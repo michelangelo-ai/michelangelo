@@ -8,12 +8,9 @@ option go_package = "v2";
 
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
-import "google/protobuf/any.proto";
 
 // Defines the status of a Model Family.
 message ModelFamilyStatus {
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 // Defines the spec of a Model Family.
@@ -27,9 +24,6 @@ message ModelFamilySpec {
   ];
 
   string description = 2;
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 // ModelFamily is a sub-problem in a project.

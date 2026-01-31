@@ -12,11 +12,13 @@ option go_package = "v1";
 
 // Defines the spec of a TestObject.
 message TestObjectSpec {
+  option (michelangelo.api.ignore_unmapped_hub_fields) = "string_list";
   int32 f1 = 1;
   repeated string f2 = 2;
   M1 f3 = 3;
   repeated M1 f4 = 4;
   map<string, M2> f5 = 5;
+  repeated int32 int_list = 6 [(michelangelo.api.ignore_unmapped) = true];
 }
 
 // Defines the status of a TestObject.

@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/cadence-workflow/starlark-worker/workflow"
@@ -344,6 +343,10 @@ func generatePipelineRunRequest(
 			Name:      triggerRun.Spec.Revision.Name,
 		}
 	}
+	// Copy notifications from trigger run to pipeline run
+	if len(triggerRun.Spec.Notifications) > 0 {
+		pr.Spec.Notifications = triggerRun.Spec.Notifications
+	}
 	pr.Labels[PipelineManifestTypeLabel] = triggerRun.Labels[PipelineManifestTypeLabel]
 	return v2pb.CreatePipelineRunRequest{
 		PipelineRun: pr,
@@ -390,26 +393,12 @@ func generateUniflowPRInput(dp *v2pb.PipelineExecutionParameters) *pbtypes.Struc
 		}
 		pbStruct.Fields["args"] = utils.NewListValue(&pbtypes.ListValue{Values: argList})
 
-		// Load KwArgs to the pipeline run input - order kw_args for deterministic behavior, so workflow runs are idempotent
-		keys := make([]string, 0)
-		kwargList := make([]*pbtypes.Value, 0)
-		if dp.KwArgs != nil && dp.KwArgs.Fields != nil {
-			for k := range dp.KwArgs.Fields {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			for _, key := range keys {
-				if val, exists := dp.KwArgs.Fields[key]; exists {
-					kwargList = append(kwargList, utils.NewListValue(&pbtypes.ListValue{
-						Values: []*pbtypes.Value{
-							utils.NewStringValue(key),
-							val,
-						},
-					}))
-				}
-			}
+		// Load KwArgs to the pipeline run input
+		kwArgsStruct := &pbtypes.Struct{Fields: make(map[string]*pbtypes.Value)}
+		if dp.KwArgs != nil {
+			kwArgsStruct = dp.KwArgs
 		}
-		pbStruct.Fields["kwargs"] = utils.NewListValue(&pbtypes.ListValue{Values: kwargList})
+		pbStruct.Fields["kw_args"] = utils.NewStructValue(kwArgsStruct)
 	}
 	return pbStruct
 }

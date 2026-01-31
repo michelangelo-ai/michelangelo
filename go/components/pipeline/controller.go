@@ -72,7 +72,22 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		Namespace: pipeline.Namespace,
 	}
 	pipeline.Status.State = v2pb.PIPELINE_STATE_READY
-	return r.updatePipelineStatus(ctx, pipeline, originalPipeline, logger)
+
+	// Emit metrics for pipeline becoming ready
+	if originalPipeline.Status.State != v2pb.PIPELINE_STATE_READY && pipeline.Status.State == v2pb.PIPELINE_STATE_READY {
+		IncPipelineReady(pipeline.Namespace, pipeline.Name, pipeline.Spec.Type.String())
+	}
+
+	result, err := r.updatePipelineStatus(ctx, pipeline, originalPipeline, logger)
+
+	// Emit reconciliation metrics
+	if err != nil {
+		IncPipelineReconcileError(pipeline.Namespace, pipeline.Name)
+	} else if pipeline.Status.State == v2pb.PIPELINE_STATE_READY {
+		IncPipelineReconcileSuccess(pipeline.Namespace, pipeline.Name)
+	}
+
+	return result, err
 }
 
 // updatePipelineStatus persists pipeline status changes to Kubernetes.

@@ -1,4 +1,4 @@
-package rollout
+package common
 
 import (
 	"context"
@@ -6,11 +6,15 @@ import (
 
 	"go.uber.org/zap"
 
+	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
+
+var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &TrafficRoutingActor{}
 
 // TrafficRoutingActor manages HTTPRoute configuration to route deployment traffic to models.
 type TrafficRoutingActor struct {
@@ -40,24 +44,12 @@ func (a *TrafficRoutingActor) Retrieve(ctx context.Context, deployment *v2pb.Dep
 			zap.String("operation", "check_deployment_route_status"),
 			zap.String("namespace", deployment.Namespace),
 			zap.String("deployment", deployment.Name))
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "CheckDeploymentRouteStatusFailed",
-			Message: fmt.Sprintf("Failed to check deployment route status: %v", err),
-		}, nil
+		return conditionsutil.GenerateFalseCondition(condition, "CheckDeploymentRouteStatusFailed", fmt.Sprintf("Failed to check deployment route status: %v", err)), nil
 	}
-
 	if !ok {
-		return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_FALSE, Reason: "DeploymentRouteNotConfigured", Message: "Deployment route is not configured"}, nil
+		return conditionsutil.GenerateFalseCondition(condition, "DeploymentRouteNotConfigured", "Deployment route is not configured"), nil
 	}
-
-	return &apipb.Condition{
-		Type:    a.GetType(),
-		Status:  apipb.CONDITION_STATUS_TRUE,
-		Reason:  "TrafficRoutingConfigured",
-		Message: fmt.Sprintf("HTTPRoute %s successfully configured for deployment", deployment.Name),
-	}, nil
+	return conditionsutil.GenerateTrueCondition(condition), nil
 }
 
 // Run creates or updates the HTTPRoute to enable traffic routing to the deployed model.
@@ -65,12 +57,7 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, deployment *v2pb.Deployme
 	a.Logger.Info("Running traffic routing configuration for deployment", zap.String("deployment", deployment.Name))
 
 	if deployment.Spec.GetInferenceServer() == nil {
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "MissingInferenceServer",
-			Message: fmt.Sprintf("inference server not specified for deployment %s", deployment.Name),
-		}, nil
+		return conditionsutil.GenerateFalseCondition(condition, "MissingInferenceServer", fmt.Sprintf("inference server not specified for deployment %s", deployment.Name)), nil
 	}
 
 	err := a.ProxyProvider.EnsureDeploymentRoute(ctx, a.Logger, deployment.Name, deployment.Namespace, deployment.Spec.GetInferenceServer().Name, deployment.Spec.DesiredRevision.Name)
@@ -80,18 +67,7 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, deployment *v2pb.Deployme
 			zap.String("operation", "ensure_deployment_route"),
 			zap.String("namespace", deployment.Namespace),
 			zap.String("deployment", deployment.Name))
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "AddDeploymentRouteFailed",
-			Message: fmt.Sprintf("Failed to add deployment route: %v", err),
-		}, nil
+		return conditionsutil.GenerateFalseCondition(condition, "AddDeploymentRouteFailed", fmt.Sprintf("Failed to add deployment route: %v", err)), nil
 	}
-
-	return &apipb.Condition{
-		Type:    a.GetType(),
-		Status:  apipb.CONDITION_STATUS_TRUE,
-		Reason:  "TrafficRoutingConfigured",
-		Message: fmt.Sprintf("HTTPRoute for deployment %s successfully configured", deployment.Name),
-	}, nil
+	return conditionsutil.GenerateTrueCondition(condition), nil
 }

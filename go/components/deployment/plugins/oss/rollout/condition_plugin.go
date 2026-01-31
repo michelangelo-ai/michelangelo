@@ -60,12 +60,8 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 		return nil, err
 	}
 
-	// Post-placement actors (completion and cleanup)
+	// Post-placement actors
 	postPlacementActors := []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
-		&TrafficRoutingActor{
-			ProxyProvider: p.ProxyProvider,
-			Logger:        p.Logger,
-		},
 		&RolloutCompletionActor{
 			gateway: p.Gateway,
 			logger:  p.Logger,

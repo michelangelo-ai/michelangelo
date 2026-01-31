@@ -14,6 +14,7 @@ The goal is to **avoid hand-written converters** and ensure mappings are
   - Compatible with Bazel `go_proto_compiler` / `go_proto_library` rules.
   - Generates one `*.convert.pb.go` file per `.proto` file in the current package.
   - The conversion logic can be customized with protobuf options below.
+  - Developers can write custom conversion logic by implementing the generated convertor interfaces.
 
 - **Hub & Spoke versions**:
   - The generated code follows the Hub & Spoke model in version conversion ([Conversion concepts](https://book.kubebuilder.io/multiversion-tutorial/conversion-concepts)).
@@ -112,5 +113,54 @@ enum State {
   UNKNOWN = 0;
   RUNNING = 1;
   FAILED  = 2;
+}
+```
+
+## Custom Conversion Logic
+
+For each CRD message type \`TypeName\` in a *spoke* version, the generator creates in that spoke version's Go package:
+
+- an interface \`Custom{TypeName}Convertor\`
+- a registration function \`SetCustom{TypeName}Convertor\(\)\`
+
+These allow developers to customize the auto\-generated conversion logic.
+
+### Custom convertor interface
+
+The \`Custom{TypeName}Convertor\` interface defines hooks invoked after the auto\-generated conversion logic. A typical interface looks like:
+
+```go
+type CustomProjectConvertor interface {
+    // ConvertToHub is invoked after the auto-generated spoke -> hub conversion has populated hub.
+    // Modify hub in-place to apply any additional or overridden mapping logic.
+    ConvertToHub(spoke *v1.Project, hub *v2.Project) error
+    // ConvertFromHub is invoked after the auto-generated hub -> spoke conversion has populated spoke.
+    // Modify spoke in-place to apply any additional or overridden mapping logic.
+    ConvertFromHub(hub *v2.Project, spoke *v1.Project) error
+}
+```
+
+> Note: The exact method signatures depend on the generated Go package paths and message types.
+
+### Registering a custom convertor
+
+To plug in your logic, implement the interface and register it using the generated setter:
+
+```go
+type projectConvertor struct{}
+
+func (c *projectConvertor) ConvertToHub(spoke *v1.Project, hub *v2.Project) error {
+    // customize spoke to hub conversion here
+    return nil
+}
+
+func (c *projectConvertor) ConvertFromHub(hub *v2.Project, spoke *v1.Project) error {
+    // customize hub to spoke conversion here
+    return nil
+}
+
+func init() {
+    // Activate the custom convertor for v1.Project <-> v2.Project
+    SetCustomProjectConvertor(&projectConvertor{})
 }
 ```

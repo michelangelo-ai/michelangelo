@@ -6,6 +6,7 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/worker/workflows",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/worker/workflows/notification:go_default_library",
         "//go/worker/workflows/ray:go_default_library",
         "//go/worker/workflows/trigger:go_default_library",
         "@org_uber_go_fx//:go_default_library",

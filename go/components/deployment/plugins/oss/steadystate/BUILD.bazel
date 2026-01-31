@@ -10,6 +10,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/base/conditions/interfaces:go_default_library",
+        "//go/base/conditions/utils:go_default_library",
         "//go/components/deployment/plugins/oss/common:go_default_library",
         "//go/components/inferenceserver/gateways:go_default_library",
         "//proto/api:go_default_library",

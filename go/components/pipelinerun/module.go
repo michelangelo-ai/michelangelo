@@ -6,6 +6,7 @@ import (
 
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/notification"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/plugin"
 	"go.uber.org/zap"
 )
@@ -15,7 +16,8 @@ var (
 	//
 	// It provides dependency injection for the controller and its plugin,
 	// which contains actors for different pipeline execution stages. The module
-	// automatically registers the controller with the controller-runtime manager.
+	// automatically registers the controller with the controller-runtime manager
+	// and includes notification functionality for pipeline run state changes.
 	//
 	// To use this module, include it in your FX application:
 	//   fx.New(
@@ -24,9 +26,17 @@ var (
 	//   )
 	Module = fx.Options(
 		plugin.Module,
+		notification.Module, // PipelineRun notification dependency
+		fx.Invoke(registerMetrics),
 		fx.Invoke(register),
 	)
 )
+
+// registerMetrics registers pipelinerun metrics with Prometheus
+// This is invoked once during application initialization
+func registerMetrics() {
+	RegisterPipelineRunMetrics()
+}
 
 // register initializes and registers the PipelineRun controller with the manager.
 //
@@ -40,6 +50,7 @@ var (
 //   - apiHandlerFactory: Factory for creating API handlers
 //   - logger: Structured logger for the controller
 //   - plugin: Contains ConditionActors for pipeline execution stages
+//   - notifier: Handles pipeline run notifications for state changes
 //
 // Returns an error if controller registration fails.
 func register(
@@ -48,6 +59,7 @@ func register(
 	apiHandlerFactory apiHandler.Factory,
 	logger *zap.Logger,
 	plugin *plugin.Plugin,
+	notifier *notification.PipelineRunNotifier,
 ) error {
-	return NewReconciler(plugin, logger, apiHandlerFactory).Register(mgr)
+	return NewReconciler(plugin, logger, apiHandlerFactory, notifier).Register(mgr)
 }

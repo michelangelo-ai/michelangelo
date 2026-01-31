@@ -30,6 +30,7 @@ import (
 	workflowClientMock "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface/interface_mock"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/actors"
 	pipelinerunutils "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/actors/utils"
+	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/notification"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/plugin"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -822,11 +823,15 @@ func setUpReconciler(
 		ApiHandler:     handler,
 		ConfigProvider: createMockConfigProvider(),
 	})
+	// Create a mock notifier to avoid nil pointer dereference
+	mockNotifier := notification.NewPipelineRunNotifier(mockWorkflowClient, logger)
+
 	reconciler := &Reconciler{
-		Handler: handler,
-		logger:  logger,
-		plugin:  plugin,
-		engine:  defaultEngine.NewDefaultEngine[*v2pb.PipelineRun](logger),
+		Handler:  handler,
+		logger:   logger,
+		plugin:   plugin,
+		engine:   defaultEngine.NewDefaultEngine[*v2pb.PipelineRun](logger),
+		notifier: mockNotifier,
 	}
 
 	return reconciler

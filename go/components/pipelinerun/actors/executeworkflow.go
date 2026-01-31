@@ -34,10 +34,14 @@ const (
 	// DefaultWorkSpaceRootURL is the default S3 location for workflow artifacts.
 	DefaultWorkSpaceRootURL = "s3://default" // TODO(#547): make this configurable
 
-	// Workflow input parameter keys.
+	// Workflow input parameter keys for uniflow pipeline
 	WorkflowEnvironKey = "environ"
-	WorkflowKWArgsKey  = "kwargs"
+	WorkflowKWArgsKey  = "kw_args"
 	WorkflowArgsKey    = "args"
+
+	// Workflow input parameter keys for canvas flex pipeline
+	WorkflowTaskConfigsKey = "task_configs"
+	WorkflowConfigKey      = "workflow_config"
 
 	// Cache-related environment variable names.
 	cacheEnabledVarName = "CACHE_ENABLED"
@@ -404,6 +408,7 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 		envs["UF_STORAGE_URL"] = DefaultWorkSpaceRootURL
 	}
 
+	// Apply dynamic parameters from pipelineRun.Spec.Input to override pipeline manifest
 	if pipelineConfigMap != nil {
 		if _, ok := pipelineConfigMap[WorkflowArgsKey]; ok {
 			args = pipelineConfigMap[WorkflowArgsKey].([]interface{})
@@ -422,6 +427,19 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 
 	// Apply DevRun environment overrides if present
 	if pipelineRun.Spec.Input != nil {
+		if pipelineConfigMap == nil {
+			pipelineConfigMap = make(map[string]interface{})
+		}
+
+		// Override input fields
+		applyInputOverrides(pipelineRun.Spec.Input, pipelineConfigMap,
+			WorkflowTaskConfigsKey, // Yaml based pipeline
+			WorkflowConfigKey,      // Yaml based pipeline
+			WorkflowArgsKey,        // Python SDK based pipeline
+			WorkflowKWArgsKey,      // Python SDK based pipeline
+		)
+
+		// Apply DevRun environment overrides if present
 		if environField := pipelineRun.Spec.Input.Fields["environ"]; environField != nil {
 			if err := applyDevRunEnvironmentOverrides(envs, environField.GetStructValue()); err != nil {
 				return nil, nil, nil, fmt.Errorf("failed to apply DevRun environment overrides: %w", err)
@@ -429,10 +447,70 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 		}
 	}
 
+	if pipelineConfigMap != nil {
+		args, kwArgs = extractWorkflowInputs(pipelineConfigMap, envs)
+	}
+
 	envs["MA_NAMESPACE"] = pipelineRun.Namespace
 	envs["MA_PIPELINE_RUN_NAME"] = pipelineRun.Name
 	addTaskImageToEnv(pipelineRun, envs)
 	return args, kwArgs, envs, nil
+}
+
+// extractWorkflowInputs extracts workflow inputs (args and kw_args) from pipeline config.
+// It handles both Yaml-based pipelines and Python SDK pipelines.
+// For Yaml based pipeline: returns workflow_config and task_configs as args
+// For Python SDK based pipeline: processes args > kw_args > environ in order
+// Returns args and kwArgs (environ is merged into the provided envs map).
+func extractWorkflowInputs(pipelineConfigMap map[string]interface{}, envs map[string]interface{}) ([]interface{}, []interface{}) {
+	var args []interface{}
+	var kwArgs []interface{}
+
+	if _, ok := pipelineConfigMap[WorkflowTaskConfigsKey]; ok {
+		// Yaml based pipeline
+		// Return workflow_config and task_configs as positional args
+		if pipelineConfigMap[WorkflowConfigKey] != nil {
+			args = append(args, pipelineConfigMap[WorkflowConfigKey])
+		}
+		if pipelineConfigMap[WorkflowTaskConfigsKey] != nil {
+			args = append(args, pipelineConfigMap[WorkflowTaskConfigsKey])
+		}
+		envs["YAML_BASED_PIPELINE"] = "true"
+	} else {
+		// Python SDK based pipeline
+		// Process args, kw_args, and env variables in order
+		if _, ok := pipelineConfigMap[WorkflowArgsKey]; ok {
+			args = pipelineConfigMap[WorkflowArgsKey].([]interface{})
+		} else if val, ok := pipelineConfigMap[WorkflowKWArgsKey]; ok {
+			kwArgs = convertKwArgsMapToList(val)
+		} else if val, ok := pipelineConfigMap[WorkflowEnvironKey]; ok {
+			environMap := val.(map[string]interface{})
+			for k, v := range environMap {
+				envs[k] = v
+			}
+		}
+	}
+	return args, kwArgs
+}
+
+// convertKwArgsMapToList converts kw_args from map format to list of [key, value] pairs.
+// Starlark workflow input expects kw_args as a list of [key, value] pairs, key as parameter name and value as parameter value.
+func convertKwArgsMapToList(val interface{}) []interface{} {
+	switch v := val.(type) {
+	case map[string]interface{}:
+		// Convert map to list of [key, value] pairs
+		kwArgsList := make([]interface{}, 0, len(v))
+		for key, value := range v {
+			kwArgsList = append(kwArgsList, []interface{}{key, value})
+		}
+		return kwArgsList
+	case []interface{}:
+		// Already in list format
+		return v
+	default:
+		// Unknown format, return empty list
+		return []interface{}{}
+	}
 }
 
 func decodePipelineManifestContent(pipelineSpec v2.PipelineSpec) (map[string]interface{}, error) {
@@ -789,4 +867,27 @@ func (a *ExecuteWorkflowActor) getTaskList(project *v2.Project, pipelineRun *v2.
 		taskList = workflowConfig.TaskList
 	}
 	return taskList, nil
+}
+
+func applyInputOverrides(input *pbtypes.Struct, pipelineConfigMap map[string]interface{}, fieldKeys ...string) {
+	if input == nil {
+		return
+	}
+	for _, fieldKey := range fieldKeys {
+		applyInputFieldToConfigMap(input, fieldKey, pipelineConfigMap)
+	}
+}
+
+func applyInputFieldToConfigMap(input *pbtypes.Struct, fieldKey string, pipelineConfigMap map[string]interface{}) {
+	if field := input.Fields[fieldKey]; field != nil {
+		if fieldStruct := field.GetStructValue(); fieldStruct != nil {
+			marshaler := &jsonpb.Marshaler{}
+			if fieldJSON, err := marshaler.MarshalToString(fieldStruct); err == nil {
+				var fieldMap map[string]interface{}
+				if err := json.Unmarshal([]byte(fieldJSON), &fieldMap); err == nil {
+					pipelineConfigMap[fieldKey] = fieldMap
+				}
+			}
+		}
+	}
 }

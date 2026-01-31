@@ -11,7 +11,6 @@ const (
 	ActorTypeValidation           = "Validated"
 	ActorTypeAssetPreparation     = "AssetsPrepared"
 	ActorTypeResourceAcquisition  = "ResourcesAcquired"
-	ActorTypeModelSync            = "ModelSynced"
 	ActorTypeRollingRollout       = "RollingRolloutComplete"
 	ActorTypeBlastRollout         = "BlastRolloutComplete"
 	ActorTypeZonalRollout         = "ZonalRolloutComplete"
@@ -20,7 +19,7 @@ const (
 	ActorTypeShadowPromotion      = "ShadowPromotionComplete"
 	ActorTypeDisaggregatedRollout = "DisaggregatedRolloutComplete"
 	ActorTypeTrafficRouting       = "TrafficRoutingConfigured"
-	ActorTypeRolloutCompletion    = "RolloutCompleted"
+	ActorTypeRolloutComplete      = "RolloutCompleted"
 	ActorTypeCleanup              = "CleanupComplete"
 	ActorTypeModelCleanup         = "ModelCleanupComplete"
 	ActorTypeRollback             = "RollbackComplete"
@@ -33,11 +32,6 @@ const (
 	AnnotationRolloutIncrement = "rollout.michelangelo.ai/increment-percentage"
 	AnnotationRolloutStrategy  = "rollout.michelangelo.ai/strategy"
 )
-
-// IsModelAvailable checks if a model is available (always true for OSS)
-func IsModelAvailable(modelName string) bool {
-	return modelName != ""
-}
 
 // GetAvailableModels returns a message about available models
 func GetAvailableModels() string {
