@@ -33,8 +33,6 @@ pipeline:
                   kernel_name: "python3"
               user_parameters:
                   notebook_path: "examples/notebook_workflow/data_validation.ipynb"
-                  data_size: "{{parameters.data_size}}"
-                  seed: "{{parameters.seed}}"
 
         # STEP 2: Conditional Logic
         # Evaluates validation status to determine which analysis to run

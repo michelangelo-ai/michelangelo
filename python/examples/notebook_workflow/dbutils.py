@@ -89,26 +89,7 @@ class TaskValuesAPI:
             key: Value key
             value: Value to store (must be JSON serializable)
         """
-        # Convert to JSON-serializable format
-        serializable_value = self._convert_to_serializable(value)
-        self._dbutils._task_values[key] = serializable_value
-
-    def _convert_to_serializable(self, value: Any) -> Any:
-        """Convert value to JSON-serializable format."""
-        import numpy as np
-
-        if hasattr(value, "dtype"):  # numpy types
-            return value.item()
-        elif isinstance(value, (np.bool_, np.integer, np.floating)):
-            return value.item()
-        elif hasattr(value, "to_dict"):  # pandas objects
-            return value.to_dict()
-        elif isinstance(value, dict):
-            return {k: self._convert_to_serializable(v) for k, v in value.items()}
-        elif isinstance(value, (list, tuple)):
-            return [self._convert_to_serializable(v) for v in value]
-        else:
-            return value
+        self._dbutils._task_values[key] = value
 
     def get(self, task_name: str, key: str, default_value: Any = None) -> Any:
         """Get a task value from upstream task.
@@ -145,9 +126,7 @@ class NotebookAPI:
         Args:
             value: Value to return from notebook execution
         """
-        # Convert to JSON-serializable format using the same method as task values
-        exit_value = self._dbutils.jobs.taskValues._convert_to_serializable(value)
-        self._dbutils._exit_value = exit_value
+        self._dbutils._exit_value = value
 
 
 class DBUtils:

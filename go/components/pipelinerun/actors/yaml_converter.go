@@ -22,13 +22,15 @@ import (
 
 // YAMLToUniflowConverter handles conversion from DAG Factory YAML to Uniflow tar
 type YAMLToUniflowConverter struct {
-	logger *zap.Logger
+	logger    *zap.Logger
+	taskTypes map[string]string // Map task names to their types (notebook, ray, spark, etc.)
 }
 
 // NewYAMLToUniflowConverter creates a new converter instance
 func NewYAMLToUniflowConverter(logger *zap.Logger) *YAMLToUniflowConverter {
 	return &YAMLToUniflowConverter{
-		logger: logger.With(zap.String("component", "yaml_converter")),
+		logger:    logger.With(zap.String("component", "yaml_converter")),
+		taskTypes: make(map[string]string),
 	}
 }
 
@@ -648,6 +650,23 @@ func (c *YAMLToUniflowConverter) generateStarlarkCode(dagSpec *DAGFactorySpec) (
 	// Get consolidated task list from either pipeline.tasks or top-level tasks
 	allTasks := c.getConsolidatedTasks(dagSpec)
 
+	// Build task types map for template reference resolution
+	c.taskTypes = make(map[string]string)
+	for _, task := range allTasks {
+		taskName := task.GetEffectiveTaskID()
+		if task.NotebookTask != nil {
+			c.taskTypes[taskName] = "notebook"
+		} else if task.RayTask != nil {
+			c.taskTypes[taskName] = "ray"
+		} else if task.SparkTask != nil {
+			c.taskTypes[taskName] = "spark"
+		} else if task.IfElseTask != nil {
+			c.taskTypes[taskName] = "if_else"
+		} else if task.ForEachTask != nil {
+			c.taskTypes[taskName] = "foreach"
+		}
+	}
+
 	// Generate load statements for required plugins
 	loadStatements, err := c.generateStarlarkLoadStatements(allTasks)
 	if err != nil {
@@ -1144,9 +1163,14 @@ func (c *YAMLToUniflowConverter) generateStarlarkNotebookTaskExecution(task *Tas
 		taskCode.WriteString("    cache_version=None,\n")
 	}
 
-	// Close the __ray_task__ call and add user parameters
+	// Close the __ray_task__ call and add user parameters as keyword arguments
+	// Use keyword arguments to eliminate order dependency
 	if len(userVarNames) > 0 {
-		taskCode.WriteString(fmt.Sprintf(")(%s)\n\n", strings.Join(userVarNames, ", ")))
+		var keywordArgs []string
+		for _, varName := range userVarNames {
+			keywordArgs = append(keywordArgs, fmt.Sprintf("%s=%s", varName, varName))
+		}
+		taskCode.WriteString(fmt.Sprintf(")(%s)\n\n", strings.Join(keywordArgs, ", ")))
 	} else {
 		taskCode.WriteString(")()\n\n")
 	}
@@ -1222,9 +1246,13 @@ func (c *YAMLToUniflowConverter) generateStarlarkRayTaskExecution(task *TaskSpec
 		}
 	}
 
-	// Close the __ray_task__ call and add user parameters to the function call
+	// Close the __ray_task__ call and add user parameters as keyword arguments
 	if len(userVarNames) > 0 {
-		taskCode.WriteString(fmt.Sprintf(")(%s)\n\n", strings.Join(userVarNames, ", ")))
+		var keywordArgs []string
+		for _, varName := range userVarNames {
+			keywordArgs = append(keywordArgs, fmt.Sprintf("%s=%s", varName, varName))
+		}
+		taskCode.WriteString(fmt.Sprintf(")(%s)\n\n", strings.Join(keywordArgs, ", ")))
 	} else {
 		taskCode.WriteString(")()\n\n")
 	}
@@ -1299,9 +1327,13 @@ func (c *YAMLToUniflowConverter) generateStarlarkSparkTaskExecution(task *TaskSp
 		}
 	}
 
-	// Close the __spark_task__ call and add user parameters to the function call
+	// Close the __spark_task__ call and add user parameters as keyword arguments
 	if len(userVarNames) > 0 {
-		taskCode.WriteString(fmt.Sprintf(")(%s)\n\n", strings.Join(userVarNames, ", ")))
+		var keywordArgs []string
+		for _, varName := range userVarNames {
+			keywordArgs = append(keywordArgs, fmt.Sprintf("%s=%s", varName, varName))
+		}
+		taskCode.WriteString(fmt.Sprintf(")(%s)\n\n", strings.Join(keywordArgs, ", ")))
 	} else {
 		taskCode.WriteString(")()\n\n")
 	}
@@ -1463,16 +1495,43 @@ func (c *YAMLToUniflowConverter) convertStarlarkTemplateReference(ref string) st
 				taskName := parts[1]
 				safeName := c.safeStarlarkName(taskName)
 
+				// Check if this is a notebook task (returns tuple)
+				isNotebookTask := c.taskTypes[taskName] == "notebook"
+
 				if len(parts) > 2 {
-					// Handle nested access like tasks.validation.output.status
+					// Handle nested access like tasks.validation.output.status or tasks.validation.task_values.key
 					accessPath := strings.Join(parts[2:], ".")
+
 					if accessPath == "output" {
+						if isNotebookTask {
+							return fmt.Sprintf("%s_result[0]", safeName)  // First element of tuple (exit_value)
+						}
 						return fmt.Sprintf("%s_result", safeName)
 					}
-					// Convert output.status to result.get("status")
+
+					if accessPath == "task_values" {
+						if isNotebookTask {
+							return fmt.Sprintf("%s_result[1]", safeName)  // Second element of tuple (task_values)
+						}
+						return fmt.Sprintf("%s_result", safeName)  // Other tasks don't have separate task_values
+					}
+
+					// Convert output.status to result.get("status") or result[0].get("status") for notebook tasks
 					if strings.HasPrefix(accessPath, "output.") {
 						field := strings.TrimPrefix(accessPath, "output.")
+						if isNotebookTask {
+							return fmt.Sprintf("%s_result[0].get(\"%s\")", safeName, field)
+						}
 						return fmt.Sprintf("%s_result.get(\"%s\")", safeName, field)
+					}
+
+					// Convert task_values.key to result[1].get("key") for notebook tasks
+					if strings.HasPrefix(accessPath, "task_values.") {
+						field := strings.TrimPrefix(accessPath, "task_values.")
+						if isNotebookTask {
+							return fmt.Sprintf("%s_result[1].get(\"%s\")", safeName, field)
+						}
+						return fmt.Sprintf("%s_result.get(\"%s\")", safeName, field)  // Other tasks don't have separate task_values
 					}
 				}
 				return fmt.Sprintf("%s_result", safeName)
