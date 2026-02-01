@@ -1,0 +1,91 @@
+# Notebook Workflow YAML DAG
+# Based on conditional_notebook_workflow.py
+# Uses advanced conditional syntax with if_else_task and outcome-based dependencies
+spec_version: "1.1"
+
+pipeline:
+    id: "conditional-notebook-workflow-001"
+    name: "conditional_notebook_workflow"
+    created_by: "claude@anthropic.com"
+    created_time: 1738368000000  # 2026-01-31 timestamp
+    workspace: "component:notebook-workflows"
+    trigger_settings:
+        mode: "MANUAL"
+        start_date: "2026-01-31"
+        max_concurrency: 1
+    timeout: "01:00:00"
+    description: "Conditional workflow demonstrating exit_value vs task_values usage with if_else_task"
+    tags: ["notebook", "conditional", "uniflow", "if-else"]
+
+    tasks:
+        # STEP 1: Data Validation
+        # Returns both exit_value (validation status) and task_values (shared data)
+        - task_name: "data_validation"
+          notebook_task:
+              task_parameters:
+                  head_cpu: 2
+                  head_memory: "4Gi"
+                  worker_cpu: 1
+                  worker_memory: "2Gi"
+                  worker_instances: 1
+                  cache_enabled: true
+                  timeout: "00:30:00"
+                  kernel_name: "python3"
+              user_parameters:
+                  notebook_path: "examples/notebook_workflow/data_validation.ipynb"
+                  data_size: "{{parameters.data_size}}"
+                  seed: "{{parameters.seed}}"
+
+        # STEP 2: Conditional Logic
+        # Evaluates validation status to determine which analysis to run
+        - task_name: "validation_check"
+          if_else_task:
+              inputs: "{{tasks.data_validation.output}}"
+              condition:
+                  op: "EQUAL_TO"
+                  left: "{{tasks.data_validation.output.status}}"
+                  right: "PASSED"
+
+        # STEP 3: Advanced Analysis (when validation passes)
+        # Execute when validation_check evaluates to true
+        - task_name: "advanced_analysis"
+          depends_on:
+              - task_name: "validation_check"
+                outcome: "true"
+          notebook_task:
+              task_parameters:
+                  head_cpu: 4
+                  head_memory: "8Gi"
+                  worker_cpu: 2
+                  worker_memory: "4Gi"
+                  worker_instances: 2
+                  cache_enabled: true
+                  timeout: "00:45:00"
+                  kernel_name: "python3"
+              user_parameters:
+                  notebook_path: "examples/notebook_workflow/advanced_analysis.ipynb"
+                  # Pass task_values from validation as input parameters
+                  parameters: "{{tasks.data_validation.task_values}}"
+
+        # STEP 4: Basic Analysis (when validation fails)
+        # Execute when validation_check evaluates to false
+        - task_name: "basic_analysis"
+          depends_on:
+              - task_name: "validation_check"
+                outcome: "false"
+          notebook_task:
+              task_parameters:
+                  head_cpu: 1
+                  head_memory: "2Gi"
+                  cache_enabled: true
+                  timeout: "00:30:00"
+                  kernel_name: "python3"
+              user_parameters:
+                  notebook_path: "examples/notebook_workflow/basic_analysis.ipynb"
+                  # Pass task_values from validation as input parameters
+                  parameters: "{{tasks.data_validation.task_values}}"
+
+# Runtime parameters (equivalent to function parameters)
+parameters:
+    data_size: 100
+    seed: 42

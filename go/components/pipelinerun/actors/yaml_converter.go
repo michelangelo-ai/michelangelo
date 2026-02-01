@@ -63,16 +63,20 @@ type PipelineArtifacts struct {
 
 type PipelineConfig struct {
 	ID                string              `yaml:"id"`
+	Type              string              `yaml:"type"`
 	Name              string              `yaml:"name"`
+	Owner             string              `yaml:"owner"`
 	CreatedBy         string              `yaml:"created_by"`
 	CreatedTime       int64               `yaml:"created_time"`
 	Workspace         string              `yaml:"workspace"`
 	TriggerSettings   *TriggerSettings    `yaml:"trigger_settings,omitempty"`
+	Schedule          *ScheduleConfig     `yaml:"schedule,omitempty"`
 	SLA               string              `yaml:"sla,omitempty"`
 	Timeout           string              `yaml:"timeout,omitempty"`
 	Notifications     *NotificationConfig `yaml:"notifications,omitempty"`
 	Description       string              `yaml:"description,omitempty"`
 	Tags              []string            `yaml:"tags,omitempty"`
+	MetadataTags      []string            `yaml:"metadata_tags,omitempty"`
 	Tasks             []*TaskSpec         `yaml:"tasks,omitempty"`
 	PipelineArtifacts *PipelineArtifacts  `yaml:"pipeline_artifacts,omitempty"`
 }
@@ -87,6 +91,9 @@ type ForEachTaskConfig struct {
 	Inputs       string              `yaml:"inputs"` // String template reference
 	Concurrency  int                 `yaml:"concurrency,omitempty"`
 	NotebookTask *NotebookTaskConfig `yaml:"notebook_task,omitempty"`
+	RayTask      *RayTaskConfig      `yaml:"ray_task,omitempty"`
+	SparkTask    *SparkTaskConfig    `yaml:"spark_task,omitempty"`
+	SparkOneTask *SparkOneTaskConfig `yaml:"sparkone_task,omitempty"`
 }
 
 type ConditionConfig struct {
@@ -108,7 +115,7 @@ type SparkOneTaskConfig struct {
 }
 
 type DependsOnConfig struct {
-	TaskID  string `yaml:"task_id"`
+	TaskID  string `yaml:"task_name"` // Changed to match actual YAML structure
 	Outcome string `yaml:"outcome"`
 }
 
@@ -135,7 +142,8 @@ type SparkTaskConfig struct {
 }
 
 type TaskSpec struct {
-	TaskID string `yaml:"task_id"`
+	TaskID   string `yaml:"task_id"`   // Keep original field mapping
+	TaskName string `yaml:"task_name"` // Add support for new field mapping
 
 	// Task type configs (mutually exclusive)
 	NotebookTask *NotebookTaskConfig `yaml:"notebook_task,omitempty"`
@@ -149,9 +157,25 @@ type TaskSpec struct {
 	DependsOn []*DependsOnConfig `yaml:"depends_on,omitempty"`
 }
 
+// GetEffectiveTaskID returns the task ID, preferring task_name over task_id
+func (t *TaskSpec) GetEffectiveTaskID() string {
+	if t.TaskName != "" {
+		return t.TaskName
+	}
+	return t.TaskID
+}
+
+type ScheduleConfig struct {
+	StartDate      string `yaml:"start_date,omitempty"`
+	MaxConcurrency int    `yaml:"max_concurrency,omitempty"`
+	Timeout        string `yaml:"timeout,omitempty"`
+}
+
 type DAGFactorySpec struct {
-	SpecVersion string          `yaml:"spec_version"`
-	Pipeline    *PipelineConfig `yaml:"pipeline"`
+	SpecVersion string                 `yaml:"spec_version"`
+	Pipeline    *PipelineConfig        `yaml:"pipeline"`
+	Tasks       []*TaskSpec            `yaml:"tasks,omitempty"`
+	Parameters  map[string]interface{} `yaml:"parameters,omitempty"`
 }
 
 // ConvertYAMLToUniflowTar converts DAG Factory YAML content to Uniflow tar bytes
@@ -173,7 +197,9 @@ func (c *YAMLToUniflowConverter) ConvertYAMLToUniflowTar(ctx context.Context, pi
 		return nil, fmt.Errorf("failed to parse DAG Factory YAML: %w", unmarshalErr)
 	}
 
-	log.Info("Parsed DAG Factory spec", zap.String("pipeline_name", dagSpec.Pipeline.Name), zap.Int("tasks", len(dagSpec.Pipeline.Tasks)))
+	// Get consolidated task list from either pipeline.tasks or top-level tasks
+	allTasks := c.getConsolidatedTasks(&dagSpec)
+	log.Info("Parsed DAG Factory spec", zap.String("pipeline_name", dagSpec.Pipeline.Name), zap.Int("tasks", len(allTasks)))
 
 	// Convert to Uniflow format
 	uniflowYAML, err := c.convertToUniflowYAML(&dagSpec)
@@ -322,6 +348,9 @@ func (c *YAMLToUniflowConverter) extractFromJSONFormat(contentAny *types.Any) (s
 
 // convertToUniflowYAML converts DAG Factory spec to Uniflow YAML format
 func (c *YAMLToUniflowConverter) convertToUniflowYAML(dagSpec *DAGFactorySpec) (string, error) {
+	// Get consolidated task list from either pipeline.tasks or top-level tasks
+	allTasks := c.getConsolidatedTasks(dagSpec)
+
 	// Create Uniflow workflow config
 	uniflowConfig := map[string]interface{}{
 		"metadata": map[string]interface{}{
@@ -336,8 +365,14 @@ func (c *YAMLToUniflowConverter) convertToUniflowYAML(dagSpec *DAGFactorySpec) (
 			"retry_attempts": 0,
 		},
 		"environment": c.convertEnvironment(dagSpec.Pipeline),
-		"tasks":       c.convertTasks(dagSpec.Pipeline.Tasks),
 	}
+
+	// Convert tasks - fail if any task conversion fails
+	tasks, err := c.convertTasks(allTasks)
+	if err != nil {
+		return "", fmt.Errorf("failed to convert tasks: %w", err)
+	}
+	uniflowConfig["tasks"] = tasks
 
 	// Add storage URL from workspace
 	if dagSpec.Pipeline.Workspace != "" && strings.HasPrefix(dagSpec.Pipeline.Workspace, "component:") {
@@ -401,41 +436,120 @@ func (c *YAMLToUniflowConverter) convertEnvironment(pipeline *PipelineConfig) ma
 }
 
 // convertTasks converts DAG Factory tasks to Uniflow format
-func (c *YAMLToUniflowConverter) convertTasks(tasks []*TaskSpec) map[string]interface{} {
+func (c *YAMLToUniflowConverter) convertTasks(tasks []*TaskSpec) (map[string]interface{}, error) {
 	uniflowTasks := make(map[string]interface{})
 
 	for _, task := range tasks {
-		uniflowTask := c.convertSingleTask(task)
-		uniflowTasks[task.TaskID] = uniflowTask
+		uniflowTask, err := c.convertSingleTask(task)
+		if err != nil {
+			// Return error instead of silently failing
+			return nil, err
+		}
+		uniflowTasks[task.GetEffectiveTaskID()] = uniflowTask
 	}
 
-	return uniflowTasks
+	return uniflowTasks, nil
 }
 
 // convertSingleTask converts a single DAG Factory task to Uniflow format
-func (c *YAMLToUniflowConverter) convertSingleTask(task *TaskSpec) map[string]interface{} {
+func (c *YAMLToUniflowConverter) convertSingleTask(task *TaskSpec) (map[string]interface{}, error) {
 	uniflowTask := map[string]interface{}{
 		"cache_enabled":  true,
-		"retry_attempts": 0,
+		"retry_attempts": 3,
 	}
 
 	// Convert task type
 	if task.NotebookTask != nil {
-		uniflowTask["function"] = "michelangelo.uniflow.plugins.notebook.run_notebook"
+		uniflowTask["function"] = "examples.notebook_workflow.executor.notebook_executor"
 		uniflowTask["config"] = map[string]interface{}{"type": "NotebookTask"}
 		uniflowTask["inputs"] = map[string]interface{}{
 			"notebook_path":   task.NotebookTask.NotebookPath,
 			"user_parameters": task.NotebookTask.UserParameters,
 		}
 	} else if task.ForEachTask != nil {
-		uniflowTask["function"] = "michelangelo.uniflow.plugins.notebook.run_notebook"
-		uniflowTask["config"] = map[string]interface{}{"type": "NotebookTask"}
+		// Determine the function and config based on the inner task type
+		if task.ForEachTask.NotebookTask != nil {
+			uniflowTask["function"] = "examples.notebook_workflow.executor.notebook_executor"
+			uniflowTask["config"] = map[string]interface{}{"type": "NotebookTask"}
+			uniflowTask["inputs"] = map[string]interface{}{
+				"notebook_path":   task.ForEachTask.NotebookTask.NotebookPath,
+				"user_parameters": task.ForEachTask.NotebookTask.UserParameters,
+			}
+		} else if task.ForEachTask.RayTask != nil {
+			// Extract function from ray task parameters - REQUIRED
+			fn, exists := task.ForEachTask.RayTask.TaskParameters["function"]
+			if !exists {
+				return nil, fmt.Errorf("ray_task in for_each_task '%s' must specify 'function' in task_parameters", task.TaskID)
+			}
+			uniflowTask["function"] = fmt.Sprintf("%v", fn)
+			uniflowTask["config"] = map[string]interface{}{"type": "RayTask"}
+			uniflowTask["inputs"] = task.ForEachTask.RayTask.UserParameters
+		} else if task.ForEachTask.SparkTask != nil {
+			// Extract function from spark task parameters - REQUIRED
+			fn, exists := task.ForEachTask.SparkTask.TaskParameters["function"]
+			if !exists {
+				return nil, fmt.Errorf("spark_task in for_each_task '%s' must specify 'function' in task_parameters", task.TaskID)
+			}
+			uniflowTask["function"] = fmt.Sprintf("%v", fn)
+			uniflowTask["config"] = map[string]interface{}{"type": "SparkTask"}
+			uniflowTask["inputs"] = task.ForEachTask.SparkTask.UserParameters
+		} else if task.ForEachTask.SparkOneTask != nil {
+			// Extract function from sparkone task parameters - REQUIRED
+			fn, exists := task.ForEachTask.SparkOneTask.TaskParameters["function"]
+			if !exists {
+				return nil, fmt.Errorf("sparkone_task in for_each_task '%s' must specify 'function' in task_parameters", task.TaskID)
+			}
+			uniflowTask["function"] = fmt.Sprintf("%v", fn)
+			uniflowTask["config"] = map[string]interface{}{"type": "SparkOneTask"}
+			uniflowTask["inputs"] = task.ForEachTask.SparkOneTask.UserParameters
+		} else {
+			// No inner task type specified - this is an error
+			return nil, fmt.Errorf("for_each_task '%s' must specify one of: notebook_task, ray_task, spark_task, or sparkone_task", task.GetEffectiveTaskID())
+		}
+
 		uniflowTask["expand"] = map[string]interface{}{
 			"item": task.ForEachTask.Inputs,
 		}
 		if task.ForEachTask.Concurrency > 0 {
 			uniflowTask["expand"].(map[string]interface{})["max_parallel"] = task.ForEachTask.Concurrency
 		}
+	} else if task.IfElseTask != nil {
+		// Handle if_else_task - this is a conditional evaluation task
+		uniflowTask["function"] = "builtin.if_else"
+		uniflowTask["config"] = map[string]interface{}{"type": "IfElseTask"}
+		uniflowTask["inputs"] = map[string]interface{}{
+			"inputs":    task.IfElseTask.Inputs,
+			"condition": task.IfElseTask.Condition,
+		}
+	} else if task.RayTask != nil {
+		// Extract function from ray task parameters - REQUIRED
+		fn, exists := task.RayTask.TaskParameters["function"]
+		if !exists {
+			return nil, fmt.Errorf("ray_task '%s' must specify 'function' in task_parameters", task.TaskID)
+		}
+		uniflowTask["function"] = fmt.Sprintf("%v", fn)
+		uniflowTask["config"] = map[string]interface{}{"type": "RayTask"}
+		uniflowTask["inputs"] = task.RayTask.UserParameters
+	} else if task.SparkTask != nil {
+		// Extract function from spark task parameters - REQUIRED
+		fn, exists := task.SparkTask.TaskParameters["function"]
+		if !exists {
+			return nil, fmt.Errorf("spark_task '%s' must specify 'function' in task_parameters", task.TaskID)
+		}
+		uniflowTask["function"] = fmt.Sprintf("%v", fn)
+		uniflowTask["config"] = map[string]interface{}{"type": "SparkTask"}
+		uniflowTask["inputs"] = task.SparkTask.UserParameters
+	} else if task.SparkOneTask != nil {
+		// Extract function from sparkone task parameters - REQUIRED
+		fn, exists := task.SparkOneTask.TaskParameters["function"]
+		if !exists {
+			return nil, fmt.Errorf("sparkone_task '%s' must specify 'function' in task_parameters", task.TaskID)
+		}
+		uniflowTask["function"] = fmt.Sprintf("%v", fn)
+		uniflowTask["config"] = map[string]interface{}{"type": "SparkOneTask"}
+		uniflowTask["inputs"] = task.SparkOneTask.UserParameters
+	} else {
+		return nil, fmt.Errorf("task '%s' must specify one of: notebook_task, for_each_task, if_else_task, ray_task, spark_task, or sparkone_task", task.GetEffectiveTaskID())
 	}
 
 	// Convert dependencies
@@ -449,7 +563,7 @@ func (c *YAMLToUniflowConverter) convertSingleTask(task *TaskSpec) map[string]in
 		}
 	}
 
-	return uniflowTask
+	return uniflowTask, nil
 }
 
 // convertDependencies converts depends_on to dependencies and conditions
@@ -531,8 +645,11 @@ func (c *YAMLToUniflowConverter) convertForEachInputsForStarlark(inputs string) 
 func (c *YAMLToUniflowConverter) generateStarlarkCode(dagSpec *DAGFactorySpec) (string, error) {
 	var starlarkCode strings.Builder
 
+	// Get consolidated task list from either pipeline.tasks or top-level tasks
+	allTasks := c.getConsolidatedTasks(dagSpec)
+
 	// Generate load statements for required plugins
-	loadStatements, err := c.generateStarlarkLoadStatements(dagSpec.Pipeline.Tasks)
+	loadStatements, err := c.generateStarlarkLoadStatements(allTasks)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate load statements: %w", err)
 	}
@@ -571,17 +688,24 @@ func (c *YAMLToUniflowConverter) generateStarlarkLoadStatements(tasks []*TaskSpe
 	for _, task := range tasks {
 		var taskType string
 		if task.NotebookTask != nil {
-			taskType = "NotebookTask"
+			taskType = "RayTask" // Notebook tasks use ray task infrastructure
 		} else if task.RayTask != nil {
 			taskType = "RayTask"
 		} else if task.SparkTask != nil {
 			taskType = "SparkTask"
+		} else if task.IfElseTask != nil {
+			// If-else tasks don't require any plugins, skip adding load statement
+			continue
 		} else if task.ForEachTask != nil {
 			// ForEach tasks use the inner task type for load statements
-			if task.SparkTask != nil {
+			if task.ForEachTask.NotebookTask != nil {
+				taskType = "RayTask" // Notebook tasks in ForEach use ray task infrastructure
+			} else if task.ForEachTask.SparkTask != nil {
 				taskType = "SparkTask"
-			} else if task.RayTask != nil {
+			} else if task.ForEachTask.RayTask != nil {
 				taskType = "RayTask"
+			} else if task.ForEachTask.SparkOneTask != nil {
+				taskType = "SparkTask" // Use SparkTask for SparkOne
 			} else {
 				taskType = "RayTask" // Default for ForEach
 			}
@@ -603,6 +727,9 @@ func (c *YAMLToUniflowConverter) generateStarlarkLoadStatements(tasks []*TaskSpe
 func (c *YAMLToUniflowConverter) generateStarlarkWorkflowFunction(dagSpec *DAGFactorySpec) (string, error) {
 	var workflowCode strings.Builder
 
+	// Get consolidated task list from either pipeline.tasks or top-level tasks
+	allTasks := c.getConsolidatedTasks(dagSpec)
+
 	// Function header
 	workflowName := c.safeStarlarkName(dagSpec.Pipeline.Name)
 	workflowCode.WriteString(fmt.Sprintf("def %s():\n", workflowName))
@@ -612,7 +739,7 @@ func (c *YAMLToUniflowConverter) generateStarlarkWorkflowFunction(dagSpec *DAGFa
 	}
 
 	// Get execution order (topological sort of dependencies)
-	executionOrder, err := c.getTaskExecutionOrder(dagSpec.Pipeline.Tasks)
+	executionOrder, err := c.getTaskExecutionOrder(allTasks)
 	if err != nil {
 		return "", fmt.Errorf("failed to determine execution order: %w", err)
 	}
@@ -621,7 +748,7 @@ func (c *YAMLToUniflowConverter) generateStarlarkWorkflowFunction(dagSpec *DAGFa
 	for _, task := range executionOrder {
 		taskCode, err := c.generateStarlarkTaskExecution(task)
 		if err != nil {
-			return "", fmt.Errorf("failed to generate task execution for %s: %w", task.TaskID, err)
+			return "", fmt.Errorf("failed to generate task execution for %s: %w", task.GetEffectiveTaskID(), err)
 		}
 
 		// Add indentation and task code
@@ -638,8 +765,9 @@ func (c *YAMLToUniflowConverter) generateStarlarkWorkflowFunction(dagSpec *DAGFa
 	// Return results from all tasks
 	var resultItems []string
 	for _, task := range executionOrder {
-		safeName := c.safeStarlarkName(task.TaskID)
-		resultItems = append(resultItems, fmt.Sprintf("\"%s\": %s_result", task.TaskID, safeName))
+		effectiveID := task.GetEffectiveTaskID()
+		safeName := c.safeStarlarkName(effectiveID)
+		resultItems = append(resultItems, fmt.Sprintf("\"%s\": %s_result", effectiveID, safeName))
 	}
 
 	if len(resultItems) > 0 {
@@ -656,12 +784,37 @@ func (c *YAMLToUniflowConverter) getTaskExecutionOrder(tasks []*TaskSpec) ([]*Ta
 	dependencies := make(map[string][]string)
 
 	for _, task := range tasks {
-		taskMap[task.TaskID] = task
+		effectiveID := task.GetEffectiveTaskID()
+		taskMap[effectiveID] = task
 		var deps []string
+
+		// Add explicit dependencies
 		for _, dep := range task.DependsOn {
 			deps = append(deps, dep.TaskID)
 		}
-		dependencies[task.TaskID] = deps
+
+		// Add implicit dependencies from template references in if_else_task
+		if task.IfElseTask != nil {
+			// Check inputs field for template references
+			if task.IfElseTask.Inputs != "" {
+				if implicitDeps := c.extractTaskDependenciesFromTemplate(task.IfElseTask.Inputs); len(implicitDeps) > 0 {
+					deps = append(deps, implicitDeps...)
+				}
+			}
+			// Check condition fields for template references
+			if task.IfElseTask.Condition != nil {
+				if implicitDeps := c.extractTaskDependenciesFromTemplate(task.IfElseTask.Condition.Left); len(implicitDeps) > 0 {
+					deps = append(deps, implicitDeps...)
+				}
+				if implicitDeps := c.extractTaskDependenciesFromTemplate(task.IfElseTask.Condition.Right); len(implicitDeps) > 0 {
+					deps = append(deps, implicitDeps...)
+				}
+			}
+		}
+
+		// Remove duplicates
+		deps = c.removeDuplicates(deps)
+		dependencies[effectiveID] = deps
 	}
 
 	// Topological sort using Kahn's algorithm
@@ -709,6 +862,40 @@ func (c *YAMLToUniflowConverter) getTaskExecutionOrder(tasks []*TaskSpec) ([]*Ta
 	return result, nil
 }
 
+// extractTaskDependenciesFromTemplate extracts task names from template references like {{tasks.task_name.output}}
+func (c *YAMLToUniflowConverter) extractTaskDependenciesFromTemplate(template string) []string {
+	var deps []string
+
+	// Find all {{tasks.task_name...}} patterns
+	if strings.Contains(template, "{{tasks.") {
+		start := strings.Index(template, "{{tasks.") + 8 // Skip "{{tasks."
+		end := strings.Index(template[start:], ".")
+		if end > 0 {
+			taskName := template[start : start+end]
+			if taskName != "" {
+				deps = append(deps, taskName)
+			}
+		}
+	}
+
+	return deps
+}
+
+// removeDuplicates removes duplicate strings from a slice
+func (c *YAMLToUniflowConverter) removeDuplicates(slice []string) []string {
+	seen := make(map[string]bool)
+	var result []string
+
+	for _, item := range slice {
+		if !seen[item] {
+			seen[item] = true
+			result = append(result, item)
+		}
+	}
+
+	return result
+}
+
 // TaskExecutionContext represents different execution contexts
 type TaskExecutionContext string
 
@@ -720,16 +907,60 @@ const (
 
 // generateTaskExecutionCode generates appropriate task execution code based on task type
 func (c *YAMLToUniflowConverter) generateTaskExecutionCode(task *TaskSpec, context TaskExecutionContext) (string, error) {
-	// Determine task type and generate appropriate execution code
+	// Handle ForEach tasks by looking at inner task types
+	if task.ForEachTask != nil && context == ContextForEach {
+		if task.ForEachTask.NotebookTask != nil {
+			// Create a temporary task with notebook task at top level for code generation
+			tempTask := &TaskSpec{
+				TaskID:       task.TaskID,
+				NotebookTask: task.ForEachTask.NotebookTask,
+			}
+			return c.generateStarlarkNotebookTaskExecution(tempTask), nil
+		} else if task.ForEachTask.RayTask != nil {
+			tempTask := &TaskSpec{
+				TaskID:  task.TaskID,
+				RayTask: task.ForEachTask.RayTask,
+			}
+			return c.generateStarlarkRayTaskExecution(tempTask)
+		} else if task.ForEachTask.SparkTask != nil {
+			tempTask := &TaskSpec{
+				TaskID:    task.TaskID,
+				SparkTask: task.ForEachTask.SparkTask,
+			}
+			return c.generateStarlarkSparkTaskExecution(tempTask)
+		} else if task.ForEachTask.SparkOneTask != nil {
+			// For SparkOne, default to RayTask generation for now
+			tempTask := &TaskSpec{
+				TaskID: task.TaskID,
+				RayTask: &RayTaskConfig{
+					TaskParameters: task.ForEachTask.SparkOneTask.TaskParameters,
+					UserParameters: task.ForEachTask.SparkOneTask.UserParameters,
+				},
+			}
+			return c.generateStarlarkRayTaskExecution(tempTask)
+		} else {
+			// Fallback to RayTask
+			tempTask := &TaskSpec{
+				TaskID: task.TaskID,
+				RayTask: &RayTaskConfig{
+					TaskParameters: map[string]interface{}{},
+					UserParameters: map[string]interface{}{},
+				},
+			}
+			return c.generateStarlarkRayTaskExecution(tempTask)
+		}
+	}
+
+	// Determine task type and generate appropriate execution code for regular tasks
 	if task.NotebookTask != nil {
 		return c.generateStarlarkNotebookTaskExecution(task), nil
 	} else if task.RayTask != nil {
-		return c.generateStarlarkRayTaskExecution(task), nil
+		return c.generateStarlarkRayTaskExecution(task)
 	} else if task.SparkTask != nil {
-		return c.generateStarlarkSparkTaskExecution(task), nil
+		return c.generateStarlarkSparkTaskExecution(task)
 	} else {
 		// Default to RayTask
-		return c.generateStarlarkRayTaskExecution(task), nil
+		return c.generateStarlarkRayTaskExecution(task)
 	}
 }
 
@@ -738,7 +969,7 @@ func (c *YAMLToUniflowConverter) generateStarlarkTaskExecution(task *TaskSpec) (
 	var taskCode strings.Builder
 
 	// Comment with task info
-	taskCode.WriteString(fmt.Sprintf("# Task: %s\n", task.TaskID))
+	taskCode.WriteString(fmt.Sprintf("# Task: %s\n", task.GetEffectiveTaskID()))
 
 	// Check for conditional execution based on dependencies
 	hasConditions := c.hasConditionalDependencies(task)
@@ -750,6 +981,11 @@ func (c *YAMLToUniflowConverter) generateStarlarkTaskExecution(task *TaskSpec) (
 	// Handle ForEach/expand pattern
 	if task.ForEachTask != nil {
 		return c.generateStarlarkForEachExecution(task)
+	}
+
+	// Handle if_else_task pattern
+	if task.IfElseTask != nil {
+		return c.generateStarlarkIfElseExecution(task)
 	}
 
 	// Regular single task execution
@@ -775,24 +1011,18 @@ func (c *YAMLToUniflowConverter) hasConditionalDependencies(task *TaskSpec) bool
 // generateStarlarkConditionalExecution generates conditional task execution
 func (c *YAMLToUniflowConverter) generateStarlarkConditionalExecution(task *TaskSpec) (string, error) {
 	var taskCode strings.Builder
-	safeName := c.safeStarlarkName(task.TaskID)
+	safeName := c.safeStarlarkName(task.GetEffectiveTaskID())
 
-	taskCode.WriteString(fmt.Sprintf("# Task: %s (conditional)\n", task.TaskID))
+	taskCode.WriteString(fmt.Sprintf("# Task: %s (conditional)\n", task.GetEffectiveTaskID()))
 
 	// Build condition from dependencies
 	var conditions []string
 	for _, dep := range task.DependsOn {
 		if dep.Outcome != "" {
 			depSafeName := c.safeStarlarkName(dep.TaskID)
-			switch dep.Outcome {
-			case "success", "true":
-				conditions = append(conditions, fmt.Sprintf("%s_result != None", depSafeName))
-			case "failure", "false":
-				conditions = append(conditions, fmt.Sprintf("%s_result == None", depSafeName))
-			default:
-				// Custom outcome check
-				conditions = append(conditions, fmt.Sprintf("%s_result.get(\"outcome\") == \"%s\"", depSafeName, dep.Outcome))
-			}
+			// For if_else_task outcomes, always check the outcome field
+			// This handles both string outcomes like "true"/"false" and custom outcomes
+			conditions = append(conditions, fmt.Sprintf("%s_result.get(\"outcome\") == \"%s\"", depSafeName, dep.Outcome))
 		}
 	}
 
@@ -834,56 +1064,106 @@ func (c *YAMLToUniflowConverter) generateStarlarkConditionalExecution(task *Task
 	return taskCode.String(), nil
 }
 
-// generateStarlarkNotebookTaskExecution generates notebook task execution
+// generateStarlarkNotebookTaskExecution generates notebook task execution using ray_task
 func (c *YAMLToUniflowConverter) generateStarlarkNotebookTaskExecution(task *TaskSpec) string {
-	safeName := c.safeStarlarkName(task.TaskID)
+	safeName := c.safeStarlarkName(task.GetEffectiveTaskID())
 
 	var taskCode strings.Builder
-	taskCode.WriteString(fmt.Sprintf("%s_result = __notebook_task__(\n", safeName))
-	taskCode.WriteString(fmt.Sprintf("    \"michelangelo.uniflow.plugins.notebook.run_notebook\",\n"))
+
+	// Generate user parameter variable assignments
+	var userVarAssignments []string
+	var userVarNames []string
 
 	if task.NotebookTask != nil {
-		taskCode.WriteString(fmt.Sprintf("    notebook_path=\"%s\",\n", task.NotebookTask.NotebookPath))
-		if len(task.NotebookTask.UserParameters) > 0 {
-			taskCode.WriteString("    parameters={\n")
+		// Add notebook_path as a parameter
+		if task.NotebookTask.NotebookPath != "" {
+			userVarAssignments = append(userVarAssignments, fmt.Sprintf("notebook_path = \"%s\"", task.NotebookTask.NotebookPath))
+			userVarNames = append(userVarNames, "notebook_path")
+		}
+
+		// Add user parameters
+		if task.NotebookTask.UserParameters != nil {
 			for key, value := range task.NotebookTask.UserParameters {
-				taskCode.WriteString(fmt.Sprintf("        \"%s\": %v,\n", key, c.formatStarlarkValue(value)))
+				if strValue, ok := value.(string); ok && strings.Contains(strValue, "{{tasks.") {
+					// Handle template expressions
+					refVar := c.convertStarlarkTemplateReference(strValue)
+					userVarAssignments = append(userVarAssignments, fmt.Sprintf("%s = %s", key, refVar))
+					userVarNames = append(userVarNames, key)
+				} else {
+					// Static values
+					userVarAssignments = append(userVarAssignments, fmt.Sprintf("%s = %s", key, c.formatStarlarkValue(value)))
+					userVarNames = append(userVarNames, key)
+				}
 			}
-			taskCode.WriteString("    },\n")
 		}
 	}
 
-	taskCode.WriteString("    cache_enabled=True,\n")
-	taskCode.WriteString("    retry_attempts=0,\n")
-	taskCode.WriteString(")()\n\n")
+	// Add user parameter variable assignments
+	for _, assignment := range userVarAssignments {
+		taskCode.WriteString(fmt.Sprintf("%s\n", assignment))
+	}
+
+	// Use ray_task with hardcoded notebook executor path
+	taskCode.WriteString(fmt.Sprintf("%s_result = __ray_task__(\n", safeName))
+	taskCode.WriteString("    \"examples.notebook_workflow.executor.notebook_executor\",\n")
+
+	// Add task parameters (head_cpu, head_memory, etc.) from YAML spec
+	rayTaskParams := []string{"head_cpu", "head_memory", "worker_cpu", "worker_memory", "worker_instances",
+		"worker_min_instances", "worker_max_instances", "cache_enabled", "cache_version"}
+
+	for _, paramName := range rayTaskParams {
+		if task.NotebookTask != nil && task.NotebookTask.TaskParameters != nil {
+			if value, exists := task.NotebookTask.TaskParameters[paramName]; exists {
+				if paramName == "cache_enabled" {
+					// Handle boolean values
+					if strValue := fmt.Sprintf("%v", value); strValue == "false" {
+						taskCode.WriteString("    cache_enabled=False,\n")
+					} else {
+						taskCode.WriteString("    cache_enabled=True,\n")
+					}
+				} else if paramName == "cache_version" && (value == nil || fmt.Sprintf("%v", value) == "null") {
+					taskCode.WriteString("    cache_version=None,\n")
+				} else if strValue, ok := value.(string); ok {
+					// String values need quotes
+					taskCode.WriteString(fmt.Sprintf("    %s=\"%s\",\n", paramName, strValue))
+				} else {
+					// Numeric values
+					taskCode.WriteString(fmt.Sprintf("    %s=%v,\n", paramName, value))
+				}
+			}
+		}
+	}
+
+	// Set defaults if not specified in YAML
+	if task.NotebookTask == nil || task.NotebookTask.TaskParameters == nil ||
+		task.NotebookTask.TaskParameters["cache_enabled"] == nil {
+		taskCode.WriteString("    cache_enabled=True,\n")
+	}
+	if task.NotebookTask == nil || task.NotebookTask.TaskParameters == nil ||
+		task.NotebookTask.TaskParameters["cache_version"] == nil {
+		taskCode.WriteString("    cache_version=None,\n")
+	}
+
+	// Close the __ray_task__ call and add user parameters
+	if len(userVarNames) > 0 {
+		taskCode.WriteString(fmt.Sprintf(")(%s)\n\n", strings.Join(userVarNames, ", ")))
+	} else {
+		taskCode.WriteString(")()\n\n")
+	}
 
 	return taskCode.String()
 }
 
 // generateStarlarkRayTaskExecution generates Ray task execution
-func (c *YAMLToUniflowConverter) generateStarlarkRayTaskExecution(task *TaskSpec) string {
-	safeName := c.safeStarlarkName(task.TaskID)
+func (c *YAMLToUniflowConverter) generateStarlarkRayTaskExecution(task *TaskSpec) (string, error) {
+	safeName := c.safeStarlarkName(task.GetEffectiveTaskID())
 
-	if task.RayTask == nil {
-		// Default fallback
-		var taskCode strings.Builder
-		taskCode.WriteString(fmt.Sprintf("%s_result = __ray_task__(\n", safeName))
-		taskCode.WriteString("    \"michelangelo.uniflow.plugins.default.run_task\",\n")
-		taskCode.WriteString("    head_cpu=2,\n")
-		taskCode.WriteString("    head_memory=\"4Gi\",\n")
-		taskCode.WriteString("    cache_enabled=False,\n")
-		taskCode.WriteString("    cache_version=None,\n")
-		taskCode.WriteString(")()\n\n")
-		return taskCode.String()
+	// Extract function from task_parameters - REQUIRED
+	fn, exists := task.RayTask.TaskParameters["function"]
+	if !exists {
+		return "", fmt.Errorf("ray_task '%s' must specify 'function' in task_parameters", task.GetEffectiveTaskID())
 	}
-
-	// Extract function from task_parameters
-	var functionName string
-	if fn, exists := task.RayTask.TaskParameters["function"]; exists {
-		functionName = fmt.Sprintf("%v", fn)
-	} else {
-		functionName = "michelangelo.uniflow.plugins.default.run_task"
-	}
+	functionName := fmt.Sprintf("%v", fn)
 
 	// Generate user parameter variable assignments
 	var userVarAssignments []string
@@ -949,33 +1229,19 @@ func (c *YAMLToUniflowConverter) generateStarlarkRayTaskExecution(task *TaskSpec
 		taskCode.WriteString(")()\n\n")
 	}
 
-	return taskCode.String()
+	return taskCode.String(), nil
 }
 
 // generateStarlarkSparkTaskExecution generates Spark task execution
-func (c *YAMLToUniflowConverter) generateStarlarkSparkTaskExecution(task *TaskSpec) string {
+func (c *YAMLToUniflowConverter) generateStarlarkSparkTaskExecution(task *TaskSpec) (string, error) {
 	safeName := c.safeStarlarkName(task.TaskID)
 
-	if task.SparkTask == nil {
-		// Default fallback
-		var taskCode strings.Builder
-		taskCode.WriteString(fmt.Sprintf("%s_result = __spark_task__(\n", safeName))
-		taskCode.WriteString("    \"michelangelo.uniflow.plugins.default.run_spark_task\",\n")
-		taskCode.WriteString("    driver_cpu=2,\n")
-		taskCode.WriteString("    driver_memory=\"4Gi\",\n")
-		taskCode.WriteString("    cache_enabled=False,\n")
-		taskCode.WriteString("    cache_version=None,\n")
-		taskCode.WriteString(")()\n\n")
-		return taskCode.String()
+	// Extract function from task_parameters - REQUIRED
+	fn, exists := task.SparkTask.TaskParameters["function"]
+	if !exists {
+		return "", fmt.Errorf("spark_task '%s' must specify 'function' in task_parameters", task.TaskID)
 	}
-
-	// Extract function from task_parameters
-	var functionName string
-	if fn, exists := task.SparkTask.TaskParameters["function"]; exists {
-		functionName = fmt.Sprintf("%v", fn)
-	} else {
-		functionName = "michelangelo.uniflow.plugins.default.run_spark_task"
-	}
+	functionName := fmt.Sprintf("%v", fn)
 
 	// Generate user parameter variable assignments
 	var userVarAssignments []string
@@ -1040,15 +1306,15 @@ func (c *YAMLToUniflowConverter) generateStarlarkSparkTaskExecution(task *TaskSp
 		taskCode.WriteString(")()\n\n")
 	}
 
-	return taskCode.String()
+	return taskCode.String(), nil
 }
 
 // generateStarlarkForEachExecution generates foreach/expand pattern execution
 func (c *YAMLToUniflowConverter) generateStarlarkForEachExecution(task *TaskSpec) (string, error) {
-	safeName := c.safeStarlarkName(task.TaskID)
+	safeName := c.safeStarlarkName(task.GetEffectiveTaskID())
 
 	var taskCode strings.Builder
-	taskCode.WriteString(fmt.Sprintf("# Task: %s (foreach)\n", task.TaskID))
+	taskCode.WriteString(fmt.Sprintf("# Task: %s (foreach)\n", task.GetEffectiveTaskID()))
 
 	iterSource := c.convertForEachInputsForStarlark(task.ForEachTask.Inputs)
 
@@ -1094,6 +1360,64 @@ func (c *YAMLToUniflowConverter) generateStarlarkForEachExecution(task *TaskSpec
 	return taskCode.String(), nil
 }
 
+// generateStarlarkIfElseExecution generates Starlark code for if_else_task
+func (c *YAMLToUniflowConverter) generateStarlarkIfElseExecution(task *TaskSpec) (string, error) {
+	safeName := c.safeStarlarkName(task.GetEffectiveTaskID())
+
+	var taskCode strings.Builder
+	taskCode.WriteString(fmt.Sprintf("# Task: %s (if_else)\n", task.GetEffectiveTaskID()))
+
+	if task.IfElseTask == nil {
+		return "", fmt.Errorf("if_else_task configuration is required for task %s", task.TaskID)
+	}
+
+	if task.IfElseTask.Condition == nil {
+		return "", fmt.Errorf("condition is required for if_else_task %s", task.TaskID)
+	}
+
+	// Extract the inputs (usually a task reference)
+	inputs := task.IfElseTask.Inputs
+	if inputs == "" {
+		return "", fmt.Errorf("inputs is required for if_else_task %s", task.TaskID)
+	}
+
+	// Convert template reference to Starlark variable reference
+	inputsRef := c.convertStarlarkTemplateReference(inputs)
+
+	// Generate condition evaluation code
+	condition := task.IfElseTask.Condition
+	leftRef := c.convertStarlarkTemplateReference(condition.Left)
+	rightValue := condition.Right // Assume right side is a literal value
+
+	// Build the condition expression based on operator
+	var conditionExpr string
+	switch condition.Op {
+	case "EQUAL_TO", "EQ":
+		conditionExpr = fmt.Sprintf("%s == \"%s\"", leftRef, rightValue)
+	case "NOT_EQUAL_TO", "NE":
+		conditionExpr = fmt.Sprintf("%s != \"%s\"", leftRef, rightValue)
+	case "GREATER_THAN", "GT":
+		conditionExpr = fmt.Sprintf("%s > %s", leftRef, rightValue)
+	case "LESS_THAN", "LT":
+		conditionExpr = fmt.Sprintf("%s < %s", leftRef, rightValue)
+	case "GREATER_EQUAL", "GE":
+		conditionExpr = fmt.Sprintf("%s >= %s", leftRef, rightValue)
+	case "LESS_EQUAL", "LE":
+		conditionExpr = fmt.Sprintf("%s <= %s", leftRef, rightValue)
+	default:
+		return "", fmt.Errorf("unsupported condition operator '%s' for task %s", condition.Op, task.TaskID)
+	}
+
+	// Generate the if_else logic
+	taskCode.WriteString(fmt.Sprintf("# Evaluate condition: %s\n", conditionExpr))
+	taskCode.WriteString(fmt.Sprintf("if %s:\n", conditionExpr))
+	taskCode.WriteString(fmt.Sprintf("    %s_result = {\"outcome\": \"true\", \"inputs\": %s}\n", safeName, inputsRef))
+	taskCode.WriteString("else:\n")
+	taskCode.WriteString(fmt.Sprintf("    %s_result = {\"outcome\": \"false\", \"inputs\": %s}\n\n", safeName, inputsRef))
+
+	return taskCode.String(), nil
+}
+
 // safeStarlarkName converts to valid Starlark identifier
 func (c *YAMLToUniflowConverter) safeStarlarkName(name string) string {
 	safe := strings.ReplaceAll(name, "-", "_")
@@ -1127,14 +1451,32 @@ func (c *YAMLToUniflowConverter) formatStarlarkValue(value interface{}) string {
 
 // convertStarlarkTemplateReference converts template references for Starlark
 func (c *YAMLToUniflowConverter) convertStarlarkTemplateReference(ref string) string {
-	// Convert {{tasks.taskname.output}} to taskname_result
+	// Convert template references like {{tasks.taskname.output.field}} to Starlark
 	if strings.Contains(ref, "{{tasks.") {
-		start := strings.Index(ref, "{{tasks.") + 8
-		end := strings.Index(ref[start:], ".") + start
-		if end > start {
-			taskName := ref[start:end]
-			safeName := c.safeStarlarkName(taskName)
-			return fmt.Sprintf("%s_result", safeName)
+		// Remove {{ and }}
+		inner := strings.Trim(ref, "{}")
+		inner = strings.TrimSpace(inner)
+
+		if strings.HasPrefix(inner, "tasks.") {
+			parts := strings.Split(inner, ".")
+			if len(parts) >= 2 {
+				taskName := parts[1]
+				safeName := c.safeStarlarkName(taskName)
+
+				if len(parts) > 2 {
+					// Handle nested access like tasks.validation.output.status
+					accessPath := strings.Join(parts[2:], ".")
+					if accessPath == "output" {
+						return fmt.Sprintf("%s_result", safeName)
+					}
+					// Convert output.status to result.get("status")
+					if strings.HasPrefix(accessPath, "output.") {
+						field := strings.TrimPrefix(accessPath, "output.")
+						return fmt.Sprintf("%s_result.get(\"%s\")", safeName, field)
+					}
+				}
+				return fmt.Sprintf("%s_result", safeName)
+			}
 		}
 	}
 
@@ -1178,6 +1520,22 @@ func (c *YAMLToUniflowConverter) createUniflowTar(uniflowYAML, starlarkCode stri
 
 	c.logger.Info("Created Uniflow tar", zap.Int("size_bytes", tarBuffer.Len()), zap.String("workflow", dagSpec.Pipeline.Name))
 	return tarBuffer.Bytes(), nil
+}
+
+// getConsolidatedTasks returns tasks from either pipeline.tasks or top-level tasks
+func (c *YAMLToUniflowConverter) getConsolidatedTasks(dagSpec *DAGFactorySpec) []*TaskSpec {
+	// Check if tasks are defined at the top level (new format)
+	if len(dagSpec.Tasks) > 0 {
+		return dagSpec.Tasks
+	}
+
+	// Fallback to pipeline.tasks (old format)
+	if dagSpec.Pipeline != nil && len(dagSpec.Pipeline.Tasks) > 0 {
+		return dagSpec.Pipeline.Tasks
+	}
+
+	// No tasks found
+	return []*TaskSpec{}
 }
 
 // addFileToTar adds a file to the tar archive

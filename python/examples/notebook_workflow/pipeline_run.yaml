@@ -1,0 +1,17 @@
+apiVersion: michelangelo.api/v2
+kind: PipelineRun
+metadata:
+  name: notebook-workflow-run-012
+  namespace: ma-dev-test
+  annotations:
+    michelangelo/description: "Test execution of notebook workflow YAML DAG"
+spec:
+  pipeline:
+    namespace: ma-dev-test
+    name: notebook-workflow-test
+  description: "Test run of conditional notebook workflow with task_values and exit_value"
+  input:
+    environment: "test"
+    ref_date: "2026-01-31"
+    data_size: 100
+    seed: 42
