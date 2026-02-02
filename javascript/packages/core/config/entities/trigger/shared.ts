@@ -1,7 +1,9 @@
 import { CellType } from '#core/components/cell/constants';
-import { Cell } from '#core/components/cell/types';
 
-export const TRIGGER_STATE_CELL_CONFIG: Cell = {
+import type { RowCell } from '#core/components/row/types';
+import type { TriggerRun } from './types';
+
+export const TRIGGER_STATE_CELL_CONFIG: RowCell = {
   id: 'status.state',
   label: 'State',
   type: CellType.STATE,
@@ -23,7 +25,7 @@ export const TRIGGER_STATE_CELL_CONFIG: Cell = {
   },
 };
 
-export const TRIGGER_PIPELINE_CELL_CONFIG: Cell = {
+export const TRIGGER_PIPELINE_CELL_CONFIG: RowCell = {
   id: 'spec.pipeline.name',
   label: 'Pipeline',
   items: [
@@ -36,4 +38,76 @@ export const TRIGGER_PIPELINE_CELL_CONFIG: Cell = {
       type: CellType.DESCRIPTION,
     },
   ],
+};
+
+export const TRIGGER_CRON_CELL_CONFIG: RowCell = {
+  id: 'spec.trigger.triggerType.value.cron',
+  label: 'Cron Schedule',
+  type: CellType.TEXT,
+  accessor: (row: TriggerRun) => {
+    const triggerType = row.spec?.trigger?.triggerType;
+    if (triggerType?.case === 'cronSchedule') {
+      return triggerType.value.cron;
+    }
+    return undefined;
+  },
+  hideEmpty: true,
+};
+
+export const TRIGGER_INTERVAL_CELL_CONFIG: RowCell = {
+  id: 'spec.trigger.triggerType.value.interval.seconds',
+  label: 'Interval (seconds)',
+  type: CellType.TEXT,
+  accessor: (row: TriggerRun) => {
+    const triggerType = row.spec?.trigger?.triggerType;
+    if (triggerType?.case === 'intervalSchedule') {
+      return triggerType.value.interval?.seconds;
+    }
+    return undefined;
+  },
+  hideEmpty: true,
+};
+
+export const TRIGGER_BATCH_SIZE_CELL_CONFIG: RowCell = {
+  id: 'spec.trigger.batchPolicy.batchSize',
+  label: 'Batch Size',
+  type: CellType.TEXT,
+  accessor: (row: TriggerRun) => {
+    if (row.spec?.trigger?.maxConcurrency) return undefined;
+    return row.spec?.trigger?.batchPolicy?.batchSize;
+  },
+  hideEmpty: true,
+};
+
+export const TRIGGER_WAIT_CELL_CONFIG: RowCell = {
+  id: 'spec.trigger.batchPolicy.wait.seconds',
+  label: 'Wait (seconds)',
+  type: CellType.TEXT,
+  accessor: (row: TriggerRun) => {
+    if (row.spec?.trigger?.maxConcurrency) return undefined;
+    return row.spec?.trigger?.batchPolicy?.wait?.seconds;
+  },
+  hideEmpty: true,
+};
+
+export const TRIGGER_MAX_CONCURRENCY_CELL_CONFIG: RowCell = {
+  id: 'spec.trigger.maxConcurrency',
+  label: 'Max Concurrency',
+  type: CellType.TEXT,
+  accessor: (row: TriggerRun) => row.spec?.trigger?.maxConcurrency,
+  hideEmpty: true,
+};
+
+export const TRIGGER_START_TIME_CELL_CONFIG: RowCell = {
+  id: 'spec.startTimestamp.seconds',
+  label: 'Start Time',
+  type: CellType.DATE,
+  hideEmpty: true,
+};
+
+export const TRIGGER_END_TIME_CELL_CONFIG: RowCell = {
+  id: 'spec.endTimestamp.seconds',
+  label: 'End Time',
+  type: CellType.DATE,
+  hideEmpty: true,
 };
