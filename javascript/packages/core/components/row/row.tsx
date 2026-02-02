@@ -8,6 +8,58 @@ import { StyledRowContainer, StyledRowItemContainer } from './styled-components'
 
 import type { RowProps } from '#core/components/row/types';
 
+/**
+ * Displays data as a horizontal row of label-value pairs with optional loading state.
+ *
+ * Row provides a flexible layout for displaying record data in a structured format,
+ * with automatic handling of empty values, loading skeletons, and value extraction
+ * from data records using accessors.
+ *
+ * Features:
+ * - Horizontal layout of label-value pairs
+ * - Automatic value extraction via accessors (string paths or functions)
+ * - Optional hiding of empty values via hideEmpty flag
+ * - Loading state with skeleton UI
+ * - Customizable through BaseUI overrides
+ * - Theme integration
+ *
+ * @param props.items - Array of row items to display, each with id, label, and optional accessor
+ * @param props.record - Data record to extract values from
+ * @param props.loading - When true, displays skeleton loading placeholders instead of values
+ * @param props.overrides - BaseUI overrides for RowContainer, RowItemContainer, and RowItem components
+ *
+ * @example
+ * ```tsx
+ * // Basic row with data
+ * <Row
+ *   record={{ name: 'training-pipeline', version: 'v1.2', status: 'running' }}
+ *   items={[
+ *     { id: 'name', label: 'Name', accessor: 'name' },
+ *     { id: 'version', label: 'Version', accessor: 'version' },
+ *     { id: 'status', label: 'Status', accessor: 'status' }
+ *   ]}
+ * />
+ *
+ * // With loading state
+ * <Row
+ *   loading={true}
+ *   items={[
+ *     { id: 'name', label: 'Name' },
+ *     { id: 'status', label: 'Status' }
+ *   ]}
+ * />
+ *
+ * // Hide empty values
+ * <Row
+ *   record={{ name: 'pipeline', description: null }}
+ *   items={[
+ *     { id: 'name', label: 'Name', accessor: 'name' },
+ *     { id: 'description', label: 'Description', accessor: 'description', hideEmpty: true }
+ *   ]}
+ * />
+ * // Only "Name" will be displayed
+ * ```
+ */
 export function Row(props: RowProps) {
   const { items, loading = false, record = {}, overrides = {} } = props;
 
