@@ -8,7 +8,51 @@ import { useCellProvider } from '#core/providers/cell-provider/use-cell-provider
 import { CellType } from './constants';
 
 /**
- * @returns A function that returns a cell renderer for a given column.
+ * Returns a function that resolves the appropriate cell renderer based on column
+ * configuration and value type.
+ *
+ * The renderer resolution follows this priority order:
+ * 1. Custom renderer from column.Cell if provided
+ * 2. Renderer from CellProvider context if registered for the column type
+ * 3. Built-in renderer from CELL_RENDERERS if type matches
+ * 4. Auto-detected link renderer for URL values
+ * 5. Default TextCell renderer as fallback
+ *
+ * @returns Function that takes CellRendererProps and returns the appropriate CellRenderer.
+ *   The returned renderer will handle rendering the cell value and provide a toString method.
+ *
+ * @example
+ * ```typescript
+ * const getCellRenderer = useGetCellRenderer();
+ *
+ * // Get renderer for a specific cell
+ * const renderer = getCellRenderer({
+ *   column: { type: CellType.DATE },
+ *   value: '2024-01-15T10:30:00Z'
+ * });
+ * // Returns DateCell renderer
+ *
+ * // Custom renderer from column config
+ * const renderer = getCellRenderer({
+ *   column: { Cell: MyCustomCell },
+ *   value: data
+ * });
+ * // Returns MyCustomCell
+ *
+ * // Auto-detected URL
+ * const renderer = getCellRenderer({
+ *   column: {},
+ *   value: 'https://example.com'
+ * });
+ * // Returns auto-generated Link renderer
+ *
+ * // Fallback for unknown types
+ * const renderer = getCellRenderer({
+ *   column: {},
+ *   value: 'plain text'
+ * });
+ * // Returns TextCell
+ * ```
  */
 export function useGetCellRenderer(): (args: CellRendererProps<unknown>) => CellRenderer<unknown> {
   const cellContext = useCellProvider();

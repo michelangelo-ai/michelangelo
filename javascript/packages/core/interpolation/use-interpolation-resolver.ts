@@ -8,24 +8,56 @@ import { resolveInterpolations } from './resolve-interpolations';
 import type { ExclusionCheck, InterpolationContext, UserDataSources } from './types';
 
 /**
- * React hook that returns a function to resolve interpolations in an unknown
- * data structure. It combines data from multiple sources, including React Contexts,
- * URL parameters, and page data.
+ * Returns a function to resolve interpolated values by merging data from multiple sources
+ * including URL params, React contexts, and user-provided data.
+ *
+ * The resolver traverses data structures recursively, replacing interpolated values
+ * (created with `interpolate()`) with their resolved values. Non-interpolated values
+ * pass through unchanged.
+ *
+ * Data sources are merged in this priority order (later overrides earlier):
+ * 1. Studio route params (projectId, phase, etc.)
+ * 2. Repeated layout context (for nested/repeated UI elements)
+ * 3. Injected interpolation context (from InterpolationProvider)
+ * 4. User-provided data sources (passed as second argument)
+ *
+ * @returns Function that resolves interpolations:
+ *   - `variable`: The value or data structure to resolve (can be any type)
+ *   - `input`: Optional additional data sources (page, row, data, etc.)
+ *   - `excludeProperty`: Optional function to exclude certain properties from resolution
  *
  * @example
  * ```typescript
- * // Basic usage, react context includes user.name = "John"
+ * // Basic string interpolation
  * const resolve = useInterpolationResolver();
  * const greeting = resolve(interpolate('Hello ${user.name}'));
- * // greeting: "Hello John"
+ * // If context has user.name = "John": "Hello John"
  *
- * // With additional data sources
- * const schema = interpolate('${page.title}: ${row.id}');
- * const result = resolve(schema, {
+ * // Object with interpolated values
+ * const config = {
+ *   title: interpolate('${page.title}'),
+ *   id: interpolate('${row.id}'),
+ *   static: 'unchanged'
+ * };
+ * const resolved = resolve(config, {
  *   page: { title: 'Dashboard' },
  *   row: { id: 123 }
  * });
- * // result: "Dashboard: 123"
+ * // Returns: { title: 'Dashboard', id: 123, static: 'unchanged' }
+ *
+ * // Function interpolation
+ * const dynamic = interpolate(({ studio }) => studio.projectId);
+ * const projectId = resolve(dynamic);
+ * // Returns current projectId from URL params
+ *
+ * // Excluding properties from resolution
+ * const data = { config: interpolate('${value}'), schema: rawSchema };
+ * const resolved = resolve(
+ *   data,
+ *   { value: 'resolved' },
+ *   (key) => key === 'schema' // Exclude 'schema' from resolution
+ * );
+ * // Returns: { config: 'resolved', schema: rawSchema }
  * ```
  */
 export function useInterpolationResolver() {
