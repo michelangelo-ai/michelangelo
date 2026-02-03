@@ -12,16 +12,21 @@ This document provides a comprehensive summary of the Michelangelo Ingester cont
 
 **Location:** `/home/user/Uber/michelangelo/scripts/`
 
-- ✅ `setup_mysql_sandbox.sh` - Automated MySQL database and table creation
-- ✅ `mysql_schema.sql` - Complete schema with 5 CRD types (Model, Pipeline, PipelineRun, Dataset, Deployment)
+- ✅ `complete_ingester_schema.sql` - **COMPLETE schema with ALL 13 CRD types** (RECOMMENDED)
+- ✅ `init_ingester_db.sh` - Automated database initialization (works for sandbox and production)
+- ✅ `ingester-schema-init-job.yaml` - Kubernetes Job for automated deployment
 - Each CRD has 3 tables: main table, labels table, annotations table
 - Supports soft deletion via `delete_time` column
-- Indexed columns for fast queries
+- All indexed fields from protobuf included
 
 **Usage:**
 ```bash
+# Shell script approach:
 export MYSQL_HOST=localhost MYSQL_PORT=3306 MYSQL_USER=root MYSQL_PASSWORD=pass
-./scripts/setup_mysql_sandbox.sh
+./scripts/init_ingester_db.sh
+
+# Or Kubernetes Job approach:
+kubectl apply -f scripts/ingester-schema-init-job.yaml
 ```
 
 ---
@@ -413,7 +418,9 @@ CREATE TABLE `model_annotations` (
 ```bash
 # 1. Setup MySQL
 export MYSQL_HOST=localhost MYSQL_PORT=3306 MYSQL_USER=root MYSQL_PASSWORD=pass
-./scripts/setup_mysql_sandbox.sh
+./scripts/init_ingester_db.sh
+# Or use Kubernetes Job:
+# kubectl apply -f scripts/ingester-schema-init-job.yaml
 
 # 2. Start MinIO
 docker run -d -p 9000:9000 -p 9001:9001 \
@@ -491,8 +498,9 @@ mysql -h localhost -u root -ppass michelangelo -e "SELECT * FROM model;"
 │       └── config/
 │           └── ingester_config.go    # Configuration structs
 ├── scripts/
-│   ├── setup_mysql_sandbox.sh        # MySQL setup script
-│   └── mysql_schema.sql              # Database schema
+│   ├── init_ingester_db.sh           # MySQL setup script
+│   ├── complete_ingester_schema.sql  # Complete schema (all 13 CRDs)
+│   └── ingester-schema-init-job.yaml # Kubernetes Job for schema init
 ├── config/
 │   └── sandbox_ingester.yaml         # Sample configuration
 └── SANDBOX_INGESTER_GUIDE.md         # Complete testing guide
@@ -504,7 +512,7 @@ mysql -h localhost -u root -ppass michelangelo -e "SELECT * FROM model;"
 
 ### Step 1: Add MySQL Schema
 
-Edit `scripts/mysql_schema.sql`:
+Edit `scripts/complete_ingester_schema.sql`:
 
 ```sql
 CREATE TABLE `my_crd` (
@@ -560,7 +568,7 @@ func (m *MyCRD) GetIndexedKeyValuePairs() []storage.IndexedField {
 
 ```bash
 bazel build //go/controllermgr/...
-./scripts/setup_mysql_sandbox.sh  # Re-run to create new tables
+./scripts/init_ingester_db.sh  # Re-run to create new tables
 # Start controller and test
 ```
 
@@ -601,7 +609,7 @@ WHERE delete_time IS NOT NULL;
 ## 🚦 Next Steps
 
 ### Immediate (Sandbox Validation)
-1. ✅ Run `./scripts/setup_mysql_sandbox.sh`
+1. ✅ Run `./scripts/init_ingester_db.sh` or `kubectl apply -f scripts/ingester-schema-init-job.yaml`
 2. ✅ Start MySQL and MinIO
 3. ✅ Test create/update/delete flows
 4. ✅ Verify MySQL data
