@@ -73,6 +73,10 @@ data:
       password: root
       database: michelangelo
 
+    ingester:
+      concurrentReconciles: 2
+      requeuePeriod: 30s
+
     workflowClient:
       service: cadence-frontend
       host: cadence:7833
