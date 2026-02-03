@@ -39,7 +39,6 @@ type Reconciler struct {
 	Scheme          *runtime.Scheme
 	TargetKind      client.Object
 	MetadataStorage storage.MetadataStorage
-	BlobStorage     storage.BlobStorage
 	Config          Config
 }
 
@@ -90,18 +89,10 @@ func (r *Reconciler) handleSync(ctx context.Context, log logr.Logger, object cli
 		indexedFields = indexedObj.GetIndexedKeyValuePairs()
 	}
 
-	// Upsert to metadata storage
+	// Upsert to metadata storage (includes all fields - no blob separation)
 	if err := r.MetadataStorage.Upsert(ctx, object, false, indexedFields); err != nil {
 		log.Error(err, "Failed to upsert object to metadata storage")
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
-	}
-
-	// Handle blob storage if object has blob fields
-	if r.BlobStorage != nil {
-		if blobObj, ok := object.(storage.ObjectWithBlobFields); ok && blobObj.HasBlobFields() {
-			log.Info("Object has blob fields - handling blob storage")
-			// TODO: Upload blob fields to MinIO
-		}
 	}
 
 	log.Info("Successfully synced object to metadata storage")
@@ -137,14 +128,6 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
 	if err := r.MetadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil {
 		log.Error(err, "Failed to delete from metadata storage")
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
-	}
-
-	// Delete from blob storage if applicable
-	if r.BlobStorage != nil {
-		if blobObj, ok := object.(storage.ObjectWithBlobFields); ok && blobObj.HasBlobFields() {
-			log.Info("Deleting blob storage")
-			// TODO: Delete from MinIO
-		}
 	}
 
 	// Remove our finalizer
