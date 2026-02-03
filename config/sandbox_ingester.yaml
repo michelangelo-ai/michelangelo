@@ -1,5 +1,5 @@
 # Michelangelo Sandbox Configuration with Ingester
-# This file demonstrates how to configure the ingester controller with MySQL and MinIO
+# This file demonstrates how to configure the ingester controller with MySQL
 
 # MySQL Configuration
 mysql:
@@ -12,15 +12,6 @@ mysql:
   maxOpenConns: 25
   maxIdleConns: 5
   connMaxLifetime: "5m"
-
-# MinIO Configuration (S3-compatible object storage)
-minio:
-  enabled: true
-  endpoint: "localhost:9000"
-  accessKeyID: "minioadmin"  # Default MinIO credentials
-  secretAccessKey: "minioadmin"
-  useSSL: false
-  bucketName: "michelangelo-blobs"
 
 # Ingester Controller Configuration
 ingester:
