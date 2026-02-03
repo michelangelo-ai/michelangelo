@@ -411,7 +411,7 @@ class ReadMinioConfigTest(TestCase):
     @patch("michelangelo.cli.mactl.mactl.yaml_safe_load")
     @patch("michelangelo.cli.mactl.mactl.getenv", return_value=None)
     @patch.dict(os.environ, {}, clear=True)
-    def test_sets_env_vars(self, mock_getenv, mock_yaml, mock_open, mock_config):
+    def test_sets_env_vars(self, _, mock_yaml, __, mock_config):
         """Test setting env vars from config."""
         mock_config.exists.return_value = True
         mock_yaml.return_value = {
@@ -432,7 +432,7 @@ class ReadMinioConfigTest(TestCase):
     @patch("michelangelo.cli.mactl.mactl.open")
     @patch("michelangelo.cli.mactl.mactl.yaml_safe_load")
     @patch.dict(os.environ, {"AWS_ACCESS_KEY_ID": "existing"}, clear=True)
-    def test_preserves_existing_env(self, mock_yaml, mock_open, mock_config):
+    def test_preserves_existing_env(self, mock_yaml, _, mock_config):
         """Test not overwriting existing env vars."""
         mock_config.exists.return_value = True
         mock_yaml.return_value = {"minio": {"access_key_id": "new_key"}}
@@ -447,10 +447,15 @@ class DiscoverCrdsTest(TestCase):
 
     @patch("michelangelo.cli.mactl.mactl.create_serivce_classes")
     @patch("michelangelo.cli.mactl.mactl.list_services")
-    def test_discover_crds_returns_crd_dict(self, mock_list_services, mock_create_classes):
+    def test_discover_crds_returns_crd_dict(
+        self, mock_list_services, mock_create_classes
+    ):
         """Test that discover_crds returns CRD dictionary."""
         mock_channel = Mock()
-        mock_services = ["michelangelo.api.v2.ProjectService", "michelangelo.api.v2.ModelService"]
+        mock_services = [
+            "michelangelo.api.v2.ProjectService",
+            "michelangelo.api.v2.ModelService",
+        ]
         mock_crds = {"project": Mock(), "model": Mock()}
 
         mock_list_services.return_value = mock_services
@@ -464,7 +469,9 @@ class DiscoverCrdsTest(TestCase):
 
     @patch("michelangelo.cli.mactl.mactl.create_serivce_classes")
     @patch("michelangelo.cli.mactl.mactl.list_services")
-    def test_discover_crds_with_empty_services(self, mock_list_services, mock_create_classes):
+    def test_discover_crds_with_empty_services(
+        self, mock_list_services, mock_create_classes
+    ):
         """Test discover_crds with no services."""
         mock_channel = Mock()
         mock_list_services.return_value = []
@@ -518,7 +525,7 @@ class HandleCrdActionHelpTest(TestCase):
 
     @patch("builtins.print")
     @patch("michelangelo.cli.mactl.mactl.print_help_available_actions")
-    def test_no_remaining_args_exits_with_1(self, mock_print_help, mock_print):
+    def test_no_remaining_args_exits_with_1(self, mock_print_help, _):
         """Test exits with code 1 when no remaining args."""
         mock_crd = Mock()
         mock_crd.name = "project"
@@ -532,7 +539,7 @@ class HandleCrdActionHelpTest(TestCase):
 
     @patch("builtins.print")
     @patch("michelangelo.cli.mactl.mactl.print_help_available_actions")
-    def test_help_flag_exits_with_0(self, mock_print_help, mock_print):
+    def test_help_flag_exits_with_0(self, mock_print_help, _):
         """Test exits with code 0 when --help flag is present."""
         mock_crd = Mock()
         mock_crd.name = "model"
@@ -546,7 +553,7 @@ class HandleCrdActionHelpTest(TestCase):
 
     @patch("builtins.print")
     @patch("michelangelo.cli.mactl.mactl.print_help_available_actions")
-    def test_h_flag_exits_with_0(self, mock_print_help, mock_print):
+    def test_h_flag_exits_with_0(self, mock_print_help, _):
         """Test exits with code 0 when -h flag is present."""
         mock_crd = Mock()
         mock_crd.name = "pipeline"
