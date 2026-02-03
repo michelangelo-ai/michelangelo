@@ -27,6 +27,13 @@ This tool helps you create and manage a sandbox cluster directly on your machine
 _dir = Path(__file__).parent
 
 _michelangelo_sandbox_kube_cluster_name = "michelangelo-sandbox"
+
+# Inference server target clusters for multi-cluster demo
+_inference_target_cluster_configs = [
+    {"k3d_name": "cluster-1", "cluster_id": "k3d-cluster-1"},
+    {"k3d_name": "cluster-2", "cluster_id": "k3d-cluster-2"},
+]
+
 _kube_ports = [
     "3306:30001",  # MySQL
     "9091:30007",  # MinIO
@@ -638,6 +645,19 @@ def _delete(ns: argparse.Namespace):
     except subprocess.CalledProcessError:
         # Cluster doesn't exist, skip deletion
         print(f"Compute cluster '{compute_cluster}' not found, skipping deletion.")
+
+    # Delete inference server target clusters (created by inference-multi-cluster demo)
+    for config in _inference_target_cluster_configs:
+        cluster_name = config["k3d_name"]
+        try:
+            subprocess.check_output(
+                ["k3d", "cluster", "get", cluster_name], stderr=subprocess.DEVNULL
+            )
+            # Cluster exists, delete it
+            _exec("k3d", "cluster", "delete", cluster_name)
+        except subprocess.CalledProcessError:
+            # Cluster doesn't exist, skip deletion
+            pass
 
     # Always try to delete the main sandbox cluster
     _exec("k3d", "cluster", "delete", _michelangelo_sandbox_kube_cluster_name)
@@ -1401,17 +1421,11 @@ def _create_inference_demo_multi_cluster():
     """Create an inference server for multi-cluster deployment demo purposes."""
     print("🚀 Setting up Michelangelo AI Inference Demo (Multi-Cluster)...")
 
-    # Define target clusters for multi-cluster inference
-    target_cluster_configs = [
-        {"k3d_name": "cluster-1", "cluster_id": "k3d-cluster-1"},
-        {"k3d_name": "cluster-2", "cluster_id": "k3d-cluster-2"},
-    ]
-
     # Create secrets and collect cluster connection info
     cluster_targets = []
     target_cluster_names = []
 
-    for config in target_cluster_configs:
+    for config in _inference_target_cluster_configs:
         k3d_name = config["k3d_name"]
         cluster_id = config["cluster_id"]
         secret_prefix = cluster_id  # e.g., "k3d-cluster-1"
@@ -1468,7 +1482,9 @@ def _create_inference_demo_multi_cluster():
             },
             "decomSpec": {"decommission": False},
             "owner": {"name": "user-example"},
-            "clusterTargets": cluster_targets,
+            "deploymentStrategy": {
+                "remoteClusterDeployment": {"clusterTargets": cluster_targets}
+            },
         },
     }
 
@@ -2058,8 +2074,8 @@ def _install_east_west_gateway(kube_context: str, cluster_id: str, network_name:
 
     Args:
         kube_context: kubectl context (e.g., "k3d-cluster-1")
-        cluster_id: The cluster ID used in InferenceServer.spec.clusterTargets
-                    (e.g., "k3d-cluster-1")
+        cluster_id: The cluster ID matching ClusterTarget.clusterId in the
+                    deploymentStrategy.remoteClusterDeployment list (e.g., "k3d-cluster-1")
         network_name: Network name for multi-cluster topology (e.g., "network1")
                       See: https://istio.io/latest/docs/setup/install/multicluster/multi-primary_multi-network/
     """

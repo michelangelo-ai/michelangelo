@@ -39,18 +39,21 @@ func (a *ClusterWorkloadsActor) GetType() string {
 func (a *ClusterWorkloadsActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Retrieving Triton server condition")
 
-	for _, targetCluster := range resource.Spec.ClusterTargets {
+	for _, targetCluster := range common.GetTargetClusters(resource.Spec.GetDeploymentStrategy()) {
 		status, err := a.backend.GetServerStatus(ctx, resource.Name, resource.Namespace, targetCluster)
 		if err != nil {
 			a.logger.Error("Failed to check server status",
 				zap.Error(err),
 				zap.String("operation", "get_server_status"),
 				zap.String("namespace", resource.Namespace),
-				zap.String("inferenceServer", resource.Name))
-			return conditionsUtils.GenerateFalseCondition(condition, "ClusterCheckFailed", "Failed to check cluster status"), nil
+				zap.String("inferenceServer", resource.Name),
+				zap.String("cluster", common.GenerateClusterDisplayName(targetCluster)))
+			return conditionsUtils.GenerateFalseCondition(condition, "ClusterCheckFailed",
+				fmt.Sprintf("Failed to check cluster %s status", common.GenerateClusterDisplayName(targetCluster))), nil
 		}
 		if status.ClusterState != v2pb.CLUSTER_STATE_READY {
-			return conditionsUtils.GenerateUnknownCondition(condition, "ClusterNotReady", fmt.Sprintf("Cluster %s is in state %s", targetCluster.ClusterId, status.ClusterState)), nil
+			return conditionsUtils.GenerateUnknownCondition(condition, "ClusterNotReady",
+				fmt.Sprintf("Cluster %s is in state %s", common.GenerateClusterDisplayName(targetCluster), status.ClusterState)), nil
 		}
 	}
 	return conditionsUtils.GenerateTrueCondition(condition), nil
@@ -60,21 +63,26 @@ func (a *ClusterWorkloadsActor) Retrieve(ctx context.Context, resource *v2pb.Inf
 func (a *ClusterWorkloadsActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Running Triton server infrastructure creation for all target clusters")
 
-	for _, targetCluster := range resource.Spec.ClusterTargets {
-		_, err := a.backend.CreateServer(ctx, resource.Name, resource.Namespace, backends.ResourceConstraints{
-			Cpu:      resource.Spec.InitSpec.ResourceSpec.Cpu,
-			Memory:   resource.Spec.InitSpec.ResourceSpec.Memory,
-			Gpu:      resource.Spec.InitSpec.ResourceSpec.Gpu,
-			Replicas: resource.Spec.InitSpec.NumInstances,
-		}, targetCluster)
+	constraints := backends.ResourceConstraints{
+		Cpu:      resource.Spec.InitSpec.ResourceSpec.Cpu,
+		Memory:   resource.Spec.InitSpec.ResourceSpec.Memory,
+		Gpu:      resource.Spec.InitSpec.ResourceSpec.Gpu,
+		Replicas: resource.Spec.InitSpec.NumInstances,
+	}
+
+	for _, targetCluster := range common.GetTargetClusters(resource.Spec.GetDeploymentStrategy()) {
+		_, err := a.backend.CreateServer(ctx, resource.Name, resource.Namespace, constraints, targetCluster)
 		if err != nil {
 			a.logger.Error("Failed to create server",
 				zap.Error(err),
 				zap.String("operation", "create_server"),
 				zap.String("namespace", resource.Namespace),
-				zap.String("inferenceServer", resource.Name))
-			return conditionsUtils.GenerateFalseCondition(condition, "ClusterCreationFailed", fmt.Sprintf("Failed to create server in cluster %s: %v", targetCluster.ClusterId, err)), nil
+				zap.String("inferenceServer", resource.Name),
+				zap.String("cluster", common.GenerateClusterDisplayName(targetCluster)))
+			return conditionsUtils.GenerateFalseCondition(condition, "ClusterCreationFailed",
+				fmt.Sprintf("Failed to create server in cluster %s: %v", common.GenerateClusterDisplayName(targetCluster), err)), nil
 		}
 	}
-	return conditionsUtils.GenerateUnknownCondition(condition, "ClusterCreationInitiated", "server creation initiated in all target clusters, waiting for resources to be ready"), nil
+	return conditionsUtils.GenerateUnknownCondition(condition, "ClusterCreationInitiated",
+		"server creation initiated in all target clusters, waiting for resources to be ready"), nil
 }

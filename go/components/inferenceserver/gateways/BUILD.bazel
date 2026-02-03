@@ -11,8 +11,8 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways",
     visibility = ["//visibility:public"],
     deps = [
-        "//go/base/config:go_default_library",
         "//go/components/inferenceserver/backends:go_default_library",
+        "//go/components/inferenceserver/backends/common:go_default_library",
         "//go/components/inferenceserver/clientfactory:go_default_library",
         "//go/components/inferenceserver/configmap:go_default_library",
         "//go/components/inferenceserver/endpointregistry:go_default_library",

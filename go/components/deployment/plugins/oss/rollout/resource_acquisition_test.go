@@ -17,9 +17,9 @@ import (
 )
 
 func TestResourceAcquisitionRetrieve(t *testing.T) {
-	testCluster := &v2pb.ClusterTarget{
+	testCluster := &gateways.TargetClusterConnection{
 		ClusterId: "test-cluster",
-		Config:    &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host1"}},
+		Host:      "host1",
 	}
 
 	tests := []struct {
@@ -43,7 +43,7 @@ func TestResourceAcquisitionRetrieve(t *testing.T) {
 				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
 					Return(&gateways.DeploymentTargetInfo{
 						BackendType:    v2pb.BACKEND_TYPE_TRITON,
-						ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+						ClusterTargets: []*gateways.TargetClusterConnection{testCluster},
 					}, nil)
 				gw.EXPECT().InferenceServerIsHealthy(
 					gomock.Any(), gomock.Any(), "test-server", "default", testCluster, v2pb.BACKEND_TYPE_TRITON,
@@ -95,7 +95,7 @@ func TestResourceAcquisitionRetrieve(t *testing.T) {
 				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
 					Return(&gateways.DeploymentTargetInfo{
 						BackendType:    v2pb.BACKEND_TYPE_TRITON,
-						ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+						ClusterTargets: []*gateways.TargetClusterConnection{testCluster},
 					}, nil)
 				gw.EXPECT().InferenceServerIsHealthy(
 					gomock.Any(), gomock.Any(), "test-server", "default", testCluster, v2pb.BACKEND_TYPE_TRITON,
@@ -118,7 +118,7 @@ func TestResourceAcquisitionRetrieve(t *testing.T) {
 				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
 					Return(&gateways.DeploymentTargetInfo{
 						BackendType:    v2pb.BACKEND_TYPE_TRITON,
-						ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+						ClusterTargets: []*gateways.TargetClusterConnection{testCluster},
 					}, nil)
 				gw.EXPECT().InferenceServerIsHealthy(
 					gomock.Any(), gomock.Any(), "test-server", "default", testCluster, v2pb.BACKEND_TYPE_TRITON,

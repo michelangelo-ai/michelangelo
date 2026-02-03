@@ -40,7 +40,7 @@ func (a *CleanupActor) Retrieve(ctx context.Context, resource *v2pb.InferenceSer
 	a.logger.Info("Retrieving Triton cleanup condition")
 
 	// Check if inference server still exists
-	for _, clusterTarget := range resource.Spec.ClusterTargets {
+	for _, clusterTarget := range common.GetTargetClusters(resource.Spec.GetDeploymentStrategy()) {
 		status, err := a.backend.GetServerStatus(ctx, resource.Name, resource.Namespace, clusterTarget)
 		if err != nil {
 			return conditionsUtils.GenerateFalseCondition(condition, "CannotCheckServerStatus", "Failed to check server status"), nil
@@ -58,7 +58,7 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.InferenceServer, 
 
 	// Delete inference server in all target clusters
 	a.logger.Info("Cleaning up inference server", zap.String("inferenceServer", resource.Name))
-	for _, clusterTarget := range resource.Spec.ClusterTargets {
+	for _, clusterTarget := range common.GetTargetClusters(resource.Spec.GetDeploymentStrategy()) {
 		err := a.backend.DeleteServer(ctx, resource.Name, resource.Namespace, clusterTarget)
 		if err != nil {
 			a.logger.Error("Failed to delete inference server",

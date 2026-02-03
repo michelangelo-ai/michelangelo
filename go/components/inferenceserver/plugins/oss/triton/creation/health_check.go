@@ -40,7 +40,7 @@ func (a *HealthCheckActor) Retrieve(ctx context.Context, resource *v2pb.Inferenc
 	a.logger.Info("Retrieving Triton health condition")
 
 	// check if the server is healthy in all target clusters
-	for _, targetCluster := range resource.Spec.ClusterTargets {
+	for _, targetCluster := range common.GetTargetClusters(resource.Spec.GetDeploymentStrategy()) {
 		healthy, err := a.backend.IsHealthy(ctx, resource.Name, resource.Namespace, targetCluster)
 		if err != nil {
 			a.logger.Error("Failed to check health",
@@ -51,7 +51,7 @@ func (a *HealthCheckActor) Retrieve(ctx context.Context, resource *v2pb.Inferenc
 			return conditionsUtils.GenerateFalseCondition(condition, "HealthCheckFailed", fmt.Sprintf("Health check error: %v", err)), nil
 		}
 		if !healthy {
-			return conditionsUtils.GenerateFalseCondition(condition, "HealthCheckFailed", fmt.Sprintf("Server is not healthy in cluster %s", targetCluster.ClusterId)), nil
+			return conditionsUtils.GenerateFalseCondition(condition, "HealthCheckFailed", fmt.Sprintf("Server is not healthy in cluster %s", common.GenerateClusterDisplayName(targetCluster))), nil
 		}
 	}
 	return conditionsUtils.GenerateTrueCondition(condition), nil

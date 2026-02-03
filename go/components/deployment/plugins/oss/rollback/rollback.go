@@ -71,7 +71,7 @@ func (a *RollbackActor) Retrieve(ctx context.Context, resource *v2pb.Deployment,
 
 	currentCluster := &metadata.Clusters[currentIdx]
 	a.logger.Info("Checking rollback status for cluster",
-		zap.String("cluster_id", currentCluster.ClusterID),
+		zap.String("cluster_id", currentCluster.ClusterId),
 		zap.String("state", currentCluster.State),
 		zap.Int("cluster_index", currentIdx),
 		zap.Int("total_clusters", len(metadata.Clusters)))
@@ -79,12 +79,12 @@ func (a *RollbackActor) Retrieve(ctx context.Context, resource *v2pb.Deployment,
 	// If PENDING, trigger Run to start rollback
 	if currentCluster.State == common.ClusterStatePending {
 		return conditionsutil.GenerateFalseCondition(condition, "RollbackPending",
-			fmt.Sprintf("Cluster %s is pending rollback", currentCluster.ClusterID)), nil
+			fmt.Sprintf("Cluster %s is pending rollback", currentCluster.ClusterId)), nil
 	}
 
 	// If ROLLBACK_IN_PROGRESS, check if candidate model still exists
 	if currentCluster.State == common.ClusterStateRollbackInProgress {
-		clusterTarget := common.GetClusterTarget(currentCluster)
+		clusterTarget := common.GetClusterTargetConnection(currentCluster)
 		backendType := v2pb.BackendType(v2pb.BackendType_value[metadata.BackendType])
 
 		exists, err := a.gateway.CheckModelExists(
@@ -92,24 +92,24 @@ func (a *RollbackActor) Retrieve(ctx context.Context, resource *v2pb.Deployment,
 		)
 		if err != nil {
 			a.logger.Warn("Failed to check model existence during rollback, will retry",
-				zap.String("cluster_id", currentCluster.ClusterID),
+				zap.String("cluster_id", currentCluster.ClusterId),
 				zap.String("model", candidateModel),
 				zap.Error(err))
 			return conditionsutil.GenerateUnknownCondition(condition, "RollbackStatusCheckFailed",
-				fmt.Sprintf("Failed to check rollback status on cluster %s: %v", currentCluster.ClusterID, err)), nil
+				fmt.Sprintf("Failed to check rollback status on cluster %s: %v", currentCluster.ClusterId, err)), nil
 		}
 
 		if exists {
 			a.logger.Info("Candidate model still exists on cluster, waiting for rollback",
-				zap.String("cluster_id", currentCluster.ClusterID),
+				zap.String("cluster_id", currentCluster.ClusterId),
 				zap.String("model", candidateModel))
 			return conditionsutil.GenerateUnknownCondition(condition, "RollbackInProgress",
-				fmt.Sprintf("Candidate model %s still exists on cluster %s", candidateModel, currentCluster.ClusterID)), nil
+				fmt.Sprintf("Candidate model %s still exists on cluster %s", candidateModel, currentCluster.ClusterId)), nil
 		}
 
 		// Candidate model removed
 		a.logger.Info("Candidate model removed from cluster",
-			zap.String("cluster_id", currentCluster.ClusterID),
+			zap.String("cluster_id", currentCluster.ClusterId),
 			zap.String("model", candidateModel))
 
 		metadata.Clusters[currentIdx].State = common.ClusterStateRolledBack
@@ -121,14 +121,14 @@ func (a *RollbackActor) Retrieve(ctx context.Context, resource *v2pb.Deployment,
 
 		if currentIdx+1 < len(metadata.Clusters) {
 			return conditionsutil.GenerateFalseCondition(condition, "NextClusterRollbackPending",
-				fmt.Sprintf("Cluster %s rolled back, moving to next cluster", currentCluster.ClusterID)), nil
+				fmt.Sprintf("Cluster %s rolled back, moving to next cluster", currentCluster.ClusterId)), nil
 		}
 
 		return conditionsutil.GenerateTrueCondition(condition), nil
 	}
 
 	return conditionsutil.GenerateUnknownCondition(condition, "UnexpectedState",
-		fmt.Sprintf("Cluster %s in unexpected state: %s", currentCluster.ClusterID, currentCluster.State)), nil
+		fmt.Sprintf("Cluster %s in unexpected state: %s", currentCluster.ClusterId, currentCluster.State)), nil
 }
 
 // Run unloads the candidate model from the current cluster.
@@ -163,14 +163,14 @@ func (a *RollbackActor) Run(ctx context.Context, resource *v2pb.Deployment, cond
 		}
 
 		for i, ct := range targetInfo.ClusterTargets {
-			k8s := ct.GetKubernetes()
 			metadata.Clusters[i] = common.ClusterEntry{
-				ClusterID: ct.ClusterId,
-				Host:      k8s.GetHost(),
-				Port:      k8s.GetPort(),
-				TokenTag:  k8s.GetTokenTag(),
-				CaDataTag: k8s.GetCaDataTag(),
-				State:     common.ClusterStatePending,
+				ClusterId:             ct.ClusterId,
+				Host:                  ct.Host,
+				Port:                  ct.Port,
+				TokenTag:              ct.TokenTag,
+				CaDataTag:             ct.CaDataTag,
+				State:                 common.ClusterStatePending,
+				IsControlPlaneCluster: ct.IsControlPlaneCluster,
 			}
 		}
 
@@ -195,25 +195,25 @@ func (a *RollbackActor) Run(ctx context.Context, resource *v2pb.Deployment, cond
 
 	if currentCluster.State == common.ClusterStateRollbackInProgress {
 		a.logger.Info("Rollback in progress, waiting for Retrieve to check status",
-			zap.String("cluster_id", currentCluster.ClusterID))
+			zap.String("cluster_id", currentCluster.ClusterId))
 		return conditionsutil.GenerateUnknownCondition(condition, "RollbackInProgress",
-			fmt.Sprintf("Rollback in progress on cluster %s", currentCluster.ClusterID)), nil
+			fmt.Sprintf("Rollback in progress on cluster %s", currentCluster.ClusterId)), nil
 	}
 
 	// Unload candidate model from inference server
 	a.logger.Info("Unloading candidate model from cluster",
 		zap.String("candidate_model", candidateModel),
-		zap.String("cluster_id", currentCluster.ClusterID),
+		zap.String("cluster_id", currentCluster.ClusterId),
 		zap.String("inference_server", inferenceServerName))
 
-	clusterTarget := common.GetClusterTarget(currentCluster)
+	clusterTarget := common.GetClusterTargetConnection(currentCluster)
 	if err := a.gateway.UnloadModel(ctx, a.logger, candidateModel, inferenceServerName, resource.Namespace, clusterTarget); err != nil {
 		a.logger.Error("Failed to unload candidate model from cluster",
 			zap.String("model", candidateModel),
-			zap.String("cluster_id", currentCluster.ClusterID),
+			zap.String("cluster_id", currentCluster.ClusterId),
 			zap.Error(err))
 		return conditionsutil.GenerateFalseCondition(condition, "RollbackFailed",
-			fmt.Sprintf("Failed to unload candidate model %s from cluster %s: %v", candidateModel, currentCluster.ClusterID, err)), nil
+			fmt.Sprintf("Failed to unload candidate model %s from cluster %s: %v", candidateModel, currentCluster.ClusterId, err)), nil
 	}
 
 	metadata.Clusters[metadata.CurrentIndex].State = common.ClusterStateRollbackInProgress
@@ -222,9 +222,9 @@ func (a *RollbackActor) Run(ctx context.Context, resource *v2pb.Deployment, cond
 	}
 
 	a.logger.Info("Successfully initiated rollback on cluster",
-		zap.String("cluster_id", currentCluster.ClusterID),
+		zap.String("cluster_id", currentCluster.ClusterId),
 		zap.String("candidate_model", candidateModel))
 
 	return conditionsutil.GenerateUnknownCondition(condition, "RollbackStarted",
-		fmt.Sprintf("Rollback started on cluster %s", currentCluster.ClusterID)), nil
+		fmt.Sprintf("Rollback started on cluster %s", currentCluster.ClusterId)), nil
 }

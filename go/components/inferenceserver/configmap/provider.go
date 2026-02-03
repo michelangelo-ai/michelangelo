@@ -50,11 +50,6 @@ func (p *defaultModelConfigMapProvider) CreateModelConfigMap(ctx context.Context
 
 	configMapName := generateConfigMapName(inferenceServer)
 
-	p.logger.Info("Creating model ConfigMap",
-		zap.String("configMap", configMapName),
-		zap.String("namespace", namespace),
-		zap.String("cluster", targetCluster.ClusterId))
-
 	// Check if ConfigMap already exists in the target cluster
 	existing := &corev1.ConfigMap{}
 	err = clusterClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, existing)
@@ -66,11 +61,6 @@ func (p *defaultModelConfigMapProvider) CreateModelConfigMap(ctx context.Context
 	// Build model list JSON
 	modelListJSON, err := json.MarshalIndent(modelConfigs, "", "  ")
 	if err != nil {
-		p.logger.Error("failed to marshal model configs",
-			zap.Error(err),
-			zap.String("operation", "create_configmap"),
-			zap.String("namespace", namespace),
-			zap.String("configMap", configMapName))
 		return fmt.Errorf("failed to marshal model configs for ConfigMap %s/%s: %w",
 			namespace, configMapName, err)
 	}
@@ -101,24 +91,15 @@ func (p *defaultModelConfigMapProvider) CreateModelConfigMap(ctx context.Context
 	}
 
 	if err := clusterClient.Create(ctx, configMap); err != nil {
-		p.logger.Error("failed to create ConfigMap",
-			zap.Error(err),
-			zap.String("operation", "create_configmap"),
-			zap.String("namespace", namespace),
-			zap.String("configMap", configMapName))
 		return fmt.Errorf("failed to create ConfigMap %s/%s: %w",
 			namespace, configMapName, err)
 	}
-
-	p.logger.Info("Model ConfigMap created successfully", zap.String("configMap", configMapName), zap.Int("modelCount", len(modelConfigs)))
 	return nil
 }
 
 // GetModelsFromConfigMap retrieves a ConfigMap and parses its model configurations
 func (p *defaultModelConfigMapProvider) GetModelsFromConfigMap(ctx context.Context, inferenceServer string, namespace string, targetCluster *v2pb.ClusterTarget) ([]ModelConfigEntry, error) {
 	configMapName := generateConfigMapName(inferenceServer)
-	p.logger.Info("Getting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
-
 	clusterClient, err := p.clientFactory.GetClient(ctx, targetCluster)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cluster client: %w", err)
@@ -127,11 +108,6 @@ func (p *defaultModelConfigMapProvider) GetModelsFromConfigMap(ctx context.Conte
 	configMap := &corev1.ConfigMap{}
 	err = clusterClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, configMap)
 	if err != nil {
-		p.logger.Error("failed to get ConfigMap",
-			zap.Error(err),
-			zap.String("operation", "get_configmap"),
-			zap.String("namespace", namespace),
-			zap.String("configMap", configMapName))
 		return nil, fmt.Errorf("failed to get ConfigMap %s/%s: %w",
 			namespace, configMapName, err)
 	}
@@ -140,15 +116,12 @@ func (p *defaultModelConfigMapProvider) GetModelsFromConfigMap(ctx context.Conte
 	if err != nil {
 		return nil, err
 	}
-	p.logger.Info("Model ConfigMap retrieved successfully", zap.String("configMap", configMapName), zap.Int("modelCount", len(modelConfigs)))
 	return modelConfigs, nil
 }
 
 // AddModelToConfigMap adds a model to a ModelConfigMap
 func (p *defaultModelConfigMapProvider) AddModelToConfigMap(ctx context.Context, inferenceServer string, namespace string, modelConfig ModelConfigEntry, targetCluster *v2pb.ClusterTarget) error {
 	configMapName := generateConfigMapName(inferenceServer)
-	p.logger.Info("Getting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
-
 	clusterClient, err := p.clientFactory.GetClient(ctx, targetCluster)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster client: %w", err)
@@ -157,11 +130,6 @@ func (p *defaultModelConfigMapProvider) AddModelToConfigMap(ctx context.Context,
 	configMap := &corev1.ConfigMap{}
 	err = clusterClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, configMap)
 	if err != nil {
-		p.logger.Error("failed to get ConfigMap",
-			zap.Error(err),
-			zap.String("operation", "get_configmap"),
-			zap.String("namespace", namespace),
-			zap.String("configMap", configMapName))
 		return fmt.Errorf("failed to get ConfigMap %s/%s: %w",
 			namespace, configMapName, err)
 	}
@@ -192,15 +160,12 @@ func (p *defaultModelConfigMapProvider) AddModelToConfigMap(ctx context.Context,
 	if err := p.updateConfigMapWithModels(ctx, clusterClient, configMap, currentConfigs); err != nil {
 		return err
 	}
-	p.logger.Info("Model successfully added to ConfigMap", zap.String("configMap", configMapName), zap.Int("modelCount", len(currentConfigs)))
 	return nil
 }
 
 // RemoveModelFromConfigMap removes a model from a ModelConfigMap
 func (p *defaultModelConfigMapProvider) RemoveModelFromConfigMap(ctx context.Context, inferenceServer string, namespace string, modelName string, targetCluster *v2pb.ClusterTarget) error {
 	configMapName := generateConfigMapName(inferenceServer)
-	p.logger.Info("Getting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
-
 	clusterClient, err := p.clientFactory.GetClient(ctx, targetCluster)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster client: %w", err)
@@ -209,11 +174,6 @@ func (p *defaultModelConfigMapProvider) RemoveModelFromConfigMap(ctx context.Con
 	configMap := &corev1.ConfigMap{}
 	err = clusterClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, configMap)
 	if err != nil {
-		p.logger.Error("failed to get ConfigMap",
-			zap.Error(err),
-			zap.String("operation", "get_configmap"),
-			zap.String("namespace", namespace),
-			zap.String("configMap", configMapName))
 		return fmt.Errorf("failed to get ConfigMap %s/%s: %w",
 			namespace, configMapName, err)
 	}
@@ -234,15 +194,12 @@ func (p *defaultModelConfigMapProvider) RemoveModelFromConfigMap(ctx context.Con
 	if err := p.updateConfigMapWithModels(ctx, clusterClient, configMap, updatedConfigs); err != nil {
 		return err
 	}
-	p.logger.Info("Model successfully removed from ConfigMap", zap.String("configMap", configMapName), zap.Int("modelCount", len(updatedConfigs)))
 	return nil
 }
 
 // DeleteModelConfigMap deletes a ConfigMap for model configuration
 func (p *defaultModelConfigMapProvider) DeleteModelConfigMap(ctx context.Context, inferenceServer string, namespace string, targetCluster *v2pb.ClusterTarget) error {
 	configMapName := generateConfigMapName(inferenceServer)
-	p.logger.Info("Deleting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
-
 	clusterClient, err := p.clientFactory.GetClient(ctx, targetCluster)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster client: %w", err)
@@ -255,16 +212,9 @@ func (p *defaultModelConfigMapProvider) DeleteModelConfigMap(ctx context.Context
 		},
 	}
 	if err := clusterClient.Delete(ctx, configMap); err != nil {
-		p.logger.Error("failed to delete ConfigMap",
-			zap.Error(err),
-			zap.String("operation", "delete_configmap"),
-			zap.String("namespace", namespace),
-			zap.String("configMap", configMapName))
 		return fmt.Errorf("failed to delete ConfigMap %s/%s: %w",
 			namespace, configMapName, err)
 	}
-
-	p.logger.Info("Model ConfigMap deleted successfully", zap.String("configMap", configMapName))
 	return nil
 }
 
@@ -277,11 +227,6 @@ func (p *defaultModelConfigMapProvider) updateConfigMapWithModels(ctx context.Co
 	// Marshal the updated model list with proper formatting
 	modelListJSON, err := json.MarshalIndent(modelConfigs, "", "  ")
 	if err != nil {
-		p.logger.Error("failed to marshal model configs",
-			zap.Error(err),
-			zap.String("operation", "update_configmap"),
-			zap.String("namespace", configMap.Namespace),
-			zap.String("configMap", configMap.Name))
 		return fmt.Errorf("failed to marshal model configs for ConfigMap %s/%s: %w",
 			configMap.Namespace, configMap.Name, err)
 	}
@@ -294,33 +239,20 @@ func (p *defaultModelConfigMapProvider) updateConfigMapWithModels(ctx context.Co
 	defer cancel()
 
 	if err := clusterClient.Update(ctx, configMap); err != nil {
-		p.logger.Error("failed to update ConfigMap",
-			zap.Error(err),
-			zap.String("operation", "update_configmap"),
-			zap.String("namespace", configMap.Namespace),
-			zap.String("configMap", configMap.Name))
 		return fmt.Errorf("failed to update ConfigMap %s/%s: %w",
 			configMap.Namespace, configMap.Name, err)
 	}
-
-	p.logger.Info("Model ConfigMap updated successfully", zap.String("configMap", configMap.Name), zap.Int("modelCount", len(modelConfigs)))
 	return nil
 }
 
 func (p *defaultModelConfigMapProvider) parseModelConfigsFromConfigMap(ctx context.Context, configMap *corev1.ConfigMap) ([]ModelConfigEntry, error) {
 	modelListJSON, exists := configMap.Data[modelListKey]
 	if !exists {
-		p.logger.Info("No model-list.json found in ConfigMap", zap.String("configMap", configMap.Name))
 		return []ModelConfigEntry{}, nil
 	}
 
 	var modelConfigs []ModelConfigEntry
 	if err := json.Unmarshal([]byte(modelListJSON), &modelConfigs); err != nil {
-		p.logger.Error("failed to parse model-list.json from ConfigMap",
-			zap.Error(err),
-			zap.String("operation", "get_configmap"),
-			zap.String("namespace", configMap.Namespace),
-			zap.String("configMap", configMap.Name))
 		return nil, fmt.Errorf("failed to parse model-list.json from ConfigMap %s/%s: %w",
 			configMap.Namespace, configMap.Name, err)
 	}

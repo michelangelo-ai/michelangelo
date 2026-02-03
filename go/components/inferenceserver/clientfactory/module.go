@@ -5,7 +5,6 @@ import (
 	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/secrets"
 )
 
@@ -14,7 +13,7 @@ var Module = fx.Options(
 )
 
 // newClientFactory creates a new ClientFactory with the configured control plane cluster ID
-func newClientFactory(kubeClient client.Client, logger *zap.Logger, config baseconfig.InferenceServerConfig) ClientFactory {
+func newClientFactory(kubeClient client.Client, logger *zap.Logger) ClientFactory {
 	sp := secrets.NewProvider(kubeClient)
-	return NewClientFactory(kubeClient, sp, kubeClient.Scheme(), logger, config.ControlPlaneClusterId)
+	return NewClientFactory(kubeClient, sp, kubeClient.Scheme(), logger)
 }

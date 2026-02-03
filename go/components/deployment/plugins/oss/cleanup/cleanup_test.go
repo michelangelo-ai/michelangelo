@@ -66,7 +66,7 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 				_ = common.SetClusterMetadata(cond, &common.ClusterMetadata{
 					BackendType: "BACKEND_TYPE_TRITON",
 					Clusters: []common.ClusterEntry{
-						{ClusterID: "cluster-1", State: common.ClusterStateCleaned},
+						{ClusterId: "cluster-1", State: common.ClusterStateCleaned},
 					},
 					CurrentIndex: 1,
 				})
@@ -96,7 +96,7 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 				_ = common.SetClusterMetadata(cond, &common.ClusterMetadata{
 					BackendType: "BACKEND_TYPE_TRITON",
 					Clusters: []common.ClusterEntry{
-						{ClusterID: "cluster-1", State: common.ClusterStateCleaned},
+						{ClusterId: "cluster-1", State: common.ClusterStateCleaned},
 					},
 					CurrentIndex: 1,
 				})
@@ -126,7 +126,7 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 				_ = common.SetClusterMetadata(cond, &common.ClusterMetadata{
 					BackendType: "BACKEND_TYPE_TRITON",
 					Clusters: []common.ClusterEntry{
-						{ClusterID: "cluster-1", State: common.ClusterStatePending},
+						{ClusterId: "cluster-1", State: common.ClusterStatePending},
 					},
 					CurrentIndex: 0,
 				})
@@ -154,7 +154,7 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 				_ = common.SetClusterMetadata(cond, &common.ClusterMetadata{
 					BackendType: "BACKEND_TYPE_TRITON",
 					Clusters: []common.ClusterEntry{
-						{ClusterID: "cluster-1", Host: "host1", Port: "6443", State: common.ClusterStateCleanupInProgress},
+						{ClusterId: "cluster-1", Host: "host1", Port: "6443", State: common.ClusterStateCleanupInProgress},
 					},
 					CurrentIndex: 0,
 				})
@@ -224,8 +224,8 @@ func TestCleanupActor_Run(t *testing.T) {
 				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
 					Return(&gateways.DeploymentTargetInfo{
 						BackendType: v2pb.BACKEND_TYPE_TRITON,
-						ClusterTargets: []*v2pb.ClusterTarget{
-							{ClusterId: "cluster-1", Config: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host1"}}},
+						ClusterTargets: []*gateways.TargetClusterConnection{
+							{ClusterId: "cluster-1", Host: "host1"},
 						},
 					}, nil)
 			},
@@ -250,7 +250,7 @@ func TestCleanupActor_Run(t *testing.T) {
 				_ = common.SetClusterMetadata(cond, &common.ClusterMetadata{
 					BackendType: "BACKEND_TYPE_TRITON",
 					Clusters: []common.ClusterEntry{
-						{ClusterID: "cluster-1", Host: "host1", Port: "6443", State: common.ClusterStatePending},
+						{ClusterId: "cluster-1", Host: "host1", Port: "6443", State: common.ClusterStatePending},
 					},
 					CurrentIndex: 0,
 				})
@@ -282,7 +282,7 @@ func TestCleanupActor_Run(t *testing.T) {
 				_ = common.SetClusterMetadata(cond, &common.ClusterMetadata{
 					BackendType: "BACKEND_TYPE_TRITON",
 					Clusters: []common.ClusterEntry{
-						{ClusterID: "cluster-1", Host: "host1", Port: "6443", State: common.ClusterStatePending},
+						{ClusterId: "cluster-1", Host: "host1", Port: "6443", State: common.ClusterStatePending},
 					},
 					CurrentIndex: 0,
 				})
@@ -314,7 +314,7 @@ func TestCleanupActor_Run(t *testing.T) {
 				_ = common.SetClusterMetadata(cond, &common.ClusterMetadata{
 					BackendType: "BACKEND_TYPE_TRITON",
 					Clusters: []common.ClusterEntry{
-						{ClusterID: "cluster-1", State: common.ClusterStateCleaned},
+						{ClusterId: "cluster-1", State: common.ClusterStateCleaned},
 					},
 					CurrentIndex: 1,
 				})
@@ -344,7 +344,7 @@ func TestCleanupActor_Run(t *testing.T) {
 				_ = common.SetClusterMetadata(cond, &common.ClusterMetadata{
 					BackendType: "BACKEND_TYPE_TRITON",
 					Clusters: []common.ClusterEntry{
-						{ClusterID: "cluster-1", State: common.ClusterStateCleaned},
+						{ClusterId: "cluster-1", State: common.ClusterStateCleaned},
 					},
 					CurrentIndex: 1,
 				})
@@ -374,7 +374,7 @@ func TestCleanupActor_Run(t *testing.T) {
 				_ = common.SetClusterMetadata(cond, &common.ClusterMetadata{
 					BackendType: "BACKEND_TYPE_TRITON",
 					Clusters: []common.ClusterEntry{
-						{ClusterID: "cluster-1", State: common.ClusterStateCleaned},
+						{ClusterId: "cluster-1", State: common.ClusterStateCleaned},
 					},
 					CurrentIndex: 1,
 				})

@@ -42,8 +42,8 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 				BackendType:  "BACKEND_TYPE_TRITON",
 				CurrentIndex: 0,
 				Clusters: []common.ClusterEntry{
-					{ClusterID: "cluster-1", State: common.ClusterStateDeployed},
-					{ClusterID: "cluster-2", State: common.ClusterStateDeployed},
+					{ClusterId: "cluster-1", State: common.ClusterStateDeployed},
+					{ClusterId: "cluster-2", State: common.ClusterStateDeployed},
 				},
 			},
 			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
@@ -57,7 +57,7 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 				BackendType:  "BACKEND_TYPE_TRITON",
 				CurrentIndex: 0,
 				Clusters: []common.ClusterEntry{
-					{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", State: common.ClusterStatePending},
+					{ClusterId: "cluster-1", Host: "1.2.3.4", Port: "6443", State: common.ClusterStatePending},
 				},
 			},
 			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
@@ -71,7 +71,7 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 				BackendType:  "BACKEND_TYPE_TRITON",
 				CurrentIndex: 0,
 				Clusters: []common.ClusterEntry{
-					{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: common.ClusterStateDeploymentInProgress},
+					{ClusterId: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: common.ClusterStateDeploymentInProgress},
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
@@ -90,7 +90,7 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 				BackendType:  "BACKEND_TYPE_TRITON",
 				CurrentIndex: 0,
 				Clusters: []common.ClusterEntry{
-					{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: common.ClusterStateDeploymentInProgress},
+					{ClusterId: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: common.ClusterStateDeploymentInProgress},
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
@@ -109,7 +109,7 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 				BackendType:  "BACKEND_TYPE_TRITON",
 				CurrentIndex: 0,
 				Clusters: []common.ClusterEntry{
-					{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: common.ClusterStateDeploymentInProgress},
+					{ClusterId: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: common.ClusterStateDeploymentInProgress},
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
@@ -128,8 +128,8 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 				BackendType:  "BACKEND_TYPE_TRITON",
 				CurrentIndex: 0,
 				Clusters: []common.ClusterEntry{
-					{ClusterID: "cluster-1", State: common.ClusterStateDeployed},
-					{ClusterID: "cluster-2", Host: "5.6.7.8", Port: "6443", State: common.ClusterStatePending},
+					{ClusterId: "cluster-1", State: common.ClusterStateDeployed},
+					{ClusterId: "cluster-2", Host: "5.6.7.8", Port: "6443", State: common.ClusterStatePending},
 				},
 			},
 			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
@@ -182,7 +182,7 @@ func TestRollingRolloutRun(t *testing.T) {
 					gomock.Any(), gomock.Any(), "test-server", "default",
 				).Return(&gateways.DeploymentTargetInfo{
 					BackendType: v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{
+					ClusterTargets: []*gateways.TargetClusterConnection{
 						createClusterTarget("cluster-1", "1.2.3.4", "6443", "token1", "ca1"),
 						createClusterTarget("cluster-2", "5.6.7.8", "6443", "token2", "ca2"),
 					},
@@ -212,7 +212,7 @@ func TestRollingRolloutRun(t *testing.T) {
 					gomock.Any(), gomock.Any(), "test-server", "default",
 				).Return(&gateways.DeploymentTargetInfo{
 					BackendType:    v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{},
+					ClusterTargets: []*gateways.TargetClusterConnection{},
 				}, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
@@ -225,7 +225,7 @@ func TestRollingRolloutRun(t *testing.T) {
 				BackendType:  "BACKEND_TYPE_TRITON",
 				CurrentIndex: 0,
 				Clusters: []common.ClusterEntry{
-					{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: common.ClusterStatePending},
+					{ClusterId: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: common.ClusterStatePending},
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
@@ -244,7 +244,7 @@ func TestRollingRolloutRun(t *testing.T) {
 				BackendType:  "BACKEND_TYPE_TRITON",
 				CurrentIndex: 0,
 				Clusters: []common.ClusterEntry{
-					{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", State: common.ClusterStateDeploymentInProgress},
+					{ClusterId: "cluster-1", Host: "1.2.3.4", Port: "6443", State: common.ClusterStateDeploymentInProgress},
 				},
 			},
 			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
@@ -258,7 +258,7 @@ func TestRollingRolloutRun(t *testing.T) {
 				BackendType:  "BACKEND_TYPE_TRITON",
 				CurrentIndex: 0,
 				Clusters: []common.ClusterEntry{
-					{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: common.ClusterStatePending},
+					{ClusterId: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: common.ClusterStatePending},
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
@@ -293,8 +293,8 @@ func TestRollingRolloutRun(t *testing.T) {
 				BackendType:  "BACKEND_TYPE_TRITON",
 				CurrentIndex: 2, // Past the last index
 				Clusters: []common.ClusterEntry{
-					{ClusterID: "cluster-1", State: common.ClusterStateDeployed},
-					{ClusterID: "cluster-2", State: common.ClusterStateDeployed},
+					{ClusterId: "cluster-1", State: common.ClusterStateDeployed},
+					{ClusterId: "cluster-2", State: common.ClusterStateDeployed},
 				},
 			},
 			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
@@ -353,16 +353,12 @@ func createDeployment(name, namespace, modelName, serverName string) *v2pb.Deplo
 }
 
 // Helper to create cluster targets
-func createClusterTarget(clusterID, host, port, tokenTag, caDataTag string) *v2pb.ClusterTarget {
-	return &v2pb.ClusterTarget{
+func createClusterTarget(clusterID, host, port, tokenTag, caDataTag string) *gateways.TargetClusterConnection {
+	return &gateways.TargetClusterConnection{
 		ClusterId: clusterID,
-		Config: &v2pb.ClusterTarget_Kubernetes{
-			Kubernetes: &v2pb.ConnectionSpec{
-				Host:      host,
-				Port:      port,
-				TokenTag:  tokenTag,
-				CaDataTag: caDataTag,
-			},
-		},
+		Host:      host,
+		Port:      port,
+		TokenTag:  tokenTag,
+		CaDataTag: caDataTag,
 	}
 }

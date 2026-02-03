@@ -17,15 +17,13 @@ var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &ValidationAct
 
 // ValidationActor validates that inference server configuration meets Triton requirements.
 type ValidationActor struct {
-	controlPlaneClusterId string
-	logger                *zap.Logger
+	logger *zap.Logger
 }
 
 // NewValidationActor creates a condition actor for Triton configuration validation.
-func NewValidationActor(controlPlaneClusterId string, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
+func NewValidationActor(logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return &ValidationActor{
-		controlPlaneClusterId: controlPlaneClusterId,
-		logger:                logger,
+		logger: logger,
 	}
 }
 
@@ -41,6 +39,18 @@ func (a *ValidationActor) Retrieve(ctx context.Context, resource *v2pb.Inference
 	// Validate Triton-specific requirements
 	if resource.Spec.BackendType != v2pb.BACKEND_TYPE_TRITON {
 		return conditionsutil.GenerateFalseCondition(condition, "InvalidBackendType", fmt.Sprintf("invalid backend type for Triton plugin: %v", resource.Spec.BackendType)), nil
+	}
+
+	if resource.Spec.GetDeploymentStrategy() == nil {
+		// treat nil deployment strategy as control plane deployment
+		resource.Spec.DeploymentStrategy = &v2pb.InferenceServerDeploymentStrategy{
+			Strategy: &v2pb.InferenceServerDeploymentStrategy_ControlPlaneClusterDeployment{
+				ControlPlaneClusterDeployment: &v2pb.ControlPlaneClusterDeployment{},
+			},
+		}
+		return conditionsutil.GenerateTrueCondition(condition), nil
+	} else if resource.Spec.GetDeploymentStrategy().GetControlPlaneClusterDeployment() != nil {
+		return conditionsutil.GenerateTrueCondition(condition), nil
 	}
 
 	// Validate cluster targets
@@ -60,37 +70,14 @@ func (a *ValidationActor) Run(ctx context.Context, resource *v2pb.InferenceServe
 
 // validateClusterTargets validates that cluster targets are properly configured.
 func (a *ValidationActor) validateClusterTargets(resource *v2pb.InferenceServer) error {
-	clusterTargets := resource.Spec.ClusterTargets
+	clusterTargets := resource.Spec.GetDeploymentStrategy().GetRemoteClusterDeployment().GetClusterTargets()
 	if len(clusterTargets) == 0 {
 		return fmt.Errorf("at least one cluster target is required")
-	}
-
-	// Check if control plane cluster is present
-	hasControlPlane := false
-	if a.controlPlaneClusterId != "" {
-		for _, target := range clusterTargets {
-			if target.ClusterId == a.controlPlaneClusterId {
-				hasControlPlane = true
-				break
-			}
-		}
-	}
-
-	// If control plane cluster is present, it must be the only target (single-cluster setup)
-	if hasControlPlane && len(clusterTargets) > 1 {
-		return fmt.Errorf("control plane cluster %s cannot be mixed with remote clusters; use either single-cluster (control plane only) or multi-cluster (remote clusters only)", a.controlPlaneClusterId)
 	}
 
 	for _, target := range clusterTargets {
 		if target.ClusterId == "" {
 			return fmt.Errorf("cluster target must have a clusterId")
-		}
-
-		// Control plane cluster doesn't require kubernetes connection details
-		if a.controlPlaneClusterId != "" && target.ClusterId == a.controlPlaneClusterId {
-			a.logger.Debug("Cluster target is control plane, skipping connection validation",
-				zap.String("clusterId", target.ClusterId))
-			continue
 		}
 
 		// For remote clusters, validate kubernetes connection details

@@ -17,14 +17,14 @@ type ModelConfigEntry struct {
 // ModelConfigMapProvider manages model configurations stored in Kubernetes ConfigMaps.
 // Used by inference servers to configure which models to load.
 type ModelConfigMapProvider interface {
-	// CreateModelConfigMap creates a new ConfigMap with model configurations.
+	// CreateModelConfigMap creates a new ConfigMap with model configurations. If targetCluster is nil, the ConfigMap will be created in the control plane cluster.
 	CreateModelConfigMap(ctx context.Context, inferenceServer string, namespace string, modelConfigs []ModelConfigEntry, labels map[string]string, annotations map[string]string, targetCluster *v2pb.ClusterTarget) error
-	// DeleteModelConfigMap removes the entire ConfigMap for an inference server.
+	// DeleteModelConfigMap removes the entire ConfigMap for an inference server. If targetCluster is nil, the ConfigMap will be deleted from the control plane cluster.
 	DeleteModelConfigMap(ctx context.Context, inferenceServer string, namespace string, targetCluster *v2pb.ClusterTarget) error
-	// GetModelsFromConfigMap retrieves all model configurations from a ConfigMap.
+	// GetModelsFromConfigMap retrieves all model configurations from a ConfigMap. If targetCluster is nil, the model configurations will be retrieved from the control plane cluster.
 	GetModelsFromConfigMap(ctx context.Context, inferenceServer string, namespace string, targetCluster *v2pb.ClusterTarget) ([]ModelConfigEntry, error)
-	// AddModelToConfigMap adds a single model configuration to an existing ConfigMap.
+	// AddModelToConfigMap adds a single model configuration to an existing ConfigMap. If targetCluster is nil, the model configuration will be added to the control plane cluster.
 	AddModelToConfigMap(ctx context.Context, inferenceServer string, namespace string, modelConfig ModelConfigEntry, targetCluster *v2pb.ClusterTarget) error
-	// RemoveModelFromConfigMap removes a model configuration from a ConfigMap.
+	// RemoveModelFromConfigMap removes a model configuration from a ConfigMap. If targetCluster is nil, the model configuration will be removed from the control plane cluster.
 	RemoveModelFromConfigMap(ctx context.Context, inferenceServer string, namespace string, modelName string, targetCluster *v2pb.ClusterTarget) error
 }

@@ -41,9 +41,17 @@ func (a *ControlPlaneDiscoveryActor) Retrieve(ctx context.Context, resource *v2p
 		zap.String("namespace", resource.Namespace),
 	)
 
+	// if the inference server is deployed to control plane cluster, skip discovery
+	if resource.Spec.GetDeploymentStrategy() == nil || resource.Spec.GetDeploymentStrategy().GetControlPlaneClusterDeployment() != nil {
+		a.logger.Info("Inference server is deployed to control plane cluster, skipping discovery",
+			zap.String("inferenceServer", resource.Name),
+		)
+		return conditionsUtils.GenerateTrueCondition(condition), nil
+	}
+
 	// Filter to only clusters that need endpoint registration (remote clusters with kubernetes config).
 	// Control plane clusters (no kubernetes config) don't need cross-cluster discovery.
-	remoteClusters := filterRemoteClusters(resource.Spec.ClusterTargets)
+	remoteClusters := filterRemoteClusters(resource.Spec.GetDeploymentStrategy().GetRemoteClusterDeployment().GetClusterTargets())
 	if len(remoteClusters) == 0 {
 		a.logger.Info("No remote clusters requiring endpoint registration, skipping discovery",
 			zap.String("inferenceServer", resource.Name),
@@ -93,7 +101,7 @@ func (a *ControlPlaneDiscoveryActor) Run(ctx context.Context, resource *v2pb.Inf
 		return conditionsUtils.GenerateFalseCondition(condition, "ListEndpointsFailed", fmt.Sprintf("Failed to list registered endpoints: %v", err)), nil
 	}
 
-	missing, stale := findEndpointDiff(resource.Spec.ClusterTargets, registered)
+	missing, stale := findEndpointDiff(resource.Spec.GetDeploymentStrategy().GetRemoteClusterDeployment().GetClusterTargets(), registered)
 
 	// Register missing endpoints.
 	for clusterID, clusterTarget := range missing {

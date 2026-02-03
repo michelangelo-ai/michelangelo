@@ -119,10 +119,3 @@ func GetWorkflowClientConfig(provider config.Provider) (WorkflowClientConfig, er
 	err := provider.Get(_workflowClientConfigKey).Populate(&workflowClientConfig)
 	return workflowClientConfig, err
 }
-
-// GetInferenceServerConfig parses the configuration file and returns the inference server configuration
-func GetInferenceServerConfig(provider config.Provider) (InferenceServerConfig, error) {
-	inferenceServerConfig := InferenceServerConfig{}
-	err := provider.Get(_inferenceServerConfigKey).Populate(&inferenceServerConfig)
-	return inferenceServerConfig, err
-}

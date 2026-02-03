@@ -75,7 +75,7 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deploym
 
 	currentCluster := &metadata.Clusters[currentIdx]
 	a.Logger.Info("Checking cleanup status for cluster",
-		zap.String("cluster_id", currentCluster.ClusterID),
+		zap.String("cluster_id", currentCluster.ClusterId),
 		zap.String("state", currentCluster.State),
 		zap.Int("cluster_index", currentIdx),
 		zap.Int("total_clusters", len(metadata.Clusters)))
@@ -83,12 +83,12 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deploym
 	// If PENDING, trigger Run to start cleanup
 	if currentCluster.State == actorCommon.ClusterStatePending {
 		return conditionUtils.GenerateFalseCondition(condition, "CleanupPending",
-			fmt.Sprintf("Cluster %s is pending cleanup", currentCluster.ClusterID)), nil
+			fmt.Sprintf("Cluster %s is pending cleanup", currentCluster.ClusterId)), nil
 	}
 
 	// If IN_PROGRESS, check if old model still exists
 	if currentCluster.State == actorCommon.ClusterStateCleanupInProgress {
-		clusterTarget := actorCommon.GetClusterTarget(currentCluster)
+		clusterTarget := actorCommon.GetClusterTargetConnection(currentCluster)
 		backendType := v2pb.BackendType(v2pb.BackendType_value[metadata.BackendType])
 
 		modelReady, err := a.Gateway.CheckModelStatus(
@@ -96,24 +96,24 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deploym
 		)
 		if err != nil {
 			a.Logger.Warn("Failed to check model status during cleanup, will retry",
-				zap.String("cluster_id", currentCluster.ClusterID),
+				zap.String("cluster_id", currentCluster.ClusterId),
 				zap.String("model", currentModel),
 				zap.Error(err))
 			return conditionUtils.GenerateUnknownCondition(condition, "CleanupStatusCheckFailed",
-				fmt.Sprintf("Failed to check cleanup status on cluster %s: %v", currentCluster.ClusterID, err)), nil
+				fmt.Sprintf("Failed to check cleanup status on cluster %s: %v", currentCluster.ClusterId, err)), nil
 		}
 
 		if modelReady {
 			a.Logger.Info("Old model still loaded on cluster, waiting for cleanup",
-				zap.String("cluster_id", currentCluster.ClusterID),
+				zap.String("cluster_id", currentCluster.ClusterId),
 				zap.String("model", currentModel))
 			return conditionUtils.GenerateUnknownCondition(condition, "CleanupInProgress",
-				fmt.Sprintf("Old model %s still loaded on cluster %s", currentModel, currentCluster.ClusterID)), nil
+				fmt.Sprintf("Old model %s still loaded on cluster %s", currentModel, currentCluster.ClusterId)), nil
 		}
 
 		// Old model cleaned up
 		a.Logger.Info("Old model cleaned up on cluster",
-			zap.String("cluster_id", currentCluster.ClusterID),
+			zap.String("cluster_id", currentCluster.ClusterId),
 			zap.String("model", currentModel))
 
 		metadata.Clusters[currentIdx].State = actorCommon.ClusterStateCleaned
@@ -125,14 +125,14 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deploym
 
 		if currentIdx+1 < len(metadata.Clusters) {
 			return conditionUtils.GenerateFalseCondition(condition, "NextClusterCleanupPending",
-				fmt.Sprintf("Cluster %s cleaned, moving to next cluster", currentCluster.ClusterID)), nil
+				fmt.Sprintf("Cluster %s cleaned, moving to next cluster", currentCluster.ClusterId)), nil
 		}
 
 		return conditionUtils.GenerateTrueCondition(condition), nil
 	}
 
 	return conditionUtils.GenerateUnknownCondition(condition, "UnexpectedState",
-		fmt.Sprintf("Cluster %s in unexpected state: %s", currentCluster.ClusterID, currentCluster.State)), nil
+		fmt.Sprintf("Cluster %s in unexpected state: %s", currentCluster.ClusterId, currentCluster.State)), nil
 }
 
 // Run removes old model from ConfigMap and directly unloads it from Triton via API.
@@ -168,14 +168,14 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 		}
 
 		for i, ct := range targetInfo.ClusterTargets {
-			k8s := ct.GetKubernetes()
 			metadata.Clusters[i] = actorCommon.ClusterEntry{
-				ClusterID: ct.ClusterId,
-				Host:      k8s.GetHost(),
-				Port:      k8s.GetPort(),
-				TokenTag:  k8s.GetTokenTag(),
-				CaDataTag: k8s.GetCaDataTag(),
-				State:     actorCommon.ClusterStatePending,
+				ClusterId:             ct.ClusterId,
+				Host:                  ct.Host,
+				Port:                  ct.Port,
+				TokenTag:              ct.TokenTag,
+				CaDataTag:             ct.CaDataTag,
+				State:                 actorCommon.ClusterStatePending,
+				IsControlPlaneCluster: ct.IsControlPlaneCluster,
 			}
 		}
 
@@ -205,14 +205,14 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 
 	if currentCluster.State == actorCommon.ClusterStateCleanupInProgress {
 		a.Logger.Info("Cleanup in progress, waiting for Retrieve to check status",
-			zap.String("cluster_id", currentCluster.ClusterID))
+			zap.String("cluster_id", currentCluster.ClusterId))
 		return conditionUtils.GenerateUnknownCondition(condition, "CleanupInProgress",
-			fmt.Sprintf("Cleanup in progress on cluster %s", currentCluster.ClusterID)), nil
+			fmt.Sprintf("Cleanup in progress on cluster %s", currentCluster.ClusterId)), nil
 	}
 
 	// Unload old model from inference server
 	a.Logger.Info("Unloading old model from inference server", zap.String("old_model", currentModel))
-	clusterTarget := actorCommon.GetClusterTarget(currentCluster)
+	clusterTarget := actorCommon.GetClusterTargetConnection(currentCluster)
 	if err := a.Gateway.UnloadModel(ctx, a.Logger, currentModel, inferenceServerName, resource.Namespace, clusterTarget); err != nil {
 		a.Logger.Error("Failed to unload old model from inference server", zap.String("model", currentModel), zap.Error(err))
 		return conditionUtils.GenerateFalseCondition(condition, "ModelUnloadingFailed", fmt.Sprintf("Failed to unload old model %s from inference server: %v", currentModel, err)), nil
@@ -224,10 +224,10 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 	}
 
 	a.Logger.Info("Successfully initiated old model cleanup on cluster",
-		zap.String("cluster_id", currentCluster.ClusterID),
+		zap.String("cluster_id", currentCluster.ClusterId),
 		zap.String("old_model", currentModel),
 		zap.String("new_model", desiredModel))
 
 	return conditionUtils.GenerateUnknownCondition(condition, "CleanupStarted",
-		fmt.Sprintf("Cleanup started on cluster %s", currentCluster.ClusterID)), nil
+		fmt.Sprintf("Cleanup started on cluster %s", currentCluster.ClusterId)), nil
 }
