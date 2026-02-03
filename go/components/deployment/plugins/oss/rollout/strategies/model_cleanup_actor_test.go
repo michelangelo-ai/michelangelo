@@ -104,7 +104,7 @@ func TestModelCleanupActor_Retrieve(t *testing.T) {
 					BackendType:  v2pb.BACKEND_TYPE_TRITON.String(),
 					CurrentIndex: 0,
 					Clusters: []common.ClusterEntry{
-						{ClusterID: "test-cluster", Host: "host1", State: common.ClusterStatePending},
+						{ClusterId: "test-cluster", Host: "host1", State: common.ClusterStatePending},
 					},
 				})
 				return cond
@@ -133,7 +133,7 @@ func TestModelCleanupActor_Retrieve(t *testing.T) {
 					BackendType:  v2pb.BACKEND_TYPE_TRITON.String(),
 					CurrentIndex: 0,
 					Clusters: []common.ClusterEntry{
-						{ClusterID: "test-cluster", Host: "host1", State: common.ClusterStateCleanupInProgress},
+						{ClusterId: "test-cluster", Host: "host1", State: common.ClusterStateCleanupInProgress},
 					},
 				})
 				return cond
@@ -166,7 +166,7 @@ func TestModelCleanupActor_Retrieve(t *testing.T) {
 					BackendType:  v2pb.BACKEND_TYPE_TRITON.String(),
 					CurrentIndex: 1,
 					Clusters: []common.ClusterEntry{
-						{ClusterID: "test-cluster", Host: "host1", State: common.ClusterStateCleaned},
+						{ClusterId: "test-cluster", Host: "host1", State: common.ClusterStateCleaned},
 					},
 				})
 				return cond
@@ -203,9 +203,9 @@ func TestModelCleanupActor_Retrieve(t *testing.T) {
 }
 
 func TestModelCleanupActor_Run(t *testing.T) {
-	testCluster := &v2pb.ClusterTarget{
+	testCluster := &gateways.TargetClusterConnection{
 		ClusterId: "test-cluster",
-		Config:    &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host1"}},
+		Host:      "host1",
 	}
 
 	tests := []struct {
@@ -235,7 +235,7 @@ func TestModelCleanupActor_Run(t *testing.T) {
 				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
 					Return(&gateways.DeploymentTargetInfo{
 						BackendType:    v2pb.BACKEND_TYPE_TRITON,
-						ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+						ClusterTargets: []*gateways.TargetClusterConnection{testCluster},
 					}, nil)
 			},
 			expectedStatus:  api.CONDITION_STATUS_UNKNOWN,
@@ -283,7 +283,7 @@ func TestModelCleanupActor_Run(t *testing.T) {
 					BackendType:  v2pb.BACKEND_TYPE_TRITON.String(),
 					CurrentIndex: 0,
 					Clusters: []common.ClusterEntry{
-						{ClusterID: "test-cluster", Host: "host1", State: common.ClusterStatePending},
+						{ClusterId: "test-cluster", Host: "host1", State: common.ClusterStatePending},
 					},
 				})
 				return cond
@@ -316,7 +316,7 @@ func TestModelCleanupActor_Run(t *testing.T) {
 					BackendType:  v2pb.BACKEND_TYPE_TRITON.String(),
 					CurrentIndex: 0,
 					Clusters: []common.ClusterEntry{
-						{ClusterID: "test-cluster", Host: "host1", State: common.ClusterStatePending},
+						{ClusterId: "test-cluster", Host: "host1", State: common.ClusterStatePending},
 					},
 				})
 				return cond
@@ -349,7 +349,7 @@ func TestModelCleanupActor_Run(t *testing.T) {
 					BackendType:  v2pb.BACKEND_TYPE_TRITON.String(),
 					CurrentIndex: 0,
 					Clusters: []common.ClusterEntry{
-						{ClusterID: "test-cluster", Host: "host1", State: common.ClusterStateCleanupInProgress},
+						{ClusterId: "test-cluster", Host: "host1", State: common.ClusterStateCleanupInProgress},
 					},
 				})
 				return cond
@@ -378,7 +378,7 @@ func TestModelCleanupActor_Run(t *testing.T) {
 					BackendType:  v2pb.BACKEND_TYPE_TRITON.String(),
 					CurrentIndex: 1,
 					Clusters: []common.ClusterEntry{
-						{ClusterID: "test-cluster", Host: "host1", State: common.ClusterStateCleaned},
+						{ClusterId: "test-cluster", Host: "host1", State: common.ClusterStateCleaned},
 					},
 				})
 				return cond

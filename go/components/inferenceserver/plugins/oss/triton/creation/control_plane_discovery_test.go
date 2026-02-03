@@ -27,15 +27,17 @@ func TestControlPlaneDiscoveryActor_Retrieve(t *testing.T) {
 		expectedErr     bool
 	}{
 		{
-			name: "single cluster setup",
+			name: "control plane cluster deployment skips discovery",
 			resource: &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-server",
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					ClusterTargets: []*v2pb.ClusterTarget{
-						{ClusterId: "control-plane"}, // no kubernetes config
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_ControlPlaneClusterDeployment{
+							ControlPlaneClusterDeployment: &v2pb.ControlPlaneClusterDeployment{},
+						},
 					},
 				},
 			},
@@ -52,9 +54,15 @@ func TestControlPlaneDiscoveryActor_Retrieve(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					ClusterTargets: []*v2pb.ClusterTarget{
-						{ClusterId: "cluster-1", Config: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host1"}}},
-						{ClusterId: "cluster-2", Config: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host2"}}},
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{
+									{ClusterId: "cluster-1", Config: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host1"}}},
+									{ClusterId: "cluster-2", Config: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host2"}}},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -78,9 +86,15 @@ func TestControlPlaneDiscoveryActor_Retrieve(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					ClusterTargets: []*v2pb.ClusterTarget{
-						{ClusterId: "cluster-1", Config: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host1"}}},
-						{ClusterId: "cluster-2", Config: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host2"}}},
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{
+									{ClusterId: "cluster-1", Config: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host1"}}},
+									{ClusterId: "cluster-2", Config: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host2"}}},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -103,8 +117,14 @@ func TestControlPlaneDiscoveryActor_Retrieve(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					ClusterTargets: []*v2pb.ClusterTarget{
-						{ClusterId: "cluster-1", Config: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host1"}}},
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{
+									{ClusterId: "cluster-1", Config: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host1"}}},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -128,8 +148,14 @@ func TestControlPlaneDiscoveryActor_Retrieve(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					ClusterTargets: []*v2pb.ClusterTarget{
-						{ClusterId: "cluster-1", Config: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host1"}}},
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{
+									{ClusterId: "cluster-1", Config: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host1"}}},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -190,8 +216,14 @@ func TestControlPlaneDiscoveryActor_Run(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					ClusterTargets: []*v2pb.ClusterTarget{
-						{ClusterId: "cluster-1", Config: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host1"}}},
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{
+									{ClusterId: "cluster-1", Config: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host1"}}},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -215,7 +247,13 @@ func TestControlPlaneDiscoveryActor_Run(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					ClusterTargets: []*v2pb.ClusterTarget{},
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{},
+							},
+						},
+					},
 				},
 			},
 			setupMocks: func(mockRegistry *endpointregistrymocks.MockEndpointRegistry) {
@@ -240,8 +278,14 @@ func TestControlPlaneDiscoveryActor_Run(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					ClusterTargets: []*v2pb.ClusterTarget{
-						{ClusterId: "cluster-new", Config: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host1"}}},
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{
+									{ClusterId: "cluster-new", Config: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host1"}}},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -270,8 +314,14 @@ func TestControlPlaneDiscoveryActor_Run(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					ClusterTargets: []*v2pb.ClusterTarget{
-						{ClusterId: "cluster-1", Config: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host1"}}},
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{
+									{ClusterId: "cluster-1", Config: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host1"}}},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -295,7 +345,13 @@ func TestControlPlaneDiscoveryActor_Run(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					ClusterTargets: []*v2pb.ClusterTarget{},
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{},
+							},
+						},
+					},
 				},
 			},
 			setupMocks: func(mockRegistry *endpointregistrymocks.MockEndpointRegistry) {
@@ -320,8 +376,14 @@ func TestControlPlaneDiscoveryActor_Run(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					ClusterTargets: []*v2pb.ClusterTarget{
-						{ClusterId: "cluster-1", Config: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host1"}}},
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{
+									{ClusterId: "cluster-1", Config: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host1"}}},
+								},
+							},
+						},
 					},
 				},
 			},

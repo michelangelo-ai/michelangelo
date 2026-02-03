@@ -13,8 +13,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	backendCommon "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
@@ -40,29 +42,13 @@ func NewTritonBackend(clientFactory clientfactory.ClientFactory, modelConfigMapP
 }
 
 func (b *tritonBackend) CreateServer(ctx context.Context, inferenceServerName, namespace string, resourceConstraints ResourceConstraints, targetCluster *v2pb.ClusterTarget) (*ServerStatus, error) {
-	b.logger.Info("Creating Triton server",
-		zap.String("server", inferenceServerName),
-		zap.String("namespace", namespace),
-	)
-
 	clusterClient, err := b.clientFactory.GetClient(ctx, targetCluster)
 	if err != nil {
-		b.logger.Error("failed to get cluster client",
-			zap.Error(err),
-			zap.String("operation", "create_server"),
-			zap.String("namespace", namespace),
-			zap.String("inferenceServer", inferenceServerName),
-			zap.String("cluster", targetCluster.ClusterId))
-		return nil, fmt.Errorf("failed to get cluster client for cluster %s: %w", targetCluster.ClusterId, err)
+		return nil, fmt.Errorf("failed to get cluster client for cluster %s: %w", common.GenerateClusterDisplayName(targetCluster), err)
 	}
 
 	// Create Deployment in the target cluster
 	if err = b.createTritonDeployment(ctx, inferenceServerName, namespace, resourceConstraints, clusterClient); err != nil {
-		b.logger.Error("failed to create Deployment",
-			zap.Error(err),
-			zap.String("operation", "create_server"),
-			zap.String("namespace", namespace),
-			zap.String("inferenceServer", inferenceServerName))
 		return nil, fmt.Errorf("failed to create Deployment for %s/%s: %w",
 			namespace, inferenceServerName, err)
 	}
@@ -70,22 +56,12 @@ func (b *tritonBackend) CreateServer(ctx context.Context, inferenceServerName, n
 	// Create Service in the target cluster (ClusterIP; east-west gateway handles cross-cluster routing)
 	_, err = b.createTritonService(ctx, inferenceServerName, namespace, clusterClient)
 	if err != nil {
-		b.logger.Error("failed to create Service",
-			zap.Error(err),
-			zap.String("operation", "create_server"),
-			zap.String("namespace", namespace),
-			zap.String("inferenceServer", inferenceServerName))
 		return nil, fmt.Errorf("failed to create Service for %s/%s: %w",
 			namespace, inferenceServerName, err)
 	}
 
 	// Create empty ConfigMap for model configuration in the target cluster
 	if err = b.modelConfigMapProvider.CreateModelConfigMap(ctx, inferenceServerName, namespace, nil, nil, nil, targetCluster); err != nil {
-		b.logger.Error("failed to create ConfigMap",
-			zap.Error(err),
-			zap.String("operation", "create_server"),
-			zap.String("namespace", namespace),
-			zap.String("inferenceServer", inferenceServerName))
 		return nil, fmt.Errorf("failed to create ConfigMap for %s/%s: %w",
 			namespace, inferenceServerName, err)
 	}
@@ -100,17 +76,9 @@ func (b *tritonBackend) CreateServer(ctx context.Context, inferenceServerName, n
 }
 
 func (b *tritonBackend) GetServerStatus(ctx context.Context, inferenceServerName, namespace string, targetCluster *v2pb.ClusterTarget) (*ServerStatus, error) {
-	b.logger.Info("Getting Triton server status", zap.String("server", inferenceServerName))
-
 	clusterClient, err := b.clientFactory.GetClient(ctx, targetCluster)
 	if err != nil {
-		b.logger.Error("failed to get cluster client",
-			zap.Error(err),
-			zap.String("operation", "get_server_status"),
-			zap.String("namespace", namespace),
-			zap.String("inferenceServer", inferenceServerName),
-			zap.String("cluster", targetCluster.ClusterId))
-		return nil, fmt.Errorf("failed to get cluster client for cluster %s: %w", targetCluster.ClusterId, err)
+		return nil, fmt.Errorf("failed to get cluster client for cluster %s: %w", common.GenerateClusterDisplayName(targetCluster), err)
 	}
 	endpoint := b.getServiceEndpoint(inferenceServerName, namespace, targetCluster)
 
@@ -118,9 +86,6 @@ func (b *tritonBackend) GetServerStatus(ctx context.Context, inferenceServerName
 	deploymentKey := client.ObjectKey{Name: fmt.Sprintf("triton-%s", inferenceServerName), Namespace: namespace}
 
 	if err := clusterClient.Get(ctx, deploymentKey, deployment); err != nil {
-		b.logger.Info("Deployment not found in cluster",
-			zap.String("cluster", targetCluster.ClusterId),
-			zap.Error(err))
 		return &ServerStatus{
 			ClusterState: v2pb.CLUSTER_STATE_INVALID,
 			Endpoint:     endpoint,
@@ -137,10 +102,6 @@ func (b *tritonBackend) GetServerStatus(ctx context.Context, inferenceServerName
 		clusterState = v2pb.CLUSTER_STATE_CREATING
 	}
 
-	b.logger.Info("Server status determined",
-		zap.String("clusterState", clusterState.String()),
-		zap.String("endpoint", endpoint))
-
 	return &ServerStatus{
 		ClusterState: clusterState,
 		Endpoint:     endpoint,
@@ -151,13 +112,7 @@ func (b *tritonBackend) DeleteServer(ctx context.Context, inferenceServerName, n
 	b.logger.Info("Deleting Triton server", zap.String("server", inferenceServerName))
 	clusterClient, err := b.clientFactory.GetClient(ctx, targetCluster)
 	if err != nil {
-		b.logger.Error("failed to get cluster client",
-			zap.Error(err),
-			zap.String("operation", "delete_server"),
-			zap.String("namespace", namespace),
-			zap.String("inferenceServer", inferenceServerName),
-			zap.String("cluster", targetCluster.ClusterId))
-		return fmt.Errorf("failed to get cluster client for cluster %s: %w", targetCluster.ClusterId, err)
+		return fmt.Errorf("failed to get cluster client for cluster %s: %w", common.GenerateClusterDisplayName(targetCluster), err)
 	}
 
 	// Delete kubernetes deployment
@@ -169,57 +124,31 @@ func (b *tritonBackend) DeleteServer(ctx context.Context, inferenceServerName, n
 	}
 
 	if err := clusterClient.Delete(ctx, deployment); client.IgnoreNotFound(err) != nil {
-		b.logger.Error("failed to delete deployment",
-			zap.Error(err),
-			zap.String("operation", "delete_server"),
-			zap.String("namespace", namespace),
-			zap.String("inferenceServer", inferenceServerName),
-			zap.String("cluster", targetCluster.ClusterId))
 		return fmt.Errorf("failed to delete deployment for %s/%s: %w", namespace, inferenceServerName, err)
 	}
 
 	// Delete kubernetes service
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-inference-service", inferenceServerName),
+			Name:      backendCommon.GenerateInferenceServiceName(inferenceServerName),
 			Namespace: namespace,
 		},
 	}
 	if err := clusterClient.Delete(ctx, service); client.IgnoreNotFound(err) != nil {
-		b.logger.Error("failed to delete service",
-			zap.Error(err),
-			zap.String("operation", "delete_server"),
-			zap.String("namespace", namespace),
-			zap.String("inferenceServer", inferenceServerName),
-			zap.String("cluster", targetCluster.ClusterId))
 		return fmt.Errorf("failed to delete service for %s/%s: %w", namespace, inferenceServerName, err)
 	}
 
 	// Delete model configmap
 	if err := b.modelConfigMapProvider.DeleteModelConfigMap(ctx, inferenceServerName, namespace, targetCluster); err != nil {
-		b.logger.Error("failed to delete ConfigMap",
-			zap.Error(err),
-			zap.String("operation", "delete_server"),
-			zap.String("namespace", namespace),
-			zap.String("inferenceServer", inferenceServerName),
-			zap.String("cluster", targetCluster.ClusterId))
 		return fmt.Errorf("failed to delete ConfigMap for %s/%s: %w", namespace, inferenceServerName, err)
 	}
 	return nil
 }
 
 func (b *tritonBackend) IsHealthy(ctx context.Context, inferenceServerName, namespace string, targetCluster *v2pb.ClusterTarget) (bool, error) {
-	b.logger.Info("Checking Triton health via Kubernetes pod status", zap.String("server", inferenceServerName))
-
 	clusterClient, err := b.clientFactory.GetClient(ctx, targetCluster)
 	if err != nil {
-		b.logger.Error("failed to get cluster client",
-			zap.Error(err),
-			zap.String("operation", "health_check"),
-			zap.String("namespace", namespace),
-			zap.String("inferenceServer", inferenceServerName),
-			zap.String("cluster", targetCluster.ClusterId))
-		return false, fmt.Errorf("failed to get cluster client for cluster %s: %w", targetCluster.ClusterId, err)
+		return false, fmt.Errorf("failed to get cluster client for cluster %s: %w", common.GenerateClusterDisplayName(targetCluster), err)
 	}
 
 	deploymentName := fmt.Sprintf("triton-%s", inferenceServerName)
@@ -227,14 +156,8 @@ func (b *tritonBackend) IsHealthy(ctx context.Context, inferenceServerName, name
 
 	err = clusterClient.Get(ctx, client.ObjectKey{Name: deploymentName, Namespace: namespace}, deployment)
 	if err != nil {
-		b.logger.Error("failed to get Triton deployment",
-			zap.Error(err),
-			zap.String("operation", "health_check"),
-			zap.String("namespace", namespace),
-			zap.String("deployment", deploymentName),
-			zap.String("cluster", targetCluster.ClusterId))
 		return false, fmt.Errorf("failed to get deployment %s/%s in cluster %s: %w",
-			namespace, deploymentName, targetCluster.ClusterId, err)
+			namespace, deploymentName, common.GenerateClusterDisplayName(targetCluster), err)
 	}
 
 	// Check deployment conditions
@@ -243,28 +166,10 @@ func (b *tritonBackend) IsHealthy(ctx context.Context, inferenceServerName, name
 			if condition.Status == corev1.ConditionTrue {
 				// Also check if pods are ready
 				if deployment.Status.ReadyReplicas > 0 && deployment.Status.ReadyReplicas == deployment.Status.Replicas {
-					b.logger.Info("Triton pods are ready in cluster",
-						zap.String("server", inferenceServerName),
-						zap.Int32("readyReplicas", deployment.Status.ReadyReplicas),
-						zap.String("cluster", targetCluster.ClusterId))
 				} else {
-					b.logger.Error("Triton deployment available but pods not ready",
-						zap.String("operation", "health_check"),
-						zap.String("namespace", namespace),
-						zap.String("server", inferenceServerName),
-						zap.Int32("readyReplicas", deployment.Status.ReadyReplicas),
-						zap.Int32("totalReplicas", deployment.Status.Replicas),
-						zap.String("cluster", targetCluster.ClusterId))
 					return false, nil
 				}
 			} else {
-				b.logger.Error("Triton deployment not available",
-					zap.String("operation", "health_check"),
-					zap.String("namespace", namespace),
-					zap.String("server", inferenceServerName),
-					zap.String("reason", condition.Reason),
-					zap.String("message", condition.Message),
-					zap.String("cluster", targetCluster.ClusterId))
 				return false, nil
 			}
 		}
@@ -274,19 +179,10 @@ func (b *tritonBackend) IsHealthy(ctx context.Context, inferenceServerName, name
 
 // Triton Model Management
 func (b *tritonBackend) CheckModelStatus(ctx context.Context, modelName string, inferenceServerName string, namespace string, targetCluster *v2pb.ClusterTarget) (bool, error) {
-	b.logger.Info("Checking Triton model status", zap.String("model", modelName), zap.String("server", inferenceServerName))
-
 	// Get HTTP client with proper TLS configuration for the target cluster
 	httpClient, err := b.clientFactory.GetHTTPClient(ctx, targetCluster)
 	if err != nil {
-		b.logger.Error("failed to get HTTP client for target cluster",
-			zap.Error(err),
-			zap.String("operation", "check_model_status"),
-			zap.String("namespace", namespace),
-			zap.String("inferenceServer", inferenceServerName),
-			zap.String("model", modelName),
-			zap.String("cluster", targetCluster.ClusterId))
-		return false, fmt.Errorf("failed to get HTTP client for cluster %s: %w", targetCluster.ClusterId, err)
+		return false, fmt.Errorf("failed to get HTTP client for cluster %s: %w", common.GenerateClusterDisplayName(targetCluster), err)
 	}
 
 	modelReadyPath := fmt.Sprintf("/v2/models/%s/ready", modelName)
@@ -294,41 +190,18 @@ func (b *tritonBackend) CheckModelStatus(ctx context.Context, modelName string, 
 	serviceURL := fmt.Sprintf("%s%s", serviceEndpoint, modelReadyPath)
 	req, err := http.NewRequestWithContext(ctx, "GET", serviceURL, nil)
 	if err != nil {
-		b.logger.Error("failed to create ready request",
-			zap.Error(err),
-			zap.String("operation", "check_model_status"),
-			zap.String("namespace", namespace),
-			zap.String("inferenceServer", inferenceServerName),
-			zap.String("model", modelName),
-			zap.String("cluster", targetCluster.ClusterId))
 		return false, fmt.Errorf("failed to create ready request for model %s on %s/%s: %w",
 			modelName, namespace, inferenceServerName, err)
 	}
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		b.logger.Error("failed to call Triton ready endpoint",
-			zap.Error(err),
-			zap.String("operation", "check_model_status"),
-			zap.String("namespace", namespace),
-			zap.String("inferenceServer", inferenceServerName),
-			zap.String("model", modelName),
-			zap.String("url", serviceURL),
-			zap.String("cluster", targetCluster.ClusterId))
 		return false, fmt.Errorf("failed to call Triton ready endpoint for model %s on %s/%s: %w",
 			modelName, namespace, inferenceServerName, err)
 	}
 	defer resp.Body.Close()
 
 	if ready := resp.StatusCode == http.StatusOK; !ready {
-		b.logger.Warn("Triton model not ready",
-			zap.String("operation", "check_model_status"),
-			zap.String("namespace", namespace),
-			zap.String("inferenceServer", inferenceServerName),
-			zap.String("model", modelName),
-			zap.String("url", serviceURL),
-			zap.Int("statusCode", resp.StatusCode),
-			zap.String("cluster", targetCluster.ClusterId))
 		return false, nil
 	}
 
@@ -342,8 +215,7 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, inferenceSer
 	existing := &appsv1.Deployment{}
 	err := clusterClient.Get(ctx, client.ObjectKey{Name: deploymentName, Namespace: namespace}, existing)
 	if err == nil {
-		// Deployment already exists, log and return success
-		b.logger.Info("Deployment already exists, skipping creation", zap.String("name", deploymentName))
+		// Deployment already exists
 		return nil
 	}
 
@@ -435,11 +307,6 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, inferenceSer
 	}
 
 	if err := clusterClient.Create(ctx, deployment); err != nil {
-		b.logger.Error("failed to create Triton Deployment",
-			zap.Error(err),
-			zap.String("operation", "create_triton_deployment"),
-			zap.String("namespace", namespace),
-			zap.String("deployment", deploymentName))
 		return fmt.Errorf("failed to create Triton Deployment %s/%s: %w",
 			namespace, deploymentName, err)
 	}
@@ -447,14 +314,13 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, inferenceSer
 }
 
 func (b *tritonBackend) createTritonService(ctx context.Context, inferenceServerName, namespace string, clusterClient client.Client) (*corev1.Service, error) {
-	serviceName := fmt.Sprintf("%s-inference-service", inferenceServerName)
+	serviceName := backendCommon.GenerateInferenceServiceName(inferenceServerName)
 
 	// Check if Service already exists in the target cluster
 	existing := &corev1.Service{}
 	err := clusterClient.Get(ctx, client.ObjectKey{Name: serviceName, Namespace: namespace}, existing)
 	if err == nil {
-		// Service already exists, return it
-		b.logger.Info("Service already exists, skipping creation", zap.String("name", serviceName))
+		// Service already exists
 		return existing, nil
 	}
 
@@ -486,11 +352,6 @@ func (b *tritonBackend) createTritonService(ctx context.Context, inferenceServer
 	}
 
 	if err := clusterClient.Create(ctx, service); err != nil {
-		b.logger.Error("failed to create Triton Service",
-			zap.Error(err),
-			zap.String("operation", "create_triton_service"),
-			zap.String("namespace", namespace),
-			zap.String("service", serviceName))
 		return nil, fmt.Errorf("failed to create Triton Service %s/%s: %w",
 			namespace, serviceName, err)
 	}
@@ -501,16 +362,12 @@ func (b *tritonBackend) createTritonService(ctx context.Context, inferenceServer
 // For remote clusters (with kubernetes config), uses the Kubernetes API proxy.
 // For control plane cluster (no config), uses direct in-cluster service access.
 func (b *tritonBackend) getServiceEndpoint(inferenceServerName, namespace string, targetCluster *v2pb.ClusterTarget) string {
-	serviceName := fmt.Sprintf("%s-inference-service", inferenceServerName)
-
-	// Check if this is a remote cluster with connection details
-	if k8sSpec := targetCluster.GetKubernetes(); k8sSpec != nil && k8sSpec.Host != "" && k8sSpec.Port != "" {
-		return fmt.Sprintf("%s:%s/api/v1/namespaces/%s/services/%s:http/proxy",
-			k8sSpec.Host, k8sSpec.Port, namespace, serviceName)
+	serviceName := backendCommon.GenerateInferenceServiceName(inferenceServerName)
+	if targetCluster == nil {
+		return fmt.Sprintf("http://%s.%s.svc.cluster.local:80", serviceName, namespace)
 	}
-
-	// use direct in-cluster service access for control plane cluster
-	return fmt.Sprintf("http://%s.%s.svc.cluster.local:80", serviceName, namespace)
+	// otherwise, construct url for remote cluster
+	return fmt.Sprintf("%s:%s/api/v1/namespaces/%s/services/%s:http/proxy", targetCluster.GetKubernetes().GetHost(), targetCluster.GetKubernetes().GetPort(), namespace, serviceName)
 }
 
 func buildResourceRequirements(constraints ResourceConstraints) corev1.ResourceRequirements {

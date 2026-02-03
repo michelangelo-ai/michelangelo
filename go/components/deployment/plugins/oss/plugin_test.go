@@ -269,9 +269,9 @@ func TestParseStage(t *testing.T) {
 }
 
 func TestGetState(t *testing.T) {
-	testCluster := &v2pb.ClusterTarget{
+	testCluster := &gateways.TargetClusterConnection{
 		ClusterId: "test-cluster",
-		Config:    &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{Host: "host1"}},
+		Host:      "host1",
 	}
 
 	tests := []struct {
@@ -386,7 +386,7 @@ func TestGetState(t *testing.T) {
 				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
 					Return(&gateways.DeploymentTargetInfo{
 						BackendType:    v2pb.BACKEND_TYPE_TRITON,
-						ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+						ClusterTargets: []*gateways.TargetClusterConnection{testCluster},
 					}, nil)
 				gw.EXPECT().CheckModelStatus(
 					gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", testCluster, v2pb.BACKEND_TYPE_TRITON,
@@ -413,7 +413,7 @@ func TestGetState(t *testing.T) {
 				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
 					Return(&gateways.DeploymentTargetInfo{
 						BackendType:    v2pb.BACKEND_TYPE_TRITON,
-						ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+						ClusterTargets: []*gateways.TargetClusterConnection{testCluster},
 					}, nil)
 				gw.EXPECT().CheckModelStatus(
 					gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", testCluster, v2pb.BACKEND_TYPE_TRITON,
@@ -440,7 +440,7 @@ func TestGetState(t *testing.T) {
 				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
 					Return(&gateways.DeploymentTargetInfo{
 						BackendType:    v2pb.BACKEND_TYPE_TRITON,
-						ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+						ClusterTargets: []*gateways.TargetClusterConnection{testCluster},
 					}, nil)
 				gw.EXPECT().CheckModelStatus(
 					gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", testCluster, v2pb.BACKEND_TYPE_TRITON,

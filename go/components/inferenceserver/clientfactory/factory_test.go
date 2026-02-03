@@ -21,33 +21,28 @@ func TestGetClient(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
 	tests := []struct {
-		name                  string
-		cluster               *v2pb.ClusterTarget
-		controlPlaneClusterId string
-		setupMock             func(*secretsmocks.MockSecretProvider)
-		wantDefaultClient     bool
-		wantErr               bool
-		errContains           string
+		name              string
+		cluster           *v2pb.ClusterTarget
+		setupMock         func(*secretsmocks.MockSecretProvider)
+		wantDefaultClient bool
+		wantErr           bool
+		errContains       string
 	}{
 		{
-			name: "returns default client for control plane cluster",
-			cluster: &v2pb.ClusterTarget{
-				ClusterId: "control-plane-cluster",
-			},
-			controlPlaneClusterId: "control-plane-cluster",
-			setupMock:             func(m *secretsmocks.MockSecretProvider) {},
-			wantDefaultClient:     true,
-			wantErr:               false,
+			name:              "returns default client when cluster is nil",
+			cluster:           nil,
+			setupMock:         func(m *secretsmocks.MockSecretProvider) {},
+			wantDefaultClient: true,
+			wantErr:           false,
 		},
 		{
 			name: "returns error when remote cluster missing kubernetes config",
 			cluster: &v2pb.ClusterTarget{
 				ClusterId: "remote-cluster",
 			},
-			controlPlaneClusterId: "control-plane-cluster",
-			setupMock:             func(m *secretsmocks.MockSecretProvider) {},
-			wantErr:               true,
-			errContains:           "missing kubernetes connection details",
+			setupMock:   func(m *secretsmocks.MockSecretProvider) {},
+			wantErr:     true,
+			errContains: "missing kubernetes connection details",
 		},
 		{
 			name: "returns error when remote cluster missing host",
@@ -59,10 +54,9 @@ func TestGetClient(t *testing.T) {
 					},
 				},
 			},
-			controlPlaneClusterId: "control-plane-cluster",
-			setupMock:             func(m *secretsmocks.MockSecretProvider) {},
-			wantErr:               true,
-			errContains:           "missing kubernetes connection details",
+			setupMock:   func(m *secretsmocks.MockSecretProvider) {},
+			wantErr:     true,
+			errContains: "missing kubernetes connection details",
 		},
 		{
 			name: "returns error when secret provider fails",
@@ -77,7 +71,6 @@ func TestGetClient(t *testing.T) {
 					},
 				},
 			},
-			controlPlaneClusterId: "control-plane-cluster",
 			setupMock: func(m *secretsmocks.MockSecretProvider) {
 				m.EXPECT().
 					GetClientAuth(gomock.Any(), gomock.Any()).
@@ -96,7 +89,7 @@ func TestGetClient(t *testing.T) {
 			mockProvider := secretsmocks.NewMockSecretProvider(ctrl)
 			tt.setupMock(mockProvider)
 
-			factory := NewClientFactory(fakeClient, mockProvider, scheme, zap.NewNop(), tt.controlPlaneClusterId)
+			factory := NewClientFactory(fakeClient, mockProvider, scheme, zap.NewNop())
 
 			result, err := factory.GetClient(context.Background(), tt.cluster)
 
@@ -119,33 +112,28 @@ func TestGetHTTPClient(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
 	tests := []struct {
-		name                  string
-		cluster               *v2pb.ClusterTarget
-		controlPlaneClusterId string
-		setupMock             func(*secretsmocks.MockSecretProvider)
-		wantSimpleClient      bool
-		wantErr               bool
-		errContains           string
+		name             string
+		cluster          *v2pb.ClusterTarget
+		setupMock        func(*secretsmocks.MockSecretProvider)
+		wantSimpleClient bool
+		wantErr          bool
+		errContains      string
 	}{
 		{
-			name: "returns simple HTTP client for control plane cluster",
-			cluster: &v2pb.ClusterTarget{
-				ClusterId: "control-plane-cluster",
-			},
-			controlPlaneClusterId: "control-plane-cluster",
-			setupMock:             func(m *secretsmocks.MockSecretProvider) {},
-			wantSimpleClient:      true,
-			wantErr:               false,
+			name:             "returns simple HTTP client when cluster is nil",
+			cluster:          nil,
+			setupMock:        func(m *secretsmocks.MockSecretProvider) {},
+			wantSimpleClient: true,
+			wantErr:          false,
 		},
 		{
 			name: "returns error when remote cluster missing kubernetes config",
 			cluster: &v2pb.ClusterTarget{
 				ClusterId: "remote-cluster",
 			},
-			controlPlaneClusterId: "control-plane-cluster",
-			setupMock:             func(m *secretsmocks.MockSecretProvider) {},
-			wantErr:               true,
-			errContains:           "missing kubernetes connection details",
+			setupMock:   func(m *secretsmocks.MockSecretProvider) {},
+			wantErr:     true,
+			errContains: "missing kubernetes connection details",
 		},
 		{
 			name: "returns error when secret provider fails",
@@ -160,7 +148,6 @@ func TestGetHTTPClient(t *testing.T) {
 					},
 				},
 			},
-			controlPlaneClusterId: "control-plane-cluster",
 			setupMock: func(m *secretsmocks.MockSecretProvider) {
 				m.EXPECT().
 					GetClientAuth(gomock.Any(), gomock.Any()).
@@ -182,7 +169,6 @@ func TestGetHTTPClient(t *testing.T) {
 					},
 				},
 			},
-			controlPlaneClusterId: "control-plane-cluster",
 			setupMock: func(m *secretsmocks.MockSecretProvider) {
 				m.EXPECT().
 					GetClientAuth(gomock.Any(), gomock.Any()).
@@ -204,7 +190,7 @@ func TestGetHTTPClient(t *testing.T) {
 			mockProvider := secretsmocks.NewMockSecretProvider(ctrl)
 			tt.setupMock(mockProvider)
 
-			factory := NewClientFactory(fakeClient, mockProvider, scheme, zap.NewNop(), tt.controlPlaneClusterId)
+			factory := NewClientFactory(fakeClient, mockProvider, scheme, zap.NewNop())
 
 			result, err := factory.GetHTTPClient(context.Background(), tt.cluster)
 

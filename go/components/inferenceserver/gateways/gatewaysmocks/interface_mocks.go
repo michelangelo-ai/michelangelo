@@ -9,9 +9,10 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	zap "go.uber.org/zap"
+
 	gateways "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	zap "go.uber.org/zap"
 )
 
 // MockGateway is a mock of Gateway interface.
@@ -38,7 +39,7 @@ func (m *MockGateway) EXPECT() *MockGatewayMockRecorder {
 }
 
 // CheckModelExists mocks base method.
-func (m *MockGateway) CheckModelExists(ctx context.Context, logger *zap.Logger, modelName, inferenceServerName, namespace string, targetCluster *v2.ClusterTarget, backendType v2.BackendType) (bool, error) {
+func (m *MockGateway) CheckModelExists(ctx context.Context, logger *zap.Logger, modelName, inferenceServerName, namespace string, targetCluster *gateways.TargetClusterConnection, backendType v2.BackendType) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CheckModelExists", ctx, logger, modelName, inferenceServerName, namespace, targetCluster, backendType)
 	ret0, _ := ret[0].(bool)
@@ -53,7 +54,7 @@ func (mr *MockGatewayMockRecorder) CheckModelExists(ctx, logger, modelName, infe
 }
 
 // CheckModelStatus mocks base method.
-func (m *MockGateway) CheckModelStatus(ctx context.Context, logger *zap.Logger, modelName, inferenceServerName, namespace string, targetCluster *v2.ClusterTarget, backendType v2.BackendType) (bool, error) {
+func (m *MockGateway) CheckModelStatus(ctx context.Context, logger *zap.Logger, modelName, inferenceServerName, namespace string, targetCluster *gateways.TargetClusterConnection, backendType v2.BackendType) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CheckModelStatus", ctx, logger, modelName, inferenceServerName, namespace, targetCluster, backendType)
 	ret0, _ := ret[0].(bool)
@@ -68,17 +69,18 @@ func (mr *MockGatewayMockRecorder) CheckModelStatus(ctx, logger, modelName, infe
 }
 
 // GetControlPlaneServiceName mocks base method.
-func (m *MockGateway) GetControlPlaneServiceName(inferenceServerName string) string {
+func (m *MockGateway) GetControlPlaneServiceName(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetControlPlaneServiceName", inferenceServerName)
+	ret := m.ctrl.Call(m, "GetControlPlaneServiceName", ctx, logger, inferenceServerName, namespace)
 	ret0, _ := ret[0].(string)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetControlPlaneServiceName indicates an expected call of GetControlPlaneServiceName.
-func (mr *MockGatewayMockRecorder) GetControlPlaneServiceName(inferenceServerName interface{}) *gomock.Call {
+func (mr *MockGatewayMockRecorder) GetControlPlaneServiceName(ctx, logger, inferenceServerName, namespace interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetControlPlaneServiceName", reflect.TypeOf((*MockGateway)(nil).GetControlPlaneServiceName), inferenceServerName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetControlPlaneServiceName", reflect.TypeOf((*MockGateway)(nil).GetControlPlaneServiceName), ctx, logger, inferenceServerName, namespace)
 }
 
 // GetDeploymentTargetInfo mocks base method.
@@ -97,7 +99,7 @@ func (mr *MockGatewayMockRecorder) GetDeploymentTargetInfo(ctx, logger, inferenc
 }
 
 // InferenceServerIsHealthy mocks base method.
-func (m *MockGateway) InferenceServerIsHealthy(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string, targetCluster *v2.ClusterTarget, backendType v2.BackendType) (bool, error) {
+func (m *MockGateway) InferenceServerIsHealthy(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string, targetCluster *gateways.TargetClusterConnection, backendType v2.BackendType) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InferenceServerIsHealthy", ctx, logger, inferenceServerName, namespace, targetCluster, backendType)
 	ret0, _ := ret[0].(bool)
@@ -112,7 +114,7 @@ func (mr *MockGatewayMockRecorder) InferenceServerIsHealthy(ctx, logger, inferen
 }
 
 // LoadModel mocks base method.
-func (m *MockGateway) LoadModel(ctx context.Context, logger *zap.Logger, modelName, storagePath, inferenceServerName, namespace string, targetCluster *v2.ClusterTarget) error {
+func (m *MockGateway) LoadModel(ctx context.Context, logger *zap.Logger, modelName, storagePath, inferenceServerName, namespace string, targetCluster *gateways.TargetClusterConnection) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "LoadModel", ctx, logger, modelName, storagePath, inferenceServerName, namespace, targetCluster)
 	ret0, _ := ret[0].(error)
@@ -126,7 +128,7 @@ func (mr *MockGatewayMockRecorder) LoadModel(ctx, logger, modelName, storagePath
 }
 
 // UnloadModel mocks base method.
-func (m *MockGateway) UnloadModel(ctx context.Context, logger *zap.Logger, modelName, inferenceServerName, namespace string, targetCluster *v2.ClusterTarget) error {
+func (m *MockGateway) UnloadModel(ctx context.Context, logger *zap.Logger, modelName, inferenceServerName, namespace string, targetCluster *gateways.TargetClusterConnection) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UnloadModel", ctx, logger, modelName, inferenceServerName, namespace, targetCluster)
 	ret0, _ := ret[0].(error)

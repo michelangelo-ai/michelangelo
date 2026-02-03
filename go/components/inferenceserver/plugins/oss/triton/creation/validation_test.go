@@ -15,7 +15,6 @@ import (
 )
 
 func TestValidationActor_Retrieve(t *testing.T) {
-	controlPlaneClusterId := "control-plane-cluster"
 	tests := []struct {
 		name                   string
 		resource               *v2pb.InferenceServer
@@ -25,7 +24,7 @@ func TestValidationActor_Retrieve(t *testing.T) {
 		expectedErr            bool
 	}{
 		{
-			name: "valid triton with control plane cluster",
+			name: "valid triton with control plane cluster deployment",
 			resource: &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-server",
@@ -33,9 +32,27 @@ func TestValidationActor_Retrieve(t *testing.T) {
 				},
 				Spec: v2pb.InferenceServerSpec{
 					BackendType: v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{
-						{ClusterId: controlPlaneClusterId},
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_ControlPlaneClusterDeployment{
+							ControlPlaneClusterDeployment: &v2pb.ControlPlaneClusterDeployment{},
+						},
 					},
+				},
+			},
+			expectedStatus:         apipb.CONDITION_STATUS_TRUE,
+			expectedMessage:        "",
+			expectedReasonContains: "",
+			expectedErr:            false,
+		},
+		{
+			name: "valid triton with nil deployment strategy defaults to control plane",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
 				},
 			},
 			expectedStatus:         apipb.CONDITION_STATUS_TRUE,
@@ -52,15 +69,21 @@ func TestValidationActor_Retrieve(t *testing.T) {
 				},
 				Spec: v2pb.InferenceServerSpec{
 					BackendType: v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{
-						{
-							ClusterId: "remote-cluster",
-							Config: &v2pb.ClusterTarget_Kubernetes{
-								Kubernetes: &v2pb.ConnectionSpec{
-									Host:      "https://api.remote.cluster",
-									Port:      "6443",
-									TokenTag:  "token-secret",
-									CaDataTag: "ca-secret",
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{
+									{
+										ClusterId: "remote-cluster",
+										Config: &v2pb.ClusterTarget_Kubernetes{
+											Kubernetes: &v2pb.ConnectionSpec{
+												Host:      "https://api.remote.cluster",
+												Port:      "6443",
+												TokenTag:  "token-secret",
+												CaDataTag: "ca-secret",
+											},
+										},
+									},
 								},
 							},
 						},
@@ -81,8 +104,10 @@ func TestValidationActor_Retrieve(t *testing.T) {
 				},
 				Spec: v2pb.InferenceServerSpec{
 					BackendType: v2pb.BACKEND_TYPE_LLM_D,
-					ClusterTargets: []*v2pb.ClusterTarget{
-						{ClusterId: controlPlaneClusterId},
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_ControlPlaneClusterDeployment{
+							ControlPlaneClusterDeployment: &v2pb.ControlPlaneClusterDeployment{},
+						},
 					},
 				},
 			},
@@ -92,24 +117,7 @@ func TestValidationActor_Retrieve(t *testing.T) {
 			expectedErr:            false,
 		},
 		{
-			name: "no cluster targets",
-			resource: &v2pb.InferenceServer{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-server",
-					Namespace: "test-namespace",
-				},
-				Spec: v2pb.InferenceServerSpec{
-					BackendType:    v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{},
-				},
-			},
-			expectedStatus:         apipb.CONDITION_STATUS_FALSE,
-			expectedMessage:        "InvalidClusterTargets",
-			expectedReasonContains: "at least one cluster target is required",
-			expectedErr:            false,
-		},
-		{
-			name: "control plane mixed with remote clusters",
+			name: "no cluster targets in remote deployment",
 			resource: &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-server",
@@ -117,17 +125,10 @@ func TestValidationActor_Retrieve(t *testing.T) {
 				},
 				Spec: v2pb.InferenceServerSpec{
 					BackendType: v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{
-						{ClusterId: controlPlaneClusterId},
-						{
-							ClusterId: "remote-cluster",
-							Config: &v2pb.ClusterTarget_Kubernetes{
-								Kubernetes: &v2pb.ConnectionSpec{
-									Host:      "https://api.remote.cluster",
-									Port:      "6443",
-									TokenTag:  "token-secret",
-									CaDataTag: "ca-secret",
-								},
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{},
 							},
 						},
 					},
@@ -135,7 +136,7 @@ func TestValidationActor_Retrieve(t *testing.T) {
 			},
 			expectedStatus:         apipb.CONDITION_STATUS_FALSE,
 			expectedMessage:        "InvalidClusterTargets",
-			expectedReasonContains: "cannot be mixed with remote clusters",
+			expectedReasonContains: "at least one cluster target is required",
 			expectedErr:            false,
 		},
 		{
@@ -147,8 +148,14 @@ func TestValidationActor_Retrieve(t *testing.T) {
 				},
 				Spec: v2pb.InferenceServerSpec{
 					BackendType: v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{
-						{ClusterId: "remote-cluster"}, // no kubernetes config
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{
+									{ClusterId: "remote-cluster"}, // no kubernetes config
+								},
+							},
+						},
 					},
 				},
 			},
@@ -166,14 +173,20 @@ func TestValidationActor_Retrieve(t *testing.T) {
 				},
 				Spec: v2pb.InferenceServerSpec{
 					BackendType: v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{
-						{
-							ClusterId: "remote-cluster",
-							Config: &v2pb.ClusterTarget_Kubernetes{
-								Kubernetes: &v2pb.ConnectionSpec{
-									Port:      "6443",
-									TokenTag:  "token-secret",
-									CaDataTag: "ca-secret",
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{
+									{
+										ClusterId: "remote-cluster",
+										Config: &v2pb.ClusterTarget_Kubernetes{
+											Kubernetes: &v2pb.ConnectionSpec{
+												Port:      "6443",
+												TokenTag:  "token-secret",
+												CaDataTag: "ca-secret",
+											},
+										},
+									},
 								},
 							},
 						},
@@ -192,7 +205,7 @@ func TestValidationActor_Retrieve(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			actor := NewValidationActor(controlPlaneClusterId, zap.NewNop())
+			actor := NewValidationActor(zap.NewNop())
 
 			condition := &apipb.Condition{
 				Type: "TritonValidation",
@@ -221,7 +234,7 @@ func TestValidationActor_Run(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	actor := NewValidationActor("control-plane-cluster", zap.NewNop())
+	actor := NewValidationActor(zap.NewNop())
 
 	resource := &v2pb.InferenceServer{
 		ObjectMeta: metav1.ObjectMeta{

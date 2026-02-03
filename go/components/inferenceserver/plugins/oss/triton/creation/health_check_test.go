@@ -28,20 +28,52 @@ func TestHealthCheckActor_Retrieve(t *testing.T) {
 		expectedErr            bool
 	}{
 		{
-			name: "server is healthy",
+			name: "server is healthy with remote cluster",
 			resource: &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-server",
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					BackendType:    v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
 				},
 			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
 					IsHealthy(gomock.Any(), "test-server", "test-namespace", testCluster).
+					Return(true, nil)
+			},
+			expectedStatus:         apipb.CONDITION_STATUS_TRUE,
+			expectedMessage:        "",
+			expectedReasonContains: "",
+			expectedErr:            false,
+		},
+		{
+			name: "server is healthy with control plane cluster",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_ControlPlaneClusterDeployment{
+							ControlPlaneClusterDeployment: &v2pb.ControlPlaneClusterDeployment{},
+						},
+					},
+				},
+			},
+			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
+				mockBackend.EXPECT().
+					IsHealthy(gomock.Any(), "test-server", "test-namespace", nil).
 					Return(true, nil)
 			},
 			expectedStatus:         apipb.CONDITION_STATUS_TRUE,
@@ -57,8 +89,14 @@ func TestHealthCheckActor_Retrieve(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					BackendType:    v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
 				},
 			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
@@ -79,8 +117,14 @@ func TestHealthCheckActor_Retrieve(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					BackendType:    v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
 				},
 			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {

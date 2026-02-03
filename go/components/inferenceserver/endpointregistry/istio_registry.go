@@ -118,11 +118,6 @@ func (r *istioEndpointRegistry) DeleteRegisteredEndpoint(ctx context.Context, lo
 		return fmt.Errorf("failed to set ServiceEntry endpoints: %w", err)
 	}
 
-	logger.Info("Updating global ServiceEntry to remove cluster endpoint",
-		zap.String("serviceEntry", globalServiceEntryName),
-		zap.String("namespace", namespace),
-		zap.String("clusterID", clusterID),
-	)
 	if _, err := r.dynamicClient.Resource(serviceEntryGVR).Namespace(namespace).Update(ctx, se, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("failed to update global ServiceEntry: %w", err)
 	}
@@ -227,11 +222,6 @@ func (r *istioEndpointRegistry) ensureBridgeService(ctx context.Context, logger 
 			ExternalName: externalName,
 		},
 	}
-	logger.Info("Creating bridge ExternalName Service",
-		zap.String("service", serviceName),
-		zap.String("namespace", namespace),
-		zap.String("externalName", externalName),
-	)
 	if err := r.kubeClient.Create(ctx, svc); err != nil {
 		return fmt.Errorf("failed to create bridge Service %s/%s: %w", namespace, serviceName, err)
 	}
@@ -290,10 +280,6 @@ func (r *istioEndpointRegistry) ensureGlobalServiceEntry(ctx context.Context, lo
 	// Upsert.
 	creationTimestamp := se.GetCreationTimestamp()
 	if creationTimestamp.IsZero() {
-		logger.Info("Creating global ServiceEntry",
-			zap.String("serviceEntry", globalServiceEntryName),
-			zap.String("namespace", endpoint.Namespace),
-		)
 		if _, err := r.dynamicClient.Resource(serviceEntryGVR).Namespace(endpoint.Namespace).Create(ctx, se, metav1.CreateOptions{}); err != nil {
 			return fmt.Errorf("failed to create global ServiceEntry: %w", err)
 		}
@@ -369,11 +355,8 @@ func (r *istioEndpointRegistry) resolveEndpointFromTargetCluster(ctx context.Con
 	if targetCluster == nil {
 		return ClusterEndpoint{}, fmt.Errorf("targetCluster is required for cluster %s", endpoint.ClusterID)
 	}
-	switch targetCluster.GetConfig().(type) {
-	case *v2pb.ClusterTarget_Kubernetes:
-		// ok
-	default:
-		return ClusterEndpoint{}, fmt.Errorf("unsupported cluster type: %T", targetCluster.GetConfig())
+	if targetCluster.GetKubernetes() == nil {
+		return ClusterEndpoint{}, fmt.Errorf("unsupported or missing cluster config type: %T", targetCluster.GetConfig())
 	}
 
 	clusterClient, err := r.clientFactory.GetClient(ctx, targetCluster)

@@ -37,8 +37,14 @@ func TestClusterWorkloadsActor_Retrieve(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					BackendType:    v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
 				},
 			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
@@ -61,8 +67,14 @@ func TestClusterWorkloadsActor_Retrieve(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					BackendType:    v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
 				},
 			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
@@ -85,8 +97,14 @@ func TestClusterWorkloadsActor_Retrieve(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					BackendType:    v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
 				},
 			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
@@ -96,22 +114,33 @@ func TestClusterWorkloadsActor_Retrieve(t *testing.T) {
 			},
 			expectedStatus:         apipb.CONDITION_STATUS_FALSE,
 			expectedMessage:        "ClusterCheckFailed",
-			expectedReasonContains: "Failed to check cluster status",
+			expectedReasonContains: "Failed to check cluster test-cluster status",
 			expectedErr:            false,
 		},
 		{
-			name: "no cluster targets returns true",
+			name: "control plane cluster returns true when ready",
 			resource: &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-server",
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					BackendType:    v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{},
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_ControlPlaneClusterDeployment{
+							ControlPlaneClusterDeployment: &v2pb.ControlPlaneClusterDeployment{},
+						},
+					},
 				},
 			},
-			setupMocks:             func(mockBackend *backendsmocks.MockBackend) {},
+			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
+				// nil cluster target means control plane cluster
+				mockBackend.EXPECT().
+					GetServerStatus(gomock.Any(), "test-server", "test-namespace", nil).
+					Return(&backends.ServerStatus{
+						ClusterState: v2pb.CLUSTER_STATE_READY,
+					}, nil)
+			},
 			expectedStatus:         apipb.CONDITION_STATUS_TRUE,
 			expectedMessage:        "",
 			expectedReasonContains: "",
@@ -171,8 +200,14 @@ func TestClusterWorkloadsActor_Run(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					BackendType:    v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
 					InitSpec: &v2pb.InitSpec{
 						ResourceSpec: &v2pb.ResourceSpec{
 							Cpu:    4,
@@ -221,8 +256,14 @@ func TestClusterWorkloadsActor_Run(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					BackendType:    v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
 					InitSpec: &v2pb.InitSpec{
 						ResourceSpec: &v2pb.ResourceSpec{
 							Cpu:    4,
@@ -255,15 +296,19 @@ func TestClusterWorkloadsActor_Run(t *testing.T) {
 			expectedErr:            false,
 		},
 		{
-			name: "no cluster targets returns unknown",
+			name: "control plane cluster creation succeeds",
 			resource: &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-server",
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					BackendType:    v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{},
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_ControlPlaneClusterDeployment{
+							ControlPlaneClusterDeployment: &v2pb.ControlPlaneClusterDeployment{},
+						},
+					},
 					InitSpec: &v2pb.InitSpec{
 						ResourceSpec: &v2pb.ResourceSpec{
 							Cpu:    4,
@@ -274,7 +319,22 @@ func TestClusterWorkloadsActor_Run(t *testing.T) {
 					},
 				},
 			},
-			setupMocks:             func(mockBackend *backendsmocks.MockBackend) {},
+			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
+				mockBackend.EXPECT().
+					CreateServer(
+						gomock.Any(),
+						"test-server",
+						"test-namespace",
+						backends.ResourceConstraints{
+							Cpu:      4,
+							Memory:   "8Gi",
+							Gpu:      2,
+							Replicas: 1,
+						},
+						nil,
+					).
+					Return(nil, nil)
+			},
 			expectedStatus:         apipb.CONDITION_STATUS_UNKNOWN,
 			expectedMessage:        "ClusterCreationInitiated",
 			expectedReasonContains: "server creation initiated",

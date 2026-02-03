@@ -37,8 +37,14 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					BackendType:    v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
 				},
 			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
@@ -61,8 +67,14 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					BackendType:    v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
 				},
 			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
@@ -85,8 +97,14 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					BackendType:    v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
 				},
 			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
@@ -153,8 +171,14 @@ func TestCleanupActor_Run(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					BackendType:    v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
 				},
 			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
@@ -175,8 +199,14 @@ func TestCleanupActor_Run(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: v2pb.InferenceServerSpec{
-					BackendType:    v2pb.BACKEND_TYPE_TRITON,
-					ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
 				},
 			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {

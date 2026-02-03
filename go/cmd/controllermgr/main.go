@@ -83,7 +83,6 @@ func options() fx.Option {
 		fx.Provide(baseconfig.GetK8sConfig),
 		fx.Provide(baseconfig.GetMetadataStorageConfig),
 		fx.Provide(baseconfig.GetWorkflowClientConfig),
-		fx.Provide(baseconfig.GetInferenceServerConfig),
 		fx.Provide(getTallyScope),
 		apiHandler.CtrlMgrModule,
 		spark.Module,

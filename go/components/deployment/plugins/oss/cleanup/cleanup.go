@@ -80,7 +80,7 @@ func (a *CleanupActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment
 
 	currentCluster := &metadata.Clusters[currentIdx]
 	a.logger.Info("Checking deletion cleanup status for cluster",
-		zap.String("cluster_id", currentCluster.ClusterID),
+		zap.String("cluster_id", currentCluster.ClusterId),
 		zap.String("state", currentCluster.State),
 		zap.Int("cluster_index", currentIdx),
 		zap.Int("total_clusters", len(metadata.Clusters)))
@@ -88,12 +88,12 @@ func (a *CleanupActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment
 	// If PENDING, trigger Run to start cleanup
 	if currentCluster.State == common.ClusterStatePending {
 		return conditionUtils.GenerateFalseCondition(condition, "DeletionCleanupPending",
-			fmt.Sprintf("Cluster %s is pending deletion cleanup", currentCluster.ClusterID)), nil
+			fmt.Sprintf("Cluster %s is pending deletion cleanup", currentCluster.ClusterId)), nil
 	}
 
 	// If DELETION_IN_PROGRESS, check if model still exists
 	if currentCluster.State == common.ClusterStateCleanupInProgress {
-		clusterTarget := common.GetClusterTarget(currentCluster)
+		clusterTarget := common.GetClusterTargetConnection(currentCluster)
 		backendType := v2pb.BackendType(v2pb.BackendType_value[metadata.BackendType])
 
 		exists, err := a.gateway.CheckModelExists(
@@ -101,24 +101,24 @@ func (a *CleanupActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment
 		)
 		if err != nil {
 			a.logger.Warn("Failed to check model existence during deletion cleanup, will retry",
-				zap.String("cluster_id", currentCluster.ClusterID),
+				zap.String("cluster_id", currentCluster.ClusterId),
 				zap.String("model", currentModel),
 				zap.Error(err))
 			return conditionUtils.GenerateUnknownCondition(condition, "DeletionStatusCheckFailed",
-				fmt.Sprintf("Failed to check deletion status on cluster %s: %v", currentCluster.ClusterID, err)), nil
+				fmt.Sprintf("Failed to check deletion status on cluster %s: %v", currentCluster.ClusterId, err)), nil
 		}
 
 		if exists {
 			a.logger.Info("Model still exists on cluster, waiting for deletion",
-				zap.String("cluster_id", currentCluster.ClusterID),
+				zap.String("cluster_id", currentCluster.ClusterId),
 				zap.String("model", currentModel))
 			return conditionUtils.GenerateUnknownCondition(condition, "DeletionInProgress",
-				fmt.Sprintf("Model %s still exists on cluster %s", currentModel, currentCluster.ClusterID)), nil
+				fmt.Sprintf("Model %s still exists on cluster %s", currentModel, currentCluster.ClusterId)), nil
 		}
 
 		// Model deleted from cluster
 		a.logger.Info("Model deleted from cluster",
-			zap.String("cluster_id", currentCluster.ClusterID),
+			zap.String("cluster_id", currentCluster.ClusterId),
 			zap.String("model", currentModel))
 
 		metadata.Clusters[currentIdx].State = common.ClusterStateCleaned
@@ -130,7 +130,7 @@ func (a *CleanupActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment
 
 		if currentIdx+1 < len(metadata.Clusters) {
 			return conditionUtils.GenerateFalseCondition(condition, "NextClusterDeletionPending",
-				fmt.Sprintf("Cluster %s cleaned, moving to next cluster", currentCluster.ClusterID)), nil
+				fmt.Sprintf("Cluster %s cleaned, moving to next cluster", currentCluster.ClusterId)), nil
 		}
 
 		// All clusters done, but still need to delete HTTPRoute
@@ -139,7 +139,7 @@ func (a *CleanupActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment
 	}
 
 	return conditionUtils.GenerateUnknownCondition(condition, "UnexpectedState",
-		fmt.Sprintf("Cluster %s in unexpected state: %s", currentCluster.ClusterID, currentCluster.State)), nil
+		fmt.Sprintf("Cluster %s in unexpected state: %s", currentCluster.ClusterId, currentCluster.State)), nil
 }
 
 // Run removes model from ConfigMap and deletes the deployment HTTPRoute.
@@ -174,14 +174,14 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 		}
 
 		for i, ct := range targetInfo.ClusterTargets {
-			k8s := ct.GetKubernetes()
 			metadata.Clusters[i] = common.ClusterEntry{
-				ClusterID: ct.ClusterId,
-				Host:      k8s.GetHost(),
-				Port:      k8s.GetPort(),
-				TokenTag:  k8s.GetTokenTag(),
-				CaDataTag: k8s.GetCaDataTag(),
-				State:     common.ClusterStatePending,
+				ClusterId:             ct.ClusterId,
+				Host:                  ct.Host,
+				Port:                  ct.Port,
+				TokenTag:              ct.TokenTag,
+				CaDataTag:             ct.CaDataTag,
+				State:                 common.ClusterStatePending,
+				IsControlPlaneCluster: ct.IsControlPlaneCluster,
 			}
 		}
 
@@ -234,25 +234,25 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 
 	if currentCluster.State == common.ClusterStateCleanupInProgress {
 		a.logger.Info("Deletion in progress, waiting for Retrieve to check status",
-			zap.String("cluster_id", currentCluster.ClusterID))
+			zap.String("cluster_id", currentCluster.ClusterId))
 		return conditionUtils.GenerateUnknownCondition(condition, "DeletionInProgress",
-			fmt.Sprintf("Deletion in progress on cluster %s", currentCluster.ClusterID)), nil
+			fmt.Sprintf("Deletion in progress on cluster %s", currentCluster.ClusterId)), nil
 	}
 
 	// Unload model from cluster
 	a.logger.Info("Unloading model from cluster",
 		zap.String("model", currentModel),
-		zap.String("cluster_id", currentCluster.ClusterID),
+		zap.String("cluster_id", currentCluster.ClusterId),
 		zap.String("inference_server", inferenceServerName))
 
-	clusterTarget := common.GetClusterTarget(currentCluster)
+	clusterTarget := common.GetClusterTargetConnection(currentCluster)
 	if err := a.gateway.UnloadModel(ctx, a.logger, currentModel, inferenceServerName, resource.Namespace, clusterTarget); err != nil {
 		a.logger.Error("Failed to unload model from cluster",
 			zap.String("model", currentModel),
-			zap.String("cluster_id", currentCluster.ClusterID),
+			zap.String("cluster_id", currentCluster.ClusterId),
 			zap.Error(err))
 		return conditionUtils.GenerateFalseCondition(condition, "ModelUnloadingFailed",
-			fmt.Sprintf("Failed to unload model %s from cluster %s: %v", currentModel, currentCluster.ClusterID, err)), nil
+			fmt.Sprintf("Failed to unload model %s from cluster %s: %v", currentModel, currentCluster.ClusterId, err)), nil
 	}
 
 	metadata.Clusters[metadata.CurrentIndex].State = common.ClusterStateCleanupInProgress
@@ -261,9 +261,9 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 	}
 
 	a.logger.Info("Successfully initiated model deletion on cluster",
-		zap.String("cluster_id", currentCluster.ClusterID),
+		zap.String("cluster_id", currentCluster.ClusterId),
 		zap.String("model", currentModel))
 
 	return conditionUtils.GenerateUnknownCondition(condition, "DeletionStarted",
-		fmt.Sprintf("Deletion started on cluster %s", currentCluster.ClusterID)), nil
+		fmt.Sprintf("Deletion started on cluster %s", currentCluster.ClusterId)), nil
 }

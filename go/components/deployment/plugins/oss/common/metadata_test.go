@@ -60,7 +60,7 @@ func TestGetClusterMetadata(t *testing.T) {
 					BackendType: "triton",
 					Clusters: []ClusterEntry{
 						{
-							ClusterID: "cluster-1",
+							ClusterId: "cluster-1",
 							Host:      "api.cluster1.example.com",
 							Port:      "6443",
 							TokenTag:  "token-1",
@@ -77,7 +77,7 @@ func TestGetClusterMetadata(t *testing.T) {
 				BackendType: "triton",
 				Clusters: []ClusterEntry{
 					{
-						ClusterID: "cluster-1",
+						ClusterId: "cluster-1",
 						Host:      "api.cluster1.example.com",
 						Port:      "6443",
 						TokenTag:  "token-1",
@@ -95,9 +95,9 @@ func TestGetClusterMetadata(t *testing.T) {
 				metadata := &ClusterMetadata{
 					BackendType: "triton",
 					Clusters: []ClusterEntry{
-						{ClusterID: "cluster-1", State: ClusterStateDeployed},
-						{ClusterID: "cluster-2", State: ClusterStateDeploymentInProgress},
-						{ClusterID: "cluster-3", State: ClusterStatePending},
+						{ClusterId: "cluster-1", State: ClusterStateDeployed},
+						{ClusterId: "cluster-2", State: ClusterStateDeploymentInProgress},
+						{ClusterId: "cluster-3", State: ClusterStatePending},
 					},
 					CurrentIndex: 1,
 				}
@@ -107,9 +107,9 @@ func TestGetClusterMetadata(t *testing.T) {
 			expected: &ClusterMetadata{
 				BackendType: "triton",
 				Clusters: []ClusterEntry{
-					{ClusterID: "cluster-1", State: ClusterStateDeployed},
-					{ClusterID: "cluster-2", State: ClusterStateDeploymentInProgress},
-					{ClusterID: "cluster-3", State: ClusterStatePending},
+					{ClusterId: "cluster-1", State: ClusterStateDeployed},
+					{ClusterId: "cluster-2", State: ClusterStateDeploymentInProgress},
+					{ClusterId: "cluster-3", State: ClusterStatePending},
 				},
 				CurrentIndex: 1,
 			},
@@ -129,7 +129,7 @@ func TestGetClusterMetadata(t *testing.T) {
 				assert.Equal(t, tt.expected.CurrentIndex, result.CurrentIndex)
 				require.Len(t, result.Clusters, len(tt.expected.Clusters))
 				for i, expectedCluster := range tt.expected.Clusters {
-					assert.Equal(t, expectedCluster.ClusterID, result.Clusters[i].ClusterID)
+					assert.Equal(t, expectedCluster.ClusterId, result.Clusters[i].ClusterId)
 					assert.Equal(t, expectedCluster.Host, result.Clusters[i].Host)
 					assert.Equal(t, expectedCluster.Port, result.Clusters[i].Port)
 					assert.Equal(t, expectedCluster.TokenTag, result.Clusters[i].TokenTag)
@@ -164,7 +164,7 @@ func TestSetClusterMetadata(t *testing.T) {
 				BackendType: "triton",
 				Clusters: []ClusterEntry{
 					{
-						ClusterID: "cluster-1",
+						ClusterId: "cluster-1",
 						Host:      "api.cluster1.example.com",
 						Port:      "6443",
 						TokenTag:  "token-1",
@@ -182,9 +182,9 @@ func TestSetClusterMetadata(t *testing.T) {
 			metadata: &ClusterMetadata{
 				BackendType: "triton",
 				Clusters: []ClusterEntry{
-					{ClusterID: "cluster-1", State: ClusterStateDeployed},
-					{ClusterID: "cluster-2", State: ClusterStateCleanupInProgress},
-					{ClusterID: "cluster-3", State: ClusterStateRolledBack},
+					{ClusterId: "cluster-1", State: ClusterStateDeployed},
+					{ClusterId: "cluster-2", State: ClusterStateCleanupInProgress},
+					{ClusterId: "cluster-3", State: ClusterStateRolledBack},
 				},
 				CurrentIndex: 2,
 			},
@@ -214,7 +214,7 @@ func TestSetClusterMetadata(t *testing.T) {
 				assert.Equal(t, tt.metadata.CurrentIndex, result.CurrentIndex)
 				require.Len(t, result.Clusters, len(tt.metadata.Clusters))
 				for i, expectedCluster := range tt.metadata.Clusters {
-					assert.Equal(t, expectedCluster.ClusterID, result.Clusters[i].ClusterID)
+					assert.Equal(t, expectedCluster.ClusterId, result.Clusters[i].ClusterId)
 					assert.Equal(t, expectedCluster.State, result.Clusters[i].State)
 				}
 			}

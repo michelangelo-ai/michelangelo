@@ -87,7 +87,7 @@ func (a *RollingRolloutActor) Retrieve(ctx context.Context, deployment *v2pb.Dep
 	inferenceServerName := deployment.Spec.GetInferenceServer().Name
 
 	a.logger.Info("Checking deployment status for cluster",
-		zap.String("cluster_id", currentCluster.ClusterID),
+		zap.String("cluster_id", currentCluster.ClusterId),
 		zap.String("state", currentCluster.State),
 		zap.Int("cluster_index", currentIdx),
 		zap.Int("total_clusters", len(metadata.Clusters)))
@@ -95,28 +95,28 @@ func (a *RollingRolloutActor) Retrieve(ctx context.Context, deployment *v2pb.Dep
 	// If in PENDING state, update CurrentIndex and trigger Run to deploy
 	if currentCluster.State == actorCommon.ClusterStatePending {
 		return conditionUtils.GenerateFalseCondition(condition, "ClusterPendingDeployment",
-			fmt.Sprintf("Cluster %s is pending deployment", currentCluster.ClusterID)), nil
+			fmt.Sprintf("Cluster %s is pending deployment", currentCluster.ClusterId)), nil
 	}
 
 	// If IN_PROGRESS state, then check model status
 	if currentCluster.State == actorCommon.ClusterStateDeploymentInProgress {
-		clusterTarget := actorCommon.GetClusterTarget(currentCluster)
+		clusterTarget := actorCommon.GetClusterTargetConnection(currentCluster)
 		backendType := v2pb.BackendType(v2pb.BackendType_value[metadata.BackendType])
 
 		modelReady, err := a.gateway.CheckModelStatus(ctx, a.logger, modelName, inferenceServerName, deployment.Namespace, clusterTarget, backendType)
 		if err != nil {
 			a.logger.Warn("Failed to check model status, will retry",
-				zap.String("cluster_id", currentCluster.ClusterID),
+				zap.String("cluster_id", currentCluster.ClusterId),
 				zap.String("model", modelName),
 				zap.Error(err))
 			return conditionUtils.GenerateUnknownCondition(condition, "ModelStatusCheckFailed",
-				fmt.Sprintf("Failed to check model status on cluster %s: %v", currentCluster.ClusterID, err)), nil
+				fmt.Sprintf("Failed to check model status on cluster %s: %v", currentCluster.ClusterId, err)), nil
 		}
 
 		if modelReady {
 			// Mark as DEPLOYED
 			a.logger.Info("Model deployed successfully on cluster",
-				zap.String("cluster_id", currentCluster.ClusterID),
+				zap.String("cluster_id", currentCluster.ClusterId),
 				zap.String("model", modelName))
 
 			metadata.Clusters[currentIdx].State = actorCommon.ClusterStateDeployed
@@ -129,21 +129,21 @@ func (a *RollingRolloutActor) Retrieve(ctx context.Context, deployment *v2pb.Dep
 			// If more clusters remain, return false to trigger next cluster deployment
 			if currentIdx+1 < len(metadata.Clusters) {
 				return conditionUtils.GenerateFalseCondition(condition, "NextClusterPending",
-					fmt.Sprintf("Cluster %s deployed, moving to next cluster", currentCluster.ClusterID)), nil
+					fmt.Sprintf("Cluster %s deployed, moving to next cluster", currentCluster.ClusterId)), nil
 			}
 			return conditionUtils.GenerateTrueCondition(condition), nil
 		}
 
 		// Model not ready yet
 		a.logger.Info("Model not yet ready on cluster, continuing to wait",
-			zap.String("cluster_id", currentCluster.ClusterID),
+			zap.String("cluster_id", currentCluster.ClusterId),
 			zap.String("model", modelName))
 		return conditionUtils.GenerateUnknownCondition(condition, "ModelLoading",
-			fmt.Sprintf("Model %s is loading on cluster %s", modelName, currentCluster.ClusterID)), nil
+			fmt.Sprintf("Model %s is loading on cluster %s", modelName, currentCluster.ClusterId)), nil
 	}
 
 	return conditionUtils.GenerateUnknownCondition(condition, "UnexpectedState",
-		fmt.Sprintf("Cluster %s in unexpected state: %s", currentCluster.ClusterID, currentCluster.State)), nil
+		fmt.Sprintf("Cluster %s in unexpected state: %s", currentCluster.ClusterId, currentCluster.State)), nil
 }
 
 // Run initiates model deployment on the current cluster.
@@ -183,14 +183,14 @@ func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployme
 		}
 
 		for i, ct := range targetInfo.ClusterTargets {
-			k8s := ct.GetKubernetes()
 			metadata.Clusters[i] = actorCommon.ClusterEntry{
-				ClusterID: ct.ClusterId,
-				Host:      k8s.GetHost(),
-				Port:      k8s.GetPort(),
-				TokenTag:  k8s.GetTokenTag(),
-				CaDataTag: k8s.GetCaDataTag(),
-				State:     actorCommon.ClusterStatePending,
+				ClusterId:             ct.ClusterId,
+				Host:                  ct.Host,
+				Port:                  ct.Port,
+				TokenTag:              ct.TokenTag,
+				CaDataTag:             ct.CaDataTag,
+				State:                 actorCommon.ClusterStatePending,
+				IsControlPlaneCluster: ct.IsControlPlaneCluster,
 			}
 		}
 
@@ -214,29 +214,29 @@ func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployme
 	currentCluster := &metadata.Clusters[metadata.CurrentIndex]
 	if currentCluster.State == actorCommon.ClusterStateDeploymentInProgress {
 		a.logger.Info("Cluster deployment in progress, waiting for Retrieve to check status",
-			zap.String("cluster_id", currentCluster.ClusterID))
+			zap.String("cluster_id", currentCluster.ClusterId))
 		return conditionUtils.GenerateUnknownCondition(condition, "DeploymentInProgress",
-			fmt.Sprintf("Model deployment in progress on cluster %s", currentCluster.ClusterID)), nil
+			fmt.Sprintf("Model deployment in progress on cluster %s", currentCluster.ClusterId)), nil
 	}
 
 	// Deploy to this cluster
 	a.logger.Info("Starting model deployment on cluster",
-		zap.String("cluster_id", currentCluster.ClusterID),
+		zap.String("cluster_id", currentCluster.ClusterId),
 		zap.String("model", modelName),
 		zap.Int("cluster_index", metadata.CurrentIndex),
 		zap.Int("total_clusters", len(metadata.Clusters)))
 
-	clusterTarget := actorCommon.GetClusterTarget(currentCluster)
+	clusterTarget := actorCommon.GetClusterTargetConnection(currentCluster)
 	// TODO(#696): make the storage path configurable w.r.t storage client and storage location
 	storagePath := fmt.Sprintf("s3://deploy-models/%s/", modelName)
 
 	if err := a.gateway.LoadModel(ctx, a.logger, modelName, storagePath, inferenceServerName, deployment.Namespace, clusterTarget); err != nil {
 		a.logger.Error("Failed to initiate model loading",
 			zap.Error(err),
-			zap.String("cluster_id", currentCluster.ClusterID),
+			zap.String("cluster_id", currentCluster.ClusterId),
 			zap.String("model", modelName))
 		return conditionUtils.GenerateFalseCondition(condition, "ModelLoadingFailed",
-			fmt.Sprintf("Failed to load model on cluster %s: %v", currentCluster.ClusterID, err)), nil
+			fmt.Sprintf("Failed to load model on cluster %s: %v", currentCluster.ClusterId, err)), nil
 	}
 
 	// Mark as IN_PROGRESS
@@ -246,9 +246,9 @@ func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployme
 	}
 
 	a.logger.Info("Successfully initiated model loading on cluster",
-		zap.String("cluster_id", currentCluster.ClusterID),
+		zap.String("cluster_id", currentCluster.ClusterId),
 		zap.String("model", modelName))
 
 	return conditionUtils.GenerateUnknownCondition(condition, "DeploymentStarted",
-		fmt.Sprintf("Model deployment started on cluster %s", currentCluster.ClusterID)), nil
+		fmt.Sprintf("Model deployment started on cluster %s", currentCluster.ClusterId)), nil
 }

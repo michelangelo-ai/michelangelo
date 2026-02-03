@@ -6,8 +6,8 @@ import (
 
 	"github.com/gogo/protobuf/types"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // Cluster states used by rollout, cleanup, and rollback actors
@@ -21,7 +21,6 @@ const (
 	// Cleanup states
 	ClusterStateCleanupInProgress = "CLEANUP_IN_PROGRESS"
 	ClusterStateCleaned           = "CLEANED"
-
 	// Rollback states
 	ClusterStateRollbackInProgress = "ROLLBACK_IN_PROGRESS"
 	ClusterStateRolledBack         = "ROLLED_BACK"
@@ -29,12 +28,13 @@ const (
 
 // ClusterEntry tracks the state for a single cluster.
 type ClusterEntry struct {
-	ClusterID string `json:"cluster_id"`
-	Host      string `json:"host"`
-	Port      string `json:"port"`
-	TokenTag  string `json:"token_tag"`
-	CaDataTag string `json:"ca_data_tag"`
-	State     string `json:"state"`
+	ClusterId             string `json:"cluster_id"`
+	Host                  string `json:"host"`
+	Port                  string `json:"port"`
+	TokenTag              string `json:"token_tag"`
+	CaDataTag             string `json:"ca_data_tag"`
+	State                 string `json:"state"`
+	IsControlPlaneCluster bool   `json:"is_control_plane_cluster"`
 }
 
 // ClusterMetadata stores the multi-cluster state in condition metadata.
@@ -102,18 +102,15 @@ func SetClusterMetadata(condition *apipb.Condition, metadata *ClusterMetadata) e
 	return nil
 }
 
-// GetClusterTarget reconstructs a ClusterTarget from the metadata entry.
-func GetClusterTarget(entry *ClusterEntry) *v2pb.ClusterTarget {
-	return &v2pb.ClusterTarget{
-		ClusterId: entry.ClusterID,
-		Config: &v2pb.ClusterTarget_Kubernetes{
-			Kubernetes: &v2pb.ConnectionSpec{
-				Host:      entry.Host,
-				Port:      entry.Port,
-				TokenTag:  entry.TokenTag,
-				CaDataTag: entry.CaDataTag,
-			},
-		},
+// GetClusterTargetConnection reconstructs a ClusterTargetMetadata from the metadata entry.
+func GetClusterTargetConnection(entry *ClusterEntry) *gateways.TargetClusterConnection {
+	return &gateways.TargetClusterConnection{
+		ClusterId:             entry.ClusterId,
+		Host:                  entry.Host,
+		Port:                  entry.Port,
+		TokenTag:              entry.TokenTag,
+		CaDataTag:             entry.CaDataTag,
+		IsControlPlaneCluster: entry.IsControlPlaneCluster,
 	}
 }
 
@@ -136,6 +133,8 @@ func convertValueToInterface(v *types.Value) interface{} {
 		return k.StringValue
 	case *types.Value_NumberValue:
 		return k.NumberValue
+	case *types.Value_BoolValue:
+		return k.BoolValue
 	case *types.Value_StructValue:
 		return convertStructToMap(k.StructValue)
 	case *types.Value_ListValue:
@@ -165,6 +164,8 @@ func convertInterfaceToValue(v interface{}) *types.Value {
 		return &types.Value{Kind: &types.Value_StringValue{StringValue: val}}
 	case float64:
 		return &types.Value{Kind: &types.Value_NumberValue{NumberValue: val}}
+	case bool:
+		return &types.Value{Kind: &types.Value_BoolValue{BoolValue: val}}
 	case map[string]interface{}:
 		return &types.Value{Kind: &types.Value_StructValue{StructValue: convertMapToStruct(val)}}
 	case []interface{}:

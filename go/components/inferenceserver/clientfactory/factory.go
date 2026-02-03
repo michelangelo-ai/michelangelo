@@ -32,9 +32,6 @@ type defaultClientFactory struct {
 	scheme         *runtime.Scheme
 	logger         *zap.Logger
 
-	// controlPlaneClusterId is the cluster ID that represents the control plane cluster.
-	controlPlaneClusterId string
-
 	// Cache for remote cluster clients
 	clients sync.Map
 	mu      sync.Mutex
@@ -49,23 +46,19 @@ func NewClientFactory(
 	secretProvider secrets.SecretProvider,
 	scheme *runtime.Scheme,
 	logger *zap.Logger,
-	controlPlaneClusterId string,
 ) ClientFactory {
 	return &defaultClientFactory{
-		defaultClient:         defaultClient,
-		secretProvider:        secretProvider,
-		scheme:                scheme,
-		logger:                logger,
-		controlPlaneClusterId: controlPlaneClusterId,
+		defaultClient:  defaultClient,
+		secretProvider: secretProvider,
+		scheme:         scheme,
+		logger:         logger,
 	}
 }
 
 // GetClient returns a controller-runtime client for the given cluster target.
 func (f *defaultClientFactory) GetClient(ctx context.Context, cluster *v2pb.ClusterTarget) (client.Client, error) {
-	// If the cluster ID matches the control plane cluster ID, returns the default client.
-	if f.controlPlaneClusterId != "" && cluster.ClusterId == f.controlPlaneClusterId {
-		f.logger.Debug("Using in-cluster client for control plane cluster",
-			zap.String("clusterId", cluster.ClusterId))
+	// If the cluster is nil, returns the default client to the control plane cluster.
+	if cluster == nil {
 		return f.defaultClient, nil
 	}
 
@@ -122,10 +115,8 @@ func (f *defaultClientFactory) GetClient(ctx context.Context, cluster *v2pb.Clus
 
 // GetHTTPClient returns an HTTP client configured for the given cluster target.
 func (f *defaultClientFactory) GetHTTPClient(ctx context.Context, cluster *v2pb.ClusterTarget) (*http.Client, error) {
-	// If the cluster ID matches the configured control plane cluster ID, returns a simple HTTP client.
-	if f.controlPlaneClusterId != "" && cluster.ClusterId == f.controlPlaneClusterId {
-		f.logger.Debug("Using in-cluster HTTP client",
-			zap.String("clusterId", cluster.ClusterId))
+	// If the cluster is nil, returns HTTP client to the control plane cluster.
+	if cluster == nil {
 		return &http.Client{
 			Timeout: 10 * time.Second,
 		}, nil
