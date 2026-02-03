@@ -12,7 +12,7 @@
 
 ### Pipeline
 
-A pipeline is an instance of a workflow. A pipeline runs the workflow function with a set of predefined configs. This means a workflow can be associated with multiple pipelines, each one with its own set of configs. In CanvasFlex, a pipeline can be triggered in the following ways:
+A pipeline is an instance of a workflow. A pipeline runs the workflow function with a set of predefined configs. This means a workflow can be associated with multiple pipelines, each one with its own set of configs. In Canvas, a pipeline can be triggered in the following ways:
 
 -   Triggered directly through MA Studio UI (remote run only)
 -   Triggered via MA CLI tools (remote run only)
@@ -240,7 +240,7 @@ Users can configure retry (and timeout, though timeout is currently deferred for
 
 • **Uniflow Decorator**: Directly in your Python task definition using the retry parameter (e.g., @uniflow.task(config=Spark(driver\_cpu=4), retry=3)).
 
-• **CanvasFlex YAML**: In the pipeline\_conf.yaml file under task\_configs (e.g., feature\_prep: job\_specs: retry: 3).
+• **Canvas YAML**: In the pipeline\_conf.yaml file under task\_configs (e.g., feature\_prep: job\_specs: retry: 3).
 
 These retry values are passed to the Starlark code layers (spark\_task.star or ray\_task.star).
 

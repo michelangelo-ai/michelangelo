@@ -135,7 +135,7 @@ This command should install all the dependencies from pyproject.toml.
 
 ```bash
 cd $REPO_ROOT/python
-poetry install -E mactl
+poetry install -E ma
 ```
 
 if you see the following error when setting up sandbox
@@ -152,8 +152,8 @@ Traceback (most recent call last):
   File "<frozen importlib._bootstrap_external>", line 850, in exec_module
   File "<frozen importlib._bootstrap>", line 228, in _call_with_frames_removed
   File "/Users/frank.chen.cst/Desktop/michelangelo/python/michelangelo/cli/cli.py", line 5, in <module>
-    from michelangelo.cli.mactl import mactl
-  File "/Users/frank.chen.cst/Desktop/michelangelo/python/michelangelo/cli/mactl/mactl.py", line 39, in <module>
+    from michelangelo.cli.ma import ma
+  File "/Users/frank.chen.cst/Desktop/michelangelo/python/michelangelo/cli/ma/ma.py", line 39, in <module>
     from grpc_reflection.v1alpha import reflection_pb2, reflection_pb2_grpc
 ModuleNotFoundError: No module named 'grpc_reflection'
 ```

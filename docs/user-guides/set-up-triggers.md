@@ -37,7 +37,7 @@ Parameter IDs represent configurations utilized for scaling up trigger runs. For
 
 ### 3\. Use CLI Tool to Register Trigger
 
-After trigger.yaml is created with corresponding trigger configuration, users manage TriggerRuns using CLI tools(mactl) after the environment prerequisites are met (sandbox creation, namespace setup, etc.). 
+After trigger.yaml is created with corresponding trigger configuration, users manage TriggerRuns using CLI tools(ma) after the environment prerequisites are met (sandbox creation, namespace setup, etc.). 
 
 | Action | Example CLI Command |
 | :---- | :---- |

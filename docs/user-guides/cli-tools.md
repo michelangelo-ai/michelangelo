@@ -1,10 +1,10 @@
 # CLI Tools
 
-MaCTL (Michelangelo CLI interface) provides a unified way to manage Michelangelo resources using standard Kubernetes-style commands. This guide covers all supported commands for managing Custom Resource Definitions (CRDs).
+ma (Michelangelo CLI interface) provides a unified way to manage Michelangelo resources using standard Kubernetes-style commands. This guide covers all supported commands for managing Custom Resource Definitions (CRDs).
 
 ## Prerequisites
 
-Before using MaCTL, ensure:
+Before using ma, ensure:
 
 1. **API Server is running**:
    ```bash
@@ -17,13 +17,13 @@ Before using MaCTL, ensure:
    # Set repo root and install dependencies
    $ export REPO_ROOT="/Users/{username}/michelangelo"
    $ cd $REPO_ROOT/python/
-   $ poetry install -E mactl
+   $ poetry install -E ma
    ```
 
 3. **Configure API server address** (optional):
    ```bash
    # Override default API server address
-   $ export MACTL_ADDRESS="127.0.0.1:14566"  # e.g., for Michelangelo Api Server
+   $ export ma_ADDRESS="127.0.0.1:14566"  # e.g., for Michelangelo Api Server
    ```
 
 
@@ -32,15 +32,15 @@ Before using MaCTL, ensure:
 
 All CRDs support the following standard operations -- GET, APPLY, and DELETE
 
-### How to run the MaCTL in michelangelo repository
+### How to run the ma in michelangelo repository
 
 **Usage:**
 ```bash
 $ cd $REPO_ROOT/python/ 
-$ poetry run python -m michelangelo.cli.mactl.mactl <COMMAND> <RESOURCE_TYPE> [ARGS]
+$ poetry run python -m michelangelo.cli.ma.ma <COMMAND> <RESOURCE_TYPE> [ARGS]
 ```
 
-We will abstract this part like `$ mactl <RESOURCE_TYPE> <COMMAND> ` in below.
+We will abstract this part like `$ ma <RESOURCE_TYPE> <COMMAND> ` in below.
 
 ### GET - Retrieve resource
 
@@ -48,51 +48,51 @@ Retrieve information about an existing resource by namespace and name. If you do
 
 **Syntax:**
 ```bash
-$ mactl <RESOURCE_TYPE> get  --namespace="<namespace>" [--name="<name>"]
+$ ma <RESOURCE_TYPE> get  --namespace="<namespace>" [--name="<name>"]
 ```
 
 **Examples:**
 ```bash
 # List all projects
-$ poetry run python -m michelangelo.cli.mactl.mactl project get --namespace="ma-dev-test"
+$ poetry run python -m michelangelo.cli.ma.ma project get --namespace="ma-dev-test"
 
 # List all pipelines in a namespace
-$ poetry run python -m michelangelo.cli.mactl.mactl pipeline get --namespace="ma-dev-test"
+$ poetry run python -m michelangelo.cli.ma.ma pipeline get --namespace="ma-dev-test"
 
 # Get a specific pipeline
-$ poetry run python -m michelangelo.cli.mactl.mactl pipeline get --namespace="ma-dev-test" --name="bert-cola-test"
+$ poetry run python -m michelangelo.cli.ma.ma pipeline get --namespace="ma-dev-test" --name="bert-cola-test"
 
 # Get a specific project
-$ poetry run python -m michelangelo.cli.mactl.mactl project get --namespace="ma-dev-test" --name="my-project"
+$ poetry run python -m michelangelo.cli.ma.ma project get --namespace="ma-dev-test" --name="my-project"
 
 # Get a pipeline run
-$ poetry run python -m michelangelo.cli.mactl.mactl pipeline_run get --namespace="ma-dev-test" --name="run-001"
+$ poetry run python -m michelangelo.cli.ma.ma pipeline_run get --namespace="ma-dev-test" --name="run-001"
 
 # Get a prompt template
-$ poetry run python -m michelangelo.cli.mactl.mactl prompt_template get --namespace="ma-dev-test" --name="classification-prompt"
+$ poetry run python -m michelangelo.cli.ma.ma prompt_template get --namespace="ma-dev-test" --name="classification-prompt"
 ```
 
 ### APPLY - Create or update a resource from YAML
 
-Apply (create or update) a resource from a YAML configuration file. MaCTL automatically detects the resource type from the `apiVersion` and `kind` fields in the YAML.
+Apply (create or update) a resource from a YAML configuration file. ma automatically detects the resource type from the `apiVersion` and `kind` fields in the YAML.
 
-Note: Currently, we support `create` command for creating a new CRD by using mactl. Creating a new CRD with `apply` command would fail. This will be fixed soon.
+Note: Currently, we support `create` command for creating a new CRD by using ma. Creating a new CRD with `apply` command would fail. This will be fixed soon.
 
 **Syntax:**
 ```bash
-$ mactl pipeline apply --file="<YAML_FILE_PATH>"
+$ ma pipeline apply --file="<YAML_FILE_PATH>"
 ```
 
 **Examples:**
 ```bash
 # Apply a pipeline configuration
-$ poetry run python -m michelangelo.cli.mactl.mactl pipeline apply --file="./examples/bert_cola/pipeline.yaml"
+$ poetry run python -m michelangelo.cli.ma.ma pipeline apply --file="./examples/bert_cola/pipeline.yaml"
 
 # Apply a project configuration  
-$ poetry run python -m michelangelo.cli.mactl.mactl project apply --file="./project.yaml"
+$ poetry run python -m michelangelo.cli.ma.ma project apply --file="./project.yaml"
 
 # Apply a prompt template
-$ poetry run python -m michelangelo.cli.mactl.mactl prompt_template apply --file="./prompt_template.yaml"
+$ poetry run python -m michelangelo.cli.ma.ma prompt_template apply --file="./prompt_template.yaml"
 ```
 
 ### DELETE - Remove a resource
@@ -101,43 +101,43 @@ Delete a specific resource by namespace and name.
 
 **Syntax:**
 ```bash
-$ poetry run python -m michelangelo.cli.mactl.mactl <resource_type> delete --namespace="<namespace>" --name="<name>"
+$ poetry run python -m michelangelo.cli.ma.ma <resource_type> delete --namespace="<namespace>" --name="<name>"
 ```
 
 **Examples:**
 ```bash
 # Delete a pipeline
-$ poetry run python -m michelangelo.cli.mactl.mactl pipeline delete --namespace="ma-dev-test" --name="bert-cola-test"
+$ poetry run python -m michelangelo.cli.ma.ma pipeline delete --namespace="ma-dev-test" --name="bert-cola-test"
 
 # Delete a project
-$ poetry run python -m michelangelo.cli.mactl.mactl project delete --namespace="ma-dev-test" --name="my-project"
+$ poetry run python -m michelangelo.cli.ma.ma project delete --namespace="ma-dev-test" --name="my-project"
 
 # Delete a pipeline run
-$ poetry run python -m michelangelo.cli.mactl.mactl pipeline_run delete --namespace="ma-dev-test" --name="run-001"
+$ poetry run python -m michelangelo.cli.ma.ma pipeline_run delete --namespace="ma-dev-test" --name="run-001"
 
 # Delete a prompt template
-$ poetry run python -m michelangelo.cli.mactl.mactl prompt_template delete --namespace="ma-dev-test" --name="classification-prompt"
+$ poetry run python -m michelangelo.cli.ma.ma prompt_template delete --namespace="ma-dev-test" --name="classification-prompt"
 ```
 
 ## Default Plugin commands
 
-MaCTL support the default plugin commands for users for specific CRDs.
+ma support the default plugin commands for users for specific CRDs.
 
 ### Pipeline
 
 #### RUN - Execute a pipeline
 
-The RUN command is used to create and execute pipeline runs. To run a pipeline, you need to register your pipeline by using `mactl apply <pipeline_conf.yaml PATH` command first.
+The RUN command is used to create and execute pipeline runs. To run a pipeline, you need to register your pipeline by using `ma apply <pipeline_conf.yaml PATH` command first.
 
 **Syntax:**
 ```bash
-$ poetry run python -m michelangelo.cli.mactl.mactl pipeline run --namespace="<namespace>" --name="<pipeline_name>"
+$ poetry run python -m michelangelo.cli.ma.ma pipeline run --namespace="<namespace>" --name="<pipeline_name>"
 ```
 
 **Example:**
 ```bash
 # Run a registered pipeline
-$ poetry run python -m michelangelo.cli.mactl.mactl pipeline run --namespace="ma-dev-test" --name="bert-cola-test"
+$ poetry run python -m michelangelo.cli.ma.ma pipeline run --namespace="ma-dev-test" --name="bert-cola-test"
 ```
 
 #### DEV RUN - Execute a pipeline in DEV mode
@@ -146,13 +146,13 @@ The DEV RUN command is used to run a pipeline without registering it. This comma
 
 **Syntax:**
 ```bash
-$ poetry run python -m michelangelo.cli.mactl.mactl pipeline dev-run --file=<YAML_FILE_PATH> --env=<ENV_VAR>=<ENV_VAL>
+$ poetry run python -m michelangelo.cli.ma.ma pipeline dev-run --file=<YAML_FILE_PATH> --env=<ENV_VAR>=<ENV_VAL>
 ```
 
 **Example:**
 ```bash
 # Run a pipeline in dev mode
-$ poetry run python -m michelangelo.cli.mactl.mactl pipeline dev-run  --file="./examples/bert_cola/pipeline.yaml" --env=foo=bar
+$ poetry run python -m michelangelo.cli.ma.ma pipeline dev-run  --file="./examples/bert_cola/pipeline.yaml" --env=foo=bar
 ```
 
 ## YAML Resource Examples
@@ -206,7 +206,7 @@ spec:
 apiVersion: michelangelo.uber.com/v2beta1
 kind: PromptTemplate
 metadata:
-  name: mactl-pt-test-001
+  name: ma-pt-test-001
   namespace: ma-integration-test
 spec:
   features:
@@ -235,7 +235,7 @@ spec:
 
 ## Configuration
 
-MaCTL supports configuration through a `config.yaml` file located at `michelangelo/cli/mactl/config.yaml`. This can include:
+ma supports configuration through a `config.yaml` file located at `michelangelo/cli/ma/config.yaml`. This can include:
 
 - MinIO/S3 credentials for object storage
 - API server endpoints

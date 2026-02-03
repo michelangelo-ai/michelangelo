@@ -14,7 +14,7 @@ Feature | Standard Workflow | Custom Workflow
 --- | --- | ---
 MA Studio UI support | ✅ | ✅
 Triggering the pipeline via MA Studio | ✅ | ✅
-Triggering the pipeline via MACTL in CLI | ✅ | ✅
+Triggering the pipeline via ma in CLI | ✅ | ✅
 Remote run (via Spark/Ray clusters) | ✅ | ✅
 Local run | ✅ | ✅
 Resume from previous steps | ✅ | ✅
@@ -227,7 +227,7 @@ if __name__ == "__main__":
 
 # Pipeline Registration 
 
-The pipeline registration is required to execute the pipeline remotely through MA Studio. Registering and running the pipeline in CanvasFlex is similar to Canvas. Most of the commands in ManageandLaunchPipelinesUsingmactl, can still be used in CanvasFlex.
+The pipeline registration is required to execute the pipeline remotely through MA Studio. Registering and running the pipeline in Canvas is similar to Canvas. Most of the commands in ManageandLaunchPipelinesUsingma, can still be used in Canvas.
 
 **Register the Pipeline**  
 
@@ -251,7 +251,7 @@ Click into the pipeline and click the Run button.
 <img width="1407" height="187" alt="Screenshot 2026-01-08 at 3 15 10 PM" src="https://github.com/user-attachments/assets/1451f194-3244-455a-9d03-75975a5bdfcb" />
 
 
-### Run the Pipeline using MACTL
+### Run the Pipeline using ma
 
 If the pipeline is registered from the main branch. A new pipeline revision is created under the main branch, and the default revision for the pipeline is updated to the new revision. Therefore, you can run the pipeline directly.
 
@@ -265,16 +265,16 @@ ma pipeline run \--namespace=\<namespace> \--name=\<pipeline_name>
 ma pipeline run \--namespace=ma-dev-test-uber-one \--name=simple-custom-train
 ```
 
-### Run the Pipeline Revision using MACTL
+### Run the Pipeline Revision using ma
 
 If the pipeline is registered from a remote private branch. A new pipeline revision is created under the private branch, and the default revision for the pipeline is not updated. Therefore, you should run the pipeline with the revision.
 
 ```
-mactl pipeline run -n <namespace> --revision <pipeline_revision_name>
+ma pipeline run -n <namespace> --revision <pipeline_revision_name>
 ```
 
 **Example**
 
 ```
-mactl pipeline run -n ma-dev-test-uber-one --revision pipeline-simple-custom-train-511e3b3be42f
+ma pipeline run -n ma-dev-test-uber-one --revision pipeline-simple-custom-train-511e3b3be42f
 ```

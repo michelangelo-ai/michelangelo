@@ -39,7 +39,7 @@ methods for each CRD type (API resource type). Controllers monitor the
 creations / modifications of the CRD objects through the Kubernetes
 API server. Michelangelo users cannot directly call Kubernetes API
 server. Instead, they have to use Michelangelo API server (gRPC) or
-Michelangelo CLI(mactl) to use Michelangelo APIs.
+Michelangelo CLI(ma) to use Michelangelo APIs.
 
 **Michelangelo API Server:** A gRPC server. For standard declarative
 API resources, Michelangelo API server is a gRPC to REST proxy. The

@@ -19,14 +19,14 @@ Dependencies are installed:
 # Set repo root and install dependencies
 export REPO_ROOT="/Users/{username}/michelangelo"
 cd $REPO_ROOT/python/
-poetry install -E mactl
+poetry install -E ma
 ```
 
 Configure API server address (optional):
 
 ```bash
 # Override default API server address
-export MACTL_ADDRESS="127.0.0.1:14566"  # e.g., for Michelangelo Api Server
+export ma_ADDRESS="127.0.0.1:14566"  # e.g., for Michelangelo Api Server
 ```
 
 ## Usage
@@ -338,7 +338,7 @@ spec:
 apiVersion: michelangelo.uber.com/v2beta1
 kind: PromptTemplate
 metadata:
-  name: mactl-pt-test-001
+  name: ma-pt-test-001
   namespace: ma-integration-test
 spec:
   features:
@@ -376,7 +376,7 @@ rpc-caller = grpcurl
 rpc-service = ma-apiserver
 rpc-encoding = proto
 
-[mactl]
+[ma]
 address = 127.0.0.1:14566
 use_tls = false
 namespace = "ma-dev-test"
@@ -396,9 +396,9 @@ Available configuration fields:
 
 ##### API server endpoints
 
-(Currently supported at ~/.mactlrc / Will be configurable in the configrc file later.)
+(Currently supported at ~/.marc / Will be configurable in the configrc file later.)
 
-API server related configuration would be placed under `[mactl]` group
+API server related configuration would be placed under `[ma]` group
 
 Available configuration fields:
 
@@ -407,7 +407,7 @@ Available configuration fields:
 
 ##### Custom Metadata
 
-(Currently supported at ~/.mactlrc / Will be configurable in the configrc file later.)
+(Currently supported at ~/.marc / Will be configurable in the configrc file later.)
 
 Custom gRPC metadata headers are placed under the [metadata] section.
 
