@@ -109,40 +109,32 @@ spec:
             name: ingester-schema-sql
 
 ---
-# To use this Job:
-# 1. Create ConfigMap from the SQL file:
-#    kubectl create configmap ingester-schema-sql \
-#      --from-file=ingester_schema.sql=scripts/ingester_schema.sql
-#
-# 2. Apply this Job:
-#    kubectl apply -f scripts/ingester_schema_job.yaml
-#
-# 3. Check status:
-#    kubectl get job ingester-schema-init
-#    kubectl logs job/ingester-schema-init
-#
-# 4. Verify:
-#    kubectl exec mysql -- mysql -u root -proot michelangelo -e "SHOW TABLES;"
-#    Expected: 39 tables
-
 # ==============================================================================
-# HEALTH CHECK & ORDERING
+# DEPLOYMENT NOTES
 # ==============================================================================
-# 
-# Q: Does this Job ensure MySQL is healthy before running?
-# A: YES! The init container (wait-for-mysql) ensures:
-#    ✅ MySQL pod is running
-#    ✅ MySQL service DNS resolves
-#    ✅ MySQL accepts connections
-#    ✅ MySQL responds to queries
 #
-# The Job will NOT execute the schema SQL until all these checks pass.
+# This Job waits for MySQL to be ready before executing schema initialization.
 #
-# Deployment Order Best Practices:
-# 1. Deploy MySQL: kubectl apply -f mysql.yaml
-# 2. Wait for ready: kubectl wait --for=condition=ready pod/mysql --timeout=5m  
-# 3. Create ConfigMap: kubectl create configmap ingester-schema-sql --from-file=...
+# Health Checks:
+# - Init container waits for MySQL to accept connections (up to 2 minutes)
+# - Tests DNS resolution, connection, and database accessibility
+# - Main container executes SQL only after init container succeeds
+#
+# Deployment Order:
+# 1. Deploy MySQL first: kubectl apply -f mysql.yaml
+# 2. Wait for MySQL to be ready: kubectl wait --for=condition=ready pod/mysql --timeout=5m
+# 3. Create ConfigMap: kubectl create configmap ingester-schema-sql --from-file=ingester_schema.sql=scripts/ingester_schema.sql
 # 4. Run this Job: kubectl apply -f scripts/ingester_schema_job.yaml
 #
-# The init container provides up to 2 minutes of retry logic if MySQL is slow to start.
+# For automated deployment (Helm/Kustomize):
+# - Use Helm hooks: Add "helm.sh/hook": post-install,post-upgrade to metadata.annotations
+# - Or use depends_on in docker-compose/ArgoCD
+# - Or use Job dependencies in Argo Workflows
+#
+# Verification:
+#    kubectl get job ingester-schema-init
+#    kubectl logs job/ingester-schema-init
+#    kubectl exec mysql -- mysql -u root -proot michelangelo -e "SHOW TABLES;"
+#    Expected: 39 tables
+#
 # ==============================================================================
