@@ -44,11 +44,10 @@ If you're coming from other ML platforms, here's how familiar concepts map to Mi
 | **Model Training** | Custom scripts, Kubeflow Pipelines | **MA Studio Training** (UI) or **Canvas/Uniflow workflows** (code) |
 | **Hyperparameter Tuning** | Optuna, Ray Tune | **Uniflow tasks** with Ray * |
 | **Model Storage** | S3 buckets, model registries | **Michelangelo Model Registry** with metadata & lineage & plugin storage |
-| **Batch Inference** | Airflow + custom scripts | **Deployment to batch endpoint** with offline inference pipeline with Ray / Triton Inference * |
+| **Batch Inference** | Airflow + custom scripts | **Deployment to batch endpoint** with offline inference pipeline and Ray / Triton Inference * |
 | **Online Serving** | TorchServe, TensorFlow Serving | **Deployment to inference server** with Triton Inference Server * |
 | **Monitoring** | Prometheus + Grafana | **Model Excellence Scores** + built-in dashboard * |
 | **Pipeline Orchestration** | Airflow, Prefect, Temporal | **Uniflow workflows** with Cadence/Temporal backend * |
-
 _* Can be replaced by the plugin system for custom integrations_
 
 **Key Difference**: Instead of stitching together 5-10 separate tools, Michelangelo provides integrated components that work together seamlessly while still allowing you to drop down to code when needed.
