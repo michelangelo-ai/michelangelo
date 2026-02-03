@@ -95,7 +95,7 @@ Many teams start with the **UI for initial experiments**, then transition to **c
 ## Machine Learning Tools
 
 ### Michelangelo User Interface (MA UI)
-The UI environment provides a standard, code-free ML development experience. It guides users through the different phases of the ML development lifecycle. Uber’s internal term for the UI is MA Studio (you may see it appear on this site in screenshots of the UI). This environment provides all the essential tools which allows ML developers to build, train, deploy, monitor, and debug your machine learning models in a single unified visual interface to boost your productivity. 
+The UI environment provides a standard, code-free ML development experience. It guides users through the different phases of the ML development lifecycle. Uber's internal term for the UI is MA Studio (you may see it appear on this site in screenshots of the UI). This environment provides all the essential tools which allow ML developers to build, train, deploy, monitor, and debug your machine learning models in a single unified visual interface to boost your productivity. 
 
 **Currently, Preparing and Training models are available for open source users. More features will be made available soon.**
 
@@ -105,7 +105,7 @@ Users can use the no-code dev environment to perform standardized ML tasks witho
 
 ### Canvas: opinionated predefined ML workflow
 
-For more advanced tasks, such as training DL models, setting up customized retraining workflows, building bespoken model performance monitoring workflows, users can build the corresponding pipelines via Canvas, an opinionated predefined ML workflow, while managing these pipelines (running, debugging, viewing run results, etc) in the UI environment. 
+For more advanced tasks, such as training DL models, setting up customized retraining workflows, building bespoke model performance monitoring workflows, users can build the corresponding pipelines via Canvas, an opinionated predefined ML workflow, while managing these pipelines (running, debugging, viewing run results, etc) in the UI environment. 
 
 Canvas provides a highly customized, code driven ML development experience by applying software development principles to ML development. Users can create their own dependencies that can be managed in the UI environment.
 
