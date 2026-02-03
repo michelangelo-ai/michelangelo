@@ -89,7 +89,10 @@ export MYSQL_PASSWORD=rootpass
 export MYSQL_DATABASE=michelangelo
 
 # Run the setup script
-./scripts/setup_mysql_sandbox.sh
+./scripts/init_ingester_db.sh
+
+# Or use Kubernetes Job:
+kubectl apply -f scripts/ingester-schema-init-job.yaml
 ```
 
 ### Verify Tables
@@ -368,8 +371,8 @@ mysql -h localhost -u root -prootpass -e "SHOW PROCESSLIST;"
 ### 3. **Schema Limitations**
 
 - **Limited Indexed Fields**: Only a few fields per CRD are indexed
-  - To add more: Update `scripts/mysql_schema.sql` and add fields to the table
-  - Then implement `GetIndexedKeyValuePairs()` on the CRD proto object
+  - To add more: Update `scripts/complete_ingester_schema.sql` and add fields to the table
+  - All indexed fields are auto-generated from protobuf `GetIndexedKeyValuePairs()` method
 
 - **Fixed Schema**: Schema must be updated manually when CRD spec changes
   - No automatic schema migration
