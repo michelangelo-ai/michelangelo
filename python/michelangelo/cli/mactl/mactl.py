@@ -280,21 +280,27 @@ def print_help_available_actions(actions: list[tuple[str, str]]) -> None:
             print(f"  {'':{help_position}}{help_text}")
 
 
+def read_minio_config():
+    """Read configuration for Minio environment variables."""
+    if not CONFIG_FILE.exists():
+        return
+
+    with open(CONFIG_FILE) as f:
+        config = yaml_safe_load(f) or {}
+    minio_config = config.get("minio", {})
+    if not getenv("AWS_ACCESS_KEY_ID"):
+        environ["AWS_ACCESS_KEY_ID"] = minio_config.get("access_key_id", "")
+    if not getenv("AWS_SECRET_ACCESS_KEY"):
+        environ["AWS_SECRET_ACCESS_KEY"] = minio_config.get("secret_access_key", "")
+    if not getenv("AWS_ENDPOINT_URL"):
+        environ["AWS_ENDPOINT_URL"] = minio_config.get("endpoint_url", "")
+
 def main(channel: Channel):
     """Main function for mactl."""
     _LOG.debug("Starting mactl...")
 
     # Load config and set environment variables
-    if CONFIG_FILE.exists():
-        with open(CONFIG_FILE, "r") as f:
-            config = yaml_safe_load(f) or {}
-        minio_config = config.get("minio", {})
-        if not getenv("AWS_ACCESS_KEY_ID"):
-            environ["AWS_ACCESS_KEY_ID"] = minio_config.get("access_key_id", "")
-        if not getenv("AWS_SECRET_ACCESS_KEY"):
-            environ["AWS_SECRET_ACCESS_KEY"] = minio_config.get("secret_access_key", "")
-        if not getenv("AWS_ENDPOINT_URL"):
-            environ["AWS_ENDPOINT_URL"] = minio_config.get("endpoint_url", "")
+    read_minio_config()
 
     # Phase 1: Discover CRDs and create resource subcommands
     services = list_services(channel, METADATA)
