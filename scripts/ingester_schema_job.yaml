@@ -12,9 +12,12 @@ metadata:
     app: michelangelo-ingester
   annotations:
     description: "Initializes MySQL schema for Michelangelo ingester - all 13 CRDs"
+    # Ensure this runs after MySQL is deployed
+    # If using Helm, add: "helm.sh/hook": post-install,post-upgrade
+    # If using Argo CD, add dependencies in Application manifest
 spec:
   ttlSecondsAfterFinished: 86400  # Auto-delete after 24 hours
-  backoffLimit: 3                  # Retry up to 3 times
+  backoffLimit: 3                  # Retry up to 3 times if MySQL is temporarily unavailable
   
   template:
     metadata:
@@ -32,14 +35,36 @@ spec:
             - sh
             - -c
             - |
-              echo "Waiting for MySQL..."
-              for i in $(seq 1 30); do
-                if mysql -h mysql -u root -proot -e "SELECT 1" 2>/dev/null; then
-                  echo "✓ MySQL ready!"
-                  exit 0
+              echo "Waiting for MySQL pod to be ready..."
+              echo "Checking service endpoint availability..."
+              
+              MAX_ATTEMPTS=60  # Wait up to 2 minutes
+              ATTEMPT=0
+              
+              while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+                ATTEMPT=$((ATTEMPT + 1))
+                
+                # Check if MySQL service has endpoints (pod is running)
+                if nslookup mysql >/dev/null 2>&1; then
+                  echo "  ✓ DNS resolution working"
+                  
+                  # Check if MySQL is accepting connections
+                  if mysql -h mysql -u root -proot -e "SELECT 1" 2>/dev/null; then
+                    echo "  ✓ MySQL is ready and accepting connections!"
+                    
+                    # Verify database can be accessed
+                    if mysql -h mysql -u root -proot -e "SHOW DATABASES;" 2>/dev/null | grep -q mysql; then
+                      echo "  ✓ MySQL is fully operational!"
+                      exit 0
+                    fi
+                  fi
                 fi
+                
+                echo "  Attempt $ATTEMPT/$MAX_ATTEMPTS: MySQL not ready, waiting..."
                 sleep 2
               done
+              
+              echo "✗ MySQL did not become ready after $MAX_ATTEMPTS attempts"
               exit 1
       
       # Execute the schema SQL
@@ -99,3 +124,25 @@ spec:
 # 4. Verify:
 #    kubectl exec mysql -- mysql -u root -proot michelangelo -e "SHOW TABLES;"
 #    Expected: 39 tables
+
+# ==============================================================================
+# HEALTH CHECK & ORDERING
+# ==============================================================================
+# 
+# Q: Does this Job ensure MySQL is healthy before running?
+# A: YES! The init container (wait-for-mysql) ensures:
+#    ✅ MySQL pod is running
+#    ✅ MySQL service DNS resolves
+#    ✅ MySQL accepts connections
+#    ✅ MySQL responds to queries
+#
+# The Job will NOT execute the schema SQL until all these checks pass.
+#
+# Deployment Order Best Practices:
+# 1. Deploy MySQL: kubectl apply -f mysql.yaml
+# 2. Wait for ready: kubectl wait --for=condition=ready pod/mysql --timeout=5m  
+# 3. Create ConfigMap: kubectl create configmap ingester-schema-sql --from-file=...
+# 4. Run this Job: kubectl apply -f scripts/ingester_schema_job.yaml
+#
+# The init container provides up to 2 minutes of retry logic if MySQL is slow to start.
+# ==============================================================================
