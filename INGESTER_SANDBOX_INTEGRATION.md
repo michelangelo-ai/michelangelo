@@ -255,9 +255,11 @@ if metadataStorageEnabled {
 
 ## File Locations
 
-- **Schema SQL**: `/python/michelangelo/cli/sandbox/resources/mysql.yaml`
+- **Complete Schema SQL**: `/scripts/complete_ingester_schema.sql` (all 13 CRDs)
+- **Minimal Schema SQL**: `/scripts/init_ingester_schema.sql` (5 core CRDs)
+- **Kubernetes Job**: `/scripts/ingester-schema-init-job.yaml`
+- **Shell Script**: `/scripts/init_ingester_db.sh`
 - **Sandbox Script**: `/python/michelangelo/cli/sandbox/sandbox.py`
-- **Original standalone scripts** (deprecated):
   - `/scripts/setup_mysql_sandbox.sh` - No longer needed
   - `/scripts/mysql_schema.sql` - No longer needed
 
