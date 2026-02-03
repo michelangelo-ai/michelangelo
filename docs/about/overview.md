@@ -31,7 +31,7 @@ If you're an ML practitioner familiar with training models, managing experiments
 Michelangelo offers 2 primary ways for you to build and deploy your model:
 
 1. **User Interface (UI)** - No-code environment for standard ML workflows
-2. **Canvas** - Code-driven workflows for advanced customization
+2. **Canvas/Uniflow** - Code-driven workflows for advanced customization
 
 ### ML Workflow Mapping
 
@@ -39,15 +39,17 @@ If you're coming from other ML platforms, here's how familiar concepts map to Mi
 
 | Your Workflow | Familiar Tool | Michelangelo Equivalent |
 |---------------|---------------|-------------------------|
-| **Data Preparation** | Pandas, Spark notebooks | **MA Studio Data Prep** or **Uniflow tasks** with Ray |
+| **Data Preparation** | Pandas, Spark notebooks | **MA Studio Data Prep** or **Uniflow tasks** with Ray/Spark * |
 | **Experiment Tracking** | MLflow, Weights & Biases | **Model Registry** with automatic versioning |
 | **Model Training** | Custom scripts, Kubeflow Pipelines | **MA Studio Training** (UI) or **Canvas/Uniflow workflows** (code) |
-| **Hyperparameter Tuning** | Optuna, Ray Tune | **Built-in tuning** in MA Studio or custom Uniflow tasks |
-| **Model Storage** | S3 buckets, model registries | **Michelangelo Model Registry** with metadata & lineage |
-| **Batch Inference** | Airflow + custom scripts | **Deployment to batch endpoint** |
-| **Online Serving** | TorchServe, TensorFlow Serving | **Deployment to inference server** |
-| **Monitoring** | Prometheus + Grafana | **Model Excellence Scores** + built-in dashboards |
-| **Pipeline Orchestration** | Airflow, Prefect, Temporal | **Uniflow workflows** with Temporal backend |
+| **Hyperparameter Tuning** | Optuna, Ray Tune | **Uniflow tasks** with Ray * |
+| **Model Storage** | S3 buckets, model registries | **Michelangelo Model Registry** with metadata & lineage & plugin storage |
+| **Batch Inference** | Airflow + custom scripts | **Deployment to batch endpoint** with offline inference pipeline with Ray / Triton Inference * |
+| **Online Serving** | TorchServe, TensorFlow Serving | **Deployment to inference server** with Triton Inference Server * |
+| **Monitoring** | Prometheus + Grafana | **Model Excellence Scores** + built-in dashboard * |
+| **Pipeline Orchestration** | Airflow, Prefect, Temporal | **Uniflow workflows** with Cadence/Temporal backend * |
+
+_* Can be replaced by the plugin system for custom integrations_
 
 **Key Difference**: Instead of stitching together 5-10 separate tools, Michelangelo provides integrated components that work together seamlessly while still allowing you to drop down to code when needed.
 
