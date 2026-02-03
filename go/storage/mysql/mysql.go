@@ -11,7 +11,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	proto "github.com/gogo/protobuf/proto"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"

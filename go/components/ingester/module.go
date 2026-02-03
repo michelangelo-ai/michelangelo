@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/michelangelo-ai/michelangelo/go/storage"
-	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
