@@ -8,6 +8,7 @@ go_library(
     deps = [
         "//go/storage:go_default_library",
         "//proto/api:go_default_library",
+        "//proto/api/v2:go_default_library",
         "@com_github_gogo_protobuf//proto:go_default_library",
         "@com_github_go_sql_driver_mysql//:go_default_library",
         "@com_github_gogo_protobuf//proto:go_default_library",
