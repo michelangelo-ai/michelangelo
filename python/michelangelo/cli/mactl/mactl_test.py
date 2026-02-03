@@ -11,6 +11,9 @@ from michelangelo.cli.mactl import mactl
 from michelangelo.cli.mactl.mactl import (
     ADDRESS,
     create_serivce_classes,
+    discover_crds,
+    handle_crd_action_help,
+    pre_parse_args,
     read_module_from_file,
 )
 
@@ -437,3 +440,134 @@ class ReadMinioConfigTest(TestCase):
         mactl.read_minio_config()
 
         self.assertEqual(os.environ["AWS_ACCESS_KEY_ID"], "existing")
+
+
+class DiscoverCrdsTest(TestCase):
+    """Tests for discover_crds function."""
+
+    @patch("michelangelo.cli.mactl.mactl.create_serivce_classes")
+    @patch("michelangelo.cli.mactl.mactl.list_services")
+    def test_discover_crds_returns_crd_dict(self, mock_list_services, mock_create_classes):
+        """Test that discover_crds returns CRD dictionary."""
+        mock_channel = Mock()
+        mock_services = ["michelangelo.api.v2.ProjectService", "michelangelo.api.v2.ModelService"]
+        mock_crds = {"project": Mock(), "model": Mock()}
+
+        mock_list_services.return_value = mock_services
+        mock_create_classes.return_value = mock_crds
+
+        result = discover_crds(mock_channel)
+
+        mock_list_services.assert_called_once_with(mock_channel, mactl.METADATA)
+        mock_create_classes.assert_called_once_with(mock_services)
+        self.assertEqual(result, mock_crds)
+
+    @patch("michelangelo.cli.mactl.mactl.create_serivce_classes")
+    @patch("michelangelo.cli.mactl.mactl.list_services")
+    def test_discover_crds_with_empty_services(self, mock_list_services, mock_create_classes):
+        """Test discover_crds with no services."""
+        mock_channel = Mock()
+        mock_list_services.return_value = []
+        mock_create_classes.return_value = {}
+
+        result = discover_crds(mock_channel)
+
+        self.assertEqual(result, {})
+        mock_create_classes.assert_called_once_with([])
+
+
+class PreParseArgsTest(TestCase):
+    """Tests for pre_parse_args function."""
+
+    @patch("sys.argv", ["mactl", "project", "list"])
+    def test_pre_parse_args_basic(self):
+        """Test basic argument parsing."""
+        crds = {"project": Mock(), "model": Mock()}
+
+        namespace, remaining = pre_parse_args(crds)
+
+        self.assertEqual(namespace.entity, "project")
+        self.assertEqual(remaining, ["list"])
+
+    @patch("sys.argv", ["mactl", "-vv", "model", "create", "--file=test.yaml"])
+    def test_pre_parse_args_with_verbose(self):
+        """Test parsing with verbose flag."""
+        crds = {"project": Mock(), "model": Mock()}
+
+        namespace, remaining = pre_parse_args(crds)
+
+        self.assertTrue(namespace.verbose)
+        self.assertEqual(namespace.entity, "model")
+        self.assertEqual(remaining, ["create", "--file=test.yaml"])
+
+    @patch("sys.argv", ["mactl", "pipeline", "apply", "-f", "config.yaml"])
+    def test_pre_parse_args_with_remaining_args(self):
+        """Test parsing with remaining arguments."""
+        crds = {"pipeline": Mock(), "project": Mock()}
+
+        namespace, remaining = pre_parse_args(crds)
+
+        self.assertEqual(namespace.entity, "pipeline")
+        self.assertIn("apply", remaining)
+        self.assertIn("-f", remaining)
+        self.assertIn("config.yaml", remaining)
+
+
+class HandleCrdActionHelpTest(TestCase):
+    """Tests for handle_crd_action_help function."""
+
+    @patch("builtins.print")
+    @patch("michelangelo.cli.mactl.mactl.print_help_available_actions")
+    def test_no_remaining_args_exits_with_1(self, mock_print_help, mock_print):
+        """Test exits with code 1 when no remaining args."""
+        mock_crd = Mock()
+        mock_crd.name = "project"
+        mock_crd.func_signature = {"list": {"help": "List projects"}}
+
+        with self.assertRaises(SystemExit) as cm:
+            handle_crd_action_help(mock_crd, [])
+
+        self.assertEqual(cm.exception.code, 1)
+        mock_print_help.assert_called_once()
+
+    @patch("builtins.print")
+    @patch("michelangelo.cli.mactl.mactl.print_help_available_actions")
+    def test_help_flag_exits_with_0(self, mock_print_help, mock_print):
+        """Test exits with code 0 when --help flag is present."""
+        mock_crd = Mock()
+        mock_crd.name = "model"
+        mock_crd.func_signature = {"create": {"help": "Create model"}}
+
+        with self.assertRaises(SystemExit) as cm:
+            handle_crd_action_help(mock_crd, ["--help"])
+
+        self.assertEqual(cm.exception.code, 0)
+        mock_print_help.assert_called_once()
+
+    @patch("builtins.print")
+    @patch("michelangelo.cli.mactl.mactl.print_help_available_actions")
+    def test_h_flag_exits_with_0(self, mock_print_help, mock_print):
+        """Test exits with code 0 when -h flag is present."""
+        mock_crd = Mock()
+        mock_crd.name = "pipeline"
+        mock_crd.func_signature = {"apply": {"help": "Apply pipeline"}}
+
+        with self.assertRaises(SystemExit) as cm:
+            handle_crd_action_help(mock_crd, ["-h"])
+
+        self.assertEqual(cm.exception.code, 0)
+        mock_print_help.assert_called_once()
+
+    @patch("builtins.print")
+    @patch("michelangelo.cli.mactl.mactl.print_help_available_actions")
+    def test_normal_action_does_not_exit(self, mock_print_help, mock_print):
+        """Test does not exit when normal action is provided."""
+        mock_crd = Mock()
+        mock_crd.name = "project"
+        mock_crd.func_signature = {"list": {"help": "List projects"}}
+
+        # Should not raise SystemExit
+        handle_crd_action_help(mock_crd, ["list"])
+
+        mock_print_help.assert_not_called()
+        mock_print.assert_not_called()
