@@ -8,9 +8,8 @@ import { ServiceContext } from './service-context';
  * This hook must be used within a ServiceProvider component. It provides access
  * to the request function for making API calls.
  *
- * @returns Service context containing the request function
- *
- * @throws Will throw if used outside of a ServiceProvider
+ * @returns Service context containing the request function. Note: The returned
+ *   `request` function will throw if called outside of a ServiceProvider.
  *
  * @example
  * ```typescript

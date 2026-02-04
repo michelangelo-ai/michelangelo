@@ -8,9 +8,8 @@ import { UserContext } from './user-context';
  * This hook must be used within a UserProvider component. It provides access
  * to the authenticated user's data.
  *
- * @returns User context containing the current user information
- *
- * @throws Will throw if used outside of a UserProvider
+ * @returns User context containing the current user information. Returns default
+ *   context values if used outside of a UserProvider.
  *
  * @example
  * ```typescript
