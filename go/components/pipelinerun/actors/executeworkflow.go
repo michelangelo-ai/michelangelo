@@ -159,7 +159,7 @@ func (a *ExecuteWorkflowActor) Retrieve(ctx context.Context, resource *v2.Pipeli
 	retryInfo := resource.Spec.RetryInfo
 	if retryInfo != nil && retryInfo.ActivityId != "" {
 		// Check the trigger condition: only process if workflowRunId differs from current status
-		if retryInfo.WorkflowRunId != "" && retryInfo.WorkflowRunId != resource.Status.WorkflowRunId {
+		if retryInfo.WorkflowRunId != "" && retryInfo.WorkflowRunId == resource.Status.WorkflowRunId {
 			logger.Info("retry scenario detected - allowing retry processing",
 				zap.String("retryWorkflowRunId", retryInfo.WorkflowRunId),
 				zap.String("currentWorkflowRunId", resource.Status.WorkflowRunId),
@@ -230,6 +230,14 @@ func (a *ExecuteWorkflowActor) Retrieve(ctx context.Context, resource *v2.Pipeli
 // Returns a condition indicating the workflow state (RUNNING, SUCCEEDED, FAILED, KILLED).
 func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.PipelineRun, previousCondition *apipb.Condition) (*apipb.Condition, error) {
 	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
+
+	// Check for manual retry spec field and process if present
+	// Manual retries can work from any workflow state (FAILED, TERMINATED, RUNNING, etc.)
+	retryErr := a.processManualRetrySpec(ctx, pipelineRun)
+	if retryErr != nil {
+		logger.Error("failed to process manual retry spec", zap.Error(retryErr))
+	}
+
 	executeWorkflowStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
 	if executeWorkflowStep == nil {
 		logger.Info("execute workflow step not found, setting to pending")
@@ -347,13 +355,6 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 		return nil, queryErr
 	} else if len(taskSteps) > 0 {
 		executeWorkflowStep.SubSteps = taskSteps
-	}
-
-	// Check for manual retry spec field and process if present
-	// Manual retries can work from any workflow state (FAILED, TERMINATED, RUNNING, etc.)
-	retryErr := a.processManualRetrySpec(ctx, pipelineRun)
-	if retryErr != nil {
-		logger.Error("failed to process manual retry spec", zap.Error(retryErr))
 	}
 
 	// Note: Automatic retry logic is handled at the Starlark task level (ray_task.star, spark/task.star)
@@ -1028,7 +1029,6 @@ func (a *ExecuteWorkflowActor) findTaskResetEventIDByActivityID(ctx context.Cont
 	return resetEventID, nil
 }
 
-
 // processManualRetrySpec checks for manual retry spec field and triggers retry if present
 func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipelineRun *v2.PipelineRun) error {
 	logger := a.logger.With(
@@ -1043,7 +1043,7 @@ func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipel
 
 	// New trigger condition: only process if workflowRunId differs from current status
 	// This prevents duplicate processing and ensures precise retry control
-	if retryInfo.WorkflowRunId != "" && retryInfo.WorkflowRunId != pipelineRun.Status.WorkflowRunId {
+	if retryInfo.WorkflowRunId != "" && retryInfo.WorkflowRunId == pipelineRun.Status.WorkflowRunId {
 		logger.Info("processing retry - workflowRunId differs from current status",
 			zap.String("retryWorkflowRunId", retryInfo.WorkflowRunId),
 			zap.String("currentWorkflowRunId", pipelineRun.Status.WorkflowRunId),
@@ -1105,7 +1105,8 @@ func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipel
 	// Update execute workflow step state from FAILED/KILLED to RUNNING for retry
 	executeWorkflowStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
 	if executeWorkflowStep != nil &&
-		(executeWorkflowStep.State == v2.PIPELINE_RUN_STEP_STATE_FAILED ||
+		(executeWorkflowStep.State == v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED ||
+			executeWorkflowStep.State == v2.PIPELINE_RUN_STEP_STATE_FAILED ||
 			executeWorkflowStep.State == v2.PIPELINE_RUN_STEP_STATE_KILLED) {
 		logger.Info("updating execute workflow step state to RUNNING for retry",
 			zap.String("previousState", executeWorkflowStep.State.String()))
@@ -1118,16 +1119,6 @@ func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipel
 		logger.Info("clearing kill flag from previous run for retry")
 		pipelineRun.Spec.Kill = false
 	}
-
-	// Clear retry info after successful processing to prevent repeated retries
-	pipelineRun.Spec.RetryInfo = nil
-
-	logger.Info("manual retry successfully triggered with workflow reset",
-		zap.String("activityId", retryInfo.ActivityId),
-		zap.String("activityID", activityID),
-		zap.Int64("resetEventID", resetEventID),
-		zap.String("newWorkflowRunId", newWorkflowRun.RunID),
-	)
 
 	return nil
 }
