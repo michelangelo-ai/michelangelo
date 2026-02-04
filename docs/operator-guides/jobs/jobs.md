@@ -19,7 +19,7 @@ You focus on the job logic; Michelangelo manages the infrastructure.
 
 The image below displays the Michelangelo (MA) architecture for running Spark and Ray batch jobs end‑to‑end: submission, scheduling, execution, and reporting.
 
-<img width="687" height="673" alt="Screenshot 2026-01-08 at 12 31 13 PM" src="https://github.com/user-attachments/assets/4dc5cf1d-aefc-430a-9d67-31b2b8f55e5e" />
+![Job controller flow diagram](./images/job-controller-flow.png)
 
 ## How Jobs Run
 
