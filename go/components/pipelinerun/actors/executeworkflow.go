@@ -157,12 +157,13 @@ func (a *ExecuteWorkflowActor) Retrieve(ctx context.Context, resource *v2.Pipeli
 
 	// Check for retry scenario first - if RetryInfo is present and workflow run IDs differ, allow retry processing
 	retryInfo := resource.Spec.RetryInfo
-	if retryInfo != nil && retryInfo.TaskName != "" {
+	if retryInfo != nil && retryInfo.ActivityId != "" {
 		// Check the trigger condition: only process if workflowRunId differs from current status
-		if retryInfo.WorkflowRunId != "" && retryInfo.WorkflowRunId == resource.Status.WorkflowRunId {
+		if retryInfo.WorkflowRunId != "" && retryInfo.WorkflowRunId != resource.Status.WorkflowRunId {
 			logger.Info("retry scenario detected - allowing retry processing",
 				zap.String("retryWorkflowRunId", retryInfo.WorkflowRunId),
-				zap.String("currentWorkflowRunId", resource.Status.WorkflowRunId))
+				zap.String("currentWorkflowRunId", resource.Status.WorkflowRunId),
+				zap.String("activityId", retryInfo.ActivityId))
 			return &apipb.Condition{
 				Type:   ExecuteWorkflowType,
 				Status: apipb.CONDITION_STATUS_FALSE,
@@ -1027,56 +1028,6 @@ func (a *ExecuteWorkflowActor) findTaskResetEventIDByActivityID(ctx context.Cont
 	return resetEventID, nil
 }
 
-// queryActivityIDFromTaskProgress queries workflow for task progress and extracts FirstActivityID for the specified task
-func (a *ExecuteWorkflowActor) queryActivityIDFromTaskProgress(ctx context.Context, pipelineRun *v2.PipelineRun, taskName string) (string, error) {
-	// Use retry info workflow IDs to query the original workflow
-	workflowID := pipelineRun.Spec.RetryInfo.WorkflowId
-	runID := pipelineRun.Spec.RetryInfo.WorkflowRunId
-
-	logger := a.logger.With(
-		zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)),
-		zap.String("taskName", taskName),
-		zap.String("originalWorkflowID", workflowID),
-		zap.String("originalRunID", runID),
-	)
-
-	// Query workflow for task progress
-	var workflowProgressStr []string
-	err := a.workflowClient.QueryWorkflow(ctx, workflowID, runID, pipelinerunutils.UniflowTaskProgressQueryHandlerKey, &workflowProgressStr)
-	if err != nil {
-		return "", fmt.Errorf("failed to query workflow progress: %w", err)
-	}
-
-	// Parse progress data to find the specified task's activity ID
-	for _, progress := range workflowProgressStr {
-		var taskProgress TaskProgress
-
-		// Parse task progress (now includes activity IDs)
-		err := json.Unmarshal([]byte(progress), &taskProgress)
-		if err != nil {
-			logger.Debug("Cannot parse progress string", zap.Error(err), zap.String("progress", progress))
-			continue
-		}
-
-		// Check if this is the task we're looking for - match against task_path (full path)
-		if taskProgress.TaskPath == taskName {
-			if taskProgress.FirstActivityID == "" {
-				logger.Warn("Found task but no FirstActivityID available",
-					zap.String("taskPath", taskName),
-					zap.String("taskName", taskProgress.TaskName))
-				continue
-			}
-
-			logger.Info("Found activity ID for task",
-				zap.String("taskPath", taskName),
-				zap.String("activityID", taskProgress.FirstActivityID),
-				zap.String("taskName", taskProgress.TaskName))
-			return taskProgress.FirstActivityID, nil
-		}
-	}
-
-	return "", fmt.Errorf("task with path %s not found in workflow progress data", taskName)
-}
 
 // processManualRetrySpec checks for manual retry spec field and triggers retry if present
 func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipelineRun *v2.PipelineRun) error {
@@ -1086,13 +1037,13 @@ func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipel
 
 	// Check if retry info field is set
 	retryInfo := pipelineRun.Spec.RetryInfo
-	if retryInfo == nil || retryInfo.TaskName == "" {
+	if retryInfo == nil || retryInfo.ActivityId == "" {
 		return nil
 	}
 
 	// New trigger condition: only process if workflowRunId differs from current status
 	// This prevents duplicate processing and ensures precise retry control
-	if retryInfo.WorkflowRunId != "" && retryInfo.WorkflowRunId == pipelineRun.Status.WorkflowRunId {
+	if retryInfo.WorkflowRunId != "" && retryInfo.WorkflowRunId != pipelineRun.Status.WorkflowRunId {
 		logger.Info("processing retry - workflowRunId differs from current status",
 			zap.String("retryWorkflowRunId", retryInfo.WorkflowRunId),
 			zap.String("currentWorkflowRunId", pipelineRun.Status.WorkflowRunId),
@@ -1106,38 +1057,24 @@ func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipel
 	}
 
 	logger.Info("manual retry spec field detected",
-		zap.String("taskName", retryInfo.TaskName),
+		zap.String("activityId", retryInfo.ActivityId),
 		zap.String("workflowId", retryInfo.WorkflowId),
 		zap.String("workflowRunId", retryInfo.WorkflowRunId),
 		zap.String("reason", retryInfo.Reason),
 	)
 
-	// Query activity ID from task progress for precise reset boundary
-	activityID, err := a.queryActivityIDFromTaskProgress(ctx, pipelineRun, retryInfo.TaskName)
-	if err != nil {
-		logger.Error("failed to query activity ID for task",
-			zap.String("taskName", retryInfo.TaskName),
-			zap.Error(err),
-		)
-		return fmt.Errorf("failed to query activity ID for task %s: %w", retryInfo.TaskName, err)
-	}
-
-	if activityID == "" {
-		logger.Error("no activity ID found for task",
-			zap.String("taskName", retryInfo.TaskName),
-		)
-		return fmt.Errorf("no activity ID found for task %s", retryInfo.TaskName)
-	}
+	// Use the activity ID directly from retryInfo for precise reset boundary
+	activityID := retryInfo.ActivityId
 
 	// Find reset event ID using the queried activity ID
 	resetEventID, err := a.findTaskResetEventIDByActivityID(ctx, pipelineRun.Status.WorkflowId, pipelineRun.Status.WorkflowRunId, activityID)
 	if err != nil {
 		logger.Error("failed to find reset event ID",
-			zap.String("taskName", retryInfo.TaskName),
+			zap.String("activityId", retryInfo.ActivityId),
 			zap.String("activityID", activityID),
 			zap.Error(err),
 		)
-		return fmt.Errorf("failed to find reset event ID for task %s: %w", retryInfo.TaskName, err)
+		return fmt.Errorf("failed to find reset event ID for activity %s: %w", retryInfo.ActivityId, err)
 	}
 
 	// Perform workflow reset
@@ -1145,20 +1082,20 @@ func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipel
 		WorkflowID: pipelineRun.Status.WorkflowId,
 		RunID:      pipelineRun.Status.WorkflowRunId,
 		EventID:    resetEventID,
-		Reason:     fmt.Sprintf("Manual retry for task: %s - %s", retryInfo.TaskName, retryInfo.Reason),
+		Reason:     fmt.Sprintf("Manual retry for activity: %s - %s", retryInfo.ActivityId, retryInfo.Reason),
 		RequestID:  fmt.Sprintf("manual-retry-%s-%d", pipelineRun.Name, time.Now().Unix()),
 	}
 
 	newWorkflowRun, err := a.workflowClient.ResetWorkflow(ctx, resetOptions)
 	if err != nil {
 		logger.Error("workflow reset failed",
-			zap.String("taskName", retryInfo.TaskName),
+			zap.String("activityId", retryInfo.ActivityId),
 			zap.String("workflowId", pipelineRun.Status.WorkflowId),
 			zap.String("workflowRunId", pipelineRun.Status.WorkflowRunId),
 			zap.Int64("resetEventID", resetEventID),
 			zap.Error(err),
 		)
-		return fmt.Errorf("workflow reset failed for task %s: %w", retryInfo.TaskName, err)
+		return fmt.Errorf("workflow reset failed for activity %s: %w", retryInfo.ActivityId, err)
 	}
 
 	// Update pipeline run status
@@ -1173,7 +1110,7 @@ func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipel
 		logger.Info("updating execute workflow step state to RUNNING for retry",
 			zap.String("previousState", executeWorkflowStep.State.String()))
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_RUNNING
-		executeWorkflowStep.Message = fmt.Sprintf("Retry started for task: %s", retryInfo.TaskName)
+		executeWorkflowStep.Message = fmt.Sprintf("Retry started for activity: %s", retryInfo.ActivityId)
 	}
 
 	// Clear kill flag from previous run to prevent immediate termination of new workflow
@@ -1186,7 +1123,7 @@ func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipel
 	pipelineRun.Spec.RetryInfo = nil
 
 	logger.Info("manual retry successfully triggered with workflow reset",
-		zap.String("taskName", retryInfo.TaskName),
+		zap.String("activityId", retryInfo.ActivityId),
 		zap.String("activityID", activityID),
 		zap.Int64("resetEventID", resetEventID),
 		zap.String("newWorkflowRunId", newWorkflowRun.RunID),
