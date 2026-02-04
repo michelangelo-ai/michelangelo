@@ -24,7 +24,7 @@ This document explains:
 
 The following diagram shows the relationship between each of the services in Michelangelo eco-system.
 
-<img width="791" height="690" alt="Screenshot 2026-01-08 at 11 43 07 AM" src="https://github.com/user-attachments/assets/8d39767f-a750-44de-ab67-8663cc9d8aeb" />
+![Michelangelo service architecture diagram](./images/ma-service-architecture.png)
 
 
 # Server Configuration

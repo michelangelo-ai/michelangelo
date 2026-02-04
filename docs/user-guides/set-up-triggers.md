@@ -51,7 +51,7 @@ Once registered, the trigger controller begins executing the recurring schedule.
 
 * **Monitor in MA Studio UI:** Access the MA Studio UI (e.g. [*`http://localhost:8090/ma-dev-test`*](http://localhost:8090/ma-dev-test))*. The cron trigger should appear under the Triggers section, showing a running state and recent pipeline runs being generated.
 
-<img width="1321" height="571" alt="Screenshot 2026-01-08 at 11 15 17 AM" src="https://github.com/user-attachments/assets/3d039b8d-a1d7-49ab-9ee6-e786d9c21ebd" />
+![MA Studio triggers page showing backfill training pipeline](./images/studio-trigger-backfill-runs.png)
 
 
 * **Monitor in Workflow Engine UI (Cadence/Temporal):**  
@@ -59,9 +59,9 @@ Once registered, the trigger controller begins executing the recurring schedule.
   * The cron trigger will be represented by an "Open" or "Running" trigger workflow (e.g., `trigger.CronTrigger`).  
   * This trigger workflow continuously generates **child pipeline runs** based on the configured cron setting. Successful end-to-end tests verify that the pipeline runs are created and executed successfully.
 
-<img width="1333" height="300" alt="Screenshot 2026-01-08 at 11 16 50 AM" src="https://github.com/user-attachments/assets/67f4b419-03d0-4e89-a5b3-b20ccfff14a4" />
-<img width="1329" height="590" alt="Screenshot 2026-01-08 at 11 17 09 AM" src="https://github.com/user-attachments/assets/2e251b20-9227-4e1a-a3ab-d943bb00d2f4" />
-<img width="1331" height="505" alt="Screenshot 2026-01-08 at 11 17 37 AM" src="https://github.com/user-attachments/assets/704735dc-b5ab-4d29-bd28-eabe6f4e1e89" />
+![Cadence UI workflows list](./images/cadence-workflows-list.png)
+![Cadence UI workflow activities](./images/cadence-workflow-activities.png)
+![Temporal UI workflows list](./images/temporal-workflows-list.png)
 
 ## Setting Up a Backfill Trigger
 

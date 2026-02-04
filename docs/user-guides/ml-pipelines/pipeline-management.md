@@ -243,12 +243,12 @@ ma pipeline apply \-f \<pipeline.yaml path>
 
 After the pipeline is registered in MA Studio, it is displayed in the pipeline list page in MA Studio.
 
-<img width="1410" height="318" alt="Screenshot 2026-01-08 at 3 14 59 PM" src="https://github.com/user-attachments/assets/297c49d8-2080-4b7c-9f12-bfb7a5445a31" />
+![MA Studio pipeline list](./images/studio-pipeline-list.png)
 
 
 Click into the pipeline and click the Run button.
 
-<img width="1407" height="187" alt="Screenshot 2026-01-08 at 3 15 10 PM" src="https://github.com/user-attachments/assets/1451f194-3244-455a-9d03-75975a5bdfcb" />
+![MA Studio pipeline detail view](./images/studio-pipeline-detail.png)
 
 
 ### Run the Pipeline using MACTL
