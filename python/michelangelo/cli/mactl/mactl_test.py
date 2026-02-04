@@ -2,6 +2,7 @@
 
 import os
 import tempfile
+from argparse import Namespace
 from importlib import reload
 from pathlib import Path
 from unittest import TestCase
@@ -614,3 +615,93 @@ class CheckCrdTest(TestCase):
         call_args = mock_print_help.call_args[0][0]
         self.assertIn(("apply", "Apply"), call_args)
         self.assertIn(("delete", "Delete"), call_args)
+
+
+class MainFunctionTest(TestCase):
+    """Tests for main() function.
+
+    TODO: These are minimal mock-based tests for coverage purposes only.
+          Once the main() function refactoring is complete, these should be
+          replaced with proper integration tests that verify actual behavior.
+    """
+
+    @patch("michelangelo.cli.mactl.mactl.read_minio_config")
+    @patch("michelangelo.cli.mactl.mactl.discover_crds")
+    @patch("michelangelo.cli.mactl.mactl.pre_parse_args")
+    @patch("michelangelo.cli.mactl.mactl.read_plugins")
+    @patch("michelangelo.cli.mactl.mactl.handle_crd_action_help")
+    @patch("michelangelo.cli.mactl.mactl.kebab_to_snake")
+    @patch("michelangelo.cli.mactl.mactl.check_crd")
+    @patch("michelangelo.cli.mactl.mactl.read_plugin_command")
+    @patch("michelangelo.cli.mactl.mactl.ArgumentParser")
+    def test_main_basic_execution_flow(
+        self,
+        mock_arg_parser_class,
+        mock_read_plugin_command,
+        mock_check_crd,
+        mock_kebab_to_snake,
+        mock_handle_crd_action_help,
+        mock_read_plugins,
+        mock_pre_parse_args,
+        mock_discover_crds,
+        mock_read_minio_config,
+    ):
+        """Test basic execution flow of main() function."""
+        # Setup mock channel
+        mock_channel = MagicMock()
+
+        # Setup mock CRD
+        mock_crd = MagicMock(spec=CRD)
+        mock_crd.name = "project"
+        mock_crd.generate_create = MagicMock()
+        mock_crd.create = MagicMock()
+
+        # Setup function returns
+        mock_discover_crds.return_value = {"project": mock_crd}
+        mock_pre_parse_args.return_value = (
+            Namespace(entity="project"),
+            ["create", "--name", "test"],
+        )
+        mock_kebab_to_snake.return_value = "create"
+
+        # Setup ArgumentParser mock
+        mock_parser_instance = MagicMock()
+        mock_parser_instance.parse_args.return_value = Namespace(name="test")
+        mock_arg_parser_class.return_value = mock_parser_instance
+
+        # Execute main
+        mactl.main(mock_channel)
+
+        # Verify Phase 1: Load config and discover CRDs
+        mock_read_minio_config.assert_called_once()
+        mock_discover_crds.assert_called_once_with(mock_channel)
+
+        # Verify Phase 2: Pre-parse arguments
+        mock_pre_parse_args.assert_called_once_with({"project": mock_crd})
+
+        # Verify Phase 2: Load plugins for target CRD
+        mock_read_plugins.assert_called_once_with(mock_crd, mock_channel)
+
+        # Verify Phase 2: Handle CRD-level help
+        mock_handle_crd_action_help.assert_called_once_with(
+            mock_crd, ["create", "--name", "test"]
+        )
+
+        # Verify Phase 3: Generate method and configure argparse
+        mock_kebab_to_snake.assert_called_once_with("create")
+        mock_check_crd.assert_called_once_with(
+            ["create", "--name", "test"], mock_crd, "create"
+        )
+        mock_read_plugin_command.assert_called_once_with(
+            mock_crd, "create", {"project": mock_crd}, mock_channel
+        )
+
+        # Verify ArgumentParser was created and used
+        mock_arg_parser_class.assert_called_once_with(prog="mactl project create")
+        mock_crd.generate_create.assert_called_once_with(
+            mock_channel, mock_parser_instance
+        )
+        mock_parser_instance.parse_args.assert_called_once_with(["--name", "test"])
+
+        # Verify Phase 5: Execute action
+        mock_crd.create.assert_called_once_with(name="test")
