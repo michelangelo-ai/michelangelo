@@ -173,6 +173,9 @@ func (r *gateway) List(ctx context.Context) (*apiextv1.CustomResourceDefinitionL
 
 func (r *gateway) hasInstances(ctx context.Context, crd *apiextv1.CustomResourceDefinition) (bool, error) {
 	for _, v := range crd.Spec.Versions {
+		if !v.Storage {
+			continue
+		}
 		gvr := schema.GroupVersionResource{
 			Group:    crd.Spec.Group,
 			Version:  v.Name,
