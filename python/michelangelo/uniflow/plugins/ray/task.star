@@ -269,12 +269,21 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
         retry_attempt_id = retry_attempt_id,
     )
 
-    cluster = ray.create_cluster(cluster, timeout_seconds = DEFAULT_CREATE_CLUSTER_TIMEOUT_SECONDS)
+    # Enhanced: Call existing Go activity that now returns activity ID
+    cluster_response = ray.create_cluster(cluster, timeout_seconds = DEFAULT_CREATE_CLUSTER_TIMEOUT_SECONDS)
+
+    # Extract cluster info and activity ID from enhanced response
+    cluster = cluster_response["rayCluster"]  # This contains the actual cluster data
+    first_activity_id = cluster_response["activity_id"]  # NEW: Activity ID from Go
+
     cluster_url = cluster["status"].get("jobUrl", "UAPI did not report RayJob URL")
     cluster_name = cluster["metadata"]["name"]
     cluster_namespace = cluster["metadata"]["namespace"]
 
     print("ray | cluster created:", "ns=" + cluster_namespace, "n=" + cluster_name, "url=" + cluster_url)
+    print("ray | first activity ID:", first_activity_id)  # NEW: Log the activity ID
+
+    # Enhanced: Progress report with activity ID - this establishes the first activity for this task
     report_progress(
         task_path = task_path,
         task_name = task_name,
@@ -285,6 +294,7 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
         end_time = "",
         output = "",
         retry_attempt_id = retry_attempt_id,
+        first_activity_id = first_activity_id,  # NEW: Store first activity ID for retry boundary
     )
 
     atexit.register(terminate_cluster, cluster_namespace, cluster_name)
@@ -292,12 +302,20 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
     # Run job
     entrypoint = ray_job_entrypoint(task_path, result_url, args, kwargs)
     print("ray | run job:", "task_path=" + task_path)
-    job = ray.create_job(
+
+    # Enhanced: Call existing job creation that now returns activity ID
+    job_response = ray.create_job(
         entrypoint,
         ray_job_namespace = cluster_namespace,
         ray_job_name = cluster_name,
     )
+
+    # Extract job info and activity ID from enhanced response
+    job = job_response["rayJob"]  # This contains the actual job data
+    job_activity_id = job_response["activity_id"]  # NEW: Second activity ID
+
     print("ray | +run job: job=" + str(job))
+    print("ray | job activity ID:", job_activity_id)  # NEW: Log second activity ID
 
     # Extract Ray job ID/name from job object - try job ID first, then metadata name, then cluster name
     ray_job_name = (job.get("spec", {}).get("jobId") or
@@ -305,6 +323,21 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
                    job.get("metadata", {}).get("name", cluster_name))
     generated_log_url = get_ray_log_url(ray_job_name)
     log_url = generated_log_url if generated_log_url else cluster_url
+
+    # Enhanced: Progress report with second activity ID
+    report_progress(
+        task_path = task_path,
+        task_name = task_name,
+        task_log = log_url,
+        task_message = "Ray Job Created Successfully",
+        task_state = TASK_STATE_RUNNING,
+        start_time = start_time_formated_str,
+        end_time = "",
+        output = "",
+        retry_attempt_id = retry_attempt_id,
+        activity_id = job_activity_id,  # NEW: Current activity ID
+        # first_activity_id is already stored, no need to repeat
+    )
 
     atexit.register(report_ray_task_result, job, task_path, task_name, cluster_url, start_time_formated_str, args, kwargs, retry_attempt_id, cache_version, namespace, result_url)
 

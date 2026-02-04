@@ -59,3 +59,4 @@ go_test(
         "@org_uber_go_zap//zaptest:go_default_library",
     ],
 )
+

@@ -169,3 +169,86 @@ func (c *CadenceClient) ListOpenWorkflow(ctx context.Context, request clientInte
 func (c *CadenceClient) TerminateWorkflow(ctx context.Context, workflowID string, runID string, reason string) error {
 	return c.Client.TerminateWorkflow(ctx, workflowID, runID, reason, nil)
 }
+
+func (c *CadenceClient) ResetWorkflow(ctx context.Context, options clientInterface.ResetWorkflowOptions) (*clientInterface.WorkflowExecution, error) {
+	resetRequest := &shared.ResetWorkflowExecutionRequest{
+		Domain: &c.Domain,
+		WorkflowExecution: &shared.WorkflowExecution{
+			WorkflowId: &options.WorkflowID,
+			RunId:      &options.RunID,
+		},
+		Reason:                &options.Reason,
+		DecisionFinishEventId: &options.EventID,
+	}
+
+	if options.RequestID != "" {
+		resetRequest.RequestId = &options.RequestID
+	}
+
+	response, err := c.Client.ResetWorkflow(ctx, resetRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reset workflow: %w", err)
+	}
+
+	return &clientInterface.WorkflowExecution{
+		ID:    options.WorkflowID,
+		RunID: response.GetRunId(),
+	}, nil
+}
+
+func (c *CadenceClient) GetWorkflowExecutionHistory(ctx context.Context, workflowID string, runID string, pageToken []byte, pageSize int32) (*clientInterface.WorkflowHistory, error) {
+	// Use iterator-based API for getting history
+	iter := c.Client.GetWorkflowHistory(ctx, workflowID, runID, false, shared.HistoryEventFilterTypeAllEvent)
+
+	// Convert Cadence history events to our interface format
+	events := make([]clientInterface.HistoryEvent, 0)
+	var collectedEvents int32 = 0
+
+	for iter.HasNext() && (pageSize == 0 || collectedEvents < pageSize) {
+		event, err := iter.Next()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get next history event: %w", err)
+		}
+
+		historyEvent := clientInterface.HistoryEvent{
+			EventID:   event.GetEventId(),
+			EventType: event.GetEventType().String(),
+			EventTime: time.Unix(0, event.GetTimestamp()),
+			Details:   make(map[string]interface{}),
+		}
+
+		// Add relevant event details based on event type
+		switch event.GetEventType() {
+		case shared.EventTypeDecisionTaskCompleted:
+			if attr := event.DecisionTaskCompletedEventAttributes; attr != nil {
+				historyEvent.Details["identity"] = attr.GetIdentity()
+				historyEvent.Details["scheduled_event_id"] = attr.GetScheduledEventId()
+			}
+		case shared.EventTypeActivityTaskScheduled:
+			if attr := event.ActivityTaskScheduledEventAttributes; attr != nil {
+				historyEvent.Details["activity_id"] = attr.GetActivityId()
+				historyEvent.Details["activity_type"] = attr.GetActivityType().GetName()
+			}
+		case shared.EventTypeActivityTaskFailed:
+			if attr := event.ActivityTaskFailedEventAttributes; attr != nil {
+				historyEvent.Details["reason"] = attr.GetReason()
+				historyEvent.Details["details"] = attr.GetDetails()
+				historyEvent.Details["identity"] = attr.GetIdentity()
+			}
+		case shared.EventTypeWorkflowExecutionStarted:
+			if attr := event.WorkflowExecutionStartedEventAttributes; attr != nil {
+				historyEvent.Details["workflow_type"] = attr.GetWorkflowType().GetName()
+				historyEvent.Details["task_list"] = attr.GetTaskList().GetName()
+			}
+		}
+
+		events = append(events, historyEvent)
+		collectedEvents++
+	}
+
+	// Note: Iterator-based API doesn't provide page tokens, so we return empty token
+	return &clientInterface.WorkflowHistory{
+		Events:        events,
+		NextPageToken: nil,
+	}, nil
+}

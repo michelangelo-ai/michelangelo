@@ -66,7 +66,7 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 		return nil, err
 	}
 
-	var response v2pb.CreateRayClusterResponse
+	var response ray.EnhancedCreateRayClusterResponse
 	if err := workflow.ExecuteActivity(ctx, ray.Activities.CreateRayCluster, v2pb.CreateRayClusterRequest{
 		RayCluster:    &cluster,
 		CreateOptions: &metav1.CreateOptions{},
@@ -75,7 +75,8 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 		return nil, err
 	}
 
-	cluster = *response.RayCluster
+	cluster = *response.CreateRayClusterResponse.RayCluster
+	activityID := response.ActivityID
 
 	srp := utils.CadenceDefaultSensorRetryPolicy
 	srp.ExpirationInterval = time.Second * time.Duration(timeout)
@@ -129,8 +130,15 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 	}
 
 	sensorCluster := sensorResponse.RayCluster
+
+	// Create enhanced response with both cluster data and activity ID
+	enhancedResponse := map[string]interface{}{
+		"rayCluster":  sensorCluster,
+		"activity_id": activityID,
+	}
+
 	var res starlark.Value
-	if err := utils.AsStar(sensorCluster, &res); err != nil {
+	if err := utils.AsStar(enhancedResponse, &res); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
 		return nil, err
 	}
@@ -170,7 +178,7 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 			},
 		},
 	}
-	var createRes v2pb.CreateRayJobResponse
+	var createRes ray.EnhancedCreateRayJobResponse
 	if err := workflow.ExecuteActivity(ctx, ray.Activities.CreateRayJob, v2pb.CreateRayJobRequest{
 		RayJob: &rayJob,
 	}).Get(ctx, &createRes); err != nil {
@@ -178,15 +186,16 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 		return nil, err
 	}
 
-	rayJob = *createRes.RayJob
+	rayJob = *createRes.CreateRayJobResponse.RayJob
+	jobActivityID := createRes.ActivityID
 
 	var sensorRes ray.SensorRayJobResponse
 	srp := utils.CadenceDefaultSensorRetryPolicy
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	sensorCtx := workflow.WithRetryPolicy(ctx, srp)
 	if err := workflow.ExecuteActivity(sensorCtx, ray.Activities.SensorRayJob, v2pb.GetRayJobRequest{
-		Name:       createRes.RayJob.Name,
-		Namespace:  createRes.RayJob.Namespace,
+		Name:       rayJob.Name,
+		Namespace:  rayJob.Namespace,
 		GetOptions: &metav1.GetOptions{},
 	}).Get(sensorCtx, &sensorRes); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
@@ -194,8 +203,15 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 	}
 
 	job := sensorRes.RayJob
+
+	// Create enhanced response with both job data and activity ID
+	enhancedJobResponse := map[string]interface{}{
+		"rayJob":      job,
+		"activity_id": jobActivityID,
+	}
+
 	var res starlark.Value
-	if err := utils.AsStar(job, &res); err != nil {
+	if err := utils.AsStar(enhancedJobResponse, &res); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
 		return nil, err
 	}

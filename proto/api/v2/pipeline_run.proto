@@ -123,7 +123,40 @@ message PipelineRunSpec {
   // Pipeline spec for pipeline dev run.
   // When specified, the pipeline run controller will use the following pipeline spec to run the pipeline.
   PipelineSpec pipeline_spec = 12;
+
+  // Retry configuration for manual retry operations.
+  // When specified with both task_name and workflow_id, the pipeline run controller will
+  // trigger a workflow reset to retry that specific task from the specified workflow run.
+  // This field is automatically cleared after successful processing to prevent repeated retries.
+  // The retry will bypass normal retry limits and restart from the beginning of the specified task.
+  RetryInfo retry_info = 13;
 }
+
+// RetryInfo specifies retry configuration for manual retry operations.
+// It defines which task to retry from which specific workflow execution.
+// The retry is triggered when workflow_run_id differs from the current pipeline run's status.workflow_run_id.
+message RetryInfo {
+  // Name of the task to retry (e.g., "examples.bert_cola.train.train").
+  // This identifies the specific step in the pipeline that should be retried.
+  // The task must exist in the original workflow execution.
+  string task_name = 1;
+
+  // Workflow ID of the specific execution to retry from (e.g., "run-1770071659-05ae7a3b").
+  // This ensures the retry happens from the exact workflow version intended,
+  // preventing confusion when multiple workflow runs exist for the same pipeline run.
+  string workflow_id = 2;
+
+  // Optional reason for the retry operation.
+  // Provides context about why the retry was requested, useful for audit trails.
+  string reason = 3;
+
+  // Workflow Run ID used as trigger condition for retry processing.
+  // The retry is only processed when this field is set and differs from
+  // pipelineRun.status.workflow_run_id, ensuring retries are triggered precisely
+  // and preventing duplicate processing of the same retry request.
+  string workflow_run_id = 4;
+}
+
 
 // PipelineRunState represents the current execution state of a pipeline run.
 // The state transitions follow this flow:

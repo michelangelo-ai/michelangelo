@@ -10,6 +10,8 @@ import (
 	temporalEnumsV1 "go.temporal.io/api/enums/v1"
 	filterV1 "go.temporal.io/api/filter/v1"
 	workflowserviceV1 "go.temporal.io/api/workflowservice/v1"
+	commonV1 "go.temporal.io/api/common/v1"
+	enumspb "go.temporal.io/api/enums/v1"
 	temporalClient "go.temporal.io/sdk/client"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -257,4 +259,89 @@ func (c *TemporalClient) ListOpenWorkflow(ctx context.Context, request clientInt
 
 func (c *TemporalClient) TerminateWorkflow(ctx context.Context, workflowID string, runID string, reason string) error {
 	return c.Client.TerminateWorkflow(ctx, workflowID, runID, reason)
+}
+
+func (c *TemporalClient) ResetWorkflow(ctx context.Context, options clientInterface.ResetWorkflowOptions) (*clientInterface.WorkflowExecution, error) {
+	resetRequest := &workflowserviceV1.ResetWorkflowExecutionRequest{
+		Namespace: c.Domain,
+		WorkflowExecution: &commonV1.WorkflowExecution{
+			WorkflowId: options.WorkflowID,
+			RunId:      options.RunID,
+		},
+		Reason:                    options.Reason,
+		WorkflowTaskFinishEventId: options.EventID,
+	}
+
+	if options.RequestID != "" {
+		resetRequest.RequestId = options.RequestID
+	}
+
+	response, err := c.Client.ResetWorkflowExecution(ctx, resetRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reset workflow: %w", err)
+	}
+
+	return &clientInterface.WorkflowExecution{
+		ID:    options.WorkflowID,
+		RunID: response.GetRunId(),
+	}, nil
+}
+
+func (c *TemporalClient) GetWorkflowExecutionHistory(ctx context.Context, workflowID string, runID string, pageToken []byte, pageSize int32) (*clientInterface.WorkflowHistory, error) {
+	// Use iterator-based API for getting history
+	iter := c.Client.GetWorkflowHistory(ctx, workflowID, runID, false, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT)
+
+	// Convert Temporal history events to our interface format
+	events := make([]clientInterface.HistoryEvent, 0)
+	var collectedEvents int32 = 0
+
+	for iter.HasNext() && (pageSize == 0 || collectedEvents < pageSize) {
+		event, err := iter.Next()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get next history event: %w", err)
+		}
+
+		historyEvent := clientInterface.HistoryEvent{
+			EventID:   event.GetEventId(),
+			EventType: event.GetEventType().String(),
+			EventTime: event.GetEventTime().AsTime(),
+			Details:   make(map[string]interface{}),
+		}
+
+		// Add relevant event details based on event type
+		switch event.GetEventType() {
+		case temporalEnumsV1.EVENT_TYPE_WORKFLOW_TASK_COMPLETED:
+			if attr := event.GetWorkflowTaskCompletedEventAttributes(); attr != nil {
+				historyEvent.Details["identity"] = attr.GetIdentity()
+				historyEvent.Details["scheduled_event_id"] = attr.GetScheduledEventId()
+			}
+		case temporalEnumsV1.EVENT_TYPE_ACTIVITY_TASK_SCHEDULED:
+			if attr := event.GetActivityTaskScheduledEventAttributes(); attr != nil {
+				historyEvent.Details["activity_id"] = attr.GetActivityId()
+				historyEvent.Details["activity_type"] = attr.GetActivityType().GetName()
+			}
+		case temporalEnumsV1.EVENT_TYPE_ACTIVITY_TASK_FAILED:
+			if attr := event.GetActivityTaskFailedEventAttributes(); attr != nil {
+				if failure := attr.GetFailure(); failure != nil {
+					historyEvent.Details["failure_message"] = failure.GetMessage()
+					historyEvent.Details["failure_source"] = failure.GetSource()
+				}
+				historyEvent.Details["identity"] = attr.GetIdentity()
+			}
+		case temporalEnumsV1.EVENT_TYPE_WORKFLOW_EXECUTION_STARTED:
+			if attr := event.GetWorkflowExecutionStartedEventAttributes(); attr != nil {
+				historyEvent.Details["workflow_type"] = attr.GetWorkflowType().GetName()
+				historyEvent.Details["task_queue"] = attr.GetTaskQueue().GetName()
+			}
+		}
+
+		events = append(events, historyEvent)
+		collectedEvents++
+	}
+
+	// Note: Iterator-based API doesn't provide page tokens, so we return empty token
+	return &clientInterface.WorkflowHistory{
+		Events:        events,
+		NextPageToken: nil,
+	}, nil
 }
