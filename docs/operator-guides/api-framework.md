@@ -29,7 +29,7 @@ For detailed Michelangelo API definition, see the API Reference (coming soon).
 Figure below shows the high-level architecture of Michelangelo API
 framework that consists of the following components:
 
-<img width="969" alt="architecture" src="https://github.com/user-attachments/assets/80efbaed-86a5-46fb-8f58-ca1e254ff21f" />
+![MA API architecture](./images/api-architecture.png)
 
 
 ### API Servers
@@ -80,4 +80,4 @@ framework, i.e. `controller-runtime`.
 Figure below shows how different ML pipelines can be managed and
 executed using the Michelangelo API Framework.
 
-<img width="1184" alt="pipeline-mgmt" src="https://github.com/user-attachments/assets/f6a83fae-0082-4ef8-9097-51f9b4736841" />
+![Pipeline management flow](./images/pipeline-management-flow.png)
