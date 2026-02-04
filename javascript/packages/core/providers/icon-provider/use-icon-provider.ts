@@ -8,9 +8,8 @@ import { IconContext } from './icon-context';
  * This hook must be used within an IconProvider component. It provides access
  * to the icon registry which maps icon names to React components.
  *
- * @returns Icon context containing the icon registry mapping
- *
- * @throws Will throw if used outside of an IconProvider
+ * @returns Icon context containing the icon registry mapping. Returns default empty
+ *   registry if used outside of an IconProvider.
  *
  * @example
  * ```typescript

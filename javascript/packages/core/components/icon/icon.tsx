@@ -28,6 +28,7 @@ import type { Props } from './types';
  *   - PRIMARY: contentPrimary color
  *   - SECONDARY: contentSecondary color
  *   - TERTIARY: contentTertiary color
+ *   - ACCENT: contentAccent color
  * @param props.size - Icon size. Defaults to theme.sizing.scale550
  * @param props.color - Custom color override. When provided, overrides kind-based coloring
  * @param props.title - Accessible title for the icon
