@@ -296,6 +296,23 @@ def read_minio_config():
         environ["AWS_ENDPOINT_URL"] = minio_config.get("endpoint_url", "")
 
 
+def check_crd(crd: CRD, user_command_action: str) -> None:
+    """Check CRD action validity."""
+    # TODO: this will be handled by CRD automatically later with argparse
+    if user_command_action not in crd.func_signature:
+        _LOG.debug(
+            "Unknown action `%r`: %r",
+            user_command_action,
+            crd.func_signature,
+        )
+        print(f"Unknown action: `{crd.name}`")
+        print_help_available_actions(
+            [(k, v.get("help", "")) for k, v in crd.func_signature.items()]
+        )
+        print(f"\nRun 'ma {crd.name} --help' for more information")
+        sys.exit(1)
+
+
 def discover_crds(channel: Channel) -> dict[str, CRD]:
     """Discover CRDs from the API server."""
     services = list_services(channel, METADATA)
@@ -369,26 +386,7 @@ def main(channel: Channel):
 
     # Phase 3: Generate method + configure argparse
     user_command_action = kebab_to_snake(remaining[0])
-    action_parser = ArgumentParser(
-        prog=f"mactl {user_command_crd} {user_command_action}"
-    )
-
-    # TODO: this will be handled by CRD automatically later with argparse
-    if user_command_action not in crds[user_command_crd].func_signature:
-        _LOG.debug(
-            "Unknown action `%r`: %r",
-            user_command_action,
-            crds[user_command_crd].func_signature,
-        )
-        print(f"Unknown action: `{user_command_action}`")
-        print_help_available_actions(
-            [
-                (k, v.get("help", ""))
-                for k, v in crds[user_command_crd].func_signature.items()
-            ]
-        )
-        print(f"\nRun 'ma {user_command_crd} --help' for more information")
-        sys.exit(1)
+    check_crd(remaining, crds[user_command_crd], user_command_action)
 
     # Load target function plugin
     read_plugin_command(
@@ -405,6 +403,9 @@ def main(channel: Channel):
         dir(crds[user_command_crd]),
     )
     func_generator = getattr(crds[user_command_crd], f"generate_{user_command_action}")
+    action_parser = ArgumentParser(
+        prog=f"mactl {user_command_crd} {user_command_action}"
+    )
     func_generator(channel, action_parser)
 
     # Phase 4: Parse remaining arguments

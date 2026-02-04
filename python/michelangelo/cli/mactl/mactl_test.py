@@ -8,8 +8,10 @@ from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
 
 from michelangelo.cli.mactl import mactl
+from michelangelo.cli.mactl.crd import CRD
 from michelangelo.cli.mactl.mactl import (
     ADDRESS,
+    check_crd,
     create_serivce_classes,
     discover_crds,
     handle_crd_action_help,
@@ -527,12 +529,12 @@ class HandleCrdActionHelpTest(TestCase):
     @patch("michelangelo.cli.mactl.mactl.print_help_available_actions")
     def test_no_remaining_args_exits_with_1(self, mock_print_help, _):
         """Test exits with code 1 when no remaining args."""
-        mock_crd = Mock()
-        mock_crd.name = "project"
-        mock_crd.func_signature = {"list": {"help": "List projects"}}
+        crd = CRD(
+            name="project", full_name="michelangelo.api.v2.ProjectService", metadata=[]
+        )
 
         with self.assertRaises(SystemExit) as cm:
-            handle_crd_action_help(mock_crd, [])
+            handle_crd_action_help(crd, [])
 
         self.assertEqual(cm.exception.code, 1)
         mock_print_help.assert_called_once()
@@ -541,12 +543,12 @@ class HandleCrdActionHelpTest(TestCase):
     @patch("michelangelo.cli.mactl.mactl.print_help_available_actions")
     def test_help_flag_exits_with_0(self, mock_print_help, _):
         """Test exits with code 0 when --help flag is present."""
-        mock_crd = Mock()
-        mock_crd.name = "model"
-        mock_crd.func_signature = {"create": {"help": "Create model"}}
+        crd = CRD(
+            name="model", full_name="michelangelo.api.v2.ModelService", metadata=[]
+        )
 
         with self.assertRaises(SystemExit) as cm:
-            handle_crd_action_help(mock_crd, ["--help"])
+            handle_crd_action_help(crd, ["--help"])
 
         self.assertEqual(cm.exception.code, 0)
         mock_print_help.assert_called_once()
@@ -555,12 +557,14 @@ class HandleCrdActionHelpTest(TestCase):
     @patch("michelangelo.cli.mactl.mactl.print_help_available_actions")
     def test_h_flag_exits_with_0(self, mock_print_help, _):
         """Test exits with code 0 when -h flag is present."""
-        mock_crd = Mock()
-        mock_crd.name = "pipeline"
-        mock_crd.func_signature = {"apply": {"help": "Apply pipeline"}}
+        crd = CRD(
+            name="pipeline",
+            full_name="michelangelo.api.v2.PipelineService",
+            metadata=[],
+        )
 
         with self.assertRaises(SystemExit) as cm:
-            handle_crd_action_help(mock_crd, ["-h"])
+            handle_crd_action_help(crd, ["-h"])
 
         self.assertEqual(cm.exception.code, 0)
         mock_print_help.assert_called_once()
@@ -569,12 +573,44 @@ class HandleCrdActionHelpTest(TestCase):
     @patch("michelangelo.cli.mactl.mactl.print_help_available_actions")
     def test_normal_action_does_not_exit(self, mock_print_help, mock_print):
         """Test does not exit when normal action is provided."""
-        mock_crd = Mock()
-        mock_crd.name = "project"
-        mock_crd.func_signature = {"list": {"help": "List projects"}}
+        crd = CRD(
+            name="project", full_name="michelangelo.api.v2.ProjectService", metadata=[]
+        )
 
         # Should not raise SystemExit
-        handle_crd_action_help(mock_crd, ["list"])
+        handle_crd_action_help(crd, ["list"])
 
         mock_print_help.assert_not_called()
         mock_print.assert_not_called()
+
+
+class CheckCrdTest(TestCase):
+    """Tests for check_crd function."""
+
+    def test_valid_action_does_not_exit(self):
+        """Test valid action does not exit."""
+        crd = CRD(
+            name="project", full_name="michelangelo.api.v2.ProjectService", metadata=[]
+        )
+        check_crd(crd, "get")  # Should not raise
+
+    @patch("builtins.print")
+    @patch("michelangelo.cli.mactl.mactl.print_help_available_actions")
+    def test_prints_available_actions_on_error(self, mock_print_help, _):
+        """Test prints available actions when action is invalid."""
+        crd = CRD(
+            name="pipeline",
+            full_name="michelangelo.api.v2.PipelineService",
+            metadata=[],
+        )
+        crd.func_signature = {"apply": {"help": "Apply"}, "delete": {"help": "Delete"}}
+
+        with self.assertRaises(SystemExit) as err:
+            check_crd(crd, "unknown")
+
+        self.assertEqual(err.exception.code, 1)
+        mock_print_help.assert_called_once()
+
+        call_args = mock_print_help.call_args[0][0]
+        self.assertIn(("apply", "Apply"), call_args)
+        self.assertIn(("delete", "Delete"), call_args)
