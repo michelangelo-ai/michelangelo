@@ -330,10 +330,7 @@ def handle_crd_action_help(crd: CRD, remaining: list[str]) -> None:
     if len(remaining) < 1:
         print(f"Usage: ma {crd.name} <action> [options]")
         print_help_available_actions(
-            [
-                (k, v.get("help", ""))
-                for k, v in crd.func_signature.items()
-            ]
+            [(k, v.get("help", "")) for k, v in crd.func_signature.items()]
         )
         print(f"\nRun 'ma {crd.name} --help' for more information")
         sys.exit(1)
@@ -341,10 +338,7 @@ def handle_crd_action_help(crd: CRD, remaining: list[str]) -> None:
     if len(remaining) >= 1 and remaining[0] in ["--help", "-h"]:
         print(f"Usage: ma {crd.name} <action> [options]")
         print_help_available_actions(
-            [
-                (k, v.get("help", ""))
-                for k, v in crd.func_signature.items()
-            ]
+            [(k, v.get("help", "")) for k, v in crd.func_signature.items()]
         )
         print(f"\nFor action-specific help, use: ma {crd.name} <action> --help")
         sys.exit(0)
