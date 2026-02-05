@@ -1,7 +1,7 @@
 {
   "label": "ML Pipelines",
   "position": 2,
-  "collapsed": true,
+  "collapsed": false,
   "link": {
     "type": "doc",
     "id": "user-guides/ml-pipelines/index"
