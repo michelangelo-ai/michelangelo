@@ -1,5 +1,9 @@
 {
   "label": "Contributing",
   "position": 6,
-  "collapsed": true
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Contributing"
+  }
 }

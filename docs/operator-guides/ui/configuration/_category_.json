@@ -1,5 +1,9 @@
 {
   "label": "Configuration API",
   "position": 4,
-  "collapsed": true
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Configuration API"
+  }
 }

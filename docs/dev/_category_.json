@@ -1,5 +1,9 @@
 {
   "label": "Developer Reference",
   "position": 7,
-  "collapsed": true
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Developer Reference"
+  }
 }
