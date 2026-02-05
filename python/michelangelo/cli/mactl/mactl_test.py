@@ -2,15 +2,21 @@
 
 import os
 import tempfile
+from argparse import Namespace
 from importlib import reload
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
 
 from michelangelo.cli.mactl import mactl
+from michelangelo.cli.mactl.crd import CRD
 from michelangelo.cli.mactl.mactl import (
     ADDRESS,
+    check_crd,
     create_serivce_classes,
+    discover_crds,
+    handle_crd_action_help,
+    pre_parse_args,
     read_module_from_file,
 )
 
@@ -393,3 +399,309 @@ class ReadModuleFromFileTest(TestCase):
 
             # Verify returns None
             self.assertIsNone(result)
+
+
+class ReadMinioConfigTest(TestCase):
+    """Tests for read_minio_config function."""
+
+    @patch.object(mactl, "CONFIG_FILE", Path("/nonexistent/config.yaml"))
+    def test_config_file_not_exists(self):
+        """Test when config file doesn't exist."""
+        mactl.read_minio_config()  # Should not raise
+
+    @patch.object(mactl, "CONFIG_FILE")
+    @patch("michelangelo.cli.mactl.mactl.open")
+    @patch("michelangelo.cli.mactl.mactl.yaml_safe_load")
+    @patch("michelangelo.cli.mactl.mactl.getenv", return_value=None)
+    @patch.dict(os.environ, {}, clear=True)
+    def test_sets_env_vars(self, _, mock_yaml, __, mock_config):
+        """Test setting env vars from config."""
+        mock_config.exists.return_value = True
+        mock_yaml.return_value = {
+            "minio": {
+                "access_key_id": "key123",
+                "secret_access_key": "secret456",
+                "endpoint_url": "http://localhost:9000",
+            }
+        }
+
+        mactl.read_minio_config()
+
+        self.assertEqual(os.environ["AWS_ACCESS_KEY_ID"], "key123")
+        self.assertEqual(os.environ["AWS_SECRET_ACCESS_KEY"], "secret456")
+        self.assertEqual(os.environ["AWS_ENDPOINT_URL"], "http://localhost:9000")
+
+    @patch.object(mactl, "CONFIG_FILE")
+    @patch("michelangelo.cli.mactl.mactl.open")
+    @patch("michelangelo.cli.mactl.mactl.yaml_safe_load")
+    @patch.dict(os.environ, {"AWS_ACCESS_KEY_ID": "existing"}, clear=True)
+    def test_preserves_existing_env(self, mock_yaml, _, mock_config):
+        """Test not overwriting existing env vars."""
+        mock_config.exists.return_value = True
+        mock_yaml.return_value = {"minio": {"access_key_id": "new_key"}}
+
+        mactl.read_minio_config()
+
+        self.assertEqual(os.environ["AWS_ACCESS_KEY_ID"], "existing")
+
+
+class DiscoverCrdsTest(TestCase):
+    """Tests for discover_crds function."""
+
+    @patch("michelangelo.cli.mactl.mactl.create_serivce_classes")
+    @patch("michelangelo.cli.mactl.mactl.list_services")
+    def test_discover_crds_returns_crd_dict(
+        self, mock_list_services, mock_create_classes
+    ):
+        """Test that discover_crds returns CRD dictionary."""
+        mock_channel = Mock()
+        mock_services = [
+            "michelangelo.api.v2.ProjectService",
+            "michelangelo.api.v2.ModelService",
+        ]
+        mock_crds = {"project": Mock(), "model": Mock()}
+
+        mock_list_services.return_value = mock_services
+        mock_create_classes.return_value = mock_crds
+
+        result = discover_crds(mock_channel)
+
+        mock_list_services.assert_called_once_with(mock_channel, mactl.METADATA)
+        mock_create_classes.assert_called_once_with(mock_services)
+        self.assertEqual(result, mock_crds)
+
+    @patch("michelangelo.cli.mactl.mactl.create_serivce_classes")
+    @patch("michelangelo.cli.mactl.mactl.list_services")
+    def test_discover_crds_with_empty_services(
+        self, mock_list_services, mock_create_classes
+    ):
+        """Test discover_crds with no services."""
+        mock_channel = Mock()
+        mock_list_services.return_value = []
+        mock_create_classes.return_value = {}
+
+        result = discover_crds(mock_channel)
+
+        self.assertEqual(result, {})
+        mock_create_classes.assert_called_once_with([])
+
+
+class PreParseArgsTest(TestCase):
+    """Tests for pre_parse_args function."""
+
+    @patch("sys.argv", ["mactl", "project", "list"])
+    def test_pre_parse_args_basic(self):
+        """Test basic argument parsing."""
+        crds = {"project": Mock(), "model": Mock()}
+
+        namespace, remaining = pre_parse_args(crds)
+
+        self.assertEqual(namespace.entity, "project")
+        self.assertEqual(remaining, ["list"])
+
+    @patch("sys.argv", ["mactl", "-vv", "model", "create", "--file=test.yaml"])
+    def test_pre_parse_args_with_verbose(self):
+        """Test parsing with verbose flag."""
+        crds = {"project": Mock(), "model": Mock()}
+
+        namespace, remaining = pre_parse_args(crds)
+
+        self.assertTrue(namespace.verbose)
+        self.assertEqual(namespace.entity, "model")
+        self.assertEqual(remaining, ["create", "--file=test.yaml"])
+
+    @patch("sys.argv", ["mactl", "pipeline", "apply", "-f", "config.yaml"])
+    def test_pre_parse_args_with_remaining_args(self):
+        """Test parsing with remaining arguments."""
+        crds = {"pipeline": Mock(), "project": Mock()}
+
+        namespace, remaining = pre_parse_args(crds)
+
+        self.assertEqual(namespace.entity, "pipeline")
+        self.assertIn("apply", remaining)
+        self.assertIn("-f", remaining)
+        self.assertIn("config.yaml", remaining)
+
+
+class HandleCrdActionHelpTest(TestCase):
+    """Tests for handle_crd_action_help function."""
+
+    @patch("builtins.print")
+    @patch("michelangelo.cli.mactl.mactl.print_help_available_actions")
+    def test_no_remaining_args_exits_with_1(self, mock_print_help, _):
+        """Test exits with code 1 when no remaining args."""
+        crd = CRD(
+            name="project", full_name="michelangelo.api.v2.ProjectService", metadata=[]
+        )
+
+        with self.assertRaises(SystemExit) as cm:
+            handle_crd_action_help(crd, [])
+
+        self.assertEqual(cm.exception.code, 1)
+        mock_print_help.assert_called_once()
+
+    @patch("builtins.print")
+    @patch("michelangelo.cli.mactl.mactl.print_help_available_actions")
+    def test_help_flag_exits_with_0(self, mock_print_help, _):
+        """Test exits with code 0 when --help flag is present."""
+        crd = CRD(
+            name="model", full_name="michelangelo.api.v2.ModelService", metadata=[]
+        )
+
+        with self.assertRaises(SystemExit) as cm:
+            handle_crd_action_help(crd, ["--help"])
+
+        self.assertEqual(cm.exception.code, 0)
+        mock_print_help.assert_called_once()
+
+    @patch("builtins.print")
+    @patch("michelangelo.cli.mactl.mactl.print_help_available_actions")
+    def test_h_flag_exits_with_0(self, mock_print_help, _):
+        """Test exits with code 0 when -h flag is present."""
+        crd = CRD(
+            name="pipeline",
+            full_name="michelangelo.api.v2.PipelineService",
+            metadata=[],
+        )
+
+        with self.assertRaises(SystemExit) as cm:
+            handle_crd_action_help(crd, ["-h"])
+
+        self.assertEqual(cm.exception.code, 0)
+        mock_print_help.assert_called_once()
+
+    @patch("builtins.print")
+    @patch("michelangelo.cli.mactl.mactl.print_help_available_actions")
+    def test_normal_action_does_not_exit(self, mock_print_help, mock_print):
+        """Test does not exit when normal action is provided."""
+        crd = CRD(
+            name="project", full_name="michelangelo.api.v2.ProjectService", metadata=[]
+        )
+
+        # Should not raise SystemExit
+        handle_crd_action_help(crd, ["list"])
+
+        mock_print_help.assert_not_called()
+        mock_print.assert_not_called()
+
+
+class CheckCrdTest(TestCase):
+    """Tests for check_crd function."""
+
+    def test_valid_action_does_not_exit(self):
+        """Test valid action does not exit."""
+        crd = CRD(
+            name="project", full_name="michelangelo.api.v2.ProjectService", metadata=[]
+        )
+        check_crd(crd, "get")  # Should not raise
+
+    @patch("builtins.print")
+    @patch("michelangelo.cli.mactl.mactl.print_help_available_actions")
+    def test_prints_available_actions_on_error(self, mock_print_help, _):
+        """Test prints available actions when action is invalid."""
+        crd = CRD(
+            name="pipeline",
+            full_name="michelangelo.api.v2.PipelineService",
+            metadata=[],
+        )
+        crd.func_signature = {"apply": {"help": "Apply"}, "delete": {"help": "Delete"}}
+
+        with self.assertRaises(SystemExit) as err:
+            check_crd(crd, "unknown")
+
+        self.assertEqual(err.exception.code, 1)
+        mock_print_help.assert_called_once()
+
+        call_args = mock_print_help.call_args[0][0]
+        self.assertIn(("apply", "Apply"), call_args)
+        self.assertIn(("delete", "Delete"), call_args)
+
+
+class MainFunctionTest(TestCase):
+    """Tests for main() function.
+
+    TODO: These are minimal mock-based tests for coverage purposes only.
+          Once the main() function refactoring is complete, these should be
+          replaced with proper integration tests that verify actual behavior.
+    """
+
+    @patch("michelangelo.cli.mactl.mactl.read_minio_config")
+    @patch("michelangelo.cli.mactl.mactl.discover_crds")
+    @patch("michelangelo.cli.mactl.mactl.pre_parse_args")
+    @patch("michelangelo.cli.mactl.mactl.read_plugins")
+    @patch("michelangelo.cli.mactl.mactl.handle_crd_action_help")
+    @patch("michelangelo.cli.mactl.mactl.kebab_to_snake")
+    @patch("michelangelo.cli.mactl.mactl.check_crd")
+    @patch("michelangelo.cli.mactl.mactl.read_plugin_command")
+    @patch("michelangelo.cli.mactl.mactl.ArgumentParser")
+    def test_main_basic_execution_flow(
+        self,
+        mock_arg_parser_class,
+        mock_read_plugin_command,
+        mock_check_crd,
+        mock_kebab_to_snake,
+        mock_handle_crd_action_help,
+        mock_read_plugins,
+        mock_pre_parse_args,
+        mock_discover_crds,
+        mock_read_minio_config,
+    ):
+        """Test basic execution flow of main() function."""
+        # Setup mock channel
+        mock_channel = MagicMock()
+
+        # Setup mock CRD
+        mock_crd = MagicMock(spec=CRD)
+        mock_crd.name = "project"
+        mock_crd.generate_create = MagicMock()
+        mock_crd.create = MagicMock()
+
+        # Setup function returns
+        mock_discover_crds.return_value = {"project": mock_crd}
+        mock_pre_parse_args.return_value = (
+            Namespace(entity="project"),
+            ["create", "--name", "test"],
+        )
+        mock_kebab_to_snake.return_value = "create"
+
+        # Setup ArgumentParser mock
+        mock_parser_instance = MagicMock()
+        mock_parser_instance.parse_args.return_value = Namespace(name="test")
+        mock_arg_parser_class.return_value = mock_parser_instance
+
+        # Execute main
+        mactl.main(mock_channel)
+
+        # Verify Phase 1: Load config and discover CRDs
+        mock_read_minio_config.assert_called_once()
+        mock_discover_crds.assert_called_once_with(mock_channel)
+
+        # Verify Phase 2: Pre-parse arguments
+        mock_pre_parse_args.assert_called_once_with({"project": mock_crd})
+
+        # Verify Phase 2: Load plugins for target CRD
+        mock_read_plugins.assert_called_once_with(mock_crd, mock_channel)
+
+        # Verify Phase 2: Handle CRD-level help
+        mock_handle_crd_action_help.assert_called_once_with(
+            mock_crd, ["create", "--name", "test"]
+        )
+
+        # Verify Phase 3: Generate method and configure argparse
+        mock_kebab_to_snake.assert_called_once_with("create")
+        mock_check_crd.assert_called_once_with(
+            ["create", "--name", "test"], mock_crd, "create"
+        )
+        mock_read_plugin_command.assert_called_once_with(
+            mock_crd, "create", {"project": mock_crd}, mock_channel
+        )
+
+        # Verify ArgumentParser was created and used
+        mock_arg_parser_class.assert_called_once_with(prog="mactl project create")
+        mock_crd.generate_create.assert_called_once_with(
+            mock_channel, mock_parser_instance
+        )
+        mock_parser_instance.parse_args.assert_called_once_with(["--name", "test"])
+
+        # Verify Phase 5: Execute action
+        mock_crd.create.assert_called_once_with(name="test")
