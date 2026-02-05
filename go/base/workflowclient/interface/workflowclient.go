@@ -101,4 +101,10 @@ type WorkflowClient interface {
 	ResetWorkflow(ctx context.Context, options ResetWorkflowOptions) (*WorkflowExecution, error)
 	// GetWorkflowExecutionHistory gets the execution history of a workflow
 	GetWorkflowExecutionHistory(ctx context.Context, workflowID string, runID string, pageToken []byte, pageSize int32) (*WorkflowHistory, error)
+	// GetActivityTaskScheduledEventType returns the engine-specific event type string for ActivityTaskScheduled
+	GetActivityTaskScheduledEventType() string
+	// GetActivityTaskCompletedEventType returns the engine-specific event type string for ActivityTaskCompleted
+	GetActivityTaskCompletedEventType() string
+	// GetDecisionTaskCompletedEventType returns the engine-specific event type string for DecisionTaskCompleted
+	GetDecisionTaskCompletedEventType() string
 }

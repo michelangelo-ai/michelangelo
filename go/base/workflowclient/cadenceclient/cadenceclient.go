@@ -218,6 +218,18 @@ func (c *CadenceClient) GetWorkflowExecutionHistory(ctx context.Context, workflo
 		}
 
 		// Add relevant event details based on event type
+		// TODO: Expand event type support beyond retry-specific events
+		// Currently only handles: DecisionTaskCompleted, ActivityTaskScheduled,
+		// ActivityTaskFailed, WorkflowExecutionStarted
+		//
+		// Future Cadence event types to add:
+		// - ActivityTaskCompleted, ActivityTaskTimedOut, ActivityTaskCanceled
+		// - WorkflowExecutionCompleted, WorkflowExecutionFailed, WorkflowExecutionTimedOut
+		// - TimerStarted, TimerFired, TimerCanceled
+		// - ChildWorkflowExecutionStarted, ChildWorkflowExecutionCompleted, ChildWorkflowExecutionFailed
+		// - SignalExternalWorkflowExecutionInitiated, SignalExternalWorkflowExecutionFailed
+		// - MarkerRecorded, RequestCancelExternalWorkflowExecutionInitiated
+		// - And others as needed for broader workflow introspection
 		switch event.GetEventType() {
 		case shared.EventTypeDecisionTaskCompleted:
 			if attr := event.DecisionTaskCompletedEventAttributes; attr != nil {
@@ -228,6 +240,13 @@ func (c *CadenceClient) GetWorkflowExecutionHistory(ctx context.Context, workflo
 			if attr := event.ActivityTaskScheduledEventAttributes; attr != nil {
 				historyEvent.Details["activity_id"] = attr.GetActivityId()
 				historyEvent.Details["activity_type"] = attr.GetActivityType().GetName()
+			}
+		case shared.EventTypeActivityTaskCompleted:
+			if attr := event.ActivityTaskCompletedEventAttributes; attr != nil {
+				historyEvent.Details["identity"] = attr.GetIdentity()
+				historyEvent.Details["scheduled_event_id"] = attr.GetScheduledEventId()
+				// Note: Cadence ActivityTaskCompletedEventAttributes doesn't directly contain activity_id
+				// The activity_id is typically found in the corresponding ActivityTaskScheduled event
 			}
 		case shared.EventTypeActivityTaskFailed:
 			if attr := event.ActivityTaskFailedEventAttributes; attr != nil {
@@ -249,6 +268,19 @@ func (c *CadenceClient) GetWorkflowExecutionHistory(ctx context.Context, workflo
 	// Note: Iterator-based API doesn't provide page tokens, so we return empty token
 	return &clientInterface.WorkflowHistory{
 		Events:        events,
-		NextPageToken: nil,
+		NextPageToken: pageToken,
 	}, nil
+}
+
+// Event type abstraction methods for Cadence
+func (c *CadenceClient) GetActivityTaskScheduledEventType() string {
+	return shared.EventTypeActivityTaskScheduled.String()
+}
+
+func (c *CadenceClient) GetActivityTaskCompletedEventType() string {
+	return shared.EventTypeActivityTaskCompleted.String()
+}
+
+func (c *CadenceClient) GetDecisionTaskCompletedEventType() string {
+	return shared.EventTypeDecisionTaskCompleted.String()
 }

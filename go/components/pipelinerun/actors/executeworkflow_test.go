@@ -2524,6 +2524,11 @@ func TestProcessManualRetrySpec(t *testing.T) {
 				},
 			},
 			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				// Mock event type interface methods
+				workflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+				workflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+				workflowClient.EXPECT().GetDecisionTaskCompletedEventType().Return("DecisionTaskCompleted").AnyTimes()
+
 				// Mock GetWorkflowExecutionHistory
 				mockHistory := &clientInterfaces.WorkflowHistory{
 					Events: []clientInterfaces.HistoryEvent{
@@ -2602,6 +2607,11 @@ func TestProcessManualRetrySpec(t *testing.T) {
 				},
 			},
 			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				// Mock event type interface methods
+				workflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+				workflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+				workflowClient.EXPECT().GetDecisionTaskCompletedEventType().Return("DecisionTaskCompleted").AnyTimes()
+
 				// Mock GetWorkflowExecutionHistory
 				mockHistory := &clientInterfaces.WorkflowHistory{
 					Events: []clientInterfaces.HistoryEvent{
@@ -2691,6 +2701,11 @@ func TestFindTaskResetEventIDByActivityID(t *testing.T) {
 			runID:           "test-run-id",
 			firstActivityID: "test-activity-1",
 			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				// Mock event type interface methods
+				workflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+				workflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+				workflowClient.EXPECT().GetDecisionTaskCompletedEventType().Return("DecisionTaskCompleted").AnyTimes()
+
 				mockHistory := &clientInterfaces.WorkflowHistory{
 					Events: []clientInterfaces.HistoryEvent{
 						{
@@ -2731,6 +2746,11 @@ func TestFindTaskResetEventIDByActivityID(t *testing.T) {
 			runID:           "test-run-id",
 			firstActivityID: "missing-activity",
 			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				// Mock event type interface methods
+				workflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+				workflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+				workflowClient.EXPECT().GetDecisionTaskCompletedEventType().Return("DecisionTaskCompleted").AnyTimes()
+
 				mockHistory := &clientInterfaces.WorkflowHistory{
 					Events: []clientInterfaces.HistoryEvent{
 						{
@@ -2763,6 +2783,11 @@ func TestFindTaskResetEventIDByActivityID(t *testing.T) {
 			runID:           "test-run-id",
 			firstActivityID: "test-activity-1",
 			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				// Mock event type interface methods (even though they won't be called due to error)
+				workflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+				workflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+				workflowClient.EXPECT().GetDecisionTaskCompletedEventType().Return("DecisionTaskCompleted").AnyTimes()
+
 				workflowClient.EXPECT().GetWorkflowExecutionHistory(
 					gomock.Any(),
 					"test-workflow-id",
@@ -2780,6 +2805,11 @@ func TestFindTaskResetEventIDByActivityID(t *testing.T) {
 			runID:           "test-run-id",
 			firstActivityID: "test-activity-1",
 			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				// Mock event type interface methods
+				workflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+				workflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+				workflowClient.EXPECT().GetDecisionTaskCompletedEventType().Return("DecisionTaskCompleted").AnyTimes()
+
 				mockHistory := &clientInterfaces.WorkflowHistory{
 					Events: []clientInterfaces.HistoryEvent{
 						{

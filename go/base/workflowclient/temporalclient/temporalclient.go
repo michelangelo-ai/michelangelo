@@ -309,6 +309,19 @@ func (c *TemporalClient) GetWorkflowExecutionHistory(ctx context.Context, workfl
 		}
 
 		// Add relevant event details based on event type
+		// TODO: Expand event type support beyond retry-specific events
+		// Currently only handles: WorkflowTaskCompleted, ActivityTaskScheduled,
+		// ActivityTaskFailed, WorkflowExecutionStarted
+		//
+		// Future Temporal event types to add:
+		// - ActivityTaskCompleted, ActivityTaskTimedOut, ActivityTaskCanceled
+		// - WorkflowExecutionCompleted, WorkflowExecutionFailed, WorkflowExecutionTimedOut
+		// - TimerStarted, TimerFired, TimerCanceled
+		// - ChildWorkflowExecutionStarted, ChildWorkflowExecutionCompleted, ChildWorkflowExecutionFailed
+		// - SignalExternalWorkflowExecutionInitiated, SignalExternalWorkflowExecutionFailed
+		// - MarkerRecorded, RequestCancelExternalWorkflowExecutionInitiated
+		// - WorkflowTaskScheduled, WorkflowTaskStarted, WorkflowTaskFailed
+		// - And others as needed for broader workflow introspection
 		switch event.GetEventType() {
 		case temporalEnumsV1.EVENT_TYPE_WORKFLOW_TASK_COMPLETED:
 			if attr := event.GetWorkflowTaskCompletedEventAttributes(); attr != nil {
@@ -319,6 +332,13 @@ func (c *TemporalClient) GetWorkflowExecutionHistory(ctx context.Context, workfl
 			if attr := event.GetActivityTaskScheduledEventAttributes(); attr != nil {
 				historyEvent.Details["activity_id"] = attr.GetActivityId()
 				historyEvent.Details["activity_type"] = attr.GetActivityType().GetName()
+			}
+		case temporalEnumsV1.EVENT_TYPE_ACTIVITY_TASK_COMPLETED:
+			if attr := event.GetActivityTaskCompletedEventAttributes(); attr != nil {
+				historyEvent.Details["identity"] = attr.GetIdentity()
+				historyEvent.Details["scheduled_event_id"] = attr.GetScheduledEventId()
+				// Note: Temporal ActivityTaskCompletedEventAttributes doesn't directly contain activity_id
+				// The activity_id is typically found in the corresponding ActivityTaskScheduled event
 			}
 		case temporalEnumsV1.EVENT_TYPE_ACTIVITY_TASK_FAILED:
 			if attr := event.GetActivityTaskFailedEventAttributes(); attr != nil {
@@ -342,6 +362,20 @@ func (c *TemporalClient) GetWorkflowExecutionHistory(ctx context.Context, workfl
 	// Note: Iterator-based API doesn't provide page tokens, so we return empty token
 	return &clientInterface.WorkflowHistory{
 		Events:        events,
-		NextPageToken: nil,
+		NextPageToken: pageToken,
 	}, nil
+}
+
+// Event type abstraction methods for Temporal
+func (c *TemporalClient) GetActivityTaskScheduledEventType() string {
+	return temporalEnumsV1.EVENT_TYPE_ACTIVITY_TASK_SCHEDULED.String()
+}
+
+func (c *TemporalClient) GetActivityTaskCompletedEventType() string {
+	return temporalEnumsV1.EVENT_TYPE_ACTIVITY_TASK_COMPLETED.String()
+}
+
+func (c *TemporalClient) GetDecisionTaskCompletedEventType() string {
+	// In Temporal, DecisionTask is called WorkflowTask
+	return temporalEnumsV1.EVENT_TYPE_WORKFLOW_TASK_COMPLETED.String()
 }

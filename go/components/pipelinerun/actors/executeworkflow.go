@@ -990,7 +990,7 @@ func (a *ExecuteWorkflowActor) findTaskResetEventIDByActivityID(ctx context.Cont
 	// Find the exact event where the first activity was scheduled
 	var firstActivityScheduledEventID int64
 	for _, event := range history.Events {
-		if event.EventType == "ActivityTaskScheduled" {
+		if event.EventType == a.workflowClient.GetActivityTaskScheduledEventType() {
 			if activityID, ok := event.Details["activity_id"].(string); ok {
 				if activityID == firstActivityID {
 					firstActivityScheduledEventID = event.EventID
@@ -1017,7 +1017,7 @@ func (a *ExecuteWorkflowActor) findTaskResetEventIDByActivityID(ctx context.Cont
 		}
 
 		// Look for the decision/activity task completed event just before
-		if event.EventType == "ActivityTaskCompleted" || event.EventType == "DecisionTaskCompleted" {
+		if event.EventType == a.workflowClient.GetActivityTaskCompletedEventType() || event.EventType == a.workflowClient.GetDecisionTaskCompletedEventType() {
 			resetEventID = event.EventID
 			break
 		}
