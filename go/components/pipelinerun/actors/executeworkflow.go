@@ -810,6 +810,10 @@ func mergePipelineRunStepInfo(oldStepInfo *v2.PipelineRunStepInfo, newStepInfo *
 		mergedStepInfo.Resources = append(oldStepInfo.Resources, newStepInfo.Resources...)
 		mergedStepInfo.AttemptIds = append(oldStepInfo.AttemptIds, newStepInfo.AttemptIds...)
 	}
+	// Make sure we don't overwrite activity ID if it already exists
+	if newStepInfo.ActivityId != "" {
+		mergedStepInfo.ActivityId = newStepInfo.ActivityId
+	}
 
 	// Preserve retry-related metadata across merges
 	// Retry metadata is maintained in stepInfo.Message for failed tasks
@@ -843,6 +847,7 @@ func getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *
 	stepInfo.Name = taskProgress.TaskPath
 	stepInfo.DisplayName = taskProgress.TaskName
 	stepInfo.LogUrl = taskProgress.TaskLog
+	stepInfo.ActivityId = taskProgress.FirstActivityID
 
 	if taskProgress.StartTime != "" {
 		// parse utc time str 2024-06-10 17:53:20 to time.Time
