@@ -66,7 +66,7 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 		return nil, err
 	}
 
-	var response ray.EnhancedCreateRayClusterResponse
+	var response ray.CreateRayClusterActivityResponse
 	if err := workflow.ExecuteActivity(ctx, ray.Activities.CreateRayCluster, v2pb.CreateRayClusterRequest{
 		RayCluster:    &cluster,
 		CreateOptions: &metav1.CreateOptions{},
@@ -75,7 +75,7 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 		return nil, err
 	}
 
-	cluster = *response.CreateRayClusterResponse.RayCluster
+	cluster = *response.RayCluster
 	activityID := response.ActivityID
 
 	srp := utils.CadenceDefaultSensorRetryPolicy
@@ -178,7 +178,7 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 			},
 		},
 	}
-	var createRes ray.EnhancedCreateRayJobResponse
+	var createRes v2pb.CreateRayJobResponse
 	if err := workflow.ExecuteActivity(ctx, ray.Activities.CreateRayJob, v2pb.CreateRayJobRequest{
 		RayJob: &rayJob,
 	}).Get(ctx, &createRes); err != nil {
@@ -186,8 +186,7 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 		return nil, err
 	}
 
-	rayJob = *createRes.CreateRayJobResponse.RayJob
-	jobActivityID := createRes.ActivityID
+	rayJob = *createRes.RayJob
 
 	var sensorRes ray.SensorRayJobResponse
 	srp := utils.CadenceDefaultSensorRetryPolicy
@@ -203,15 +202,8 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 	}
 
 	job := sensorRes.RayJob
-
-	// Create enhanced response with both job data and activity ID
-	enhancedJobResponse := map[string]interface{}{
-		"rayJob":      job,
-		"activity_id": jobActivityID,
-	}
-
 	var res starlark.Value
-	if err := utils.AsStar(enhancedJobResponse, &res); err != nil {
+	if err := utils.AsStar(job, &res); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
 		return nil, err
 	}

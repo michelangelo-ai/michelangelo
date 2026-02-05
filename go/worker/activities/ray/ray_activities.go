@@ -41,18 +41,11 @@ type activities struct {
 	rayJobService     v2pb.RayJobServiceYARPCClient
 }
 
-// EnhancedCreateRayClusterResponse includes the activity ID for progress reporting
-type EnhancedCreateRayClusterResponse struct {
-	*v2pb.CreateRayClusterResponse
+// CreateRayClusterActivityResponse includes the activity ID for progress reporting
+type CreateRayClusterActivityResponse struct {
+	RayCluster *v2pb.RayCluster
 	ActivityID string `json:"activity_id"` // The actual activity ID from workflow engine
 }
-
-// EnhancedCreateRayJobResponse includes the activity ID for progress reporting
-type EnhancedCreateRayJobResponse struct {
-	*v2pb.CreateRayJobResponse
-	ActivityID string `json:"activity_id"` // The actual activity ID from workflow engine
-}
-
 
 // CreateRayJob creates a new Ray job using the provided request parameters and returns activity ID.
 //
@@ -63,10 +56,10 @@ type EnhancedCreateRayJobResponse struct {
 // - request: The request containing details of the Ray job to create.
 //
 // Returns:
-// - *EnhancedCreateRayJobResponse: Response containing the created Ray job details and activity ID.
+// - *CreateRayJobActivityResponse: Response containing the created Ray job details and activity ID.
 // - *workflow.CustomError: Error information if the operation fails.
 func (r *activities) CreateRayJob(ctx context.Context, request v2pb.CreateRayJobRequest) (
-	*EnhancedCreateRayJobResponse, error) {
+	*v2pb.CreateRayJobResponse, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
 
@@ -83,12 +76,7 @@ func (r *activities) CreateRayJob(ctx context.Context, request v2pb.CreateRayJob
 		return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeUnavailable.String(), err.Error())
 	}
 
-	return &EnhancedCreateRayJobResponse{
-		CreateRayJobResponse: &v2pb.CreateRayJobResponse{
-			RayJob: createRayJobResponse.RayJob,
-		},
-		ActivityID: activityID,
-	}, nil
+	return createRayJobResponse, nil
 }
 
 // CreateRayCluster creates a new Ray cluster and returns it with activity ID for retry tracking.
@@ -100,10 +88,10 @@ func (r *activities) CreateRayJob(ctx context.Context, request v2pb.CreateRayJob
 // - request: The details of the Ray cluster to create.
 //
 // Returns:
-// - *EnhancedCreateRayClusterResponse: Response containing the created cluster details and activity ID.
+// - *CreateRayClusterActivityResponse: Response containing the created cluster details and activity ID.
 // - *workflow.CustomError: Error information if the operation fails.
 func (r *activities) CreateRayCluster(ctx context.Context, request v2pb.CreateRayClusterRequest) (
-	*EnhancedCreateRayClusterResponse, error) {
+	*CreateRayClusterActivityResponse, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
 
@@ -119,10 +107,9 @@ func (r *activities) CreateRayCluster(ctx context.Context, request v2pb.CreateRa
 		return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeUnavailable.String(), err.Error())
 	}
 
-	// Return enhanced response with activity ID
-	return &EnhancedCreateRayClusterResponse{
-		CreateRayClusterResponse: createRayClusterResponse,
-		ActivityID:               activityID,
+	return &CreateRayClusterActivityResponse{
+		RayCluster: createRayClusterResponse.RayCluster,
+		ActivityID: activityID,
 	}, nil
 }
 
