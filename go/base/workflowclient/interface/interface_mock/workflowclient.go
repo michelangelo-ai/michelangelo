@@ -49,6 +49,48 @@ func (mr *MockWorkflowClientMockRecorder) CancelWorkflow(ctx, workflowID, runID,
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CancelWorkflow", reflect.TypeOf((*MockWorkflowClient)(nil).CancelWorkflow), ctx, workflowID, runID, reason)
 }
 
+// GetActivityTaskCompletedEventType mocks base method.
+func (m *MockWorkflowClient) GetActivityTaskCompletedEventType() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetActivityTaskCompletedEventType")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetActivityTaskCompletedEventType indicates an expected call of GetActivityTaskCompletedEventType.
+func (mr *MockWorkflowClientMockRecorder) GetActivityTaskCompletedEventType() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActivityTaskCompletedEventType", reflect.TypeOf((*MockWorkflowClient)(nil).GetActivityTaskCompletedEventType))
+}
+
+// GetActivityTaskScheduledEventType mocks base method.
+func (m *MockWorkflowClient) GetActivityTaskScheduledEventType() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetActivityTaskScheduledEventType")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetActivityTaskScheduledEventType indicates an expected call of GetActivityTaskScheduledEventType.
+func (mr *MockWorkflowClientMockRecorder) GetActivityTaskScheduledEventType() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActivityTaskScheduledEventType", reflect.TypeOf((*MockWorkflowClient)(nil).GetActivityTaskScheduledEventType))
+}
+
+// GetDecisionTaskCompletedEventType mocks base method.
+func (m *MockWorkflowClient) GetDecisionTaskCompletedEventType() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDecisionTaskCompletedEventType")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetDecisionTaskCompletedEventType indicates an expected call of GetDecisionTaskCompletedEventType.
+func (mr *MockWorkflowClientMockRecorder) GetDecisionTaskCompletedEventType() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDecisionTaskCompletedEventType", reflect.TypeOf((*MockWorkflowClient)(nil).GetDecisionTaskCompletedEventType))
+}
+
 // GetDomain mocks base method.
 func (m *MockWorkflowClient) GetDomain() string {
 	m.ctrl.T.Helper()
