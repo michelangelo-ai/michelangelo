@@ -218,18 +218,8 @@ func (c *CadenceClient) GetWorkflowExecutionHistory(ctx context.Context, workflo
 		}
 
 		// Add relevant event details based on event type
-		// TODO: Expand event type support beyond retry-specific events
-		// Currently only handles: DecisionTaskCompleted, ActivityTaskScheduled,
-		// ActivityTaskFailed, WorkflowExecutionStarted
-		//
-		// Future Cadence event types to add:
-		// - ActivityTaskCompleted, ActivityTaskTimedOut, ActivityTaskCanceled
-		// - WorkflowExecutionCompleted, WorkflowExecutionFailed, WorkflowExecutionTimedOut
-		// - TimerStarted, TimerFired, TimerCanceled
-		// - ChildWorkflowExecutionStarted, ChildWorkflowExecutionCompleted, ChildWorkflowExecutionFailed
-		// - SignalExternalWorkflowExecutionInitiated, SignalExternalWorkflowExecutionFailed
-		// - MarkerRecorded, RequestCancelExternalWorkflowExecutionInitiated
-		// - And others as needed for broader workflow introspection
+		// Currently handles: DecisionTaskCompleted, ActivityTaskScheduled,
+		// ActivityTaskCompleted, ActivityTaskFailed, WorkflowExecutionStarted
 		switch event.GetEventType() {
 		case shared.EventTypeDecisionTaskCompleted:
 			if attr := event.DecisionTaskCompletedEventAttributes; attr != nil {

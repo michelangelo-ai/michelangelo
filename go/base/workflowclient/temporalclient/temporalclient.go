@@ -309,19 +309,8 @@ func (c *TemporalClient) GetWorkflowExecutionHistory(ctx context.Context, workfl
 		}
 
 		// Add relevant event details based on event type
-		// TODO: Expand event type support beyond retry-specific events
-		// Currently only handles: WorkflowTaskCompleted, ActivityTaskScheduled,
-		// ActivityTaskFailed, WorkflowExecutionStarted
-		//
-		// Future Temporal event types to add:
-		// - ActivityTaskCompleted, ActivityTaskTimedOut, ActivityTaskCanceled
-		// - WorkflowExecutionCompleted, WorkflowExecutionFailed, WorkflowExecutionTimedOut
-		// - TimerStarted, TimerFired, TimerCanceled
-		// - ChildWorkflowExecutionStarted, ChildWorkflowExecutionCompleted, ChildWorkflowExecutionFailed
-		// - SignalExternalWorkflowExecutionInitiated, SignalExternalWorkflowExecutionFailed
-		// - MarkerRecorded, RequestCancelExternalWorkflowExecutionInitiated
-		// - WorkflowTaskScheduled, WorkflowTaskStarted, WorkflowTaskFailed
-		// - And others as needed for broader workflow introspection
+		// Currently handles: WorkflowTaskCompleted, ActivityTaskScheduled,
+		// ActivityTaskCompleted, ActivityTaskFailed, WorkflowExecutionStarted
 		switch event.GetEventType() {
 		case temporalEnumsV1.EVENT_TYPE_WORKFLOW_TASK_COMPLETED:
 			if attr := event.GetWorkflowTaskCompletedEventAttributes(); attr != nil {
