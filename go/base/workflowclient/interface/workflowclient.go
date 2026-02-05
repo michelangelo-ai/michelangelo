@@ -38,11 +38,11 @@ type WorkflowExecution struct {
 }
 
 type ResetWorkflowOptions struct {
-	WorkflowID    string
-	RunID         string
-	EventID       int64
-	Reason        string
-	RequestID     string
+	WorkflowID string
+	RunID      string
+	EventID    int64
+	Reason     string
+	RequestID  string
 }
 
 type HistoryEvent struct {
