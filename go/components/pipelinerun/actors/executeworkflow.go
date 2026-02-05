@@ -236,6 +236,7 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 	retryErr := a.processManualRetrySpec(ctx, pipelineRun)
 	if retryErr != nil {
 		logger.Error("failed to process manual retry spec", zap.Error(retryErr))
+		return nil, retryErr
 	}
 
 	executeWorkflowStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
