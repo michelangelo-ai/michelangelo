@@ -1,5 +1,9 @@
 {
   "label": "Setup Guide",
   "position": 4,
-  "collapsed": true
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "title": "Setup Guide"
+  }
 }

@@ -1,5 +1,9 @@
 {
   "label": "Operator Guides",
   "position": 5,
-  "collapsed": true
+  "collapsed": true,
+  "link": {
+    "type": "doc",
+    "id": "operator-guides/index"
+  }
 }
