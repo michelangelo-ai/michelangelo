@@ -2450,3 +2450,393 @@ func TestGetWorkflowInputsWithPythonSDKBasedPipeline(t *testing.T) {
 		})
 	}
 }
+
+func TestProcessManualRetrySpec(t *testing.T) {
+	testCases := []struct {
+		name            string
+		pipelineRun     *v2.PipelineRun
+		mockFunc        func(workflowClient *workflowclientMock.MockWorkflowClient)
+		expectedError   string
+		expectedRunning bool
+	}{
+		{
+			name: "No retry info - should not process",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					RetryInfo: nil,
+				},
+				Status: v2.PipelineRunStatus{
+					WorkflowRunId: "current-run-id",
+				},
+			},
+			mockFunc:        func(workflowClient *workflowclientMock.MockWorkflowClient) {},
+			expectedError:   "",
+			expectedRunning: false,
+		},
+		{
+			name: "Empty activity ID - should not process",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					RetryInfo: &v2.RetryInfo{
+						ActivityId: "",
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					WorkflowRunId: "current-run-id",
+				},
+			},
+			mockFunc:        func(workflowClient *workflowclientMock.MockWorkflowClient) {},
+			expectedError:   "",
+			expectedRunning: false,
+		},
+		{
+			name: "WorkflowRunId matches current - should process retry",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					RetryInfo: &v2.RetryInfo{
+						ActivityId:    "test-activity-1",
+						WorkflowId:    "test-workflow-id",
+						WorkflowRunId: "current-run-id",
+						Reason:        "Test retry",
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					WorkflowId:    "test-workflow-id",
+					WorkflowRunId: "current-run-id",
+					Steps: []*v2.PipelineRunStepInfo{
+						{
+							Name:  pipelinerunutils.ExecuteWorkflowStepName,
+							State: v2.PIPELINE_RUN_STEP_STATE_FAILED,
+						},
+					},
+				},
+			},
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				// Mock GetWorkflowExecutionHistory
+				mockHistory := &clientInterfaces.WorkflowHistory{
+					Events: []clientInterfaces.HistoryEvent{
+						{
+							EventID:   1,
+							EventType: "ActivityTaskCompleted",
+						},
+						{
+							EventID:   2,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id": "test-activity-1",
+							},
+						},
+					},
+				}
+				workflowClient.EXPECT().GetWorkflowExecutionHistory(
+					gomock.Any(),
+					"test-workflow-id",
+					"current-run-id",
+					gomock.Any(),
+					int32(5000),
+				).Return(mockHistory, nil)
+
+				// Mock ResetWorkflow
+				workflowClient.EXPECT().ResetWorkflow(
+					gomock.Any(),
+					gomock.Any(),
+				).Return(&clientInterfaces.WorkflowExecution{
+					ID:    "test-workflow-id",
+					RunID: "new-run-id",
+				}, nil)
+			},
+			expectedError:   "",
+			expectedRunning: true,
+		},
+		{
+			name: "WorkflowRunId differs - should not process",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					RetryInfo: &v2.RetryInfo{
+						ActivityId:    "test-activity-1",
+						WorkflowRunId: "old-run-id",
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					WorkflowRunId: "new-run-id", // Different from retry
+				},
+			},
+			mockFunc:        func(workflowClient *workflowclientMock.MockWorkflowClient) {},
+			expectedError:   "",
+			expectedRunning: false,
+		},
+		{
+			name: "Reset workflow fails",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					RetryInfo: &v2.RetryInfo{
+						ActivityId:    "test-activity-1",
+						WorkflowId:    "test-workflow-id",
+						WorkflowRunId: "current-run-id", // Same as current to trigger processing
+						Reason:        "Manual retry",
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					WorkflowId:    "test-workflow-id",
+					WorkflowRunId: "current-run-id", // Same as retry to trigger processing
+				},
+			},
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				// Mock GetWorkflowExecutionHistory
+				mockHistory := &clientInterfaces.WorkflowHistory{
+					Events: []clientInterfaces.HistoryEvent{
+						{
+							EventID:   1,
+							EventType: "ActivityTaskCompleted",
+						},
+						{
+							EventID:   2,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id": "test-activity-1",
+							},
+						},
+					},
+				}
+				workflowClient.EXPECT().GetWorkflowExecutionHistory(
+					gomock.Any(),
+					"test-workflow-id",
+					"current-run-id",
+					gomock.Any(),
+					int32(5000),
+				).Return(mockHistory, nil)
+
+				// Mock ResetWorkflow failure
+				workflowClient.EXPECT().ResetWorkflow(
+					gomock.Any(),
+					gomock.Any(),
+				).Return(nil, fmt.Errorf("reset failed"))
+			},
+			expectedError:   "workflow reset failed for activity test-activity-1: reset failed",
+			expectedRunning: false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockWorkflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+			mockBlobStore := blobstoreMock.NewMockBlobStoreClient(ctrl)
+
+			testCase.mockFunc(mockWorkflowClient)
+
+			scheme := runtime.NewScheme()
+			err := v2.AddToScheme(scheme)
+			require.NoError(t, err)
+			k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			apiHandlerInstance := apiHandler.NewFakeAPIHandler(k8sClient)
+
+			actor := setUpExecuteWorkflowActor(t, mockWorkflowClient, mockBlobStore, apiHandlerInstance)
+
+			retryErr := actor.processManualRetrySpec(context.Background(), testCase.pipelineRun)
+
+			if testCase.expectedError != "" {
+				require.Error(t, retryErr)
+				require.Contains(t, retryErr.Error(), testCase.expectedError)
+			} else {
+				require.NoError(t, retryErr)
+			}
+
+			if testCase.expectedRunning {
+				require.Equal(t, v2.PIPELINE_RUN_STATE_RUNNING, testCase.pipelineRun.Status.State)
+				executeStep := pipelinerunutils.GetStep(testCase.pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
+				if executeStep != nil {
+					require.Equal(t, v2.PIPELINE_RUN_STEP_STATE_RUNNING, executeStep.State)
+				}
+			}
+		})
+	}
+}
+
+func TestFindTaskResetEventIDByActivityID(t *testing.T) {
+	testCases := []struct {
+		name            string
+		workflowID      string
+		runID           string
+		firstActivityID string
+		mockFunc        func(workflowClient *workflowclientMock.MockWorkflowClient)
+		expectedEventID int64
+		expectedError   string
+	}{
+		{
+			name:            "Find reset event successfully",
+			workflowID:      "test-workflow-id",
+			runID:           "test-run-id",
+			firstActivityID: "test-activity-1",
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				mockHistory := &clientInterfaces.WorkflowHistory{
+					Events: []clientInterfaces.HistoryEvent{
+						{
+							EventID:   1,
+							EventType: "WorkflowExecutionStarted",
+						},
+						{
+							EventID:   2,
+							EventType: "DecisionTaskCompleted",
+						},
+						{
+							EventID:   3,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id": "test-activity-1",
+							},
+						},
+						{
+							EventID:   4,
+							EventType: "ActivityTaskFailed",
+						},
+					},
+				}
+				workflowClient.EXPECT().GetWorkflowExecutionHistory(
+					gomock.Any(),
+					"test-workflow-id",
+					"test-run-id",
+					gomock.Any(),
+					int32(5000),
+				).Return(mockHistory, nil)
+			},
+			expectedEventID: 2,
+			expectedError:   "",
+		},
+		{
+			name:            "Activity not found",
+			workflowID:      "test-workflow-id",
+			runID:           "test-run-id",
+			firstActivityID: "missing-activity",
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				mockHistory := &clientInterfaces.WorkflowHistory{
+					Events: []clientInterfaces.HistoryEvent{
+						{
+							EventID:   1,
+							EventType: "WorkflowExecutionStarted",
+						},
+						{
+							EventID:   2,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id": "different-activity",
+							},
+						},
+					},
+				}
+				workflowClient.EXPECT().GetWorkflowExecutionHistory(
+					gomock.Any(),
+					"test-workflow-id",
+					"test-run-id",
+					gomock.Any(),
+					int32(5000),
+				).Return(mockHistory, nil)
+			},
+			expectedEventID: 0,
+			expectedError:   "could not find scheduled event for first activity missing-activity",
+		},
+		{
+			name:            "History retrieval fails",
+			workflowID:      "test-workflow-id",
+			runID:           "test-run-id",
+			firstActivityID: "test-activity-1",
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				workflowClient.EXPECT().GetWorkflowExecutionHistory(
+					gomock.Any(),
+					"test-workflow-id",
+					"test-run-id",
+					gomock.Any(),
+					int32(5000),
+				).Return(nil, fmt.Errorf("history error"))
+			},
+			expectedEventID: 0,
+			expectedError:   "failed to get workflow history: history error",
+		},
+		{
+			name:            "No safe reset boundary found",
+			workflowID:      "test-workflow-id",
+			runID:           "test-run-id",
+			firstActivityID: "test-activity-1",
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				mockHistory := &clientInterfaces.WorkflowHistory{
+					Events: []clientInterfaces.HistoryEvent{
+						{
+							EventID:   1,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id": "test-activity-1",
+							},
+						},
+					},
+				}
+				workflowClient.EXPECT().GetWorkflowExecutionHistory(
+					gomock.Any(),
+					"test-workflow-id",
+					"test-run-id",
+					gomock.Any(),
+					int32(5000),
+				).Return(mockHistory, nil)
+			},
+			expectedEventID: 0,
+			expectedError:   "could not find safe reset boundary before first activity test-activity-1",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockWorkflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+			mockBlobStore := blobstoreMock.NewMockBlobStoreClient(ctrl)
+
+			testCase.mockFunc(mockWorkflowClient)
+
+			scheme := runtime.NewScheme()
+			err := v2.AddToScheme(scheme)
+			require.NoError(t, err)
+			k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			apiHandlerInstance := apiHandler.NewFakeAPIHandler(k8sClient)
+
+			actor := setUpExecuteWorkflowActor(t, mockWorkflowClient, mockBlobStore, apiHandlerInstance)
+
+			eventID, err := actor.findTaskResetEventIDByActivityID(
+				context.Background(),
+				testCase.workflowID,
+				testCase.runID,
+				testCase.firstActivityID,
+			)
+
+			if testCase.expectedError != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), testCase.expectedError)
+				require.Equal(t, int64(0), eventID)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, testCase.expectedEventID, eventID)
+			}
+		})
+	}
+}

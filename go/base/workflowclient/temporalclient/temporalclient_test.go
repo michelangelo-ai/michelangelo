@@ -554,3 +554,6 @@ func TestCreateScheduleForCron(t *testing.T) {
 		})
 	}
 }
+
+// Note: Temporal retry methods are tested via integration with the actual Temporal client.
+// Core retry functionality is tested in CadenceClient and ExecuteWorkflowActor tests.

@@ -3,7 +3,7 @@ name: Dev Release
 on:
   workflow_dispatch:
   push:
-    branches: [ main, badcount/retry ]
+    branches: [ main ]
 #  pull_request:
 #    branches: [ main ]
 

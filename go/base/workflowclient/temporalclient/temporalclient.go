@@ -7,11 +7,11 @@ import (
 	"time"
 
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
+	commonV1 "go.temporal.io/api/common/v1"
+	enumspb "go.temporal.io/api/enums/v1"
 	temporalEnumsV1 "go.temporal.io/api/enums/v1"
 	filterV1 "go.temporal.io/api/filter/v1"
 	workflowserviceV1 "go.temporal.io/api/workflowservice/v1"
-	commonV1 "go.temporal.io/api/common/v1"
-	enumspb "go.temporal.io/api/enums/v1"
 	temporalClient "go.temporal.io/sdk/client"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
