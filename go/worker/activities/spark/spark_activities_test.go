@@ -68,10 +68,11 @@ func (r *Suite) Test_CreateSparkJob_Success() {
 	r.Require().NoError(err)
 	r.Require().True(val.HasValue())
 
-	var res v2pb.CreateSparkJobResponse
+	var res CreateSparkJobActivityResponse
 	r.Require().NoError(val.Get(&res))
 	r.Require().Equal(jobName, res.SparkJob.Name)
 	r.Require().Equal("default", res.SparkJob.Namespace)
+	r.Require().NotEmpty(res.ActivityID) // Verify activity ID is present
 }
 
 func (r *Suite) Test_GetSparkJob_Success() {

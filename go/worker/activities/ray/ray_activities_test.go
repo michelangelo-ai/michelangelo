@@ -93,11 +93,13 @@ func (r *Suite) Test_CreateRayCluster() {
 		RayCluster: rayCluster,
 	}, nil)
 	res, err := r.activitySuite.ExecuteActivity(Activities.CreateRayCluster, *request)
-	var resp v2pb.CreateRayClusterResponse
+	var resp CreateRayClusterActivityResponse
 	res.Get(&resp)
 	assert.Nil(r.t, err)
 	assert.NotNil(r.t, resp)
-	assert.Equal(r.t, rayCluster, resp.RayCluster)
+	assert.NotNil(r.t, resp.RayCluster)
+	assert.Equal(r.t, rayCluster.Name, resp.RayCluster.Name)
+	assert.Equal(r.t, rayCluster.Namespace, resp.RayCluster.Namespace)
 }
 
 func (r *Suite) Test_TerminateCluster() {
