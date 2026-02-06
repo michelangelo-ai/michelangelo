@@ -133,8 +133,8 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 
 	// Create enhanced response with both cluster data and activity ID
 	enhancedResponse := map[string]interface{}{
-		"rayCluster":  sensorCluster,
-		"activity_id": activityID,
+		"rayCluster": sensorCluster,
+		"activityId": activityID,
 	}
 
 	var res starlark.Value

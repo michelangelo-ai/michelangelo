@@ -812,8 +812,8 @@ func mergePipelineRunStepInfo(oldStepInfo *v2.PipelineRunStepInfo, newStepInfo *
 		mergedStepInfo.AttemptIds = append(oldStepInfo.AttemptIds, newStepInfo.AttemptIds...)
 	}
 	// Make sure we don't overwrite activity ID if it already exists
-	if newStepInfo.ActivityId != "" {
-		mergedStepInfo.ActivityId = newStepInfo.ActivityId
+	if oldStepInfo.ActivityId != "" {
+		mergedStepInfo.ActivityId = oldStepInfo.ActivityId
 	}
 
 	// Preserve retry-related metadata across merges

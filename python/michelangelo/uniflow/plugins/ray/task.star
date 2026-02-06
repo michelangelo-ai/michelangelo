@@ -1,5 +1,5 @@
 load("@plugin", "atexit", "json", "os", "ray", "time")
-load("../../commons.star", "DEFAULT_RETRY_ATTEMPTS", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_pythonpath", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "process_terminated_job", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
+load("../../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "DEFAULT_RETRY_ATTEMPTS", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_pythonpath", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "process_terminated_job", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 DEFAULT_CREATE_CLUSTER_TIMEOUT_SECONDS = 60 * 30  # Timeout duration for cluster creation in seconds.
 RAY_ENV = {
@@ -182,22 +182,21 @@ def task(
 
         total_retry_attempt = retry_attempts + 1
         for retry_attempt_id in range(1, total_retry_attempt + 1):
-
             job_state, job, cluster_url, ray_job_name = execute_ray_task(
-                task_path=task_path,
-                task_name=task_name,
-                cluster=cluster,
-                cluster_namespace=cluster_namespace,
-                runtime_env=runtime_env,
-                start_time_formated_str=start_time_formated_str,
-                result_url=result_url,
-                args=args,
-                kwargs=kwargs,
-                retry_attempt_id=retry_attempt_id,
-                total_retry_attempt=total_retry_attempt,
-                cache_version=cache_version,
-                namespace=namespace,
-                breakpoint=breakpoint,
+                task_path = task_path,
+                task_name = task_name,
+                cluster = cluster,
+                cluster_namespace = cluster_namespace,
+                runtime_env = runtime_env,
+                start_time_formated_str = start_time_formated_str,
+                result_url = result_url,
+                args = args,
+                kwargs = kwargs,
+                retry_attempt_id = retry_attempt_id,
+                total_retry_attempt = total_retry_attempt,
+                cache_version = cache_version,
+                namespace = namespace,
+                breakpoint = breakpoint,
             )
 
             # Generate log URL from Ray job name
@@ -255,8 +254,7 @@ def task(
     callable.with_overrides = with_overrides
     return callable
 
-def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_env, start_time_formated_str, result_url, args, kwargs, retry_attempt_id, total_retry_attempt, cache_version, namespace, breakpoint=False):
-
+def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_env, start_time_formated_str, result_url, args, kwargs, retry_attempt_id, total_retry_attempt, cache_version, namespace, breakpoint = False):
     print("Ray job running, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ")")
     report_progress(
         task_path = task_path,
@@ -274,7 +272,7 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
 
     # Extract cluster info and activity ID from enhanced response
     cluster = cluster_response["rayCluster"]  # This contains the actual cluster data
-    first_activity_id = cluster_response["activity_id"]  # NEW: Activity ID from Go
+    first_activity_id = cluster_response["activityId"]  # NEW: Activity ID from Go
 
     cluster_url = cluster["status"].get("jobUrl", "UAPI did not report RayJob URL")
     cluster_name = cluster["metadata"]["name"]
@@ -303,42 +301,20 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
     entrypoint = ray_job_entrypoint(task_path, result_url, args, kwargs)
     print("ray | run job:", "task_path=" + task_path)
 
-    # Enhanced: Call existing job creation that now returns activity ID
-    job_response = ray.create_job(
+    job = ray.create_job(
         entrypoint,
         ray_job_namespace = cluster_namespace,
         ray_job_name = cluster_name,
     )
 
-    # Extract job info and activity ID from enhanced response
-    job = job_response["rayJob"]  # This contains the actual job data
-    job_activity_id = job_response["activity_id"]  # NEW: Second activity ID
-
     print("ray | +run job: job=" + str(job))
-    print("ray | job activity ID:", job_activity_id)  # NEW: Log second activity ID
 
     # Extract Ray job ID/name from job object - try job ID first, then metadata name, then cluster name
     ray_job_name = (job.get("spec", {}).get("jobId") or
-                   job.get("status", {}).get("jobId") or
-                   job.get("metadata", {}).get("name", cluster_name))
+                    job.get("status", {}).get("jobId") or
+                    job.get("metadata", {}).get("name", cluster_name))
     generated_log_url = get_ray_log_url(ray_job_name)
     log_url = generated_log_url if generated_log_url else cluster_url
-
-    # Enhanced: Progress report with second activity ID
-    report_progress(
-        task_path = task_path,
-        task_name = task_name,
-        task_log = log_url,
-        task_message = "Ray Job Created Successfully",
-        task_state = TASK_STATE_RUNNING,
-        start_time = start_time_formated_str,
-        end_time = "",
-        output = "",
-        retry_attempt_id = retry_attempt_id,
-        activity_id = job_activity_id,  # NEW: Current activity ID
-        # first_activity_id is already stored, no need to repeat
-    )
-
     atexit.register(report_ray_task_result, job, task_path, task_name, cluster_url, start_time_formated_str, args, kwargs, retry_attempt_id, cache_version, namespace, result_url)
 
     if breakpoint:
@@ -359,7 +335,7 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
     atexit.unregister(terminate_cluster)
     atexit.unregister(report_ray_task_result)
 
-    return(job_state, job, cluster_url, ray_job_name)
+    return (job_state, job, cluster_url, ray_job_name)
 
 def terminate_cluster(cluster_namespace, cluster_name):
     ray.terminate_cluster(cluster_name, cluster_namespace, "job failed", "TERMINATION_TYPE_FAILED")
@@ -514,8 +490,8 @@ def ray_cluster_spec(
                                 "name": "ray",
                                 "volumeSource": {
                                     "hostPath": {
-                                        "path": "/tmp/ray"
-                                    }
+                                        "path": "/tmp/ray",
+                                    },
                                 },
                             },
                         ],
@@ -615,7 +591,7 @@ def ray_config(
         worker_gpu = None,
         worker_object_store_memory = None,
         worker_instances = None,
-        breakpoint = None, 
+        breakpoint = None,
         runtime_env = None):
     config_overrides = {
         "head_cpu": head_cpu,
