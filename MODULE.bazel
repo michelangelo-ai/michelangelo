@@ -56,7 +56,7 @@ use_repo(
     "com_github_google_go_cmp",
     "com_github_google_uuid",
     "com_github_json_iterator_go",
-    "com_github_michelangelo_ai_michelangelo_proto",
+    "com_github_michelangelo_ai_michelangelo_proto_go",
     "com_github_minio_minio_go_v7",
     "com_github_prometheus_client_golang",
     "com_github_r3labs_diff_v3",

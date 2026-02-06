@@ -14,8 +14,8 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
-	"github.com/michelangelo-ai/michelangelo/proto/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	"github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 func TestModelCleanupActor_Retrieve(t *testing.T) {

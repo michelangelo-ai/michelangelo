@@ -14,8 +14,8 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/ray"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/utils"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // TODO(#559): andrii: implement Ray starlark plugin here

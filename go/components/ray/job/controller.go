@@ -19,8 +19,8 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	matypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
 	jobsutils "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/utils"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 )
 

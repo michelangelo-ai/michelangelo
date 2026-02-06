@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // Registrar manages plugin registration and retrieval

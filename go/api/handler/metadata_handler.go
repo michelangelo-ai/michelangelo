@@ -6,7 +6,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

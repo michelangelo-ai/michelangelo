@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	testpb "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto"
+	testpb "github.com/michelangelo-ai/michelangelo/proto-go/test/kubeproto"
 
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
 

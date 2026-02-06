@@ -17,8 +17,8 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	pipelinerunutils "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/actors/utils"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 const (

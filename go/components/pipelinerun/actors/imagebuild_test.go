@@ -12,8 +12,8 @@ import (
 
 	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	pipelinerunutils "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/actors/utils"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 func TestImageBuildActor(t *testing.T) {

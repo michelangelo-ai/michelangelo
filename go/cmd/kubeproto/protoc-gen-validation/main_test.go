@@ -10,7 +10,7 @@ import (
 
 	"github.com/dave/dst/decorator"
 
-	testpb "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto"
+	testpb "github.com/michelangelo-ai/michelangelo/proto-go/test/kubeproto"
 
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/types/pluginpb"

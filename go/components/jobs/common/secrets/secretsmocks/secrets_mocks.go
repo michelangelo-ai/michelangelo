@@ -10,7 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	secrets "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/secrets"
-	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 

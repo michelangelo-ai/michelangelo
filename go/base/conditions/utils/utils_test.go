@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	api "github.com/michelangelo-ai/michelangelo/proto/api"
+	api "github.com/michelangelo-ai/michelangelo/proto-go/api"
 )
 
 func TestGenerateUnknownCondition(t *testing.T) {

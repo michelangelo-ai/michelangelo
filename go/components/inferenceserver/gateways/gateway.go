@@ -12,7 +12,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/endpointregistry"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 var _ Gateway = &gateway{}

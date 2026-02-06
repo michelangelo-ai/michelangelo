@@ -3,14 +3,14 @@ package trigger
 import (
 	"testing"
 
-	"mock/github.com/michelangelo-ai/michelangelo/proto/api/v2/v2mock"
+	"mock/github.com/michelangelo-ai/michelangelo/proto-go/api/v2/v2mock"
 
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/cadence-workflow/starlark-worker/test/types"
 	"github.com/golang/mock/gomock"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/trigger/parameter"
-	"github.com/michelangelo-ai/michelangelo/proto/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	"github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

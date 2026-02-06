@@ -6,7 +6,7 @@ import (
 	"github.com/go-logr/logr"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // Plugin is the interface that all Deployment plugins must implement. The deployment controller will

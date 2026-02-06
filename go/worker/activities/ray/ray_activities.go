@@ -14,7 +14,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 var Activities = (*activities)(nil)

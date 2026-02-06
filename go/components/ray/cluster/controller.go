@@ -24,8 +24,8 @@ import (
 	matypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
 	jobsutils "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/scheduler"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 const (

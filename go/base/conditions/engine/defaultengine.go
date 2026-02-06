@@ -12,7 +12,7 @@ import (
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
-	api "github.com/michelangelo-ai/michelangelo/proto/api"
+	api "github.com/michelangelo-ai/michelangelo/proto-go/api"
 )
 
 const (

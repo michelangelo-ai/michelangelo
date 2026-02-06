@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"

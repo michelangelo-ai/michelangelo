@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 222.17 144">
+  <defs>
+    <style>
+      .cls-1, .cls-2 {
+        fill: none;
+        stroke: #fff;
+        stroke-miterlimit: 10;
+      }
+
+      .cls-2 {
+        filter: url(#drop-shadow-1);
+      }
+
+      .cls-3 {
+        fill: #fff;
+      }
+    </style>
+    <filter id="drop-shadow-1" x="130.29" y="0" width="70" height="144" filterUnits="userSpaceOnUse">
+      <feOffset dx="5.67" dy="7"/>
+      <feGaussianBlur result="blur" stdDeviation="5"/>
+      <feFlood flood-color="#000" flood-opacity=".5"/>
+      <feComposite in2="blur" operator="in"/>
+      <feComposite in="SourceGraphic"/>
+    </filter>
+  </defs>
+  <g id="Layer_2-2" data-name="Layer 2">
+    <g>
+      <rect class="cls-1" x="70.95" y="8.88" width="37.74" height="112.02"/>
+      <polygon class="cls-3" points="109.03 8.36 64.26 8.36 0 121.74 44.98 121.74 109.03 8.36"/>
+      <polyline class="cls-1" points="178.78 79.8 220.95 80 178.75 121.06"/>
+      <rect class="cls-2" x="140.87" y="8.88" width="37.74" height="112.02"/>
+      <polygon class="cls-3" points="179.74 8.36 134.97 8.36 70.71 121.74 115.68 121.74 179.74 8.36"/>
+    </g>
+  </g>
+</svg>

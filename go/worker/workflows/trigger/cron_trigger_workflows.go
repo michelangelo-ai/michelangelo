@@ -12,8 +12,8 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/utils"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/trigger"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/trigger/parameter"
-	api "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	api "github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.uber.org/zap"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

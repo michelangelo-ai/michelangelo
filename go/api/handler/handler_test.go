@@ -9,14 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gogo/protobuf/types"
 	"github.com/golang/mock/gomock"
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
 	"github.com/michelangelo-ai/michelangelo/go/storage/storagemocks"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/uber-go/tally"
 	"go.uber.org/zap"
@@ -76,7 +75,6 @@ var (
 				Tier:        3,
 				GitRepo:     "repo",
 				RootDir:     "root",
-				Ext:         &types.Any{},
 			},
 		},
 	}
@@ -825,7 +823,6 @@ func TestUpdateDryRun(t *testing.T) {
 				Tier:        3,
 				GitRepo:     "repo",
 				RootDir:     "root",
-				Ext:         &types.Any{},
 			},
 		}
 		err = handler.Create(context.Background(), testProject, &metav1.CreateOptions{})

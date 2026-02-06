@@ -7,7 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // TargetClusterConnection contains the connection details for a Kubernetes cluster

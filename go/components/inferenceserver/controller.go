@@ -47,7 +47,7 @@ import (
 	defaultengine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // Reconciler reconciles InferenceServer custom resources and manages their lifecycle.

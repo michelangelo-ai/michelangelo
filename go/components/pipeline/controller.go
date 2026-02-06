@@ -21,8 +21,8 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -72,7 +72,22 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		Namespace: pipeline.Namespace,
 	}
 	pipeline.Status.State = v2pb.PIPELINE_STATE_READY
-	return r.updatePipelineStatus(ctx, pipeline, originalPipeline, logger)
+
+	// Emit metrics for pipeline becoming ready
+	if originalPipeline.Status.State != v2pb.PIPELINE_STATE_READY && pipeline.Status.State == v2pb.PIPELINE_STATE_READY {
+		IncPipelineReady(pipeline.Namespace, pipeline.Name, pipeline.Spec.Type.String())
+	}
+
+	result, err := r.updatePipelineStatus(ctx, pipeline, originalPipeline, logger)
+
+	// Emit reconciliation metrics
+	if err != nil {
+		IncPipelineReconcileError(pipeline.Namespace, pipeline.Name)
+	} else if pipeline.Status.State == v2pb.PIPELINE_STATE_READY {
+		IncPipelineReconcileSuccess(pipeline.Namespace, pipeline.Name)
+	}
+
+	return result, err
 }
 
 // updatePipelineStatus persists pipeline status changes to Kubernetes.

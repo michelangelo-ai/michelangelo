@@ -12,8 +12,8 @@ import (
 	actorCommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	strategiesCommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // getRollingActors returns actors for rolling rollout strategy

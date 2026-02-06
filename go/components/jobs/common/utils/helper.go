@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 )

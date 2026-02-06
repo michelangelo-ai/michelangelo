@@ -8,7 +8,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/secrets"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/secrets/secretsmocks"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

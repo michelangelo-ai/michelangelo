@@ -37,7 +37,7 @@ go_proto_library(
         "//bazel/rules/proto:go_validation",
         "//bazel/rules/proto:go_kubeproto_unittest",
     ],
-    importpath = "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto",
+    importpath = "github.com/michelangelo-ai/michelangelo/proto-go/test/kubeproto",
     proto = ":kubeproto_proto",
     visibility = ["//visibility:public"],
     deps = [
@@ -51,6 +51,6 @@ go_proto_library(
 go_library(
     name = "go_default_library",
     embed = [":kubeproto_go_proto"],
-    importpath = "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto",
+    importpath = "github.com/michelangelo-ai/michelangelo/proto-go/test/kubeproto",
     visibility = ["//visibility:public"],
 )

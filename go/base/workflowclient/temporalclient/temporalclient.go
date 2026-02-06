@@ -47,12 +47,17 @@ var _ clientInterface.WorkflowClient = &TemporalClient{}
 
 // StartWorkflow starts a new workflow
 func (c *TemporalClient) StartWorkflow(ctx context.Context, options clientInterface.StartWorkflowOptions, workflowName string, args ...interface{}) (*clientInterface.WorkflowExecution, error) {
+	// If CronSchedule is provided, create a Temporal Schedule instead of a cron workflow
+	if options.CronSchedule != "" {
+		return c.createScheduleForCron(ctx, options, workflowName, args...)
+	}
+
 	startWorkflowOptions := temporalClient.StartWorkflowOptions{
 		ID:                       options.ID,
 		TaskQueue:                options.TaskList,
 		WorkflowExecutionTimeout: options.ExecutionStartToCloseTimeout,
 		WorkflowTaskTimeout:      options.DecisionTaskStartToCloseTimeout,
-		CronSchedule:             options.CronSchedule,
+		// No CronSchedule - this is a regular workflow
 	}
 	// This is a workaround for Grab Temporal demo
 	_args := make([]any, len(args))
@@ -75,6 +80,65 @@ func (c *TemporalClient) StartWorkflow(ctx context.Context, options clientInterf
 	return &clientInterface.WorkflowExecution{
 		ID:    workflowExecution.GetID(),
 		RunID: workflowExecution.GetRunID(),
+	}, nil
+}
+
+// createScheduleForCron creates a Temporal Schedule when a cron expression is provided in StartWorkflow
+func (c *TemporalClient) createScheduleForCron(ctx context.Context, options clientInterface.StartWorkflowOptions, workflowName string, args ...interface{}) (*clientInterface.WorkflowExecution, error) {
+	// Generate a schedule ID based on the workflow ID
+	scheduleID := options.ID + "-schedule"
+
+	// Schedule should always fire when cron time is met
+	// The trigger workflow itself will handle maxConcurrency logic for pipeline runs
+	overlapPolicy := temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_SKIP
+
+	// Log the configuration for debugging
+	fmt.Printf("[TemporalClient] Creating schedule %s with overlapPolicy=%v (trigger workflow handles maxConcurrency)\n",
+		scheduleID, overlapPolicy)
+
+	// Check if schedule already exists
+	scheduleHandle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
+	if scheduleHandle != nil {
+		_, err := scheduleHandle.Describe(ctx)
+		if err == nil {
+			// Schedule already exists, return success
+			return &clientInterface.WorkflowExecution{
+				ID:    scheduleID,
+				RunID: "", // Schedules don't have runIDs
+			}, nil
+		}
+	}
+
+	// Create Temporal Schedule
+	scheduleOptions := temporalClient.ScheduleOptions{
+		ID: scheduleID,
+		Spec: temporalClient.ScheduleSpec{
+			CronExpressions: []string{options.CronSchedule},
+		},
+		Action: &temporalClient.ScheduleWorkflowAction{
+			ID:        options.ID,
+			Workflow:  workflowName,
+			TaskQueue: options.TaskList,
+			Args:      args,
+		},
+		Overlap:        overlapPolicy, // Use extracted policy based on maxConcurrency
+		PauseOnFailure: false,
+	}
+
+	// Set workflow timeout if provided
+	if options.ExecutionStartToCloseTimeout > 0 {
+		scheduleOptions.Action.(*temporalClient.ScheduleWorkflowAction).WorkflowExecutionTimeout = options.ExecutionStartToCloseTimeout
+	}
+
+	// Create the schedule
+	_, err := c.Client.ScheduleClient().Create(ctx, scheduleOptions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Temporal schedule: %w", err)
+	}
+
+	return &clientInterface.WorkflowExecution{
+		ID:    scheduleID,
+		RunID: "", // Schedules don't have runIDs
 	}, nil
 }
 

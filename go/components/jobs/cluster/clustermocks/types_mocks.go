@@ -9,7 +9,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	cluster "github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
-	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // MockRegisteredClustersCache is a mock of RegisteredClustersCache interface.

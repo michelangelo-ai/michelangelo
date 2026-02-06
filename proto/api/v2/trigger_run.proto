@@ -21,7 +21,6 @@ option go_package = "v2";
 
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/duration.proto";
-import "google/protobuf/any.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
 import "michelangelo/api/v2/parameter.proto";
@@ -169,9 +168,6 @@ message TriggerRunSpec {
   // - Notification channel (email, slack, webhook)
   // - Recipients and message template
   repeated Notification notifications = 10;
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 // BatchRerun defines configuration for rerunning multiple failed pipeline runs.
@@ -238,9 +234,6 @@ message TriggerRunStatus {
 
   // log_url for the trigger_run
   string log_url = 4;
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 // Defines a trigger run resource that represents an execution of a pipeline:

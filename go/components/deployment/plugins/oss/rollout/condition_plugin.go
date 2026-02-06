@@ -11,8 +11,8 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 var _ conditionInterfaces.Plugin[*v2pb.Deployment] = &conditionPlugin{}

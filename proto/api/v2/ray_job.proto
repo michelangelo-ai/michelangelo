@@ -21,7 +21,6 @@ package michelangelo.api.v2;
 option go_package = "v2";
 
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
-import "google/protobuf/any.proto";
 import "michelangelo/api/options.proto";
 import "michelangelo/api/conditions.proto";
 import "michelangelo/api/v2/user.proto";
@@ -56,9 +55,6 @@ message RayJobSpec {
       type: "michelangelo.uber.com/RayCluster"
     }
   ];
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 // Enum representing the various states of a Ray job
@@ -125,9 +121,6 @@ message RayJobStatus {
 
   // Conditions that describe the states.
   repeated Condition status_conditions = 9;
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 // Represents a Ray job and its specifications

@@ -11,8 +11,8 @@ import (
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/ray"
-	"github.com/michelangelo-ai/michelangelo/proto/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	"github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/yarpc/yarpcerrors"
 )

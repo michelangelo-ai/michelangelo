@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"go.uber.org/fx"
 	"k8s.io/apimachinery/pkg/runtime"

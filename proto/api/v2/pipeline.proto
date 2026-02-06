@@ -190,9 +190,6 @@ message PipelineSpec {
 
   // Notifications settings for the pipeline.
   repeated Notification notifications = 9;
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 // Describes the state of a pipeline resource:
@@ -266,9 +263,6 @@ message PipelineStatus {
   // - Resource configuration issues
   // This helps users diagnose and fix pipeline build problems.
   string error_message = 6;
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 // Pipeline defines a machine learning pipeline resource that encapsulates:

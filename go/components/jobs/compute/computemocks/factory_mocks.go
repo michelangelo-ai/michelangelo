@@ -9,7 +9,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	compute "github.com/michelangelo-ai/michelangelo/go/components/jobs/compute"
-	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // MockFactory is a mock of Factory interface.

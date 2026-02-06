@@ -486,6 +486,33 @@ def _setup_temporal(links, helm_existing_repos):
         )
         _exec("helm", "repo", "update")
 
+    # Wait for MySQL to be ready before installing Temporal
+    print("Waiting for MySQL to be ready...")
+    _exec(
+        "kubectl",
+        "wait",
+        "--for=condition=ready",
+        "pod",
+        "mysql",
+        "--timeout=300s",
+    )
+
+    # Wait for MySQL to accept connections
+    print("Waiting for MySQL to accept connections...")
+    _exec(
+        "kubectl",
+        "exec",
+        "mysql",
+        "--",
+        "mysqladmin",
+        "ping",
+        "-u",
+        "root",
+        "-proot",
+        "--silent",
+        "--wait",
+    )
+
     values_file = _dir / "resources" / "temporal.mysql.yaml"
 
     _exec(
@@ -512,16 +539,214 @@ def _setup_temporal(links, helm_existing_repos):
         "wait",
         "--for=condition=available",
         "deployment",
-        "--selector=!job-name",
-        "--all",
+        "-l",
+        "app",
         "--timeout=600s",
     )
 
-    # Register the default namespace in Temporal
+    print("Waiting for Temporal admin tools to be ready...")
+    _exec(
+        "kubectl",
+        "wait",
+        "--for=condition=ready",
+        "pod",
+        "-l",
+        "app.kubernetes.io/component=admintools,app.kubernetes.io/instance=temporaltest",
+        "--timeout=300s",
+    )
+
+    print("Creating database schemas via Temporal admin tools...")
+
+    # Create both temporal databases explicitly
+    print("Creating temporal and temporal_visibility databases...")
     _exec(
         "kubectl",
         "exec",
-        "deploy/temporaltest-admintools",
+        "mysql",
+        "--",
+        "mysql",
+        "-u",
+        "root",
+        "-proot",
+        "-e",
+        "CREATE DATABASE IF NOT EXISTS temporal;",
+    )
+    _exec(
+        "kubectl",
+        "exec",
+        "mysql",
+        "--",
+        "mysql",
+        "-u",
+        "root",
+        "-proot",
+        "-e",
+        "CREATE DATABASE IF NOT EXISTS temporal_visibility;",
+    )
+
+    # Setup temporal database schema
+    print("Setting up temporal database schema...")
+    _exec(
+        "kubectl",
+        "exec",
+        "deployment/temporaltest-admintools",
+        "--",
+        "env",
+        "MYSQL_HOST=mysql",
+        "MYSQL_PORT=3306",
+        "MYSQL_USER=root",
+        "MYSQL_PWD=root",
+        "temporal-sql-tool",
+        "--endpoint",
+        "mysql",
+        "--port",
+        "3306",
+        "--user",
+        "root",
+        "--password",
+        "root",
+        "--database",
+        "temporal",
+        "setup-schema",
+        "-v",
+        "0.0",
+    )
+    _exec(
+        "kubectl",
+        "exec",
+        "deployment/temporaltest-admintools",
+        "--",
+        "env",
+        "MYSQL_HOST=mysql",
+        "MYSQL_PORT=3306",
+        "MYSQL_USER=root",
+        "MYSQL_PWD=root",
+        "temporal-sql-tool",
+        "--endpoint",
+        "mysql",
+        "--port",
+        "3306",
+        "--user",
+        "root",
+        "--password",
+        "root",
+        "--database",
+        "temporal",
+        "update-schema",
+        "-d",
+        "/etc/temporal/schema/mysql/v8/temporal/versioned",
+    )
+
+    # Setup temporal visibility database schema
+    print("Setting up temporal_visibility database schema...")
+    _exec(
+        "kubectl",
+        "exec",
+        "deployment/temporaltest-admintools",
+        "--",
+        "env",
+        "MYSQL_HOST=mysql",
+        "MYSQL_PORT=3306",
+        "MYSQL_USER=root",
+        "MYSQL_PWD=root",
+        "temporal-sql-tool",
+        "--endpoint",
+        "mysql",
+        "--port",
+        "3306",
+        "--user",
+        "root",
+        "--password",
+        "root",
+        "--database",
+        "temporal_visibility",
+        "setup-schema",
+        "-v",
+        "0.0",
+    )
+    _exec(
+        "kubectl",
+        "exec",
+        "deployment/temporaltest-admintools",
+        "--",
+        "env",
+        "MYSQL_HOST=mysql",
+        "MYSQL_PORT=3306",
+        "MYSQL_USER=root",
+        "MYSQL_PWD=root",
+        "temporal-sql-tool",
+        "--endpoint",
+        "mysql",
+        "--port",
+        "3306",
+        "--user",
+        "root",
+        "--password",
+        "root",
+        "--database",
+        "temporal_visibility",
+        "update-schema",
+        "-d",
+        "/etc/temporal/schema/mysql/v8/visibility/versioned",
+    )
+
+    print("Database schemas created. Restarting Temporal...")
+    # Restart Temporal to apply the schemas
+    _exec("helm", "uninstall", "temporaltest")
+    _exec(
+        "helm",
+        "install",
+        "temporaltest",
+        "temporal",
+        "--repo",
+        "https://go.temporal.io/helm-charts",
+        "-f",
+        str(values_file),
+        "--set",
+        "elasticsearch.enabled=false",
+        "--set",
+        "prometheus.enabled=false",
+        "--set",
+        "grafana.enabled=false",
+    )
+
+    _exec(
+        "kubectl",
+        "-n",
+        "default",
+        "wait",
+        "--for=condition=available",
+        "deployment",
+        "-l",
+        "app",
+        "--timeout=600s",
+    )
+
+    # Wait for admin tools to be fully ready and get specific pod name
+    print("Waiting for admin tools to be ready for commands...")
+    time.sleep(10)  # Increased wait time
+
+    # Get the specific admin tools pod name for more reliable exec
+    admin_pod_result = subprocess.check_output(
+        [
+            "kubectl",
+            "get",
+            "pod",
+            "-l",
+            "app.kubernetes.io/component=admintools,app.kubernetes.io/instance=temporaltest",
+            "-o",
+            "jsonpath={.items[0].metadata.name}",
+        ],
+        text=True,
+    ).strip()
+
+    # Register the default namespace in Temporal using specific pod name
+    _exec(
+        "kubectl",
+        "exec",
+        admin_pod_result,
+        "-c",
+        "admin-tools",
         "--",
         "tctl",
         "--address",
@@ -683,13 +908,14 @@ def _kube_apply(path: Path):
 
 def _kube_wait(pods: bool = True, jobs: bool = True):
     if pods:
+        # Wait for all non-job pods to be ready
         _exec(
             "kubectl",
             "wait",
-            "--all",
-            "pods",
             "--for=condition=ready",
-            "--selector=!job-name",
+            "pod",
+            "-l",
+            "app",
             "--timeout=600s",
         )
     if jobs:

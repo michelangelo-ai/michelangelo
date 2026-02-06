@@ -123,9 +123,6 @@ message PipelineRunSpec {
   // Pipeline spec for pipeline dev run.
   // When specified, the pipeline run controller will use the following pipeline spec to run the pipeline.
   PipelineSpec pipeline_spec = 12;
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 // PipelineRunState represents the current execution state of a pipeline run.
@@ -279,9 +276,6 @@ message PipelineRunStatus {
 
   // The ID of the workflow execution for this pipeline run.
   string workflow_run_id = 13;
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 // PipelineRunExceptionType indicates the category of failure for a failed PipelineRun.

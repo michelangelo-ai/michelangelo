@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"sigs.k8s.io/controller-runtime/pkg/conversion"
 
-	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	v2alpha1 "github.com/michelangelo-ai/michelangelo/proto/test/api/v2alpha1"
+	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	v2alpha1 "github.com/michelangelo-ai/michelangelo/proto-go/test/api/v2alpha1"
 )
 
 // ============================================================================
@@ -18,7 +18,7 @@ import (
 // This represents a spoke version with:
 // - [DEMO CHANGE 3] Renamed field: project_description (instead of description)
 // - [DEMO CHANGE 4] Spoke-only field: legacy_alpha_config
-// - [DEMO CHANGE 1,2,5,6] Missing fields: type_info, ext, last_update_time (excluded due to type incompatibility)
+// - [DEMO CHANGE 1,2,5,6] Missing fields: type_info, last_update_time (excluded due to type incompatibility)
 func createTestV2Alpha1Project() *v2alpha1.Project {
 	return &v2alpha1.Project{
 		Spec: v2alpha1.ProjectSpec{
@@ -85,14 +85,12 @@ func createTestV2Project() *v2.Project {
 				NotificationControl: v2.NOTIFICATION_CONTROL_PROJECT_OWNER_ONLY,
 			},
 			TypeInfo: nil, // [DEMO CHANGE 1] Hub-only field (not in v2alpha1)
-			Ext:      nil, // [DEMO CHANGE 2] Excluded due to type incompatibility
 		},
 		Status: v2.ProjectStatus{
 			State:          v2.PROJECT_STATE_READY,
 			Phase:          v2.PROJECT_PHASE_DEVELOPMENT,
 			ErrorMessage:   "",
 			LastUpdateTime: nil, // [DEMO CHANGE 6] Excluded due to type incompatibility
-			Ext:            nil, // [DEMO CHANGE 5] Excluded due to type incompatibility
 		},
 	}
 }
@@ -129,15 +127,12 @@ func createTestV2ProjectWithHubOnlyFields() *v2.Project {
 				IsCoreMl:       true,
 				IsGenerativeAi: false,
 			},
-			// [DEMO CHANGE 2] Type incompatibility field - not set to avoid issues
-			Ext: nil,
 		},
 		Status: v2.ProjectStatus{
 			State:          v2.PROJECT_STATE_READY,
 			Phase:          v2.PROJECT_PHASE_PRODUCTION,
 			ErrorMessage:   "hub status message",
 			LastUpdateTime: nil, // [DEMO CHANGE 6] Type incompatibility - not set
-			Ext:            nil, // [DEMO CHANGE 5] Type incompatibility - not set
 		},
 	}
 }
@@ -178,7 +173,7 @@ func createExpectedV2Alpha1FromHub() *v2alpha1.Project {
 			State:        v2alpha1.PROJECT_STATE_READY,
 			Phase:        v2alpha1.PROJECT_PHASE_PRODUCTION,
 			ErrorMessage: "hub status message",
-			// Note: LastUpdateTime and Ext are not in v2alpha1 (type incompatibility)
+			// Note: LastUpdateTime is not in v2alpha1 (type incompatibility)
 		},
 	}
 }
@@ -204,10 +199,11 @@ func TestProjectConversion(t *testing.T) {
 // TestProjectConvertToHub tests conversion from v2alpha1 (spoke) to v2 (hub).
 //
 // Test Flow:
-//   Input:    v2alpha1.Project (spoke)
-//   Convert:  v2alpha1 → v2 (using ConvertTo)
-//   Expected: v2.Project (hub)
-//   Verify:   actual == expected
+//
+//	Input:    v2alpha1.Project (spoke)
+//	Convert:  v2alpha1 → v2 (using ConvertTo)
+//	Expected: v2.Project (hub)
+//	Verify:   actual == expected
 //
 // Demo Changes Tested:
 // - [DEMO CHANGE 3] Field rename: project_description → description
@@ -233,10 +229,11 @@ func TestProjectConvertToHub(t *testing.T) {
 // TestProjectConvertFromHub tests conversion from v2 (hub) to v2alpha1 (spoke).
 //
 // Test Flow:
-//   Input:    v2.Project (hub) with hub-only fields
-//   Convert:  v2 → v2alpha1 (using ConvertFrom)
-//   Expected: v2alpha1.Project (spoke) without hub-only fields
-//   Verify:   actual == expected
+//
+//	Input:    v2.Project (hub) with hub-only fields
+//	Convert:  v2 → v2alpha1 (using ConvertFrom)
+//	Expected: v2alpha1.Project (spoke) without hub-only fields
+//	Verify:   actual == expected
 //
 // Demo Changes Tested:
 // - [DEMO CHANGE 3] Field rename: description → project_description
@@ -264,10 +261,11 @@ func TestProjectConvertFromHub(t *testing.T) {
 // TestProjectRoundTripConversion tests bidirectional conversion: v2alpha1 → v2 → v2alpha1.
 //
 // Test Flow:
-//   Start:    v2alpha1.Project (spoke) with spoke-only field
-//   Step 1:   v2alpha1 → v2 (spoke to hub, loses legacy_alpha_config)
-//   Step 2:   v2 → v2alpha1 (hub back to spoke)
-//   Verify:   final == start (except spoke-only field is lost)
+//
+//	Start:    v2alpha1.Project (spoke) with spoke-only field
+//	Step 1:   v2alpha1 → v2 (spoke to hub, loses legacy_alpha_config)
+//	Step 2:   v2 → v2alpha1 (hub back to spoke)
+//	Verify:   final == start (except spoke-only field is lost)
 //
 // Demo Changes Tested:
 // - [DEMO CHANGE 4] Spoke-only field is lost during round-trip (expected behavior)

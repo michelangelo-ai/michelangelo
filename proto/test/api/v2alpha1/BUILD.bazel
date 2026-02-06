@@ -17,7 +17,6 @@ proto_library(
     deps = [
         "//proto/api:api_proto",
         "//proto/api/v2:v2_proto",
-        "@com_google_protobuf//:any_proto",
         "@com_google_protobuf//:timestamp_proto",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:v1_proto",
     ],
@@ -30,7 +29,7 @@ go_proto_library(
         "//bazel/rules/proto:go_validation",
         "//bazel/rules/proto:go_kubeconversion",
     ],
-    importpath = "github.com/michelangelo-ai/michelangelo/proto/test/api/v2alpha1",
+    importpath = "github.com/michelangelo-ai/michelangelo/proto-go/test/api/v2alpha1",
     proto = ":v2alpha1_proto",
     visibility = ["//visibility:public"],
     deps = [
@@ -43,6 +42,6 @@ go_proto_library(
 go_library(
     name = "go_default_library",
     embed = [":v2alpha1_go_proto"],
-    importpath = "github.com/michelangelo-ai/michelangelo/proto/test/api/v2alpha1",
+    importpath = "github.com/michelangelo-ai/michelangelo/proto-go/test/api/v2alpha1",
     visibility = ["//visibility:public"],
 )

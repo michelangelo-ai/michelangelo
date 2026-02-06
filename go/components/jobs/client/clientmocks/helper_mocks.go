@@ -10,7 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	client "github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
-	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	rest "k8s.io/client-go/rest"
