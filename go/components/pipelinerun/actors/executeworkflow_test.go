@@ -2884,7 +2884,7 @@ func TestGetWorkflowUrl(t *testing.T) {
 			configSetup: map[string]interface{}{
 				"workflowClient": map[string]interface{}{
 					"taskList":          "default",
-					"workflowUrlFormat": "http://cadence-web:8080/domain/%s/workflows/%s",
+					"executionUrlFormat": "http://cadence-web:8080/domain/{{.Domain}}/workflows/{{.ExecutionID}}",
 					"domain":            "michelangelo",
 				},
 			},
@@ -2897,7 +2897,7 @@ func TestGetWorkflowUrl(t *testing.T) {
 			configSetup: map[string]interface{}{
 				"workflowClient": map[string]interface{}{
 					"taskList":          "custom-queue",
-					"workflowUrlFormat": "https://temporal-ui.prod:7243/namespaces/%s/workflows/%s",
+					"executionUrlFormat": "https://temporal-ui.prod:7243/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}",
 					"domain":            "production",
 				},
 			},
@@ -2922,7 +2922,7 @@ func TestGetWorkflowUrl(t *testing.T) {
 			configSetup: map[string]interface{}{
 				"workflowClient": map[string]interface{}{
 					"taskList":          "default",
-					"workflowUrlFormat": "http://localhost:8080/domain/%s/workflows/%s",
+					"executionUrlFormat": "http://localhost:8080/domain/{{.Domain}}/workflows/{{.ExecutionID}}",
 					"domain":            "default",
 				},
 			},
@@ -2935,7 +2935,7 @@ func TestGetWorkflowUrl(t *testing.T) {
 			configSetup: map[string]interface{}{
 				"workflowClient": map[string]interface{}{
 					"taskList":          "default",
-					"workflowUrlFormat": "http://cadence-web:8080/domain/%s/workflows/%s",
+					"executionUrlFormat": "http://cadence-web:8080/domain/{{.Domain}}/workflows/{{.ExecutionID}}",
 					"domain":            "test-domain",
 				},
 			},

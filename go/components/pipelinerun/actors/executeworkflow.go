@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gogo/protobuf/jsonpb"
@@ -234,11 +235,12 @@ func (a *ExecuteWorkflowActor) GetWorkflowUrl(name string) string {
 	}
 
 	// Check if the required configuration fields are present
-	if workflowConfig.WorkflowUrlFormat == "" || workflowConfig.Domain == "" {
+	if workflowConfig.ExecutionUrlFormat == "" || workflowConfig.Domain == "" {
 		return ""
 	}
 
-	return fmt.Sprintf(workflowConfig.WorkflowUrlFormat, workflowConfig.Domain, name)
+	url := strings.ReplaceAll(workflowConfig.ExecutionUrlFormat, "{{.Domain}}", workflowConfig.Domain)
+	return strings.ReplaceAll(url, "{{.ExecutionID}}", name)
 }
 
 // Run executes and monitors the workflow for a pipeline run.
