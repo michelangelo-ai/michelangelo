@@ -689,9 +689,7 @@ class MainFunctionTest(TestCase):
 
         # Verify Phase 3: Generate method and configure argparse
         mock_kebab_to_snake.assert_called_once_with("create")
-        mock_check_crd.assert_called_once_with(
-            ["create", "--name", "test"], mock_crd, "create"
-        )
+        mock_check_crd.assert_called_once_with(mock_crd, "create")
         mock_read_plugin_command.assert_called_once_with(
             mock_crd, "create", {"project": mock_crd}, mock_channel
         )
