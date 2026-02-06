@@ -1,10 +1,11 @@
 package actors
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
+	"text/template"
 	"time"
 
 	"github.com/gogo/protobuf/jsonpb"
@@ -239,8 +240,10 @@ func (a *ExecuteWorkflowActor) GetWorkflowUrl(name string) string {
 		return ""
 	}
 
-	url := strings.ReplaceAll(workflowConfig.ExecutionUrlFormat, "{{.Domain}}", workflowConfig.Domain)
-	return strings.ReplaceAll(url, "{{.ExecutionID}}", name)
+	tmpl, _ := template.New("url").Parse(workflowConfig.ExecutionUrlFormat)
+	var buf bytes.Buffer
+	tmpl.Execute(&buf, map[string]string{"Domain": workflowConfig.Domain, "ExecutionID": name})
+	return buf.String()
 }
 
 // Run executes and monitors the workflow for a pipeline run.
