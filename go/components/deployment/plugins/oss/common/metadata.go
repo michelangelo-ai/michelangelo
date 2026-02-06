@@ -7,7 +7,7 @@ import (
 	"github.com/gogo/protobuf/types"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 )
 
 // Cluster states used by rollout, cleanup, and rollback actors

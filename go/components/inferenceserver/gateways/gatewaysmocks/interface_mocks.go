@@ -9,12 +9,9 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	zap "go.uber.org/zap"
-
-	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
-
 	gateways "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
-	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	zap "go.uber.org/zap"
 )
 
 // MockGateway is a mock of Gateway interface.

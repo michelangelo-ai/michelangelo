@@ -1,7 +1,7 @@
 package common
 
 import (
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // GetTargetClusters returns the target clusters for a given deployment strategy.

@@ -10,8 +10,9 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
+
+	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // MockClientFactory is a mock of ClientFactory interface.

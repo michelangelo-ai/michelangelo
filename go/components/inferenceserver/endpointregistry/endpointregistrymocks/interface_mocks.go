@@ -9,9 +9,10 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	endpointregistry "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/endpointregistry"
-	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	zap "go.uber.org/zap"
+
+	endpointregistry "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/endpointregistry"
+	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // MockEndpointRegistry is a mock of EndpointRegistry interface.
