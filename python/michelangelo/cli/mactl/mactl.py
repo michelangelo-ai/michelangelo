@@ -386,7 +386,7 @@ def main(channel: Channel):
 
     # Phase 3: Generate method + configure argparse
     user_command_action = kebab_to_snake(remaining[0])
-    check_crd(remaining, crds[user_command_crd], user_command_action)
+    check_crd(crds[user_command_crd], user_command_action)
 
     # Load target function plugin
     read_plugin_command(
