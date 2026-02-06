@@ -65,4 +65,4 @@ data:
       transport: grpc
       domain: default
       taskList: default
-      workflowUrlFormat: http://localhost:8088/namespaces/%s/workflows/%s
+      executionUrlFormat: http://localhost:8088/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}
