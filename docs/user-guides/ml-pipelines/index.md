@@ -1,4 +1,6 @@
-# 1. Introduction
+# Uniflow User Guide
+
+## 1. Introduction
 
 **Uniflow** is a human-friendly Python framework designed to build and run resilient Data and Machine Learning (ML) workflows.
 
@@ -109,7 +111,7 @@ Similarly, we can integrate with various Uber services (e.g., Flipr, QueryRunner
 
 Built-ins, along with tasks, form what's known as the Unified Framework. This framework allows developers to seamlessly integrate both resource-intensive processes and lightweight transactional operations into a single, cohesive workflow. Here is what an end-to-end model retraining workflow can look like from the perspective of tasks and built-ins:
 
-*[Image Coming Soon]*
+*[TODO: Add unified framework workflow diagram]*
 
 ## Context
 

@@ -1,4 +1,4 @@
-# Introduction
+# Michelangelo Jobs
 
 Michelangelo provides a unified way to run large-scale data processing and ML training jobs on Kubernetes, using **Ray** and **Spark** as execution engines. This guide explains *the core concepts*, how jobs run, compute is allocated, and how users interact with the system.
 
@@ -19,7 +19,7 @@ You focus on the job logic; Michelangelo manages the infrastructure.
 
 The image below displays the Michelangelo (MA) architecture for running Spark and Ray batch jobs end-to-end: submission, scheduling, execution, and reporting.
 
-<img width="687" height="673" alt="Screenshot 2026-01-08 at 12 31 13 PM" src="https://github.com/user-attachments/assets/4dc5cf1d-aefc-430a-9d67-31b2b8f55e5e" />
+![Job Controller Flow](./images/job-controller-flow.png)
 
 ## **How Jobs Run**
 
