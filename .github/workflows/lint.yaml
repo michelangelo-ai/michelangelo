@@ -122,6 +122,12 @@ jobs:
             const hasFormatIssues = formatLines > 1;
             const hasLintIssues = lintLines > 1;
 
+            // Only comment if there are issues
+            if (!hasFormatIssues && !hasLintIssues) {
+              console.log("No linting or formatting issues detected. Skipping comment.");
+              return;
+            }
+
             let body = "### 🛠 Ruff Check & Format Results\n";
 
             if (hasFormatIssues) {
@@ -135,11 +141,7 @@ jobs:
               body += "<details>\n<summary>Show details</summary>\n\n```\n" + lintOutput + "\n```\n</details>\n";
             }
 
-            if (hasFormatIssues || hasLintIssues) {
-              body += "\n🛠 Run `poetry install -E dev` to set up pre-commit hooks and apply fixes locally. (or run `poetry run pre-commit` before run git commit)";
-            } else {
-              body += "\n✅ No formatting or linting issues detected!";
-            }
+            body += "\n🛠 Run `poetry install -E dev` to set up pre-commit hooks and apply fixes locally. (or run `poetry run pre-commit` before run git commit)";
 
             github.rest.issues.createComment({
               issue_number: pr_number,
