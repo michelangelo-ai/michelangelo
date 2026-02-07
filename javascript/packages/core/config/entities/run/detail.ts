@@ -77,6 +77,13 @@ export const RUN_DETAIL_CONFIG: DetailViewConfig = {
                 6: 'gray',
               },
             },
+            {
+              id: 'retry',
+              label: 'Actions',
+              type: CellType.RETRY,
+              accessor: (record: any) => record?.activityId ? record : null, // Only pass record if activityId exists
+              hideEmpty: true, // Hide the column when no retry buttons are shown
+            },
           ],
         },
         body: [
