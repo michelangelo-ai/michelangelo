@@ -2,36 +2,35 @@
 
 This guide describes how to configure **Michelangelo server components** in Kubernetes cluster. It focuses on the **configuration surfaces** (ConfigMaps, fields, and key parameters).
 
-# overview
+# Overview
 
 Michelangelo consists of four core server components:
 
-1. **API Server** – Central gRPC API  
-2. **Controller Manager** – Kubernetes controllers  
-3. **Worker** – Workflow execution (Temporal workers \+ compute integration)  
-4. **UI \+ Envoy** – Frontend and proxy
+1. **API Server** – Central gRPC API
+2. **Controller Manager** – Kubernetes controllers
+3. **Worker** – Workflow execution (Temporal workers + compute integration)
+4. **UI + Envoy** – Frontend and proxy
 
 Each component exposes server-side configuration through ConfigMaps and overlays.
 
 This document explains:
 
-* Where each component’s configuration lives  
-* What fields can be customized  
-* What each field means  
+* Where each component's configuration lives
+* What fields can be customized
+* What each field means
 * How to apply changes using Kustomize overlays
 
 # Michelangelo Service architecture diagram
 
 The following diagram shows the relationship between each of the services in Michelangelo eco-system.
 
-<img width="791" height="690" alt="Screenshot 2026-01-08 at 11 43 07 AM" src="https://github.com/user-attachments/assets/8d39767f-a750-44de-ab67-8663cc9d8aeb" />
-
+![Michelangelo Service Architecture](./images/ma-service-architecture.png)
 
 # Server Configuration
 
 ## API Server Configuration
 
-### Key Fields
+### **Key Fields**
 
 ```yaml
 apiserver:
@@ -48,19 +47,19 @@ apiserver:
     enableIncompatibleUpdate: false
 ```
 
-### Field Explanations
+### **Field Explanations**
 
 | Field | Description |
 | ----- | ----- |
-| `yarpc.host/port` | gRPC bind address \+ port |
+| `yarpc.host/port` | gRPC bind address + port |
 | `k8s.qps/burst` | Throttling limits for Kubernetes API calls |
 | `enableMetadataStorage` | Enables metadata persistence |
-| `enableCRDUpdate` | Controls whether CRDs can be sync’d |
+| `enableCRDUpdate` | Controls whether CRDs can be sync'd |
 | `enableIncompatibleUpdate` | Allows breaking CRD changes (use only during major migrations) |
 
 ## Controller Manager Configuration
 
-### Key Fields
+### **Key Fields**
 
 ```yaml
 controllermgr:
@@ -87,7 +86,7 @@ workflowClient:
   domain: uniflow
 ```
 
-### Field Explanations
+### **Field Explanations**
 
 | Field | Description |
 | ----- | ----- |
@@ -96,11 +95,11 @@ workflowClient:
 | `leaderElection` | Enable for production HA |
 | `minio.*` | S3 / MinIO backend configuration |
 | `workflowClient.*` | Temporal client configuration |
-| `controllers.*` | Each controller components’ configuration |
+| `controllers.*` | Each controller components' configuration |
 
 ## Worker Configuration
 
-### Key Fields
+### **Key Fields**
 
 ```yaml
 worker:
@@ -124,7 +123,7 @@ workflow-engine:
     domain: uniflow
 ```
 
-### Field Explanations
+### **Field Explanations**
 
 | Field | Description |
 | ----- | ----- |
@@ -135,7 +134,7 @@ workflow-engine:
 
 ## UI & Envoy Configuration
 
-### Envoy Proxy
+### **Envoy Proxy**
 
 **ConfigMap:**
 
@@ -157,14 +156,15 @@ static_resources:
                       port_value: 14566
 ```
 
-### Public UI Config
+### **Public UI Config**
 
 **ConfigMap:**
 
 ```json
-{
-  "apiBaseUrl": "https://michelangelo-envoy.<your-domain>"
-}
+config.json: |
+  {
+    "apiBaseUrl": "https://michelangelo-envoy.<your-domain>"
+  }
 ```
 
 ## Environment Overrides / Domain Settings
@@ -194,16 +194,16 @@ minio:
   useIam: true                # Use IAM roles for authentication
 ```
 
-### Fields
+### **Fields**
 
-* `awsRegion` – The AWS region of your S3 bucket.  
-* `awsEndpointUrl` – S3 endpoint (`s3.amazonaws.com` or regional endpoint).  
+* `awsRegion` – The AWS region of your S3 bucket.
+* `awsEndpointUrl` – S3 endpoint (`s3.amazonaws.com` or regional endpoint).
 * `useIam` – Set to `true` in production (do not hardcode keys in config).
 
-## Storage Setup Checklist (from original guide)
+## **Storage Setup Checklist (from original guide)**
 
-* Configure **AWS credentials/IAM roles** for pods that need S3 access.  
-* Verify **region and endpoint** in the ConfigMap match your S3 setup.  
+* Configure **AWS credentials/IAM roles** for pods that need S3 access.
+* Verify **region and endpoint** in the ConfigMap match your S3 setup.
 * Test connectivity from worker/controller pods to the bucket.
 
 # Workflow Engine Configuration (Temporal/Cadence)
@@ -222,11 +222,11 @@ workflowClient:
   domain: uniflow               # Temporal domain
 ```
 
-### Fields
+### **Fields**
 
-* `service` – Workflow engine frontend service name (`temporal-frontend` / `cadence-frontend`).  
-* `host` – Full endpoint (host:port).  
-* `transport` – Typically `grpc`.  
+* `service` – Workflow engine frontend service name (`temporal-frontend` / `cadence-frontend`).
+* `host` – Full endpoint (host:port).
+* `transport` – Typically `grpc`.
 * `domain` – Temporal domain (or Cadence domain) to target.
 
 ## Worker Workflow Engine Settings
@@ -247,14 +247,14 @@ workflow-engine:
 
 ### Fields
 
-* `provider` – `temporal` (or **cadence**); can be extended to `cadence` if needed.  
-* `host` – Temporal/Cadence endpoint.  
-* `workers[].domain` – Domain where worker polls for tasks.  
-* `workers[].taskList` – Task list (queue) used for workflow tasks.  
+* `provider` – `temporal` (or **cadence**); can be extended to `cadence` if needed.
+* `host` – Temporal/Cadence endpoint.
+* `workers[].domain` – Domain where worker polls for tasks.
+* `workers[].taskList` – Task list (queue) used for workflow tasks.
 * `client.domain` – Client domain for starting workflows.
 
 ## Temporal Setup (from original external dependencies)
 
-* Ensure Temporal is accessible at the configured endpoint.  
-* Create required domains (`uniflow`, `default`, `production-uniflow`).  
+* Ensure Temporal is accessible at the configured endpoint.
+* Create required domains (`uniflow`, `default`, `production-uniflow`).
 * Configure task lists such as `production-uniflow`.

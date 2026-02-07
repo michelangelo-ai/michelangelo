@@ -94,6 +94,8 @@ GET command supports extra arguments for some entity types (e.g. revision entity
 
 Apply (create or update) a resource from a YAML configuration file. MA command automatically detects the resource type from the apiVersion and kind fields in the YAML.
 
+> **Note:** Currently, we support `create` command for creating a new resource. Creating a new resource with `apply` command may fail in some cases. This will be fixed soon.
+
 Syntax:
 
 ```bash
@@ -330,31 +332,6 @@ spec:
   pipeline:
     name: training-pipeline
     namespace: ma-dev-test
-```
-
-### PromptTemplate YAML
-
-```yaml
-apiVersion: michelangelo.uber.com/v2beta1
-kind: PromptTemplate
-metadata:
-  name: ma-pt-test-001
-  namespace: ma-integration-test
-spec:
-  features:
-    - name: user_name
-      value: albert greenberg
-  instruction: |-
-    Classify the following user's name: '{{user_name}}'
-  messages:
-    - content: Please classify user's name..
-      role: user
-  model: azure-openai-gpt4
-  model_params:
-    max_tokens: 1024
-    temperature: 0.01
-  traffic_type: PROMPT_TEMPLATE_TRAFFIC_TYPE_PRODUCTION
-  type: PROMPT_TEMPLATE_TYPE_LLM_CHAT_COMPLETION
 ```
 
 ## Configuration

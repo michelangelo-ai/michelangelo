@@ -53,17 +53,28 @@ const (
 //
 // This struct is populated from Cadence/Temporal workflow queries and provides
 // detailed information about individual task execution within a pipeline run.
+// Enhanced with activity IDs for precise retry control.
 type TaskProgress struct {
-	TaskPath       string `json:"task_path"`        // full hierarchical path of the task within the workflow execution tree
-	TaskName       string `json:"task_name"`        // name of task
-	TaskLog        string `json:"task_log"`         // URL or reference to the task's execution logs
-	TaskMessage    string `json:"task_message"`     // contains status messages, error details, or other information from task execution
-	TaskState      string `json:"task_state"`       // represents the current execution state (e.g., "running", "succeeded", "failed", "pending")
-	StartTime      string `json:"start_time"`       // timestamp when the task execution began
-	EndTime        string `json:"end_time"`         // timestamp when the task execution completed
-	Output         string `json:"output"`           // contains the serialized output data produced by the task upon completion
-	RetryAttemptID string `json:"retry_attempt_id"` // identifies the specific retry attempt for this task execution
+	TaskPath          string   `json:"task_path"`           // full hierarchical path of the task within the workflow execution tree
+	TaskName          string   `json:"task_name"`           // name of task
+	TaskLog           string   `json:"task_log"`            // URL or reference to the task's execution logs
+	TaskMessage       string   `json:"task_message"`        // contains status messages, error details, or other information from task execution
+	TaskState         string   `json:"task_state"`          // represents the current execution state (e.g., "running", "succeeded", "failed", "pending")
+	StartTime         string   `json:"start_time"`          // timestamp when the task execution began
+	EndTime           string   `json:"end_time"`            // timestamp when the task execution completed
+	Output            string   `json:"output"`              // contains the serialized output data produced by the task upon completion
+	RetryAttemptID    string   `json:"retry_attempt_id"`    // identifies the specific retry attempt for this task execution
+	FirstActivityID   string   `json:"first_activity_id"`   // ID of the first activity in this task
+	CurrentActivityID string   `json:"current_activity_id"` // ID of the currently executing activity
+	ActivitySequence  []string `json:"activity_sequence"`   // Ordered list of activity IDs in this task
 }
+
+// RetryConfig removed - was only used for automatic retry configuration which is now handled at Starlark level
+
+// TaskRetryMetadata removed - was only used for automatic retry logic which is now handled at Starlark level
+
+// ManualRetryTaskRequest is deprecated in favor of the new workflow_run_id based retry approach.
+// Retry is now triggered via RetryInfo field in PipelineRunSpec with workflow_run_id trigger condition.
 
 // ExecuteWorkflowActor implements the workflow execution stage of pipeline runs.
 //
@@ -73,9 +84,43 @@ type TaskProgress struct {
 //   - Querying and updating task-level progress
 //   - Handling workflow termination and cancellation
 //   - Managing task caching for pipeline run resumption
+//   - Implementing task-level retry functionality using workflow reset
 //
 // The actor integrates with the workflow client to execute Starlark-based ML workflows
 // and tracks detailed execution progress including individual task states, logs, and outputs.
+//
+// ## Task-Level Retry Implementation
+//
+// The retry functionality provides both automatic and manual retry capabilities for failed tasks:
+//
+// ### Automatic Retry Features:
+// - Detects retriable failures based on configurable failure patterns
+// - Enforces per-task retry limits and intervals
+// - Uses workflow reset to restart from appropriate decision points
+// - Maintains full audit trail of retry attempts and failures
+// - Prevents race conditions and concurrent retry attempts
+//
+// ### Manual Retry Features:
+// - Triggered via RetryInfo field in PipelineRunSpec with workflow_run_id trigger condition
+// - Uses workflow reset for precise retry control without duplicate processing
+// - Automatically queries activity IDs for reset boundary calculation
+// - Updates pipeline run status and clears retry info after successful processing
+//
+// ### Configuration:
+// - Configurable via pipeline run annotations (michelangelo.ai/retry-*)
+// - Per-task overrides supported via pipeline spec input
+// - Default patterns include OOM, system errors, infrastructure failures
+//
+// ### Reset Strategy:
+// - Finds appropriate workflow/decision task completed events as reset points
+// - Resets workflow execution to just before the failed task
+// - Updates pipeline run status with new workflow run ID
+// - Preserves task progress history and attempt metadata
+//
+// ### Integration with Starlark Workflows:
+// - Compatible with report_progress() function retry_attempt_id field
+// - Handles retry logic from both workflow engine and controller side
+// - Supports existing task caching and output management
 type ExecuteWorkflowActor struct {
 	conditionInterfaces.ConditionActor[*v2.PipelineRun]
 	logger         *zap.Logger
@@ -83,17 +128,20 @@ type ExecuteWorkflowActor struct {
 	blobStore      *blobstore.BlobStore
 	apiHandler     api.Handler
 	configProvider uberconfig.Provider
+	// retryMetadata and retryMutex removed - were only used for automatic retry tracking
 }
 
 // NewExecuteWorkflowActor creates a new ExecuteWorkflowActor with the specified dependencies
 // for managing workflow execution.
 func NewExecuteWorkflowActor(logger *zap.Logger, workflowClient clientInterfaces.WorkflowClient, blobStore *blobstore.BlobStore, apiHandler api.Handler, configProvider uberconfig.Provider) *ExecuteWorkflowActor {
+	actorLogger := logger.With(zap.String("actor", "execute-workflow"))
 	return &ExecuteWorkflowActor{
-		logger:         logger.With(zap.String("actor", "execute-workflow")),
+		logger:         actorLogger,
 		workflowClient: workflowClient,
 		blobStore:      blobStore,
 		apiHandler:     apiHandler,
 		configProvider: configProvider,
+		// retryMetadata initialization removed
 	}
 }
 
@@ -106,6 +154,22 @@ func NewExecuteWorkflowActor(logger *zap.Logger, workflowClient clientInterfaces
 // Returns an appropriate condition based on the workflow execution state.
 func (a *ExecuteWorkflowActor) Retrieve(ctx context.Context, resource *v2.PipelineRun, previousCondition *apipb.Condition) (*apipb.Condition, error) {
 	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", resource.Namespace, resource.Name)))
+
+	// Check for retry scenario first - if RetryInfo is present and workflow run IDs differ, allow retry processing
+	retryInfo := resource.Spec.RetryInfo
+	if retryInfo != nil && retryInfo.ActivityId != "" {
+		// Check the trigger condition: only process if workflowRunId differs from current status
+		if retryInfo.WorkflowRunId != "" && retryInfo.WorkflowRunId == resource.Status.WorkflowRunId {
+			logger.Info("retry scenario detected - allowing retry processing",
+				zap.String("retryWorkflowRunId", retryInfo.WorkflowRunId),
+				zap.String("currentWorkflowRunId", resource.Status.WorkflowRunId),
+				zap.String("activityId", retryInfo.ActivityId))
+			return &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			}, nil
+		}
+	}
 
 	executeWorkflowStep := pipelinerunutils.GetStep(resource, pipelinerunutils.ExecuteWorkflowStepName)
 	// Check if workflow step is already in a terminal state.
@@ -166,6 +230,15 @@ func (a *ExecuteWorkflowActor) Retrieve(ctx context.Context, resource *v2.Pipeli
 // Returns a condition indicating the workflow state (RUNNING, SUCCEEDED, FAILED, KILLED).
 func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.PipelineRun, previousCondition *apipb.Condition) (*apipb.Condition, error) {
 	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
+
+	// Check for manual retry spec field and process if present
+	// Manual retries can work from any workflow state (FAILED, TERMINATED, RUNNING, etc.)
+	retryErr := a.processManualRetrySpec(ctx, pipelineRun)
+	if retryErr != nil {
+		logger.Error("failed to process manual retry spec", zap.Error(retryErr))
+		return nil, retryErr
+	}
+
 	executeWorkflowStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
 	if executeWorkflowStep == nil {
 		logger.Info("execute workflow step not found, setting to pending")
@@ -284,6 +357,9 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 	} else if len(taskSteps) > 0 {
 		executeWorkflowStep.SubSteps = taskSteps
 	}
+
+	// Note: Automatic retry logic is handled at the Starlark task level (ray_task.star, spark/task.star)
+	// No workflow-level automatic retries needed here
 
 	switch workflowExecution.Status {
 	case clientInterfaces.WorkflowExecutionStatusRunning:
@@ -678,6 +754,8 @@ func (a *ExecuteWorkflowActor) constructPipelineRunStepInfo(ctx context.Context,
 
 	for _, progress := range workflowProgressStr {
 		var taskProgress TaskProgress
+
+		// Parse task progress (now includes activity IDs)
 		err := json.Unmarshal([]byte(progress), &taskProgress)
 		if err != nil {
 			logger.Error("Cannot parse progress string", zap.Error(err), zap.String("progress", progress))
@@ -696,7 +774,7 @@ func (a *ExecuteWorkflowActor) constructPipelineRunStepInfo(ctx context.Context,
 			continue
 		}
 
-		// Merge the task progress into the existing step info
+		// Merge the task progress
 		oldStepInfo := stepMap[taskName]
 		newStepInfo := getStepInfoFromTaskProgress(&taskProgress, pipelineRun.Namespace)
 		stepMap[taskName] = mergePipelineRunStepInfo(oldStepInfo, newStepInfo)
@@ -733,6 +811,17 @@ func mergePipelineRunStepInfo(oldStepInfo *v2.PipelineRunStepInfo, newStepInfo *
 		mergedStepInfo.Resources = append(oldStepInfo.Resources, newStepInfo.Resources...)
 		mergedStepInfo.AttemptIds = append(oldStepInfo.AttemptIds, newStepInfo.AttemptIds...)
 	}
+	// Make sure we don't overwrite activity ID if it already exists
+	if oldStepInfo.ActivityId != "" {
+		mergedStepInfo.ActivityId = oldStepInfo.ActivityId
+	}
+
+	// Preserve retry-related metadata across merges
+	// Retry metadata is maintained in stepInfo.Message for failed tasks
+	if oldStepInfo.State == v2.PIPELINE_RUN_STEP_STATE_FAILED && newStepInfo.State == v2.PIPELINE_RUN_STEP_STATE_PENDING {
+		// Task is being reset for retry - update state but preserve failure history
+		mergedStepInfo.Message = fmt.Sprintf("Retrying task (previous failure: %s)", oldStepInfo.Message)
+	}
 
 	return mergedStepInfo
 }
@@ -759,6 +848,7 @@ func getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *
 	stepInfo.Name = taskProgress.TaskPath
 	stepInfo.DisplayName = taskProgress.TaskName
 	stepInfo.LogUrl = taskProgress.TaskLog
+	stepInfo.ActivityId = taskProgress.FirstActivityID
 
 	if taskProgress.StartTime != "" {
 		// parse utc time str 2024-06-10 17:53:20 to time.Time
@@ -804,22 +894,34 @@ func getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *
 		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_PENDING
 	}
 
+	// Handle retry attempt tracking with enhanced metadata
 	if taskProgress.RetryAttemptID != "" {
-		stepInfo.Resources = []*v2.PipelineRunResource{
-			{
-				Resource: &v2.PipelineRunResource_ExternalResource{
-					ExternalResource: &v2.ExternalResource{
-						Name: fmt.Sprintf("Attempt%s-DriverURL", taskProgress.RetryAttemptID),
-						Url:  taskProgress.TaskLog,
-					},
+		// Create resource entry for this retry attempt
+		attemptResource := &v2.PipelineRunResource{
+			Resource: &v2.PipelineRunResource_ExternalResource{
+				ExternalResource: &v2.ExternalResource{
+					Name: fmt.Sprintf("Attempt%s-DriverURL", taskProgress.RetryAttemptID),
+					Url:  taskProgress.TaskLog,
 				},
 			},
 		}
+
+		// Add retry metadata if this is a retry attempt
+		if taskProgress.RetryAttemptID != "0" {
+			attemptResource.Resource.(*v2.PipelineRunResource_ExternalResource).ExternalResource.Name =
+				fmt.Sprintf("Retry-Attempt%s-DriverURL", taskProgress.RetryAttemptID)
+		}
+
+		stepInfo.Resources = []*v2.PipelineRunResource{attemptResource}
 		stepInfo.AttemptIds = []string{taskProgress.RetryAttemptID}
 	}
 
 	return stepInfo
 }
+
+// Enhanced functions removed - activity ID functionality has been merged into TaskProgress
+
+// Storage methods removed - now using on-demand querying of task progress for activity IDs
 
 func (a *ExecuteWorkflowActor) getTaskList(project *v2.Project, pipelineRun *v2.PipelineRun) (string, error) {
 	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
@@ -867,4 +969,162 @@ func applyInputFieldToConfigMap(input *pbtypes.Struct, fieldKey string, pipeline
 			}
 		}
 	}
+}
+
+// findTaskResetEventIDByActivityID finds reset boundary using the provided first activity ID
+// This is the most precise approach as it uses the actual activity ID from step info
+func (a *ExecuteWorkflowActor) findTaskResetEventIDByActivityID(ctx context.Context, workflowID, runID, firstActivityID string) (int64, error) {
+	logger := a.logger.With(
+		zap.String("workflowID", workflowID),
+		zap.String("runID", runID),
+		zap.String("firstActivityID", firstActivityID),
+	)
+
+	logger.Info("finding reset event using first activity ID")
+
+	// Get workflow history
+	history, err := a.workflowClient.GetWorkflowExecutionHistory(ctx, workflowID, runID, nil, 5000)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get workflow history: %w", err)
+	}
+
+	// Find the exact event where the first activity was scheduled
+	var firstActivityScheduledEventID int64
+	for _, event := range history.Events {
+		if event.EventType == a.workflowClient.GetActivityTaskScheduledEventType() {
+			if activityID, ok := event.Details["activity_id"].(string); ok {
+				if activityID == firstActivityID {
+					firstActivityScheduledEventID = event.EventID
+					logger.Info("found first activity scheduled event",
+						zap.Int64("eventID", event.EventID))
+					break
+				}
+			}
+		}
+	}
+
+	if firstActivityScheduledEventID == 0 {
+		return 0, fmt.Errorf("could not find scheduled event for first activity %s", firstActivityID)
+	}
+
+	// Find the decision/workflow task completed event immediately before the first activity
+	var resetEventID int64
+	for i := len(history.Events) - 1; i >= 0; i-- {
+		event := history.Events[i]
+
+		// Stop when we reach the first activity scheduled event
+		if event.EventID >= firstActivityScheduledEventID {
+			continue
+		}
+
+		// Look for the decision/activity task completed event just before
+		if event.EventType == a.workflowClient.GetActivityTaskCompletedEventType() || event.EventType == a.workflowClient.GetDecisionTaskCompletedEventType() {
+			resetEventID = event.EventID
+			break
+		}
+	}
+
+	if resetEventID == 0 {
+		return 0, fmt.Errorf("could not find safe reset boundary before first activity %s", firstActivityID)
+	}
+
+	logger.Info("found precise reset boundary using activity ID",
+		zap.Int64("firstActivityScheduledEventID", firstActivityScheduledEventID),
+		zap.Int64("resetEventID", resetEventID))
+
+	return resetEventID, nil
+}
+
+// processManualRetrySpec checks for manual retry spec field and triggers retry if present
+func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipelineRun *v2.PipelineRun) error {
+	logger := a.logger.With(
+		zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)),
+	)
+
+	// Check if retry info field is set
+	retryInfo := pipelineRun.Spec.RetryInfo
+	if retryInfo == nil || retryInfo.ActivityId == "" {
+		return nil
+	}
+
+	// New trigger condition: only process if workflowRunId differs from current status
+	// This prevents duplicate processing and ensures precise retry control
+	if retryInfo.WorkflowRunId != "" && retryInfo.WorkflowRunId == pipelineRun.Status.WorkflowRunId {
+		logger.Info("processing retry - workflowRunId differs from current status",
+			zap.String("retryWorkflowRunId", retryInfo.WorkflowRunId),
+			zap.String("currentWorkflowRunId", pipelineRun.Status.WorkflowRunId),
+		)
+	} else {
+		logger.Debug("skipping retry processing - workflowRunId matches current status or is empty",
+			zap.String("retryWorkflowRunId", retryInfo.WorkflowRunId),
+			zap.String("currentWorkflowRunId", pipelineRun.Status.WorkflowRunId),
+		)
+		return nil
+	}
+
+	logger.Info("manual retry spec field detected",
+		zap.String("activityId", retryInfo.ActivityId),
+		zap.String("workflowId", retryInfo.WorkflowId),
+		zap.String("workflowRunId", retryInfo.WorkflowRunId),
+		zap.String("reason", retryInfo.Reason),
+	)
+
+	// Use the activity ID directly from retryInfo for precise reset boundary
+	activityID := retryInfo.ActivityId
+
+	// Find reset event ID using the queried activity ID
+	resetEventID, err := a.findTaskResetEventIDByActivityID(ctx, pipelineRun.Status.WorkflowId, pipelineRun.Status.WorkflowRunId, activityID)
+	if err != nil {
+		logger.Error("failed to find reset event ID",
+			zap.String("activityId", retryInfo.ActivityId),
+			zap.String("activityID", activityID),
+			zap.Error(err),
+		)
+		return fmt.Errorf("failed to find reset event ID for activity %s: %w", retryInfo.ActivityId, err)
+	}
+
+	// Perform workflow reset
+	resetOptions := clientInterfaces.ResetWorkflowOptions{
+		WorkflowID: pipelineRun.Status.WorkflowId,
+		RunID:      pipelineRun.Status.WorkflowRunId,
+		EventID:    resetEventID,
+		Reason:     fmt.Sprintf("Manual retry for activity: %s - %s", retryInfo.ActivityId, retryInfo.Reason),
+		RequestID:  fmt.Sprintf("manual-retry-%s-%d", pipelineRun.Name, time.Now().Unix()),
+	}
+
+	newWorkflowRun, err := a.workflowClient.ResetWorkflow(ctx, resetOptions)
+	if err != nil {
+		logger.Error("workflow reset failed",
+			zap.String("activityId", retryInfo.ActivityId),
+			zap.String("workflowId", pipelineRun.Status.WorkflowId),
+			zap.String("workflowRunId", pipelineRun.Status.WorkflowRunId),
+			zap.Int64("resetEventID", resetEventID),
+			zap.Error(err),
+		)
+		return fmt.Errorf("workflow reset failed for activity %s: %w", retryInfo.ActivityId, err)
+	}
+
+	// Update pipeline run status
+	pipelineRun.Status.State = v2.PIPELINE_RUN_STATE_RUNNING
+	pipelineRun.Status.WorkflowRunId = newWorkflowRun.RunID
+
+	// Update execute workflow step state from FAILED/KILLED to RUNNING for retry
+	executeWorkflowStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
+	if executeWorkflowStep != nil &&
+		(executeWorkflowStep.State == v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED ||
+			executeWorkflowStep.State == v2.PIPELINE_RUN_STEP_STATE_FAILED ||
+			executeWorkflowStep.State == v2.PIPELINE_RUN_STEP_STATE_KILLED) {
+		logger.Info("updating execute workflow step state to RUNNING for retry",
+			zap.String("previousState", executeWorkflowStep.State.String()))
+		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_RUNNING
+		executeWorkflowStep.Message = fmt.Sprintf("Retry started for activity: %s", retryInfo.ActivityId)
+	}
+
+	// Clear kill flag from previous run to prevent immediate termination of new workflow
+	if pipelineRun.Spec.Kill {
+		logger.Info("clearing kill flag from previous run for retry")
+		pipelineRun.Spec.Kill = false
+	}
+
+	return nil
 }

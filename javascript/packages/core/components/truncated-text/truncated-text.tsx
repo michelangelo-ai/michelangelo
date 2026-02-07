@@ -6,6 +6,59 @@ import { ELLIPSIS_STYLES } from './constants';
 
 import type { Props } from './types';
 
+/**
+ * Displays text with automatic truncation and tooltip for overflow content.
+ *
+ * This component intelligently detects when text content overflows its container
+ * and automatically shows a tooltip with the full text on hover. If the text fits
+ * within the container, no tooltip is shown.
+ *
+ * Features:
+ * - Automatic overflow detection with resize handling
+ * - CSS ellipsis (...) for truncated text
+ * - Tooltip with full text appears only when text is truncated
+ * - Accessible with keyboard support
+ * - Maximum tooltip width of 400px with word wrapping
+ * - Responsive to window resize events
+ *
+ * @param props.children - Text content to display and potentially truncate
+ * @param props.overrides - BaseUI overrides for the Tooltip component
+ *
+ * @example
+ * ```tsx
+ * // Short text - no truncation, no tooltip
+ * <TruncatedText>
+ *   Short pipeline name
+ * </TruncatedText>
+ *
+ * // Long text in constrained container - shows ellipsis and tooltip
+ * <div style={{ width: '200px' }}>
+ *   <TruncatedText>
+ *     This is a very long pipeline name that will be truncated
+ *   </TruncatedText>
+ * </div>
+ *
+ * // In table cells
+ * <td style={{ maxWidth: '150px' }}>
+ *   <TruncatedText>
+ *     {row.description}
+ *   </TruncatedText>
+ * </td>
+ *
+ * // With custom tooltip styling
+ * <TruncatedText
+ *   overrides={{
+ *     Tooltip: {
+ *       Body: {
+ *         style: { backgroundColor: '#333' }
+ *       }
+ *     }
+ *   }}
+ * >
+ *   Long content here
+ * </TruncatedText>
+ * ```
+ */
 export function TruncatedText({ children, overrides }: Props) {
   const [css] = useStyletron();
   const [isOverflowing, setIsOverflowing] = useState(false);

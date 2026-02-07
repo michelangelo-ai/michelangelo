@@ -1,5 +1,9 @@
 {
   "label": "Jobs",
   "position": 1,
-  "collapsed": true
+  "collapsed": true,
+  "link": {
+    "type": "doc",
+    "id": "operator-guides/jobs/index"
+  }
 }

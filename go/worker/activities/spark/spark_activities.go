@@ -42,7 +42,13 @@ type activities struct {
 	sparkJobService v2pb.SparkJobServiceYARPCClient
 }
 
-// CreateSparkJob creates a new Spark job using the provided request parameters.
+// CreateSparkJobActivityResponse includes the activity ID for progress reporting
+type CreateSparkJobActivityResponse struct {
+	SparkJob   *v2pb.SparkJob
+	ActivityID string `json:"activity_id"` // The actual activity ID from workflow engine
+}
+
+// CreateSparkJob creates a new Spark job using the provided request parameters and returns activity ID.
 //
 // This method is executed as part of a Starlark worker activity.
 //
@@ -51,20 +57,29 @@ type activities struct {
 // - request: The request containing details of the Spark job to create.
 //
 // Returns:
-// - *v2pb.CreateSparkJobResponse: Response containing the created Spark job details.
-// - *cadence.CustomError: Error information if the operation fails.
+// - *CreateSparkJobActivityResponse: Response containing the created Spark job details and activity ID.
+// - *workflow.CustomError: Error information if the operation fails.
 func (r *activities) CreateSparkJob(ctx context.Context, request v2pb.CreateSparkJobRequest) (
-	*v2pb.CreateSparkJobResponse, error) {
+	*CreateSparkJobActivityResponse, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
+
+	// Get activity ID from Temporal or Cadence context
+	activityInfo := activity.GetInfo(ctx)
+	activityID := activityInfo.ActivityID
+	logger.Info("activity-id-extracted", zap.String("activityID", activityID))
+
+	// Execute the original job creation logic
 	createSparkJobResponse, err := r.sparkJobService.CreateSparkJob(ctx, &request)
 	if err != nil || createSparkJobResponse == nil || createSparkJobResponse.SparkJob == nil ||
 		createSparkJobResponse.SparkJob.Name == "" {
 		logger.Error("activity-error", zap.Any("error", err.Error()))
 		return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeUnavailable.String(), err.Error())
 	}
-	return &v2pb.CreateSparkJobResponse{
-		SparkJob: createSparkJobResponse.SparkJob,
+
+	return &CreateSparkJobActivityResponse{
+		SparkJob:   createSparkJobResponse.SparkJob,
+		ActivityID: activityID,
 	}, nil
 }
 

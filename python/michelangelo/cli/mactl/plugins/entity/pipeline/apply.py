@@ -48,7 +48,7 @@ def convert_crd_metadata_pipeline_apply(
         "revision_id": repo.head.commit.hexsha,
         "type": "PIPELINE_MANIFEST_TYPE_YAML",
     }
-    res["spec"]["owner"] = {"name": getenv("UBER_LDAP_UID")}
+    res["spec"]["owner"] = {"name": get_user_name()}
     _LOG.debug("Converted CRD metadata: %r", res)
     """
     return res

@@ -5,7 +5,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 const config: Config = {
   title: 'Michelangelo',
   tagline: 'ML Platform Documentation',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/favicon.svg',
 
   future: {
     v4: true,
@@ -35,7 +35,7 @@ const config: Config = {
       {
         docs: {
           path: '../docs',
-          routeBasePath: '/',
+          routeBasePath: '/docs',
           sidebarPath: './sidebars.ts',
           editUrl: 'https://github.com/michelangelo-ai/michelangelo/tree/main/website/',
         },
@@ -82,7 +82,7 @@ const config: Config = {
           items: [
             {
               label: 'Getting Started',
-              to: '/',
+              to: '/docs',
             },
           ],
         },

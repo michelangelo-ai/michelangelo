@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -50 215 215">
+  <defs>
+    <style>
+      .gray { fill: #8493a1; }
+      .white { fill: #fff; }
+    </style>
+  </defs>
+  <rect class="gray" x="71.59" y="8.43" width="33.14" height="98.37"/>
+  <polygon class="white" points="104.81 8.53 66.01 8.53 10.31 106.81 49.29 106.81 104.81 8.53"/>
+  <polyline class="gray" points="167.35 71.09 204.38 71.27 167.32 106.81"/>
+  <rect class="gray" x="132.99" y="8.43" width="33.14" height="98.37"/>
+  <polygon class="white" points="166.1 8.53 127.29 8.53 71.59 106.81 110.58 106.81 166.1 8.53"/>
+</svg>

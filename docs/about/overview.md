@@ -1,4 +1,8 @@
-# About Michelangelo
+---
+sidebar_position: 1
+---
+
+# Overview
 
 Michelangelo ("MA") is Uber's machine learning platform.
 
@@ -167,7 +171,7 @@ Michelangelo supports a wide range of ML use cases. Here are some common example
 
 ## Architecture
 
-### Ecosystem overview
+### Ecosystem Overview
 
 At Uber, Machine Learning (ML) is critical because of the complexity and scale of all the decisions that we have to make. ML can reduce uncertainty in our processes, making our products more targeted and our user experience better. There are also so many factors and signals influencing our systems that we often need ML to make sense of what’s happening.
 
