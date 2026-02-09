@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -17,15 +18,15 @@ var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &ValidationAct
 
 // ValidationActor validates that inference server configuration meets requirements.
 type ValidationActor struct {
-	backend backends.Backend
-	logger  *zap.Logger
+	registry *backends.Registry
+	logger   *zap.Logger
 }
 
 // NewValidationActor creates a condition actor for inference server configuration validation.
-func NewValidationActor(backend backends.Backend, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
+func NewValidationActor(registry *backends.Registry, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return &ValidationActor{
-		backend: backend,
-		logger:  logger,
+		registry: registry,
+		logger:   logger,
 	}
 }
 
@@ -38,32 +39,18 @@ func (a *ValidationActor) GetType() string {
 func (a *ValidationActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Retrieving inference server validation condition")
 
-	// Validate backend-specific requirements
-	if resource.Spec.BackendType != v2pb.BACKEND_TYPE_TRITON {
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "InvalidBackendType",
-			Message: fmt.Sprintf("invalid backend type for OSS plugin: %v", resource.Spec.BackendType),
-		}, nil
+	// Validate that the backend type is registered in the registry
+	_, err := a.registry.GetBackend(resource.Spec.BackendType)
+	if err != nil {
+		return conditionUtils.GenerateFalseCondition(condition, "InvalidBackendType", fmt.Sprintf("unsupported backend type: %v", resource.Spec.BackendType)), nil
 	}
 
-	return &apipb.Condition{
-		Type:    a.GetType(),
-		Status:  apipb.CONDITION_STATUS_TRUE,
-		Reason:  "ValidationSucceeded",
-		Message: "Inference server configuration is valid",
-	}, nil
+	return conditionUtils.GenerateTrueCondition(condition), nil
 }
 
 // Run returns a failed condition since validation failures cannot be automatically fixed.
 func (a *ValidationActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
-	// This method is only ran when Retrieve() fails.
-	// If Retrieve() failed, then there's nothing we can do here, simply return false condition.
-	return &apipb.Condition{
-		Type:    a.GetType(),
-		Status:  apipb.CONDITION_STATUS_FALSE,
-		Reason:  "ValidationFailed",
-		Message: "Inference server configuration is invalid",
-	}, nil
+	// This method is only run when Retrieve() fails.
+	// If Retrieve() failed, then there's nothing we can do here, simply return the condition.
+	return condition, nil
 }

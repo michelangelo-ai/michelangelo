@@ -6,12 +6,13 @@ package gatewaysmocks
 
 import (
 	context "context"
+	http "net/http"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	zap "go.uber.org/zap"
-
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	zap "go.uber.org/zap"
+	client "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // MockGateway is a mock of Gateway interface.
@@ -38,31 +39,31 @@ func (m *MockGateway) EXPECT() *MockGatewayMockRecorder {
 }
 
 // CheckModelStatus mocks base method.
-func (m *MockGateway) CheckModelStatus(ctx context.Context, logger *zap.Logger, modelName, inferenceServerName, namespace string, backendType v2.BackendType) (bool, error) {
+func (m *MockGateway) CheckModelStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, httpClient *http.Client, modelName, inferenceServerName, namespace string, backendType v2.BackendType) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CheckModelStatus", ctx, logger, modelName, inferenceServerName, namespace, backendType)
+	ret := m.ctrl.Call(m, "CheckModelStatus", ctx, logger, kubeClient, httpClient, modelName, inferenceServerName, namespace, backendType)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CheckModelStatus indicates an expected call of CheckModelStatus.
-func (mr *MockGatewayMockRecorder) CheckModelStatus(ctx, logger, modelName, inferenceServerName, namespace, backendType interface{}) *gomock.Call {
+func (mr *MockGatewayMockRecorder) CheckModelStatus(ctx, logger, kubeClient, httpClient, modelName, inferenceServerName, namespace, backendType interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckModelStatus", reflect.TypeOf((*MockGateway)(nil).CheckModelStatus), ctx, logger, modelName, inferenceServerName, namespace, backendType)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckModelStatus", reflect.TypeOf((*MockGateway)(nil).CheckModelStatus), ctx, logger, kubeClient, httpClient, modelName, inferenceServerName, namespace, backendType)
 }
 
 // InferenceServerIsHealthy mocks base method.
-func (m *MockGateway) InferenceServerIsHealthy(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string, backendType v2.BackendType) (bool, error) {
+func (m *MockGateway) InferenceServerIsHealthy(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName, namespace string, backendType v2.BackendType) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InferenceServerIsHealthy", ctx, logger, inferenceServerName, namespace, backendType)
+	ret := m.ctrl.Call(m, "InferenceServerIsHealthy", ctx, logger, kubeClient, inferenceServerName, namespace, backendType)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // InferenceServerIsHealthy indicates an expected call of InferenceServerIsHealthy.
-func (mr *MockGatewayMockRecorder) InferenceServerIsHealthy(ctx, logger, inferenceServerName, namespace, backendType interface{}) *gomock.Call {
+func (mr *MockGatewayMockRecorder) InferenceServerIsHealthy(ctx, logger, kubeClient, inferenceServerName, namespace, backendType interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InferenceServerIsHealthy", reflect.TypeOf((*MockGateway)(nil).InferenceServerIsHealthy), ctx, logger, inferenceServerName, namespace, backendType)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InferenceServerIsHealthy", reflect.TypeOf((*MockGateway)(nil).InferenceServerIsHealthy), ctx, logger, kubeClient, inferenceServerName, namespace, backendType)
 }

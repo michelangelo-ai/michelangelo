@@ -10,10 +10,18 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	backendsmocks "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
+
+// createValidationTestRegistry creates a registry with the mock backend registered for Triton.
+func createValidationTestRegistry(mockBackend *backendsmocks.MockBackend) *backends.Registry {
+	registry := backends.NewRegistry()
+	registry.Register(v2pb.BACKEND_TYPE_TRITON, mockBackend)
+	return registry
+}
 
 func TestValidationActor_Retrieve(t *testing.T) {
 	tests := []struct {
@@ -28,24 +36,24 @@ func TestValidationActor_Retrieve(t *testing.T) {
 			name:            "valid triton backend type",
 			backendType:     v2pb.BACKEND_TYPE_TRITON,
 			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
-			expectedReason:  "ValidationSucceeded",
-			expectedMessage: "Triton configuration is valid",
+			expectedReason:  "",
+			expectedMessage: "",
 			expectedErr:     false,
 		},
 		{
 			name:            "invalid backend type - llm-d",
 			backendType:     v2pb.BACKEND_TYPE_LLM_D,
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
-			expectedReason:  "InvalidBackendType",
-			expectedMessage: "invalid backend type for Triton plugin: BACKEND_TYPE_LLM_D",
+			expectedMessage: "InvalidBackendType",
+			expectedReason:  "unsupported backend type: BACKEND_TYPE_LLM_D",
 			expectedErr:     false,
 		},
 		{
 			name:            "invalid backend type",
 			backendType:     v2pb.BACKEND_TYPE_INVALID,
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
-			expectedReason:  "InvalidBackendType",
-			expectedMessage: "invalid backend type for Triton plugin: BACKEND_TYPE_INVALID",
+			expectedMessage: "InvalidBackendType",
+			expectedReason:  "unsupported backend type: BACKEND_TYPE_INVALID",
 			expectedErr:     false,
 		},
 	}
@@ -56,9 +64,10 @@ func TestValidationActor_Retrieve(t *testing.T) {
 			defer ctrl.Finish()
 
 			mockBackend := backendsmocks.NewMockBackend(ctrl)
+			registry := createValidationTestRegistry(mockBackend)
 			// No expectations set, backend should not be called
 
-			actor := NewValidationActor(mockBackend, zap.NewNop())
+			actor := NewValidationActor(registry, zap.NewNop())
 
 			resource := &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{
@@ -90,15 +99,15 @@ func TestValidationActor_Retrieve(t *testing.T) {
 }
 
 func TestValidationActor_Run(t *testing.T) {
-	// Run() always returns a simple false condition since there's nothing
-	// it can do differently from Retrieve(). It doesn't check backend type or call backend.
+	// Run() simply returns the input condition as-is (no changes).
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockBackend := backendsmocks.NewMockBackend(ctrl)
+	registry := createValidationTestRegistry(mockBackend)
 	// No expectations set, backend should not be called
 
-	actor := NewValidationActor(mockBackend, zap.NewNop())
+	actor := NewValidationActor(registry, zap.NewNop())
 
 	resource := &v2pb.InferenceServer{
 		ObjectMeta: metav1.ObjectMeta{
@@ -110,8 +119,12 @@ func TestValidationActor_Run(t *testing.T) {
 		},
 	}
 
+	// Provide an input condition with specific values
 	condition := &apipb.Condition{
-		Type: "TritonValidation",
+		Type:    "TritonValidation",
+		Status:  apipb.CONDITION_STATUS_FALSE,
+		Reason:  "TestReason",
+		Message: "TestMessage",
 	}
 
 	result, err := actor.Run(context.Background(), resource, condition)
@@ -119,7 +132,7 @@ func TestValidationActor_Run(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, apipb.CONDITION_STATUS_FALSE, result.Status)
-	assert.Equal(t, "ValidationFailed", result.Reason)
-	assert.Equal(t, "Triton configuration is invalid", result.Message)
+	assert.Equal(t, "TestReason", result.Reason)
+	assert.Equal(t, "TestMessage", result.Message)
 	assert.Equal(t, "TritonValidation", result.Type)
 }

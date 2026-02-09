@@ -6,7 +6,6 @@ go_library(
         "gateway.go",
         "interface.go",
         "module.go",
-        "registry.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways",
     visibility = ["//visibility:public"],

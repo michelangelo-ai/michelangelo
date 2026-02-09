@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"time"
 
 	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -23,6 +22,7 @@ var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &ModelCleanupActor{
 // ModelCleanupActor unloads previous model versions from inference servers after successful rollout.
 type ModelCleanupActor struct {
 	Client              client.Client
+	HTTPClient          *http.Client
 	Gateway             gateways.Gateway
 	ModelConfigProvider modelconfig.ModelConfigProvider
 	Logger              *zap.Logger
@@ -54,8 +54,7 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deploym
 		zap.String("inference_server", inferenceServerName))
 
 	// Check if old model still exists in Triton
-	// todo: ghosharitra: check if httpClient should be directly created by controller runtime client
-	ready, err := a.Gateway.CheckModelStatus(ctx, a.Logger, a.Client, &http.Client{Timeout: 30 * time.Second}, currentModel, inferenceServerName, resource.Namespace, v2pb.BACKEND_TYPE_TRITON)
+	ready, err := a.Gateway.CheckModelStatus(ctx, a.Logger, a.Client, a.HTTPClient, currentModel, inferenceServerName, resource.Namespace, v2pb.BACKEND_TYPE_TRITON)
 	if err != nil {
 		a.Logger.Info("Cannot verify old model status, cleanup may be needed", zap.Error(err))
 		return conditionUtils.GenerateFalseCondition(condition, "CleanupPending", fmt.Sprintf("Need to cleanup old model %s", currentModel)), nil

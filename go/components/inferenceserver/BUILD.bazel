@@ -16,7 +16,6 @@ go_library(
         "//go/base/conditions/engine:go_default_library",
         "//go/base/conditions/interfaces:go_default_library",
         "//go/components/inferenceserver/gateways:go_default_library",
-        "//go/components/inferenceserver/modelconfig:go_default_library",
         "//go/components/inferenceserver/plugins:go_default_library",
         "//proto/api/v2:go_default_library",
         "@io_k8s_api//core/v1:go_default_library",

@@ -22,10 +22,11 @@ import (
 )
 
 // getRollingActors returns actors for rolling rollout strategy
-func getRollingActors(params Params, deployment *v2pb.Deployment) []conditionInterfaces.ConditionActor[*v2pb.Deployment] {
+func getRollingActors(params Params) []conditionInterfaces.ConditionActor[*v2pb.Deployment] {
 	return []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&RollingRolloutActor{
 			client:              params.Client,
+			HTTPClient:          params.HTTPClient,
 			gateway:             params.Gateway,
 			modelConfigProvider: params.ModelConfigProvider,
 			logger:              params.Logger,
@@ -37,6 +38,7 @@ func getRollingActors(params Params, deployment *v2pb.Deployment) []conditionInt
 		},
 		&ModelCleanupActor{
 			Client:              params.Client,
+			HTTPClient:          params.HTTPClient,
 			Gateway:             params.Gateway,
 			ModelConfigProvider: params.ModelConfigProvider,
 			Logger:              params.Logger,
@@ -50,6 +52,7 @@ var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &RollingRolloutActo
 // The strategy involves loading the model into one target cluster at a time and verifying it is ready.
 type RollingRolloutActor struct {
 	client              client.Client
+	HTTPClient          *http.Client
 	gateway             gateways.Gateway
 	modelConfigProvider modelconfig.ModelConfigProvider
 	logger              *zap.Logger
@@ -137,7 +140,6 @@ func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployme
 	return conditionUtils.GenerateUnknownCondition(condition, "RollingRolloutPending", "Rolling rollout is in progress"), nil
 }
 
-// todo: ghosharitra: remove and mimic as multi-cluster (no exp retry here)
 // checkModelStatusWithTimeout implements retry logic with configurable timeout for model health checks
 func (a *RollingRolloutActor) checkModelStatusWithTimeout(ctx context.Context, logger *zap.Logger, modelName string, inferenceServerName string, namespace string) (bool, error) {
 	const (
@@ -160,13 +162,19 @@ func (a *RollingRolloutActor) checkModelStatusWithTimeout(ctx context.Context, l
 	defer ticker.Stop()
 
 	// Try immediately first
-	modelReady, err := a.modelConfigProvider.GetModelsFromConfig(timeoutCtx, logger, a.client, inferenceServerName, namespace)
-	if err != nil {
-		return false, fmt.Errorf("failed to get models from model config: %w", err)
-	}
-	if len(modelReady) > 0 {
+	modelReady, err := a.gateway.CheckModelStatus(timeoutCtx, logger, a.client, a.HTTPClient, modelName, inferenceServerName, namespace, v2pb.BACKEND_TYPE_TRITON)
+	if err == nil && modelReady {
+		logger.Info("Model health check succeeded immediately", zap.String("model", modelName))
 		return true, nil
 	}
+	if err != nil {
+		logger.Info("Initial model health check failed",
+			zap.String("model", modelName),
+			zap.Error(err))
+	} else {
+		logger.Info("Model not ready, will retry", zap.String("model", modelName))
+	}
+
 	// Start retry loop
 	for {
 		select {
@@ -179,7 +187,7 @@ func (a *RollingRolloutActor) checkModelStatusWithTimeout(ctx context.Context, l
 		case <-ticker.C:
 			logger.Info("Retrying model health check", zap.String("model", modelName))
 
-			modelReady, err := a.gateway.CheckModelStatus(timeoutCtx, logger, a.client, &http.Client{Timeout: 30 * time.Second}, modelName, inferenceServerName, namespace, v2pb.BACKEND_TYPE_TRITON)
+			modelReady, err := a.gateway.CheckModelStatus(timeoutCtx, logger, a.client, a.HTTPClient, modelName, inferenceServerName, namespace, v2pb.BACKEND_TYPE_TRITON)
 			if err == nil && modelReady {
 				logger.Info("Model health check succeeded after retry", zap.String("model", modelName))
 				return true, nil

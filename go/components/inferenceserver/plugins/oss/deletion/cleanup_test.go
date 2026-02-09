@@ -18,6 +18,13 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
+// createCleanupTestRegistry creates a registry with the mock backend registered for Triton.
+func createCleanupTestRegistry(mockBackend *backendsmocks.MockBackend) *backends.Registry {
+	registry := backends.NewRegistry()
+	registry.Register(v2pb.BACKEND_TYPE_TRITON, mockBackend)
+	return registry
+}
+
 func TestCleanupActor_Retrieve(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -31,24 +38,24 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 			name: "inference server exists, cleanup not completed",
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
-					GetServerStatus(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
+					GetServerStatus(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "test-namespace").
 					Return(&backends.ServerStatus{}, nil)
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
-			expectedReason:  "CleanupInProgress",
-			expectedMessage: "Inference server cleanup in progress",
+			expectedReason:  "Inference server cleanup in progress",
+			expectedMessage: "CleanupInProgress",
 			expectedErr:     false,
 		},
 		{
 			name: "inference server does not exist, cleanup completed",
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
-					GetServerStatus(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
+					GetServerStatus(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "test-namespace").
 					Return(nil, errors.New("inference server not found"))
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
-			expectedReason:  "CleanupCompleted",
-			expectedMessage: "Inference server cleanup completed",
+			expectedReason:  "",
+			expectedMessage: "",
 			expectedErr:     false,
 		},
 	}
@@ -60,10 +67,11 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 
 			mockBackend := backendsmocks.NewMockBackend(ctrl)
 			mockConfigMapProvider := modelconfigmocks.NewMockModelConfigProvider(ctrl)
+			registry := createCleanupTestRegistry(mockBackend)
 
 			tt.setupMocks(mockBackend)
 
-			actor := NewCleanupActor(mockBackend, mockConfigMapProvider, zap.NewNop())
+			actor := NewCleanupActor(nil, registry, mockConfigMapProvider, zap.NewNop())
 
 			resource := &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{
@@ -108,17 +116,17 @@ func TestCleanupActor_Run(t *testing.T) {
 			setupMocks: func(mockBackend *backendsmocks.MockBackend, mockConfigMap *modelconfigmocks.MockModelConfigProvider) {
 				// ConfigMap deletion succeeds
 				mockConfigMap.EXPECT().
-					DeleteModelConfig(gomock.Any(), "test-server", "test-namespace").
+					DeleteModelConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "test-namespace").
 					Return(nil)
 
 				// Inference server deletion succeeds
 				mockBackend.EXPECT().
-					DeleteServer(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
+					DeleteServer(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "test-namespace").
 					Return(nil)
 			},
 			expectedStatus:          apipb.CONDITION_STATUS_TRUE,
-			expectedReason:          "CleanupInitiated",
-			expectedMessageContains: "Inference server, model ConfigMap cleanup initiated successfully",
+			expectedReason:          "",
+			expectedMessageContains: "",
 			expectedErr:             false,
 		},
 		{
@@ -126,17 +134,17 @@ func TestCleanupActor_Run(t *testing.T) {
 			setupMocks: func(mockBackend *backendsmocks.MockBackend, mockConfigMap *modelconfigmocks.MockModelConfigProvider) {
 				// ConfigMap deletion fails
 				mockConfigMap.EXPECT().
-					DeleteModelConfig(gomock.Any(), "test-server", "test-namespace").
+					DeleteModelConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "test-namespace").
 					Return(errors.New("configmap not found"))
 
 				// Inference server deletion succeeds
 				mockBackend.EXPECT().
-					DeleteServer(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
+					DeleteServer(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "test-namespace").
 					Return(nil)
 			},
 			expectedStatus:          apipb.CONDITION_STATUS_TRUE,
-			expectedReason:          "CleanupInitiated",
-			expectedMessageContains: "Inference server, model ConfigMap cleanup initiated successfully",
+			expectedReason:          "",
+			expectedMessageContains: "",
 			expectedErr:             false,
 		},
 		{
@@ -144,17 +152,17 @@ func TestCleanupActor_Run(t *testing.T) {
 			setupMocks: func(mockBackend *backendsmocks.MockBackend, mockConfigMap *modelconfigmocks.MockModelConfigProvider) {
 				// ConfigMap deletion succeeds
 				mockConfigMap.EXPECT().
-					DeleteModelConfig(gomock.Any(), "test-server", "test-namespace").
+					DeleteModelConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "test-namespace").
 					Return(nil)
 
 				// Inference server deletion fails
 				mockBackend.EXPECT().
-					DeleteServer(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
+					DeleteServer(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "test-namespace").
 					Return(errors.New("failed to delete deployment"))
 			},
 			expectedStatus:          apipb.CONDITION_STATUS_FALSE,
-			expectedReason:          "ServerCleanupFailed",
-			expectedMessageContains: "Failed to cleanup inference server",
+			expectedReason:          "Failed to cleanup inference server: failed to delete deployment",
+			expectedMessageContains: "ServerCleanupFailed",
 			expectedErr:             true,
 		},
 		{
@@ -162,17 +170,17 @@ func TestCleanupActor_Run(t *testing.T) {
 			setupMocks: func(mockBackend *backendsmocks.MockBackend, mockConfigMap *modelconfigmocks.MockModelConfigProvider) {
 				// ConfigMap deletion fails
 				mockConfigMap.EXPECT().
-					DeleteModelConfig(gomock.Any(), "test-server", "test-namespace").
+					DeleteModelConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "test-namespace").
 					Return(errors.New("configmap error"))
 
 				// Inference server deletion succeeds
 				mockBackend.EXPECT().
-					DeleteServer(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
+					DeleteServer(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "test-namespace").
 					Return(nil)
 			},
 			expectedStatus:          apipb.CONDITION_STATUS_TRUE,
-			expectedReason:          "CleanupInitiated",
-			expectedMessageContains: "Inference server, model ConfigMap cleanup initiated successfully",
+			expectedReason:          "",
+			expectedMessageContains: "",
 			expectedErr:             false,
 		},
 	}
@@ -184,10 +192,11 @@ func TestCleanupActor_Run(t *testing.T) {
 
 			mockBackend := backendsmocks.NewMockBackend(ctrl)
 			mockConfigMapProvider := modelconfigmocks.NewMockModelConfigProvider(ctrl)
+			registry := createCleanupTestRegistry(mockBackend)
 
 			tt.setupMocks(mockBackend, mockConfigMapProvider)
 
-			actor := NewCleanupActor(mockBackend, mockConfigMapProvider, zap.NewNop())
+			actor := NewCleanupActor(nil, registry, mockConfigMapProvider, zap.NewNop())
 
 			resource := &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{

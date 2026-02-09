@@ -15,16 +15,16 @@ import (
 // CreationPlugin orchestrates the condition actors for inference server creation.
 type CreationPlugin struct {
 	client              client.Client
-	backend             backends.Backend
+	registry            *backends.Registry
 	modelConfigProvider modelconfig.ModelConfigProvider
 	logger              *zap.Logger
 }
 
 // NewCreationPlugin creates a plugin that manages validation, provisioning, health checks, and routing.
-func NewCreationPlugin(client client.Client, backend backends.Backend, modelConfigProvider modelconfig.ModelConfigProvider, logger *zap.Logger) conditionInterfaces.Plugin[*v2pb.InferenceServer] {
+func NewCreationPlugin(client client.Client, registry *backends.Registry, modelConfigProvider modelconfig.ModelConfigProvider, logger *zap.Logger) conditionInterfaces.Plugin[*v2pb.InferenceServer] {
 	return &CreationPlugin{
 		client:              client,
-		backend:             backend,
+		registry:            registry,
 		modelConfigProvider: modelConfigProvider,
 		logger:              logger,
 	}
@@ -33,10 +33,10 @@ func NewCreationPlugin(client client.Client, backend backends.Backend, modelConf
 // GetActors returns the ordered list of condition actors for creation workflow.
 func (p *CreationPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return []conditionInterfaces.ConditionActor[*v2pb.InferenceServer]{
-		NewValidationActor(p.backend, p.logger),
-		NewBackendProvisionActor(p.client, p.backend, p.logger),
+		NewValidationActor(p.registry, p.logger),
+		NewBackendProvisionActor(p.client, p.registry, p.logger),
 		NewModelConfigProvisionActor(p.client, p.modelConfigProvider, p.logger),
-		NewHealthCheckActor(p.client, p.backend, p.logger),
+		NewHealthCheckActor(p.client, p.registry, p.logger),
 	}
 }
 

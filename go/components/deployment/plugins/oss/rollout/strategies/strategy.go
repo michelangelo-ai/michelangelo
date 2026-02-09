@@ -2,6 +2,7 @@ package strategies
 
 import (
 	"context"
+	"net/http"
 
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
@@ -17,6 +18,7 @@ import (
 // Params contains dependencies for strategy actors
 type Params struct {
 	Client              client.Client
+	HTTPClient          *http.Client
 	DynamicClient       dynamic.Interface
 	RouteProvider       route.RouteProvider
 	Gateway             gateways.Gateway
@@ -36,7 +38,7 @@ func GetActorsForStrategy(ctx context.Context, params Params, deployment *v2pb.D
 	case "rolling":
 		fallthrough
 	default:
-		return getRollingActors(params, deployment), nil
+		return getRollingActors(params), nil
 	}
 }
 

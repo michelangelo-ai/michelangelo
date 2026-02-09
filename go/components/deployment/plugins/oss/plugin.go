@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"time"
 
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -37,12 +36,14 @@ var _ plugins.Plugin = &Plugin{}
 
 // Plugin implements deployment lifecycle management for open-source deployments.
 type Plugin struct {
-	client        client.Client
-	dynamicClient dynamic.Interface
-	routeProvider route.RouteProvider
-	gateway       gateways.Gateway
-	blobstore     *blobstore.BlobStore
-	logger        *zap.Logger
+	client              client.Client
+	httpClient          *http.Client
+	dynamicClient       dynamic.Interface
+	routeProvider       route.RouteProvider
+	gateway             gateways.Gateway
+	modelConfigProvider modelconfig.ModelConfigProvider
+	blobstore           *blobstore.BlobStore
+	logger              *zap.Logger
 
 	rolloutPlugin     conditionInterfaces.Plugin[*v2pb.Deployment]
 	rollbackPlugin    conditionInterfaces.Plugin[*v2pb.Deployment]
@@ -56,6 +57,7 @@ type Params struct {
 
 	Registrar           pluginmanager.Registrar[plugins.Plugin]
 	Client              client.Client
+	HTTPClient          *http.Client
 	DynamicClient       dynamic.Interface
 	Gateway             gateways.Gateway
 	RouteProvider       route.RouteProvider
@@ -67,12 +69,14 @@ type Params struct {
 // NewPlugin creates an OSS deployment plugin with rollback, cleanup, and steady state workflows.
 func NewPlugin(params Params) *Plugin {
 	return &Plugin{
-		client:        params.Client,
-		dynamicClient: params.DynamicClient,
-		gateway:       params.Gateway,
-		routeProvider: params.RouteProvider,
-		blobstore:     params.BlobStore,
-		logger:        params.Logger,
+		client:              params.Client,
+		httpClient:          params.HTTPClient,
+		dynamicClient:       params.DynamicClient,
+		gateway:             params.Gateway,
+		routeProvider:       params.RouteProvider,
+		modelConfigProvider: params.ModelConfigProvider,
+		blobstore:           params.BlobStore,
+		logger:              params.Logger,
 		rollbackPlugin: rollback.NewRollbackPlugin(rollback.Params{
 			Client:              params.Client,
 			ModelConfigProvider: params.ModelConfigProvider,
@@ -85,9 +89,10 @@ func NewPlugin(params Params) *Plugin {
 			Logger:              params.Logger,
 		}),
 		steadyStatePlugin: steadystate.NewSteadyStatePlugin(steadystate.Params{
-			Client:  params.Client,
-			Gateway: params.Gateway,
-			Logger:  params.Logger,
+			Client:     params.Client,
+			HTTPClient: params.HTTPClient,
+			Gateway:    params.Gateway,
+			Logger:     params.Logger,
 		}),
 	}
 }
@@ -95,11 +100,13 @@ func NewPlugin(params Params) *Plugin {
 // GetRolloutPlugin creates a deployment-specific rollout plugin with the appropriate strategy.
 func (p *Plugin) GetRolloutPlugin(ctx context.Context, deployment *v2pb.Deployment) (conditionInterfaces.Plugin[*v2pb.Deployment], error) {
 	rolloutPlugin, err := rollout.NewRolloutPlugin(ctx, rollout.Params{
-		Client:        p.client,
-		DynamicClient: p.dynamicClient,
-		RouteProvider: p.routeProvider,
-		Gateway:       p.gateway,
-		Logger:        p.logger,
+		Client:              p.client,
+		HTTPClient:          p.httpClient,
+		DynamicClient:       p.dynamicClient,
+		RouteProvider:       p.routeProvider,
+		Gateway:             p.gateway,
+		ModelConfigProvider: p.modelConfigProvider,
+		Logger:              p.logger,
 	}, deployment)
 	if err != nil {
 		p.logger.Error("failed to create rollout plugin",
@@ -206,7 +213,7 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 		return deployment.Status, nil
 	}
 	serverName := inferenceServer.GetName()
-	healthy, err := p.gateway.CheckModelStatus(ctx, p.logger, p.client, &http.Client{Timeout: 30 * time.Second}, deployment.Spec.DesiredRevision.Name, serverName, deployment.Namespace, v2pb.BACKEND_TYPE_TRITON)
+	healthy, err := p.gateway.CheckModelStatus(ctx, p.logger, p.client, p.httpClient, deployment.Spec.DesiredRevision.Name, serverName, deployment.Namespace, v2pb.BACKEND_TYPE_TRITON)
 	if err != nil {
 		p.logger.Error("failed to check model status",
 			zap.Error(err),

@@ -17,6 +17,13 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
+// createTestRegistry creates a registry with the mock backend registered for Triton.
+func createTestRegistry(mockBackend *backendsmocks.MockBackend) *backends.Registry {
+	registry := backends.NewRegistry()
+	registry.Register(v2pb.BACKEND_TYPE_TRITON, mockBackend)
+	return registry
+}
+
 func TestBackendProvisioningActor_Retrieve(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -33,17 +40,17 @@ func TestBackendProvisioningActor_Retrieve(t *testing.T) {
 					GetServerStatus(
 						gomock.Any(),
 						gomock.Any(),
+						gomock.Any(),
 						"test-server",
 						"test-namespace",
 					).
 					Return(&backends.ServerStatus{
 						State: v2pb.INFERENCE_SERVER_STATE_SERVING,
-						Ready: true,
 					}, nil)
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
-			expectedReason:  "ServerReady",
-			expectedMessage: "Server is ready",
+			expectedReason:  "",
+			expectedMessage: "",
 			expectedErr:     false,
 		},
 		{
@@ -53,17 +60,17 @@ func TestBackendProvisioningActor_Retrieve(t *testing.T) {
 					GetServerStatus(
 						gomock.Any(),
 						gomock.Any(),
+						gomock.Any(),
 						"test-server",
 						"test-namespace",
 					).
 					Return(&backends.ServerStatus{
 						State: v2pb.INFERENCE_SERVER_STATE_CREATING,
-						Ready: false,
 					}, nil)
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
-			expectedReason:  "ServerNotFound",
-			expectedMessage: "Server needs to be created",
+			expectedMessage: "BackendProvisioningFailed",
+			expectedReason:  "Backend state is not serving: INFERENCE_SERVER_STATE_CREATING",
 			expectedErr:     false,
 		},
 		{
@@ -73,14 +80,15 @@ func TestBackendProvisioningActor_Retrieve(t *testing.T) {
 					GetServerStatus(
 						gomock.Any(),
 						gomock.Any(),
+						gomock.Any(),
 						"test-server",
 						"test-namespace",
 					).
 					Return(nil, errors.New("API error"))
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
-			expectedReason:  "ServerCheckFailed",
-			expectedMessage: "Failed to check server status: API error",
+			expectedMessage: "BackendProvisioningCheckFailed",
+			expectedReason:  "Failed to check backend status: API error",
 			expectedErr:     false,
 		},
 		{
@@ -90,17 +98,17 @@ func TestBackendProvisioningActor_Retrieve(t *testing.T) {
 					GetServerStatus(
 						gomock.Any(),
 						gomock.Any(),
+						gomock.Any(),
 						"test-server",
 						"test-namespace",
 					).
 					Return(&backends.ServerStatus{
 						State: v2pb.INFERENCE_SERVER_STATE_FAILED,
-						Ready: false,
 					}, nil)
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
-			expectedReason:  "ServerCreating",
-			expectedMessage: "Server is being created",
+			expectedMessage: "BackendProvisioningFailed",
+			expectedReason:  "Backend state is not serving: INFERENCE_SERVER_STATE_FAILED",
 			expectedErr:     false,
 		},
 	}
@@ -111,10 +119,11 @@ func TestBackendProvisioningActor_Retrieve(t *testing.T) {
 			defer ctrl.Finish()
 
 			mockBackend := backendsmocks.NewMockBackend(ctrl)
+			registry := createTestRegistry(mockBackend)
 
 			tt.setupMocks(mockBackend)
 
-			actor := NewResourceCreationActor(mockBackend, zap.NewNop())
+			actor := NewBackendProvisionActor(nil, registry, zap.NewNop())
 
 			resource := &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{
@@ -148,7 +157,7 @@ func TestBackendProvisioningActor_Retrieve(t *testing.T) {
 func TestResourceCreationActor_Run(t *testing.T) {
 	tests := []struct {
 		name                    string
-		setupMocks              func(*backendsmocks.MockBackend)
+		setupMocks              func(*testing.T, *backendsmocks.MockBackend)
 		resource                *v2pb.InferenceServer
 		expectedStatus          apipb.ConditionStatus
 		expectedReason          string
@@ -157,14 +166,15 @@ func TestResourceCreationActor_Run(t *testing.T) {
 	}{
 		{
 			name: "server creation succeeds",
-			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
+			setupMocks: func(t *testing.T, mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
 					CreateServer(
 						gomock.Any(),
 						gomock.Any(),
 						gomock.Any(),
+						gomock.Any(),
 					).
-					DoAndReturn(func(ctx context.Context, logger *zap.Logger, inferenceServer *v2pb.InferenceServer) (*backends.ServerStatus, error) {
+					DoAndReturn(func(ctx context.Context, logger *zap.Logger, kubeClient interface{}, inferenceServer *v2pb.InferenceServer) (*backends.ServerStatus, error) {
 						assert.Equal(t, "test-server", inferenceServer.Name)
 						assert.Equal(t, "test-namespace", inferenceServer.Namespace)
 						assert.Equal(t, v2pb.BACKEND_TYPE_TRITON, inferenceServer.Spec.BackendType)
@@ -175,8 +185,7 @@ func TestResourceCreationActor_Run(t *testing.T) {
 						assert.Equal(t, int32(2), inferenceServer.Spec.InitSpec.ResourceSpec.Gpu)
 						assert.Equal(t, int32(1), inferenceServer.Spec.InitSpec.NumInstances)
 						return &backends.ServerStatus{
-							State:   v2pb.INFERENCE_SERVER_STATE_CREATING,
-							Message: "Server creation initiated",
+							State: v2pb.INFERENCE_SERVER_STATE_CREATING,
 						}, nil
 					})
 			},
@@ -198,15 +207,16 @@ func TestResourceCreationActor_Run(t *testing.T) {
 				},
 			},
 			expectedStatus:          apipb.CONDITION_STATUS_TRUE,
-			expectedReason:          "ServerCreationInitiated",
-			expectedMessageContains: "Server creation initiated successfully",
+			expectedReason:          "",
+			expectedMessageContains: "",
 			expectedErr:             false,
 		},
 		{
 			name: "server creation fails",
-			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
+			setupMocks: func(t *testing.T, mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
 					CreateServer(
+						gomock.Any(),
 						gomock.Any(),
 						gomock.Any(),
 						gomock.Any(),
@@ -230,8 +240,8 @@ func TestResourceCreationActor_Run(t *testing.T) {
 				},
 			},
 			expectedStatus:          apipb.CONDITION_STATUS_FALSE,
-			expectedReason:          "ServerCreationFailed",
-			expectedMessageContains: "Failed to create server: insufficient resources",
+			expectedReason:          "Failed to provision backend: insufficient resources",
+			expectedMessageContains: "BackendProvisionFailed",
 			expectedErr:             true,
 		},
 	}
@@ -242,10 +252,11 @@ func TestResourceCreationActor_Run(t *testing.T) {
 			defer ctrl.Finish()
 
 			mockBackend := backendsmocks.NewMockBackend(ctrl)
+			registry := createTestRegistry(mockBackend)
 
-			tt.setupMocks(mockBackend)
+			tt.setupMocks(t, mockBackend)
 
-			actor := NewResourceCreationActor(mockBackend, zap.NewNop())
+			actor := NewBackendProvisionActor(nil, registry, zap.NewNop())
 
 			condition := &apipb.Condition{
 				Type: "TritonResourceCreation",

@@ -20,21 +20,16 @@ func TestCreateModelConfigMap(t *testing.T) {
 		name               string
 		inferenceServer    string
 		namespace          string
-		modelConfigs       []ModelConfigEntry
 		labels             map[string]string
 		annotations        map[string]string
 		existingConfigMaps []runtime.Object
 		expectError        bool
-		validateFunc       func(t *testing.T, client client.Client, inferenceServer string, namespace string, modelConfigs []ModelConfigEntry, annotations map[string]string)
+		validateFunc       func(t *testing.T, client client.Client, inferenceServer string, namespace string, annotations map[string]string)
 	}{
 		{
 			name:            "create call on new modelconfig",
 			inferenceServer: "test-server",
 			namespace:       "default",
-			modelConfigs: []ModelConfigEntry{
-				{Name: "model1", StoragePath: "s3://bucket/model1"},
-				{Name: "model2", StoragePath: "s3://bucket/model2"},
-			},
 			labels: map[string]string{
 				"custom-label": "custom-value",
 			},
@@ -42,7 +37,7 @@ func TestCreateModelConfigMap(t *testing.T) {
 				"custom-annotation": "annotation-value",
 			},
 			existingConfigMaps: []runtime.Object{},
-			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string, modelConfigs []ModelConfigEntry, annotations map[string]string) {
+			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string, annotations map[string]string) {
 				configMapName := generateConfigMapName(inferenceServer)
 				cm := &corev1.ConfigMap{}
 				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: namespace}, cm)
@@ -63,26 +58,14 @@ func TestCreateModelConfigMap(t *testing.T) {
 
 				// Verify annotations
 				assert.Equal(t, annotations, cm.Annotations)
-
-				// Verify model-list.json data
-				modelListJSON, exists := cm.Data[modelListKey]
-				assert.True(t, exists)
-
-				var actualModels []ModelConfigEntry
-				err = json.Unmarshal([]byte(modelListJSON), &actualModels)
-				require.NoError(t, err)
-				assert.Equal(t, modelConfigs, actualModels)
 			},
 		},
 		{
 			name:            "create call on modelconfig that already exists",
 			inferenceServer: "existing-server",
 			namespace:       "default",
-			modelConfigs: []ModelConfigEntry{
-				{Name: "new-model", StoragePath: "s3://bucket/new-model"},
-			},
-			labels:      nil,
-			annotations: nil,
+			labels:          nil,
+			annotations:     nil,
 			existingConfigMaps: []runtime.Object{
 				&corev1.ConfigMap{
 					ObjectMeta: metav1.ObjectMeta{
@@ -98,7 +81,7 @@ func TestCreateModelConfigMap(t *testing.T) {
 					},
 				},
 			},
-			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string, modelConfigs []ModelConfigEntry, annotations map[string]string) {
+			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string, annotations map[string]string) {
 				configMapName := generateConfigMapName(inferenceServer)
 				cm := &corev1.ConfigMap{}
 				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: namespace}, cm)
@@ -134,13 +117,13 @@ func TestCreateModelConfigMap(t *testing.T) {
 				WithRuntimeObjects(tt.existingConfigMaps...).
 				Build()
 
-			provider := NewDefaultModelConfigProvider(fakeClient, zap.NewNop())
+			provider := NewDefaultModelConfigProvider()
 
 			// Execute
-			err := provider.CreateModelConfig(context.Background(), tt.inferenceServer, tt.namespace, tt.modelConfigs, tt.labels, tt.annotations)
+			err := provider.CreateModelConfig(context.Background(), zap.NewNop(), fakeClient, tt.inferenceServer, tt.namespace, tt.labels, tt.annotations)
 
 			assert.NoError(t, err)
-			tt.validateFunc(t, fakeClient, tt.inferenceServer, tt.namespace, tt.modelConfigs, tt.annotations)
+			tt.validateFunc(t, fakeClient, tt.inferenceServer, tt.namespace, tt.annotations)
 		})
 	}
 }
@@ -258,10 +241,10 @@ func TestGetModelConfigMap(t *testing.T) {
 				WithRuntimeObjects(tt.existingConfigMaps...).
 				Build()
 
-			provider := NewDefaultModelConfigProvider(fakeClient, zap.NewNop())
+			provider := NewDefaultModelConfigProvider()
 
 			// Execute
-			actualResponse, err := provider.GetModelsFromConfig(context.Background(), tt.inferenceServer, tt.namespace)
+			actualResponse, err := provider.GetModelsFromConfig(context.Background(), zap.NewNop(), fakeClient, tt.inferenceServer, tt.namespace)
 
 			// Assert
 			if tt.expectError {
@@ -431,10 +414,10 @@ func TestAddModelToConfig(t *testing.T) {
 				WithRuntimeObjects(tt.existingConfigMaps...).
 				Build()
 
-			provider := NewDefaultModelConfigProvider(fakeClient, zap.NewNop())
+			provider := NewDefaultModelConfigProvider()
 
 			// Execute
-			err := provider.AddModelToConfig(context.Background(), tt.inferenceServer, tt.namespace, tt.modelConfig)
+			err := provider.AddModelToConfig(context.Background(), zap.NewNop(), fakeClient, tt.inferenceServer, tt.namespace, tt.modelConfig)
 
 			// Assert
 			if tt.expectError {
@@ -597,10 +580,10 @@ func TestRemoveModelFromConfigMap(t *testing.T) {
 				WithRuntimeObjects(tt.existingConfigMaps...).
 				Build()
 
-			provider := NewDefaultModelConfigProvider(fakeClient, zap.NewNop())
+			provider := NewDefaultModelConfigProvider()
 
 			// Execute
-			err := provider.RemoveModelFromConfig(context.Background(), tt.inferenceServer, tt.namespace, tt.modelName)
+			err := provider.RemoveModelFromConfig(context.Background(), zap.NewNop(), fakeClient, tt.inferenceServer, tt.namespace, tt.modelName)
 
 			// Assert
 			if tt.expectError {
@@ -669,10 +652,10 @@ func TestDeleteModelConfigMap(t *testing.T) {
 				WithRuntimeObjects(tt.existingConfigMaps...).
 				Build()
 
-			provider := NewDefaultModelConfigProvider(fakeClient, zap.NewNop())
+			provider := NewDefaultModelConfigProvider()
 
 			// Execute
-			err := provider.DeleteModelConfig(context.Background(), tt.inferenceServer, tt.namespace)
+			err := provider.DeleteModelConfig(context.Background(), zap.NewNop(), fakeClient, tt.inferenceServer, tt.namespace)
 
 			// Assert
 			if tt.expectError {

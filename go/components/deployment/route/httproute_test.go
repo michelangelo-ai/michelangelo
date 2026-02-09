@@ -113,7 +113,7 @@ func TestEnsureDeploymentRoute(t *testing.T) {
 			manager := NewHTTPRouteManager(fakeClient, zap.NewNop())
 
 			// Execute
-			err := manager.EnsureDeploymentRoute(context.Background(), zap.NewNop(), tt.deploymentName, tt.namespace, tt.inferenceServerName, tt.modelName)
+			err := manager.EnsureDeploymentRoute(context.Background(), zap.NewNop(), fakeClient, tt.deploymentName, tt.namespace, tt.inferenceServerName, tt.modelName)
 
 			// Validate
 			if tt.expectError {
@@ -183,7 +183,7 @@ func TestCheckDeploymentRouteStatus(t *testing.T) {
 			manager := NewHTTPRouteManager(fakeClient, zap.NewNop())
 
 			// Execute
-			result, err := manager.CheckDeploymentRouteStatus(context.Background(), zap.NewNop(), tt.deploymentName, tt.namespace, tt.inferenceServerName, tt.modelName)
+			result, err := manager.CheckDeploymentRouteStatus(context.Background(), zap.NewNop(), fakeClient, tt.deploymentName, tt.namespace, tt.inferenceServerName, tt.modelName)
 
 			// Validate
 			if tt.expectError {
@@ -234,7 +234,7 @@ func TestDeploymentRouteExists(t *testing.T) {
 			manager := NewHTTPRouteManager(fakeClient, zap.NewNop())
 
 			// Execute
-			result, err := manager.DeploymentRouteExists(context.Background(), zap.NewNop(), tt.deploymentName, tt.namespace)
+			result, err := manager.DeploymentRouteExists(context.Background(), zap.NewNop(), fakeClient, tt.deploymentName, tt.namespace)
 
 			// Validate
 			if tt.expectError {
@@ -295,7 +295,7 @@ func TestDeleteDeploymentRoute(t *testing.T) {
 			manager := NewHTTPRouteManager(fakeClient, zap.NewNop())
 
 			// Execute
-			err := manager.DeleteDeploymentRoute(context.Background(), zap.NewNop(), tt.deploymentName, tt.namespace)
+			err := manager.DeleteDeploymentRoute(context.Background(), zap.NewNop(), fakeClient, tt.deploymentName, tt.namespace)
 
 			// Validate
 			if tt.expectError {

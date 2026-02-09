@@ -11,10 +11,18 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	backendsmocks "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
+
+// createHealthCheckTestRegistry creates a registry with the mock backend registered for Triton.
+func createHealthCheckTestRegistry(mockBackend *backendsmocks.MockBackend) *backends.Registry {
+	registry := backends.NewRegistry()
+	registry.Register(v2pb.BACKEND_TYPE_TRITON, mockBackend)
+	return registry
+}
 
 func TestHealthCheckActor_Retrieve(t *testing.T) {
 	tests := []struct {
@@ -32,14 +40,15 @@ func TestHealthCheckActor_Retrieve(t *testing.T) {
 					IsHealthy(
 						gomock.Any(),
 						gomock.Any(),
+						gomock.Any(),
 						"test-server",
 						"test-namespace",
 					).
 					Return(true, nil)
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
-			expectedReason:  "HealthCheckSucceeded",
-			expectedMessage: "Server is healthy",
+			expectedReason:  "",
+			expectedMessage: "",
 			expectedErr:     false,
 		},
 		{
@@ -49,14 +58,15 @@ func TestHealthCheckActor_Retrieve(t *testing.T) {
 					IsHealthy(
 						gomock.Any(),
 						gomock.Any(),
+						gomock.Any(),
 						"test-server",
 						"test-namespace",
 					).
 					Return(false, nil)
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
-			expectedReason:  "HealthCheckFailed",
-			expectedMessage: "Server is not healthy",
+			expectedMessage: "HealthCheckFailed",
+			expectedReason:  "Server is not healthy",
 			expectedErr:     false,
 		},
 		{
@@ -66,14 +76,15 @@ func TestHealthCheckActor_Retrieve(t *testing.T) {
 					IsHealthy(
 						gomock.Any(),
 						gomock.Any(),
+						gomock.Any(),
 						"test-server",
 						"test-namespace",
 					).
 					Return(false, errors.New("connection timeout"))
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
-			expectedReason:  "HealthCheckFailed",
-			expectedMessage: "Health check error: connection timeout",
+			expectedMessage: "HealthCheckFailed",
+			expectedReason:  "Health check error: connection timeout",
 			expectedErr:     false,
 		},
 	}
@@ -84,10 +95,11 @@ func TestHealthCheckActor_Retrieve(t *testing.T) {
 			defer ctrl.Finish()
 
 			mockBackend := backendsmocks.NewMockBackend(ctrl)
+			registry := createHealthCheckTestRegistry(mockBackend)
 
 			tt.setupMocks(mockBackend)
 
-			actor := NewHealthCheckActor(mockBackend, zap.NewNop())
+			actor := NewHealthCheckActor(nil, registry, zap.NewNop())
 
 			resource := &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{
@@ -119,15 +131,15 @@ func TestHealthCheckActor_Retrieve(t *testing.T) {
 }
 
 func TestHealthCheckActor_Run(t *testing.T) {
-	// Run() always returns a simple false condition since there's nothing
-	// it can do differently from Retrieve(). It doesn't call the backend.
+	// Run() simply returns the input condition as-is (no changes).
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockBackend := backendsmocks.NewMockBackend(ctrl)
+	registry := createHealthCheckTestRegistry(mockBackend)
 	// No expectations set, backend should not be called
 
-	actor := NewHealthCheckActor(mockBackend, zap.NewNop())
+	actor := NewHealthCheckActor(nil, registry, zap.NewNop())
 
 	resource := &v2pb.InferenceServer{
 		ObjectMeta: metav1.ObjectMeta{
@@ -139,16 +151,21 @@ func TestHealthCheckActor_Run(t *testing.T) {
 		},
 	}
 
+	// Provide an input condition with specific values
 	condition := &apipb.Condition{
-		Type: "TritonHealthCheck",
+		Type:    "TritonHealthCheck",
+		Status:  apipb.CONDITION_STATUS_FALSE,
+		Reason:  "TestReason",
+		Message: "TestMessage",
 	}
 
 	result, err := actor.Run(context.Background(), resource, condition)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
+	// Run() returns the input condition as-is
 	assert.Equal(t, apipb.CONDITION_STATUS_FALSE, result.Status)
-	assert.Equal(t, "HealthCheckFailed", result.Reason)
-	assert.Equal(t, "Server is not healthy", result.Message)
+	assert.Equal(t, "TestReason", result.Reason)
+	assert.Equal(t, "TestMessage", result.Message)
 	assert.Equal(t, "TritonHealthCheck", result.Type)
 }

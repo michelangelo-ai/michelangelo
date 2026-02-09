@@ -9,6 +9,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -19,17 +20,17 @@ var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &BackendProvis
 
 // BackendProvisioningActor provisions Kubernetes resources for inference servers.
 type BackendProvisionActor struct {
-	client  client.Client
-	backend backends.Backend
-	logger  *zap.Logger
+	client   client.Client
+	registry *backends.Registry
+	logger   *zap.Logger
 }
 
 // NewBackendProvisionActor creates a condition actor for inference server provisioning.
-func NewBackendProvisionActor(client client.Client, backend backends.Backend, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
+func NewBackendProvisionActor(client client.Client, registry *backends.Registry, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return &BackendProvisionActor{
-		client:  client,
-		backend: backend,
-		logger:  logger,
+		client:   client,
+		registry: registry,
+		logger:   logger,
 	}
 }
 
@@ -38,74 +39,52 @@ func (a *BackendProvisionActor) GetType() string {
 	return common.BackendProvisionConditionType
 }
 
-// Retrieve checks if Kubernetes infrastructure exists and is ready.
+// Retrieve checks if Kubernetes infrastructure exists (deployment and service).
 func (a *BackendProvisionActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Retrieving backend provisioning condition")
 
-	// Check if inference server exists
-	status, err := a.backend.GetServerStatus(ctx, a.logger, a.client, resource.Name, resource.Namespace)
+	backend, err := a.registry.GetBackend(resource.Spec.BackendType)
+	if err != nil {
+		return conditionUtils.GenerateFalseCondition(condition, "BackendNotFound", fmt.Sprintf("Failed to get backend: %v", err)), nil
+	}
+
+	// Check if inference server resources exist
+	status, err := backend.GetServerStatus(ctx, a.logger, a.client, resource.Name, resource.Namespace)
 	if err != nil {
 		a.logger.Error("Failed to check backend provisioning status",
 			zap.Error(err),
 			zap.String("operation", "get_backend_provisioning_status"),
 			zap.String("namespace", resource.Namespace),
 			zap.String("backend", resource.Name))
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "BackendProvisioningCheckFailed",
-			Message: fmt.Sprintf("Failed to check backend status: %v", err),
-		}, nil
+		return conditionUtils.GenerateFalseCondition(condition, "BackendProvisioningCheckFailed", fmt.Sprintf("Failed to check backend status: %v", err)), nil
 	}
 
-	if status.State == v2pb.INFERENCE_SERVER_STATE_SERVING {
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_TRUE,
-			Reason:  "ServerReady",
-			Message: "Server is ready",
-		}, nil
-	} else if status.State == v2pb.INFERENCE_SERVER_STATE_CREATING {
-		// Server doesn't exist or is incomplete, needs to be created
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "ServerNotFound",
-			Message: "Server needs to be created",
-		}, nil
+	switch status.State {
+	case v2pb.INFERENCE_SERVER_STATE_SERVING:
+		return conditionUtils.GenerateTrueCondition(condition), nil
+	default:
+		return conditionUtils.GenerateFalseCondition(condition, "BackendProvisioningFailed", fmt.Sprintf("Backend state is not serving: %v", status.State)), nil
 	}
-
-	return &apipb.Condition{
-		Type:    a.GetType(),
-		Status:  apipb.CONDITION_STATUS_FALSE,
-		Reason:  "ServerCreating",
-		Message: "Server is being created",
-	}, nil
 }
 
 // Run creates the Kubernetes deployment, service, and related resources for inference servers.
 func (a *BackendProvisionActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Running backend provisioning")
 
-	_, err := a.backend.CreateServer(ctx, a.logger, a.client, resource)
+	backend, err := a.registry.GetBackend(resource.Spec.BackendType)
+	if err != nil {
+		return conditionUtils.GenerateFalseCondition(condition, "BackendNotFound", fmt.Sprintf("Failed to get backend: %v", err)), nil
+	}
+
+	_, err = backend.CreateServer(ctx, a.logger, a.client, resource)
 	if err != nil {
 		a.logger.Error("Failed to create backend",
 			zap.Error(err),
 			zap.String("operation", "create_backend"),
 			zap.String("namespace", resource.Namespace),
 			zap.String("inferenceServer", resource.Name))
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "BackendProvisionFailed",
-			Message: fmt.Sprintf("Failed to provision backend: %v", err),
-		}, err
+		return conditionUtils.GenerateFalseCondition(condition, "BackendProvisionFailed", fmt.Sprintf("Failed to provision backend: %v", err)), err
 	}
 
-	return &apipb.Condition{
-		Type:    a.GetType(),
-		Status:  apipb.CONDITION_STATUS_TRUE,
-		Reason:  "BackendProvisionSucceeded",
-		Message: "Backend provisioned successfully",
-	}, nil
+	return conditionUtils.GenerateTrueCondition(condition), nil
 }

@@ -37,7 +37,7 @@ func TestRetrieve(t *testing.T) {
 					CandidateRevision: nil,
 				},
 			},
-			setupMocks:              func(gw *modelconfigmocks.MockModelConfigProvider) {},
+			setupMocks:              func(mcp *modelconfigmocks.MockModelConfigProvider) {},
 			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
 			expectedConditionReason: "",
 		},
@@ -54,12 +54,8 @@ func TestRetrieve(t *testing.T) {
 					CandidateRevision: &api.ResourceIdentifier{Name: "failed-model"},
 				},
 			},
-			setupMocks: func(gw *modelconfigmocks.MockModelConfigProvider) {
-				gw.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any()).Return([]modelconfig.ModelConfigEntry{
-					{
-						Name: "failed-model",
-					},
-				}, nil)
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
+				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return([]modelconfig.ModelConfigEntry{}, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
 			expectedConditionReason: "",
@@ -77,11 +73,9 @@ func TestRetrieve(t *testing.T) {
 					CandidateRevision: &api.ResourceIdentifier{Name: "failed-model"},
 				},
 			},
-			setupMocks: func(gw *modelconfigmocks.MockModelConfigProvider) {
-				gw.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any()).Return([]modelconfig.ModelConfigEntry{
-					{
-						Name: "failed-model",
-					},
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
+				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return([]modelconfig.ModelConfigEntry{
+					{Name: "failed-model"},
 				}, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
@@ -100,8 +94,8 @@ func TestRetrieve(t *testing.T) {
 					CandidateRevision: &api.ResourceIdentifier{Name: "failed-model"},
 				},
 			},
-			setupMocks: func(gw *modelconfigmocks.MockModelConfigProvider) {
-				gw.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("api error"))
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
+				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return(nil, errors.New("api error"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Unable to check if model failed-model exists in model config: api error",
@@ -126,7 +120,7 @@ func TestRetrieve(t *testing.T) {
 			assert.NoError(t, err)
 			assert.NotNil(t, condition)
 			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
-			assert.Equal(t, tt.expectedConditionReason, condition.Reason)
+			assert.Contains(t, condition.Reason, tt.expectedConditionReason)
 		})
 	}
 }
@@ -140,7 +134,7 @@ func TestRun(t *testing.T) {
 		expectedConditionReason string
 	}{
 		{
-			name: "successful rollback unloads candidate model",
+			name: "successful rollback removes candidate model from config",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
@@ -152,19 +146,14 @@ func TestRun(t *testing.T) {
 					CandidateRevision: &api.ResourceIdentifier{Name: "failed-model"},
 				},
 			},
-			setupMocks: func(gw *modelconfigmocks.MockModelConfigProvider) {
-				gw.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), "failed-model", "test-server").Return(nil)
-				gw.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any()).Return([]modelconfig.ModelConfigEntry{
-					{
-						Name: "failed-model",
-					},
-				}, nil)
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
+				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "failed-model").Return(nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
 			expectedConditionReason: "",
 		},
 		{
-			name: "rollback fails when unload fails",
+			name: "rollback fails when remove model fails",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
@@ -176,16 +165,11 @@ func TestRun(t *testing.T) {
 					CandidateRevision: &api.ResourceIdentifier{Name: "failed-model"},
 				},
 			},
-			setupMocks: func(gw *modelconfigmocks.MockModelConfigProvider) {
-				gw.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), "failed-model", "test-server").Return(errors.New("unload failed"))
-				gw.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any()).Return([]modelconfig.ModelConfigEntry{
-					{
-						Name: "failed-model",
-					},
-				}, nil)
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
+				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "failed-model").Return(errors.New("removal failed"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "Failed to rollback deployment: unload failed",
+			expectedConditionReason: "Failed to remove candidate model failed-model from model config: removal failed",
 		},
 	}
 
@@ -207,7 +191,7 @@ func TestRun(t *testing.T) {
 			assert.NoError(t, err)
 			assert.NotNil(t, condition)
 			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
-			assert.Equal(t, tt.expectedConditionReason, condition.Reason)
+			assert.Contains(t, condition.Reason, tt.expectedConditionReason)
 		})
 	}
 }

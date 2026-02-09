@@ -15,16 +15,16 @@ import (
 // DeletionPlugin orchestrates the condition actors for inference server deletion.
 type DeletionPlugin struct {
 	client              client.Client
-	backend             backends.Backend
+	registry            *backends.Registry
 	modelConfigProvider modelconfig.ModelConfigProvider
 	logger              *zap.Logger
 }
 
 // NewDeletionPlugin creates a plugin that manages cleanup of all inference server resources.
-func NewDeletionPlugin(client client.Client, backend backends.Backend, modelConfigProvider modelconfig.ModelConfigProvider, logger *zap.Logger) conditionInterfaces.Plugin[*v2pb.InferenceServer] {
+func NewDeletionPlugin(client client.Client, registry *backends.Registry, modelConfigProvider modelconfig.ModelConfigProvider, logger *zap.Logger) conditionInterfaces.Plugin[*v2pb.InferenceServer] {
 	return &DeletionPlugin{
 		client:              client,
-		backend:             backend,
+		registry:            registry,
 		modelConfigProvider: modelConfigProvider,
 		logger:              logger,
 	}
@@ -33,7 +33,7 @@ func NewDeletionPlugin(client client.Client, backend backends.Backend, modelConf
 // GetActors returns the condition actors for deletion workflow.
 func (p *DeletionPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return []conditionInterfaces.ConditionActor[*v2pb.InferenceServer]{
-		NewCleanupActor(p.client, p.backend, p.modelConfigProvider, p.logger),
+		NewCleanupActor(p.client, p.registry, p.modelConfigProvider, p.logger),
 	}
 }
 

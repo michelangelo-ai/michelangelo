@@ -6,12 +6,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
-	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 )
 
 // Module provides the inference server controller with all dependencies
 var Module = fx.Options(
-	modelconfig.Module,
 	gateways.Module,
 	fx.Provide(newEventRecorder),
 	fx.Provide(NewReconciler),

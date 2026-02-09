@@ -28,20 +28,20 @@ type Plugin struct {
 	creationPlugin conditionInterfaces.Plugin[*v2pb.InferenceServer]
 	deletionPlugin conditionInterfaces.Plugin[*v2pb.InferenceServer]
 
-	backend  backends.Backend
+	registry *backends.Registry
 	client   client.Client
 	Recorder record.EventRecorder
 	logger   *zap.Logger
 }
 
 // NewPlugin creates a plugin with creation and deletion workflows.
-func NewOSSPlugin(client client.Client, backend backends.Backend, modelConfigProvider modelconfig.ModelConfigProvider, recorder record.EventRecorder, logger *zap.Logger) plugins.Plugin {
+func NewOSSPlugin(client client.Client, registry *backends.Registry, modelConfigProvider modelconfig.ModelConfigProvider, recorder record.EventRecorder, logger *zap.Logger) plugins.Plugin {
 	return &Plugin{
-		creationPlugin: creation.NewCreationPlugin(client, backend, modelConfigProvider, logger),
-		deletionPlugin: deletion.NewDeletionPlugin(client, backend, modelConfigProvider, logger),
+		creationPlugin: creation.NewCreationPlugin(client, registry, modelConfigProvider, logger),
+		deletionPlugin: deletion.NewDeletionPlugin(client, registry, modelConfigProvider, logger),
 
 		client:   client,
-		backend:  backend,
+		registry: registry,
 		Recorder: recorder,
 		logger:   logger,
 	}
@@ -110,8 +110,20 @@ func (p *Plugin) UpdateDetails(ctx context.Context, resource *v2pb.InferenceServ
 		return nil
 	}
 
+	// Get backend from registry based on resource spec
+	backend, err := p.registry.GetBackend(resource.Spec.BackendType)
+	if err != nil {
+		p.logger.Error("Failed to get backend for inference server",
+			zap.Error(err),
+			zap.String("operation", "get_backend"),
+			zap.String("namespace", resource.Namespace),
+			zap.String("inferenceServer", resource.Name),
+			zap.String("backendType", resource.Spec.BackendType.String()))
+		return nil
+	}
+
 	// Get current status from backend
-	status, err := p.backend.GetServerStatus(ctx, p.logger, p.client, resource.Name, resource.Namespace)
+	status, err := backend.GetServerStatus(ctx, p.logger, p.client, resource.Name, resource.Namespace)
 	if err != nil {
 		// Don't fail reconciliation for status check errors
 		p.logger.Error("Failed to get server status",

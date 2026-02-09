@@ -8,6 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -18,17 +19,17 @@ var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &HealthCheckAc
 
 // HealthCheckActor verifies inference server health by polling backend health endpoints.
 type HealthCheckActor struct {
-	backend backends.Backend
-	logger  *zap.Logger
-	client  client.Client
+	registry *backends.Registry
+	logger   *zap.Logger
+	client   client.Client
 }
 
 // NewHealthCheckActor creates a condition actor for inference server health verification.
-func NewHealthCheckActor(client client.Client, backend backends.Backend, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
+func NewHealthCheckActor(client client.Client, registry *backends.Registry, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return &HealthCheckActor{
-		client:  client,
-		backend: backend,
-		logger:  logger,
+		client:   client,
+		registry: registry,
+		logger:   logger,
 	}
 }
 
@@ -41,45 +42,29 @@ func (a *HealthCheckActor) GetType() string {
 func (a *HealthCheckActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Retrieving inference server health condition")
 
-	healthy, err := a.backend.IsHealthy(ctx, a.logger, a.client, resource.Name, resource.Namespace)
+	backend, err := a.registry.GetBackend(resource.Spec.BackendType)
+	if err != nil {
+		return conditionUtils.GenerateFalseCondition(condition, "BackendNotFound", fmt.Sprintf("Failed to get backend: %v", err)), nil
+	}
 
+	healthy, err := backend.IsHealthy(ctx, a.logger, a.client, resource.Name, resource.Namespace)
 	if err == nil && healthy {
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_TRUE,
-			Reason:  "HealthCheckSucceeded",
-			Message: "Server is healthy",
-		}, nil
+		return conditionUtils.GenerateTrueCondition(condition), nil
 	} else if err != nil {
 		a.logger.Error("Health check failed",
 			zap.Error(err),
 			zap.String("operation", "health_check"),
 			zap.String("namespace", resource.Namespace),
 			zap.String("inferenceServer", resource.Name))
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "HealthCheckFailed",
-			Message: fmt.Sprintf("Health check error: %v", err),
-		}, nil
+		return conditionUtils.GenerateFalseCondition(condition, "HealthCheckFailed", fmt.Sprintf("Health check error: %v", err)), nil
 	}
 
-	return &apipb.Condition{
-		Type:    a.GetType(),
-		Status:  apipb.CONDITION_STATUS_FALSE,
-		Reason:  "HealthCheckFailed",
-		Message: "Server is not healthy",
-	}, nil
+	return conditionUtils.GenerateFalseCondition(condition, "HealthCheckFailed", "Server is not healthy"), nil
 }
 
 // Run returns a failed condition since health check failures cannot be automatically remediated.
 func (a *HealthCheckActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
-	// This method is only ran when Retrieve() fails
-	// If Retrieve() failed, then there's nothing we can do here, simply return false condition.
-	return &apipb.Condition{
-		Type:    a.GetType(),
-		Status:  apipb.CONDITION_STATUS_FALSE,
-		Reason:  "HealthCheckFailed",
-		Message: "Server is not healthy",
-	}, nil
+	// This method is only run when Retrieve() fails.
+	// If Retrieve() failed, then there's nothing we can do here, simply return the condition.
+	return condition, nil
 }

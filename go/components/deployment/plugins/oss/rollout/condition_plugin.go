@@ -3,6 +3,7 @@ package rollout
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
@@ -27,6 +28,7 @@ type conditionPlugin struct {
 // Params contains dependencies injected for rollout plugin initialization.
 type Params struct {
 	Client              client.Client
+	HTTPClient          *http.Client
 	DynamicClient       dynamic.Interface
 	RouteProvider       route.RouteProvider
 	Gateway             gateways.Gateway
@@ -57,6 +59,7 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 	// Placement strategy actors (rolling strategy for OSS)
 	placementActors, err := strategies.GetActorsForStrategy(ctx, strategies.Params{
 		Client:              p.Client,
+		HTTPClient:          p.HTTPClient,
 		DynamicClient:       p.DynamicClient,
 		RouteProvider:       p.RouteProvider,
 		Gateway:             p.Gateway,

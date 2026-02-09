@@ -16,7 +16,6 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-// todo: ghosharitra: we need to create a backend registry and provide that into the module.go function. This would allow us to dynamically switch between backends.
 var _ Backend = &tritonBackend{}
 
 const (
@@ -45,46 +44,42 @@ func (b *tritonBackend) CreateServer(ctx context.Context, logger *zap.Logger, ku
 
 	return &ServerStatus{
 		State:     v2pb.INFERENCE_SERVER_STATE_CREATING,
-		Endpoints: []string{fmt.Sprintf("http://%s-inference-service.%s.svc.cluster.local:80", inferenceServer.Name, inferenceServer.Namespace)},
+		Endpoints: []string{fmt.Sprintf("http://%s.%s.svc.cluster.local:80", generateK8sServiceName(inferenceServer.Name), inferenceServer.Namespace)},
 	}, nil
 }
 
 func (b *tritonBackend) GetServerStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName string, namespace string) (*ServerStatus, error) {
-	// Check deployment status
+	deploymentName := generateK8sDeploymentName(inferenceServerName)
+
+	// Check deployment exists
 	deployment := &appsv1.Deployment{}
-	deploymentKey := client.ObjectKey{Name: fmt.Sprintf("triton-%s", inferenceServerName), Namespace: namespace}
+	deploymentKey := client.ObjectKey{Name: deploymentName, Namespace: namespace}
 
 	if err := kubeClient.Get(ctx, deploymentKey, deployment); err != nil {
-		// When deployment doesn't exist, return CREATING state to trigger server creation
+		// When deployment doesn't exist, return CREATE_PENDING to indicate resources need to be created
 		return &ServerStatus{
-			State: v2pb.INFERENCE_SERVER_STATE_CREATING,
+			State: v2pb.INFERENCE_SERVER_STATE_CREATE_PENDING,
 		}, nil
 	}
 
-	// Check if ConfigMap exists
-	configMapName := fmt.Sprintf("%s-model-config", inferenceServerName)
-	configMap := &corev1.ConfigMap{}
-	configMapKey := client.ObjectKey{Name: configMapName, Namespace: namespace}
+	// Check if service exists
+	service := &corev1.Service{}
+	serviceKey := client.ObjectKey{Name: generateK8sServiceName(inferenceServerName), Namespace: namespace}
 
-	if err := kubeClient.Get(ctx, configMapKey, configMap); err != nil {
-		// ConfigMap doesn't exist, server is incomplete
+	if err := kubeClient.Get(ctx, serviceKey, service); err != nil {
+		// Service doesn't exist, return CREATE_PENDING to indicate resources need to be created
 		return &ServerStatus{
-			State: v2pb.INFERENCE_SERVER_STATE_CREATING,
+			State: v2pb.INFERENCE_SERVER_STATE_CREATE_PENDING,
 		}, nil
 	}
 
-	// Check if deployment is ready
-	ready := deployment.Status.ReadyReplicas == deployment.Status.Replicas && deployment.Status.Replicas > 0
-
-	state := v2pb.INFERENCE_SERVER_STATE_CREATING
-	if ready {
-		state = v2pb.INFERENCE_SERVER_STATE_SERVING
-	}
+	// Determine state from deployment status and conditions
+	state := b.getStateFromDeployment(logger, deployment, deploymentName)
 
 	return &ServerStatus{
 		State: state,
 		Endpoints: []string{
-			fmt.Sprintf("http://%s-inference-service.%s.svc.cluster.local:80", inferenceServerName, namespace),
+			fmt.Sprintf("http://%s.%s.svc.cluster.local:80", generateK8sServiceName(inferenceServerName), namespace),
 		},
 	}, nil
 }
@@ -93,7 +88,7 @@ func (b *tritonBackend) DeleteServer(ctx context.Context, logger *zap.Logger, ku
 	// Delete Deployment
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("triton-%s", inferenceServerName),
+			Name:      generateK8sDeploymentName(inferenceServerName),
 			Namespace: namespace,
 		},
 	}
@@ -108,7 +103,7 @@ func (b *tritonBackend) DeleteServer(ctx context.Context, logger *zap.Logger, ku
 	// Delete Service
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-inference-service", inferenceServerName),
+			Name:      generateK8sServiceName(inferenceServerName),
 			Namespace: namespace,
 		},
 	}
@@ -126,8 +121,7 @@ func (b *tritonBackend) DeleteServer(ctx context.Context, logger *zap.Logger, ku
 func (b *tritonBackend) IsHealthy(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName string, namespace string) (bool, error) {
 	// Check Kubernetes resource status instead of HTTP endpoints
 	// Get the Triton deployment status from Kubernetes
-	// todo: ghosharitra: I think this name can simply stay as inferenceServerName
-	deploymentName := fmt.Sprintf("triton-%s", inferenceServerName)
+	deploymentName := generateK8sDeploymentName(inferenceServerName)
 
 	deployment := &appsv1.Deployment{}
 	err := kubeClient.Get(ctx, client.ObjectKey{Name: deploymentName, Namespace: namespace}, deployment)
@@ -170,12 +164,11 @@ func (b *tritonBackend) IsHealthy(ctx context.Context, logger *zap.Logger, kubeC
 	return false, nil
 }
 
-// todo: ghosharitra: update the references to incorporate the httpClient
 func (b *tritonBackend) CheckModelStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, httpClient *http.Client, inferenceServerName string, namespace string, modelName string) (bool, error) {
 	logger.Info("Checking Triton model status", zap.String("model", modelName), zap.String("server", inferenceServerName))
 
 	// Format: http://{service-name}.{namespace}.svc.cluster.local/v2/models/{model}/ready
-	serviceName := fmt.Sprintf("%s-inference-service", inferenceServerName)
+	serviceName := generateK8sServiceName(inferenceServerName)
 	serviceURL := fmt.Sprintf("http://%s.%s.svc.cluster.local/v2/models/%s/ready", serviceName, namespace, modelName)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", serviceURL, nil)
@@ -206,7 +199,7 @@ func (b *tritonBackend) CheckModelStatus(ctx context.Context, logger *zap.Logger
 }
 
 func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServer *v2pb.InferenceServer) error {
-	deploymentName := fmt.Sprintf("triton-%s", inferenceServer.Name)
+	deploymentName := generateK8sDeploymentName(inferenceServer.Name)
 
 	// Check if Deployment already exists
 	existing := &appsv1.Deployment{}
@@ -317,8 +310,7 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.
 }
 
 func (b *tritonBackend) createTritonService(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServer *v2pb.InferenceServer) error {
-	// todo: ghosharitra: I think this name can simply stay as inferenceServerName
-	serviceName := fmt.Sprintf("%s-inference-service", inferenceServer.Name)
+	serviceName := generateK8sServiceName(inferenceServer.Name)
 
 	// Check if Service already exists
 	existing := &corev1.Service{}
@@ -336,7 +328,7 @@ func (b *tritonBackend) createTritonService(ctx context.Context, logger *zap.Log
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{
-				"app": fmt.Sprintf("triton-%s", inferenceServer.Name),
+				"app": generateK8sDeploymentName(inferenceServer.Name),
 			},
 			Ports: []corev1.ServicePort{
 				{
@@ -368,6 +360,53 @@ func (b *tritonBackend) createTritonService(ctx context.Context, logger *zap.Log
 	return nil
 }
 
+// getStateFromDeployment determines the server state by checking the Kubernetes Deployment status.
+func (b *tritonBackend) getStateFromDeployment(logger *zap.Logger, deployment *appsv1.Deployment, deploymentName string) v2pb.InferenceServerState {
+	desiredReplicas := int32(1)
+	if deployment.Spec.Replicas != nil {
+		desiredReplicas = *deployment.Spec.Replicas
+	}
+
+	// Check deployment conditions
+	var availableCondition, progressingCondition *appsv1.DeploymentCondition
+	for i := range deployment.Status.Conditions {
+		cond := &deployment.Status.Conditions[i]
+		switch cond.Type {
+		case appsv1.DeploymentAvailable:
+			availableCondition = cond
+		case appsv1.DeploymentProgressing:
+			progressingCondition = cond
+		}
+	}
+
+	logger.Debug("Deployment status",
+		zap.String("deployment", deploymentName),
+		zap.Int32("desiredReplicas", desiredReplicas),
+		zap.Int32("readyReplicas", deployment.Status.ReadyReplicas),
+		zap.Int32("availableReplicas", deployment.Status.AvailableReplicas),
+		zap.Int32("updatedReplicas", deployment.Status.UpdatedReplicas))
+
+	// Check if deployment has failed (Progressing condition is False with a failure reason)
+	if progressingCondition != nil && progressingCondition.Status == corev1.ConditionFalse {
+		if progressingCondition.Reason == "ProgressDeadlineExceeded" {
+			logger.Warn("Deployment progress deadline exceeded",
+				zap.String("deployment", deploymentName),
+				zap.String("message", progressingCondition.Message))
+			return v2pb.INFERENCE_SERVER_STATE_FAILED
+		}
+	}
+
+	// Check if deployment is available and all replicas are ready
+	if availableCondition != nil && availableCondition.Status == corev1.ConditionTrue {
+		if deployment.Status.ReadyReplicas >= desiredReplicas && desiredReplicas > 0 {
+			return v2pb.INFERENCE_SERVER_STATE_SERVING
+		}
+	}
+
+	// Deployment is still progressing
+	return v2pb.INFERENCE_SERVER_STATE_CREATING
+}
+
 func buildResourceRequirements(initSpec *v2pb.InitSpec) corev1.ResourceRequirements {
 	requests := corev1.ResourceList{}
 	limits := corev1.ResourceList{}
@@ -396,4 +435,12 @@ func buildResourceRequirements(initSpec *v2pb.InitSpec) corev1.ResourceRequireme
 func parseQuantity(value string) resource.Quantity {
 	qty, _ := resource.ParseQuantity(value)
 	return qty
+}
+
+func generateK8sDeploymentName(inferenceServerName string) string {
+	return fmt.Sprintf("triton-%s", inferenceServerName)
+}
+
+func generateK8sServiceName(inferenceServerName string) string {
+	return fmt.Sprintf("%s-inference-service", inferenceServerName)
 }

@@ -4,6 +4,8 @@ go_library(
     name = "go_default_library",
     srcs = [
         "interface.go",
+        "module.go",
+        "registry.go",
         "triton.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends",
@@ -16,6 +18,7 @@ go_library(
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/util/intstr:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
         "@org_uber_go_zap//:go_default_library",
     ],
 )

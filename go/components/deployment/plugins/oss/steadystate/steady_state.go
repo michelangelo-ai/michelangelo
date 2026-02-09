@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"time"
 
 	"go.uber.org/zap"
 
@@ -19,9 +18,10 @@ import (
 
 // SteadyStateActor monitors deployment health and maintains stable operation after rollout completion.
 type SteadyStateActor struct {
-	gateway gateways.Gateway
-	logger  *zap.Logger
-	client  client.Client
+	httpClient *http.Client
+	gateway    gateways.Gateway
+	logger     *zap.Logger
+	client     client.Client
 }
 
 // GetType returns the condition type identifier for steady state.
@@ -50,7 +50,7 @@ func (a *SteadyStateActor) Retrieve(ctx context.Context, resource *v2pb.Deployme
 	}
 
 	// Check if the desired model is ready in Triton
-	modelReady, err := a.gateway.CheckModelStatus(ctx, a.logger, a.client, &http.Client{Timeout: 30 * time.Second}, resource.Spec.DesiredRevision.Name, resource.Spec.GetInferenceServer().Name, resource.Namespace, v2pb.BACKEND_TYPE_TRITON)
+	modelReady, err := a.gateway.CheckModelStatus(ctx, a.logger, a.client, a.httpClient, resource.Spec.DesiredRevision.Name, resource.Spec.GetInferenceServer().Name, resource.Namespace, v2pb.BACKEND_TYPE_TRITON)
 	if err != nil {
 		a.logger.Error("failed to check model status",
 			zap.Error(err),
