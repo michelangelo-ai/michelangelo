@@ -1,13 +1,13 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useStyletron } from 'baseui';
 import { Button, KIND, SIZE } from 'baseui/button';
 import { Textarea } from 'baseui/textarea';
-import { useQueryClient } from '@tanstack/react-query';
 
 import { Dialog } from '#core/components/dialog/dialog';
+import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioMutation } from '#core/hooks/use-studio-mutation';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
-import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 
 import type { CellRendererProps } from '#core/components/cell/types';
 import type { PipelineRunData } from './types';
@@ -41,7 +41,8 @@ export const RetryCell = (props: CellRendererProps<string>) => {
 
   const hasActivityId = !!value;
   const pipelineRunState = pipelineRunData?.pipelineRun?.status?.state;
-  const isPipelineRunTerminated = pipelineRunState !== undefined && TERMINATED_STATES.has(pipelineRunState);
+  const isPipelineRunTerminated =
+    pipelineRunState !== undefined && TERMINATED_STATES.has(pipelineRunState);
 
   if (!hasActivityId || !isPipelineRunTerminated) {
     return null;
@@ -137,9 +138,7 @@ export const RetryCell = (props: CellRendererProps<string>) => {
           Are you sure you want to retry this task?
         </div>
         <div className={css({ marginBottom: theme.sizing.scale400 })}>
-          <label className={css({ ...theme.typography.LabelMedium })}>
-            Retry Reason:
-          </label>
+          <label className={css({ ...theme.typography.LabelMedium })}>Retry Reason:</label>
         </div>
         <Textarea
           value={retryReason}

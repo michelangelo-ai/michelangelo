@@ -97,7 +97,9 @@ describe('RetryCell', () => {
     await user.click(await screen.findByRole('button', { name: 'Retry' }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Retry Task' });
-    expect(within(dialog).getByText('Are you sure you want to retry this task?')).toBeInTheDocument();
+    expect(
+      within(dialog).getByText('Are you sure you want to retry this task?')
+    ).toBeInTheDocument();
     expect(within(dialog).getByRole('textbox')).toBeInTheDocument();
   });
 
@@ -171,18 +173,15 @@ describe('RetryCell', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Retry Task' }));
 
     await waitFor(() => {
-      expect(mockRequest).toHaveBeenCalledWith(
-        'UpdatePipelineRun',
-        expect.objectContaining({
-          pipelineRun: expect.objectContaining({
-            spec: expect.objectContaining({
-              retryInfo: expect.objectContaining({
-                reason: 'Pipeline failed due to OOM',
-              }),
-            }),
+      expect(mockRequest).toHaveBeenCalledWith('UpdatePipelineRun', {
+        pipelineRun: expect.objectContaining({
+          spec: expect.objectContaining({
+            retryInfo: expect.objectContaining({
+              reason: 'Pipeline failed due to OOM',
+            }) as Record<string, unknown>,
           }) as Record<string, unknown>,
-        })
-      );
+        }) as Record<string, unknown>,
+      });
     });
   });
 
