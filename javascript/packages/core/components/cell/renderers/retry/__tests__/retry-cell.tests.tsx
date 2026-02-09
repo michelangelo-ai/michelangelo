@@ -139,7 +139,7 @@ describe('RetryCell', () => {
     const user = userEvent.setup();
     const mockRequest = createQueryMockRouter({
       GetPipelineRun: mockPipelineRunData,
-      UpdatePipelineRun: new Error('Retry failed'),
+      UpdatePipelineRun: new Error('Test error'),
     });
 
     renderRetryCell(mockRequest);
@@ -150,6 +150,40 @@ describe('RetryCell', () => {
 
     await screen.findByText(/Test error/);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('submits with custom retry reason', async () => {
+    const user = userEvent.setup();
+    const mockRequest = createQueryMockRouter({
+      GetPipelineRun: mockPipelineRunData,
+      UpdatePipelineRun: { pipelineRun: {} },
+    });
+
+    renderRetryCell(mockRequest);
+
+    await user.click(await screen.findByRole('button', { name: 'Retry' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Retry Task' });
+
+    const textarea = within(dialog).getByRole('textbox');
+    await user.clear(textarea);
+    await user.type(textarea, 'Pipeline failed due to OOM');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Retry Task' }));
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        'UpdatePipelineRun',
+        expect.objectContaining({
+          pipelineRun: expect.objectContaining({
+            spec: expect.objectContaining({
+              retryInfo: expect.objectContaining({
+                reason: 'Pipeline failed due to OOM',
+              }),
+            }),
+          }) as Record<string, unknown>,
+        })
+      );
+    });
   });
 
   it('closes dialog on cancel', async () => {
