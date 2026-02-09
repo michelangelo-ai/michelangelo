@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import type { Cell } from '#core/components/cell/types';
+import type { RowCell } from '#core/components/row/types';
 import type { Accessor } from '#core/types/common/studio-types';
 import type { TaskBodySchema } from './components/task-details/renderers/types';
 import type { TaskListRendererProps } from './components/types';
@@ -122,7 +122,7 @@ export type ExecutionDetailViewSchema<
        * ]
        * ```
        */
-      metadata?: Cell[];
+      metadata?: RowCell[];
     };
 
     /**
