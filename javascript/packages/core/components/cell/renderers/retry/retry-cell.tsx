@@ -2,36 +2,27 @@ import React, { useState } from 'react';
 import { useStyletron } from 'baseui';
 import { Button, KIND, SIZE } from 'baseui/button';
 import { Modal, ModalBody, ModalFooter, ModalHeader } from 'baseui/modal';
-import { create } from '@bufbuild/protobuf';
 import { useQueryClient } from '@tanstack/react-query';
-import { RetryInfoSchema } from '@michelangelo/rpc';
 
 import { useStudioMutation } from '#core/hooks/use-studio-mutation';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 
-import type { CellProps } from '#core/components/cell/types';
+import type { CellRendererProps } from '#core/components/cell/types';
+import type { PipelineRunData } from './types';
 
-export function RetryCell(props: CellProps<string>) {
-  console.log('=== RetryCell component instantiated ===');
+const TERMINATED_STATES = new Set([3, 4, 5, 6]);
 
+export function RetryCell(props: CellRendererProps<string>) {
+  const { value } = props;
   const [css, theme] = useStyletron();
-  const { record } = props;
   const [showRetryModal, setShowRetryModal] = useState(false);
   const [retryReason, setRetryReason] = useState('Manual retry from UI');
   const queryClient = useQueryClient();
 
-  // Debug logging to understand the data structure
-  console.log('RetryCell props:', props);
-  console.log('RetryCell record:', record);
-  console.log('Record state:', record?.state);
-  console.log('Record activityId:', (record as any)?.activityId);
-
-  // Get the current pipeline run context
   const { projectId, entityId } = useStudioParams('detail');
 
-  // Fetch the complete pipeline run data
-  const { data: pipelineRunData } = useStudioQuery<{ pipelineRun: Record<string, unknown> }>({
+  const { data: pipelineRunData } = useStudioQuery<PipelineRunData>({
     queryName: 'GetPipelineRun',
     serviceOptions: {
       namespace: projectId,
@@ -43,94 +34,54 @@ export function RetryCell(props: CellProps<string>) {
   });
 
   const updatePipelineRunMutation = useStudioMutation<
-    { pipelineRun: Record<string, unknown>; updateOptions?: Record<string, unknown> },
+    { pipelineRun: Record<string, unknown> },
     { pipelineRun: Record<string, unknown> }
   >({ mutationName: 'UpdatePipelineRun' });
 
-  // Only show retry button when pipeline run is terminated AND step has activityId
-  const hasActivityId = record && (record as any)?.activityId;
+  const hasActivityId = !!value;
   const pipelineRunState = pipelineRunData?.pipelineRun?.status?.state;
-
-  // Terminated states: SUCCEEDED=3, KILLED=4, FAILED=5, SKIPPED=6
-  // Non-terminated states: PENDING=1, RUNNING=2
-  const isPipelineRunTerminated = pipelineRunState && pipelineRunState >= 3;
-
-  console.log('Pipeline run state:', pipelineRunState);
-  console.log('Is pipeline run terminated:', isPipelineRunTerminated);
-  console.log('Has activityId:', hasActivityId);
+  const isPipelineRunTerminated = pipelineRunState !== undefined && TERMINATED_STATES.has(pipelineRunState);
 
   if (!hasActivityId || !isPipelineRunTerminated) {
-    console.log('Not showing retry button - pipeline still running or no activityId');
     return null;
   }
 
-  const handleRetryClick = async () => {
+  const submitRetry = async () => {
     if (updatePipelineRunMutation.isPending || !pipelineRunData?.pipelineRun) {
       return;
     }
 
-    const fullPipelineRun = pipelineRunData.pipelineRun;
+    const { pipelineRun } = pipelineRunData;
+    const { workflowId, workflowRunId } = pipelineRun.status;
 
-    // Extract activityId from the step record
-    const activityId = (record as any)?.activityId;
-    const workflowId = (fullPipelineRun.status as any)?.workflowId;
-    const workflowRunId = (fullPipelineRun.status as any)?.workflowRunId;
-
-    // Check all required values
-    console.log('Extracted values:', {
-      activityId,
-      workflowId,
-      workflowRunId,
-      retryReason
-    });
-
-    if (!activityId || !workflowId || !workflowRunId) {
-      console.error('Missing required retry data:', { activityId, workflowId, workflowRunId });
-      alert(`Missing required data: activityId=${activityId}, workflowId=${workflowId}, workflowRunId=${workflowRunId}`);
+    if (!value || !workflowId || !workflowRunId) {
       return;
     }
 
-    // Create proper protobuf RetryInfo message
-    const retryInfo = create(RetryInfoSchema, {
-      activityId: activityId.toString(),
-      reason: retryReason,
-      workflowId: workflowId,
-      workflowRunId: workflowRunId,
-    });
-
-    console.log('RetryInfo protobuf message:', retryInfo);
-    console.log('Current spec:', fullPipelineRun.spec);
-
-    // Construct the updated pipeline run with retryInfo
     const updatedPipelineRun = {
-      ...fullPipelineRun,
+      ...pipelineRun,
       spec: {
-        ...fullPipelineRun.spec,
-        retryInfo,
+        ...pipelineRun.spec,
+        retryInfo: {
+          activityId: value,
+          workflowId,
+          // Must match status.workflowRunId to trigger backend retry processing
+          workflowRunId,
+          reason: retryReason,
+        },
       },
     };
 
-    console.log('Updated spec with retryInfo:', updatedPipelineRun.spec);
-    console.log('Full updated pipeline run:', updatedPipelineRun);
-
     try {
-      const result = await updatePipelineRunMutation.mutateAsync({
-        pipelineRun: updatedPipelineRun
-      });
-      console.log('Retry request successful:', result);
+      await updatePipelineRunMutation.mutateAsync({ pipelineRun: updatedPipelineRun });
       setShowRetryModal(false);
       setRetryReason('Manual retry from UI');
 
-      // Refresh the pipeline run data to show updated status
       await queryClient.invalidateQueries({
         queryKey: ['GetPipelineRun', { namespace: projectId, name: entityId }],
       });
-
-      // Show success message
-      alert('Retry request submitted successfully! Page data refreshed.');
-    } catch (error) {
-      console.error('Failed to retry task:', error);
-      alert(`Failed to retry task: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch {
+      // Error is captured in updatePipelineRunMutation.error and displayed in the modal
     }
   };
 
@@ -145,10 +96,20 @@ export function RetryCell(props: CellProps<string>) {
         Retry
       </Button>
 
-      {/* Retry confirmation modal */}
       <Modal isOpen={showRetryModal} onClose={() => setShowRetryModal(false)}>
         <ModalHeader>Retry Task</ModalHeader>
         <ModalBody>
+          {updatePipelineRunMutation.error && (
+            <div
+              className={css({
+                color: theme.colors.negative,
+                marginBottom: theme.sizing.scale600,
+                ...theme.typography.ParagraphSmall,
+              })}
+            >
+              {updatePipelineRunMutation.error.message}
+            </div>
+          )}
           <div className={css({ marginBottom: theme.sizing.scale600 })}>
             Are you sure you want to retry this task?
           </div>
@@ -185,7 +146,7 @@ export function RetryCell(props: CellProps<string>) {
             <Button
               size={SIZE.compact}
               kind={KIND.primary}
-              onClick={handleRetryClick}
+              onClick={submitRetry}
               isLoading={updatePipelineRunMutation.isPending}
             >
               Retry Task
