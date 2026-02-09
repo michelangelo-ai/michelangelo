@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useStyletron } from 'baseui';
 import { Button, KIND, SIZE } from 'baseui/button';
-import { Modal, ModalBody, ModalFooter, ModalHeader } from 'baseui/modal';
+import { Textarea } from 'baseui/textarea';
 import { useQueryClient } from '@tanstack/react-query';
 
+import { Dialog } from '#core/components/dialog/dialog';
 import { useStudioMutation } from '#core/hooks/use-studio-mutation';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
@@ -13,7 +14,7 @@ import type { PipelineRunData } from './types';
 
 const TERMINATED_STATES = new Set([3, 4, 5, 6]);
 
-export function RetryCell(props: CellRendererProps<string>) {
+export const RetryCell = (props: CellRendererProps<string>) => {
   const { value } = props;
   const [css, theme] = useStyletron();
   const [showRetryModal, setShowRetryModal] = useState(false);
@@ -96,64 +97,64 @@ export function RetryCell(props: CellRendererProps<string>) {
         Retry
       </Button>
 
-      <Modal isOpen={showRetryModal} onClose={() => setShowRetryModal(false)}>
-        <ModalHeader>Retry Task</ModalHeader>
-        <ModalBody>
-          {updatePipelineRunMutation.error && (
-            <div
-              className={css({
-                color: theme.colors.negative,
-                marginBottom: theme.sizing.scale600,
-                ...theme.typography.ParagraphSmall,
-              })}
-            >
-              {updatePipelineRunMutation.error.message}
-            </div>
-          )}
-          <div className={css({ marginBottom: theme.sizing.scale600 })}>
-            Are you sure you want to retry this task?
-          </div>
-          <div className={css({ marginBottom: theme.sizing.scale400 })}>
-            <label className={css({ ...theme.typography.LabelMedium })}>
-              Retry Reason:
-            </label>
-          </div>
-          <textarea
-            value={retryReason}
-            onChange={(e) => setRetryReason(e.target.value)}
-            placeholder="Enter reason for retry..."
-            className={css({
-              width: '100%',
-              padding: theme.sizing.scale400,
-              border: `1px solid ${theme.colors.borderOpaque}`,
-              borderRadius: theme.borders.radius200,
-              resize: 'vertical',
-              minHeight: '80px',
-              fontFamily: 'inherit',
-            })}
-          />
-        </ModalBody>
-        <ModalFooter>
-          <div className={css({ display: 'flex', gap: theme.sizing.scale400 })}>
+      <Dialog
+        isOpen={showRetryModal}
+        onDismiss={() => setShowRetryModal(false)}
+        heading="Retry Task"
+        buttonDock={{
+          primaryAction: (
             <Button
-              size={SIZE.compact}
-              kind={KIND.secondary}
-              onClick={() => setShowRetryModal(false)}
-              disabled={updatePipelineRunMutation.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              size={SIZE.compact}
               kind={KIND.primary}
               onClick={submitRetry}
               isLoading={updatePipelineRunMutation.isPending}
             >
               Retry Task
             </Button>
+          ),
+          dismissiveAction: (
+            <Button
+              kind={KIND.tertiary}
+              onClick={() => setShowRetryModal(false)}
+              disabled={updatePipelineRunMutation.isPending}
+            >
+              Cancel
+            </Button>
+          ),
+        }}
+      >
+        {updatePipelineRunMutation.error && (
+          <div
+            className={css({
+              color: theme.colors.negative,
+              marginBottom: theme.sizing.scale600,
+              ...theme.typography.ParagraphSmall,
+            })}
+          >
+            {updatePipelineRunMutation.error.message}
           </div>
-        </ModalFooter>
-      </Modal>
+        )}
+        <div className={css({ marginBottom: theme.sizing.scale600 })}>
+          Are you sure you want to retry this task?
+        </div>
+        <div className={css({ marginBottom: theme.sizing.scale400 })}>
+          <label className={css({ ...theme.typography.LabelMedium })}>
+            Retry Reason:
+          </label>
+        </div>
+        <Textarea
+          value={retryReason}
+          onChange={(e) => setRetryReason(e.target.value)}
+          placeholder="Enter reason for retry..."
+          overrides={{
+            Input: {
+              style: {
+                resize: 'vertical',
+                minHeight: '80px',
+              },
+            },
+          }}
+        />
+      </Dialog>
     </>
   );
-}
+};
