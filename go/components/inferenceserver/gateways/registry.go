@@ -11,14 +11,11 @@ type registry struct {
 	backends map[v2pb.BackendType]backends.Backend
 }
 
-func newRegistry() *registry {
-	return &registry{
-		backends: make(map[v2pb.BackendType]backends.Backend),
+func newRegistry(backends map[v2pb.BackendType]backends.Backend) *registry {
+	registry := &registry{
+		backends: backends,
 	}
-}
-
-func (r *registry) registerBackend(backendType v2pb.BackendType, backend backends.Backend) {
-	r.backends[backendType] = backend
+	return registry
 }
 
 func (r *registry) getBackend(backendType v2pb.BackendType) (backends.Backend, error) {

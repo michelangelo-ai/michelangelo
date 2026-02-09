@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"go.uber.org/zap"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
@@ -20,6 +21,7 @@ var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &ResourceAcquisitio
 type ResourceAcquisitionActor struct {
 	logger  *zap.Logger
 	gateway gateways.Gateway
+	client  client.Client
 }
 
 // GetType returns the condition type identifier for resource acquisition.
@@ -34,7 +36,7 @@ func (a *ResourceAcquisitionActor) Retrieve(ctx context.Context, resource *v2pb.
 	}
 
 	// Check if the inference server is healthy
-	if healthy, err := a.gateway.InferenceServerIsHealthy(ctx, a.logger, resource.Spec.GetInferenceServer().Name, resource.Namespace, v2pb.BACKEND_TYPE_TRITON); err != nil {
+	if healthy, err := a.gateway.InferenceServerIsHealthy(ctx, a.logger, a.client, resource.Spec.GetInferenceServer().Name, resource.Namespace, v2pb.BACKEND_TYPE_TRITON); err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "HealthCheckFailed", fmt.Sprintf("Failed to check health of inference server: %v", err)), nil
 	} else if !healthy {
 		return conditionsutil.GenerateFalseCondition(condition, "HealthCheckFailed", "Inference server is not healthy"), nil

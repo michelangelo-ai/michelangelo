@@ -5,12 +5,14 @@ import (
 	"fmt"
 
 	"go.uber.org/zap"
+	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -24,10 +26,12 @@ type conditionPlugin struct {
 
 // Params contains dependencies injected for rollout plugin initialization.
 type Params struct {
-	Client        client.Client
-	ProxyProvider proxy.ProxyProvider
-	Gateway       gateways.Gateway
-	Logger        *zap.Logger
+	Client              client.Client
+	DynamicClient       dynamic.Interface
+	RouteProvider       route.RouteProvider
+	Gateway             gateways.Gateway
+	ModelConfigProvider modelconfig.ModelConfigProvider
+	Logger              *zap.Logger
 }
 
 // NewRolloutPlugin creates a rollout workflow plugin with deployment-specific strategy actors.
@@ -44,6 +48,7 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 			logger:  logger,
 		},
 		&ResourceAcquisitionActor{
+			client:  p.Client,
 			gateway: p.Gateway,
 			logger:  logger,
 		},
@@ -51,10 +56,12 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 
 	// Placement strategy actors (rolling strategy for OSS)
 	placementActors, err := strategies.GetActorsForStrategy(ctx, strategies.Params{
-		Client:        p.Client,
-		ProxyProvider: p.ProxyProvider,
-		Gateway:       p.Gateway,
-		Logger:        p.Logger,
+		Client:              p.Client,
+		DynamicClient:       p.DynamicClient,
+		RouteProvider:       p.RouteProvider,
+		Gateway:             p.Gateway,
+		ModelConfigProvider: p.ModelConfigProvider,
+		Logger:              p.Logger,
 	}, deployment)
 	if err != nil {
 		return nil, err

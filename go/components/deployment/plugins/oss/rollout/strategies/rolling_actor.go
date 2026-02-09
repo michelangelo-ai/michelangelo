@@ -3,9 +3,11 @@ package strategies
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"go.uber.org/zap"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/gogo/protobuf/types"
 
@@ -14,6 +16,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	strategiesCommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -22,16 +25,21 @@ import (
 func getRollingActors(params Params, deployment *v2pb.Deployment) []conditionInterfaces.ConditionActor[*v2pb.Deployment] {
 	return []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&RollingRolloutActor{
-			gateway: params.Gateway,
-			logger:  params.Logger,
+			client:              params.Client,
+			gateway:             params.Gateway,
+			modelConfigProvider: params.ModelConfigProvider,
+			logger:              params.Logger,
 		},
 		&strategiesCommon.TrafficRoutingActor{
-			ProxyProvider: params.ProxyProvider,
+			DynamicClient: params.DynamicClient,
+			RouteProvider: params.RouteProvider,
 			Logger:        params.Logger,
 		},
 		&ModelCleanupActor{
-			Gateway: params.Gateway,
-			Logger:  params.Logger,
+			Client:              params.Client,
+			Gateway:             params.Gateway,
+			ModelConfigProvider: params.ModelConfigProvider,
+			Logger:              params.Logger,
 		},
 	}
 }
@@ -41,8 +49,10 @@ var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &RollingRolloutActo
 // RollingRolloutActor loads models into the inference servers via a rolling rollout strategy.
 // The strategy involves loading the model into one target cluster at a time and verifying it is ready.
 type RollingRolloutActor struct {
-	gateway gateways.Gateway
-	logger  *zap.Logger
+	client              client.Client
+	gateway             gateways.Gateway
+	modelConfigProvider modelconfig.ModelConfigProvider
+	logger              *zap.Logger
 }
 
 // GetType returns the condition type identifier for rolling rollout.
@@ -105,7 +115,7 @@ func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployme
 
 		var err error
 		// TODO(#696): ghosharitra: make the storage path configurable w.r.t storage client and storage location
-		if err = a.gateway.LoadModel(ctx, a.logger, modelName, fmt.Sprintf("s3://deploy-models/%s/", modelName), inferenceServerName, deployment.Namespace, v2pb.BACKEND_TYPE_TRITON); err != nil {
+		if err = a.modelConfigProvider.AddModelToConfig(ctx, a.logger, a.client, inferenceServerName, deployment.Namespace, modelconfig.ModelConfigEntry{Name: modelName, StoragePath: fmt.Sprintf("s3://deploy-models/%s/", modelName)}); err != nil {
 			a.logger.Error("Failed to initiate model loading", zap.Error(err), zap.String("operation", "load_model"), zap.String("model", modelName), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", deployment.Namespace), zap.String("backendType", v2pb.BACKEND_TYPE_TRITON.String()))
 			return conditionUtils.GenerateFalseCondition(condition, "ModelLoadingFailed", fmt.Sprintf("Failed to update deployment: %v", err)), nil
 		}
@@ -127,6 +137,7 @@ func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployme
 	return conditionUtils.GenerateUnknownCondition(condition, "RollingRolloutPending", "Rolling rollout is in progress"), nil
 }
 
+// todo: ghosharitra: remove and mimic as multi-cluster (no exp retry here)
 // checkModelStatusWithTimeout implements retry logic with configurable timeout for model health checks
 func (a *RollingRolloutActor) checkModelStatusWithTimeout(ctx context.Context, logger *zap.Logger, modelName string, inferenceServerName string, namespace string) (bool, error) {
 	const (
@@ -149,20 +160,13 @@ func (a *RollingRolloutActor) checkModelStatusWithTimeout(ctx context.Context, l
 	defer ticker.Stop()
 
 	// Try immediately first
-	modelReady, err := a.gateway.CheckModelStatus(timeoutCtx, logger, modelName, inferenceServerName, namespace, v2pb.BACKEND_TYPE_TRITON)
-	if err == nil && modelReady {
-		logger.Info("Model health check succeeded immediately", zap.String("model", modelName))
+	modelReady, err := a.modelConfigProvider.GetModelsFromConfig(timeoutCtx, logger, a.client, inferenceServerName, namespace)
+	if err != nil {
+		return false, fmt.Errorf("failed to get models from model config: %w", err)
+	}
+	if len(modelReady) > 0 {
 		return true, nil
 	}
-
-	if err != nil {
-		logger.Info("Initial model health check failed, will retry",
-			zap.String("model", modelName),
-			zap.Error(err))
-	} else {
-		logger.Info("Model not ready, will retry", zap.String("model", modelName))
-	}
-
 	// Start retry loop
 	for {
 		select {
@@ -175,7 +179,7 @@ func (a *RollingRolloutActor) checkModelStatusWithTimeout(ctx context.Context, l
 		case <-ticker.C:
 			logger.Info("Retrying model health check", zap.String("model", modelName))
 
-			modelReady, err := a.gateway.CheckModelStatus(timeoutCtx, logger, modelName, inferenceServerName, namespace, v2pb.BACKEND_TYPE_TRITON)
+			modelReady, err := a.gateway.CheckModelStatus(timeoutCtx, logger, a.client, &http.Client{Timeout: 30 * time.Second}, modelName, inferenceServerName, namespace, v2pb.BACKEND_TYPE_TRITON)
 			if err == nil && modelReady {
 				logger.Info("Model health check succeeded after retry", zap.String("model", modelName))
 				return true, nil
@@ -186,10 +190,9 @@ func (a *RollingRolloutActor) checkModelStatusWithTimeout(ctx context.Context, l
 					zap.String("model", modelName),
 					zap.String("inference_server", inferenceServerName),
 					zap.String("namespace", namespace),
-					zap.String("backend_type", v2pb.BACKEND_TYPE_TRITON.String()),
 					zap.Error(err))
 			} else {
-				logger.Info("Model still not ready, continuing to wait", zap.String("model", modelName), zap.String("inference_server", inferenceServerName), zap.String("namespace", namespace), zap.String("backend_type", v2pb.BACKEND_TYPE_TRITON.String()))
+				logger.Info("Model still not ready, continuing to wait", zap.String("model", modelName), zap.String("inference_server", inferenceServerName), zap.String("namespace", namespace))
 			}
 		}
 	}

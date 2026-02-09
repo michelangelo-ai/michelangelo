@@ -12,8 +12,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy/proxymocks"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig/modelconfigmocks"
 	"github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -22,7 +22,7 @@ func TestRetrieve(t *testing.T) {
 	tests := []struct {
 		name                    string
 		deployment              *v2pb.Deployment
-		setupMocks              func(*gatewaysmocks.MockGateway, *proxymocks.MockProxyProvider)
+		setupMocks              func(*gatewaysmocks.MockGateway, *proxymocks.MockRouteProvider)
 		expectedConditionStatus api.ConditionStatus
 		expectedConditionReason string
 	}{
@@ -39,7 +39,7 @@ func TestRetrieve(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "old-model"},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockRouteProvider) {
 				gw.EXPECT().CheckModelExists(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
@@ -58,7 +58,7 @@ func TestRetrieve(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "old-model"},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockRouteProvider) {
 				gw.EXPECT().CheckModelExists(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, errors.New("connection error"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
@@ -77,7 +77,7 @@ func TestRetrieve(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "old-model"},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockRouteProvider) {
 				gw.EXPECT().CheckModelExists(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
 				pp.EXPECT().DeploymentRouteExists(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(true, nil)
 			},
@@ -97,7 +97,7 @@ func TestRetrieve(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "old-model"},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockRouteProvider) {
 				gw.EXPECT().CheckModelExists(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
 				pp.EXPECT().DeploymentRouteExists(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(false, errors.New("api error"))
 			},
@@ -117,7 +117,7 @@ func TestRetrieve(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "old-model"},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockRouteProvider) {
 				gw.EXPECT().CheckModelExists(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
 				pp.EXPECT().DeploymentRouteExists(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(false, nil)
 			},
@@ -131,15 +131,15 @@ func TestRetrieve(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
-			mockProxy := proxymocks.NewMockProxyProvider(ctrl)
+			mockModelConfigProvider := modelconfigmocks.NewMockModelConfigProvider(ctrl)
+			mockProxy := proxymocks.NewMockRouteProvider(ctrl)
 
-			tt.setupMocks(mockGateway, mockProxy)
+			tt.setupMocks(mockModelConfigProvider, mockProxy)
 
 			actor := &CleanupActor{
-				gateway:       mockGateway,
-				proxyProvider: mockProxy,
-				logger:        zap.NewNop(),
+				modelConfigProvider: mockModelConfigProvider,
+				RouteProvider:       mockProxy,
+				logger:              zap.NewNop(),
 			}
 
 			condition, err := actor.Retrieve(context.Background(), tt.deployment, &api.Condition{})
@@ -156,7 +156,7 @@ func TestRun(t *testing.T) {
 	tests := []struct {
 		name                    string
 		deployment              *v2pb.Deployment
-		setupMocks              func(*gatewaysmocks.MockGateway, *proxymocks.MockProxyProvider)
+		setupMocks              func(*modelconfigmocks.MockModelConfigProvider, *proxymocks.MockRouteProvider)
 		expectedConditionStatus api.ConditionStatus
 		expectedConditionReason string
 	}{
@@ -174,7 +174,7 @@ func TestRun(t *testing.T) {
 					Stage:           v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockRouteProvider) {
 				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(nil)
 				pp.EXPECT().DeleteDeploymentRoute(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(nil)
 			},
@@ -195,7 +195,7 @@ func TestRun(t *testing.T) {
 					Stage:           v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockRouteProvider) {
 				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(errors.New("unload failed"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
@@ -215,7 +215,7 @@ func TestRun(t *testing.T) {
 					Stage:           v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockRouteProvider) {
 				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(nil)
 				pp.EXPECT().DeleteDeploymentRoute(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(errors.New("deletion failed"))
 			},
@@ -236,7 +236,7 @@ func TestRun(t *testing.T) {
 					Stage:           v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockRouteProvider) {
 				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(nil)
 				notFoundErr := kerrors.NewNotFound(schema.GroupResource{Group: "gateway.networking.k8s.io", Resource: "httproutes"}, "test-deployment-httproute")
 				pp.EXPECT().DeleteDeploymentRoute(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(notFoundErr)
@@ -251,15 +251,15 @@ func TestRun(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
-			mockProxy := proxymocks.NewMockProxyProvider(ctrl)
+			mockModelConfigProvider := modelconfigmocks.NewMockModelConfigProvider(ctrl)
+			mockProxy := proxymocks.NewMockRouteProvider(ctrl)
 
-			tt.setupMocks(mockGateway, mockProxy)
+			tt.setupMocks(mockModelConfigProvider, mockProxy)
 
 			actor := &CleanupActor{
-				gateway:       mockGateway,
-				proxyProvider: mockProxy,
-				logger:        zap.NewNop(),
+				modelConfigProvider: mockModelConfigProvider,
+				RouteProvider:       mockProxy,
+				logger:              zap.NewNop(),
 			}
 
 			condition, err := actor.Run(context.Background(), tt.deployment, &api.Condition{})

@@ -3,9 +3,12 @@ package oss
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"time"
 
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
@@ -17,8 +20,9 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollback"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/steadystate"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -34,7 +38,8 @@ var _ plugins.Plugin = &Plugin{}
 // Plugin implements deployment lifecycle management for open-source deployments.
 type Plugin struct {
 	client        client.Client
-	proxyProvider proxy.ProxyProvider
+	dynamicClient dynamic.Interface
+	routeProvider route.RouteProvider
 	gateway       gateways.Gateway
 	blobstore     *blobstore.BlobStore
 	logger        *zap.Logger
@@ -49,32 +54,38 @@ type Plugin struct {
 type Params struct {
 	fx.In
 
-	Registrar     pluginmanager.Registrar[plugins.Plugin]
-	Client        client.Client
-	Gateway       gateways.Gateway
-	ProxyProvider proxy.ProxyProvider
-	BlobStore     *blobstore.BlobStore
-	Logger        *zap.Logger
+	Registrar           pluginmanager.Registrar[plugins.Plugin]
+	Client              client.Client
+	DynamicClient       dynamic.Interface
+	Gateway             gateways.Gateway
+	RouteProvider       route.RouteProvider
+	BlobStore           *blobstore.BlobStore
+	Logger              *zap.Logger
+	ModelConfigProvider modelconfig.ModelConfigProvider
 }
 
 // NewPlugin creates an OSS deployment plugin with rollback, cleanup, and steady state workflows.
 func NewPlugin(params Params) *Plugin {
 	return &Plugin{
 		client:        params.Client,
+		dynamicClient: params.DynamicClient,
 		gateway:       params.Gateway,
-		proxyProvider: params.ProxyProvider,
+		routeProvider: params.RouteProvider,
 		blobstore:     params.BlobStore,
 		logger:        params.Logger,
 		rollbackPlugin: rollback.NewRollbackPlugin(rollback.Params{
-			Gateway: params.Gateway,
-			Logger:  params.Logger,
+			Client:              params.Client,
+			ModelConfigProvider: params.ModelConfigProvider,
+			Logger:              params.Logger,
 		}),
 		cleanupPlugin: cleanup.NewCleanupPlugin(cleanup.Params{
-			ProxyProvider: params.ProxyProvider,
-			Gateway:       params.Gateway,
-			Logger:        params.Logger,
+			Client:              params.Client,
+			RouteProvider:       params.RouteProvider,
+			ModelConfigProvider: params.ModelConfigProvider,
+			Logger:              params.Logger,
 		}),
 		steadyStatePlugin: steadystate.NewSteadyStatePlugin(steadystate.Params{
+			Client:  params.Client,
 			Gateway: params.Gateway,
 			Logger:  params.Logger,
 		}),
@@ -85,7 +96,8 @@ func NewPlugin(params Params) *Plugin {
 func (p *Plugin) GetRolloutPlugin(ctx context.Context, deployment *v2pb.Deployment) (conditionInterfaces.Plugin[*v2pb.Deployment], error) {
 	rolloutPlugin, err := rollout.NewRolloutPlugin(ctx, rollout.Params{
 		Client:        p.client,
-		ProxyProvider: p.proxyProvider,
+		DynamicClient: p.dynamicClient,
+		RouteProvider: p.routeProvider,
 		Gateway:       p.gateway,
 		Logger:        p.logger,
 	}, deployment)
@@ -194,7 +206,7 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 		return deployment.Status, nil
 	}
 	serverName := inferenceServer.GetName()
-	healthy, err := p.gateway.CheckModelStatus(ctx, p.logger, deployment.Spec.DesiredRevision.Name, serverName, deployment.Namespace, v2pb.BACKEND_TYPE_TRITON)
+	healthy, err := p.gateway.CheckModelStatus(ctx, p.logger, p.client, &http.Client{Timeout: 30 * time.Second}, deployment.Spec.DesiredRevision.Name, serverName, deployment.Namespace, v2pb.BACKEND_TYPE_TRITON)
 	if err != nil {
 		p.logger.Error("failed to check model status",
 			zap.Error(err),
@@ -236,7 +248,7 @@ func (p *Plugin) HealthCheckGate(ctx context.Context, observability plugins.Obse
 		return false, nil
 	}
 	// Check if the inference server is healthy
-	healthy, err := p.gateway.InferenceServerIsHealthy(ctx, p.logger, deployment.Spec.GetInferenceServer().Name, deployment.Namespace, v2pb.BACKEND_TYPE_TRITON)
+	healthy, err := p.gateway.InferenceServerIsHealthy(ctx, p.logger, p.client, deployment.Spec.GetInferenceServer().Name, deployment.Namespace, v2pb.BACKEND_TYPE_TRITON)
 	if err != nil {
 		p.logger.Error("failed to check health of inference server",
 			zap.Error(err),

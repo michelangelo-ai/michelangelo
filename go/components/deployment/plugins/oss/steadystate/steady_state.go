@@ -3,8 +3,12 @@ package steadystate
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"time"
 
 	"go.uber.org/zap"
+
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
@@ -17,6 +21,7 @@ import (
 type SteadyStateActor struct {
 	gateway gateways.Gateway
 	logger  *zap.Logger
+	client  client.Client
 }
 
 // GetType returns the condition type identifier for steady state.
@@ -30,7 +35,7 @@ func (a *SteadyStateActor) Retrieve(ctx context.Context, resource *v2pb.Deployme
 	a.logger.Info("Monitoring steady state for deployment", zap.String("deployment", resource.Name))
 
 	// Check if the inference server is healthy
-	healthy, err := a.gateway.InferenceServerIsHealthy(ctx, a.logger, resource.Spec.GetInferenceServer().Name, resource.Namespace, v2pb.BACKEND_TYPE_TRITON)
+	healthy, err := a.gateway.InferenceServerIsHealthy(ctx, a.logger, a.client, resource.Spec.GetInferenceServer().Name, resource.Namespace, v2pb.BACKEND_TYPE_TRITON)
 	if err != nil {
 		a.logger.Error("failed to check health of inference server",
 			zap.Error(err),
@@ -45,7 +50,7 @@ func (a *SteadyStateActor) Retrieve(ctx context.Context, resource *v2pb.Deployme
 	}
 
 	// Check if the desired model is ready in Triton
-	modelReady, err := a.gateway.CheckModelStatus(ctx, a.logger, resource.Spec.DesiredRevision.Name, resource.Spec.GetInferenceServer().Name, resource.Namespace, v2pb.BACKEND_TYPE_TRITON)
+	modelReady, err := a.gateway.CheckModelStatus(ctx, a.logger, a.client, &http.Client{Timeout: 30 * time.Second}, resource.Spec.DesiredRevision.Name, resource.Spec.GetInferenceServer().Name, resource.Namespace, v2pb.BACKEND_TYPE_TRITON)
 	if err != nil {
 		a.logger.Error("failed to check model status",
 			zap.Error(err),

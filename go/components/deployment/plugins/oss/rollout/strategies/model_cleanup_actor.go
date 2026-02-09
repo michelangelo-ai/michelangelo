@@ -3,13 +3,17 @@ package strategies
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"time"
 
 	"go.uber.org/zap"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -18,8 +22,10 @@ var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &ModelCleanupActor{
 
 // ModelCleanupActor unloads previous model versions from inference servers after successful rollout.
 type ModelCleanupActor struct {
-	Gateway gateways.Gateway
-	Logger  *zap.Logger
+	Client              client.Client
+	Gateway             gateways.Gateway
+	ModelConfigProvider modelconfig.ModelConfigProvider
+	Logger              *zap.Logger
 }
 
 // GetType returns the condition type identifier for model cleanup.
@@ -48,7 +54,8 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deploym
 		zap.String("inference_server", inferenceServerName))
 
 	// Check if old model still exists in Triton
-	ready, err := a.Gateway.CheckModelStatus(ctx, a.Logger, currentModel, inferenceServerName, resource.Namespace, v2pb.BACKEND_TYPE_TRITON)
+	// todo: ghosharitra: check if httpClient should be directly created by controller runtime client
+	ready, err := a.Gateway.CheckModelStatus(ctx, a.Logger, a.Client, &http.Client{Timeout: 30 * time.Second}, currentModel, inferenceServerName, resource.Namespace, v2pb.BACKEND_TYPE_TRITON)
 	if err != nil {
 		a.Logger.Info("Cannot verify old model status, cleanup may be needed", zap.Error(err))
 		return conditionUtils.GenerateFalseCondition(condition, "CleanupPending", fmt.Sprintf("Need to cleanup old model %s", currentModel)), nil
@@ -76,15 +83,12 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 		zap.String("inference_server", inferenceServerName))
 
 	// Unload old model from inference server
-	a.Logger.Info("Unloading old model from inference server", zap.String("old_model", currentModel))
-	if err := a.Gateway.UnloadModel(ctx, a.Logger, currentModel, inferenceServerName, resource.Namespace, v2pb.BACKEND_TYPE_TRITON); err != nil {
-		a.Logger.Error("Failed to unload old model from inference server", zap.String("model", currentModel), zap.Error(err))
-		return conditionUtils.GenerateFalseCondition(condition, "ModelUnloadingFailed", fmt.Sprintf("Failed to unload old model %s from inference server: %v", currentModel, err)), nil
+	a.Logger.Info("Removing old model from model config", zap.String("old_model", currentModel))
+	if err := a.ModelConfigProvider.RemoveModelFromConfig(ctx, a.Logger, a.Client, inferenceServerName, resource.Namespace, currentModel); err != nil {
+		a.Logger.Error("Failed to remove old model from model config", zap.String("model", currentModel), zap.Error(err))
+		return conditionUtils.GenerateFalseCondition(condition, "ModelRemovalFailed", fmt.Sprintf("Failed to remove old model %s from model config: %v", currentModel, err)), nil
 	}
-
-	a.Logger.Info("Successfully unloaded old model from inference server",
-		zap.String("old_model", currentModel),
-		zap.String("new_model", desiredModel))
+	a.Logger.Info("Successfully removed old model from model config", zap.String("old_model", currentModel))
 
 	return conditionUtils.GenerateTrueCondition(condition), nil
 }
