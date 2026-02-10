@@ -709,7 +709,6 @@ def _setup_temporal(links, helm_existing_repos):
 
     # Wait for admin tools to be fully ready and get specific pod name
     print("Waiting for admin tools to be ready for commands...")
-    time.sleep(10)  # Increased wait time
 
     # Get the specific admin tools pod name for more reliable exec
     admin_pod_result = subprocess.check_output(
@@ -724,6 +723,34 @@ def _setup_temporal(links, helm_existing_repos):
         ],
         text=True,
     ).strip()
+
+    # Test kubectl exec readiness with retries
+    max_retries = 12
+    retry_delay = 5
+    for attempt in range(max_retries):
+        try:
+            print(f"Testing admin tools container readiness (attempt {attempt + 1}/{max_retries})...")
+            subprocess.check_call(
+                [
+                    "kubectl",
+                    "exec",
+                    admin_pod_result,
+                    "-c",
+                    "admin-tools",
+                    "--",
+                    "ls",
+                    "/",
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            print("Admin tools container is ready for commands!")
+            break
+        except subprocess.CalledProcessError:
+            if attempt == max_retries - 1:
+                _err_exit(f"Admin tools container failed to become ready for commands after {max_retries * retry_delay} seconds")
+            print(f"Admin tools not ready yet, waiting {retry_delay} seconds...")
+            time.sleep(retry_delay)
 
     # Register the default namespace in Temporal using specific pod name
     _exec(
