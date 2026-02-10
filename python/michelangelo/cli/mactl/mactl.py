@@ -3,7 +3,6 @@
 A command line interface to interact with the Michelangelo API server via gRPC.
 """
 
-import configparser
 import logging
 import re
 import sys
@@ -11,7 +10,7 @@ from argparse import ArgumentParser, Namespace
 from collections import defaultdict
 from importlib.util import module_from_spec, spec_from_file_location
 from logging import WARNING, basicConfig, getLogger
-from os import environ, getenv
+from os import getenv
 from pathlib import Path
 from typing import Union
 
@@ -21,76 +20,18 @@ from grpc import (
     secure_channel,
     ssl_channel_credentials,
 )
-from yaml import safe_load as yaml_safe_load
 
+from michelangelo.cli.mactl.config import load_config, setup_minio_env
 from michelangelo.cli.mactl.crd import CRD, yaml_to_dict
 from michelangelo.cli.mactl.grpc_tools import list_services
 
+# Load configuration
+# Priority: env vars (highest) > RC file > defaults (lowest)
+_config = load_config()
 
-def _load_rc_config() -> dict:
-    """Load configuration from ~/.mactlrc file."""
-    config = configparser.ConfigParser()
-    rc_file = Path.home() / ".mactlrc"
-
-    if not rc_file.exists():
-        return {}
-
-    try:
-        config.read(rc_file)
-    except Exception:
-        return {}
-
-    rc_config = {}
-
-    if "mactl" in config:
-        if "address" in config["mactl"]:
-            rc_config["address"] = config["mactl"]["address"]
-        if "use_tls" in config["mactl"]:
-            rc_config["use_tls"] = config["mactl"]["use_tls"]
-
-    if "metadata" in config:
-        rc_config["metadata"] = dict(config["metadata"])
-
-    return rc_config
-
-
-### For Uber-internal server ###
-# $ cerberus -r michelangelo-apiserver-staging
-ADDRESS = "127.0.0.1:5435"
-METADATA = [
-    ("rpc-caller", "grpcurl"),
-    # ("rpc-service", "michelangelo-apiserver"),
-    ("rpc-service", "michelangelo-apiserver-staging"),
-    ("rpc-encoding", "proto"),
-]
-
-### For OSS server
-# $ (Run oss server)
-ADDRESS = "127.0.0.1:14566"
-# TODO: Change metadata as dict
-METADATA = [
-    ("rpc-caller", "grpcurl"),
-    ("rpc-service", "ma-apiserver"),
-    ("rpc-encoding", "proto"),
-]
-
-_rc_config = _load_rc_config()
-
-# Apply configuration priority: env vars (highest) > RC file > defaults (lowest)
-# Allow overriding the API server address via environment variable
-# This enables pointing the CLI to a k8s NodePort (e.g., 127.0.0.1:30009)
-ADDRESS = getenv("MACTL_ADDRESS", _rc_config.get("address", ADDRESS))
-# Allow overriding TLS usage via environment variable
-# Set to "true" to force TLS, "false" to force insecure,
-# or leave unset for auto-detection
-USE_TLS: bool = getenv("MACTL_USE_TLS", _rc_config.get("use_tls", "false")).lower() in (
-    "true",
-    "1",
-    "yes",
-    "y",
-)
-if "metadata" in _rc_config:
-    METADATA = list(_rc_config["metadata"].items())
+ADDRESS = _config["address"]
+USE_TLS: bool = _config["use_tls"]
+METADATA = list(_config["metadata"].items())
 
 METADATA_STUB = [*METADATA, ("ttl", "600")]
 
@@ -102,7 +43,6 @@ _LOG = getLogger(__name__)
 
 PWD = Path(__file__).parent.resolve()
 DEFAULT_DIR_PLUGINS = PWD / "plugins"
-CONFIG_FILE = PWD / "config.yaml"
 
 _LOG.info(f"Config: ADDRESS={ADDRESS}, USE_TLS={USE_TLS}, METADATA={METADATA}")
 
@@ -280,22 +220,6 @@ def print_help_available_actions(actions: list[tuple[str, str]]) -> None:
             print(f"  {'':{help_position}}{help_text}")
 
 
-def read_minio_config():
-    """Read configuration for Minio environment variables."""
-    if not CONFIG_FILE.exists():
-        return
-
-    with open(CONFIG_FILE) as f:
-        config = yaml_safe_load(f) or {}
-    minio_config = config.get("minio", {})
-    if not getenv("AWS_ACCESS_KEY_ID"):
-        environ["AWS_ACCESS_KEY_ID"] = minio_config.get("access_key_id", "")
-    if not getenv("AWS_SECRET_ACCESS_KEY"):
-        environ["AWS_SECRET_ACCESS_KEY"] = minio_config.get("secret_access_key", "")
-    if not getenv("AWS_ENDPOINT_URL"):
-        environ["AWS_ENDPOINT_URL"] = minio_config.get("endpoint_url", "")
-
-
 def check_crd(crd: CRD, user_command_action: str) -> None:
     """Check CRD action validity."""
     # TODO: this will be handled by CRD automatically later with argparse
@@ -366,7 +290,7 @@ def main(channel: Channel):
     _LOG.debug("Starting mactl...")
 
     # Load config and set environment variables
-    read_minio_config()
+    setup_minio_env()
 
     # Phase 1: Discover CRDs and create resource subcommands
     crds = discover_crds(channel)
