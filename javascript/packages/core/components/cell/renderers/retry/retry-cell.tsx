@@ -3,6 +3,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useStyletron } from 'baseui';
 import { Button, KIND, SIZE } from 'baseui/button';
 import { Textarea } from 'baseui/textarea';
+import { create } from '@bufbuild/protobuf';
+import { RetryInfoSchema } from '@michelangelo/rpc';
 
 import { Dialog } from '#core/components/dialog/dialog';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
@@ -64,13 +66,13 @@ export const RetryCell = (props: CellRendererProps<string>) => {
       ...pipelineRun,
       spec: {
         ...pipelineRun.spec,
-        retryInfo: {
+        retryInfo: create(RetryInfoSchema, {
           activityId: value,
           workflowId,
           // Must match status.workflowRunId to trigger backend retry processing
           workflowRunId,
           reason: retryReason,
-        },
+        }),
       },
     };
 
