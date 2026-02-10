@@ -104,6 +104,10 @@ def init_arguments(p: argparse.ArgumentParser):
     )
     _ = demo_sp.add_parser("pipeline", help="Create pipeline demo resources")
     _ = demo_sp.add_parser("inference", help="Create inference server demo resources")
+    _ = demo_sp.add_parser(
+        "inference-dynamo",
+        help="Create NVIDIA Dynamo inference server demo resources",
+    )
 
     delete_p = sp.add_parser("delete", help="Delete the cluster.")
     delete_p.add_argument(
@@ -778,7 +782,7 @@ def _create_cadence_domain(links):
 def _create_demo_crs(ns: argparse.Namespace):
     """Create demo Custom Resources (CRs) for the sandbox environment."""
     assert ns
-    if ns.demo_action != "pipeline" and ns.demo_action != "inference":
+    if ns.demo_action not in ("pipeline", "inference", "inference-dynamo"):
         raise ValueError(f"Unsupported demo action: {ns.demo_action}")
 
     # Check if cluster exists
@@ -829,6 +833,8 @@ def _create_demo_crs(ns: argparse.Namespace):
         _create_pipeline_demo_crs()
     elif ns.demo_action == "inference":
         _create_inference_demo_crs()
+    elif ns.demo_action == "inference-dynamo":
+        _create_inference_dynamo_demo_crs()
     else:
         raise ValueError(f"Unsupported demo action: {ns.demo_action}")
 
@@ -1447,6 +1453,218 @@ def _create_inference_demo_crs():
     print("    }")
     print("  ]")
     print("}'")
+
+
+def _create_inference_dynamo_demo_crs():
+    """Create an NVIDIA Dynamo inference server for the sandbox cluster.
+
+    This function:
+    1. Installs NVIDIA Dynamo CRDs via Helm
+    2. Installs NVIDIA Dynamo platform (operator) via Helm
+    3. Creates InferenceServer CR with BACKEND_TYPE_DYNAMO
+    4. The Michelangelo controller creates DynamoGraphDeployment CR
+    5. The Dynamo operator reconciles and creates the actual pods/services
+    """
+    print("🚀 Setting up NVIDIA Dynamo Inference Demo...")
+
+    # Setup Istio with Gateway API for routing
+    _setup_istio_with_gateway_api()
+
+    # Install Dynamo platform
+    _install_dynamo_platform()
+
+    # Create the InferenceServer CR with Dynamo backend
+    inference_demo_dir = _dir / "demo" / "inference"
+    inference_server_path = inference_demo_dir / "inferenceserver_dynamo.yaml"
+    if not inference_server_path.exists():
+        _err_exit(
+            f"❌ Dynamo inference server CR not found at {inference_server_path}, "
+            "exiting..."
+        )
+
+    print("✅ Creating NVIDIA Dynamo Inference Server CR...")
+    _kube_apply(inference_server_path)
+
+    # Wait for inference server to reach SERVING state
+    with open(inference_server_path) as f:
+        inference_server_yaml = yaml.safe_load(f)
+    inference_server_name = inference_server_yaml["metadata"]["name"]
+    inference_server_namespace = inference_server_yaml["metadata"].get(
+        "namespace", "default"
+    )
+
+    print(f"⏳ Waiting for Dynamo inference server '{inference_server_name}' to be ready...")
+    print("   (This may take several minutes for first-time image pull)")
+
+    try:
+        _exec(
+            "kubectl",
+            "wait",
+            "--for=jsonpath=.status.state=INFERENCE_SERVER_STATE_SERVING",
+            f"inferenceservers.michelangelo.api/{inference_server_name}",
+            "-n",
+            inference_server_namespace,
+            "--timeout=900s",  # Longer timeout for Dynamo setup
+            raise_error=True,
+        )
+        print("✅ Dynamo Inference server is ready!")
+    except subprocess.CalledProcessError:
+        # Check if it's still creating (not a failure)
+        print(
+            f"⚠️  Inference server '{inference_server_name}' not ready after 15 minutes.\n"
+            f"This may be normal if images are still being pulled.\n"
+            f"Check status with:\n"
+            f"  kubectl get inferenceservers.michelangelo.api {inference_server_name} "
+            f"-n {inference_server_namespace} -o yaml\n"
+            f"Check Dynamo resources with:\n"
+            f"  kubectl get dynamographdeployments -n {inference_server_namespace}\n"
+            f"  kubectl get pods -n {inference_server_namespace}"
+        )
+
+    print("🎉 NVIDIA Dynamo Inference demo setup completed!")
+    print("📋 What was set up:")
+    print("  • Gateway API with Istio integration")
+    print("  • NVIDIA Dynamo CRDs and Operator")
+    print("  • Michelangelo InferenceServer CR (with Dynamo backend)")
+    print("  • DynamoGraphDeployment (created by controller)")
+    print()
+    print("🔍 To check Dynamo resources:")
+    print(f"  kubectl get dynamographdeployments -n {inference_server_namespace}")
+    print(f"  kubectl get pods -n {inference_server_namespace}")
+    print()
+    print("🌐 Once ready, the Dynamo frontend will be available at:")
+    print(f"  http://dynamo-{inference_server_name}-frontend.{inference_server_namespace}.svc.cluster.local:8000")
+    print()
+    print("📡 Test with OpenAI-compatible API:")
+    print("  curl http://localhost:8000/v1/models")
+    print("  curl http://localhost:8000/v1/chat/completions \\")
+    print('    -H "Content-Type: application/json" \\')
+    print("    -d '{")
+    print('      "model": "Qwen/Qwen3-0.6B",')
+    print('      "messages": [{"role": "user", "content": "Hello!"}],')
+    print('      "max_tokens": 100')
+    print("    }'")
+
+
+def _install_dynamo_platform():
+    """Install NVIDIA Dynamo CRDs and operator via Helm.
+
+    Dynamo requires:
+    1. dynamo-crds Helm chart - Custom Resource Definitions
+    2. dynamo-platform Helm chart - Operator and dependencies
+    """
+    print("📦 Installing NVIDIA Dynamo platform...")
+
+    # Dynamo release version
+    dynamo_version = "0.8.1"
+    dynamo_namespace = "dynamo-system"
+
+    # Fetch existing Helm repositories
+    try:
+        helm_existing_repos = subprocess.check_output(["helm", "repo", "list"]).decode()
+    except subprocess.CalledProcessError:
+        helm_existing_repos = ""
+
+    # Add NVIDIA NGC Helm repository if not already present
+    if "nvidia-ngc" not in helm_existing_repos:
+        print("  Adding NVIDIA NGC Helm repository...")
+        _exec(
+            "helm",
+            "repo",
+            "add",
+            "nvidia-ngc",
+            "https://helm.ngc.nvidia.com/nvidia/ai-dynamo",
+            raise_error=True,
+        )
+
+    # Update Helm repositories
+    print("  Updating Helm repositories...")
+    _exec("helm", "repo", "update", raise_error=True)
+
+    # Check if Dynamo CRDs are already installed
+    try:
+        result = subprocess.check_output(
+            ["helm", "list", "-n", "default", "-o", "json"]
+        ).decode()
+        import json
+        helm_releases = json.loads(result) if result.strip() else []
+        dynamo_crds_installed = any(r.get("name") == "dynamo-crds" for r in helm_releases)
+    except (subprocess.CalledProcessError, json.JSONDecodeError):
+        dynamo_crds_installed = False
+
+    # Install Dynamo CRDs if not already installed
+    if not dynamo_crds_installed:
+        print(f"  Installing Dynamo CRDs (v{dynamo_version})...")
+        _exec(
+            "helm",
+            "install",
+            "dynamo-crds",
+            f"nvidia-ngc/dynamo-crds",
+            "--version",
+            dynamo_version,
+            "--namespace",
+            "default",
+            "--wait",
+            raise_error=True,
+        )
+    else:
+        print("  Dynamo CRDs already installed, skipping...")
+
+    # Create dynamo-system namespace if it doesn't exist
+    _ensure_namespace_exists(dynamo_namespace)
+
+    # Check if Dynamo platform is already installed
+    try:
+        result = subprocess.check_output(
+            ["helm", "list", "-n", dynamo_namespace, "-o", "json"]
+        ).decode()
+        import json
+        helm_releases = json.loads(result) if result.strip() else []
+        dynamo_platform_installed = any(
+            r.get("name") == "dynamo-platform" for r in helm_releases
+        )
+    except (subprocess.CalledProcessError, json.JSONDecodeError):
+        dynamo_platform_installed = False
+
+    # Install Dynamo platform if not already installed
+    if not dynamo_platform_installed:
+        print(f"  Installing Dynamo platform (v{dynamo_version})...")
+        _exec(
+            "helm",
+            "install",
+            "dynamo-platform",
+            f"nvidia-ngc/dynamo-platform",
+            "--version",
+            dynamo_version,
+            "--namespace",
+            dynamo_namespace,
+            "--wait",
+            "--timeout",
+            "10m",
+            raise_error=True,
+        )
+    else:
+        print("  Dynamo platform already installed, skipping...")
+
+    # Wait for Dynamo operator to be ready
+    print("  Waiting for Dynamo operator to be ready...")
+    try:
+        _exec(
+            "kubectl",
+            "rollout",
+            "status",
+            "deployment/dynamo-operator",
+            "-n",
+            dynamo_namespace,
+            "--timeout=120s",
+            raise_error=True,
+        )
+        print("✅ NVIDIA Dynamo platform installed successfully!")
+    except subprocess.CalledProcessError:
+        print(
+            "⚠️  Dynamo operator not ready after 2 minutes.\n"
+            f"Check status with: kubectl get pods -n {dynamo_namespace}"
+        )
 
 
 def _setup_istio_with_gateway_api():
