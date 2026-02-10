@@ -269,8 +269,6 @@ necessary, and this assertion will be removed.
 
     if "apiserver" not in ns.exclude:
         resources.append("michelangelo-apiserver.yaml")
-    if "controllermgr" not in ns.exclude:
-        resources.append("michelangelo-controllermgr.yaml")
     if "ui" not in ns.exclude:
         resources.append("envoy.yaml")
         resources.append("michelangelo-ui.yaml")
@@ -342,10 +340,14 @@ necessary, and this assertion will be removed.
         _setup_temporal(links, helm_existing_repos)
         if "worker" not in ns.exclude:
             _kube_create(_dir / "resources/michelangelo-temporal-worker.yaml")
+        if "controllermgr" not in ns.exclude:
+            resources.append("michelangelo-temporal-controllermgr.yaml")
     elif ns.workflow == "cadence":
         _create_cadence_domain(links)
         if "worker" not in ns.exclude:
             _kube_create(_dir / "resources/michelangelo-worker.yaml")
+        if "controllermgr" not in ns.exclude:
+            resources.append("michelangelo-controllermgr.yaml")
     else:
         raise ValueError(f"Unsupported workflow engine: {ns.workflow}")
 
