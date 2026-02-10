@@ -732,7 +732,8 @@ def _setup_temporal(links, helm_existing_repos):
     for attempt in range(max_retries):
         try:
             print(
-                f"Testing admin tools container readiness (attempt {attempt + 1}/{max_retries})..."
+                f"Testing admin tools container readiness "
+                f"(attempt {attempt + 1}/{max_retries})..."
             )
             subprocess.check_call(
                 [
@@ -752,8 +753,10 @@ def _setup_temporal(links, helm_existing_repos):
             break
         except subprocess.CalledProcessError:
             if attempt == max_retries - 1:
+                timeout_seconds = (max_retries - 1) * retry_delay
                 _err_exit(
-                    f"Admin tools container failed to become ready for commands after {(max_retries - 1) * retry_delay} seconds"
+                    f"Admin tools container failed to become ready for commands "
+                    f"after {timeout_seconds} seconds"
                 )
             print(f"Admin tools not ready yet, waiting {retry_delay} seconds...")
             time.sleep(retry_delay)
