@@ -141,6 +141,76 @@ func TestReconcile(t *testing.T) {
 	}
 }
 
+func TestFormatRevisionName(t *testing.T) {
+	testCases := []struct {
+		name           string
+		pipeline       *v2pb.Pipeline
+		expectedResult string
+	}{
+		{
+			name: "Normal git ref",
+			pipeline: &v2pb.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "my-pipeline",
+				},
+				Spec: v2pb.PipelineSpec{
+					Commit: &v2pb.CommitInfo{
+						GitRef: "abcdef1234567890",
+					},
+				},
+			},
+			expectedResult: "pipeline-my-pipeline-abcdef123456",
+		},
+		{
+			name: "Short git ref",
+			pipeline: &v2pb.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-pipe",
+				},
+				Spec: v2pb.PipelineSpec{
+					Commit: &v2pb.CommitInfo{
+						GitRef: "abc123",
+					},
+				},
+			},
+			expectedResult: "pipeline-test-pipe-abc123",
+		},
+		{
+			name: "Uppercase pipeline name",
+			pipeline: &v2pb.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "MY-PIPELINE",
+				},
+				Spec: v2pb.PipelineSpec{
+					Commit: &v2pb.CommitInfo{
+						GitRef: "def456789012",
+					},
+				},
+			},
+			expectedResult: "pipeline-my-pipeline-def456789012",
+		},
+		{
+			name: "No commit info",
+			pipeline: &v2pb.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "no-commit",
+				},
+				Spec: v2pb.PipelineSpec{
+					Commit: nil,
+				},
+			},
+			expectedResult: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := formatRevisionName(tc.pipeline)
+			require.Equal(t, tc.expectedResult, result)
+		})
+	}
+}
+
 func setUpReconciler(t *testing.T, initialObjects []client.Object, env env.Context) *Reconciler {
 	scheme := runtime.NewScheme()
 	err := v2pb.AddToScheme(scheme)
