@@ -77,6 +77,13 @@ export const RUN_DETAIL_CONFIG: DetailViewConfig = {
                 6: 'gray',
               },
             },
+            {
+              id: 'retry',
+              label: 'Actions',
+              type: CellType.RETRY,
+              accessor: 'activityId',
+              hideEmpty: true,
+            },
           ],
         },
         body: [
