@@ -731,7 +731,9 @@ def _setup_temporal(links, helm_existing_repos):
     retry_delay = 5
     for attempt in range(max_retries):
         try:
-            print(f"Testing admin tools container readiness (attempt {attempt + 1}/{max_retries})...")
+            print(
+                f"Testing admin tools container readiness (attempt {attempt + 1}/{max_retries})..."
+            )
             subprocess.check_call(
                 [
                     "kubectl",
@@ -750,7 +752,9 @@ def _setup_temporal(links, helm_existing_repos):
             break
         except subprocess.CalledProcessError:
             if attempt == max_retries - 1:
-                _err_exit(f"Admin tools container failed to become ready for commands after {max_retries * retry_delay} seconds")
+                _err_exit(
+                    f"Admin tools container failed to become ready for commands after {max_retries * retry_delay} seconds"
+                )
             print(f"Admin tools not ready yet, waiting {retry_delay} seconds...")
             time.sleep(retry_delay)
 
