@@ -252,7 +252,7 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 	}
 
 	// Build resource requirements from InitSpec
-	gpuCount := int64(1) // Default to 1 GPU
+	gpuCount := int64(1) // Add GPU by default
 	if inferenceServer.Spec.InitSpec.ResourceSpec.Gpu > 0 {
 		gpuCount = int64(inferenceServer.Spec.InitSpec.ResourceSpec.Gpu)
 	}
@@ -262,12 +262,13 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 		cpuCount = fmt.Sprintf("%d", inferenceServer.Spec.InitSpec.ResourceSpec.Cpu)
 	}
 
-	memory := "16Gi"
+	memory := "4Gi"
 	if inferenceServer.Spec.InitSpec.ResourceSpec.Memory != "" {
 		memory = inferenceServer.Spec.InitSpec.ResourceSpec.Memory
 	}
 
 	// Default model for demo - Qwen3-0.6B is small enough for sandbox testing
+	// todo: ghosharitra: remove when dynamo model is integrated.
 	modelName := "Qwen/Qwen3-0.6B"
 
 	dgd := &unstructured.Unstructured{
@@ -309,6 +310,15 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 									"--http-port=8000",
 								},
 							},
+							// Allow scheduling on GPU-tainted nodes
+							// todo: ghosharitra: this is temporary and should be removed.
+							"tolerations": []interface{}{
+								map[string]interface{}{
+									"key":      "nvidia.com/gpu",
+									"operator": "Exists",
+									"effect":   "NoSchedule",
+								},
+							},
 						},
 					},
 					// VllmDecodeWorker: vLLM inference worker (aggregated mode)
@@ -335,6 +345,15 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 									"dynamo.vllm",
 									fmt.Sprintf("--model=%s", modelName),
 									"--kv-events-config={\"enable_kv_cache_events\": false}",
+								},
+							},
+							// Allow scheduling on GPU-tainted nodes
+							// todo: ghosharitra: this is temporary and should be removed.
+							"tolerations": []interface{}{
+								map[string]interface{}{
+									"key":      "nvidia.com/gpu",
+									"operator": "Exists",
+									"effect":   "NoSchedule",
 								},
 							},
 						},
