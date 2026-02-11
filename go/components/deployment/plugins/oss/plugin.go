@@ -20,7 +20,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/steadystate"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -40,7 +40,7 @@ type Plugin struct {
 	httpClient          *http.Client
 	dynamicClient       dynamic.Interface
 	routeProvider       route.RouteProvider
-	gateway             gateways.Gateway
+	backendRegistry     *backends.Registry
 	modelConfigProvider modelconfig.ModelConfigProvider
 	blobstore           *blobstore.BlobStore
 	logger              *zap.Logger
@@ -59,7 +59,7 @@ type Params struct {
 	Client              client.Client
 	HTTPClient          *http.Client
 	DynamicClient       dynamic.Interface
-	Gateway             gateways.Gateway
+	BackendRegistry     *backends.Registry
 	RouteProvider       route.RouteProvider
 	BlobStore           *blobstore.BlobStore
 	Logger              *zap.Logger
@@ -72,7 +72,7 @@ func NewPlugin(params Params) *Plugin {
 		client:              params.Client,
 		httpClient:          params.HTTPClient,
 		dynamicClient:       params.DynamicClient,
-		gateway:             params.Gateway,
+		backendRegistry:     params.BackendRegistry,
 		routeProvider:       params.RouteProvider,
 		modelConfigProvider: params.ModelConfigProvider,
 		blobstore:           params.BlobStore,
@@ -89,10 +89,10 @@ func NewPlugin(params Params) *Plugin {
 			Logger:              params.Logger,
 		}),
 		steadyStatePlugin: steadystate.NewSteadyStatePlugin(steadystate.Params{
-			Client:     params.Client,
-			HTTPClient: params.HTTPClient,
-			Gateway:    params.Gateway,
-			Logger:     params.Logger,
+			Client:          params.Client,
+			HTTPClient:      params.HTTPClient,
+			BackendRegistry: params.BackendRegistry,
+			Logger:          params.Logger,
 		}),
 	}
 }
@@ -104,7 +104,7 @@ func (p *Plugin) GetRolloutPlugin(ctx context.Context, deployment *v2pb.Deployme
 		HTTPClient:          p.httpClient,
 		DynamicClient:       p.dynamicClient,
 		RouteProvider:       p.routeProvider,
-		Gateway:             p.gateway,
+		BackendRegistry:     p.backendRegistry,
 		ModelConfigProvider: p.modelConfigProvider,
 		Logger:              p.logger,
 	}, deployment)
@@ -213,7 +213,11 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 		return deployment.Status, nil
 	}
 	serverName := inferenceServer.GetName()
-	healthy, err := p.gateway.CheckModelStatus(ctx, p.logger, p.client, p.httpClient, deployment.Spec.DesiredRevision.Name, serverName, deployment.Namespace, v2pb.BACKEND_TYPE_TRITON)
+	serverBackend, err := p.backendRegistry.GetBackend(v2pb.BACKEND_TYPE_TRITON)
+	if err != nil {
+		return deployment.Status, fmt.Errorf("get backend for inference server %s: %w", serverName, err)
+	}
+	healthy, err := serverBackend.CheckModelStatus(ctx, p.logger, p.client, p.httpClient, serverName, deployment.Namespace, deployment.Spec.DesiredRevision.Name)
 	if err != nil {
 		p.logger.Error("failed to check model status",
 			zap.Error(err),
@@ -255,7 +259,11 @@ func (p *Plugin) HealthCheckGate(ctx context.Context, observability plugins.Obse
 		return false, nil
 	}
 	// Check if the inference server is healthy
-	healthy, err := p.gateway.InferenceServerIsHealthy(ctx, p.logger, p.client, deployment.Spec.GetInferenceServer().Name, deployment.Namespace, v2pb.BACKEND_TYPE_TRITON)
+	serverBackend, err := p.backendRegistry.GetBackend(v2pb.BACKEND_TYPE_TRITON)
+	if err != nil {
+		return false, fmt.Errorf("get backend for inference server %s: %w", deployment.Spec.GetInferenceServer().Name, err)
+	}
+	healthy, err := serverBackend.IsHealthy(ctx, p.logger, p.client, deployment.Spec.GetInferenceServer().Name, deployment.Namespace)
 	if err != nil {
 		p.logger.Error("failed to check health of inference server",
 			zap.Error(err),

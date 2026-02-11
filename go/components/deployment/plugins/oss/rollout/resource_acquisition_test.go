@@ -10,18 +10,26 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
 	"github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
+
+func createTestRegistry(mockBackend *backendsmocks.MockBackend) *backends.Registry {
+	registry := backends.NewRegistry()
+	registry.Register(v2pb.BACKEND_TYPE_TRITON, mockBackend)
+	return registry
+}
 
 func TestResourceAcquisitionRetrieve(t *testing.T) {
 	tests := []struct {
 		name                    string
 		deployment              *v2pb.Deployment
-		setupMocks              func(*gatewaysmocks.MockGateway)
+		setupMocks              func(*backendsmocks.MockBackend)
 		expectedConditionStatus api.ConditionStatus
 		expectedConditionReason string
+		expectError             bool
 	}{
 		{
 			name: "resources available when inference server is healthy",
@@ -33,11 +41,12 @@ func TestResourceAcquisitionRetrieve(t *testing.T) {
 					},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
+			setupMocks: func(mb *backendsmocks.MockBackend) {
+				mb.EXPECT().IsHealthy(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return(true, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
 			expectedConditionReason: "",
+			expectError:             false,
 		},
 		{
 			name: "no inference server specified",
@@ -47,11 +56,10 @@ func TestResourceAcquisitionRetrieve(t *testing.T) {
 					Target: nil,
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				// No mock setup needed - early return
-			},
+			setupMocks:              func(mb *backendsmocks.MockBackend) {},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "No inference server specified for deployment",
+			expectError:             false,
 		},
 		{
 			name: "inference server is not healthy",
@@ -63,11 +71,12 @@ func TestResourceAcquisitionRetrieve(t *testing.T) {
 					},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
+			setupMocks: func(mb *backendsmocks.MockBackend) {
+				mb.EXPECT().IsHealthy(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return(false, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Inference server is not healthy",
+			expectError:             false,
 		},
 		{
 			name: "health check fails with error",
@@ -79,11 +88,12 @@ func TestResourceAcquisitionRetrieve(t *testing.T) {
 					},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, errors.New("connection error"))
+			setupMocks: func(mb *backendsmocks.MockBackend) {
+				mb.EXPECT().IsHealthy(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return(false, errors.New("connection error"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Failed to check health of inference server: connection error",
+			expectError:             true,
 		},
 	}
 
@@ -92,17 +102,21 @@ func TestResourceAcquisitionRetrieve(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
-			tt.setupMocks(mockGateway)
+			mockBackend := backendsmocks.NewMockBackend(ctrl)
+			tt.setupMocks(mockBackend)
 
 			actor := &ResourceAcquisitionActor{
-				gateway: mockGateway,
-				logger:  zap.NewNop(),
+				backendRegistry: createTestRegistry(mockBackend),
+				logger:          zap.NewNop(),
 			}
 
 			condition, err := actor.Retrieve(context.Background(), tt.deployment, &api.Condition{})
 
-			assert.NoError(t, err)
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 			assert.NotNil(t, condition)
 			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
 			assert.Equal(t, tt.expectedConditionReason, condition.Reason)

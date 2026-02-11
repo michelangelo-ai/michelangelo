@@ -8,7 +8,6 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -17,8 +16,7 @@ var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &AssetPreparationAc
 
 // AssetPreparationActor verifies model artifacts are available in storage before deployment.
 type AssetPreparationActor struct {
-	gateway gateways.Gateway
-	logger  *zap.Logger
+	logger *zap.Logger
 }
 
 // GetType returns the condition type identifier for asset preparation.

@@ -9,19 +9,20 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // SteadyStateActor monitors deployment health and maintains stable operation after rollout completion.
 type SteadyStateActor struct {
-	httpClient *http.Client
-	gateway    gateways.Gateway
-	logger     *zap.Logger
-	client     client.Client
+	httpClient      *http.Client
+	backendRegistry *backends.Registry
+	logger          *zap.Logger
+	client          client.Client
 }
 
 // GetType returns the condition type identifier for steady state.
@@ -35,7 +36,11 @@ func (a *SteadyStateActor) Retrieve(ctx context.Context, resource *v2pb.Deployme
 	a.logger.Info("Monitoring steady state for deployment", zap.String("deployment", resource.Name))
 
 	// Check if the inference server is healthy
-	healthy, err := a.gateway.InferenceServerIsHealthy(ctx, a.logger, a.client, resource.Spec.GetInferenceServer().Name, resource.Namespace, v2pb.BACKEND_TYPE_TRITON)
+	serverBackend, err := a.backendRegistry.GetBackend(v2pb.BACKEND_TYPE_TRITON)
+	if err != nil {
+		return conditionUtils.GenerateFalseCondition(condition, "HealthCheckFailed", fmt.Sprintf("Failed to get backend for inference server %s: %v", resource.Spec.GetInferenceServer().Name, err)), err
+	}
+	healthy, err := serverBackend.IsHealthy(ctx, a.logger, a.client, resource.Spec.GetInferenceServer().Name, resource.Namespace)
 	if err != nil {
 		a.logger.Error("failed to check health of inference server",
 			zap.Error(err),
@@ -50,7 +55,7 @@ func (a *SteadyStateActor) Retrieve(ctx context.Context, resource *v2pb.Deployme
 	}
 
 	// Check if the desired model is ready in Triton
-	modelReady, err := a.gateway.CheckModelStatus(ctx, a.logger, a.client, a.httpClient, resource.Spec.DesiredRevision.Name, resource.Spec.GetInferenceServer().Name, resource.Namespace, v2pb.BACKEND_TYPE_TRITON)
+	modelReady, err := serverBackend.CheckModelStatus(ctx, a.logger, a.client, a.httpClient, resource.Spec.GetInferenceServer().Name, resource.Namespace, resource.Spec.DesiredRevision.Name)
 	if err != nil {
 		a.logger.Error("failed to check model status",
 			zap.Error(err),

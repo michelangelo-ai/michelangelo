@@ -12,7 +12,7 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -31,7 +31,7 @@ type Params struct {
 	HTTPClient          *http.Client
 	DynamicClient       dynamic.Interface
 	RouteProvider       route.RouteProvider
-	Gateway             gateways.Gateway
+	BackendRegistry     *backends.Registry
 	ModelConfigProvider modelconfig.ModelConfigProvider
 	Logger              *zap.Logger
 }
@@ -46,13 +46,12 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 			logger: logger,
 		},
 		&AssetPreparationActor{
-			gateway: p.Gateway,
-			logger:  logger,
+			logger: logger,
 		},
 		&ResourceAcquisitionActor{
-			client:  p.Client,
-			gateway: p.Gateway,
-			logger:  logger,
+			client:          p.Client,
+			backendRegistry: p.BackendRegistry,
+			logger:          logger,
 		},
 	}
 
@@ -62,7 +61,7 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 		HTTPClient:          p.HTTPClient,
 		DynamicClient:       p.DynamicClient,
 		RouteProvider:       p.RouteProvider,
-		Gateway:             p.Gateway,
+		BackendRegistry:     p.BackendRegistry,
 		ModelConfigProvider: p.ModelConfigProvider,
 		Logger:              p.Logger,
 	}, deployment)
@@ -73,8 +72,8 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 	// Post-placement actors
 	postPlacementActors := []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&RolloutCompletionActor{
-			gateway: p.Gateway,
-			logger:  p.Logger,
+			backendRegistry: p.BackendRegistry,
+			logger:          p.Logger,
 		},
 	}
 

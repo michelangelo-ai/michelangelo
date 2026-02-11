@@ -11,7 +11,7 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -23,7 +23,7 @@ var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &ModelCleanupActor{
 type ModelCleanupActor struct {
 	Client              client.Client
 	HTTPClient          *http.Client
-	Gateway             gateways.Gateway
+	BackendRegistry     *backends.Registry
 	ModelConfigProvider modelconfig.ModelConfigProvider
 	Logger              *zap.Logger
 }
@@ -54,7 +54,11 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deploym
 		zap.String("inference_server", inferenceServerName))
 
 	// Check if old model still exists in Triton
-	ready, err := a.Gateway.CheckModelStatus(ctx, a.Logger, a.Client, a.HTTPClient, currentModel, inferenceServerName, resource.Namespace, v2pb.BACKEND_TYPE_TRITON)
+	serverBackend, err := a.BackendRegistry.GetBackend(v2pb.BACKEND_TYPE_TRITON)
+	if err != nil {
+		return conditionUtils.GenerateFalseCondition(condition, "CleanupPending", fmt.Sprintf("Failed to get backend for inference server %s: %v", inferenceServerName, err)), err
+	}
+	ready, err := serverBackend.CheckModelStatus(ctx, a.Logger, a.Client, a.HTTPClient, inferenceServerName, resource.Namespace, currentModel)
 	if err != nil {
 		a.Logger.Info("Cannot verify old model status, cleanup may be needed", zap.Error(err))
 		return conditionUtils.GenerateFalseCondition(condition, "CleanupPending", fmt.Sprintf("Need to cleanup old model %s", currentModel)), nil

@@ -19,7 +19,7 @@ go_library(
         "//go/components/deployment/plugins/oss/rollout:go_default_library",
         "//go/components/deployment/plugins/oss/steadystate:go_default_library",
         "//go/components/deployment/route:go_default_library",
-        "//go/components/inferenceserver/gateways:go_default_library",
+        "//go/components/inferenceserver/backends:go_default_library",
         "//go/components/inferenceserver/modelconfig:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
@@ -37,7 +37,8 @@ go_test(
     deps = [
         "//go/components/deployment/plugins:go_default_library",
         "//go/components/deployment/plugins/oss/common:go_default_library",
-        "//go/components/inferenceserver/gateways/gatewaysmocks:go_default_library",
+        "//go/components/inferenceserver/backends:go_default_library",
+        "//go/components/inferenceserver/backends/backendsmocks:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_golang_mock//gomock:go_default_library",

@@ -11,12 +11,19 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig/modelconfigmocks"
 	"github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
+
+func createTestRegistry(mockBackend *backendsmocks.MockBackend) *backends.Registry {
+	registry := backends.NewRegistry()
+	registry.Register(v2pb.BACKEND_TYPE_TRITON, mockBackend)
+	return registry
+}
 
 func TestRollingRolloutRetrieve(t *testing.T) {
 	// Condition with rolloutstarted = true metadata
@@ -35,7 +42,7 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 		name                    string
 		deployment              *v2pb.Deployment
 		condition               *api.Condition
-		setupMocks              func(*gatewaysmocks.MockGateway)
+		setupMocks              func(*backendsmocks.MockBackend)
 		expectedConditionStatus api.ConditionStatus
 		expectedConditionReason string
 	}{
@@ -51,7 +58,7 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 				},
 			},
 			condition:               rolloutNotStartedCondition(),
-			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
+			setupMocks:              func(mb *backendsmocks.MockBackend) {},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Rolling rollout has not started",
 		},
@@ -67,8 +74,8 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 				},
 			},
 			condition: rolloutStartedCondition(),
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
+			setupMocks: func(mb *backendsmocks.MockBackend) {
+				mb.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").Return(true, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
 			expectedConditionReason: "",
@@ -80,12 +87,12 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
-			tt.setupMocks(mockGateway)
+			mockBackend := backendsmocks.NewMockBackend(ctrl)
+			tt.setupMocks(mockBackend)
 
 			actor := &RollingRolloutActor{
-				gateway: mockGateway,
-				logger:  zap.NewNop(),
+				BackendRegistry: createTestRegistry(mockBackend),
+				Logger:          zap.NewNop(),
 			}
 
 			condition, err := actor.Retrieve(context.Background(), tt.deployment, tt.condition)
@@ -183,8 +190,8 @@ func TestRollingRolloutRun(t *testing.T) {
 			tt.setupMocks(mockModelConfigProvider)
 
 			actor := &RollingRolloutActor{
-				modelConfigProvider: mockModelConfigProvider,
-				logger:              zap.NewNop(),
+				ModelConfigProvider: mockModelConfigProvider,
+				Logger:              zap.NewNop(),
 			}
 
 			condition, err := actor.Run(context.Background(), tt.deployment, &api.Condition{})
