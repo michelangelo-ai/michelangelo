@@ -5,7 +5,7 @@ metadata:
 data:
   config.json: |
     {
-      "apiBaseUrl": "http://localhost:8081"
+      "apiBaseUrl": "http://34.172.250.134:8081"
     }
 ---
 apiVersion: apps/v1
