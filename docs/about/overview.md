@@ -220,7 +220,7 @@ A: Multiple sources:
 A: Yes, Michelangelo integrates with feature stores or you can manage features within the platform using the data prep pipelines and inference.
 
 **Q: What data formats are supported?**
-A: Parquet (recommended, provided by default), CSV, JSON, Avro. For custom formats, use Uniflow tasks to handle data loading.
+A: Parquet (recommended). CSV, JSON, Avro. For custom formats, use Uniflow tasks to handle data loading.
 
 ### Training & Deployment
 
