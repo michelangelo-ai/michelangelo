@@ -141,7 +141,9 @@ func (e *DefaultEngine[T]) runPlugin(ctx context.Context, plugin conditionInterf
 
 			e.logger.Info("running action for first non-satisfied condition",
 				zap.String("actor", actorType),
-				zap.String("status", retrievedCondition.Status.String()))
+				zap.String("status", retrievedCondition.Status.String()),
+				zap.String("reason", retrievedCondition.Reason),
+				zap.String("message", retrievedCondition.Message))
 
 			runCondition, err := actor.Run(ctx, resource, retrievedCondition)
 			if err != nil {

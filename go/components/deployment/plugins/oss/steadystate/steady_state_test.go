@@ -10,16 +10,23 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
 	"github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
+
+func createTestRegistry(mockBackend *backendsmocks.MockBackend) *backends.Registry {
+	registry := backends.NewRegistry()
+	registry.Register(v2pb.BACKEND_TYPE_TRITON, mockBackend)
+	return registry
+}
 
 func TestRetrieve(t *testing.T) {
 	tests := []struct {
 		name                    string
 		deployment              *v2pb.Deployment
-		setupMocks              func(*gatewaysmocks.MockGateway)
+		setupMocks              func(*backendsmocks.MockBackend)
 		expectedConditionStatus api.ConditionStatus
 		expectedConditionReason string
 	}{
@@ -38,9 +45,9 @@ func TestRetrieve(t *testing.T) {
 					State: v2pb.DEPLOYMENT_STATE_HEALTHY,
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
+			setupMocks: func(mb *backendsmocks.MockBackend) {
+				mb.EXPECT().IsHealthy(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return(true, nil)
+				mb.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").Return(true, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
 			expectedConditionReason: "",
@@ -60,8 +67,8 @@ func TestRetrieve(t *testing.T) {
 					State: v2pb.DEPLOYMENT_STATE_UNHEALTHY,
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
+			setupMocks: func(mb *backendsmocks.MockBackend) {
+				mb.EXPECT().IsHealthy(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return(false, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Inference server is not healthy",
@@ -81,8 +88,8 @@ func TestRetrieve(t *testing.T) {
 					State: v2pb.DEPLOYMENT_STATE_UNHEALTHY,
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, errors.New("connection error"))
+			setupMocks: func(mb *backendsmocks.MockBackend) {
+				mb.EXPECT().IsHealthy(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return(false, errors.New("connection error"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Failed to check health of inference server: connection error",
@@ -102,9 +109,9 @@ func TestRetrieve(t *testing.T) {
 					State: v2pb.DEPLOYMENT_STATE_UNHEALTHY,
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
+			setupMocks: func(mb *backendsmocks.MockBackend) {
+				mb.EXPECT().IsHealthy(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return(true, nil)
+				mb.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").Return(false, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Model is not ready",
@@ -124,9 +131,9 @@ func TestRetrieve(t *testing.T) {
 					State: v2pb.DEPLOYMENT_STATE_UNHEALTHY,
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, errors.New("api error"))
+			setupMocks: func(mb *backendsmocks.MockBackend) {
+				mb.EXPECT().IsHealthy(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return(true, nil)
+				mb.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").Return(false, errors.New("api error"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Failed to check model status: api error",
@@ -138,12 +145,12 @@ func TestRetrieve(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
-			tt.setupMocks(mockGateway)
+			mockBackend := backendsmocks.NewMockBackend(ctrl)
+			tt.setupMocks(mockBackend)
 
 			actor := &SteadyStateActor{
-				gateway: mockGateway,
-				logger:  zap.NewNop(),
+				backendRegistry: createTestRegistry(mockBackend),
+				logger:          zap.NewNop(),
 			}
 
 			condition, err := actor.Retrieve(context.Background(), tt.deployment, &api.Condition{})

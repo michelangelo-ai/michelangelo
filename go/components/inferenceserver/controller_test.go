@@ -141,27 +141,6 @@ func TestReconciler_Reconcile(t *testing.T) {
 			expectError:                false,
 			expectEvent:                false,
 		},
-		{
-			name: "plugin not found error is caught and event recorded",
-			inferenceServer: &v2pb.InferenceServer{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-server",
-					Namespace: "test-namespace",
-				},
-				Spec: v2pb.InferenceServerSpec{
-					BackendType: v2pb.BACKEND_TYPE_TRITON,
-				},
-			},
-			setupPlugin: func() (*mockInferenceServerPlugin, *mockPlugin, *mockPlugin, *mockConditionActor, *mockConditionActor) {
-				return nil, nil, nil, nil, nil
-			},
-			registerPlugin:             false,
-			expectEngineRun:            false,
-			expectCreationPluginCalled: false,
-			expectDeletionPluginCalled: false,
-			expectError:                false,
-			expectEvent:                true,
-		},
 	}
 
 	for _, tt := range tests {
@@ -212,7 +191,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 				Handler:  handler,
 				logger:   zap.NewNop(),
 				Recorder: fakeRecorder,
-				Plugins:  registry,
+				plugin:   backendPlugin,
 				engine:   mockEngine,
 			}
 
@@ -352,20 +331,20 @@ func (m *mockInferenceServerPlugin) UpdateConditions(resource *v2pb.InferenceSer
 
 // mockPluginRegistry manages test plugins
 type mockPluginRegistry struct {
-	plugins map[v2pb.BackendType]plugins.InferenceServerPlugin
+	plugins map[v2pb.BackendType]plugins.Plugin
 }
 
 func newMockPluginRegistry() *mockPluginRegistry {
 	return &mockPluginRegistry{
-		plugins: make(map[v2pb.BackendType]plugins.InferenceServerPlugin),
+		plugins: make(map[v2pb.BackendType]plugins.Plugin),
 	}
 }
 
-func (m *mockPluginRegistry) RegisterPlugin(backendType v2pb.BackendType, plugin plugins.InferenceServerPlugin) {
+func (m *mockPluginRegistry) RegisterPlugin(backendType v2pb.BackendType, plugin plugins.Plugin) {
 	m.plugins[backendType] = plugin
 }
 
-func (m *mockPluginRegistry) GetPlugin(backendType v2pb.BackendType) (plugins.InferenceServerPlugin, error) {
+func (m *mockPluginRegistry) GetPlugin(backendType v2pb.BackendType) (plugins.Plugin, error) {
 	if plugin, ok := m.plugins[backendType]; ok {
 		return plugin, nil
 	}

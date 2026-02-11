@@ -10,7 +10,7 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -19,8 +19,8 @@ var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &RolloutCompletionA
 
 // RolloutCompletionActor finalizes deployment by updating CurrentRevision and cleaning up rollout metadata.
 type RolloutCompletionActor struct {
-	gateway gateways.Gateway
-	logger  *zap.Logger
+	backendRegistry *backends.Registry
+	logger          *zap.Logger
 }
 
 // GetType returns the condition type identifier for rollout completion.

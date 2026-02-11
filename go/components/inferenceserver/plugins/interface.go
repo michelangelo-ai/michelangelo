@@ -7,9 +7,9 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-// InferenceServerPlugin defines the interface for backend-specific lifecycle management.
+// Plugin defines the interface for backend-specific lifecycle management.
 // Implementations provide condition plugins for creation, deletion, and state management.
-type InferenceServerPlugin interface {
+type Plugin interface {
 	// GetCreationPlugin returns the plugin for infrastructure creation.
 	GetCreationPlugin() conditionInterfaces.Plugin[*v2pb.InferenceServer]
 
@@ -25,13 +25,4 @@ type InferenceServerPlugin interface {
 
 	// UpdateConditions updates the current set of conditions for a given inference server.
 	UpdateConditions(resource *v2pb.InferenceServer, conditionPlugin conditionInterfaces.Plugin[*v2pb.InferenceServer])
-}
-
-// PluginRegistry manages available plugins
-type PluginRegistry interface {
-	// RegisterPlugin registers a plugin for a specific backend type
-	RegisterPlugin(backendType v2pb.BackendType, plugin InferenceServerPlugin)
-
-	// GetPlugin returns the plugin for a given backend type
-	GetPlugin(backendType v2pb.BackendType) (InferenceServerPlugin, error)
 }

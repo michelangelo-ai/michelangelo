@@ -20,7 +20,6 @@ go_library(
         "//go/base/pluginmanager:go_default_library",
         "//go/base/revision:go_default_library",
         "//go/components/deployment/plugins:go_default_library",
-        "//go/components/deployment/proxy:go_default_library",
         "//go/logging:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",

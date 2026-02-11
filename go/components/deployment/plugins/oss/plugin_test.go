@@ -12,10 +12,17 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
 	"github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
+
+func createTestRegistry(mockBackend *backendsmocks.MockBackend) *backends.Registry {
+	registry := backends.NewRegistry()
+	registry.Register(v2pb.BACKEND_TYPE_TRITON, mockBackend)
+	return registry
+}
 
 func TestParseStage(t *testing.T) {
 	tests := []struct {
@@ -271,7 +278,7 @@ func TestGetState(t *testing.T) {
 	tests := []struct {
 		name          string
 		deployment    *v2pb.Deployment
-		setupMocks    func(*gatewaysmocks.MockGateway)
+		setupMocks    func(*backendsmocks.MockBackend)
 		expectedState v2pb.DeploymentState
 		expectError   bool
 	}{
@@ -287,7 +294,7 @@ func TestGetState(t *testing.T) {
 					Stage:           v2pb.DEPLOYMENT_STAGE_PLACEMENT,
 				},
 			},
-			setupMocks:    func(gw *gatewaysmocks.MockGateway) {},
+			setupMocks:    func(mb *backendsmocks.MockBackend) {},
 			expectedState: v2pb.DEPLOYMENT_STATE_INITIALIZING,
 			expectError:   false,
 		},
@@ -303,7 +310,7 @@ func TestGetState(t *testing.T) {
 					Stage:           v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE,
 				},
 			},
-			setupMocks:    func(gw *gatewaysmocks.MockGateway) {},
+			setupMocks:    func(mb *backendsmocks.MockBackend) {},
 			expectedState: v2pb.DEPLOYMENT_STATE_EMPTY,
 			expectError:   false,
 		},
@@ -319,7 +326,7 @@ func TestGetState(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
 				},
 			},
-			setupMocks:    func(gw *gatewaysmocks.MockGateway) {},
+			setupMocks:    func(mb *backendsmocks.MockBackend) {},
 			expectedState: v2pb.DEPLOYMENT_STATE_INVALID,
 			expectError:   false,
 		},
@@ -337,7 +344,7 @@ func TestGetState(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
 				},
 			},
-			setupMocks:    func(gw *gatewaysmocks.MockGateway) {},
+			setupMocks:    func(mb *backendsmocks.MockBackend) {},
 			expectedState: v2pb.DEPLOYMENT_STATE_INVALID,
 			expectError:   false,
 		},
@@ -355,8 +362,8 @@ func TestGetState(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
+			setupMocks: func(mb *backendsmocks.MockBackend) {
+				mb.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").Return(true, nil)
 			},
 			expectedState: v2pb.DEPLOYMENT_STATE_HEALTHY,
 			expectError:   false,
@@ -375,8 +382,8 @@ func TestGetState(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
+			setupMocks: func(mb *backendsmocks.MockBackend) {
+				mb.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").Return(false, nil)
 			},
 			expectedState: v2pb.DEPLOYMENT_STATE_UNHEALTHY,
 			expectError:   false,
@@ -395,8 +402,8 @@ func TestGetState(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, errors.New("connection error"))
+			setupMocks: func(mb *backendsmocks.MockBackend) {
+				mb.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").Return(false, errors.New("connection error"))
 			},
 			expectedState: v2pb.DEPLOYMENT_STATE_INVALID,
 			expectError:   true,
@@ -408,12 +415,12 @@ func TestGetState(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
-			tt.setupMocks(mockGateway)
+			mockBackend := backendsmocks.NewMockBackend(ctrl)
+			tt.setupMocks(mockBackend)
 
 			plugin := &Plugin{
-				gateway: mockGateway,
-				logger:  zap.NewNop(),
+				backendRegistry: createTestRegistry(mockBackend),
+				logger:          zap.NewNop(),
 			}
 
 			status, err := plugin.GetState(context.Background(), plugins.ObservabilityContext{}, tt.deployment)

@@ -11,10 +11,19 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig/modelconfigmocks"
 	"github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
+
+func createTestRegistry(mockBackend *backendsmocks.MockBackend) *backends.Registry {
+	registry := backends.NewRegistry()
+	registry.Register(v2pb.BACKEND_TYPE_TRITON, mockBackend)
+	return registry
+}
 
 func TestRollingRolloutRetrieve(t *testing.T) {
 	// Condition with rolloutstarted = true metadata
@@ -33,7 +42,7 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 		name                    string
 		deployment              *v2pb.Deployment
 		condition               *api.Condition
-		setupMocks              func(*gatewaysmocks.MockGateway)
+		setupMocks              func(*backendsmocks.MockBackend)
 		expectedConditionStatus api.ConditionStatus
 		expectedConditionReason string
 	}{
@@ -49,7 +58,7 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 				},
 			},
 			condition:               rolloutNotStartedCondition(),
-			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
+			setupMocks:              func(mb *backendsmocks.MockBackend) {},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Rolling rollout has not started",
 		},
@@ -65,8 +74,8 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 				},
 			},
 			condition: rolloutStartedCondition(),
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
+			setupMocks: func(mb *backendsmocks.MockBackend) {
+				mb.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").Return(true, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
 			expectedConditionReason: "",
@@ -78,12 +87,12 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
-			tt.setupMocks(mockGateway)
+			mockBackend := backendsmocks.NewMockBackend(ctrl)
+			tt.setupMocks(mockBackend)
 
 			actor := &RollingRolloutActor{
-				gateway: mockGateway,
-				logger:  zap.NewNop(),
+				BackendRegistry: createTestRegistry(mockBackend),
+				Logger:          zap.NewNop(),
 			}
 
 			condition, err := actor.Retrieve(context.Background(), tt.deployment, tt.condition)
@@ -100,12 +109,12 @@ func TestRollingRolloutRun(t *testing.T) {
 	tests := []struct {
 		name                    string
 		deployment              *v2pb.Deployment
-		setupMocks              func(*gatewaysmocks.MockGateway)
+		setupMocks              func(*modelconfigmocks.MockModelConfigProvider)
 		expectedConditionStatus api.ConditionStatus
 		expectedConditionReason string
 	}{
 		{
-			name: "successful model sync via gateway",
+			name: "successful model sync via model config provider",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
@@ -115,8 +124,8 @@ func TestRollingRolloutRun(t *testing.T) {
 					},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().LoadModel(gomock.Any(), gomock.Any(), "model-v1", "s3://deploy-models/model-v1/", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(nil)
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
+				mcp.EXPECT().AddModelToConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", modelconfig.ModelConfigEntry{Name: "model-v1", StoragePath: "s3://deploy-models/model-v1/"}).Return(nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_UNKNOWN,
 			expectedConditionReason: "Rolling rollout is in progress",
@@ -132,8 +141,8 @@ func TestRollingRolloutRun(t *testing.T) {
 					},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().LoadModel(gomock.Any(), gomock.Any(), "model-v2", "s3://deploy-models/model-v2/", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(errors.New("model loading failed"))
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
+				mcp.EXPECT().AddModelToConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", modelconfig.ModelConfigEntry{Name: "model-v2", StoragePath: "s3://deploy-models/model-v2/"}).Return(errors.New("model loading failed"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Failed to update deployment: model loading failed",
@@ -149,7 +158,7 @@ func TestRollingRolloutRun(t *testing.T) {
 					},
 				},
 			},
-			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
+			setupMocks:              func(mcp *modelconfigmocks.MockModelConfigProvider) {},
 			expectedConditionStatus: api.CONDITION_STATUS_UNKNOWN,
 			expectedConditionReason: "Rolling rollout is in progress",
 		},
@@ -164,8 +173,8 @@ func TestRollingRolloutRun(t *testing.T) {
 					},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().LoadModel(gomock.Any(), gomock.Any(), "bert_cola", "s3://deploy-models/bert_cola/", "triton-prod", "production", v2pb.BACKEND_TYPE_TRITON).Return(nil)
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
+				mcp.EXPECT().AddModelToConfig(gomock.Any(), gomock.Any(), gomock.Any(), "triton-prod", "production", modelconfig.ModelConfigEntry{Name: "bert_cola", StoragePath: "s3://deploy-models/bert_cola/"}).Return(nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_UNKNOWN,
 			expectedConditionReason: "Rolling rollout is in progress",
@@ -177,12 +186,12 @@ func TestRollingRolloutRun(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
-			tt.setupMocks(mockGateway)
+			mockModelConfigProvider := modelconfigmocks.NewMockModelConfigProvider(ctrl)
+			tt.setupMocks(mockModelConfigProvider)
 
 			actor := &RollingRolloutActor{
-				gateway: mockGateway,
-				logger:  zap.NewNop(),
+				ModelConfigProvider: mockModelConfigProvider,
+				Logger:              zap.NewNop(),
 			}
 
 			condition, err := actor.Run(context.Background(), tt.deployment, &api.Condition{})

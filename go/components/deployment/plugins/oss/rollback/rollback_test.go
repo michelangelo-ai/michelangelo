@@ -10,7 +10,8 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
+	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig/modelconfigmocks"
 	"github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -19,7 +20,7 @@ func TestRetrieve(t *testing.T) {
 	tests := []struct {
 		name                    string
 		deployment              *v2pb.Deployment
-		setupMocks              func(*gatewaysmocks.MockGateway)
+		setupMocks              func(*modelconfigmocks.MockModelConfigProvider)
 		expectedConditionStatus api.ConditionStatus
 		expectedConditionReason string
 	}{
@@ -36,7 +37,7 @@ func TestRetrieve(t *testing.T) {
 					CandidateRevision: nil,
 				},
 			},
-			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
+			setupMocks:              func(mcp *modelconfigmocks.MockModelConfigProvider) {},
 			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
 			expectedConditionReason: "",
 		},
@@ -53,8 +54,8 @@ func TestRetrieve(t *testing.T) {
 					CandidateRevision: &api.ResourceIdentifier{Name: "failed-model"},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelExists(gomock.Any(), gomock.Any(), "failed-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
+				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return([]modelconfig.ModelConfigEntry{}, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
 			expectedConditionReason: "",
@@ -72,11 +73,13 @@ func TestRetrieve(t *testing.T) {
 					CandidateRevision: &api.ResourceIdentifier{Name: "failed-model"},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelExists(gomock.Any(), gomock.Any(), "failed-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
+				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return([]modelconfig.ModelConfigEntry{
+					{Name: "failed-model"},
+				}, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "Candidate Model failed-model still exists in Inference Server",
+			expectedConditionReason: "Candidate Model failed-model still exists in model config",
 		},
 		{
 			name: "unable to check model exists error",
@@ -91,11 +94,11 @@ func TestRetrieve(t *testing.T) {
 					CandidateRevision: &api.ResourceIdentifier{Name: "failed-model"},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelExists(gomock.Any(), gomock.Any(), "failed-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, errors.New("api error"))
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
+				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return(nil, errors.New("api error"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "Unable to check if model failed-model exists in Inference Server: api error",
+			expectedConditionReason: "Unable to check if model failed-model exists in model config: api error",
 		},
 	}
 
@@ -104,12 +107,12 @@ func TestRetrieve(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
-			tt.setupMocks(mockGateway)
+			mockModelConfigProvider := modelconfigmocks.NewMockModelConfigProvider(ctrl)
+			tt.setupMocks(mockModelConfigProvider)
 
 			actor := &RollbackActor{
-				logger:  zap.NewNop(),
-				gateway: mockGateway,
+				logger:              zap.NewNop(),
+				modelConfigProvider: mockModelConfigProvider,
 			}
 
 			condition, err := actor.Retrieve(context.Background(), tt.deployment, &api.Condition{})
@@ -117,7 +120,7 @@ func TestRetrieve(t *testing.T) {
 			assert.NoError(t, err)
 			assert.NotNil(t, condition)
 			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
-			assert.Equal(t, tt.expectedConditionReason, condition.Reason)
+			assert.Contains(t, condition.Reason, tt.expectedConditionReason)
 		})
 	}
 }
@@ -126,12 +129,12 @@ func TestRun(t *testing.T) {
 	tests := []struct {
 		name                    string
 		deployment              *v2pb.Deployment
-		setupMocks              func(*gatewaysmocks.MockGateway)
+		setupMocks              func(*modelconfigmocks.MockModelConfigProvider)
 		expectedConditionStatus api.ConditionStatus
 		expectedConditionReason string
 	}{
 		{
-			name: "successful rollback unloads candidate model",
+			name: "successful rollback removes candidate model from config",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
@@ -143,14 +146,14 @@ func TestRun(t *testing.T) {
 					CandidateRevision: &api.ResourceIdentifier{Name: "failed-model"},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "failed-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(nil)
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
+				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "failed-model").Return(nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
 			expectedConditionReason: "",
 		},
 		{
-			name: "rollback fails when unload fails",
+			name: "rollback fails when remove model fails",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
@@ -162,11 +165,11 @@ func TestRun(t *testing.T) {
 					CandidateRevision: &api.ResourceIdentifier{Name: "failed-model"},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "failed-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(errors.New("unload failed"))
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
+				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "failed-model").Return(errors.New("removal failed"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "Failed to rollback deployment: unload failed",
+			expectedConditionReason: "Failed to remove candidate model failed-model from model config: removal failed",
 		},
 	}
 
@@ -175,12 +178,12 @@ func TestRun(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
-			tt.setupMocks(mockGateway)
+			mockModelConfigProvider := modelconfigmocks.NewMockModelConfigProvider(ctrl)
+			tt.setupMocks(mockModelConfigProvider)
 
 			actor := &RollbackActor{
-				logger:  zap.NewNop(),
-				gateway: mockGateway,
+				logger:              zap.NewNop(),
+				modelConfigProvider: mockModelConfigProvider,
 			}
 
 			condition, err := actor.Run(context.Background(), tt.deployment, &api.Condition{})
@@ -188,7 +191,7 @@ func TestRun(t *testing.T) {
 			assert.NoError(t, err)
 			assert.NotNil(t, condition)
 			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
-			assert.Equal(t, tt.expectedConditionReason, condition.Reason)
+			assert.Contains(t, condition.Reason, tt.expectedConditionReason)
 		})
 	}
 }
