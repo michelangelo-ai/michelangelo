@@ -54,6 +54,36 @@ _ray_ports = [
 _cadence_domain = "default"
 _default_compute_kube_cluster_name = "michelangelo-compute-0"
 
+# GKE cluster context name
+_gke_context = "gke_michelanglo-oss-196506_us-east1_kubernetes-gke-dev01"
+
+# Global flag to track if we're using GKE/external cluster mode
+_use_gke_mode = False
+
+
+def _get_kubectl_context_args() -> list[str]:
+    """Get kubectl context arguments based on current mode.
+    
+    Returns ["--context", gke_context] for GKE mode,
+    or ["--context", "k3d-{cluster_name}"] for k3d mode.
+    """
+    if _use_gke_mode:
+        return ["--context", _gke_context]
+    return ["--context", f"k3d-{_michelangelo_sandbox_kube_cluster_name}"]
+
+
+def _sanitize_k8s_name(name: str) -> str:
+    """Sanitize a name to be RFC 1123 compliant for Kubernetes resources."""
+    # Replace underscores with dashes, lowercase
+    return name.replace("_", "-").lower()
+
+
+def _get_current_cluster_name() -> str:
+    """Get the cluster name for use as cluster identifier."""
+    if _use_gke_mode:
+        return _sanitize_k8s_name(_gke_context)
+    return _michelangelo_sandbox_kube_cluster_name
+
 
 def init_arguments(p: argparse.ArgumentParser):
     """Initialize command-line arguments for the sandbox CLI."""
@@ -64,10 +94,20 @@ def init_arguments(p: argparse.ArgumentParser):
         "--exclude",
         help=(
             "Excludes specified services. "
-            "Available options: apiserver, controllermgr, ui, worker"
+            "Available options: apiserver, controllermgr, ui, worker, mysql, minio, prometheus, grafana, cadence, ray, spark"
         ),
         nargs="+",
         default=[],
+    )
+    create_p.add_argument(
+        "--skip-cluster-creation",
+        action="store_true",
+        help="Skip k3d cluster creation and deploy to the current kubectl context (e.g., for GKE).",
+    )
+    create_p.add_argument(
+        "--gke",
+        action="store_true",
+        help="Deploy to current GKE/external cluster context. Equivalent to --skip-cluster-creation with GHCR secret setup.",
     )
     create_p.add_argument(
         "--workflow",
@@ -99,6 +139,11 @@ def init_arguments(p: argparse.ArgumentParser):
     demo_p = sp.add_parser(
         "demo", help="Create demo project and pipelines in the sandbox cluster."
     )
+    demo_p.add_argument(
+        "--gke",
+        action="store_true",
+        help="Run demo on GKE/external cluster instead of k3d.",
+    )
     demo_sp = demo_p.add_subparsers(
         dest="demo_action", required=True, help="Demo type to create"
     )
@@ -118,6 +163,11 @@ def init_arguments(p: argparse.ArgumentParser):
             f"--create-compute-cluster is used "
             f"(default: {_default_compute_kube_cluster_name})."
         ),
+    )
+    delete_p.add_argument(
+        "--gke",
+        action="store_true",
+        help="Delete sandbox resources from current GKE/external cluster context instead of k3d.",
     )
     _ = sp.add_parser("start", help="Start the cluster.")
     _ = sp.add_parser("stop", help="Stop the cluster.")
@@ -156,29 +206,38 @@ def run(ns: argparse.Namespace):
 
 def _create(ns: argparse.Namespace):
     assert ns
-    ports = _kube_ports + ([] if ns.workflow == "temporal" else _cadence_ports)
-    args = [
-        "k3d",
-        "cluster",
-        "create",
-        _michelangelo_sandbox_kube_cluster_name,
-        "--servers",
-        "1",
-        "--agents",
-        "1",
-    ]
 
-    for p in ports:
-        args += ["-p", f"{p}@agent:0"]
+    # --gke implies --skip-cluster-creation
+    skip_cluster = getattr(ns, "skip_cluster_creation", False) or getattr(ns, "gke", False)
 
-    # TODO: andrii: Remove the following block once Michelangelo is publicly accessible.
-    # BLOCK START ----------------------------------------------------------------------
-    # Handle the GitHub Container Registry authentication.
-    env_cr_pat = "CR_PAT"
-    cr_pat = os.environ.get(env_cr_pat)
-    if not cr_pat:
-        _err_exit(
-            """
+    # Set global GKE mode flag
+    global _use_gke_mode
+    _use_gke_mode = skip_cluster
+
+    if not skip_cluster:
+        ports = _kube_ports + ([] if ns.workflow == "temporal" else _cadence_ports)
+        args = [
+            "k3d",
+            "cluster",
+            "create",
+            _michelangelo_sandbox_kube_cluster_name,
+            "--servers",
+            "1",
+            "--agents",
+            "1",
+        ]
+
+        for p in ports:
+            args += ["-p", f"{p}@agent:0"]
+
+        # TODO: andrii: Remove the following block once Michelangelo is publicly accessible.
+        # BLOCK START ----------------------------------------------------------------------
+        # Handle the GitHub Container Registry authentication.
+        env_cr_pat = "CR_PAT"
+        cr_pat = os.environ.get(env_cr_pat)
+        if not cr_pat:
+            _err_exit(
+                """
 CR_PAT environment variable is not set. To pull Michelangelo's containers
 from the GitHub Container Registry, please create a GitHub personal access
 token (classic) with the "read:packages" scope. Then, save this token to the
@@ -192,46 +251,91 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT
 publicly accessible. Once we become public, the token will no longer be
 necessary, and this assertion will be removed.
 """
-        )
+            )
 
-    # Create a temporary registry file with the GitHub Container Registry
-    # authentication.
-    registry = {
-        "mirrors": {
-            "ghcr.io": {
-                "endpoint": ["https://ghcr.io"],
-            },
-        },
-        "configs": {
-            "ghcr.io": {
-                "auth": {
-                    "username": "USERNAME",
-                    "password": cr_pat,
+        # Create a temporary registry file with the GitHub Container Registry
+        # authentication.
+        registry = {
+            "mirrors": {
+                "ghcr.io": {
+                    "endpoint": ["https://ghcr.io"],
                 },
             },
-        },
-    }
+            "configs": {
+                "ghcr.io": {
+                    "auth": {
+                        "username": "USERNAME",
+                        "password": cr_pat,
+                    },
+                },
+            },
+        }
 
-    with tempfile.NamedTemporaryFile(mode="wt", delete=False) as registry_file:
-        json.dump(registry, registry_file)
-        registry_file.flush()
-        args += ["--registry-config", registry_file.name]
+        with tempfile.NamedTemporaryFile(mode="wt", delete=False) as registry_file:
+            json.dump(registry, registry_file)
+            registry_file.flush()
+            args += ["--registry-config", registry_file.name]
 
-    # BLOCK END ----------------------------------------------------------------------
+        _exec(*args)
+    else:
+        print("Skipping k3d cluster creation, using current kubectl context...")
 
-    _exec(*args)
+        # For existing clusters (GKE, etc.), we need to create the GHCR image pull secret
+        env_cr_pat = "CR_PAT"
+        cr_pat = os.environ.get(env_cr_pat)
+        if not cr_pat:
+            _err_exit(
+                """
+CR_PAT environment variable is not set. To pull Michelangelo's containers
+from the GitHub Container Registry, please create a GitHub personal access
+token (classic) with the "read:packages" scope. Then, save this token to the
+CR_PAT environment variable, e.g.: `export CR_PAT=ghp_...`.
+"""
+            )
+
+        # Create GHCR image pull secret in default namespace
+        print("Creating GHCR image pull secret...")
+        subprocess.run(
+            ["kubectl", "delete", "secret", "ghcr-secret", "--ignore-not-found"],
+            check=False,
+            capture_output=True,
+        )
+        _exec(
+            "kubectl",
+            "create",
+            "secret",
+            "docker-registry",
+            "ghcr-secret",
+            "--docker-server=ghcr.io",
+            "--docker-username=ghcr-user",
+            f"--docker-password={cr_pat}",
+        )
+
+        # Patch default service account to use the secret
+        print("Patching default service account to use GHCR secret...")
+        _exec(
+            "kubectl",
+            "patch",
+            "serviceaccount",
+            "default",
+            "-p",
+            '{"imagePullSecrets": [{"name": "ghcr-secret"}]}',
+        )
 
     resources = [
         "boot.yaml",
-        "mysql.yaml",
         "michelangelo-config.yaml",
         "aws-credentials.yaml",
     ]
     links = []
 
-    # Cadence
+    # MySQL (required for Cadence/Temporal unless excluded)
+    if "mysql" not in ns.exclude:
+        resources.append("mysql.yaml")
 
-    if ns.workflow == "cadence":
+    # Cadence (requires mysql)
+
+    if ns.workflow == "cadence" and "cadence" not in ns.exclude and "mysql" not in ns.exclude:
         resources.append("cadence.yaml")
         links.append(
             (
@@ -240,36 +344,41 @@ necessary, and this assertion will be removed.
                 "",
             )
         )
+    elif ns.workflow == "cadence" and ("cadence" in ns.exclude or "mysql" in ns.exclude):
+        print("Note: Cadence excluded (explicitly or because mysql is excluded)")
 
     # MinIO
 
-    resources.append("minio.yaml")
-    links.append(
-        (
-            "MinIO Console",
-            "http://localhost:9090",
-            "[Username: minioadmin; Password: minioadmin]",
+    if "minio" not in ns.exclude:
+        resources.append("minio.yaml")
+        links.append(
+            (
+                "MinIO Console",
+                "http://localhost:9090",
+                "[Username: minioadmin; Password: minioadmin]",
+            )
         )
-    )
 
     # Prometheus & Grafana
 
-    resources.append("prometheus.yaml")
-    resources.append("grafana.yaml")
-    links.append(
-        (
-            "Prometheus",
-            "http://localhost:9092",
-            "",
+    if "prometheus" not in ns.exclude:
+        resources.append("prometheus.yaml")
+        links.append(
+            (
+                "Prometheus",
+                "http://localhost:9092",
+                "",
+            )
         )
-    )
-    links.append(
-        (
-            "Grafana Dashboard",
-            "http://localhost:3000",
-            "[Username: admin; Password: admin]",
+    if "grafana" not in ns.exclude:
+        resources.append("grafana.yaml")
+        links.append(
+            (
+                "Grafana Dashboard",
+                "http://localhost:3000",
+                "[Username: admin; Password: admin]",
+            )
         )
-    )
 
     if "apiserver" not in ns.exclude:
         resources.append("michelangelo-apiserver.yaml")
@@ -312,13 +421,15 @@ necessary, and this assertion will be removed.
         )
 
     # Determine buckets to create based on enabled services
-    bucket_names = ["logs", "default"]
-    if "mlflow" in ns.include_experimental:
-        bucket_names.append("mlflow")
-        print("🪣 Adding MLflow bucket to S3 setup")
+    # Only create bucket setup if minio is deployed
+    if "minio" not in ns.exclude:
+        bucket_names = ["logs", "default"]
+        if "mlflow" in ns.include_experimental:
+            bucket_names.append("mlflow")
+            print("🪣 Adding MLflow bucket to S3 setup")
 
-    # Create bucket setup with dynamic bucket list
-    _create_bucket_setup(bucket_names)
+        # Create bucket setup with dynamic bucket list
+        _create_bucket_setup(bucket_names)
     for r in resources:
         _kube_create(_dir / "resources" / r)
 
@@ -347,24 +458,33 @@ necessary, and this assertion will be removed.
         if "worker" not in ns.exclude:
             _kube_create(_dir / "resources/michelangelo-temporal-worker.yaml")
     elif ns.workflow == "cadence":
-        _create_cadence_domain(links)
-        if "worker" not in ns.exclude:
-            _kube_create(_dir / "resources/michelangelo-worker.yaml")
+        # Only create cadence domain if cadence is actually deployed
+        if "cadence" not in ns.exclude and "mysql" not in ns.exclude:
+            _create_cadence_domain(links)
+            if "worker" not in ns.exclude:
+                _kube_create(_dir / "resources/michelangelo-worker.yaml")
     else:
         raise ValueError(f"Unsupported workflow engine: {ns.workflow}")
 
     # Create separate compute cluster if requested
     if ns.create_compute_cluster:
-        _create_compute_cluster(ns.compute_cluster_name)
-        _create_compute_cluster_crd(ns.compute_cluster_name)
-        _apply_compute_cluster_rbac(ns.compute_cluster_name)
-        _create_compute_cluster_secrets(ns.compute_cluster_name)
+        if _use_gke_mode:
+            print("Warning: --create-compute-cluster is not supported in GKE mode.")
+        else:
+            _create_compute_cluster(ns.compute_cluster_name)
+            _create_compute_cluster_crd(ns.compute_cluster_name)
+            _apply_compute_cluster_rbac(ns.compute_cluster_name)
+            _create_compute_cluster_secrets(ns.compute_cluster_name)
     else:
         # Use the control plane cluster as the default compute cluster if a
         # dedicated compute cluster is not requested
-        _create_compute_cluster_crd(_michelangelo_sandbox_kube_cluster_name)
-        _apply_compute_cluster_rbac(_michelangelo_sandbox_kube_cluster_name)
-        _create_compute_cluster_secrets(_michelangelo_sandbox_kube_cluster_name)
+        if _use_gke_mode:
+            cluster_name = _get_current_cluster_name()
+        else:
+            cluster_name = _michelangelo_sandbox_kube_cluster_name
+        _create_compute_cluster_crd(cluster_name)
+        _apply_compute_cluster_rbac(cluster_name)
+        _create_compute_cluster_secrets(cluster_name)
 
     _kube_wait()
 
@@ -785,29 +905,43 @@ def _create_demo_crs(ns: argparse.Namespace):
     if ns.demo_action not in ("pipeline", "inference", "inference-dynamo"):
         raise ValueError(f"Unsupported demo action: {ns.demo_action}")
 
-    # Check if cluster exists
-    try:
-        _exec(
-            "k3d",
-            "cluster",
-            "get",
-            _michelangelo_sandbox_kube_cluster_name,
-            raise_error=True,
-        )
-    except subprocess.CalledProcessError:
-        _err_exit(
-            f"Cluster {_michelangelo_sandbox_kube_cluster_name} not found. "
-            "Please run 'ma sandbox create' first."
-        )
+    # Set GKE mode if --gke flag is specified
+    global _use_gke_mode
+    _use_gke_mode = getattr(ns, "gke", False)
 
-    # Check if cluster is running
-    try:
-        _exec("kubectl", "cluster-info", raise_error=True)
-    except subprocess.CalledProcessError:
-        _err_exit(
-            f"Cluster {_michelangelo_sandbox_kube_cluster_name} is not running. "
-            "Please run 'ma sandbox start' first."
-        )
+    # Check if cluster exists
+    if _use_gke_mode:
+        # For GKE, just check if kubectl can connect
+        try:
+            _exec("kubectl", "--context", _gke_context, "cluster-info", raise_error=True)
+        except subprocess.CalledProcessError:
+            _err_exit(
+                f"Cannot connect to GKE cluster {_gke_context}. "
+                "Please check your kubectl configuration."
+            )
+    else:
+        try:
+            _exec(
+                "k3d",
+                "cluster",
+                "get",
+                _michelangelo_sandbox_kube_cluster_name,
+                raise_error=True,
+            )
+        except subprocess.CalledProcessError:
+            _err_exit(
+                f"Cluster {_michelangelo_sandbox_kube_cluster_name} not found. "
+                "Please run 'ma sandbox create' first."
+            )
+
+        # Check if cluster is running
+        try:
+            _exec("kubectl", "cluster-info", raise_error=True)
+        except subprocess.CalledProcessError:
+            _err_exit(
+                f"Cluster {_michelangelo_sandbox_kube_cluster_name} is not running. "
+                "Please run 'ma sandbox start' first."
+            )
 
     # Create CRs used by all demo resources
     demo_dir = _dir / "demo"
@@ -841,6 +975,12 @@ def _create_demo_crs(ns: argparse.Namespace):
 
 def _delete(ns: argparse.Namespace):
     assert ns
+
+    # If --gke flag is set, delete resources from current kubectl context
+    if getattr(ns, "gke", False):
+        _delete_gke_resources()
+        return
+
     # Determine which compute cluster to check for
     compute_cluster = (
         ns.compute_cluster_name
@@ -863,6 +1003,150 @@ def _delete(ns: argparse.Namespace):
     _exec("k3d", "cluster", "delete", _michelangelo_sandbox_kube_cluster_name)
 
 
+def _delete_gke_resources():
+    """Delete sandbox resources from current GKE/external cluster context."""
+    print("Deleting sandbox resources from current kubectl context...")
+
+    context_args = ["--context", _gke_context]
+
+    # Delete Dynamo-related CRs first (before uninstalling helm charts)
+    print("Cleaning up Dynamo resources...")
+    subprocess.run(
+        ["kubectl", *context_args, "delete", "inferenceserver.michelangelo.api", "--all", "-n", "default"],
+        check=False,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["kubectl", *context_args, "delete", "dynamographdeployment", "--all", "-A"],
+        check=False,
+        capture_output=True,
+    )
+
+    # Delete any blocking CRD instances first (like RayClusters)
+    print("Cleaning up RayCluster instances...")
+    subprocess.run(
+        ["kubectl", *context_args, "delete", "raycluster.michelangelo.api", "--all", "-n", "default"],
+        check=False,
+        capture_output=True,
+    )
+
+    # Delete pods
+    pods_to_delete = [
+        "michelangelo-apiserver",
+        "michelangelo-controllermgr",
+        "envoy",
+        "cadence",
+        "cadence-web",
+        "mysql",
+        "minio",
+        "prometheus",
+        "grafana",
+    ]
+    for pod in pods_to_delete:
+        subprocess.run(
+            ["kubectl", *context_args, "delete", "pod", pod, "--ignore-not-found"],
+            check=False,
+            capture_output=True,
+        )
+
+    # Delete deployments
+    subprocess.run(
+        ["kubectl", *context_args, "delete", "deployment", "michelangelo-ui", "--ignore-not-found"],
+        check=False,
+        capture_output=True,
+    )
+
+    # Delete services
+    services_to_delete = [
+        "michelangelo-apiserver",
+        "michelangelo-controllermgr",
+        "envoy",
+        "michelangelo-ui",
+        "cadence",
+        "cadence-web",
+        "mysql",
+        "minio",
+        "prometheus",
+        "grafana",
+    ]
+    for svc in services_to_delete:
+        subprocess.run(
+            ["kubectl", *context_args, "delete", "svc", svc, "--ignore-not-found"],
+            check=False,
+            capture_output=True,
+        )
+
+    # Delete configmaps
+    configmaps_to_delete = [
+        "michelangelo-config",
+        "michelangelo-apiserver-config",
+        "michelangelo-controllermgr-config",
+        "envoy-config",
+        "public-config",
+        "sandbox-bucket-setup",
+    ]
+    for cm in configmaps_to_delete:
+        subprocess.run(
+            ["kubectl", *context_args, "delete", "configmap", cm, "--ignore-not-found"],
+            check=False,
+            capture_output=True,
+        )
+
+    # Delete secrets
+    subprocess.run(
+        ["kubectl", *context_args, "delete", "secret", "aws-credentials", "ghcr-secret", "--ignore-not-found"],
+        check=False,
+        capture_output=True,
+    )
+
+    # Delete jobs
+    subprocess.run(
+        ["kubectl", *context_args, "delete", "job", "sandbox-bucket-setup", "--ignore-not-found"],
+        check=False,
+        capture_output=True,
+    )
+
+    # Delete clusterrolebinding
+    subprocess.run(
+        ["kubectl", *context_args, "delete", "clusterrolebinding", "admin-default-default", "--ignore-not-found"],
+        check=False,
+        capture_output=True,
+    )
+
+    # Uninstall helm releases
+    print("Uninstalling helm releases...")
+    subprocess.run(
+        ["helm", "uninstall", "kuberay-operator", "-n", "ray-system", "--kube-context", _gke_context],
+        check=False,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["helm", "uninstall", "spark-operator", "-n", "spark-operator", "--kube-context", _gke_context],
+        check=False,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["helm", "uninstall", "dynamo-platform", "-n", "dynamo-system", "--kube-context", _gke_context],
+        check=False,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["helm", "uninstall", "dynamo-crds", "-n", "default", "--kube-context", _gke_context],
+        check=False,
+        capture_output=True,
+    )
+
+    # Delete dynamo-system namespace
+    print("Cleaning up dynamo-system namespace...")
+    subprocess.run(
+        ["kubectl", *context_args, "delete", "namespace", "dynamo-system", "--ignore-not-found"],
+        check=False,
+        capture_output=True,
+    )
+
+    print("GKE sandbox resources deleted.")
+
+
 def _start(ns: argparse.Namespace):
     assert ns
     _exec("k3d", "cluster", "start", _michelangelo_sandbox_kube_cluster_name)
@@ -874,18 +1158,22 @@ def _stop(ns: argparse.Namespace):
 
 
 def _kube_create(path: Path):
-    _exec("kubectl", "create", "-f", str(path))
+    context_args = _get_kubectl_context_args()
+    _exec("kubectl", *context_args, "create", "-f", str(path))
 
 
 def _kube_apply(path: Path):
-    _exec("kubectl", "apply", "-f", str(path))
+    context_args = _get_kubectl_context_args()
+    _exec("kubectl", *context_args, "apply", "-f", str(path))
 
 
 def _kube_wait(pods: bool = True, jobs: bool = True):
+    context_args = _get_kubectl_context_args()
     if pods:
         # Wait for all non-job pods to be ready
         _exec(
             "kubectl",
+            *context_args,
             "wait",
             "--for=condition=ready",
             "pod",
@@ -896,6 +1184,7 @@ def _kube_wait(pods: bool = True, jobs: bool = True):
     if jobs:
         _exec(
             "kubectl",
+            *context_args,
             "wait",
             "--all",
             "jobs",
@@ -912,10 +1201,14 @@ def _apply_compute_cluster_rbac(cluster_name: str):
     jobs cluster.
     """
     rbac_path = _dir / "resources" / "rbac-ray.yaml"
+    # For GKE mode, use GKE context; for k3d, use the specific cluster context
+    if _use_gke_mode:
+        context_args = ["--context", _gke_context]
+    else:
+        context_args = ["--context", f"k3d-{cluster_name}"]
     _exec(
         "kubectl",
-        "--context",
-        f"k3d-{cluster_name}",
+        *context_args,
         "apply",
         "-f",
         str(rbac_path),
@@ -1144,17 +1437,11 @@ def _create_aws_credentials_in_cluster(cluster_name: str):
 
 def _ensure_namespace_exists(namespace: str):
     """Ensure the namespace exists in the sandbox cluster."""
+    context_args = _get_kubectl_context_args()
     try:
         # Check if namespace already exists
         subprocess.check_output(
-            [
-                "kubectl",
-                "--context",
-                f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
-                "get",
-                "namespace",
-                namespace,
-            ],
+            ["kubectl", *context_args, "get", "namespace", namespace],
             stderr=subprocess.DEVNULL,
         )
         print(f"Namespace '{namespace}' already exists.")
@@ -1162,13 +1449,29 @@ def _ensure_namespace_exists(namespace: str):
         # Namespace doesn't exist, create it
         _exec(
             "kubectl",
-            "--context",
-            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            *context_args,
             "create",
             "namespace",
             namespace,
         )
         print(f"Created namespace '{namespace}' in the sandbox cluster.")
+
+
+def _get_kubeconfig(cluster_name: str) -> str:
+    """Get kubeconfig for the specified cluster.
+    
+    In GKE mode, returns the GKE context's kubeconfig.
+    In k3d mode, returns the k3d cluster's kubeconfig.
+    """
+    if _use_gke_mode:
+        return subprocess.check_output(
+            ["kubectl", "config", "view", "--minify", "--raw",
+             "--context", _gke_context]
+        ).decode()
+    else:
+        return subprocess.check_output(
+            ["k3d", "kubeconfig", "get", cluster_name]
+        ).decode()
 
 
 # Given a cluster name, create a Cluster CRD in the sandbox cluster
@@ -1178,9 +1481,7 @@ def _create_compute_cluster_crd(cluster_name: str):
     _ensure_namespace_exists("ma-system")
 
     # Get kubeconfig for the Ray jobs cluster
-    kubeconfig = subprocess.check_output(
-        ["k3d", "kubeconfig", "get", cluster_name]
-    ).decode()
+    kubeconfig = _get_kubeconfig(cluster_name)
 
     # Parse the kubeconfig YAML
     kubeconfig_data = yaml.safe_load(kubeconfig)
@@ -1189,15 +1490,22 @@ def _create_compute_cluster_crd(cluster_name: str):
     server_url = kubeconfig_data["clusters"][0]["cluster"]["server"]
 
     # Extract host and port from server URL
-    # Example: "https://host.docker.internal:52910"
+    # Example: "https://host.docker.internal:52910" or "https://34.26.98.208"
     import re
 
-    match = re.search(r"(https://[^:]+):(\d+)", server_url)
-    if not match:
-        raise ValueError(
-            f"Could not extract cluster host and port from server URL: {server_url}"
-        )
-    host, port = match.groups()
+    # Try with explicit port first
+    match = re.search(r"(https://[^:/]+):(\d+)", server_url)
+    if match:
+        host, port = match.groups()
+    else:
+        # No port specified, use default HTTPS port 443
+        match = re.search(r"(https://[^:/]+)", server_url)
+        if not match:
+            raise ValueError(
+                f"Could not extract cluster host from server URL: {server_url}"
+            )
+        host = match.group(1)
+        port = "443"
 
     # Create Cluster CRD manifest
     cluster_crd = {
@@ -1222,11 +1530,11 @@ def _create_compute_cluster_crd(cluster_name: str):
         yaml.dump(cluster_crd, crd_file)
         crd_file.flush()
 
-        # Apply the Cluster CRD to the sandbox cluster (explicitly specify context)
+        # Apply the Cluster CRD to the sandbox cluster
+        context_args = _get_kubectl_context_args()
         _exec(
             "kubectl",
-            "--context",
-            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            *context_args,
             "apply",
             "-f",
             crd_file.name,
@@ -1241,9 +1549,7 @@ def _create_compute_cluster_crd(cluster_name: str):
 def _create_compute_cluster_secrets(cluster_name: str):
     """Create Kubernetes secrets for the kubeconfig of the given cluster name."""
     # Get kubeconfig for the cluster
-    kubeconfig = subprocess.check_output(
-        ["k3d", "kubeconfig", "get", cluster_name]
-    ).decode()
+    kubeconfig = _get_kubeconfig(cluster_name)
 
     # Parse the kubeconfig YAML
     kubeconfig_data = yaml.safe_load(kubeconfig)
@@ -1265,40 +1571,29 @@ def _create_compute_cluster_secrets(cluster_name: str):
     }
 
     # Create a temporary file for the CA secret
+    context_args = _get_kubectl_context_args()
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as ca_file:
         yaml.dump(ca_secret, ca_file)
         ca_file.flush()
 
-        # Apply the CA secret to the sandbox cluster (explicit context)
+        # Apply the CA secret to the sandbox cluster
         _exec(
             "kubectl",
-            "--context",
-            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            *context_args,
             "apply",
             "-f",
             ca_file.name,
         )
 
     # Create a new token for the ray-manager service account in the jobs cluster
-    token_decoded = (
-        subprocess.check_output(
-            [
-                "kubectl",
-                "--context",
-                f"k3d-{cluster_name}",
-                "-n",
-                "default",
-                "create",
-                "token",
-                "ray-manager",
-                # Required to override kubectl's 1h default token TTL;
-                # set ~10y to prevent frequent sandbox expirations
-                "--duration=87600h",
-            ]
-        )
-        .decode()
-        .strip()
-    )
+    # For GKE mode, use GKE context; for k3d, use the specific cluster context
+    if _use_gke_mode:
+        token_cmd = ["kubectl", "--context", _gke_context, "-n", "default",
+                     "create", "token", "ray-manager", "--duration=87600h"]
+    else:
+        token_cmd = ["kubectl", "--context", f"k3d-{cluster_name}", "-n", "default",
+                     "create", "token", "ray-manager", "--duration=87600h"]
+    token_decoded = subprocess.check_output(token_cmd).decode().strip()
 
     # Create a secret for the user token
     token_secret = {
@@ -1316,11 +1611,10 @@ def _create_compute_cluster_secrets(cluster_name: str):
         yaml.dump(token_secret, token_file)
         token_file.flush()
 
-        # Apply the token secret to the sandbox cluster (explicit context)
+        # Apply the token secret to the sandbox cluster
         _exec(
             "kubectl",
-            "--context",
-            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            *context_args,
             "apply",
             "-f",
             token_file.name,
@@ -1359,9 +1653,11 @@ def _create_inference_demo_crs():
     print(f"⏳ Waiting for inference server '{inference_server_name}' to be ready...")
     print("   (This may take 5-10 minutes for first-time Triton image pull)")
 
+    context_args = _get_kubectl_context_args()
     try:
         _exec(
             "kubectl",
+            *context_args,
             "wait",
             "--for=jsonpath=.status.state=INFERENCE_SERVER_STATE_SERVING",
             f"inferenceservers.michelangelo.api/{inference_server_name}",
@@ -1398,6 +1694,7 @@ def _create_inference_demo_crs():
     try:
         _exec(
             "kubectl",
+            *context_args,
             "rollout",
             "status",
             "deployment/model-sync",
@@ -1496,9 +1793,11 @@ def _create_inference_dynamo_demo_crs():
     print(f"⏳ Waiting for Dynamo inference server '{inference_server_name}' to be ready...")
     print("   (This may take several minutes for first-time image pull)")
 
+    context_args = _get_kubectl_context_args()
     try:
         _exec(
             "kubectl",
+            *context_args,
             "wait",
             "--for=jsonpath=.status.state=INFERENCE_SERVER_STATE_SERVING",
             f"inferenceservers.michelangelo.api/{inference_server_name}",
@@ -1629,15 +1928,23 @@ def _install_dynamo_platform():
     # Install Dynamo platform if not already installed
     if not dynamo_platform_installed:
         print(f"  Installing Dynamo platform (v{dynamo_version})...")
+        # Add GPU toleration so operator can run on GPU nodes if needed
+        # todo: ghosharitra: this should be solved by the remote cluster scenario. Review later.
         _exec(
             "helm",
             "install",
             "dynamo-platform",
-            f"nvidia-ngc/dynamo-platform",
+            "nvidia-ngc/dynamo-platform",
             "--version",
             dynamo_version,
             "--namespace",
             dynamo_namespace,
+            "--set",
+            "operator.tolerations[0].key=nvidia.com/gpu",
+            "--set",
+            "operator.tolerations[0].operator=Exists",
+            "--set",
+            "operator.tolerations[0].effect=NoSchedule",
             "--wait",
             "--timeout",
             "10m",
@@ -1648,9 +1955,11 @@ def _install_dynamo_platform():
 
     # Wait for Dynamo operator to be ready
     print("  Waiting for Dynamo operator to be ready...")
+    context_args = _get_kubectl_context_args()
     try:
         _exec(
             "kubectl",
+            *context_args,
             "rollout",
             "status",
             "deployment/dynamo-operator",
@@ -1711,15 +2020,18 @@ def _setup_istio_with_gateway_api():
 
     # Install Gateway API CRDs (required for HTTPRoute support)
     # kubectl apply is idempotent by default
+    context_args = _get_kubectl_context_args()
     print("Installing Gateway API CRDs...")
     _exec(
         "kubectl",
+        *context_args,
         "apply",
         "-f",
         "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.1.0/standard-install.yaml",
     )
     _exec(
         "kubectl",
+        *context_args,
         "wait",
         "--for=condition=Established",
         "crd/gateways.gateway.networking.k8s.io",
@@ -1744,6 +2056,7 @@ def _setup_istio_with_gateway_api():
     # Wait for Istio control plane to be ready
     _exec(
         "kubectl",
+        *context_args,
         "wait",
         "--for=condition=available",
         "deployment",
@@ -1765,6 +2078,7 @@ def _setup_istio_with_gateway_api():
     # Wait for Gateway to be programmed (Istio provisions the gateway)
     _exec(
         "kubectl",
+        *context_args,
         "wait",
         "--for=condition=Programmed",
         "gateway/ma-gateway",
@@ -1776,6 +2090,7 @@ def _setup_istio_with_gateway_api():
     # Print status for visibility
     _exec(
         "kubectl",
+        *context_args,
         "get",
         "gateway",
         "ma-gateway",
@@ -1787,14 +2102,8 @@ def _setup_istio_with_gateway_api():
 
     # automatically perform port-forwarding in the background
     subprocess.Popen(
-        [
-            "kubectl",
-            "-n",
-            "default",
-            "port-forward",
-            "svc/ma-gateway-istio",
-            "8080:80",
-        ],
+        ["kubectl", *context_args, "-n", "default", "port-forward",
+         "svc/ma-gateway-istio", "8080:80"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
