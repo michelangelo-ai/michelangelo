@@ -93,7 +93,7 @@ Pick the approach that matches your workflow and expertise:
 #### 🔄 Hybrid Approach
 Many teams start with the **UI for initial experiments**, then transition to **code for production workflows**. You can:
 - Train initial models in the UI to validate feasibility
-- Enable IaC (Commit YAML configurations to github repo) and extend in Canvas/rebuild in Uniflow
+- Committed YAML configurations by UI and extend in Canvas/rebuild in Uniflow
 - Use the UI for monitoring while managing training/deployment pipelines
 
 ## Machine Learning Tools
