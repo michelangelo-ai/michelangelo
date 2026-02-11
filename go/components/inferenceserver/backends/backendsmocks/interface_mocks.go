@@ -9,9 +9,9 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+
 	backends "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
-	zap "go.uber.org/zap"
 )
 
 // MockBackend is a mock of Backend interface.
@@ -38,75 +38,75 @@ func (m *MockBackend) EXPECT() *MockBackendMockRecorder {
 }
 
 // CheckModelStatus mocks base method.
-func (m *MockBackend) CheckModelStatus(ctx context.Context, logger *zap.Logger, modelName, inferenceServerName, namespace string) (bool, error) {
+func (m *MockBackend) CheckModelStatus(ctx context.Context, modelName, inferenceServerName, namespace string, targetCluster *v2.ClusterTarget) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CheckModelStatus", ctx, logger, modelName, inferenceServerName, namespace)
+	ret := m.ctrl.Call(m, "CheckModelStatus", ctx, modelName, inferenceServerName, namespace, targetCluster)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CheckModelStatus indicates an expected call of CheckModelStatus.
-func (mr *MockBackendMockRecorder) CheckModelStatus(ctx, logger, modelName, inferenceServerName, namespace interface{}) *gomock.Call {
+func (mr *MockBackendMockRecorder) CheckModelStatus(ctx, modelName, inferenceServerName, namespace, targetCluster interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckModelStatus", reflect.TypeOf((*MockBackend)(nil).CheckModelStatus), ctx, logger, modelName, inferenceServerName, namespace)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckModelStatus", reflect.TypeOf((*MockBackend)(nil).CheckModelStatus), ctx, modelName, inferenceServerName, namespace, targetCluster)
 }
 
 // CreateServer mocks base method.
-func (m *MockBackend) CreateServer(ctx context.Context, logger *zap.Logger, inferenceServer *v2.InferenceServer) (*backends.ServerStatus, error) {
+func (m *MockBackend) CreateServer(ctx context.Context, inferenceServerName, namespace string, resourceConstraints backends.ResourceConstraints, targetCluster *v2.ClusterTarget) (*backends.ServerStatus, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateServer", ctx, logger, inferenceServer)
+	ret := m.ctrl.Call(m, "CreateServer", ctx, inferenceServerName, namespace, resourceConstraints, targetCluster)
 	ret0, _ := ret[0].(*backends.ServerStatus)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateServer indicates an expected call of CreateServer.
-func (mr *MockBackendMockRecorder) CreateServer(ctx, logger, inferenceServer interface{}) *gomock.Call {
+func (mr *MockBackendMockRecorder) CreateServer(ctx, inferenceServerName, namespace, resourceConstraints, targetCluster interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateServer", reflect.TypeOf((*MockBackend)(nil).CreateServer), ctx, logger, inferenceServer)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateServer", reflect.TypeOf((*MockBackend)(nil).CreateServer), ctx, inferenceServerName, namespace, resourceConstraints, targetCluster)
 }
 
 // DeleteServer mocks base method.
-func (m *MockBackend) DeleteServer(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) error {
+func (m *MockBackend) DeleteServer(ctx context.Context, inferenceServerName, namespace string, targetCluster *v2.ClusterTarget) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteServer", ctx, logger, inferenceServerName, namespace)
+	ret := m.ctrl.Call(m, "DeleteServer", ctx, inferenceServerName, namespace, targetCluster)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteServer indicates an expected call of DeleteServer.
-func (mr *MockBackendMockRecorder) DeleteServer(ctx, logger, inferenceServerName, namespace interface{}) *gomock.Call {
+func (mr *MockBackendMockRecorder) DeleteServer(ctx, inferenceServerName, namespace, targetCluster interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteServer", reflect.TypeOf((*MockBackend)(nil).DeleteServer), ctx, logger, inferenceServerName, namespace)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteServer", reflect.TypeOf((*MockBackend)(nil).DeleteServer), ctx, inferenceServerName, namespace, targetCluster)
 }
 
 // GetServerStatus mocks base method.
-func (m *MockBackend) GetServerStatus(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) (*backends.ServerStatus, error) {
+func (m *MockBackend) GetServerStatus(ctx context.Context, inferenceServerName, namespace string, targetCluster *v2.ClusterTarget) (*backends.ServerStatus, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetServerStatus", ctx, logger, inferenceServerName, namespace)
+	ret := m.ctrl.Call(m, "GetServerStatus", ctx, inferenceServerName, namespace, targetCluster)
 	ret0, _ := ret[0].(*backends.ServerStatus)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetServerStatus indicates an expected call of GetServerStatus.
-func (mr *MockBackendMockRecorder) GetServerStatus(ctx, logger, inferenceServerName, namespace interface{}) *gomock.Call {
+func (mr *MockBackendMockRecorder) GetServerStatus(ctx, inferenceServerName, namespace, targetCluster interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetServerStatus", reflect.TypeOf((*MockBackend)(nil).GetServerStatus), ctx, logger, inferenceServerName, namespace)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetServerStatus", reflect.TypeOf((*MockBackend)(nil).GetServerStatus), ctx, inferenceServerName, namespace, targetCluster)
 }
 
 // IsHealthy mocks base method.
-func (m *MockBackend) IsHealthy(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) (bool, error) {
+func (m *MockBackend) IsHealthy(ctx context.Context, inferenceServerName, namespace string, targetCluster *v2.ClusterTarget) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsHealthy", ctx, logger, inferenceServerName, namespace)
+	ret := m.ctrl.Call(m, "IsHealthy", ctx, inferenceServerName, namespace, targetCluster)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // IsHealthy indicates an expected call of IsHealthy.
-func (mr *MockBackendMockRecorder) IsHealthy(ctx, logger, inferenceServerName, namespace interface{}) *gomock.Call {
+func (mr *MockBackendMockRecorder) IsHealthy(ctx, inferenceServerName, namespace, targetCluster interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsHealthy", reflect.TypeOf((*MockBackend)(nil).IsHealthy), ctx, logger, inferenceServerName, namespace)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsHealthy", reflect.TypeOf((*MockBackend)(nil).IsHealthy), ctx, inferenceServerName, namespace, targetCluster)
 }

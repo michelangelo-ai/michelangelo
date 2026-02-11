@@ -1,8 +1,9 @@
 package common
 
 const (
-	TritonCleanupConditionType          = "TritonCleanup"
-	TritonHealthCheckConditionType      = "TritonHealthCheck"
-	TritonResourceCreationConditionType = "TritonResourceCreation"
-	TritonValidationConditionType       = "TritonValidation"
+	TritonCleanupConditionType               = "TritonCleanup"
+	TritonControlPlaneDiscoveryConditionType = "TritonControlPlaneDiscovery"
+	TritonHealthCheckConditionType           = "TritonHealthCheck"
+	TritonClusterWorkloadsConditionType      = "TritonClusterWorkloads"
+	TritonValidationConditionType            = "TritonValidation"
 )

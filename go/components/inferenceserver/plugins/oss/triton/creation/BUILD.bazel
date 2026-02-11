@@ -3,16 +3,19 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "cluster_workloads.go",
+        "control_plane_discovery.go",
         "health_check.go",
         "plugin.go",
-        "resource_creation.go",
         "validation.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/triton/creation",
     visibility = ["//visibility:public"],
     deps = [
         "//go/base/conditions/interfaces:go_default_library",
+        "//go/base/conditions/utils:go_default_library",
         "//go/components/inferenceserver/backends:go_default_library",
+        "//go/components/inferenceserver/endpointregistry:go_default_library",
         "//go/components/inferenceserver/plugins/oss/common:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
@@ -23,14 +26,17 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "cluster_workloads_test.go",
+        "control_plane_discovery_test.go",
         "health_check_test.go",
-        "resource_creation_test.go",
         "validation_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
         "//go/components/inferenceserver/backends:go_default_library",
         "//go/components/inferenceserver/backends/backendsmocks:go_default_library",
+        "//go/components/inferenceserver/endpointregistry:go_default_library",
+        "//go/components/inferenceserver/endpointregistry/endpointregistrymocks:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_golang_mock//gomock:go_default_library",

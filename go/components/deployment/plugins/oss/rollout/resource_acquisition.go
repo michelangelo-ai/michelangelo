@@ -32,15 +32,23 @@ func (a *ResourceAcquisitionActor) Retrieve(ctx context.Context, resource *v2pb.
 	if resource.Spec.GetInferenceServer() == nil {
 		return conditionsutil.GenerateFalseCondition(condition, "NoInferenceServer", "No inference server specified for deployment"), nil
 	}
-
-	// Check if the inference server is healthy
-	if healthy, err := a.gateway.InferenceServerIsHealthy(ctx, a.logger, resource.Spec.GetInferenceServer().Name, resource.Namespace, v2pb.BACKEND_TYPE_TRITON); err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, "HealthCheckFailed", fmt.Sprintf("Failed to check health of inference server: %v", err)), nil
-	} else if !healthy {
-		return conditionsutil.GenerateFalseCondition(condition, "HealthCheckFailed", "Inference server is not healthy"), nil
+	deploymentTargetInfo, err := a.gateway.GetDeploymentTargetInfo(ctx, a.logger, resource.Spec.GetInferenceServer().Name, resource.Namespace)
+	if err != nil {
+		return conditionsutil.GenerateFalseCondition(condition, "GetDeploymentTargetInfoFailed", fmt.Sprintf("Failed to get deployment target info: %v", err)), nil
 	}
 
+	// Check if the inference server is healthy for all target clusters
+	for _, targetCluster := range deploymentTargetInfo.ClusterTargets {
+		healthy, err := a.gateway.InferenceServerIsHealthy(ctx, a.logger, resource.Spec.GetInferenceServer().Name, resource.Namespace, targetCluster, deploymentTargetInfo.BackendType)
+		if err != nil {
+			return conditionsutil.GenerateFalseCondition(condition, "HealthCheckFailed", fmt.Sprintf("Failed to check health of inference server: %v", err)), nil
+		}
+		if !healthy {
+			return conditionsutil.GenerateFalseCondition(condition, "HealthCheckFailed", "Inference server is not healthy"), nil
+		}
+	}
 	// TODO(#620): ghosharitra: check inference-server capacity to see if model can be loaded.
+
 	return conditionsutil.GenerateTrueCondition(condition), nil
 }
 

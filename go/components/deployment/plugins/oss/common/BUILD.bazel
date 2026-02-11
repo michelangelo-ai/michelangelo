@@ -1,9 +1,29 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["constants.go"],
+    srcs = [
+        "constants.go",
+        "metadata.go",
+    ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common",
     visibility = ["//visibility:public"],
-    deps = ["//proto/api/v2:go_default_library"],
+    deps = [
+        "//go/components/inferenceserver/gateways:go_default_library",
+        "//proto/api:go_default_library",
+        "//proto/api/v2:go_default_library",
+        "@com_github_gogo_protobuf//types:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["metadata_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//proto/api:go_default_library",
+        "@com_github_gogo_protobuf//types:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+    ],
 )

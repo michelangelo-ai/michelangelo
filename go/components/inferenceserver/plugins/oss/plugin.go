@@ -5,10 +5,10 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/client-go/tools/record"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/endpointregistry"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/triton"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -19,6 +19,6 @@ var Module = fx.Options(
 )
 
 // registerPlugins registers all OSS plugins with the plugin registry
-func registerPlugins(registry plugins.PluginRegistry, kubeClient client.Client, modelConfigMapProvider configmap.ModelConfigMapProvider, recorder record.EventRecorder, logger *zap.Logger) {
-	registry.RegisterPlugin(v2pb.BACKEND_TYPE_TRITON, triton.NewPlugin(backends.NewTritonBackend(kubeClient, modelConfigMapProvider, logger), modelConfigMapProvider, recorder, logger))
+func registerPlugins(registry plugins.PluginRegistry, clientFactory clientfactory.ClientFactory, modelConfigMapProvider configmap.ModelConfigMapProvider, endpointRegistry endpointregistry.EndpointRegistry, recorder record.EventRecorder, logger *zap.Logger) {
+	registry.RegisterPlugin(v2pb.BACKEND_TYPE_TRITON, triton.NewPlugin(backends.NewTritonBackend(clientFactory, modelConfigMapProvider, logger), endpointRegistry, modelConfigMapProvider, recorder, logger))
 }

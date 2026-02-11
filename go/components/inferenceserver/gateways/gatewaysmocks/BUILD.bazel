@@ -6,6 +6,7 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/components/inferenceserver/gateways:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_golang_mock//gomock:go_default_library",
         "@org_uber_go_zap//:go_default_library",

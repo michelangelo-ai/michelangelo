@@ -12,6 +12,7 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
 	"github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -268,6 +269,11 @@ func TestParseStage(t *testing.T) {
 }
 
 func TestGetState(t *testing.T) {
+	testCluster := &gateways.TargetClusterConnection{
+		ClusterId: "test-cluster",
+		Host:      "host1",
+	}
+
 	tests := []struct {
 		name          string
 		deployment    *v2pb.Deployment
@@ -342,6 +348,27 @@ func TestGetState(t *testing.T) {
 			expectError:   false,
 		},
 		{
+			name: "returns error when GetDeploymentTargetInfo fails",
+			deployment: &v2pb.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				Spec: v2pb.DeploymentSpec{
+					DesiredRevision: &api.ResourceIdentifier{Name: "model-v1"},
+					Target: &v2pb.DeploymentSpec_InferenceServer{
+						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+					},
+				},
+				Status: v2pb.DeploymentStatus{
+					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1", Namespace: "default"},
+				},
+			},
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
+					Return(nil, errors.New("not found"))
+			},
+			expectedState: v2pb.DEPLOYMENT_STATE_INVALID,
+			expectError:   true,
+		},
+		{
 			name: "returns healthy when model status check succeeds",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
@@ -352,11 +379,18 @@ func TestGetState(t *testing.T) {
 					},
 				},
 				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
+					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1", Namespace: "default"},
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
+				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
+					Return(&gateways.DeploymentTargetInfo{
+						BackendType:    v2pb.BACKEND_TYPE_TRITON,
+						ClusterTargets: []*gateways.TargetClusterConnection{testCluster},
+					}, nil)
+				gw.EXPECT().CheckModelStatus(
+					gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", testCluster, v2pb.BACKEND_TYPE_TRITON,
+				).Return(true, nil)
 			},
 			expectedState: v2pb.DEPLOYMENT_STATE_HEALTHY,
 			expectError:   false,
@@ -372,11 +406,18 @@ func TestGetState(t *testing.T) {
 					},
 				},
 				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
+					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1", Namespace: "default"},
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
+				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
+					Return(&gateways.DeploymentTargetInfo{
+						BackendType:    v2pb.BACKEND_TYPE_TRITON,
+						ClusterTargets: []*gateways.TargetClusterConnection{testCluster},
+					}, nil)
+				gw.EXPECT().CheckModelStatus(
+					gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", testCluster, v2pb.BACKEND_TYPE_TRITON,
+				).Return(false, nil)
 			},
 			expectedState: v2pb.DEPLOYMENT_STATE_UNHEALTHY,
 			expectError:   false,
@@ -392,11 +433,18 @@ func TestGetState(t *testing.T) {
 					},
 				},
 				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
+					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1", Namespace: "default"},
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, errors.New("connection error"))
+				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
+					Return(&gateways.DeploymentTargetInfo{
+						BackendType:    v2pb.BACKEND_TYPE_TRITON,
+						ClusterTargets: []*gateways.TargetClusterConnection{testCluster},
+					}, nil)
+				gw.EXPECT().CheckModelStatus(
+					gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", testCluster, v2pb.BACKEND_TYPE_TRITON,
+				).Return(false, errors.New("connection error"))
 			},
 			expectedState: v2pb.DEPLOYMENT_STATE_INVALID,
 			expectError:   true,

@@ -7,129 +7,175 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
-	"github.com/michelangelo-ai/michelangelo/proto-go/api"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-func TestRetrieve(t *testing.T) {
+func TestSteadyStateActor_Retrieve(t *testing.T) {
+	testCluster := &gateways.TargetClusterConnection{
+		ClusterId: "test-cluster",
+		Host:      "host1",
+	}
+
 	tests := []struct {
-		name                    string
-		deployment              *v2pb.Deployment
-		setupMocks              func(*gatewaysmocks.MockGateway)
-		expectedConditionStatus api.ConditionStatus
-		expectedConditionReason string
+		name            string
+		deployment      *v2pb.Deployment
+		setupMocks      func(*gatewaysmocks.MockGateway)
+		expectedStatus  apipb.ConditionStatus
+		expectedMessage string
 	}{
 		{
-			name: "steady state reached when inference server and model are healthy",
+			name: "steady state when inference server and model are healthy",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: &api.ResourceIdentifier{Name: "model-v1"},
+					DesiredRevision: &apipb.ResourceIdentifier{Name: "model-v1"},
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &apipb.ResourceIdentifier{Name: "test-server"},
 					},
-				},
-				Status: v2pb.DeploymentStatus{
-					Stage: v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
-					State: v2pb.DEPLOYMENT_STATE_HEALTHY,
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
+				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
+					Return(&gateways.DeploymentTargetInfo{
+						BackendType:    v2pb.BACKEND_TYPE_TRITON,
+						ClusterTargets: []*gateways.TargetClusterConnection{testCluster},
+					}, nil)
+				gw.EXPECT().InferenceServerIsHealthy(
+					gomock.Any(), gomock.Any(), "test-server", "default", testCluster, v2pb.BACKEND_TYPE_TRITON,
+				).Return(true, nil)
+				gw.EXPECT().CheckModelStatus(
+					gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", testCluster, v2pb.BACKEND_TYPE_TRITON,
+				).Return(true, nil)
 			},
-			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
-			expectedConditionReason: "",
+			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
+			expectedMessage: "",
 		},
 		{
-			name: "not in steady state when inference server is unhealthy",
+			name: "GetDeploymentTargetInfo fails",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: &api.ResourceIdentifier{Name: "model-v1"},
+					DesiredRevision: &apipb.ResourceIdentifier{Name: "model-v1"},
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &apipb.ResourceIdentifier{Name: "test-server"},
 					},
-				},
-				Status: v2pb.DeploymentStatus{
-					Stage: v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
-					State: v2pb.DEPLOYMENT_STATE_UNHEALTHY,
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
+				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
+					Return(nil, errors.New("not found"))
 			},
-			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "Inference server is not healthy",
+			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
+			expectedMessage: "GetDeploymentTargetInfoFailed",
 		},
 		{
-			name: "not in steady state when inference server health check fails with error",
+			name: "inference server is unhealthy",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: &api.ResourceIdentifier{Name: "model-v1"},
+					DesiredRevision: &apipb.ResourceIdentifier{Name: "model-v1"},
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &apipb.ResourceIdentifier{Name: "test-server"},
 					},
-				},
-				Status: v2pb.DeploymentStatus{
-					Stage: v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
-					State: v2pb.DEPLOYMENT_STATE_UNHEALTHY,
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, errors.New("connection error"))
+				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
+					Return(&gateways.DeploymentTargetInfo{
+						BackendType:    v2pb.BACKEND_TYPE_TRITON,
+						ClusterTargets: []*gateways.TargetClusterConnection{testCluster},
+					}, nil)
+				gw.EXPECT().InferenceServerIsHealthy(
+					gomock.Any(), gomock.Any(), "test-server", "default", testCluster, v2pb.BACKEND_TYPE_TRITON,
+				).Return(false, nil)
 			},
-			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "Failed to check health of inference server: connection error",
+			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
+			expectedMessage: "HealthCheckFailed",
 		},
 		{
-			name: "not in steady state when model is not ready",
+			name: "inference server health check fails with error",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: &api.ResourceIdentifier{Name: "model-v1"},
+					DesiredRevision: &apipb.ResourceIdentifier{Name: "model-v1"},
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &apipb.ResourceIdentifier{Name: "test-server"},
 					},
-				},
-				Status: v2pb.DeploymentStatus{
-					Stage: v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
-					State: v2pb.DEPLOYMENT_STATE_UNHEALTHY,
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
+				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
+					Return(&gateways.DeploymentTargetInfo{
+						BackendType:    v2pb.BACKEND_TYPE_TRITON,
+						ClusterTargets: []*gateways.TargetClusterConnection{testCluster},
+					}, nil)
+				gw.EXPECT().InferenceServerIsHealthy(
+					gomock.Any(), gomock.Any(), "test-server", "default", testCluster, v2pb.BACKEND_TYPE_TRITON,
+				).Return(false, errors.New("connection error"))
 			},
-			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "Model is not ready",
+			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
+			expectedMessage: "HealthCheckFailed",
 		},
 		{
-			name: "not in steady state when model status check fails with error",
+			name: "model is not ready",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: &api.ResourceIdentifier{Name: "model-v1"},
+					DesiredRevision: &apipb.ResourceIdentifier{Name: "model-v1"},
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &apipb.ResourceIdentifier{Name: "test-server"},
 					},
-				},
-				Status: v2pb.DeploymentStatus{
-					Stage: v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
-					State: v2pb.DEPLOYMENT_STATE_UNHEALTHY,
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, errors.New("api error"))
+				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
+					Return(&gateways.DeploymentTargetInfo{
+						BackendType:    v2pb.BACKEND_TYPE_TRITON,
+						ClusterTargets: []*gateways.TargetClusterConnection{testCluster},
+					}, nil)
+				gw.EXPECT().InferenceServerIsHealthy(
+					gomock.Any(), gomock.Any(), "test-server", "default", testCluster, v2pb.BACKEND_TYPE_TRITON,
+				).Return(true, nil)
+				gw.EXPECT().CheckModelStatus(
+					gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", testCluster, v2pb.BACKEND_TYPE_TRITON,
+				).Return(false, nil)
 			},
-			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "Failed to check model status: api error",
+			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
+			expectedMessage: "ModelHealthCheckFailed",
+		},
+		{
+			name: "model status check fails with error",
+			deployment: &v2pb.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				Spec: v2pb.DeploymentSpec{
+					DesiredRevision: &apipb.ResourceIdentifier{Name: "model-v1"},
+					Target: &v2pb.DeploymentSpec_InferenceServer{
+						InferenceServer: &apipb.ResourceIdentifier{Name: "test-server"},
+					},
+				},
+			},
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
+					Return(&gateways.DeploymentTargetInfo{
+						BackendType:    v2pb.BACKEND_TYPE_TRITON,
+						ClusterTargets: []*gateways.TargetClusterConnection{testCluster},
+					}, nil)
+				gw.EXPECT().InferenceServerIsHealthy(
+					gomock.Any(), gomock.Any(), "test-server", "default", testCluster, v2pb.BACKEND_TYPE_TRITON,
+				).Return(true, nil)
+				gw.EXPECT().CheckModelStatus(
+					gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", testCluster, v2pb.BACKEND_TYPE_TRITON,
+				).Return(false, errors.New("api error"))
+			},
+			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
+			expectedMessage: "ModelHealthCheckFailed",
 		},
 	}
 
@@ -146,67 +192,43 @@ func TestRetrieve(t *testing.T) {
 				logger:  zap.NewNop(),
 			}
 
-			condition, err := actor.Retrieve(context.Background(), tt.deployment, &api.Condition{})
+			result, err := actor.Retrieve(context.Background(), tt.deployment, &apipb.Condition{})
 
-			assert.NoError(t, err)
-			assert.NotNil(t, condition)
-			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
-			assert.Equal(t, tt.expectedConditionReason, condition.Reason)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.Equal(t, tt.expectedStatus, result.Status)
+			if tt.expectedMessage != "" {
+				assert.Equal(t, tt.expectedMessage, result.Message)
+			}
 		})
 	}
 }
 
-func TestRun(t *testing.T) {
+func TestSteadyStateActor_Run(t *testing.T) {
 	tests := []struct {
-		name                    string
-		deployment              *v2pb.Deployment
-		inputCondition          *api.Condition
-		expectedConditionStatus api.ConditionStatus
-		expectedConditionReason string
+		name           string
+		deployment     *v2pb.Deployment
+		inputCondition *apipb.Condition
+		expectedStatus apipb.ConditionStatus
+		expectedReason string
 	}{
 		{
 			name: "run returns the input condition unchanged",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: &api.ResourceIdentifier{Name: "model-v1"},
+					DesiredRevision: &apipb.ResourceIdentifier{Name: "model-v1"},
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &apipb.ResourceIdentifier{Name: "test-server"},
 					},
 				},
-				Status: v2pb.DeploymentStatus{
-					Stage: v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
-					State: v2pb.DEPLOYMENT_STATE_HEALTHY,
-				},
 			},
-			inputCondition: &api.Condition{
-				Status: api.CONDITION_STATUS_TRUE,
-				Reason: "TestReason",
-			},
-			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
-			expectedConditionReason: "TestReason",
-		},
-		{
-			name: "run preserves false condition",
-			deployment: &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
-				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: &api.ResourceIdentifier{Name: "model-v1"},
-					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
-					},
-				},
-				Status: v2pb.DeploymentStatus{
-					Stage: v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
-					State: v2pb.DEPLOYMENT_STATE_UNHEALTHY,
-				},
-			},
-			inputCondition: &api.Condition{
-				Status: api.CONDITION_STATUS_FALSE,
+			inputCondition: &apipb.Condition{
+				Status: apipb.CONDITION_STATUS_FALSE,
 				Reason: "HealthCheckFailed",
 			},
-			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "HealthCheckFailed",
+			expectedStatus: apipb.CONDITION_STATUS_FALSE,
+			expectedReason: "HealthCheckFailed",
 		},
 	}
 
@@ -216,12 +238,12 @@ func TestRun(t *testing.T) {
 				logger: zap.NewNop(),
 			}
 
-			condition, err := actor.Run(context.Background(), tt.deployment, tt.inputCondition)
+			result, err := actor.Run(context.Background(), tt.deployment, tt.inputCondition)
 
-			assert.NoError(t, err)
-			assert.NotNil(t, condition)
-			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
-			assert.Equal(t, tt.expectedConditionReason, condition.Reason)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.Equal(t, tt.expectedStatus, result.Status)
+			assert.Equal(t, tt.expectedReason, result.Reason)
 		})
 	}
 }

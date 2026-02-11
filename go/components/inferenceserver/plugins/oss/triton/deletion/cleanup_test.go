@@ -13,43 +13,109 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
-	configmapmocks "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap/configmapmocks"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 func TestCleanupActor_Retrieve(t *testing.T) {
+	testCluster := &v2pb.ClusterTarget{ClusterId: "test-cluster"}
+
 	tests := []struct {
-		name            string
-		setupMocks      func(*backendsmocks.MockBackend)
-		expectedStatus  apipb.ConditionStatus
-		expectedReason  string
-		expectedMessage string
-		expectedErr     bool
+		name                   string
+		resource               *v2pb.InferenceServer
+		setupMocks             func(*backendsmocks.MockBackend)
+		expectedStatus         apipb.ConditionStatus
+		expectedMessage        string
+		expectedReasonContains string
+		expectedErr            bool
 	}{
 		{
-			name: "inference server exists, cleanup not completed",
+			name: "server still exists",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
+				},
+			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
-					GetServerStatus(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
-					Return(&backends.ServerStatus{}, nil)
+					GetServerStatus(gomock.Any(), "test-server", "test-namespace", testCluster).
+					Return(&backends.ServerStatus{
+						ClusterState: v2pb.CLUSTER_STATE_READY,
+					}, nil)
 			},
-			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
-			expectedReason:  "CleanupInProgress",
-			expectedMessage: "Inference server cleanup in progress",
-			expectedErr:     false,
+			expectedStatus:         apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:        "ServerNotDeleted",
+			expectedReasonContains: "is not deleted",
+			expectedErr:            false,
 		},
 		{
-			name: "inference server does not exist, cleanup completed",
+			name: "server deleted successfully",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
+				},
+			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
-					GetServerStatus(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
-					Return(nil, errors.New("inference server not found"))
+					GetServerStatus(gomock.Any(), "test-server", "test-namespace", testCluster).
+					Return(&backends.ServerStatus{
+						ClusterState: v2pb.CLUSTER_STATE_INVALID,
+					}, nil)
 			},
-			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
-			expectedReason:  "CleanupCompleted",
-			expectedMessage: "Inference server cleanup completed",
-			expectedErr:     false,
+			expectedStatus:         apipb.CONDITION_STATUS_TRUE,
+			expectedMessage:        "",
+			expectedReasonContains: "",
+			expectedErr:            false,
+		},
+		{
+			name: "error checking server status",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
+				},
+			},
+			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
+				mockBackend.EXPECT().
+					GetServerStatus(gomock.Any(), "test-server", "test-namespace", testCluster).
+					Return(nil, errors.New("API error"))
+			},
+			expectedStatus:         apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:        "CannotCheckServerStatus",
+			expectedReasonContains: "Failed to check server status",
+			expectedErr:            false,
 		},
 	}
 
@@ -59,121 +125,99 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 			defer ctrl.Finish()
 
 			mockBackend := backendsmocks.NewMockBackend(ctrl)
-			mockConfigMapProvider := configmapmocks.NewMockModelConfigMapProvider(ctrl)
-
 			tt.setupMocks(mockBackend)
 
-			actor := NewCleanupActor(mockBackend, mockConfigMapProvider, zap.NewNop())
-
-			resource := &v2pb.InferenceServer{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-server",
-					Namespace: "test-namespace",
-				},
-				Spec: v2pb.InferenceServerSpec{
-					BackendType: v2pb.BACKEND_TYPE_TRITON,
-				},
-			}
+			actor := NewCleanupActor(mockBackend, zap.NewNop())
 
 			condition := &apipb.Condition{
 				Type: "TritonCleanup",
 			}
 
-			result, err := actor.Retrieve(context.Background(), resource, condition)
+			result, err := actor.Retrieve(context.Background(), tt.resource, condition)
 
 			if tt.expectedErr {
 				assert.Error(t, err)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tt.expectedStatus, result.Status)
-				assert.Equal(t, tt.expectedReason, result.Reason)
-				assert.Equal(t, tt.expectedMessage, result.Message)
-				assert.Equal(t, "TritonCleanup", result.Type)
+				if tt.expectedMessage != "" {
+					assert.Equal(t, tt.expectedMessage, result.Message)
+				}
+				if tt.expectedReasonContains != "" {
+					assert.Contains(t, result.Reason, tt.expectedReasonContains)
+				}
 			}
 		})
 	}
 }
 
 func TestCleanupActor_Run(t *testing.T) {
+	testCluster := &v2pb.ClusterTarget{ClusterId: "test-cluster"}
+
 	tests := []struct {
-		name                    string
-		setupMocks              func(*backendsmocks.MockBackend, *configmapmocks.MockModelConfigMapProvider)
-		expectedStatus          apipb.ConditionStatus
-		expectedReason          string
-		expectedMessageContains string
-		expectedErr             bool
+		name                   string
+		resource               *v2pb.InferenceServer
+		setupMocks             func(*backendsmocks.MockBackend)
+		expectedStatus         apipb.ConditionStatus
+		expectedMessage        string
+		expectedReasonContains string
+		expectedErr            bool
 	}{
 		{
-			name: "successful cleanup, all resources deleted",
-			setupMocks: func(mockBackend *backendsmocks.MockBackend, mockConfigMap *configmapmocks.MockModelConfigMapProvider) {
-				// ConfigMap deletion succeeds
-				mockConfigMap.EXPECT().
-					DeleteModelConfigMap(gomock.Any(), "test-server", "test-namespace").
-					Return(nil)
-
-				// Inference server deletion succeeds
+			name: "successful cleanup",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
+				},
+			},
+			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
-					DeleteServer(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
+					DeleteServer(gomock.Any(), "test-server", "test-namespace", testCluster).
 					Return(nil)
 			},
-			expectedStatus:          apipb.CONDITION_STATUS_TRUE,
-			expectedReason:          "CleanupInitiated",
-			expectedMessageContains: "Inference server, model ConfigMap cleanup initiated successfully",
-			expectedErr:             false,
+			expectedStatus:         apipb.CONDITION_STATUS_TRUE,
+			expectedMessage:        "",
+			expectedReasonContains: "",
+			expectedErr:            false,
 		},
 		{
-			name: "configmap deletion fails, cleanup continues",
-			setupMocks: func(mockBackend *backendsmocks.MockBackend, mockConfigMap *configmapmocks.MockModelConfigMapProvider) {
-				// ConfigMap deletion fails
-				mockConfigMap.EXPECT().
-					DeleteModelConfigMap(gomock.Any(), "test-server", "test-namespace").
-					Return(errors.New("configmap not found"))
-
-				// Inference server deletion succeeds
-				mockBackend.EXPECT().
-					DeleteServer(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
-					Return(nil)
+			name: "deletion fails",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
+				},
 			},
-			expectedStatus:          apipb.CONDITION_STATUS_TRUE,
-			expectedReason:          "CleanupInitiated",
-			expectedMessageContains: "Inference server, model ConfigMap cleanup initiated successfully",
-			expectedErr:             false,
-		},
-		{
-			name: "inference server deletion fails, returns error",
-			setupMocks: func(mockBackend *backendsmocks.MockBackend, mockConfigMap *configmapmocks.MockModelConfigMapProvider) {
-				// ConfigMap deletion succeeds
-				mockConfigMap.EXPECT().
-					DeleteModelConfigMap(gomock.Any(), "test-server", "test-namespace").
-					Return(nil)
-
-				// Inference server deletion fails
+			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
-					DeleteServer(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
+					DeleteServer(gomock.Any(), "test-server", "test-namespace", testCluster).
 					Return(errors.New("failed to delete deployment"))
 			},
-			expectedStatus:          apipb.CONDITION_STATUS_FALSE,
-			expectedReason:          "ServerCleanupFailed",
-			expectedMessageContains: "Failed to cleanup inference server",
-			expectedErr:             true,
-		},
-		{
-			name: "configmap deletion fails but inference server cleanup succeeds",
-			setupMocks: func(mockBackend *backendsmocks.MockBackend, mockConfigMap *configmapmocks.MockModelConfigMapProvider) {
-				// ConfigMap deletion fails
-				mockConfigMap.EXPECT().
-					DeleteModelConfigMap(gomock.Any(), "test-server", "test-namespace").
-					Return(errors.New("configmap error"))
-
-				// Inference server deletion succeeds
-				mockBackend.EXPECT().
-					DeleteServer(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
-					Return(nil)
-			},
-			expectedStatus:          apipb.CONDITION_STATUS_TRUE,
-			expectedReason:          "CleanupInitiated",
-			expectedMessageContains: "Inference server, model ConfigMap cleanup initiated successfully",
-			expectedErr:             false,
+			expectedStatus:         apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:        "ServerCleanupFailed",
+			expectedReasonContains: "failed to cleanup inference server",
+			expectedErr:            false,
 		},
 	}
 
@@ -183,40 +227,29 @@ func TestCleanupActor_Run(t *testing.T) {
 			defer ctrl.Finish()
 
 			mockBackend := backendsmocks.NewMockBackend(ctrl)
-			mockConfigMapProvider := configmapmocks.NewMockModelConfigMapProvider(ctrl)
+			tt.setupMocks(mockBackend)
 
-			tt.setupMocks(mockBackend, mockConfigMapProvider)
-
-			actor := NewCleanupActor(mockBackend, mockConfigMapProvider, zap.NewNop())
-
-			resource := &v2pb.InferenceServer{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-server",
-					Namespace: "test-namespace",
-				},
-				Spec: v2pb.InferenceServerSpec{
-					BackendType: v2pb.BACKEND_TYPE_TRITON,
-				},
-			}
+			actor := NewCleanupActor(mockBackend, zap.NewNop())
 
 			condition := &apipb.Condition{
 				Type: "TritonCleanup",
 			}
 
-			result, err := actor.Run(context.Background(), resource, condition)
+			result, err := actor.Run(context.Background(), tt.resource, condition)
 
 			if tt.expectedErr {
 				assert.Error(t, err)
-				require.NotNil(t, result)
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, result)
+				assert.Equal(t, tt.expectedStatus, result.Status)
+				if tt.expectedMessage != "" {
+					assert.Equal(t, tt.expectedMessage, result.Message)
+				}
+				if tt.expectedReasonContains != "" {
+					assert.Contains(t, result.Reason, tt.expectedReasonContains)
+				}
 			}
-
-			// Check returned condition status and reason
-			assert.Equal(t, tt.expectedStatus, result.Status)
-			assert.Equal(t, tt.expectedReason, result.Reason)
-			assert.Contains(t, result.Message, tt.expectedMessageContains)
 		})
 	}
 }

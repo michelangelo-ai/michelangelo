@@ -2,6 +2,8 @@ package triton
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"go.uber.org/zap"
 	"k8s.io/client-go/tools/record"
@@ -11,6 +13,7 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/endpointregistry"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/triton/creation"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/triton/deletion"
@@ -31,9 +34,9 @@ type TritonPlugin struct {
 }
 
 // NewPlugin creates a Triton plugin with creation and deletion workflows.
-func NewPlugin(backend backends.Backend, modelConfigMapProvider configmap.ModelConfigMapProvider, recorder record.EventRecorder, logger *zap.Logger) plugins.InferenceServerPlugin {
+func NewPlugin(backend backends.Backend, endpointRegistry endpointregistry.EndpointRegistry, modelConfigMapProvider configmap.ModelConfigMapProvider, recorder record.EventRecorder, logger *zap.Logger) plugins.InferenceServerPlugin {
 	return &TritonPlugin{
-		creationPlugin: creation.NewTritonCreationPlugin(backend, logger),
+		creationPlugin: creation.NewTritonCreationPlugin(backend, endpointRegistry, logger),
 		deletionPlugin: deletion.NewTritonDeletionPlugin(backend, modelConfigMapProvider, logger),
 
 		backend:  backend,
@@ -105,10 +108,18 @@ func (p *TritonPlugin) UpdateDetails(ctx context.Context, resource *v2pb.Inferen
 		return nil
 	}
 
-	// Get current status from backend
-	status, err := p.backend.GetServerStatus(ctx, p.logger, resource.Name, resource.Namespace)
+	// Handle based on deployment strategy
+	if resource.Spec.GetDeploymentStrategy().GetRemoteClusterDeployment() != nil {
+		return p.updateRemoteClustersDetails(ctx, resource)
+	}
+	return p.updateControlPlaneClusterDetails(ctx, resource)
+}
+
+// updateControlPlaneDetails updates status for control plane cluster deployment.
+// RemoteClusterStatuses is left empty for this strategy.
+func (p *TritonPlugin) updateControlPlaneClusterDetails(ctx context.Context, resource *v2pb.InferenceServer) error {
+	status, err := p.backend.GetServerStatus(ctx, resource.Name, resource.Namespace, nil)
 	if err != nil {
-		// Don't fail reconciliation for status check errors
 		p.logger.Error("Failed to get server status",
 			zap.Error(err),
 			zap.String("operation", "get_server_status"),
@@ -117,23 +128,105 @@ func (p *TritonPlugin) UpdateDetails(ctx context.Context, resource *v2pb.Inferen
 		return nil
 	}
 
-	// Update status based on external state
-	if status.State != resource.Status.State {
-		p.logger.Info("External state change detected",
-			zap.String("currentState", resource.Status.State.String()),
-			zap.String("externalState", status.State.String()))
+	// Map cluster state to inference server state
+	switch status.ClusterState {
+	case v2pb.CLUSTER_STATE_READY:
+		if resource.Status.State != v2pb.INFERENCE_SERVER_STATE_SERVING {
+			p.Recorder.Event(resource, corev1.EventTypeNormal, "ServerReady", "Inference server is ready")
+		}
+		resource.Status.State = v2pb.INFERENCE_SERVER_STATE_SERVING
+	case v2pb.CLUSTER_STATE_CREATING:
+		resource.Status.State = v2pb.INFERENCE_SERVER_STATE_CREATING
+	case v2pb.CLUSTER_STATE_FAILED:
+		if resource.Status.State != v2pb.INFERENCE_SERVER_STATE_FAILED {
+			p.Recorder.Event(resource, corev1.EventTypeWarning, "ServerFailed", "Inference server failed")
+		}
+		resource.Status.State = v2pb.INFERENCE_SERVER_STATE_FAILED
+	case v2pb.CLUSTER_STATE_DELETING:
+		resource.Status.State = v2pb.INFERENCE_SERVER_STATE_DELETING
+	}
 
-		resource.Status.State = status.State
-		resource.Status.ProviderMetadata = status.Message
+	return nil
+}
 
-		// Record state transition events
-		switch status.State {
-		case v2pb.INFERENCE_SERVER_STATE_SERVING:
-			p.Recorder.Event(resource, corev1.EventTypeNormal, "CreationCompleted", "InferenceServer creation completed successfully")
-		case v2pb.INFERENCE_SERVER_STATE_FAILED:
-			p.Recorder.Event(resource, corev1.EventTypeWarning, "CreationFailed", "InferenceServer creation failed")
+// updateRemoteClustersDetails updates status for remote clusters deployment.
+// Populates RemoteClusterStatuses with per-cluster state.
+func (p *TritonPlugin) updateRemoteClustersDetails(ctx context.Context, resource *v2pb.InferenceServer) error {
+	clusterTargets := resource.Spec.GetDeploymentStrategy().GetRemoteClusterDeployment().GetClusterTargets()
+
+	// Initialize remote cluster statuses if needed
+	if len(resource.Status.GetRemoteClusterStatuses()) == 0 {
+		resource.Status.RemoteClusterStatuses = make([]*v2pb.RemoteClusterStatus, len(clusterTargets))
+		for i := range resource.Status.RemoteClusterStatuses {
+			resource.Status.RemoteClusterStatuses[i] = &v2pb.RemoteClusterStatus{}
 		}
 	}
+
+	numReadyClusters := 0
+	numFailedClusters := 0
+
+	for i, clusterTarget := range clusterTargets {
+		status, err := p.backend.GetServerStatus(ctx, resource.Name, resource.Namespace, clusterTarget)
+		if err != nil {
+			p.logger.Error("Failed to get server status",
+				zap.Error(err),
+				zap.String("operation", "get_server_status"),
+				zap.String("namespace", resource.Namespace),
+				zap.String("inferenceServer", resource.Name),
+				zap.String("cluster", clusterTarget.ClusterId))
+			continue
+		}
+
+		// Check for state change
+		if status.ClusterState != resource.Status.RemoteClusterStatuses[i].State {
+			p.logger.Info("External state change detected",
+				zap.String("cluster", clusterTarget.ClusterId),
+				zap.String("currentState", resource.Status.RemoteClusterStatuses[i].State.String()),
+				zap.String("externalState", status.ClusterState.String()))
+
+			// Record state transition events
+			var message string
+			switch status.ClusterState {
+			case v2pb.CLUSTER_STATE_READY:
+				message = fmt.Sprintf("Cluster %s is ready", clusterTarget.ClusterId)
+				p.Recorder.Event(resource, corev1.EventTypeNormal, "ClusterReady", message)
+			case v2pb.CLUSTER_STATE_CREATING:
+				message = fmt.Sprintf("Cluster %s is creating", clusterTarget.ClusterId)
+				p.Recorder.Event(resource, corev1.EventTypeNormal, "ClusterCreating", message)
+			case v2pb.CLUSTER_STATE_DELETING:
+				message = fmt.Sprintf("Cluster %s is deleting", clusterTarget.ClusterId)
+				p.Recorder.Event(resource, corev1.EventTypeNormal, "ClusterDeleting", message)
+			case v2pb.CLUSTER_STATE_FAILED:
+				message = fmt.Sprintf("Cluster %s failed", clusterTarget.ClusterId)
+				p.Recorder.Event(resource, corev1.EventTypeWarning, "ClusterFailed", message)
+			}
+
+			// Update cluster status
+			resource.Status.RemoteClusterStatuses[i].State = status.ClusterState
+			resource.Status.RemoteClusterStatuses[i].ClusterId = clusterTarget.ClusterId
+			resource.Status.RemoteClusterStatuses[i].Message = message
+			resource.Status.RemoteClusterStatuses[i].Endpoint = status.Endpoint
+			resource.Status.RemoteClusterStatuses[i].LastUpdated = time.Now().Format(time.RFC3339)
+		}
+
+		// Count cluster states for overall status
+		switch resource.Status.RemoteClusterStatuses[i].State {
+		case v2pb.CLUSTER_STATE_READY:
+			numReadyClusters++
+		case v2pb.CLUSTER_STATE_FAILED:
+			numFailedClusters++
+		}
+	}
+
+	// Infer server state based on cluster states
+	if numReadyClusters == len(clusterTargets) {
+		resource.Status.State = v2pb.INFERENCE_SERVER_STATE_SERVING
+	} else if numFailedClusters > 0 {
+		resource.Status.State = v2pb.INFERENCE_SERVER_STATE_FAILED
+	} else if numReadyClusters > 0 {
+		resource.Status.State = v2pb.INFERENCE_SERVER_STATE_CREATING
+	}
+
 	return nil
 }
 

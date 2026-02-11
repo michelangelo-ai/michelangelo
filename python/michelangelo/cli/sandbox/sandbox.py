@@ -2,6 +2,7 @@
 
 import argparse
 import base64
+import contextlib
 import json
 import os
 import shutil
@@ -26,6 +27,13 @@ This tool helps you create and manage a sandbox cluster directly on your machine
 _dir = Path(__file__).parent
 
 _michelangelo_sandbox_kube_cluster_name = "michelangelo-sandbox"
+
+# Inference server target clusters for multi-cluster demo
+_inference_target_cluster_configs = [
+    {"k3d_name": "cluster-1", "cluster_id": "k3d-cluster-1"},
+    {"k3d_name": "cluster-2", "cluster_id": "k3d-cluster-2"},
+]
+
 _kube_ports = [
     "3306:30001",  # MySQL
     "9091:30007",  # MinIO
@@ -103,7 +111,14 @@ def init_arguments(p: argparse.ArgumentParser):
         dest="demo_action", required=True, help="Demo type to create"
     )
     _ = demo_sp.add_parser("pipeline", help="Create pipeline demo resources")
-    _ = demo_sp.add_parser("inference", help="Create inference server demo resources")
+    _ = demo_sp.add_parser(
+        "inference-single-cluster",
+        help="Create inference server demo resources (single cluster setup)",
+    )
+    _ = demo_sp.add_parser(
+        "inference-multi-cluster",
+        help="Create inference server demo resources (multi-cluster setup)",
+    )
 
     delete_p = sp.add_parser("delete", help="Delete the cluster.")
     delete_p.add_argument(
@@ -814,7 +829,8 @@ def _create_cadence_domain(links):
 def _create_demo_crs(ns: argparse.Namespace):
     """Create demo Custom Resources (CRs) for the sandbox environment."""
     assert ns
-    if ns.demo_action != "pipeline" and ns.demo_action != "inference":
+    valid_actions = ["pipeline", "inference-single-cluster", "inference-multi-cluster"]
+    if ns.demo_action not in valid_actions:
         raise ValueError(f"Unsupported demo action: {ns.demo_action}")
 
     # Check if cluster exists
@@ -863,8 +879,10 @@ def _create_demo_crs(ns: argparse.Namespace):
 
     if ns.demo_action == "pipeline":
         _create_pipeline_demo_crs()
-    elif ns.demo_action == "inference":
-        _create_inference_demo_crs()
+    elif ns.demo_action == "inference-single-cluster":
+        _create_inference_demo_single_cluster()
+    elif ns.demo_action == "inference-multi-cluster":
+        _create_inference_demo_multi_cluster()
     else:
         raise ValueError(f"Unsupported demo action: {ns.demo_action}")
 
@@ -888,6 +906,19 @@ def _delete(ns: argparse.Namespace):
     except subprocess.CalledProcessError:
         # Cluster doesn't exist, skip deletion
         print(f"Compute cluster '{compute_cluster}' not found, skipping deletion.")
+
+    # Delete inference server target clusters (created by inference-multi-cluster demo)
+    for config in _inference_target_cluster_configs:
+        cluster_name = config["k3d_name"]
+        try:
+            subprocess.check_output(
+                ["k3d", "cluster", "get", cluster_name], stderr=subprocess.DEVNULL
+            )
+            # Cluster exists, delete it
+            _exec("k3d", "cluster", "delete", cluster_name)
+        except subprocess.CalledProcessError:
+            # Cluster doesn't exist, skip deletion
+            pass
 
     # Always try to delete the main sandbox cluster
     _exec("k3d", "cluster", "delete", _michelangelo_sandbox_kube_cluster_name)
@@ -1359,17 +1390,172 @@ def _create_compute_cluster_secrets(cluster_name: str):
     print(f"\nCreated secrets for cluster '{cluster_name}' in the sandbox cluster")
 
 
-def _create_inference_demo_crs():
-    """Create an inference server for the sandbox cluster for demo purposes."""
-    print("🚀 Setting up Michelangelo AI Inference Demo...")
+def _create_inference_cluster_secrets(cluster_name: str, secret_prefix: str) -> dict:
+    """Create Kubernetes secrets for inference server to access a target cluster.
 
-    # Setup istio with Gateway API
-    # This allows usage of HTTPRoutes to route traffic to the inference server.
+    This creates:
+    1. A service account with cluster-admin permissions in the target cluster
+    2. Secrets in the control plane cluster with the CA data and token
+
+    Args:
+        cluster_name: The k3d cluster name (e.g., "cluster-1")
+        secret_prefix: Prefix for secret names (e.g., "k3d-cluster-1")
+
+    Returns:
+        dict with 'host' and 'port' extracted from the cluster's kubeconfig
+    """
+    print(
+        f"🔐 Creating secrets for inference server access to cluster '{cluster_name}'"
+    )
+
+    # Get kubeconfig for the target cluster
+    kubeconfig = subprocess.check_output(
+        ["k3d", "kubeconfig", "get", cluster_name]
+    ).decode()
+
+    # Parse the kubeconfig YAML
+    kubeconfig_data = yaml.safe_load(kubeconfig)
+
+    # Extract server URL and parse host/port (same logic as compute cluster)
+    server_url = kubeconfig_data["clusters"][0]["cluster"]["server"]
+    import re
+
+    match = re.search(r"(https://[^:]+):(\d+)", server_url)
+    if not match:
+        raise ValueError(
+            f"Could not extract cluster host and port from server URL: {server_url}"
+        )
+    host, port = match.groups()
+
+    # Extract certificate-authority-data from clusters[0].cluster
+    ca_data = kubeconfig_data["clusters"][0]["cluster"].get(
+        "certificate-authority-data"
+    )
+    if not ca_data:
+        raise ValueError("certificate-authority-data not found in kubeconfig")
+    ca_data_decoded = base64.b64decode(ca_data).decode()
+
+    # Create service account with cluster-admin permissions in the target cluster
+    sa_manifest = {
+        "apiVersion": "v1",
+        "kind": "ServiceAccount",
+        "metadata": {
+            "name": "michelangelo-inference-access",
+            "namespace": "default",
+        },
+    }
+
+    crb_manifest = {
+        "apiVersion": "rbac.authorization.k8s.io/v1",
+        "kind": "ClusterRoleBinding",
+        "metadata": {"name": "michelangelo-inference-access-admin"},
+        "roleRef": {
+            "apiGroup": "rbac.authorization.k8s.io",
+            "kind": "ClusterRole",
+            "name": "cluster-admin",
+        },
+        "subjects": [
+            {
+                "kind": "ServiceAccount",
+                "name": "michelangelo-inference-access",
+                "namespace": "default",
+            }
+        ],
+    }
+
+    # Apply SA and CRB to target cluster
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as f:
+        yaml.dump_all([sa_manifest, crb_manifest], f)
+        f.flush()
+        _exec(
+            "kubectl",
+            "--context",
+            f"k3d-{cluster_name}",
+            "apply",
+            "-f",
+            f.name,
+        )
+
+    # Create a token for the service account in the target cluster
+    token_decoded = (
+        subprocess.check_output(
+            [
+                "kubectl",
+                "--context",
+                f"k3d-{cluster_name}",
+                "-n",
+                "default",
+                "create",
+                "token",
+                "michelangelo-inference-access",
+                "--duration=87600h",  # ~10 years
+            ]
+        )
+        .decode()
+        .strip()
+    )
+
+    # Create CA secret in the control plane cluster
+    ca_secret = {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {"name": f"{secret_prefix}-ca", "namespace": "default"},
+        "stringData": {"cadata": ca_data_decoded},
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as f:
+        yaml.dump(ca_secret, f)
+        f.flush()
+        _exec(
+            "kubectl",
+            "--context",
+            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            "apply",
+            "-f",
+            f.name,
+        )
+
+    # Create token secret in the control plane cluster
+    token_secret = {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {"name": f"{secret_prefix}-token", "namespace": "default"},
+        "stringData": {"token": token_decoded},
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as f:
+        yaml.dump(token_secret, f)
+        f.flush()
+        _exec(
+            "kubectl",
+            "--context",
+            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            "apply",
+            "-f",
+            f.name,
+        )
+
+    print(f"✅ Created secrets '{secret_prefix}-ca' and '{secret_prefix}-token'")
+    print(f"   Target cluster API server: {server_url}")
+
+    return {"host": host, "port": port}
+
+
+def _create_inference_demo_single_cluster():
+    """Create an inference server for single-cluster deployment demo purposes.
+
+    This is the simpler setup where the inference server runs on the same cluster
+    as the control plane (michelangelo-sandbox). No multi-cluster secrets or
+    cross-cluster networking is needed.
+    """
+    print("🚀 Setting up Michelangelo AI Inference Demo (Single-Cluster)...")
+
+    # Setup Istio with Gateway API on the sandbox cluster
     _setup_istio_with_gateway_api()
 
     inference_demo_dir = _dir / "demo" / "inference"
     # Create inference server CR
-    inference_server_path = inference_demo_dir / "inferenceserver.yaml"
+    inference_server_path = inference_demo_dir / "inferenceserver_single_cluster.yaml"
     if not inference_server_path.exists():
         _err_exit(
             f"❌ Inference server CR not found at {inference_server_path}, exiting..."
@@ -1403,21 +1589,21 @@ def _create_inference_demo_crs():
         print("✅ Inference server is ready!")
     except subprocess.CalledProcessError:
         _err_exit(
-            f"Inference server '{inference_server_name}'\
-                failed to become ready after 720s.\n"
+            f"Inference server '{inference_server_name}' "
+            f"failed to become ready after 720s.\n"
             f"Check status with:\n"
-            f"kubectl get inferenceservers.michelangelo.api\
-                {inference_server_name} -n {inference_server_namespace} -o yaml\n"
-            f"Check logs with:\
-                kubectl logs -l app=inference-server -n {inference_server_namespace}"
+            f"  kubectl get inferenceservers.michelangelo.api "
+            f"{inference_server_name} -n {inference_server_namespace} -o yaml\n"
+            f"Check logs with:\n"
+            f"  kubectl logs -l app=inference-server -n {inference_server_namespace}"
         )
 
     # Deploy model-sync Deployment
     model_sync_deployment_path = _dir / "resources" / "model-sync.yaml"
     if not model_sync_deployment_path.exists():
         _err_exit(
-            f"❌ Model-sync Deployment not found at {model_sync_deployment_path},\
-                exiting..."
+            f"❌ Model-sync Deployment not found at {model_sync_deployment_path}, "
+            "exiting..."
         )
 
     print("✅ Deploying model-sync Deployment...")
@@ -1441,18 +1627,840 @@ def _create_inference_demo_crs():
         _err_exit(
             "Model-sync Deployment failed to become ready after 60s.\n"
             "Check status with:\n"
-            "kubectl get deployments model-sync -n default -o yaml\n"
-            "Check logs with: kubectl logs deployment/model-sync -n default"
+            "  kubectl get deployments model-sync -n default -o yaml\n"
+            "Check logs with:\n"
+            "  kubectl logs deployment/model-sync -n default"
+        )
+    _port_forward_inference_server_in_control_plane()
+    _print_inference_demo_completion_message()
+
+
+def _create_inference_target_cluster(cluster_name: str):
+    """Create a target cluster for multi-cluster inference.
+
+    Args:
+        cluster_name: Name of the k3d cluster to create (e.g., "cluster-1")
+    """
+    # Check if the cluster already exists
+    try:
+        subprocess.check_output(
+            ["k3d", "cluster", "get", cluster_name], stderr=subprocess.DEVNULL
+        )
+        print(f"✅ Target cluster '{cluster_name}' already exists")
+        return
+    except subprocess.CalledProcessError:
+        pass
+
+    print(f"🔧 Creating target cluster '{cluster_name}'...")
+
+    args = [
+        "k3d",
+        "cluster",
+        "create",
+        cluster_name,
+        "--servers",
+        "1",
+        "--agents",
+        "1",
+        "--kubeconfig-switch-context=false",
+        "--network",
+        f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+        # Use the same network as the control plane
+    ]
+
+    _exec(*args)
+
+    # Create michelangelo-config ConfigMap pointing to control plane's MinIO
+    _create_config_in_compute_cluster(cluster_name)
+
+    # Create aws-credentials Secret (needed for model-sync to access S3)
+    _create_aws_credentials_in_cluster(cluster_name)
+
+    print(f"✅ Target cluster '{cluster_name}' created successfully")
+
+
+def _create_inference_demo_multi_cluster():
+    """Create an inference server for multi-cluster deployment demo purposes."""
+    print("🚀 Setting up Michelangelo AI Inference Demo (Multi-Cluster)...")
+
+    # Create secrets and collect cluster connection info
+    cluster_targets = []
+    target_cluster_names = []
+
+    for config in _inference_target_cluster_configs:
+        k3d_name = config["k3d_name"]
+        cluster_id = config["cluster_id"]
+        secret_prefix = cluster_id  # e.g., "k3d-cluster-1"
+
+        # Create the cluster if it doesn't exist
+        _create_inference_target_cluster(k3d_name)
+
+        # Create secrets and get connection info
+        conn_info = _create_inference_cluster_secrets(k3d_name, secret_prefix)
+
+        cluster_targets.append(
+            {
+                "clusterId": cluster_id,
+                "kubernetes": {
+                    "host": conn_info["host"],  # e.g., "https://host.docker.internal"
+                    "port": conn_info["port"],  # e.g., "52910"
+                    "tokenTag": f"{secret_prefix}-token",
+                    "caDataTag": f"{secret_prefix}-ca",
+                },
+            }
+        )
+        target_cluster_names.append(k3d_name)
+
+    print(
+        f"📋 Configured {len(target_cluster_names)} target cluster(s): "
+        f"{target_cluster_names}"
+    )
+
+    # Setup Istio on control plane cluster and target clusters (for ServiceEntry)
+    all_clusters = [_michelangelo_sandbox_kube_cluster_name]
+    all_clusters.extend(target_cluster_names)
+    _setup_istio_on_clusters(all_clusters)
+
+    # Dynamically generate InferenceServer CR with correct host/port
+    inference_server_name = "inference-server-example"
+    inference_server_namespace = "default"
+
+    inference_server_cr = {
+        "apiVersion": "michelangelo.api/v2",
+        "kind": "InferenceServer",
+        "metadata": {
+            "name": inference_server_name,
+            "namespace": inference_server_namespace,
+            "labels": {"app": "inference-server"},
+        },
+        "spec": {
+            "tenancyType": "TENANCY_TYPE_DEDICATED",
+            "backendType": "BACKEND_TYPE_TRITON",
+            "ownerSpec": {"tier": 1},
+            "initSpec": {
+                "resourceSpec": {"cpu": 2, "memory": "4Gi"},
+                "servingSpec": {"version": "latest"},
+                "numInstances": 1,
+            },
+            "decomSpec": {"decommission": False},
+            "owner": {"name": "user-example"},
+            "deploymentStrategy": {
+                "remoteClusterDeployment": {"clusterTargets": cluster_targets}
+            },
+        },
+    }
+
+    print("✅ Creating Triton Inference Server...")
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as f:
+        yaml.dump(inference_server_cr, f)
+        f.flush()
+        _kube_apply(Path(f.name))
+
+    print(f"⏳ Waiting for inference server '{inference_server_name}' to be ready...")
+    print("   (This may take 5-10 minutes for first-time Triton image pull)")
+
+    try:
+        _exec(
+            "kubectl",
+            "wait",
+            "--for=jsonpath=.status.state=INFERENCE_SERVER_STATE_SERVING",
+            f"inferenceservers.michelangelo.api/{inference_server_name}",
+            "-n",
+            inference_server_namespace,
+            "--timeout=720s",
+            raise_error=True,
+        )
+        print("✅ Inference server is ready!")
+    except subprocess.CalledProcessError:
+        _err_exit(
+            f"Inference server '{inference_server_name}'\
+                failed to become ready after 720s.\n"
+            f"Check status with:\n"
+            f"kubectl get inferenceservers.michelangelo.api\
+                {inference_server_name} -n {inference_server_namespace} -o yaml\n"
+            f"Check logs with:\
+                kubectl logs -l app=inference-server -n {inference_server_namespace}"
         )
 
-    print("✅ Inference demo resources created successfully")
+    # Deploy model-sync Deployment to each target cluster
+    model_sync_deployment_path = _dir / "resources" / "model-sync.yaml"
+    if not model_sync_deployment_path.exists():
+        _err_exit(
+            f"❌ Model-sync Deployment not found at {model_sync_deployment_path},\
+                exiting..."
+        )
 
+    # Deploy to each target cluster
+    for cluster_name in target_cluster_names:
+        ctx = f"k3d-{cluster_name}"
+
+        # Create michelangelo-config ConfigMap (required for AWS/S3 access)
+        print(f"📦 Creating michelangelo-config ConfigMap in cluster '{ctx}'...")
+        _create_config_in_compute_cluster(cluster_name)
+
+        print(f"✅ Deploying model-sync Deployment to cluster '{ctx}'...")
+
+        kubectl_args = ["kubectl", "--context", ctx]
+        _exec(*kubectl_args, "apply", "-f", str(model_sync_deployment_path))
+
+        # Wait for Deployment to be ready
+        print(f"⏳ Waiting for model-sync Deployment to be ready on '{ctx}'...")
+        try:
+            _exec(
+                *kubectl_args,
+                "rollout",
+                "status",
+                "deployment/model-sync",
+                "-n",
+                "default",
+                "--timeout=60s",
+                raise_error=True,
+            )
+            print(f"✅ Model-sync Deployment is ready on '{ctx}'!")
+        except subprocess.CalledProcessError:
+            _err_exit(
+                f"Model-sync Deployment failed to become ready after 60s on '{ctx}'.\n"
+                f"Check status with:\n"
+                f"  kubectl --context {ctx} "
+                "get deployments model-sync -n default -o yaml\n"
+                f"Check logs with:\n"
+                f"  kubectl --context {ctx} logs deployment/model-sync -n default"
+            )
+    _print_inference_demo_completion_message()
+
+
+def _generate_shared_ca_certs(cluster_names: list[str]) -> Path:
+    """Generate a shared root CA and per-cluster intermediate CAs.
+
+    For multi-cluster Istio mTLS to work, all clusters must trust each other's
+    certificates. This is achieved by having a shared root CA that signs
+    intermediate CAs for each cluster.
+
+    Directory structure:
+        certs/
+        ├── root-cert.pem       # Root CA certificate (shared)
+        ├── root-key.pem        # Root CA private key (keep secure)
+        ├── <cluster>/
+        │   ├── ca-cert.pem     # Intermediate CA certificate
+        │   ├── ca-key.pem      # Intermediate CA private key
+        │   └── cert-chain.pem  # Certificate chain (intermediate + root)
+
+    Args:
+        cluster_names: List of cluster names to generate intermediate CAs for
+
+    Returns:
+        Path to the certs directory
+    """
+    # Create a persistent certs directory in the sandbox resources
+    ca_dir = _dir / "certs"
+    ca_dir.mkdir(exist_ok=True)
+
+    root_cert = ca_dir / "root-cert.pem"
+    root_key = ca_dir / "root-key.pem"
+
+    # Generate root CA if it doesn't exist
+    if not root_cert.exists() or not root_key.exists():
+        print("   Generating root CA...")
+        subprocess.check_call(
+            [
+                "openssl",
+                "req",
+                "-x509",
+                "-sha256",
+                "-nodes",
+                "-days",
+                "3650",  # 10 years
+                "-newkey",
+                "rsa:4096",
+                "-subj",
+                "/O=Michelangelo/CN=Root CA",
+                "-keyout",
+                str(root_key),
+                "-out",
+                str(root_cert),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    # Generate intermediate CA for each cluster
+    for cluster_name in cluster_names:
+        cluster_dir = ca_dir / cluster_name
+        cluster_dir.mkdir(exist_ok=True)
+
+        ca_cert = cluster_dir / "ca-cert.pem"
+        ca_key = cluster_dir / "ca-key.pem"
+        ca_csr = cluster_dir / "ca-csr.pem"
+        cert_chain = cluster_dir / "cert-chain.pem"
+
+        if ca_cert.exists() and ca_key.exists():
+            print(f"   Intermediate CA for {cluster_name} already exists, skipping...")
+            continue
+
+        print(f"   Generating intermediate CA for {cluster_name}...")
+
+        # Generate intermediate CA private key and CSR
+        subprocess.check_call(
+            [
+                "openssl",
+                "req",
+                "-newkey",
+                "rsa:4096",
+                "-nodes",
+                "-subj",
+                f"/O=Michelangelo/CN={cluster_name} Intermediate CA",
+                "-keyout",
+                str(ca_key),
+                "-out",
+                str(ca_csr),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        # Create extensions config file for CA signing
+        ext_file = cluster_dir / "ca-ext.cnf"
+        ext_file.write_text(
+            "[v3_ca]\n"
+            "basicConstraints=critical,CA:TRUE\n"
+            "keyUsage=critical,keyCertSign,cRLSign\n"
+        )
+
+        # Sign the intermediate CA with the root CA
+        subprocess.check_call(
+            [
+                "openssl",
+                "x509",
+                "-req",
+                "-sha256",
+                "-days",
+                "3650",
+                "-CA",
+                str(root_cert),
+                "-CAkey",
+                str(root_key),
+                "-CAcreateserial",
+                "-in",
+                str(ca_csr),
+                "-out",
+                str(ca_cert),
+                "-extfile",
+                str(ext_file),
+                "-extensions",
+                "v3_ca",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        # Clean up extension file
+        ext_file.unlink(missing_ok=True)
+
+        # Create certificate chain (intermediate + root)
+        with open(cert_chain, "w") as f:
+            f.write(ca_cert.read_text())
+            f.write(root_cert.read_text())
+
+        # Clean up CSR
+        ca_csr.unlink(missing_ok=True)
+
+    return ca_dir
+
+
+def _create_istio_ca_secret(kube_context: str, ca_dir: Path, cluster_name: str):
+    """Create the 'cacerts' secret in istio-system namespace.
+
+    Istio uses this secret to issue workload certificates. By providing
+    a shared root CA hierarchy, all clusters will trust each other's
+    workload certificates.
+
+    Args:
+        kube_context: kubectl context (e.g., "k3d-cluster-1")
+        ca_dir: Path to the CA certificates directory
+        cluster_name: Name of the cluster (used to find intermediate CA)
+    """
+    kubectl_context_args = ["--context", kube_context]
+
+    root_cert = ca_dir / "root-cert.pem"
+    cluster_ca_dir = ca_dir / cluster_name
+    ca_cert = cluster_ca_dir / "ca-cert.pem"
+    ca_key = cluster_ca_dir / "ca-key.pem"
+    cert_chain = cluster_ca_dir / "cert-chain.pem"
+
+    # Verify all required files exist
+    for f in [root_cert, ca_cert, ca_key, cert_chain]:
+        if not f.exists():
+            raise FileNotFoundError(f"Required CA file not found: {f}")
+
+    # Ensure istio-system namespace exists
+    with contextlib.suppress(subprocess.CalledProcessError):
+        subprocess.check_call(
+            ["kubectl", *kubectl_context_args, "create", "namespace", "istio-system"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    # Delete existing secret if present (to update certs)
+    with contextlib.suppress(subprocess.CalledProcessError):
+        subprocess.check_call(
+            [
+                "kubectl",
+                *kubectl_context_args,
+                "delete",
+                "secret",
+                "cacerts",
+                "-n",
+                "istio-system",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    # Create the cacerts secret
+    print(f"   Creating cacerts secret in {kube_context}...")
+    subprocess.check_call(
+        [
+            "kubectl",
+            *kubectl_context_args,
+            "create",
+            "secret",
+            "generic",
+            "cacerts",
+            "-n",
+            "istio-system",
+            f"--from-file=root-cert.pem={root_cert}",
+            f"--from-file=ca-cert.pem={ca_cert}",
+            f"--from-file=ca-key.pem={ca_key}",
+            f"--from-file=cert-chain.pem={cert_chain}",
+        ]
+    )
+
+
+def _create_inference_mtls_destination_rule():
+    """Create a wildcard DestinationRule for multi-cluster mTLS on the control plane.
+
+    This DestinationRule tells the control plane's Istio sidecars to use mTLS
+    when connecting to ServiceEntry endpoints (east-west gateways in target clusters).
+
+    The rule uses a wildcard host pattern to match all inference service hostnames
+    created by the EndpointRegistry (e.g., *-inference-service.*.svc.cluster.local).
+    """
+    kube_context = f"k3d-{_michelangelo_sandbox_kube_cluster_name}"
+    kubectl_context_args = ["--context", kube_context]
+
+    print("🔒 Creating mTLS DestinationRule for multi-cluster inference routing...")
+
+    destination_rule_path = _dir / "demo" / "inference" / "destination-rule-mtls.yaml"
+    if not destination_rule_path.exists():
+        _err_exit(f"❌ DestinationRule not found at {destination_rule_path}")
+
+    _exec(
+        "kubectl",
+        *kubectl_context_args,
+        "apply",
+        "-f",
+        str(destination_rule_path),
+    )
+
+    print("✅ mTLS DestinationRule created for inference endpoints")
+
+
+def _setup_istio_on_clusters(target_clusters: list[str]):
+    """Install Istio and Gateway API on multiple target clusters.
+
+    This function sets up Istio service mesh with Kubernetes Gateway API support
+    on each of the specified target clusters. Use this for multi-cluster
+    deployments where inference workloads run on separate clusters.
+
+    For multi-cluster mTLS to work (AUTO_PASSTHROUGH on east-west gateways),
+    all clusters must share the same root CA. This function:
+    1. Generates a shared root CA
+    2. Creates per-cluster intermediate CAs signed by the root
+    3. Installs Istio with the shared CA hierarchy
+
+    For target clusters (non-control-plane), an east-west gateway is also
+    installed to enable cross-cluster routing via AUTO_PASSTHROUGH.
+
+    Args:
+        target_clusters: List of k3d cluster names where Istio should be
+            installed. Each name is the k3d cluster name (without k3d- prefix).
+    """
+    if not target_clusters:
+        print("⚠️ No target clusters specified for Istio setup")
+        return
+
+    print(f"🚀 Setting up Istio on {len(target_clusters)} target cluster(s)...")
+
+    # Generate shared root CA for multi-cluster mTLS trust
+    print("🔐 Generating shared root CA for multi-cluster mTLS...")
+    ca_dir = _generate_shared_ca_certs(target_clusters)
+    print(f"   CA certificates stored in: {ca_dir}")
+
+    for idx, cluster_name in enumerate(target_clusters):
+        print(f"\n📦 Setting up Istio on cluster: {cluster_name}")
+        kube_context = f"k3d-{cluster_name}"
+        # Network names:
+        # network0 for control plane,
+        # network1, network2, etc. for target clusters
+        network_name = f"network{idx}"
+
+        # Install shared CA secret before Istio installation
+        _create_istio_ca_secret(kube_context, ca_dir, cluster_name)
+
+        # Label istio-system namespace with network topology
+        # (required for multi-cluster)
+        # See: https://istio.io/latest/docs/setup/install/multicluster/multi-primary_multi-network/
+        _exec(
+            "kubectl",
+            "--context",
+            kube_context,
+            "label",
+            "namespace",
+            "istio-system",
+            f"topology.istio.io/network={network_name}",
+            "--overwrite",
+        )
+
+        # Label default namespace for sidecar injection and network topology
+        # Sidecar injection is required for pods
+        # to receive mTLS traffic from east-west gateway
+        _exec(
+            "kubectl",
+            "--context",
+            kube_context,
+            "label",
+            "namespace",
+            "default",
+            "istio-injection=enabled",
+            f"topology.istio.io/network={network_name}",
+            "--overwrite",
+        )
+
+        _setup_istio_with_gateway_api(
+            kube_context=kube_context,
+            cluster_name=cluster_name,
+            network_name=network_name,
+        )
+
+        # Install east-west gateway on target clusters (not control plane)
+        is_control_plane = cluster_name == _michelangelo_sandbox_kube_cluster_name
+        if not is_control_plane:
+            cluster_id = f"k3d-{cluster_name}"  # e.g., "k3d-cluster-1"
+            _install_east_west_gateway(
+                kube_context=kube_context,
+                cluster_id=cluster_id,
+                network_name=network_name,
+            )
+
+        print(f"✅ Istio setup complete on cluster: {cluster_name}")
+
+    # Create a wildcard DestinationRule on the control plane to enable mTLS
+    # for all traffic to ServiceEntry endpoints (east-west gateways)
+    _create_inference_mtls_destination_rule()
+    _port_forward_inference_server_in_control_plane()
+
+    print(f"\n✅ Istio setup complete on all {len(target_clusters)} cluster(s)")
+
+
+def _setup_istio_with_gateway_api(
+    kube_context: str | None = None,
+    cluster_name: str | None = None,
+    network_name: str | None = None,
+):
+    """Install Istio service mesh with Kubernetes Gateway API support.
+
+    This function:
+    1. Installs Istio base CRDs and cluster roles
+    2. Installs Kubernetes Gateway API CRDs
+    3. Installs Istio control plane (istiod) with multi-cluster settings
+    4. Creates the Gateway CR which triggers Istio to auto-provision the gateway
+
+    Args:
+        kube_context: Optional kubectl context to use. If None, uses current context.
+        cluster_name: Optional cluster name for multi-cluster mesh.
+            Used for istiod multiCluster.clusterName.
+        network_name: Optional network name for multi-cluster mesh.
+            Used for istiod global.network.
+    """
+    # helm uses --kube-context, kubectl uses --context
+    helm_context_args = ["--kube-context", kube_context] if kube_context else []
+    kubectl_context_args = ["--context", kube_context] if kube_context else []
+    context_msg = f" (context: {kube_context})" if kube_context else ""
+
+    print(f"Setting up Istio service mesh with Gateway API{context_msg}...")
+
+    # Fetch existing Helm repositories
+    try:
+        helm_existing_repos = subprocess.check_output(["helm", "repo", "list"]).decode()
+    except subprocess.CalledProcessError:
+        helm_existing_repos = ""
+
+    # Add Istio Helm repository if not already present
+    if "istio" not in helm_existing_repos:
+        _exec(
+            "helm",
+            "repo",
+            "add",
+            "istio",
+            "https://istio-release.storage.googleapis.com/charts",
+        )
+        _exec("helm", "repo", "update")
+
+    # Install or upgrade Istio base (CRDs and cluster roles)
+    print("Installing/upgrading Istio base...")
+    _exec(
+        "helm",
+        "upgrade",
+        "--install",
+        "istio-base",
+        "istio/base",
+        *helm_context_args,
+        "--namespace",
+        "istio-system",
+        "--create-namespace",
+        "--wait",
+    )
+
+    # Install Gateway API CRDs (required for HTTPRoute support)
+    # kubectl apply is idempotent by default
+    print("Installing Gateway API CRDs...")
+    _exec(
+        "kubectl",
+        *kubectl_context_args,
+        "apply",
+        "-f",
+        "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.1.0/standard-install.yaml",
+    )
+    _exec(
+        "kubectl",
+        *kubectl_context_args,
+        "wait",
+        "--for=condition=Established",
+        "crd/gateways.gateway.networking.k8s.io",
+        "crd/httproutes.gateway.networking.k8s.io",
+        "crd/gatewayclasses.gateway.networking.k8s.io",
+        "--timeout=60s",
+    )
+
+    # Install or upgrade Istio control plane (istiod)
+    print("Installing/upgrading Istio control plane...")
+    istiod_args = [
+        "helm",
+        "upgrade",
+        "--install",
+        "istiod",
+        "istio/istiod",
+        *helm_context_args,
+        "--namespace",
+        "istio-system",
+        "--wait",
+    ]
+    # Add multi-cluster settings if cluster/network names are provided
+    # See: https://istio.io/latest/docs/setup/install/multicluster/multi-primary_multi-network/
+    if cluster_name or network_name:
+        istiod_args.extend(["--set", "global.meshID=mesh1"])
+    if cluster_name:
+        istiod_args.extend(["--set", f"global.multiCluster.clusterName={cluster_name}"])
+    if network_name:
+        istiod_args.extend(["--set", f"global.network={network_name}"])
+    _exec(*istiod_args)
+
+    # Wait for Istio control plane to be ready
+    _exec(
+        "kubectl",
+        *kubectl_context_args,
+        "wait",
+        "--for=condition=available",
+        "deployment",
+        "--namespace=istio-system",
+        "--all",
+        "--timeout=600s",
+    )
+
+    print("✅ Istio control plane installed successfully")
+
+    # Create Gateway CR (triggers Istio to auto-provision gateway deployment/service)
+    gateway_setup_path = _dir / "resources" / "gateway-api-setup.yaml"
+    if not gateway_setup_path.exists():
+        _err_exit(f"❌ Gateway API setup not found at {gateway_setup_path}")
+
+    print("Creating Gateway API Gateway CR...")
+    _exec(
+        "kubectl",
+        *kubectl_context_args,
+        "apply",
+        "-f",
+        str(gateway_setup_path),
+    )
+
+    # Wait for Gateway to be programmed (Istio provisions the gateway)
+    _exec(
+        "kubectl",
+        *kubectl_context_args,
+        "wait",
+        "--for=condition=Programmed",
+        "gateway/ma-gateway",
+        "-n",
+        "default",
+        "--timeout=300s",
+    )
+
+    # Print status for visibility
+    _exec(
+        "kubectl",
+        *kubectl_context_args,
+        "get",
+        "gateway",
+        "ma-gateway",
+        "-n",
+        "default",
+        "-o",
+        "wide",
+    )
+
+    print("✅ Istio with Gateway API setup complete")
+
+
+def _install_east_west_gateway(kube_context: str, cluster_id: str, network_name: str):
+    """Install an Istio east-west gateway for cross-cluster routing.
+
+    This function:
+    1. Installs the istio/gateway Helm chart as an east-west gateway
+    2. Labels the gateway Service with discovery labels for EndpointRegistry
+    3. Creates a Gateway CR with AUTO_PASSTHROUGH for SNI-based routing
+
+    The EndpointRegistry in the control plane discovers this gateway by looking
+    for Services with labels:
+      - michelangelo.ai/east-west-gateway: "true"
+      - michelangelo.ai/cluster-id: <cluster_id>
+
+    Args:
+        kube_context: kubectl context (e.g., "k3d-cluster-1")
+        cluster_id: The cluster ID matching ClusterTarget.clusterId in the
+                    deploymentStrategy.remoteClusterDeployment list (e.g., "k3d-cluster-1")
+        network_name: Network name for multi-cluster topology (e.g., "network1")
+                      See: https://istio.io/latest/docs/setup/install/multicluster/multi-primary_multi-network/
+    """
+    helm_context_args = ["--kube-context", kube_context]
+    kubectl_context_args = ["--context", kube_context]
+
+    print(
+        f"📡 Installing east-west gateway on {kube_context} (cluster_id={cluster_id})"
+    )
+
+    # Install the east-west gateway using istio/gateway Helm chart
+    # We use a separate release name to avoid conflict with the ingress gateway
+    # The networkGateway setting adds the
+    # topology.istio.io/network label for multi-cluster
+    _exec(
+        "helm",
+        "upgrade",
+        "--install",
+        "istio-eastwestgateway",
+        "istio/gateway",
+        *helm_context_args,
+        "--namespace",
+        "istio-system",
+        "--set",
+        "name=istio-eastwestgateway",
+        # networkGateway adds topology.istio.io/network label
+        # (required for multi-cluster)
+        # See: https://istio.io/latest/docs/setup/install/multicluster/multi-primary_multi-network/
+        "--set",
+        f"networkGateway={network_name}",
+        # Use NodePort for k3d compatibility
+        "--set",
+        "service.type=NodePort",
+        # Expose port 15443 for mTLS passthrough
+        "--set",
+        "service.ports[0].name=tls",
+        "--set",
+        "service.ports[0].port=15443",
+        "--set",
+        "service.ports[0].targetPort=15443",
+        "--set",
+        "service.ports[0].nodePort=31443",
+        "--wait",
+    )
+
+    # Label the gateway Service with discovery labels
+    # These labels allow EndpointRegistry to discover this gateway
+    _exec(
+        "kubectl",
+        *kubectl_context_args,
+        "label",
+        "service",
+        "istio-eastwestgateway",
+        "-n",
+        "istio-system",
+        "michelangelo.ai/east-west-gateway=true",
+        f"michelangelo.ai/cluster-id={cluster_id}",
+        "--overwrite",
+    )
+
+    # todo: ghosharitra: make this into a yaml
+    # Create a Gateway CR with AUTO_PASSTHROUGH mode
+    # This allows the gateway to route based on SNI without explicit VirtualServices
+    gateway_manifest = {
+        "apiVersion": "networking.istio.io/v1",
+        "kind": "Gateway",
+        "metadata": {
+            "name": "cross-cluster-gateway",
+            "namespace": "istio-system",
+        },
+        "spec": {
+            "selector": {"istio": "eastwestgateway"},
+            "servers": [
+                {
+                    "port": {"number": 15443, "name": "tls", "protocol": "TLS"},
+                    "tls": {"mode": "AUTO_PASSTHROUGH"},
+                    "hosts": ["*.svc.cluster.local"],
+                }
+            ],
+        },
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as f:
+        yaml.dump(gateway_manifest, f)
+        f.flush()
+        _exec(
+            "kubectl",
+            *kubectl_context_args,
+            "apply",
+            "-f",
+            f.name,
+        )
+
+    print("✅ East-west gateway installed with labels:")
+    print("   michelangelo.ai/east-west-gateway=true")
+    print(f"   michelangelo.ai/cluster-id={cluster_id}")
+
+
+def _port_forward_inference_server_in_control_plane():
+    # setup port-forwarding for the control plane
+    subprocess.Popen(
+        [
+            "kubectl",
+            "--context",
+            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            "port-forward",
+            "svc/ma-gateway-istio",
+            "8080:80",
+            "-n",
+            "default",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _print_inference_demo_completion_message(multi_cluster: bool = False):
+    print("✅ Inference demo resources created successfully")
     print("🎉 Inference demo deployment created successfully!")
     print("📋 What was set up:")
     print("  • Gateway API with Istio integration")
-    print("  • HTTPRoute for traffic routing")
     print("  • Triton Inference Server")
-    print("  • Model-sync Deployment (handles S3 sync and model loading)")
+    print("  • Model-Sync Deployment (handles S3 sync and model loading)")
 
     print(
         "🌐 Deployment-agnostic endpoint:\
@@ -1483,141 +2491,6 @@ def _create_inference_demo_crs():
     print("    }")
     print("  ]")
     print("}'")
-
-
-def _setup_istio_with_gateway_api():
-    """Install Istio service mesh with Kubernetes Gateway API support.
-
-    This function:
-    1. Installs Istio base CRDs and cluster roles
-    2. Installs Kubernetes Gateway API CRDs
-    3. Installs Istio control plane (istiod)
-    4. Creates the Gateway CR which triggers Istio to auto-provision the gateway
-    """
-    print("Setting up Istio service mesh with Gateway API...")
-
-    # Fetch existing Helm repositories
-    try:
-        helm_existing_repos = subprocess.check_output(["helm", "repo", "list"]).decode()
-    except subprocess.CalledProcessError:
-        helm_existing_repos = ""
-
-    # Add Istio Helm repository if not already present
-    if "istio" not in helm_existing_repos:
-        _exec(
-            "helm",
-            "repo",
-            "add",
-            "istio",
-            "https://istio-release.storage.googleapis.com/charts",
-        )
-        _exec("helm", "repo", "update")
-
-    # Install or upgrade Istio base (CRDs and cluster roles)
-    print("Installing/upgrading Istio base...")
-    _exec(
-        "helm",
-        "upgrade",
-        "--install",
-        "istio-base",
-        "istio/base",
-        "--namespace",
-        "istio-system",
-        "--create-namespace",
-        "--wait",
-    )
-
-    # Install Gateway API CRDs (required for HTTPRoute support)
-    # kubectl apply is idempotent by default
-    print("Installing Gateway API CRDs...")
-    _exec(
-        "kubectl",
-        "apply",
-        "-f",
-        "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.1.0/standard-install.yaml",
-    )
-    _exec(
-        "kubectl",
-        "wait",
-        "--for=condition=Established",
-        "crd/gateways.gateway.networking.k8s.io",
-        "crd/httproutes.gateway.networking.k8s.io",
-        "crd/gatewayclasses.gateway.networking.k8s.io",
-        "--timeout=60s",
-    )
-
-    # Install or upgrade Istio control plane (istiod)
-    print("Installing/upgrading Istio control plane...")
-    _exec(
-        "helm",
-        "upgrade",
-        "--install",
-        "istiod",
-        "istio/istiod",
-        "--namespace",
-        "istio-system",
-        "--wait",
-    )
-
-    # Wait for Istio control plane to be ready
-    _exec(
-        "kubectl",
-        "wait",
-        "--for=condition=available",
-        "deployment",
-        "--namespace=istio-system",
-        "--all",
-        "--timeout=600s",
-    )
-
-    print("✅ Istio control plane installed successfully")
-
-    # Create Gateway CR (triggers Istio to auto-provision gateway deployment/service)
-    gateway_setup_path = _dir / "resources" / "gateway-api-setup.yaml"
-    if not gateway_setup_path.exists():
-        _err_exit(f"❌ Gateway API setup not found at {gateway_setup_path}")
-
-    print("Creating Gateway API Gateway CR...")
-    _kube_apply(gateway_setup_path)
-
-    # Wait for Gateway to be programmed (Istio provisions the gateway)
-    _exec(
-        "kubectl",
-        "wait",
-        "--for=condition=Programmed",
-        "gateway/ma-gateway",
-        "-n",
-        "default",
-        "--timeout=300s",
-    )
-
-    # Print status for visibility
-    _exec(
-        "kubectl",
-        "get",
-        "gateway",
-        "ma-gateway",
-        "-n",
-        "default",
-        "-o",
-        "wide",
-    )
-
-    # automatically perform port-forwarding in the background
-    subprocess.Popen(
-        [
-            "kubectl",
-            "-n",
-            "default",
-            "port-forward",
-            "svc/ma-gateway-istio",
-            "8080:80",
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-
-    print("✅ Istio with Gateway API setup complete")
 
 
 def _create_pipeline_demo_crs():

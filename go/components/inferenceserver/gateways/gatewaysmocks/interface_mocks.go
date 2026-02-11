@@ -9,6 +9,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	gateways "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	zap "go.uber.org/zap"
 )
@@ -37,74 +38,104 @@ func (m *MockGateway) EXPECT() *MockGatewayMockRecorder {
 }
 
 // CheckModelExists mocks base method.
-func (m *MockGateway) CheckModelExists(ctx context.Context, logger *zap.Logger, modelName, inferenceServerName, namespace string, backendType v2.BackendType) (bool, error) {
+func (m *MockGateway) CheckModelExists(ctx context.Context, logger *zap.Logger, modelName, inferenceServerName, namespace string, targetCluster *gateways.TargetClusterConnection, backendType v2.BackendType) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CheckModelExists", ctx, logger, modelName, inferenceServerName, namespace, backendType)
+	ret := m.ctrl.Call(m, "CheckModelExists", ctx, logger, modelName, inferenceServerName, namespace, targetCluster, backendType)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CheckModelExists indicates an expected call of CheckModelExists.
-func (mr *MockGatewayMockRecorder) CheckModelExists(ctx, logger, modelName, inferenceServerName, namespace, backendType interface{}) *gomock.Call {
+func (mr *MockGatewayMockRecorder) CheckModelExists(ctx, logger, modelName, inferenceServerName, namespace, targetCluster, backendType interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckModelExists", reflect.TypeOf((*MockGateway)(nil).CheckModelExists), ctx, logger, modelName, inferenceServerName, namespace, backendType)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckModelExists", reflect.TypeOf((*MockGateway)(nil).CheckModelExists), ctx, logger, modelName, inferenceServerName, namespace, targetCluster, backendType)
 }
 
 // CheckModelStatus mocks base method.
-func (m *MockGateway) CheckModelStatus(ctx context.Context, logger *zap.Logger, modelName, inferenceServerName, namespace string, backendType v2.BackendType) (bool, error) {
+func (m *MockGateway) CheckModelStatus(ctx context.Context, logger *zap.Logger, modelName, inferenceServerName, namespace string, targetCluster *gateways.TargetClusterConnection, backendType v2.BackendType) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CheckModelStatus", ctx, logger, modelName, inferenceServerName, namespace, backendType)
+	ret := m.ctrl.Call(m, "CheckModelStatus", ctx, logger, modelName, inferenceServerName, namespace, targetCluster, backendType)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CheckModelStatus indicates an expected call of CheckModelStatus.
-func (mr *MockGatewayMockRecorder) CheckModelStatus(ctx, logger, modelName, inferenceServerName, namespace, backendType interface{}) *gomock.Call {
+func (mr *MockGatewayMockRecorder) CheckModelStatus(ctx, logger, modelName, inferenceServerName, namespace, targetCluster, backendType interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckModelStatus", reflect.TypeOf((*MockGateway)(nil).CheckModelStatus), ctx, logger, modelName, inferenceServerName, namespace, backendType)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckModelStatus", reflect.TypeOf((*MockGateway)(nil).CheckModelStatus), ctx, logger, modelName, inferenceServerName, namespace, targetCluster, backendType)
+}
+
+// GetControlPlaneServiceName mocks base method.
+func (m *MockGateway) GetControlPlaneServiceName(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetControlPlaneServiceName", ctx, logger, inferenceServerName, namespace)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetControlPlaneServiceName indicates an expected call of GetControlPlaneServiceName.
+func (mr *MockGatewayMockRecorder) GetControlPlaneServiceName(ctx, logger, inferenceServerName, namespace interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetControlPlaneServiceName", reflect.TypeOf((*MockGateway)(nil).GetControlPlaneServiceName), ctx, logger, inferenceServerName, namespace)
+}
+
+// GetDeploymentTargetInfo mocks base method.
+func (m *MockGateway) GetDeploymentTargetInfo(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) (*gateways.DeploymentTargetInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDeploymentTargetInfo", ctx, logger, inferenceServerName, namespace)
+	ret0, _ := ret[0].(*gateways.DeploymentTargetInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDeploymentTargetInfo indicates an expected call of GetDeploymentTargetInfo.
+func (mr *MockGatewayMockRecorder) GetDeploymentTargetInfo(ctx, logger, inferenceServerName, namespace interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeploymentTargetInfo", reflect.TypeOf((*MockGateway)(nil).GetDeploymentTargetInfo), ctx, logger, inferenceServerName, namespace)
 }
 
 // InferenceServerIsHealthy mocks base method.
-func (m *MockGateway) InferenceServerIsHealthy(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string, backendType v2.BackendType) (bool, error) {
+func (m *MockGateway) InferenceServerIsHealthy(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string, targetCluster *gateways.TargetClusterConnection, backendType v2.BackendType) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InferenceServerIsHealthy", ctx, logger, inferenceServerName, namespace, backendType)
+	ret := m.ctrl.Call(m, "InferenceServerIsHealthy", ctx, logger, inferenceServerName, namespace, targetCluster, backendType)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // InferenceServerIsHealthy indicates an expected call of InferenceServerIsHealthy.
-func (mr *MockGatewayMockRecorder) InferenceServerIsHealthy(ctx, logger, inferenceServerName, namespace, backendType interface{}) *gomock.Call {
+func (mr *MockGatewayMockRecorder) InferenceServerIsHealthy(ctx, logger, inferenceServerName, namespace, targetCluster, backendType interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InferenceServerIsHealthy", reflect.TypeOf((*MockGateway)(nil).InferenceServerIsHealthy), ctx, logger, inferenceServerName, namespace, backendType)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InferenceServerIsHealthy", reflect.TypeOf((*MockGateway)(nil).InferenceServerIsHealthy), ctx, logger, inferenceServerName, namespace, targetCluster, backendType)
 }
 
 // LoadModel mocks base method.
-func (m *MockGateway) LoadModel(ctx context.Context, logger *zap.Logger, modelName, storagePath, inferenceServerName, namespace string, backendType v2.BackendType) error {
+func (m *MockGateway) LoadModel(ctx context.Context, logger *zap.Logger, modelName, storagePath, inferenceServerName, namespace string, targetCluster *gateways.TargetClusterConnection) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadModel", ctx, logger, modelName, storagePath, inferenceServerName, namespace, backendType)
+	ret := m.ctrl.Call(m, "LoadModel", ctx, logger, modelName, storagePath, inferenceServerName, namespace, targetCluster)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // LoadModel indicates an expected call of LoadModel.
-func (mr *MockGatewayMockRecorder) LoadModel(ctx, logger, modelName, storagePath, inferenceServerName, namespace, backendType interface{}) *gomock.Call {
+func (mr *MockGatewayMockRecorder) LoadModel(ctx, logger, modelName, storagePath, inferenceServerName, namespace, targetCluster interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadModel", reflect.TypeOf((*MockGateway)(nil).LoadModel), ctx, logger, modelName, storagePath, inferenceServerName, namespace, backendType)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadModel", reflect.TypeOf((*MockGateway)(nil).LoadModel), ctx, logger, modelName, storagePath, inferenceServerName, namespace, targetCluster)
 }
 
 // UnloadModel mocks base method.
-func (m *MockGateway) UnloadModel(ctx context.Context, logger *zap.Logger, modelName, inferenceServerName, namespace string, backendType v2.BackendType) error {
+func (m *MockGateway) UnloadModel(ctx context.Context, logger *zap.Logger, modelName, inferenceServerName, namespace string, targetCluster *gateways.TargetClusterConnection) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UnloadModel", ctx, logger, modelName, inferenceServerName, namespace, backendType)
+	ret := m.ctrl.Call(m, "UnloadModel", ctx, logger, modelName, inferenceServerName, namespace, targetCluster)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UnloadModel indicates an expected call of UnloadModel.
-func (mr *MockGatewayMockRecorder) UnloadModel(ctx, logger, modelName, inferenceServerName, namespace, backendType interface{}) *gomock.Call {
+func (mr *MockGatewayMockRecorder) UnloadModel(ctx, logger, modelName, inferenceServerName, namespace, targetCluster interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnloadModel", reflect.TypeOf((*MockGateway)(nil).UnloadModel), ctx, logger, modelName, inferenceServerName, namespace, backendType)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnloadModel", reflect.TypeOf((*MockGateway)(nil).UnloadModel), ctx, logger, modelName, inferenceServerName, namespace, targetCluster)
 }

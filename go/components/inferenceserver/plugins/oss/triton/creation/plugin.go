@@ -5,29 +5,33 @@ import (
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/endpointregistry"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // TritonCreationPlugin orchestrates the condition actors for inference server creation.
 type TritonCreationPlugin struct {
-	backend backends.Backend
-	logger  *zap.Logger
+	backend          backends.Backend
+	endpointRegistry endpointregistry.EndpointRegistry
+	logger           *zap.Logger
 }
 
 // NewTritonCreationPlugin creates a plugin that manages validation, provisioning, health checks, and routing.
-func NewTritonCreationPlugin(backend backends.Backend, logger *zap.Logger) conditionInterfaces.Plugin[*v2pb.InferenceServer] {
+func NewTritonCreationPlugin(backend backends.Backend, endpointRegistry endpointregistry.EndpointRegistry, logger *zap.Logger) conditionInterfaces.Plugin[*v2pb.InferenceServer] {
 	return &TritonCreationPlugin{
-		backend: backend,
-		logger:  logger,
+		backend:          backend,
+		endpointRegistry: endpointRegistry,
+		logger:           logger,
 	}
 }
 
 // GetActors returns the ordered list of condition actors for creation workflow.
 func (p *TritonCreationPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return []conditionInterfaces.ConditionActor[*v2pb.InferenceServer]{
-		NewValidationActor(p.backend, p.logger),
-		NewResourceCreationActor(p.backend, p.logger),
+		NewValidationActor(p.logger),
+		NewClusterWorkloadsActor(p.backend, p.logger),
+		NewControlPlaneDiscoveryActor(p.endpointRegistry, p.logger),
 		NewHealthCheckActor(p.backend, p.logger),
 	}
 }

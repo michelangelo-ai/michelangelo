@@ -7,29 +7,29 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
-	"github.com/michelangelo-ai/michelangelo/go/base/blobstore/minio"
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/metrics"
 	"github.com/uber-go/tally"
 	"go.uber.org/fx"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/dynamic"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore/minio"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/metrics"
 )
 
-var (
-	// Module provides and starts the Kubernetes Controller Manager as configured by the Config.
-	// It uses Fx for dependency injection to initialize configurations, create the manager,
-	// and set up the lifecycle hooks for the application.
-	Module = fx.Options(
-		blobstore.Module,
-		minio.Module,
-		fx.Provide(newConfig),
-		fx.Provide(create),
-		fx.Invoke(start),
-		fx.Invoke(initializeMetrics),
-	)
+// Module provides and starts the Kubernetes Controller Manager as configured by the Config.
+// It uses Fx for dependency injection to initialize configurations, create the manager,
+// and set up the lifecycle hooks for the application.
+var Module = fx.Options(
+	blobstore.Module,
+	minio.Module,
+	fx.Provide(newConfig),
+	fx.Provide(create),
+	fx.Invoke(start),
+	fx.Invoke(initializeMetrics),
 )
 
 type (
@@ -41,8 +41,9 @@ type (
 
 	result struct {
 		fx.Out
-		Manager manager.Manager // Initialized Kubernetes controller manager.
-		Client  client.Client   // Kubernetes client for interacting with the cluster.
+		Manager       manager.Manager   // Initialized Kubernetes controller manager.
+		Client        client.Client     // Kubernetes client for interacting with the cluster.
+		DynamicClient dynamic.Interface // Kubernetes dynamic client for working with unstructured resources.
 	}
 )
 
@@ -58,7 +59,6 @@ type (
 //	result: Struct containing the initialized Manager and Client.
 //	error: Error if the manager creation fails.
 func create(p params) (result, error) {
-
 	restConf, err := ctrl.GetConfig()
 	if err != nil {
 		return result{}, err
@@ -75,9 +75,15 @@ func create(p params) (result, error) {
 		return result{}, err
 	}
 
+	dynamicClient, err := dynamic.NewForConfig(restConf)
+	if err != nil {
+		return result{}, err
+	}
+
 	return result{
-		Manager: mgr,
-		Client:  mgr.GetClient(),
+		Manager:       mgr,
+		Client:        mgr.GetClient(),
+		DynamicClient: dynamicClient,
 	}, nil
 }
 

@@ -7,21 +7,25 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
 	"github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-func TestModelCleanupRetrieve(t *testing.T) {
+func TestModelCleanupActor_Retrieve(t *testing.T) {
 	tests := []struct {
-		name                    string
-		deployment              *v2pb.Deployment
-		setupMocks              func(*gatewaysmocks.MockGateway)
-		expectedConditionStatus api.ConditionStatus
-		expectedConditionReason string
+		name            string
+		deployment      *v2pb.Deployment
+		condition       func() *api.Condition
+		setupMocks      func(*gatewaysmocks.MockGateway)
+		expectedStatus  api.ConditionStatus
+		expectedMessage string
 	}{
 		{
 			name: "no cleanup needed when current model is empty",
@@ -37,9 +41,10 @@ func TestModelCleanupRetrieve(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: ""},
 				},
 			},
-			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
-			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
-			expectedConditionReason: "",
+			condition:       func() *api.Condition { return &api.Condition{} },
+			setupMocks:      func(gw *gatewaysmocks.MockGateway) {},
+			expectedStatus:  api.CONDITION_STATUS_TRUE,
+			expectedMessage: "",
 		},
 		{
 			name: "no cleanup needed when models are the same",
@@ -55,12 +60,13 @@ func TestModelCleanupRetrieve(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
 				},
 			},
-			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
-			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
-			expectedConditionReason: "",
+			condition:       func() *api.Condition { return &api.Condition{} },
+			setupMocks:      func(gw *gatewaysmocks.MockGateway) {},
+			expectedStatus:  api.CONDITION_STATUS_TRUE,
+			expectedMessage: "",
 		},
 		{
-			name: "cleanup pending when old model still loaded",
+			name: "cleanup not started when no metadata",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
@@ -73,14 +79,13 @@ func TestModelCleanupRetrieve(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
-			},
-			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "Old model model-v1 still loaded, cleanup needed",
+			condition:       func() *api.Condition { return &api.Condition{} },
+			setupMocks:      func(gw *gatewaysmocks.MockGateway) {},
+			expectedStatus:  api.CONDITION_STATUS_FALSE,
+			expectedMessage: "CleanupNotStarted",
 		},
 		{
-			name: "cleanup complete when old model not found",
+			name: "cleanup pending for cluster in PENDING state",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
@@ -93,14 +98,23 @@ func TestModelCleanupRetrieve(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
+			condition: func() *api.Condition {
+				cond := &api.Condition{}
+				common.SetClusterMetadata(cond, &common.ClusterMetadata{
+					BackendType:  v2pb.BACKEND_TYPE_TRITON.String(),
+					CurrentIndex: 0,
+					Clusters: []common.ClusterEntry{
+						{ClusterId: "test-cluster", Host: "host1", State: common.ClusterStatePending},
+					},
+				})
+				return cond
 			},
-			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
-			expectedConditionReason: "",
+			setupMocks:      func(gw *gatewaysmocks.MockGateway) {},
+			expectedStatus:  api.CONDITION_STATUS_FALSE,
+			expectedMessage: "CleanupPending",
 		},
 		{
-			name: "cleanup pending when cannot verify model status",
+			name: "cleanup in progress: old model still loaded",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
@@ -113,11 +127,53 @@ func TestModelCleanupRetrieve(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, errors.New("api error"))
+			condition: func() *api.Condition {
+				cond := &api.Condition{}
+				common.SetClusterMetadata(cond, &common.ClusterMetadata{
+					BackendType:  v2pb.BACKEND_TYPE_TRITON.String(),
+					CurrentIndex: 0,
+					Clusters: []common.ClusterEntry{
+						{ClusterId: "test-cluster", Host: "host1", State: common.ClusterStateCleanupInProgress},
+					},
+				})
+				return cond
 			},
-			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "Need to cleanup old model model-v1",
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().CheckModelStatus(
+					gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", gomock.Any(), v2pb.BACKEND_TYPE_TRITON,
+				).Return(true, nil)
+			},
+			expectedStatus:  api.CONDITION_STATUS_UNKNOWN,
+			expectedMessage: "CleanupInProgress",
+		},
+		{
+			name: "all clusters cleaned",
+			deployment: &v2pb.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				Spec: v2pb.DeploymentSpec{
+					DesiredRevision: &api.ResourceIdentifier{Name: "model-v2"},
+					Target: &v2pb.DeploymentSpec_InferenceServer{
+						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+					},
+				},
+				Status: v2pb.DeploymentStatus{
+					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
+				},
+			},
+			condition: func() *api.Condition {
+				cond := &api.Condition{}
+				common.SetClusterMetadata(cond, &common.ClusterMetadata{
+					BackendType:  v2pb.BACKEND_TYPE_TRITON.String(),
+					CurrentIndex: 1,
+					Clusters: []common.ClusterEntry{
+						{ClusterId: "test-cluster", Host: "host1", State: common.ClusterStateCleaned},
+					},
+				})
+				return cond
+			},
+			setupMocks:      func(gw *gatewaysmocks.MockGateway) {},
+			expectedStatus:  api.CONDITION_STATUS_TRUE,
+			expectedMessage: "",
 		},
 	}
 
@@ -134,26 +190,34 @@ func TestModelCleanupRetrieve(t *testing.T) {
 				Logger:  zap.NewNop(),
 			}
 
-			condition, err := actor.Retrieve(context.Background(), tt.deployment, &api.Condition{})
+			result, err := actor.Retrieve(context.Background(), tt.deployment, tt.condition())
 
-			assert.NoError(t, err)
-			assert.NotNil(t, condition)
-			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
-			assert.Equal(t, tt.expectedConditionReason, condition.Reason)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.Equal(t, tt.expectedStatus, result.Status)
+			if tt.expectedMessage != "" {
+				assert.Equal(t, tt.expectedMessage, result.Message)
+			}
 		})
 	}
 }
 
-func TestModelCleanupRun(t *testing.T) {
+func TestModelCleanupActor_Run(t *testing.T) {
+	testCluster := &gateways.TargetClusterConnection{
+		ClusterId: "test-cluster",
+		Host:      "host1",
+	}
+
 	tests := []struct {
-		name                    string
-		deployment              *v2pb.Deployment
-		setupMocks              func(*gatewaysmocks.MockGateway)
-		expectedConditionStatus api.ConditionStatus
-		expectedConditionReason string
+		name            string
+		deployment      *v2pb.Deployment
+		condition       func() *api.Condition
+		setupMocks      func(*gatewaysmocks.MockGateway)
+		expectedStatus  api.ConditionStatus
+		expectedMessage string
 	}{
 		{
-			name: "successful cleanup of old model",
+			name: "initialize metadata when none exists",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
@@ -166,14 +230,19 @@ func TestModelCleanupRun(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
 				},
 			},
+			condition: func() *api.Condition { return &api.Condition{} },
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(nil)
+				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
+					Return(&gateways.DeploymentTargetInfo{
+						BackendType:    v2pb.BACKEND_TYPE_TRITON,
+						ClusterTargets: []*gateways.TargetClusterConnection{testCluster},
+					}, nil)
 			},
-			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
-			expectedConditionReason: "",
+			expectedStatus:  api.CONDITION_STATUS_UNKNOWN,
+			expectedMessage: "MetadataInitialized",
 		},
 		{
-			name: "cleanup fails when unload fails",
+			name: "GetDeploymentTargetInfo fails",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
@@ -186,31 +255,137 @@ func TestModelCleanupRun(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
 				},
 			},
+			condition: func() *api.Condition { return &api.Condition{} },
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(errors.New("unload error"))
+				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
+					Return(nil, errors.New("not found"))
 			},
-			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "Failed to unload old model model-v1 from inference server: unload error",
+			expectedStatus:  api.CONDITION_STATUS_FALSE,
+			expectedMessage: "GetTargetInfoFailed",
 		},
 		{
-			name: "cleanup successful with different model names",
+			name: "unload model from pending cluster",
 			deployment: &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "production"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: &api.ResourceIdentifier{Name: "bert_cola"},
+					DesiredRevision: &api.ResourceIdentifier{Name: "model-v2"},
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "triton-prod"},
+						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
 					},
 				},
 				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "old-bert"},
+					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "old-bert", "triton-prod", "production", v2pb.BACKEND_TYPE_TRITON).Return(nil)
+			condition: func() *api.Condition {
+				cond := &api.Condition{}
+				common.SetClusterMetadata(cond, &common.ClusterMetadata{
+					BackendType:  v2pb.BACKEND_TYPE_TRITON.String(),
+					CurrentIndex: 0,
+					Clusters: []common.ClusterEntry{
+						{ClusterId: "test-cluster", Host: "host1", State: common.ClusterStatePending},
+					},
+				})
+				return cond
 			},
-			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
-			expectedConditionReason: "",
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().UnloadModel(
+					gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", gomock.Any(),
+				).Return(nil)
+			},
+			expectedStatus:  api.CONDITION_STATUS_UNKNOWN,
+			expectedMessage: "CleanupStarted",
+		},
+		{
+			name: "unload model fails",
+			deployment: &v2pb.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				Spec: v2pb.DeploymentSpec{
+					DesiredRevision: &api.ResourceIdentifier{Name: "model-v2"},
+					Target: &v2pb.DeploymentSpec_InferenceServer{
+						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+					},
+				},
+				Status: v2pb.DeploymentStatus{
+					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
+				},
+			},
+			condition: func() *api.Condition {
+				cond := &api.Condition{}
+				common.SetClusterMetadata(cond, &common.ClusterMetadata{
+					BackendType:  v2pb.BACKEND_TYPE_TRITON.String(),
+					CurrentIndex: 0,
+					Clusters: []common.ClusterEntry{
+						{ClusterId: "test-cluster", Host: "host1", State: common.ClusterStatePending},
+					},
+				})
+				return cond
+			},
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().UnloadModel(
+					gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", gomock.Any(),
+				).Return(errors.New("unload error"))
+			},
+			expectedStatus:  api.CONDITION_STATUS_FALSE,
+			expectedMessage: "ModelUnloadingFailed",
+		},
+		{
+			name: "cleanup in progress - wait for Retrieve",
+			deployment: &v2pb.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				Spec: v2pb.DeploymentSpec{
+					DesiredRevision: &api.ResourceIdentifier{Name: "model-v2"},
+					Target: &v2pb.DeploymentSpec_InferenceServer{
+						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+					},
+				},
+				Status: v2pb.DeploymentStatus{
+					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
+				},
+			},
+			condition: func() *api.Condition {
+				cond := &api.Condition{}
+				common.SetClusterMetadata(cond, &common.ClusterMetadata{
+					BackendType:  v2pb.BACKEND_TYPE_TRITON.String(),
+					CurrentIndex: 0,
+					Clusters: []common.ClusterEntry{
+						{ClusterId: "test-cluster", Host: "host1", State: common.ClusterStateCleanupInProgress},
+					},
+				})
+				return cond
+			},
+			setupMocks:      func(gw *gatewaysmocks.MockGateway) {},
+			expectedStatus:  api.CONDITION_STATUS_UNKNOWN,
+			expectedMessage: "CleanupInProgress",
+		},
+		{
+			name: "all clusters already cleaned",
+			deployment: &v2pb.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				Spec: v2pb.DeploymentSpec{
+					DesiredRevision: &api.ResourceIdentifier{Name: "model-v2"},
+					Target: &v2pb.DeploymentSpec_InferenceServer{
+						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+					},
+				},
+				Status: v2pb.DeploymentStatus{
+					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
+				},
+			},
+			condition: func() *api.Condition {
+				cond := &api.Condition{}
+				common.SetClusterMetadata(cond, &common.ClusterMetadata{
+					BackendType:  v2pb.BACKEND_TYPE_TRITON.String(),
+					CurrentIndex: 1,
+					Clusters: []common.ClusterEntry{
+						{ClusterId: "test-cluster", Host: "host1", State: common.ClusterStateCleaned},
+					},
+				})
+				return cond
+			},
+			setupMocks:      func(gw *gatewaysmocks.MockGateway) {},
+			expectedStatus:  api.CONDITION_STATUS_TRUE,
+			expectedMessage: "",
 		},
 	}
 
@@ -227,12 +402,14 @@ func TestModelCleanupRun(t *testing.T) {
 				Logger:  zap.NewNop(),
 			}
 
-			condition, err := actor.Run(context.Background(), tt.deployment, &api.Condition{})
+			result, err := actor.Run(context.Background(), tt.deployment, tt.condition())
 
-			assert.NoError(t, err)
-			assert.NotNil(t, condition)
-			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
-			assert.Equal(t, tt.expectedConditionReason, condition.Reason)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.Equal(t, tt.expectedStatus, result.Status)
+			if tt.expectedMessage != "" {
+				assert.Equal(t, tt.expectedMessage, result.Message)
+			}
 		})
 	}
 }

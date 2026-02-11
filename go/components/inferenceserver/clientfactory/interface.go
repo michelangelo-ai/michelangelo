@@ -1,0 +1,24 @@
+//go:generate mamockgen ClientFactory
+
+package clientfactory
+
+import (
+	"context"
+	"net/http"
+
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+)
+
+// ClientFactory provides Kubernetes clients for connecting to clusters.
+// When connectionSpec is nil, it returns the default control plane cluster client.
+// When connectionSpec is provided, it creates a client for the specified remote cluster.
+type ClientFactory interface {
+	// GetClient returns a controller-runtime client for the given cluster target.
+	GetClient(ctx context.Context, cluster *v2pb.ClusterTarget) (client.Client, error)
+
+	// GetHTTPClient returns an HTTP client configured with TLS for the given cluster target.
+	// The client includes the CA certificate and bearer token for authentication.
+	GetHTTPClient(ctx context.Context, cluster *v2pb.ClusterTarget) (*http.Client, error)
+}

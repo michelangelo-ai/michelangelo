@@ -12,6 +12,7 @@ import "michelangelo/api/conditions.proto";
 import "michelangelo/api/v2/pod.proto";
 import "michelangelo/api/v2/project.proto";
 import "michelangelo/api/v2/user.proto";
+import "michelangelo/api/v2/kubernetes.proto";
 
 // ServingSpec encapsulates serving service specification.
 message ServingSpec {
@@ -94,6 +95,43 @@ message InferenceServerSpec {
   UserInfo owner = 5;
   // Backend type for this InferenceServer (e.g. Triton, LLM-D, Dynamo).
   BackendType backend_type = 6;
+  // Deployment strategy for this inference server.
+  InferenceServerDeploymentStrategy deployment_strategy = 7;
+}
+
+// DeploymentStrategy specifies the deployment strategy for the InferenceServer.
+message InferenceServerDeploymentStrategy {
+  // Strategy to roll out a model across all predictor service
+  // instances.
+  oneof strategy {
+    // Deploy the model to a single cluster.
+    ControlPlaneClusterDeployment control_plane_cluster_deployment = 1;
+    // Deploy the model to a remote cluster.
+    RemoteClustersDeployment remote_cluster_deployment = 2;
+  }
+}
+
+// ControlPlaneClusterDeployment contains configuration for deploying to the control plane cluster.
+message ControlPlaneClusterDeployment {}
+
+// RemoteClustersDeployment contains configuration for deploying to remote clusters.
+message RemoteClustersDeployment {
+  // List of remote clusters where inference server will be deployed.
+  repeated ClusterTarget cluster_targets = 1;
+}
+
+// ClusterTarget specifies a target cluster and its configuration for inference server deployment.
+message ClusterTarget {
+  // Unique identifier for this cluster (e.g., "us-west-prod", "eu-central-staging").
+  // Used by deployment controller to reference the cluster during model deployments.
+  string cluster_id = 1 [(michelangelo.api.validation) = {required: true}];
+  
+  // Cluster-specific configuration.
+  oneof config {
+    option (michelangelo.api.required) = true;
+    // Connection details for the target Kubernetes cluster.
+    ConnectionSpec kubernetes = 2;
+  }
 }
 
 // The state of the Inference Server.
@@ -132,6 +170,38 @@ message InferenceServerStatus {
   // Available environments correspond to the list of environments that are available for
   // this InferenceServer resource.
   repeated string available_environments = 8;
+  // Per-remote-cluster deployment status. Only includes clusters where infrastructure
+  // has been created or is in the process of being created. This field is not populated when
+  // the deployment strategy is control plane cluster deployment.
+  repeated RemoteClusterStatus remote_cluster_statuses = 9;
+}
+
+// ClusterState represents the lifecycle state of infrastructure in a cluster.
+enum ClusterState {
+  CLUSTER_STATE_INVALID = 0;
+  CLUSTER_STATE_CREATING = 1;
+  CLUSTER_STATE_READY = 2;
+  CLUSTER_STATE_DELETING = 4;
+  CLUSTER_STATE_FAILED = 5;
+}
+
+// RemoteClusterStatus represents the observed state of infrastructure in a specific remote cluster.
+message RemoteClusterStatus {
+  // Cluster identifier matching ClusterTarget.cluster_id in spec.
+  string cluster_id = 1;
+  
+  // Current state of the inference server infrastructure in this cluster.
+  ClusterState state = 2;
+  
+  // Human-readable message providing details about the current state.
+  string message = 3;
+  
+  // Inference service endpoint for this cluster (e.g., "https://triton.us-west.example.com").
+  // Only populated when state is CLUSTER_STATE_READY.
+  string endpoint = 4;
+  
+  // Timestamp of the last status update for this cluster (RFC3339 format).
+  string last_updated = 5;
 }
 
 // Defines a managed InferenceServer service for model serving.

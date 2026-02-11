@@ -10,43 +10,193 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	backendsmocks "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 func TestValidationActor_Retrieve(t *testing.T) {
 	tests := []struct {
-		name            string
-		backendType     v2pb.BackendType
-		expectedStatus  apipb.ConditionStatus
-		expectedReason  string
-		expectedMessage string
-		expectedErr     bool
+		name                   string
+		resource               *v2pb.InferenceServer
+		expectedStatus         apipb.ConditionStatus
+		expectedMessage        string
+		expectedReasonContains string
+		expectedErr            bool
 	}{
 		{
-			name:            "valid triton backend type",
-			backendType:     v2pb.BACKEND_TYPE_TRITON,
-			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
-			expectedReason:  "ValidationSucceeded",
-			expectedMessage: "Triton configuration is valid",
-			expectedErr:     false,
+			name: "valid triton with control plane cluster deployment",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_ControlPlaneClusterDeployment{
+							ControlPlaneClusterDeployment: &v2pb.ControlPlaneClusterDeployment{},
+						},
+					},
+				},
+			},
+			expectedStatus:         apipb.CONDITION_STATUS_TRUE,
+			expectedMessage:        "",
+			expectedReasonContains: "",
+			expectedErr:            false,
 		},
 		{
-			name:            "invalid backend type - llm-d",
-			backendType:     v2pb.BACKEND_TYPE_LLM_D,
-			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
-			expectedReason:  "InvalidBackendType",
-			expectedMessage: "invalid backend type for Triton plugin: BACKEND_TYPE_LLM_D",
-			expectedErr:     false,
+			name: "valid triton with nil deployment strategy defaults to control plane",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+				},
+			},
+			expectedStatus:         apipb.CONDITION_STATUS_TRUE,
+			expectedMessage:        "",
+			expectedReasonContains: "",
+			expectedErr:            false,
 		},
 		{
-			name:            "invalid backend type",
-			backendType:     v2pb.BACKEND_TYPE_INVALID,
-			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
-			expectedReason:  "InvalidBackendType",
-			expectedMessage: "invalid backend type for Triton plugin: BACKEND_TYPE_INVALID",
-			expectedErr:     false,
+			name: "valid triton with remote cluster",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{
+									{
+										ClusterId: "remote-cluster",
+										Config: &v2pb.ClusterTarget_Kubernetes{
+											Kubernetes: &v2pb.ConnectionSpec{
+												Host:      "https://api.remote.cluster",
+												Port:      "6443",
+												TokenTag:  "token-secret",
+												CaDataTag: "ca-secret",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedStatus:         apipb.CONDITION_STATUS_TRUE,
+			expectedMessage:        "",
+			expectedReasonContains: "",
+			expectedErr:            false,
+		},
+		{
+			name: "invalid backend type",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_LLM_D,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_ControlPlaneClusterDeployment{
+							ControlPlaneClusterDeployment: &v2pb.ControlPlaneClusterDeployment{},
+						},
+					},
+				},
+			},
+			expectedStatus:         apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:        "InvalidBackendType",
+			expectedReasonContains: "invalid backend type for Triton plugin",
+			expectedErr:            false,
+		},
+		{
+			name: "no cluster targets in remote deployment",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{},
+							},
+						},
+					},
+				},
+			},
+			expectedStatus:         apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:        "InvalidClusterTargets",
+			expectedReasonContains: "at least one cluster target is required",
+			expectedErr:            false,
+		},
+		{
+			name: "remote cluster missing kubernetes config",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{
+									{ClusterId: "remote-cluster"}, // no kubernetes config
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedStatus:         apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:        "InvalidClusterTargets",
+			expectedReasonContains: "kubernetes connection config is required",
+			expectedErr:            false,
+		},
+		{
+			name: "remote cluster missing host",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{
+									{
+										ClusterId: "remote-cluster",
+										Config: &v2pb.ClusterTarget_Kubernetes{
+											Kubernetes: &v2pb.ConnectionSpec{
+												Port:      "6443",
+												TokenTag:  "token-secret",
+												CaDataTag: "ca-secret",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedStatus:         apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:        "InvalidClusterTargets",
+			expectedReasonContains: "host is required",
+			expectedErr:            false,
 		},
 	}
 
@@ -55,50 +205,36 @@ func TestValidationActor_Retrieve(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockBackend := backendsmocks.NewMockBackend(ctrl)
-			// No expectations set, backend should not be called
-
-			actor := NewValidationActor(mockBackend, zap.NewNop())
-
-			resource := &v2pb.InferenceServer{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-server",
-					Namespace: "test-namespace",
-				},
-				Spec: v2pb.InferenceServerSpec{
-					BackendType: tt.backendType,
-				},
-			}
+			actor := NewValidationActor(zap.NewNop())
 
 			condition := &apipb.Condition{
 				Type: "TritonValidation",
 			}
 
-			result, err := actor.Retrieve(context.Background(), resource, condition)
+			result, err := actor.Retrieve(context.Background(), tt.resource, condition)
 
 			if tt.expectedErr {
 				assert.Error(t, err)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tt.expectedStatus, result.Status)
-				assert.Equal(t, tt.expectedReason, result.Reason)
-				assert.Equal(t, tt.expectedMessage, result.Message)
-				assert.Equal(t, "TritonValidation", result.Type)
+				if tt.expectedMessage != "" {
+					assert.Equal(t, tt.expectedMessage, result.Message)
+				}
+				if tt.expectedReasonContains != "" {
+					assert.Contains(t, result.Reason, tt.expectedReasonContains)
+				}
 			}
 		})
 	}
 }
 
 func TestValidationActor_Run(t *testing.T) {
-	// Run() always returns a simple false condition since there's nothing
-	// it can do differently from Retrieve(). It doesn't check backend type or call backend.
+	// Run() returns the condition unchanged - it's a no-op for validation.
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockBackend := backendsmocks.NewMockBackend(ctrl)
-	// No expectations set, backend should not be called
-
-	actor := NewValidationActor(mockBackend, zap.NewNop())
+	actor := NewValidationActor(zap.NewNop())
 
 	resource := &v2pb.InferenceServer{
 		ObjectMeta: metav1.ObjectMeta{
@@ -111,15 +247,15 @@ func TestValidationActor_Run(t *testing.T) {
 	}
 
 	condition := &apipb.Condition{
-		Type: "TritonValidation",
+		Type:   "TritonValidation",
+		Status: apipb.CONDITION_STATUS_FALSE,
+		Reason: "TestReason",
 	}
 
 	result, err := actor.Run(context.Background(), resource, condition)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.Equal(t, apipb.CONDITION_STATUS_FALSE, result.Status)
-	assert.Equal(t, "ValidationFailed", result.Reason)
-	assert.Equal(t, "Triton configuration is invalid", result.Message)
-	assert.Equal(t, "TritonValidation", result.Type)
+	// Run returns the same condition unchanged
+	assert.Equal(t, condition, result)
 }

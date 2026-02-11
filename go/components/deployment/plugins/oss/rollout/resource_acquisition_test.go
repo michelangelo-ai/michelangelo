@@ -10,12 +10,18 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
 	"github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 func TestResourceAcquisitionRetrieve(t *testing.T) {
+	testCluster := &gateways.TargetClusterConnection{
+		ClusterId: "test-cluster",
+		Host:      "host1",
+	}
+
 	tests := []struct {
 		name                    string
 		deployment              *v2pb.Deployment
@@ -34,7 +40,14 @@ func TestResourceAcquisitionRetrieve(t *testing.T) {
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
+				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
+					Return(&gateways.DeploymentTargetInfo{
+						BackendType:    v2pb.BACKEND_TYPE_TRITON,
+						ClusterTargets: []*gateways.TargetClusterConnection{testCluster},
+					}, nil)
+				gw.EXPECT().InferenceServerIsHealthy(
+					gomock.Any(), gomock.Any(), "test-server", "default", testCluster, v2pb.BACKEND_TYPE_TRITON,
+				).Return(true, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
 			expectedConditionReason: "",
@@ -47,11 +60,26 @@ func TestResourceAcquisitionRetrieve(t *testing.T) {
 					Target: nil,
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				// No mock setup needed - early return
-			},
+			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "No inference server specified for deployment",
+		},
+		{
+			name: "GetDeploymentTargetInfo fails",
+			deployment: &v2pb.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				Spec: v2pb.DeploymentSpec{
+					Target: &v2pb.DeploymentSpec_InferenceServer{
+						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+					},
+				},
+			},
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
+					Return(nil, errors.New("not found"))
+			},
+			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
+			expectedConditionReason: "Failed to get deployment target info: not found",
 		},
 		{
 			name: "inference server is not healthy",
@@ -64,7 +92,14 @@ func TestResourceAcquisitionRetrieve(t *testing.T) {
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
+				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
+					Return(&gateways.DeploymentTargetInfo{
+						BackendType:    v2pb.BACKEND_TYPE_TRITON,
+						ClusterTargets: []*gateways.TargetClusterConnection{testCluster},
+					}, nil)
+				gw.EXPECT().InferenceServerIsHealthy(
+					gomock.Any(), gomock.Any(), "test-server", "default", testCluster, v2pb.BACKEND_TYPE_TRITON,
+				).Return(false, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Inference server is not healthy",
@@ -80,7 +115,14 @@ func TestResourceAcquisitionRetrieve(t *testing.T) {
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, errors.New("connection error"))
+				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
+					Return(&gateways.DeploymentTargetInfo{
+						BackendType:    v2pb.BACKEND_TYPE_TRITON,
+						ClusterTargets: []*gateways.TargetClusterConnection{testCluster},
+					}, nil)
+				gw.EXPECT().InferenceServerIsHealthy(
+					gomock.Any(), gomock.Any(), "test-server", "default", testCluster, v2pb.BACKEND_TYPE_TRITON,
+				).Return(false, errors.New("connection error"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Failed to check health of inference server: connection error",

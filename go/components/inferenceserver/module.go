@@ -7,13 +7,17 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/endpointregistry"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins"
 )
 
 // Module provides the inference server controller with all dependencies
 var Module = fx.Options(
+	clientfactory.Module,
+	endpointregistry.Module,
 	configmap.Module,
 	gateways.Module,
 	fx.Provide(newEventRecorder),

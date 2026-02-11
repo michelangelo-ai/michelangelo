@@ -36,18 +36,18 @@ func (m *MockProxyProvider) EXPECT() *MockProxyProviderMockRecorder {
 }
 
 // CheckDeploymentRouteStatus mocks base method.
-func (m *MockProxyProvider) CheckDeploymentRouteStatus(ctx context.Context, logger *zap.Logger, deploymentName, namespace, inferenceServerName, modelName string) (bool, error) {
+func (m *MockProxyProvider) CheckDeploymentRouteStatus(ctx context.Context, logger *zap.Logger, deploymentName, namespace, inferenceServerName, modelName, backendServiceName string) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CheckDeploymentRouteStatus", ctx, logger, deploymentName, namespace, inferenceServerName, modelName)
+	ret := m.ctrl.Call(m, "CheckDeploymentRouteStatus", ctx, logger, deploymentName, namespace, inferenceServerName, modelName, backendServiceName)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CheckDeploymentRouteStatus indicates an expected call of CheckDeploymentRouteStatus.
-func (mr *MockProxyProviderMockRecorder) CheckDeploymentRouteStatus(ctx, logger, deploymentName, namespace, inferenceServerName, modelName interface{}) *gomock.Call {
+func (mr *MockProxyProviderMockRecorder) CheckDeploymentRouteStatus(ctx, logger, deploymentName, namespace, inferenceServerName, modelName, backendServiceName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckDeploymentRouteStatus", reflect.TypeOf((*MockProxyProvider)(nil).CheckDeploymentRouteStatus), ctx, logger, deploymentName, namespace, inferenceServerName, modelName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckDeploymentRouteStatus", reflect.TypeOf((*MockProxyProvider)(nil).CheckDeploymentRouteStatus), ctx, logger, deploymentName, namespace, inferenceServerName, modelName, backendServiceName)
 }
 
 // DeleteDeploymentRoute mocks base method.
@@ -80,15 +80,15 @@ func (mr *MockProxyProviderMockRecorder) DeploymentRouteExists(ctx, logger, depl
 }
 
 // EnsureDeploymentRoute mocks base method.
-func (m *MockProxyProvider) EnsureDeploymentRoute(ctx context.Context, logger *zap.Logger, deploymentName, namespace, inferenceServerName, modelName string) error {
+func (m *MockProxyProvider) EnsureDeploymentRoute(ctx context.Context, logger *zap.Logger, deploymentName, namespace, inferenceServerName, modelName, backendServiceName string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnsureDeploymentRoute", ctx, logger, deploymentName, namespace, inferenceServerName, modelName)
+	ret := m.ctrl.Call(m, "EnsureDeploymentRoute", ctx, logger, deploymentName, namespace, inferenceServerName, modelName, backendServiceName)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // EnsureDeploymentRoute indicates an expected call of EnsureDeploymentRoute.
-func (mr *MockProxyProviderMockRecorder) EnsureDeploymentRoute(ctx, logger, deploymentName, namespace, inferenceServerName, modelName interface{}) *gomock.Call {
+func (mr *MockProxyProviderMockRecorder) EnsureDeploymentRoute(ctx, logger, deploymentName, namespace, inferenceServerName, modelName, backendServiceName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureDeploymentRoute", reflect.TypeOf((*MockProxyProvider)(nil).EnsureDeploymentRoute), ctx, logger, deploymentName, namespace, inferenceServerName, modelName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureDeploymentRoute", reflect.TypeOf((*MockProxyProvider)(nil).EnsureDeploymentRoute), ctx, logger, deploymentName, namespace, inferenceServerName, modelName, backendServiceName)
 }
