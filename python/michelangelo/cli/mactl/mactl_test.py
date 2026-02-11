@@ -401,50 +401,6 @@ class ReadModuleFromFileTest(TestCase):
             self.assertIsNone(result)
 
 
-class ReadMinioConfigTest(TestCase):
-    """Tests for read_minio_config function."""
-
-    @patch.object(mactl, "CONFIG_FILE", Path("/nonexistent/config.yaml"))
-    def test_config_file_not_exists(self):
-        """Test when config file doesn't exist."""
-        mactl.read_minio_config()  # Should not raise
-
-    @patch.object(mactl, "CONFIG_FILE")
-    @patch("michelangelo.cli.mactl.mactl.open")
-    @patch("michelangelo.cli.mactl.mactl.yaml_safe_load")
-    @patch("michelangelo.cli.mactl.mactl.getenv", return_value=None)
-    @patch.dict(os.environ, {}, clear=True)
-    def test_sets_env_vars(self, _, mock_yaml, __, mock_config):
-        """Test setting env vars from config."""
-        mock_config.exists.return_value = True
-        mock_yaml.return_value = {
-            "minio": {
-                "access_key_id": "key123",
-                "secret_access_key": "secret456",
-                "endpoint_url": "http://localhost:9000",
-            }
-        }
-
-        mactl.read_minio_config()
-
-        self.assertEqual(os.environ["AWS_ACCESS_KEY_ID"], "key123")
-        self.assertEqual(os.environ["AWS_SECRET_ACCESS_KEY"], "secret456")
-        self.assertEqual(os.environ["AWS_ENDPOINT_URL"], "http://localhost:9000")
-
-    @patch.object(mactl, "CONFIG_FILE")
-    @patch("michelangelo.cli.mactl.mactl.open")
-    @patch("michelangelo.cli.mactl.mactl.yaml_safe_load")
-    @patch.dict(os.environ, {"AWS_ACCESS_KEY_ID": "existing"}, clear=True)
-    def test_preserves_existing_env(self, mock_yaml, _, mock_config):
-        """Test not overwriting existing env vars."""
-        mock_config.exists.return_value = True
-        mock_yaml.return_value = {"minio": {"access_key_id": "new_key"}}
-
-        mactl.read_minio_config()
-
-        self.assertEqual(os.environ["AWS_ACCESS_KEY_ID"], "existing")
-
-
 class DiscoverCrdsTest(TestCase):
     """Tests for discover_crds function."""
 
@@ -625,7 +581,7 @@ class MainFunctionTest(TestCase):
           replaced with proper integration tests that verify actual behavior.
     """
 
-    @patch("michelangelo.cli.mactl.mactl.read_minio_config")
+    @patch("michelangelo.cli.mactl.mactl.setup_minio_env")
     @patch("michelangelo.cli.mactl.mactl.discover_crds")
     @patch("michelangelo.cli.mactl.mactl.pre_parse_args")
     @patch("michelangelo.cli.mactl.mactl.read_plugins")
@@ -644,7 +600,7 @@ class MainFunctionTest(TestCase):
         mock_read_plugins,
         mock_pre_parse_args,
         mock_discover_crds,
-        mock_read_minio_config,
+        mock_setup_minio_env,
     ):
         """Test basic execution flow of main() function."""
         # Setup mock channel
@@ -673,7 +629,7 @@ class MainFunctionTest(TestCase):
         mactl.main(mock_channel)
 
         # Verify Phase 1: Load config and discover CRDs
-        mock_read_minio_config.assert_called_once()
+        mock_setup_minio_env.assert_called_once()
         mock_discover_crds.assert_called_once_with(mock_channel)
 
         # Verify Phase 2: Pre-parse arguments
