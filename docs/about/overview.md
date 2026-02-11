@@ -211,16 +211,16 @@ A: Start small:
 
 **Q: Where does my training data come from?**
 A: Multiple sources:
-- Upload CSV/Parquet files directly via UI
+- Upload CSV/Parquet files directly to the plugged-in storage
 - Connect to data warehouses (Snowflake, BigQuery, Redshift)
 - Use Spark/Ray for large-scale data processing
 - Reference existing datasets in Michelangelo's data catalog
 
 **Q: Can I use feature stores with Michelangelo?**
-A: Yes, Michelangelo integrates with feature stores or you can manage features within the platform using the data prep pipelines.
+A: Yes, Michelangelo integrates with feature stores or you can manage features within the platform using the data prep pipelines and inference.
 
 **Q: What data formats are supported?**
-A: Parquet (recommended), CSV, JSON, Avro. For custom formats, use Uniflow tasks to handle data loading.
+A: Parquet (recommended, provided by default), CSV, JSON, Avro. For custom formats, use Uniflow tasks to handle data loading.
 
 ### Training & Deployment
 
@@ -244,7 +244,7 @@ A: Yes. Deploy multiple model versions to the same endpoint with traffic splitti
 A: Uniflow automatically:
 - Retries transient failures (network issues, spot instance preemption)
 - Preserves logs and intermediate outputs for debugging
-- Sends notifications (email, Slack) on terminal failures
+- Sends notifications (email, Slack) on terminal state
 
 ### Monitoring & Operations
 
@@ -258,7 +258,7 @@ A: Michelangelo provides:
 **Q: Can I roll back a model deployment?**
 A: Yes, instantly. Every deployment is versioned. Click "Rollback" in the UI or use the CLI:
 ```bash
-ma deploy rollback --endpoint my-model --to-version 3
+ma deployment -f <deployment spec contains the desired model revision>
 ```
 
 **Q: How do I debug predictions?**
