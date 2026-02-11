@@ -16,10 +16,11 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-// createValidationTestRegistry creates a registry with the mock backend registered for Triton.
+// createValidationTestRegistry creates a registry with the mock backend registered for supported types.
 func createValidationTestRegistry(mockBackend *backendsmocks.MockBackend) *backends.Registry {
 	registry := backends.NewRegistry()
 	registry.Register(v2pb.BACKEND_TYPE_TRITON, mockBackend)
+	registry.Register(v2pb.BACKEND_TYPE_DYNAMO, mockBackend)
 	return registry
 }
 
@@ -35,6 +36,14 @@ func TestValidationActor_Retrieve(t *testing.T) {
 		{
 			name:            "valid triton backend type",
 			backendType:     v2pb.BACKEND_TYPE_TRITON,
+			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
+			expectedReason:  "",
+			expectedMessage: "",
+			expectedErr:     false,
+		},
+		{
+			name:            "valid dynamo backend type",
+			backendType:     v2pb.BACKEND_TYPE_DYNAMO,
 			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
 			expectedReason:  "",
 			expectedMessage: "",

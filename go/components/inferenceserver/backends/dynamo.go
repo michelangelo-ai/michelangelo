@@ -303,15 +303,22 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 						"extraPodSpec": map[string]interface{}{
 							"mainContainer": map[string]interface{}{
 								"image": defaultDynamoVLLMImage,
-								"args": []interface{}{
+								// Use command (not args) to avoid /bin/sh -c wrapper issues
+								"command": []interface{}{
 									"python3",
 									"-m",
 									"dynamo.frontend",
 									"--http-port=8000",
 								},
+								// Required for GKE GPU nodes - sets CUDA library paths
+								"env": []interface{}{
+									map[string]interface{}{
+										"name":  "LD_LIBRARY_PATH",
+										"value": "/usr/local/nvidia/lib64:/usr/local/cuda/lib64",
+									},
+								},
 							},
 							// Allow scheduling on GPU-tainted nodes
-							// todo: ghosharitra: this is temporary and should be removed.
 							"tolerations": []interface{}{
 								map[string]interface{}{
 									"key":      "nvidia.com/gpu",
@@ -339,16 +346,40 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 						"extraPodSpec": map[string]interface{}{
 							"mainContainer": map[string]interface{}{
 								"image": defaultDynamoVLLMImage,
-								"args": []interface{}{
+								// Use command (not args) to avoid /bin/sh -c wrapper issues
+								"command": []interface{}{
 									"python3",
 									"-m",
 									"dynamo.vllm",
 									fmt.Sprintf("--model=%s", modelName),
 									"--kv-events-config={\"enable_kv_cache_events\": false}",
 								},
+								// Required for GKE GPU nodes - sets CUDA library paths and GPU visibility
+								"env": []interface{}{
+									map[string]interface{}{
+										"name":  "LD_LIBRARY_PATH",
+										"value": "/usr/local/nvidia/lib64:/usr/local/cuda/lib64",
+									},
+									map[string]interface{}{
+										"name":  "NVIDIA_VISIBLE_DEVICES",
+										"value": "all",
+									},
+									map[string]interface{}{
+										"name":  "NVIDIA_DRIVER_CAPABILITIES",
+										"value": "compute,utility",
+									},
+								},
+								// GPU resource for the container (required for nvidia driver injection)
+								"resources": map[string]interface{}{
+									"limits": map[string]interface{}{
+										"nvidia.com/gpu": fmt.Sprintf("%d", gpuCount),
+									},
+									"requests": map[string]interface{}{
+										"nvidia.com/gpu": fmt.Sprintf("%d", gpuCount),
+									},
+								},
 							},
 							// Allow scheduling on GPU-tainted nodes
-							// todo: ghosharitra: this is temporary and should be removed.
 							"tolerations": []interface{}{
 								map[string]interface{}{
 									"key":      "nvidia.com/gpu",

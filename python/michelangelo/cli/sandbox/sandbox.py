@@ -1010,17 +1010,89 @@ def _delete_gke_resources():
     context_args = ["--context", _gke_context]
 
     # Delete Dynamo-related CRs first (before uninstalling helm charts)
+    # Use timeout to prevent hanging on finalizers
     print("Cleaning up Dynamo resources...")
-    subprocess.run(
-        ["kubectl", *context_args, "delete", "inferenceserver.michelangelo.api", "--all", "-n", "default"],
-        check=False,
-        capture_output=True,
+
+    # Helper to delete with timeout and finalizer removal fallback
+    def _delete_with_timeout(args: list, timeout: int = 10):
+        try:
+            subprocess.run(args, check=False, capture_output=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            pass  # Continue even if timed out
+
+    def _remove_finalizers_and_delete(resource_type: str, namespace: str = None):
+        """Remove finalizers from resources then delete them."""
+        ns_args = ["-n", namespace] if namespace else ["-A"]
+        # Get all resources of this type
+        result = subprocess.run(
+            ["kubectl", *context_args, "get", resource_type, *ns_args, "-o", "jsonpath={range .items[*]}{.metadata.name}{' '}{.metadata.namespace}{'\\n'}{end}"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            for line in result.stdout.strip().split("\n"):
+                parts = line.split()
+                if len(parts) >= 1:
+                    name = parts[0]
+                    ns = parts[1] if len(parts) > 1 else namespace or "default"
+                    # Patch to remove finalizers
+                    subprocess.run(
+                        ["kubectl", *context_args, "patch", resource_type, name, "-n", ns,
+                         "--type=merge", "-p", '{"metadata":{"finalizers":null}}'],
+                        check=False,
+                        capture_output=True,
+                        timeout=10,
+                    )
+                    # Delete the resource
+                    subprocess.run(
+                        ["kubectl", *context_args, "delete", resource_type, name, "-n", ns,
+                         "--force", "--grace-period=0"],
+                        check=False,
+                        capture_output=True,
+                        timeout=10,
+                    )
+
+    # Try normal delete first with timeout, then remove finalizers if needed
+    try:
+        _delete_with_timeout(
+            ["kubectl", *context_args, "delete", "inferenceserver.michelangelo.api", "--all", "-n", "default", "--force", "--grace-period=0"]
+        )
+    except Exception:
+        pass
+    _remove_finalizers_and_delete("inferenceserver.michelangelo.api", "default")
+
+    try:
+        _delete_with_timeout(
+            ["kubectl", *context_args, "delete", "dynamographdeployment", "--all", "-A", "--force", "--grace-period=0"]
+        )
+    except Exception:
+        pass
+    _remove_finalizers_and_delete("dynamographdeployment")
+
+    # Delete Dynamo-created deployments directly (in case operator is already gone)
+    _delete_with_timeout(
+        ["kubectl", *context_args, "delete", "deployment", "-n", "default", "-l", "app.kubernetes.io/created-by=dynamo-controller", "--force", "--grace-period=0"]
     )
-    subprocess.run(
-        ["kubectl", *context_args, "delete", "dynamographdeployment", "--all", "-A"],
-        check=False,
-        capture_output=True,
-    )
+
+    # Also delete by name pattern for any orphaned dynamo deployments
+    try:
+        result = subprocess.run(
+            ["kubectl", *context_args, "get", "deployment", "-n", "default", "-o", "name"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0:
+            for line in result.stdout.strip().split("\n"):
+                if "dynamo-" in line:
+                    _delete_with_timeout(
+                        ["kubectl", *context_args, "delete", line, "-n", "default", "--force", "--grace-period=0"]
+                    )
+    except subprocess.TimeoutExpired:
+        pass
 
     # Delete any blocking CRD instances first (like RayClusters)
     print("Cleaning up RayCluster instances...")
@@ -1049,9 +1121,22 @@ def _delete_gke_resources():
             capture_output=True,
         )
 
+    # Delete Gateway CR first (triggers Istio to clean up ma-gateway-istio deployment)
+    print("Cleaning up Istio Gateway...")
+    subprocess.run(
+        ["kubectl", *context_args, "delete", "gateway.gateway.networking.k8s.io", "ma-gateway", "-n", "default", "--ignore-not-found"],
+        check=False,
+        capture_output=True,
+    )
+
     # Delete deployments
     subprocess.run(
         ["kubectl", *context_args, "delete", "deployment", "michelangelo-ui", "--ignore-not-found"],
+        check=False,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["kubectl", *context_args, "delete", "deployment", "ma-gateway-istio", "-n", "default", "--ignore-not-found"],
         check=False,
         capture_output=True,
     )
@@ -1068,6 +1153,7 @@ def _delete_gke_resources():
         "minio",
         "prometheus",
         "grafana",
+        "ma-gateway-istio",
     ]
     for svc in services_to_delete:
         subprocess.run(
@@ -1136,13 +1222,45 @@ def _delete_gke_resources():
         capture_output=True,
     )
 
-    # Delete dynamo-system namespace
+    # Delete dynamo-system namespace (force delete to avoid hanging)
     print("Cleaning up dynamo-system namespace...")
     subprocess.run(
-        ["kubectl", *context_args, "delete", "namespace", "dynamo-system", "--ignore-not-found"],
+        ["kubectl", *context_args, "delete", "namespace", "dynamo-system", "--ignore-not-found", "--force", "--grace-period=0"],
         check=False,
         capture_output=True,
     )
+
+    # Clean up any orphaned Dynamo services in default namespace
+    result = subprocess.run(
+        ["kubectl", *context_args, "get", "svc", "-n", "default", "-o", "name"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        for line in result.stdout.strip().split("\n"):
+            if "dynamo-" in line:
+                subprocess.run(
+                    ["kubectl", *context_args, "delete", line, "-n", "default", "--force", "--grace-period=0"],
+                    check=False,
+                    capture_output=True,
+                )
+
+    # Clean up any orphaned Dynamo replicasets in default namespace
+    result = subprocess.run(
+        ["kubectl", *context_args, "get", "replicaset", "-n", "default", "-o", "name"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        for line in result.stdout.strip().split("\n"):
+            if "dynamo-" in line:
+                subprocess.run(
+                    ["kubectl", *context_args, "delete", line, "-n", "default", "--force", "--grace-period=0"],
+                    check=False,
+                    capture_output=True,
+                )
 
     print("GKE sandbox resources deleted.")
 
@@ -1928,8 +2046,8 @@ def _install_dynamo_platform():
     # Install Dynamo platform if not already installed
     if not dynamo_platform_installed:
         print(f"  Installing Dynamo platform (v{dynamo_version})...")
-        # Add GPU toleration so operator can run on GPU nodes if needed
-        # todo: ghosharitra: this should be solved by the remote cluster scenario. Review later.
+        # Add GPU toleration so all components can run on GPU nodes if needed
+        # This is needed when the only available nodes have GPU taints
         _exec(
             "helm",
             "install",
@@ -1939,12 +2057,27 @@ def _install_dynamo_platform():
             dynamo_version,
             "--namespace",
             dynamo_namespace,
+            # Operator controller manager tolerations
             "--set",
-            "operator.tolerations[0].key=nvidia.com/gpu",
+            "operator.controllerManager.tolerations[0].key=nvidia.com/gpu",
             "--set",
-            "operator.tolerations[0].operator=Exists",
+            "operator.controllerManager.tolerations[0].operator=Exists",
             "--set",
-            "operator.tolerations[0].effect=NoSchedule",
+            "operator.controllerManager.tolerations[0].effect=NoSchedule",
+            # Etcd tolerations
+            "--set",
+            "etcd.tolerations[0].key=nvidia.com/gpu",
+            "--set",
+            "etcd.tolerations[0].operator=Exists",
+            "--set",
+            "etcd.tolerations[0].effect=NoSchedule",
+            # NATS tolerations (under nats.podTemplate.merge.spec for the nats-io chart)
+            "--set",
+            "nats.podTemplate.merge.spec.tolerations[0].key=nvidia.com/gpu",
+            "--set",
+            "nats.podTemplate.merge.spec.tolerations[0].operator=Exists",
+            "--set",
+            "nats.podTemplate.merge.spec.tolerations[0].effect=NoSchedule",
             "--wait",
             "--timeout",
             "10m",
@@ -1962,7 +2095,7 @@ def _install_dynamo_platform():
             *context_args,
             "rollout",
             "status",
-            "deployment/dynamo-operator",
+            "deployment/dynamo-platform-dynamo-operator-controller-manager",
             "-n",
             dynamo_namespace,
             "--timeout=120s",
