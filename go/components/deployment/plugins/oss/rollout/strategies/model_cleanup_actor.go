@@ -56,7 +56,7 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deploym
 		zap.String("inference_server", inferenceServerName))
 
 	// Check if old model still exists in Triton
-	ready, err := a.Gateway.CheckModelStatus(ctx, a.Logger, a.Client, a.HTTPClient, currentModel, inferenceServerName, resource.Namespace, v2pb.BACKEND_TYPE_TRITON)
+	ready, err := a.Gateway.CheckModelStatus(ctx, a.Logger, a.Client, a.HTTPClient, currentModel, inferenceServerName, resource.Namespace, v2pb.BACKEND_TYPE_DYNAMO)
 	if err != nil {
 		a.Logger.Info("Cannot verify old model status, cleanup may be needed", zap.Error(err))
 		return conditionUtils.GenerateFalseCondition(condition, "CleanupPending", fmt.Sprintf("Need to cleanup old model %s", currentModel)), nil

@@ -216,7 +216,7 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 		return deployment.Status, nil
 	}
 	serverName := inferenceServer.GetName()
-	healthy, err := p.gateway.CheckModelStatus(ctx, p.logger, p.client, p.httpClient, deployment.Spec.DesiredRevision.Name, serverName, deployment.Namespace, v2pb.BACKEND_TYPE_TRITON)
+	healthy, err := p.gateway.CheckModelStatus(ctx, p.logger, p.client, p.httpClient, deployment.Spec.DesiredRevision.Name, serverName, deployment.Namespace, v2pb.BACKEND_TYPE_DYNAMO)
 	if err != nil {
 		p.logger.Error("failed to check model status",
 			zap.Error(err),
@@ -258,7 +258,7 @@ func (p *Plugin) HealthCheckGate(ctx context.Context, observability plugins.Obse
 		return false, nil
 	}
 	// Check if the inference server is healthy
-	healthy, err := p.gateway.InferenceServerIsHealthy(ctx, p.logger, p.client, deployment.Spec.GetInferenceServer().Name, deployment.Namespace, v2pb.BACKEND_TYPE_TRITON)
+	healthy, err := p.gateway.InferenceServerIsHealthy(ctx, p.logger, p.client, deployment.Spec.GetInferenceServer().Name, deployment.Namespace, v2pb.BACKEND_TYPE_DYNAMO)
 	if err != nil {
 		p.logger.Error("failed to check health of inference server",
 			zap.Error(err),

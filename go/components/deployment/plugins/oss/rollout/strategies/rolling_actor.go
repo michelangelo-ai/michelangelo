@@ -172,7 +172,7 @@ func (a *RollingRolloutActor) checkModelStatusWithTimeout(ctx context.Context, l
 	defer ticker.Stop()
 
 	// Try immediately first
-	modelReady, err := a.gateway.CheckModelStatus(timeoutCtx, logger, a.client, a.HTTPClient, modelName, inferenceServerName, namespace, v2pb.BACKEND_TYPE_TRITON)
+	modelReady, err := a.gateway.CheckModelStatus(timeoutCtx, logger, a.client, a.HTTPClient, modelName, inferenceServerName, namespace, v2pb.BACKEND_TYPE_DYNAMO)
 	if err == nil && modelReady {
 		logger.Info("Model health check succeeded immediately", zap.String("model", modelName))
 		return true, nil
@@ -197,7 +197,7 @@ func (a *RollingRolloutActor) checkModelStatusWithTimeout(ctx context.Context, l
 		case <-ticker.C:
 			logger.Info("Retrying model health check", zap.String("model", modelName))
 
-			modelReady, err := a.gateway.CheckModelStatus(timeoutCtx, logger, a.client, a.HTTPClient, modelName, inferenceServerName, namespace, v2pb.BACKEND_TYPE_TRITON)
+			modelReady, err := a.gateway.CheckModelStatus(timeoutCtx, logger, a.client, a.HTTPClient, modelName, inferenceServerName, namespace, v2pb.BACKEND_TYPE_DYNAMO)
 			if err == nil && modelReady {
 				logger.Info("Model health check succeeded after retry", zap.String("model", modelName))
 				return true, nil
