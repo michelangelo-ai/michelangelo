@@ -33,7 +33,7 @@ These are the frameworks, interfaces, and compute engines provided by Michelange
 
 #### MA Studio (No Code UI)
 
-**MA Studio** is Michelangelo's UI environment. The standard, code-free ML development experience guides users through the different phases of the ML development lifecycle. Uber's internal term for the UI is MA Studio (you may see it appear on this site in screenshots of the UI). This environment provides all the essential tools which allow ML developers to build, train, deploy, monitor, and debug your machine learning models in a single unified visual interface to boost your productivity. **_(Currently, Preparing and Training models are available for open source users. More features will be made available soon.)_**
+**MA Studio** is Michelangelo's UI environment. The standard, code-free ML development experience guides users through the different phases of the ML development lifecycle. This environment provides all the essential tools which allow ML developers to build, train, deploy, monitor, and debug your machine learning models in a single unified visual interface to boost your productivity. **_(Currently, Preparing and Training models are available for open source users. More features will be made available soon.)_**
 
 Users can use the no-code dev environment to perform standardized ML tasks without writing a single line of code, including:
 * Prepare data sources for training models or making batch predictions
@@ -102,7 +102,7 @@ These are hardware resources (CPU, GPU, memory, storage, etc) for running Machin
 
 #### Inference Server
 
-Inference Server is synonymous with the Online Prediction Service, and is essentially the host for use-cases that require online prediction.
+Inference Server is synonymous with the Online Inference Service, and is essentially the host for use-cases that require online inference.
 
 ## ML Concepts
 These are the logical entities, data structures, and artifacts that define your machine learning use case.
@@ -346,14 +346,14 @@ Project (e.g., "Fraud Detection")
 ### Training Your First Model
 
 1. **Create a Project** for your use case (e.g., "Customer Churn Prediction")
-2. **Register your Dataset** in Michelangelo (upload CSV or connect to data warehouse)
+2. **Register your Dataset** in Michelangelo (connect to data warehouse)
 3. **Define a Workflow** with training tasks (or use MA Studio UI for no-code approach)
 4. **Run the workflow** and track results in Model Registry
 5. **Create a Deployment** to serve predictions via an Endpoint
 
 **MA Studio (UI) Path**:
 ```
-Navigate to MA Studio → Create Project → Upload Dataset →
+Navigate to MA Studio → Create Project → Connect Dataset →
 Train Model (select XGBoost) → Evaluate → Deploy
 ```
 
@@ -372,6 +372,13 @@ def training_pipeline(dataset_id: str):
 ```
 
 ### Retraining an Existing Model
+
+1. **Update Dataset** with new data (or existing dataset)
+2. **Run Workflow** with training workflow
+3. **New Revision** created automatically with revision 0
+4. **Update Deployment** to new model (instant rollback available if needed)
+
+### Incremental Training an Existing Model
 
 1. **Reference existing Model** by name from your Project
 2. **Update Dataset** with new data (or create new dataset version)
@@ -396,7 +403,7 @@ def training_pipeline(dataset_id: str):
 - Leverage caching and checkpointing to reduce compute costs
 - Externalize large datasets via Ref to avoid memory bottlenecks
 - Use consistent paths and metadata for reproducibility
-- Start with MA Studio UI for quick experiments, migrate to Uniflow for production pipelines
+- Start with MA Studio UI for quick experiments, extend features with Uniflow for the custom needs
 - Use Model Families to organize related models solving one business problem
 - Always test deployments in sandbox before production
 

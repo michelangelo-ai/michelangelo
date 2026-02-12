@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Overview
 
-Michelangelo ("MA") is Uber's machine learning platform.
+Michelangelo ("MA") is an End to End Model Lifecycle Management Platform.
 
 ## Why Michelangelo?
 
@@ -13,11 +13,11 @@ If you're an ML practitioner familiar with training models, managing experiments
 ### End-to-End ML Lifecycle Management
 - **One platform** for data preparation, training, deployment, and monitoring - no need to stitch together multiple tools
 - **Automatic versioning** for datasets, models, and experiments - reproducibility built in by default
-- **Production-grade infrastructure** - benefit from Uber's scale-tested ML infrastructure without DevOps overhead
+- **Production-grade infrastructure** - benefit from Uber's scale-tested ML infrastructure without MLOps overhead
 
 ### Flexible Development Options
 - **No-code UI** for rapid prototyping and standard workflows - perfect for quick experiments and business analysts
-- **Code-driven workflows** for custom ML pipelines - full control when you need it with Canvas and Uniflow
+- **Code-driven workflows** for custom ML pipelines - full control when you need it with predefined YAML based workflow(Canvas) and python DAG based workflow(Uniflow)
 - **Seamless transition** between UI and code - start in the UI, extend with code as needs grow
 
 ### Built for Collaboration
@@ -46,11 +46,11 @@ If you're coming from other ML platforms, here's how familiar concepts map to Mi
 | **Data Preparation** | Pandas, Spark notebooks | **MA Studio Data Prep** or **Uniflow tasks** with Ray/Spark * |
 | **Experiment Tracking** | MLflow, Weights & Biases | **Model Registry** with automatic versioning |
 | **Model Training** | Custom scripts, Kubeflow Pipelines | **MA Studio Training** (UI) or **Canvas/Uniflow workflows** (code) |
-| **Hyperparameter Tuning** | Optuna, Ray Tune | **Uniflow tasks** with Ray * |
-| **Model Storage** | S3 buckets, model registries | **Michelangelo Model Registry** with metadata & lineage & plugin storage |
+| **Hyperparameter Tuning** | Optuna, Ray Tune | **Uniflow tasks** with Ray Tune * |
+| **Model Storage** | S3 buckets, model registries | **Michelangelo Model Registry** with metadata & plugin storage |
 | **Batch Inference** | Airflow + custom scripts | **Deployment to batch endpoint** with offline inference pipeline and Ray / Triton Inference * |
 | **Online Serving** | TorchServe, TensorFlow Serving | **Deployment to inference server** with Triton Inference Server * |
-| **Monitoring** | Prometheus + Grafana | **Model Excellence Scores** + built-in dashboard * |
+| **Monitoring** | Prometheus + Grafana | **Model Excellence Scores** + built-in monitoring * |
 | **Pipeline Orchestration** | Airflow, Prefect, Temporal | **Uniflow workflows** with Cadence/Temporal backend * |
 _* Can be replaced by the plugin system for custom integrations_
 
@@ -85,7 +85,7 @@ Pick the approach that matches your workflow and expertise:
 **Quick Start**:
 1. Install Michelangelo SDK: `pip install michelangelo`
 2. Define your workflow using Uniflow decorators (`@uniflow.task`, `@uniflow.workflow`)
-3. Test locally, then deploy to Michelangelo infrastructure
+3. Test locally, then dev-run to Michelangelo APIServer
 4. Monitor execution through the UI
 
 **Best for**: Custom architectures, multi-stage pipelines, A/B testing frameworks, feature engineering at scale
@@ -93,13 +93,13 @@ Pick the approach that matches your workflow and expertise:
 #### 🔄 Hybrid Approach
 Many teams start with the **UI for initial experiments**, then transition to **code for production workflows**. You can:
 - Train initial models in the UI to validate feasibility
-- Export configurations and rebuild in Canvas/Uniflow for production
-- Use the UI for monitoring while managing training/deployment via code
+- Committed YAML configurations by UI and extend in Canvas/rebuild in Uniflow
+- Use the UI for monitoring while managing training/deployment pipelines
 
 ## Machine Learning Tools
 
 ### Michelangelo User Interface (MA UI)
-The UI environment provides a standard, code-free ML development experience. It guides users through the different phases of the ML development lifecycle. Uber's internal term for the UI is MA Studio (you may see it appear on this site in screenshots of the UI). This environment provides all the essential tools which allow ML developers to build, train, deploy, monitor, and debug your machine learning models in a single unified visual interface to boost your productivity. 
+The UI environment provides a standard, code-free ML development experience. It guides users through the different phases of the ML development lifecycle. Uber's internal term for the UI is MA Studio (you may see it appear on this site in screenshots of the UI). This environment provides all the essential tools which allow ML developers to build, train, deploy, monitor, and debug their machine learning models in a single unified visual interface to boost their productivity. 
 
 **Currently, Preparing and Training models are available for open source users. More features will be made available soon.**
 
@@ -211,16 +211,16 @@ A: Start small:
 
 **Q: Where does my training data come from?**
 A: Multiple sources:
-- Upload CSV/Parquet files directly via UI
+- Upload CSV/Parquet files directly to the plugged-in storage
 - Connect to data warehouses (Snowflake, BigQuery, Redshift)
 - Use Spark/Ray for large-scale data processing
 - Reference existing datasets in Michelangelo's data catalog
 
 **Q: Can I use feature stores with Michelangelo?**
-A: Yes, Michelangelo integrates with feature stores or you can manage features within the platform using the data prep pipelines.
+A: Yes, Michelangelo integrates with feature stores or you can manage features within the platform using the data prep pipelines and inference.
 
 **Q: What data formats are supported?**
-A: Parquet (recommended), CSV, JSON, Avro. For custom formats, use Uniflow tasks to handle data loading.
+A: Parquet (recommended). CSV, JSON, Avro. For custom formats, use Uniflow tasks to handle data loading.
 
 ### Training & Deployment
 
@@ -244,7 +244,7 @@ A: Yes. Deploy multiple model versions to the same endpoint with traffic splitti
 A: Uniflow automatically:
 - Retries transient failures (network issues, spot instance preemption)
 - Preserves logs and intermediate outputs for debugging
-- Sends notifications (email, Slack) on terminal failures
+- Sends notifications (email, Slack) on terminal state
 
 ### Monitoring & Operations
 
@@ -258,7 +258,7 @@ A: Michelangelo provides:
 **Q: Can I roll back a model deployment?**
 A: Yes, instantly. Every deployment is versioned. Click "Rollback" in the UI or use the CLI:
 ```bash
-ma deploy rollback --endpoint my-model --to-version 3
+ma deployment -f <deployment spec contains the desired model revision>
 ```
 
 **Q: How do I debug predictions?**
