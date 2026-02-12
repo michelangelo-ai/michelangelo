@@ -68,10 +68,10 @@ func (h *httpRouteManager) CheckDeploymentRouteStatus(ctx context.Context, logge
 		return false, fmt.Errorf("HTTPRoute has no routing rules configured: %v", err)
 	}
 
-	// Verify the route matches the expected model and inference server configuration
-	expectedMatchPath := fmt.Sprintf("/%s/%s", inferenceServerName, deploymentName)
-	expectedRewritePath := fmt.Sprintf("/v2/models/%s", modelName)
-	expectedBackendService := addSuffixToString(inferenceServerName, inferenceServiceSuffix)
+	// Verify the route matches the expected deployment and OpenAI-compatible API configuration
+	expectedMatchPath := fmt.Sprintf("/%s", deploymentName)
+	expectedRewritePath := "/v1"
+	expectedBackendService := inferenceServerName
 
 	// Check if the route configuration matches expectations
 	for _, rule := range rules {
@@ -162,8 +162,9 @@ func (h *httpRouteManager) EnsureDeploymentRoute(ctx context.Context, logger *za
 		"michelangelo.ai/inference-server": inferenceServerName,
 	}
 
-	matchPath := fmt.Sprintf("/%s/%s", inferenceServerName, deploymentName)
-	rewritePath := fmt.Sprintf("/v2/models/%s", modelName)
+	// Match on deployment name prefix, rewrite to OpenAI-compatible /v1 path
+	matchPath := fmt.Sprintf("/%s", deploymentName)
+	rewritePath := "/v1"
 
 	httpRoute := buildHTTPRoute(
 		deploymentRouteName,
@@ -171,7 +172,7 @@ func (h *httpRouteManager) EnsureDeploymentRoute(ctx context.Context, logger *za
 		labels,
 		annotations,
 		matchPath,
-		addSuffixToString(inferenceServerName, inferenceServiceSuffix),
+		inferenceServerName,
 		nil,
 		rewritePath,
 	)

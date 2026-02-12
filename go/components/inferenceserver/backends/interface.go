@@ -33,6 +33,15 @@ type Backend interface {
 	// CheckModelStatus checks the status of a model on an inference server.
 	CheckModelStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, httpClient *http.Client, inferenceServerName string, namespace string, modelName string) (bool, error)
 
+	// LoadModel loads a LoRA adapter onto the inference server.
+	// For Dynamo backends, this creates a DynamoModel CR.
+	// modelName is the identifier used in inference requests, sourcePath is the model location (e.g., "s3://bucket/path", "hf://org/model").
+	LoadModel(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName string, namespace string, modelName string, sourcePath string) error
+	// UnloadModel removes a LoRA adapter from the inference server.
+	// For Dynamo backends, this deletes the DynamoModel CR.
+	UnloadModel(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName string, namespace string, modelName string) error
+	// GetFrontEndSvc returns the frontend service name for routing traffic.
+	GetFrontEndSvc(ctx context.Context, logger *zap.Logger, inferenceServerName string, namespace string) (string, error)
 	// GetFrontEndSvc ---> should return the service that we link to the deployment route.
 	// LoadModel/UnloadModel is also needed for direct loading/unloading of models.
 }

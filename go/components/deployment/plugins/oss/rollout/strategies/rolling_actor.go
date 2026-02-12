@@ -15,6 +15,7 @@ import (
 	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	strategiesCommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies/common"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -29,18 +30,21 @@ func getRollingActors(params Params) []conditionInterfaces.ConditionActor[*v2pb.
 			HTTPClient:          params.HTTPClient,
 			gateway:             params.Gateway,
 			modelConfigProvider: params.ModelConfigProvider,
+			backendRegistry:     params.BackendRegistry,
 			logger:              params.Logger,
 		},
 		&strategiesCommon.TrafficRoutingActor{
-			DynamicClient: params.DynamicClient,
-			RouteProvider: params.RouteProvider,
-			Logger:        params.Logger,
+			DynamicClient:   params.DynamicClient,
+			RouteProvider:   params.RouteProvider,
+			BackendRegistry: params.BackendRegistry,
+			Logger:          params.Logger,
 		},
 		&ModelCleanupActor{
 			Client:              params.Client,
 			HTTPClient:          params.HTTPClient,
 			Gateway:             params.Gateway,
 			ModelConfigProvider: params.ModelConfigProvider,
+			BackendRegistry:     params.BackendRegistry,
 			Logger:              params.Logger,
 		},
 	}
@@ -54,6 +58,7 @@ type RollingRolloutActor struct {
 	client              client.Client
 	HTTPClient          *http.Client
 	gateway             gateways.Gateway
+	backendRegistry     *backends.Registry
 	modelConfigProvider modelconfig.ModelConfigProvider
 	logger              *zap.Logger
 }
@@ -118,9 +123,14 @@ func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployme
 
 		var err error
 		// TODO(#696): ghosharitra: make the storage path configurable w.r.t storage client and storage location
-		if err = a.modelConfigProvider.AddModelToConfig(ctx, a.logger, a.client, inferenceServerName, deployment.Namespace, modelconfig.ModelConfigEntry{Name: modelName, StoragePath: fmt.Sprintf("s3://deploy-models/%s/", modelName)}); err != nil {
-			a.logger.Error("Failed to initiate model loading", zap.Error(err), zap.String("operation", "load_model"), zap.String("model", modelName), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", deployment.Namespace), zap.String("backendType", v2pb.BACKEND_TYPE_TRITON.String()))
-			return conditionUtils.GenerateFalseCondition(condition, "ModelLoadingFailed", fmt.Sprintf("Failed to update deployment: %v", err)), nil
+		dynamoBackend, err := a.backendRegistry.GetBackend(v2pb.BACKEND_TYPE_DYNAMO)
+		if err != nil {
+			a.logger.Error("Failed to get Dynamo backend", zap.Error(err))
+			return conditionUtils.GenerateFalseCondition(condition, "ModelLoadingFailed", fmt.Sprintf("Failed to get Dynamo backend: %v", err)), nil
+		}
+		if err = dynamoBackend.LoadModel(ctx, a.logger, a.client, inferenceServerName, deployment.Namespace, modelName, fmt.Sprintf("hf://myorg/%s", modelName)); err != nil {
+			a.logger.Error("Failed to load model", zap.Error(err))
+			return conditionUtils.GenerateFalseCondition(condition, "ModelLoadingFailed", fmt.Sprintf("Failed to load model: %v", err)), nil
 		}
 		rolloutstarted := &types.BoolValue{Value: true}
 		condition.Metadata, err = types.MarshalAny(rolloutstarted)

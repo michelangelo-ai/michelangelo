@@ -198,6 +198,18 @@ func (b *tritonBackend) CheckModelStatus(ctx context.Context, logger *zap.Logger
 	return ready, nil
 }
 
+func (b *tritonBackend) LoadModel(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName string, namespace string, modelName string, sourcePath string) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (b *tritonBackend) UnloadModel(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName string, namespace string, modelName string) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (b *tritonBackend) GetFrontEndSvc(ctx context.Context, logger *zap.Logger, inferenceServerName string, namespace string) (string, error) {
+	return generateK8sServiceName(inferenceServerName), nil
+}
+
 func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServer *v2pb.InferenceServer) error {
 	deploymentName := generateK8sDeploymentName(inferenceServer.Name)
 

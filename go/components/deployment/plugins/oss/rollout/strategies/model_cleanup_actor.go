@@ -11,6 +11,7 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -24,6 +25,7 @@ type ModelCleanupActor struct {
 	Client              client.Client
 	HTTPClient          *http.Client
 	Gateway             gateways.Gateway
+	BackendRegistry     *backends.Registry
 	ModelConfigProvider modelconfig.ModelConfigProvider
 	Logger              *zap.Logger
 }
@@ -83,7 +85,12 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 
 	// Unload old model from inference server
 	a.Logger.Info("Removing old model from model config", zap.String("old_model", currentModel))
-	if err := a.ModelConfigProvider.RemoveModelFromConfig(ctx, a.Logger, a.Client, inferenceServerName, resource.Namespace, currentModel); err != nil {
+	dynamoBackend, err := a.BackendRegistry.GetBackend(v2pb.BACKEND_TYPE_DYNAMO)
+	if err != nil {
+		a.Logger.Error("Failed to get Dynamo backend", zap.Error(err))
+		return conditionUtils.GenerateFalseCondition(condition, "ModelRemovalFailed", fmt.Sprintf("Failed to get Dynamo backend: %v", err)), nil
+	}
+	if err = dynamoBackend.UnloadModel(ctx, a.Logger, a.Client, inferenceServerName, resource.Namespace, currentModel); err != nil {
 		a.Logger.Error("Failed to remove old model from model config", zap.String("model", currentModel), zap.Error(err))
 		return conditionUtils.GenerateFalseCondition(condition, "ModelRemovalFailed", fmt.Sprintf("Failed to remove old model %s from model config: %v", currentModel, err)), nil
 	}

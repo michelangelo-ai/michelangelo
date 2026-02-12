@@ -20,6 +20,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/steadystate"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -36,6 +37,7 @@ var _ plugins.Plugin = &Plugin{}
 
 // Plugin implements deployment lifecycle management for open-source deployments.
 type Plugin struct {
+	backendRegistry     *backends.Registry
 	client              client.Client
 	httpClient          *http.Client
 	dynamicClient       dynamic.Interface
@@ -105,6 +107,7 @@ func (p *Plugin) GetRolloutPlugin(ctx context.Context, deployment *v2pb.Deployme
 		DynamicClient:       p.dynamicClient,
 		RouteProvider:       p.routeProvider,
 		Gateway:             p.gateway,
+		BackendRegistry:     p.backendRegistry,
 		ModelConfigProvider: p.modelConfigProvider,
 		Logger:              p.logger,
 	}, deployment)

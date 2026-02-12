@@ -2,11 +2,15 @@ package backends
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -23,9 +27,16 @@ const (
 	dynamoAPIVersion = "v1alpha1"
 	dynamoKind       = "DynamoGraphDeployment"
 
+	// DynamoModel CRD details
+	dynamoModelKind = "DynamoModel"
+
 	// Default Dynamo container images from NGC
 	defaultDynamoVLLMImage = "nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1"
 	// defaultDynamoSGLangImage = "nvcr.io/nvidia/ai-dynamo/sglang-runtime:0.8.1"
+
+	// Default base model - used for LoRA adapter loading
+	// TODO: Make this configurable via InferenceServer spec
+	defaultBaseModelName = "Qwen/Qwen3-0.6B"
 
 	// Labels
 	dynamoManagedByLabel = "app.kubernetes.io/managed-by"
@@ -37,6 +48,13 @@ var dynamoGVK = schema.GroupVersionKind{
 	Group:   dynamoAPIGroup,
 	Version: dynamoAPIVersion,
 	Kind:    dynamoKind,
+}
+
+// dynamoModelGVK is the GroupVersionKind for DynamoModel
+var dynamoModelGVK = schema.GroupVersionKind{
+	Group:   dynamoAPIGroup,
+	Version: dynamoAPIVersion,
+	Kind:    dynamoModelKind,
 }
 
 // dynamoBackend implements the Backend interface for NVIDIA Dynamo.
@@ -207,40 +225,62 @@ func (b *dynamoBackend) IsHealthy(ctx context.Context, logger *zap.Logger, kubeC
 // CheckModelStatus checks if a model is available on the Dynamo inference server.
 // Dynamo uses OpenAI-compatible APIs, so we check /v1/models endpoint.
 func (b *dynamoBackend) CheckModelStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, httpClient *http.Client, inferenceServerName string, namespace string, modelName string) (bool, error) {
-	logger.Info("Checking Dynamo model status",
+	logger.Info("Checking Dynamo model status via headless service",
 		zap.String("model", modelName),
 		zap.String("server", inferenceServerName))
 
-	// Dynamo uses OpenAI-compatible API at /v1/models
-	endpoint := b.generateDynamoEndpoint(inferenceServerName, namespace)
-	serviceURL := fmt.Sprintf("%s/v1/models", endpoint)
+	// Compute the headless service name from the base model name
+	// Service name format: dynamo-model-{sha256(baseModelName)[:8]}
+	serviceName := generateDynamoModelServiceName(defaultBaseModelName)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", serviceURL, nil)
+	// Get the Endpoints resource for this service (same name as service)
+	endpoints := &corev1.Endpoints{}
+	err := kubeClient.Get(ctx, client.ObjectKey{Name: serviceName, Namespace: namespace}, endpoints)
 	if err != nil {
-		return false, fmt.Errorf("failed to create request for Dynamo models endpoint: %w", err)
+		if errors.IsNotFound(err) {
+			logger.Debug("Dynamo model endpoints not found",
+				zap.String("serviceName", serviceName))
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to get endpoints %s: %w", serviceName, err)
 	}
 
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		logger.Debug("failed to reach Dynamo models endpoint",
-			zap.Error(err),
-			zap.String("url", serviceURL))
-		return false, nil // Not an error, just not ready yet
+	// Count total and ready endpoints from subsets
+	var totalEndpoints, readyEndpoints int
+	for _, subset := range endpoints.Subsets {
+		// Ready addresses
+		readyEndpoints += len(subset.Addresses)
+		totalEndpoints += len(subset.Addresses)
+		// NotReady addresses
+		totalEndpoints += len(subset.NotReadyAddresses)
 	}
-	defer resp.Body.Close()
 
-	// If we can reach the endpoint and get 200, the server is serving
-	if resp.StatusCode == http.StatusOK {
-		logger.Info("Dynamo model endpoint is available",
+	logger.Debug("Dynamo model endpoint status",
+		zap.String("serviceName", serviceName),
+		zap.Int("totalEndpoints", totalEndpoints),
+		zap.Int("readyEndpoints", readyEndpoints))
+
+	// Model is ready if we have at least one endpoint and all endpoints are ready
+	if totalEndpoints > 0 && readyEndpoints == totalEndpoints {
+		logger.Info("Dynamo model endpoints are ready",
 			zap.String("model", modelName),
-			zap.String("server", inferenceServerName))
+			zap.Int("readyEndpoints", readyEndpoints))
 		return true, nil
 	}
 
-	logger.Debug("Dynamo model not ready",
+	logger.Debug("Dynamo model not fully ready",
 		zap.String("model", modelName),
-		zap.Int("statusCode", resp.StatusCode))
+		zap.Int("total", totalEndpoints),
+		zap.Int("ready", readyEndpoints))
 	return false, nil
+}
+
+// generateDynamoModelServiceName computes the headless service name for a model.
+// The service name follows the pattern: dynamo-model-{sha256(baseModelName)[:8]}
+func generateDynamoModelServiceName(baseModelName string) string {
+	hash := sha256.Sum256([]byte(baseModelName))
+	hashStr := hex.EncodeToString(hash[:4]) // First 4 bytes = 8 hex chars
+	return fmt.Sprintf("dynamo-model-%s", hashStr)
 }
 
 // buildDynamoGraphDeployment creates an unstructured DynamoGraphDeployment CR.
@@ -396,6 +436,132 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 	}
 
 	return dgd
+}
+
+// LoadModel creates a DynamoModel CR to load a LoRA adapter onto the inference server.
+// modelName is the identifier used in inference requests, sourcePath is the model location.
+func (b *dynamoBackend) LoadModel(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName string, namespace string, modelName string, sourcePath string) error {
+	logger.Info("Loading LoRA adapter via DynamoModel CR",
+		zap.String("inferenceServer", inferenceServerName),
+		zap.String("modelName", modelName),
+		zap.String("baseModelName", defaultBaseModelName),
+		zap.String("sourcePath", sourcePath))
+
+	// Generate a deterministic name for the DynamoModel CR
+	dynamoModelName := generateDynamoModelName(inferenceServerName, modelName)
+
+	// Build the DynamoModel CR for LoRA type
+	dynamoModel := b.buildDynamoModel(dynamoModelName, namespace, modelName, sourcePath)
+
+	// Check if DynamoModel already exists
+	existing := &unstructured.Unstructured{}
+	existing.SetGroupVersionKind(dynamoModelGVK)
+	err := kubeClient.Get(ctx, client.ObjectKey{Name: dynamoModelName, Namespace: namespace}, existing)
+	if err == nil {
+		// DynamoModel already exists, update it
+		dynamoModel.SetResourceVersion(existing.GetResourceVersion())
+		if updateErr := kubeClient.Update(ctx, dynamoModel); updateErr != nil {
+			return fmt.Errorf("failed to update DynamoModel %s: %w", dynamoModelName, updateErr)
+		}
+		logger.Info("Updated existing DynamoModel",
+			zap.String("name", dynamoModelName),
+			zap.String("modelName", modelName))
+		return nil
+	}
+
+	if !errors.IsNotFound(err) {
+		return fmt.Errorf("failed to check existing DynamoModel %s: %w", dynamoModelName, err)
+	}
+
+	// Create the DynamoModel CR
+	if err := kubeClient.Create(ctx, dynamoModel); err != nil {
+		return fmt.Errorf("failed to create DynamoModel %s: %w", dynamoModelName, err)
+	}
+
+	logger.Info("Created DynamoModel CR for LoRA adapter",
+		zap.String("name", dynamoModelName),
+		zap.String("modelName", modelName))
+
+	return nil
+}
+
+// UnloadModel deletes the DynamoModel CR to unload a model or adapter from the inference server.
+func (b *dynamoBackend) UnloadModel(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName string, namespace string, modelName string) error {
+	logger.Info("Unloading model via DynamoModel CR deletion",
+		zap.String("inferenceServer", inferenceServerName),
+		zap.String("modelName", modelName))
+
+	// Generate the DynamoModel CR name
+	dynamoModelName := generateDynamoModelName(inferenceServerName, modelName)
+
+	// Get the existing DynamoModel
+	existing := &unstructured.Unstructured{}
+	existing.SetGroupVersionKind(dynamoModelGVK)
+	err := kubeClient.Get(ctx, client.ObjectKey{Name: dynamoModelName, Namespace: namespace}, existing)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			logger.Info("DynamoModel not found, already unloaded",
+				zap.String("name", dynamoModelName))
+			return nil
+		}
+		return fmt.Errorf("failed to get DynamoModel %s: %w", dynamoModelName, err)
+	}
+
+	// Delete the DynamoModel CR
+	if err := kubeClient.Delete(ctx, existing); err != nil {
+		if errors.IsNotFound(err) {
+			logger.Info("DynamoModel already deleted",
+				zap.String("name", dynamoModelName))
+			return nil
+		}
+		return fmt.Errorf("failed to delete DynamoModel %s: %w", dynamoModelName, err)
+	}
+
+	logger.Info("Deleted DynamoModel CR",
+		zap.String("name", dynamoModelName),
+		zap.String("modelName", modelName))
+
+	return nil
+}
+
+// buildDynamoModel constructs a DynamoModel CR for a LoRA adapter.
+func (b *dynamoBackend) buildDynamoModel(name string, namespace string, modelName string, sourcePath string) *unstructured.Unstructured {
+	spec := map[string]interface{}{
+		"modelName":     modelName,
+		"baseModelName": defaultBaseModelName,
+		"modelType":     "lora",
+		"source": map[string]interface{}{
+			"uri": sourcePath,
+		},
+	}
+
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": fmt.Sprintf("%s/%s", dynamoAPIGroup, dynamoAPIVersion),
+			"kind":       dynamoModelKind,
+			"metadata": map[string]interface{}{
+				"name":      name,
+				"namespace": namespace,
+				"labels": map[string]interface{}{
+					dynamoManagedByLabel:          dynamoManagedByValue,
+					"michelangelo.ai/server-name": name,
+				},
+			},
+			"spec": spec,
+		},
+	}
+}
+
+// generateDynamoModelName generates a deterministic name for a DynamoModel CR.
+func generateDynamoModelName(inferenceServerName string, modelName string) string {
+	// Sanitize model name for Kubernetes naming (replace / with -)
+	sanitized := strings.ReplaceAll(modelName, "/", "-")
+	sanitized = strings.ToLower(sanitized)
+	return fmt.Sprintf("%s-%s", inferenceServerName, sanitized)
+}
+
+func (b *dynamoBackend) GetFrontEndSvc(ctx context.Context, logger *zap.Logger, inferenceServerName string, namespace string) (string, error) {
+	return generateDynamoFrontendServiceName(inferenceServerName), nil
 }
 
 // extractStateFromDGD extracts the InferenceServerState from a DynamoGraphDeployment.

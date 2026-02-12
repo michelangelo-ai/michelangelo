@@ -12,6 +12,7 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -32,6 +33,7 @@ type Params struct {
 	DynamicClient       dynamic.Interface
 	RouteProvider       route.RouteProvider
 	Gateway             gateways.Gateway
+	BackendRegistry     *backends.Registry
 	ModelConfigProvider modelconfig.ModelConfigProvider
 	Logger              *zap.Logger
 }
@@ -63,6 +65,7 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 		DynamicClient:       p.DynamicClient,
 		RouteProvider:       p.RouteProvider,
 		Gateway:             p.Gateway,
+		BackendRegistry:     p.BackendRegistry,
 		ModelConfigProvider: p.ModelConfigProvider,
 		Logger:              p.Logger,
 	}, deployment)
