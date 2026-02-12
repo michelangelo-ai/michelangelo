@@ -7,10 +7,10 @@ metadata:
     app: bert-cola-example
 spec:
   desiredRevision:
-    name: bert-cola-37
+    name: qwen-multilingual-lora
     namespace: default
   inferenceServer:
-    name: inference-server-example
+    name: dynamo-inference-server
     namespace: default
   selector:
     matchLabels:
