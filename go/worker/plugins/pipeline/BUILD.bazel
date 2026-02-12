@@ -1,4 +1,4 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
@@ -8,12 +8,12 @@ go_library(
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/worker/plugins/pipeline",
     visibility = ["//visibility:public"],
-           deps = [
-               "//go/components/utils:go_default_library",
-               "//go/worker/activities/trigger:go_default_library",
-               "//go/worker/plugins/utils:go_default_library",
-               "//proto/api:go_default_library",
-               "//proto/api/v2:go_default_library",
+    deps = [
+        "//go/components/utils:go_default_library",
+        "//go/worker/activities/trigger:go_default_library",
+        "//go/worker/plugins/utils:go_default_library",
+        "//proto/api:go_default_library",
+        "//proto/api/v2:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//ext:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//worker:go_default_library",
@@ -23,4 +23,3 @@ go_library(
         "@net_starlark_go//starlark:go_default_library",
     ],
 )
-

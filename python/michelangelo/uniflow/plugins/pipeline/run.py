@@ -4,12 +4,14 @@ This module provides the same functionality as the Go/Starlark pipeline plugin,
 but can be used directly in Python workflows without requiring Cadence/Starlark.
 """
 
+from __future__ import annotations
+
 import logging
 import random
 import string
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import grpc
 from google.protobuf import struct_pb2
@@ -82,10 +84,10 @@ def _python_to_value(obj: Any) -> Value:
 
 
 def _build_input_struct(
-    environ: Optional[Dict[str, str]] = None,
-    args: Optional[List[Any]] = None,
-    kwargs: Optional[Dict[str, Any]] = None,
-    input_data: Optional[Dict[str, Any]] = None,
+    environ: Optional[dict[str, str]] = None,
+    args: Optional[list[Any]] = None,
+    kwargs: Optional[dict[str, Any]] = None,
+    input_data: Optional[dict[str, Any]] = None,
 ) -> Optional[Struct]:
     """Build a protobuf Struct for pipeline input based on provided parameters.
 
@@ -140,7 +142,6 @@ def _build_input_struct(
                     arg_struct = Struct()
                     arg_struct.update(arg)
                 else:
-                    # Wrap primitive values in a struct with "value" field
                     arg_struct = Struct()
                     arg_struct["value"] = _python_to_value(arg)
                 arg_list.append(Value(struct_value=arg_struct))
@@ -148,7 +149,6 @@ def _build_input_struct(
 
         # Process kwargs (dict -> sorted list of [key, value] pairs)
         if kwargs is not None:
-            # Sort keys for deterministic behavior (matching Go implementation)
             sorted_keys = sorted(kwargs.keys())
             kwarg_list = []
             for key in sorted_keys:
@@ -175,10 +175,10 @@ def create_pipeline_run(
     namespace: str,
     pipeline_name: str,
     pipeline_revision: Optional[str] = None,
-    environ: Optional[Dict[str, str]] = None,
-    args: Optional[List[Any]] = None,
-    kwargs: Optional[Dict[str, Any]] = None,
-    input_data: Optional[Dict[str, Any]] = None,
+    environ: Optional[dict[str, str]] = None,
+    args: Optional[list[Any]] = None,
+    kwargs: Optional[dict[str, Any]] = None,
+    input_data: Optional[dict[str, Any]] = None,
     actor: Optional[str] = None,
 ) -> PipelineRun:
     """
@@ -260,7 +260,7 @@ def poll_pipeline_run(
     name: str,
     timeout_seconds: int = _DEFAULT_TIMEOUT_SECONDS,
     poll_seconds: int = _DEFAULT_POLL_SECONDS,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Polls a created pipeline run until it reaches a terminal state or times out.
     Intended for internal use only.
@@ -329,7 +329,9 @@ def poll_pipeline_run(
                     final_state_name = PipelineRunState.Name(final_state)
                 else:
                     final_state_name = (
-                        final_state.name if hasattr(final_state, 'name') else str(final_state)
+                        final_state.name
+                        if hasattr(final_state, "name")
+                        else str(final_state)
                     )
                 return {
                     "metadata": {
@@ -343,7 +345,11 @@ def poll_pipeline_run(
 
             # Check for failed terminal states
             elif state_value in failed_terminal_states:
-                state_name = PipelineRunState.Name(state_value) if isinstance(state, int) else state_name
+                state_name = (
+                    PipelineRunState.Name(state_value)
+                    if isinstance(state, int)
+                    else state_name
+                )
                 error_msg = f"Pipeline run {name} failed with status {state_name}"
                 if current_run.status.error_message:
                     error_msg += f": {current_run.status.error_message}"
@@ -390,14 +396,14 @@ def run_pipeline(
     namespace: str,
     pipeline_name: str,
     pipeline_revision: Optional[str] = None,
-    environ: Optional[Dict[str, str]] = None,
-    args: Optional[List[Any]] = None,
-    kwargs: Optional[Dict[str, Any]] = None,
-    timeout_seconds: int = 0,  # 0 means use _DEFAULT_TIMEOUT_SECONDS
-    poll_seconds: int = 10,  # Use literal to avoid transpilation issues
-    input_data: Optional[Dict[str, Any]] = None,
+    environ: Optional[dict[str, str]] = None,
+    args: Optional[list[Any]] = None,
+    kwargs: Optional[dict[str, Any]] = None,
+    timeout_seconds: int = 0,
+    poll_seconds: int = 10,
+    input_data: Optional[dict[str, Any]] = None,
     actor: Optional[str] = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create and wait for a child pipeline run to complete synchronously.
 
     This function matches the Go/Starlark implementation exactly in terms of
