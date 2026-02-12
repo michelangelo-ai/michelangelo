@@ -1,3 +1,5 @@
+"""Unit tests for file synchronization functionality."""
+
 import io
 import os
 import tarfile
@@ -23,13 +25,17 @@ class _TestableFileBuilder(FileSync):
 
 
 class TestFileSync(unittest.TestCase):
+    """Unit tests for FileSync abstract base class."""
+
     def setUp(self):
+        """Set up test fixtures."""
         self.builder = _TestableFileBuilder()
         os.environ["UF_BASE_PROJECTS_PATH"] = (
             "/prod/michelangelo/uniflow/uniflow_dev_run/projects"
         )
 
     def test_get_random_file_name(self):
+        """Test that get_random_file_name generates a valid file name."""
         file_name = self.builder.get_random_file_name()
         self.assertIsNotNone(file_name)
         self.assertTrue(file_name.startswith("file-sync-"))
@@ -43,11 +49,13 @@ class TestFileSync(unittest.TestCase):
         self.assertTrue(file_name.endswith(".tar.gz"))
 
     def test_get_file_name(self):
+        """Test that get_file_name returns a file name with correct prefix."""
         file_name = self.builder.get_file_name()
         self.assertTrue(file_name.startswith("file-sync"))
         self.assertTrue(file_name.endswith(".tar.gz"))
 
     def test_get_remote_file_path(self):
+        """Test that get_remote_file_path returns the correct remote path."""
         os.environ["UF_FILE_SYNC_STORAGE_URL"] = "s3://test-bucket/file-sync"
         remote_file_path = self.builder.get_remote_file_path()
         self.assertTrue(remote_file_path.startswith("s3://test-bucket/file-sync/"))
@@ -106,6 +114,7 @@ class TestFileSync(unittest.TestCase):
                         self.assertTrue(any("test.py" in name for name in names))
 
     def test_create_and_upload_tarball_success(self):
+        """Test successful tarball creation and upload."""
         with (
             patch(
                 "michelangelo.uniflow.core.file_sync.FileSync.create_diff_tarball_bytes",
@@ -128,6 +137,7 @@ class TestFileSync(unittest.TestCase):
             self.assertEqual(mock_path.call_count, 3)
 
     def test_create_and_upload_tarball_no_tarball(self):
+        """Test that no tarball is created when there are no changed files."""
         with (
             patch(
                 "michelangelo.uniflow.core.file_sync.FileSync.create_diff_tarball_bytes",
@@ -143,6 +153,7 @@ class TestFileSync(unittest.TestCase):
             mock_upload.assert_not_called()
 
     def test_get_git_sha(self):
+        """Test that get_git_sha returns the correct Git SHA."""
         self.builder.get_git_sha = MagicMock(
             return_value="0241feca9a6a681c917c3bb712dcb62918522aed"
         )
@@ -154,6 +165,7 @@ class TestDefaultFileSync(unittest.TestCase):
     """Unit tests for DefaultFileSync."""
 
     def setUp(self):
+        """Set up test fixtures."""
         self.builder = DefaultFileSync(
             docker_image="examples:latest",
         )

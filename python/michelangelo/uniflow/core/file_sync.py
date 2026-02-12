@@ -1,3 +1,5 @@
+"""File synchronization utilities for Uniflow development workflows."""
+
 import io
 import logging
 import os
@@ -19,16 +21,30 @@ _file_sync_executed = False
 
 
 class FileSync(ABC):
+    """Abstract base class for file synchronization operations."""
+
     def __init__(self):
+        """Initialize the FileSync instance."""
         self._file_name = None
         self._remote_file_path = None
 
     @abstractmethod
     def get_git_sha(self) -> str:
+        """Get the Git SHA of the current commit.
+
+        Returns:
+            str: The Git SHA hash.
+        """
         pass
 
     @abstractmethod
     def upload_tarball(self, local_path: str, remote_path: str):
+        """Upload a tarball to remote storage.
+
+        Args:
+            local_path: Local path to the tarball file.
+            remote_path: Remote destination path.
+        """
         pass
 
     def get_random_file_name(self) -> str:
@@ -156,7 +172,14 @@ class FileSync(ABC):
 
 
 class DefaultFileSync(FileSync):
+    """Default implementation of FileSync using Docker and fsspec."""
+
     def __init__(self, docker_image: Optional[str] = None):
+        """Initialize DefaultFileSync.
+
+        Args:
+            docker_image: Optional Docker image name to extract Git SHA from.
+        """
         super().__init__()
         self._docker_image = docker_image
 
