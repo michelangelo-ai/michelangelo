@@ -449,16 +449,17 @@ func (b *dynamoBackend) extractStateFromDGD(logger *zap.Logger, dgd *unstructure
 }
 
 // checkDynamoDeploymentsHealth checks the health of deployments created by Dynamo.
-// Dynamo creates deployments with specific naming patterns.
+// Dynamo creates deployments with specific labels set by the Dynamo operator.
 func (b *dynamoBackend) checkDynamoDeploymentsHealth(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName string, namespace string) (bool, error) {
 	dgdName := generateDynamoDGDName(inferenceServerName)
 
-	// List deployments with the Dynamo labels
+	// List deployments with the Dynamo operator labels
+	// The Dynamo operator uses nvidia.com/dynamo-graph-deployment-name label
 	deployments := &appsv1.DeploymentList{}
 	listOpts := []client.ListOption{
 		client.InNamespace(namespace),
 		client.MatchingLabels{
-			dynamoManagedByLabel: dynamoManagedByValue,
+			"nvidia.com/dynamo-graph-deployment-name": dgdName,
 		},
 	}
 
@@ -469,14 +470,19 @@ func (b *dynamoBackend) checkDynamoDeploymentsHealth(ctx context.Context, logger
 		return false, nil
 	}
 
-	if len(deployments.Items) == 0 {
-		logger.Debug("No Dynamo deployments found yet",
-			zap.String("dgd", dgdName))
+	// We expect at least 2 deployments: Frontend and VllmDecodeWorker
+	if len(deployments.Items) < 2 {
+		logger.Debug("Not all Dynamo deployments found yet",
+			zap.String("dgd", dgdName),
+			zap.Int("found", len(deployments.Items)))
 		return false, nil
 	}
 
 	// Check if all deployments are ready
 	for _, deployment := range deployments.Items {
+		if deployment.Spec.Replicas == nil {
+			continue
+		}
 		if deployment.Status.ReadyReplicas < *deployment.Spec.Replicas {
 			logger.Debug("Dynamo deployment not fully ready",
 				zap.String("deployment", deployment.Name),
