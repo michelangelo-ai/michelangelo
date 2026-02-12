@@ -454,19 +454,24 @@ class TestFileSyncPreRun(unittest.TestCase):
         """Set up test fixtures"""
         # Reset the global flag before each test
         import michelangelo.uniflow.core.file_sync as file_sync_module
+
         file_sync_module._file_sync_executed = False
 
     def tearDown(self):
         """Clean up after each test"""
         # Reset the global flag after each test
         import michelangelo.uniflow.core.file_sync as file_sync_module
+
         file_sync_module._file_sync_executed = False
 
     @patch("michelangelo.uniflow.core.file_sync.download_and_extract_dev_files")
     @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
     def test_file_sync_executed_flag_prevents_double_execution(self, mock_download):
         """Test that _file_sync_executed flag prevents multiple executions"""
-        from michelangelo.uniflow.core.file_sync import FsspecDownloader, file_sync_pre_run
+        from michelangelo.uniflow.core.file_sync import (
+            FsspecDownloader,
+            file_sync_pre_run,
+        )
 
         mock_download.return_value = True
         downloader = FsspecDownloader()
@@ -488,7 +493,10 @@ class TestFileSyncPreRun(unittest.TestCase):
     def test_file_sync_executed_flag_is_set_after_first_call(self, mock_download):
         """Test that _file_sync_executed flag is set to True after first execution"""
         import michelangelo.uniflow.core.file_sync as file_sync_module
-        from michelangelo.uniflow.core.file_sync import FsspecDownloader, file_sync_pre_run
+        from michelangelo.uniflow.core.file_sync import (
+            FsspecDownloader,
+            file_sync_pre_run,
+        )
 
         mock_download.return_value = True
         downloader = FsspecDownloader()
@@ -507,7 +515,10 @@ class TestFileSyncPreRun(unittest.TestCase):
     def test_file_sync_executed_flag_set_even_without_tarball_url(self, mock_download):
         """Test that flag is set even when UF_FILE_SYNC_TARBALL_URL is not set"""
         import michelangelo.uniflow.core.file_sync as file_sync_module
-        from michelangelo.uniflow.core.file_sync import FsspecDownloader, file_sync_pre_run
+        from michelangelo.uniflow.core.file_sync import (
+            FsspecDownloader,
+            file_sync_pre_run,
+        )
 
         downloader = FsspecDownloader()
 
@@ -528,7 +539,10 @@ class TestFileSyncPreRun(unittest.TestCase):
     def test_file_sync_executed_flag_set_even_on_error(self, mock_download):
         """Test that flag is set even when download fails"""
         import michelangelo.uniflow.core.file_sync as file_sync_module
-        from michelangelo.uniflow.core.file_sync import FsspecDownloader, file_sync_pre_run
+        from michelangelo.uniflow.core.file_sync import (
+            FsspecDownloader,
+            file_sync_pre_run,
+        )
 
         # Make download fail
         mock_download.side_effect = Exception("Download failed")

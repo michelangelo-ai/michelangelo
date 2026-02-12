@@ -243,6 +243,7 @@ class DefaultFileSync(FileSync):
             log.error(f"Failed to upload tarball: {e}")
             raise
 
+
 class StorageDownloader(ABC):
     """Abstract interface for downloading files from remote storage."""
 
@@ -262,6 +263,7 @@ class StorageDownloader(ABC):
         """
         pass
 
+
 class FsspecDownloader(StorageDownloader):
     """Downloader using fsspec for OSS S3-compatible storage."""
 
@@ -280,6 +282,7 @@ class FsspecDownloader(StorageDownloader):
         except Exception as e:
             logger.error(f"fsspec download failed: {e}")
             return False
+
 
 def download_and_extract_dev_files(*, downloader: StorageDownloader):
     """Download and extract development files from remote storage with following steps:
