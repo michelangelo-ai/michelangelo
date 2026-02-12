@@ -5,14 +5,14 @@ This document describes how to set up and manage a secure VS Code Web environmen
 ## 🌐 Access Information
 
 ### VS Code Web Interface
-**URL**: `http://34.172.250.134:8080`
+**URL**: `http://34.9.112.58:8080`
 **Password**: `michelangelo-playground-2024`
 **User Workspace**: `oai` (Dedicated workspace for OpenAI users)
 **Workspace Root**: `/shared/playground/oai/` (Pre-configured with Michelangelo)
 **Restricted Access**: Limited to user's dedicated workspace only
 
 ### Michelangelo API Server
-**URL**: `http://34.172.250.134:14566`
+**URL**: `http://34.9.112.58:14566`
 **Purpose**: Programmatic access to Michelangelo API endpoints
 **Authentication**: Configure as needed for your applications
 
@@ -56,8 +56,13 @@ This document describes how to set up and manage a secure VS Code Web environmen
 ```
 
 ### Firewall Configuration
-- **Port 8080**: VS Code Web access
 - **Port 22**: SSH access for management
+- **Port 80**: Michelangelo UI (HTTP)
+- **Port 8080**: VS Code Web access
+- **Port 8081**: Envoy gRPC-Web proxy
+- **Port 8088**: Temporal Web UI (via kubectl port-forward)
+- **Port 9090**: MinIO Console
+- **Port 9091**: MinIO S3 API
 - **Port 14566**: Michelangelo API server access
 - **All other ports**: Blocked
 
@@ -358,7 +363,7 @@ gcloud compute instances describe sandbox-instance-20251112-220947 \
   --format="value(networkInterfaces[0].accessConfigs[0].natIP)"
 
 # Test connectivity
-curl -I http://34.172.250.134:8080
+curl -I http://34.9.112.58:8080
 ```
 
 ### Permission Issues
@@ -372,7 +377,7 @@ gcloud compute ssh sandbox-instance-20251112-220947 --zone=us-central1-a -- \
 
 ### CORS Error for Michelangelo UI API Calls
 
-**Problem**: When accessing the Michelangelo UI from an external IP (like `http://34.172.250.134`), you may get CORS errors when the frontend tries to call API endpoints like `listProject`.
+**Problem**: When accessing the Michelangelo UI from an external IP (like `http://34.9.112.58`), you may get CORS errors when the frontend tries to call API endpoints like `listProject`.
 
 **Symptoms**:
 - Browser console shows CORS policy errors
@@ -401,9 +406,9 @@ kubectl get configmap envoy-config -o yaml | grep -A 5 "allow_origin_string_matc
 
 4. **Add your external IP to CORS allowed origins**:
 ```bash
-# Replace 34.172.250.134 with your actual external IP
+# Replace 34.9.112.58 with your actual external IP
 kubectl get configmap envoy-config -o yaml | \
-  sed 's|allow_origin_string_match:|allow_origin_string_match:\n                              - exact: "http://34.172.250.134"|' | \
+  sed 's|allow_origin_string_match:|allow_origin_string_match:\n                              - exact: "http://34.9.112.58"|' | \
   kubectl apply -f -
 ```
 
@@ -425,26 +430,65 @@ kubectl get pod envoy
 
 8. **Test CORS fix** (replace IP with your external IP):
 ```bash
-curl -H "Origin: http://34.172.250.134" \
+curl -H "Origin: http://34.9.112.58" \
      -H "Access-Control-Request-Method: GET" \
      -H "Access-Control-Request-Headers: content-type,x-grpc-web" \
-     -X OPTIONS http://34.172.250.134:8081/ -v
+     -X OPTIONS http://34.9.112.58:8081/ -v
 ```
 
 You should see response headers like:
 ```
-< access-control-allow-origin: http://34.172.250.134
+< access-control-allow-origin: http://34.9.112.58
 < access-control-allow-methods: GET, POST, OPTIONS
 < access-control-allow-headers: content-type,context-ttl-ms,grpc-timeout,rpc-caller,rpc-encoding,rpc-service,x-grpc-web,x-user-agent
 ```
 
 #### Network Architecture Reference
 ```
-Frontend (http://34.172.250.134/)
+Frontend (http://34.9.112.58/)
     ↓ gRPC-Web requests
 Envoy Proxy (port 8081 / NodePort 30010) ← CORS enforcement here
     ↓ gRPC conversion
 API Server (port 14566 / NodePort 30009)
+```
+
+#### Temporal Web UI Port-Forward
+
+The Temporal Web UI runs on port 8080 inside k3d but is exposed externally on port 8088 via kubectl port-forward. This must be re-established after VM or pod restarts:
+
+```bash
+export KUBECONFIG=/tmp/k3d-config.yaml
+pkill -f 'port-forward.*temporaltest-web' 2>/dev/null
+nohup kubectl port-forward svc/temporaltest-web 8088:8080 --address 0.0.0.0 > /tmp/temporal-portforward.log 2>&1 &
+```
+
+**CSRF Fix**: The Temporal Web UI has `TEMPORAL_CSRF_COOKIE_INSECURE=true` set to allow workflow termination over plain HTTP (non-localhost). This was applied via:
+```bash
+kubectl set env deployment/temporaltest-web TEMPORAL_CSRF_COOKIE_INSECURE=true
+```
+
+#### Ray Cluster Compute Config
+
+The Michelangelo controller manager creates RayCluster resources via the Kubernetes API. The Cluster CRD in `ma-system` namespace must point to the **in-cluster** API address (not the external k3d address):
+
+```bash
+# Check current config
+kubectl get cluster -n ma-system -o yaml
+
+# Fix: patch to use in-cluster address (instead of 0.0.0.0:39955)
+kubectl patch cluster michelangelo-sandbox -n ma-system --type=merge \
+  -p '{"spec":{"kubernetes":{"rest":{"host":"https://kubernetes.default.svc","port":"443"}}}}'
+
+# Revert if needed
+kubectl patch cluster michelangelo-sandbox -n ma-system --type=merge \
+  -p '{"spec":{"kubernetes":{"rest":{"host":"https://0.0.0.0","port":"39955"}}}}'
+```
+
+**Note**: `sandbox.py` extracts the server URL from `k3d kubeconfig get`, which returns the external address (`0.0.0.0:39955`). This doesn't work from inside pods. The patch above fixes it for the running sandbox.
+
+**Ray image**: Pipeline Ray pods use `imagePullPolicy: Never`, so the image must be pre-imported into k3d:
+```bash
+k3d image import <image-name> -c michelangelo-sandbox
 ```
 
 #### If Services Are Not Running
@@ -497,8 +541,8 @@ gcloud compute firewall-rules create oss-vpc-allow-code-server-8081 \
   --network oss-vpc --allow tcp:8081 --source-ranges 0.0.0.0/0
 
 # User access:
-# OAI User: http://34.172.250.134:8080
-# Claude User: http://34.172.250.134:8081
+# OAI User: http://34.9.112.58:8080
+# Claude User: http://34.9.112.58:8081
 ```
 
 #### Option 2: Additional VMs (For High Isolation)
@@ -526,7 +570,7 @@ nohup code-server --config ~/.config/code-server/config.yaml \
   --bind-addr 0.0.0.0:$PORT /shared/playground/$USER_NAME > /tmp/code-server-$USER_NAME.log 2>&1 &
 
 echo "User $USER_NAME created on port $PORT"
-echo "URL: http://34.172.250.134:$PORT"
+echo "URL: http://34.9.112.58:$PORT"
 EOF
 
 chmod +x /shared/playground/create-user.sh
@@ -580,6 +624,13 @@ For issues or questions about the VS Code sandbox setup:
 
 ## 📝 Recent Updates
 
+### Version 2.2 (February 11, 2026)
+- **🔧 Envoy CORS Fix**: Fixed CORS by reordering http_filters (cors before grpc_web) so OPTIONS preflight is handled correctly
+- **🕐 Temporal Web UI**: Added kubectl port-forward setup (8088->8080) and CSRF fix for non-localhost access
+- **📦 MinIO Firewall**: Added firewall rule for MinIO console (9090) and S3 API (9091)
+- **🔥 Firewall Docs**: Updated firewall section with all active ports
+- **🔄 Ray Cluster Fix**: Documented Cluster CRD patch to use in-cluster K8s API address instead of external k3d address
+
 ### Version 2.1 (December 9, 2024)
 - **🔧 CORS Fix Documentation**: Added comprehensive CORS troubleshooting guide for external IP access
 - **🌐 Network Architecture**: Documented Envoy proxy setup and gRPC-Web to gRPC conversion
@@ -609,8 +660,8 @@ For issues or questions about the VS Code sandbox setup:
 
 ---
 
-**Last Updated**: December 2, 2024
-**Version**: 2.0
+**Last Updated**: February 11, 2026
+**Version**: 2.2
 **Maintainer**: Michelangelo Team
 
 ---
