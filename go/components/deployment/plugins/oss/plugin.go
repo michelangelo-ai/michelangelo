@@ -63,6 +63,7 @@ type Params struct {
 	DynamicClient       dynamic.Interface
 	Gateway             gateways.Gateway
 	RouteProvider       route.RouteProvider
+	BackendRegistry     *backends.Registry
 	BlobStore           *blobstore.BlobStore
 	Logger              *zap.Logger
 	ModelConfigProvider modelconfig.ModelConfigProvider
@@ -76,6 +77,7 @@ func NewPlugin(params Params) *Plugin {
 		dynamicClient:       params.DynamicClient,
 		gateway:             params.Gateway,
 		routeProvider:       params.RouteProvider,
+		backendRegistry:     params.BackendRegistry,
 		modelConfigProvider: params.ModelConfigProvider,
 		blobstore:           params.BlobStore,
 		logger:              params.Logger,
