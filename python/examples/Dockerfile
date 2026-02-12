@@ -6,6 +6,10 @@
 # Use a base image with Python installed
 FROM nvidia/cuda:12.8.0-base-ubuntu22.04
 
+# Use HTTPS for apt repos (plain HTTP fails behind some proxies/firewalls)
+RUN sed -i 's|http://archive.ubuntu.com|https://archive.ubuntu.com|g' /etc/apt/sources.list && \
+    sed -i 's|http://security.ubuntu.com|https://security.ubuntu.com|g' /etc/apt/sources.list
+
 # Install dependencies required for building Python
 RUN apt-get update && apt-get install -y \
     curl \
@@ -41,7 +45,8 @@ RUN ln -sf /usr/local/bin/python3.9 /usr/bin/python3 && \
 
 # Install pip and Poetry
 RUN python --version
-RUN curl -sSL https://install.python-poetry.org | python3 -
+RUN python -m pip install --upgrade pip setuptools && \
+    curl -sSL https://install.python-poetry.org | python3 - --version 1.8.5
 ENV PATH="/root/.local/bin:$PATH"
 RUN poetry --version
 
