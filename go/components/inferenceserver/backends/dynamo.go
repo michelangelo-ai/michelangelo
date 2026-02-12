@@ -289,7 +289,8 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 				"services": map[string]interface{}{
 					// Frontend: OpenAI-compatible HTTP server
 					"Frontend": map[string]interface{}{
-						"replicas": int64(1),
+						"componentType": "frontend", // Required for Dynamo operator discovery
+						"replicas":      int64(1),
 						"resources": map[string]interface{}{
 							"requests": map[string]interface{}{
 								"cpu":    "2",
@@ -303,13 +304,6 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 						"extraPodSpec": map[string]interface{}{
 							"mainContainer": map[string]interface{}{
 								"image": defaultDynamoVLLMImage,
-								// Use command (not args) to avoid /bin/sh -c wrapper issues
-								"command": []interface{}{
-									"python3",
-									"-m",
-									"dynamo.frontend",
-									"--http-port=8000",
-								},
 								// Required for GKE GPU nodes - sets CUDA library paths
 								"env": []interface{}{
 									map[string]interface{}{
@@ -330,7 +324,9 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 					},
 					// VllmDecodeWorker: vLLM inference worker (aggregated mode)
 					"VllmDecodeWorker": map[string]interface{}{
-						"replicas": replicas,
+						"componentType":    "worker", // Required for Dynamo operator discovery
+						"subComponentType": "decode", // Decode worker type
+						"replicas":         replicas,
 						"resources": map[string]interface{}{
 							"requests": map[string]interface{}{
 								"cpu":            cpuCount,
@@ -352,6 +348,7 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 									"-m",
 									"dynamo.vllm",
 									fmt.Sprintf("--model=%s", modelName),
+									"--connector=none", // Disable NIXL connector (requires UCX/RDMA not available on standard GKE)
 									"--kv-events-config={\"enable_kv_cache_events\": false}",
 								},
 								// Required for GKE GPU nodes - sets CUDA library paths and GPU visibility
