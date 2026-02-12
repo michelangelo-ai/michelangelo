@@ -13,7 +13,7 @@ from michelangelo.uniflow.core.file_sync import (
 
 
 class _TestableFileBuilder(FileSync):
-    """Concrete implementation for testing abstract base class"""
+    """Concrete implementation for testing abstract base class."""
 
     def get_git_sha(self):
         return "0241feca9a6a681c917c3bb712dcb62918522aed"
@@ -36,7 +36,7 @@ class TestFileSync(unittest.TestCase):
         self.assertTrue(file_name.endswith(".tar.gz"))
 
     def test_get_random_file_name_with_none_pipeline(self):
-        """Test that filename always uses 'file-sync' prefix"""
+        """Test that filename always uses 'file-sync' prefix."""
         builder = _TestableFileBuilder()
         file_name = builder.get_random_file_name()
         self.assertIn("file-sync", file_name)
@@ -54,7 +54,7 @@ class TestFileSync(unittest.TestCase):
         self.assertTrue(remote_file_path.endswith(".tar.gz"))
 
     def test_get_remote_file_path_with_fallback(self):
-        """Test fallback to default when env var is not set"""
+        """Test fallback to default when env var is not set."""
         if "UF_FILE_SYNC_STORAGE_URL" in os.environ:
             del os.environ["UF_FILE_SYNC_STORAGE_URL"]
 
@@ -66,7 +66,7 @@ class TestFileSync(unittest.TestCase):
         self.assertTrue(remote_file_path.endswith(".tar.gz"))
 
     def test_create_diff_tarball_bytes_strips_python_prefix(self):
-        """Test that python/ prefix is stripped from arcname in tarball"""
+        """Test that python/ prefix is stripped from arcname in tarball."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_dir_path = Path(tmp_dir)
             git_dir = tmp_dir_path / ".git"
@@ -151,7 +151,7 @@ class TestFileSync(unittest.TestCase):
 
 
 class TestDefaultFileSync(unittest.TestCase):
-    """Unit tests for DefaultFileSync"""
+    """Unit tests for DefaultFileSync."""
 
     def setUp(self):
         self.builder = DefaultFileSync(
@@ -159,11 +159,11 @@ class TestDefaultFileSync(unittest.TestCase):
         )
 
     def test_init(self):
-        """Test initialization"""
+        """Test initialization."""
         self.assertEqual(self.builder._docker_image, "examples:latest")
 
     def test_get_git_sha_from_label_git_commit_actual(self):
-        """Test getting Git SHA from git.commit label (actual implementation)"""
+        """Test getting Git SHA from git.commit label (actual implementation)."""
         # Patch docker inside the method where it's imported
         with patch("docker.from_env") as mock_from_env:
             mock_client = MagicMock()
@@ -178,7 +178,7 @@ class TestDefaultFileSync(unittest.TestCase):
             mock_client.images.get.assert_called_once_with("examples:latest")
 
     def test_get_git_sha_from_label_git_sha(self):
-        """Test getting Git SHA from git.sha label"""
+        """Test getting Git SHA from git.sha label."""
         with patch("docker.from_env") as mock_from_env:
             mock_client = MagicMock()
             mock_image = MagicMock()
@@ -191,7 +191,7 @@ class TestDefaultFileSync(unittest.TestCase):
             self.assertEqual(git_sha, "xyz789abc123")
 
     def test_get_git_sha_from_env_var(self):
-        """Test getting Git SHA from GIT_SHA environment variable"""
+        """Test getting Git SHA from GIT_SHA environment variable."""
         with patch("docker.from_env") as mock_from_env:
             mock_client = MagicMock()
             mock_image = MagicMock()
@@ -209,7 +209,7 @@ class TestDefaultFileSync(unittest.TestCase):
             self.assertEqual(git_sha, "env123sha456")
 
     def test_get_git_sha_not_found(self):
-        """Test that None is returned when Git SHA is not found"""
+        """Test that None is returned when Git SHA is not found."""
         with patch("docker.from_env") as mock_from_env:
             mock_client = MagicMock()
             mock_image = MagicMock()
@@ -224,7 +224,7 @@ class TestDefaultFileSync(unittest.TestCase):
             self.assertIsNone(git_sha)
 
     def test_get_git_sha_docker_error(self):
-        """Test that None is returned when Docker fails"""
+        """Test that None is returned when Docker fails."""
         with patch("docker.from_env") as mock_from_env:
             mock_client = MagicMock()
             mock_client.images.get.side_effect = Exception("Docker daemon not running")
@@ -236,7 +236,7 @@ class TestDefaultFileSync(unittest.TestCase):
             self.assertIsNone(git_sha)
 
     def test_get_git_sha_docker_not_installed(self):
-        """Test that None is returned when docker package is not available"""
+        """Test that None is returned when docker package is not available."""
         # Mock the import to raise ImportError
         with patch(
             "builtins.__import__", side_effect=ImportError("No module named 'docker'")
@@ -248,7 +248,7 @@ class TestDefaultFileSync(unittest.TestCase):
     @patch("builtins.open", new_callable=mock_open, read_data=b"tarball content")
     @patch("michelangelo.uniflow.core.file_sync.fsspec.open")
     def test_upload_tarball_success(self, mock_fsspec_open, mock_builtin_open):
-        """Test successful tarball upload"""
+        """Test successful tarball upload."""
         mock_remote_file = MagicMock()
         mock_fsspec_open.return_value.__enter__.return_value = mock_remote_file
 
@@ -263,7 +263,7 @@ class TestDefaultFileSync(unittest.TestCase):
     @patch("builtins.open", new_callable=mock_open, read_data=b"tarball content")
     @patch("michelangelo.uniflow.core.file_sync.fsspec.open")
     def test_upload_tarball_failure(self, mock_fsspec_open, mock_builtin_open):
-        """Test tarball upload failure"""
+        """Test tarball upload failure."""
         mock_fsspec_open.side_effect = Exception("S3 connection failed")
 
         with self.assertRaises(Exception) as ctx:
@@ -274,7 +274,7 @@ class TestDefaultFileSync(unittest.TestCase):
         self.assertIn("S3 connection failed", str(ctx.exception))
 
     def test_build_and_upload_tarball_integration(self):
-        """Test create_and_upload_tarball integration"""
+        """Test create_and_upload_tarball integration."""
         with (
             patch("docker.from_env") as mock_from_env,
             patch(
@@ -310,10 +310,10 @@ class TestDefaultFileSync(unittest.TestCase):
 
 
 class TestStorageDownloader(unittest.TestCase):
-    """Basic unit tests for StorageDownloader and FsspecDownloader"""
+    """Basic unit tests for StorageDownloader and FsspecDownloader."""
 
     def test_storage_downloader_is_abstract(self):
-        """Test that StorageDownloader cannot be instantiated directly"""
+        """Test that StorageDownloader cannot be instantiated directly."""
         from michelangelo.uniflow.core.file_sync import StorageDownloader
 
         with self.assertRaises(TypeError):
@@ -321,7 +321,7 @@ class TestStorageDownloader(unittest.TestCase):
             StorageDownloader()
 
     def test_fsspec_downloader_exists(self):
-        """Test that FsspecDownloader class exists and can be instantiated"""
+        """Test that FsspecDownloader class exists and can be instantiated."""
         from michelangelo.uniflow.core.file_sync import FsspecDownloader
 
         # Should not raise
@@ -329,7 +329,7 @@ class TestStorageDownloader(unittest.TestCase):
         self.assertIsNotNone(downloader)
 
     def test_download_and_extract_dev_files_exists(self):
-        """Test that download_and_extract_dev_files function exists"""
+        """Test that download_and_extract_dev_files function exists."""
         from michelangelo.uniflow.core.file_sync import (
             download_and_extract_dev_files,
         )
@@ -340,10 +340,10 @@ class TestStorageDownloader(unittest.TestCase):
 
 
 class TestFsspecDownloader(unittest.TestCase):
-    """Unit tests for FsspecDownloader"""
+    """Unit tests for FsspecDownloader."""
 
     def setUp(self):
-        """Set up test fixtures"""
+        """Set up test fixtures."""
         import logging
 
         from michelangelo.uniflow.core.file_sync import FsspecDownloader
@@ -352,13 +352,13 @@ class TestFsspecDownloader(unittest.TestCase):
         self.logger = logging.getLogger("test")
 
     def test_fsspec_downloader_has_download_method(self):
-        """Test that FsspecDownloader has a download method"""
+        """Test that FsspecDownloader has a download method."""
         self.assertTrue(hasattr(self.downloader, "download"))
         self.assertTrue(callable(self.downloader.download))
 
     @patch("fsspec.open")
     def test_download_success(self, mock_fsspec_open):
-        """Test successful download using fsspec"""
+        """Test successful download using fsspec."""
         # Mock fsspec.open to return fake tarball data
         fake_data = b"fake tarball content"
         mock_remote_file = MagicMock()
@@ -387,7 +387,7 @@ class TestFsspecDownloader(unittest.TestCase):
 
     @patch("fsspec.open")
     def test_download_fsspec_error(self, mock_fsspec_open):
-        """Test download failure due to fsspec error"""
+        """Test download failure due to fsspec error."""
         # Mock fsspec.open to raise an exception
         mock_fsspec_open.side_effect = Exception("S3 connection failed")
 
@@ -406,7 +406,7 @@ class TestFsspecDownloader(unittest.TestCase):
 
     @patch("fsspec.open")
     def test_download_with_different_protocols(self, mock_fsspec_open):
-        """Test download with different storage protocols (S3, MinIO, etc.)"""
+        """Test download with different storage protocols (S3, MinIO, etc.)."""
         fake_data = b"test data"
         mock_remote_file = MagicMock()
         mock_remote_file.read.return_value = fake_data
@@ -430,7 +430,7 @@ class TestFsspecDownloader(unittest.TestCase):
 
     @patch("fsspec.open")
     def test_download_large_file(self, mock_fsspec_open):
-        """Test download of large file (simulated)"""
+        """Test download of large file (simulated)."""
         # Simulate a 10MB file
         fake_data = b"x" * (10 * 1024 * 1024)  # 10MB
         mock_remote_file = MagicMock()
@@ -449,11 +449,11 @@ class TestFsspecDownloader(unittest.TestCase):
 
 
 class TestDownloadAndExtractDevFiles(unittest.TestCase):
-    """Unit tests for download_and_extract_dev_files function"""
+    """Unit tests for download_and_extract_dev_files function."""
 
     @patch.dict(os.environ, {}, clear=True)
     def test_returns_false_when_no_tarball_url(self):
-        """Test that function returns False when UF_FILE_SYNC_TARBALL_URL is not set"""
+        """Test that function returns False when UF_FILE_SYNC_TARBALL_URL is not set."""
         from michelangelo.uniflow.core.file_sync import (
             FsspecDownloader,
             download_and_extract_dev_files,
@@ -467,7 +467,7 @@ class TestDownloadAndExtractDevFiles(unittest.TestCase):
     @patch("shutil.copy2")
     @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
     def test_successful_download_and_extract(self, mock_copy, mock_cwd):
-        """Test successful download, extract, and copy workflow"""
+        """Test successful download, extract, and copy workflow."""
         from michelangelo.uniflow.core.file_sync import (
             FsspecDownloader,
             download_and_extract_dev_files,
@@ -501,7 +501,7 @@ class TestDownloadAndExtractDevFiles(unittest.TestCase):
 
     @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
     def test_returns_false_when_download_fails(self):
-        """Test that function returns False when download fails"""
+        """Test that function returns False when download fails."""
         from michelangelo.uniflow.core.file_sync import (
             FsspecDownloader,
             download_and_extract_dev_files,
@@ -516,7 +516,7 @@ class TestDownloadAndExtractDevFiles(unittest.TestCase):
     @patch("tarfile.open")
     @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
     def test_returns_false_when_extraction_fails(self, mock_tarfile_open):
-        """Test that function returns False when tarball extraction fails"""
+        """Test that function returns False when tarball extraction fails."""
         from michelangelo.uniflow.core.file_sync import (
             FsspecDownloader,
             download_and_extract_dev_files,
@@ -543,7 +543,7 @@ class TestDownloadAndExtractDevFiles(unittest.TestCase):
     @patch("shutil.copy2")
     @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
     def test_extracts_multiple_files(self, mock_copy, mock_cwd):
-        """Test extraction and copying of multiple files"""
+        """Test extraction and copying of multiple files."""
         from michelangelo.uniflow.core.file_sync import (
             FsspecDownloader,
             download_and_extract_dev_files,
@@ -580,7 +580,7 @@ class TestDownloadAndExtractDevFiles(unittest.TestCase):
     @patch("michelangelo.uniflow.core.file_sync.Path.cwd")
     @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
     def test_handles_unexpected_errors(self, mock_cwd):
-        """Test that function handles unexpected errors gracefully"""
+        """Test that function handles unexpected errors gracefully."""
         from michelangelo.uniflow.core.file_sync import (
             FsspecDownloader,
             download_and_extract_dev_files,
@@ -596,17 +596,17 @@ class TestDownloadAndExtractDevFiles(unittest.TestCase):
 
 
 class TestFileSyncPreRun(unittest.TestCase):
-    """Unit tests for file_sync_pre_run function"""
+    """Unit tests for file_sync_pre_run function."""
 
     def setUp(self):
-        """Set up test fixtures"""
+        """Set up test fixtures."""
         # Reset the global flag before each test
         import michelangelo.uniflow.core.file_sync as file_sync_module
 
         file_sync_module._file_sync_executed = False
 
     def tearDown(self):
-        """Clean up after each test"""
+        """Clean up after each test."""
         # Reset the global flag after each test
         import michelangelo.uniflow.core.file_sync as file_sync_module
 
@@ -615,7 +615,7 @@ class TestFileSyncPreRun(unittest.TestCase):
     @patch("michelangelo.uniflow.core.file_sync.download_and_extract_dev_files")
     @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
     def test_file_sync_executed_flag_prevents_double_execution(self, mock_download):
-        """Test that _file_sync_executed flag prevents multiple executions"""
+        """Test that _file_sync_executed flag prevents multiple executions."""
         from michelangelo.uniflow.core.file_sync import (
             FsspecDownloader,
             file_sync_pre_run,
@@ -639,7 +639,7 @@ class TestFileSyncPreRun(unittest.TestCase):
     @patch("michelangelo.uniflow.core.file_sync.download_and_extract_dev_files")
     @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
     def test_file_sync_executed_flag_is_set_after_first_call(self, mock_download):
-        """Test that _file_sync_executed flag is set to True after first execution"""
+        """Test that _file_sync_executed flag is set to True after first execution."""
         import michelangelo.uniflow.core.file_sync as file_sync_module
         from michelangelo.uniflow.core.file_sync import (
             FsspecDownloader,
@@ -661,7 +661,7 @@ class TestFileSyncPreRun(unittest.TestCase):
     @patch("michelangelo.uniflow.core.file_sync.download_and_extract_dev_files")
     @patch.dict(os.environ, {}, clear=True)
     def test_file_sync_executed_flag_set_even_without_tarball_url(self, mock_download):
-        """Test that flag is set even when UF_FILE_SYNC_TARBALL_URL is not set"""
+        """Test that flag is set even when UF_FILE_SYNC_TARBALL_URL is not set."""
         import michelangelo.uniflow.core.file_sync as file_sync_module
         from michelangelo.uniflow.core.file_sync import (
             FsspecDownloader,
@@ -685,7 +685,7 @@ class TestFileSyncPreRun(unittest.TestCase):
     @patch("michelangelo.uniflow.core.file_sync.download_and_extract_dev_files")
     @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
     def test_file_sync_executed_flag_set_even_on_error(self, mock_download):
-        """Test that flag is set even when download fails"""
+        """Test that flag is set even when download fails."""
         import michelangelo.uniflow.core.file_sync as file_sync_module
         from michelangelo.uniflow.core.file_sync import (
             FsspecDownloader,

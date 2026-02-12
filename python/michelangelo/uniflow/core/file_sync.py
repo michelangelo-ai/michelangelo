@@ -275,9 +275,10 @@ class FsspecDownloader(StorageDownloader):
         """Download using fsspec (works with S3, MinIO, etc)."""
         try:
             logger.info(f"Downloading from: {remote_path}")
-            with fsspec.open(remote_path, "rb") as remote_file, open(
-                local_path, "wb"
-            ) as local_file:
+            with (
+                fsspec.open(remote_path, "rb") as remote_file,
+                open(local_path, "wb") as local_file,
+            ):
                 local_file.write(remote_file.read())
 
             logger.info(f"Successfully downloaded to: {local_path}")
