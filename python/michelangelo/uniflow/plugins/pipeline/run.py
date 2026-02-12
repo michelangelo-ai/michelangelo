@@ -11,7 +11,7 @@ import random
 import string
 import time
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 import grpc
 from google.protobuf import struct_pb2
@@ -84,11 +84,11 @@ def _python_to_value(obj: Any) -> Value:
 
 
 def _build_input_struct(
-    environ: Optional[dict[str, str]] = None,
-    args: Optional[list[Any]] = None,
-    kwargs: Optional[dict[str, Any]] = None,
-    input_data: Optional[dict[str, Any]] = None,
-) -> Optional[Struct]:
+    environ: dict[str, str] | None = None,
+    args: list[Any] | None = None,
+    kwargs: dict[str, Any] | None = None,
+    input_data: dict[str, Any] | None = None,
+) -> Struct | None:
     """Build a protobuf Struct for pipeline input based on provided parameters.
 
     This matches the structure expected by the Go implementation:
@@ -164,7 +164,9 @@ def _build_input_struct(
                         )
                     )
                 )
-            pb_struct["kwargs"] = Value(list_value=struct_pb2.ListValue(values=kwarg_list))
+            pb_struct["kwargs"] = Value(
+                list_value=struct_pb2.ListValue(values=kwarg_list)
+            )
 
         return pb_struct if pb_struct else None
 
@@ -174,15 +176,14 @@ def _build_input_struct(
 def create_pipeline_run(
     namespace: str,
     pipeline_name: str,
-    pipeline_revision: Optional[str] = None,
-    environ: Optional[dict[str, str]] = None,
-    args: Optional[list[Any]] = None,
-    kwargs: Optional[dict[str, Any]] = None,
-    input_data: Optional[dict[str, Any]] = None,
-    actor: Optional[str] = None,
+    pipeline_revision: str | None = None,
+    environ: dict[str, str] | None = None,
+    args: list[Any] | None = None,
+    kwargs: dict[str, Any] | None = None,
+    input_data: dict[str, Any] | None = None,
+    actor: str | None = None,
 ) -> PipelineRun:
-    """
-    Creates a pipeline run with the specified parameters.
+    """Creates a pipeline run with the specified parameters.
     Intended for internal use only.
 
     Args:
@@ -204,7 +205,9 @@ def create_pipeline_run(
         ValueError: If input_data is used together with environ/args/kwargs.
     """
     # Input validation: ensure we do not have both input_data and (environ/args/kwargs)
-    if input_data is not None and (environ is not None or args is not None or kwargs is not None):
+    if input_data is not None and (
+        environ is not None or args is not None or kwargs is not None
+    ):
         raise ValueError(
             "cannot use 'input_data' together with 'environ', 'args', or 'kwargs'; "
             "'input_data' is for orchestration pipelines, while 'environ'/'args'/'kwargs' are for Uniflow pipelines"
@@ -216,7 +219,9 @@ def create_pipeline_run(
     # Format revision if provided
     revision = None
     if pipeline_revision:
-        sha_prefix = pipeline_revision[:12] if len(pipeline_revision) > 12 else pipeline_revision
+        sha_prefix = (
+            pipeline_revision[:12] if len(pipeline_revision) > 12 else pipeline_revision
+        )
         formatted = f"pipeline-{pipeline_name}-{sha_prefix}"
         revision = ResourceIdentifier(namespace=namespace, name=formatted)
 
@@ -247,7 +252,9 @@ def create_pipeline_run(
         pipeline_run.spec.input.CopyFrom(input_struct)
 
     # Create pipeline run via API
-    log.info(f"Creating pipeline run {name} for pipeline {pipeline_name} in namespace {namespace}")
+    log.info(
+        f"Creating pipeline run {name} for pipeline {pipeline_name} in namespace {namespace}"
+    )
     created_run = APIClient.PipelineRunService.create_pipeline_run(
         pipeline_run=pipeline_run, create_options=CreateOptions()
     )
@@ -261,8 +268,7 @@ def poll_pipeline_run(
     timeout_seconds: int = _DEFAULT_TIMEOUT_SECONDS,
     poll_seconds: int = _DEFAULT_POLL_SECONDS,
 ) -> dict[str, Any]:
-    """
-    Polls a created pipeline run until it reaches a terminal state or times out.
+    """Polls a created pipeline run until it reaches a terminal state or times out.
     Intended for internal use only.
 
     Args:
@@ -317,8 +323,8 @@ def poll_pipeline_run(
                 state_value = state
                 state_name = PipelineRunState.Name(state)
             else:
-                state_value = state.value if hasattr(state, 'value') else int(state)
-                state_name = state.name if hasattr(state, 'name') else str(state)
+                state_value = state.value if hasattr(state, "value") else int(state)
+                state_name = state.name if hasattr(state, "name") else str(state)
 
             # Check for successful terminal states
             if state_value in successful_terminal_states:
@@ -395,14 +401,14 @@ def poll_pipeline_run(
 def run_pipeline(
     namespace: str,
     pipeline_name: str,
-    pipeline_revision: Optional[str] = None,
-    environ: Optional[dict[str, str]] = None,
-    args: Optional[list[Any]] = None,
-    kwargs: Optional[dict[str, Any]] = None,
+    pipeline_revision: str | None = None,
+    environ: dict[str, str] | None = None,
+    args: list[Any] | None = None,
+    kwargs: dict[str, Any] | None = None,
     timeout_seconds: int = 0,
     poll_seconds: int = 10,
-    input_data: Optional[dict[str, Any]] = None,
-    actor: Optional[str] = None,
+    input_data: dict[str, Any] | None = None,
+    actor: str | None = None,
 ) -> dict[str, Any]:
     """Create and wait for a child pipeline run to complete synchronously.
 
@@ -481,5 +487,3 @@ def run_pipeline(
             raise
         # Wrap unexpected exceptions
         raise RuntimeError(f"Pipeline run failed: {e!s}") from e
-
-

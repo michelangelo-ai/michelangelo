@@ -7,4 +7,3 @@ matching the functionality of the Go/Starlark pipeline plugin.
 from michelangelo.uniflow.plugins.pipeline.run import run_pipeline
 
 __all__ = ["run_pipeline"]
-
