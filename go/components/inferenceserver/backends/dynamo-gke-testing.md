@@ -60,6 +60,8 @@ ma sandbox delete --gke
 
 3. **LD_LIBRARY_PATH**: Explicitly set to `/usr/local/nvidia/lib64:/usr/local/cuda/lib64` for GKE GPU driver injection.
 
+4. We should add a new getsvcdetails or something similar. This would return the details for the frontend svc. This 
+
 ---
 
 ## Model Loading

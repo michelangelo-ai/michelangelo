@@ -1925,6 +1925,34 @@ def _create_inference_dynamo_demo_crs():
             raise_error=True,
         )
         print("✅ Dynamo Inference server is ready!")
+
+        # Start port-forward in background for easy access
+        print("🔌 Starting port-forward to frontend (localhost:8000)...")
+        try:
+            # Start port-forward as a detached background process
+            # start_new_session=True ensures it survives when parent exits
+            # DGD name is "dynamo-{inference_server_name}", frontend is "{dgd_name}-frontend"
+            dgd_name = f"dynamo-{inference_server_name}"
+            port_forward_cmd = [
+                "kubectl",
+                *context_args,
+                "port-forward",
+                f"deployment/{dgd_name}-frontend",
+                "8000:8000",
+                "-n",
+                inference_server_namespace,
+            ]
+            subprocess.Popen(
+                port_forward_cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            print("✅ Port-forward started! Access the API at http://localhost:8000")
+        except Exception as e:
+            print(f"⚠️  Could not start port-forward: {e}")
+
     except subprocess.CalledProcessError:
         # Check if it's still creating (not a failure)
         print(
@@ -1954,14 +1982,12 @@ def _create_inference_dynamo_demo_crs():
     print()
     print("📡 Test with OpenAI-compatible API:")
     print("  curl http://localhost:8000/v1/models")
-    print("  curl http://localhost:8000/v1/chat/completions \\")
-    print('    -H "Content-Type: application/json" \\')
-    print("    -d '{")
-    print('      "model": "Qwen/Qwen3-0.6B",')
-    print('      "messages": [{"role": "user", "content": "Hello!"}],')
-    print('      "max_tokens": 100')
-    print("    }'")
-
+    print(
+        '  curl -X POST http://localhost:8000/v1/chat/completions '
+        '-H "Content-Type: application/json" '
+        '-d \'{"model": "Qwen/Qwen3-0.6B", "messages": [{"role": "user", '
+        '"content": "Hello!"}], "max_tokens": 50}\''
+    )
 
 def _install_dynamo_platform():
     """Install NVIDIA Dynamo CRDs and operator via Helm.
@@ -2057,13 +2083,13 @@ def _install_dynamo_platform():
             dynamo_version,
             "--namespace",
             dynamo_namespace,
-            # Operator controller manager tolerations
+            # Operator controller manager tolerations (dynamo-operator subchart)
             "--set",
-            "operator.controllerManager.tolerations[0].key=nvidia.com/gpu",
+            "dynamo-operator.controllerManager.tolerations[0].key=nvidia.com/gpu",
             "--set",
-            "operator.controllerManager.tolerations[0].operator=Exists",
+            "dynamo-operator.controllerManager.tolerations[0].operator=Exists",
             "--set",
-            "operator.controllerManager.tolerations[0].effect=NoSchedule",
+            "dynamo-operator.controllerManager.tolerations[0].effect=NoSchedule",
             # Etcd tolerations
             "--set",
             "etcd.tolerations[0].key=nvidia.com/gpu",

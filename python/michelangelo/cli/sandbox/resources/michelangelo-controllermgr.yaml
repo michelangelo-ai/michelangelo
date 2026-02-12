@@ -9,6 +9,7 @@ spec:
   containers:
     - name: app
       image: ghcr.io/michelangelo-ai/controllermgr:ghosharitra-dynamo-integration
+      imagePullPolicy: Always
       volumeMounts:
         - name: config-volume
           mountPath: /config

@@ -326,7 +326,11 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 					"VllmDecodeWorker": map[string]interface{}{
 						"componentType":    "worker", // Required for Dynamo operator discovery
 						"subComponentType": "decode", // Decode worker type
-						"replicas":         replicas,
+						// modelRef links this worker to DynamoModel for LoRA adapter support
+						"modelRef": map[string]interface{}{
+							"name": modelName,
+						},
+						"replicas": replicas,
 						"resources": map[string]interface{}{
 							"requests": map[string]interface{}{
 								"cpu":            cpuCount,

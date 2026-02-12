@@ -32,4 +32,7 @@ type Backend interface {
 	IsHealthy(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName string, namespace string) (bool, error)
 	// CheckModelStatus checks the status of a model on an inference server.
 	CheckModelStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, httpClient *http.Client, inferenceServerName string, namespace string, modelName string) (bool, error)
+
+	// GetFrontEndSvc ---> should return the service that we link to the deployment route.
+	// LoadModel/UnloadModel is also needed for direct loading/unloading of models.
 }
