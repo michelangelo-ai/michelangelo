@@ -128,7 +128,8 @@ class FileSync(ABC):
             for file_path in all_changed_files:
                 path = Path(git_root) / file_path  # Make path relative to git root
                 if path.exists():
-                    # Strip 'python/' prefix if present since Dockerfile copies python/ to /app
+                    # Strip 'python/' prefix if present since
+                    # Dockerfile copies python/ to /app
                     arcname = file_path
                     if arcname.startswith("python/"):
                         arcname = arcname[7:]  # Remove 'python/' prefix
@@ -136,7 +137,7 @@ class FileSync(ABC):
         return bb.getvalue()
 
     def create_and_upload_tarball(self) -> str:
-        """Create a tarball of the changed files in the Git repository and upload it to the remote storage.
+        """Create a tarball of changed files and upload to remote storage.
 
         Returns:
             The remote file path, or None if the remote file path is not set
@@ -206,7 +207,8 @@ class DefaultFileSync(FileSync):
                     return git_sha
 
             log.info(
-                f"Git SHA not found in Docker image '{docker_image}' labels or environment variables. "
+                f"Git SHA not found in Docker image '{docker_image}' "
+                "labels or environment variables. "
                 "Will create tarball with all uncommitted changes."
             )
             return None
@@ -273,9 +275,10 @@ class FsspecDownloader(StorageDownloader):
         """Download using fsspec (works with S3, MinIO, etc)."""
         try:
             logger.info(f"Downloading from: {remote_path}")
-            with fsspec.open(remote_path, "rb") as remote_file:
-                with open(local_path, "wb") as local_file:
-                    local_file.write(remote_file.read())
+            with fsspec.open(remote_path, "rb") as remote_file, open(
+                local_path, "wb"
+            ) as local_file:
+                local_file.write(remote_file.read())
 
             logger.info(f"Successfully downloaded to: {local_path}")
             return True
@@ -285,7 +288,9 @@ class FsspecDownloader(StorageDownloader):
 
 
 def download_and_extract_dev_files(*, downloader: StorageDownloader):
-    """Download and extract development files from remote storage with following steps:
+    """Download and extract development files from remote storage.
+
+    Steps:
     1. Check for UF_FILE_SYNC_TARBALL_URL environment variable
     2. Download tarball using appropriate downloader (tb-cli or fsspec)
     3. Extract and replace files in current working directory
@@ -366,11 +371,15 @@ def file_sync_pre_run(downloader: StorageDownloader):
     _file_sync_executed = True
 
     if os.environ.get("UF_FILE_SYNC_TARBALL_URL"):
-        log.info("Development file sync starting...")
-        success = download_and_extract_dev_files(downloader=downloader)
-        if success:
-            log.info("Development file sync completed")
-        else:
-            log.warning("Development file sync failed (check logs above)")
+        try:
+            log.info("Development file sync starting...")
+            success = download_and_extract_dev_files(downloader=downloader)
+            if success:
+                log.info("Development file sync completed")
+            else:
+                log.warning("Development file sync failed (check logs above)")
+        except Exception as e:
+            log.error(f"Error during file sync: {e}")
+            # Continue despite errors to avoid breaking containers
     else:
         log.info("No development files to sync (UF_FILE_SYNC_TARBALL_URL not set)")

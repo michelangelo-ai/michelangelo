@@ -15,7 +15,6 @@ import traceback
 
 from michelangelo.uniflow.core.file_sync import FsspecDownloader, file_sync_pre_run
 
-
 # Run the file sync pre-run functionality automatically when this module is imported
 if __name__ != "__main__":  # pragma: no cover
     # Initialize module-level logger
@@ -40,7 +39,8 @@ if __name__ != "__main__":  # pragma: no cover
         log.info(f"Python executable: {sys.executable}")
         log.info(f"Working directory: {os.getcwd()}")
         log.info(
-            f"UF_FILE_SYNC_TARBALL_URL: {os.environ.get('UF_FILE_SYNC_TARBALL_URL', 'NOT SET')}"
+            "UF_FILE_SYNC_TARBALL_URL: "
+            f"{os.environ.get('UF_FILE_SYNC_TARBALL_URL', 'NOT SET')}"
         )
     else:
         # Disable logger completely if not in debug mode

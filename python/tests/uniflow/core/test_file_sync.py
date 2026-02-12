@@ -344,8 +344,9 @@ class TestFsspecDownloader(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures"""
-        from michelangelo.uniflow.core.file_sync import FsspecDownloader
         import logging
+
+        from michelangelo.uniflow.core.file_sync import FsspecDownloader
 
         self.downloader = FsspecDownloader()
         self.logger = logging.getLogger("test")
@@ -445,6 +446,153 @@ class TestFsspecDownloader(unittest.TestCase):
 
             self.assertTrue(result)
             self.assertEqual(local_path.stat().st_size, len(fake_data))
+
+
+class TestDownloadAndExtractDevFiles(unittest.TestCase):
+    """Unit tests for download_and_extract_dev_files function"""
+
+    @patch.dict(os.environ, {}, clear=True)
+    def test_returns_false_when_no_tarball_url(self):
+        """Test that function returns False when UF_FILE_SYNC_TARBALL_URL is not set"""
+        from michelangelo.uniflow.core.file_sync import (
+            FsspecDownloader,
+            download_and_extract_dev_files,
+        )
+
+        downloader = FsspecDownloader()
+        result = download_and_extract_dev_files(downloader=downloader)
+        self.assertFalse(result)
+
+    @patch("michelangelo.uniflow.core.file_sync.Path.cwd")
+    @patch("shutil.copy2")
+    @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
+    def test_successful_download_and_extract(self, mock_copy, mock_cwd):
+        """Test successful download, extract, and copy workflow"""
+        from michelangelo.uniflow.core.file_sync import (
+            FsspecDownloader,
+            download_and_extract_dev_files,
+        )
+
+        with tempfile.TemporaryDirectory() as fake_repo_root:
+            mock_cwd.return_value = Path(fake_repo_root)
+
+            # Create a real tarball with test content
+            with tempfile.TemporaryDirectory() as tar_source_dir:
+                test_file = Path(tar_source_dir) / "test.py"
+                test_file.write_text("print('test')")
+
+                tarball_bytes = io.BytesIO()
+                with tarfile.open(fileobj=tarball_bytes, mode="w:gz") as tar:
+                    tar.add(test_file, arcname="test.py")
+                tarball_bytes.seek(0)
+
+                # Mock the downloader to write the tarball
+                def mock_download(remote_path, local_path, logger):
+                    local_path.write_bytes(tarball_bytes.getvalue())
+                    return True
+
+                downloader = FsspecDownloader()
+                with patch.object(downloader, "download", side_effect=mock_download):
+                    result = download_and_extract_dev_files(downloader=downloader)
+
+                self.assertTrue(result)
+                # Verify copy was called (file was applied)
+                self.assertGreater(mock_copy.call_count, 0)
+
+    @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
+    def test_returns_false_when_download_fails(self):
+        """Test that function returns False when download fails"""
+        from michelangelo.uniflow.core.file_sync import (
+            FsspecDownloader,
+            download_and_extract_dev_files,
+        )
+
+        downloader = FsspecDownloader()
+        # Mock download to fail
+        with patch.object(downloader, "download", return_value=False):
+            result = download_and_extract_dev_files(downloader=downloader)
+            self.assertFalse(result)
+
+    @patch("tarfile.open")
+    @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
+    def test_returns_false_when_extraction_fails(self, mock_tarfile_open):
+        """Test that function returns False when tarball extraction fails"""
+        from michelangelo.uniflow.core.file_sync import (
+            FsspecDownloader,
+            download_and_extract_dev_files,
+        )
+
+        # Mock download to succeed
+        downloader = FsspecDownloader()
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tarball_path = Path(tmp_dir) / "test.tar.gz"
+            tarball_path.write_bytes(b"fake tarball")
+
+            def mock_download(remote_path, local_path, logger):
+                local_path.write_bytes(b"fake tarball")
+                return True
+
+            # Mock tarfile.open to raise TarError
+            mock_tarfile_open.side_effect = tarfile.TarError("Invalid tarball")
+
+            with patch.object(downloader, "download", side_effect=mock_download):
+                result = download_and_extract_dev_files(downloader=downloader)
+                self.assertFalse(result)
+
+    @patch("michelangelo.uniflow.core.file_sync.Path.cwd")
+    @patch("shutil.copy2")
+    @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
+    def test_extracts_multiple_files(self, mock_copy, mock_cwd):
+        """Test extraction and copying of multiple files"""
+        from michelangelo.uniflow.core.file_sync import (
+            FsspecDownloader,
+            download_and_extract_dev_files,
+        )
+
+        with tempfile.TemporaryDirectory() as fake_repo_root:
+            mock_cwd.return_value = Path(fake_repo_root)
+
+            # Create a tarball with multiple files
+            with tempfile.TemporaryDirectory() as tar_source_dir:
+                (Path(tar_source_dir) / "file1.py").write_text("print('file1')")
+                (Path(tar_source_dir) / "file2.py").write_text("print('file2')")
+                subdir = Path(tar_source_dir) / "subdir"
+                subdir.mkdir()
+                (subdir / "file3.py").write_text("print('file3')")
+
+                tarball_bytes = io.BytesIO()
+                with tarfile.open(fileobj=tarball_bytes, mode="w:gz") as tar:
+                    tar.add(tar_source_dir, arcname=".")
+                tarball_bytes.seek(0)
+
+                def mock_download(remote_path, local_path, logger):
+                    local_path.write_bytes(tarball_bytes.getvalue())
+                    return True
+
+                downloader = FsspecDownloader()
+                with patch.object(downloader, "download", side_effect=mock_download):
+                    result = download_and_extract_dev_files(downloader=downloader)
+
+                self.assertTrue(result)
+                # Should have copied multiple files
+                self.assertGreaterEqual(mock_copy.call_count, 3)
+
+    @patch("michelangelo.uniflow.core.file_sync.Path.cwd")
+    @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
+    def test_handles_unexpected_errors(self, mock_cwd):
+        """Test that function handles unexpected errors gracefully"""
+        from michelangelo.uniflow.core.file_sync import (
+            FsspecDownloader,
+            download_and_extract_dev_files,
+        )
+
+        # Make cwd() raise an exception
+        mock_cwd.side_effect = Exception("Unexpected error")
+        downloader = FsspecDownloader()
+
+        with patch.object(downloader, "download", return_value=True):
+            result = download_and_extract_dev_files(downloader=downloader)
+            self.assertFalse(result)
 
 
 class TestFileSyncPreRun(unittest.TestCase):
@@ -556,6 +704,23 @@ class TestFileSyncPreRun(unittest.TestCase):
 
         # Flag should be True even though download failed
         self.assertTrue(file_sync_module._file_sync_executed)
+
+    @patch("michelangelo.uniflow.core.file_sync.download_and_extract_dev_files")
+    @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
+    def test_calls_download_and_extract_with_downloader(self, mock_download):
+        """Test file_sync_pre_run calls download_and_extract_dev_files."""
+        from michelangelo.uniflow.core.file_sync import (
+            FsspecDownloader,
+            file_sync_pre_run,
+        )
+
+        mock_download.return_value = True
+        downloader = FsspecDownloader()
+
+        file_sync_pre_run(downloader=downloader)
+
+        # Verify download_and_extract_dev_files was called with the downloader
+        mock_download.assert_called_once_with(downloader=downloader)
 
 
 if __name__ == "__main__":
