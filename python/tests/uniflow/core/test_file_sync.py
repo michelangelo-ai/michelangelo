@@ -307,3 +307,242 @@ class TestDefaultFileSync(unittest.TestCase):
 
             # Verify create_diff_tarball_bytes was called
             mock_create_tarball.assert_called_once()
+
+
+class TestStorageDownloader(unittest.TestCase):
+    """Basic unit tests for StorageDownloader and FsspecDownloader"""
+
+    def test_storage_downloader_is_abstract(self):
+        """Test that StorageDownloader cannot be instantiated directly"""
+        from michelangelo.uniflow.core.file_sync import StorageDownloader
+
+        with self.assertRaises(TypeError):
+            # Should fail because it's abstract
+            StorageDownloader()
+
+    def test_fsspec_downloader_exists(self):
+        """Test that FsspecDownloader class exists and can be instantiated"""
+        from michelangelo.uniflow.core.file_sync import FsspecDownloader
+
+        # Should not raise
+        downloader = FsspecDownloader()
+        self.assertIsNotNone(downloader)
+
+    def test_download_and_extract_dev_files_exists(self):
+        """Test that download_and_extract_dev_files function exists"""
+        from michelangelo.uniflow.core.file_sync import (
+            download_and_extract_dev_files,
+        )
+
+        # Should not raise
+        self.assertIsNotNone(download_and_extract_dev_files)
+        self.assertTrue(callable(download_and_extract_dev_files))
+
+
+class TestFsspecDownloader(unittest.TestCase):
+    """Unit tests for FsspecDownloader"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        from michelangelo.uniflow.core.file_sync import FsspecDownloader
+        import logging
+
+        self.downloader = FsspecDownloader()
+        self.logger = logging.getLogger("test")
+
+    def test_fsspec_downloader_has_download_method(self):
+        """Test that FsspecDownloader has a download method"""
+        self.assertTrue(hasattr(self.downloader, "download"))
+        self.assertTrue(callable(self.downloader.download))
+
+    @patch("fsspec.open")
+    def test_download_success(self, mock_fsspec_open):
+        """Test successful download using fsspec"""
+        # Mock fsspec.open to return fake tarball data
+        fake_data = b"fake tarball content"
+        mock_remote_file = MagicMock()
+        mock_remote_file.read.return_value = fake_data
+        mock_fsspec_open.return_value.__enter__.return_value = mock_remote_file
+
+        # Create a temporary file path
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            local_path = Path(tmp_dir) / "test.tar.gz"
+
+            # Call download
+            result = self.downloader.download(
+                "s3://bucket/path/file.tar.gz", local_path, self.logger
+            )
+
+            # Verify success
+            self.assertTrue(result)
+            mock_fsspec_open.assert_called_once_with(
+                "s3://bucket/path/file.tar.gz", "rb"
+            )
+
+            # Verify file was written
+            self.assertTrue(local_path.exists())
+            with open(local_path, "rb") as f:
+                self.assertEqual(f.read(), fake_data)
+
+    @patch("fsspec.open")
+    def test_download_fsspec_error(self, mock_fsspec_open):
+        """Test download failure due to fsspec error"""
+        # Mock fsspec.open to raise an exception
+        mock_fsspec_open.side_effect = Exception("S3 connection failed")
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            local_path = Path(tmp_dir) / "test.tar.gz"
+
+            # Call download
+            result = self.downloader.download(
+                "s3://bucket/path/file.tar.gz", local_path, self.logger
+            )
+
+            # Verify failure
+            self.assertFalse(result)
+            # File should not exist
+            self.assertFalse(local_path.exists())
+
+    @patch("fsspec.open")
+    def test_download_with_different_protocols(self, mock_fsspec_open):
+        """Test download with different storage protocols (S3, MinIO, etc.)"""
+        fake_data = b"test data"
+        mock_remote_file = MagicMock()
+        mock_remote_file.read.return_value = fake_data
+        mock_fsspec_open.return_value.__enter__.return_value = mock_remote_file
+
+        test_paths = [
+            "s3://bucket/file.tar.gz",
+            "s3://minio-bucket/path/to/file.tar.gz",
+            "hdfs:///path/to/file.tar.gz",
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            for remote_path in test_paths:
+                mock_fsspec_open.reset_mock()
+                local_path = Path(tmp_dir) / f"test_{hash(remote_path)}.tar.gz"
+
+                result = self.downloader.download(remote_path, local_path, self.logger)
+
+                self.assertTrue(result, f"Failed for {remote_path}")
+                mock_fsspec_open.assert_called_once_with(remote_path, "rb")
+
+    @patch("fsspec.open")
+    def test_download_large_file(self, mock_fsspec_open):
+        """Test download of large file (simulated)"""
+        # Simulate a 10MB file
+        fake_data = b"x" * (10 * 1024 * 1024)  # 10MB
+        mock_remote_file = MagicMock()
+        mock_remote_file.read.return_value = fake_data
+        mock_fsspec_open.return_value.__enter__.return_value = mock_remote_file
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            local_path = Path(tmp_dir) / "large_file.tar.gz"
+
+            result = self.downloader.download(
+                "s3://bucket/large.tar.gz", local_path, self.logger
+            )
+
+            self.assertTrue(result)
+            self.assertEqual(local_path.stat().st_size, len(fake_data))
+
+
+class TestFileSyncPreRun(unittest.TestCase):
+    """Unit tests for file_sync_pre_run function"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        # Reset the global flag before each test
+        import michelangelo.uniflow.core.file_sync as file_sync_module
+        file_sync_module._file_sync_executed = False
+
+    def tearDown(self):
+        """Clean up after each test"""
+        # Reset the global flag after each test
+        import michelangelo.uniflow.core.file_sync as file_sync_module
+        file_sync_module._file_sync_executed = False
+
+    @patch("michelangelo.uniflow.core.file_sync.download_and_extract_dev_files")
+    @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
+    def test_file_sync_executed_flag_prevents_double_execution(self, mock_download):
+        """Test that _file_sync_executed flag prevents multiple executions"""
+        from michelangelo.uniflow.core.file_sync import FsspecDownloader, file_sync_pre_run
+
+        mock_download.return_value = True
+        downloader = FsspecDownloader()
+
+        # First call should execute
+        file_sync_pre_run(downloader=downloader)
+        self.assertEqual(mock_download.call_count, 1)
+
+        # Second call should be skipped due to flag
+        file_sync_pre_run(downloader=downloader)
+        self.assertEqual(mock_download.call_count, 1)  # Still 1, not 2
+
+        # Third call should also be skipped
+        file_sync_pre_run(downloader=downloader)
+        self.assertEqual(mock_download.call_count, 1)  # Still 1, not 3
+
+    @patch("michelangelo.uniflow.core.file_sync.download_and_extract_dev_files")
+    @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
+    def test_file_sync_executed_flag_is_set_after_first_call(self, mock_download):
+        """Test that _file_sync_executed flag is set to True after first execution"""
+        import michelangelo.uniflow.core.file_sync as file_sync_module
+        from michelangelo.uniflow.core.file_sync import FsspecDownloader, file_sync_pre_run
+
+        mock_download.return_value = True
+        downloader = FsspecDownloader()
+
+        # Flag should be False initially
+        self.assertFalse(file_sync_module._file_sync_executed)
+
+        # Execute
+        file_sync_pre_run(downloader=downloader)
+
+        # Flag should be True after execution
+        self.assertTrue(file_sync_module._file_sync_executed)
+
+    @patch("michelangelo.uniflow.core.file_sync.download_and_extract_dev_files")
+    @patch.dict(os.environ, {}, clear=True)
+    def test_file_sync_executed_flag_set_even_without_tarball_url(self, mock_download):
+        """Test that flag is set even when UF_FILE_SYNC_TARBALL_URL is not set"""
+        import michelangelo.uniflow.core.file_sync as file_sync_module
+        from michelangelo.uniflow.core.file_sync import FsspecDownloader, file_sync_pre_run
+
+        downloader = FsspecDownloader()
+
+        # Flag should be False initially
+        self.assertFalse(file_sync_module._file_sync_executed)
+
+        # Execute (should just log and return, but still set flag)
+        file_sync_pre_run(downloader=downloader)
+
+        # Flag should be True even though no download happened
+        self.assertTrue(file_sync_module._file_sync_executed)
+
+        # Download should not have been called
+        mock_download.assert_not_called()
+
+    @patch("michelangelo.uniflow.core.file_sync.download_and_extract_dev_files")
+    @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
+    def test_file_sync_executed_flag_set_even_on_error(self, mock_download):
+        """Test that flag is set even when download fails"""
+        import michelangelo.uniflow.core.file_sync as file_sync_module
+        from michelangelo.uniflow.core.file_sync import FsspecDownloader, file_sync_pre_run
+
+        # Make download fail
+        mock_download.side_effect = Exception("Download failed")
+        downloader = FsspecDownloader()
+
+        # Flag should be False initially
+        self.assertFalse(file_sync_module._file_sync_executed)
+
+        # Execute (will catch exception internally)
+        file_sync_pre_run(downloader=downloader)
+
+        # Flag should be True even though download failed
+        self.assertTrue(file_sync_module._file_sync_executed)
+
+
+if __name__ == "__main__":
+    unittest.main()
