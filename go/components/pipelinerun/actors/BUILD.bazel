@@ -6,6 +6,7 @@ go_library(
         "executeworkflow.go",
         "imagebuild.go",
         "sourcepipeline.go",
+        "yaml_converter.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/actors",
     visibility = ["//visibility:public"],
@@ -25,6 +26,9 @@ go_library(
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@org_uber_go_config//:go_default_library",
         "@org_uber_go_zap//:go_default_library",
+        "@org_golang_google_protobuf//types/known/anypb:go_default_library",
+        "@org_golang_google_protobuf//types/known/wrapperspb:go_default_library",
+        "@@gazelle~~go_deps~in_gopkg_yaml_v3//:yaml_v3",
     ],
 )
 
@@ -34,6 +38,7 @@ go_test(
         "executeworkflow_test.go",
         "imagebuild_test.go",
         "sourcepipeline_test.go",
+        "yaml_converter_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
@@ -57,5 +62,8 @@ go_test(
         "@io_k8s_sigs_controller_runtime//pkg/client/fake:go_default_library",
         "@org_uber_go_config//:go_default_library",
         "@org_uber_go_zap//zaptest:go_default_library",
+        "@org_golang_google_protobuf//types/known/anypb:go_default_library",
+        "@org_golang_google_protobuf//types/known/wrapperspb:go_default_library",
+        "@@gazelle~~go_deps~com_github_gogo_protobuf//types:types",
     ],
 )

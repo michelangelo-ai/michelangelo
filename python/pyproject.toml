@@ -52,6 +52,11 @@ xgboost = {version = "2.1.4", optional = true }
 kaggle = { version = "^1.6.17", optional = true }
 scikit-learn = { version = "^1.5.2", optional = true }
 
+# For notebook workflow example
+nbformat = { version = "^5.10.0", optional = true }
+nbconvert = { version = "^7.16.0", optional = true }
+matplotlib = { version = "^3.8.0", optional = true }
+
 # For MLflow model packaging
 mlflow = { version = "^2.0.0", optional = true }
 boto3 = { version = "^1.40.0", optional = true }
@@ -74,7 +79,7 @@ ma = 'michelangelo.cli.cli:main'
 [tool.poetry.extras]
 dev = ["pytest", "pytest-cov", "coverage", "ruff", "jinja2", "pre-commit", "docker", "torch", "pandas", "numpy", "transformers", "pyarrow", "pytorch_lightning", "ray", "grpcio-reflection", "PyYAML", "GitPython"]
 plugin = ["ray", "pyspark"]
-example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "xgboost", "xgboost_ray", "kaggle", "scikit-learn", "chronon-ai", "thrift", "sqlglot", "pyspark", "ray", "mlflow", "boto3", "peft"]
+example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "xgboost", "xgboost_ray", "kaggle", "scikit-learn", "chronon-ai", "thrift", "sqlglot", "pyspark", "ray", "mlflow", "boto3", "peft", "nbformat", "nbconvert", "matplotlib"]
 vllm = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "vllm", "setuptools"]
 mactl = ["grpcio-reflection", "PyYAML", "GitPython"]
 
