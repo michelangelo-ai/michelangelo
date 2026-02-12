@@ -36,7 +36,7 @@ func (a *ResourceAcquisitionActor) Retrieve(ctx context.Context, resource *v2pb.
 	}
 
 	// Check if the inference server is healthy
-	if healthy, err := a.gateway.InferenceServerIsHealthy(ctx, a.logger, a.client, resource.Spec.GetInferenceServer().Name, resource.Namespace, v2pb.BACKEND_TYPE_TRITON); err != nil {
+	if healthy, err := a.gateway.InferenceServerIsHealthy(ctx, a.logger, a.client, resource.Spec.GetInferenceServer().Name, resource.Namespace, v2pb.BACKEND_TYPE_DYNAMO); err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "HealthCheckFailed", fmt.Sprintf("Failed to check health of inference server: %v", err)), nil
 	} else if !healthy {
 		return conditionsutil.GenerateFalseCondition(condition, "HealthCheckFailed", "Inference server is not healthy"), nil
