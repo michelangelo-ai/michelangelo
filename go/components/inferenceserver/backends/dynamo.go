@@ -394,6 +394,8 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 									fmt.Sprintf("--model=%s", modelName),
 									"--connector=none", // Disable NIXL connector (requires UCX/RDMA not available on standard GKE)
 									"--kv-events-config={\"enable_kv_cache_events\": false}",
+									"--enable-lora",      // Enable LoRA adapter support
+									"--max-lora-rank=64", // Maximum LoRA rank supported
 								},
 								// Required for GKE GPU nodes - sets CUDA library paths and GPU visibility
 								"env": []interface{}{
@@ -408,6 +410,24 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 									map[string]interface{}{
 										"name":  "NVIDIA_DRIVER_CAPABILITIES",
 										"value": "compute,utility",
+									},
+									// LoRA support environment variables
+									map[string]interface{}{
+										"name":  "DYN_LORA_ENABLED",
+										"value": "true",
+									},
+									map[string]interface{}{
+										"name":  "DYN_LORA_PATH",
+										"value": "/tmp/dynamo_loras",
+									},
+									// System status server for LoRA API
+									map[string]interface{}{
+										"name":  "DYN_SYSTEM_ENABLED",
+										"value": "true",
+									},
+									map[string]interface{}{
+										"name":  "DYN_SYSTEM_PORT",
+										"value": "9090",
 									},
 								},
 								// GPU resource for the container (required for nvidia driver injection)
