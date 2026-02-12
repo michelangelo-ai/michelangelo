@@ -11,6 +11,7 @@ automatic execution without explicit container startup script modifications.
 import logging
 import os
 import shutil
+import sys
 import tarfile
 import tempfile
 import traceback
@@ -19,11 +20,12 @@ from pathlib import Path
 
 import fsspec
 
+# Global flag to ensure file_sync_pre_run only executes once per process
+_file_sync_executed = False
 
-def _get_logger(context="uniflow_task_pre_run"):
-    """Get a configured logger for the pre-run script."""
-    logging.basicConfig(level=logging.INFO, format=f"[{context}] %(message)s")
-    return logging.getLogger(f"uniflow.{context}")
+# Initialize module-level logger
+logger = logging.getLogger("michelangelo.uniflow.sitecustomize")
+logger.propagate = False
 
 
 class StorageDownloader(ABC):
@@ -74,15 +76,16 @@ def download_and_extract_dev_files(*, downloader: StorageDownloader, logger=None
     4. Clean up temporary files
 
     Args:
-        logger: Optional logger instance (will create one if not provided)
-        downloader: Optional StorageDownloader instance (auto-detected if not provided)
+        downloader: StorageDownloader instance for downloading files
+        logger: Optional logger instance (uses module logger if not provided)
 
     Returns:
         bool: True if files were processed, False if skipped or failed
     """
+    # Use module-level logger if none provided
     if logger is None:
-        logger = _get_logger()
-
+        logger = globals()['logger']
+    
     # Check for the required environment variable
     remote_file_path = os.environ.get("UF_FILE_SYNC_TARBALL_URL")
     if not remote_file_path:
@@ -136,43 +139,61 @@ def download_and_extract_dev_files(*, downloader: StorageDownloader, logger=None
         return False
 
 
-def file_sync_pre_run():
-    """Automatically run the pre-run script if environment conditions are met.
+def file_sync_pre_run(downloader: StorageDownloader, logger=None):
+    """Automatically run the pre_run script if environment conditions are met.
 
     This is the entry point used by sitecustomize.py for automatic execution.
     It includes additional safety checks and logging for the container environment.
+
+    Args:
+        downloader: StorageDownloader instance for downloading files (required).
+        logger: Optional logger instance. If not provided, uses module-level logger.
     """
-    logger = _get_logger("sitecustomize")
+    global _file_sync_executed
+    # Only run once per Python process
+    if _file_sync_executed:
+        return
+    _file_sync_executed = True
 
-    if os.environ.get("UF_FILE_SYNC_TARBALL_URL"):
-        logger.info("Development file sync starting...")
-        success = download_and_extract_dev_files(
-            downloader=FsspecDownloader(), logger=logger
-        )
-        if success:
-            logger.info("Development file sync completed")
-        else:
-            logger.warning("Development file sync failed (check logs above)")
+    # Use module-level logger if none provided
+    if logger is None:
+        logger = globals()['logger']
+
+    # Check if debug mode is enabled via environment variable
+    debug_mode = os.environ.get("UF_FILE_SYNC_DEBUG", "").lower() in ("1", "true", "yes")
+    
+    # Configure logger based on debug mode
+    if debug_mode:
+        logger.setLevel(logging.INFO)
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(logging.Formatter("[sitecustomize] %(message)s"))
+        logger.addHandler(handler)
+        
+        # Print debug info
+        logger.info(f"Python executable: {sys.executable}")
+        logger.info(f"Working directory: {os.getcwd()}")
+        logger.info(f"UF_FILE_SYNC_TARBALL_URL: {os.environ.get('UF_FILE_SYNC_TARBALL_URL', 'NOT SET')}")
     else:
-        logger.info("No development files to sync (UF_FILE_SYNC_TARBALL_URL not set)")
+        # Disable logger completely if not in debug mode
+        logger.disabled = True
 
+    try:
+        if os.environ.get("UF_FILE_SYNC_TARBALL_URL"):
+            logger.info("Development file sync starting...")
+            success = download_and_extract_dev_files(
+                downloader=downloader, logger=logger
+            )
+            if success:
+                logger.info("Development file sync completed")
+            else:
+                logger.warning("Development file sync failed (check logs above)")
+        else:
+            logger.info("No development files to sync (UF_FILE_SYNC_TARBALL_URL not set)")
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        # Continue despite errors to avoid breaking containers
 
 # Run the file sync pre-run functionality automatically when this module is imported
 if __name__ != "__main__":
-    import sys
-
-    print(f"[sitecustomize] Python executable: {sys.executable}")
-    print(f"[sitecustomize] Working directory: {os.getcwd()}")
-    print(
-        f"[sitecustomize] UF_FILE_SYNC_TARBALL_URL: {os.environ.get('UF_FILE_SYNC_TARBALL_URL', 'NOT SET')}"
-    )
-
-    try:
-        file_sync_pre_run()
-    except Exception as e:
-        # Never let sitecustomize errors break Python startup
-        import traceback
-
-        print(f"[sitecustomize] Error: {e}")
-        print(f"[sitecustomize] Traceback: {traceback.format_exc()}")
-        # Continue despite errors to avoid breaking containers
+    file_sync_pre_run(downloader=FsspecDownloader())
