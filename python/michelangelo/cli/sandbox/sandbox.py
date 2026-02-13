@@ -470,11 +470,11 @@ CR_PAT environment variable, e.g.: `export CR_PAT=ghp_...`.
         if "controllermgr" not in ns.exclude:
             resources.append("michelangelo-temporal-controllermgr.yaml")
     elif ns.workflow == "cadence":
-        _create_cadence_domain(links)
-        if "worker" not in ns.exclude:
-            _kube_create(_dir / "resources/michelangelo-worker.yaml")
-        if "controllermgr" not in ns.exclude:
-            resources.append("michelangelo-controllermgr.yaml")
+        # Only create cadence domain if cadence is actually deployed
+        if "cadence" not in ns.exclude and "mysql" not in ns.exclude:
+            _create_cadence_domain(links)
+            if "worker" not in ns.exclude:
+                _kube_create(_dir / "resources/michelangelo-worker.yaml")
     else:
         raise ValueError(f"Unsupported workflow engine: {ns.workflow}")
 
