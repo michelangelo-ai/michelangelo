@@ -348,6 +348,8 @@ func (b *dynamoSelfProvisionBackend) createFrontend(ctx context.Context, logger 
 								{Name: "DYN_NAMESPACE", Value: "dynamo"},
 								{Name: "DYN_COMPONENT", Value: "Frontend"},
 								{Name: "DYN_DISCOVERY_BACKEND", Value: "kubernetes"},
+								// Use in-memory KV store (no external etcd needed for aggregated mode)
+								{Name: "DYN_STORE_KV", Value: "mem"},
 								{Name: "DYN_HTTP_PORT", Value: fmt.Sprintf("%d", frontendPort)},
 								{Name: "DYNAMO_PORT", Value: fmt.Sprintf("%d", frontendPort)},
 								// Pod identity (Downward API)
@@ -552,6 +554,8 @@ func (b *dynamoSelfProvisionBackend) createWorker(ctx context.Context, logger *z
 								{Name: "DYN_NAMESPACE", Value: "dynamo"},
 								{Name: "DYN_COMPONENT", Value: "VllmDecodeWorker"},
 								{Name: "DYN_DISCOVERY_BACKEND", Value: "kubernetes"},
+								// Use in-memory KV store (no external etcd needed for aggregated mode)
+								{Name: "DYN_STORE_KV", Value: "mem"},
 								// System status server
 								{Name: "DYN_SYSTEM_ENABLED", Value: "true"},
 								{Name: "DYN_SYSTEM_PORT", Value: fmt.Sprintf("%d", workerSystemPort)},
