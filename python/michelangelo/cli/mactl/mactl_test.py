@@ -1,12 +1,13 @@
 """Unit tests for mactl CLI functions."""
 
+import os
+import tempfile
 from argparse import Namespace
 from importlib import reload
+from inspect import Parameter
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
-import os
-import tempfile
 
 from michelangelo.cli.mactl import mactl
 from michelangelo.cli.mactl.crd import CRD
@@ -19,9 +20,10 @@ from michelangelo.cli.mactl.mactl import (
     handle_crd_action_help,
     pre_parse_args,
     read_module_from_file,
+    read_plugin_command,
     read_plugin_modules,
+    read_plugins,
 )
-
 
 PWD = Path(__file__).parent.resolve()
 PLUGIN_TEST_DIR = PWD / "test" / "plugin_test"
@@ -356,12 +358,6 @@ class ReadPluginsTest(TestCase):
 
     def test_read_plugin_modules_read_multiple(self):
         """Test read_plugins returns a list of loaded modules."""
-        crd = CRD(
-            name="pipeline",
-            full_name="michelangelo.api.v2.PipelineService",
-            metadata=[],
-        )
-
         res = read_plugin_modules(
             "pipeline", [str(DEFAULT_DIR_PLUGINS), str(PLUGIN_TEST_DIR / "plugins_1")]
         )
@@ -378,6 +374,68 @@ class ReadPluginsTest(TestCase):
             res[1].__file__,
             str(PLUGIN_TEST_DIR / "plugins_1" / "entity" / "pipeline" / "main.py"),
         )
+
+    @patch.dict(
+        "michelangelo.cli.mactl.mactl._CONFIG",
+        {"plugins": [str(PLUGIN_TEST_DIR / "plugins_1")]},
+        clear=False,
+    )
+    def test_read_plugin_multiple(self):
+        """Test for `read_plugin()` with multiple plugin directories."""
+        crd = CRD(
+            name="pipeline",
+            full_name="michelangelo.api.v2.PipelineService",
+            metadata=[],
+        )
+        mock_channel = MagicMock()
+
+        # Run function.
+        read_plugins(crd, mock_channel)
+
+        # Check new function signature
+        self.assertTrue("fly" in crd.func_signature)
+        self.assertEqual(
+            crd.func_signature["fly"],
+            {
+                "help": "Fly away all pipelines.",
+                "args": [
+                    {
+                        "args": ["-n", "--namespace"],
+                        "func_signature": Parameter(
+                            "namespace",
+                            Parameter.POSITIONAL_OR_KEYWORD,
+                        ),
+                        "kwargs": {
+                            "help": "Namespace of the resource",
+                            "required": True,
+                            "type": str,
+                        },
+                    }
+                ]
+            },
+        )
+
+    @patch.dict(
+        "michelangelo.cli.mactl.mactl._CONFIG",
+        {"plugins": [str(PLUGIN_TEST_DIR / "plugins_1")]},
+        clear=False,
+    )
+    def test_read_plugin_command_multiple(self):
+        """Test for `read_plugin_command()` with multiple plugin directories."""
+        crd = CRD(
+            name="pipeline",
+            full_name="michelangelo.api.v2.PipelineService",
+            metadata=[],
+        )
+        mock_channel = MagicMock()
+
+        # Run function
+        read_plugin_command(crd, "apply", {"pipeline": crd}, mock_channel)
+        # Run overwritten function. mock args would be okay.
+        res = crd.func_crd_metadata_converter(Mock(), Mock(), Mock())
+
+        # Check result
+        self.assertEqual(res, {"test_spec": "plugin_1_test"})
 
 
 class ReadModuleFromFileTest(TestCase):
