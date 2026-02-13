@@ -1,8 +1,9 @@
-import React, {useState} from 'react';
+import React, {useState, useCallback, type KeyboardEvent} from 'react';
 import {Highlight, themes} from 'prism-react-renderer';
 import styles from '../../css/landing.module.css';
 
 type TabKey = 'python' | 'cli' | 'yaml';
+const tabKeys: TabKey[] = ['python', 'cli', 'yaml'];
 
 interface Tab {
   key: TabKey;
@@ -85,6 +86,36 @@ export default function CodeExample(): React.ReactElement {
   const [activeTab, setActiveTab] = useState<TabKey>('python');
   const currentTab = tabs.find((t) => t.key === activeTab) ?? tabs[0];
 
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLButtonElement>, tabKey: TabKey) => {
+      const currentIndex = tabKeys.indexOf(tabKey);
+      let newIndex: number | null = null;
+
+      switch (e.key) {
+        case 'ArrowLeft':
+          newIndex = currentIndex === 0 ? tabKeys.length - 1 : currentIndex - 1;
+          break;
+        case 'ArrowRight':
+          newIndex = currentIndex === tabKeys.length - 1 ? 0 : currentIndex + 1;
+          break;
+        case 'Home':
+          newIndex = 0;
+          break;
+        case 'End':
+          newIndex = tabKeys.length - 1;
+          break;
+      }
+
+      if (newIndex !== null) {
+        e.preventDefault();
+        const newTabKey = tabKeys[newIndex];
+        setActiveTab(newTabKey);
+        document.getElementById(`tab-${newTabKey}`)?.focus();
+      }
+    },
+    []
+  );
+
   return (
     <section className={styles.codeExample}>
       <div className={styles.codeExampleContainer}>
@@ -94,19 +125,30 @@ export default function CodeExample(): React.ReactElement {
         </p>
 
         <div className={styles.codeBlock}>
-          <div className={styles.codeTabs}>
+          <div className={styles.codeTabs} role="tablist" aria-label="Code examples">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
+                role="tab"
+                aria-selected={activeTab === tab.key}
+                aria-controls={`panel-${tab.key}`}
+                id={`tab-${tab.key}`}
+                tabIndex={activeTab === tab.key ? 0 : -1}
                 className={`${styles.codeTab} ${activeTab === tab.key ? styles.codeTabActive : ''}`}
                 onClick={() => setActiveTab(tab.key)}
+                onKeyDown={(e) => handleKeyDown(e, tab.key)}
               >
                 {tab.label}
               </button>
             ))}
           </div>
 
-          <div className={styles.codeContent}>
+          <div
+            className={styles.codeContent}
+            role="tabpanel"
+            id={`panel-${currentTab.key}`}
+            aria-labelledby={`tab-${currentTab.key}`}
+          >
             <Highlight
               theme={themes.dracula}
               code={currentTab.code}
