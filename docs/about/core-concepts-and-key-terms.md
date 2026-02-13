@@ -125,9 +125,10 @@ A Model Family is a group of related ML models within a project that address dif
 
 **Familiar Equivalent**: Similar to organizing multiple models within one Kubeflow or SageMaker pipeline, where each model has a specific role in solving the overall problem.
 
-⚠️ **Common Confusion**:
+:::warning[Common Confusion]
 - A **Model** is a single trained artifact (e.g., one XGBoost classifier)
 - A **Model Family** is a group of models solving related sub-problems (e.g., three models for conversion, quality, and fairness in ranking)
+:::
 
 **Examples**:
 -   Model excellence scores track the quality of each model family
