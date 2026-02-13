@@ -16,7 +16,7 @@ func NewBackendRegistry() *Registry {
 
 	// Register default backends
 	registry.Register(v2pb.BACKEND_TYPE_TRITON, NewTritonBackend())
-	registry.Register(v2pb.BACKEND_TYPE_DYNAMO, NewDynamoSelfProvisionBackend())
+	registry.Register(v2pb.BACKEND_TYPE_DYNAMO, NewDynamoBackend())
 
 	return registry
 }

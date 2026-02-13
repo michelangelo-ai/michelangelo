@@ -284,7 +284,8 @@ func generateDynamoModelServiceName(baseModelName string) string {
 }
 
 // buildDynamoGraphDeployment creates an unstructured DynamoGraphDeployment CR.
-// This uses the inline configuration format for vLLM aggregated deployment.
+// This uses the inline configuration format for vLLM disaggregated deployment
+// with separate Prefill and Decode workers.
 func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.InferenceServer) *unstructured.Unstructured {
 	replicas := int64(inferenceServer.Spec.InitSpec.NumInstances)
 	if replicas == 0 {
@@ -324,8 +325,9 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 				},
 			},
 			"spec": map[string]interface{}{
-				// Aggregated vLLM deployment configuration
-				// This deploys Frontend + VllmDecodeWorker as a simple serving setup
+				// Disaggregated vLLM deployment configuration
+				// This deploys Frontend + VllmPrefillWorker + VllmDecodeWorker
+				// for prefill/decode separation (P/D disaggregation)
 				"services": map[string]interface{}{
 					// Frontend: OpenAI-compatible HTTP server
 					"Frontend": map[string]interface{}{
@@ -363,7 +365,81 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 							},
 						},
 					},
-					// VllmDecodeWorker: vLLM inference worker (aggregated mode)
+					// VllmPrefillWorker: Prefill-only worker for disaggregated serving
+					"VllmPrefillWorker": map[string]interface{}{
+						"componentType":    "worker",  // Required for Dynamo operator discovery
+						"subComponentType": "prefill", // Prefill worker type
+						"replicas":         replicas,
+						"resources": map[string]interface{}{
+							"requests": map[string]interface{}{
+								"cpu":            cpuCount,
+								"memory":         memory,
+								"nvidia.com/gpu": fmt.Sprintf("%d", gpuCount),
+							},
+							"limits": map[string]interface{}{
+								"cpu":            cpuCount,
+								"memory":         memory,
+								"nvidia.com/gpu": fmt.Sprintf("%d", gpuCount),
+							},
+						},
+						"extraPodSpec": map[string]interface{}{
+							"mainContainer": map[string]interface{}{
+								"image": defaultDynamoVLLMImage,
+								"command": []interface{}{
+									"python3",
+									"-m",
+									"dynamo.vllm",
+								},
+								"args": []interface{}{
+									"--model",
+									modelName,
+									"--is-prefill-worker", // Run as prefill-only worker
+								},
+								// Required for GKE GPU nodes - sets CUDA library paths and GPU visibility
+								"env": []interface{}{
+									map[string]interface{}{
+										"name":  "LD_LIBRARY_PATH",
+										"value": "/usr/local/nvidia/lib64:/usr/local/cuda/lib64",
+									},
+									map[string]interface{}{
+										"name":  "NVIDIA_VISIBLE_DEVICES",
+										"value": "all",
+									},
+									map[string]interface{}{
+										"name":  "NVIDIA_DRIVER_CAPABILITIES",
+										"value": "compute,utility",
+									},
+									// System status server for health checks
+									map[string]interface{}{
+										"name":  "DYN_SYSTEM_ENABLED",
+										"value": "true",
+									},
+									map[string]interface{}{
+										"name":  "DYN_SYSTEM_PORT",
+										"value": "9090",
+									},
+								},
+								// GPU resource for the container (required for nvidia driver injection)
+								"resources": map[string]interface{}{
+									"limits": map[string]interface{}{
+										"nvidia.com/gpu": fmt.Sprintf("%d", gpuCount),
+									},
+									"requests": map[string]interface{}{
+										"nvidia.com/gpu": fmt.Sprintf("%d", gpuCount),
+									},
+								},
+							},
+							// Allow scheduling on GPU-tainted nodes
+							"tolerations": []interface{}{
+								map[string]interface{}{
+									"key":      "nvidia.com/gpu",
+									"operator": "Exists",
+									"effect":   "NoSchedule",
+								},
+							},
+						},
+					},
+					// VllmDecodeWorker: Decode-only worker for disaggregated serving
 					"VllmDecodeWorker": map[string]interface{}{
 						"componentType":    "worker", // Required for Dynamo operator discovery
 						"subComponentType": "decode", // Decode worker type
@@ -387,16 +463,17 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 						"extraPodSpec": map[string]interface{}{
 							"mainContainer": map[string]interface{}{
 								"image": defaultDynamoVLLMImage,
-								// Use command (not args) to avoid /bin/sh -c wrapper issues
 								"command": []interface{}{
 									"python3",
 									"-m",
 									"dynamo.vllm",
-									fmt.Sprintf("--model=%s", modelName),
-									"--connector=none", // Disable NIXL connector (requires UCX/RDMA not available on standard GKE)
-									"--kv-events-config={\"enable_kv_cache_events\": false}",
+								},
+								"args": []interface{}{
+									"--model",
+									modelName,
+									"--is-decode-worker", // Run as decode-only worker
 									"--enable-lora",      // Enable LoRA adapter support
-									"--max-loras=4",      // Maximum number of LoRA adapters that can be active
+									"--max-loras=4",      // Maximum number of LoRA adapters
 									"--max-lora-rank=64", // Maximum LoRA rank supported
 								},
 								// Required for GKE GPU nodes - sets CUDA library paths and GPU visibility
@@ -422,7 +499,7 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 										"name":  "DYN_LORA_PATH",
 										"value": "/tmp/dynamo_loras",
 									},
-									// System status server for LoRA API
+									// System status server for LoRA API and health checks
 									map[string]interface{}{
 										"name":  "DYN_SYSTEM_ENABLED",
 										"value": "true",
@@ -662,11 +739,12 @@ func (b *dynamoBackend) checkDynamoDeploymentsHealth(ctx context.Context, logger
 		return false, nil
 	}
 
-	// We expect at least 2 deployments: Frontend and VllmDecodeWorker
-	if len(deployments.Items) < 2 {
+	// We expect at least 3 deployments: Frontend, VllmPrefillWorker, VllmDecodeWorker
+	if len(deployments.Items) < 3 {
 		logger.Debug("Not all Dynamo deployments found yet",
 			zap.String("dgd", dgdName),
-			zap.Int("found", len(deployments.Items)))
+			zap.Int("found", len(deployments.Items)),
+			zap.Int("expected", 3))
 		return false, nil
 	}
 
