@@ -36,6 +36,7 @@ type WorkflowClientConfig struct {
 	Domain    string `yaml:"domain"`
 	TaskList  string `yaml:"taskList"`
 	Provider  string `yaml:"provider"`
+	UseTLS    bool   `yaml:"useTLS"`
 }
 
 // Params defines the dependencies of the config fx module.
