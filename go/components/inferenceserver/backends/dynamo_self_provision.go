@@ -48,6 +48,7 @@ const (
 	// Ports
 	frontendPort     = 8000
 	workerSystemPort = 9090
+	natsPort         = 4222
 )
 
 // dynamoSelfProvisionBackend implements the Backend interface by directly
@@ -70,6 +71,11 @@ func (b *dynamoSelfProvisionBackend) CreateServer(ctx context.Context, logger *z
 
 	serverName := inferenceServer.Name
 	namespace := inferenceServer.Namespace
+
+	// Create NATS Deployment and Service (required for Dynamo request plane)
+	if err := b.createNATS(ctx, logger, kubeClient, serverName, namespace); err != nil {
+		return nil, fmt.Errorf("failed to create NATS: %w", err)
+	}
 
 	// Create Frontend Deployment and Service
 	if err := b.createFrontend(ctx, logger, kubeClient, serverName, namespace); err != nil {
@@ -208,6 +214,28 @@ func (b *dynamoSelfProvisionBackend) DeleteServer(ctx context.Context, logger *z
 	}
 	if err := kubeClient.Delete(ctx, frontendService); err != nil && !errors.IsNotFound(err) {
 		errs = append(errs, fmt.Errorf("failed to delete frontend service: %w", err))
+	}
+
+	// Delete NATS deployment
+	natsDeployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      b.natsDeploymentName(inferenceServerName),
+			Namespace: namespace,
+		},
+	}
+	if err := kubeClient.Delete(ctx, natsDeployment); err != nil && !errors.IsNotFound(err) {
+		errs = append(errs, fmt.Errorf("failed to delete NATS deployment: %w", err))
+	}
+
+	// Delete NATS service
+	natsService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      b.natsServiceName(inferenceServerName),
+			Namespace: namespace,
+		},
+	}
+	if err := kubeClient.Delete(ctx, natsService); err != nil && !errors.IsNotFound(err) {
+		errs = append(errs, fmt.Errorf("failed to delete NATS service: %w", err))
 	}
 
 	if len(errs) > 0 {
@@ -359,6 +387,130 @@ func (b *dynamoSelfProvisionBackend) GetFrontEndSvc(ctx context.Context, logger 
 	return b.frontendServiceName(inferenceServerName), nil
 }
 
+// createNATS creates the NATS Deployment and Service for Dynamo request plane.
+func (b *dynamoSelfProvisionBackend) createNATS(ctx context.Context, logger *zap.Logger, kubeClient client.Client, serverName string, namespace string) error {
+	deploymentName := b.natsDeploymentName(serverName)
+	serviceName := b.natsServiceName(serverName)
+
+	// Labels for NATS
+	labels := map[string]string{
+		selfProvisionManagedByLabel: selfProvisionManagedByValue,
+		selfProvisionServerLabel:    serverName,
+		selfProvisionComponentLabel: "nats",
+	}
+
+	// Create NATS Deployment
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deploymentName,
+			Namespace: namespace,
+			Labels:    labels,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: ptr.To(int32(1)),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: corev1.PodSpec{
+					TerminationGracePeriodSeconds: ptr.To(int64(30)),
+					Containers: []corev1.Container{
+						{
+							Name:  "nats",
+							Image: "nats:2.10-alpine",
+							Ports: []corev1.ContainerPort{
+								{
+									Name:          "client",
+									ContainerPort: natsPort,
+									Protocol:      corev1.ProtocolTCP,
+								},
+							},
+							LivenessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									TCPSocket: &corev1.TCPSocketAction{
+										Port: intstr.FromInt(natsPort),
+									},
+								},
+								InitialDelaySeconds: 5,
+								PeriodSeconds:       10,
+								TimeoutSeconds:      5,
+								FailureThreshold:    3,
+							},
+							ReadinessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									TCPSocket: &corev1.TCPSocketAction{
+										Port: intstr.FromInt(natsPort),
+									},
+								},
+								InitialDelaySeconds: 5,
+								PeriodSeconds:       5,
+								TimeoutSeconds:      5,
+								FailureThreshold:    3,
+							},
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("100m"),
+									corev1.ResourceMemory: resource.MustParse("128Mi"),
+								},
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("500m"),
+									corev1.ResourceMemory: resource.MustParse("256Mi"),
+								},
+							},
+						},
+					},
+					// Tolerate GPU nodes (for scheduling flexibility)
+					Tolerations: []corev1.Toleration{
+						{
+							Key:      "nvidia.com/gpu",
+							Operator: corev1.TolerationOpExists,
+							Effect:   corev1.TaintEffectNoSchedule,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if err := b.createOrUpdateDeployment(ctx, kubeClient, deployment); err != nil {
+		return fmt.Errorf("failed to create NATS deployment: %w", err)
+	}
+
+	// Create NATS Service
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceName,
+			Namespace: namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.ServiceSpec{
+			Type: corev1.ServiceTypeClusterIP,
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "client",
+					Port:       natsPort,
+					TargetPort: intstr.FromInt(natsPort),
+					Protocol:   corev1.ProtocolTCP,
+				},
+			},
+			Selector: labels,
+		},
+	}
+
+	if err := b.createOrUpdateService(ctx, kubeClient, service); err != nil {
+		return fmt.Errorf("failed to create NATS service: %w", err)
+	}
+
+	logger.Info("Created NATS resources",
+		zap.String("deployment", deploymentName),
+		zap.String("service", serviceName))
+
+	return nil
+}
+
 // createFrontend creates the Frontend Deployment and Service.
 func (b *dynamoSelfProvisionBackend) createFrontend(ctx context.Context, logger *zap.Logger, kubeClient client.Client, serverName string, namespace string) error {
 	deploymentName := b.frontendDeploymentName(serverName)
@@ -415,8 +567,10 @@ func (b *dynamoSelfProvisionBackend) createFrontend(ctx context.Context, logger 
 								{Name: "DYN_NAMESPACE", Value: "dynamo"},
 								{Name: "DYN_COMPONENT", Value: "Frontend"},
 								{Name: "DYN_DISCOVERY_BACKEND", Value: "kubernetes"},
-								// Use in-memory KV store (no external etcd needed for aggregated mode)
+								// Use in-memory KV store (no external etcd needed)
 								{Name: "DYN_STORE_KV", Value: "mem"},
+								// NATS URL for request plane
+								{Name: "DYN_NATS_URL", Value: b.natsURL(serverName, namespace)},
 								{Name: "DYN_HTTP_PORT", Value: fmt.Sprintf("%d", frontendPort)},
 								{Name: "DYNAMO_PORT", Value: fmt.Sprintf("%d", frontendPort)},
 								// Pod identity (Downward API)
@@ -620,8 +774,9 @@ func (b *dynamoSelfProvisionBackend) createPrefillWorker(ctx context.Context, lo
 								{Name: "DYN_DISCOVERY_BACKEND", Value: "kubernetes"},
 								// Use in-memory KV store (no external etcd needed)
 								{Name: "DYN_STORE_KV", Value: "mem"},
-								// System status server
-								{Name: "DYN_SYSTEM_ENABLED", Value: "true"},
+								// NATS URL for request plane
+								{Name: "DYN_NATS_URL", Value: b.natsURL(serverName, namespace)},
+								// System status server port (DYN_SYSTEM_ENABLED is deprecated)
 								{Name: "DYN_SYSTEM_PORT", Value: fmt.Sprintf("%d", workerSystemPort)},
 								// Pod identity (Downward API)
 								{
@@ -860,8 +1015,9 @@ func (b *dynamoSelfProvisionBackend) createDecodeWorker(ctx context.Context, log
 								{Name: "DYN_DISCOVERY_BACKEND", Value: "kubernetes"},
 								// Use in-memory KV store (no external etcd needed)
 								{Name: "DYN_STORE_KV", Value: "mem"},
-								// System status server
-								{Name: "DYN_SYSTEM_ENABLED", Value: "true"},
+								// NATS URL for request plane
+								{Name: "DYN_NATS_URL", Value: b.natsURL(serverName, namespace)},
+								// System status server port (DYN_SYSTEM_ENABLED is deprecated)
 								{Name: "DYN_SYSTEM_PORT", Value: fmt.Sprintf("%d", workerSystemPort)},
 								// LoRA support
 								{Name: "DYN_LORA_ENABLED", Value: "true"},
@@ -1105,6 +1261,19 @@ func (b *dynamoSelfProvisionBackend) decodeWorkerDeploymentName(serverName strin
 
 func (b *dynamoSelfProvisionBackend) decodeWorkerServiceName(serverName string) string {
 	return fmt.Sprintf("dynamo-sp-%s-decode", serverName)
+}
+
+func (b *dynamoSelfProvisionBackend) natsDeploymentName(serverName string) string {
+	return fmt.Sprintf("dynamo-sp-%s-nats", serverName)
+}
+
+func (b *dynamoSelfProvisionBackend) natsServiceName(serverName string) string {
+	return fmt.Sprintf("dynamo-sp-%s-nats", serverName)
+}
+
+func (b *dynamoSelfProvisionBackend) natsURL(serverName string, namespace string) string {
+	return fmt.Sprintf("nats://%s.%s.svc.cluster.local:%d",
+		b.natsServiceName(serverName), namespace, natsPort)
 }
 
 func (b *dynamoSelfProvisionBackend) generateEndpoint(serverName string, namespace string) string {
