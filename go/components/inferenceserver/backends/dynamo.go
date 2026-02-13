@@ -353,6 +353,7 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 								},
 							},
 							// Allow scheduling on GPU-tainted nodes
+							// todo: ghosharitra: this is just because we don't have enough CPU nodes.
 							"tolerations": []interface{}{
 								map[string]interface{}{
 									"key":      "nvidia.com/gpu",
@@ -395,6 +396,7 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 									"--connector=none", // Disable NIXL connector (requires UCX/RDMA not available on standard GKE)
 									"--kv-events-config={\"enable_kv_cache_events\": false}",
 									"--enable-lora",      // Enable LoRA adapter support
+									"--max-loras=4",      // Maximum number of LoRA adapters that can be active
 									"--max-lora-rank=64", // Maximum LoRA rank supported
 								},
 								// Required for GKE GPU nodes - sets CUDA library paths and GPU visibility

@@ -2,6 +2,7 @@
 
 import argparse
 import base64
+import contextlib
 import json
 import os
 import shutil
@@ -1015,10 +1016,8 @@ def _delete_gke_resources():
 
     # Helper to delete with timeout and finalizer removal fallback
     def _delete_with_timeout(args: list, timeout: int = 10):
-        try:
+        with contextlib.suppress(subprocess.TimeoutExpired):
             subprocess.run(args, check=False, capture_output=True, timeout=timeout)
-        except subprocess.TimeoutExpired:
-            pass  # Continue even if timed out
 
     def _remove_finalizers_and_delete(resource_type: str, namespace: str = None):
         """Remove finalizers from resources then delete them."""
@@ -1055,20 +1054,39 @@ def _delete_gke_resources():
                     )
 
     # Try normal delete first with timeout, then remove finalizers if needed
-    try:
-        _delete_with_timeout(
-            ["kubectl", *context_args, "delete", "inferenceserver.michelangelo.api", "--all", "-n", "default", "--force", "--grace-period=0"]
-        )
-    except Exception:
-        pass
+    # Delete Michelangelo Deployment CRs first (they reference InferenceServers)
+    print("Cleaning up Michelangelo Deployment resources...")
+    with contextlib.suppress(Exception):
+        _delete_with_timeout([
+            "kubectl", *context_args, "delete", "deployment.michelangelo.api",
+            "--all", "-n", "default", "--force", "--grace-period=0"
+        ])
+    _remove_finalizers_and_delete("deployment.michelangelo.api", "default")
+
+    # Delete Michelangelo InferenceServer CRs
+    print("Cleaning up Michelangelo InferenceServer resources...")
+    with contextlib.suppress(Exception):
+        _delete_with_timeout([
+            "kubectl", *context_args, "delete", "inferenceserver.michelangelo.api",
+            "--all", "-n", "default", "--force", "--grace-period=0"
+        ])
     _remove_finalizers_and_delete("inferenceserver.michelangelo.api", "default")
 
-    try:
-        _delete_with_timeout(
-            ["kubectl", *context_args, "delete", "dynamographdeployment", "--all", "-A", "--force", "--grace-period=0"]
-        )
-    except Exception:
-        pass
+    # Delete DynamoModel CRs (LoRA adapters)
+    print("Cleaning up DynamoModel resources...")
+    with contextlib.suppress(Exception):
+        _delete_with_timeout([
+            "kubectl", *context_args, "delete", "dynamomodel",
+            "--all", "-A", "--force", "--grace-period=0"
+        ])
+    _remove_finalizers_and_delete("dynamomodel")
+
+    # Delete DynamoGraphDeployment CRs
+    with contextlib.suppress(Exception):
+        _delete_with_timeout([
+            "kubectl", *context_args, "delete", "dynamographdeployment",
+            "--all", "-A", "--force", "--grace-period=0"
+        ])
     _remove_finalizers_and_delete("dynamographdeployment")
 
     # Delete Dynamo-created deployments directly (in case operator is already gone)
