@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"regexp"
+	"strings"
 
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
@@ -486,6 +488,9 @@ func (b *dynamoSelfProvisionBackend) createWorker(ctx context.Context, logger *z
 	// Compute base model hash for service discovery
 	baseModelHash := b.computeModelHash(modelName)
 
+	// Sanitize model name for label value (K8s labels don't allow '/')
+	sanitizedModelName := b.sanitizeLabelValue(modelName)
+
 	// Common labels
 	labels := map[string]string{
 		selfProvisionManagedByLabel: selfProvisionManagedByValue,
@@ -496,7 +501,7 @@ func (b *dynamoSelfProvisionBackend) createWorker(ctx context.Context, logger *z
 		dynamoSubComponentTypeLabel: "decode",
 		dynamoNamespaceLabel:        "dynamo",
 		dynamoComponentLabel:        "VllmDecodeWorker",
-		dynamoBaseModelLabel:        modelName,
+		dynamoBaseModelLabel:        sanitizedModelName, // Sanitized for K8s label compliance
 		dynamoDiscoveryEnabledLabel: "true",
 		// Base model hash for service discovery
 		"nvidia.com/dynamo-base-model-hash": baseModelHash,
@@ -698,15 +703,21 @@ func (b *dynamoSelfProvisionBackend) createOrUpdateDeployment(ctx context.Contex
 	err := kubeClient.Get(ctx, client.ObjectKey{Name: deployment.Name, Namespace: deployment.Namespace}, existing)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			return kubeClient.Create(ctx, deployment)
+			if createErr := kubeClient.Create(ctx, deployment); createErr != nil {
+				return fmt.Errorf("failed to create deployment %s: %w", deployment.Name, createErr)
+			}
+			return nil
 		}
-		return err
+		return fmt.Errorf("failed to get deployment %s: %w", deployment.Name, err)
 	}
 
 	// Update existing deployment
 	existing.Spec = deployment.Spec
 	existing.Labels = deployment.Labels
-	return kubeClient.Update(ctx, existing)
+	if updateErr := kubeClient.Update(ctx, existing); updateErr != nil {
+		return fmt.Errorf("failed to update deployment %s: %w", deployment.Name, updateErr)
+	}
+	return nil
 }
 
 // createOrUpdateService creates or updates a Service.
@@ -715,21 +726,51 @@ func (b *dynamoSelfProvisionBackend) createOrUpdateService(ctx context.Context, 
 	err := kubeClient.Get(ctx, client.ObjectKey{Name: service.Name, Namespace: service.Namespace}, existing)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			return kubeClient.Create(ctx, service)
+			if createErr := kubeClient.Create(ctx, service); createErr != nil {
+				return fmt.Errorf("failed to create service %s: %w", service.Name, createErr)
+			}
+			return nil
 		}
-		return err
+		return fmt.Errorf("failed to get service %s: %w", service.Name, err)
 	}
 
 	// Update existing service (preserve ClusterIP)
 	service.Spec.ClusterIP = existing.Spec.ClusterIP
 	service.ResourceVersion = existing.ResourceVersion
-	return kubeClient.Update(ctx, service)
+	if updateErr := kubeClient.Update(ctx, existing); updateErr != nil {
+		return fmt.Errorf("failed to update service %s: %w", service.Name, updateErr)
+	}
+	return nil
 }
 
 // computeModelHash computes a short hash of the model name for service naming.
 func (b *dynamoSelfProvisionBackend) computeModelHash(modelName string) string {
 	hash := sha256.Sum256([]byte(modelName))
 	return hex.EncodeToString(hash[:4]) // First 4 bytes = 8 hex chars
+}
+
+// sanitizeLabelValue sanitizes a string to be a valid Kubernetes label value.
+// Valid label values: must be 63 characters or less, begin/end with alphanumeric,
+// and only contain alphanumerics, '-', '_', and '.'.
+func (b *dynamoSelfProvisionBackend) sanitizeLabelValue(value string) string {
+	// Replace '/' with '-'
+	sanitized := strings.ReplaceAll(value, "/", "-")
+
+	// Replace any remaining invalid characters with '-'
+	invalidChars := regexp.MustCompile(`[^a-zA-Z0-9\-_.]`)
+	sanitized = invalidChars.ReplaceAllString(sanitized, "-")
+
+	// Ensure it starts and ends with alphanumeric
+	sanitized = strings.Trim(sanitized, "-_.")
+
+	// Truncate to 63 characters max
+	if len(sanitized) > 63 {
+		sanitized = sanitized[:63]
+		// Ensure it ends with alphanumeric after truncation
+		sanitized = strings.TrimRight(sanitized, "-_.")
+	}
+
+	return sanitized
 }
 
 // Naming helper functions
