@@ -1010,9 +1010,9 @@ def _delete_gke_resources():
 
     context_args = ["--context", _gke_context]
 
-    # Delete Dynamo-related CRs first (before uninstalling helm charts)
+    # Delete self-provisioned Dynamo resources and Michelangelo CRs
     # Use timeout to prevent hanging on finalizers
-    print("Cleaning up Dynamo resources...")
+    print("Cleaning up Dynamo self-provisioned resources...")
 
     # Helper to delete with timeout and finalizer removal fallback
     def _delete_with_timeout(args: list, timeout: int = 10):
@@ -1072,29 +1072,24 @@ def _delete_gke_resources():
         ])
     _remove_finalizers_and_delete("inferenceserver.michelangelo.api", "default")
 
-    # Delete DynamoModel CRs (LoRA adapters)
-    print("Cleaning up DynamoModel resources...")
-    with contextlib.suppress(Exception):
-        _delete_with_timeout([
-            "kubectl", *context_args, "delete", "dynamomodel",
-            "--all", "-A", "--force", "--grace-period=0"
-        ])
-    _remove_finalizers_and_delete("dynamomodel")
-
-    # Delete DynamoGraphDeployment CRs
-    with contextlib.suppress(Exception):
-        _delete_with_timeout([
-            "kubectl", *context_args, "delete", "dynamographdeployment",
-            "--all", "-A", "--force", "--grace-period=0"
-        ])
-    _remove_finalizers_and_delete("dynamographdeployment")
-
-    # Delete Dynamo-created deployments directly (in case operator is already gone)
+    # Delete self-provisioned Dynamo deployments (created by our controller)
+    # Label: app.kubernetes.io/managed-by=michelangelo-self-provision
+    print("Cleaning up self-provisioned Dynamo deployments...")
     _delete_with_timeout(
-        ["kubectl", *context_args, "delete", "deployment", "-n", "default", "-l", "app.kubernetes.io/created-by=dynamo-controller", "--force", "--grace-period=0"]
+        ["kubectl", *context_args, "delete", "deployment", "-n", "default",
+         "-l", "app.kubernetes.io/managed-by=michelangelo-self-provision",
+         "--force", "--grace-period=0"]
     )
 
-    # Also delete by name pattern for any orphaned dynamo deployments
+    # Delete self-provisioned Dynamo services
+    print("Cleaning up self-provisioned Dynamo services...")
+    _delete_with_timeout(
+        ["kubectl", *context_args, "delete", "svc", "-n", "default",
+         "-l", "app.kubernetes.io/managed-by=michelangelo-self-provision",
+         "--force", "--grace-period=0"]
+    )
+
+    # Also delete by name pattern for any orphaned dynamo-sp deployments
     try:
         result = subprocess.run(
             ["kubectl", *context_args, "get", "deployment", "-n", "default", "-o", "name"],
@@ -1105,9 +1100,29 @@ def _delete_gke_resources():
         )
         if result.returncode == 0:
             for line in result.stdout.strip().split("\n"):
-                if "dynamo-" in line:
+                if "dynamo-sp-" in line:
                     _delete_with_timeout(
-                        ["kubectl", *context_args, "delete", line, "-n", "default", "--force", "--grace-period=0"]
+                        ["kubectl", *context_args, "delete", line, "-n", "default",
+                         "--force", "--grace-period=0"]
+                    )
+    except subprocess.TimeoutExpired:
+        pass
+
+    # Delete orphaned dynamo-sp services by name pattern
+    try:
+        result = subprocess.run(
+            ["kubectl", *context_args, "get", "svc", "-n", "default", "-o", "name"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0:
+            for line in result.stdout.strip().split("\n"):
+                if "dynamo-sp-" in line:
+                    _delete_with_timeout(
+                        ["kubectl", *context_args, "delete", line, "-n", "default",
+                         "--force", "--grace-period=0"]
                     )
     except subprocess.TimeoutExpired:
         pass
@@ -1229,40 +1244,27 @@ def _delete_gke_resources():
         check=False,
         capture_output=True,
     )
-    subprocess.run(
-        ["helm", "uninstall", "dynamo-platform", "-n", "dynamo-system", "--kube-context", _gke_context],
-        check=False,
-        capture_output=True,
-    )
-    subprocess.run(
-        ["helm", "uninstall", "dynamo-crds", "-n", "default", "--kube-context", _gke_context],
-        check=False,
-        capture_output=True,
-    )
 
-    # Delete dynamo-system namespace (force delete to avoid hanging)
-    print("Cleaning up dynamo-system namespace...")
+    # Clean up Dynamo discovery CRD and RBAC
+    print("  Cleaning up Dynamo discovery CRD and RBAC...")
     subprocess.run(
-        ["kubectl", *context_args, "delete", "namespace", "dynamo-system", "--ignore-not-found", "--force", "--grace-period=0"],
+        ["kubectl", *context_args, "delete", "clusterrolebinding",
+         "dynamo-discovery-default", "--ignore-not-found"],
         check=False,
         capture_output=True,
     )
-
-    # Clean up any orphaned Dynamo services in default namespace
-    result = subprocess.run(
-        ["kubectl", *context_args, "get", "svc", "-n", "default", "-o", "name"],
+    subprocess.run(
+        ["kubectl", *context_args, "delete", "clusterrole",
+         "dynamo-discovery", "--ignore-not-found"],
         check=False,
         capture_output=True,
-        text=True,
     )
-    if result.returncode == 0:
-        for line in result.stdout.strip().split("\n"):
-            if "dynamo-" in line:
-                subprocess.run(
-                    ["kubectl", *context_args, "delete", line, "-n", "default", "--force", "--grace-period=0"],
-                    check=False,
-                    capture_output=True,
-                )
+    subprocess.run(
+        ["kubectl", *context_args, "delete", "crd",
+         "dynamoworkermetadatas.nvidia.com", "--ignore-not-found"],
+        check=False,
+        capture_output=True,
+    )
 
     # Clean up any orphaned Dynamo replicasets in default namespace
     result = subprocess.run(
@@ -1273,9 +1275,10 @@ def _delete_gke_resources():
     )
     if result.returncode == 0:
         for line in result.stdout.strip().split("\n"):
-            if "dynamo-" in line:
+            if "dynamo-sp-" in line:
                 subprocess.run(
-                    ["kubectl", *context_args, "delete", line, "-n", "default", "--force", "--grace-period=0"],
+                    ["kubectl", *context_args, "delete", line, "-n", "default",
+                     "--force", "--grace-period=0"],
                     check=False,
                     capture_output=True,
                 )
@@ -1888,23 +1891,44 @@ def _create_inference_demo_crs():
     print("}'")
 
 
+def _install_dynamo_discovery_rbac():
+    """Install Dynamo discovery CRD and RBAC for Kubernetes-native service discovery.
+
+    This enables Dynamo's Kubernetes discovery mode without requiring the full operator:
+    - DynamoWorkerMetadata CRD: Schema for worker registration
+    - ClusterRole: Permissions to manage worker metadata
+    - ClusterRoleBinding: Grants permissions to pods in default namespace
+    """
+    print("📦 Installing Dynamo discovery CRD and RBAC...")
+
+    context_args = _get_kubectl_context_args()
+    rbac_path = _dir / "resources" / "dynamo-discovery-rbac.yaml"
+
+    if not rbac_path.exists():
+        print(f"  ⚠️  RBAC file not found at {rbac_path}, skipping...")
+        return
+
+    # Apply the CRD and RBAC (idempotent - will update if exists)
+    _exec("kubectl", *context_args, "apply", "-f", str(rbac_path), raise_error=True)
+    print("✅ Dynamo discovery CRD and RBAC installed successfully!")
+
+
 def _create_inference_dynamo_demo_crs():
     """Create an NVIDIA Dynamo inference server for the sandbox cluster.
 
-    This function:
-    1. Installs NVIDIA Dynamo CRDs via Helm
-    2. Installs NVIDIA Dynamo platform (operator) via Helm
-    3. Creates InferenceServer CR with BACKEND_TYPE_DYNAMO
-    4. The Michelangelo controller creates DynamoGraphDeployment CR
-    5. The Dynamo operator reconciles and creates the actual pods/services
+    This function uses self-provisioning (no Dynamo operator needed):
+    1. Sets up Istio with Gateway API for routing
+    2. Creates InferenceServer CR with BACKEND_TYPE_DYNAMO
+    3. The Michelangelo controller directly provisions Frontend and Worker pods
     """
-    print("🚀 Setting up NVIDIA Dynamo Inference Demo...")
+    print("🚀 Setting up Dynamo Inference Demo (self-provisioned)...")
 
     # Setup Istio with Gateway API for routing
     _setup_istio_with_gateway_api()
 
-    # Install Dynamo platform
-    _install_dynamo_platform()
+    # Install Dynamo discovery CRD and RBAC (no operator needed)
+    # This allows workers to register themselves via K8s API for frontend discovery
+    _install_dynamo_discovery_rbac()
 
     # Create the InferenceServer CR with Dynamo backend
     inference_demo_dir = _dir / "demo" / "inference"
@@ -1915,7 +1939,7 @@ def _create_inference_dynamo_demo_crs():
             "exiting..."
         )
 
-    print("✅ Creating NVIDIA Dynamo Inference Server CR...")
+    print("✅ Creating Dynamo Inference Server CR (self-provisioned)...")
     _kube_apply(inference_server_path)
 
     # Wait for inference server to reach SERVING state
@@ -1926,7 +1950,10 @@ def _create_inference_dynamo_demo_crs():
         "namespace", "default"
     )
 
-    print(f"⏳ Waiting for Dynamo inference server '{inference_server_name}' to be ready...")
+    print(
+        f"⏳ Waiting for Dynamo inference server "
+        f"'{inference_server_name}' to be ready..."
+    )
     print("   (This may take several minutes for first-time image pull)")
 
     context_args = _get_kubectl_context_args()
@@ -1939,7 +1966,7 @@ def _create_inference_dynamo_demo_crs():
             f"inferenceservers.michelangelo.api/{inference_server_name}",
             "-n",
             inference_server_namespace,
-            "--timeout=900s",  # Longer timeout for Dynamo setup
+            "--timeout=900s",  # Longer timeout for model loading
             raise_error=True,
         )
         print("✅ Dynamo Inference server is ready!")
@@ -1949,13 +1976,13 @@ def _create_inference_dynamo_demo_crs():
         try:
             # Start port-forward as a detached background process
             # start_new_session=True ensures it survives when parent exits
-            # DGD name is "dynamo-{inference_server_name}", frontend is "{dgd_name}-frontend"
-            dgd_name = f"dynamo-{inference_server_name}"
+            # Self-provisioned naming: "dynamo-sp-{inference_server_name}-frontend"
+            frontend_deployment = f"dynamo-sp-{inference_server_name}-frontend"
             port_forward_cmd = [
                 "kubectl",
                 *context_args,
                 "port-forward",
-                f"deployment/{dgd_name}-frontend",
+                f"deployment/{frontend_deployment}",
                 "8000:8000",
                 "-n",
                 inference_server_namespace,
@@ -1974,29 +2001,36 @@ def _create_inference_dynamo_demo_crs():
     except subprocess.CalledProcessError:
         # Check if it's still creating (not a failure)
         print(
-            f"⚠️  Inference server '{inference_server_name}' not ready after 15 minutes.\n"
+            f"⚠️  Inference server '{inference_server_name}' "
+            f"not ready after 15 minutes.\n"
             f"This may be normal if images are still being pulled.\n"
             f"Check status with:\n"
-            f"  kubectl get inferenceservers.michelangelo.api {inference_server_name} "
-            f"-n {inference_server_namespace} -o yaml\n"
-            f"Check Dynamo resources with:\n"
-            f"  kubectl get dynamographdeployments -n {inference_server_namespace}\n"
+            f"  kubectl get inferenceservers.michelangelo.api "
+            f"{inference_server_name} -n {inference_server_namespace} -o yaml\n"
+            f"Check self-provisioned resources with:\n"
+            f"  kubectl get deployments "
+            f"-l michelangelo.ai/inference-server={inference_server_name}\n"
             f"  kubectl get pods -n {inference_server_namespace}"
         )
 
-    print("🎉 NVIDIA Dynamo Inference demo setup completed!")
+    print("🎉 Dynamo Inference demo setup completed (self-provisioned)!")
     print("📋 What was set up:")
     print("  • Gateway API with Istio integration")
-    print("  • NVIDIA Dynamo CRDs and Operator")
     print("  • Michelangelo InferenceServer CR (with Dynamo backend)")
-    print("  • DynamoGraphDeployment (created by controller)")
+    print("  • Frontend and Worker pods (self-provisioned by controller)")
     print()
-    print("🔍 To check Dynamo resources:")
-    print(f"  kubectl get dynamographdeployments -n {inference_server_namespace}")
+    print("🔍 To check self-provisioned resources:")
+    print(
+        f"  kubectl get deployments "
+        f"-l michelangelo.ai/inference-server={inference_server_name}"
+    )
     print(f"  kubectl get pods -n {inference_server_namespace}")
     print()
     print("🌐 Once ready, the Dynamo frontend will be available at:")
-    print(f"  http://dynamo-{inference_server_name}-frontend.{inference_server_namespace}.svc.cluster.local:8000")
+    print(
+        f"  http://dynamo-sp-{inference_server_name}-frontend."
+        f"{inference_server_namespace}.svc.cluster.local:8000"
+    )
     print()
     print("📡 Test with OpenAI-compatible API:")
     print("  curl http://localhost:8000/v1/models")
@@ -2006,152 +2040,6 @@ def _create_inference_dynamo_demo_crs():
         '-d \'{"model": "Qwen/Qwen3-0.6B", "messages": [{"role": "user", '
         '"content": "Hello!"}], "max_tokens": 50}\''
     )
-
-def _install_dynamo_platform():
-    """Install NVIDIA Dynamo CRDs and operator via Helm.
-
-    Dynamo requires:
-    1. dynamo-crds Helm chart - Custom Resource Definitions
-    2. dynamo-platform Helm chart - Operator and dependencies
-    """
-    print("📦 Installing NVIDIA Dynamo platform...")
-
-    # Dynamo release version
-    dynamo_version = "0.8.1"
-    dynamo_namespace = "dynamo-system"
-
-    # Fetch existing Helm repositories
-    try:
-        helm_existing_repos = subprocess.check_output(["helm", "repo", "list"]).decode()
-    except subprocess.CalledProcessError:
-        helm_existing_repos = ""
-
-    # Add NVIDIA NGC Helm repository if not already present
-    if "nvidia-ngc" not in helm_existing_repos:
-        print("  Adding NVIDIA NGC Helm repository...")
-        _exec(
-            "helm",
-            "repo",
-            "add",
-            "nvidia-ngc",
-            "https://helm.ngc.nvidia.com/nvidia/ai-dynamo",
-            raise_error=True,
-        )
-
-    # Update Helm repositories
-    print("  Updating Helm repositories...")
-    _exec("helm", "repo", "update", raise_error=True)
-
-    # Check if Dynamo CRDs are already installed
-    try:
-        result = subprocess.check_output(
-            ["helm", "list", "-n", "default", "-o", "json"]
-        ).decode()
-        import json
-        helm_releases = json.loads(result) if result.strip() else []
-        dynamo_crds_installed = any(r.get("name") == "dynamo-crds" for r in helm_releases)
-    except (subprocess.CalledProcessError, json.JSONDecodeError):
-        dynamo_crds_installed = False
-
-    # Install Dynamo CRDs if not already installed
-    if not dynamo_crds_installed:
-        print(f"  Installing Dynamo CRDs (v{dynamo_version})...")
-        _exec(
-            "helm",
-            "install",
-            "dynamo-crds",
-            f"nvidia-ngc/dynamo-crds",
-            "--version",
-            dynamo_version,
-            "--namespace",
-            "default",
-            "--wait",
-            raise_error=True,
-        )
-    else:
-        print("  Dynamo CRDs already installed, skipping...")
-
-    # Create dynamo-system namespace if it doesn't exist
-    _ensure_namespace_exists(dynamo_namespace)
-
-    # Check if Dynamo platform is already installed
-    try:
-        result = subprocess.check_output(
-            ["helm", "list", "-n", dynamo_namespace, "-o", "json"]
-        ).decode()
-        import json
-        helm_releases = json.loads(result) if result.strip() else []
-        dynamo_platform_installed = any(
-            r.get("name") == "dynamo-platform" for r in helm_releases
-        )
-    except (subprocess.CalledProcessError, json.JSONDecodeError):
-        dynamo_platform_installed = False
-
-    # Install Dynamo platform if not already installed
-    if not dynamo_platform_installed:
-        print(f"  Installing Dynamo platform (v{dynamo_version})...")
-        # Add GPU toleration so all components can run on GPU nodes if needed
-        # This is needed when the only available nodes have GPU taints
-        _exec(
-            "helm",
-            "install",
-            "dynamo-platform",
-            "nvidia-ngc/dynamo-platform",
-            "--version",
-            dynamo_version,
-            "--namespace",
-            dynamo_namespace,
-            # Operator controller manager tolerations (dynamo-operator subchart)
-            "--set",
-            "dynamo-operator.controllerManager.tolerations[0].key=nvidia.com/gpu",
-            "--set",
-            "dynamo-operator.controllerManager.tolerations[0].operator=Exists",
-            "--set",
-            "dynamo-operator.controllerManager.tolerations[0].effect=NoSchedule",
-            # Etcd tolerations
-            "--set",
-            "etcd.tolerations[0].key=nvidia.com/gpu",
-            "--set",
-            "etcd.tolerations[0].operator=Exists",
-            "--set",
-            "etcd.tolerations[0].effect=NoSchedule",
-            # NATS tolerations (under nats.podTemplate.merge.spec for the nats-io chart)
-            "--set",
-            "nats.podTemplate.merge.spec.tolerations[0].key=nvidia.com/gpu",
-            "--set",
-            "nats.podTemplate.merge.spec.tolerations[0].operator=Exists",
-            "--set",
-            "nats.podTemplate.merge.spec.tolerations[0].effect=NoSchedule",
-            "--wait",
-            "--timeout",
-            "10m",
-            raise_error=True,
-        )
-    else:
-        print("  Dynamo platform already installed, skipping...")
-
-    # Wait for Dynamo operator to be ready
-    print("  Waiting for Dynamo operator to be ready...")
-    context_args = _get_kubectl_context_args()
-    try:
-        _exec(
-            "kubectl",
-            *context_args,
-            "rollout",
-            "status",
-            "deployment/dynamo-platform-dynamo-operator-controller-manager",
-            "-n",
-            dynamo_namespace,
-            "--timeout=120s",
-            raise_error=True,
-        )
-        print("✅ NVIDIA Dynamo platform installed successfully!")
-    except subprocess.CalledProcessError:
-        print(
-            "⚠️  Dynamo operator not ready after 2 minutes.\n"
-            f"Check status with: kubectl get pods -n {dynamo_namespace}"
-        )
-
 
 def _setup_istio_with_gateway_api():
     """Install Istio service mesh with Kubernetes Gateway API support.

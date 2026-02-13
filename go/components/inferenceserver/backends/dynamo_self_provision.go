@@ -593,9 +593,10 @@ func (b *dynamoSelfProvisionBackend) createWorker(ctx context.Context, logger *z
 										Port: intstr.FromInt(workerSystemPort),
 									},
 								},
-								PeriodSeconds:    5,
-								TimeoutSeconds:   4,
-								FailureThreshold: 1,
+								InitialDelaySeconds: 30,
+								PeriodSeconds:       10,
+								TimeoutSeconds:      5,
+								FailureThreshold:    6, // Allow 60s of failures before restart
 							},
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{

@@ -32,34 +32,116 @@ These images contain all Python/Rust bindings needed for the Dynamo distributed 
 
 ## Service Discovery
 
-Dynamo supports two discovery backends, configured via `DYN_DISCOVERY_BACKEND` environment variable:
+Dynamo's `DistributedRuntime` requires a service discovery mechanism for components (Frontend, Workers) to find each other. This is configured via the `DYN_DISCOVERY_BACKEND` environment variable.
 
-### 1. Kubernetes Discovery (Recommended for Uber)
+**Reference**: [Dynamo Distributed Runtime - Service Discovery Backends](https://docs.nvidia.com/dynamo/design-docs/distributed-runtime#service-discovery-backends)
+
+### Discovery Backend Options
+
+| Backend | `DYN_DISCOVERY_BACKEND` | Requires | Best For |
+|---------|-------------------------|----------|----------|
+| KV Store (etcd) | `kv_store` (default) | etcd cluster | Full operator deployment |
+| Kubernetes | `kubernetes` | CRD + RBAC | Self-provisioned deployment |
+
+> **Important**: The default is `kv_store`, which uses etcd for both discovery AND internal KV storage. For self-provisioning without etcd, you must explicitly set `DYN_DISCOVERY_BACKEND=kubernetes`.
+
+### Option 1: Kubernetes Discovery (Recommended for Self-Provisioning)
 
 ```yaml
 env:
   - name: DYN_DISCOVERY_BACKEND
     value: "kubernetes"
+  - name: DYN_STORE_KV
+    value: "mem"  # In-memory KV store (no etcd needed)
 ```
 
-- Workers register themselves via Kubernetes EndpointSlices
-- Frontend discovers workers by watching EndpointSlices through the K8s API
-- Requires headless Services for workers with appropriate labels
-- No external dependencies (etcd, NATS) required for basic operation
+**How it works:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Kubernetes API Server                        │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │      DynamoWorkerMetadata CRs (worker registrations)     │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│           ▲ CREATE                       │ WATCH               │
+└───────────┼──────────────────────────────┼──────────────────────┘
+            │                              ▼
+     ┌──────┴──────┐                ┌─────────────┐
+     │   Worker    │                │  Frontend   │
+     └─────────────┘                └─────────────┘
+```
 
-### 2. etcd Discovery
+- Workers create `DynamoWorkerMetadata` CRs to register themselves
+- Frontend watches these CRs via the Kubernetes API
+- Pods need RBAC permissions to create/watch these CRs
+- **No operator required** - just the CRD and RBAC
+
+**Requirements:**
+
+1. **DynamoWorkerMetadata CRD** - Schema definition for worker registration
+2. **ClusterRole** - Permissions to manage `dynamoworkermetadatas` and watch `endpointslices`
+3. **ClusterRoleBinding** - Grants permissions to pod ServiceAccounts
+
+See `python/michelangelo/cli/sandbox/resources/dynamo-discovery-rbac.yaml` for the complete setup.
+
+**RBAC Permissions Required:**
+```yaml
+rules:
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["nvidia.com"]
+    resources: ["dynamoworkermetadatas"]
+    verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
+```
+
+### Option 2: KV Store Discovery (etcd)
 
 ```yaml
 env:
   - name: DYN_DISCOVERY_BACKEND
-    value: "etcd"
+    value: "kv_store"  # This is the default
+  - name: DYN_STORE_KV
+    value: "etcd"      # This is the default
   - name: ETCD_ENDPOINTS
-    value: "<etcd-address>:2379"
+    value: "etcd.dynamo-system:2379"
 ```
 
-- Workers register themselves in etcd
-- Frontend discovers workers from etcd
-- Requires running etcd cluster
+**How it works:**
+- Workers register themselves in etcd at `/services/{namespace}/{component}/{endpoint}-{lease_id}`
+- Frontend watches etcd for worker registrations
+- Requires running etcd cluster (typically deployed by Dynamo operator)
+
+**When to use:**
+- Full Dynamo operator deployment
+- Need centralized configuration store beyond discovery
+
+### Why Not In-Memory with KV Store Discovery?
+
+You might wonder: can we use `DYN_DISCOVERY_BACKEND=kv_store` with `DYN_STORE_KV=mem` to avoid both etcd AND the CRD?
+
+**No** - this doesn't work for multi-pod deployments:
+
+| Configuration | Result |
+|---------------|--------|
+| `kv_store` + `etcd` | ✅ Works - etcd is shared across pods |
+| `kv_store` + `mem` | ❌ Fails - each pod has isolated in-memory store |
+| `kubernetes` + `mem` | ✅ Works - K8s API is shared, KV store only for non-discovery data |
+
+With `kv_store` + `mem`, the worker registers itself in its own local memory, but the frontend looks in its own empty memory store and never finds the worker.
+
+### KV Store vs Discovery Backend (Important Distinction)
+
+These are **two different configurations**:
+
+| Env Variable | Purpose | Options |
+|--------------|---------|---------|
+| `DYN_DISCOVERY_BACKEND` | How components discover each other | `kubernetes`, `kv_store` |
+| `DYN_STORE_KV` | Internal KV storage for runtime data | `etcd`, `mem`, `file` |
+
+When using `kubernetes` discovery:
+- Discovery uses K8s API (CRDs, EndpointSlices)
+- KV store can be `mem` since discovery doesn't need it
+- KV store is still used for other runtime data (load metrics, etc.)
 
 ## Required Environment Variables
 
@@ -630,6 +712,63 @@ If you only see TCP transports, RDMA is not active - check your RDMA device plug
 | Long inputs (>8000 tokens), short outputs | Disaggregated |
 | Need independent P/D scaling | Disaggregated |
 | No RDMA available | Aggregated (disaggregated without RDMA is 40x slower) |
+
+## Testing Inference
+
+Once the frontend and worker pods are running, you can test inference using the OpenAI-compatible API.
+
+### Accessing the Frontend
+
+**Port-forward to the frontend service:**
+```bash
+kubectl port-forward svc/dynamo-sp-<inference-server-name>-frontend 8000:8000
+```
+
+Or directly to the pod:
+```bash
+kubectl port-forward $(kubectl get pods -l nvidia.com/dynamo-component-type=frontend -o name) 8000:8000
+```
+
+### API Endpoints
+
+**List available models:**
+```bash
+curl http://localhost:8000/v1/models
+```
+
+**Chat completion:**
+```bash
+curl http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "Qwen/Qwen3-0.6B",
+    "messages": [{"role": "user", "content": "Hello, how are you?"}],
+    "max_tokens": 50
+  }'
+```
+
+**Text completion:**
+```bash
+curl http://localhost:8000/v1/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "Qwen/Qwen3-0.6B",
+    "prompt": "The capital of France is",
+    "max_tokens": 20
+  }'
+```
+
+**Streaming response:**
+```bash
+curl http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "Qwen/Qwen3-0.6B",
+    "messages": [{"role": "user", "content": "Tell me a short joke"}],
+    "max_tokens": 100,
+    "stream": true
+  }'
+```
 
 ## LoRA Loading
 
