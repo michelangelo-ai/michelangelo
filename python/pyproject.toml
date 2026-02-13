@@ -65,6 +65,7 @@ vllm = { version = "0.8.1", optional = true }
 grpcio-reflection = { version = ">=1.66.1", optional = true }
 PyYAML = { version = "6.0.2", optional = true }
 GitPython = { version = ">=3.1.44", optional = true }
+tomli = { version = "^2.0.1", optional = true, python = "<3.11" }
 
 
 [tool.poetry.scripts]
@@ -76,7 +77,7 @@ dev = ["pytest", "pytest-cov", "coverage", "ruff", "jinja2", "pre-commit", "dock
 plugin = ["ray", "pyspark"]
 example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "xgboost", "xgboost_ray", "kaggle", "scikit-learn", "chronon-ai", "thrift", "sqlglot", "pyspark", "ray", "mlflow", "boto3", "peft"]
 vllm = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "vllm", "setuptools"]
-mactl = ["grpcio-reflection", "PyYAML", "GitPython"]
+mactl = ["grpcio-reflection", "PyYAML", "GitPython", "tomli"]
 
 [tool.pytest.ini_options]
 pythonpath = [
