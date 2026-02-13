@@ -335,7 +335,7 @@ def download_and_extract_dev_files(*, downloader: StorageDownloader):
 
     try:
         with tempfile.TemporaryDirectory() as tmp_dir:
-            tarball_path = Path(tmp_dir) / "dev_run.tar.gz"
+            tarball_path = Path(tmp_dir) / "file_sync.tar.gz"
 
             # Download tarball using the configured downloader
             if not downloader.download(remote_file_path, tarball_path, log):
