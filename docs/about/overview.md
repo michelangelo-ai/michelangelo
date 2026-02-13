@@ -60,7 +60,7 @@ _* Can be replaced by the plugin system for custom integrations_
 
 Pick the approach that matches your workflow and expertise:
 
-#### 🎨 UI Path - Start Here If You:
+#### UI Path - Start Here If You:
 - Want to **quickly experiment** with standard ML models (XGBoost, Classic ML, Deep Learning)
 - Prefer **visual workflows** over writing code
 - Are a **business analyst or product manager** building predictive models
@@ -75,7 +75,7 @@ Pick the approach that matches your workflow and expertise:
 
 **Best for**: Classification, regression, time series forecasting with standard features
 
-#### 💻 Code Path - Choose This If You:
+#### Code Path - Choose This If You:
 - Need **custom ML pipelines** with specialized preprocessing
 - Want **full control** over training loops, model architectures, or data transformations
 - Are building **production-grade workflows** that need to run on schedules
@@ -90,7 +90,7 @@ Pick the approach that matches your workflow and expertise:
 
 **Best for**: Custom architectures, multi-stage pipelines, A/B testing frameworks, feature engineering at scale
 
-#### 🔄 Hybrid Approach
+#### Hybrid Approach
 Many teams start with the **UI for initial experiments**, then transition to **code for production workflows**. You can:
 - Train initial models in the UI to validate feasibility
 - Committed YAML configurations by UI and extend in Canvas/rebuild in Uniflow
