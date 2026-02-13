@@ -26,7 +26,7 @@ var _ Backend = &dynamoSelfProvisionBackend{}
 
 const (
 	// Default Dynamo container image
-	defaultSelfProvisionImage = "nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1"
+	defaultSelfProvisionImage = "nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.9.0"
 
 	// Default model for aggregated deployment
 	defaultSelfProvisionModel = "Qwen/Qwen3-0.6B"
@@ -438,7 +438,6 @@ func (b *dynamoSelfProvisionBackend) createFrontend(ctx context.Context, logger 
 								{Name: "DYN_DISCOVERY_BACKEND", Value: "kubernetes"},
 								// Use in-memory KV store (no external etcd needed)
 								{Name: "DYN_STORE_KV", Value: "mem"},
-								// Use ZMQ event plane instead of NATS (simpler, no external dependencies)
 								{Name: "DYN_EVENT_PLANE", Value: "zmq"},
 								{Name: "DYN_HTTP_PORT", Value: fmt.Sprintf("%d", frontendPort)},
 								{Name: "DYNAMO_PORT", Value: fmt.Sprintf("%d", frontendPort)},
@@ -643,7 +642,6 @@ func (b *dynamoSelfProvisionBackend) createPrefillWorker(ctx context.Context, lo
 								{Name: "DYN_DISCOVERY_BACKEND", Value: "kubernetes"},
 								// Use in-memory KV store (no external etcd needed)
 								{Name: "DYN_STORE_KV", Value: "mem"},
-								// Use ZMQ event plane instead of NATS (simpler, no external dependencies)
 								{Name: "DYN_EVENT_PLANE", Value: "zmq"},
 								// System status server port (DYN_SYSTEM_ENABLED is deprecated)
 								{Name: "DYN_SYSTEM_PORT", Value: fmt.Sprintf("%d", workerSystemPort)},
