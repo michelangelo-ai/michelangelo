@@ -1,4 +1,4 @@
-# Set up golang server for VS Code / Cursor
+# Set Up Go Server for VS Code / Cursor
 
 1. Make sure [golang](https://go.dev/doc/install) is installed and setup correctly. 
 2. Install [gopls](https://github.com/golang/tools/blob/master/gopls/doc/index.md).
