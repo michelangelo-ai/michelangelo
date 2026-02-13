@@ -23,6 +23,10 @@ var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &ModelCleanupActor{
 type ModelCleanupActor struct {
 	Client              client.Client
 	HTTPClient          *http.Client
+	BackendRegistry     *backends.Registry
+	ModelConfigProvider modelconfig.ModelConfigProvider
+	Logger              *zap.Logger
+}
 
 // GetType returns the condition type identifier for model cleanup.
 func (a *ModelCleanupActor) GetType() string {
