@@ -28,7 +28,7 @@ if __name__ != "__main__":  # pragma: no cover
         # Create shared handler with [file_sync] prefix
         handler = logging.StreamHandler(sys.stderr)
         handler.setFormatter(logging.Formatter("[file_sync] %(message)s"))
-        
+
         # Configure loggers for sitecustomize and file_sync modules
         for logger_name in [__name__, "michelangelo.uniflow.core.file_sync"]:
             logger = logging.getLogger(logger_name)
