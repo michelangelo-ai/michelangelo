@@ -334,3 +334,47 @@ tr:hover td {
 [data-theme='dark'] ::-webkit-scrollbar-thumb:hover {
   background-color: rgba(255, 255, 255, 0.3);
 }
+
+/* ============================================
+   Landing Page Navbar - Always Black
+   ============================================ */
+
+html[data-landing-page] .navbar {
+  background: rgba(0, 0, 0, 0.95) !important;
+}
+
+html[data-landing-page] .navbar__title,
+html[data-landing-page] .navbar__link {
+  color: #ffffff !important;
+}
+
+html[data-landing-page] .navbar__link:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Theme toggle icon - white on landing page */
+html[data-landing-page] .navbar [class*='colorModeToggle'] button {
+  color: #ffffff !important;
+}
+
+html[data-landing-page] .navbar [class*='colorModeToggle'] svg {
+  color: #ffffff !important;
+}
+
+/* ============================================
+   View Transitions for Theme Toggle
+   ============================================ */
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 9999;
+}
