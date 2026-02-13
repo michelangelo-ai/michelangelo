@@ -1,24 +1,30 @@
 """Unit tests for mactl CLI functions."""
 
-import os
-import tempfile
 from argparse import Namespace
 from importlib import reload
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
+import os
+import tempfile
 
 from michelangelo.cli.mactl import mactl
 from michelangelo.cli.mactl.crd import CRD
 from michelangelo.cli.mactl.mactl import (
     ADDRESS,
+    DEFAULT_DIR_PLUGINS,
     check_crd,
     create_serivce_classes,
     discover_crds,
     handle_crd_action_help,
     pre_parse_args,
     read_module_from_file,
+    read_plugin_modules,
 )
+
+
+PWD = Path(__file__).parent.resolve()
+PLUGIN_TEST_DIR = PWD / "test" / "plugin_test"
 
 
 class ServiceClassCreationTest(TestCase):
@@ -343,6 +349,35 @@ class TLSErrorHandlingTest(TestCase):
                 mactl.ssl_channel_credentials()
 
             self.assertEqual(str(context.exception), "Failed to create SSL credentials")
+
+
+class ReadPluginsTest(TestCase):
+    """Tests for reading multiple plugins."""
+
+    def test_read_plugin_modules_read_multiple(self):
+        """Test read_plugins returns a list of loaded modules."""
+        crd = CRD(
+            name="pipeline",
+            full_name="michelangelo.api.v2.PipelineService",
+            metadata=[],
+        )
+
+        res = read_plugin_modules(
+            "pipeline", [str(DEFAULT_DIR_PLUGINS), str(PLUGIN_TEST_DIR / "plugins_1")]
+        )
+
+        # TODO: check 3+
+        self.assertEqual(len(res), 2)
+        self.assertEqual(res[0].__name__, "plugin_pipeline_main_0")
+        self.assertEqual(
+            res[0].__file__,
+            str(DEFAULT_DIR_PLUGINS / "entity" / "pipeline" / "main.py"),
+        )
+        self.assertEqual(res[1].__name__, "plugin_pipeline_main_1")
+        self.assertEqual(
+            res[1].__file__,
+            str(PLUGIN_TEST_DIR / "plugins_1" / "entity" / "pipeline" / "main.py"),
+        )
 
 
 class ReadModuleFromFileTest(TestCase):

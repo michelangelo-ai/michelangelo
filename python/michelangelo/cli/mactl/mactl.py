@@ -58,12 +58,38 @@ def kebab_to_snake(name: str) -> str:
     return name.replace("-", "_")
 
 
-def read_module_from_file(crd_name: str) -> Union[object, None]:
+def read_plugin_modules(crd_name: str, plugin_dirs: list[str]) -> list[object]:
+    """Read and load plugin modules from given directories.
+
+    Args:
+        crd_name (str): The name of the CRD.
+        plugin_dirs (list[str]): List of directories to search for plugins.
+            The later directories have higher priority.
+    """
+    plugin_modules = []
+    for i, plugin_dir in enumerate(plugin_dirs):
+        plugin_module = read_module_from_file(crd_name, Path(plugin_dir), i)
+        if plugin_module is not None:
+            plugin_modules.append(plugin_module)
+    return plugin_modules
+
+
+def read_module_from_file(
+    crd_name: str, plugin_dir: Path, num: int = 0
+) -> Union[object, None]:
     """Read and load a plugin module from a given file path."""
-    _LOG.info("Check Plugin directory: %r", DEFAULT_DIR_PLUGINS)
-    plugin_dir = DEFAULT_DIR_PLUGINS / "entity" / crd_name
-    if not plugin_dir.exists():
-        _LOG.info("Plugin directory does not exist: %r", plugin_dir)
+    _LOG.info("Check Plugin directory: %r", plugin_dir)
+    if not plugin_dir.exists() or not plugin_dir.is_dir():
+        _LOG.warning(
+            "Plugin base directory does not exist (or not a directory): %r", plugin_dir
+        )
+        return
+
+    plugin_dir = plugin_dir / "entity" / crd_name
+    if not plugin_dir.exists() or not plugin_dir.is_dir():
+        _LOG.info(
+            "Plugin directory does not exist (or not a directory): %r", plugin_dir
+        )
         return
 
     plugin_main = plugin_dir / "main.py"
@@ -79,7 +105,7 @@ def read_module_from_file(crd_name: str) -> Union[object, None]:
         sys.path.insert(0, str(plugin_parent_path))
 
     spec = spec_from_file_location(
-        f"plugin_{crd_name}_main", str(plugin_main.resolve())
+        f"plugin_{crd_name}_main_{num}", str(plugin_main.resolve())
     )
     if spec is None:
         _LOG.error("Failed to load plugin spec for %r", plugin_main)
