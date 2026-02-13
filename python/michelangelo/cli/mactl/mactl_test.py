@@ -359,11 +359,15 @@ class ReadPluginsTest(TestCase):
     def test_read_plugin_modules_read_multiple(self):
         """Test read_plugins returns a list of loaded modules."""
         res = read_plugin_modules(
-            "pipeline", [str(DEFAULT_DIR_PLUGINS), str(PLUGIN_TEST_DIR / "plugins_1")]
+            "pipeline",
+            [
+                str(DEFAULT_DIR_PLUGINS),
+                str(PLUGIN_TEST_DIR / "plugins_1"),
+                str(PLUGIN_TEST_DIR / "plugins_2"),
+            ],
         )
 
-        # TODO: check 3+
-        self.assertEqual(len(res), 2)
+        self.assertEqual(len(res), 3)
         self.assertEqual(res[0].__name__, "plugin_pipeline_main_0")
         self.assertEqual(
             res[0].__file__,
@@ -374,10 +378,20 @@ class ReadPluginsTest(TestCase):
             res[1].__file__,
             str(PLUGIN_TEST_DIR / "plugins_1" / "entity" / "pipeline" / "main.py"),
         )
+        self.assertEqual(res[2].__name__, "plugin_pipeline_main_2")
+        self.assertEqual(
+            res[2].__file__,
+            str(PLUGIN_TEST_DIR / "plugins_2" / "entity" / "pipeline" / "main.py"),
+        )
 
     @patch.dict(
         "michelangelo.cli.mactl.mactl._CONFIG",
-        {"plugins": [str(PLUGIN_TEST_DIR / "plugins_1")]},
+        {
+            "plugins": [
+                str(PLUGIN_TEST_DIR / "plugins_1"),
+                str(PLUGIN_TEST_DIR / "plugins_2"),
+            ]
+        },
         clear=False,
     )
     def test_read_plugin_multiple(self):
@@ -411,13 +425,18 @@ class ReadPluginsTest(TestCase):
                             "type": str,
                         },
                     }
-                ]
+                ],
             },
         )
 
     @patch.dict(
         "michelangelo.cli.mactl.mactl._CONFIG",
-        {"plugins": [str(PLUGIN_TEST_DIR / "plugins_1")]},
+        {
+            "plugins": [
+                str(PLUGIN_TEST_DIR / "plugins_1"),
+                str(PLUGIN_TEST_DIR / "plugins_2"),
+            ]
+        },
         clear=False,
     )
     def test_read_plugin_command_multiple(self):
@@ -477,6 +496,30 @@ class ReadModuleFromFileTest(TestCase):
 
             # Execute
             result = read_module_from_file("test_entity", Path(tmpdir))
+
+            # Verify returns None
+            self.assertIsNone(result)
+
+    def test_plugin_base_directory_does_not_exist(self):
+        """Test when plugin base directory does not exist (line 84)."""
+        # Use a non-existent path
+        nonexistent_path = Path("/tmp/nonexistent_plugin_dir_12345")
+
+        # Execute
+        result = read_module_from_file("test_entity", nonexistent_path)
+
+        # Verify returns None
+        self.assertIsNone(result)
+
+    def test_plugin_base_directory_is_not_a_directory(self):
+        """Test when plugin base directory is a file, not a directory (line 84)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a file instead of directory
+            file_path = Path(tmpdir) / "plugin_file.txt"
+            file_path.write_text("not a directory")
+
+            # Execute
+            result = read_module_from_file("test_entity", file_path)
 
             # Verify returns None
             self.assertIsNone(result)
