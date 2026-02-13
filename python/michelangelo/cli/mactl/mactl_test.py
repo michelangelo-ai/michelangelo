@@ -441,8 +441,7 @@ class ReadPluginsTest(TestCase):
 class ReadModuleFromFileTest(TestCase):
     """Tests for read_module_from_file function."""
 
-    @patch("michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS")
-    def test_successful_module_loading(self, mock_default_dir_plugins):
+    def test_successful_module_loading(self):
         """Test successful loading of a plugin module."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create plugin directory structure
@@ -453,42 +452,31 @@ class ReadModuleFromFileTest(TestCase):
             main_py = plugin_dir / "main.py"
             main_py.write_text("test_var = 'hello'")
 
-            # Mock DEFAULT_DIR_PLUGINS to point to our temp directory
-            mock_default_dir_plugins.__truediv__.return_value = Path(tmpdir) / "entity"
-
             # Execute
-            result = read_module_from_file("test_entity")
+            result = read_module_from_file("test_entity", Path(tmpdir))
 
             # Verify module was loaded and has the expected attribute
             self.assertIsNotNone(result)
             self.assertEqual(result.test_var, "hello")
 
-    @patch("michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS")
-    def test_plugin_directory_does_not_exist(self, mock_default_dir_plugins):
+    def test_plugin_directory_does_not_exist(self):
         """Test when plugin directory does not exist."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Mock DEFAULT_DIR_PLUGINS but don't create the directory
-            mock_default_dir_plugins.__truediv__.return_value = Path(tmpdir) / "entity"
-
-            # Execute
-            result = read_module_from_file("nonexistent_entity")
+            # Execute with non-existent entity
+            result = read_module_from_file("nonexistent_entity", Path(tmpdir))
 
             # Verify returns None
             self.assertIsNone(result)
 
-    @patch("michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS")
-    def test_main_py_does_not_exist(self, mock_default_dir_plugins):
+    def test_main_py_does_not_exist(self):
         """Test when main.py file does not exist in plugin directory."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create plugin directory but no main.py
             plugin_dir = Path(tmpdir) / "entity" / "test_entity"
             plugin_dir.mkdir(parents=True)
 
-            # Mock DEFAULT_DIR_PLUGINS
-            mock_default_dir_plugins.__truediv__.return_value = Path(tmpdir) / "entity"
-
             # Execute
-            result = read_module_from_file("test_entity")
+            result = read_module_from_file("test_entity", Path(tmpdir))
 
             # Verify returns None
             self.assertIsNone(result)
