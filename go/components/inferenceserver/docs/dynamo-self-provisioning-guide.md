@@ -311,6 +311,104 @@ python3 -m dynamo.vllm --model Qwen/Qwen3-0.6B --is-prefill-worker --connector k
 python3 -m dynamo.vllm --model Qwen/Qwen3-0.6B --is-decode-worker --connector nixl
 ```
 
+## Disaggregated Deployment Requirements
+
+Disaggregated serving (P/D separation) has specific infrastructure requirements beyond basic Kubernetes.
+
+### Base Requirements (All Disaggregated Deployments)
+
+#### 1. NATS Message Server
+
+NATS is **required** for Dynamo's request plane in disaggregated mode. The `DistributedRuntime` uses NATS for:
+- Request routing between Frontend and Workers
+- Component coordination and discovery events
+- Load balancing decisions
+
+**Deployment:**
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dynamo-nats
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dynamo-nats
+  template:
+    metadata:
+      labels:
+        app: dynamo-nats
+    spec:
+      containers:
+        - name: nats
+          image: nats:2.10-alpine
+          ports:
+            - containerPort: 4222
+              name: client
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dynamo-nats
+spec:
+  type: ClusterIP
+  ports:
+    - port: 4222
+      targetPort: 4222
+      name: client
+  selector:
+    app: dynamo-nats
+```
+
+**Environment Variable for All Components:**
+```yaml
+env:
+  - name: DYN_NATS_URL
+    value: "nats://dynamo-nats.{namespace}.svc.cluster.local:4222"
+```
+
+> **Note**: Without NATS, workers will fail with: `Failed to connect to NATS: IO error: Cannot assign requested address`
+
+#### 2. DynamoWorkerMetadata CRD + RBAC
+
+Required for Kubernetes-based service discovery. See the [Service Discovery](#service-discovery) section.
+
+#### 3. KV Transfer Connector
+
+Choose one based on your hardware:
+
+| Connector | Hardware Required | KV Transfer Speed | Complexity |
+|-----------|-------------------|-------------------|------------|
+| `none` | None | No transfer (workers independent) | Low |
+| `nixl` | InfiniBand/NVLink | Fastest (GPU-to-GPU RDMA) | High |
+| `lmcache` | Standard Ethernet | Medium (via CPU RAM) | Medium |
+
+### Without KV Transfer (`--connector=none`)
+
+If you deploy disaggregated mode without a KV transfer connector:
+- Prefill worker handles requests end-to-end (including decode)
+- Decode worker sits **idle** and receives no traffic
+- This is functionally equivalent to aggregated mode but wastes a GPU
+
+**Use case**: Testing disaggregated infrastructure before adding InfiniBand.
+
+### With NIXL KV Transfer (Requires InfiniBand)
+
+See [NIXL Requirements](#nixl-requirements) below.
+
+### With LMCache KV Transfer (Standard GKE)
+
+See [LMCache Requirements](#lmcache-requirements-alternative) below.
+
 ## Connector Options
 
 | Connector | Description | Use Case |
