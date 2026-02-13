@@ -37,6 +37,26 @@ type WorkflowExecution struct {
 	RunID string
 }
 
+type ResetWorkflowOptions struct {
+	WorkflowID string
+	RunID      string
+	EventID    int64
+	Reason     string
+	RequestID  string
+}
+
+type HistoryEvent struct {
+	EventID   int64
+	EventType string
+	EventTime time.Time
+	Details   map[string]interface{}
+}
+
+type WorkflowHistory struct {
+	Events        []HistoryEvent
+	NextPageToken []byte
+}
+
 type ExecutionFilter struct {
 	WorkflowID string
 	RunID      string
@@ -77,4 +97,14 @@ type WorkflowClient interface {
 	ListOpenWorkflow(ctx context.Context, request ListOpenWorkflowExecutionsRequest) (*ListOpenWorkflowExecutionsResponse, error)
 	// TerminateWorkflow terminates a workflow
 	TerminateWorkflow(ctx context.Context, workflowID string, runID string, reason string) error
+	// ResetWorkflow resets a workflow execution to a specific event ID
+	ResetWorkflow(ctx context.Context, options ResetWorkflowOptions) (*WorkflowExecution, error)
+	// GetWorkflowExecutionHistory gets the execution history of a workflow
+	GetWorkflowExecutionHistory(ctx context.Context, workflowID string, runID string, pageToken []byte, pageSize int32) (*WorkflowHistory, error)
+	// GetActivityTaskScheduledEventType returns the engine-specific event type string for ActivityTaskScheduled
+	GetActivityTaskScheduledEventType() string
+	// GetActivityTaskCompletedEventType returns the engine-specific event type string for ActivityTaskCompleted
+	GetActivityTaskCompletedEventType() string
+	// GetDecisionTaskCompletedEventType returns the engine-specific event type string for DecisionTaskCompleted
+	GetDecisionTaskCompletedEventType() string
 }

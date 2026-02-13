@@ -11,7 +11,6 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -22,7 +21,6 @@ type Params struct {
 	HTTPClient          *http.Client
 	DynamicClient       dynamic.Interface
 	RouteProvider       route.RouteProvider
-	Gateway             gateways.Gateway
 	BackendRegistry     *backends.Registry
 	ModelConfigProvider modelconfig.ModelConfigProvider
 	Logger              *zap.Logger

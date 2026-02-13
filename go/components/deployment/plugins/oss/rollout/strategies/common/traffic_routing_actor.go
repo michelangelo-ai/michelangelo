@@ -11,7 +11,6 @@ import (
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -20,10 +19,9 @@ var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &TrafficRoutingActo
 
 // TrafficRoutingActor manages HTTPRoute configuration to route deployment traffic to models.
 type TrafficRoutingActor struct {
-	RouteProvider   route.RouteProvider
-	BackendRegistry *backends.Registry
-	DynamicClient   dynamic.Interface
-	Logger          *zap.Logger
+	RouteProvider route.RouteProvider
+	DynamicClient dynamic.Interface
+	Logger        *zap.Logger
 }
 
 // GetType returns the condition type identifier for traffic routing.
@@ -40,18 +38,8 @@ func (a *TrafficRoutingActor) GetLogger() *zap.Logger {
 func (a *TrafficRoutingActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.Logger.Info("Retrieving traffic routing configuration for deployment", zap.String("deployment", deployment.Name))
 
-	dynamoBackend, err := a.BackendRegistry.GetBackend(v2pb.BACKEND_TYPE_DYNAMO)
-	if err != nil {
-		a.Logger.Error("Failed to get Dynamo backend", zap.Error(err))
-		return conditionsutil.GenerateFalseCondition(condition, "CheckDeploymentRouteStatusFailed", fmt.Sprintf("Failed to get Dynamo backend: %v", err)), nil
-	}
-	frontendSvc, err := dynamoBackend.GetFrontEndSvc(ctx, a.Logger, deployment.Spec.GetInferenceServer().Name, deployment.Namespace)
-	if err != nil {
-		a.Logger.Error("Failed to get frontend service", zap.Error(err))
-		return conditionsutil.GenerateFalseCondition(condition, "CheckDeploymentRouteStatusFailed", fmt.Sprintf("Failed to get frontend service: %v", err)), nil
-	}
 	ok, err := a.RouteProvider.CheckDeploymentRouteStatus(ctx, a.Logger,
-		a.DynamicClient, deployment.Name, deployment.Namespace, frontendSvc, deployment.Spec.DesiredRevision.Name)
+		a.DynamicClient, deployment.Name, deployment.Namespace, deployment.Spec.GetInferenceServer().Name, deployment.Spec.DesiredRevision.Name)
 	if err != nil {
 		a.Logger.Error("failed to check deployment route status",
 			zap.Error(err),
@@ -73,17 +61,8 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, deployment *v2pb.Deployme
 	if deployment.Spec.GetInferenceServer() == nil {
 		return conditionsutil.GenerateFalseCondition(condition, "MissingInferenceServer", fmt.Sprintf("inference server not specified for deployment %s", deployment.Name)), nil
 	}
-	dynamoBackend, err := a.BackendRegistry.GetBackend(v2pb.BACKEND_TYPE_DYNAMO)
-	if err != nil {
-		a.Logger.Error("Failed to get Dynamo backend", zap.Error(err))
-		return conditionsutil.GenerateFalseCondition(condition, "CheckDeploymentRouteStatusFailed", fmt.Sprintf("Failed to get Dynamo backend: %v", err)), nil
-	}
-	frontendSvc, err := dynamoBackend.GetFrontEndSvc(ctx, a.Logger, deployment.Spec.GetInferenceServer().Name, deployment.Namespace)
-	if err != nil {
-		a.Logger.Error("Failed to get frontend service", zap.Error(err))
-		return conditionsutil.GenerateFalseCondition(condition, "CheckDeploymentRouteStatusFailed", fmt.Sprintf("Failed to get frontend service: %v", err)), nil
-	}
-	err = a.RouteProvider.EnsureDeploymentRoute(ctx, a.Logger, a.DynamicClient, deployment.Name, deployment.Namespace, frontendSvc, deployment.Spec.DesiredRevision.Name)
+
+	err := a.RouteProvider.EnsureDeploymentRoute(ctx, a.Logger, a.DynamicClient, deployment.Name, deployment.Namespace, deployment.Spec.GetInferenceServer().Name, deployment.Spec.DesiredRevision.Name)
 	if err != nil {
 		a.Logger.Error("failed to add deployment route",
 			zap.Error(err),

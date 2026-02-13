@@ -1,0 +1,36 @@
+apiVersion: michelangelo.api/v2
+kind: PipelineRun
+metadata:
+  annotations:
+    michelangelo/uniflow-image: docker.io/library/examples:latest
+  labels:
+    michelangelo/SpecUpdateTimestamp: "1770233943390974"
+    michelangelo/UpdateTimestamp: "1770233943390974"
+  name: run-1770233943-97e1a220
+  namespace: ma-dev-test
+spec:
+  actor:
+    name: mactl-user
+  pipeline:
+    name: bert-cola-test
+    namespace: ma-dev-test
+  retryInfo:
+    activityId: "10"
+    reason: Manual retry to test new activity-based retry implementation4
+    workflowId: run-1770233943-97e1a220
+    workflowRunId: c0dae85c-2c05-4387-8063-5c2878e56af0
+  pipelineSpec:
+    commit:
+      branch: badcount/retry
+      gitRef: 00f5c9e178c261726272fe46be9faf3e4449f93a
+    manifest:
+      content:
+        '@type': type.googleapis.com/michelangelo.api.TypedStruct
+        value: Cix0eXBlLmdvb2dsZWFwaXMuY29tL21pY2hlbGFuZ2Vsby5VbmlGbG93Q29uZhKcAgqoAQoHZW52aXJvbhKcASqZAQonCiBQWVRPUkNIX01QU19ISUdIX1dBVEVSTUFSS19SQVRJTxIDGgEwChkKDE1BX05BTUVTUEFDRRIJGgdkZWZhdWx0CiIKGFMzX0FMTE9XX0JVQ0tFVF9DUkVBVElPThIGGgRUcnVlChwKEUlNQUdFX1BVTExfUE9MSUNZEgcaBU5ldmVyChEKCURBVEFfU0laRRIEGgIxMAoKCgRhcmdzEgIyAApjCgZrd2FyZ3MSWTJXChoyGAoGGgRwYXRoCg4aDG55dS1tbGwvZ2x1ZQoSMhAKBhoEbmFtZQoGGgRzc3QyCiUyIwoWGhR0b2tlbml6ZXJfbWF4X2xlbmd0aAoJEQAAAAAAAHBA
+      filePath: python/examples/bert_cola/pipeline.yaml
+      type: PIPELINE_MANIFEST_TYPE_UNIFLOW
+      uniflowFunction: train_workflow
+      uniflowTar: s3://default/uniflow/ma-dev-test_bert-cola-test_195f6172.tar.gz
+    owner:
+      name: weric
+    type: PIPELINE_TYPE_TRAIN

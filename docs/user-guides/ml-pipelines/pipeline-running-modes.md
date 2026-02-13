@@ -138,9 +138,9 @@ Engineers must validate the **entire pipeline**, including container image build
 ### Usage
 
 ```shell
-mactl pipeline dev_run -f pipeline.yaml
-mactl pipeline dev_run -f pipeline.yaml --env DATASET_SIZE=1000
-mactl pipeline dev_run -f pipeline.yaml --resume_from my-run-123:train
+ma pipeline dev_run -f pipeline.yaml
+ma pipeline dev_run -f pipeline.yaml --env DATASET_SIZE=1000
+ma pipeline dev_run -f pipeline.yaml --resume_from my-run-123:train
 ```
 
 ## Pipeline Run Mode

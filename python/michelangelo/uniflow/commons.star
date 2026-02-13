@@ -75,7 +75,7 @@ def resource_dict(cpu, memory, disk = None, gpu = None, gpu_sku = ""):
         res["gpu_sku"] = gpu_sku
     return res
 
-def report_progress(task_path, task_name, task_log = "", task_message = "", task_state = "", start_time = "", end_time = "", output = "", retry_attempt_id = ""):
+def report_progress(task_path, task_name, task_log = "", task_message = "", task_state = "", start_time = "", end_time = "", output = "", retry_attempt_id = "", first_activity_id = "", activity_id = ""):
     if type(retry_attempt_id) != "str":
         retry_attempt_id = str(retry_attempt_id)
     state_dict = {
@@ -88,6 +88,8 @@ def report_progress(task_path, task_name, task_log = "", task_message = "", task
         "end_time": end_time,
         "output": output,
         "retry_attempt_id": retry_attempt_id,
+        "first_activity_id": first_activity_id,
+        "current_activity_id": activity_id,
     }
     progress.report(str(state_dict))
 

@@ -394,8 +394,6 @@ CR_PAT environment variable, e.g.: `export CR_PAT=ghp_...`.
 
     if "apiserver" not in ns.exclude:
         resources.append("michelangelo-apiserver.yaml")
-    if "controllermgr" not in ns.exclude:
-        resources.append("michelangelo-controllermgr.yaml")
     if "ui" not in ns.exclude:
         resources.append("envoy.yaml")
         resources.append("michelangelo-ui.yaml")
@@ -469,12 +467,14 @@ CR_PAT environment variable, e.g.: `export CR_PAT=ghp_...`.
         _setup_temporal(links, helm_existing_repos)
         if "worker" not in ns.exclude:
             _kube_create(_dir / "resources/michelangelo-temporal-worker.yaml")
+        if "controllermgr" not in ns.exclude:
+            resources.append("michelangelo-temporal-controllermgr.yaml")
     elif ns.workflow == "cadence":
-        # Only create cadence domain if cadence is actually deployed
-        if "cadence" not in ns.exclude and "mysql" not in ns.exclude:
-            _create_cadence_domain(links)
-            if "worker" not in ns.exclude:
-                _kube_create(_dir / "resources/michelangelo-worker.yaml")
+        _create_cadence_domain(links)
+        if "worker" not in ns.exclude:
+            _kube_create(_dir / "resources/michelangelo-worker.yaml")
+        if "controllermgr" not in ns.exclude:
+            resources.append("michelangelo-controllermgr.yaml")
     else:
         raise ValueError(f"Unsupported workflow engine: {ns.workflow}")
 
@@ -845,7 +845,6 @@ def _setup_temporal(links, helm_existing_repos):
 
     # Wait for admin tools to be fully ready and get specific pod name
     print("Waiting for admin tools to be ready for commands...")
-    time.sleep(10)  # Increased wait time
 
     # Get the specific admin tools pod name for more reliable exec
     admin_pod_result = subprocess.check_output(
@@ -860,6 +859,41 @@ def _setup_temporal(links, helm_existing_repos):
         ],
         text=True,
     ).strip()
+
+    # Test kubectl exec readiness with retries
+    max_retries = 12
+    retry_delay = 5
+    for attempt in range(max_retries):
+        try:
+            print(
+                f"Testing admin tools container readiness "
+                f"(attempt {attempt + 1}/{max_retries})..."
+            )
+            subprocess.check_call(
+                [
+                    "kubectl",
+                    "exec",
+                    admin_pod_result,
+                    "-c",
+                    "admin-tools",
+                    "--",
+                    "ls",
+                    "/",
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            print("Admin tools container is ready for commands!")
+            break
+        except subprocess.CalledProcessError:
+            if attempt == max_retries - 1:
+                timeout_seconds = (max_retries - 1) * retry_delay
+                _err_exit(
+                    f"Admin tools container failed to become ready for commands "
+                    f"after {timeout_seconds} seconds"
+                )
+            print(f"Admin tools not ready yet, waiting {retry_delay} seconds...")
+            time.sleep(retry_delay)
 
     # Register the default namespace in Temporal using specific pod name
     _exec(

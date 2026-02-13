@@ -12,7 +12,6 @@ import (
 	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -24,11 +23,6 @@ var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &ModelCleanupActor{
 type ModelCleanupActor struct {
 	Client              client.Client
 	HTTPClient          *http.Client
-	Gateway             gateways.Gateway
-	BackendRegistry     *backends.Registry
-	ModelConfigProvider modelconfig.ModelConfigProvider
-	Logger              *zap.Logger
-}
 
 // GetType returns the condition type identifier for model cleanup.
 func (a *ModelCleanupActor) GetType() string {
@@ -56,7 +50,11 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deploym
 		zap.String("inference_server", inferenceServerName))
 
 	// Check if old model still exists in Triton
-	ready, err := a.Gateway.CheckModelStatus(ctx, a.Logger, a.Client, a.HTTPClient, currentModel, inferenceServerName, resource.Namespace, v2pb.BACKEND_TYPE_DYNAMO)
+	serverBackend, err := a.BackendRegistry.GetBackend(v2pb.BACKEND_TYPE_TRITON)
+	if err != nil {
+		return conditionUtils.GenerateFalseCondition(condition, "CleanupPending", fmt.Sprintf("Failed to get backend for inference server %s: %v", inferenceServerName, err)), err
+	}
+	ready, err := serverBackend.CheckModelStatus(ctx, a.Logger, a.Client, a.HTTPClient, inferenceServerName, resource.Namespace, currentModel)
 	if err != nil {
 		a.Logger.Info("Cannot verify old model status, cleanup may be needed", zap.Error(err))
 		return conditionUtils.GenerateFalseCondition(condition, "CleanupPending", fmt.Sprintf("Need to cleanup old model %s", currentModel)), nil
@@ -85,12 +83,7 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 
 	// Unload old model from inference server
 	a.Logger.Info("Removing old model from model config", zap.String("old_model", currentModel))
-	dynamoBackend, err := a.BackendRegistry.GetBackend(v2pb.BACKEND_TYPE_DYNAMO)
-	if err != nil {
-		a.Logger.Error("Failed to get Dynamo backend", zap.Error(err))
-		return conditionUtils.GenerateFalseCondition(condition, "ModelRemovalFailed", fmt.Sprintf("Failed to get Dynamo backend: %v", err)), nil
-	}
-	if err = dynamoBackend.UnloadModel(ctx, a.Logger, a.Client, inferenceServerName, resource.Namespace, currentModel); err != nil {
+	if err := a.ModelConfigProvider.RemoveModelFromConfig(ctx, a.Logger, a.Client, inferenceServerName, resource.Namespace, currentModel); err != nil {
 		a.Logger.Error("Failed to remove old model from model config", zap.String("model", currentModel), zap.Error(err))
 		return conditionUtils.GenerateFalseCondition(condition, "ModelRemovalFailed", fmt.Sprintf("Failed to remove old model %s from model config: %v", currentModel, err)), nil
 	}

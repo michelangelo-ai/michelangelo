@@ -17,11 +17,10 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-// createHealthCheckTestRegistry creates a registry with the mock backend registered for supported types.
+// createHealthCheckTestRegistry creates a registry with the mock backend registered for Triton.
 func createHealthCheckTestRegistry(mockBackend *backendsmocks.MockBackend) *backends.Registry {
 	registry := backends.NewRegistry()
 	registry.Register(v2pb.BACKEND_TYPE_TRITON, mockBackend)
-	registry.Register(v2pb.BACKEND_TYPE_DYNAMO, mockBackend)
 	return registry
 }
 

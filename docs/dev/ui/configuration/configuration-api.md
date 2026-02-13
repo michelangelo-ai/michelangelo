@@ -109,7 +109,7 @@ See `javascript/packages/core/config/entities/*/list.ts` and `*/detail.ts` for c
 
 ## When to Use Configuration vs Custom Components
 
-**✅ Use configuration when the standard patterns fit:**
+**Use configuration when the standard patterns fit:**
 
 - Entity list views (tables with columns, sorting, filtering)
 - Entity detail views (metadata headers, content sections)
@@ -117,14 +117,14 @@ See `javascript/packages/core/config/entities/*/list.ts` and `*/detail.ts` for c
 - Workflow phases grouping related entities
 - Standard display types (dates, states, text, links)
 
-**🔧 Write custom components when you need:**
+**Write custom components when you need:**
 
 - UI patterns not covered by existing configurations
 - Complex interactive visualizations or custom interactions
 - Business logic beyond what accessor functions can handle
 - Integration with external systems requiring custom logic
 
-**💡 Engineering best practice: Dual interfaces**
+**Engineering best practice: Dual interfaces**
 
 When building new UI components for Michelangelo, provide both interfaces:
 

@@ -125,7 +125,10 @@ func (r *Reconciler) updatePipelineStatus(ctx context.Context, pipeline *v2pb.Pi
 //
 // For example: "pipeline-my-model-a1b2c3d4e5f6"
 func formatRevisionName(pipeline *v2pb.Pipeline) string {
-	return fmt.Sprintf("%s-%s-%s", "pipeline", strings.ToLower(pipeline.Name), pipeline.Spec.Commit.GitRef[:min(len(pipeline.Spec.Commit.GitRef), 12)])
+	if pipeline.Spec.Commit != nil {
+		return fmt.Sprintf("%s-%s-%s", "pipeline", strings.ToLower(pipeline.Name), pipeline.Spec.Commit.GitRef[:min(len(pipeline.Spec.Commit.GitRef), 12)])
+	}
+	return ""
 }
 
 // isTerminatedState checks if a pipeline state is terminal.

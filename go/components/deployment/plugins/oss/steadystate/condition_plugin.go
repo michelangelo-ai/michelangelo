@@ -7,7 +7,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -21,20 +21,20 @@ type conditionPlugin struct {
 
 // Params contains dependencies injected for steady state plugin initialization.
 type Params struct {
-	Gateway    gateways.Gateway
-	Client     client.Client
-	HTTPClient *http.Client
-	Logger     *zap.Logger
+	BackendRegistry *backends.Registry
+	Client          client.Client
+	HTTPClient      *http.Client
+	Logger          *zap.Logger
 }
 
 // NewSteadyStatePlugin creates a steady state monitoring workflow plugin.
 func NewSteadyStatePlugin(p Params) conditionInterfaces.Plugin[*v2pb.Deployment] {
 	return &conditionPlugin{actors: []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&SteadyStateActor{
-			gateway:    p.Gateway,
-			httpClient: p.HTTPClient,
-			client:     p.Client,
-			logger:     p.Logger,
+			backendRegistry: p.BackendRegistry,
+			httpClient:      p.HTTPClient,
+			client:          p.Client,
+			logger:          p.Logger,
 		},
 	}}
 }

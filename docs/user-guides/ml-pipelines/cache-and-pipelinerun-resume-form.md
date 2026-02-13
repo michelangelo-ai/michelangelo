@@ -39,10 +39,10 @@ If cache\_enable \= false, we will force rerun the feature\_join task and the pr
 
 Now Uniflow PipelineRun can also support resume from step. Essentially, it relies on the uniflow cache logic. 
 
-We can resume from a specific step using mactl with the follow cmd. 
+We can resume from a specific step using ma with the follow cmd. 
 
 ```
-mactl pipeline run -n <namespace> --revision <pipeline-revision-name> --resume_from <pipeline-run-name>:<step-name>
+ma pipeline run -n <namespace> --revision <pipeline-revision-name> --resume_from <pipeline-run-name>:<step-name>
 ```
 
 **Important Notice:** To skip a step during resume from, Uniflow requires that the input of the step is not changed. 

@@ -200,6 +200,25 @@ func (this *PipelineRunSpec) Validate(prefix string) error {
 			}
 		}
 	}
+	{
+		v := this.GetRetryInfo()
+		n := `retry_info`
+		var i interface{}
+		if reflect.ValueOf(v).Kind() == reflect.Ptr {
+			i = reflect.ValueOf(v).Interface()
+			if reflect.ValueOf(v).IsNil() {
+				i = nil
+			}
+		} else {
+			i = reflect.ValueOf(&v).Interface()
+		}
+		validate, hasValidate := i.(interface{ Validate(string) error })
+		if hasValidate {
+			if err := validate.Validate(prefix + n + "."); err != nil {
+				return err
+			}
+		}
+	}
 	// Call extension validation if registered
 	if pipelineRunSpecValidateExt != nil {
 		if err := pipelineRunSpecValidateExt(this, prefix); err != nil {
@@ -212,6 +231,25 @@ func (this *PipelineRunSpec) Validate(prefix string) error {
 // RegisterPipelineRunSpecValidateExt registers an extension validation function
 func RegisterPipelineRunSpecValidateExt(f func(*PipelineRunSpec, string) error) {
 	pipelineRunSpecValidateExt = f
+}
+
+// retryInfoValidateExt is an extension hook for additional validation logic
+var retryInfoValidateExt func(*RetryInfo, string) error
+
+func (this *RetryInfo) Validate(prefix string) error {
+
+	// Call extension validation if registered
+	if retryInfoValidateExt != nil {
+		if err := retryInfoValidateExt(this, prefix); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RegisterRetryInfoValidateExt registers an extension validation function
+func RegisterRetryInfoValidateExt(f func(*RetryInfo, string) error) {
+	retryInfoValidateExt = f
 }
 
 // pipelineRunStatusValidateExt is an extension hook for additional validation logic
