@@ -394,6 +394,7 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 									"--model",
 									modelName,
 									"--is-prefill-worker", // Run as prefill-only worker
+									"--connector=none",    // Disable KV transfer (NIXL requires InfiniBand)
 								},
 								// Required for GKE GPU nodes - sets CUDA library paths and GPU visibility
 								"env": []interface{}{
@@ -472,6 +473,7 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 									"--model",
 									modelName,
 									"--is-decode-worker", // Run as decode-only worker
+									"--connector=none",   // Disable KV transfer (NIXL requires InfiniBand)
 									"--enable-lora",      // Enable LoRA adapter support
 									"--max-loras=4",      // Maximum number of LoRA adapters
 									"--max-lora-rank=64", // Maximum LoRA rank supported
@@ -508,6 +510,7 @@ func (b *dynamoBackend) buildDynamoGraphDeployment(inferenceServer *v2pb.Inferen
 										"name":  "DYN_SYSTEM_PORT",
 										"value": "9090",
 									},
+									// NATS URL for KV transfer (connector=nats)
 								},
 								// GPU resource for the container (required for nvidia driver injection)
 								"resources": map[string]interface{}{
