@@ -62,8 +62,9 @@ func NewDynamoSelfProvisionBackend() *dynamoSelfProvisionBackend {
 
 // CreateServer creates the Kubernetes resources (Deployments, Services) for a Dynamo
 // inference server directly, without using the Dynamo operator.
+// This creates a disaggregated deployment with separate Prefill and Decode workers.
 func (b *dynamoSelfProvisionBackend) CreateServer(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServer *v2pb.InferenceServer) (*ServerStatus, error) {
-	logger.Info("Creating self-provisioned Dynamo inference server",
+	logger.Info("Creating self-provisioned Dynamo inference server (disaggregated mode)",
 		zap.String("name", inferenceServer.Name),
 		zap.String("namespace", inferenceServer.Namespace))
 
@@ -75,12 +76,17 @@ func (b *dynamoSelfProvisionBackend) CreateServer(ctx context.Context, logger *z
 		return nil, fmt.Errorf("failed to create frontend: %w", err)
 	}
 
-	// Create Worker Deployment and Service
-	if err := b.createWorker(ctx, logger, kubeClient, serverName, namespace, inferenceServer); err != nil {
-		return nil, fmt.Errorf("failed to create worker: %w", err)
+	// Create Prefill Worker Deployment and Service (disaggregated mode)
+	if err := b.createPrefillWorker(ctx, logger, kubeClient, serverName, namespace, inferenceServer); err != nil {
+		return nil, fmt.Errorf("failed to create prefill worker: %w", err)
 	}
 
-	logger.Info("Successfully created self-provisioned Dynamo inference server",
+	// Create Decode Worker Deployment and Service (disaggregated mode)
+	if err := b.createDecodeWorker(ctx, logger, kubeClient, serverName, namespace, inferenceServer); err != nil {
+		return nil, fmt.Errorf("failed to create decode worker: %w", err)
+	}
+
+	logger.Info("Successfully created self-provisioned Dynamo inference server (disaggregated)",
 		zap.String("name", serverName),
 		zap.String("namespace", namespace))
 
@@ -132,32 +138,54 @@ func (b *dynamoSelfProvisionBackend) GetServerStatus(ctx context.Context, logger
 
 // DeleteServer deletes all self-provisioned resources for the inference server.
 func (b *dynamoSelfProvisionBackend) DeleteServer(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName string, namespace string) error {
-	logger.Info("Deleting self-provisioned Dynamo inference server",
+	logger.Info("Deleting self-provisioned Dynamo inference server (disaggregated)",
 		zap.String("name", inferenceServerName),
 		zap.String("namespace", namespace))
 
 	var errs []error
 
-	// Delete worker deployment
-	workerDeployment := &appsv1.Deployment{
+	// Delete prefill worker deployment
+	prefillDeployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      b.workerDeploymentName(inferenceServerName),
+			Name:      b.prefillWorkerDeploymentName(inferenceServerName),
 			Namespace: namespace,
 		},
 	}
-	if err := kubeClient.Delete(ctx, workerDeployment); err != nil && !errors.IsNotFound(err) {
-		errs = append(errs, fmt.Errorf("failed to delete worker deployment: %w", err))
+	if err := kubeClient.Delete(ctx, prefillDeployment); err != nil && !errors.IsNotFound(err) {
+		errs = append(errs, fmt.Errorf("failed to delete prefill worker deployment: %w", err))
 	}
 
-	// Delete worker headless service
-	workerService := &corev1.Service{
+	// Delete prefill worker headless service
+	prefillService := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      b.workerServiceName(inferenceServerName),
+			Name:      b.prefillWorkerServiceName(inferenceServerName),
 			Namespace: namespace,
 		},
 	}
-	if err := kubeClient.Delete(ctx, workerService); err != nil && !errors.IsNotFound(err) {
-		errs = append(errs, fmt.Errorf("failed to delete worker service: %w", err))
+	if err := kubeClient.Delete(ctx, prefillService); err != nil && !errors.IsNotFound(err) {
+		errs = append(errs, fmt.Errorf("failed to delete prefill worker service: %w", err))
+	}
+
+	// Delete decode worker deployment
+	decodeDeployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      b.decodeWorkerDeploymentName(inferenceServerName),
+			Namespace: namespace,
+		},
+	}
+	if err := kubeClient.Delete(ctx, decodeDeployment); err != nil && !errors.IsNotFound(err) {
+		errs = append(errs, fmt.Errorf("failed to delete decode worker deployment: %w", err))
+	}
+
+	// Delete decode worker headless service
+	decodeService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      b.decodeWorkerServiceName(inferenceServerName),
+			Namespace: namespace,
+		},
+	}
+	if err := kubeClient.Delete(ctx, decodeService); err != nil && !errors.IsNotFound(err) {
+		errs = append(errs, fmt.Errorf("failed to delete decode worker service: %w", err))
 	}
 
 	// Delete frontend deployment
@@ -192,7 +220,7 @@ func (b *dynamoSelfProvisionBackend) DeleteServer(ctx context.Context, logger *z
 	return nil
 }
 
-// IsHealthy checks if all deployments are ready.
+// IsHealthy checks if all deployments are ready (frontend, prefill, decode workers).
 func (b *dynamoSelfProvisionBackend) IsHealthy(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName string, namespace string) (bool, error) {
 	// Check frontend deployment
 	frontendDeployment := &appsv1.Deployment{}
@@ -215,24 +243,45 @@ func (b *dynamoSelfProvisionBackend) IsHealthy(ctx context.Context, logger *zap.
 		return false, nil
 	}
 
-	// Check worker deployment
-	workerDeployment := &appsv1.Deployment{}
+	// Check prefill worker deployment
+	prefillDeployment := &appsv1.Deployment{}
 	err = kubeClient.Get(ctx, client.ObjectKey{
-		Name:      b.workerDeploymentName(inferenceServerName),
+		Name:      b.prefillWorkerDeploymentName(inferenceServerName),
 		Namespace: namespace,
-	}, workerDeployment)
+	}, prefillDeployment)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return false, nil
 		}
-		return false, fmt.Errorf("failed to get worker deployment: %w", err)
+		return false, fmt.Errorf("failed to get prefill worker deployment: %w", err)
 	}
 
-	if workerDeployment.Spec.Replicas != nil &&
-		workerDeployment.Status.ReadyReplicas < *workerDeployment.Spec.Replicas {
-		logger.Debug("Worker deployment not ready",
-			zap.Int32("ready", workerDeployment.Status.ReadyReplicas),
-			zap.Int32("desired", *workerDeployment.Spec.Replicas))
+	if prefillDeployment.Spec.Replicas != nil &&
+		prefillDeployment.Status.ReadyReplicas < *prefillDeployment.Spec.Replicas {
+		logger.Debug("Prefill worker deployment not ready",
+			zap.Int32("ready", prefillDeployment.Status.ReadyReplicas),
+			zap.Int32("desired", *prefillDeployment.Spec.Replicas))
+		return false, nil
+	}
+
+	// Check decode worker deployment
+	decodeDeployment := &appsv1.Deployment{}
+	err = kubeClient.Get(ctx, client.ObjectKey{
+		Name:      b.decodeWorkerDeploymentName(inferenceServerName),
+		Namespace: namespace,
+	}, decodeDeployment)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to get decode worker deployment: %w", err)
+	}
+
+	if decodeDeployment.Spec.Replicas != nil &&
+		decodeDeployment.Status.ReadyReplicas < *decodeDeployment.Spec.Replicas {
+		logger.Debug("Decode worker deployment not ready",
+			zap.Int32("ready", decodeDeployment.Status.ReadyReplicas),
+			zap.Int32("desired", *decodeDeployment.Spec.Replicas))
 		return false, nil
 	}
 
@@ -240,30 +289,48 @@ func (b *dynamoSelfProvisionBackend) IsHealthy(ctx context.Context, logger *zap.
 }
 
 // CheckModelStatus checks if a model is available on the inference server.
+// For disaggregated mode, checks both prefill and decode worker endpoints.
 func (b *dynamoSelfProvisionBackend) CheckModelStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, httpClient *http.Client, inferenceServerName string, namespace string, modelName string) (bool, error) {
-	// Check worker endpoints
-	workerServiceName := b.workerServiceName(inferenceServerName)
-
-	endpoints := &corev1.Endpoints{}
-	err := kubeClient.Get(ctx, client.ObjectKey{Name: workerServiceName, Namespace: namespace}, endpoints)
+	// Check prefill worker endpoints
+	prefillServiceName := b.prefillWorkerServiceName(inferenceServerName)
+	prefillEndpoints := &corev1.Endpoints{}
+	err := kubeClient.Get(ctx, client.ObjectKey{Name: prefillServiceName, Namespace: namespace}, prefillEndpoints)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			logger.Debug("Worker endpoints not found", zap.String("service", workerServiceName))
+			logger.Debug("Prefill worker endpoints not found", zap.String("service", prefillServiceName))
 			return false, nil
 		}
-		return false, fmt.Errorf("failed to get worker endpoints: %w", err)
+		return false, fmt.Errorf("failed to get prefill worker endpoints: %w", err)
 	}
 
-	var totalEndpoints, readyEndpoints int
-	for _, subset := range endpoints.Subsets {
-		readyEndpoints += len(subset.Addresses)
-		totalEndpoints += len(subset.Addresses) + len(subset.NotReadyAddresses)
+	var prefillReady int
+	for _, subset := range prefillEndpoints.Subsets {
+		prefillReady += len(subset.Addresses)
 	}
 
-	if totalEndpoints > 0 && readyEndpoints == totalEndpoints {
-		logger.Info("Model endpoints ready",
+	// Check decode worker endpoints
+	decodeServiceName := b.decodeWorkerServiceName(inferenceServerName)
+	decodeEndpoints := &corev1.Endpoints{}
+	err = kubeClient.Get(ctx, client.ObjectKey{Name: decodeServiceName, Namespace: namespace}, decodeEndpoints)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			logger.Debug("Decode worker endpoints not found", zap.String("service", decodeServiceName))
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to get decode worker endpoints: %w", err)
+	}
+
+	var decodeReady int
+	for _, subset := range decodeEndpoints.Subsets {
+		decodeReady += len(subset.Addresses)
+	}
+
+	// Both workers must have at least one ready endpoint
+	if prefillReady > 0 && decodeReady > 0 {
+		logger.Info("Model endpoints ready (disaggregated)",
 			zap.String("model", modelName),
-			zap.Int("readyEndpoints", readyEndpoints))
+			zap.Int("prefillReady", prefillReady),
+			zap.Int("decodeReady", decodeReady))
 		return true, nil
 	}
 
@@ -459,10 +526,10 @@ func (b *dynamoSelfProvisionBackend) createFrontend(ctx context.Context, logger 
 	return nil
 }
 
-// createWorker creates the vLLM Worker Deployment and Headless Service.
-func (b *dynamoSelfProvisionBackend) createWorker(ctx context.Context, logger *zap.Logger, kubeClient client.Client, serverName string, namespace string, inferenceServer *v2pb.InferenceServer) error {
-	deploymentName := b.workerDeploymentName(serverName)
-	serviceName := b.workerServiceName(serverName)
+// createPrefillWorker creates the Prefill Worker Deployment and Headless Service for disaggregated mode.
+func (b *dynamoSelfProvisionBackend) createPrefillWorker(ctx context.Context, logger *zap.Logger, kubeClient client.Client, serverName string, namespace string, inferenceServer *v2pb.InferenceServer) error {
+	deploymentName := b.prefillWorkerDeploymentName(serverName)
+	serviceName := b.prefillWorkerServiceName(serverName)
 
 	// Get configuration from InferenceServer spec
 	replicas := int32(1)
@@ -493,23 +560,23 @@ func (b *dynamoSelfProvisionBackend) createWorker(ctx context.Context, logger *z
 	// Sanitize model name for label value (K8s labels don't allow '/')
 	sanitizedModelName := b.sanitizeLabelValue(modelName)
 
-	// Common labels
+	// Labels for prefill worker
 	labels := map[string]string{
 		selfProvisionManagedByLabel: selfProvisionManagedByValue,
 		selfProvisionServerLabel:    serverName,
-		selfProvisionComponentLabel: "worker",
+		selfProvisionComponentLabel: "prefill-worker",
 		// Dynamo discovery labels
 		dynamoComponentTypeLabel:    "worker",
-		dynamoSubComponentTypeLabel: "decode",
+		dynamoSubComponentTypeLabel: "prefill",
 		dynamoNamespaceLabel:        "dynamo",
-		dynamoComponentLabel:        "VllmDecodeWorker",
-		dynamoBaseModelLabel:        sanitizedModelName, // Sanitized for K8s label compliance
+		dynamoComponentLabel:        "VllmPrefillWorker",
+		dynamoBaseModelLabel:        sanitizedModelName,
 		dynamoDiscoveryEnabledLabel: "true",
 		// Base model hash for service discovery
 		"nvidia.com/dynamo-base-model-hash": baseModelHash,
 	}
 
-	// Create Worker Deployment
+	// Create Prefill Worker Deployment
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      deploymentName,
@@ -536,11 +603,8 @@ func (b *dynamoSelfProvisionBackend) createWorker(ctx context.Context, logger *z
 								"-m",
 								"dynamo.vllm",
 								fmt.Sprintf("--model=%s", modelName),
-								"--connector=none", // Aggregated mode, no KV transfer
-								"--kv-events-config={\"enable_kv_cache_events\": false}",
-								"--enable-lora",
-								"--max-loras=4",
-								"--max-lora-rank=64",
+								"--is-prefill-worker", // Disaggregated: prefill-only worker
+								"--connector=none",    // No KV transfer (NIXL requires InfiniBand)
 							},
 							Ports: []corev1.ContainerPort{
 								{
@@ -552,16 +616,13 @@ func (b *dynamoSelfProvisionBackend) createWorker(ctx context.Context, logger *z
 							Env: []corev1.EnvVar{
 								// Dynamo configuration
 								{Name: "DYN_NAMESPACE", Value: "dynamo"},
-								{Name: "DYN_COMPONENT", Value: "VllmDecodeWorker"},
+								{Name: "DYN_COMPONENT", Value: "VllmPrefillWorker"},
 								{Name: "DYN_DISCOVERY_BACKEND", Value: "kubernetes"},
-								// Use in-memory KV store (no external etcd needed for aggregated mode)
+								// Use in-memory KV store (no external etcd needed)
 								{Name: "DYN_STORE_KV", Value: "mem"},
 								// System status server
 								{Name: "DYN_SYSTEM_ENABLED", Value: "true"},
 								{Name: "DYN_SYSTEM_PORT", Value: fmt.Sprintf("%d", workerSystemPort)},
-								// LoRA support
-								{Name: "DYN_LORA_ENABLED", Value: "true"},
-								{Name: "DYN_LORA_PATH", Value: "/tmp/dynamo_loras"},
 								// Pod identity (Downward API)
 								{
 									Name: "POD_NAME",
@@ -596,7 +657,7 @@ func (b *dynamoSelfProvisionBackend) createWorker(ctx context.Context, logger *z
 								InitialDelaySeconds: 30,
 								PeriodSeconds:       10,
 								TimeoutSeconds:      5,
-								FailureThreshold:    6, // Allow 60s of failures before restart
+								FailureThreshold:    6,
 							},
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
@@ -665,10 +726,10 @@ func (b *dynamoSelfProvisionBackend) createWorker(ctx context.Context, logger *z
 	}
 
 	if err := b.createOrUpdateDeployment(ctx, kubeClient, deployment); err != nil {
-		return fmt.Errorf("failed to create worker deployment: %w", err)
+		return fmt.Errorf("failed to create prefill worker deployment: %w", err)
 	}
 
-	// Create Worker Headless Service (for Kubernetes discovery)
+	// Create Prefill Worker Headless Service (for Kubernetes discovery)
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      serviceName,
@@ -691,10 +752,253 @@ func (b *dynamoSelfProvisionBackend) createWorker(ctx context.Context, logger *z
 	}
 
 	if err := b.createOrUpdateService(ctx, kubeClient, service); err != nil {
-		return fmt.Errorf("failed to create worker service: %w", err)
+		return fmt.Errorf("failed to create prefill worker service: %w", err)
 	}
 
-	logger.Info("Created worker resources",
+	logger.Info("Created prefill worker resources",
+		zap.String("deployment", deploymentName),
+		zap.String("service", serviceName),
+		zap.Int32("replicas", replicas))
+
+	return nil
+}
+
+// createDecodeWorker creates the Decode Worker Deployment and Headless Service for disaggregated mode.
+func (b *dynamoSelfProvisionBackend) createDecodeWorker(ctx context.Context, logger *zap.Logger, kubeClient client.Client, serverName string, namespace string, inferenceServer *v2pb.InferenceServer) error {
+	deploymentName := b.decodeWorkerDeploymentName(serverName)
+	serviceName := b.decodeWorkerServiceName(serverName)
+
+	// Get configuration from InferenceServer spec
+	replicas := int32(1)
+	if inferenceServer.Spec.InitSpec.NumInstances > 0 {
+		replicas = int32(inferenceServer.Spec.InitSpec.NumInstances)
+	}
+
+	gpuCount := int64(1)
+	if inferenceServer.Spec.InitSpec.ResourceSpec.Gpu > 0 {
+		gpuCount = int64(inferenceServer.Spec.InitSpec.ResourceSpec.Gpu)
+	}
+
+	cpuRequest := "4"
+	if inferenceServer.Spec.InitSpec.ResourceSpec.Cpu > 0 {
+		cpuRequest = fmt.Sprintf("%d", inferenceServer.Spec.InitSpec.ResourceSpec.Cpu)
+	}
+
+	memoryRequest := "16Gi"
+	if inferenceServer.Spec.InitSpec.ResourceSpec.Memory != "" {
+		memoryRequest = inferenceServer.Spec.InitSpec.ResourceSpec.Memory
+	}
+
+	modelName := defaultSelfProvisionModel
+
+	// Compute base model hash for service discovery
+	baseModelHash := b.computeModelHash(modelName)
+
+	// Sanitize model name for label value (K8s labels don't allow '/')
+	sanitizedModelName := b.sanitizeLabelValue(modelName)
+
+	// Labels for decode worker
+	labels := map[string]string{
+		selfProvisionManagedByLabel: selfProvisionManagedByValue,
+		selfProvisionServerLabel:    serverName,
+		selfProvisionComponentLabel: "decode-worker",
+		// Dynamo discovery labels
+		dynamoComponentTypeLabel:    "worker",
+		dynamoSubComponentTypeLabel: "decode",
+		dynamoNamespaceLabel:        "dynamo",
+		dynamoComponentLabel:        "VllmDecodeWorker",
+		dynamoBaseModelLabel:        sanitizedModelName,
+		dynamoDiscoveryEnabledLabel: "true",
+		// Base model hash for service discovery
+		"nvidia.com/dynamo-base-model-hash": baseModelHash,
+	}
+
+	// Create Decode Worker Deployment
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deploymentName,
+			Namespace: namespace,
+			Labels:    labels,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: ptr.To(replicas),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: corev1.PodSpec{
+					TerminationGracePeriodSeconds: ptr.To(int64(60)),
+					Containers: []corev1.Container{
+						{
+							Name:  "main",
+							Image: defaultSelfProvisionImage,
+							Command: []string{
+								"python3",
+								"-m",
+								"dynamo.vllm",
+								fmt.Sprintf("--model=%s", modelName),
+								"--is-decode-worker", // Disaggregated: decode-only worker
+								"--connector=none",   // No KV transfer (NIXL requires InfiniBand)
+								"--enable-lora",
+								"--max-loras=4",
+								"--max-lora-rank=64",
+							},
+							Ports: []corev1.ContainerPort{
+								{
+									Name:          "system",
+									ContainerPort: workerSystemPort,
+									Protocol:      corev1.ProtocolTCP,
+								},
+							},
+							Env: []corev1.EnvVar{
+								// Dynamo configuration
+								{Name: "DYN_NAMESPACE", Value: "dynamo"},
+								{Name: "DYN_COMPONENT", Value: "VllmDecodeWorker"},
+								{Name: "DYN_DISCOVERY_BACKEND", Value: "kubernetes"},
+								// Use in-memory KV store (no external etcd needed)
+								{Name: "DYN_STORE_KV", Value: "mem"},
+								// System status server
+								{Name: "DYN_SYSTEM_ENABLED", Value: "true"},
+								{Name: "DYN_SYSTEM_PORT", Value: fmt.Sprintf("%d", workerSystemPort)},
+								// LoRA support
+								{Name: "DYN_LORA_ENABLED", Value: "true"},
+								{Name: "DYN_LORA_PATH", Value: "/tmp/dynamo_loras"},
+								// Pod identity (Downward API)
+								{
+									Name: "POD_NAME",
+									ValueFrom: &corev1.EnvVarSource{
+										FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"},
+									},
+								},
+								{
+									Name: "POD_NAMESPACE",
+									ValueFrom: &corev1.EnvVarSource{
+										FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"},
+									},
+								},
+								{
+									Name: "POD_UID",
+									ValueFrom: &corev1.EnvVarSource{
+										FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.uid"},
+									},
+								},
+								// GKE GPU node configuration
+								{Name: "LD_LIBRARY_PATH", Value: "/usr/local/nvidia/lib64:/usr/local/cuda/lib64"},
+								{Name: "NVIDIA_VISIBLE_DEVICES", Value: "all"},
+								{Name: "NVIDIA_DRIVER_CAPABILITIES", Value: "compute,utility"},
+							},
+							LivenessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									HTTPGet: &corev1.HTTPGetAction{
+										Path: "/live",
+										Port: intstr.FromInt(workerSystemPort),
+									},
+								},
+								InitialDelaySeconds: 30,
+								PeriodSeconds:       10,
+								TimeoutSeconds:      5,
+								FailureThreshold:    6,
+							},
+							ReadinessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									HTTPGet: &corev1.HTTPGetAction{
+										Path: "/health",
+										Port: intstr.FromInt(workerSystemPort),
+									},
+								},
+								PeriodSeconds:    10,
+								TimeoutSeconds:   4,
+								FailureThreshold: 3,
+							},
+							StartupProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									HTTPGet: &corev1.HTTPGetAction{
+										Path: "/live",
+										Port: intstr.FromInt(workerSystemPort),
+									},
+								},
+								PeriodSeconds:    10,
+								TimeoutSeconds:   5,
+								FailureThreshold: 720, // 2 hours for model loading
+							},
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse(cpuRequest),
+									corev1.ResourceMemory: resource.MustParse(memoryRequest),
+									"nvidia.com/gpu":      resource.MustParse(fmt.Sprintf("%d", gpuCount)),
+								},
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse(cpuRequest),
+									corev1.ResourceMemory: resource.MustParse(memoryRequest),
+									"nvidia.com/gpu":      resource.MustParse(fmt.Sprintf("%d", gpuCount)),
+								},
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "shared-memory",
+									MountPath: "/dev/shm",
+								},
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "shared-memory",
+							VolumeSource: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{
+									Medium:    corev1.StorageMediumMemory,
+									SizeLimit: ptr.To(resource.MustParse("16Gi")),
+								},
+							},
+						},
+					},
+					// Tolerate GPU nodes
+					Tolerations: []corev1.Toleration{
+						{
+							Key:      "nvidia.com/gpu",
+							Operator: corev1.TolerationOpExists,
+							Effect:   corev1.TaintEffectNoSchedule,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if err := b.createOrUpdateDeployment(ctx, kubeClient, deployment); err != nil {
+		return fmt.Errorf("failed to create decode worker deployment: %w", err)
+	}
+
+	// Create Decode Worker Headless Service (for Kubernetes discovery)
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceName,
+			Namespace: namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.ServiceSpec{
+			Type:      corev1.ServiceTypeClusterIP,
+			ClusterIP: corev1.ClusterIPNone, // Headless service
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "system",
+					Port:       workerSystemPort,
+					TargetPort: intstr.FromInt(workerSystemPort),
+					Protocol:   corev1.ProtocolTCP,
+				},
+			},
+			Selector: labels,
+		},
+	}
+
+	if err := b.createOrUpdateService(ctx, kubeClient, service); err != nil {
+		return fmt.Errorf("failed to create decode worker service: %w", err)
+	}
+
+	logger.Info("Created decode worker resources",
 		zap.String("deployment", deploymentName),
 		zap.String("service", serviceName),
 		zap.Int32("replicas", replicas))
@@ -787,12 +1091,20 @@ func (b *dynamoSelfProvisionBackend) frontendServiceName(serverName string) stri
 	return fmt.Sprintf("dynamo-sp-%s-frontend", serverName)
 }
 
-func (b *dynamoSelfProvisionBackend) workerDeploymentName(serverName string) string {
-	return fmt.Sprintf("dynamo-sp-%s-worker", serverName)
+func (b *dynamoSelfProvisionBackend) prefillWorkerDeploymentName(serverName string) string {
+	return fmt.Sprintf("dynamo-sp-%s-prefill", serverName)
 }
 
-func (b *dynamoSelfProvisionBackend) workerServiceName(serverName string) string {
-	return fmt.Sprintf("dynamo-sp-%s-worker", serverName)
+func (b *dynamoSelfProvisionBackend) prefillWorkerServiceName(serverName string) string {
+	return fmt.Sprintf("dynamo-sp-%s-prefill", serverName)
+}
+
+func (b *dynamoSelfProvisionBackend) decodeWorkerDeploymentName(serverName string) string {
+	return fmt.Sprintf("dynamo-sp-%s-decode", serverName)
+}
+
+func (b *dynamoSelfProvisionBackend) decodeWorkerServiceName(serverName string) string {
+	return fmt.Sprintf("dynamo-sp-%s-decode", serverName)
 }
 
 func (b *dynamoSelfProvisionBackend) generateEndpoint(serverName string, namespace string) string {

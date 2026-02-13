@@ -320,6 +320,114 @@ python3 -m dynamo.vllm --model Qwen/Qwen3-0.6B --is-decode-worker --connector ni
 | `lmcache` | CPU-based KV cache | Disaggregated with CPU caching |
 | `kvbm` | KV Block Manager | Disaggregated with block-level management |
 
+### NIXL Requirements
+
+NIXL (NVIDIA Inference Xfer Library) provides the fastest KV cache transfer using GPU Direct RDMA. However, it has strict hardware requirements.
+
+#### Hardware Requirements
+
+| Requirement | Details |
+|-------------|---------|
+| **InfiniBand or RoCE NICs** | Mellanox ConnectX-6/7 or similar RDMA-capable NICs |
+| **RDMA-capable GPUs** | NVIDIA A100, H100, or newer with GPU Direct RDMA support |
+| **Network Fabric** | InfiniBand switch fabric OR RoCE-enabled Ethernet |
+| **Architecture** | x86_64/AMD64 only (ARM64 not supported) |
+
+#### GKE Node Pool Requirements
+
+For GKE, you need specific machine types with InfiniBand pre-configured:
+
+| Machine Type | GPUs | InfiniBand | Notes |
+|--------------|------|------------|-------|
+| `a3-highgpu-8g` | 8x H100 80GB | Yes (NVSwitch + InfiniBand) | Best for NIXL |
+| `a3-megagpu-8g` | 8x H100 80GB | Yes (NVLink + InfiniBand) | Best for NIXL |
+| `a2-ultragpu-8g` | 8x A100 80GB | Yes (NVLink) | Good for NIXL |
+| `a2-highgpu-*` | 1-8x A100 40GB | No | NIXL not supported |
+| `g2-standard-*` | L4 GPUs | No | NIXL not supported |
+
+#### Software/Kubernetes Requirements
+
+1. **NVIDIA Network Operator** - Deploys RDMA device plugin and drivers
+   ```bash
+   helm install network-operator nvidia/network-operator \
+     --namespace nvidia-network-operator --create-namespace
+   ```
+
+2. **SR-IOV Device Plugin** - Exposes RDMA devices to pods
+
+3. **Pod Security Context** - Required capabilities:
+   ```yaml
+   securityContext:
+     capabilities:
+       add:
+         - IPC_LOCK      # Required for RDMA memory registration
+         - SYS_RESOURCE  # Required for memory limits
+   ```
+
+4. **Resource Requests** - RDMA device allocation:
+   ```yaml
+   resources:
+     limits:
+       rdma/ib_verbs: 1       # InfiniBand verbs device
+       # OR
+       rdma/shared_device: 1  # Shared RDMA device
+   ```
+
+5. **Environment Variables**:
+   ```yaml
+   env:
+     - name: UCX_TLS
+       value: "rc,cuda_copy,cuda_ipc"  # UCX transport layers
+     - name: UCX_NET_DEVICES
+       value: "mlx5_0:1"  # InfiniBand device
+   ```
+
+#### NIXL Connector Configuration
+
+**Prefill Worker:**
+```bash
+python3 -m dynamo.vllm --model <model> --is-prefill-worker --connector kvbm nixl
+```
+
+**Decode Worker:**
+```bash
+python3 -m dynamo.vllm --model <model> --is-decode-worker --connector nixl
+```
+
+### LMCache Requirements (Alternative)
+
+LMCache uses CPU memory as an intermediate KV cache, making it work on **standard GKE clusters** without InfiniBand.
+
+#### Trade-offs
+
+| Aspect | NIXL | LMCache |
+|--------|------|---------|
+| **Speed** | Fastest (GPU-to-GPU) | Slower (GPU→CPU→GPU) |
+| **Hardware** | InfiniBand required | Standard Ethernet |
+| **Memory** | GPU VRAM only | Uses CPU RAM for cache |
+| **Complexity** | High (special networking) | Low (standard K8s) |
+
+#### LMCache Configuration
+
+**Prefill Worker:**
+```bash
+python3 -m dynamo.vllm --model <model> --is-prefill-worker --connector lmcache
+```
+
+**Decode Worker:**
+```bash
+python3 -m dynamo.vllm --model <model> --is-decode-worker --connector lmcache
+```
+
+**Environment Variables:**
+```yaml
+env:
+  - name: LMCACHE_DISTRIBUTED_URL
+    value: "lmcache://lmcache-service:7000"  # LMCache server address
+```
+
+> **Note**: LMCache may require a separate LMCache server deployment for distributed caching. Check the [Dynamo LMCache Integration docs](https://docs.nvidia.com/dynamo/latest/backends/vllm/LMCache_Integration.html) for current requirements.
+
 ## vLLM Arguments
 
 ### Common Arguments

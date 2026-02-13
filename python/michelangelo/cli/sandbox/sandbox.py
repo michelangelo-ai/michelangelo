@@ -150,9 +150,20 @@ def init_arguments(p: argparse.ArgumentParser):
     )
     _ = demo_sp.add_parser("pipeline", help="Create pipeline demo resources")
     _ = demo_sp.add_parser("inference", help="Create inference server demo resources")
-    _ = demo_sp.add_parser(
+    inference_dynamo_p = demo_sp.add_parser(
         "inference-dynamo",
         help="Create NVIDIA Dynamo inference server demo resources",
+    )
+    inference_dynamo_p.add_argument(
+        "--gke",
+        action="store_true",
+        help="Run demo on GKE/external cluster instead of k3d.",
+    )
+    inference_dynamo_p.add_argument(
+        "--dynamo-operator",
+        action="store_true",
+        help="Install and use the Dynamo operator for deployment (disaggregated mode). "
+        "Without this flag, pods are self-provisioned by the Michelangelo controller.",
     )
 
     delete_p = sp.add_parser("delete", help="Delete the cluster.")
@@ -969,7 +980,8 @@ def _create_demo_crs(ns: argparse.Namespace):
     elif ns.demo_action == "inference":
         _create_inference_demo_crs()
     elif ns.demo_action == "inference-dynamo":
-        _create_inference_dynamo_demo_crs()
+        use_dynamo_operator = getattr(ns, "dynamo_operator", False)
+        _create_inference_dynamo_demo_crs(use_dynamo_operator=use_dynamo_operator)
     else:
         raise ValueError(f"Unsupported demo action: {ns.demo_action}")
 
@@ -1156,20 +1168,30 @@ def _delete_gke_resources():
 
     # Delete Gateway CR first (triggers Istio to clean up ma-gateway-istio deployment)
     print("Cleaning up Istio Gateway...")
-    subprocess.run(
-        ["kubectl", *context_args, "delete", "gateway.gateway.networking.k8s.io", "ma-gateway", "-n", "default", "--ignore-not-found"],
-        check=False,
-        capture_output=True,
-    )
+    # Delete from both default and michelangelo namespaces (handles different setups)
+    for ns in ["default", "michelangelo"]:
+        subprocess.run(
+            ["kubectl", *context_args, "delete", "gateway.gateway.networking.k8s.io",
+             "ma-gateway", "-n", ns, "--ignore-not-found"],
+            check=False,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["kubectl", *context_args, "delete", "deployment", "ma-gateway-istio",
+             "-n", ns, "--ignore-not-found"],
+            check=False,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["kubectl", *context_args, "delete", "svc", "ma-gateway-istio",
+             "-n", ns, "--ignore-not-found"],
+            check=False,
+            capture_output=True,
+        )
 
     # Delete deployments
     subprocess.run(
         ["kubectl", *context_args, "delete", "deployment", "michelangelo-ui", "--ignore-not-found"],
-        check=False,
-        capture_output=True,
-    )
-    subprocess.run(
-        ["kubectl", *context_args, "delete", "deployment", "ma-gateway-istio", "-n", "default", "--ignore-not-found"],
         check=False,
         capture_output=True,
     )
@@ -1186,7 +1208,7 @@ def _delete_gke_resources():
         "minio",
         "prometheus",
         "grafana",
-        "ma-gateway-istio",
+        # ma-gateway-istio is handled above in the namespace loop
     ]
     for svc in services_to_delete:
         subprocess.run(
@@ -1245,7 +1267,127 @@ def _delete_gke_resources():
         capture_output=True,
     )
 
-    # Clean up Dynamo discovery CRD and RBAC
+    # Uninstall Istio Helm releases (must uninstall istiod before istio-base)
+    print("  Cleaning up Istio...")
+    subprocess.run(
+        ["helm", "uninstall", "istiod", "-n", "istio-system", "--kube-context", _gke_context],
+        check=False,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["helm", "uninstall", "istio-base", "-n", "istio-system", "--kube-context", _gke_context],
+        check=False,
+        capture_output=True,
+    )
+    # Delete istio-system namespace
+    subprocess.run(
+        ["kubectl", *context_args, "delete", "namespace", "istio-system", "--ignore-not-found"],
+        check=False,
+        capture_output=True,
+    )
+    # Delete Istio CRDs (Helm keeps them due to resource policy)
+    istio_crds = [
+        "wasmplugins.extensions.istio.io",
+        "workloadgroups.networking.istio.io",
+        "authorizationpolicies.security.istio.io",
+        "peerauthentications.security.istio.io",
+        "requestauthentications.security.istio.io",
+        "telemetries.telemetry.istio.io",
+        "destinationrules.networking.istio.io",
+        "envoyfilters.networking.istio.io",
+        "gateways.networking.istio.io",
+        "proxyconfigs.networking.istio.io",
+        "serviceentries.networking.istio.io",
+        "sidecars.networking.istio.io",
+        "virtualservices.networking.istio.io",
+        "workloadentries.networking.istio.io",
+    ]
+    subprocess.run(
+        ["kubectl", *context_args, "delete", "crd", *istio_crds, "--ignore-not-found"],
+        check=False,
+        capture_output=True,
+    )
+
+    # Clean up Dynamo operator (if installed via --dynamo-operator)
+    print("  Cleaning up Dynamo operator (if installed)...")
+    # Delete any orphaned dynamo deployments first (faster than waiting for DGD)
+    with contextlib.suppress(subprocess.TimeoutExpired):
+        result = subprocess.run(
+            ["kubectl", *context_args, "get", "deployment", "-n", "default",
+             "-o", "jsonpath={.items[*].metadata.name}"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            for deploy_name in result.stdout.strip().split():
+                if deploy_name.startswith("dynamo-"):
+                    with contextlib.suppress(subprocess.TimeoutExpired):
+                        subprocess.run(
+                            ["kubectl", *context_args, "delete", "deployment", deploy_name,
+                             "-n", "default", "--ignore-not-found", "--force", "--grace-period=0"],
+                            check=False,
+                            capture_output=True,
+                            timeout=15,
+                        )
+    # Delete any orphaned dynamo services
+    with contextlib.suppress(subprocess.TimeoutExpired):
+        result = subprocess.run(
+            ["kubectl", *context_args, "get", "svc", "-n", "default",
+             "-o", "jsonpath={.items[*].metadata.name}"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            for svc_name in result.stdout.strip().split():
+                if svc_name.startswith("dynamo-"):
+                    with contextlib.suppress(subprocess.TimeoutExpired):
+                        subprocess.run(
+                            ["kubectl", *context_args, "delete", "svc", svc_name,
+                             "-n", "default", "--ignore-not-found"],
+                            check=False,
+                            capture_output=True,
+                            timeout=10,
+                        )
+    # Delete DGD CRs (may hang if finalizers are stuck, so use timeout)
+    with contextlib.suppress(subprocess.TimeoutExpired):
+        subprocess.run(
+            ["kubectl", *context_args, "delete", "dynamographdeployments.nvidia.com",
+             "--all", "-n", "default", "--ignore-not-found", "--force", "--grace-period=0"],
+            check=False,
+            capture_output=True,
+            timeout=30,
+        )
+    # Now uninstall Dynamo operator Helm releases
+    with contextlib.suppress(subprocess.TimeoutExpired):
+        subprocess.run(
+            ["helm", "uninstall", "dynamo-platform", "-n", "dynamo-system",
+             "--kube-context", _gke_context],
+            check=False,
+            capture_output=True,
+            timeout=60,
+        )
+    # Clean up dynamo-crds Helm release
+    with contextlib.suppress(subprocess.TimeoutExpired):
+        subprocess.run(
+            ["helm", "uninstall", "dynamo-crds", "-n", "default",
+             "--kube-context", _gke_context],
+            check=False,
+            capture_output=True,
+            timeout=30,
+        )
+    # Clean up dynamo-system namespace
+    with contextlib.suppress(subprocess.TimeoutExpired):
+        subprocess.run(
+            ["kubectl", *context_args, "delete", "namespace", "dynamo-system",
+             "--ignore-not-found"],
+            check=False,
+            capture_output=True,
+            timeout=60,
+        )
+
+    # Clean up Dynamo discovery CRD and RBAC (for both modes)
     print("  Cleaning up Dynamo discovery CRD and RBAC...")
     subprocess.run(
         ["kubectl", *context_args, "delete", "clusterrolebinding",
@@ -1259,6 +1401,8 @@ def _delete_gke_resources():
         check=False,
         capture_output=True,
     )
+    # Note: DynamoWorkerMetadata CRD is managed by dynamo-crds helm chart when using operator,
+    # or by dynamo-discovery-rbac.yaml when self-provisioned. Delete explicitly for safety.
     subprocess.run(
         ["kubectl", *context_args, "delete", "crd",
          "dynamoworkermetadatas.nvidia.com", "--ignore-not-found"],
@@ -1267,6 +1411,7 @@ def _delete_gke_resources():
     )
 
     # Clean up any orphaned Dynamo replicasets in default namespace
+    # Handles both self-provisioned (dynamo-sp-*) and operator-managed (dynamo-*)
     result = subprocess.run(
         ["kubectl", *context_args, "get", "replicaset", "-n", "default", "-o", "name"],
         check=False,
@@ -1275,7 +1420,8 @@ def _delete_gke_resources():
     )
     if result.returncode == 0:
         for line in result.stdout.strip().split("\n"):
-            if "dynamo-sp-" in line:
+            # Match both "dynamo-sp-" (self-provisioned) and "dynamo-" (operator)
+            if line and ("dynamo-sp-" in line or "dynamo-" in line):
                 subprocess.run(
                     ["kubectl", *context_args, "delete", line, "-n", "default",
                      "--force", "--grace-period=0"],
@@ -1913,22 +2059,181 @@ def _install_dynamo_discovery_rbac():
     print("✅ Dynamo discovery CRD and RBAC installed successfully!")
 
 
-def _create_inference_dynamo_demo_crs():
+def _install_dynamo_operator():
+    """Install the NVIDIA Dynamo operator and platform components.
+
+    This installs the full Dynamo platform via Helm:
+    - dynamo-crds: Custom Resource Definitions
+    - dynamo-platform: Operator, etcd, and other platform components
+    """
+    print("📦 Installing Dynamo Operator...")
+
+    dynamo_version = "0.8.1"
+    context_args = _get_kubectl_context_args()
+
+    # Fetch existing Helm repositories
+    try:
+        helm_existing_repos = subprocess.check_output(
+            ["helm", "repo", "list"]
+        ).decode()
+    except subprocess.CalledProcessError:
+        helm_existing_repos = ""
+
+    # Add NVIDIA NGC Helm repository if not already present
+    if "nvidia-ngc" not in helm_existing_repos:
+        print("  Adding NVIDIA NGC Helm repository...")
+        _exec(
+            "helm",
+            "repo",
+            "add",
+            "nvidia-ngc",
+            "https://helm.ngc.nvidia.com/nvidia/ai-dynamo",
+            raise_error=True,
+        )
+        _exec("helm", "repo", "update", raise_error=True)
+
+    # Create dynamo-system namespace
+    _ensure_namespace_exists("dynamo-system")
+
+    # Install dynamo-crds first (includes DynamoWorkerMetadata CRD)
+    try:
+        result = subprocess.check_output(
+            ["helm", "list", "-n", "default", "-o", "json",
+             "--kube-context", _gke_context]
+        ).decode()
+        import json
+        helm_releases = json.loads(result) if result.strip() else []
+        crds_installed = any(
+            r.get("name") == "dynamo-crds" for r in helm_releases
+        )
+    except (subprocess.CalledProcessError, json.JSONDecodeError):
+        crds_installed = False
+
+    if not crds_installed:
+        print(f"  Installing Dynamo CRDs (v{dynamo_version})...")
+        _exec(
+            "helm",
+            "install",
+            "dynamo-crds",
+            "nvidia-ngc/dynamo-crds",
+            "--version",
+            dynamo_version,
+            "--namespace",
+            "default",
+            "--kube-context",
+            _gke_context,
+            "--wait",
+            raise_error=True,
+        )
+    else:
+        print("  Dynamo CRDs already installed, skipping...")
+
+    # Also apply discovery RBAC for pods to manage worker metadata
+    print("  Installing Dynamo discovery RBAC...")
+    rbac_path = _dir / "resources" / "dynamo-discovery-rbac.yaml"
+    # Only apply RBAC parts (CRD should come from helm chart, but apply anyway for safety)
+    _exec("kubectl", *context_args, "apply", "-f", str(rbac_path), raise_error=False)
+
+    # Check if Dynamo platform is already installed
+    try:
+        result = subprocess.check_output(
+            ["helm", "list", "-n", "dynamo-system", "-o", "json",
+             "--kube-context", _gke_context]
+        ).decode()
+        import json
+        helm_releases = json.loads(result) if result.strip() else []
+        dynamo_installed = any(
+            r.get("name") == "dynamo-platform" for r in helm_releases
+        )
+    except (subprocess.CalledProcessError, json.JSONDecodeError):
+        dynamo_installed = False
+
+    if not dynamo_installed:
+        print(f"  Installing Dynamo Platform (v{dynamo_version})...")
+        # Add GPU tolerations so all components can run on GPU nodes if needed
+        # This is required when the only available nodes have GPU taints
+        _exec(
+            "helm",
+            "install",
+            "dynamo-platform",
+            "nvidia-ngc/dynamo-platform",
+            "--version",
+            dynamo_version,
+            "--namespace",
+            "dynamo-system",
+            "--create-namespace",
+            "--kube-context",
+            _gke_context,
+            # Operator controller manager tolerations (dynamo-operator subchart)
+            "--set",
+            "dynamo-operator.controllerManager.tolerations[0].key=nvidia.com/gpu",
+            "--set",
+            "dynamo-operator.controllerManager.tolerations[0].operator=Exists",
+            "--set",
+            "dynamo-operator.controllerManager.tolerations[0].effect=NoSchedule",
+            # Etcd tolerations
+            "--set",
+            "etcd.tolerations[0].key=nvidia.com/gpu",
+            "--set",
+            "etcd.tolerations[0].operator=Exists",
+            "--set",
+            "etcd.tolerations[0].effect=NoSchedule",
+            # NATS tolerations (under nats.podTemplate.merge.spec for the nats-io chart)
+            "--set",
+            "nats.podTemplate.merge.spec.tolerations[0].key=nvidia.com/gpu",
+            "--set",
+            "nats.podTemplate.merge.spec.tolerations[0].operator=Exists",
+            "--set",
+            "nats.podTemplate.merge.spec.tolerations[0].effect=NoSchedule",
+            "--wait",
+            "--timeout",
+            "10m",
+            raise_error=True,
+        )
+        print("✅ Dynamo Operator installed successfully!")
+    else:
+        print("  Dynamo Operator already installed, skipping...")
+
+    # Wait for operator to be ready
+    print("  Waiting for Dynamo operator to be ready...")
+    try:
+        _exec(
+            "kubectl",
+            *context_args,
+            "wait",
+            "--for=condition=available",
+            "deployment/dynamo-operator",
+            "-n",
+            "dynamo-system",
+            "--timeout=300s",
+            raise_error=True,
+        )
+        print("✅ Dynamo Operator is ready!")
+    except subprocess.CalledProcessError:
+        print("⚠️  Dynamo operator may not be fully ready yet, continuing...")
+
+
+def _create_inference_dynamo_demo_crs(use_dynamo_operator: bool = False):
     """Create an NVIDIA Dynamo inference server for the sandbox cluster.
 
-    This function uses self-provisioning (no Dynamo operator needed):
-    1. Sets up Istio with Gateway API for routing
-    2. Creates InferenceServer CR with BACKEND_TYPE_DYNAMO
-    3. The Michelangelo controller directly provisions Frontend and Worker pods
+    Args:
+        use_dynamo_operator: If True, install and use the Dynamo operator for
+            disaggregated deployment. If False (default), use self-provisioning
+            for aggregated deployment.
     """
-    print("🚀 Setting up Dynamo Inference Demo (self-provisioned)...")
-
-    # Setup Istio with Gateway API for routing
-    _setup_istio_with_gateway_api()
-
-    # Install Dynamo discovery CRD and RBAC (no operator needed)
-    # This allows workers to register themselves via K8s API for frontend discovery
-    _install_dynamo_discovery_rbac()
+    if use_dynamo_operator:
+        print("🚀 Setting up Dynamo Inference Demo (with Dynamo Operator)...")
+        # Setup Istio with Gateway API for routing
+        _setup_istio_with_gateway_api()
+        # Install the full Dynamo operator
+        _install_dynamo_operator()
+    else:
+        print("🚀 Setting up Dynamo Inference Demo (self-provisioned)...")
+        # Setup Istio with Gateway API for routing
+        _setup_istio_with_gateway_api()
+        # Install Dynamo discovery CRD and RBAC (no operator needed)
+        # This allows workers to register themselves via K8s API for discovery
+        _install_dynamo_discovery_rbac()
 
     # Create the InferenceServer CR with Dynamo backend
     inference_demo_dir = _dir / "demo" / "inference"
@@ -1939,7 +2244,8 @@ def _create_inference_dynamo_demo_crs():
             "exiting..."
         )
 
-    print("✅ Creating Dynamo Inference Server CR (self-provisioned)...")
+    mode_str = "operator-managed" if use_dynamo_operator else "self-provisioned"
+    print(f"✅ Creating Dynamo Inference Server CR ({mode_str})...")
     _kube_apply(inference_server_path)
 
     # Wait for inference server to reach SERVING state
@@ -1976,8 +2282,13 @@ def _create_inference_dynamo_demo_crs():
         try:
             # Start port-forward as a detached background process
             # start_new_session=True ensures it survives when parent exits
-            # Self-provisioned naming: "dynamo-sp-{inference_server_name}-frontend"
-            frontend_deployment = f"dynamo-sp-{inference_server_name}-frontend"
+            # Naming differs based on mode:
+            # - Self-provisioned: "dynamo-sp-{name}-frontend"
+            # - Operator-managed: "dynamo-{name}-frontend"
+            if use_dynamo_operator:
+                frontend_deployment = f"dynamo-{inference_server_name}-frontend"
+            else:
+                frontend_deployment = f"dynamo-sp-{inference_server_name}-frontend"
             port_forward_cmd = [
                 "kubectl",
                 *context_args,
@@ -2106,6 +2417,7 @@ def _setup_istio_with_gateway_api():
     )
 
     # Install or upgrade Istio control plane (istiod)
+    # Add GPU tolerations so istiod can schedule on GPU nodes if CPU nodes are full
     print("Installing/upgrading Istio control plane...")
     _exec(
         "helm",
@@ -2115,6 +2427,12 @@ def _setup_istio_with_gateway_api():
         "istio/istiod",
         "--namespace",
         "istio-system",
+        "--set",
+        "pilot.tolerations[0].key=nvidia.com/gpu",
+        "--set",
+        "pilot.tolerations[0].operator=Exists",
+        "--set",
+        "pilot.tolerations[0].effect=NoSchedule",
         "--wait",
     )
 
@@ -2139,6 +2457,37 @@ def _setup_istio_with_gateway_api():
 
     print("Creating Gateway API Gateway CR...")
     _kube_apply(gateway_setup_path)
+
+    # Wait for Istio to create the gateway deployment, then add GPU tolerations
+    # This must happen BEFORE waiting for Gateway to be programmed, otherwise
+    # the pod can't schedule on GPU nodes and the Gateway never becomes programmed
+    print("Waiting for Istio gateway deployment to be created...")
+    import time
+    for _ in range(30):  # Wait up to 30 seconds
+        result = subprocess.run(
+            ["kubectl", *context_args, "get", "deployment", "ma-gateway-istio",
+             "-n", "default", "-o", "name"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0 and "ma-gateway-istio" in result.stdout:
+            break
+        time.sleep(1)
+
+    # Add GPU toleration to Istio gateway deployment so it can schedule on GPU nodes
+    print("Adding GPU toleration to Istio gateway...")
+    import json
+    toleration_patch = json.dumps([{
+        "op": "add",
+        "path": "/spec/template/spec/tolerations",
+        "value": [{"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}]
+    }])
+    subprocess.run(
+        ["kubectl", *context_args, "patch", "deployment", "ma-gateway-istio",
+         "-n", "default", "--type=json", f"-p={toleration_patch}"],
+        check=False,
+        capture_output=True,
+    )
 
     # Wait for Gateway to be programmed (Istio provisions the gateway)
     _exec(

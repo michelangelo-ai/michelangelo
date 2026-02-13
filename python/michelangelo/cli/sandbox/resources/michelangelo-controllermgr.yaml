@@ -8,7 +8,7 @@ metadata:
 spec:
   containers:
     - name: app
-      image: ghcr.io/michelangelo-ai/controllermgr:ghosharitra-dynamo-integration-with-deployment-controller
+      image: ghcr.io/michelangelo-ai/controllermgr:ghosharitra-dynamo-self-provisioning
       imagePullPolicy: Always
       volumeMounts:
         - name: config-volume
