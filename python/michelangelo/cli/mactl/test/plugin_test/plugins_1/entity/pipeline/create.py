@@ -1,4 +1,5 @@
 """Pipeline `create` function plugin module."""
+
 from pathlib import Path
 
 from google.protobuf.message import Message

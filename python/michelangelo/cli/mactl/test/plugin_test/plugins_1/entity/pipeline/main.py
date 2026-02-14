@@ -1,7 +1,8 @@
 """Pipeline entity plugin module."""
 
-from grpc import Channel
 from logging import getLogger
+
+from grpc import Channel
 
 from michelangelo.cli.mactl.crd import CRD
 from michelangelo.cli.mactl.test.plugin_test.plugins_1.entity.pipeline.apply import (
