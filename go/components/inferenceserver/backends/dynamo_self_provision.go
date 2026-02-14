@@ -48,6 +48,8 @@ const (
 	// Ports
 	frontendPort     = 8000
 	workerSystemPort = 9090
+	etcdClientPort   = 2379
+	etcdPeerPort     = 2380
 )
 
 // dynamoSelfProvisionBackend implements the Backend interface by directly
@@ -71,8 +73,10 @@ func (b *dynamoSelfProvisionBackend) CreateServer(ctx context.Context, logger *z
 	serverName := inferenceServer.Name
 	namespace := inferenceServer.Namespace
 
-	// Note: Using ZMQ event plane instead of NATS for simpler deployment.
-	// This avoids the need for a NATS server and uses direct HTTP + ZMQ communication.
+	// Create etcd Deployment and Service (required for Dynamo service discovery with kv_store backend)
+	if err := b.createEtcd(ctx, logger, kubeClient, serverName, namespace); err != nil {
+		return nil, fmt.Errorf("failed to create etcd: %w", err)
+	}
 
 	// Create Frontend Deployment and Service
 	if err := b.createFrontend(ctx, logger, kubeClient, serverName, namespace); err != nil {
@@ -211,6 +215,28 @@ func (b *dynamoSelfProvisionBackend) DeleteServer(ctx context.Context, logger *z
 	}
 	if err := kubeClient.Delete(ctx, frontendService); err != nil && !errors.IsNotFound(err) {
 		errs = append(errs, fmt.Errorf("failed to delete frontend service: %w", err))
+	}
+
+	// Delete etcd deployment
+	etcdDeployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      b.etcdDeploymentName(inferenceServerName),
+			Namespace: namespace,
+		},
+	}
+	if err := kubeClient.Delete(ctx, etcdDeployment); err != nil && !errors.IsNotFound(err) {
+		errs = append(errs, fmt.Errorf("failed to delete etcd deployment: %w", err))
+	}
+
+	// Delete etcd service
+	etcdService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      b.etcdServiceName(inferenceServerName),
+			Namespace: namespace,
+		},
+	}
+	if err := kubeClient.Delete(ctx, etcdService); err != nil && !errors.IsNotFound(err) {
+		errs = append(errs, fmt.Errorf("failed to delete etcd service: %w", err))
 	}
 
 	// Note: NATS is no longer used - using ZMQ event plane instead.
@@ -380,6 +406,169 @@ func (b *dynamoSelfProvisionBackend) GetFrontEndSvc(ctx context.Context, logger 
 	return b.frontendServiceName(inferenceServerName), nil
 }
 
+// createEtcd creates the etcd Deployment and Service for Dynamo service discovery.
+func (b *dynamoSelfProvisionBackend) createEtcd(ctx context.Context, logger *zap.Logger, kubeClient client.Client, serverName string, namespace string) error {
+	deploymentName := b.etcdDeploymentName(serverName)
+	serviceName := b.etcdServiceName(serverName)
+
+	// Labels for etcd
+	labels := map[string]string{
+		selfProvisionManagedByLabel: selfProvisionManagedByValue,
+		selfProvisionServerLabel:    serverName,
+		selfProvisionComponentLabel: "etcd",
+	}
+
+	// Create etcd Deployment
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deploymentName,
+			Namespace: namespace,
+			Labels:    labels,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: ptr.To(int32(1)),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: corev1.PodSpec{
+					TerminationGracePeriodSeconds: ptr.To(int64(30)),
+					Containers: []corev1.Container{
+						{
+							Name:  "etcd",
+							Image: "quay.io/coreos/etcd:v3.5.9",
+							Command: []string{
+								"etcd",
+								"--name=etcd0",
+								"--data-dir=/etcd-data",
+								fmt.Sprintf("--listen-client-urls=http://0.0.0.0:%d", etcdClientPort),
+								fmt.Sprintf("--advertise-client-urls=http://%s.%s.svc.cluster.local:%d", serviceName, namespace, etcdClientPort),
+								fmt.Sprintf("--listen-peer-urls=http://0.0.0.0:%d", etcdPeerPort),
+								fmt.Sprintf("--initial-advertise-peer-urls=http://%s.%s.svc.cluster.local:%d", serviceName, namespace, etcdPeerPort),
+								"--initial-cluster=etcd0=http://etcd0:2380",
+								"--initial-cluster-token=dynamo-etcd-cluster",
+								"--initial-cluster-state=new",
+							},
+							Ports: []corev1.ContainerPort{
+								{
+									Name:          "client",
+									ContainerPort: etcdClientPort,
+									Protocol:      corev1.ProtocolTCP,
+								},
+								{
+									Name:          "peer",
+									ContainerPort: etcdPeerPort,
+									Protocol:      corev1.ProtocolTCP,
+								},
+							},
+							LivenessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									HTTPGet: &corev1.HTTPGetAction{
+										Path: "/health",
+										Port: intstr.FromInt(etcdClientPort),
+									},
+								},
+								InitialDelaySeconds: 10,
+								PeriodSeconds:       10,
+								TimeoutSeconds:      5,
+								FailureThreshold:    3,
+							},
+							ReadinessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									HTTPGet: &corev1.HTTPGetAction{
+										Path: "/health",
+										Port: intstr.FromInt(etcdClientPort),
+									},
+								},
+								InitialDelaySeconds: 5,
+								PeriodSeconds:       5,
+								TimeoutSeconds:      5,
+								FailureThreshold:    3,
+							},
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("100m"),
+									corev1.ResourceMemory: resource.MustParse("256Mi"),
+								},
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("500m"),
+									corev1.ResourceMemory: resource.MustParse("512Mi"),
+								},
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "etcd-data",
+									MountPath: "/etcd-data",
+								},
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "etcd-data",
+							VolumeSource: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
+							},
+						},
+					},
+					// Tolerate GPU nodes (for scheduling flexibility)
+					Tolerations: []corev1.Toleration{
+						{
+							Key:      "nvidia.com/gpu",
+							Operator: corev1.TolerationOpExists,
+							Effect:   corev1.TaintEffectNoSchedule,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if err := b.createOrUpdateDeployment(ctx, kubeClient, deployment); err != nil {
+		return fmt.Errorf("failed to create etcd deployment: %w", err)
+	}
+
+	// Create etcd Service
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceName,
+			Namespace: namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.ServiceSpec{
+			Type: corev1.ServiceTypeClusterIP,
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "client",
+					Port:       etcdClientPort,
+					TargetPort: intstr.FromInt(etcdClientPort),
+					Protocol:   corev1.ProtocolTCP,
+				},
+				{
+					Name:       "peer",
+					Port:       etcdPeerPort,
+					TargetPort: intstr.FromInt(etcdPeerPort),
+					Protocol:   corev1.ProtocolTCP,
+				},
+			},
+			Selector: labels,
+		},
+	}
+
+	if err := b.createOrUpdateService(ctx, kubeClient, service); err != nil {
+		return fmt.Errorf("failed to create etcd service: %w", err)
+	}
+
+	logger.Info("Created etcd resources",
+		zap.String("deployment", deploymentName),
+		zap.String("service", serviceName))
+
+	return nil
+}
+
 // createFrontend creates the Frontend Deployment and Service.
 func (b *dynamoSelfProvisionBackend) createFrontend(ctx context.Context, logger *zap.Logger, kubeClient client.Client, serverName string, namespace string) error {
 	deploymentName := b.frontendDeploymentName(serverName)
@@ -435,9 +624,10 @@ func (b *dynamoSelfProvisionBackend) createFrontend(ctx context.Context, logger 
 								// Dynamo configuration
 								{Name: "DYN_NAMESPACE", Value: "dynamo"},
 								{Name: "DYN_COMPONENT", Value: "Frontend"},
-								{Name: "DYN_DISCOVERY_BACKEND", Value: "kubernetes"},
-								// Use in-memory KV store (no external etcd needed)
-								{Name: "DYN_STORE_KV", Value: "mem"},
+								// Use etcd-based service discovery
+								{Name: "DYN_DISCOVERY_BACKEND", Value: "kv_store"},
+								{Name: "DYN_STORE_KV", Value: "etcd"},
+								{Name: "ETCD_ENDPOINTS", Value: b.etcdURL(serverName, namespace)},
 								{Name: "DYN_EVENT_PLANE", Value: "zmq"},
 								{Name: "DYN_HTTP_PORT", Value: fmt.Sprintf("%d", frontendPort)},
 								{Name: "DYNAMO_PORT", Value: fmt.Sprintf("%d", frontendPort)},
@@ -639,9 +829,10 @@ func (b *dynamoSelfProvisionBackend) createPrefillWorker(ctx context.Context, lo
 								// Dynamo configuration
 								{Name: "DYN_NAMESPACE", Value: "dynamo"},
 								{Name: "DYN_COMPONENT", Value: "VllmPrefillWorker"},
-								{Name: "DYN_DISCOVERY_BACKEND", Value: "kubernetes"},
-								// Use in-memory KV store (no external etcd needed)
-								{Name: "DYN_STORE_KV", Value: "mem"},
+								// Use etcd-based service discovery
+								{Name: "DYN_DISCOVERY_BACKEND", Value: "kv_store"},
+								{Name: "DYN_STORE_KV", Value: "etcd"},
+								{Name: "ETCD_ENDPOINTS", Value: b.etcdURL(serverName, namespace)},
 								{Name: "DYN_EVENT_PLANE", Value: "zmq"},
 								// System status server port (DYN_SYSTEM_ENABLED is deprecated)
 								{Name: "DYN_SYSTEM_PORT", Value: fmt.Sprintf("%d", workerSystemPort)},
@@ -879,9 +1070,10 @@ func (b *dynamoSelfProvisionBackend) createDecodeWorker(ctx context.Context, log
 								// Dynamo configuration
 								{Name: "DYN_NAMESPACE", Value: "dynamo"},
 								{Name: "DYN_COMPONENT", Value: "VllmDecodeWorker"},
-								{Name: "DYN_DISCOVERY_BACKEND", Value: "kubernetes"},
-								// Use in-memory KV store (no external etcd needed)
-								{Name: "DYN_STORE_KV", Value: "mem"},
+								// Use etcd-based service discovery
+								{Name: "DYN_DISCOVERY_BACKEND", Value: "kv_store"},
+								{Name: "DYN_STORE_KV", Value: "etcd"},
+								{Name: "ETCD_ENDPOINTS", Value: b.etcdURL(serverName, namespace)},
 								// Use ZMQ event plane instead of NATS (simpler, no external dependencies)
 								{Name: "DYN_EVENT_PLANE", Value: "zmq"},
 								// System status server port (DYN_SYSTEM_ENABLED is deprecated)
@@ -1136,6 +1328,20 @@ func (b *dynamoSelfProvisionBackend) natsDeploymentName(serverName string) strin
 
 func (b *dynamoSelfProvisionBackend) natsServiceName(serverName string) string {
 	return fmt.Sprintf("dynamo-sp-%s-nats", serverName)
+}
+
+func (b *dynamoSelfProvisionBackend) etcdDeploymentName(serverName string) string {
+	return fmt.Sprintf("dynamo-sp-%s-etcd", serverName)
+}
+
+func (b *dynamoSelfProvisionBackend) etcdServiceName(serverName string) string {
+	return fmt.Sprintf("dynamo-sp-%s-etcd", serverName)
+}
+
+// etcdURL returns the etcd endpoint URL for Dynamo service discovery.
+func (b *dynamoSelfProvisionBackend) etcdURL(serverName string, namespace string) string {
+	return fmt.Sprintf("http://%s.%s.svc.cluster.local:%d",
+		b.etcdServiceName(serverName), namespace, etcdClientPort)
 }
 
 func (b *dynamoSelfProvisionBackend) generateEndpoint(serverName string, namespace string) string {
