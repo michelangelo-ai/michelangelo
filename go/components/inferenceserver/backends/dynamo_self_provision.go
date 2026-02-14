@@ -73,11 +73,6 @@ func (b *dynamoSelfProvisionBackend) CreateServer(ctx context.Context, logger *z
 	serverName := inferenceServer.Name
 	namespace := inferenceServer.Namespace
 
-	// Create etcd Deployment and Service (required for Dynamo service discovery with kv_store backend)
-	if err := b.createEtcd(ctx, logger, kubeClient, serverName, namespace); err != nil {
-		return nil, fmt.Errorf("failed to create etcd: %w", err)
-	}
-
 	// Create Frontend Deployment and Service
 	if err := b.createFrontend(ctx, logger, kubeClient, serverName, namespace); err != nil {
 		return nil, fmt.Errorf("failed to create frontend: %w", err)
@@ -448,7 +443,7 @@ func (b *dynamoSelfProvisionBackend) createEtcd(ctx context.Context, logger *zap
 								fmt.Sprintf("--advertise-client-urls=http://%s.%s.svc.cluster.local:%d", serviceName, namespace, etcdClientPort),
 								fmt.Sprintf("--listen-peer-urls=http://0.0.0.0:%d", etcdPeerPort),
 								fmt.Sprintf("--initial-advertise-peer-urls=http://%s.%s.svc.cluster.local:%d", serviceName, namespace, etcdPeerPort),
-								"--initial-cluster=etcd0=http://etcd0:2380",
+								fmt.Sprintf("--initial-cluster=etcd0=http://%s.%s.svc.cluster.local:%d", serviceName, namespace, etcdPeerPort),
 								"--initial-cluster-token=dynamo-etcd-cluster",
 								"--initial-cluster-state=new",
 							},
@@ -624,10 +619,9 @@ func (b *dynamoSelfProvisionBackend) createFrontend(ctx context.Context, logger 
 								// Dynamo configuration
 								{Name: "DYN_NAMESPACE", Value: "dynamo"},
 								{Name: "DYN_COMPONENT", Value: "Frontend"},
-								// Use etcd-based service discovery
-								{Name: "DYN_DISCOVERY_BACKEND", Value: "kv_store"},
-								{Name: "DYN_STORE_KV", Value: "etcd"},
-								{Name: "ETCD_ENDPOINTS", Value: b.etcdURL(serverName, namespace)},
+								{Name: "DYN_DISCOVERY_BACKEND", Value: "kubernetes"},
+								// Use in-memory KV store (no external etcd needed)
+								{Name: "DYN_STORE_KV", Value: "mem"},
 								{Name: "DYN_EVENT_PLANE", Value: "zmq"},
 								{Name: "DYN_HTTP_PORT", Value: fmt.Sprintf("%d", frontendPort)},
 								{Name: "DYNAMO_PORT", Value: fmt.Sprintf("%d", frontendPort)},
@@ -816,7 +810,7 @@ func (b *dynamoSelfProvisionBackend) createPrefillWorker(ctx context.Context, lo
 								"dynamo.vllm",
 								fmt.Sprintf("--model=%s", modelName),
 								"--is-prefill-worker", // Disaggregated: prefill-only worker
-								"--connector=none",    // No KV transfer (NIXL requires InfiniBand)
+								"--connector=nixl",    // NIXL KV transfer (using TCP transport via UCX_TLS)
 							},
 							Ports: []corev1.ContainerPort{
 								{
@@ -829,10 +823,9 @@ func (b *dynamoSelfProvisionBackend) createPrefillWorker(ctx context.Context, lo
 								// Dynamo configuration
 								{Name: "DYN_NAMESPACE", Value: "dynamo"},
 								{Name: "DYN_COMPONENT", Value: "VllmPrefillWorker"},
-								// Use etcd-based service discovery
-								{Name: "DYN_DISCOVERY_BACKEND", Value: "kv_store"},
-								{Name: "DYN_STORE_KV", Value: "etcd"},
-								{Name: "ETCD_ENDPOINTS", Value: b.etcdURL(serverName, namespace)},
+								{Name: "DYN_DISCOVERY_BACKEND", Value: "kubernetes"},
+								// Use in-memory KV store (no external etcd needed)
+								{Name: "DYN_STORE_KV", Value: "mem"},
 								{Name: "DYN_EVENT_PLANE", Value: "zmq"},
 								// System status server port (DYN_SYSTEM_ENABLED is deprecated)
 								{Name: "DYN_SYSTEM_PORT", Value: fmt.Sprintf("%d", workerSystemPort)},
@@ -859,6 +852,8 @@ func (b *dynamoSelfProvisionBackend) createPrefillWorker(ctx context.Context, lo
 								{Name: "LD_LIBRARY_PATH", Value: "/usr/local/nvidia/lib64:/usr/local/cuda/lib64"},
 								{Name: "NVIDIA_VISIBLE_DEVICES", Value: "all"},
 								{Name: "NVIDIA_DRIVER_CAPABILITIES", Value: "compute,utility"},
+								// UCX configuration for NIXL KV transfer over TCP (no InfiniBand required)
+								{Name: "UCX_TLS", Value: "tcp,cuda_copy,cuda_ipc"},
 							},
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
@@ -1054,7 +1049,7 @@ func (b *dynamoSelfProvisionBackend) createDecodeWorker(ctx context.Context, log
 								"dynamo.vllm",
 								fmt.Sprintf("--model=%s", modelName),
 								"--is-decode-worker", // Disaggregated: decode-only worker
-								"--connector=none",   // No KV transfer (NIXL requires InfiniBand)
+								"--connector=nixl",   // NIXL KV transfer (using TCP transport)
 								"--enable-lora",
 								"--max-loras=4",
 								"--max-lora-rank=64",
@@ -1070,10 +1065,9 @@ func (b *dynamoSelfProvisionBackend) createDecodeWorker(ctx context.Context, log
 								// Dynamo configuration
 								{Name: "DYN_NAMESPACE", Value: "dynamo"},
 								{Name: "DYN_COMPONENT", Value: "VllmDecodeWorker"},
-								// Use etcd-based service discovery
-								{Name: "DYN_DISCOVERY_BACKEND", Value: "kv_store"},
-								{Name: "DYN_STORE_KV", Value: "etcd"},
-								{Name: "ETCD_ENDPOINTS", Value: b.etcdURL(serverName, namespace)},
+								{Name: "DYN_DISCOVERY_BACKEND", Value: "kubernetes"},
+								// Use in-memory KV store (no external etcd needed)
+								{Name: "DYN_STORE_KV", Value: "mem"},
 								// Use ZMQ event plane instead of NATS (simpler, no external dependencies)
 								{Name: "DYN_EVENT_PLANE", Value: "zmq"},
 								// System status server port (DYN_SYSTEM_ENABLED is deprecated)
@@ -1104,6 +1098,8 @@ func (b *dynamoSelfProvisionBackend) createDecodeWorker(ctx context.Context, log
 								{Name: "LD_LIBRARY_PATH", Value: "/usr/local/nvidia/lib64:/usr/local/cuda/lib64"},
 								{Name: "NVIDIA_VISIBLE_DEVICES", Value: "all"},
 								{Name: "NVIDIA_DRIVER_CAPABILITIES", Value: "compute,utility"},
+								// UCX configuration for NIXL KV transfer over TCP (no InfiniBand required)
+								{Name: "UCX_TLS", Value: "tcp,cuda_copy,cuda_ipc"},
 							},
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
