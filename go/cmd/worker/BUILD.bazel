@@ -14,6 +14,9 @@ go_library(
         "//go/worker:go_default_library",
         "//go/worker/activities/ray:go_default_library",
         "//go/worker/activities/spark:go_default_library",
+        "//go/worker/plugins/ray:go_default_library",
+        "//go/worker/plugins/spark:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
         "@org_uber_go_fx//:go_default_library",
     ],
 )
