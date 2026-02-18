@@ -452,7 +452,7 @@ func TestMergeCRDVersions(t *testing.T) {
 
 		_, err := mergeCRDVersions(crdList, crdVersions, nil)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "CRD test-crd has multiple versions but version config specified in crdVersions")
+		assert.Contains(t, err.Error(), "CRD test-crd has multiple versions but no version config specified in crdVersions")
 	})
 
 	t.Run("Error: CRD has multiple versions but no storage version specified", func(t *testing.T) {
