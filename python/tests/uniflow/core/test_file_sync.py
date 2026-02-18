@@ -340,15 +340,15 @@ class TestStorageDownloader(unittest.TestCase):
         downloader = FsspecDownloader()
         self.assertIsNotNone(downloader)
 
-    def test_download_and_extract_dev_files_exists(self):
-        """Test that download_and_extract_dev_files function exists."""
+    def test__download_and_extract_dev_files_exists(self):
+        """Test that _download_and_extract_dev_files function exists."""
         from michelangelo.uniflow.core.file_sync import (
-            download_and_extract_dev_files,
+            _download_and_extract_dev_files,
         )
 
         # Should not raise
-        self.assertIsNotNone(download_and_extract_dev_files)
-        self.assertTrue(callable(download_and_extract_dev_files))
+        self.assertIsNotNone(_download_and_extract_dev_files)
+        self.assertTrue(callable(_download_and_extract_dev_files))
 
 
 class TestFsspecDownloader(unittest.TestCase):
@@ -461,18 +461,18 @@ class TestFsspecDownloader(unittest.TestCase):
 
 
 class TestDownloadAndExtractDevFiles(unittest.TestCase):
-    """Unit tests for download_and_extract_dev_files function."""
+    """Unit tests for _download_and_extract_dev_files function."""
 
     @patch.dict(os.environ, {}, clear=True)
     def test_returns_false_when_no_tarball_url(self):
         """Test that function returns False when UF_FILE_SYNC_TARBALL_URL is not set."""
         from michelangelo.uniflow.core.file_sync import (
             FsspecDownloader,
-            download_and_extract_dev_files,
+            _download_and_extract_dev_files,
         )
 
         downloader = FsspecDownloader()
-        result = download_and_extract_dev_files(downloader=downloader)
+        result = _download_and_extract_dev_files(downloader=downloader)
         self.assertFalse(result)
 
     @patch("michelangelo.uniflow.core.file_sync.Path.cwd")
@@ -482,7 +482,7 @@ class TestDownloadAndExtractDevFiles(unittest.TestCase):
         """Test successful download, extract, and copy workflow."""
         from michelangelo.uniflow.core.file_sync import (
             FsspecDownloader,
-            download_and_extract_dev_files,
+            _download_and_extract_dev_files,
         )
 
         with tempfile.TemporaryDirectory() as fake_repo_root:
@@ -505,7 +505,7 @@ class TestDownloadAndExtractDevFiles(unittest.TestCase):
 
                 downloader = FsspecDownloader()
                 with patch.object(downloader, "download", side_effect=mock_download):
-                    result = download_and_extract_dev_files(downloader=downloader)
+                    result = _download_and_extract_dev_files(downloader=downloader)
 
                 self.assertTrue(result)
                 # Verify copy was called (file was applied)
@@ -516,13 +516,13 @@ class TestDownloadAndExtractDevFiles(unittest.TestCase):
         """Test that function returns False when download fails."""
         from michelangelo.uniflow.core.file_sync import (
             FsspecDownloader,
-            download_and_extract_dev_files,
+            _download_and_extract_dev_files,
         )
 
         downloader = FsspecDownloader()
         # Mock download to fail
         with patch.object(downloader, "download", return_value=False):
-            result = download_and_extract_dev_files(downloader=downloader)
+            result = _download_and_extract_dev_files(downloader=downloader)
             self.assertFalse(result)
 
     @patch("tarfile.open")
@@ -531,7 +531,7 @@ class TestDownloadAndExtractDevFiles(unittest.TestCase):
         """Test that function returns False when tarball extraction fails."""
         from michelangelo.uniflow.core.file_sync import (
             FsspecDownloader,
-            download_and_extract_dev_files,
+            _download_and_extract_dev_files,
         )
 
         # Mock download to succeed
@@ -548,7 +548,7 @@ class TestDownloadAndExtractDevFiles(unittest.TestCase):
             mock_tarfile_open.side_effect = tarfile.TarError("Invalid tarball")
 
             with patch.object(downloader, "download", side_effect=mock_download):
-                result = download_and_extract_dev_files(downloader=downloader)
+                result = _download_and_extract_dev_files(downloader=downloader)
                 self.assertFalse(result)
 
     @patch("michelangelo.uniflow.core.file_sync.Path.cwd")
@@ -558,7 +558,7 @@ class TestDownloadAndExtractDevFiles(unittest.TestCase):
         """Test extraction and copying of multiple files."""
         from michelangelo.uniflow.core.file_sync import (
             FsspecDownloader,
-            download_and_extract_dev_files,
+            _download_and_extract_dev_files,
         )
 
         with tempfile.TemporaryDirectory() as fake_repo_root:
@@ -583,7 +583,7 @@ class TestDownloadAndExtractDevFiles(unittest.TestCase):
 
                 downloader = FsspecDownloader()
                 with patch.object(downloader, "download", side_effect=mock_download):
-                    result = download_and_extract_dev_files(downloader=downloader)
+                    result = _download_and_extract_dev_files(downloader=downloader)
 
                 self.assertTrue(result)
                 # Should have copied multiple files
@@ -595,7 +595,7 @@ class TestDownloadAndExtractDevFiles(unittest.TestCase):
         """Test that function handles unexpected errors gracefully."""
         from michelangelo.uniflow.core.file_sync import (
             FsspecDownloader,
-            download_and_extract_dev_files,
+            _download_and_extract_dev_files,
         )
 
         # Make cwd() raise an exception
@@ -603,12 +603,12 @@ class TestDownloadAndExtractDevFiles(unittest.TestCase):
         downloader = FsspecDownloader()
 
         with patch.object(downloader, "download", return_value=True):
-            result = download_and_extract_dev_files(downloader=downloader)
+            result = _download_and_extract_dev_files(downloader=downloader)
             self.assertFalse(result)
 
 
 class TestFileSyncPreRun(unittest.TestCase):
-    """Unit tests for file_sync_pre_run function."""
+    """Unit tests for _file_sync_pre_run function."""
 
     def setUp(self):
         """Set up test fixtures."""
@@ -624,38 +624,38 @@ class TestFileSyncPreRun(unittest.TestCase):
 
         file_sync_module._file_sync_executed = False
 
-    @patch("michelangelo.uniflow.core.file_sync.download_and_extract_dev_files")
+    @patch("michelangelo.uniflow.core.file_sync._download_and_extract_dev_files")
     @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
     def test_file_sync_executed_flag_prevents_double_execution(self, mock_download):
         """Test that _file_sync_executed flag prevents multiple executions."""
         from michelangelo.uniflow.core.file_sync import (
             FsspecDownloader,
-            file_sync_pre_run,
+            _file_sync_pre_run,
         )
 
         mock_download.return_value = True
         downloader = FsspecDownloader()
 
         # First call should execute
-        file_sync_pre_run(downloader=downloader)
+        _file_sync_pre_run(downloader=downloader)
         self.assertEqual(mock_download.call_count, 1)
 
         # Second call should be skipped due to flag
-        file_sync_pre_run(downloader=downloader)
+        _file_sync_pre_run(downloader=downloader)
         self.assertEqual(mock_download.call_count, 1)  # Still 1, not 2
 
         # Third call should also be skipped
-        file_sync_pre_run(downloader=downloader)
+        _file_sync_pre_run(downloader=downloader)
         self.assertEqual(mock_download.call_count, 1)  # Still 1, not 3
 
-    @patch("michelangelo.uniflow.core.file_sync.download_and_extract_dev_files")
+    @patch("michelangelo.uniflow.core.file_sync._download_and_extract_dev_files")
     @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
     def test_file_sync_executed_flag_is_set_after_first_call(self, mock_download):
         """Test that _file_sync_executed flag is set to True after first execution."""
         import michelangelo.uniflow.core.file_sync as file_sync_module
         from michelangelo.uniflow.core.file_sync import (
             FsspecDownloader,
-            file_sync_pre_run,
+            _file_sync_pre_run,
         )
 
         mock_download.return_value = True
@@ -665,19 +665,19 @@ class TestFileSyncPreRun(unittest.TestCase):
         self.assertFalse(file_sync_module._file_sync_executed)
 
         # Execute
-        file_sync_pre_run(downloader=downloader)
+        _file_sync_pre_run(downloader=downloader)
 
         # Flag should be True after execution
         self.assertTrue(file_sync_module._file_sync_executed)
 
-    @patch("michelangelo.uniflow.core.file_sync.download_and_extract_dev_files")
+    @patch("michelangelo.uniflow.core.file_sync._download_and_extract_dev_files")
     @patch.dict(os.environ, {}, clear=True)
     def test_file_sync_executed_flag_set_even_without_tarball_url(self, mock_download):
         """Test that flag is set even when UF_FILE_SYNC_TARBALL_URL is not set."""
         import michelangelo.uniflow.core.file_sync as file_sync_module
         from michelangelo.uniflow.core.file_sync import (
             FsspecDownloader,
-            file_sync_pre_run,
+            _file_sync_pre_run,
         )
 
         downloader = FsspecDownloader()
@@ -686,7 +686,7 @@ class TestFileSyncPreRun(unittest.TestCase):
         self.assertFalse(file_sync_module._file_sync_executed)
 
         # Execute (should just log and return, but still set flag)
-        file_sync_pre_run(downloader=downloader)
+        _file_sync_pre_run(downloader=downloader)
 
         # Flag should be True even though no download happened
         self.assertTrue(file_sync_module._file_sync_executed)
@@ -694,14 +694,14 @@ class TestFileSyncPreRun(unittest.TestCase):
         # Download should not have been called
         mock_download.assert_not_called()
 
-    @patch("michelangelo.uniflow.core.file_sync.download_and_extract_dev_files")
+    @patch("michelangelo.uniflow.core.file_sync._download_and_extract_dev_files")
     @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
     def test_file_sync_executed_flag_set_even_on_error(self, mock_download):
         """Test that flag is set even when download fails."""
         import michelangelo.uniflow.core.file_sync as file_sync_module
         from michelangelo.uniflow.core.file_sync import (
             FsspecDownloader,
-            file_sync_pre_run,
+            _file_sync_pre_run,
         )
 
         # Make download fail
@@ -712,26 +712,26 @@ class TestFileSyncPreRun(unittest.TestCase):
         self.assertFalse(file_sync_module._file_sync_executed)
 
         # Execute (will catch exception internally)
-        file_sync_pre_run(downloader=downloader)
+        _file_sync_pre_run(downloader=downloader)
 
         # Flag should be True even though download failed
         self.assertTrue(file_sync_module._file_sync_executed)
 
-    @patch("michelangelo.uniflow.core.file_sync.download_and_extract_dev_files")
+    @patch("michelangelo.uniflow.core.file_sync._download_and_extract_dev_files")
     @patch.dict(os.environ, {"UF_FILE_SYNC_TARBALL_URL": "s3://bucket/test.tar.gz"})
     def test_calls_download_and_extract_with_downloader(self, mock_download):
-        """Test file_sync_pre_run calls download_and_extract_dev_files."""
+        """Test _file_sync_pre_run calls _download_and_extract_dev_files."""
         from michelangelo.uniflow.core.file_sync import (
             FsspecDownloader,
-            file_sync_pre_run,
+            _file_sync_pre_run,
         )
 
         mock_download.return_value = True
         downloader = FsspecDownloader()
 
-        file_sync_pre_run(downloader=downloader)
+        _file_sync_pre_run(downloader=downloader)
 
-        # Verify download_and_extract_dev_files was called with the downloader
+        # Verify _download_and_extract_dev_files was called with the downloader
         mock_download.assert_called_once_with(downloader=downloader)
 
 
