@@ -9,8 +9,6 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/cachedoutput"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/model"
-	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/ray"
-	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/spark"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/storage"
 )
 
@@ -22,16 +20,6 @@ func RegisterStoragePlugin(registry map[string]service.IPlugin) {
 // RegisterCachedOutputPlugin adds the cachedoutput plugin to the plugin registry.
 func RegisterCachedOutputPlugin(registry map[string]service.IPlugin) {
 	registry[cachedoutput.Plugin.ID()] = cachedoutput.Plugin
-}
-
-// RegisterRayPlugin adds the ray plugin to the plugin registry.
-func RegisterRayPlugin(registry map[string]service.IPlugin) {
-	registry[ray.Plugin.ID()] = ray.Plugin
-}
-
-// RegisterSparkPlugin adds the spark plugin to the plugin registry.
-func RegisterSparkPlugin(registry map[string]service.IPlugin) {
-	registry[spark.Plugin.ID()] = spark.Plugin
 }
 
 // RegisterModelPlugin adds the model plugin to the plugin registry.
@@ -59,8 +47,6 @@ func CreateStarlarkService(registry map[string]service.IPlugin, workers []worker
 var Module = fx.Options(
 	fx.Invoke(RegisterStoragePlugin),
 	fx.Invoke(RegisterCachedOutputPlugin),
-	fx.Invoke(RegisterRayPlugin),
-	fx.Invoke(RegisterSparkPlugin),
 	fx.Invoke(RegisterModelPlugin),
 	fx.Invoke(CreateStarlarkService),
 )
