@@ -287,11 +287,14 @@ cleanup() {
 trap cleanup SIGTERM SIGINT
 
 # Start decode worker in background
+# Note/TODO: we are using --enforce-eager to disable CUDA graphs for quick deployment. for production use, need to remove this flag.
 echo "Starting decode worker on port ` + fmt.Sprintf("%d", singleContainerWorkerPort) + `..."
 python3 -m dynamo.vllm \
     --model=` + singleContainerModel + ` \
     --is-decode-worker \
-    --connector=nixl &
+    --connector=nixl \
+    --enforce-eager \
+    --max-model-len=4096 &
 WORKER_PID=$!
 
 # Wait for worker to initialize and register with file-based KV store
@@ -469,7 +472,7 @@ func (b *dynamoSingleContainerBackend) createDeployment(ctx context.Context, log
 							VolumeSource: corev1.VolumeSource{
 								EmptyDir: &corev1.EmptyDirVolumeSource{
 									Medium:    corev1.StorageMediumMemory,
-									SizeLimit: ptr.To(resource.MustParse("16Gi")),
+									SizeLimit: ptr.To(resource.MustParse("4Gi")),
 								},
 							},
 						},
