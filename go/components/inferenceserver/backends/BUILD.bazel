@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "dynamo.go",
         "dynamo_self_provision.go",
+        "dynamo_single_container.go",
         "interface.go",
         "module.go",
         "registry.go",
