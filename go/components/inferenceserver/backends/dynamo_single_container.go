@@ -263,14 +263,20 @@ func (b *dynamoSingleContainerBackend) createEntrypointConfigMap(ctx context.Con
 	return nil
 }
 
-// generateEntrypointScript creates the shell script that runs both processes.
+// generateEntrypointScript creates the shell script that runs both frontend and decode worker
+// in disaggregated mode, using file-based KV store for service discovery between them.
+// Both processes share the same filesystem, so they can discover each other via /tmp/dynamo_store_kv.
 func (b *dynamoSingleContainerBackend) generateEntrypointScript() string {
 	script := strings.TrimSpace(`
 #!/bin/bash
 set -e
 
-echo "Starting Dynamo single-container deployment..."
+echo "Starting Dynamo single-container deployment (disaggregated mode)..."
 echo "Model: ` + singleContainerModel + `"
+echo "Using file-based KV store for service discovery"
+
+# Create the shared KV store directory
+mkdir -p /tmp/dynamo_store_kv
 
 # Function to handle shutdown
 cleanup() {
@@ -282,23 +288,18 @@ trap cleanup SIGTERM SIGINT
 
 # Start decode worker in background
 echo "Starting decode worker on port ` + fmt.Sprintf("%d", singleContainerWorkerPort) + `..."
-DYN_COMPONENT=VllmDecodeWorker \
-DYN_SYSTEM_PORT=` + fmt.Sprintf("%d", singleContainerWorkerPort) + ` \
 python3 -m dynamo.vllm \
     --model=` + singleContainerModel + ` \
     --is-decode-worker \
     --connector=nixl &
 WORKER_PID=$!
 
-# Wait for worker to initialize
+# Wait for worker to initialize and register with file-based KV store
 echo "Waiting for decode worker to initialize..."
-sleep 10
+sleep 30
 
 # Start frontend in foreground
 echo "Starting frontend on port ` + fmt.Sprintf("%d", singleContainerFrontendPort) + `..."
-DYN_COMPONENT=Frontend \
-DYN_HTTP_PORT=` + fmt.Sprintf("%d", singleContainerFrontendPort) + ` \
-DYNAMO_PORT=` + fmt.Sprintf("%d", singleContainerFrontendPort) + ` \
 python3 -m dynamo.frontend
 `)
 	return script
@@ -370,9 +371,12 @@ func (b *dynamoSingleContainerBackend) createDeployment(ctx context.Context, log
 								},
 							},
 							Env: []corev1.EnvVar{
+								// Dynamo configuration - use file-based KV store for discovery
+								// Both processes share the same filesystem, so they can discover each other
 								{Name: "DYN_NAMESPACE", Value: "dynamo"},
-								{Name: "DYN_DISCOVERY_BACKEND", Value: "kubernetes"},
-								{Name: "DYN_STORE_KV", Value: "mem"},
+								{Name: "DYN_DISCOVERY_BACKEND", Value: "kv_store"},
+								{Name: "DYN_STORE_KV", Value: "file"},
+								{Name: "DYN_FILE_KV", Value: "/tmp/dynamo_store_kv"},
 								{Name: "DYN_EVENT_PLANE", Value: "zmq"},
 								// Pod identity (Downward API)
 								{
