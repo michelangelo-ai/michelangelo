@@ -141,7 +141,6 @@ func newCadenceClient(conf Config) (workflowserviceclient.Interface, error) {
 		if conf.TLSConfig != nil {
 			creds := credentials.NewTLS(conf.TLSConfig)
 			dialer := grpc.NewTransport().NewDialer(grpc.DialerCredentials(creds))
-			// TODO: For complex TLS scenarios, consider implementing peer chooser pattern
 			_ = dialer // placeholder to avoid unused variable error for now
 			grpcTransport = grpc.NewTransport()
 		} else {
