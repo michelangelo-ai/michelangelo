@@ -13,10 +13,9 @@ spec:
   initSpec:
     resourceSpec:
       # CPU/memory for the frontend and workers
-      # Keep requests low to fit on GPU nodes (~4 CPU, ~13Gi allocatable)
-      # todo: ghosharitra: revisit this.
+      # GPU nodes have ~13Gi allocatable, use 12Gi to leave headroom
       cpu: 2
-      memory: "4Gi"
+      memory: "12Gi"
       # GPU is required for vLLM inference
       gpu: 1
     servingSpec:

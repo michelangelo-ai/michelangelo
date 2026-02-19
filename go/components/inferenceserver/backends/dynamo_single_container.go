@@ -1,3 +1,5 @@
+// This is an example where we deploy both frontend and decode worker in a single container.
+// This is a good starting point to replicate within UP using Pinnochio files.
 package backends
 
 import (
