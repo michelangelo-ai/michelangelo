@@ -10,7 +10,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
@@ -32,16 +31,37 @@ const (
 // Reconciler reconciles a Ray Job object
 type Reconciler struct {
 	client.Client
+	logger          logr.Logger
 	federatedClient jobsclient.FederatedClient
 	clusterCache    jobscluster.RegisteredClustersCache
 	env             env.Context
 }
 
+// NewReconciler constructs a Reconciler with required dependencies.
+//
+// This provides a stable construction API for downstream users so they do not
+// need to rely on reflection to set unexported fields.
+func NewReconciler(
+	logger logr.Logger,
+	client client.Client,
+	env env.Context,
+	federatedClient jobsclient.FederatedClient,
+	clusterCache jobscluster.RegisteredClustersCache,
+) *Reconciler {
+	return &Reconciler{
+		logger:          logger,
+		Client:          client,
+		federatedClient: federatedClient,
+		clusterCache:    clusterCache,
+		env:             env,
+	}
+}
+
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-	logger.Info("Reconciling ray job", "namespacedName", req.NamespacedName)
+	logger := r.logger.WithValues("namespacedName", req.NamespacedName)
+	logger.Info("Reconciling ray job")
 	res := ctrl.Result{}
 
 	// retrieve the ray job
@@ -88,6 +108,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 }
 
 func (r *Reconciler) Register(mgr ctrl.Manager) error {
+	r.logger = mgr.GetLogger().WithName("rayjob")
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.RayJob{}).
 		Complete(r)

@@ -1,10 +1,11 @@
 package cluster
 
 import (
+	"github.com/go-logr/logr"
 	"go.uber.org/fx"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"github.com/michelangelo-ai/michelangelo/go/api"
+	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
@@ -19,18 +20,20 @@ var Module = fx.Options(
 
 func register(
 	conf Config,
+	logger logr.Logger,
+	apiHandlerFactory apiHandler.Factory,
 	env env.Context,
 	mgr manager.Manager,
 	schedulerQueue scheduler.JobQueue,
 	federatedClient client.FederatedClient,
 	clusterCache cluster.RegisteredClustersCache,
-	handler api.Handler,
 ) error {
-	return (&Reconciler{
-		Handler:         handler,
-		env:             env,
-		schedulerQueue:  schedulerQueue,
-		federatedClient: federatedClient,
-		clusterCache:    clusterCache,
-	}).Register(mgr)
+	return NewReconciler(
+		logger,
+		apiHandlerFactory,
+		env,
+		schedulerQueue,
+		federatedClient,
+		clusterCache,
+	).Register(mgr)
 }

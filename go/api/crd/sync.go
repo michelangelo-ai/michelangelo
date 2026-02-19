@@ -304,7 +304,7 @@ func mergeCRDVersions(
 			// and that version will be set as the storage version
 			if len(versions) > 1 {
 				return nil, fmt.Errorf(
-					"CRD %s has multiple versions but version config specified in crdVersions",
+					"CRD %s has multiple versions but no version config specified in crdVersions",
 					name)
 			}
 

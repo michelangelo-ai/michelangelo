@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	api "github.com/michelangelo-ai/michelangelo/go/api"
+	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	jobsclient "github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
@@ -48,10 +49,34 @@ const (
 type Reconciler struct {
 	api.Handler // API client for managing API objects
 
-	env             env.Context                         // Environment context for configuration
-	schedulerQueue  scheduler.JobQueue                  // Queue for enqueuing jobs to scheduler
-	federatedClient jobsclient.FederatedClient          // Client for creating clusters on remote K8s
-	clusterCache    jobscluster.RegisteredClustersCache // Cache for looking up assigned clusters
+	logger            logr.Logger                         // Logger for the controller
+	apiHandlerFactory apiHandler.Factory                  // Factory for creating API handlers
+	env               env.Context                         // Environment context for configuration
+	schedulerQueue    scheduler.JobQueue                  // Queue for enqueuing jobs to scheduler
+	federatedClient   jobsclient.FederatedClient          // Client for creating clusters on remote K8s
+	clusterCache      jobscluster.RegisteredClustersCache // Cache for looking up assigned clusters
+}
+
+// NewReconciler constructs a Reconciler with required dependencies.
+//
+// This provides a stable construction API for downstream users so they do not
+// need to rely on reflection to set unexported fields.
+func NewReconciler(
+	logger logr.Logger,
+	apiHandlerFactory apiHandler.Factory,
+	env env.Context,
+	schedulerQueue scheduler.JobQueue,
+	federatedClient jobsclient.FederatedClient,
+	clusterCache jobscluster.RegisteredClustersCache,
+) *Reconciler {
+	return &Reconciler{
+		logger:            logger,
+		apiHandlerFactory: apiHandlerFactory,
+		env:               env,
+		schedulerQueue:    schedulerQueue,
+		federatedClient:   federatedClient,
+		clusterCache:      clusterCache,
+	}
 }
 
 // Reconcile ensures the desired state of the Ray Cluster matches the actual state in the cluster.
@@ -203,6 +228,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 // Register adds the Reconciler to the controller manager
 func (r *Reconciler) Register(mgr ctrl.Manager) error {
+	r.logger = mgr.GetLogger().WithName("raycluster")
+	handler, err := r.apiHandlerFactory.GetAPIHandler(mgr.GetClient())
+	if err != nil {
+		return err
+	}
+	r.Handler = handler
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.RayCluster{}). // Watch for changes in RayCluster custom resources
 		Complete(r)
