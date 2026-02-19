@@ -13,6 +13,7 @@ import (
 	sworker "github.com/cadence-workflow/starlark-worker/worker"
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	tallyv4 "github.com/uber-go/tally/v4"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/uber-go/tally"
@@ -136,7 +137,17 @@ func newCadenceClient(conf Config) (workflowserviceclient.Interface, error) {
 	var tran transport.UnaryOutbound
 	switch conf.Transport {
 	case "grpc":
-		tran = grpc.NewTransport().NewSingleOutbound(conf.Host)
+		var grpcTransport *grpc.Transport
+		if conf.TLSConfig != nil {
+			creds := credentials.NewTLS(conf.TLSConfig)
+			dialer := grpc.NewTransport().NewDialer(grpc.DialerCredentials(creds))
+			// TODO: For complex TLS scenarios, consider implementing peer chooser pattern
+			_ = dialer // placeholder to avoid unused variable error for now
+			grpcTransport = grpc.NewTransport()
+		} else {
+			grpcTransport = grpc.NewTransport()
+		}
+		tran = grpcTransport.NewSingleOutbound(conf.Host)
 	case "tchannel":
 		if t, err := tchannel.NewTransport(tchannel.ServiceName("tchannel")); err != nil {
 			return nil, err

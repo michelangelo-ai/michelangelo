@@ -28,12 +28,16 @@ go_library(
         "@org_uber_go_yarpc//transport/grpc:go_default_library",
         "@org_uber_go_yarpc//transport/tchannel:go_default_library",
         "@org_uber_go_zap//:go_default_library",
+        "@org_golang_google_grpc//credentials:go_default_library",
     ],
 )
 
 go_test(
     name = "go_default_test",
-    srcs = ["module_test.go"],
+    srcs = [
+        "module_test.go",
+        "tls_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
         "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
