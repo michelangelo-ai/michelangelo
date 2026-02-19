@@ -2883,9 +2883,9 @@ func TestGetWorkflowUrl(t *testing.T) {
 			name: "Valid config with workflow URL template",
 			configSetup: map[string]interface{}{
 				"workflowClient": map[string]interface{}{
-					"taskList":          "default",
+					"taskList":           "default",
 					"executionUrlFormat": "http://cadence-web:8080/domain/{{.Domain}}/workflows/{{.ExecutionID}}",
-					"domain":            "michelangelo",
+					"domain":             "michelangelo",
 				},
 			},
 			inputName:   "test-pipeline-run",
@@ -2896,9 +2896,9 @@ func TestGetWorkflowUrl(t *testing.T) {
 			name: "Config with different domain",
 			configSetup: map[string]interface{}{
 				"workflowClient": map[string]interface{}{
-					"taskList":          "custom-queue",
+					"taskList":           "custom-queue",
 					"executionUrlFormat": "https://temporal-ui.prod:7243/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}",
-					"domain":            "production",
+					"domain":             "production",
 				},
 			},
 			inputName:   "prod-pipeline-execution",
@@ -2921,9 +2921,9 @@ func TestGetWorkflowUrl(t *testing.T) {
 			name: "Empty pipeline name",
 			configSetup: map[string]interface{}{
 				"workflowClient": map[string]interface{}{
-					"taskList":          "default",
+					"taskList":           "default",
 					"executionUrlFormat": "http://localhost:8080/domain/{{.Domain}}/workflows/{{.ExecutionID}}",
-					"domain":            "default",
+					"domain":             "default",
 				},
 			},
 			inputName:   "",
@@ -2934,9 +2934,9 @@ func TestGetWorkflowUrl(t *testing.T) {
 			name: "Complex pipeline name with special characters",
 			configSetup: map[string]interface{}{
 				"workflowClient": map[string]interface{}{
-					"taskList":          "default",
+					"taskList":           "default",
 					"executionUrlFormat": "http://cadence-web:8080/domain/{{.Domain}}/workflows/{{.ExecutionID}}",
-					"domain":            "test-domain",
+					"domain":             "test-domain",
 				},
 			},
 			inputName:   "my-pipeline-run-123_test",
