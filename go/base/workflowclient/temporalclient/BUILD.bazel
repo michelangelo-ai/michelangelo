@@ -26,8 +26,8 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
-        "temporalclient_test.go",
         "module_test.go",
+        "temporalclient_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
