@@ -1,6 +1,8 @@
 package temporalclient
 
 import (
+	"crypto/tls"
+
 	"github.com/cadence-workflow/starlark-worker/temporal"
 	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
@@ -21,11 +23,20 @@ var Module = fx.Options(
 // NewTemporalClient creates a new TemporalClient
 func NewTemporalClient(config baseconfig.WorkflowClientConfig) (TemporalClientOut, error) {
 	defaultTemporalClientFactory := workflowfx.DefaultTemporalClientFactory{}
-	client, err := defaultTemporalClientFactory.NewTemporalClient(temporalClient.Options{
+	opts := temporalClient.Options{
 		HostPort:      config.Host,
 		Namespace:     config.Domain,
 		DataConverter: temporal.DataConverter{}, // using temporal.DataConverter{} from the starlark-worker package since it supports starlark types
-	})
+	}
+
+	// Add TLS connection options if UseTLS is enabled
+	if config.UseTLS {
+		opts.ConnectionOptions = temporalClient.ConnectionOptions{
+			TLS: &tls.Config{},
+		}
+	}
+
+	client, err := defaultTemporalClientFactory.NewTemporalClient(opts)
 	if err != nil {
 		return TemporalClientOut{}, err
 	}
