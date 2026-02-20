@@ -342,14 +342,12 @@ necessary, and this assertion will be removed.
             _kube_create(_dir / "resources/michelangelo-temporal-worker.yaml")
         if "controllermgr" not in ns.exclude:
             resources.append("michelangelo-temporal-controllermgr.yaml")
-    elif ns.workflow == "cadence":
+    else:
         _create_cadence_domain(links)
         if "worker" not in ns.exclude:
             _kube_create(_dir / "resources/michelangelo-worker.yaml")
         if "controllermgr" not in ns.exclude:
             resources.append("michelangelo-controllermgr.yaml")
-    else:
-        raise ValueError(f"Unsupported workflow engine: {ns.workflow}")
 
     # Create separate compute cluster if requested
     if ns.create_compute_cluster:
