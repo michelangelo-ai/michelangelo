@@ -25,6 +25,8 @@ import (
 	"go.uber.org/fx"
 	"go.uber.org/yarpc"
 	"go.uber.org/yarpc/api/transport"
+	"go.uber.org/yarpc/peer"
+	"go.uber.org/yarpc/peer/hostport"
 	"go.uber.org/yarpc/transport/grpc"
 	"go.uber.org/yarpc/transport/tchannel"
 	"go.uber.org/zap"
@@ -137,16 +139,20 @@ func newCadenceClient(conf Config) (workflowserviceclient.Interface, error) {
 	var tran transport.UnaryOutbound
 	switch conf.Transport {
 	case "grpc":
-		var grpcTransport *grpc.Transport
+		grpcTransport := grpc.NewTransport()
 		if conf.TLSConfig != nil {
 			creds := credentials.NewTLS(conf.TLSConfig)
-			dialer := grpc.NewTransport().NewDialer(grpc.DialerCredentials(creds))
-			_ = dialer // placeholder to avoid unused variable error for now
-			grpcTransport = grpc.NewTransport()
+			dialer := grpcTransport.NewDialer(grpc.DialerCredentials(creds))
+
+			// Create a peer chooser with the TLS-enabled dialer
+			chooser := peer.NewSingle(
+				hostport.Identify(conf.Host),
+				dialer,
+			)
+			tran = grpcTransport.NewOutbound(chooser)
 		} else {
-			grpcTransport = grpc.NewTransport()
+			tran = grpcTransport.NewSingleOutbound(conf.Host)
 		}
-		tran = grpcTransport.NewSingleOutbound(conf.Host)
 	case "tchannel":
 		if t, err := tchannel.NewTransport(tchannel.ServiceName("tchannel")); err != nil {
 			return nil, err
