@@ -21,7 +21,7 @@ Need to quickly look up a term? Here's a summary of the most commonly used conce
 | **Deployment** | Model running in production environment | Making your model available for predictions |
 | **Endpoint** | URL/routing for accessing deployed models | Making prediction requests from applications |
 | **MA Studio** | No-code UI for ML development | Building models visually without writing code |
-| **Canvas** | Code-driven YAML workflows | Advanced customization with best practices and version control |
+| **CanvasFlex** | Code-driven YAML workflows | Advanced customization with best practices and version control |
 | **Uniflow** | Python orchestration framework | Writing custom ML pipelines with `@task` and `@workflow` decorators |
 
 ---
@@ -39,9 +39,9 @@ Users can use the no-code dev environment to perform standardized ML tasks witho
 * Prepare data sources for training models or making batch predictions
 * Build and train XGB models, classic ML models, and Deep Learning models
 
-#### Canvas (Code Driven YAML/UI)
+#### CanvasFlex (Code Driven YAML/UI)
 
-**Canvas** is an opinionated predefined ML workflow designed for more advanced tasks with best practices, such as training DL models, setting up customized retraining workflows, building bespoke model performance monitoring workflows. Canvas provides a highly customized, code driven ML development experience by applying software development principles to ML development. Users can create their own dependencies that can be managed in the UI environment.
+**CanvasFlex** is an opinionated predefined ML workflow designed for more advanced tasks with best practices, such as training DL models, setting up customized retraining workflows, building bespoke model performance monitoring workflows. CanvasFlex provides a highly customized, code driven ML development experience by applying software development principles to ML development. Users can create their own dependencies that can be managed in the UI environment.
 
 #### Uniflow (Orchestration Framework)
 
