@@ -1640,6 +1640,137 @@ describe('Table', () => {
         expect(screen.getAllByRole('row')[3]).toHaveTextContent('Charlie');
       });
     });
+
+    describe('with undefined values', () => {
+      const undefinedSortData = [
+        { id: '1', name: 'Alice', age: 30 },
+        { id: '2', name: 'Charlie', age: 25 },
+        { id: '3', name: 'David', age: 35 },
+        { id: '4', name: 'Eve', age: undefined },
+        { id: '5', name: 'Bob', age: undefined },
+        { id: '6', name: undefined, age: 35 },
+      ];
+
+      const undefinedSortColumns = [
+        { id: 'name', label: 'Name', accessor: 'name', enableSorting: true },
+        { id: 'age', label: 'Age', accessor: 'age', enableSorting: true },
+      ];
+
+      it('should sort undefined values to the end when sorting ascending', async () => {
+        const user = userEvent.setup();
+
+        render(
+          <Table
+            data={undefinedSortData}
+            columns={undefinedSortColumns}
+            disablePagination={true}
+          />,
+          buildWrapper([
+            getBaseProviderWrapper(),
+            getIconProviderWrapper({ icons: mockIcons }),
+            getInterpolationProviderWrapper(),
+            getRouterWrapper(),
+          ])
+        );
+
+        await user.click(screen.getByRole('columnheader', { name: /age/i }));
+
+        await waitFor(() => {
+          expect(screen.getAllByRole('row')[5]).toHaveTextContent('Eve');
+          expect(screen.getAllByRole('row')[6]).toHaveTextContent('Bob');
+        });
+      });
+
+      it('should sort undefined values to the end when sorting descending', async () => {
+        const user = userEvent.setup();
+
+        render(
+          <Table
+            data={undefinedSortData}
+            columns={undefinedSortColumns}
+            disablePagination={true}
+          />,
+          buildWrapper([
+            getBaseProviderWrapper(),
+            getIconProviderWrapper({ icons: mockIcons }),
+            getInterpolationProviderWrapper(),
+            getRouterWrapper(),
+          ])
+        );
+
+        const ageHeader = screen.getByRole('columnheader', { name: /age/i });
+        await user.click(ageHeader);
+        await user.click(ageHeader);
+
+        await waitFor(() => {
+          expect(screen.getAllByRole('row')[5]).toHaveTextContent('Eve');
+          expect(screen.getAllByRole('row')[6]).toHaveTextContent('Bob');
+        });
+      });
+
+      it('should sort undefined values to the end for string columns', async () => {
+        const user = userEvent.setup();
+
+        render(
+          <Table
+            data={undefinedSortData}
+            columns={undefinedSortColumns}
+            disablePagination={true}
+          />,
+          buildWrapper([
+            getBaseProviderWrapper(),
+            getIconProviderWrapper({ icons: mockIcons }),
+            getInterpolationProviderWrapper(),
+            getRouterWrapper(),
+          ])
+        );
+
+        await user.click(screen.getByRole('columnheader', { name: /name/i }));
+
+        await waitFor(() => {
+          expect(screen.getAllByRole('row')[1]).toHaveTextContent('Alice');
+          expect(screen.getAllByRole('row')[2]).toHaveTextContent('Bob');
+          expect(screen.getAllByRole('row')[3]).toHaveTextContent('Charlie');
+          expect(screen.getAllByRole('row')[4]).toHaveTextContent('David');
+          expect(screen.getAllByRole('row')[5]).toHaveTextContent('Eve');
+        });
+      });
+
+      it('should maintain undefined-last behavior when switching between columns', async () => {
+        const user = userEvent.setup();
+
+        render(
+          <Table
+            data={undefinedSortData}
+            columns={undefinedSortColumns}
+            disablePagination={true}
+          />,
+          buildWrapper([
+            getBaseProviderWrapper(),
+            getIconProviderWrapper({ icons: mockIcons }),
+            getInterpolationProviderWrapper(),
+            getRouterWrapper(),
+          ])
+        );
+
+        // Sort by age
+        await user.click(screen.getByRole('columnheader', { name: /age/i }));
+        await waitFor(() => {
+          expect(screen.getAllByRole('row')[5]).toHaveTextContent('Eve');
+          expect(screen.getAllByRole('row')[6]).toHaveTextContent('Bob');
+        });
+
+        // Switch to sort by name
+        await user.click(screen.getByRole('columnheader', { name: /name/i }));
+        await waitFor(() => {
+          expect(screen.getAllByRole('row')[1]).toHaveTextContent('Alice');
+          expect(screen.getAllByRole('row')[2]).toHaveTextContent('Bob');
+          expect(screen.getAllByRole('row')[3]).toHaveTextContent('Charlie');
+          expect(screen.getAllByRole('row')[4]).toHaveTextContent('David');
+          expect(screen.getAllByRole('row')[5]).toHaveTextContent('Eve');
+        });
+      });
+    });
   });
 
   describe('row selection integration', () => {
