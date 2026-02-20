@@ -5,6 +5,7 @@ apiserver:
   crdSync:
     enableCRDUpdate: true
     enableCRDDeletion: true
+    skipIncompatibleCheck: false
     crdVersions:
       project:
         versions: [v2]

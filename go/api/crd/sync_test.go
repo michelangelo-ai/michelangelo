@@ -33,7 +33,7 @@ func TestUpsertCRDs(t *testing.T) {
 		crd, err := readCRDFromFile(testCRDManifestDir + "/project.pb.yaml")
 		assert.NotNil(t, crd)
 		assert.NoError(t, err)
-		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, []string{})
+		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, false, []string{})
 		assert.NoError(t, err)
 	})
 
@@ -48,7 +48,7 @@ func TestUpsertCRDs(t *testing.T) {
 		crd, err := readCRDFromFile(testCRDManifestDir + "/project.pb.yaml")
 		assert.NotNil(t, crd)
 		assert.NoError(t, err)
-		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, []string{})
+		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, false, []string{})
 		assert.NoError(t, err)
 	})
 
@@ -61,7 +61,7 @@ func TestUpsertCRDs(t *testing.T) {
 		crd, err := readCRDFromFile(testCRDManifestDir + "/project.pb.yaml")
 		assert.NotNil(t, crd)
 		assert.NoError(t, err)
-		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, []string{})
+		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, false, []string{})
 		assert.Error(t, err)
 	})
 }
@@ -258,32 +258,37 @@ func TestSyncCRDs(t *testing.T) {
 	crdYaml, err := os.ReadFile(testCRDManifestDir + "/project.pb.yaml")
 	assert.NoError(t, err)
 	err = syncCRDs(context.Background(), logger, "test",
-		true, &crdGateway, nil, nil, []string{}, map[string]string{"Project": string(crdYaml)})
+		true, &crdGateway, nil, nil, false, []string{}, map[string]string{"Project": string(crdYaml)})
 	assert.NoError(t, err)
 
 	// incompatible change - should be blocked with empty allowlist
 	crdYaml, err = os.ReadFile(testCRDManifestDir + "/project_delete_props.pb.yaml")
 	assert.NoError(t, err)
 	err = syncCRDs(context.Background(), logger, "test",
-		true, &crdGateway, nil, nil, []string{}, map[string]string{"Project": string(crdYaml)})
+		true, &crdGateway, nil, nil, false, []string{}, map[string]string{"Project": string(crdYaml)})
 	assert.Error(t, err, "failed to update CRD. Schema is incompatible, and there are existing instances. Abort updating CRD projects.test")
 
 	// same incompatible change - should be allowed when CRD is in allowlist
 	err = syncCRDs(context.Background(), logger, "test",
-		true, &crdGateway, nil, nil, []string{"projects.test"}, map[string]string{"Project": string(crdYaml)})
+		true, &crdGateway, nil, nil, false, []string{"projects.test"}, map[string]string{"Project": string(crdYaml)})
 	assert.NoError(t, err, "incompatible update should be allowed when CRD is in allowlist")
 
 	// fail to list existing CRDs
 	mockGateway := crdmocks.NewMockGateway(gomock.NewController(t))
 	mockGateway.EXPECT().List(gomock.Any()).Return(nil, fmt.Errorf("test error"))
 	err = syncCRDs(context.Background(), logger, "test",
-		true, mockGateway, nil, nil, []string{}, map[string]string{"Project": string(crdYaml)})
+		true, mockGateway, nil, nil, false, []string{}, map[string]string{"Project": string(crdYaml)})
 	assert.Error(t, err, "failed to list existing CRDs: test error")
 
 	// do not update CRDs that are not in the specified groups
 	err = syncCRDs(context.Background(), logger, "test1",
-		true, &crdGateway, nil, nil, []string{}, map[string]string{"Project": string(crdYaml)})
+		true, &crdGateway, nil, nil, false, []string{}, map[string]string{"Project": string(crdYaml)})
 	assert.Error(t, err, "CRD projects.test is not in the specified group test1")
+
+	// incompatible change - should be allowed when skipIncompatibleCheck is true (dev env)
+	err = syncCRDs(context.Background(), logger, "test",
+		true, &crdGateway, nil, nil, true, []string{}, map[string]string{"Project": string(crdYaml)})
+	assert.NoError(t, err, "incompatible update should be allowed when skipIncompatibleCheck is true")
 }
 
 func TestParseConfig(t *testing.T) {
@@ -298,6 +303,7 @@ apiserver:
 	conf, err := ParseConfig(provider)
 	assert.NoError(t, err)
 	assert.True(t, conf.EnableCRDUpdate)
+	assert.False(t, conf.SkipIncompatibleCheck, "skipIncompatibleCheck should default to false when not specified")
 
 	// Parse configuration with CRD versions
 	yamlConfStr2 := `
@@ -322,14 +328,29 @@ apiserver:
 		},
 	})
 
+	// Parse configuration with skipIncompatibleCheck
+	yamlConfStr3 := `
+apiserver:
+  crdSync:
+    enableCRDUpdate: true
+    skipIncompatibleCheck: true
+`
+	provider3, err := config.NewYAML(config.Source(strings.NewReader(yamlConfStr3)))
+	assert.NoError(t, err)
+
+	conf3, err := ParseConfig(provider3)
+	assert.NoError(t, err)
+	assert.True(t, conf3.EnableCRDUpdate)
+	assert.True(t, conf3.SkipIncompatibleCheck)
+
 	invalidConfStr := `
 apiserver:
   crdSync:
     enableCRDUpdat: true
 `
-	provider3, err := config.NewYAML(config.Source(strings.NewReader(invalidConfStr)))
+	provider4, err := config.NewYAML(config.Source(strings.NewReader(invalidConfStr)))
 	assert.NoError(t, err)
-	_, err2 := ParseConfig(provider3)
+	_, err2 := ParseConfig(provider4)
 	assert.Error(t, err2)
 }
 
@@ -661,7 +682,7 @@ func TestUpsertCRDsWithAllowList(t *testing.T) {
 		crd.Name = "deployments.michelangelo.api"
 
 		allowList := []string{"deployments.michelangelo.api"}
-		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, allowList)
+		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, false, allowList)
 		assert.NoError(t, err)
 	})
 
@@ -681,7 +702,7 @@ func TestUpsertCRDsWithAllowList(t *testing.T) {
 		crd.Name = "projects.michelangelo.api"
 
 		allowList := []string{"deployments.michelangelo.api"}
-		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, allowList)
+		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, false, allowList)
 		assert.NoError(t, err)
 	})
 
@@ -698,7 +719,26 @@ func TestUpsertCRDsWithAllowList(t *testing.T) {
 		assert.NoError(t, err)
 
 		allowList := []string{}
-		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, allowList)
+		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, false, allowList)
+		assert.NoError(t, err)
+	})
+
+	t.Run("skipIncompatibleCheck enables incompatible updates for all CRDs regardless of allowlist", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		crdGatewayMock := crdmocks.NewMockGateway(ctrl)
+
+		// Expect ConditionalUpsert to be called with enableIncompatibleUpdate=true even with empty allowlist
+		crdGatewayMock.EXPECT().ConditionalUpsert(gomock.Any(), gomock.Any(), true).Return(nil).Times(1)
+
+		ctx := context.Background()
+		crd, err := readCRDFromFile(testCRDManifestDir + "/project.pb.yaml")
+		assert.NotNil(t, crd)
+		assert.NoError(t, err)
+
+		// CRD is NOT in the allowlist, but skipIncompatibleCheck overrides
+		crd.Name = "projects.michelangelo.api"
+		allowList := []string{}
+		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, true, allowList)
 		assert.NoError(t, err)
 	})
 }
