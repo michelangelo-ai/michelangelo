@@ -3,6 +3,9 @@ name: Python Ruff Lint & Format
 on:
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'website/**'
 
 jobs:
 

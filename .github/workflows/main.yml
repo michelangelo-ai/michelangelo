@@ -4,8 +4,14 @@ name: Bazel Test
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'website/**'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'website/**'
 
 jobs:
   bazel-build:
