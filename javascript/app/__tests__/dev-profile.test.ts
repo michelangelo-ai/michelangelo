@@ -8,12 +8,9 @@ import {
   useDevProfile,
 } from '../dev-profile';
 
-const originalLocation = window.location;
-
 afterEach(() => {
   window.localStorage.clear();
   vi.unstubAllGlobals();
-  Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
   window.history.replaceState(null, '', '/');
 });
 
@@ -141,11 +138,6 @@ it('clears the cached profile', () => {
     DEV_PROFILE_STORAGE_KEY,
     JSON.stringify({ username: 'ada', name: 'Ada Lovelace' })
   );
-  Object.defineProperty(window, 'location', {
-    configurable: true,
-    value: { ...window.location, reload: vi.fn(), assign: vi.fn() },
-  });
-
   clearDevProfile();
 
   expect(window.localStorage.getItem(DEV_PROFILE_STORAGE_KEY)).toBeNull();
