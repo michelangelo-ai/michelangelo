@@ -7,71 +7,62 @@ from michelangelo.cli.mactl.config import (
     DEFAULT_CONFIG,
     _apply_env_overrides,
     _deep_merge,
-    _load_rc_config,
+    _load_toml_config,
     load_config,
     setup_minio_env,
 )
 
 
-class LoadRcConfigTest(TestCase):
-    """Test cases for _load_rc_config function."""
+class LoadTomlConfigTest(TestCase):
+    """Test cases for _load_toml_config function."""
 
     @patch("michelangelo.cli.mactl.config.Path")
-    def test_load_rc_config_file_not_exists(self, mock_path):
-        """Test _load_rc_config returns empty dict when file doesn't exist."""
-        mock_path.home.return_value.__truediv__.return_value.exists.return_value = False
-        result = _load_rc_config()
+    def test_load_toml_config_file_not_exists(self, mock_path):
+        """Test _load_toml_config returns empty dict when file doesn't exist."""
+        mock_config_file = MagicMock()
+        mock_config_file.exists.return_value = False
+        mock_home_ma = mock_path.home.return_value.__truediv__.return_value
+        mock_home_ma.__truediv__.return_value = mock_config_file
+        result = _load_toml_config()
         self.assertEqual(result, {})
 
     @patch("michelangelo.cli.mactl.config.Path")
-    @patch("michelangelo.cli.mactl.config.configparser.ConfigParser")
-    def test_load_rc_config_with_mactl_section(self, mock_config_parser, mock_path):
-        """Test _load_rc_config loads mactl section correctly."""
-        mock_path.home.return_value.__truediv__.return_value.exists.return_value = True
+    @patch("builtins.open")
+    @patch("michelangelo.cli.mactl.config.tomllib.load")
+    def test_load_toml_config_with_config(self, mock_toml_load, mock_open, mock_path):
+        """Test _load_toml_config loads TOML config correctly."""
+        mock_config_file = MagicMock()
+        mock_config_file.exists.return_value = True
+        mock_home_ma = mock_path.home.return_value.__truediv__.return_value
+        mock_home_ma.__truediv__.return_value = mock_config_file
 
-        mock_config = MagicMock()
-        mock_config_parser.return_value = mock_config
-        mock_config.__contains__ = lambda self, key: key in ["mactl"]
-        mock_config.__getitem__ = lambda self, key: {
+        mock_toml_load.return_value = {
             "address": "127.0.0.1:8080",
-            "use_tls": "true",
+            "use_tls": True,
+            "metadata": {
+                "rpc-caller": "test",
+                "rpc-service": "test-service",
+            },
         }
 
-        result = _load_rc_config()
+        result = _load_toml_config()
 
         self.assertEqual(result["address"], "127.0.0.1:8080")
-        self.assertEqual(result["use_tls"], "true")
-
-    @patch("michelangelo.cli.mactl.config.Path")
-    @patch("michelangelo.cli.mactl.config.configparser.ConfigParser")
-    def test_load_rc_config_with_metadata_section(self, mock_config_parser, mock_path):
-        """Test _load_rc_config loads metadata section correctly."""
-        mock_path.home.return_value.__truediv__.return_value.exists.return_value = True
-
-        mock_config = MagicMock()
-        mock_config_parser.return_value = mock_config
-        mock_config.__contains__ = lambda self, key: key in ["metadata"]
-        mock_config.__getitem__ = lambda self, key: {
-            "rpc-caller": "test",
-            "rpc-service": "test-service",
-        }
-
-        result = _load_rc_config()
-
-        self.assertIn("metadata", result)
+        self.assertTrue(result["use_tls"])
         self.assertEqual(result["metadata"]["rpc-caller"], "test")
 
     @patch("michelangelo.cli.mactl.config.Path")
-    @patch("michelangelo.cli.mactl.config.configparser.ConfigParser")
-    def test_load_rc_config_read_exception(self, mock_config_parser, mock_path):
-        """Test _load_rc_config returns empty dict on exception."""
-        mock_path.home.return_value.__truediv__.return_value.exists.return_value = True
+    @patch("builtins.open")
+    def test_load_toml_config_read_exception(self, mock_open, mock_path):
+        """Test _load_toml_config returns empty dict on exception."""
+        mock_config_file = MagicMock()
+        mock_config_file.exists.return_value = True
+        mock_home_ma = mock_path.home.return_value.__truediv__.return_value
+        mock_home_ma.__truediv__.return_value = mock_config_file
 
-        mock_config = MagicMock()
-        mock_config_parser.return_value = mock_config
-        mock_config.read.side_effect = Exception("Test exception")
+        mock_open.side_effect = Exception("Test exception")
 
-        result = _load_rc_config()
+        result = _load_toml_config()
 
         self.assertEqual(result, {})
 
@@ -187,10 +178,10 @@ class LoadConfigTest(TestCase):
     """Test cases for load_config function."""
 
     @patch("michelangelo.cli.mactl.config._apply_env_overrides")
-    @patch("michelangelo.cli.mactl.config._load_rc_config")
-    def test_load_config_default_only(self, mock_load_rc, mock_apply_env):
+    @patch("michelangelo.cli.mactl.config._load_toml_config")
+    def test_load_config_default_only(self, mock_load_toml, mock_apply_env):
         """Test load_config with defaults only."""
-        mock_load_rc.return_value = {}
+        mock_load_toml.return_value = {}
         mock_apply_env.side_effect = lambda x: x
 
         result = load_config()
@@ -199,22 +190,22 @@ class LoadConfigTest(TestCase):
         self.assertFalse(result["use_tls"])
 
     @patch("michelangelo.cli.mactl.config._apply_env_overrides")
-    @patch("michelangelo.cli.mactl.config._load_rc_config")
-    def test_load_config_with_rc(self, mock_load_rc, mock_apply_env):
-        """Test load_config merges RC config."""
-        mock_load_rc.return_value = {"address": "rc-address:8888"}
+    @patch("michelangelo.cli.mactl.config._load_toml_config")
+    def test_load_config_with_toml(self, mock_load_toml, mock_apply_env):
+        """Test load_config merges TOML config."""
+        mock_load_toml.return_value = {"address": "toml-address:8888"}
         mock_apply_env.side_effect = lambda x: x
 
         result = load_config()
 
-        self.assertEqual(result["address"], "rc-address:8888")
+        self.assertEqual(result["address"], "toml-address:8888")
         self.assertFalse(result["use_tls"])
 
     @patch("michelangelo.cli.mactl.config._apply_env_overrides")
-    @patch("michelangelo.cli.mactl.config._load_rc_config")
-    def test_load_config_with_env(self, mock_load_rc, mock_apply_env):
+    @patch("michelangelo.cli.mactl.config._load_toml_config")
+    def test_load_config_with_env(self, mock_load_toml, mock_apply_env):
         """Test load_config applies env overrides."""
-        mock_load_rc.return_value = {}
+        mock_load_toml.return_value = {}
 
         def apply_env_side_effect(config):
             config["address"] = "env-address:9999"
@@ -227,13 +218,13 @@ class LoadConfigTest(TestCase):
         self.assertEqual(result["address"], "env-address:9999")
 
     @patch("michelangelo.cli.mactl.config._apply_env_overrides")
-    @patch("michelangelo.cli.mactl.config._load_rc_config")
-    def test_load_config_priority(self, mock_load_rc, mock_apply_env):
-        """Test load_config respects priority: env > rc > default."""
-        # RC config overrides default
-        mock_load_rc.return_value = {"address": "rc-address"}
+    @patch("michelangelo.cli.mactl.config._load_toml_config")
+    def test_load_config_priority(self, mock_load_toml, mock_apply_env):
+        """Test load_config respects priority: env > toml > default."""
+        # TOML config overrides default
+        mock_load_toml.return_value = {"address": "toml-address"}
 
-        # Env overrides RC
+        # Env overrides TOML
         def apply_env_side_effect(config):
             config["address"] = "env-address"
             return config

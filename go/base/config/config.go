@@ -30,12 +30,14 @@ type K8sConfig struct {
 }
 
 type WorkflowClientConfig struct {
-	Service   string `yaml:"service"`
-	Host      string `yaml:"host"`
-	Transport string `yaml:"transport"`
-	Domain    string `yaml:"domain"`
-	TaskList  string `yaml:"taskList"`
-	Provider  string `yaml:"provider"`
+	Service            string `yaml:"service"`
+	Host               string `yaml:"host"`
+	Transport          string `yaml:"transport"`
+	Domain             string `yaml:"domain"`
+	TaskList           string `yaml:"taskList"`
+	Provider           string `yaml:"provider"`
+	UseTLS             bool   `yaml:"useTLS"`
+	ExecutionUrlFormat string `yaml:"executionUrlFormat"`
 }
 
 // Params defines the dependencies of the config fx module.

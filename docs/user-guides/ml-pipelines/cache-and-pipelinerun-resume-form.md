@@ -1,4 +1,4 @@
-# Uniflow Caching: Applied to both Remote Run and MA studio PipelineRun
+# Uniflow Caching and PipelineRun Resume
 
 For each task in a Uniflow Remote Run,  we have cached and indexed the task results after the task execution. Next time when you execute the task, you have the option to skip the task execution by reusing the cached results. 
 

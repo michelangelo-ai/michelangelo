@@ -1,4 +1,4 @@
-# What’s a project?
+# What's a Project?
 
 In Michelangelo, a project represents a **business use case** that is continuously measured through a defined set of performance metrics. Examples include **dish recommendations in Uber Eats** or **restaurant ranking on the home feed.** This structure—framing each project as a business use case—has enabled Uber to **drive sustained model evolution within a specific domain over time,** ensuring that improvements are directly tied to measurable business outcomes.
 

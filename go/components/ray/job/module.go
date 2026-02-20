@@ -1,6 +1,7 @@
 package job
 
 import (
+	"github.com/go-logr/logr"
 	"go.uber.org/fx"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -17,6 +18,7 @@ var Module = fx.Options(
 
 func register(
 	conf cluster.Config,
+	logger logr.Logger,
 	env env.Context,
 	mgr manager.Manager,
 	federatedClient jobsclient.FederatedClient,
@@ -26,10 +28,11 @@ func register(
 	restConfig.QPS = conf.QPS
 	restConfig.Burst = conf.Burst
 
-	return (&Reconciler{
-		Client:          mgr.GetClient(),
-		env:             env,
-		federatedClient: federatedClient,
-		clusterCache:    clusterCache,
-	}).Register(mgr)
+	return NewReconciler(
+		logger,
+		mgr.GetClient(),
+		env,
+		federatedClient,
+		clusterCache,
+	).Register(mgr)
 }

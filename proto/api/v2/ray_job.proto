@@ -126,7 +126,9 @@ message RayJobStatus {
 // Represents a Ray job and its specifications
 message RayJob {
   // Annotation for Michelangelo resource identification
-  option (michelangelo.api.resource) = {};
+  option (michelangelo.api.resource) = {
+    conversion: true  // Enable conversion for multi-version support
+  };
 
   // Kubernetes metadata for the Ray job
   k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;

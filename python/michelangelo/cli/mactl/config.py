@@ -1,10 +1,15 @@
 """Configuration management for mactl."""
 
-import configparser
+import sys
 from copy import deepcopy
 from logging import getLogger
 from os import environ, getenv
 from pathlib import Path
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 _LOG = getLogger(__name__)
 
@@ -24,31 +29,19 @@ DEFAULT_CONFIG = {
 }
 
 
-def _load_rc_config() -> dict:
-    """Load configuration from ~/.mactlrc file."""
-    config = configparser.ConfigParser()
-    rc_file = Path.home() / ".mactlrc"
+def _load_toml_config() -> dict:
+    """Load configuration from ~/.ma/config.toml file."""
+    config_dir = Path.home() / ".ma"
+    config_file = config_dir / "config.toml"
 
-    if not rc_file.exists():
+    if not config_file.exists():
         return {}
 
     try:
-        config.read(rc_file)
+        with open(config_file, "rb") as f:
+            return tomllib.load(f)
     except Exception:
         return {}
-
-    rc_config = {}
-
-    if "mactl" in config:
-        if "address" in config["mactl"]:
-            rc_config["address"] = config["mactl"]["address"]
-        if "use_tls" in config["mactl"]:
-            rc_config["use_tls"] = config["mactl"]["use_tls"]
-
-    if "metadata" in config:
-        rc_config["metadata"] = dict(config["metadata"])
-
-    return rc_config
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
@@ -92,7 +85,7 @@ def load_config() -> dict:
 
     Priority (highest to lowest):
     1. Environment variables (MACTL_ADDRESS, MACTL_USE_TLS)
-    2. RC file (~/.mactlrc)
+    2. TOML config file (~/.ma/config.toml)
     3. Default configuration
 
     Returns:
@@ -101,10 +94,10 @@ def load_config() -> dict:
     # Start with defaults
     config = deepcopy(DEFAULT_CONFIG)
 
-    # Layer 1: RC file
-    rc_config = _load_rc_config()
-    if rc_config:
-        config = _deep_merge(config, rc_config)
+    # Layer 1: TOML config file
+    toml_config = _load_toml_config()
+    if toml_config:
+        config = _deep_merge(config, toml_config)
 
     # Layer 2: Environment variables
     config = _apply_env_overrides(config)
@@ -117,7 +110,7 @@ def setup_minio_env() -> None:
 
     Sets AWS_* environment variables for boto3/AWS SDK libraries to use.
     Config priority is already applied in load_config():
-    env vars > RC file > defaults.
+    env vars > TOML config > defaults.
     """
     config = load_config()
     minio_config = config.get("minio", {})

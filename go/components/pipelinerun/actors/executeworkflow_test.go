@@ -2870,3 +2870,118 @@ func TestFindTaskResetEventIDByActivityID(t *testing.T) {
 		})
 	}
 }
+
+func TestGetWorkflowUrl(t *testing.T) {
+	testCases := []struct {
+		name        string
+		configSetup map[string]interface{}
+		inputName   string
+		expectedUrl string
+		expectError bool
+	}{
+		{
+			name: "Valid config with workflow URL template",
+			configSetup: map[string]interface{}{
+				"workflowClient": map[string]interface{}{
+					"taskList":           "default",
+					"executionUrlFormat": "http://cadence-web:8080/domain/{{.Domain}}/workflows/{{.ExecutionID}}",
+					"domain":             "michelangelo",
+				},
+			},
+			inputName:   "test-pipeline-run",
+			expectedUrl: "http://cadence-web:8080/domain/michelangelo/workflows/test-pipeline-run",
+			expectError: false,
+		},
+		{
+			name: "Config with different domain",
+			configSetup: map[string]interface{}{
+				"workflowClient": map[string]interface{}{
+					"taskList":           "custom-queue",
+					"executionUrlFormat": "https://temporal-ui.prod:7243/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}",
+					"domain":             "production",
+				},
+			},
+			inputName:   "prod-pipeline-execution",
+			expectedUrl: "https://temporal-ui.prod:7243/namespaces/production/workflows/prod-pipeline-execution",
+			expectError: false,
+		},
+		{
+			name: "Missing workflow config - should return empty string",
+			configSetup: map[string]interface{}{
+				"workflowClient": map[string]interface{}{
+					"taskList": "default",
+					// Missing workflowUrl and domain
+				},
+			},
+			inputName:   "test-pipeline",
+			expectedUrl: "",
+			expectError: false, // Method returns empty string on config error
+		},
+		{
+			name: "Empty pipeline name",
+			configSetup: map[string]interface{}{
+				"workflowClient": map[string]interface{}{
+					"taskList":           "default",
+					"executionUrlFormat": "http://localhost:8080/domain/{{.Domain}}/workflows/{{.ExecutionID}}",
+					"domain":             "default",
+				},
+			},
+			inputName:   "",
+			expectedUrl: "http://localhost:8080/domain/default/workflows/",
+			expectError: false,
+		},
+		{
+			name: "Complex pipeline name with special characters",
+			configSetup: map[string]interface{}{
+				"workflowClient": map[string]interface{}{
+					"taskList":           "default",
+					"executionUrlFormat": "http://cadence-web:8080/domain/{{.Domain}}/workflows/{{.ExecutionID}}",
+					"domain":             "test-domain",
+				},
+			},
+			inputName:   "my-pipeline-run-123_test",
+			expectedUrl: "http://cadence-web:8080/domain/test-domain/workflows/my-pipeline-run-123_test",
+			expectError: false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			workflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+			blobStoreClient := blobstoreMock.NewMockBlobStoreClient(ctrl)
+
+			// Create config provider with test case specific config
+			configProvider, err := uberconfig.NewYAML(uberconfig.Static(testCase.configSetup))
+			require.NoError(t, err)
+
+			// Create actor with test-specific config
+			logger := zaptest.NewLogger(t)
+			blobStore := blobstore.BlobStore{
+				Logger: logger,
+				Clients: map[string]blobstore.BlobStoreClient{
+					"mock": blobStoreClient,
+				},
+			}
+
+			scheme := runtime.NewScheme()
+			err = v2.AddToScheme(scheme)
+			require.NoError(t, err)
+			k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			apiHandlerInstance := apiHandler.NewFakeAPIHandler(k8sClient)
+
+			actor := NewExecuteWorkflowActor(logger, workflowClient, &blobStore, apiHandlerInstance, configProvider)
+
+			// Test the GetWorkflowUrl method
+			result := actor.GetWorkflowUrl(testCase.inputName)
+
+			if testCase.expectError {
+				require.Empty(t, result)
+			} else {
+				require.Equal(t, testCase.expectedUrl, result)
+			}
+		})
+	}
+}

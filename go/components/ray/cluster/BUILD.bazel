@@ -11,6 +11,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/api:go_default_library",
+        "//go/api/handler:go_default_library",
         "//go/api/utils:go_default_library",
         "//go/base/env:go_default_library",
         "//go/components/jobs/client:go_default_library",
