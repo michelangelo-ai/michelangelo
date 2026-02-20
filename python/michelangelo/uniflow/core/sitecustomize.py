@@ -10,6 +10,4 @@ automatic execution without explicit container startup script modifications.
 
 from michelangelo.uniflow.core import file_sync
 
-# Run file sync automatically when this module is imported
-if __name__ != "__main__":  # pragma: no cover
-    file_sync.run(downloader=file_sync.FsspecDownloader())
+file_sync.run(downloader=file_sync.FsspecDownloader())
