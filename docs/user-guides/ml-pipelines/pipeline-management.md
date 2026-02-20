@@ -227,7 +227,7 @@ if __name__ == "__main__":
 
 # Pipeline Registration 
 
-The pipeline registration is required to execute the pipeline remotely through MA Studio. Registering and running the pipeline in Canvas is similar to Canvas. Most of the commands in ManageandLaunchPipelinesUsingma, can still be used in Canvas.
+The pipeline registration is required to execute the pipeline remotely through MA Studio. Registering and running the pipeline in CanvasFlex is similar to MA Studio. Most of the commands in Manage and Launch Pipelines Using MA Studio, can still be used in CanvasFlex.
 
 **Register the Pipeline**  
 
