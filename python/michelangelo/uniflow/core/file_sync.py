@@ -1,22 +1,24 @@
-"""File synchronization utilities for Uniflow development workflows.
+"""File sync functions and classes for Uniflow development workflows.
 
-This module provides the file sync mechanism that allows developers to sync local
-code changes to remote execution environments without rebuilding Docker images.
+This module provides the file sync mechanism that allows developers to sync
+local code changes to remote execution environments without rebuilding Docker
+images.
 
-Main entry point:
-    run(downloader): Configure logging and execute file sync with safety features
+## Architecture
 
-Public API:
-    - run(): Main entry point with automatic logging setup
-    - FsspecDownloader: Default downloader for S3/MinIO storage
-    - StorageDownloader: Abstract interface for custom downloaders
-    - FileSync: Abstract base class for custom file sync implementations
-    - DefaultFileSync: Default implementation using Docker + fsspec
+The file sync process operates in two phases:
 
-Private Functions:
-    - _file_sync_pre_run(): Internal core logic (do not call directly)
-    - _download_and_extract_dev_files(): Internal download/extract logic
-      (do not call directly)
+### Phase 1: Local Development Environment
+Uses `FileSync.create_and_upload_tarball()` to:
+1. Detect code differences between local workspace and the base commit
+2. Create a gzipped tarball containing only the changed files
+3. Upload the tarball to remote storage (S3/MinIO)
+
+### Phase 2: Remote Execution Environment
+Uses `run()` as the entry point (called by sitecustomize.py) to:
+1. Download the tarball from remote storage
+2. Extract and apply the changed files to the container filesystem
+3. Log the file sync process with [file_sync] prefix
 """
 
 import io
@@ -40,7 +42,7 @@ _file_sync_executed = False
 
 
 class FileSync(ABC):
-    """Abstract base class for file synchronization operations.
+    """Abstract base class for file sync operations.
 
     FileSync provides a framework for detecting local code changes and uploading
     them to remote storage for consumption by remote execution environments. It
@@ -659,7 +661,7 @@ def _file_sync_pre_run(downloader: StorageDownloader):
 
 
 def run(downloader: StorageDownloader):  # pragma: no cover
-    """Run file synchronization with automatic logging setup.
+    """Run file sync with automatic logging setup.
 
     This is the main public entry point for file sync. It sets up structured
     logging (if debug mode is enabled), then executes the file sync workflow
