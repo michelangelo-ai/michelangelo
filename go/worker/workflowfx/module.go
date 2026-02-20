@@ -13,6 +13,7 @@ import (
 	sworker "github.com/cadence-workflow/starlark-worker/worker"
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	tallyv4 "github.com/uber-go/tally/v4"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/uber-go/tally"
@@ -24,6 +25,8 @@ import (
 	"go.uber.org/fx"
 	"go.uber.org/yarpc"
 	"go.uber.org/yarpc/api/transport"
+	"go.uber.org/yarpc/peer"
+	"go.uber.org/yarpc/peer/hostport"
 	"go.uber.org/yarpc/transport/grpc"
 	"go.uber.org/yarpc/transport/tchannel"
 	"go.uber.org/zap"
@@ -136,7 +139,20 @@ func newCadenceClient(conf Config) (workflowserviceclient.Interface, error) {
 	var tran transport.UnaryOutbound
 	switch conf.Transport {
 	case "grpc":
-		tran = grpc.NewTransport().NewSingleOutbound(conf.Host)
+		grpcTransport := grpc.NewTransport()
+		if conf.TLSConfig != nil {
+			creds := credentials.NewTLS(conf.TLSConfig)
+			dialer := grpcTransport.NewDialer(grpc.DialerCredentials(creds))
+
+			// Create a peer chooser with the TLS-enabled dialer
+			chooser := peer.NewSingle(
+				hostport.Identify(conf.Host),
+				dialer,
+			)
+			tran = grpcTransport.NewOutbound(chooser)
+		} else {
+			tran = grpcTransport.NewSingleOutbound(conf.Host)
+		}
 	case "tchannel":
 		if t, err := tchannel.NewTransport(tchannel.ServiceName("tchannel")); err != nil {
 			return nil, err

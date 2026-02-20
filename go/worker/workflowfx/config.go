@@ -1,5 +1,7 @@
 package workflowfx
 
+import "crypto/tls"
+
 const (
 	ConfigKey        = "workflow-engine"
 	ProviderCadence  = "cadence"
@@ -22,6 +24,7 @@ type Config struct {
 	Workers   []WorkerConfig `yaml:"workers"`
 	Client    ClientConfig   `yaml:"client"`
 	Provider  string         `yaml:"provider"`
+	TLSConfig *tls.Config    `yaml:"-"` // Not configured via YAML, set programmatically
 }
 
 type WorkerConfig struct {
