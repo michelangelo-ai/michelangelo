@@ -1,27 +1,9 @@
 name: Combined Coverage Report
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    paths:
-      - 'python/**'
-      - 'go/**/*.go'
-      - 'go/**/BUILD.bazel'
-      - 'proto/**/*.proto'
-      - '**/*.js'
-      - '**/*.mjs'
-      - '**/*.cjs'
-      - '**/package.json'
-      - '**/package-lock.json'
-  push:
-    branches:
-      - main
-    paths:
-      - 'python/**'
-      - 'go/**/*.go'
-      - '**/*.js'
-      - '**/*.mjs'
-      - '**/*.cjs'
+  workflow_run:
+    workflows: ["JavaScript Coverage", "Python Coverage Check", "Go Coverage"]
+    types: [completed]
 
 permissions:
   contents: read
@@ -33,11 +15,28 @@ jobs:
   aggregate-coverage:
     name: Aggregate All Coverage
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event.workflow_run.event == 'pull_request'
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Get PR number
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          PULL_REQUESTS_JSON: ${{ toJSON(github.event.workflow_run.pull_requests) }}
+        run: |
+          PR_NUMBER=$(echo "$PULL_REQUESTS_JSON" | jq -r '.[0].number // empty')
+          if [ -z "$PR_NUMBER" ]; then
+            PR_NUMBER=$(gh pr list --head "$HEAD_BRANCH" --json number --jq '.[0].number' 2>/dev/null || echo "")
+          fi
+          if [ -z "$PR_NUMBER" ]; then
+            echo "Could not determine PR number, skipping"
+            exit 1
+          fi
+          echo "number=$PR_NUMBER" >> $GITHUB_OUTPUT
 
       - name: Download Python coverage
         uses: dawidd6/action-download-artifact@v6
@@ -132,6 +131,7 @@ jobs:
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: combined-coverage
+          number: ${{ steps.pr.outputs.number }}
           message: |
             ## 📊 Combined Coverage Report
 
