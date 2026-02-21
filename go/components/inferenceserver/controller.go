@@ -11,10 +11,6 @@
 //   - Manages resource allocation (CPU, GPU, memory)
 //   - Handles scaling and replica management
 //
-// Network Routing:
-//   - Sets up URL rewriting rules
-//   - Manages traffic routing for deployments
-//
 // Health & Status:
 //   - Performs health checks on inference servers
 //   - Reports infrastructure and model status
@@ -53,7 +49,7 @@ import (
 // Reconciler reconciles InferenceServer custom resources and manages their lifecycle.
 //
 // The Reconciler handles:
-//   - Infrastructure provisioning (Kubernetes deployments, services, configmaps)
+//   - Infrastructure provisioning (Kubernetes deployments, services, modelconfigs)
 //   - Health checking and status reporting
 //   - Cleanup and finalization on deletion
 type Reconciler struct {
@@ -62,7 +58,7 @@ type Reconciler struct {
 	logger            *zap.Logger
 	Recorder          record.EventRecorder
 	engine            conditionInterfaces.Engine[*v2pb.InferenceServer]
-	Plugins           plugins.PluginRegistry
+	plugin            plugins.Plugin
 	apiHandlerFactory apiHandler.Factory
 }
 
@@ -80,12 +76,12 @@ type Reconciler struct {
 //
 // Returns:
 //   - *Reconciler: Configured reconciler ready to be registered with the manager
-func NewReconciler(mgr ctrl.Manager, scheme *runtime.Scheme, pluginRegistry plugins.PluginRegistry, apiHandlerFactory apiHandler.Factory, logger *zap.Logger) *Reconciler {
+func NewReconciler(mgr ctrl.Manager, scheme *runtime.Scheme, plugin plugins.Plugin, apiHandlerFactory apiHandler.Factory, logger *zap.Logger) *Reconciler {
 	logger = logger.With(zap.String("component", "inferenceserver"))
 	return &Reconciler{
 		engine:            defaultengine.NewDefaultEngine[*v2pb.InferenceServer](logger),
 		Recorder:          mgr.GetEventRecorderFor(ControllerName),
-		Plugins:           pluginRegistry,
+		plugin:            plugin,
 		apiHandlerFactory: apiHandlerFactory,
 		logger:            logger,
 	}
@@ -189,19 +185,7 @@ func (r *Reconciler) reconcile(ctx context.Context, inferenceServer *v2pb.Infere
 	// Deep copy for change detection (Uber production pattern)
 	originalInferenceServer := inferenceServer.DeepCopy()
 
-	// Determine plugin based on backend type
-	backendPlugin, err := r.Plugins.GetPlugin(inferenceServer.Spec.BackendType)
-	if err != nil {
-		r.logger.Error("Failed to get backend plugin",
-			zap.Error(err),
-			zap.String("operation", "get_backend_plugin"),
-			zap.String("namespace", inferenceServer.Namespace),
-			zap.String("name", inferenceServer.Name),
-			zap.String("backendType", inferenceServer.Spec.BackendType.String()))
-		return ctrl.Result{RequeueAfter: ActiveRequeueAfter}, err
-	}
-
-	err = backendPlugin.UpdateDetails(ctx, inferenceServer)
+	err := r.plugin.UpdateDetails(ctx, inferenceServer)
 	if err != nil {
 		r.logger.Error("Failed to update external details, proceeding with reconciliation",
 			zap.Error(err),
@@ -210,15 +194,13 @@ func (r *Reconciler) reconcile(ctx context.Context, inferenceServer *v2pb.Infere
 			zap.String("name", inferenceServer.Name))
 	}
 
-	var conditionPlugin conditionInterfaces.Plugin[*v2pb.InferenceServer]
+	conditionPlugin := r.plugin.GetCreationPlugin()
 	if !inferenceServer.GetDeletionTimestamp().IsZero() || isDecommissioned(inferenceServer) {
-		conditionPlugin = backendPlugin.GetDeletionPlugin(inferenceServer)
-	} else {
-		conditionPlugin = backendPlugin.GetCreationPlugin()
+		conditionPlugin = r.plugin.GetDeletionPlugin(inferenceServer)
 	}
 
 	// update inferenceServer.status.conditions with the conditions specific to the current conditionPlugin
-	backendPlugin.UpdateConditions(inferenceServer, conditionPlugin)
+	r.plugin.UpdateConditions(inferenceServer, conditionPlugin)
 
 	conditionResult, err := r.engine.Run(ctx, conditionPlugin, inferenceServer)
 	if err != nil {
@@ -230,7 +212,7 @@ func (r *Reconciler) reconcile(ctx context.Context, inferenceServer *v2pb.Infere
 		return ctrl.Result{RequeueAfter: ActiveRequeueAfter}, err
 	}
 
-	state := backendPlugin.ParseState(inferenceServer)
+	state := r.plugin.ParseState(inferenceServer)
 	inferenceServer.Status.State = state
 
 	// Only update if there are changes (Uber production pattern)

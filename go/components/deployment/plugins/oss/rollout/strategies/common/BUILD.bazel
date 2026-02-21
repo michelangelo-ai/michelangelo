@@ -10,7 +10,6 @@ go_library(
         "//go/base/conditions/utils:go_default_library",
         "//go/components/deployment/plugins/oss/common:go_default_library",
         "//go/components/deployment/proxy:go_default_library",
-        "//go/components/inferenceserver/gateways:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_gogo_protobuf//types:go_default_library",
@@ -24,7 +23,6 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//go/components/deployment/proxy/proxymocks:go_default_library",
-        "//go/components/inferenceserver/gateways/gatewaysmocks:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_gogo_protobuf//types:go_default_library",

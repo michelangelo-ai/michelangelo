@@ -7,19 +7,24 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/errors"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // CleanupActor removes models from ConfigMap and deletes deployment HTTPRoutes during deletion.
 type CleanupActor struct {
-	proxyProvider proxy.ProxyProvider
-	gateway       gateways.Gateway
-	logger        *zap.Logger
+	defaultClient       client.Client
+	clientFactory       clientfactory.ClientFactory
+	proxyProvider       proxy.ProxyProvider
+	logger              *zap.Logger
+	modelConfigProvider modelconfig.ModelConfigProvider
 }
 
 // GetType returns the condition type identifier for cleanup.
@@ -93,11 +98,32 @@ func (a *CleanupActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment
 
 	// If DELETION_IN_PROGRESS, check if model still exists
 	if currentCluster.State == common.ClusterStateCleanupInProgress {
-		clusterTarget := common.GetClusterTargetConnection(currentCluster)
-		backendType := v2pb.BackendType(v2pb.BackendType_value[metadata.BackendType])
 
-		exists, err := a.gateway.CheckModelExists(
-			ctx, a.logger, currentModel, inferenceServerName, deployment.Namespace, clusterTarget, backendType,
+		// todo: ghosharitra: pass along these information in the form of annotations, these annotations should be cleaned up in the cleanup actor
+		var targetClusterClient client.Client
+		if currentCluster.IsControlPlaneCluster {
+			targetClusterClient = a.defaultClient
+		} else {
+			client, err := a.clientFactory.GetClient(ctx, &v2pb.ClusterTarget{
+				ClusterId: currentCluster.ClusterId,
+				Config: &v2pb.ClusterTarget_Kubernetes{
+					Kubernetes: &v2pb.ConnectionSpec{
+						Host:      currentCluster.Host,
+						Port:      currentCluster.Port,
+						CaDataTag: currentCluster.CaDataTag,
+						TokenTag:  currentCluster.TokenTag,
+					},
+				},
+			})
+			if err != nil {
+				return conditionUtils.GenerateFalseCondition(condition, "GetClientFailed",
+					fmt.Sprintf("Failed to get client for cluster %s: %v", currentCluster.ClusterId, err)), nil
+			}
+			targetClusterClient = client
+		}
+
+		exists, err := common.CheckModelExists(
+			ctx, a.logger, a.modelConfigProvider, targetClusterClient, currentModel, inferenceServerName, deployment.Namespace,
 		)
 		if err != nil {
 			a.logger.Warn("Failed to check model existence during deletion cleanup, will retry",
@@ -156,32 +182,32 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 		a.logger.Info("Initializing deletion cleanup metadata from inference server",
 			zap.String("inference_server", inferenceServerName))
 
-		targetInfo, err := a.gateway.GetDeploymentTargetInfo(ctx, a.logger, inferenceServerName, resource.Namespace)
-		if err != nil {
-			return conditionUtils.GenerateFalseCondition(condition, "GetTargetInfoFailed",
-				fmt.Sprintf("Failed to get deployment target info: %v", err)), nil
-		}
-
-		if len(targetInfo.ClusterTargets) == 0 {
-			return conditionUtils.GenerateFalseCondition(condition, "NoClustersFound",
-				"No target clusters found for inference server"), nil
-		}
-
+		// todo: ghosharitra: cannot use GetDeploymentTargetInfo, we need to pass in information via annotations
+		// this should be handled by some annotation that is passed through
+		targetClusters := common.GetInferenceServerTargetClusters(ctx, a.defaultClient, resource)
 		metadata = &common.ClusterMetadata{
-			BackendType:  targetInfo.BackendType.String(),
-			Clusters:     make([]common.ClusterEntry, len(targetInfo.ClusterTargets)),
+			Clusters:     make([]common.ClusterEntry, len(targetClusters)),
 			CurrentIndex: 0,
 		}
 
-		for i, ct := range targetInfo.ClusterTargets {
+		// if target clusters are found, then add them to the metadata along with connection information
+		for i, ct := range targetClusters {
 			metadata.Clusters[i] = common.ClusterEntry{
-				ClusterId:             ct.ClusterId,
-				Host:                  ct.Host,
-				Port:                  ct.Port,
-				TokenTag:              ct.TokenTag,
-				CaDataTag:             ct.CaDataTag,
-				State:                 common.ClusterStatePending,
-				IsControlPlaneCluster: ct.IsControlPlaneCluster,
+				ClusterId: ct.GetClusterId(),
+				Host:      ct.GetKubernetes().GetHost(),
+				Port:      ct.GetKubernetes().GetPort(),
+				TokenTag:  ct.GetKubernetes().GetTokenTag(),
+				CaDataTag: ct.GetKubernetes().GetCaDataTag(),
+				State:     common.ClusterStatePending,
+			}
+		}
+		// if no target clusters are found, then add the control plane cluster
+		if len(targetClusters) == 0 {
+			metadata.Clusters = []common.ClusterEntry{
+				{
+					State:                 common.ClusterStatePending,
+					IsControlPlaneCluster: true,
+				},
 			}
 		}
 
@@ -190,8 +216,7 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 		}
 
 		a.logger.Info("Initialized deletion cleanup metadata, returning to let Retrieve start cleanup",
-			zap.Int("cluster_count", len(metadata.Clusters)),
-			zap.String("backend_type", metadata.BackendType))
+			zap.Int("cluster_count", len(metadata.Clusters)))
 
 		return conditionUtils.GenerateUnknownCondition(condition, "MetadataInitialized",
 			"Deletion cleanup metadata initialized, ready for cleanup"), nil
@@ -245,13 +270,31 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 		zap.String("cluster_id", currentCluster.ClusterId),
 		zap.String("inference_server", inferenceServerName))
 
-	clusterTarget := common.GetClusterTargetConnection(currentCluster)
-	if err := a.gateway.UnloadModel(ctx, a.logger, currentModel, inferenceServerName, resource.Namespace, clusterTarget); err != nil {
-		a.logger.Error("Failed to unload model from cluster",
+	targetClusterClient := a.defaultClient
+	if !currentCluster.IsControlPlaneCluster {
+		client, err := a.clientFactory.GetClient(ctx, &v2pb.ClusterTarget{
+			ClusterId: currentCluster.ClusterId,
+			Config: &v2pb.ClusterTarget_Kubernetes{
+				Kubernetes: &v2pb.ConnectionSpec{
+					Host:      currentCluster.Host,
+					Port:      currentCluster.Port,
+					CaDataTag: currentCluster.CaDataTag,
+					TokenTag:  currentCluster.TokenTag,
+				},
+			},
+		})
+		if err != nil {
+			return conditionUtils.GenerateFalseCondition(condition, "GetClientFailed",
+				fmt.Sprintf("Failed to get client for cluster %s: %v", currentCluster.ClusterId, err)), nil
+		}
+		targetClusterClient = client
+	}
+	if err := a.modelConfigProvider.RemoveModelFromConfig(ctx, a.logger, targetClusterClient, currentModel, inferenceServerName, resource.Namespace); err != nil {
+		a.logger.Error("Failed to remove model from config",
 			zap.String("model", currentModel),
 			zap.String("cluster_id", currentCluster.ClusterId),
 			zap.Error(err))
-		return conditionUtils.GenerateFalseCondition(condition, "ModelUnloadingFailed",
+		return conditionUtils.GenerateFalseCondition(condition, "ModelRemovalFailed",
 			fmt.Sprintf("Failed to unload model %s from cluster %s: %v", currentModel, currentCluster.ClusterId, err)), nil
 	}
 

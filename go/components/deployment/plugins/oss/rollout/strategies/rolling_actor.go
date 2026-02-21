@@ -3,15 +3,19 @@ package strategies
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"go.uber.org/zap"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	actorCommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	strategiesCommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -20,8 +24,11 @@ import (
 func getRollingActors(params Params, deployment *v2pb.Deployment) []conditionInterfaces.ConditionActor[*v2pb.Deployment] {
 	return []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&RollingRolloutActor{
-			gateway: params.Gateway,
-			logger:  params.Logger,
+			logger:        params.Logger,
+			registry:      params.Registry,
+			client:        params.Client,
+			httpClient:    params.HTTPClient,
+			clientFactory: params.ClientFactory,
 		},
 		&strategiesCommon.TrafficRoutingActor{
 			ProxyProvider: params.ProxyProvider,
@@ -29,8 +36,11 @@ func getRollingActors(params Params, deployment *v2pb.Deployment) []conditionInt
 			Logger:        params.Logger,
 		},
 		&ModelCleanupActor{
-			Gateway: params.Gateway,
-			Logger:  params.Logger,
+			logger:              params.Logger,
+			registry:            params.Registry,
+			clientFactory:       params.ClientFactory,
+			defaultClient:       params.Client,
+			modelConfigProvider: params.ModelConfigProvider,
 		},
 	}
 }
@@ -40,8 +50,12 @@ var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &RollingRolloutActo
 // RollingRolloutActor loads models into the inference servers via a rolling rollout strategy.
 // The strategy involves loading the model into one target cluster at a time and verifying it is ready.
 type RollingRolloutActor struct {
-	gateway gateways.Gateway
-	logger  *zap.Logger
+	client              client.Client
+	httpClient          *http.Client
+	registry            *backends.Registry
+	logger              *zap.Logger
+	clientFactory       clientfactory.ClientFactory
+	modelConfigProvider modelconfig.ModelConfigProvider
 }
 
 // GetType returns the condition type identifier for rolling rollout.
@@ -103,7 +117,26 @@ func (a *RollingRolloutActor) Retrieve(ctx context.Context, deployment *v2pb.Dep
 		clusterTarget := actorCommon.GetClusterTargetConnection(currentCluster)
 		backendType := v2pb.BackendType(v2pb.BackendType_value[metadata.BackendType])
 
-		modelReady, err := a.gateway.CheckModelStatus(ctx, a.logger, modelName, inferenceServerName, deployment.Namespace, clusterTarget, backendType)
+		backend, err := a.registry.GetBackend(backendType)
+		if err != nil {
+			return conditionUtils.GenerateFalseCondition(condition, "BackendNotFound", fmt.Sprintf("Failed to get backend: %v", err)), err
+		}
+
+		// todo: ghosharitra: the following logic to choose a client has been replicated in many places. This should be a common helper function.
+		targetClusterClient := a.client
+		targetHTTPClient := a.httpClient
+		if !currentCluster.IsControlPlaneCluster {
+			targetClusterClient, err = a.clientFactory.GetClient(ctx, clusterTarget)
+			if err != nil {
+				return conditionUtils.GenerateFalseCondition(condition, "ClientNotFound", fmt.Sprintf("Failed to get client for cluster %s: %v", currentCluster.ClusterId, err)), err
+			}
+			targetHTTPClient, err = a.clientFactory.GetHTTPClient(ctx, clusterTarget)
+			if err != nil {
+				return conditionUtils.GenerateFalseCondition(condition, "ClientNotFound", fmt.Sprintf("Failed to get client for cluster %s: %v", currentCluster.ClusterId, err)), err
+			}
+		}
+
+		modelReady, err := backend.CheckModelStatus(ctx, a.logger, targetClusterClient, targetHTTPClient, inferenceServerName, deployment.Namespace, modelName)
 		if err != nil {
 			a.logger.Warn("Failed to check model status, will retry",
 				zap.String("cluster_id", currentCluster.ClusterId),
@@ -164,34 +197,31 @@ func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployme
 		a.logger.Info("Initializing rollout metadata from inference server",
 			zap.String("inference_server", inferenceServerName))
 
-		targetInfo, err := a.gateway.GetDeploymentTargetInfo(ctx, a.logger, inferenceServerName, deployment.Namespace)
-		if err != nil {
-			return conditionUtils.GenerateFalseCondition(condition, "GetTargetInfoFailed",
-				fmt.Sprintf("Failed to get deployment target info: %v", err)), nil
-		}
-
-		if len(targetInfo.ClusterTargets) == 0 {
-			return conditionUtils.GenerateFalseCondition(condition, "NoClustersFound",
-				"No target clusters found for inference server"), nil
-		}
-
+		targetClusters := common.GetInferenceServerTargetClusters(ctx, a.client, deployment)
 		// Build metadata with all clusters in PENDING state
 		metadata = &actorCommon.ClusterMetadata{
-			BackendType:  targetInfo.BackendType.String(),
-			Clusters:     make([]actorCommon.ClusterEntry, len(targetInfo.ClusterTargets)),
+			BackendType:  v2pb.BACKEND_TYPE_TRITON.String(), // todo: ghosharitra: this is a placeholder for now
+			Clusters:     make([]actorCommon.ClusterEntry, len(targetClusters)),
 			CurrentIndex: 0,
 		}
 
-		for i, ct := range targetInfo.ClusterTargets {
+		// todo: ghosharitra: the following logic has also been replicated in many places. This should be a common helper function.
+		for i, ct := range targetClusters {
 			metadata.Clusters[i] = actorCommon.ClusterEntry{
-				ClusterId:             ct.ClusterId,
-				Host:                  ct.Host,
-				Port:                  ct.Port,
-				TokenTag:              ct.TokenTag,
-				CaDataTag:             ct.CaDataTag,
-				State:                 actorCommon.ClusterStatePending,
-				IsControlPlaneCluster: ct.IsControlPlaneCluster,
+				ClusterId: ct.GetClusterId(),
+				Host:      ct.GetKubernetes().GetHost(),
+				Port:      ct.GetKubernetes().GetPort(),
+				TokenTag:  ct.GetKubernetes().GetTokenTag(),
+				CaDataTag: ct.GetKubernetes().GetCaDataTag(),
+				State:     actorCommon.ClusterStatePending,
 			}
+		}
+
+		if len(targetClusters) == 0 {
+			metadata.Clusters = append(metadata.Clusters, actorCommon.ClusterEntry{
+				State:                 actorCommon.ClusterStatePending,
+				IsControlPlaneCluster: true,
+			})
 		}
 
 		if err := actorCommon.SetClusterMetadata(condition, metadata); err != nil {
@@ -227,10 +257,20 @@ func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployme
 		zap.Int("total_clusters", len(metadata.Clusters)))
 
 	clusterTarget := actorCommon.GetClusterTargetConnection(currentCluster)
+	targetClusterClient := a.client
+	if !currentCluster.IsControlPlaneCluster {
+		client, err := a.clientFactory.GetClient(ctx, clusterTarget)
+		if err != nil {
+			return conditionUtils.GenerateFalseCondition(condition, "ClientNotFound", fmt.Sprintf("Failed to get client for cluster %s: %v", currentCluster.ClusterId, err)), err
+		}
+		targetClusterClient = client
+	}
 	// TODO(#696): make the storage path configurable w.r.t storage client and storage location
 	storagePath := fmt.Sprintf("s3://deploy-models/%s/", modelName)
-
-	if err := a.gateway.LoadModel(ctx, a.logger, modelName, storagePath, inferenceServerName, deployment.Namespace, clusterTarget); err != nil {
+	if err := a.modelConfigProvider.AddModelToConfig(ctx, a.logger, targetClusterClient, inferenceServerName, deployment.Namespace, modelconfig.ModelConfigEntry{
+		Name:        modelName,
+		StoragePath: storagePath,
+	}); err != nil {
 		a.logger.Error("Failed to initiate model loading",
 			zap.Error(err),
 			zap.String("cluster_id", currentCluster.ClusterId),

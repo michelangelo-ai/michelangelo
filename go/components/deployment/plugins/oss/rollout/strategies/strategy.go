@@ -2,22 +2,29 @@ package strategies
 
 import (
 	"context"
+	"net/http"
 
 	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // Params contains dependencies for strategy actors
 type Params struct {
-	Client        client.Client
-	ProxyProvider proxy.ProxyProvider
-	Gateway       gateways.Gateway
-	Logger        *zap.Logger
+	Client              client.Client
+	HTTPClient          *http.Client
+	ProxyProvider       proxy.ProxyProvider
+	Logger              *zap.Logger
+	Registry            *backends.Registry
+	ClientFactory       clientfactory.ClientFactory
+	DefaultClient       client.Client
+	ModelConfigProvider modelconfig.ModelConfigProvider
 }
 
 // GetActorsForStrategy returns actors for the appropriate strategy

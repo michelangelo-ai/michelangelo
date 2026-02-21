@@ -6,7 +6,6 @@ import (
 
 	"github.com/gogo/protobuf/types"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 )
 
@@ -103,15 +102,17 @@ func SetClusterMetadata(condition *apipb.Condition, metadata *ClusterMetadata) e
 }
 
 // GetClusterTargetConnection reconstructs a ClusterTargetMetadata from the metadata entry.
+// todo: ghosharitra: convert this to return a v2pb.ClusterTarget
 func GetClusterTargetConnection(entry *ClusterEntry) *gateways.TargetClusterConnection {
-	return &gateways.TargetClusterConnection{
-		ClusterId:             entry.ClusterId,
-		Host:                  entry.Host,
-		Port:                  entry.Port,
-		TokenTag:              entry.TokenTag,
-		CaDataTag:             entry.CaDataTag,
-		IsControlPlaneCluster: entry.IsControlPlaneCluster,
-	}
+	// return &gateways.TargetClusterConnection{
+	// 	ClusterId:             entry.ClusterId,
+	// 	Host:                  entry.Host,
+	// 	Port:                  entry.Port,
+	// 	TokenTag:              entry.TokenTag,
+	// 	CaDataTag:             entry.CaDataTag,
+	// 	IsControlPlaneCluster: entry.IsControlPlaneCluster,
+	// }
+	return nil
 }
 
 // convertStructToMap converts a types.Struct to a map[string]interface{}.

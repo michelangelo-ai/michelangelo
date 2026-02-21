@@ -5,7 +5,7 @@ import (
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -19,18 +19,18 @@ type conditionPlugin struct {
 
 // Params contains dependencies injected for cleanup plugin initialization.
 type Params struct {
-	ProxyProvider proxy.ProxyProvider
-	Gateway       gateways.Gateway
-	Logger        *zap.Logger
+	ProxyProvider       proxy.ProxyProvider
+	ModelConfigProvider modelconfig.ModelConfigProvider
+	Logger              *zap.Logger
 }
 
 // NewCleanupPlugin creates a cleanup workflow plugin.
 func NewCleanupPlugin(p Params) conditionInterfaces.Plugin[*v2pb.Deployment] {
 	return &conditionPlugin{actors: []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&CleanupActor{
-			proxyProvider: p.ProxyProvider,
-			gateway:       p.Gateway,
-			logger:        p.Logger,
+			proxyProvider:       p.ProxyProvider,
+			modelConfigProvider: p.ModelConfigProvider,
+			logger:              p.Logger,
 		},
 	}}
 }

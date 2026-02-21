@@ -10,7 +10,6 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -26,7 +25,6 @@ type conditionPlugin struct {
 type Params struct {
 	Client        client.Client
 	ProxyProvider proxy.ProxyProvider
-	Gateway       gateways.Gateway
 	Logger        *zap.Logger
 }
 
@@ -40,8 +38,7 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 			logger: logger,
 		},
 		&AssetPreparationActor{
-			gateway: p.Gateway,
-			logger:  logger,
+			logger: logger,
 		},
 		&ResourceAcquisitionActor{
 			gateway: p.Gateway,

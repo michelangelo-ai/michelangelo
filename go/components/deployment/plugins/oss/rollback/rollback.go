@@ -6,10 +6,13 @@ import (
 
 	"go.uber.org/zap"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -18,8 +21,10 @@ var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &RollbackActor{}
 
 // RollbackActor restores deployment to the previous stable revision when rollout fails.
 type RollbackActor struct {
-	logger  *zap.Logger
-	gateway gateways.Gateway
+	defaultClient       client.Client
+	logger              *zap.Logger
+	clientFactory       clientfactory.ClientFactory
+	modelConfigProvider modelconfig.ModelConfigProvider
 }
 
 // GetType returns the condition type identifier for rollback.
@@ -84,11 +89,8 @@ func (a *RollbackActor) Retrieve(ctx context.Context, resource *v2pb.Deployment,
 
 	// If ROLLBACK_IN_PROGRESS, check if candidate model still exists
 	if currentCluster.State == common.ClusterStateRollbackInProgress {
-		clusterTarget := common.GetClusterTargetConnection(currentCluster)
-		backendType := v2pb.BackendType(v2pb.BackendType_value[metadata.BackendType])
-
-		exists, err := a.gateway.CheckModelExists(
-			ctx, a.logger, candidateModel, inferenceServerName, resource.Namespace, clusterTarget, backendType,
+		exists, err := common.CheckModelExists(
+			ctx, a.logger, a.modelConfigProvider, a.defaultClient, candidateModel, inferenceServerName, resource.Namespace,
 		)
 		if err != nil {
 			a.logger.Warn("Failed to check model existence during rollback, will retry",
@@ -145,32 +147,34 @@ func (a *RollbackActor) Run(ctx context.Context, resource *v2pb.Deployment, cond
 		a.logger.Info("Initializing rollback metadata from inference server",
 			zap.String("inference_server", inferenceServerName))
 
-		targetInfo, err := a.gateway.GetDeploymentTargetInfo(ctx, a.logger, inferenceServerName, resource.Namespace)
-		if err != nil {
-			return conditionsutil.GenerateFalseCondition(condition, "GetTargetInfoFailed",
-				fmt.Sprintf("Failed to get deployment target info: %v", err)), nil
-		}
-
-		if len(targetInfo.ClusterTargets) == 0 {
+		targetClusters := common.GetInferenceServerTargetClusters(ctx, a.defaultClient, resource)
+		if len(targetClusters) == 0 {
 			return conditionsutil.GenerateFalseCondition(condition, "NoClustersFound",
 				"No target clusters found for inference server"), nil
 		}
 
 		metadata = &common.ClusterMetadata{
-			BackendType:  targetInfo.BackendType.String(),
-			Clusters:     make([]common.ClusterEntry, len(targetInfo.ClusterTargets)),
+			Clusters:     make([]common.ClusterEntry, len(targetClusters)),
 			CurrentIndex: 0,
 		}
 
-		for i, ct := range targetInfo.ClusterTargets {
+		for i, ct := range targetClusters {
 			metadata.Clusters[i] = common.ClusterEntry{
-				ClusterId:             ct.ClusterId,
-				Host:                  ct.Host,
-				Port:                  ct.Port,
-				TokenTag:              ct.TokenTag,
-				CaDataTag:             ct.CaDataTag,
-				State:                 common.ClusterStatePending,
-				IsControlPlaneCluster: ct.IsControlPlaneCluster,
+				ClusterId: ct.GetClusterId(),
+				Host:      ct.GetKubernetes().GetHost(),
+				Port:      ct.GetKubernetes().GetPort(),
+				TokenTag:  ct.GetKubernetes().GetTokenTag(),
+				CaDataTag: ct.GetKubernetes().GetCaDataTag(),
+				State:     common.ClusterStatePending,
+			}
+		}
+		// if no target clusters are found, then add the control plane cluster
+		if len(targetClusters) == 0 {
+			metadata.Clusters = []common.ClusterEntry{
+				{
+					State:                 common.ClusterStatePending,
+					IsControlPlaneCluster: true,
+				},
 			}
 		}
 
@@ -206,8 +210,27 @@ func (a *RollbackActor) Run(ctx context.Context, resource *v2pb.Deployment, cond
 		zap.String("cluster_id", currentCluster.ClusterId),
 		zap.String("inference_server", inferenceServerName))
 
-	clusterTarget := common.GetClusterTargetConnection(currentCluster)
-	if err := a.gateway.UnloadModel(ctx, a.logger, candidateModel, inferenceServerName, resource.Namespace, clusterTarget); err != nil {
+	targetClusterClient := a.defaultClient
+	if !currentCluster.IsControlPlaneCluster {
+		client, err := a.clientFactory.GetClient(ctx, &v2pb.ClusterTarget{
+			ClusterId: currentCluster.ClusterId,
+			Config: &v2pb.ClusterTarget_Kubernetes{
+				Kubernetes: &v2pb.ConnectionSpec{
+					Host:      currentCluster.Host,
+					Port:      currentCluster.Port,
+					CaDataTag: currentCluster.CaDataTag,
+					TokenTag:  currentCluster.TokenTag,
+				},
+			},
+		})
+		if err != nil {
+			// todo: ghosharitra: in case of error, we should just log error and continue with the next cluster, the logic needs to be updated for this.
+			return nil, fmt.Errorf("failed to get client for cluster %s: %w", currentCluster.ClusterId, err)
+		}
+		targetClusterClient = client
+	}
+
+	if err := a.modelConfigProvider.RemoveModelFromConfig(ctx, a.logger, targetClusterClient, candidateModel, inferenceServerName, resource.Namespace); err != nil {
 		a.logger.Error("Failed to unload candidate model from cluster",
 			zap.String("model", candidateModel),
 			zap.String("cluster_id", currentCluster.ClusterId),

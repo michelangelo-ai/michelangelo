@@ -11,8 +11,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/secrets"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/secrets/secretsmocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory/secrets"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory/secrets/secretsmocks"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 

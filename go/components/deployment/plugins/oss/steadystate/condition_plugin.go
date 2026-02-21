@@ -4,7 +4,6 @@ import (
 	"go.uber.org/zap"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -18,16 +17,14 @@ type conditionPlugin struct {
 
 // Params contains dependencies injected for steady state plugin initialization.
 type Params struct {
-	Gateway gateways.Gateway
-	Logger  *zap.Logger
+	Logger *zap.Logger
 }
 
 // NewSteadyStatePlugin creates a steady state monitoring workflow plugin.
 func NewSteadyStatePlugin(p Params) conditionInterfaces.Plugin[*v2pb.Deployment] {
 	return &conditionPlugin{actors: []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&SteadyStateActor{
-			gateway: p.Gateway,
-			logger:  p.Logger,
+			logger: p.Logger,
 		},
 	}}
 }

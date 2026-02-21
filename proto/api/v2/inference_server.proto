@@ -176,22 +176,13 @@ message InferenceServerStatus {
   repeated RemoteClusterStatus remote_cluster_statuses = 9;
 }
 
-// ClusterState represents the lifecycle state of infrastructure in a cluster.
-enum ClusterState {
-  CLUSTER_STATE_INVALID = 0;
-  CLUSTER_STATE_CREATING = 1;
-  CLUSTER_STATE_READY = 2;
-  CLUSTER_STATE_DELETING = 4;
-  CLUSTER_STATE_FAILED = 5;
-}
-
 // RemoteClusterStatus represents the observed state of infrastructure in a specific remote cluster.
 message RemoteClusterStatus {
   // Cluster identifier matching ClusterTarget.cluster_id in spec.
   string cluster_id = 1;
   
   // Current state of the inference server infrastructure in this cluster.
-  ClusterState state = 2;
+  InferenceServerState state = 2;
   
   // Human-readable message providing details about the current state.
   string message = 3;

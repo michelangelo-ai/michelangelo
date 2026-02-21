@@ -35,6 +35,7 @@ func (a *TrafficRoutingActor) GetType() string {
 // Retrieve checks if the Gateway API HTTPRoute is correctly configured for the deployment.
 func (a *TrafficRoutingActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.Logger.Info("Retrieving traffic routing configuration for deployment", zap.String("deployment", deployment.Name))
+	// todo: ghoosharitra: need to fix this
 	controlPlaneServiceName, err := a.Gateway.GetControlPlaneServiceName(ctx, a.Logger, deployment.Spec.GetInferenceServer().Name, deployment.Namespace)
 	if err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "MissingControlPlaneService", fmt.Sprintf("control plane service not found for inference server %s", deployment.Spec.GetInferenceServer().Name)), nil

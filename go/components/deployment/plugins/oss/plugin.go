@@ -18,7 +18,6 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/steadystate"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -35,7 +34,6 @@ var _ plugins.Plugin = &Plugin{}
 type Plugin struct {
 	client        client.Client
 	proxyProvider proxy.ProxyProvider
-	gateway       gateways.Gateway
 	blobstore     *blobstore.BlobStore
 	logger        *zap.Logger
 
@@ -51,7 +49,6 @@ type Params struct {
 
 	Registrar     pluginmanager.Registrar[plugins.Plugin]
 	Client        client.Client
-	Gateway       gateways.Gateway
 	ProxyProvider proxy.ProxyProvider
 	BlobStore     *blobstore.BlobStore
 	Logger        *zap.Logger
@@ -61,22 +58,18 @@ type Params struct {
 func NewPlugin(params Params) *Plugin {
 	return &Plugin{
 		client:        params.Client,
-		gateway:       params.Gateway,
 		proxyProvider: params.ProxyProvider,
 		blobstore:     params.BlobStore,
 		logger:        params.Logger,
 		rollbackPlugin: rollback.NewRollbackPlugin(rollback.Params{
-			Gateway: params.Gateway,
-			Logger:  params.Logger,
+			Logger: params.Logger,
 		}),
 		cleanupPlugin: cleanup.NewCleanupPlugin(cleanup.Params{
 			ProxyProvider: params.ProxyProvider,
-			Gateway:       params.Gateway,
 			Logger:        params.Logger,
 		}),
 		steadyStatePlugin: steadystate.NewSteadyStatePlugin(steadystate.Params{
-			Gateway: params.Gateway,
-			Logger:  params.Logger,
+			Logger: params.Logger,
 		}),
 	}
 }
@@ -194,6 +187,7 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 		return deployment.Status, nil
 	}
 	serverName := inferenceServer.GetName()
+	// todo: ghosharitra: fix this, need to remove gateway dependency
 	deploymentTargetInfo, err := p.gateway.GetDeploymentTargetInfo(ctx, p.logger, serverName, deployment.Namespace)
 	if err != nil {
 		return deployment.Status, fmt.Errorf("get deployment target info for deployment %s/%s: %w", deployment.Namespace, deployment.Name, err)

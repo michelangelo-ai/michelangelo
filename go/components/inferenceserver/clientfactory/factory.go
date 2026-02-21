@@ -17,17 +17,16 @@ import (
 	"k8s.io/client-go/util/flowcontrol"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/secrets"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory/secrets"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 const serviceName = "michelangelo-inferenceserver"
 
-var _ ClientFactory = &defaultClientFactory{}
+var _ ClientFactory = &remoteClientFactory{}
 
-// defaultClientFactory implements the ClientFactory interface.
-type defaultClientFactory struct {
-	defaultClient  client.Client
+// remoteClientFactory implements the ClientFactory interface.
+type remoteClientFactory struct {
 	secretProvider secrets.SecretProvider
 	scheme         *runtime.Scheme
 	logger         *zap.Logger
@@ -37,18 +36,14 @@ type defaultClientFactory struct {
 	mu      sync.Mutex
 }
 
-// NewClientFactory creates a new ClientFactory instance.
-// defaultClient is the in-cluster client to use for the control plane cluster returned when cluster ID matches the control plane cluster ID.
-// secretProvider retrieves credentials for remote clusters.
-// scheme is the runtime scheme to use for the clients.
-func NewClientFactory(
-	defaultClient client.Client,
+// NewRemoteClientFactory creates a new RemoteClientFactory instance.
+// This client factory is used to connect to remote clusters to provision inference servers.
+func NewRemoteClientFactory(
 	secretProvider secrets.SecretProvider,
 	scheme *runtime.Scheme,
 	logger *zap.Logger,
 ) ClientFactory {
-	return &defaultClientFactory{
-		defaultClient:  defaultClient,
+	return &remoteClientFactory{
 		secretProvider: secretProvider,
 		scheme:         scheme,
 		logger:         logger,
@@ -56,13 +51,7 @@ func NewClientFactory(
 }
 
 // GetClient returns a controller-runtime client for the given cluster target.
-func (f *defaultClientFactory) GetClient(ctx context.Context, cluster *v2pb.ClusterTarget) (client.Client, error) {
-	// If the cluster is nil, returns the default client to the control plane cluster.
-	if cluster == nil {
-		return f.defaultClient, nil
-	}
-
-	// For remote clusters, validate kubernetes config with connection details is provided
+func (f *remoteClientFactory) GetClient(ctx context.Context, cluster *v2pb.ClusterTarget) (client.Client, error) {
 	k8sConfig := cluster.GetKubernetes()
 	if k8sConfig == nil || k8sConfig.Host == "" || k8sConfig.Port == "" {
 		return nil, fmt.Errorf("missing kubernetes connection details for cluster %s (host and port required)", cluster.ClusterId)
@@ -114,7 +103,7 @@ func (f *defaultClientFactory) GetClient(ctx context.Context, cluster *v2pb.Clus
 }
 
 // GetHTTPClient returns an HTTP client configured for the given cluster target.
-func (f *defaultClientFactory) GetHTTPClient(ctx context.Context, cluster *v2pb.ClusterTarget) (*http.Client, error) {
+func (f *remoteClientFactory) GetHTTPClient(ctx context.Context, cluster *v2pb.ClusterTarget) (*http.Client, error) {
 	// If the cluster is nil, returns HTTP client to the control plane cluster.
 	if cluster == nil {
 		return &http.Client{
@@ -176,12 +165,12 @@ func (rt *bearerTokenRoundTripper) RoundTrip(req *http.Request) (*http.Response,
 }
 
 // getClientKey generates a unique key for caching clients based on connection spec.
-func (f *defaultClientFactory) getClientKey(cluster *v2pb.ClusterTarget) string {
+func (f *remoteClientFactory) getClientKey(cluster *v2pb.ClusterTarget) string {
 	return fmt.Sprintf("%s:%s:%s", cluster.ClusterId, cluster.GetKubernetes().GetHost(), cluster.GetKubernetes().GetPort())
 }
 
 // getKubeClientConfig builds a REST config from connection details and auth.
-func (f *defaultClientFactory) getKubeClientConfig(server string, auth *secrets.ClientAuth) (*rest.Config, error) {
+func (f *remoteClientFactory) getKubeClientConfig(server string, auth *secrets.ClientAuth) (*rest.Config, error) {
 	clientCmdConfig := f.getKubeConfigStruct(server, auth)
 
 	config, err := clientcmd.NewDefaultClientConfig(
@@ -202,7 +191,7 @@ func (f *defaultClientFactory) getKubeClientConfig(server string, auth *secrets.
 }
 
 // getKubeConfigStruct builds a kubeconfig struct from connection details.
-func (f *defaultClientFactory) getKubeConfigStruct(server string, auth *secrets.ClientAuth) *api.Config {
+func (f *remoteClientFactory) getKubeConfigStruct(server string, auth *secrets.ClientAuth) *api.Config {
 	clusterName := "remote-cluster"
 	contextName := fmt.Sprintf("%s@%s", serviceName, clusterName)
 

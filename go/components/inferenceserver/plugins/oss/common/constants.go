@@ -1,9 +1,10 @@
 package common
 
 const (
-	TritonCleanupConditionType               = "TritonCleanup"
-	TritonControlPlaneDiscoveryConditionType = "TritonControlPlaneDiscovery"
-	TritonHealthCheckConditionType           = "TritonHealthCheck"
-	TritonClusterWorkloadsConditionType      = "TritonClusterWorkloads"
-	TritonValidationConditionType            = "TritonValidation"
+	CleanupConditionType               = "Cleanup"
+	HealthCheckConditionType           = "HealthCheck"
+	BackendProvisionConditionType      = "BackendProvision"
+	ModelConfigProvisionConditionType  = "ModelConfigProvision"
+	ValidationConditionType            = "Validation"
+	ControlPlaneDiscoveryConditionType = "ControlPlaneDiscovery"
 )
