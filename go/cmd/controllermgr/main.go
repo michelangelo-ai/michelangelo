@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -68,6 +69,11 @@ func getTallyScope() (tally.Scope, error) {
 	return s, nil
 }
 
+// provideLogger provides a logr.Logger from the zap logger for dependency injection.
+func provideLogger(logger *zap.Logger) logr.Logger {
+	return zapr.NewLogger(logger)
+}
+
 // options provides the FX modules and configurations used by the application.
 //
 // This function defines the dependencies and lifecycle management for the application by:
@@ -81,6 +87,7 @@ func options() fx.Option {
 	return fx.Options(
 		env.Module,
 		zapfx.Module,
+		fx.Provide(provideLogger),
 		baseconfig.Module,
 		fx.Provide(scheme),
 		fx.Provide(baseconfig.GetK8sConfig),
@@ -105,8 +112,8 @@ func options() fx.Option {
 		scheduler.Module,
 		cluster.Module,
 		client.Module,
-		fx.Invoke(func(logger *zap.Logger) {
-			ctrl.SetLogger(zapr.NewLogger(logger))
+		fx.Invoke(func(logger logr.Logger) {
+			ctrl.SetLogger(logger)
 		}),
 	)
 }
