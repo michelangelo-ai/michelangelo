@@ -2985,3 +2985,128 @@ func TestGetWorkflowUrl(t *testing.T) {
 		})
 	}
 }
+
+func TestConstructPipelineRunStepInfo_CompositeKey(t *testing.T) {
+	testCases := []struct {
+		name                    string
+		workflowProgressStrings []string
+		expectedStepCount       int
+		expectedStepNames       []string
+		expectedActivityIDs     []string
+	}{
+		{
+			name: "Different task names - should remain separate",
+			workflowProgressStrings: []string{
+				`{"task_name":"task1","task_path":"workflow.task1","first_activity_id":"activity_1","task_state":"SUCCEEDED","start_time":"2024-06-10 17:53:20","end_time":"2024-06-10 17:54:20"}`,
+				`{"task_name":"task2","task_path":"workflow.task2","first_activity_id":"activity_2","task_state":"RUNNING","start_time":"2024-06-10 17:54:25"}`,
+			},
+			expectedStepCount:   2,
+			expectedStepNames:   []string{"task1", "task2"},
+			expectedActivityIDs: []string{"activity_1", "activity_2"},
+		},
+		{
+			name: "Same task names with different activity IDs - should remain separate",
+			workflowProgressStrings: []string{
+				`{"task_name":"train_model","task_path":"workflow.train_model_1","first_activity_id":"activity_123","task_state":"SUCCEEDED","start_time":"2024-06-10 17:53:20","end_time":"2024-06-10 17:54:20"}`,
+				`{"task_name":"train_model","task_path":"workflow.train_model_2","first_activity_id":"activity_456","task_state":"RUNNING","start_time":"2024-06-10 17:54:25"}`,
+				`{"task_name":"train_model","task_path":"workflow.train_model_3","first_activity_id":"activity_789","task_state":"PENDING","start_time":"2024-06-10 17:55:00"}`,
+			},
+			expectedStepCount:   3,
+			expectedStepNames:   []string{"train_model", "train_model", "train_model"},
+			expectedActivityIDs: []string{"activity_123", "activity_456", "activity_789"},
+		},
+		{
+			name: "Same task name with empty activity ID and with activity ID - should remain separate",
+			workflowProgressStrings: []string{
+				`{"task_name":"preprocess","task_path":"workflow.preprocess","first_activity_id":"","task_state":"SUCCEEDED","start_time":"2024-06-10 17:53:20","end_time":"2024-06-10 17:54:20"}`,
+				`{"task_name":"preprocess","task_path":"workflow.preprocess_2","first_activity_id":"activity_999","task_state":"RUNNING","start_time":"2024-06-10 17:54:25"}`,
+			},
+			expectedStepCount:   2,
+			expectedStepNames:   []string{"preprocess", "preprocess"},
+			expectedActivityIDs: []string{"", "activity_999"},
+		},
+		{
+			name: "Multiple updates for same task (same activity ID) - should merge",
+			workflowProgressStrings: []string{
+				`{"task_name":"evaluate","task_path":"workflow.evaluate","first_activity_id":"activity_eval_1","task_state":"RUNNING","start_time":"2024-06-10 17:53:20"}`,
+				`{"task_name":"evaluate","task_path":"workflow.evaluate","first_activity_id":"activity_eval_1","task_state":"SUCCEEDED","start_time":"2024-06-10 17:53:20","end_time":"2024-06-10 17:55:30"}`,
+			},
+			expectedStepCount:   1,
+			expectedStepNames:   []string{"evaluate"},
+			expectedActivityIDs: []string{"activity_eval_1"},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			// Setup mocks
+			mockWorkflowClient := workflowclientMock.NewMockWorkflowClient(gomock.NewController(t))
+			mockBlobStore := blobstoreMock.NewMockBlobStoreClient(gomock.NewController(t))
+
+			// Setup blobstore with correct structure
+			logger := zaptest.NewLogger(t)
+			blobStore := &blobstore.BlobStore{
+				Logger: logger,
+				Clients: map[string]blobstore.BlobStoreClient{
+					"mock": mockBlobStore,
+				},
+			}
+
+			// Setup fake k8s client and API handler
+			scheme := runtime.NewScheme()
+			err := v2.AddToScheme(scheme)
+			require.NoError(t, err)
+			k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			apiHandlerInstance := apiHandler.NewFakeAPIHandler(k8sClient)
+
+			// Create test pipeline run
+			pipelineRun := &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run",
+					Namespace: "default",
+				},
+				Status: v2.PipelineRunStatus{
+					WorkflowId:    "test-workflow-id",
+					WorkflowRunId: "test-run-id",
+				},
+			}
+
+			// Mock QueryWorkflow to return our test progress strings
+			mockWorkflowClient.EXPECT().QueryWorkflow(
+				gomock.Any(),
+				"test-workflow-id",
+				"test-run-id",
+				pipelinerunutils.UniflowTaskProgressQueryHandlerKey,
+				gomock.Any(),
+			).DoAndReturn(func(ctx context.Context, workflowID, runID, queryType string, result interface{}) error {
+				// Set the result to our test progress strings
+				*result.(*[]string) = testCase.workflowProgressStrings
+				return nil
+			})
+
+			// Create actor
+			configProvider, err := uberconfig.NewYAML(uberconfig.Static(map[string]interface{}{}))
+			require.NoError(t, err)
+			actor := NewExecuteWorkflowActor(logger, mockWorkflowClient, blobStore, apiHandlerInstance, configProvider)
+
+			// Call the method under test
+			stepInfos, err := actor.constructPipelineRunStepInfo(context.Background(), pipelineRun)
+
+			// Verify results
+			require.NoError(t, err)
+			require.Equal(t, testCase.expectedStepCount, len(stepInfos))
+
+			// Verify each step has correct name and activity ID
+			for i, stepInfo := range stepInfos {
+				require.Equal(t, testCase.expectedStepNames[i], stepInfo.DisplayName)
+				require.Equal(t, testCase.expectedActivityIDs[i], stepInfo.ActivityId)
+			}
+
+			// Additional check for the consolidation case to ensure final state is correct
+			if testCase.name == "Multiple updates for same task (same activity ID) - should merge" {
+				require.Equal(t, v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED, stepInfos[0].State)
+				require.NotNil(t, stepInfos[0].EndTime)
+			}
+		})
+	}
+}

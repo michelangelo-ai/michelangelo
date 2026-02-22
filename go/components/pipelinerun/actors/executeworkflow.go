@@ -800,16 +800,23 @@ func (a *ExecuteWorkflowActor) constructPipelineRunStepInfo(ctx context.Context,
 			continue
 		}
 
-		if _, existingTask := stepMap[taskName]; !existingTask {
-			stepOrder = append(stepOrder, taskName)
-			stepMap[taskName] = getStepInfoFromTaskProgress(&taskProgress, pipelineRun.Namespace)
+		// Create composite key using TaskName and FirstActivityID to avoid consolidation of same methods
+		// Use FirstActivityID to ensure uniqueness when same task method is used multiple times
+		compositeKey := taskName
+		if taskProgress.FirstActivityID != "" {
+			compositeKey = fmt.Sprintf("%s_%s", taskName, taskProgress.FirstActivityID)
+		}
+
+		if _, existingTask := stepMap[compositeKey]; !existingTask {
+			stepOrder = append(stepOrder, compositeKey)
+			stepMap[compositeKey] = getStepInfoFromTaskProgress(&taskProgress, pipelineRun.Namespace)
 			continue
 		}
 
 		// Merge the task progress
-		oldStepInfo := stepMap[taskName]
+		oldStepInfo := stepMap[compositeKey]
 		newStepInfo := getStepInfoFromTaskProgress(&taskProgress, pipelineRun.Namespace)
-		stepMap[taskName] = mergePipelineRunStepInfo(oldStepInfo, newStepInfo)
+		stepMap[compositeKey] = mergePipelineRunStepInfo(oldStepInfo, newStepInfo)
 	}
 
 	for _, stepName := range stepOrder {
