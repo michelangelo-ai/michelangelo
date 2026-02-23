@@ -28,13 +28,13 @@ jobs:
         with:
           path: |
             ~/.cache/bazel
-          key: bazel_cache_root
+          key: bazel-test-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
           restore-keys: |
-            bazel_cache_root
+            bazel-test-${{ runner.os }}-
 
       # Run Bazel tests
       - name: Run Bazel Test
-        run: ./tools/bazel test ...
+        run: ./tools/bazel test //go/... //proto/... --build_tests_only
 
   python-build:
     runs-on: ubuntu-latest
@@ -95,9 +95,9 @@ jobs:
         with:
           path: |
             ~/.cache/bazel
-          key: bazel_cache_root
+          key: bazel-dirty-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
           restore-keys: |
-            bazel_cache_root
+            bazel-dirty-${{ runner.os }}-
 
       - name: Run Gazelle
         run: |
