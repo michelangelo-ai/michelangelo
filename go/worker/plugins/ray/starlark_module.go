@@ -71,7 +71,6 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 		RayCluster:    &cluster,
 		CreateOptions: &metav1.CreateOptions{},
 	}).Get(ctx, &response); err != nil {
-		activityId := response.ActivityID
 		logger.Error("error", zap.Error(err))
 		return nil, err
 	}
