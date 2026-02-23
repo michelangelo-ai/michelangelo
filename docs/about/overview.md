@@ -167,7 +167,7 @@ Michelangelo supports a wide range of ML use cases. Here are some common example
   - _Features_: Raw images + metadata
   - _Deployment_: Batch processing for catalog updates
 
-**Not sure where to start?** Check out our [tutorials](../tutorials) with end-to-end examples, or explore the [Model Registry](../model-registry) to see what others have built.
+**Not sure where to start?** Check out our [user guides](../user-guides) for end-to-end examples.
 
 ## Architecture
 
@@ -302,4 +302,4 @@ A: Yes, with proper configuration. Michelangelo supports:
 
 ---
 
-**Still have questions?** Check out our [documentation](../), join the [community forum](https://github.com/michelangelo-ai/michelangelo/discussions), or explore [example projects](../tutorials).
+**Still have questions?** Check out our [documentation](../), join the [community forum](https://github.com/michelangelo-ai/michelangelo/discussions), or explore the [user guides](../user-guides).
