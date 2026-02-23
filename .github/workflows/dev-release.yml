@@ -38,8 +38,8 @@ jobs:
         uses: actions/cache@v4  # https://github.com/actions/cache
         with:
           path: ~/.cache/bazel
-          key: bazel_cache_root
-          restore-keys: bazel_cache_root
+          key: bazel-release-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
+          restore-keys: bazel-release-${{ runner.os }}-
 
       - name: ${{ matrix.service }} / Build  Binary
         run: |
