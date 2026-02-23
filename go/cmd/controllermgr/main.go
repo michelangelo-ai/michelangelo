@@ -4,7 +4,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	"go.uber.org/fx"
-	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -69,11 +68,6 @@ func getTallyScope() (tally.Scope, error) {
 	return s, nil
 }
 
-// provideLogger provides a logr.Logger from the zap logger for dependency injection.
-func provideLogger(logger *zap.Logger) logr.Logger {
-	return zapr.NewLogger(logger)
-}
-
 // options provides the FX modules and configurations used by the application.
 //
 // This function defines the dependencies and lifecycle management for the application by:
@@ -87,7 +81,7 @@ func options() fx.Option {
 	return fx.Options(
 		env.Module,
 		zapfx.Module,
-		fx.Provide(provideLogger),
+		fx.Provide(zapr.NewLogger),
 		baseconfig.Module,
 		fx.Provide(scheme),
 		fx.Provide(baseconfig.GetK8sConfig),

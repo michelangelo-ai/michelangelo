@@ -1,17 +1,17 @@
 controllermgr:
   metricsBindAddress: ${METRICS_ADDRESS::8091}
-  healthProbeBindAddress: ${HEALTH_ADDRESS::8083}
+  healthProbeBindAddress: ${HEALTH_ADDRESS::8081}
   leaderElection: false
   leaderElectionID: decaf1259.michelangelo.uber.com
 
 workflowClient:
-  service: temporaltest-frontend
-  host: localhost:7233
+  service: cadence-frontend
+  host: michelangelo-worker:7833
   transport: grpc
   domain: default
   # taskList is a used as a fallback if project.Metatdata.Annotations["michelangelo/worker_queue"] is empty
   taskList: default # TODO: MaCTL support for adding project.Metatdata.Annotations["michelangelo/worker_queue"] to project CRD
-  executionUrlFormat: http://localhost:8080/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}
+  executionUrlFormat: http://localhost:8088/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}
     
 k8s:
   qps: 300
