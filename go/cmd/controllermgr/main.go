@@ -1,9 +1,9 @@
 package main
 
 import (
+	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	"go.uber.org/fx"
-	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -81,6 +81,7 @@ func options() fx.Option {
 	return fx.Options(
 		env.Module,
 		zapfx.Module,
+		fx.Provide(zapr.NewLogger),
 		baseconfig.Module,
 		fx.Provide(scheme),
 		fx.Provide(baseconfig.GetK8sConfig),
@@ -105,8 +106,8 @@ func options() fx.Option {
 		scheduler.Module,
 		cluster.Module,
 		client.Module,
-		fx.Invoke(func(logger *zap.Logger) {
-			ctrl.SetLogger(zapr.NewLogger(logger))
+		fx.Invoke(func(logger logr.Logger) {
+			ctrl.SetLogger(logger)
 		}),
 	)
 }
