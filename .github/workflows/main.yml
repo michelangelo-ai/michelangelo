@@ -28,9 +28,9 @@ jobs:
         with:
           path: |
             ~/.cache/bazel
-          key: bazel-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
+          key: bazel-test-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
           restore-keys: |
-            bazel-${{ runner.os }}-
+            bazel-test-${{ runner.os }}-
 
       # Run Bazel tests
       - name: Run Bazel Test
@@ -95,9 +95,9 @@ jobs:
         with:
           path: |
             ~/.cache/bazel
-          key: bazel-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
+          key: bazel-dirty-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
           restore-keys: |
-            bazel-${{ runner.os }}-
+            bazel-dirty-${{ runner.os }}-
 
       - name: Run Gazelle
         run: |
