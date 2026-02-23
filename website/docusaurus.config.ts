@@ -17,8 +17,8 @@ const config: Config = {
   organizationName: 'michelangelo-ai',
   projectName: 'michelangelo',
 
-  onBrokenLinks: 'warn',
-  onBrokenMarkdownLinks: 'warn',
+  onBrokenLinks: 'throw',
+  onBrokenMarkdownLinks: 'throw',
 
   markdown: {
     format: 'md',
