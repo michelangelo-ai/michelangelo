@@ -18,10 +18,12 @@ const config: Config = {
   projectName: 'michelangelo',
 
   onBrokenLinks: 'throw',
-  onBrokenMarkdownLinks: 'throw',
 
   markdown: {
     format: 'md',
+    hooks: {
+      onBrokenMarkdownLinks: 'throw',
+    },
   },
 
   i18n: {
