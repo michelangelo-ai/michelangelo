@@ -13,7 +13,6 @@ jobs:
   ruff:
     name: Python Run Ruff on Changed Files
     runs-on: ubuntu-latest
-    continue-on-error: true
     permissions:
       pull-requests: write   # For commenting on PRs
       contents: read
