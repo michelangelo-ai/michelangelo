@@ -269,9 +269,14 @@ def prepare_column_info() -> list[dict]:
         },
         {
             "column_name": "LAST_UPDATED_SPEC",
-            "retrieve_func": lambda item: datetime.fromtimestamp(
-                int(item.metadata.labels["michelangelo/UpdateTimestamp"]) / 1_000_000
-            ).strftime("%Y-%m-%d_%H:%M:%S"),
+            "retrieve_func": lambda item: (
+                datetime.fromtimestamp(
+                    int(item.metadata.labels["michelangelo/UpdateTimestamp"])
+                    / 1_000_000
+                ).strftime("%Y-%m-%d_%H:%M:%S")
+                if item.metadata.labels.get("michelangelo/UpdateTimestamp", "")
+                else "N/A"
+            ),
             "max_length": len("LAST_UPDATED_SPEC") + 1,
         },
     ]
