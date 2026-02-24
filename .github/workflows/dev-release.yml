@@ -4,6 +4,11 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
+    paths-ignore:
+      - 'docs/**'
+      - 'website/**'
+      - 'javascript/**'
+      - 'python/**'
 #  pull_request:
 #    branches: [ main ]
 
