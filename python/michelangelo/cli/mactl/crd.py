@@ -26,6 +26,7 @@ from michelangelo.cli.mactl.grpc_tools import (
     get_message_class_by_name,
     get_methods_from_service,
 )
+from michelangelo.gen.api.list_pb2 import ListOptionsExt, PaginationSpec
 
 _LOG = getLogger(__name__)
 METADATA_STUB = []
@@ -241,7 +242,10 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
         _LOG.debug("No name argument passed. List CRD in the namespace.")
         _self: CRD = bound_args.arguments["self"]
         _self.generate_list(crd_method_info.channel)
-        return _self.list(namespace=get_single_arg(bound_args.arguments, "namespace"))
+        return _self.list(
+            namespace=get_single_arg(bound_args.arguments, "namespace"),
+            limit=bound_args.arguments.get("limit", 100),
+        )
 
     call_res = crd_method_call_kwargs(
         crd_method_info,
@@ -314,9 +318,16 @@ def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mes
     """Default common CRD member method implementation for LIST method."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
+    limit = bound_args.arguments.get("limit", 100)
+    pagination_spec = PaginationSpec(offset=0, limit=limit)
+    list_options_ext = ListOptionsExt(pagination=pagination_spec)
+
     call_res = crd_method_call_kwargs(
         crd_method_info,
-        **{"namespace": get_single_arg(bound_args.arguments, "namespace")},
+        **{
+            "namespace": get_single_arg(bound_args.arguments, "namespace"),
+            "list_options_ext": list_options_ext,
+        },
     )
     _LOG.debug("Succeed to list CRDs: %r", type(call_res))
     results = {k.name: v for k, v in call_res.ListFields() if k.name.endswith("_list")}
@@ -330,6 +341,13 @@ def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mes
     raw_elems = results[next(iter(results))]
 
     print_list_formatted(raw_elems.items)
+
+    if len(raw_elems.items) == limit:
+        print(
+            f"\n⚠️  Warning: Result count ({len(raw_elems.items)}) equals limit "
+            f"({limit}). There may be more items. Use --limit to increase."
+        )
+
     return call_res
 
 
@@ -498,6 +516,49 @@ class CRD:
                             "type": str,
                             "required": False,
                             "help": "Name of the resource",
+                        },
+                    },
+                    {
+                        "func_signature": Parameter(
+                            "limit", Parameter.POSITIONAL_OR_KEYWORD, default=100
+                        ),
+                        "args": ["--limit"],
+                        "kwargs": {
+                            "dest": "limit",
+                            "type": int,
+                            "default": 100,
+                            "help": (
+                                "Maximum number of items to return when listing "
+                                "(default: 100)"
+                            ),
+                        },
+                    },
+                ],
+            },
+            "list": {
+                "help": "List entities in a namespace",
+                "args": [
+                    {
+                        "func_signature": Parameter(
+                            "namespace", Parameter.POSITIONAL_OR_KEYWORD
+                        ),
+                        "args": ["-n", "--namespace"],
+                        "kwargs": {
+                            "type": str,
+                            "required": True,
+                            "help": "Namespace of the resource",
+                        },
+                    },
+                    {
+                        "func_signature": Parameter(
+                            "limit", Parameter.POSITIONAL_OR_KEYWORD, default=100
+                        ),
+                        "args": ["--limit"],
+                        "kwargs": {
+                            "dest": "limit",
+                            "type": int,
+                            "default": 100,
+                            "help": "Maximum number of items to return (default: 100)",
                         },
                     },
                 ],
@@ -675,10 +736,10 @@ class CRD:
             *self._extract_method_info(channel, self.full_name, "List"),
         )
         list_func_signature = Signature(
-            [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
-            + [
-                Parameter(name, Parameter.POSITIONAL_OR_KEYWORD)
-                for name in ["namespace"]
+            [
+                Parameter("self", Parameter.POSITIONAL_OR_KEYWORD),
+                Parameter("namespace", Parameter.POSITIONAL_OR_KEYWORD),
+                Parameter("limit", Parameter.POSITIONAL_OR_KEYWORD, default=100),
             ]
         )
 

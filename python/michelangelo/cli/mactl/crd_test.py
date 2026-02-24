@@ -111,12 +111,49 @@ class ListFuncImplTest(TestCase):
         mock_call_kwargs.return_value = mock_response
 
         # Execute - should not raise any exceptions
-        list_func_impl(crd_method_info, Mock(arguments={"namespace": "test-namespace"}))
+        list_func_impl(
+            crd_method_info,
+            Mock(arguments={"namespace": "test-namespace", "limit": 100}),
+        )
 
         # Verify crd_method_call_kwargs was called with correct arguments
-        mock_call_kwargs.assert_called_once_with(
-            crd_method_info, namespace="test-namespace"
+        call_args = mock_call_kwargs.call_args
+        self.assertEqual(call_args.kwargs["namespace"], "test-namespace")
+        self.assertTrue("list_options_ext" in call_args.kwargs)
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
+    def test_list_func_impl_with_limit_warning(self, mock_call_kwargs):
+        """Test list_func_impl shows warning when result count equals limit."""
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="michelangelo.api.v2.ProjectService",
+            method_name="List",
+            input_class=Mock,
+            output_class=Mock,
         )
+
+        mock_items = [MagicMock() for _ in range(10)]
+        for item in mock_items:
+            item.metadata.namespace = "test-ns"
+            item.metadata.name = "test-project"
+            item.metadata.labels = {"michelangelo/UpdateTimestamp": "1640000000000000"}
+
+        mock_response = Mock()
+        mock_response.ListFields.return_value = [
+            (
+                Mock(name="project_list"),
+                Mock(items=mock_items),
+            )
+        ]
+        mock_call_kwargs.return_value = mock_response
+
+        list_func_impl(
+            crd_method_info,
+            Mock(arguments={"namespace": "test-namespace", "limit": 10}),
+        )
+
+        call_args = mock_call_kwargs.call_args
+        self.assertEqual(call_args.kwargs["list_options_ext"].pagination.limit, 10)
 
 
 class DeleteFuncImplTest(TestCase):
