@@ -98,20 +98,23 @@ Many teams start with the **UI for initial experiments**, then transition to **c
 
 ## Machine Learning Tools
 
-### Michelangelo User Interface (MA UI)
-The UI environment provides a standard, code-free ML development experience. It guides users through the different phases of the ML development lifecycle. Uber's internal term for the UI is MA Studio (you may see it appear on this site in screenshots of the UI). This environment provides all the essential tools which allow ML developers to build, train, deploy, monitor, and debug their machine learning models in a single unified visual interface to boost their productivity. 
+### MA Studio (No Code UI)
 
-**Currently, Preparing and Training models are available for open source users. More features will be made available soon.**
+**MA Studio** is Michelangelo's UI environment. The standard, code-free ML development experience guides users through the different phases of the ML development lifecycle. This environment provides all the essential tools which allow ML developers to build, train, deploy, monitor, and debug your machine learning models in a single unified visual interface to boost your productivity. **_(Currently, Preparing and Training models are available for open source users. More features will be made available soon.)_**
 
 Users can use the no-code dev environment to perform standardized ML tasks without writing a single line of code, including:
-* Prepare data sources for training models or making batch predictions
-* Build and train XGB models, classic ML models, and Deep Learning models
 
-### Canvas: opinionated predefined ML workflow
+-   Prepare data sources for training models or making batch predictions
+-   Build and train XGB models, classic ML models, and Deep Learning models
 
-For more advanced tasks, such as training DL models, setting up customized retraining workflows, building bespoke model performance monitoring workflows, users can build the corresponding pipelines via Canvas, an opinionated predefined ML workflow, while managing these pipelines (running, debugging, viewing run results, etc) in the UI environment. 
+### CanvasFlex (Code Driven YAML/UI)
 
-Canvas provides a highly customized, code driven ML development experience by applying software development principles to ML development. Users can create their own dependencies that can be managed in the UI environment.
+**CanvasFlex** is an opinionated predefined ML workflow designed for more advanced tasks with best practices, such as training DL models, setting up customized retraining workflows, building bespoke model performance monitoring workflows. Canvas provides a highly customized, code driven ML development experience by applying software development principles to ML development. Users can create their own dependencies that can be managed in the UI environment.
+
+### Uniflow (Orchestration Framework)
+
+**Uniflow** is a structured, scalable orchestration framework designed to manage AI/ML pipelines at scale. It enables you to modularize your computation into **tasks**, chain them into **workflows**, and manage input/output artifacts efficiently.
+
 
 ## What Can I Build?
 
