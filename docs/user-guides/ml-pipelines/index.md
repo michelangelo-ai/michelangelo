@@ -14,7 +14,7 @@
 
 ## Pipeline
 
-A pipeline is an instance of a workflow. A pipeline runs the workflow function with a set of predefined configs. This means a workflow can be associated with multiple pipelines, each one with its own set of configs. In Canvas, a pipeline can be triggered in the following ways:
+A pipeline is an instance of a workflow. A pipeline runs the workflow function with a set of predefined configs. This means a workflow can be associated with multiple pipelines, each one with its own set of configs. In CanvasFlex, a pipeline can be triggered in the following ways:
 
 - Triggered directly through MA Studio UI (remote run only)
 - Triggered via MA CLI tools (remote run only)
