@@ -26,7 +26,6 @@ from michelangelo.cli.mactl.grpc_tools import (
     get_message_class_by_name,
     get_methods_from_service,
 )
-from michelangelo.gen.api.list_pb2 import ListOptionsExt, PaginationSpec
 
 _LOG = getLogger(__name__)
 METADATA_STUB = []
@@ -220,6 +219,10 @@ def crd_method_call(crd_method_info, request_input: Message) -> Message:
 
     method_fullname = f"/{crd_method_info.crd_full_name}/{crd_method_info.method_name}"
     _LOG.info("Method fullname for gRPC call: %s", method_fullname)
+
+    request_size = len(request_input.SerializeToString())
+    _LOG.info("gRPC request size: %d bytes", request_size)
+
     stub_method = crd_method_info.channel.unary_unary(
         method_fullname,
         request_serializer=crd_method_info.input_class.SerializeToString,
@@ -230,6 +233,9 @@ def crd_method_call(crd_method_info, request_input: Message) -> Message:
         metadata=METADATA_STUB,
         timeout=30,
     )
+
+    response_size = len(response.SerializeToString())
+    _LOG.info("gRPC response size: %d bytes (%d KB)", response_size, response_size // 1024)
     _LOG.info("Stub method completed (%r): %r", type(response), response)
     return response
 
@@ -273,9 +279,14 @@ def prepare_column_info() -> list[dict]:
         },
         {
             "column_name": "LAST_UPDATED_SPEC",
-            "retrieve_func": lambda item: datetime.fromtimestamp(
-                int(item.metadata.labels["michelangelo/UpdateTimestamp"]) / 1_000_000
-            ).strftime("%Y-%m-%d_%H:%M:%S"),
+            "retrieve_func": lambda item: (
+                datetime.fromtimestamp(
+                    int(item.metadata.labels["michelangelo/UpdateTimestamp"])
+                    / 1_000_000
+                ).strftime("%Y-%m-%d_%H:%M:%S")
+                if item.metadata.labels.get("michelangelo/UpdateTimestamp", "")
+                else "N/A"
+            ),
             "max_length": len("LAST_UPDATED_SPEC") + 1,
         },
     ]
@@ -319,16 +330,22 @@ def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mes
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
     limit = bound_args.arguments.get("limit", 100)
-    pagination_spec = PaginationSpec(offset=0, limit=limit)
-    list_options_ext = ListOptionsExt(pagination=pagination_spec)
 
-    call_res = crd_method_call_kwargs(
-        crd_method_info,
-        **{
-            "namespace": get_single_arg(bound_args.arguments, "namespace"),
-            "list_options_ext": list_options_ext,
+    request_dict = {
+        "namespace": get_single_arg(bound_args.arguments, "namespace"),
+        "list_options": {"limit": limit},
+        "list_options_ext": {
+            "pagination": {
+                "offset": 0,
+                "limit": limit,
+            }
         },
-    )
+    }
+
+    request_input = crd_method_info.input_class()
+    ParseDict(request_dict, request_input)
+    _LOG.info("ListRequest built: %r", request_input)
+    call_res = crd_method_call(crd_method_info, request_input)
     _LOG.debug("Succeed to list CRDs: %r", type(call_res))
     results = {k.name: v for k, v in call_res.ListFields() if k.name.endswith("_list")}
     _LOG.debug(
@@ -342,10 +359,13 @@ def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mes
 
     print_list_formatted(raw_elems.items)
 
+    # Show warning if we got exactly the limit (there might be more)
     if len(raw_elems.items) == limit:
         print(
-            f"\n⚠️  Warning: Result count ({len(raw_elems.items)}) equals limit "
-            f"({limit}). There may be more items. Use --limit to increase."
+            f"\n⚠️  The response is limited to {limit} pipelines. "
+            f"There may be more than {limit} results. "
+            f"Consider a larger limit with --limit argument or using filter to narrow down the result. "
+            f"(default: 100)"
         )
 
     return call_res
@@ -726,7 +746,7 @@ class CRD:
         self.create = MethodType(bound_func, self)
         _LOG.debug("Generated CREATE injected well: %r", self.create)
 
-    def generate_list(self, channel: Channel):
+    def generate_list(self, channel: Channel, parser: Optional[ArgumentParser] = None):
         """Generate list function of this class."""
         _LOG.info("Generate LIST method for %r / %r", self.name, self.full_name)
 
@@ -735,6 +755,8 @@ class CRD:
             self.full_name,
             *self._extract_method_info(channel, self.full_name, "List"),
         )
+
+        self.configure_parser("list", parser)
         list_func_signature = Signature(
             [
                 Parameter("self", Parameter.POSITIONAL_OR_KEYWORD),

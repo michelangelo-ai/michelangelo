@@ -83,8 +83,9 @@ class PrepareColumnInfoTest(TestCase):
 class ListFuncImplTest(TestCase):
     """Test cases for list_func_impl function."""
 
-    @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
-    def test_list_func_impl(self, mock_call_kwargs):
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.ParseDict")
+    def test_list_func_impl(self, mock_parse_dict, mock_call):
         """Test list_func_impl extracts list fields and formats output."""
         # Create CrdMethodInfo instance
         crd_method_info = CrdMethodInfo(
@@ -108,7 +109,7 @@ class ListFuncImplTest(TestCase):
                 Mock(items=[mock_item]),
             )
         ]
-        mock_call_kwargs.return_value = mock_response
+        mock_call.return_value = mock_response
 
         # Execute - should not raise any exceptions
         list_func_impl(
@@ -116,13 +117,15 @@ class ListFuncImplTest(TestCase):
             Mock(arguments={"namespace": "test-namespace", "limit": 100}),
         )
 
-        # Verify crd_method_call_kwargs was called with correct arguments
-        call_args = mock_call_kwargs.call_args
-        self.assertEqual(call_args.kwargs["namespace"], "test-namespace")
-        self.assertTrue("list_options_ext" in call_args.kwargs)
+        # Verify ParseDict was called with correct request dict
+        call_args = mock_parse_dict.call_args
+        request_dict = call_args[0][0]
+        self.assertEqual(request_dict["namespace"], "test-namespace")
+        self.assertEqual(request_dict["list_options_ext"]["pagination"]["limit"], 100)
 
-    @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
-    def test_list_func_impl_with_limit_warning(self, mock_call_kwargs):
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.ParseDict")
+    def test_list_func_impl_with_limit_warning(self, mock_parse_dict, mock_call):
         """Test list_func_impl shows warning when result count equals limit."""
         crd_method_info = CrdMethodInfo(
             channel=Mock(),
@@ -145,15 +148,16 @@ class ListFuncImplTest(TestCase):
                 Mock(items=mock_items),
             )
         ]
-        mock_call_kwargs.return_value = mock_response
+        mock_call.return_value = mock_response
 
         list_func_impl(
             crd_method_info,
             Mock(arguments={"namespace": "test-namespace", "limit": 10}),
         )
 
-        call_args = mock_call_kwargs.call_args
-        self.assertEqual(call_args.kwargs["list_options_ext"].pagination.limit, 10)
+        call_args = mock_parse_dict.call_args
+        request_dict = call_args[0][0]
+        self.assertEqual(request_dict["list_options_ext"]["pagination"]["limit"], 10)
 
 
 class DeleteFuncImplTest(TestCase):
