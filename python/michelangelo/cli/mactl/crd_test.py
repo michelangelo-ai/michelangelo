@@ -208,6 +208,36 @@ class GetFuncImplTest(TestCase):
             crd_method_info, namespace="ns", name="proj"
         )
 
+    def test_get_func_impl_without_name_calls_list(self):
+        """Test get_func_impl without name calls list with limit."""
+        mock_crd = Mock()
+        mock_crd.list = Mock(return_value="list_result")
+        mock_crd.generate_list = Mock()
+
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Get",
+            input_class=Mock,
+            output_class=Mock,
+        )
+
+        result = get_func_impl(
+            crd_method_info,
+            Mock(
+                arguments={
+                    "self": mock_crd,
+                    "namespace": "ns",
+                    "name": None,
+                    "limit": 50,
+                }
+            ),
+        )
+
+        mock_crd.generate_list.assert_called_once_with(crd_method_info.channel)
+        mock_crd.list.assert_called_once_with(namespace="ns", limit=50)
+        self.assertEqual(result, "list_result")
+
 
 class ApplyFuncImplTest(TestCase):
     """Test cases for apply_func_impl function."""

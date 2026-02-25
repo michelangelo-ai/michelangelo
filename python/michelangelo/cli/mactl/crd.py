@@ -352,8 +352,8 @@ def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mes
         print(
             f"\n⚠️  The response is limited to {limit} pipelines. "
             f"There may be more than {limit} results. "
-            f"Consider a larger limit with --limit argument or using filter to narrow down the result. "
-            f"(default: 100)"
+            f"Consider a larger limit with --limit argument or using filter "
+            f"to narrow down the result. (default: 100)"
         )
 
     return call_res
