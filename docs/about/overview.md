@@ -17,7 +17,7 @@ If you're an ML practitioner familiar with training models, managing experiments
 
 ### Flexible Development Options
 - **No-code UI** for rapid prototyping and standard workflows - perfect for quick experiments and business analysts
-- **Code-driven workflows** for custom ML pipelines - full control when you need it with predefined YAML based workflow(Canvas) and python DAG based workflow(Uniflow)
+- **Code-driven workflows** for custom ML pipelines - full control when you need it with predefined YAML based workflow(CanvasFlex) and python DAG based workflow(Uniflow)
 - **Seamless transition** between UI and code - start in the UI, extend with code as needs grow
 
 ### Built for Collaboration
@@ -35,7 +35,7 @@ If you're an ML practitioner familiar with training models, managing experiments
 Michelangelo offers 2 primary ways for you to build and deploy your model:
 
 1. **User Interface (UI)** - No-code environment for standard ML workflows
-2. **Canvas/Uniflow** - Code-driven workflows for advanced customization
+2. **CanvasFlex/Uniflow** - Code-driven workflows for advanced customization
 
 ### ML Workflow Mapping
 
@@ -45,7 +45,7 @@ If you're coming from other ML platforms, here's how familiar concepts map to Mi
 |---------------|---------------|-------------------------|
 | **Data Preparation** | Pandas, Spark notebooks | **MA Studio Data Prep** or **Uniflow tasks** with Ray/Spark * |
 | **Experiment Tracking** | MLflow, Weights & Biases | **Model Registry** with automatic versioning |
-| **Model Training** | Custom scripts, Kubeflow Pipelines | **MA Studio Training** (UI) or **Canvas/Uniflow workflows** (code) |
+| **Model Training** | Custom scripts, Kubeflow Pipelines | **MA Studio Training** (UI) or **CanvasFlex/Uniflow workflows** (code) |
 | **Hyperparameter Tuning** | Optuna, Ray Tune | **Uniflow tasks** with Ray Tune * |
 | **Model Storage** | S3 buckets, model registries | **Michelangelo Model Registry** with metadata & plugin storage |
 | **Batch Inference** | Airflow + custom scripts | **Deployment to batch endpoint** with offline inference pipeline and Ray / Triton Inference * |
@@ -93,7 +93,7 @@ Pick the approach that matches your workflow and expertise:
 #### Hybrid Approach
 Many teams start with the **UI for initial experiments**, then transition to **code for production workflows**. You can:
 - Train initial models in the UI to validate feasibility
-- Committed YAML configurations by UI and extend in Canvas/rebuild in Uniflow
+- Committed YAML configurations by UI and extend in CanvasFlex/rebuild in Uniflow
 - Use the UI for monitoring while managing training/deployment pipelines
 
 ## Machine Learning Tools
@@ -107,11 +107,11 @@ Users can use the no-code dev environment to perform standardized ML tasks witho
 * Prepare data sources for training models or making batch predictions
 * Build and train XGB models, classic ML models, and Deep Learning models
 
-### Canvas: opinionated predefined ML workflow
+### CanvasFlex: opinionated predefined ML workflow
 
-For more advanced tasks, such as training DL models, setting up customized retraining workflows, building bespoke model performance monitoring workflows, users can build the corresponding pipelines via Canvas, an opinionated predefined ML workflow, while managing these pipelines (running, debugging, viewing run results, etc) in the UI environment. 
+For more advanced tasks, such as training DL models, setting up customized retraining workflows, building bespoke model performance monitoring workflows, users can build the corresponding pipelines via CanvasFlex, an opinionated predefined ML workflow, while managing these pipelines (running, debugging, viewing run results, etc) in the UI environment. 
 
-Canvas provides a highly customized, code driven ML development experience by applying software development principles to ML development. Users can create their own dependencies that can be managed in the UI environment.
+CanvasFlex provides a highly customized, code driven ML development experience by applying software development principles to ML development. Users can create their own dependencies that can be managed in the UI environment.
 
 ## What Can I Build?
 
@@ -124,7 +124,7 @@ Michelangelo supports a wide range of ML use cases. Here are some common example
   - _Deployment_: Batch predictions daily, results to business intelligence dashboard
 
 - **Fraud Detection**: Flag suspicious transactions in real-time
-  - _Approach_: Deep learning model via Canvas workflow
+  - _Approach_: Deep learning model via CanvasFlex workflow
   - _Features_: Transaction patterns, device fingerprints, network analysis
   - _Deployment_: Online inference server with <100ms latency requirements
 
