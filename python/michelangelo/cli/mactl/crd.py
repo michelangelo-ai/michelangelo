@@ -219,10 +219,6 @@ def crd_method_call(crd_method_info, request_input: Message) -> Message:
 
     method_fullname = f"/{crd_method_info.crd_full_name}/{crd_method_info.method_name}"
     _LOG.info("Method fullname for gRPC call: %s", method_fullname)
-
-    request_size = len(request_input.SerializeToString())
-    _LOG.info("gRPC request size: %d bytes", request_size)
-
     stub_method = crd_method_info.channel.unary_unary(
         method_fullname,
         request_serializer=crd_method_info.input_class.SerializeToString,
@@ -233,9 +229,6 @@ def crd_method_call(crd_method_info, request_input: Message) -> Message:
         metadata=METADATA_STUB,
         timeout=30,
     )
-
-    response_size = len(response.SerializeToString())
-    _LOG.info("gRPC response size: %d bytes (%d KB)", response_size, response_size // 1024)
     _LOG.info("Stub method completed (%r): %r", type(response), response)
     return response
 
@@ -279,14 +272,9 @@ def prepare_column_info() -> list[dict]:
         },
         {
             "column_name": "LAST_UPDATED_SPEC",
-            "retrieve_func": lambda item: (
-                datetime.fromtimestamp(
-                    int(item.metadata.labels["michelangelo/UpdateTimestamp"])
-                    / 1_000_000
-                ).strftime("%Y-%m-%d_%H:%M:%S")
-                if item.metadata.labels.get("michelangelo/UpdateTimestamp", "")
-                else "N/A"
-            ),
+            "retrieve_func": lambda item: datetime.fromtimestamp(
+                int(item.metadata.labels["michelangelo/UpdateTimestamp"]) / 1_000_000
+            ).strftime("%Y-%m-%d_%H:%M:%S"),
             "max_length": len("LAST_UPDATED_SPEC") + 1,
         },
     ]
