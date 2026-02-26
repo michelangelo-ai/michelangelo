@@ -1,0 +1,38 @@
+apiVersion: michelangelo.api/v2
+kind: InferenceServer
+metadata:
+  name: inference-server-example
+  namespace: default
+  labels:
+    app: inference-server
+spec:
+  tenancyType: TENANCY_TYPE_DEDICATED
+  backendType: BACKEND_TYPE_TRITON
+  ownerSpec:
+    tier: 1
+  initSpec:
+    resourceSpec:
+      cpu: 2
+      memory: "4Gi"
+    servingSpec:
+      version: "latest"
+    numInstances: 1
+  decomSpec:
+    decommission: false
+  owner:
+    name: "user-example"
+  deploymentStrategy:
+    remoteClusterDeployment:
+      clusterTargets:
+        - clusterId: "k3d-cluster-1"
+          kubernetes:
+            host: "k3d-cluster-1-server-0"
+            port: "6443"
+            tokenTag: "k3d-cluster-1-token"
+            caDataTag: "k3d-cluster-1-ca"
+        - clusterId: "k3d-cluster-2"
+          kubernetes:
+            host: "k3d-cluster-2-server-0"
+            port: "6443"
+            tokenTag: "k3d-cluster-2-token"
+            caDataTag: "k3d-cluster-2-ca"

@@ -1,0 +1,30 @@
+apiVersion: michelangelo.api/v2
+kind: Deployment
+metadata:
+  name: bert-cola-deployment
+  namespace: default
+  labels:
+    app: bert-cola-example
+spec:
+  desiredRevision:
+    name: qwen-multilingual-lora
+    namespace: default
+  inferenceServer:
+    name: dynamo-inference-server
+    namespace: default
+  selector:
+    matchLabels:
+      environment: production
+  deletionSpec:
+    deleted: false
+  strategy:
+    rolling:
+      incrementPercentage: 20
+  definition:
+    type: TARGET_TYPE_INFERENCE_SERVER
+    subType: realtime-serving
+  modelFamily:
+    name: bert-cola-family
+    namespace: default
+  owner:
+    name: "user-1234"

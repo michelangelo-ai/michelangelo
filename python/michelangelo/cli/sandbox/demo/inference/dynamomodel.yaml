@@ -1,0 +1,9 @@
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoModel
+metadata:
+  name: qwen3-base
+  namespace: default
+spec:
+  modelName: Qwen/Qwen3-0.6B
+  baseModelName: Qwen/Qwen3-0.6B
+  modelType: base

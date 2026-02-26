@@ -1,0 +1,85 @@
+# Dynamo Kubernetes Discovery Setup
+# This provides the minimal resources needed for Dynamo's Kubernetes-native service discovery
+# WITHOUT requiring the full Dynamo operator.
+#
+# Components:
+# 1. DynamoWorkerMetadata CRD - Schema for worker registration
+# 2. ClusterRole - Permissions to manage worker metadata and watch endpoints
+# 3. ClusterRoleBinding - Grants permissions to pods in the default namespace
+
+---
+# CRD: DynamoWorkerMetadata
+# Workers create instances of this to register themselves for discovery by the frontend
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: dynamoworkermetadatas.nvidia.com
+spec:
+  group: nvidia.com
+  names:
+    kind: DynamoWorkerMetadata
+    listKind: DynamoWorkerMetadataList
+    plural: dynamoworkermetadatas
+    singular: dynamoworkermetadata
+    shortNames:
+      - dwm
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: DynamoWorkerMetadata stores discovery metadata for a Dynamo worker pod
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required:
+                - data
+              properties:
+                data:
+                  type: object
+                  description: Raw JSON blob containing DiscoveryMetadata
+                  x-kubernetes-preserve-unknown-fields: true
+      additionalPrinterColumns:
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+
+---
+# ClusterRole: Permissions for Dynamo Kubernetes discovery
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: dynamo-discovery
+rules:
+  # Watch EndpointSlices for pod readiness
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]
+  # Manage DynamoWorkerMetadata CRs for service registration/discovery
+  - apiGroups: ["nvidia.com"]
+    resources: ["dynamoworkermetadatas"]
+    verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
+
+---
+# ClusterRoleBinding: Grant permissions to default ServiceAccount in default namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: dynamo-discovery-default
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: dynamo-discovery
+  apiGroup: rbac.authorization.k8s.io

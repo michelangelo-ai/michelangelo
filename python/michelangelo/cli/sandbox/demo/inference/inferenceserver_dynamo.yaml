@@ -1,0 +1,27 @@
+apiVersion: michelangelo.api/v2
+kind: InferenceServer
+metadata:
+  name: dynamo-inference-server
+  namespace: default
+  labels:
+    app: dynamo-inference-server
+spec:
+  tenancyType: TENANCY_TYPE_DEDICATED
+  backendType: BACKEND_TYPE_DYNAMO
+  ownerSpec:
+    tier: 1
+  initSpec:
+    resourceSpec:
+      # CPU/memory for the frontend and workers
+      # GPU nodes have ~13Gi allocatable, use 12Gi to leave headroom
+      cpu: 2
+      memory: "12Gi"
+      # GPU is required for vLLM inference
+      gpu: 1
+    servingSpec:
+      version: "latest"
+    numInstances: 1
+  decomSpec:
+    decommission: false
+  owner:
+    name: "user-example"
