@@ -36,9 +36,7 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = [
-        "module_test.go",
-    ],
+    srcs = ["module_test.go"],
     embed = [":go_default_library"],
     deps = [
         "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
