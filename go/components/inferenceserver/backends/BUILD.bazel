@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "dynamo.go",
+        "dynamo_etcd.go",
         "dynamo_self_provision.go",
         "dynamo_single_container.go",
         "interface.go",
