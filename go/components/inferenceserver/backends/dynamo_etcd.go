@@ -523,7 +523,7 @@ func (b *dynamoEtcdBackend) createFrontend(ctx context.Context, logger *zap.Logg
 							Env: []corev1.EnvVar{
 								{Name: "DYN_NAMESPACE", Value: "dynamo"},
 								{Name: "DYN_COMPONENT", Value: "Frontend"},
-								{Name: "DYN_DISCOVERY_BACKEND", Value: "etcd"},
+								{Name: "DYN_DISCOVERY_BACKEND", Value: "kv_store"},
 								{Name: "DYN_STORE_KV", Value: "etcd"},
 								{Name: "ETCD_ENDPOINTS", Value: etcdEndpoint},
 								{Name: "DYN_EVENT_PLANE", Value: "zmq"},
@@ -719,7 +719,7 @@ func (b *dynamoEtcdBackend) createDecodeWorker(ctx context.Context, logger *zap.
 							Env: []corev1.EnvVar{
 								{Name: "DYN_NAMESPACE", Value: "dynamo"},
 								{Name: "DYN_COMPONENT", Value: "VllmDecodeWorker"},
-								{Name: "DYN_DISCOVERY_BACKEND", Value: "etcd"},
+								{Name: "DYN_DISCOVERY_BACKEND", Value: "kv_store"},
 								{Name: "DYN_STORE_KV", Value: "etcd"},
 								{Name: "ETCD_ENDPOINTS", Value: etcdEndpoint},
 								{Name: "DYN_EVENT_PLANE", Value: "zmq"},
