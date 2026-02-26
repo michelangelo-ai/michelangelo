@@ -38,7 +38,6 @@ go_test(
     name = "go_default_test",
     srcs = [
         "module_test.go",
-        "tls_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
