@@ -649,12 +649,12 @@ func (b *dynamoEtcdBackend) createDecodeWorker(ctx context.Context, logger *zap.
 		gpuCount = int64(inferenceServer.Spec.InitSpec.ResourceSpec.Gpu)
 	}
 
-	cpuRequest := "4"
+	cpuRequest := "2"
 	if inferenceServer.Spec.InitSpec.ResourceSpec.Cpu > 0 {
 		cpuRequest = fmt.Sprintf("%d", inferenceServer.Spec.InitSpec.ResourceSpec.Cpu)
 	}
 
-	memoryRequest := "16Gi"
+	memoryRequest := "8Gi"
 	if inferenceServer.Spec.InitSpec.ResourceSpec.Memory != "" {
 		memoryRequest = inferenceServer.Spec.InitSpec.ResourceSpec.Memory
 	}
