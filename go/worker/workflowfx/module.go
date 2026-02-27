@@ -4,6 +4,7 @@ package workflowfx
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"time"
 
@@ -56,14 +57,14 @@ func (f DefaultTemporalClientFactory) NewTemporalClient(opts tempclient.Options)
 
 // CadenceClientFactory creates Cadence clients.
 type CadenceClientFactory interface {
-	NewCadenceClient(conf Config) (workflowserviceclient.Interface, error)
+	NewCadenceClient(conf Config, tlsConfig *tls.Config) (workflowserviceclient.Interface, error)
 }
 
 // DefaultCadenceClientFactory implements CadenceClientFactory.
 type DefaultCadenceClientFactory struct{}
 
-func (f DefaultCadenceClientFactory) NewCadenceClient(conf Config) (workflowserviceclient.Interface, error) {
-	return newCadenceClient(conf)
+func (f DefaultCadenceClientFactory) NewCadenceClient(conf Config, tlsConfig *tls.Config) (workflowserviceclient.Interface, error) {
+	return newCadenceClient(conf, tlsConfig)
 }
 
 type In struct {
@@ -73,6 +74,7 @@ type In struct {
 
 	CadenceFactory  CadenceClientFactory  `optional:"true"`
 	TemporalFactory TemporalClientFactory `optional:"true"`
+	TLSConfig       *tls.Config           `optional:"true"` // Optional: user-provided custom TLS config
 }
 
 type Out struct {
@@ -90,7 +92,7 @@ func provide(in In) (Out, error) {
 	out.Backend = service.BackendType(conf.Provider)
 	if conf.Provider == ProviderCadence {
 		var err error
-		out.Workers, err = newCadenceWorker(in.CadenceFactory, in.Config, in.Logger)
+		out.Workers, err = newCadenceWorker(in.CadenceFactory, in.Config, in.Logger, in.TLSConfig)
 		if err != nil {
 			return out, err
 		}
@@ -107,7 +109,7 @@ func provide(in In) (Out, error) {
 }
 
 // newCadenceWorker creates a new Cadence worker.
-func newCadenceWorker(factory CadenceClientFactory, conf Config, log *zap.Logger) ([]sworker.Worker, error) {
+func newCadenceWorker(factory CadenceClientFactory, conf Config, log *zap.Logger, tlsConfig *tls.Config) ([]sworker.Worker, error) {
 	metrics := tally.NoopScope
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, workflow.BackendContextKey, cadence.NewWorkflow())
@@ -118,7 +120,7 @@ func newCadenceWorker(factory CadenceClientFactory, conf Config, log *zap.Logger
 		BackgroundActivityContext: ctx,
 	}
 	// Create the Cadence client interface.
-	inter, err := factory.NewCadenceClient(conf)
+	inter, err := factory.NewCadenceClient(conf, tlsConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -133,15 +135,19 @@ func newCadenceWorker(factory CadenceClientFactory, conf Config, log *zap.Logger
 }
 
 // newCadenceClient creates a new Cadence client interface.
-func newCadenceClient(conf Config) (workflowserviceclient.Interface, error) {
+func newCadenceClient(conf Config, tlsConfig *tls.Config) (workflowserviceclient.Interface, error) {
 	service := "cadence-frontend"
 
 	var tran transport.UnaryOutbound
 	switch conf.Transport {
 	case "grpc":
 		grpcTransport := grpc.NewTransport()
-		if conf.TLSConfig != nil {
-			creds := credentials.NewTLS(conf.TLSConfig)
+		if conf.UseTLS {
+			// Use the injected TLS configuration, or create a default one if not provided
+			if tlsConfig == nil {
+				tlsConfig = &tls.Config{}
+			}
+			creds := credentials.NewTLS(tlsConfig)
 			dialer := grpcTransport.NewDialer(grpc.DialerCredentials(creds))
 
 			// Create a peer chooser with the TLS-enabled dialer
