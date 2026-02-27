@@ -1,0 +1,51 @@
+import { Textarea } from 'baseui/textarea';
+
+import { FormControl } from '#core/components/form/components/form-control';
+import { useField } from '#core/components/form/hooks/use-field';
+import { MaxLengthLabelEnhancer } from './max-length-label-enhancer';
+
+import type { TextareaFieldProps } from './types';
+
+export const TextareaField: React.FC<TextareaFieldProps> = ({
+  name,
+  label,
+  required,
+  readOnly,
+  disabled,
+  placeholder,
+  description,
+  caption,
+  rows,
+  maxLength,
+}) => {
+  const { input, meta } = useField<string>(name);
+  const currentLength = input.value?.length ?? 0;
+
+  return (
+    <FormControl
+      label={label}
+      required={required}
+      description={description}
+      caption={caption}
+      error={meta.touched && meta.error ? meta.error : undefined}
+      labelEndEnhancer={
+        maxLength ? (
+          <MaxLengthLabelEnhancer maxLength={maxLength} currentLength={currentLength} />
+        ) : undefined
+      }
+    >
+      <Textarea
+        id={input.name}
+        name={input.name}
+        value={input.value ?? ''}
+        onChange={(e) => input.onChange(e.currentTarget.value)}
+        onBlur={input.onBlur}
+        placeholder={placeholder}
+        readOnly={readOnly}
+        disabled={disabled}
+        rows={rows}
+        maxLength={maxLength}
+      />
+    </FormControl>
+  );
+};

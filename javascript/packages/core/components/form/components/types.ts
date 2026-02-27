@@ -4,5 +4,6 @@ export interface FormControlProps {
   description?: string;
   caption?: string;
   error?: string;
+  labelEndEnhancer?: React.ReactNode;
   children: React.ReactNode;
 }
