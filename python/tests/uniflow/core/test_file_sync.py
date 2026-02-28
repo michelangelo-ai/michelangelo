@@ -742,9 +742,13 @@ class TestDevRunStorageUrl(unittest.TestCase):
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.yaml_to_dict")
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name")
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_object")
-    def test_storage_url_passed_to_workflow_retrieval(self, mock_gen_obj, mock_gen_name, mock_yaml, mock_handle):
+    def test_storage_url_passed_to_workflow_retrieval(
+        self, mock_gen_obj, mock_gen_name, mock_yaml, mock_handle
+    ):
         """Test that storage_url parameter is correctly passed through dev_run to handle_workflow_inputs_retrieval."""
-        from michelangelo.cli.mactl.plugins.entity.pipeline.dev_run import convert_crd_metadata_pipeline_dev_run
+        from michelangelo.cli.mactl.plugins.entity.pipeline.dev_run import (
+            convert_crd_metadata_pipeline_dev_run,
+        )
         from pathlib import Path
         from unittest.mock import MagicMock
         from google.protobuf.message import Message
@@ -777,8 +781,13 @@ class TestDevRunStorageUrl(unittest.TestCase):
         args, kwargs = mock_handle.call_args
 
         # The storage_url should be the last positional argument
-        self.assertEqual(len(args), 5, f"Expected 5 args (including storage_url), got {len(args)}")
-        self.assertEqual(args[4], test_storage_url, f"Expected storage_url '{test_storage_url}', got '{args[4]}'")
+        self.assertEqual(
+            len(args), 5, f"Expected 5 args (including storage_url), got {len(args)}"
+        )
+        self.assertEqual(
+            args[4], test_storage_url,
+            f"Expected storage_url '{test_storage_url}', got '{args[4]}'"
+        )
 
         # Verify the function returns a valid result
         self.assertIsInstance(result, dict)
@@ -788,9 +797,13 @@ class TestDevRunStorageUrl(unittest.TestCase):
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.yaml_to_dict")
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name")
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_object")
-    def test_storage_url_none_by_default(self, mock_gen_obj, mock_gen_name, mock_yaml, mock_handle):
+    def test_storage_url_none_by_default(
+        self, mock_gen_obj, mock_gen_name, mock_yaml, mock_handle
+    ):
         """Test that storage_url parameter defaults to None when not provided."""
-        from michelangelo.cli.mactl.plugins.entity.pipeline.dev_run import convert_crd_metadata_pipeline_dev_run
+        from michelangelo.cli.mactl.plugins.entity.pipeline.dev_run import (
+            convert_crd_metadata_pipeline_dev_run,
+        )
         from pathlib import Path
         from unittest.mock import MagicMock
         from google.protobuf.message import Message
@@ -820,7 +833,9 @@ class TestDevRunStorageUrl(unittest.TestCase):
         args, kwargs = mock_handle.call_args
 
         # The storage_url should be the last positional argument and None
-        self.assertEqual(len(args), 5, f"Expected 5 args (including storage_url), got {len(args)}")
+        self.assertEqual(
+            len(args), 5, f"Expected 5 args (including storage_url), got {len(args)}"
+        )
         self.assertIsNone(args[4], f"Expected storage_url to be None, got '{args[4]}'")
 
         # Verify the function returns a valid result
@@ -828,9 +843,13 @@ class TestDevRunStorageUrl(unittest.TestCase):
         self.assertIn('pipeline_run', result)
 
     @patch("michelangelo.cli.mactl.utils.run_subprocess_registration")
-    def test_storage_url_passed_to_subprocess_registration(self, mock_subprocess):
+    def test_storage_url_passed_to_subprocess_registration(
+        self, mock_subprocess
+    ):
         """Test that storage_url is passed correctly to run_subprocess_registration."""
-        from michelangelo.cli.mactl.plugins.entity.pipeline.create import get_pipeline_config_and_tar
+        from michelangelo.cli.mactl.plugins.entity.pipeline.create import (
+            get_pipeline_config_and_tar,
+        )
         from pathlib import Path
         from unittest.mock import MagicMock
         import tempfile
@@ -843,9 +862,13 @@ class TestDevRunStorageUrl(unittest.TestCase):
             tmp_path = Path(tmp_dir)
 
             # Create mock output files
-            (tmp_path / "registration_success.txt").write_text("SUCCESS: s3://test/output.tar.gz")
+            (tmp_path / "registration_success.txt").write_text(
+                "SUCCESS: s3://test/output.tar.gz"
+            )
             (tmp_path / "uniflow_tar_path.txt").write_text("s3://test/output.tar.gz")
-            (tmp_path / "uniflow_input.txt").write_text('{"environ": {}, "kwargs": []}')
+            (tmp_path / "uniflow_input.txt").write_text(
+                '{"environ": {}, "kwargs": []}'
+            )
             (tmp_path / "workflow_function_name.txt").write_text("test_workflow")
 
             # Create a mock config file
@@ -853,7 +876,9 @@ class TestDevRunStorageUrl(unittest.TestCase):
             config_path.write_text("apiVersion: v1\nkind: Pipeline")
 
             # Mock the read_subprocess_outputs function to return success
-            with patch("michelangelo.cli.mactl.plugins.entity.pipeline.create.read_subprocess_outputs") as mock_read:
+            with patch(
+                "michelangelo.cli.mactl.plugins.entity.pipeline.create.read_subprocess_outputs"
+            ) as mock_read:
                 mock_read.return_value = (True, "Success", "s3://test/output.tar.gz")
 
                 test_storage_url = "s3://custom-bucket/my-path"

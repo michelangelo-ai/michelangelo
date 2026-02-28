@@ -229,7 +229,10 @@ def generate_dev_run(
 
 
 def convert_crd_metadata_pipeline_dev_run(
-    yaml_dict: dict, crd_class: type[Message], yaml_path: Path, storage_url: Optional[str] = None
+    yaml_dict: dict,
+    crd_class: type[Message],
+    yaml_path: Path,
+    storage_url: Optional[str] = None,
 ) -> dict:
     """Convert CRD metadata for pipeline dev-run command.
 

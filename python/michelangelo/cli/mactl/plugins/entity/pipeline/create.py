@@ -219,7 +219,11 @@ def convert_crd_metadata_pipeline_create(
 
 
 def handle_workflow_inputs_retrieval(
-    repo_root: Path, config_file_relative_path: str, project: str, pipeline: str, storage_url: Optional[str] = None
+    repo_root: Path,
+    config_file_relative_path: str,
+    project: str,
+    pipeline: str,
+    storage_url: Optional[str] = None,
 ) -> tuple[dict, str, str]:
     """Handle workflow inputs retrieval from subprocess registration."""
     workflow_inputs = None
