@@ -79,6 +79,54 @@ class PrepareColumnInfoTest(TestCase):
             ],
         )
 
+    def test_prepare_column_info_empty_timestamp(self):
+        """Test prepare_column_info handles empty timestamp gracefully."""
+        # Mock Entity with empty timestamp
+        mock_item = Mock()
+        mock_item.metadata.namespace = "test-ns"
+        mock_item.metadata.name = "test-name"
+        mock_item.metadata.labels = {"michelangelo/UpdateTimestamp": ""}
+
+        # run func
+        result = prepare_column_info()
+
+        # Check results
+        retrieval_funcs = [col.pop("retrieve_func") for col in result]
+
+        # Should return "N/A" for empty timestamp instead of crashing
+        self.assertEqual(
+            [func(mock_item) for func in retrieval_funcs],
+            [
+                "test-ns",
+                "test-name",
+                "N/A",
+            ],
+        )
+
+    def test_prepare_column_info_missing_timestamp(self):
+        """Test prepare_column_info handles missing timestamp label."""
+        # Mock Entity without timestamp label
+        mock_item = Mock()
+        mock_item.metadata.namespace = "test-ns"
+        mock_item.metadata.name = "test-name"
+        mock_item.metadata.labels = {}
+
+        # run func
+        result = prepare_column_info()
+
+        # Check results
+        retrieval_funcs = [col.pop("retrieve_func") for col in result]
+
+        # Should return "N/A" for missing timestamp
+        self.assertEqual(
+            [func(mock_item) for func in retrieval_funcs],
+            [
+                "test-ns",
+                "test-name",
+                "N/A",
+            ],
+        )
+
 
 class ListFuncImplTest(TestCase):
     """Test cases for list_func_impl function."""
