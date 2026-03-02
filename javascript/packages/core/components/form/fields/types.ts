@@ -1,3 +1,5 @@
+import type { FieldValidator } from '#core/components/form/validation/types';
+
 export interface BaseFieldProps {
   /** Unique ID of the field,
    *
@@ -48,4 +50,11 @@ export interface BaseFieldProps {
    * **Markdown supported.**
    */
   caption?: string;
+
+  /**
+   * Validation function called on each value change after the field is touched.
+   * Returns an error message string when invalid, or `undefined` when valid.
+   * Use `combineValidators` to compose multiple validators.
+   */
+  validate?: FieldValidator;
 }

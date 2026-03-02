@@ -12,6 +12,7 @@ export const SelectField: React.FC<SelectFieldProps> = ({
   name,
   label,
   required,
+  validate,
   readOnly,
   disabled,
   description,
@@ -23,7 +24,10 @@ export const SelectField: React.FC<SelectFieldProps> = ({
   multi = false,
   creatable = false,
 }) => {
-  const { input, meta } = useField<string | string[] | number[] | number>(name);
+  const { input, meta } = useField<string | string[] | number[] | number>(name, {
+    required,
+    validate,
+  });
 
   const handleChange = useCallback(
     (params: { value: ReadonlyArray<SelectOption> }) => {

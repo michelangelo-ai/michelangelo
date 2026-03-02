@@ -60,6 +60,7 @@ export default [
       '**/node_modules/**',
       '**/dist/**',
       '**/gen/**',
+      '**/coverage/**',
       'eslint.config.js',
       '**/vite-env.d.ts',
     ],
