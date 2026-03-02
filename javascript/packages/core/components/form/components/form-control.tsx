@@ -12,7 +12,7 @@ export const FormControl: React.FC<FormControlProps> = ({
   description,
   caption,
   error,
-  labelEndEnhancer,
+  counter,
   children,
 }) => {
   const [css] = useStyletron();
@@ -21,8 +21,8 @@ export const FormControl: React.FC<FormControlProps> = ({
     <div className={css({ width: '100%' })}>
       <BaseFormControl
         label={label && <Label label={label} required={required} description={description} />}
-        labelEndEnhancer={labelEndEnhancer}
         caption={caption}
+        counter={counter}
         error={error}
         overrides={{
           ControlContainer: {
