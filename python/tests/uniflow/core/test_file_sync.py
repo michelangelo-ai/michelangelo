@@ -738,45 +738,58 @@ class TestFileSyncPreRun(unittest.TestCase):
 class TestDevRunStorageUrl(unittest.TestCase):
     """Unit tests for dev_run --storage-url parameter functionality."""
 
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.create.handle_workflow_inputs_retrieval")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.create.handle_workflow_inputs_retrieval"
+    )
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.yaml_to_dict")
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name")
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_object")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_object"
+    )
     def test_storage_url_passed_to_workflow_retrieval(
         self, mock_gen_obj, mock_gen_name, mock_yaml, mock_handle
     ):
-        """Test that storage_url parameter is correctly passed through dev_run to handle_workflow_inputs_retrieval."""
+        """Test that storage_url parameter is correctly passed through dev_run.
+
+        Verifies that the storage_url parameter is passed to
+        handle_workflow_inputs_retrieval.
+        """
+        from pathlib import Path
+        from unittest.mock import MagicMock
+
+        from google.protobuf.message import Message
+
         from michelangelo.cli.mactl.plugins.entity.pipeline.dev_run import (
             convert_crd_metadata_pipeline_dev_run,
         )
-        from pathlib import Path
-        from unittest.mock import MagicMock
-        from google.protobuf.message import Message
 
         # Setup mock returns
         mock_yaml.return_value = {
-            'metadata': {'namespace': 'test-project', 'name': 'test-pipeline'},
-            'spec': {}
+            "metadata": {"namespace": "test-project", "name": "test-pipeline"},
+            "spec": {},
         }
-        mock_handle.return_value = ({}, 's3://test/path.tar.gz', 'test_workflow')
-        mock_gen_name.return_value = 'test-run-123'
-        mock_gen_obj.return_value = {'spec': {}}
+        mock_handle.return_value = ({}, "s3://test/path.tar.gz", "test_workflow")
+        mock_gen_name.return_value = "test-run-123"
+        mock_gen_obj.return_value = {"spec": {}}
 
         # Create test data
         yaml_dict = {
-            'metadata': {'namespace': 'test-project', 'name': 'test-pipeline'},
-            'spec': {}
+            "metadata": {"namespace": "test-project", "name": "test-pipeline"},
+            "spec": {},
         }
         crd_class = MagicMock(spec=Message)
-        yaml_path = Path('/tmp/test.yaml')
-        test_storage_url = 's3://custom-bucket/custom-path'
+        yaml_path = Path("/tmp/test.yaml")
+        test_storage_url = "s3://custom-bucket/custom-path"
 
         # Call the function with storage_url
         result = convert_crd_metadata_pipeline_dev_run(
             yaml_dict, crd_class, yaml_path, storage_url=test_storage_url
         )
 
-        # Verify that handle_workflow_inputs_retrieval was called with the correct storage_url
+        # Verify that handle_workflow_inputs_retrieval was called with the correct
+        # storage_url
         mock_handle.assert_called_once()
         args, kwargs = mock_handle.call_args
 
@@ -785,45 +798,54 @@ class TestDevRunStorageUrl(unittest.TestCase):
             len(args), 5, f"Expected 5 args (including storage_url), got {len(args)}"
         )
         self.assertEqual(
-            args[4], test_storage_url,
-            f"Expected storage_url '{test_storage_url}', got '{args[4]}'"
+            args[4],
+            test_storage_url,
+            f"Expected storage_url '{test_storage_url}', got '{args[4]}'",
         )
 
         # Verify the function returns a valid result
         self.assertIsInstance(result, dict)
-        self.assertIn('pipeline_run', result)
+        self.assertIn("pipeline_run", result)
 
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.create.handle_workflow_inputs_retrieval")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.create.handle_workflow_inputs_retrieval"
+    )
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.yaml_to_dict")
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name")
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_object")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_object"
+    )
     def test_storage_url_none_by_default(
         self, mock_gen_obj, mock_gen_name, mock_yaml, mock_handle
     ):
         """Test that storage_url parameter defaults to None when not provided."""
+        from pathlib import Path
+        from unittest.mock import MagicMock
+
+        from google.protobuf.message import Message
+
         from michelangelo.cli.mactl.plugins.entity.pipeline.dev_run import (
             convert_crd_metadata_pipeline_dev_run,
         )
-        from pathlib import Path
-        from unittest.mock import MagicMock
-        from google.protobuf.message import Message
 
         # Setup mock returns
         mock_yaml.return_value = {
-            'metadata': {'namespace': 'test-project', 'name': 'test-pipeline'},
-            'spec': {}
+            "metadata": {"namespace": "test-project", "name": "test-pipeline"},
+            "spec": {},
         }
-        mock_handle.return_value = ({}, 's3://test/path.tar.gz', 'test_workflow')
-        mock_gen_name.return_value = 'test-run-123'
-        mock_gen_obj.return_value = {'spec': {}}
+        mock_handle.return_value = ({}, "s3://test/path.tar.gz", "test_workflow")
+        mock_gen_name.return_value = "test-run-123"
+        mock_gen_obj.return_value = {"spec": {}}
 
         # Create test data
         yaml_dict = {
-            'metadata': {'namespace': 'test-project', 'name': 'test-pipeline'},
-            'spec': {}
+            "metadata": {"namespace": "test-project", "name": "test-pipeline"},
+            "spec": {},
         }
         crd_class = MagicMock(spec=Message)
-        yaml_path = Path('/tmp/test.yaml')
+        yaml_path = Path("/tmp/test.yaml")
 
         # Call the function without storage_url (should default to None)
         result = convert_crd_metadata_pipeline_dev_run(yaml_dict, crd_class, yaml_path)
@@ -840,19 +862,18 @@ class TestDevRunStorageUrl(unittest.TestCase):
 
         # Verify the function returns a valid result
         self.assertIsInstance(result, dict)
-        self.assertIn('pipeline_run', result)
+        self.assertIn("pipeline_run", result)
 
     @patch("michelangelo.cli.mactl.utils.run_subprocess_registration")
-    def test_storage_url_passed_to_subprocess_registration(
-        self, mock_subprocess
-    ):
+    def test_storage_url_passed_to_subprocess_registration(self, mock_subprocess):
         """Test that storage_url is passed correctly to run_subprocess_registration."""
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import MagicMock
+
         from michelangelo.cli.mactl.plugins.entity.pipeline.create import (
             get_pipeline_config_and_tar,
         )
-        from pathlib import Path
-        from unittest.mock import MagicMock
-        import tempfile
 
         # Setup mock subprocess to return success
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
@@ -866,9 +887,7 @@ class TestDevRunStorageUrl(unittest.TestCase):
                 "SUCCESS: s3://test/output.tar.gz"
             )
             (tmp_path / "uniflow_tar_path.txt").write_text("s3://test/output.tar.gz")
-            (tmp_path / "uniflow_input.txt").write_text(
-                '{"environ": {}, "kwargs": []}'
-            )
+            (tmp_path / "uniflow_input.txt").write_text('{"environ": {}, "kwargs": []}')
             (tmp_path / "workflow_function_name.txt").write_text("test_workflow")
 
             # Create a mock config file
@@ -890,10 +909,11 @@ class TestDevRunStorageUrl(unittest.TestCase):
                     bazel_target="",
                     project="test-project",
                     pipeline="test-pipeline",
-                    storage_url=test_storage_url
+                    storage_url=test_storage_url,
                 )
 
-                # Verify run_subprocess_registration was called with the correct storage_url
+                # Verify run_subprocess_registration was called with the correct
+                # storage_url
                 mock_subprocess.assert_called_once()
                 args, kwargs = mock_subprocess.call_args
 
