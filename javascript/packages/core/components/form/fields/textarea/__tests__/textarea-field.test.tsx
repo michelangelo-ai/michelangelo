@@ -46,7 +46,7 @@ describe('TextareaField', () => {
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
     );
 
-    expect(screen.getByText('0 / 100')).toBeInTheDocument();
+    expect(screen.getByText('0/100')).toBeInTheDocument();
   });
 
   it('updates character count as user types', async () => {
@@ -59,7 +59,7 @@ describe('TextareaField', () => {
 
     await user.type(screen.getByRole('textbox', { name: 'Notes' }), 'Hello');
 
-    expect(screen.getByText('5 / 100')).toBeInTheDocument();
+    expect(screen.getByText('5/100')).toBeInTheDocument();
   });
 
   it('does not display character count when maxLength is not provided', () => {
