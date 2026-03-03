@@ -9,6 +9,7 @@ export const TextareaField: React.FC<TextareaFieldProps> = ({
   name,
   label,
   required,
+  validate,
   readOnly,
   disabled,
   placeholder,
@@ -17,7 +18,7 @@ export const TextareaField: React.FC<TextareaFieldProps> = ({
   rows,
   maxLength,
 }) => {
-  const { input, meta } = useField<string>(name);
+  const { input, meta } = useField<string>(name, { required, validate });
   const currentLength = input.value?.length ?? 0;
 
   return (
