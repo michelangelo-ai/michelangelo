@@ -70,7 +70,7 @@ export const SelectField: React.FC<SelectFieldProps> = ({
         clearable={!disabled && !readOnly && clearable}
         searchable={searchable}
         multi={multi}
-        overrides={buildSelectOverrides(disabled, readOnly)}
+        overrides={buildSelectOverrides(name, disabled, readOnly)}
         creatable={creatable}
         // Modified getOptionLabel in BaseWeb Select to avoid adding "Create" prefix on user input for
         // creatable dropdowns, as creation typically occurs during form submission. The prefix is misleading.
