@@ -4,5 +4,9 @@ export interface FormControlProps {
   description?: string;
   caption?: string;
   error?: string;
+  counter?: {
+    length: number;
+    maxLength: number;
+  };
   children: React.ReactNode;
 }
