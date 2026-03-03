@@ -9,13 +9,14 @@ export const StringField: React.FC<BaseFieldProps> = ({
   name,
   label,
   required,
+  validate,
   readOnly,
   disabled,
   placeholder,
   description,
   caption,
 }) => {
-  const { input, meta } = useField<string>(name);
+  const { input, meta } = useField<string>(name, { required, validate });
 
   return (
     <FormControl

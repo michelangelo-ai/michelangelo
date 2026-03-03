@@ -1,9 +1,22 @@
 import { useField as useReactFinalFormField } from 'react-final-form';
 
+import { combineValidators } from '#core/components/form/validation/combine-validators';
+import { required as requiredValidator } from '#core/components/form/validation/validators';
+
+import type { FieldValidator } from '#core/components/form/validation/types';
 import type { FieldInput, FieldState } from '../types';
 
-export function useField<T = unknown>(name: string): { input: FieldInput<T>; meta: FieldState } {
-  const field = useReactFinalFormField<T>(name);
+export function useField<T = unknown>(
+  name: string,
+  options?: { validate?: FieldValidator; required?: boolean }
+): { input: FieldInput<T>; meta: FieldState } {
+  const composedValidate = options?.required
+    ? combineValidators(requiredValidator(), ...(options.validate ? [options.validate] : []))
+    : options?.validate;
+
+  const validate = composedValidate ? (value: T) => composedValidate(value as unknown) : undefined;
+
+  const field = useReactFinalFormField<T>(name, { validate });
 
   const input: FieldInput<T> = {
     value: field.input.value,
@@ -13,8 +26,7 @@ export function useField<T = unknown>(name: string): { input: FieldInput<T>; met
   };
 
   const meta: FieldState = {
-    // TODO: field.meta.error is typed as any, do we need better refinement?
-    error: field.meta.error as string,
+    error: typeof field.meta.error === 'string' ? field.meta.error : undefined,
     touched: !!field.meta.touched,
   };
 

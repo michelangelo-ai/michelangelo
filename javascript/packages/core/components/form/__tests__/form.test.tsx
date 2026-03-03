@@ -5,6 +5,8 @@ import { vi } from 'vitest';
 import { FormDialog } from '#core/components/form/components/form-dialog/form-dialog';
 import { StringField } from '#core/components/form/fields/string/string-field';
 import { Form } from '#core/components/form/form';
+import { combineValidators } from '#core/components/form/validation/combine-validators';
+import { minLength, required } from '#core/components/form/validation/validators';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
@@ -165,6 +167,63 @@ describe('Form integration', () => {
         expect.anything()
       )
     );
+  });
+});
+
+describe('Form validation', () => {
+  it('allows submission after required field is filled', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    render(
+      <Form onSubmit={onSubmit}>
+        <StringField name="username" label="Username" required />
+        <button type="submit">Submit</button>
+      </Form>,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+    expect(await screen.findByText('This field is required.')).toBeInTheDocument();
+
+    await user.type(screen.getByRole('textbox', { name: 'Username *' }), 'johndoe');
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        { username: 'johndoe' },
+        expect.anything(),
+        expect.anything()
+      )
+    );
+  });
+
+  it('shows first error when composed validators fail sequentially', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    render(
+      <Form onSubmit={onSubmit}>
+        <StringField
+          name="username"
+          label="Username"
+          required
+          validate={combineValidators(required(), minLength(6))}
+        />
+        <button type="submit">Submit</button>
+      </Form>,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+    expect(await screen.findByText('This field is required.')).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    await user.type(screen.getByRole('textbox', { name: 'Username *' }), 'abc');
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    expect(await screen.findByText('Must be at least 6 characters.')).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });
 
