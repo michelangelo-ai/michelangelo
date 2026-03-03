@@ -784,7 +784,7 @@ class TestDevRunStorageUrl(unittest.TestCase):
         mock_handle.return_value = (
             workflow_inputs,
             "s3://test/path.tar.gz",
-            "test_workflow"
+            "test_workflow",
         )
         mock_gen_name.return_value = "test-run-123"
         mock_gen_obj.return_value = {"spec": {}}
@@ -865,7 +865,7 @@ class TestDevRunStorageUrl(unittest.TestCase):
         mock_handle.return_value = (
             workflow_inputs,
             "s3://test/path.tar.gz",
-            "test_workflow"
+            "test_workflow",
         )
         mock_gen_name.return_value = "test-run-123"
         mock_gen_obj.return_value = {"spec": {}}
@@ -896,7 +896,9 @@ class TestDevRunStorageUrl(unittest.TestCase):
         self.assertIsInstance(result, dict)
         self.assertIn("pipeline_run", result)
 
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.create.run_subprocess_registration")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.create.run_subprocess_registration"
+    )
     def test_storage_url_passed_to_subprocess_registration(self, mock_subprocess):
         """Test that storage_url is passed correctly to run_subprocess_registration."""
         from pathlib import Path
@@ -910,12 +912,13 @@ class TestDevRunStorageUrl(unittest.TestCase):
         test_storage_url = "s3://custom-bucket/my-path"
 
         create_module = "michelangelo.cli.mactl.plugins.entity.pipeline.create"
-        with patch(f"{create_module}.Path.exists") as mock_exists, \
-             patch(f"{create_module}.tempfile.TemporaryDirectory") as mock_tempdir, \
-             patch(f"{create_module}.read_subprocess_outputs") as mock_read, \
-             patch(f"{create_module}.Path.read_text") as mock_read_text, \
-             patch(f"{create_module}.json.loads") as mock_json:
-
+        with (
+            patch(f"{create_module}.Path.exists") as mock_exists,
+            patch(f"{create_module}.tempfile.TemporaryDirectory") as mock_tempdir,
+            patch(f"{create_module}.read_subprocess_outputs") as mock_read,
+            patch(f"{create_module}.Path.read_text") as mock_read_text,
+            patch(f"{create_module}.json.loads") as mock_json,
+        ):
             # Mock file exists check to pass
             mock_exists.return_value = True
 
@@ -931,14 +934,17 @@ class TestDevRunStorageUrl(unittest.TestCase):
                 # Return different content based on which file is being read
                 args_str = str(args)
                 kwargs_str = str(kwargs)
-                if ("uniflow_tar_path.txt" in args_str or
-                        "uniflow_tar_path" in kwargs_str):
+                if (
+                    "uniflow_tar_path.txt" in args_str
+                    or "uniflow_tar_path" in kwargs_str
+                ):
                     return "s3://test/output.tar.gz"
-                elif ("uniflow_input.txt" in args_str or
-                      "uniflow_input" in kwargs_str):
+                elif "uniflow_input.txt" in args_str or "uniflow_input" in kwargs_str:
                     return '{"environ": {}, "kwargs": []}'
-                elif ("workflow_function_name.txt" in args_str or
-                      "workflow_function" in kwargs_str):
+                elif (
+                    "workflow_function_name.txt" in args_str
+                    or "workflow_function" in kwargs_str
+                ):
                     return "test_workflow"
                 return ""
 
@@ -1029,13 +1035,15 @@ spec:
 
                 def mock_read_signatures(method_name):
                     if method_name == "dev_run":
-                        return Signature([
-                            Parameter("self", Parameter.POSITIONAL_OR_KEYWORD),
-                            Parameter("file", Parameter.POSITIONAL_OR_KEYWORD),
-                            Parameter(
-                                "storage_url", Parameter.KEYWORD_ONLY, default=None
-                            ),
-                        ])
+                        return Signature(
+                            [
+                                Parameter("self", Parameter.POSITIONAL_OR_KEYWORD),
+                                Parameter("file", Parameter.POSITIONAL_OR_KEYWORD),
+                                Parameter(
+                                    "storage_url", Parameter.KEYWORD_ONLY, default=None
+                                ),
+                            ]
+                        )
                     if original_read_signatures:
                         return original_read_signatures(method_name)
                     return Signature([])
@@ -1063,7 +1071,6 @@ spec:
                         ".dev_run.get_message_class_by_name"
                     ) as mock_get_message_class,
                 ):
-
                     # Setup service mocks
                     mock_get_service.return_value = "test.service"
                     mock_method = Mock()
