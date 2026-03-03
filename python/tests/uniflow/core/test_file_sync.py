@@ -739,7 +739,7 @@ class TestDevRunStorageUrl(unittest.TestCase):
     """Unit tests for dev_run --storage-url parameter functionality."""
 
     @patch(
-        "michelangelo.cli.mactl.plugins.entity.pipeline.create.handle_workflow_inputs_retrieval"
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.handle_workflow_inputs_retrieval"
     )
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.yaml_to_dict")
     @patch(
@@ -757,9 +757,10 @@ class TestDevRunStorageUrl(unittest.TestCase):
         handle_workflow_inputs_retrieval.
         """
         from pathlib import Path
-        from unittest.mock import MagicMock
+        from unittest.mock import MagicMock, patch
 
         from google.protobuf.message import Message
+        from google.protobuf.struct_pb2 import Struct
 
         from michelangelo.cli.mactl.plugins.entity.pipeline.dev_run import (
             convert_crd_metadata_pipeline_dev_run,
@@ -770,7 +771,9 @@ class TestDevRunStorageUrl(unittest.TestCase):
             "metadata": {"namespace": "test-project", "name": "test-pipeline"},
             "spec": {},
         }
-        mock_handle.return_value = ({}, "s3://test/path.tar.gz", "test_workflow")
+        # Create a proper Struct object instead of dict
+        workflow_inputs = Struct()
+        mock_handle.return_value = (workflow_inputs, "s3://test/path.tar.gz", "test_workflow")
         mock_gen_name.return_value = "test-run-123"
         mock_gen_obj.return_value = {"spec": {}}
 
@@ -780,7 +783,8 @@ class TestDevRunStorageUrl(unittest.TestCase):
             "spec": {},
         }
         crd_class = MagicMock(spec=Message)
-        yaml_path = Path("/tmp/test.yaml")
+        # Create a yaml_path that's actually within the repo
+        yaml_path = Path.cwd() / "test-pipeline.yaml"
         test_storage_url = "s3://custom-bucket/custom-path"
 
         # Call the function with storage_url
@@ -808,7 +812,7 @@ class TestDevRunStorageUrl(unittest.TestCase):
         self.assertIn("pipeline_run", result)
 
     @patch(
-        "michelangelo.cli.mactl.plugins.entity.pipeline.create.handle_workflow_inputs_retrieval"
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.handle_workflow_inputs_retrieval"
     )
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.yaml_to_dict")
     @patch(
@@ -822,9 +826,10 @@ class TestDevRunStorageUrl(unittest.TestCase):
     ):
         """Test that storage_url parameter defaults to None when not provided."""
         from pathlib import Path
-        from unittest.mock import MagicMock
+        from unittest.mock import MagicMock, patch
 
         from google.protobuf.message import Message
+        from google.protobuf.struct_pb2 import Struct
 
         from michelangelo.cli.mactl.plugins.entity.pipeline.dev_run import (
             convert_crd_metadata_pipeline_dev_run,
@@ -835,7 +840,9 @@ class TestDevRunStorageUrl(unittest.TestCase):
             "metadata": {"namespace": "test-project", "name": "test-pipeline"},
             "spec": {},
         }
-        mock_handle.return_value = ({}, "s3://test/path.tar.gz", "test_workflow")
+        # Create a proper Struct object instead of dict
+        workflow_inputs = Struct()
+        mock_handle.return_value = (workflow_inputs, "s3://test/path.tar.gz", "test_workflow")
         mock_gen_name.return_value = "test-run-123"
         mock_gen_obj.return_value = {"spec": {}}
 
@@ -845,7 +852,8 @@ class TestDevRunStorageUrl(unittest.TestCase):
             "spec": {},
         }
         crd_class = MagicMock(spec=Message)
-        yaml_path = Path("/tmp/test.yaml")
+        # Create a yaml_path that's actually within the repo
+        yaml_path = Path.cwd() / "test-pipeline.yaml"
 
         # Call the function without storage_url (should default to None)
         result = convert_crd_metadata_pipeline_dev_run(yaml_dict, crd_class, yaml_path)
@@ -864,70 +872,79 @@ class TestDevRunStorageUrl(unittest.TestCase):
         self.assertIsInstance(result, dict)
         self.assertIn("pipeline_run", result)
 
-    @patch("michelangelo.cli.mactl.utils.run_subprocess_registration")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.create.run_subprocess_registration")
     def test_storage_url_passed_to_subprocess_registration(self, mock_subprocess):
         """Test that storage_url is passed correctly to run_subprocess_registration."""
         import tempfile
         from pathlib import Path
-        from unittest.mock import MagicMock
+        from unittest.mock import MagicMock, patch
 
         from michelangelo.cli.mactl.plugins.entity.pipeline.create import (
             get_pipeline_config_and_tar,
         )
 
-        # Setup mock subprocess to return success
-        mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        # Mock all file operations and subprocess calls
+        test_storage_url = "s3://custom-bucket/my-path"
 
-        # Create temporary files to simulate the subprocess output
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp_path = Path(tmp_dir)
+        with patch("michelangelo.cli.mactl.plugins.entity.pipeline.create.Path.exists") as mock_exists, \
+             patch("michelangelo.cli.mactl.plugins.entity.pipeline.create.tempfile.TemporaryDirectory") as mock_tempdir, \
+             patch("michelangelo.cli.mactl.plugins.entity.pipeline.create.read_subprocess_outputs") as mock_read, \
+             patch("michelangelo.cli.mactl.plugins.entity.pipeline.create.Path.read_text") as mock_read_text, \
+             patch("michelangelo.cli.mactl.plugins.entity.pipeline.create.json.loads") as mock_json:
 
-            # Create mock output files
-            (tmp_path / "registration_success.txt").write_text(
-                "SUCCESS: s3://test/output.tar.gz"
+            # Mock file exists check to pass
+            mock_exists.return_value = True
+
+            # Mock temporary directory
+            mock_tempdir.return_value.__enter__.return_value = "/tmp/mock"
+            mock_tempdir.return_value.__exit__.return_value = None
+
+            # Mock subprocess result reading to succeed
+            mock_read.return_value = (True, "Success", "s3://test/output.tar.gz")
+
+            # Mock file reading operations - different values for different files
+            def mock_read_text_side_effect(*args, **kwargs):
+                # Return different content based on which file is being read
+                if "uniflow_tar_path.txt" in str(args) or "uniflow_tar_path" in str(kwargs):
+                    return "s3://test/output.tar.gz"
+                elif "uniflow_input.txt" in str(args) or "uniflow_input" in str(kwargs):
+                    return '{"environ": {}, "kwargs": []}'
+                elif "workflow_function_name.txt" in str(args) or "workflow_function" in str(kwargs):
+                    return "test_workflow"
+                return ""
+
+            mock_read_text.side_effect = mock_read_text_side_effect
+            mock_json.return_value = {"environ": {}, "kwargs": []}
+
+            # Setup subprocess mock to succeed
+            mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+            # Call the function with storage_url
+            result = get_pipeline_config_and_tar(
+                repo_root=Path("/fake/repo"),
+                config_file_relative_path="config.yaml",
+                bazel_target="",
+                project="test-project",
+                pipeline="test-pipeline",
+                storage_url=test_storage_url,
             )
-            (tmp_path / "uniflow_tar_path.txt").write_text("s3://test/output.tar.gz")
-            (tmp_path / "uniflow_input.txt").write_text('{"environ": {}, "kwargs": []}')
-            (tmp_path / "workflow_function_name.txt").write_text("test_workflow")
 
-            # Create a mock config file
-            config_path = tmp_path / "config.yaml"
-            config_path.write_text("apiVersion: v1\nkind: Pipeline")
+            # Verify run_subprocess_registration was called with the correct
+            # storage_url
+            mock_subprocess.assert_called_once()
+            args, kwargs = mock_subprocess.call_args
 
-            # Mock the read_subprocess_outputs function to return success
-            with patch(
-                "michelangelo.cli.mactl.plugins.entity.pipeline.create.read_subprocess_outputs"
-            ) as mock_read:
-                mock_read.return_value = (True, "Success", "s3://test/output.tar.gz")
+            # Check that storage_url was passed correctly
+            self.assertIn("storage_url", kwargs)
+            self.assertEqual(kwargs["storage_url"], test_storage_url)
 
-                test_storage_url = "s3://custom-bucket/my-path"
+            # Verify other parameters are as expected
+            self.assertEqual(kwargs["project"], "test-project")
+            self.assertEqual(kwargs["pipeline"], "test-pipeline")
 
-                # Call the function with storage_url
-                result = get_pipeline_config_and_tar(
-                    repo_root=tmp_path,
-                    config_file_relative_path="config.yaml",
-                    bazel_target="",
-                    project="test-project",
-                    pipeline="test-pipeline",
-                    storage_url=test_storage_url,
-                )
-
-                # Verify run_subprocess_registration was called with the correct
-                # storage_url
-                mock_subprocess.assert_called_once()
-                args, kwargs = mock_subprocess.call_args
-
-                # Check that storage_url was passed correctly
-                self.assertIn("storage_url", kwargs)
-                self.assertEqual(kwargs["storage_url"], test_storage_url)
-
-                # Verify other parameters are as expected
-                self.assertEqual(kwargs["project"], "test-project")
-                self.assertEqual(kwargs["pipeline"], "test-pipeline")
-
-                # Verify the function returns the expected tuple
-                self.assertIsInstance(result, tuple)
-                self.assertEqual(len(result), 3)
+            # Verify the function returns the expected tuple
+            self.assertIsInstance(result, tuple)
+            self.assertEqual(len(result), 3)
 
     def test_dev_run_func_extracts_storage_url_from_bound_args(self):
         """Test that dev_run function extracts storage_url from bound_args.
@@ -970,7 +987,7 @@ spec:
                 crd = CRD(
                     name="test-pipeline",
                     full_name="test-project.test-pipeline",
-                    metadata=[{"project": "test-project"}]
+                    metadata=[{"project": "test-project"}],
                 )
 
                 # Mock the required methods that would normally be set up
@@ -979,7 +996,7 @@ spec:
                 )
 
                 # Override _read_signatures to provide our test signature
-                original_read_signatures = getattr(crd, '_read_signatures', None)
+                original_read_signatures = getattr(crd, "_read_signatures", None)
 
                 def mock_read_signatures(method_name):
                     if method_name == "dev_run":
