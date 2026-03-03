@@ -543,34 +543,6 @@ class CRD:
                     },
                 ],
             },
-            "list": {
-                "help": "List entities in a namespace",
-                "args": [
-                    {
-                        "func_signature": Parameter(
-                            "namespace", Parameter.POSITIONAL_OR_KEYWORD
-                        ),
-                        "args": ["-n", "--namespace"],
-                        "kwargs": {
-                            "type": str,
-                            "required": True,
-                            "help": "Namespace of the resource",
-                        },
-                    },
-                    {
-                        "func_signature": Parameter(
-                            "limit", Parameter.POSITIONAL_OR_KEYWORD, default=100
-                        ),
-                        "args": ["--limit"],
-                        "kwargs": {
-                            "dest": "limit",
-                            "type": int,
-                            "default": 100,
-                            "help": "Maximum number of items to return (default: 100)",
-                        },
-                    },
-                ],
-            },
         }
 
         # TODO: This would be changed to use centralized config metadata stub
