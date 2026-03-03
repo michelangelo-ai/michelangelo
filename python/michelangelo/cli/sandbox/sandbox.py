@@ -341,13 +341,13 @@ necessary, and this assertion will be removed.
         if "worker" not in ns.exclude:
             _kube_create(_dir / "resources/michelangelo-temporal-worker.yaml")
         if "controllermgr" not in ns.exclude:
-            resources.append("michelangelo-temporal-controllermgr.yaml")
+            _kube_create(_dir / "resources/michelangelo-temporal-controllermgr.yaml")
     elif ns.workflow == "cadence":
         _create_cadence_domain(links)
         if "worker" not in ns.exclude:
             _kube_create(_dir / "resources/michelangelo-worker.yaml")
         if "controllermgr" not in ns.exclude:
-            resources.append("michelangelo-controllermgr.yaml")
+            _kube_create(_dir / "resources/michelangelo-controllermgr.yaml")
     else:
         raise ValueError(f"Unsupported workflow engine: {ns.workflow}")
 
