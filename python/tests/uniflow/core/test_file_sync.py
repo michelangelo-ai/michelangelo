@@ -735,8 +735,5 @@ class TestFileSyncPreRun(unittest.TestCase):
         mock_download.assert_called_once_with(downloader=downloader)
 
 
-
-
-
 if __name__ == "__main__":
     unittest.main()

@@ -312,8 +312,7 @@ spec:
                     ".dev_run.get_message_class_by_name"
                 ) as mock_get_message_class,
                 patch(
-                    "michelangelo.cli.mactl.plugins.entity.pipeline"
-                    ".dev_run.ParseDict"
+                    "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.ParseDict"
                 ) as mock_parse_dict,
             ):
                 # Setup service mocks
