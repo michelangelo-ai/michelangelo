@@ -54,6 +54,15 @@ describe('FormBanner', () => {
     expect(screen.queryByText('Dismissible message')).not.toBeInTheDocument();
   });
 
+  it('renders string content as Markdown', () => {
+    render(
+      <FormBanner content="This is **bold** text" />,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+    );
+
+    expect(screen.getByText('bold').tagName).toBe('STRONG');
+  });
+
   it('renders ReactNode content directly', () => {
     render(
       <FormBanner content={<span data-testid="custom-content">Custom element</span>} />,
