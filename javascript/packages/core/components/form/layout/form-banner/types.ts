@@ -3,22 +3,16 @@ import type { ReactNode } from 'react';
 export interface FormBannerProps {
   title?: string;
 
-  /**
-   * The kind of banner to display
-   *
-   * @default 'info'
-   */
+  /** @default 'info' */
   kind?: 'info' | 'warning';
 
   /**
-   * Controls whether the banner can be dismissed by the user
+   * Once dismissed, the banner stays hidden for the component's lifetime.
    *
    * @default false
    */
   dismissible?: boolean;
 
-  /**
-   * The content of the banner
-   */
+  /** String values are rendered as Markdown. */
   content?: ReactNode | string;
 }
