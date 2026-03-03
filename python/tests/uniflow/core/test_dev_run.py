@@ -6,9 +6,16 @@ import unittest
 from inspect import Parameter, Signature
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
+
+from google.protobuf.message import Message
+from google.protobuf.struct_pb2 import Struct
+
 from michelangelo.cli.mactl.crd import CRD
-# Import the entire dev_run module to ensure coverage tracking
+from michelangelo.cli.mactl.plugins.entity.pipeline.create import (
+    get_pipeline_config_and_tar,
+)
 from michelangelo.cli.mactl.plugins.entity.pipeline.dev_run import (
+    convert_crd_metadata_pipeline_dev_run,
     generate_dev_run,
 )
 
@@ -35,16 +42,6 @@ class TestDevRun(unittest.TestCase):
         Verifies that the storage_url parameter is passed to
         handle_workflow_inputs_retrieval.
         """
-        from pathlib import Path
-        from unittest.mock import MagicMock
-
-        from google.protobuf.message import Message
-        from google.protobuf.struct_pb2 import Struct
-
-        from michelangelo.cli.mactl.plugins.entity.pipeline.dev_run import (
-            convert_crd_metadata_pipeline_dev_run,
-        )
-
         # Setup mock git repository
         mock_repo_instance = MagicMock()
         mock_repo_instance.git.rev_parse.return_value = str(Path.cwd())
@@ -116,16 +113,6 @@ class TestDevRun(unittest.TestCase):
         self, mock_gen_obj, mock_gen_name, mock_yaml, mock_handle, mock_repo
     ):
         """Test that storage_url parameter defaults to None when not provided."""
-        from pathlib import Path
-        from unittest.mock import MagicMock
-
-        from google.protobuf.message import Message
-        from google.protobuf.struct_pb2 import Struct
-
-        from michelangelo.cli.mactl.plugins.entity.pipeline.dev_run import (
-            convert_crd_metadata_pipeline_dev_run,
-        )
-
         # Setup mock git repository
         mock_repo_instance = MagicMock()
         mock_repo_instance.git.rev_parse.return_value = str(Path.cwd())
@@ -179,13 +166,6 @@ class TestDevRun(unittest.TestCase):
     )
     def test_storage_url_passed_to_subprocess_registration(self, mock_subprocess):
         """Test that storage_url is passed correctly to run_subprocess_registration."""
-        from pathlib import Path
-        from unittest.mock import MagicMock, patch
-
-        from michelangelo.cli.mactl.plugins.entity.pipeline.create import (
-            get_pipeline_config_and_tar,
-        )
-
         # Mock all file operations and subprocess calls
         test_storage_url = "s3://custom-bucket/my-path"
 
@@ -265,11 +245,9 @@ class TestDevRun(unittest.TestCase):
         This test specifically targets line 187 in dev_run.py:
         _storage_url = bound_args.arguments.get("storage_url")
         """
-
-
         # Create a real CRD instance (not a mock)
+        temp_yaml = None
         try:
-
             # Create temporary yaml file for testing
             with tempfile.NamedTemporaryFile(
                 mode="w", suffix=".yaml", delete=False
@@ -320,8 +298,6 @@ spec:
             mock_channel.unary_unary.return_value = Mock(return_value=Mock())
 
             # Mock the service discovery methods
-            from unittest.mock import patch
-
             with (
                 patch(
                     "michelangelo.cli.mactl.plugins.entity.pipeline"
@@ -378,7 +354,7 @@ spec:
 
         finally:
             # Clean up temp file
-            if os.path.exists(temp_yaml):
+            if temp_yaml and os.path.exists(temp_yaml):
                 os.unlink(temp_yaml)
 
 
