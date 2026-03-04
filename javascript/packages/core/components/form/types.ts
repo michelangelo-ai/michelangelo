@@ -11,6 +11,13 @@ export interface FormProps<FieldValues extends FormData = FormData> {
   children: React.ReactNode;
 
   /**
+   * When true, focuses the first field with a validation error on failed submit.
+   *
+   * @default true
+   */
+  focusOnError?: boolean;
+
+  /**
    * Optional render prop for wrapping the form element.
    * When provided, the form element is passed to this function, allowing
    * components outside the form element to access form state via useFormState.

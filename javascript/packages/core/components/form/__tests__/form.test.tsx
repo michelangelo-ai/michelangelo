@@ -225,6 +225,25 @@ describe('Form validation', () => {
     expect(await screen.findByText('Must be at least 6 characters.')).toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
   });
+
+  it('focuses first field with error on failed submit', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <Form onSubmit={vi.fn()}>
+        <StringField name="email" label="Email" required />
+        <StringField name="name" label="Name" required />
+        <button type="submit">Submit</button>
+      </Form>,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Email *' }));
+    });
+  });
 });
 
 describe('FormDialog', () => {

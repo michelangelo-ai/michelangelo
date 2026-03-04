@@ -1,7 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { vi } from 'vitest';
 
 import { SelectField } from '#core/components/form/fields/select/select-field';
+import { Form } from '#core/components/form/form';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getFormProviderWrapper } from '#core/test/wrappers/get-form-provider-wrapper';
@@ -276,6 +278,24 @@ describe('SelectField', () => {
     expect(screen.getByRole('combobox', { name: 'Read only' })).toBeInTheDocument();
     expect(screen.queryByText('Disabled placeholder')).not.toBeInTheDocument();
     expect(screen.queryByText('Read only placeholder')).not.toBeInTheDocument();
+  });
+
+  it('focuses on failed submit when form has focusOnError enabled', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <Form onSubmit={vi.fn()} focusOnError>
+        <SelectField name="priority" label="Priority" options={options} required />
+        <button type="submit">Submit</button>
+      </Form>,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Priority *' }));
+    });
   });
 
   it('displays caption text', () => {

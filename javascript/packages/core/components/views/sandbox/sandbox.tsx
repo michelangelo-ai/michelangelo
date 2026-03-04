@@ -1,9 +1,16 @@
 import { useState } from 'react';
 import { Block } from 'baseui/block';
+import { Button } from 'baseui/button';
+import { Notification } from 'baseui/notification';
 import { Tab, Tabs } from 'baseui/tabs';
-import { HeadingXXLarge } from 'baseui/typography';
+import { HeadingXXLarge, LabelLarge, ParagraphSmall } from 'baseui/typography';
 
 import { CellType } from '#core/components/cell/constants';
+import { SelectField } from '#core/components/form/fields/select/select-field';
+import { StringField } from '#core/components/form/fields/string/string-field';
+import { Form } from '#core/components/form/form';
+import { FormGroup } from '#core/components/form/layout/form-group/form-group';
+import { required } from '#core/components/form/validation/validators';
 import { TextEditor } from '#core/components/text-editor/text-editor';
 import { DetailView } from '#core/components/views/detail-view/detail-view';
 import { TASK_STATE } from '#core/components/views/execution/constants';
@@ -236,6 +243,88 @@ export function Sandbox() {
             >
               <Execution schema={executionSchema} data={{}} />
             </DetailView>
+          </Block>
+        </Tab>
+
+        <Tab title="Form - Focus on Error">
+          <Block marginTop="24px" maxWidth="600px">
+            <Notification
+              kind="info"
+              overrides={{ Body: { style: { width: 'auto', marginBottom: '24px' } } }}
+            >
+              <LabelLarge marginBottom="scale200">How to see the scroll</LabelLarge>
+              <ParagraphSmall margin="0">
+                Scroll to the bottom of this page and click <strong>Submit</strong> with fields
+                empty. The page will automatically scroll back up and focus the first field with a
+                validation error.
+              </ParagraphSmall>
+            </Notification>
+
+            <Form focusOnError onSubmit={(values) => console.log('Submitted:', values)}>
+              <FormGroup
+                title="Personal Information"
+                description="Your name and contact details. All fields are required."
+              >
+                <StringField name="firstName" label="First Name" validate={required()} />
+                <StringField name="lastName" label="Last Name" validate={required()} />
+                <StringField name="email" label="Email Address" validate={required()} />
+                <StringField name="phone" label="Phone Number" validate={required()} />
+              </FormGroup>
+
+              <FormGroup
+                title="Professional Details"
+                description="Your role and team affiliation within the organisation."
+              >
+                <SelectField
+                  name="department"
+                  label="Department"
+                  validate={required()}
+                  options={[
+                    { id: 'engineering', label: 'Engineering' },
+                    { id: 'product', label: 'Product' },
+                    { id: 'design', label: 'Design' },
+                    { id: 'data', label: 'Data Science' },
+                    { id: 'operations', label: 'Operations' },
+                  ]}
+                />
+                <StringField name="jobTitle" label="Job Title" validate={required()} />
+                <StringField name="manager" label="Manager Name" validate={required()} />
+              </FormGroup>
+
+              <FormGroup
+                title="Account Configuration"
+                description="Settings applied to your account on creation. These can be changed later."
+              >
+                <SelectField
+                  name="region"
+                  label="Region"
+                  validate={required()}
+                  options={[
+                    { id: 'us-east', label: 'US East' },
+                    { id: 'us-west', label: 'US West' },
+                    { id: 'eu-west', label: 'EU West' },
+                    { id: 'ap-south', label: 'AP South' },
+                  ]}
+                />
+                <SelectField
+                  name="timezone"
+                  label="Timezone"
+                  validate={required()}
+                  options={[
+                    { id: 'utc', label: 'UTC' },
+                    { id: 'us-eastern', label: 'US/Eastern' },
+                    { id: 'us-pacific', label: 'US/Pacific' },
+                    { id: 'europe-london', label: 'Europe/London' },
+                    { id: 'asia-tokyo', label: 'Asia/Tokyo' },
+                  ]}
+                />
+                <StringField name="slackHandle" label="Slack Handle" validate={required()} />
+              </FormGroup>
+
+              <Block display="flex" justifyContent="flex-end" marginTop="scale600">
+                <Button type="submit">Submit — watch it scroll on error</Button>
+              </Block>
+            </Form>
           </Block>
         </Tab>
       </Tabs>

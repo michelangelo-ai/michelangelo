@@ -1,7 +1,10 @@
 import { Form as FinalForm } from 'react-final-form';
 import { useStyletron } from 'baseui';
+import createFocusOnErrorDecorator from 'final-form-focus';
 
 import type { FormData, FormProps } from './types';
+
+const focusOnErrorDecorator = createFocusOnErrorDecorator();
 
 export const Form = <FieldValues extends FormData = FormData>({
   onSubmit,
@@ -9,6 +12,7 @@ export const Form = <FieldValues extends FormData = FormData>({
   id,
   children,
   render,
+  focusOnError = true,
 }: FormProps<FieldValues>) => {
   const [css, theme] = useStyletron();
 
@@ -16,6 +20,7 @@ export const Form = <FieldValues extends FormData = FormData>({
     <FinalForm
       onSubmit={onSubmit}
       initialValues={initialValues}
+      decorators={focusOnError ? [focusOnErrorDecorator] : undefined}
       render={({ handleSubmit }) => {
         const formElement = (
           <form
