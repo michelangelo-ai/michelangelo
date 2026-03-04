@@ -15,7 +15,17 @@ import type { PipelineRunData } from './types';
 const TERMINATED_STATES = new Set([3, 4, 5, 6]);
 
 export const RetryCell = (props: CellRendererProps<string>) => {
-  const { value } = props;
+  const { value: originalValue } = props;
+
+  // 🧪 SIMULATE K8S ENVIRONMENT: Force activity_id to be undefined to reproduce the k8s issue
+  // This simulates the k8s environment where activity_id is missing
+  const SIMULATE_K8S_MISSING_ACTIVITY_ID = true; // Set to true to reproduce k8s issue
+  const value = SIMULATE_K8S_MISSING_ACTIVITY_ID ? undefined : originalValue;
+
+  // Log simulation status for debugging
+  if (SIMULATE_K8S_MISSING_ACTIVITY_ID && originalValue) {
+    console.log('🧪 K8S SIMULATION: Forcing activity_id to be undefined (originally was:', originalValue, ')');
+  }
   const [css, theme] = useStyletron();
   const [showRetryModal, setShowRetryModal] = useState(false);
   const [retryReason, setRetryReason] = useState('Manual retry from UI');
@@ -50,7 +60,9 @@ export const RetryCell = (props: CellRendererProps<string>) => {
 
   const submitRetry = async () => {
     console.log('🔍 DEBUG: submitRetry called with:', {
-      value,
+      originalValue,
+      simulatedValue: value,
+      isSimulatingK8s: SIMULATE_K8S_MISSING_ACTIVITY_ID,
       valueType: typeof value,
       hasValue: !!value,
       isPending: updatePipelineRunMutation.isPending,
