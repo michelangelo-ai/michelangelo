@@ -149,7 +149,7 @@ func (r *module) sensorJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 		return nil, err
 	}
 
-	srp := utils.CadenceDefaultSensorRetryPolicy
+	srp := utils.DefaultSensorRetryPolicy
 	srp.ExpirationInterval = time.Second * time.Duration(timeout)
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	sensorCtx := workflow.WithRetryPolicy(ctx, srp)

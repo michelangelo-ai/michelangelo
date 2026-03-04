@@ -51,9 +51,9 @@ var CadenceDefaultNonRetriableErrorReasons = []string{
 	yarpcerrors.CodeInternal.String(),         // server error; serious error, like panic
 }
 
-// CadenceDefaultRetryPolicy is the default retry policy for Cadence workflows with
+// DefaultRetryPolicy is the default retry policy for workflows with
 // a 15-second initial interval and 5-minute expiration.
-var CadenceDefaultRetryPolicy = workflow.RetryPolicy{
+var DefaultRetryPolicy = workflow.RetryPolicy{
 	InitialInterval:          time.Second * 15,
 	BackoffCoefficient:       1,
 	ExpirationInterval:       time.Minute * 5,
@@ -61,9 +61,9 @@ var CadenceDefaultRetryPolicy = workflow.RetryPolicy{
 	MaximumAttempts:          1,
 }
 
-// CadenceDefaultSensorRetryPolicy is the default retry policy for sensor workflows
+// DefaultSensorRetryPolicy is the default retry policy for sensor workflows
 // with a 10-second initial interval and long timeout for polling operations.
-var CadenceDefaultSensorRetryPolicy = workflow.RetryPolicy{
+var DefaultSensorRetryPolicy = workflow.RetryPolicy{
 	InitialInterval:          time.Second * 10,
 	BackoffCoefficient:       1,
 	ExpirationInterval:       CadenceLongTimeout,
