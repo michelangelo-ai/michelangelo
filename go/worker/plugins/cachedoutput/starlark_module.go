@@ -77,7 +77,7 @@ func (r *module) get(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tupl
 		Name:      name,
 	}
 	response := v2pb.GetCachedOutputResponse{}
-	retryPolicy := utils.CadenceDefaultRetryPolicy
+	retryPolicy := utils.DefaultRetryPolicy
 	getCtx := workflow.WithRetryPolicy(ctx, retryPolicy)
 	if err := workflow.ExecuteActivity(getCtx, cachedoutput.Activities.GetCachedOutput, request).Get(ctx, &response); err != nil {
 		logger.Error("Failed to get CachedOutput", ext.ZapError(err)...)
@@ -119,7 +119,7 @@ func (r *module) put(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tupl
 		CachedOutput: &co,
 	}
 	response := v2pb.CreateCachedOutputResponse{}
-	retryPolicy := utils.CadenceDefaultRetryPolicy
+	retryPolicy := utils.DefaultRetryPolicy
 	createCtx := workflow.WithRetryPolicy(ctx, retryPolicy)
 	if err := workflow.ExecuteActivity(createCtx, cachedoutput.Activities.CreateCachedOutput, request).Get(ctx, &response); err != nil {
 		logger.Error("Failed to put CachedOutput", ext.ZapError(err)...)
@@ -208,7 +208,7 @@ func (r *module) query(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tu
 	}
 
 	response := v2pb.ListCachedOutputResponse{}
-	retryPolicy := utils.CadenceDefaultRetryPolicy
+	retryPolicy := utils.DefaultRetryPolicy
 	listCtx := workflow.WithRetryPolicy(ctx, retryPolicy)
 	if err := workflow.ExecuteActivity(listCtx, cachedoutput.Activities.ListCachedOutput, request).Get(ctx, &response); err != nil {
 		logger.Error("Failed to list CachedOutput", ext.ZapError(err)...)

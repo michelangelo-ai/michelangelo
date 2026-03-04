@@ -82,7 +82,7 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 		return nil, err
 	}
 	if timeout == 0 {
-		timeout = int64(utils.CadenceLongTimeout.Seconds())
+		timeout = int64(utils.LongTimeout.Seconds())
 	}
 
 	var sparkJob v2pb.SparkJob
@@ -91,7 +91,7 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 		return nil, err
 	}
 
-	srp := utils.CadenceDefaultRetryPolicy
+	srp := utils.DefaultRetryPolicy
 	srp.ExpirationInterval = time.Second * time.Duration(timeout)
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	createCtx := workflow.WithRetryPolicy(ctx, srp)
@@ -132,7 +132,7 @@ func (r *module) sensorJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 	logger := workflow.GetLogger(ctx)
 
 	var _job *starlark.Dict
-	timeout := int64(utils.CadenceLongTimeout.Seconds())
+	timeout := int64(utils.LongTimeout.Seconds())
 	poll := defaultPollSeconds
 	var assertConditionType string = utils.SucceededCondition
 

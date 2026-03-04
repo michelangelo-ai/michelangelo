@@ -28,8 +28,8 @@ const (
 	SparkAppFailedCondition  string = "SparkAppFailed"
 )
 
-const CadenceLongTimeout = time.Hour * 24 * 365 * 10 // 10 years, practically - no timeout
-const CadenceLongRetry = time.Hour * 24 * 365 * 10   // 10 years, practically - no timeout
+const LongTimeout = time.Hour * 24 * 365 * 10 // 10 years, practically - no timeout
+const LongRetry = time.Hour * 24 * 365 * 10   // 10 years, practically - no timeout
 
 var CadenceDefaultNonRetriableErrorReasons = []string{
 	"cadenceInternal:Panic",                  // panics
@@ -66,7 +66,7 @@ var DefaultRetryPolicy = workflow.RetryPolicy{
 var DefaultSensorRetryPolicy = workflow.RetryPolicy{
 	InitialInterval:          time.Second * 10,
 	BackoffCoefficient:       1,
-	ExpirationInterval:       CadenceLongTimeout,
+	ExpirationInterval:       LongTimeout,
 	NonRetriableErrorReasons: CadenceDefaultNonRetriableErrorReasons,
 }
 

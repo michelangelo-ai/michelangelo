@@ -57,7 +57,7 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 		return nil, err
 	}
 	if timeout == 0 {
-		timeout = int64(utils.CadenceLongTimeout.Seconds())
+		timeout = int64(utils.LongTimeout.Seconds())
 	}
 
 	var cluster v2pb.RayCluster
