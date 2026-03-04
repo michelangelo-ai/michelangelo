@@ -532,12 +532,10 @@ spec:
                 # Mock ParseDict to avoid protobuf complexity
                 mock_parse_dict.return_value = None
 
-                # Generate the dev_run function - creates real function and
-                # executes line 187
+                # Generate the dev_run function
                 generate_dev_run(crd, mock_channel)
 
                 # Now test the dev_run function by calling it
-                # This will exercise line 187:
                 # _storage_url = bound_args.arguments.get("storage_url")
                 test_storage_url = "s3://test-bucket/test-path"
 
