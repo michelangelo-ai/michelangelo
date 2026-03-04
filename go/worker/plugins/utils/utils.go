@@ -31,7 +31,7 @@ const (
 const LongTimeout = time.Hour * 24 * 365 * 10 // 10 years, practically - no timeout
 const LongRetry = time.Hour * 24 * 365 * 10   // 10 years, practically - no timeout
 
-var CadenceDefaultNonRetriableErrorReasons = []string{
+var DefaultNonRetriableErrorReasons = []string{
 	"cadenceInternal:Panic",                  // panics
 	"cadenceInternal:Generic",                // cadence converter errors (similar to invalid-argument)
 	"400",                                    // bad-request https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
@@ -57,7 +57,7 @@ var DefaultRetryPolicy = workflow.RetryPolicy{
 	InitialInterval:          time.Second * 15,
 	BackoffCoefficient:       1,
 	ExpirationInterval:       time.Minute * 5,
-	NonRetriableErrorReasons: CadenceDefaultNonRetriableErrorReasons,
+	NonRetriableErrorReasons: DefaultNonRetriableErrorReasons,
 	MaximumAttempts:          1,
 }
 
@@ -67,7 +67,7 @@ var DefaultSensorRetryPolicy = workflow.RetryPolicy{
 	InitialInterval:          time.Second * 10,
 	BackoffCoefficient:       1,
 	ExpirationInterval:       LongTimeout,
-	NonRetriableErrorReasons: CadenceDefaultNonRetriableErrorReasons,
+	NonRetriableErrorReasons: DefaultNonRetriableErrorReasons,
 }
 
 // AsStar converts a Go value to a Starlark value by marshaling through JSON.
