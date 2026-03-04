@@ -15,20 +15,7 @@ import type { PipelineRunData } from './types';
 const TERMINATED_STATES = new Set([3, 4, 5, 6]);
 
 export const RetryCell = (props: CellRendererProps<string>) => {
-  const { value: originalValue } = props;
-
-  // 🧪 SIMULATE K8S ENVIRONMENT: Simulate race condition where button shows but mutation fails
-  // This simulates: button renders with activity_id, but becomes undefined during mutation
-  const SIMULATE_K8S_RACE_CONDITION = true; // Set to true to reproduce k8s issue
-  const SIMULATE_UNDEFINED_DURING_MUTATION = true;
-
-  // Show button (don't force undefined here)
-  const value = originalValue;
-
-  // Log simulation status for debugging
-  if (SIMULATE_K8S_RACE_CONDITION && originalValue) {
-    console.log('🧪 K8S RACE CONDITION SIMULATION: Button shows with activity_id:', originalValue, 'but mutation will use undefined');
-  }
+  const { value } = props;
   const [css, theme] = useStyletron();
   const [showRetryModal, setShowRetryModal] = useState(false);
   const [retryReason, setRetryReason] = useState('Manual retry from UI');
@@ -62,38 +49,20 @@ export const RetryCell = (props: CellRendererProps<string>) => {
   }
 
   const submitRetry = async () => {
-    // 🧪 Simulate value becoming undefined during mutation (race condition)
-    const mutationValue = SIMULATE_UNDEFINED_DURING_MUTATION ? undefined : value;
-
-    console.log('🔍 DEBUG: submitRetry called with:', {
-      originalValue,
-      renderValue: value,
-      mutationValue: mutationValue,
-      isSimulatingRaceCondition: SIMULATE_K8S_RACE_CONDITION,
-      valueType: typeof mutationValue,
-      hasValue: !!mutationValue,
-      isPending: updatePipelineRunMutation.isPending,
-      hasPipelineRun: !!pipelineRunData?.pipelineRun
-    });
-
     if (updatePipelineRunMutation.isPending || !pipelineRunData?.pipelineRun) {
-      console.log('🔍 DEBUG: Early return - pending or no pipeline run');
       return;
     }
 
     const { pipelineRun } = pipelineRunData;
     const { workflowId, workflowRunId } = pipelineRun.status;
 
-    console.log('🔍 DEBUG: Extracted values:', {
-      mutationValue,
-      workflowId,
-      workflowRunId,
-      status: pipelineRun.status
-    });
+    // 🔧 FIX: Capture activity_id at mutation time and validate all required fields
+    const currentActivityId = value;
 
-    if (!mutationValue || !workflowId || !workflowRunId) {
-      console.log('🔍 DEBUG: Missing required fields, aborting:', {
-        hasValue: !!mutationValue,
+    if (!currentActivityId || !workflowId || !workflowRunId) {
+      // Silently abort if required fields are missing - this prevents the protobuf error
+      console.warn('RetryCell: Cannot retry - missing required fields:', {
+        hasActivityId: !!currentActivityId,
         hasWorkflowId: !!workflowId,
         hasWorkflowRunId: !!workflowRunId
       });
@@ -108,7 +77,7 @@ export const RetryCell = (props: CellRendererProps<string>) => {
       spec: {
         ...specFields,
         retryInfo: {
-          activityId: mutationValue,
+          activityId: currentActivityId,
           workflowId,
           // Must match status.workflowRunId to trigger backend retry processing
           workflowRunId,
