@@ -202,6 +202,7 @@ class PipelineCreateTest(TestCase):
             bazel_target="",
             project=project,
             pipeline=pipeline,
+            storage_url=None,
         )
 
     @patch(
