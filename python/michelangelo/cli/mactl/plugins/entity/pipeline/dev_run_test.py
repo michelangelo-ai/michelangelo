@@ -1,14 +1,10 @@
 """Unit tests for pipeline dev_run plugin."""
 
-import os
 import tempfile
 from inspect import Parameter, Signature
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
-
-from google.protobuf.message import Message
-from google.protobuf.struct_pb2 import Struct
 
 from michelangelo.cli.mactl.crd import CRD
 from michelangelo.cli.mactl.plugins.entity.pipeline.dev_run import (
