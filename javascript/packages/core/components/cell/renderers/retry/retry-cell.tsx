@@ -49,14 +49,35 @@ export const RetryCell = (props: CellRendererProps<string>) => {
   }
 
   const submitRetry = async () => {
+    console.log('🔍 DEBUG: submitRetry called with:', {
+      value,
+      valueType: typeof value,
+      hasValue: !!value,
+      isPending: updatePipelineRunMutation.isPending,
+      hasPipelineRun: !!pipelineRunData?.pipelineRun
+    });
+
     if (updatePipelineRunMutation.isPending || !pipelineRunData?.pipelineRun) {
+      console.log('🔍 DEBUG: Early return - pending or no pipeline run');
       return;
     }
 
     const { pipelineRun } = pipelineRunData;
     const { workflowId, workflowRunId } = pipelineRun.status;
 
+    console.log('🔍 DEBUG: Extracted values:', {
+      value,
+      workflowId,
+      workflowRunId,
+      status: pipelineRun.status
+    });
+
     if (!value || !workflowId || !workflowRunId) {
+      console.log('🔍 DEBUG: Missing required fields, aborting:', {
+        hasValue: !!value,
+        hasWorkflowId: !!workflowId,
+        hasWorkflowRunId: !!workflowRunId
+      });
       return;
     }
 
