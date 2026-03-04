@@ -1,6 +1,38 @@
-import { getObjectSymbols, getObjectValue } from '../object-utils';
+import { getObjectSymbols, getObjectValue, toFlatDotPathMap } from '../object-utils';
 
 describe('object-utils', () => {
+  describe('toFlatDotPathMap', () => {
+    it('flattens a nested object into dot-notation keys', () => {
+      expect(toFlatDotPathMap({ address: { street: 'Main St', city: 'Boston' } })).toEqual({
+        'address.street': 'Main St',
+        'address.city': 'Boston',
+      });
+    });
+
+    it('handles deeply nested objects', () => {
+      expect(toFlatDotPathMap({ a: { b: { c: 'value' } } })).toEqual({ 'a.b.c': 'value' });
+    });
+
+    it('uses bracket notation for array indices', () => {
+      expect(toFlatDotPathMap({ items: [{ name: 'item1' }, { name: 'item2' }] })).toEqual({
+        'items[0].name': 'item1',
+        'items[1].name': 'item2',
+      });
+    });
+
+    it('handles mixed nesting of objects and arrays', () => {
+      expect(toFlatDotPathMap({ a: { b: [{ c: 'value' }] } })).toEqual({ 'a.b[0].c': 'value' });
+    });
+
+    it('returns leaf values of any type', () => {
+      expect(toFlatDotPathMap({ a: 1, b: true, c: null })).toEqual({ a: 1, b: true, c: null });
+    });
+
+    it('returns an empty object for an empty input', () => {
+      expect(toFlatDotPathMap({})).toEqual({});
+    });
+  });
+
   describe('getObjectValue', () => {
     const testObject = {
       name: 'John',

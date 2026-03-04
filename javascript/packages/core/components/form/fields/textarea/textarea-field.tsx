@@ -25,6 +25,7 @@ export const TextareaField: React.FC<TextareaFieldProps> = ({
     validate,
     defaultValue,
     initialValue,
+    label,
   });
   const currentLength = input.value?.length ?? 0;
 

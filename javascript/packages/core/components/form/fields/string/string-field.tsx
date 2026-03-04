@@ -23,6 +23,7 @@ export const StringField: React.FC<BaseFieldProps<string>> = ({
     validate,
     defaultValue,
     initialValue,
+    label,
   });
 
   return (
