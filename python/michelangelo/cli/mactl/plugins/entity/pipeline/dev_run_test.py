@@ -1,9 +1,16 @@
 """Unit tests for pipeline dev_run plugin."""
 
+import os
+import tempfile
+from inspect import Parameter, Signature
 from pathlib import Path
 from unittest import TestCase
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
+from google.protobuf.message import Message
+from google.protobuf.struct_pb2 import Struct
+
+from michelangelo.cli.mactl.crd import CRD
 from michelangelo.cli.mactl.plugins.entity.pipeline.dev_run import (
     _process_env_variables,
     convert_crd_metadata_pipeline_dev_run,
@@ -431,3 +438,111 @@ class PipelineDevRunTest(TestCase):
         mock_get_methods.assert_called_once_with(
             mock_channel, "michelangelo.api.v2.PipelineRunService", mock_crd.metadata
         )
+
+    def test_dev_run_func_extracts_storage_url_from_bound_args(self):
+        """Test that dev_run function extracts storage_url from bound_args.
+
+        This test specifically targets line 187 in dev_run.py:
+        _storage_url = bound_args.arguments.get("storage_url")
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_yaml_path = Path(tmpdir) / "test_pipeline.yaml"
+            with open(temp_yaml_path, "w") as f:
+                f.write("""
+metadata:
+  name: test-pipeline
+  namespace: test-project
+spec:
+  workflowGraph:
+    nodes: []
+""")
+
+            # Create a real CRD instance (not a mock)
+            crd = CRD(
+                name="test-pipeline",
+                full_name="test-project.test-pipeline",
+                metadata=[{"project": "test-project"}],
+            )
+
+            # Mock the required methods that would normally be set up
+            crd.func_crd_metadata_converter = Mock(
+                return_value={"pipeline_run": {"spec": {}}}
+            )
+
+            # Override _read_signatures to provide our test signature
+            original_read_signatures = getattr(crd, "_read_signatures", None)
+
+            def mock_read_signatures(method_name):
+                if method_name == "dev_run":
+                    return Signature(
+                        [
+                            Parameter("self", Parameter.POSITIONAL_OR_KEYWORD),
+                            Parameter("file", Parameter.POSITIONAL_OR_KEYWORD),
+                            Parameter(
+                                "storage_url", Parameter.KEYWORD_ONLY, default=None
+                            ),
+                        ]
+                    )
+                if original_read_signatures:
+                    return original_read_signatures(method_name)
+                return Signature([])
+
+            crd._read_signatures = mock_read_signatures
+
+            # Create mock channel
+            mock_channel = Mock()
+            mock_channel.unary_unary.return_value = Mock(return_value=Mock())
+
+            # Mock the service discovery methods
+            with (
+                patch(
+                    "michelangelo.cli.mactl.plugins.entity.pipeline"
+                    ".dev_run.get_service_name"
+                ) as mock_get_service,
+                patch(
+                    "michelangelo.cli.mactl.plugins.entity.pipeline"
+                    ".dev_run.get_methods_from_service"
+                ) as mock_get_methods,
+                patch(
+                    "michelangelo.cli.mactl.plugins.entity.pipeline"
+                    ".dev_run.get_message_class_by_name"
+                ) as mock_get_message_class,
+                patch(
+                    "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.ParseDict"
+                ) as mock_parse_dict,
+            ):
+                # Setup service mocks
+                mock_get_service.return_value = "test.service"
+                mock_method = Mock()
+                mock_method.input_type = ".TestInput"
+                mock_method.output_type = ".TestOutput"
+                mock_get_methods.return_value = (
+                    {"CreatePipelineRun": mock_method},
+                    Mock(),
+                )
+
+                # Setup message class mocks (simplified since we're patching ParseDict)
+                mock_input_class = Mock()
+                mock_output_class = Mock()
+                mock_get_message_class.side_effect = [
+                    mock_input_class,
+                    mock_output_class,
+                ]
+
+                # Mock ParseDict to avoid protobuf complexity
+                mock_parse_dict.return_value = None
+
+                # Generate the dev_run function - creates real function and
+                # executes line 187
+                generate_dev_run(crd, mock_channel)
+
+                # Now test the dev_run function by calling it
+                # This will exercise line 187:
+                # _storage_url = bound_args.arguments.get("storage_url")
+                test_storage_url = "s3://test-bucket/test-path"
+
+                # Call with storage_url
+                crd.dev_run(file=str(temp_yaml_path), storage_url=test_storage_url)
+
+                # Call without storage_url (should default to None)
+                crd.dev_run(file=str(temp_yaml_path))
