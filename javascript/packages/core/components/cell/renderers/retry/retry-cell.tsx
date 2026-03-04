@@ -17,14 +17,17 @@ const TERMINATED_STATES = new Set([3, 4, 5, 6]);
 export const RetryCell = (props: CellRendererProps<string>) => {
   const { value: originalValue } = props;
 
-  // 🧪 SIMULATE K8S ENVIRONMENT: Force activity_id to be undefined to reproduce the k8s issue
-  // This simulates the k8s environment where activity_id is missing
-  const SIMULATE_K8S_MISSING_ACTIVITY_ID = true; // Set to true to reproduce k8s issue
-  const value = SIMULATE_K8S_MISSING_ACTIVITY_ID ? undefined : originalValue;
+  // 🧪 SIMULATE K8S ENVIRONMENT: Simulate race condition where button shows but mutation fails
+  // This simulates: button renders with activity_id, but becomes undefined during mutation
+  const SIMULATE_K8S_RACE_CONDITION = true; // Set to true to reproduce k8s issue
+  const SIMULATE_UNDEFINED_DURING_MUTATION = true;
+
+  // Show button (don't force undefined here)
+  const value = originalValue;
 
   // Log simulation status for debugging
-  if (SIMULATE_K8S_MISSING_ACTIVITY_ID && originalValue) {
-    console.log('🧪 K8S SIMULATION: Forcing activity_id to be undefined (originally was:', originalValue, ')');
+  if (SIMULATE_K8S_RACE_CONDITION && originalValue) {
+    console.log('🧪 K8S RACE CONDITION SIMULATION: Button shows with activity_id:', originalValue, 'but mutation will use undefined');
   }
   const [css, theme] = useStyletron();
   const [showRetryModal, setShowRetryModal] = useState(false);
@@ -59,12 +62,16 @@ export const RetryCell = (props: CellRendererProps<string>) => {
   }
 
   const submitRetry = async () => {
+    // 🧪 Simulate value becoming undefined during mutation (race condition)
+    const mutationValue = SIMULATE_UNDEFINED_DURING_MUTATION ? undefined : value;
+
     console.log('🔍 DEBUG: submitRetry called with:', {
       originalValue,
-      simulatedValue: value,
-      isSimulatingK8s: SIMULATE_K8S_MISSING_ACTIVITY_ID,
-      valueType: typeof value,
-      hasValue: !!value,
+      renderValue: value,
+      mutationValue: mutationValue,
+      isSimulatingRaceCondition: SIMULATE_K8S_RACE_CONDITION,
+      valueType: typeof mutationValue,
+      hasValue: !!mutationValue,
       isPending: updatePipelineRunMutation.isPending,
       hasPipelineRun: !!pipelineRunData?.pipelineRun
     });
@@ -78,15 +85,15 @@ export const RetryCell = (props: CellRendererProps<string>) => {
     const { workflowId, workflowRunId } = pipelineRun.status;
 
     console.log('🔍 DEBUG: Extracted values:', {
-      value,
+      mutationValue,
       workflowId,
       workflowRunId,
       status: pipelineRun.status
     });
 
-    if (!value || !workflowId || !workflowRunId) {
+    if (!mutationValue || !workflowId || !workflowRunId) {
       console.log('🔍 DEBUG: Missing required fields, aborting:', {
-        hasValue: !!value,
+        hasValue: !!mutationValue,
         hasWorkflowId: !!workflowId,
         hasWorkflowRunId: !!workflowRunId
       });
@@ -101,7 +108,7 @@ export const RetryCell = (props: CellRendererProps<string>) => {
       spec: {
         ...specFields,
         retryInfo: {
-          activityId: value,
+          activityId: mutationValue,
           workflowId,
           // Must match status.workflowRunId to trigger backend retry processing
           workflowRunId,
