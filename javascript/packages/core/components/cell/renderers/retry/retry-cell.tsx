@@ -64,7 +64,7 @@ export const RetryCell = (props: CellRendererProps<string>) => {
       console.warn('RetryCell: Cannot retry - missing required fields:', {
         hasActivityId: !!currentActivityId,
         hasWorkflowId: !!workflowId,
-        hasWorkflowRunId: !!workflowRunId
+        hasWorkflowRunId: !!workflowRunId,
       });
       return;
     }
