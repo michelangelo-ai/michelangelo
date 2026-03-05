@@ -8,7 +8,7 @@ import type { FieldInput, FieldState } from '../types';
 
 export function useField<T = unknown>(
   name: string,
-  options?: { validate?: FieldValidator; required?: boolean }
+  options?: { validate?: FieldValidator; required?: boolean; defaultValue?: T; initialValue?: T }
 ): { input: FieldInput<T>; meta: FieldState } {
   const composedValidate = options?.required
     ? combineValidators(requiredValidator(), ...(options.validate ? [options.validate] : []))
@@ -16,7 +16,11 @@ export function useField<T = unknown>(
 
   const validate = composedValidate ? (value: T) => composedValidate(value as unknown) : undefined;
 
-  const field = useReactFinalFormField<T>(name, { validate });
+  const field = useReactFinalFormField<T>(name, {
+    validate,
+    defaultValue: options?.defaultValue,
+    initialValue: options?.initialValue,
+  });
 
   const input: FieldInput<T> = {
     value: field.input.value,

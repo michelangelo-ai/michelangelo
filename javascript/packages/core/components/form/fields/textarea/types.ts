@@ -1,6 +1,6 @@
 import type { BaseFieldProps } from '../types';
 
-export interface TextareaFieldProps extends BaseFieldProps {
+export interface TextareaFieldProps extends BaseFieldProps<string> {
   rows?: number;
   maxLength?: number;
 }

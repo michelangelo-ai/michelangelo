@@ -7,7 +7,7 @@ export interface RadioOption {
   disabled?: boolean;
 }
 
-export interface RadioFieldProps extends BaseFieldProps {
+export interface RadioFieldProps extends BaseFieldProps<string | boolean> {
   options: RadioOption[];
   align?: Align;
 }

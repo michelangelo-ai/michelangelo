@@ -8,6 +8,8 @@ import type { TextareaFieldProps } from './types';
 export const TextareaField: React.FC<TextareaFieldProps> = ({
   name,
   label,
+  defaultValue,
+  initialValue,
   required,
   validate,
   readOnly,
@@ -18,7 +20,12 @@ export const TextareaField: React.FC<TextareaFieldProps> = ({
   rows,
   maxLength,
 }) => {
-  const { input, meta } = useField<string>(name, { required, validate });
+  const { input, meta } = useField<string>(name, {
+    required,
+    validate,
+    defaultValue,
+    initialValue,
+  });
   const currentLength = input.value?.length ?? 0;
 
   return (

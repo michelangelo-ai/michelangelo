@@ -1,6 +1,6 @@
 import type { FieldValidator } from '#core/components/form/validation/types';
 
-export interface BaseFieldProps {
+export interface BaseFieldProps<T = unknown> {
   /** Unique ID of the field,
    *
    *  - Identifies the field input in the form
@@ -15,6 +15,18 @@ export interface BaseFieldProps {
    * Label displayed above the field
    */
   label?: string;
+
+  /**
+   * The value of the field upon creation. Previously configured values take
+   * precedence over default value.
+   */
+  defaultValue?: T;
+
+  /**
+   * The value of the field upon page load. Takes precedence over default and
+   * configured values. Can be overwritten by user modification.
+   */
+  initialValue?: T;
 
   required?: boolean;
 

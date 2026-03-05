@@ -10,6 +10,8 @@ import type { BooleanFieldProps } from './types';
 export const BooleanField: React.FC<BooleanFieldProps> = ({
   name,
   label,
+  defaultValue,
+  initialValue,
   required,
   validate,
   readOnly,
@@ -19,7 +21,12 @@ export const BooleanField: React.FC<BooleanFieldProps> = ({
   checkboxLabel,
   toggle = false,
 }) => {
-  const { input, meta } = useField<boolean>(name, { required, validate });
+  const { input, meta } = useField<boolean>(name, {
+    required,
+    validate,
+    defaultValue,
+    initialValue,
+  });
 
   const handleChange = (event: React.FormEvent<HTMLInputElement>) => {
     input.onChange(event.currentTarget.checked);

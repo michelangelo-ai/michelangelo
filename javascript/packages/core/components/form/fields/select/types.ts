@@ -6,7 +6,7 @@ export interface SelectOption {
   disabled?: boolean;
 }
 
-export interface SelectFieldProps extends BaseFieldProps {
+export interface SelectFieldProps extends BaseFieldProps<string | string[] | number | number[]> {
   options: SelectOption[];
   clearable?: boolean;
   searchable?: boolean;
