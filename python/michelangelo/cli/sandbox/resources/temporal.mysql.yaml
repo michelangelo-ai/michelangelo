@@ -55,3 +55,10 @@ schema:
     enabled: false
   update:
     enabled: false
+
+# Configure web UI service as NodePort for external access
+web:
+  service:
+    type: NodePort
+    port: 8080
+    nodePort: 30005
