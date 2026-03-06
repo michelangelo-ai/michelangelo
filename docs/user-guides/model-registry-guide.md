@@ -1,219 +1,467 @@
 # Model Registry Guide
 
-Save, version, and manage trained models using Michelangelo's comprehensive model packaging system.
+Save, version, and manage trained models using Michelangelo's model packaging system.
 
-## What Michelangelo Model Packaging Provides
+## Overview
 
-Michelangelo's model packager handles the complete model lifecycle:
+Michelangelo's model packager turns your trained model into self-contained, versioned artifacts ready for serving or sharing. The packager handles dependency bundling, schema validation, and Triton configuration generation automatically.
 
-* **Creates Model Custom Resource** – Registers model metadata in Kubernetes
-* **Stores metadata in ETCD** – Version history, schema, and lineage tracking
-* **Dual format packaging** – Raw model files + deployable (serveable) model files
-* **Cloud storage integration** – Automatic upload/download to S3/GCS
-* **Inference ready** – Fully compatible with Triton Inference Server
-* **Model validation** – Built-in schema and inference tests
-* **Easy downloading** – Retrieve any version for serving or fine-tuning
+**What the model packager provides:**
 
-# Model Registration
+* **Dual format packaging** -- deployable (Triton-ready) and raw (developer-facing) artifacts
+* **Schema validation** -- input/output contracts enforced at packaging time
+* **Dependency bundling** -- auto-packages Python modules your model needs at inference time
+* **Built-in testing** -- raw packages are validated with sample data before they are written
+* **Triton compatibility** -- deployable packages work directly with NVIDIA Triton Inference Server
 
-## Register a Model
+## Core Concepts
+
+Before diving in, here are the key components you will work with:
+
+| Concept | What It Is | Module |
+|---------|-----------|--------|
+| **Model** | Abstract base class your model must implement (`save`, `load`, `predict`) | `michelangelo.lib.model_manager.interface.custom_model` |
+| **ModelSchema** | Defines input/output feature names, types, and shapes | `michelangelo.lib.model_manager.schema` |
+| **CustomTritonPackager** | Creates deployable and raw model packages | `michelangelo.lib.model_manager.packager.custom_triton` |
+| **load_raw_model** | Loads a raw model package for testing or fine-tuning | `michelangelo.lib.model_manager.serde.model` |
+
+The packager produces two complementary artifacts:
+
+| Artifact | Purpose | Created By |
+|----------|---------|-----------|
+| **Deployable model package** | Triton Inference Server deployment | `create_model_package()` |
+| **Raw model package** | Testing, fine-tuning, reproducibility | `create_raw_model_package()` |
+
+## Quick Start: Package Your First Model
+
+This end-to-end walkthrough takes you from a trained model to a verified package in four steps.
+
+### Step 1: Implement the Model interface
+
+Create a class that extends `Model` with three methods: `save`, `load`, and `predict`.
 
 ```py
-from michelangelo.lib.model_manager import CustomTritonPackager
-import michelangelo.uniflow.core as uniflow
+import os
+import numpy as np
+from michelangelo.lib.model_manager.interface.custom_model import Model
 
-@uniflow.task()
-def register_model(model_path: str, model_name: str, package_name: str):
-    """Register a trained model"""
 
-    packager = CustomTritonPackager()
+class EchoModel(Model):
+    """Minimal model that returns inputs unchanged."""
 
-    # input and output feature schema for the model
-    model_schema = ModelSchema(
-        input_schema=[  # list of input features and their schema
-            ModelSchemaItem(
-                name="feature",
-                data_type=DataType.STRING,
-                shape=[1],
-            ),
-        ],
-        output_schema=[  # list of output features and their schema
-            ModelSchemaItem(
-                name="response",
-                data_type=DataType.STRING,
-                shape=[1],
-            ),
-        ],
-    )
+    def save(self, path: str) -> None:
+        os.makedirs(path, exist_ok=True)
+        with open(os.path.join(path, "config.txt"), "w") as f:
+            f.write("echo-model-v1")
 
-    deployable_model_package_path = packager.create_model_package(
-        model_path="/a/b/c",                          # The path of the directory that contains the pretrained raw model binaries, e.g. binaries from torch.save
-        model_class="foo.bar.CustomModel",            # The full import path for the model class which contains the inference logics
-        model_schema=model_schema,
-        model_path_source_type=StorageType.LOCAL,     # or StorageType.TERRABLOB, or StorageType.HDFS,
-        include_import_prefixes=["uber"]              # (Optional) Only save the imported modules with the given prefixes in the model package,
-                                                      # e.g. ['uber', 'data.michelangelo'] only imports starting with 'uber' or 'data.michelangelo' will be saved in the model package.
-                                                      # Default is ['uber'], and if the list is [], save all imports
-    )
+    @classmethod
+    def load(cls, path: str) -> "EchoModel":
+        with open(os.path.join(path, "config.txt")) as f:
+            f.read()
+        return cls()
 
-    raw_model_package_path = packager.create_raw_model_package(
-        model_path="/a/b/c",                          # The path of the directory that contains the pretrained raw model binaries, e.g. binaries from torch.save
-        model_class="foo.bar.CustomModel",            # The full import path for the model class which contains the inference logics
-        model_schema=model_schema,
-        sample_data=[                                 # The sample data is a list of example inputs for your model, at least one input is needed
-            {"feature": np.array([b"a"])},
-            {"feature": np.array([b"b"])},
-            ...
-        ],
-        model_path_source_type=StorageType.LOCAL,     # or StorageType.TERRABLOB, or StorageType.HDFS
-        requirements=[                                # (Optional) The third-party libraries the model depends on. This can also be the path to a requirements.txt file.
-            "pandas=2.2.2",                           # The requirements will be saved as the "dependencies/requirements.txt" file in the raw model package.
-            "scikit-learn",                           # It is recommended to configure this parameter to help future users of the model to recreate the environment needed to load and run the model.
-            ...
-        ],
-        include_import_prefixes=["uber"]              # (Optional) Only save the imported modules with the given prefixes in the model package,
-                                                      # e.g. ['uber', 'data.michelangelo'] only imports starting with 'uber' or 'data.michelangelo' will be saved in the model package.
-                                                      # Default is ['uber'], and if the list is [], save all imports
-    )
+    def predict(self, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+        a = inputs["a"].astype(np.int32)
+        return {"response": a, "doubled": (2 * a).astype(np.int32)}
 ```
 
-### What happens during registration
+### Step 2: Define the schema
 
-1. A **Model Custom Resource (CR)** is created in the Michelangelo control plane
-2. Model **schema & metadata** are stored in ETCD
-3. Two artifacts are generated:
-   * **Raw model format** – original training files
-   * **Deployable model format** – optimized for Triton inference
-4. Packager **uploads both artifacts** to cloud storage
-5. Model **validation tests** run (load → schema → sample inference)
+Declare what your model expects as input and what it produces as output.
 
-# Model Formats and Storage
+```py
+from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
 
-Michelangelo produces **two complementary formats**.
+schema = ModelSchema(
+    input_schema=[
+        ModelSchemaItem(name="a", data_type=DataType.INT, shape=[1]),
+    ],
+    output_schema=[
+        ModelSchemaItem(name="response", data_type=DataType.INT, shape=[1]),
+        ModelSchemaItem(name="doubled", data_type=DataType.INT, shape=[1]),
+    ],
+)
+```
 
-## Raw Model Format (Developer-Facing)
+### Step 3: Package the model
 
-Used for:
+Save your model artifacts, then create both package types.
 
-* Fine-tuning
-* Offline analysis
-* Reproducibility
+```py
+from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
 
-### Directory structure
+# Save model artifacts first
+model = EchoModel()
+model.save("/tmp/echo-artifacts")
 
-```sh
+# Create the packager
+packager = CustomTritonPackager()
+
+# Deployable package (for Triton serving)
+deployable_path = packager.create_model_package(
+    model_path="/tmp/echo-artifacts",
+    model_class="myproject.models.EchoModel",
+    model_schema=schema,
+    model_name="echo-model",
+    dest_model_path="/tmp/echo-deployable",
+)
+
+# Raw package (for testing and fine-tuning)
+sample_data = [
+    {"a": np.array([1], dtype=np.int32)},
+    {"a": np.array([5], dtype=np.int32)},
+]
+
+raw_path = packager.create_raw_model_package(
+    model_path="/tmp/echo-artifacts",
+    model_class="myproject.models.EchoModel",
+    model_schema=schema,
+    sample_data=sample_data,
+    dest_model_path="/tmp/echo-raw",
+    requirements=["numpy"],
+)
+```
+
+### Step 4: Verify the package
+
+Load the raw package and run a prediction to confirm everything works.
+
+```py
+from michelangelo.lib.model_manager.serde.model import load_raw_model
+
+loaded = load_raw_model("/tmp/echo-raw")
+result = loaded.predict({"a": np.array([42], dtype=np.int32)})
+print(result)
+# {'response': array([42], dtype=int32), 'doubled': array([84], dtype=int32)}
+```
+
+You now have a deployable Triton package at `/tmp/echo-deployable` and a verified raw package at `/tmp/echo-raw`.
+
+## API Reference
+
+### Model Interface
+
+All custom models must extend the `Model` abstract base class:
+
+```py
+from michelangelo.lib.model_manager.interface.custom_model import Model
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `save` | `save(self, path: str)` | Serialize model artifacts to a directory |
+| `load` | `load(cls, path: str) -> Model` | Class method that loads and returns a ready-to-use model instance |
+| `predict` | `predict(self, inputs: dict[str, ndarray]) -> dict[str, ndarray]` | Run inference; keys must match the model schema |
+
+:::tip
+Avoid using `pickle` or `torch.save` directly for persistence. Prefer format-specific serialization methods (e.g., `state_dict` for PyTorch, SavedModel for TensorFlow) for better compatibility and security.
+:::
+
+### ModelSchema
+
+Defines the contract between your model and the serving infrastructure.
+
+```py
+from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
+```
+
+**ModelSchemaItem fields:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | `str` | (required) | Feature name, used as the key in input/output dictionaries |
+| `data_type` | `DataType` | `DataType.UNKNOWN` | The data type of the feature |
+| `shape` | `list[int]` | `None` | Shape following NumPy conventions; use `-1` for variable-length dimensions |
+| `optional` | `bool` | `None` | If `True`, the feature may be omitted from input data |
+
+**Supported data types:**
+
+| DataType | Python/NumPy Type | Description |
+|----------|------------------|-------------|
+| `BOOLEAN` | `bool` | Boolean values |
+| `STRING` | `str` / `bytes` | Text data (passed as byte strings in NumPy arrays) |
+| `BYTE` | `int8` | 8-bit signed integer |
+| `CHAR` | `uint8` | 8-bit unsigned integer |
+| `SHORT` | `int16` | 16-bit signed integer |
+| `INT` | `int32` | 32-bit signed integer |
+| `LONG` | `int64` | 64-bit signed integer |
+| `FLOAT` | `float32` | 32-bit floating point |
+| `DOUBLE` | `float64` | 64-bit floating point |
+
+**Shape examples:**
+
+| Shape | Meaning |
+|-------|---------|
+| `[1]` | Scalar value |
+| `[10]` | 1D array of length 10 |
+| `[10, 5]` | 2D array (10 rows, 5 columns) |
+| `[-1]` | Variable-length 1D array |
+
+### CustomTritonPackager
+
+```py
+from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
+```
+
+**Constructor:**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `custom_batch_processing` | `False` | If `True`, your model handles batching internally |
+
+**`create_model_package()` parameters:**
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `model_path` | Yes | -- | Path to saved model artifacts |
+| `model_class` | Yes | -- | Fully qualified Python class name (e.g., `"mypackage.models.MyModel"`) |
+| `model_schema` | Yes | -- | `ModelSchema` instance defining inputs and outputs |
+| `model_name` | No | Derived from class | Display name in Michelangelo Studio |
+| `dest_model_path` | No | Auto temp dir | Output directory for the package |
+| `model_revision` | No | `None` | Revision number for versioning |
+| `model_path_source_type` | No | `StorageType.LOCAL` | Storage backend type |
+| `include_import_prefixes` | No | `None` (all imports) | List of module prefixes to bundle |
+
+**`create_raw_model_package()` parameters:**
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `model_path` | Yes | -- | Path to saved model artifacts |
+| `model_class` | Yes | -- | Fully qualified Python class name |
+| `model_schema` | Yes | -- | `ModelSchema` instance defining inputs and outputs |
+| `sample_data` | Yes | -- | List of sample inputs for validation |
+| `dest_model_path` | No | Auto temp dir | Output directory for the package |
+| `model_path_source_type` | No | `StorageType.LOCAL` | Storage backend type |
+| `requirements` | No | `None` | Dependencies as a list or path to `requirements.txt` |
+| `include_import_prefixes` | No | `None` (all imports) | List of module prefixes to bundle |
+
+### load_raw_model
+
+```py
+from michelangelo.lib.model_manager.serde.model import load_raw_model
+
+model = load_raw_model("/path/to/raw/package")
+```
+
+Returns an instance of your `Model` subclass, fully loaded and ready for inference.
+
+:::note
+`load_raw_model` currently supports Custom Python models (`RawModelType.CUSTOM_PYTHON`). Support for additional model types (HuggingFace, PyTorch) is planned for future releases.
+:::
+
+## Advanced Topics
+
+### PyTorch Model Example
+
+The packager works with any framework. Here is an example using PyTorch internally while conforming to the numpy-based Model interface:
+
+```py
+import numpy as np
+import torch
+from michelangelo.lib.model_manager.interface.custom_model import Model
+
+
+class TorchClassifier(Model):
+    """PyTorch model with numpy I/O for Model Manager."""
+
+    def __init__(self):
+        self.net = torch.nn.Linear(4, 2)
+
+    def save(self, path: str) -> None:
+        import os
+        os.makedirs(path, exist_ok=True)
+        torch.save(self.net.state_dict(), os.path.join(path, "model.pt"))
+
+    @classmethod
+    def load(cls, path: str) -> "TorchClassifier":
+        import os
+        obj = cls()
+        state = torch.load(os.path.join(path, "model.pt"), weights_only=True)
+        obj.net.load_state_dict(state)
+        obj.net.eval()
+        return obj
+
+    def predict(self, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+        x = torch.from_numpy(inputs["x"].astype(np.float32))
+        with torch.no_grad():
+            out = self.net(x)
+        return {"prediction": out.numpy()}
+```
+
+Package it with a matching schema:
+
+```py
+schema = ModelSchema(
+    input_schema=[
+        ModelSchemaItem(name="x", data_type=DataType.FLOAT, shape=[1, 4]),
+    ],
+    output_schema=[
+        ModelSchemaItem(name="prediction", data_type=DataType.FLOAT, shape=[1, 2]),
+    ],
+)
+
+sample_data = [
+    {"x": np.array([[1.0, 2.0, 3.0, 4.0]], dtype=np.float32)},
+]
+
+packager = CustomTritonPackager()
+
+raw_path = packager.create_raw_model_package(
+    model_path="/tmp/torch-artifacts",
+    model_class="myproject.models.TorchClassifier",
+    model_schema=schema,
+    sample_data=sample_data,
+    requirements=["numpy", "torch"],
+)
+```
+
+### Custom Batch Processing
+
+By default, Triton handles batching automatically and your `predict` method receives individual samples. If your model handles batching internally, enable custom batch processing:
+
+```py
+packager = CustomTritonPackager(custom_batch_processing=True)
+```
+
+When enabled, inputs include an additional leading batch dimension. For example, if the schema specifies shape `[n, m]`, the actual input shape will be `[batch_size, n, m]`.
+
+### Feature Store Integration
+
+If your model retrieves features from a feature store at inference time, declare them in `feature_store_features_schema`:
+
+```py
+schema = ModelSchema(
+    input_schema=[
+        ModelSchemaItem(name="user_id", data_type=DataType.LONG, shape=[1]),
+    ],
+    feature_store_features_schema=[
+        ModelSchemaItem(name="user_embedding", data_type=DataType.FLOAT, shape=[128]),
+    ],
+    output_schema=[
+        ModelSchemaItem(name="score", data_type=DataType.FLOAT, shape=[1]),
+    ],
+)
+```
+
+These features are looked up based on keys in the input schema and joined with the input data before being passed to your model.
+
+### Model Package Formats
+
+#### Deployable Format (Triton-Compatible)
+
+```
+model_name/
+├── 0/
+│   ├── model.py                    # Triton Python backend entry point
+│   ├── user_model.py               # Your model implementation
+│   ├── model_class.txt             # Fully qualified Python class path
+│   ├── download.yaml               # Metadata for raw model files
+│   └── myproject/models/...        # Auto-packaged runtime dependencies
+└── config.pbtxt                    # Triton configuration (I/O schema, batching)
+```
+
+| File | Purpose |
+|------|---------|
+| `model.py` | Triton Python backend entry point |
+| `user_model.py` | Your model's forward pass and inference logic |
+| `model_class.txt` | Fully qualified Python class path |
+| `download.yaml` | Metadata describing how raw model files were produced |
+| `config.pbtxt` | Triton configuration (I/O schema, batching, instances) |
+
+#### Raw Format (Developer-Facing)
+
+```
 model_name/
 └── 0/
     ├── metadata/
-    │   ├── type.yaml
-    │   ├── schema.yaml
-    │   └── sample_data.yaml
-    ├── model/                        # the model binaries
+    │   ├── type.yaml               # Model type (custom-python, torch, etc.)
+    │   ├── schema.yaml             # Input/output schema
+    │   └── sample_data.yaml        # Sample data for testing
+    ├── model/                      # Model binaries (your saved artifacts)
     └── defs/
-        ├── model_class.txt
-        ├── michelangelo/...          # runtime code
-        └── team/project/models/...   # domain code
+        ├── model_class.txt         # Fully qualified class path
+        └── myproject/models/...    # Runtime code dependencies
 ```
 
-## Deployable Model Format (Inference-Ready)
+## Integration with Uniflow Workflows
 
-*(Updated using your uploaded model.tar)*
-
-The deployable artifact is packaged into a **Triton-compatible model repository**.
-
-### Directory structure
-
-```sh
-model_name/
-├── 0/
-│   ├── model.py
-│   ├── user_model.py
-│   ├── model_class.txt
-│   ├── download.yaml
-│   ├── uber/ai/michelangelo/...      # runtime code
-│   ├── uber/product/eats/...         # domain code
-│   └── ... additional runtime modules ...
-└── config.pbtxt
-```
-
-### Purpose of key files
-
-| File | Purpose |
-| ----- | ----- |
-| **model.py** | Triton Python backend entry point |
-| **user_model.py** | Your actual model implementation: forward pass & logic |
-| **model_class.txt** | Fully-qualified Python class path |
-| **download.yaml** | Metadata describing how raw model files were produced |
-| **config.pbtxt** | Triton configuration (I/O schema, batching, instances) |
-| **uber/**\* | Auto-packaged modules required at inference time |
-
-### Features of Deployable Models
-
-* Fully Triton-compatible
-* Batch + real-time inference
-* Supports GPU/CPU via Triton instance groups
-* Versioned (`0/`, `1/`, …)
-* Bundles all Python code required to run inference
-
-Stored in cloud at:
-
-```
-s3://<bucket>/models/<model_name>/serve/<version>/
-```
-
-# Inference Support
-
-## Online & Offline Inference
+Package model registration as a task in your ML pipeline:
 
 ```py
-from uber.ai.michelangelo.sdk.model_manager.downloader import download_raw_model
-from uber.ai.michelangelo.sdk.model_manager.serde.model import load_raw_model
+import michelangelo.uniflow.core as uniflow
+from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
+from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
 
-model_path = download_raw_model(
-    project_name="ma-dev-test-uber-one",              # The MA Studio Project
-    model_name="model-20240913-222032-93cdf484",      # The model name
-)
 
-model = load_raw_model(model_path)                    # Load the model, the returned model is a subclass of uber.ai.michelangelo.sdk.model_manager.interface.custom_model.Model
+@uniflow.task()
+def package_model(model_path: str, model_class: str):
+    """Package a trained model for deployment."""
+    packager = CustomTritonPackager()
 
-inputs = {                                            # These inputs should match the schema defined in ModelSchema::input_schema
-    "feature1": np.array([b"test_feature"]),          # Note: If the schema expects the feature to be DataType.STRING, the model expects the feature to be a ndarray of byte string
-    ...
-}
+    schema = ModelSchema(
+        input_schema=[
+            ModelSchemaItem(name="feature", data_type=DataType.STRING, shape=[1]),
+        ],
+        output_schema=[
+            ModelSchemaItem(name="response", data_type=DataType.STRING, shape=[1]),
+        ],
+    )
 
-result = model.predict(inputs)                        # Outputs should match the schema defined in ModelSchema::output_schema
+    deployable_path = packager.create_model_package(
+        model_path=model_path,
+        model_class=model_class,
+        model_schema=schema,
+    )
 
-response = result.get("response")[0]
+    return deployable_path
 ```
 
-# Loading & Downloading Models
-
-## Load model for serving or analysis
+This task can be chained after a training task in a workflow:
 
 ```py
-model = packager.load_model("housing-predictor")
-model_v2 = packager.load_model("housing-predictor", version="2")
+@uniflow.workflow
+def train_and_package(dataset_id: str):
+    model_path = train_model(dataset_id)
+    package_path = package_model(model_path, "myproject.models.MyModel")
+    return package_path
 ```
 
-## Download for fine-tuning or custom deployment
+## Troubleshooting
 
-```py
-from uber.ai.michelangelo.sdk.model_manager.downloader import download_raw_model
-from uber.ai.michelangelo.sdk.model_manager.serde.model import load_raw_model
+### `ValueError: model_class is required`
 
-model_path = download_raw_model(
-    project_name="ma-dev-test-uber-one",              # The MA Studio Project
-    model_name="model-20240913-222032-93cdf484",      # The model name
-)
+The `model_class` parameter must be a non-empty string containing the fully qualified Python class path (e.g., `"mypackage.models.MyModel"`).
 
-model = load_raw_model(model_path)                    # Load the model, the returned model is a subclass of uber.ai.michelangelo.sdk.model_manager.interface.custom_model.Model
+### `ValueError: model_schema is required`
 
-inputs = {                                            # These inputs should match the schema defined in ModelSchema::input_schema
-    "feature1": np.array([b"test_feature"]),          # Note: If the schema expects the feature to be DataType.STRING, the model expects the feature to be a ndarray of byte string
-    ...
-}
+A `ModelSchema` with at least one input and one output `ModelSchemaItem` must be provided.
 
-result = model.predict(inputs)                        # Outputs should match the schema defined in ModelSchema::output_schema
+### Schema validation errors
 
-response = result.get("response")[0]
-```
+Ensure your sample data matches the schema exactly:
+
+* Each required input feature must be present in every sample
+* Array shapes must match the schema's `shape` field
+* Array dtypes must be compatible with the schema's `data_type`
+
+:::warning
+When using `DataType.STRING`, pass byte strings in your NumPy arrays (e.g., `np.array([b"hello"])`), not regular Python strings.
+:::
+
+### `NotImplementedError: The loader for ... model is not supported yet`
+
+`load_raw_model` currently only supports Custom Python models. HuggingFace and PyTorch loaders are planned for future releases.
+
+### Model class validation fails
+
+Your model class must:
+
+* Be importable from the current Python environment
+* Extend `michelangelo.lib.model_manager.interface.custom_model.Model`
+* Implement all three abstract methods: `save`, `load`, and `predict`
+
+## Next Steps
+
+* See working examples in [`python/examples/model_manager/`](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/model_manager)
+* Learn about [model training](./train-and-register-a-model.md) to prepare models for packaging
+* Learn about [data preparation](./prepare-your-data.md) for your training pipeline
