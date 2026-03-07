@@ -27,10 +27,9 @@ export function TableFilterMenu<T extends TableData = TableData>(props: TableFil
       onOpen={() => setIsMenuOpen(true)}
       overrides={{
         Body: {
-          style: ({ $theme }: { $theme: { borders: { radius300: string } } }) => ({
-            borderRadius: $theme.borders.radius300,
+          style: {
             overflow: 'hidden',
-          }),
+          },
         },
       }}
       content={({ close }) => (
