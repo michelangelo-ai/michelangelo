@@ -41,6 +41,14 @@ export function ActiveFilterTag<TData = unknown>(props: ActiveFilterTagProps<TDa
   return (
     <StatefulPopover
       placement={PLACEMENT.bottomLeft}
+      overrides={{
+        Body: {
+          style: ({ $theme }: { $theme: Theme }) => ({
+            borderRadius: $theme.borders.radius300,
+            overflow: 'hidden',
+          }),
+        },
+      }}
       content={({ close }) => (
         <FilterComponent
           column={column}
