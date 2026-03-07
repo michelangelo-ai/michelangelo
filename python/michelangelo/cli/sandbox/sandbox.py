@@ -45,11 +45,6 @@ _cadence_ports = [
     "8088:30004",  # Cadence Web
 ]
 
-# Temporal ports (NodePort mappings like Cadence)
-_temporal_ports = [
-    "8080:30005",  # Temporal Web UI
-]
-
 # Ray framework ports
 _ray_ports = [
     "10001:10001",  # Ray client port
@@ -157,7 +152,7 @@ def run(ns: argparse.Namespace):
 
 def _create(ns: argparse.Namespace):
     assert ns
-    ports = _kube_ports + (_temporal_ports if ns.workflow == "temporal" else _cadence_ports)
+    ports = _kube_ports + ([] if ns.workflow == "temporal" else _cadence_ports)
     args = [
         "k3d",
         "cluster",
@@ -782,6 +777,17 @@ def _setup_temporal(links, helm_existing_repos):
         "default",
         "--retention",
         "72",
+    )
+    # Automatically port-forward Temporal Web UI in the background
+    subprocess.Popen(
+        ["kubectl", "port-forward", "svc/temporaltest-web", "8080:8080"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    subprocess.Popen(
+        ["kubectl", "port-forward", "svc/temporaltest-frontend", "7233:7233"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
     links.append(("Temporal Web UI", "http://localhost:8080", ""))
 
