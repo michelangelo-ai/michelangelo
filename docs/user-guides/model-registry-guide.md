@@ -325,26 +325,6 @@ packager = CustomTritonPackager(custom_batch_processing=True)
 
 When enabled, inputs include an additional leading batch dimension. For example, if the schema specifies shape `[n, m]`, the actual input shape will be `[batch_size, n, m]`.
 
-### Feature Store Integration
-
-If your model retrieves features from a feature store at inference time, declare them in `feature_store_features_schema`:
-
-```py
-schema = ModelSchema(
-    input_schema=[
-        ModelSchemaItem(name="user_id", data_type=DataType.LONG, shape=[1]),
-    ],
-    feature_store_features_schema=[
-        ModelSchemaItem(name="user_embedding", data_type=DataType.FLOAT, shape=[128]),
-    ],
-    output_schema=[
-        ModelSchemaItem(name="score", data_type=DataType.FLOAT, shape=[1]),
-    ],
-)
-```
-
-These features are looked up based on keys in the input schema and joined with the input data before being passed to your model.
-
 ### Model Package Formats
 
 #### Deployable Format (Triton-Compatible)
