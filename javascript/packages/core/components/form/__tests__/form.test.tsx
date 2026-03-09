@@ -91,7 +91,12 @@ describe('Form integration', () => {
   it('uses field-level initialValue over defaultValue when both are provided', () => {
     render(
       <Form onSubmit={vi.fn()}>
-        <StringField name="email" label="Email" defaultValue="from-default" initialValue="from-field-initial" />
+        <StringField
+          name="email"
+          label="Email"
+          defaultValue="from-default"
+          initialValue="from-field-initial"
+        />
       </Form>,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
     );
