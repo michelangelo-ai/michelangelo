@@ -8,7 +8,7 @@ metadata:
 spec:
   containers:
     - name: app
-      image: ghcr.io/michelangelo-ai/controllermgr:sha-fbedfa6
+      image: ghcr.io/michelangelo-ai/controllermgr:main
       imagePullPolicy: IfNotPresent
       volumeMounts:
         - name: config-volume
