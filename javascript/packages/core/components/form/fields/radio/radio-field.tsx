@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
-import { InlineRadioField } from './inline-radio-field';
+
 import { CardRadioField } from './card-radio-field';
+import { InlineRadioField } from './inline-radio-field';
 
 import type { RadioFieldProps } from './types';
 

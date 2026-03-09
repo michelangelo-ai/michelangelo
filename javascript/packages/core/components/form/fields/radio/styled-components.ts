@@ -1,3 +1,5 @@
+import type { Theme } from 'baseui';
+
 export const getTileGroupOverrides = (align: string) => ({
   Root: {
     style: {
@@ -5,7 +7,7 @@ export const getTileGroupOverrides = (align: string) => ({
     },
   },
   RadioMarkOuter: {
-    style: ({ $disabled, $theme }) => {
+    style: ({ $disabled, $theme }: { $disabled: boolean; $theme: Theme }) => {
       return $disabled ? { backgroundColor: $theme.colors.tickFillSelected } : {};
     },
   },
@@ -13,7 +15,7 @@ export const getTileGroupOverrides = (align: string) => ({
 
 export const TILE_OVERRIDES = {
   Root: {
-    style: ({ $selected, $theme }) => ({
+    style: ({ $selected, $theme }: { $selected: boolean; $theme: Theme }) => ({
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'flex-start',

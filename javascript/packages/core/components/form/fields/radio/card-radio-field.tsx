@@ -1,19 +1,18 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useStyletron } from 'baseui';
 import { ALIGN } from 'baseui/radio';
-import { LabelMedium } from 'baseui/typography';
 import {
-  Tile,
-  TileGroup,
+  ALIGNMENT,
   StyledParagraph,
+  Tile,
   TILE_GROUP_KIND,
   TILE_KIND,
-  ALIGNMENT,
+  TileGroup,
 } from 'baseui/tile';
+import { LabelMedium } from 'baseui/typography';
 
 import { FormControl } from '#core/components/form/components/form-control';
 import { useField } from '#core/components/form/hooks/use-field';
-
 import { getTileGroupOverrides, TILE_OVERRIDES } from './styled-components';
 
 import type { RadioFieldProps } from './types';
@@ -67,7 +66,7 @@ export const CardRadioField: React.FC<RadioFieldProps> = ({
         kind={TILE_GROUP_KIND.singleSelect}
         onClick={onClick}
         selected={selectedIndex}
-        disabled={disabled || readOnly}
+        disabled={disabled ?? readOnly}
         overrides={getTileGroupOverrides(align)}
       >
         {options.map((option) => {
