@@ -11,6 +11,8 @@ import type { RadioFieldProps } from './types';
 export const RadioField: React.FC<RadioFieldProps> = ({
   name,
   label,
+  defaultValue,
+  initialValue,
   required,
   validate,
   readOnly,
@@ -20,7 +22,12 @@ export const RadioField: React.FC<RadioFieldProps> = ({
   options,
   align = ALIGN.horizontal,
 }) => {
-  const { input, meta } = useField<string | boolean>(name, { required, validate });
+  const { input, meta } = useField<string | boolean>(name, {
+    required,
+    validate,
+    defaultValue,
+    initialValue,
+  });
 
   const isBoolean = options.every(({ value }) => typeof value === 'boolean');
 

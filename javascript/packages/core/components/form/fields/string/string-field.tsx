@@ -5,9 +5,11 @@ import { useField } from '#core/components/form/hooks/use-field';
 
 import type { BaseFieldProps } from '#core/components/form/fields/types';
 
-export const StringField: React.FC<BaseFieldProps> = ({
+export const StringField: React.FC<BaseFieldProps<string>> = ({
   name,
   label,
+  defaultValue,
+  initialValue,
   required,
   validate,
   readOnly,
@@ -16,7 +18,12 @@ export const StringField: React.FC<BaseFieldProps> = ({
   description,
   caption,
 }) => {
-  const { input, meta } = useField<string>(name, { required, validate });
+  const { input, meta } = useField<string>(name, {
+    required,
+    validate,
+    defaultValue,
+    initialValue,
+  });
 
   return (
     <FormControl

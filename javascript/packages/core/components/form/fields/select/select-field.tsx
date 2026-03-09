@@ -11,6 +11,8 @@ import type { SelectFieldProps, SelectOption } from './types';
 export const SelectField: React.FC<SelectFieldProps> = ({
   name,
   label,
+  defaultValue,
+  initialValue,
   required,
   validate,
   readOnly,
@@ -27,6 +29,8 @@ export const SelectField: React.FC<SelectFieldProps> = ({
   const { input, meta } = useField<string | string[] | number[] | number>(name, {
     required,
     validate,
+    defaultValue,
+    initialValue,
   });
 
   const handleChange = useCallback(

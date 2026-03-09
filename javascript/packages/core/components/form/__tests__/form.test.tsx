@@ -66,6 +66,60 @@ describe('Form integration', () => {
     );
   });
 
+  it('populates the field with defaultValue', () => {
+    render(
+      <Form onSubmit={vi.fn()}>
+        <StringField name="email" label="Email" defaultValue="from-default" />
+      </Form>,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+    );
+
+    expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('from-default');
+  });
+
+  it('uses initialValues over defaultValue when both are provided', () => {
+    render(
+      <Form onSubmit={vi.fn()} initialValues={{ email: 'from-form' }}>
+        <StringField name="email" label="Email" defaultValue="from-default" />
+      </Form>,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+    );
+
+    expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('from-form');
+  });
+
+  it('uses field-level initialValue over defaultValue when both are provided', () => {
+    render(
+      <Form onSubmit={vi.fn()}>
+        <StringField
+          name="email"
+          label="Email"
+          defaultValue="from-default"
+          initialValue="from-field-initial"
+        />
+      </Form>,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+    );
+
+    expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('from-field-initial');
+  });
+
+  it('uses field-level initialValue when all three value sources are provided', () => {
+    render(
+      <Form onSubmit={vi.fn()} initialValues={{ email: 'from-form' }}>
+        <StringField
+          name="email"
+          label="Email"
+          defaultValue="from-default"
+          initialValue="from-field-initial"
+        />
+      </Form>,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+    );
+
+    expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('from-field-initial');
+  });
+
   it('supports external submit button via form id', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
