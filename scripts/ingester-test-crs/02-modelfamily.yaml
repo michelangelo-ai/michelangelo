@@ -1,0 +1,10 @@
+apiVersion: michelangelo.api/v2
+kind: ModelFamily
+metadata:
+  name: ingester-test-model-family
+  namespace: ingester-test
+  labels:
+    test: ingester
+spec:
+  name: ingester-test-model-family
+  description: Test model family for ingester validation
