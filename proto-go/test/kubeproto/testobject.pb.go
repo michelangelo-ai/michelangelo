@@ -5509,6 +5509,14 @@ spec:
                                               type: object
                                           type: object
                                           x-kubernetes-map-type: atomic
+                                        matchLabelKeys:
+                                          items:
+                                            type: string
+                                          type: array
+                                        mismatchLabelKeys:
+                                          items:
+                                            type: string
+                                          type: array
                                         namespaceSelector:
                                           description: A label selector is a label
                                             query over a set of resources. The result
@@ -5640,6 +5648,14 @@ spec:
                                           type: object
                                       type: object
                                       x-kubernetes-map-type: atomic
+                                    matchLabelKeys:
+                                      items:
+                                        type: string
+                                      type: array
+                                    mismatchLabelKeys:
+                                      items:
+                                        type: string
+                                      type: array
                                     namespaceSelector:
                                       description: A label selector is a label query
                                         over a set of resources. The result of matchLabels
@@ -5772,6 +5788,14 @@ spec:
                                               type: object
                                           type: object
                                           x-kubernetes-map-type: atomic
+                                        matchLabelKeys:
+                                          items:
+                                            type: string
+                                          type: array
+                                        mismatchLabelKeys:
+                                          items:
+                                            type: string
+                                          type: array
                                         namespaceSelector:
                                           description: A label selector is a label
                                             query over a set of resources. The result
@@ -5903,6 +5927,14 @@ spec:
                                           type: object
                                       type: object
                                       x-kubernetes-map-type: atomic
+                                    matchLabelKeys:
+                                      items:
+                                        type: string
+                                      type: array
+                                    mismatchLabelKeys:
+                                      items:
+                                        type: string
+                                      type: array
                                     namespaceSelector:
                                       description: A label selector is a label query
                                         over a set of resources. The result of matchLabels
@@ -6110,6 +6142,13 @@ spec:
                                         scheme:
                                           type: string
                                       type: object
+                                    sleep:
+                                      properties:
+                                        seconds:
+                                          format: int64
+                                          pattern: ^[-]?\d{1,19}$
+                                          type: string
+                                      type: object
                                     tcpSocket:
                                       properties:
                                         host:
@@ -6165,6 +6204,13 @@ spec:
                                               type: string
                                           type: object
                                         scheme:
+                                          type: string
+                                      type: object
+                                    sleep:
+                                      properties:
+                                        seconds:
+                                          format: int64
+                                          pattern: ^[-]?\d{1,19}$
                                           type: string
                                       type: object
                                     tcpSocket:
@@ -6395,6 +6441,8 @@ spec:
                                     properties:
                                       name:
                                         type: string
+                                      request:
+                                        type: string
                                     type: object
                                   type: array
                                 limits:
@@ -6420,6 +6468,13 @@ spec:
                               properties:
                                 allowPrivilegeEscalation:
                                   type: boolean
+                                appArmorProfile:
+                                  properties:
+                                    localhostProfile:
+                                      type: string
+                                    type:
+                                      type: string
+                                  type: object
                                 capabilities:
                                   properties:
                                     add:
@@ -6594,6 +6649,8 @@ spec:
                                     type: string
                                   readOnly:
                                     type: boolean
+                                  recursiveReadOnly:
+                                    type: string
                                   subPath:
                                     type: string
                                   subPathExpr:
@@ -6769,6 +6826,13 @@ spec:
                                             scheme:
                                               type: string
                                           type: object
+                                        sleep:
+                                          properties:
+                                            seconds:
+                                              format: int64
+                                              pattern: ^[-]?\d{1,19}$
+                                              type: string
+                                          type: object
                                         tcpSocket:
                                           properties:
                                             host:
@@ -6824,6 +6888,13 @@ spec:
                                                   type: string
                                               type: object
                                             scheme:
+                                              type: string
+                                          type: object
+                                        sleep:
+                                          properties:
+                                            seconds:
+                                              format: int64
+                                              pattern: ^[-]?\d{1,19}$
                                               type: string
                                           type: object
                                         tcpSocket:
@@ -7054,6 +7125,8 @@ spec:
                                         properties:
                                           name:
                                             type: string
+                                          request:
+                                            type: string
                                         type: object
                                       type: array
                                     limits:
@@ -7079,6 +7152,13 @@ spec:
                                   properties:
                                     allowPrivilegeEscalation:
                                       type: boolean
+                                    appArmorProfile:
+                                      properties:
+                                        localhostProfile:
+                                          type: string
+                                        type:
+                                          type: string
+                                      type: object
                                     capabilities:
                                       properties:
                                         add:
@@ -7253,6 +7333,8 @@ spec:
                                         type: string
                                       readOnly:
                                         type: boolean
+                                      recursiveReadOnly:
+                                        type: string
                                       subPath:
                                         type: string
                                       subPathExpr:
@@ -7433,6 +7515,13 @@ spec:
                                         scheme:
                                           type: string
                                       type: object
+                                    sleep:
+                                      properties:
+                                        seconds:
+                                          format: int64
+                                          pattern: ^[-]?\d{1,19}$
+                                          type: string
+                                      type: object
                                     tcpSocket:
                                       properties:
                                         host:
@@ -7488,6 +7577,13 @@ spec:
                                               type: string
                                           type: object
                                         scheme:
+                                          type: string
+                                      type: object
+                                    sleep:
+                                      properties:
+                                        seconds:
+                                          format: int64
+                                          pattern: ^[-]?\d{1,19}$
                                           type: string
                                       type: object
                                     tcpSocket:
@@ -7718,6 +7814,8 @@ spec:
                                     properties:
                                       name:
                                         type: string
+                                      request:
+                                        type: string
                                     type: object
                                   type: array
                                 limits:
@@ -7743,6 +7841,13 @@ spec:
                               properties:
                                 allowPrivilegeEscalation:
                                   type: boolean
+                                appArmorProfile:
+                                  properties:
+                                    localhostProfile:
+                                      type: string
+                                    type:
+                                      type: string
+                                  type: object
                                 capabilities:
                                   properties:
                                     add:
@@ -7917,6 +8022,8 @@ spec:
                                     type: string
                                   readOnly:
                                     type: boolean
+                                  recursiveReadOnly:
+                                    type: string
                                   subPath:
                                     type: string
                                   subPathExpr:
@@ -7965,13 +8072,10 @@ spec:
                           properties:
                             name:
                               type: string
-                            source:
-                              properties:
-                                resourceClaimName:
-                                  type: string
-                                resourceClaimTemplateName:
-                                  type: string
-                              type: object
+                            resourceClaimName:
+                              type: string
+                            resourceClaimTemplateName:
+                              type: string
                           type: object
                         type: array
                       restartPolicy:
@@ -7989,6 +8093,13 @@ spec:
                         type: array
                       securityContext:
                         properties:
+                          appArmorProfile:
+                            properties:
+                              localhostProfile:
+                                type: string
+                              type:
+                                type: string
+                            type: object
                           fsGroup:
                             format: int64
                             pattern: ^[-]?\d{1,19}$
@@ -8029,6 +8140,8 @@ spec:
                               pattern: ^[-]?\d{1,19}$
                               type: string
                             type: array
+                          supplementalGroupsPolicy:
+                            type: string
                           sysctls:
                             items:
                               properties:
@@ -8457,13 +8570,6 @@ spec:
                                               type: object
                                             resources:
                                               properties:
-                                                claims:
-                                                  items:
-                                                    properties:
-                                                      name:
-                                                        type: string
-                                                    type: object
-                                                  type: array
                                                 limits:
                                                   additionalProperties:
                                                     anyOf:
@@ -8547,6 +8653,8 @@ spec:
                                               type: object
                                               x-kubernetes-map-type: atomic
                                             storageClassName:
+                                              type: string
+                                            volumeAttributesClassName:
                                               type: string
                                             volumeMode:
                                               type: string
@@ -8635,6 +8743,13 @@ spec:
                                     type:
                                       type: string
                                   type: object
+                                image:
+                                  properties:
+                                    pullPolicy:
+                                      type: string
+                                    reference:
+                                      type: string
+                                  type: object
                                 iscsi:
                                   properties:
                                     chapAuthDiscovery:
@@ -8706,6 +8821,83 @@ spec:
                                     sources:
                                       items:
                                         properties:
+                                          clusterTrustBundle:
+                                            properties:
+                                              labelSelector:
+                                                description: A label selector is a
+                                                  label query over a set of resources.
+                                                  The result of matchLabels and matchExpressions
+                                                  are ANDed. An empty label selector
+                                                  matches all objects. A null label
+                                                  selector matches no objects.
+                                                properties:
+                                                  matchExpressions:
+                                                    description: matchExpressions
+                                                      is a list of label selector
+                                                      requirements. The requirements
+                                                      are ANDed.
+                                                    items:
+                                                      description: A label selector
+                                                        requirement is a selector
+                                                        that contains values, a key,
+                                                        and an operator that relates
+                                                        the key and values.
+                                                      properties:
+                                                        key:
+                                                          description: key is the
+                                                            label key that the selector
+                                                            applies to.
+                                                          type: string
+                                                        operator:
+                                                          description: operator represents
+                                                            a key's relationship to
+                                                            a set of values. Valid
+                                                            operators are In, NotIn,
+                                                            Exists and DoesNotExist.
+                                                          type: string
+                                                        values:
+                                                          description: values is an
+                                                            array of string values.
+                                                            If the operator is In
+                                                            or NotIn, the values array
+                                                            must be non-empty. If
+                                                            the operator is Exists
+                                                            or DoesNotExist, the values
+                                                            array must be empty. This
+                                                            array is replaced during
+                                                            a strategic merge patch.
+                                                          items:
+                                                            type: string
+                                                          type: array
+                                                      required:
+                                                      - key
+                                                      - operator
+                                                      type: object
+                                                    type: array
+                                                  matchLabels:
+                                                    additionalProperties:
+                                                      type: string
+                                                    description: matchLabels is a
+                                                      map of {key,value} pairs. A
+                                                      single {key,value} in the matchLabels
+                                                      map is equivalent to an element
+                                                      of matchExpressions, whose key
+                                                      field is "key", the operator
+                                                      is "In", and the values array
+                                                      contains only "value". The requirements
+                                                      are ANDed.
+                                                    type: object
+                                                type: object
+                                                x-kubernetes-map-type: atomic
+                                              name:
+                                                type: string
+                                              optional:
+                                                type: boolean
+                                              path:
+                                                type: string
+                                              signerName:
+                                                type: string
+                                            type: object
                                           configMap:
                                             properties:
                                               items:
@@ -10000,6 +10192,14 @@ spec:
                                               type: object
                                           type: object
                                           x-kubernetes-map-type: atomic
+                                        matchLabelKeys:
+                                          items:
+                                            type: string
+                                          type: array
+                                        mismatchLabelKeys:
+                                          items:
+                                            type: string
+                                          type: array
                                         namespaceSelector:
                                           description: A label selector is a label
                                             query over a set of resources. The result
@@ -10131,6 +10331,14 @@ spec:
                                           type: object
                                       type: object
                                       x-kubernetes-map-type: atomic
+                                    matchLabelKeys:
+                                      items:
+                                        type: string
+                                      type: array
+                                    mismatchLabelKeys:
+                                      items:
+                                        type: string
+                                      type: array
                                     namespaceSelector:
                                       description: A label selector is a label query
                                         over a set of resources. The result of matchLabels
@@ -10263,6 +10471,14 @@ spec:
                                               type: object
                                           type: object
                                           x-kubernetes-map-type: atomic
+                                        matchLabelKeys:
+                                          items:
+                                            type: string
+                                          type: array
+                                        mismatchLabelKeys:
+                                          items:
+                                            type: string
+                                          type: array
                                         namespaceSelector:
                                           description: A label selector is a label
                                             query over a set of resources. The result
@@ -10394,6 +10610,14 @@ spec:
                                           type: object
                                       type: object
                                       x-kubernetes-map-type: atomic
+                                    matchLabelKeys:
+                                      items:
+                                        type: string
+                                      type: array
+                                    mismatchLabelKeys:
+                                      items:
+                                        type: string
+                                      type: array
                                     namespaceSelector:
                                       description: A label selector is a label query
                                         over a set of resources. The result of matchLabels
@@ -10601,6 +10825,13 @@ spec:
                                         scheme:
                                           type: string
                                       type: object
+                                    sleep:
+                                      properties:
+                                        seconds:
+                                          format: int64
+                                          pattern: ^[-]?\d{1,19}$
+                                          type: string
+                                      type: object
                                     tcpSocket:
                                       properties:
                                         host:
@@ -10656,6 +10887,13 @@ spec:
                                               type: string
                                           type: object
                                         scheme:
+                                          type: string
+                                      type: object
+                                    sleep:
+                                      properties:
+                                        seconds:
+                                          format: int64
+                                          pattern: ^[-]?\d{1,19}$
                                           type: string
                                       type: object
                                     tcpSocket:
@@ -10886,6 +11124,8 @@ spec:
                                     properties:
                                       name:
                                         type: string
+                                      request:
+                                        type: string
                                     type: object
                                   type: array
                                 limits:
@@ -10911,6 +11151,13 @@ spec:
                               properties:
                                 allowPrivilegeEscalation:
                                   type: boolean
+                                appArmorProfile:
+                                  properties:
+                                    localhostProfile:
+                                      type: string
+                                    type:
+                                      type: string
+                                  type: object
                                 capabilities:
                                   properties:
                                     add:
@@ -11085,6 +11332,8 @@ spec:
                                     type: string
                                   readOnly:
                                     type: boolean
+                                  recursiveReadOnly:
+                                    type: string
                                   subPath:
                                     type: string
                                   subPathExpr:
@@ -11260,6 +11509,13 @@ spec:
                                             scheme:
                                               type: string
                                           type: object
+                                        sleep:
+                                          properties:
+                                            seconds:
+                                              format: int64
+                                              pattern: ^[-]?\d{1,19}$
+                                              type: string
+                                          type: object
                                         tcpSocket:
                                           properties:
                                             host:
@@ -11315,6 +11571,13 @@ spec:
                                                   type: string
                                               type: object
                                             scheme:
+                                              type: string
+                                          type: object
+                                        sleep:
+                                          properties:
+                                            seconds:
+                                              format: int64
+                                              pattern: ^[-]?\d{1,19}$
                                               type: string
                                           type: object
                                         tcpSocket:
@@ -11545,6 +11808,8 @@ spec:
                                         properties:
                                           name:
                                             type: string
+                                          request:
+                                            type: string
                                         type: object
                                       type: array
                                     limits:
@@ -11570,6 +11835,13 @@ spec:
                                   properties:
                                     allowPrivilegeEscalation:
                                       type: boolean
+                                    appArmorProfile:
+                                      properties:
+                                        localhostProfile:
+                                          type: string
+                                        type:
+                                          type: string
+                                      type: object
                                     capabilities:
                                       properties:
                                         add:
@@ -11744,6 +12016,8 @@ spec:
                                         type: string
                                       readOnly:
                                         type: boolean
+                                      recursiveReadOnly:
+                                        type: string
                                       subPath:
                                         type: string
                                       subPathExpr:
@@ -11924,6 +12198,13 @@ spec:
                                         scheme:
                                           type: string
                                       type: object
+                                    sleep:
+                                      properties:
+                                        seconds:
+                                          format: int64
+                                          pattern: ^[-]?\d{1,19}$
+                                          type: string
+                                      type: object
                                     tcpSocket:
                                       properties:
                                         host:
@@ -11979,6 +12260,13 @@ spec:
                                               type: string
                                           type: object
                                         scheme:
+                                          type: string
+                                      type: object
+                                    sleep:
+                                      properties:
+                                        seconds:
+                                          format: int64
+                                          pattern: ^[-]?\d{1,19}$
                                           type: string
                                       type: object
                                     tcpSocket:
@@ -12209,6 +12497,8 @@ spec:
                                     properties:
                                       name:
                                         type: string
+                                      request:
+                                        type: string
                                     type: object
                                   type: array
                                 limits:
@@ -12234,6 +12524,13 @@ spec:
                               properties:
                                 allowPrivilegeEscalation:
                                   type: boolean
+                                appArmorProfile:
+                                  properties:
+                                    localhostProfile:
+                                      type: string
+                                    type:
+                                      type: string
+                                  type: object
                                 capabilities:
                                   properties:
                                     add:
@@ -12408,6 +12705,8 @@ spec:
                                     type: string
                                   readOnly:
                                     type: boolean
+                                  recursiveReadOnly:
+                                    type: string
                                   subPath:
                                     type: string
                                   subPathExpr:
@@ -12456,13 +12755,10 @@ spec:
                           properties:
                             name:
                               type: string
-                            source:
-                              properties:
-                                resourceClaimName:
-                                  type: string
-                                resourceClaimTemplateName:
-                                  type: string
-                              type: object
+                            resourceClaimName:
+                              type: string
+                            resourceClaimTemplateName:
+                              type: string
                           type: object
                         type: array
                       restartPolicy:
@@ -12480,6 +12776,13 @@ spec:
                         type: array
                       securityContext:
                         properties:
+                          appArmorProfile:
+                            properties:
+                              localhostProfile:
+                                type: string
+                              type:
+                                type: string
+                            type: object
                           fsGroup:
                             format: int64
                             pattern: ^[-]?\d{1,19}$
@@ -12520,6 +12823,8 @@ spec:
                               pattern: ^[-]?\d{1,19}$
                               type: string
                             type: array
+                          supplementalGroupsPolicy:
+                            type: string
                           sysctls:
                             items:
                               properties:
@@ -12948,13 +13253,6 @@ spec:
                                               type: object
                                             resources:
                                               properties:
-                                                claims:
-                                                  items:
-                                                    properties:
-                                                      name:
-                                                        type: string
-                                                    type: object
-                                                  type: array
                                                 limits:
                                                   additionalProperties:
                                                     anyOf:
@@ -13038,6 +13336,8 @@ spec:
                                               type: object
                                               x-kubernetes-map-type: atomic
                                             storageClassName:
+                                              type: string
+                                            volumeAttributesClassName:
                                               type: string
                                             volumeMode:
                                               type: string
@@ -13126,6 +13426,13 @@ spec:
                                     type:
                                       type: string
                                   type: object
+                                image:
+                                  properties:
+                                    pullPolicy:
+                                      type: string
+                                    reference:
+                                      type: string
+                                  type: object
                                 iscsi:
                                   properties:
                                     chapAuthDiscovery:
@@ -13197,6 +13504,83 @@ spec:
                                     sources:
                                       items:
                                         properties:
+                                          clusterTrustBundle:
+                                            properties:
+                                              labelSelector:
+                                                description: A label selector is a
+                                                  label query over a set of resources.
+                                                  The result of matchLabels and matchExpressions
+                                                  are ANDed. An empty label selector
+                                                  matches all objects. A null label
+                                                  selector matches no objects.
+                                                properties:
+                                                  matchExpressions:
+                                                    description: matchExpressions
+                                                      is a list of label selector
+                                                      requirements. The requirements
+                                                      are ANDed.
+                                                    items:
+                                                      description: A label selector
+                                                        requirement is a selector
+                                                        that contains values, a key,
+                                                        and an operator that relates
+                                                        the key and values.
+                                                      properties:
+                                                        key:
+                                                          description: key is the
+                                                            label key that the selector
+                                                            applies to.
+                                                          type: string
+                                                        operator:
+                                                          description: operator represents
+                                                            a key's relationship to
+                                                            a set of values. Valid
+                                                            operators are In, NotIn,
+                                                            Exists and DoesNotExist.
+                                                          type: string
+                                                        values:
+                                                          description: values is an
+                                                            array of string values.
+                                                            If the operator is In
+                                                            or NotIn, the values array
+                                                            must be non-empty. If
+                                                            the operator is Exists
+                                                            or DoesNotExist, the values
+                                                            array must be empty. This
+                                                            array is replaced during
+                                                            a strategic merge patch.
+                                                          items:
+                                                            type: string
+                                                          type: array
+                                                      required:
+                                                      - key
+                                                      - operator
+                                                      type: object
+                                                    type: array
+                                                  matchLabels:
+                                                    additionalProperties:
+                                                      type: string
+                                                    description: matchLabels is a
+                                                      map of {key,value} pairs. A
+                                                      single {key,value} in the matchLabels
+                                                      map is equivalent to an element
+                                                      of matchExpressions, whose key
+                                                      field is "key", the operator
+                                                      is "In", and the values array
+                                                      contains only "value". The requirements
+                                                      are ANDed.
+                                                    type: object
+                                                type: object
+                                                x-kubernetes-map-type: atomic
+                                              name:
+                                                type: string
+                                              optional:
+                                                type: boolean
+                                              path:
+                                                type: string
+                                              signerName:
+                                                type: string
+                                            type: object
                                           configMap:
                                             properties:
                                               items:
