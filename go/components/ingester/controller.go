@@ -19,9 +19,6 @@ import (
 const (
 	// Default reconcile period for requeuing
 	defaultRequeuePeriod = 30 * time.Second
-
-	// Deletion grace period in seconds (wait before actually deleting)
-	deletionGracePeriod = int64(10)
 )
 
 // Config holds configuration for the ingester controller
@@ -109,14 +106,7 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
 		return ctrl.Result{}, nil
 	}
 
-	// Check grace period
-	gracePeriodSeconds := object.GetDeletionGracePeriodSeconds()
-	if gracePeriodSeconds != nil && *gracePeriodSeconds > deletionGracePeriod {
-		log.Info("Grace period not yet expired", "remainingSeconds", *gracePeriodSeconds)
-		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, nil
-	}
-
-	log.Info("Grace period expired, deleting from metadata storage")
+	log.Info("Deleting from metadata storage")
 
 	// Delete from metadata storage
 	gvk := object.GetObjectKind().GroupVersionKind()
