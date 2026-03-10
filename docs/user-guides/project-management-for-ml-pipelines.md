@@ -65,7 +65,7 @@ spec:
       - john.doe
     ownerGroups:
       - ml-platform-team
-  tier: 3                      # Service criticality: 1 (highest) to 5 (lowest)
+  tier: 3                      # Service criticality: 1 (highest/most critical) to 5 (inactive/soft deletion)
   gitRepo: https://github.com/your-org/your-ml-repo
   rootDir: path/to/ml/project
 ```
@@ -99,7 +99,7 @@ This will display the project's metadata and spec if the project was created suc
 | `spec.description` | string | Human-readable description of the project. |
 | `spec.owner.owningTeam` | string | Team identifier in UUID format (e.g., `a1b2c3d4-e5f6-7890-abcd-ef1234567890`). |
 | `spec.owner.owners` | list | List of individual owner identifiers. |
-| `spec.tier` | integer | Service criticality tier from 1 (most critical) to 5 (least critical). |
+| `spec.tier` | integer | Service criticality tier: 1 (most critical) to 4 (least critical), or 5 (inactive project, soft deletion before hard deletion in production). |
 | `spec.gitRepo` | string | URL of the Git repository containing the project code. |
 | `spec.rootDir` | string | Path within the repository to the project root directory. Used to locate workflow code and configuration files. |
 
@@ -214,7 +214,7 @@ The API enforces the following constraints when creating or updating projects:
 1. **Name must match namespace.** The `metadata.name` and `metadata.namespace` fields must be identical. A mismatch will cause a validation error.
 2. **Reserved namespaces are forbidden.** Projects cannot be created in the `default` or `kube-*` namespaces.
 3. **`owningTeam` must be a UUID.** The `spec.owner.owningTeam` field must be a valid UUID string (e.g., `a1b2c3d4-e5f6-7890-abcd-ef1234567890`). Plain text names will be rejected.
-4. **Tier must be 1-5.** The `spec.tier` field must be an integer between 1 and 5 inclusive.
+4. **Tier must be 1-5.** The `spec.tier` field must be an integer between 1 and 5 inclusive. Tier 5 indicates an inactive project (soft deletion) before hard deletion in production.
 5. **Kubernetes naming conventions apply.** The project name must be lowercase, alphanumeric, and may include hyphens. No underscores or uppercase characters.
 
 ## Next steps
