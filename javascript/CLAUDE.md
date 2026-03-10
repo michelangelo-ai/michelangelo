@@ -1,197 +1,75 @@
-# CLAUDE.md - Project Guidelines
+# JavaScript Codebase
 
-## Core Principle
+## Architecture
 
-**Follow existing patterns in the codebase first.**
+Michelangelo Studio is a **pluggable ML UI**. The `javascript/` directory contains two packages and an application:
 
-### Pattern Discovery Process
+| Directory       | Name                      | Purpose                                              |
+| --------------- | ------------------------- | ---------------------------------------------------- |
+| `packages/core` | `@uber/michelangelo-core` | UI rendering engine — the primary library            |
+| `packages/rpc`  | `@michelangelo/rpc`       | Optional ConnectRPC/gRPC-Web client                  |
+| `app/`          | `@michelangelo/app`       | Reference application — served via Docker/Kubernetes |
 
-1. **Examine existing code**: Look for similar functionality already in the codebase
-2. **Follow established conventions**: Use the same approach, naming, and structure
-3. **Document what you find**: Note the patterns for consistency
-4. **When no pattern exists**: Make minimal decisions and establish new patterns carefully
+### Component-driven first, configuration-driven on top
+
+**Component-driven is the default and first-class approach.** Build with standard React patterns — props, composition, TypeScript interfaces — no configuration required.
+
+**Configuration-driven is layered on top.** Deployments that need dynamic behavior, interpolation, or CRUD automation can wrap the same base components in a configuration layer. New functionality should be built component-driven first; a configuration layer can be added later as a thin wrapper.
+
+### Pluggability via providers
+
+Customization is achieved through React context providers. Consumers register custom implementations (renderers, icons, services, etc.) via the `dependencies` prop on `CoreApp` — no forking of core required.
+
+### `app/` — the reference application
+
+`app/` is not just a local dev sandbox. It is the application built into the Docker image (see `docker/ui.Dockerfile`) and published via CI (see `.github/workflows/ui-release.yml`). It is what users of the Kubernetes sandbox (`python/michelangelo/cli/sandbox/`) and anyone pulling the published image consume.
+
+`app/` also shows how to leverage pluggability implemented by `packages/core`. For example, the request function from `@michelangelo/rpc` is provided to `CoreApp`'s `request` property.
+
+```tsx
+// app/App.tsx — reference integration using @michelangelo/rpc
+import { request } from '@michelangelo/rpc';
+
+<CoreApp dependencies={{ service: { request } }} />;
+```
 
 ---
 
-## General Code Practices
+## Commands
 
-### File Organization
+Run from the `javascript/` directory:
 
-- **Direct imports**: Avoid `index.ts` barrel exports - import directly from source files
-- **Co-location**: Related code (types, context, hooks, tests, utils) should live together
-- **Flat over nested**: Prefer flat structures when file count is manageable (~10 files)
-
-### Naming Conventions
-
-- **Files**: kebab-case with `.tsx` for JSX, `.ts` otherwise
-- **Variables**: camelCase
-- **Constants**: UPPER_SNAKE_CASE
-- **Components**: PascalCase (matching kebab-case filename)
-- **Types**: PascalCase without T suffix
-- **Component props**: Follow existing patterns in the area
-  - **Simple "Props"**: When component file contains single component
-  - **"ComponentNameProps"**: When multiple components exist or props are exported
-
-#### Event Handlers
-
-- **Use semantic function names**: Focus on intent rather than event type
-- **Avoid redundant prefixes**: Don't use `handleOn*` since "handle" already implies event handling
-
-**❌ Avoid:**
-```typescript
-const handleOnMouseEnter = () => { /* show tooltip */ };
-const handleOnClick = () => { /* toggle menu */ };
-```
-
-**✅ Prefer:**
-```typescript
-const showTooltipAfterDelay = () => { /* show tooltip */ };
-const toggleMenu = () => { /* toggle menu */ };
-```
-
-### Type Safety
-
-- **Prefer `unknown` over `any`**: For better compile-time safety when creating new types
-- **Create focused types**: Map from generated types, include only needed properties
-- **Avoid type suppression**: Unless stress testing with invalid input
+| Command           | Purpose                                                            |
+| ----------------- | ------------------------------------------------------------------ |
+| `yarn dev`        | Start dev server (`app/`)                                          |
+| `yarn test`       | Run all tests (vitest)                                             |
+| `yarn test:core`  | Run only `packages/core` tests                                     |
+| `yarn test:rpc`   | Run only `packages/rpc` tests                                      |
+| `yarn test:watch` | Run tests in watch mode                                            |
+| `yarn lint`       | ESLint across all packages                                         |
+| `yarn typecheck`  | Full TypeScript type check                                         |
+| `yarn format`     | Check Prettier formatting                                          |
+| `yarn build`      | Build all workspaces (runs `generate` first)                       |
+| `yarn generate`   | Regenerate gRPC clients from protobuf definitions                  |
+| `yarn setup`      | Fresh install + generate (use after cloning or switching branches) |
 
 ---
 
-## Development Guidelines
+## Skills
 
-### Code Organization
+Coding standards are enforced through skills that fire automatically based on context.
 
-- **Start local, promote when needed**: Begin with `components/my-component/utils/`, move to `utils/` when multiple parts need it
-- **Follow recursive folder structure**: Use consistent pattern regardless of file size
-- **Namespace component names**: `table/components/table-action-button.tsx` not `action-button.tsx`
+| Context                     | Skill                         | Trigger                                           |
+| --------------------------- | ----------------------------- | ------------------------------------------------- |
+| Any code change             | `ui-coding-principles`        | Always — governs complexity and pattern-following |
+| React components            | `react-component-development` | All `.tsx` modifications                          |
+| Tests                       | `testing-standards`           | Writing, editing, or refactoring test files       |
+| TypeScript types            | `typescript-cookbook`         | Type definitions, generics, type errors           |
+| Files, directories, imports | `file-directory-structure`    | Creating/moving files, adding imports             |
+| Comments, JSDoc             | `documenting-code`            | Adding or reviewing documentation                 |
 
-### Specific Directory Patterns (Established in Codebase)
+## Always-On Rules
 
-- **Components**: Use `components/` for feature building blocks
-- **Tests**: Place in closest `__tests__/` directory to tested code
-- **Constants/Types**: Single files `constants.ts`, `types.ts` in feature root
-- **Styled components**: In `styled-components.ts` for reusable styles
-
-#### Hooks/Utils
-
-**Common pattern variations**:
-
-- **Single file**: `use-hook-name.ts`, `validation-util.ts` directly in component directory
-- **Directory approach**: `hooks/`, `utils/`, `components/` with multiple files
-
-### Performance
-
-- **Avoid premature optimization**: Only optimize with data justifying the addition
-- **Memoization**: Use `useMemo`/`useCallback` only to solve real user-facing problems
-
----
-
-## Styled Components Guidelines
-
-### Styling Approach Strategy
-
-**Follow BaseUI's philosophy: Start with `useStyletron`, extract when needed.**
-
-#### When to Use Each Approach
-
-**1. useStyletron (Inline Styles) - Start Here**
-
-```typescript
-const [css, theme] = useStyletron();
-
-// Simple layouts and basic styling
-<div className={css({ display: 'flex', gap: theme.sizing.scale400 })}>
-<div className={css({ padding: theme.sizing.scale600 })}>
-```
-
-**2. styled() - Extract When Complex**
-
-```typescript
-export const TaskSeparator = styled('div', ({ $theme }) => ({
-  height: '1px',
-  backgroundColor: $theme.colors.borderOpaque,
-  margin: `${$theme.sizing.scale600} 0`,
-}));
-```
-
-#### Decision Criteria for Extraction
-
-**Extract to styled component when you find:**
-
-1. **Complex Multi-Property Styling** (4+ CSS properties, computed values, pseudo-selectors)
-2. **Pattern Reuse** (Used in 2+ places, clear semantic meaning)
-3. **JSX Readability** (Inline styles would make JSX hard to read)
-
-#### Naming Conventions
-
-**❌ Avoid Generic Names:** `Container`, `Card`, `Wrapper` (cause collisions)
-**✅ Use Semantic Names:** `TaskSeparator`, `ExecutionMatrix`, `PipelineHeader`
-
-## Testing Guidelines
-
-### What to Test
-
-- **Real interactions over mocks**: Reduce dependency mocking to test closer to production
-- **Mock server dependencies**: Don't connect to real servers, use established RPC mocking
-- **Business logic over implementation**: Test your business decisions and logic, not the tools you're using to implement them. Follow React Testing Library's guidance: test what users see (`screen.getByText()`, `screen.getByRole()`) rather than component internals (`container.firstChild`, prop verification)
-- **Avoid test duplication**: Don't test the same behavior in both unit and integration tests - choose the most appropriate level. If higher-level tests already verify user-facing behavior, don't also test implementation details in lower-level tests
-- **Success path plus key edge cases**: Test core functionality and meaningful edge cases. Skip testing scenarios already covered by dependencies. Skip testing unrealistic scenarios
-
-### Test Organization
-
-- **Use `describe` blocks only when tests truly benefit from grouping**: shared setup, complex state management, or related assertions that build on each other. Keep tests flat when individual test names are descriptive enough
-- **Place tests near code**: Use closest `__tests__/` directory
-- **Well-named mocks**: Use descriptive names that explain test intent
-- **Inline when appropriate**: For simple cases tied directly to test expectations
-- **Inline expect calls**: Prefer `expect(functionCall(args)).toEqual(result)` over assigning to variables when possible
-
-When to mock vs not mock:
-
-- ✅ DO mock: External APIs, RPC calls, server dependencies
-- ✅ DO use real: Internal hooks, components, React context, well-tested utilities with error handling
-- ✅ DO use real: Dependencies that are already comprehensively tested and handle edge cases gracefully
-
----
-
-## Documentation Guidelines
-
-### When to Add Documentation
-
-**Add JSDoc when functions have**:
-
-- **Non-obvious behaviors**: Error handling, side effects, or special logic
-- **Edge cases**: Null handling, validation, or fallback behavior
-- **Public APIs**: Utilities shared across multiple features
-
-**Skip documentation for**:
-
-- Simple getters/setters that match their TypeScript signature
-- Internal implementation details
-
-### JSDoc Style
-
-- **Focus on "why" over "what"**: Explain behavior, not syntax
-- **Include examples for complex functions**: Show real usage scenarios
-- **Document edge cases and error handling**: What happens when inputs are invalid?
-- **Be concise but complete**: Cover important behavior without redundancy
-
-### Inline Comments
-
-**Use inline comments for**:
-
-- **Non-obvious implementation decisions**: Why a specific approach was chosen
-- **Complex logic explanation**: Clarify intricate algorithms or transformations
-- **Important context**: Business rules or constraints that affect the code
-
-**Good examples**:
-
-```typescript
-// Ignore localStorage errors (quota exceeded, private browsing, etc.)
-// Convert MM/DD/YYYY to YYYY/MM/DD format for consistency
-```
-
-### Avoid
-
-- **Type duplication**: Don't restate what TypeScript already expresses
-- **Obvious comments**: `// gets the pipeline run based on name`
-- **AI/agent references**: Keep documentation focused on code purpose
+- **No barrel exports**: Never use `index.ts` to re-export — always import directly from source files
+- **Follow existing patterns first**: Examine similar code in the codebase before establishing new patterns
+- **Prettier owns formatting**: Never manually adjust whitespace, semicolons, or line breaks
