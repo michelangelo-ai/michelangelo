@@ -41,6 +41,9 @@ type Reconciler struct {
 
 // Reconcile is the main reconciliation loop
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
 	log := r.Log.WithValues("namespace", req.Namespace, "name", req.Name)
 	log.Info("Reconciling object")
 
