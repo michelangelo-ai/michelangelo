@@ -221,18 +221,37 @@ func (m *Model) GetIndexedKeyValuePairs() []storage.IndexedField {
 
 ### 3.1 Opt-In via Dependency Injection
 
-The ingester module is registered in the `controllermgr` but only activates when MySQL config is present. It uses `fx` optional dependencies:
+The ingester activates through a two-gate check in `go/cmd/controllermgr/ingester_providers.go`:
+
+```go
+func provideMetadataStorage(
+    storageConfig storage.MetadataStorageConfig,
+    mysqlConfig baseconfig.MySQLConfig,
+    scheme *runtime.Scheme,
+) (storage.MetadataStorage, error) {
+    // Gate 1: metadataStorage.enableMetadataStorage must be true
+    if !storage.EnableMetadataStorage(&storageConfig) {
+        return nil, nil
+    }
+    // Gate 2: mysql config must have host/user/database or enabled: true
+    if !mysqlConfigEnabled(mysqlConfig) {
+        return nil, fmt.Errorf("metadata storage is enabled but mysql config is empty")
+    }
+    return mysqlstorage.NewMetadataStorage(mysqlConfig.ToMySQLConfig(), scheme)
+}
+
+func mysqlConfigEnabled(config baseconfig.MySQLConfig) bool {
+    if config.Enabled {
+        return true
+    }
+    return config.Host != "" || config.Database != "" || config.User != ""
+}
+```
+
+When `provideMetadataStorage` returns `nil`, the ingester module detects it and skips setup:
 
 ```go
 // go/components/ingester/module.go
-type registerParams struct {
-    fx.In
-    Manager         ctrl.Manager
-    MetadataStorage storage.MetadataStorage `optional:"true"`
-    Config          Config                  `optional:"true"`
-    Logger          *zap.Logger
-}
-
 func register(p registerParams) error {
     if p.MetadataStorage == nil {
         p.Logger.Info("Metadata storage not configured, skipping ingester setup")
@@ -242,16 +261,23 @@ func register(p registerParams) error {
 }
 ```
 
-When `michelangelo-controllermgr-config` does not include a `mysql:` stanza, `MetadataStorage` is `nil` and the ingester silently skips setup. No other code changes are required to enable or disable it.
+No other code changes are required to enable or disable the ingester.
 
 ### 3.2 Configuration
 
-The ingester is configured via the controllermgr ConfigMap:
+The ingester is configured via the controllermgr ConfigMap. Both `metadataStorage` and `mysql` stanzas are required to activate it:
 
 ```yaml
 # michelangelo-controllermgr-config
+
+# Gate 1: must set enableMetadataStorage: true
+metadataStorage:
+  enableMetadataStorage: true
+  deletionDelay: 10s
+  enableResourceVersionCache: false
+
+# Gate 2: must provide mysql connection details
 mysql:
-  enabled: true
   host: mysql
   port: 3306
   user: root
@@ -262,9 +288,11 @@ mysql:
   connMaxLifetime: 5m
 
 ingester:
-  concurrentReconciles: 1
+  concurrentReconciles: 2
   requeuePeriod: 30s
 ```
+
+If either stanza is absent, the ingester silently stays disabled with zero impact on the rest of the controllermgr.
 
 ### 3.3 Controller Setup
 
@@ -298,15 +326,18 @@ The ingester is designed to be enabled without downtime. Existing objects in etc
    kubectl wait --for=condition=complete job/ingester-schema-init --timeout=120s
    ```
 
-2. **Update the controllermgr ConfigMap** to add MySQL credentials:
+2. **Update the controllermgr ConfigMap** to add both required stanzas:
    ```bash
    kubectl edit configmap michelangelo-controllermgr-config
-   # Add mysql: and ingester: stanzas
+   # Add metadataStorage:, mysql:, and ingester: stanzas (see Section 3.2)
    ```
 
-3. **Restart the controllermgr**:
+3. **Restart the controllermgr** (use rollout restart for Deployments, or delete the pod for bare Pods):
    ```bash
+   # If controllermgr is a Deployment:
    kubectl rollout restart deployment michelangelo-controllermgr
+   # If controllermgr is a bare Pod (e.g. sandbox):
+   kubectl delete pod michelangelo-controllermgr
    ```
 
 4. **Verify controllers registered** (13 log lines expected):
