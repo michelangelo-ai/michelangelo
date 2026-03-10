@@ -77,26 +77,23 @@ func TestReconciler_HandleSync(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = v2.AddToScheme(scheme)
 
-	// Create a test model
-	model := &v2.Model{
+	// Use Deployment (non-immutable kind) to exercise the sync path
+	deployment := &v2.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "michelangelo.uber.com/v2",
-			Kind:       "Model",
+			Kind:       "Deployment",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-model",
+			Name:      "test-deployment",
 			Namespace: "default",
 			UID:       types.UID("test-uid"),
-		},
-		Spec: v2.ModelSpec{
-			Description: "Test model for ingester",
 		},
 	}
 
 	// Create fake client
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
-		WithObjects(model).
+		WithObjects(deployment).
 		Build()
 
 	// Create mock storage
@@ -108,7 +105,7 @@ func TestReconciler_HandleSync(t *testing.T) {
 		Client:          fakeClient,
 		Log:             logr.Discard(),
 		Scheme:          scheme,
-		TargetKind:      &v2.Model{},
+		TargetKind:      &v2.Deployment{},
 		MetadataStorage: mockStorage,
 		Config: Config{
 			ConcurrentReconciles: 1,
@@ -119,7 +116,7 @@ func TestReconciler_HandleSync(t *testing.T) {
 	// Test reconcile
 	req := ctrl.Request{
 		NamespacedName: types.NamespacedName{
-			Name:      "test-model",
+			Name:      "test-deployment",
 			Namespace: "default",
 		},
 	}
@@ -266,6 +263,70 @@ func TestReconciler_HandleDeletionAnnotation(t *testing.T) {
 	updatedModel := &v2.Model{}
 	err = fakeClient.Get(context.Background(), types.NamespacedName{Name: "test-model", Namespace: "default"}, updatedModel)
 	assert.True(t, client.IgnoreNotFound(err) == nil, "Object should be deleted from K8s")
+}
+
+func TestReconciler_HandleImmutableKind(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = v2.AddToScheme(scheme)
+
+	// Model is an immutable kind (IsImmutableKind() returns true), no annotation needed
+	model := &v2.Model{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "michelangelo.uber.com/v2",
+			Kind:       "Model",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test-model",
+			Namespace:  "default",
+			UID:        types.UID("test-uid"),
+			Finalizers: []string{api.IngesterFinalizer},
+		},
+		Spec: v2.ModelSpec{
+			Description: "Test immutable kind model",
+		},
+	}
+
+	// Create fake client
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(model).
+		Build()
+
+	// Create mock storage
+	mockStorage := new(MockMetadataStorage)
+	mockStorage.On("Upsert", mock.Anything, mock.Anything, false, mock.Anything).Return(nil)
+
+	// Create reconciler
+	reconciler := &Reconciler{
+		Client:          fakeClient,
+		Log:             logr.Discard(),
+		Scheme:          scheme,
+		TargetKind:      &v2.Model{},
+		MetadataStorage: mockStorage,
+		Config: Config{
+			ConcurrentReconciles: 1,
+			RequeuePeriod:        30 * time.Second,
+		},
+	}
+
+	req := ctrl.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      "test-model",
+			Namespace: "default",
+		},
+	}
+
+	result, err := reconciler.Reconcile(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, ctrl.Result{}, result)
+
+	// Verify Upsert was called (object saved to storage before etcd removal)
+	mockStorage.AssertCalled(t, "Upsert", mock.Anything, mock.Anything, false, mock.Anything)
+
+	// Verify object was deleted from K8s/etcd
+	updatedModel := &v2.Model{}
+	err = fakeClient.Get(context.Background(), types.NamespacedName{Name: "test-model", Namespace: "default"}, updatedModel)
+	assert.True(t, client.IgnoreNotFound(err) == nil, "Immutable kind object should be removed from K8s")
 }
 
 func TestReconciler_HandleImmutableObject(t *testing.T) {
@@ -423,6 +484,16 @@ func TestHelperFunctions(t *testing.T) {
 			},
 		}
 		assert.False(t, isImmutable(obj2))
+	})
+
+	t.Run("isImmutableKind", func(t *testing.T) {
+		// Model is an immutable kind
+		model := &v2.Model{}
+		assert.True(t, isImmutableKind(model))
+
+		// Deployment is not an immutable kind
+		deployment := &v2.Deployment{}
+		assert.False(t, isImmutableKind(deployment))
 	})
 
 	t.Run("getRequeuePeriod", func(t *testing.T) {

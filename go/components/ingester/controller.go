@@ -70,8 +70,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return r.handleDeletionAnnotation(ctx, log, object)
 	}
 
-	// Check if object is immutable
-	if isImmutable(object) {
+	// Check if object is immutable (either by kind or annotation)
+	if isImmutable(object) || isImmutableKind(object) {
 		return r.handleImmutableObject(ctx, log, object)
 	}
 
@@ -241,4 +241,14 @@ func isImmutable(object client.Object) bool {
 		return false
 	}
 	return annotations[api.ImmutableAnnotation] == "true"
+}
+
+func isImmutableKind(object client.Object) bool {
+	type immutableKinder interface {
+		IsImmutableKind() bool
+	}
+	if ik, ok := object.(immutableKinder); ok {
+		return ik.IsImmutableKind()
+	}
+	return false
 }
