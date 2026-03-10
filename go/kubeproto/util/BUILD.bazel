@@ -9,7 +9,6 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/kubeproto/util",
     visibility = ["//visibility:public"],
     deps = [
-        "//go/kubeproto/pboptions:go_default_library",
         "@com_github_dave_dst//:go_default_library",
         "@com_github_gogo_protobuf//proto:go_default_library",
         "@com_github_tidwall_gjson//:go_default_library",
@@ -30,10 +29,6 @@ go_test(
         "util_test.go",
     ],
     deps = [
-        ":go_default_library",
-        "//go/kubeproto/pboptions:go_default_library",
-        "//proto/test/kubeproto:go_default_library",
-        "//proto/test/kubeproto/indexing_errors:go_default_library",
         "@com_github_dave_dst//decorator:go_default_library",
         "@com_github_gogo_protobuf//jsonpb:go_default_library",
         "@com_github_gogo_protobuf//proto:go_default_library",

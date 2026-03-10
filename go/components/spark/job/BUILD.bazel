@@ -10,11 +10,6 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/spark/job",
     visibility = ["//visibility:public"],
     deps = [
-        "//go/api/utils:go_default_library",
-        "//go/base/env:go_default_library",
-        "//go/components/jobs/common/constants:go_default_library",
-        "//proto/api:go_default_library",
-        "//proto/api/v2:go_default_library",
         "@com_github_go_logr_logr//:go_default_library",
         "@io_k8s_sigs_controller_runtime//:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
@@ -29,8 +24,6 @@ go_test(
     srcs = ["controller_test.go"],
     embed = [":go_default_library"],
     deps = [
-        "//go/components/testfakes:go_default_library",
-        "//proto/api/v2:go_default_library",
         "@com_github_go_logr_logr//:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
