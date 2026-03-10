@@ -6,6 +6,7 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants",
     visibility = ["//visibility:public"],
     deps = [
+        "//proto/api/v2:go_default_library",
         "@com_github_ray_project_kuberay_ray_operator//apis/ray/v1:go_default_library",
         "@io_k8s_api//core/v1:go_default_library",
     ],

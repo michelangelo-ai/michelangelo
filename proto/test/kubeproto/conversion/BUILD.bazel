@@ -7,6 +7,8 @@ go_test(
     size = "small",
     srcs = ["project_conversion_test.go"],
     deps = [
+        "//proto/api/v2:go_default_library",
+        "//proto/test/api/v2alpha1:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/conversion:go_default_library",
     ],

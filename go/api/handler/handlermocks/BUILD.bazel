@@ -6,6 +6,7 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/api/handler/handlermocks",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/api:go_default_library",
         "@com_github_golang_mock//gomock:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
     ],

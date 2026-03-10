@@ -9,6 +9,10 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/notification",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/base/notification/types:go_default_library",
+        "//go/base/workflowclient/interface:go_default_library",
+        "//go/worker/workflows/notification:go_default_library",
+        "//proto/api/v2:go_default_library",
         "@org_uber_go_fx//:go_default_library",
         "@org_uber_go_zap//:go_default_library",
     ],
@@ -19,6 +23,9 @@ go_test(
     srcs = ["notifier_test.go"],
     embed = [":go_default_library"],
     deps = [
+        "//go/base/workflowclient/interface:go_default_library",
+        "//go/base/workflowclient/interface/interface_mock:go_default_library",
+        "//proto/api/v2:go_default_library",
         "@com_github_golang_mock//gomock:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",

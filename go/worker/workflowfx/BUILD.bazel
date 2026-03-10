@@ -9,6 +9,7 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/worker/workflowfx",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/base/config:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//cadence:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//temporal:go_default_library",

@@ -5,7 +5,10 @@ go_library(
     srcs = ["metrics.go"],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/jobs/metrics",
     visibility = ["//visibility:public"],
-    deps = ["@com_github_uber_go_tally//:go_default_library"],
+    deps = [
+        "//go/components/jobs/common/constants:go_default_library",
+        "@com_github_uber_go_tally//:go_default_library",
+    ],
 )
 
 go_test(
