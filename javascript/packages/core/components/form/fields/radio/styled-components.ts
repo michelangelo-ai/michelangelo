@@ -1,17 +1,12 @@
 import type { Theme } from 'baseui';
 
-export const getTileGroupOverrides = (align: string) => ({
-  Root: {
-    style: {
-      flexDirection: align === 'horizontal' ? 'row' : 'column',
-    },
-  },
+export const TILE_GROUP_OVERRIDES = {
   RadioMarkOuter: {
     style: ({ $disabled, $theme }: { $disabled: boolean; $theme: Theme }) => {
       return $disabled ? { backgroundColor: $theme.colors.tickFillSelected } : {};
     },
   },
-});
+};
 
 export const TILE_OVERRIDES = {
   Root: {

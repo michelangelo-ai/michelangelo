@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
 import { useStyletron } from 'baseui';
-import { ALIGN } from 'baseui/radio';
 import {
   ALIGNMENT,
   StyledParagraph,
@@ -13,7 +12,7 @@ import { LabelMedium } from 'baseui/typography';
 
 import { FormControl } from '#core/components/form/components/form-control';
 import { useField } from '#core/components/form/hooks/use-field';
-import { getTileGroupOverrides, TILE_OVERRIDES } from './styled-components';
+import { TILE_GROUP_OVERRIDES, TILE_OVERRIDES } from './styled-components';
 
 import type { RadioFieldProps } from './types';
 
@@ -29,7 +28,6 @@ export const CardRadioField: React.FC<RadioFieldProps> = ({
   description,
   caption,
   options,
-  align = ALIGN.horizontal,
 }) => {
   const [, theme] = useStyletron();
   const { input, meta } = useField<string | boolean>(name, {
@@ -68,7 +66,7 @@ export const CardRadioField: React.FC<RadioFieldProps> = ({
         selected={selectedIndex}
         // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
         disabled={disabled || readOnly}
-        overrides={getTileGroupOverrides(align)}
+        overrides={TILE_GROUP_OVERRIDES}
       >
         {options.map((option) => {
           return (
