@@ -6,6 +6,7 @@ import { Tab, Tabs } from 'baseui/tabs';
 import { HeadingXXLarge, LabelLarge, ParagraphSmall } from 'baseui/typography';
 
 import { CellType } from '#core/components/cell/constants';
+import { FormErrorBanner } from '#core/components/form/components/form-error-banner/form-error-banner';
 import { SelectField } from '#core/components/form/fields/select/select-field';
 import { StringField } from '#core/components/form/fields/string/string-field';
 import { Form } from '#core/components/form/form';
@@ -321,6 +322,7 @@ export function Sandbox() {
                 <StringField name="slackHandle" label="Slack Handle" validate={required()} />
               </FormGroup>
 
+              <FormErrorBanner />
               <Block display="flex" justifyContent="flex-end" marginTop="scale600">
                 <Button type="submit">Submit — watch it scroll on error</Button>
               </Block>

@@ -27,6 +27,7 @@ export const InlineRadioField: React.FC<RadioFieldProps> = ({
     validate,
     defaultValue,
     initialValue,
+    label,
   });
 
   const isBoolean = options.every(({ value }) => typeof value === 'boolean');

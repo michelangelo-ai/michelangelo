@@ -50,10 +50,20 @@ export interface FormProps<FieldValues extends FormData = FormData> {
   render?: (formElement: React.ReactNode) => React.ReactNode;
 }
 
+export interface FormInstance {
+  fieldRegistry: FieldRegistry;
+}
+
 export interface FormState<FieldValues extends FormData = FormData> {
   submitting: boolean;
   submitError?: string;
   values?: FieldValues;
+  submitFailed?: boolean;
+  hasValidationErrors?: boolean;
+  errors?: Record<string, unknown>;
+  submitErrors?: Record<string, unknown>;
+  touched?: Record<string, boolean>;
+  modifiedSinceLastSubmit?: boolean;
 }
 
 export interface FieldState {
@@ -67,3 +77,7 @@ export interface FieldInput<T = unknown> {
   onChange: (value: T) => void;
   onBlur: () => void;
 }
+
+export type FieldRegistry = Map<string, FieldRegistryEntry>;
+
+export type FieldRegistryEntry = { label: string };

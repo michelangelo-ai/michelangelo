@@ -35,6 +35,7 @@ export const CardRadioField: React.FC<RadioFieldProps> = ({
     validate,
     defaultValue,
     initialValue,
+    label,
   });
 
   const selectedIndex = useMemo(
