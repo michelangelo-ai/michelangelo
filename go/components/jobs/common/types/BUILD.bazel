@@ -5,7 +5,6 @@ go_library(
     srcs = ["types.go"],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types",
     visibility = ["//visibility:public"],
-    deps = ["//proto/api/v2:go_default_library"],
 )
 
 go_test(

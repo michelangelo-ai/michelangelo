@@ -7,9 +7,6 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/kubeproto/conversion",
     visibility = ["//visibility:public"],
     deps = [
-        "//go/kubeproto/groupinfo:go_default_library",
-        "//go/kubeproto/pboptions:go_default_library",
-        "//go/kubeproto/util:go_default_library",
         "@org_golang_google_protobuf//compiler/protogen:go_default_library",
         "@org_golang_google_protobuf//reflect/protoreflect:go_default_library",
         "@org_golang_google_protobuf//reflect/protoregistry:go_default_library",
@@ -23,8 +20,6 @@ go_test(
     srcs = ["version_conversion_test.go"],
     embed = [":go_default_library"],
     deps = [
-        "//proto/test/kubeproto/conversion/v1:go_default_library",
-        "//proto/test/kubeproto/conversion/v2:go_default_library",
         "@com_github_r3labs_diff_v3//:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/conversion:go_default_library",

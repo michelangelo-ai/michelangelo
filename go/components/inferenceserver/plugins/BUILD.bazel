@@ -5,8 +5,4 @@ go_library(
     srcs = ["interface.go"],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins",
     visibility = ["//visibility:public"],
-    deps = [
-        "//go/base/conditions/interfaces:go_default_library",
-        "//proto/api/v2:go_default_library",
-    ],
 )

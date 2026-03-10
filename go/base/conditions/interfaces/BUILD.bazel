@@ -6,7 +6,6 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces",
     visibility = ["//visibility:public"],
     deps = [
-        "//proto/api:go_default_library",
         "@io_k8s_sigs_controller_runtime//:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
     ],

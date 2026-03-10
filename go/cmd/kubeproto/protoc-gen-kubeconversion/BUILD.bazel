@@ -12,8 +12,4 @@ go_library(
     srcs = ["main.go"],
     importpath = "github.com/michelangelo-ai/michelangelo/go/cmd/kubeproto/protoc-gen-kubeconversion",
     visibility = ["//visibility:private"],
-    deps = [
-        "//go/kubeproto/conversion:go_default_library",
-        "//go/kubeproto/util:go_default_library",
-    ],
 )

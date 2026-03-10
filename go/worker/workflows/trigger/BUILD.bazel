@@ -10,12 +10,6 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/worker/workflows/trigger",
     visibility = ["//visibility:public"],
     deps = [
-        "//go/components/triggerrun:go_default_library",
-        "//go/components/utils:go_default_library",
-        "//go/worker/activities/trigger:go_default_library",
-        "//go/worker/activities/trigger/parameter:go_default_library",
-        "//proto/api:go_default_library",
-        "//proto/api/v2:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//worker:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//workflow:go_default_library",
         "@com_github_gogo_protobuf//types:go_default_library",
@@ -30,8 +24,6 @@ go_test(
     srcs = ["cron_trigger_workflows_test.go"],
     embed = [":go_default_library"],
     deps = [
-        "//proto/api:go_default_library",
-        "//proto/api/v2:go_default_library",
         "@com_github_gogo_protobuf//proto:go_default_library",
         "@com_github_gogo_protobuf//types:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
