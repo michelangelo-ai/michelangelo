@@ -144,9 +144,10 @@ Engineers must validate the **entire pipeline**, including container image build
 ### Usage
 
 ```shell
-ma pipeline dev_run -f pipeline.yaml
-ma pipeline dev_run -f pipeline.yaml --env DATASET_SIZE=1000
-ma pipeline dev_run -f pipeline.yaml --resume_from my-run-123:train
+ma pipeline dev-run -f pipeline.yaml
+ma pipeline dev-run -f pipeline.yaml --env=DATASET_SIZE=1000
+ma pipeline dev-run -f pipeline.yaml --resume_from=my-run-123:train
+ma pipeline dev-run -f pipeline.yaml --file-sync
 ```
 
 ## Pipeline Run mode
@@ -182,8 +183,8 @@ Enterprises need **production-grade pipeline execution** with full CI/CD, govern
 ### Usage
 
 ```shell
-ma pipeline run -n my-namespace --name my-pipeline
-ma pipeline run -n my-namespace --name my-pipeline --resume_from previous-run:step
+ma pipeline run --namespace="my-namespace" --name="my-pipeline"
+ma pipeline run --namespace="my-namespace" --name="my-pipeline" --resume_from=previous-run:step
 ```
 
 ## Decision tree: which mode should I use?

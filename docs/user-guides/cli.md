@@ -16,17 +16,19 @@ bazel run //go/cmd/apiserver:apiserver
 Dependencies are installed:
 
 ```bash
-# Set repo root and install dependencies
+# Set repo root and install dependencies (requires Python >= 3.9)
 export REPO_ROOT="/Users/{username}/michelangelo"
 cd $REPO_ROOT/python/
-poetry install -E ma
+poetry install
 ```
+
+> **Tip:** You can also use `ma sandbox create` to set up a complete local development environment with the API server, workflow engine, and all dependencies. See the sandbox documentation for details.
 
 Configure API server address (optional):
 
 ```bash
 # Override default API server address
-export ma_ADDRESS="127.0.0.1:14566"  # e.g., for Michelangelo Api Server
+export MACTL_ADDRESS="127.0.0.1:14566"
 ```
 
 ## Usage
@@ -39,10 +41,10 @@ Usage:
 
 ```bash
 cd $REPO_ROOT/python/
-ma <COMMAND> <RESOURCE_TYPE> [ARGS]
+ma <RESOURCE_TYPE> <COMMAND> [ARGS]
 ```
 
-We will abstract this part like `ma <COMMAND> <RESOURCE_TYPE>` in below.
+We will abstract this part like `ma <RESOURCE_TYPE> <COMMAND>` in below.
 
 ### GET - Retrieve resource
 
@@ -52,6 +54,8 @@ Syntax:
 
 ```bash
 ma <RESOURCE_TYPE> get --namespace="<namespace>" [--name="<name>"]
+# Short form: -n for --namespace
+ma <RESOURCE_TYPE> get -n "<namespace>" [--name="<name>"]
 ```
 
 Examples:
@@ -73,33 +77,22 @@ ma project get --namespace="ma-dev-test" --name="my-project"
 ma pipeline_run get --namespace="ma-dev-test" --name="run-001"
 ```
 
-#### Arguments (Not implemented yet)
+#### Arguments
 
-Some arguments are available only for list functions (get command without --name argument)
+The following argument is available for list operations (get command without `--name`):
 
-- `-o` - output in {list,json,yaml} format
-- `--limit [n]` - (list command only) limit of the list output (default 20)
-- `--page [n]` - (list command only) pagination of list
-
-##### Special arguments for specific entity type (Not implemented yet)
-
-GET command supports extra arguments for some entity types (e.g. revision entity). It helps users to filter out a list of entities by its attribute.
-
-- `--revision-deployment` - filter deployment revision entities only
-- `--revision-model` - filter model revision entities only
-- `--revision-owner` - filter owner revision entities only
-- `--revision-pipeline` - filter pipeline revision entities only
+- `--limit [n]` - maximum number of results to return (default: 100)
 
 ### APPLY - Create or update a resource from YAML
 
-Apply (create or update) a resource from a YAML configuration file. MA command automatically detects the resource type from the apiVersion and kind fields in the YAML.
-
-> **Note:** Currently, we support `create` command for creating a new resource. Creating a new resource with `apply` command may fail in some cases. This will be fixed soon.
+Apply (create or update) a resource from a YAML configuration file. The `apply` command works as an upsert: it creates the resource if it doesn't exist, or updates it if it does. The resource type is automatically detected from the `apiVersion` and `kind` fields in the YAML.
 
 Syntax:
 
 ```bash
 ma <RESOURCE_TYPE> apply --file="<YAML_FILE_PATH>"
+# Short form: -f for --file
+ma <RESOURCE_TYPE> apply -f "<YAML_FILE_PATH>"
 ```
 
 Examples:
@@ -120,6 +113,8 @@ Syntax:
 
 ```bash
 ma <RESOURCE_TYPE> delete --namespace="<namespace>" --name="<name>"
+# Short form: -n for --namespace
+ma <RESOURCE_TYPE> delete -n "<namespace>" --name="<name>"
 ```
 
 Examples:
@@ -143,12 +138,14 @@ MA Command supports the default type-specific commands for users for specific Mi
 
 #### RUN - Execute a pipeline
 
-The RUN command is specifically available for pipelines to create and execute pipeline runs. To run a pipeline, you need to register your pipeline by using `ma apply <pipeline_conf.yaml>` PATH command first.
+The RUN command is specifically available for pipelines to create and execute pipeline runs. To run a pipeline, you need to register your pipeline first using `ma pipeline apply -f <pipeline_conf.yaml>`.
 
 Syntax:
 
 ```bash
 ma pipeline run --namespace="<namespace>" --name="<pipeline_name>"
+# Short form: -n for --namespace
+ma pipeline run -n "<namespace>" --name="<pipeline_name>"
 ```
 
 Example:
@@ -159,8 +156,6 @@ ma pipeline run --namespace="ma-dev-test" --name="bert-cola-test"
 ```
 
 ##### Arguments
-
-Some arguments are available only for list functions (get command without --name argument)
 
 - `--resume_from` - create resumed pipeline run from specified pipeline run (specifying resume_from step is optional)
 
@@ -188,38 +183,51 @@ Syntax:
 
 ```bash
 ma pipeline dev-run --file=<YAML_FILE_PATH> --env=<ENV_VAR>=<ENV_VAL>
+# Short form: -f for --file
+ma pipeline dev-run -f <YAML_FILE_PATH> --env=<ENV_VAR>=<ENV_VAL>
 ```
+
+##### Arguments
+
+- `--file` / `-f` - path to the pipeline YAML configuration file (required)
+- `--env` - environment variable to inject (repeatable for multiple variables)
+- `--file-sync` - sync uncommitted local file changes to the remote container
+- `--storage-url` - custom storage URL for file-sync tarballs (e.g., `s3://bucket/path`)
+- `--resume_from` - resume from a previous pipeline run, optionally specifying a step (`<run_name>:<step_name>`)
 
 Example:
 
 ```bash
 # Run a pipeline in dev mode
-ma pipeline dev-run  --file="./examples/bert_cola/pipeline.yaml" --env=foo=bar
+ma pipeline dev-run -f "./examples/bert_cola/pipeline.yaml" --env=foo=bar
 
 # To pass in multiple environment variables:
-ma pipeline dev-run  --file="./examples/bert_cola/pipeline.yaml" --env=foo=bar --env=lorem=ipsum --env=key=val
+ma pipeline dev-run -f "./examples/bert_cola/pipeline.yaml" --env=foo=bar --env=lorem=ipsum --env=key=val
 ```
 
-##### Dev-run command with local file sync (Not implemented yet)
+##### Dev-run command with local file sync
 
-Example:
+Adding `--file-sync` to the dev-run command enables testing of uncommitted code changes without needing to commit or rebuild Docker images.
 
 ```bash
 # Run a pipeline in dev mode with file sync
-ma pipeline dev-run  --file="./examples/bert_cola/pipeline.yaml" --env=foo=bar --file-sync
+ma pipeline dev-run -f "./examples/bert_cola/pipeline.yaml" --env=foo=bar --file-sync
+
+# With custom storage URL
+ma pipeline dev-run -f "./examples/bert_cola/pipeline.yaml" --file-sync --storage-url=s3://my-bucket/workflows
 ```
 
 ##### Differences between dev-run and remote-run in vanilla uniflow
 
-**1. dev_run: Test Pipeline from Local File**
+**1. dev-run: Test Pipeline from Local File**
 
-`pipeline dev_run` command runs a pipeline directly from your committed git snapshot. Pipeline run will be controlled by Michelangelo API server and controller. This command creates a PipelineRun Entity but no Pipeline Entity. It means, users cannot see the pipeline entity information in MA studio, which was executed by dev-run command.
+`pipeline dev-run` command runs a pipeline directly from your committed git snapshot. Pipeline run will be controlled by Michelangelo API server and controller. This command creates a PipelineRun entity but no Pipeline entity, so you will not see the pipeline entity information in MA Studio.
 
 Technical details: This command reads your pipeline configuration from a local YAML file, creates a PipelineRun Michelangelo entity, which does not have the registered parent Pipeline entity. The key difference from `pipeline run` command is that it embeds the entire pipeline specification inline rather than referencing an existing registered Pipeline resource, allowing you to test changes before actually registering it. However, it only uses code that's committed to git. Any uncommitted changes in your working directory are ignored. This command goes through the full Michelangelo API and controller manager path: ma command → API Server → PipelineRun entity → Controller Manager → Cadence/Temporal.
 
-**2. dev_run --file-sync: Test Pipeline + Uncommitted Changes**
+**2. dev-run --file-sync: Test Pipeline + Uncommitted Changes**
 
-Adding `--file-sync` to the `pipeline dev_run` command enables testing of uncommitted code changes without needing to commit or rebuild Docker images.
+Adding `--file-sync` to the `pipeline dev-run` command enables testing of uncommitted code changes without needing to commit or rebuild Docker images.
 
 Technical details: It works by creating two tarballs: the workflow tarball (from committed code) and a file-sync tarball (containing only files changed via git diff). When the container starts, Python's sitecustomize.py automatically downloads the file-sync tarball and overlays those changed files on top of the base code, effectively "patching" the container with your local edits. This still goes through Michelangelo API server and controller managers (creates a PipelineRun) but injects an additional environment variable `UF_FILE_SYNC_TARBALL_URL` that implies the remote container where to find your local changes.
 
@@ -237,9 +245,9 @@ Technical details: `remote-run --file-sync` creates two tarballs: a workflow tar
 
 ### Pipeline_run
 
-#### Kill (not implemented yet)
+#### Kill - Terminate a pipeline run
 
-The KILL command is used to cleanly terminate a running pipeline in MA Studio. It would change the PipelineRun status as "killed", so actual pipeline execution in Cadence would be aborted. The command will prompt for confirmation unless the --yes flag is provided.
+The KILL command is used to cleanly terminate a running pipeline. It sets the PipelineRun status to "killed" and aborts the pipeline execution in Cadence/Temporal. The command will prompt for confirmation unless the `--yes` flag is provided.
 
 Syntax:
 
@@ -290,7 +298,7 @@ ma trigger_run kill --namespace=ma-dev-test --name=training-pipeline-cron-trigge
 ### Pipeline YAML
 
 ```yaml
-apiVersion: michelangelo.uber.com/v2beta1
+apiVersion: michelangelo.api/v2
 kind: Pipeline
 metadata:
   namespace: "ma-dev-test"
@@ -336,75 +344,68 @@ spec:
 
 ## Configuration
 
-### Configuration RC file
+The `ma` CLI uses a layered configuration system. Settings are resolved in the following priority order (highest to lowest):
 
-MA command supports configuration through a configrc file located at ~/.ma/configrc (Not implemented yet)
+1. **Environment variables** (highest priority)
+2. **TOML config file** (`~/.ma/config.toml`)
+3. **Default values** (lowest priority)
 
-#### Example configuration (configrc file)
+### Configuration file
 
-```ini
+The configuration file is located at `~/.ma/config.toml` and uses TOML format.
+
+#### Example configuration
+
+```toml
+[ma]
+address = "127.0.0.1:14566"
+use_tls = false
+
 [minio]
-access_key_id= minioadmin
-secret_access_key= minioadmin
-endpoint_url= http://localhost:9091
+access_key_id = "minioadmin"
+secret_access_key = "minioadmin"
+endpoint_url = "http://localhost:9091"
 
 [metadata]
-rpc-caller = grpcurl
-rpc-service = ma-apiserver
-rpc-encoding = proto
-
-[ma]
-address = 127.0.0.1:14566
-use_tls = false
-namespace = "ma-dev-test"
+rpc-caller = "grpcurl"
+rpc-service = "ma-apiserver"
+rpc-encoding = "proto"
 ```
 
-#### Configurable fields
+### Configurable fields
 
-##### MinIO credentials(Not implemented yet)
+#### API server
 
-MinIO credentials for object storage are placed under the [minio] section.
+API server configuration is placed under the `[ma]` section.
 
-Available configuration fields:
+- `address` - Address of the API server (default: `127.0.0.1:14566`)
+- `use_tls` - Whether the client uses TLS credentials (default: `false`)
 
-- `access_key_id` - MinIO user name (example: minioadmin)
-- `secret_access_key` - MinIO password (example: minioadmin)
-- `endpoint_url` - MinIO endpoint URL (example: http://localhost:9091)
+#### MinIO credentials
 
-##### API server endpoints
+MinIO credentials for object storage are placed under the `[minio]` section.
 
-(Currently supported at ~/.marc / Will be configurable in the configrc file later.)
+- `access_key_id` - MinIO user name (example: `minioadmin`)
+- `secret_access_key` - MinIO password (example: `minioadmin`)
+- `endpoint_url` - MinIO endpoint URL (example: `http://localhost:9091`)
 
-API server related configuration would be placed under `[ma]` group
+#### Custom gRPC metadata
 
-Available configuration fields:
+Custom gRPC metadata headers are placed under the `[metadata]` section.
 
-- `address` - Address of API server (example: 127.0.0.1:14566)
-- `use_tls` - Configuration whether the client uses the TLS credentials
+- `rpc-caller` - Identifies the calling client (example: `grpcurl`)
+- `rpc-service` - Target service name (example: `ma-apiserver`)
+- `rpc-encoding` - Protocol encoding format (example: `proto`)
 
-##### Custom Metadata
+### Environment variables
 
-(Currently supported at ~/.marc / Will be configurable in the configrc file later.)
+The following environment variables override config file settings:
 
-Custom gRPC metadata headers are placed under the [metadata] section.
-
-Available configuration fields:
-
-- `rpc-caller` - Identifies the calling client (example: grpcurl)
-- `rpc-service` - Target service name (example: ma-apiserver)
-- `rpc-encoding` - Protocol encoding format (example: proto)
-
-##### Default namespaces(Not implemented yet)
-
-User can specify the default namespace by using `namespace` field in the ~/.ma/configrc file. This allows users to avoid repeatedly passing the --namespace flag for every command.
-
-Once configured, the default namespace will be applied to all ma commands unless explicitly overridden. For example, if user configured namespace = "ma-dev-test" in ~/.ma/configrc With this configuration, commands like ma pipeline run --name=my-pipeline will automatically use ma-dev-test as the namespace without requiring the --namespace argument.
-
-#### Namespace auto-recognition(Not implemented yet)
-
-Michelangelo command will travel the CRD yaml directories and try to find config/project.yaml file. If the `ma` command finds this directory structure and project.yaml is a valid michelangelo project CRD representation, it would implicitly use this project as default namespace. Users can overwrite this default namespace by using --namespace argument or configuration rc file.
-
-The namespace has the priority by this order: command line argument, rc file, and directory search. If no method finds the namespace, the ma command would error out.
+- `MACTL_ADDRESS` - Override the API server address
+- `MACTL_USE_TLS` - Override the TLS setting (accepts: `true`, `1`, `yes`, `y`)
+- `AWS_ACCESS_KEY_ID` - Override MinIO/S3 access key
+- `AWS_SECRET_ACCESS_KEY` - Override MinIO/S3 secret key
+- `AWS_ENDPOINT_URL` - Override MinIO/S3 endpoint URL
 
 ## Troubleshooting
 
