@@ -1,8 +1,10 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { FORM_ERROR } from 'final-form';
 import { vi } from 'vitest';
 
 import { FormDialog } from '#core/components/form/components/form-dialog/form-dialog';
+import { FormErrorBanner } from '#core/components/form/components/form-error-banner/form-error-banner';
 import { StringField } from '#core/components/form/fields/string/string-field';
 import { Form } from '#core/components/form/form';
 import { combineValidators } from '#core/components/form/validation/combine-validators';
@@ -11,418 +13,610 @@ import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
 
-describe('Form integration', () => {
-  it('submits form with multiple field values', async () => {
-    const user = userEvent.setup();
-    const onSubmit = vi.fn();
+describe('Form', () => {
+  describe('integration', () => {
+    it('submits form with multiple field values', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
 
-    render(
-      <Form onSubmit={onSubmit}>
-        <StringField name="email" label="Email" />
-        <StringField name="name" label="Name" />
-        <button type="submit">Submit</button>
-      </Form>,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
-    );
-
-    await user.type(screen.getByLabelText('Email'), 'test@example.com');
-    await user.type(screen.getByLabelText('Name'), 'John Doe');
-    await user.click(screen.getByRole('button', { name: 'Submit' }));
-
-    await waitFor(() =>
-      expect(onSubmit).toHaveBeenCalledWith(
-        {
-          email: 'test@example.com',
-          name: 'John Doe',
-        },
-        expect.anything(),
-        expect.anything()
-      )
-    );
-  });
-
-  it('provides initial values to fields', async () => {
-    const user = userEvent.setup();
-    const onSubmit = vi.fn();
-    const initialValues = { email: 'initial@example.com', name: 'Initial User' };
-
-    render(
-      <div>
-        <Form onSubmit={onSubmit} initialValues={initialValues}>
+      render(
+        <Form onSubmit={onSubmit}>
           <StringField name="email" label="Email" />
           <StringField name="name" label="Name" />
           <button type="submit">Submit</button>
-        </Form>
-      </div>,
+        </Form>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
 
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
-    );
+      await user.type(screen.getByLabelText('Email'), 'test@example.com');
+      await user.type(screen.getByLabelText('Name'), 'John Doe');
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
 
-    expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('initial@example.com');
-    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Initial User');
-    await user.click(screen.getByRole('button', { name: 'Submit' }));
-    await waitFor(() =>
-      expect(onSubmit).toHaveBeenCalledWith(initialValues, expect.anything(), expect.anything())
-    );
-  });
+      await waitFor(() =>
+        expect(onSubmit).toHaveBeenCalledWith(
+          {
+            email: 'test@example.com',
+            name: 'John Doe',
+          },
+          expect.anything(),
+          expect.anything()
+        )
+      );
+    });
 
-  it('populates the field with defaultValue', () => {
-    render(
-      <Form onSubmit={vi.fn()}>
-        <StringField name="email" label="Email" defaultValue="from-default" />
-      </Form>,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
-    );
+    it('provides initial values to fields', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      const initialValues = { email: 'initial@example.com', name: 'Initial User' };
 
-    expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('from-default');
-  });
+      render(
+        <div>
+          <Form onSubmit={onSubmit} initialValues={initialValues}>
+            <StringField name="email" label="Email" />
+            <StringField name="name" label="Name" />
+            <button type="submit">Submit</button>
+          </Form>
+        </div>,
 
-  it('uses initialValues over defaultValue when both are provided', () => {
-    render(
-      <Form onSubmit={vi.fn()} initialValues={{ email: 'from-form' }}>
-        <StringField name="email" label="Email" defaultValue="from-default" />
-      </Form>,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
-    );
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
 
-    expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('from-form');
-  });
+      expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('initial@example.com');
+      expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Initial User');
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+      await waitFor(() =>
+        expect(onSubmit).toHaveBeenCalledWith(initialValues, expect.anything(), expect.anything())
+      );
+    });
 
-  it('uses field-level initialValue over defaultValue when both are provided', () => {
-    render(
-      <Form onSubmit={vi.fn()}>
-        <StringField
-          name="email"
-          label="Email"
-          defaultValue="from-default"
-          initialValue="from-field-initial"
-        />
-      </Form>,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
-    );
+    it('populates the field with defaultValue', () => {
+      render(
+        <Form onSubmit={vi.fn()}>
+          <StringField name="email" label="Email" defaultValue="from-default" />
+        </Form>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
 
-    expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('from-field-initial');
-  });
+      expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('from-default');
+    });
 
-  it('uses field-level initialValue when all three value sources are provided', () => {
-    render(
-      <Form onSubmit={vi.fn()} initialValues={{ email: 'from-form' }}>
-        <StringField
-          name="email"
-          label="Email"
-          defaultValue="from-default"
-          initialValue="from-field-initial"
-        />
-      </Form>,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
-    );
+    it('uses initialValues over defaultValue when both are provided', () => {
+      render(
+        <Form onSubmit={vi.fn()} initialValues={{ email: 'from-form' }}>
+          <StringField name="email" label="Email" defaultValue="from-default" />
+        </Form>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
 
-    expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('from-field-initial');
-  });
+      expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('from-form');
+    });
 
-  it('supports external submit button via form id', async () => {
-    const user = userEvent.setup();
-    const onSubmit = vi.fn();
+    it('uses field-level initialValue over defaultValue when both are provided', () => {
+      render(
+        <Form onSubmit={vi.fn()}>
+          <StringField
+            name="email"
+            label="Email"
+            defaultValue="from-default"
+            initialValue="from-field-initial"
+          />
+        </Form>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
 
-    render(
-      <div>
-        <Form id="test-form" onSubmit={onSubmit}>
-          <StringField name="email" label="Email" />
-        </Form>
-        <button type="submit" form="test-form">
-          External Submit
-        </button>
-      </div>,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
-    );
+      expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('from-field-initial');
+    });
 
-    await user.type(screen.getByLabelText('Email'), 'test@example.com');
-    await user.click(screen.getByRole('button', { name: 'External Submit' }));
+    it('uses field-level initialValue when all three value sources are provided', () => {
+      render(
+        <Form onSubmit={vi.fn()} initialValues={{ email: 'from-form' }}>
+          <StringField
+            name="email"
+            label="Email"
+            defaultValue="from-default"
+            initialValue="from-field-initial"
+          />
+        </Form>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
 
-    await waitFor(() =>
-      expect(onSubmit).toHaveBeenCalledWith(
-        { email: 'test@example.com' },
-        expect.anything(),
-        expect.anything()
-      )
-    );
-  });
+      expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('from-field-initial');
+    });
 
-  it('supports render prop for wrapping form element', async () => {
-    const user = userEvent.setup();
-    const onSubmit = vi.fn();
+    it('supports external submit button via form id', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
 
-    render(
-      <Form
-        id="wrapped-form"
-        onSubmit={onSubmit}
-        render={(formElement) => (
-          <div data-testid="wrapper">
-            <div data-testid="header">Header Content</div>
-            {formElement}
-            <div data-testid="footer">Footer Content</div>
-          </div>
-        )}
-      >
-        <StringField name="email" label="Email" />
-        <button type="submit">Submit</button>
-      </Form>,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
-    );
+      render(
+        <div>
+          <Form id="test-form" onSubmit={onSubmit}>
+            <StringField name="email" label="Email" />
+          </Form>
+          <button type="submit" form="test-form">
+            External Submit
+          </button>
+        </div>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
 
-    expect(screen.getByTestId('wrapper')).toBeInTheDocument();
-    expect(screen.getByTestId('header')).toHaveTextContent('Header Content');
-    expect(screen.getByTestId('footer')).toHaveTextContent('Footer Content');
-    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+      await user.type(screen.getByLabelText('Email'), 'test@example.com');
+      await user.click(screen.getByRole('button', { name: 'External Submit' }));
 
-    await user.type(screen.getByLabelText('Email'), 'test@example.com');
-    await user.click(screen.getByRole('button', { name: 'Submit' }));
+      await waitFor(() =>
+        expect(onSubmit).toHaveBeenCalledWith(
+          { email: 'test@example.com' },
+          expect.anything(),
+          expect.anything()
+        )
+      );
+    });
 
-    await waitFor(() =>
-      expect(onSubmit).toHaveBeenCalledWith(
-        { email: 'test@example.com' },
-        expect.anything(),
-        expect.anything()
-      )
-    );
-  });
+    it('supports render prop for wrapping form element', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
 
-  it('allows external submit button in render prop wrapper via form id', async () => {
-    const user = userEvent.setup();
-    const onSubmit = vi.fn();
-
-    render(
-      <Form
-        id="wrapped-form"
-        onSubmit={onSubmit}
-        render={(formElement) => (
-          <div data-testid="wrapper">
-            {formElement}
-            <div data-testid="footer">
-              <button type="submit" form="wrapped-form">
-                External Submit
-              </button>
+      render(
+        <Form
+          id="wrapped-form"
+          onSubmit={onSubmit}
+          render={(formElement) => (
+            <div data-testid="wrapper">
+              <div data-testid="header">Header Content</div>
+              {formElement}
+              <div data-testid="footer">Footer Content</div>
             </div>
-          </div>
-        )}
-      >
-        <StringField name="email" label="Email" />
-      </Form>,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
-    );
+          )}
+        >
+          <StringField name="email" label="Email" />
+          <button type="submit">Submit</button>
+        </Form>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
 
-    await user.type(screen.getByLabelText('Email'), 'test@example.com');
-    await user.click(screen.getByRole('button', { name: 'External Submit' }));
+      expect(screen.getByTestId('wrapper')).toBeInTheDocument();
+      expect(screen.getByTestId('header')).toHaveTextContent('Header Content');
+      expect(screen.getByTestId('footer')).toHaveTextContent('Footer Content');
+      expect(screen.getByLabelText('Email')).toBeInTheDocument();
 
-    await waitFor(() =>
-      expect(onSubmit).toHaveBeenCalledWith(
-        { email: 'test@example.com' },
-        expect.anything(),
-        expect.anything()
-      )
-    );
-  });
-});
+      await user.type(screen.getByLabelText('Email'), 'test@example.com');
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
 
-describe('Form validation', () => {
-  it('allows submission after required field is filled', async () => {
-    const user = userEvent.setup();
-    const onSubmit = vi.fn();
+      await waitFor(() =>
+        expect(onSubmit).toHaveBeenCalledWith(
+          { email: 'test@example.com' },
+          expect.anything(),
+          expect.anything()
+        )
+      );
+    });
 
-    render(
-      <Form onSubmit={onSubmit}>
-        <StringField name="username" label="Username" required />
-        <button type="submit">Submit</button>
-      </Form>,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
-    );
+    it('allows external submit button in render prop wrapper via form id', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
 
-    await user.click(screen.getByRole('button', { name: 'Submit' }));
-    expect(await screen.findByText('This field is required.')).toBeInTheDocument();
+      render(
+        <Form
+          id="wrapped-form"
+          onSubmit={onSubmit}
+          render={(formElement) => (
+            <div data-testid="wrapper">
+              {formElement}
+              <div data-testid="footer">
+                <button type="submit" form="wrapped-form">
+                  External Submit
+                </button>
+              </div>
+            </div>
+          )}
+        >
+          <StringField name="email" label="Email" />
+        </Form>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
 
-    await user.type(screen.getByRole('textbox', { name: 'Username *' }), 'johndoe');
-    await user.click(screen.getByRole('button', { name: 'Submit' }));
+      await user.type(screen.getByLabelText('Email'), 'test@example.com');
+      await user.click(screen.getByRole('button', { name: 'External Submit' }));
 
-    await waitFor(() =>
-      expect(onSubmit).toHaveBeenCalledWith(
-        { username: 'johndoe' },
-        expect.anything(),
-        expect.anything()
-      )
-    );
-  });
-
-  it('shows first error when composed validators fail sequentially', async () => {
-    const user = userEvent.setup();
-    const onSubmit = vi.fn();
-
-    render(
-      <Form onSubmit={onSubmit}>
-        <StringField
-          name="username"
-          label="Username"
-          required
-          validate={combineValidators(required(), minLength(6))}
-        />
-        <button type="submit">Submit</button>
-      </Form>,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
-    );
-
-    await user.click(screen.getByRole('button', { name: 'Submit' }));
-    expect(await screen.findByText('This field is required.')).toBeInTheDocument();
-    expect(onSubmit).not.toHaveBeenCalled();
-
-    await user.type(screen.getByRole('textbox', { name: 'Username *' }), 'abc');
-    await user.click(screen.getByRole('button', { name: 'Submit' }));
-
-    expect(await screen.findByText('Must be at least 6 characters.')).toBeInTheDocument();
-    expect(onSubmit).not.toHaveBeenCalled();
-  });
-
-  it('focuses first field with error on failed submit', async () => {
-    const user = userEvent.setup();
-
-    render(
-      <Form onSubmit={vi.fn()}>
-        <StringField name="email" label="Email" required />
-        <StringField name="name" label="Name" required />
-        <button type="submit">Submit</button>
-      </Form>,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
-    );
-
-    await user.click(screen.getByRole('button', { name: 'Submit' }));
-
-    await waitFor(() => {
-      expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Email *' }));
+      await waitFor(() =>
+        expect(onSubmit).toHaveBeenCalledWith(
+          { email: 'test@example.com' },
+          expect.anything(),
+          expect.anything()
+        )
+      );
     });
   });
-});
 
-describe('FormDialog', () => {
-  const defaultProps = {
-    isOpen: true,
-    onDismiss: vi.fn(),
-    heading: 'Test Dialog',
-    onSubmit: vi.fn(),
-  };
+  describe('validation', () => {
+    it('allows submission after required field is filled', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
 
-  beforeEach(() => {
-    vi.clearAllMocks();
+      render(
+        <Form onSubmit={onSubmit}>
+          <StringField name="username" label="Username" required />
+          <button type="submit">Submit</button>
+        </Form>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+      expect(await screen.findByText('This field is required.')).toBeInTheDocument();
+
+      await user.type(screen.getByRole('textbox', { name: 'Username *' }), 'johndoe');
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+      await waitFor(() =>
+        expect(onSubmit).toHaveBeenCalledWith(
+          { username: 'johndoe' },
+          expect.anything(),
+          expect.anything()
+        )
+      );
+    });
+
+    it('shows first error when composed validators fail sequentially', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+
+      render(
+        <Form onSubmit={onSubmit}>
+          <StringField
+            name="username"
+            label="Username"
+            required
+            validate={combineValidators(required(), minLength(6))}
+          />
+          <button type="submit">Submit</button>
+        </Form>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+      expect(await screen.findByText('This field is required.')).toBeInTheDocument();
+      expect(onSubmit).not.toHaveBeenCalled();
+
+      await user.type(screen.getByRole('textbox', { name: 'Username *' }), 'abc');
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+      expect(await screen.findByText('Must be at least 6 characters.')).toBeInTheDocument();
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it('focuses first field with error on failed submit', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Form onSubmit={vi.fn()}>
+          <StringField name="email" label="Email" required />
+          <StringField name="name" label="Name" required />
+          <button type="submit">Submit</button>
+        </Form>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+      await waitFor(() => {
+        expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Email *' }));
+      });
+    });
   });
 
-  it('renders dialog with form when open', async () => {
-    render(
-      <FormDialog {...defaultProps}>
-        <StringField name="email" label="Email" />
-      </FormDialog>,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
-    );
+  describe('error display', () => {
+    const wrapper = buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()]);
 
-    await screen.findByRole('dialog', { name: 'Test Dialog' });
-    expect(screen.getByLabelText('Email')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Submit' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
-  });
-
-  it('does not render when closed', async () => {
-    render(
-      <FormDialog {...defaultProps} isOpen={false}>
-        <StringField name="email" label="Email" />
-      </FormDialog>,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
-    );
-
-    try {
-      await screen.findByRole('dialog', {}, { timeout: 100 });
-      throw new Error('Dialog should not be in the document');
-    } catch (e: unknown) {
-      if (e instanceof Error) {
-        if (e.name !== 'TestingLibraryElementError') throw e;
-      } else {
-        throw e;
-      }
-
-      // Success!
+    function getErrorEntry(banner: HTMLElement, label: string, errorMessage: string) {
+      const labelButton = within(banner).getByRole('button', { name: label });
+      const entry = labelButton.closest('div')!;
+      expect(entry).toHaveTextContent(errorMessage);
+      return entry;
     }
-  });
 
-  it('submits form data and auto-closes on success', async () => {
-    const user = userEvent.setup();
-    const onSubmit = vi.fn().mockResolvedValue(undefined);
-    const onDismiss = vi.fn();
+    it('shows errors after failed submit', async () => {
+      const user = userEvent.setup();
 
-    render(
-      <FormDialog {...defaultProps} onSubmit={onSubmit} onDismiss={onDismiss}>
-        <StringField name="email" label="Email" />
-      </FormDialog>,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
-    );
+      render(
+        <Form onSubmit={vi.fn()}>
+          <StringField name="email" label="Email Address" required />
+          <FormErrorBanner />
+          <button type="submit">Submit</button>
+        </Form>,
+        wrapper
+      );
 
-    await user.type(screen.getByLabelText('Email'), 'test@example.com');
-    await user.click(screen.getByRole('button', { name: 'Submit' }));
+      expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(onSubmit).toHaveBeenCalledWith({ email: 'test@example.com' });
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+      const banner = await screen.findByRole('complementary');
+      expect(banner).toHaveTextContent('This field is required.');
     });
 
-    await waitFor(() => {
+    it('clears errors when field is corrected', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Form onSubmit={vi.fn()}>
+          <StringField name="email" label="Email Address" required />
+          <FormErrorBanner />
+          <button type="submit">Submit</button>
+        </Form>,
+        wrapper
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+      expect(await screen.findByRole('complementary')).toBeInTheDocument();
+
+      await user.type(screen.getByRole('textbox', { name: 'Email Address *' }), 'test@example.com');
+
+      await waitFor(() => {
+        expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+      });
+    });
+
+    it('focuses the correct field when clicking a label among multiple errors', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Form onSubmit={vi.fn()}>
+          <StringField name="email" label="Email" required />
+          <StringField name="name" label="Name" required />
+          <FormErrorBanner />
+          <button type="submit">Submit</button>
+        </Form>,
+        wrapper
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+      const banner = await screen.findByRole('complementary');
+      await user.click(within(banner).getByText('Name'));
+
+      expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Name *' }));
+      expect(document.activeElement).not.toBe(screen.getByRole('textbox', { name: 'Email *' }));
+    });
+
+    it('does not show a clickable button for form-level errors', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn().mockResolvedValue({ [FORM_ERROR]: 'Something went wrong' });
+
+      render(
+        <Form onSubmit={onSubmit}>
+          <StringField name="email" label="Email" />
+          <FormErrorBanner />
+          <button type="submit">Submit</button>
+        </Form>,
+        wrapper
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+      const banner = await screen.findByRole('complementary');
+      expect(banner).toHaveTextContent('Something went wrong');
+      expect(within(banner).queryByRole('button')).not.toBeInTheDocument();
+    });
+
+    it('shows separate errors for sibling fields in the same nested object', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Form onSubmit={vi.fn()}>
+          <StringField name="address.street" label="Street" required />
+          <StringField name="address.city" label="City" required />
+          <FormErrorBanner />
+          <button type="submit">Submit</button>
+        </Form>,
+        wrapper
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+      const banner = await screen.findByRole('complementary');
+      getErrorEntry(banner, 'Street', 'This field is required.');
+      getErrorEntry(banner, 'City', 'This field is required.');
+    });
+
+    it('shows form-level error alongside field validation errors', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn().mockResolvedValue({ [FORM_ERROR]: 'Server unavailable' });
+
+      render(
+        <Form onSubmit={onSubmit}>
+          <StringField name="email" label="Email" required />
+          <FormErrorBanner />
+          <button type="submit">Submit</button>
+        </Form>,
+        wrapper
+      );
+
+      // First submit — field error fires, onSubmit is never called because validation blocks it
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+      const banner = await screen.findByRole('complementary');
+      getErrorEntry(banner, 'Email', 'This field is required.');
+
+      // Fill the field and resubmit — now onSubmit is called and returns server error
+      await user.type(screen.getByRole('textbox', { name: 'Email *' }), 'test@example.com');
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+      expect(await screen.findByText(/Server unavailable/)).toBeInTheDocument();
+    });
+
+    it('removes only the corrected field error when one of multiple errors is fixed', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Form onSubmit={vi.fn()}>
+          <StringField name="email" label="Email" required />
+          <StringField name="name" label="Name" required />
+          <FormErrorBanner />
+          <button type="submit">Submit</button>
+        </Form>,
+        wrapper
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+      const banner = await screen.findByRole('complementary');
+
+      getErrorEntry(banner, 'Email', 'This field is required.');
+      getErrorEntry(banner, 'Name', 'This field is required.');
+
+      // Fix only the email field
+      await user.type(screen.getByRole('textbox', { name: 'Email *' }), 'test@example.com');
+
+      await waitFor(() => {
+        expect(
+          within(screen.getByRole('complementary')).queryByText('Email')
+        ).not.toBeInTheDocument();
+      });
+
+      // Name entry still present with label and error together
+      getErrorEntry(screen.getByRole('complementary'), 'Name', 'This field is required.');
+    });
+
+    it('shows error without label when field has no label', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Form onSubmit={vi.fn()}>
+          <StringField name="username" required />
+          <FormErrorBanner />
+          <button type="submit">Submit</button>
+        </Form>,
+        wrapper
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+      const errorDisplay = await screen.findByRole('complementary');
+      expect(within(errorDisplay).getByText('This field is required.')).toBeInTheDocument();
+      expect(within(errorDisplay).queryByRole('button')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('FormDialog', () => {
+    const defaultProps = {
+      isOpen: true,
+      onDismiss: vi.fn(),
+      heading: 'Test Dialog',
+      onSubmit: vi.fn(),
+    };
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('renders dialog with form when open', async () => {
+      render(
+        <FormDialog {...defaultProps}>
+          <StringField name="email" label="Email" />
+        </FormDialog>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      await screen.findByRole('dialog', { name: 'Test Dialog' });
+      expect(screen.getByLabelText('Email')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Submit' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    });
+
+    it('does not render when closed', async () => {
+      render(
+        <FormDialog {...defaultProps} isOpen={false}>
+          <StringField name="email" label="Email" />
+        </FormDialog>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      try {
+        await screen.findByRole('dialog', {}, { timeout: 100 });
+        throw new Error('Dialog should not be in the document');
+      } catch (e: unknown) {
+        if (e instanceof Error) {
+          if (e.name !== 'TestingLibraryElementError') throw e;
+        } else {
+          throw e;
+        }
+
+        // Success!
+      }
+    });
+
+    it('submits form data and auto-closes on success', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn().mockResolvedValue(undefined);
+      const onDismiss = vi.fn();
+
+      render(
+        <FormDialog {...defaultProps} onSubmit={onSubmit} onDismiss={onDismiss}>
+          <StringField name="email" label="Email" />
+        </FormDialog>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      await user.type(screen.getByLabelText('Email'), 'test@example.com');
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith({ email: 'test@example.com' });
+      });
+
+      await waitFor(() => {
+        expect(onDismiss).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('calls onDismiss when cancel is clicked', async () => {
+      const user = userEvent.setup();
+      const onDismiss = vi.fn();
+
+      render(
+        <FormDialog {...defaultProps} onDismiss={onDismiss}>
+          <StringField name="email" label="Email" />
+        </FormDialog>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
       expect(onDismiss).toHaveBeenCalledTimes(1);
     });
-  });
 
-  it('calls onDismiss when cancel is clicked', async () => {
-    const user = userEvent.setup();
-    const onDismiss = vi.fn();
+    it('handles submit errors without auto-closing', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn().mockRejectedValue(new Error('Submit failed'));
+      const onDismiss = vi.fn();
 
-    render(
-      <FormDialog {...defaultProps} onDismiss={onDismiss}>
-        <StringField name="email" label="Email" />
-      </FormDialog>,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
-    );
+      render(
+        <FormDialog {...defaultProps} onSubmit={onSubmit} onDismiss={onDismiss}>
+          <StringField name="email" label="Email" />
+        </FormDialog>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
 
-    await user.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(onDismiss).toHaveBeenCalledTimes(1);
-  });
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
 
-  it('handles submit errors without auto-closing', async () => {
-    const user = userEvent.setup();
-    const onSubmit = vi.fn().mockRejectedValue(new Error('Submit failed'));
-    const onDismiss = vi.fn();
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalled();
+      });
 
-    render(
-      <FormDialog {...defaultProps} onSubmit={onSubmit} onDismiss={onDismiss}>
-        <StringField name="email" label="Email" />
-      </FormDialog>,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
-    );
-
-    await user.click(screen.getByRole('button', { name: 'Submit' }));
-
-    await waitFor(() => {
-      expect(onSubmit).toHaveBeenCalled();
+      expect(onDismiss).not.toHaveBeenCalled();
+      expect(screen.getByRole('dialog', { name: 'Test Dialog' })).toBeInTheDocument();
+      await screen.findByText(/Submit failed/);
     });
 
-    expect(onDismiss).not.toHaveBeenCalled();
-    expect(screen.getByRole('dialog', { name: 'Test Dialog' })).toBeInTheDocument();
-    await screen.findByText(/Submit failed/);
-  });
+    it('supports custom submit label and initial values', () => {
+      render(
+        <FormDialog
+          {...defaultProps}
+          submitLabel="Create Item"
+          initialValues={{ email: 'preset@example.com' }}
+        >
+          <StringField name="email" label="Email" />
+        </FormDialog>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
 
-  it('supports custom submit label and initial values', () => {
-    render(
-      <FormDialog
-        {...defaultProps}
-        submitLabel="Create Item"
-        initialValues={{ email: 'preset@example.com' }}
-      >
-        <StringField name="email" label="Email" />
-      </FormDialog>,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
-    );
-
-    expect(screen.getByRole('button', { name: 'Create Item' })).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('preset@example.com');
+      expect(screen.getByRole('button', { name: 'Create Item' })).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('preset@example.com');
+    });
   });
 });

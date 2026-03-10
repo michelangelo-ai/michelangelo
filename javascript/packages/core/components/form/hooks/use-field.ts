@@ -1,5 +1,6 @@
 import { useField as useReactFinalFormField } from 'react-final-form';
 
+import { useFieldRegistration } from '#core/components/form/hooks/use-field-registration';
 import { combineValidators } from '#core/components/form/validation/combine-validators';
 import { required as requiredValidator } from '#core/components/form/validation/validators';
 
@@ -8,8 +9,16 @@ import type { FieldInput, FieldState } from '../types';
 
 export function useField<T = unknown>(
   name: string,
-  options?: { validate?: FieldValidator; required?: boolean; defaultValue?: T; initialValue?: T }
+  options?: {
+    validate?: FieldValidator;
+    required?: boolean;
+    defaultValue?: T;
+    initialValue?: T;
+    label?: string;
+  }
 ): { input: FieldInput<T>; meta: FieldState } {
+  useFieldRegistration(name, options?.label);
+
   const composedValidate = options?.required
     ? combineValidators(requiredValidator(), ...(options.validate ? [options.validate] : []))
     : options?.validate;

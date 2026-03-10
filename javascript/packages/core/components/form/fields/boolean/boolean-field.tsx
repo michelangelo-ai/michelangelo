@@ -26,6 +26,7 @@ export const BooleanField: React.FC<BooleanFieldProps> = ({
     validate,
     defaultValue,
     initialValue,
+    label,
   });
 
   const handleChange = (event: React.FormEvent<HTMLInputElement>) => {

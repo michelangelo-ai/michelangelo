@@ -31,6 +31,7 @@ export const SelectField: React.FC<SelectFieldProps> = ({
     validate,
     defaultValue,
     initialValue,
+    label,
   });
 
   const handleChange = useCallback(
