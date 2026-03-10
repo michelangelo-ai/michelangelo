@@ -5,5 +5,9 @@ go_library(
     srcs = ["interface.go"],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins",
     visibility = ["//visibility:public"],
-    deps = ["@com_github_go_logr_logr//:go_default_library"],
+    deps = [
+        "//go/base/conditions/interfaces:go_default_library",
+        "//proto/api/v2:go_default_library",
+        "@com_github_go_logr_logr//:go_default_library",
+    ],
 )

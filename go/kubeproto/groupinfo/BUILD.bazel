@@ -6,6 +6,7 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/kubeproto/groupinfo",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/kubeproto/pboptions:go_default_library",
         "@org_golang_google_protobuf//compiler/protogen:go_default_library",
         "@org_golang_google_protobuf//reflect/protoregistry:go_default_library",
     ],
@@ -16,6 +17,9 @@ go_test(
     srcs = ["group_info_test.go"],
     embed = [":go_default_library"],
     deps = [
+        "//go/kubeproto/pboptions:go_default_library",
+        "//go/kubeproto/util:go_default_library",
+        "//proto/test/kubeproto:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
         "@org_golang_google_protobuf//compiler/protogen:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",

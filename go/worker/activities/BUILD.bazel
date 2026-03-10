@@ -5,5 +5,12 @@ go_library(
     srcs = ["module.go"],
     importpath = "github.com/michelangelo-ai/michelangelo/go/worker/activities",
     visibility = ["//visibility:public"],
-    deps = ["@org_uber_go_fx//:go_default_library"],
+    deps = [
+        "//go/worker/activities/cachedoutput:go_default_library",
+        "//go/worker/activities/model:go_default_library",
+        "//go/worker/activities/notification:go_default_library",
+        "//go/worker/activities/storage:go_default_library",
+        "//go/worker/activities/trigger:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+    ],
 )

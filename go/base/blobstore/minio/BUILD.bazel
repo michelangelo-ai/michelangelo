@@ -10,6 +10,7 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/base/blobstore/minio",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/base/blobstore:go_default_library",
         "@com_github_minio_minio_go_v7//:go_default_library",
         "@com_github_minio_minio_go_v7//pkg/credentials:go_default_library",
         "@org_uber_go_config//:go_default_library",

@@ -9,6 +9,10 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/worker/activities/spark",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/api/utils:go_default_library",
+        "//go/worker/plugins/utils:go_default_library",
+        "//proto/api:go_default_library",
+        "//proto/api/v2:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//activity:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//ext:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//worker:go_default_library",
@@ -27,6 +31,8 @@ go_test(
     srcs = ["spark_activities_test.go"],
     embed = [":go_default_library"],
     deps = [
+        "//proto/api/v2:go_default_library",
+        "//proto/api/v2:go_michelangelo_v2_gomock_library",
         "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//test/types:go_default_library",
         "@com_github_golang_mock//gomock:go_default_library",

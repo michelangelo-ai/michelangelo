@@ -12,6 +12,15 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/cmd/apiserver",
     visibility = ["//visibility:private"],
     deps = [
+        "//go/api/crd:go_default_library",
+        "//go/api/handler:go_default_library",
+        "//go/auth:go_default_library",
+        "//go/base/config:go_default_library",
+        "//go/base/env:go_default_library",
+        "//go/base/zapfx:go_default_library",
+        "//go/components/project/apihook:go_default_library",
+        "//go/logging:go_default_library",
+        "//proto/api/v2:go_default_library",
         "@com_github_uber_go_tally//:go_default_library",
         "@io_k8s_apimachinery//pkg/runtime:go_default_library",
         "@io_k8s_client_go//kubernetes/scheme:go_default_library",
@@ -56,6 +65,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//proto/api/v2:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
         "@org_uber_go_config//:go_default_library",
         "@org_uber_go_fx//:go_default_library",
