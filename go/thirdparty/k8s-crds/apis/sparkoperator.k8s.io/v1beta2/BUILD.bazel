@@ -12,6 +12,7 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/thirdparty/k8s-crds/apis/sparkoperator.k8s.io/v1beta2",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/thirdparty/k8s-crds/apis/sparkoperator.k8s.io:go_default_library",
         "@io_k8s_api//core/v1:go_default_library",
         "@io_k8s_api//networking/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",

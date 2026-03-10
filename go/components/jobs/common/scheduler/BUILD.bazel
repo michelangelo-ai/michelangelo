@@ -8,7 +8,10 @@ go_library(
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/scheduler",
     visibility = ["//visibility:public"],
-    deps = ["@org_uber_go_fx//:go_default_library"],
+    deps = [
+        "//go/components/jobs/common/types:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+    ],
 )
 
 go_test(
@@ -16,6 +19,8 @@ go_test(
     srcs = ["queue_test.go"],
     embed = [":go_default_library"],
     deps = [
+        "//go/base/typedefs/context/contextmocks:go_default_library",
+        "//go/components/jobs/common/types:go_default_library",
         "@com_github_golang_mock//gomock:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
     ],
