@@ -1,54 +1,82 @@
 # CLI Reference
 
-The Michelangelo CLI interface provides a unified way to manage resources using standard Kubernetes-style commands. This guide covers all supported commands for managing Michelangelo API entities.
+The Michelangelo CLI (`ma`) provides a unified way to manage resources using standard Kubernetes-style commands. This guide covers all supported commands for managing Michelangelo API entities.
+
+## Command summary
+
+| Command | Description |
+|---------|-------------|
+| `ma <type> get` | List or retrieve resources |
+| `ma <type> apply -f <file>` | Create or update a resource from YAML |
+| `ma <type> delete` | Delete a resource |
+| `ma pipeline run` | Execute a registered pipeline |
+| `ma pipeline dev-run` | Run a pipeline without registering it |
+| `ma pipeline_run kill` | Terminate a running pipeline run |
+| `ma trigger_run kill` | Terminate a running trigger |
+| `ma sandbox create` | Set up a local development environment |
+| `ma sandbox delete` | Remove the local development environment |
+
+Supported resource types:
+
+| Resource Type | CLI Name | Description | Supported Operations |
+|---------------|----------|-------------|----------------------|
+| Project | `project` | Namespace and team ownership for ML resources | get, apply, delete |
+| Pipeline | `pipeline` | Registered workflow with configuration and scheduling | get, apply, delete, run, dev-run |
+| PipelineRun | `pipeline_run` | Single execution instance of a pipeline | get, apply, delete, kill |
+| TriggerRun | `trigger_run` | Scheduled or on-demand pipeline execution trigger | get, apply, delete, kill |
+| Model | `model` | Trained model artifact with versioning | get, apply, delete |
+| ModelFamily | `model_family` | Group of related model versions | get, apply, delete |
+| Deployment | `deployment` | Model serving deployment configuration | get, apply, delete |
+| InferenceServer | `inference_server` | Runtime server for model inference | get, apply, delete |
+| Revision | `revision` | Versioned snapshot of a resource | get, apply, delete |
+| Cluster | `cluster` | Kubernetes cluster configuration | get, apply, delete |
+| RayCluster | `ray_cluster` | Ray distributed compute cluster | get, apply, delete |
+| RayJob | `ray_job` | Job submitted to a Ray cluster | get, apply, delete |
+| SparkJob | `spark_job` | Job submitted to a Spark cluster | get, apply, delete |
+| CachedOutput | `cached_output` | Cached task output for pipeline resume | get, apply, delete |
 
 ## Prerequisites
 
-Before using CLI, ensure:
+1. **Install Python >= 3.9** and [Poetry](https://python-poetry.org/)
 
-API Server is running:
+2. **Clone and install dependencies:**
 
-```bash
-# Start the Michelangelo API server (from repository root)
-bazel run //go/cmd/apiserver:apiserver
-```
+   ```bash
+   export REPO_ROOT="/Users/{username}/michelangelo"
+   cd $REPO_ROOT/python/
+   poetry install
+   ```
 
-Dependencies are installed:
+3. **Start the API server** (from repository root):
 
-```bash
-# Set repo root and install dependencies (requires Python >= 3.9)
-export REPO_ROOT="/Users/{username}/michelangelo"
-cd $REPO_ROOT/python/
-poetry install
-```
+   ```bash
+   bazel run //go/cmd/apiserver:apiserver
+   ```
 
-> **Tip:** You can also use `ma sandbox create` to set up a complete local development environment with the API server, workflow engine, and all dependencies. See the sandbox documentation for details.
+   > **Tip:** You can also use `ma sandbox create` to set up a complete local development environment with the API server, workflow engine, and all dependencies. See [Sandbox commands](#sandbox-commands) for details.
 
-Configure API server address (optional):
+4. **(Optional) Configure API server address:**
 
-```bash
-# Override default API server address
-export MACTL_ADDRESS="127.0.0.1:14566"
-```
+   ```bash
+   export MACTL_ADDRESS="127.0.0.1:14566"
+   ```
 
 ## Usage
 
 All Michelangelo API entities support the following standard operations -- GET, APPLY, and DELETE
 
-### How to run the command in michelangelo repository
-
-Usage:
+### General syntax
 
 ```bash
 cd $REPO_ROOT/python/
 ma <RESOURCE_TYPE> <COMMAND> [ARGS]
 ```
 
-We will abstract this part like `ma <RESOURCE_TYPE> <COMMAND>` in below.
+The examples below omit the `cd` step for brevity.
 
 ### GET - Retrieve resource
 
-Retrieve information about an existing resource by namespace and name. If you don't specify the `--name` field, it would list all resources under the specified namespace.
+Retrieve information about an existing resource by namespace and name. If you don't specify the `--name` field, it lists all resources under the specified namespace.
 
 Syntax:
 
@@ -130,9 +158,9 @@ ma project delete --namespace="ma-dev-test" --name="my-project"
 ma pipeline_run delete --namespace="ma-dev-test" --name="run-001"
 ```
 
-## Type specific commands
+## Type-specific commands
 
-MA Command supports the default type-specific commands for users for specific Michelangelo API entities.
+Some resource types support additional commands beyond GET, APPLY, and DELETE.
 
 ### Pipeline
 
@@ -217,31 +245,31 @@ ma pipeline dev-run -f "./examples/bert_cola/pipeline.yaml" --env=foo=bar --file
 ma pipeline dev-run -f "./examples/bert_cola/pipeline.yaml" --file-sync --storage-url=s3://my-bucket/workflows
 ```
 
-##### Differences between dev-run and remote-run in vanilla uniflow
+##### Differences between dev-run and remote-run
 
-**1. dev-run: Test Pipeline from Local File**
+| Mode | Command | Uncommitted changes | Creates PipelineRun | Visible in MA Studio |
+|------|---------|---------------------|---------------------|----------------------|
+| **dev-run** | `ma pipeline dev-run` | No (committed code only) | Yes | PipelineRun only |
+| **dev-run --file-sync** | `ma pipeline dev-run --file-sync` | Yes | Yes | PipelineRun only |
+| **remote-run** | `python workflow.py remote-run` | No (committed code only) | No | No |
+| **remote-run --file-sync** | `python workflow.py remote-run --file-sync` | Yes | No | No |
 
-`pipeline dev-run` command runs a pipeline directly from your committed git snapshot. Pipeline run will be controlled by Michelangelo API server and controller. This command creates a PipelineRun entity but no Pipeline entity, so you will not see the pipeline entity information in MA Studio.
+**dev-run** runs a pipeline directly from your committed git snapshot via the Michelangelo API server. It creates a PipelineRun entity but no Pipeline entity. Adding `--file-sync` enables testing uncommitted changes by syncing local file diffs to the remote container.
 
-Technical details: This command reads your pipeline configuration from a local YAML file, creates a PipelineRun Michelangelo entity, which does not have the registered parent Pipeline entity. The key difference from `pipeline run` command is that it embeds the entire pipeline specification inline rather than referencing an existing registered Pipeline resource, allowing you to test changes before actually registering it. However, it only uses code that's committed to git. Any uncommitted changes in your working directory are ignored. This command goes through the full Michelangelo API and controller manager path: ma command → API Server → PipelineRun entity → Controller Manager → Cadence/Temporal.
+**remote-run** (invoked via `python my_workflow.py remote-run`, not an `ma` command) bypasses the Michelangelo API server and submits your workflow directly to Cadence/Temporal. No Michelangelo entities are created, and pipeline status is not visible in MA Studio.
 
-**2. dev-run --file-sync: Test Pipeline + Uncommitted Changes**
+<details>
+<summary>Technical details</summary>
 
-Adding `--file-sync` to the `pipeline dev-run` command enables testing of uncommitted code changes without needing to commit or rebuild Docker images.
+**dev-run**: Reads your pipeline configuration from a local YAML file and creates a PipelineRun Michelangelo entity with the pipeline specification embedded inline (rather than referencing a registered Pipeline resource). Execution path: ma command → API Server → PipelineRun entity → Controller Manager → Cadence/Temporal.
 
-Technical details: It works by creating two tarballs: the workflow tarball (from committed code) and a file-sync tarball (containing only files changed via git diff). When the container starts, Python's sitecustomize.py automatically downloads the file-sync tarball and overlays those changed files on top of the base code, effectively "patching" the container with your local edits. This still goes through Michelangelo API server and controller managers (creates a PipelineRun) but injects an additional environment variable `UF_FILE_SYNC_TARBALL_URL` that implies the remote container where to find your local changes.
+**dev-run --file-sync**: Creates two tarballs: a workflow tarball (from committed code) and a file-sync tarball (containing only files changed via `git diff`). When the container starts, `sitecustomize.py` downloads the file-sync tarball and overlays changed files on top of the base code. The file-sync URL is passed via the `UF_FILE_SYNC_TARBALL_URL` environment variable.
 
-**3. remote-run: (non ma command) Direct Workflow Execution**
+**remote-run**: Creates a workflow tarball from committed code and sends it straight to the workflow engine without creating any Michelangelo entities.
 
-`remote-run` command (invoked via `python my_workflow.py remote-run`) bypasses Michelangelo API server and skips PipelineRun Entity entirely and directly submits your workflow to Cadence or Temporal using their CLI tools. Users cannot see the Pipeline and PipelineRun status in MA Studio UI.
+**remote-run --file-sync**: Creates two tarballs: a workflow tarball (base64-encoded in the Cadence CLI input) and a file-sync tarball (uploaded to S3). The S3 URL is passed as an environment variable to the container.
 
-Technical details: It creates a workflow tarball from your committed code and sends it straight to the workflow engine without creating any Michelangelo entities like Pipeline or PipelineRun.
-
-**4. remote-run --file-sync: (non ma command) Direct Workflow Execution with uncommitted changes**
-
-Similar to the `--file-sync` option in `dev-run` command, it reflects the current uncommitted code changes in remote-run.
-
-Technical details: `remote-run --file-sync` creates two tarballs: a workflow tarball (from committed code) that is base64-encoded and embedded directly in the Cadence CLI command input, and a file-sync tarball (git diff changes) that is uploaded to S3. The S3 URL for the file-sync tarball is passed as an environment variable to the container, which downloads and overlays those changes at runtime. The trade-off is that no Michelangelo entities like PipelineRun is created, no MA UI visualization and resource management capabilities, monitoring is only through the Cadence/Temporal UI.
+</details>
 
 ### Pipeline_run
 
@@ -292,6 +320,22 @@ ma trigger_run kill --namespace=ma-dev-test --name=training-pipeline-cron-trigge
 # Kill a trigger run without confirmation prompt
 ma trigger_run kill --namespace=ma-dev-test --name=training-pipeline-cron-trigger --yes
 ```
+
+## Sandbox commands
+
+The `ma sandbox` commands manage a local K3d development environment. For prerequisites, setup walkthrough, and detailed options, see the [Sandbox Setup Guide](../setup-guide/sandbox-setup.md).
+
+| Command | Description |
+|---------|-------------|
+| `ma sandbox create` | Create a K3d cluster with all Michelangelo services |
+| `ma sandbox create --workflow temporal` | Create with Temporal instead of Cadence |
+| `ma sandbox create --exclude ui` | Create without specific services |
+| `ma sandbox create --create-compute-cluster` | Create with a Ray compute cluster |
+| `ma sandbox delete` | Tear down the cluster and all resources |
+| `ma sandbox start` | Start a stopped cluster |
+| `ma sandbox stop` | Stop the cluster (preserves state) |
+| `ma sandbox demo pipeline` | Create demo pipeline resources |
+| `ma sandbox demo inference` | Create demo inference server resources |
 
 ## YAML Resource Examples
 
