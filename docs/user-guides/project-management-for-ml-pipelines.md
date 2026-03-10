@@ -1,41 +1,226 @@
-# What's a Project?
+# Project Management
 
-In Michelangelo, a project represents a **business use case** that is continuously measured through a defined set of performance metrics. Examples include **dish recommendations in Uber Eats** or **restaurant ranking on the home feed.** This structure—framing each project as a business use case—has enabled Uber to **drive sustained model evolution within a specific domain over time,** ensuring that improvements are directly tied to measurable business outcomes.
+A **project** in Michelangelo is a top-level organizational unit that groups related ML pipelines, models, and resources under a single namespace. Each project typically maps to a business use case -- for example, a product recommendation system, a fraud detection pipeline, or a document classification service.
 
-# Create a MA Studio Project from the CLI
+Projects provide:
 
-To create an MA Studio project using the CLI, follow these steps:
+- **Namespace isolation** -- each project runs in its own Kubernetes namespace (an isolated scope for resources)
+- **Ownership and access control** -- define teams and individuals who manage the project
+- **Pipeline grouping** -- all pipelines within a project share configuration and resources
+- **Lifecycle tracking** -- projects progress through phases from development to production
 
-1.  Create a project folder within your repository.
-2.  Add the following file to the newly created project folder.
+A project must be created before you can register or run pipelines. See [Pipeline Management](./ml-pipelines/pipeline-management.md) for creating pipelines within a project.
+
+## Prerequisites
+
+Before creating a project, ensure:
+
+1. **The Michelangelo CLI is installed.** See the [CLI Reference](./cli.md) for setup instructions.
+2. **The API server is running:**
+
+```bash
+bazel run //go/cmd/apiserver:apiserver
+```
+
+3. **Dependencies are installed:**
+
+```bash
+export REPO_ROOT="/path/to/michelangelo"
+cd $REPO_ROOT/python/
+poetry install
+```
+
+## Create a project
+
+To create a project, define a `project.yaml` configuration file and apply it with the `ma` CLI.
+
+### Step 1: Create a project folder
+
+Create a folder in your repository with a `config/` subdirectory:
 
 ```
-<project folder> 
-  config/ 
+my-project/
+  config/
     project.yaml
 ```
 
--   Modify the **project.yaml** file with the following example
+### Step 2: Define the project configuration
 
-```apiVersion: michelangelo.api/v2
+Create a `project.yaml` file with the following structure:
+
+```yaml
+apiVersion: michelangelo.api/v2
 kind: Project
 metadata:
-  name: ma-test # k8s naming convention
-  namespace: ma-test # k8s naming convention
+  name: my-ml-project          # Must follow Kubernetes naming conventions
+  namespace: my-ml-project     # Must match the name field exactly
   annotations:
-    michelangelo/worker_queue: [cadence-temporal-worker-queue]
+    michelangelo/worker_queue: "default"  # Optional: override the workflow execution queue
 spec:
-  description: My Project
+  description: "Product recommendation model training and serving"
   owner:
-    owningTeam: "[team-id-used-by-auth]" #LDAP group
+    owningTeam: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"  # Team identifier (UUID format)
     owners:
-      - [user-id-used-by-auth]
-  tier: 4
-  gitRepo: https://[your-github].github.com/[repo-name]
-  rootDir: your/ml/root/directory
+      - jane.smith
+      - john.doe
+    ownerGroups:
+      - ml-platform-team
+  tier: 3                      # Service criticality: 1 (highest) to 5 (lowest)
+  gitRepo: https://github.com/your-org/your-ml-repo
+  rootDir: path/to/ml/project
 ```
-* Run this command to create a new project
+
+### Step 3: Apply the configuration
+
+Run the following command to create the project:
+
+```bash
+ma project apply -f "./my-project/config/project.yaml"
+```
+
+The `apply` command is an **upsert** operation: it creates the project if it does not exist, or updates it if it does. You can use the same command to modify project settings later.
+
+### Step 4: Verify the project was created
+
+```bash
+ma project get --namespace="my-ml-project" --name="my-ml-project"
+```
+
+This will display the project's metadata and spec if the project was created successfully.
+
+## Project YAML reference
+
+### Required fields
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `metadata.name` | string | Project name. Must follow [Kubernetes naming conventions](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/) (lowercase, alphanumeric, hyphens). |
+| `metadata.namespace` | string | Kubernetes namespace. **Must match `metadata.name` exactly.** |
+| `spec.description` | string | Human-readable description of the project. |
+| `spec.owner.owningTeam` | string | Team identifier in UUID format (e.g., `a1b2c3d4-e5f6-7890-abcd-ef1234567890`). |
+| `spec.owner.owners` | list | List of individual owner identifiers. |
+| `spec.tier` | integer | Service criticality tier from 1 (most critical) to 5 (least critical). |
+| `spec.gitRepo` | string | URL of the Git repository containing the project code. |
+| `spec.rootDir` | string | Path within the repository to the project root directory. Used to locate workflow code and configuration files. |
+
+### Optional fields
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `metadata.annotations` | map | Key-value metadata. Use `michelangelo/worker_queue` to override the default Cadence/Temporal (the workflow orchestration engine) worker queue for this project. |
+| `spec.owner.ownerGroups` | list | List of group identifiers for group-based ownership. |
+| `spec.commit` | object | Git commit information associated with the project. |
+| `spec.supportingLinks` | map | Key-value map of related resource URLs (dashboards, documentation, etc.). |
+| `spec.retentionConfig` | object | Retention policies for deployments, endpoints, and models. |
+| `spec.typeInfo` | object | Project classification flags (`isCoreMl`, `isGenerativeAi`). |
+
+## Manage projects
+
+### List all projects in a namespace
+
+```bash
+ma project get --namespace="my-ml-project"
+```
+
+Use `--limit` to control the number of results (default: 100):
+
+```bash
+ma project get --namespace="my-ml-project" --limit=10
+```
+
+### Get a specific project
+
+```bash
+ma project get --namespace="my-ml-project" --name="my-ml-project"
+```
+
+### Update a project
+
+Modify your `project.yaml` file and re-run `apply`:
+
+```bash
+ma project apply -f "./my-project/config/project.yaml"
+```
+
+The CLI detects that the project already exists and performs an update.
+
+### Delete a project
+
+```bash
+ma project delete --namespace="my-ml-project" --name="my-ml-project"
+```
+
+See the [CLI Reference](./cli.md) for the full list of supported commands and flags.
+
+## Project-pipeline relationship
+
+Projects are the top-level container for ML pipelines. Every pipeline must belong to a project, and the pipeline's namespace must match the project's namespace.
 
 ```
-ma project apply --file="[your-project-folder-root]/project.yaml"
+Project (my-ml-project)
+  ├── Pipeline: training-pipeline
+  ├── Pipeline: evaluation-pipeline
+  └── Pipeline: serving-pipeline
 ```
+
+To create a pipeline within a project, register it with the same namespace:
+
+```yaml
+apiVersion: michelangelo.api/v2
+kind: Pipeline
+metadata:
+  namespace: "my-ml-project"   # Must match the project namespace
+  name: "training-pipeline"
+spec:
+  type: "PIPELINE_TYPE_TRAIN"
+  manifest:
+    filePath: my_project.training_workflow
+```
+
+```bash
+ma pipeline apply -f "./pipeline.yaml"
+```
+
+See [Pipeline Management](./ml-pipelines/pipeline-management.md) for details on creating and managing pipelines.
+
+## Project lifecycle
+
+### States
+
+A project transitions through the following states after creation:
+
+| State | Description |
+| --- | --- |
+| `PROVISIONING` | Project resources are being set up. |
+| `PROVISION_PENDING` | Provisioning is queued and waiting to start. |
+| `READY` | Project is fully provisioned and available for use. |
+| `ERROR` | Provisioning failed. Check the project status for error details. |
+
+### Phases
+
+Projects can be tagged with a lifecycle phase. Phases are organizational labels. Only `DECOMMISSION` has a functional effect -- it blocks new pipeline and pipeline run creation.
+
+| Phase | Description |
+| --- | --- |
+| `DEVELOPMENT` | Active development and experimentation. |
+| `STAGING` | Pre-production validation. |
+| `PRODUCTION` | Serving live traffic. |
+| `DECOMMISSION` | Marked for retirement. New pipelines and pipeline runs cannot be created in a decommissioned project. |
+
+## Validation rules
+
+The API enforces the following constraints when creating or updating projects:
+
+1. **Name must match namespace.** The `metadata.name` and `metadata.namespace` fields must be identical. A mismatch will cause a validation error.
+2. **Reserved namespaces are forbidden.** Projects cannot be created in the `default` or `kube-*` namespaces.
+3. **`owningTeam` must be a UUID.** The `spec.owner.owningTeam` field must be a valid UUID string (e.g., `a1b2c3d4-e5f6-7890-abcd-ef1234567890`). Plain text names will be rejected.
+4. **Tier must be 1-5.** The `spec.tier` field must be an integer between 1 and 5 inclusive.
+5. **Kubernetes naming conventions apply.** The project name must be lowercase, alphanumeric, and may include hyphens. No underscores or uppercase characters.
+
+## Next steps
+
+- [Pipeline Management](./ml-pipelines/pipeline-management.md) -- Create and manage pipelines within your project
+- [Pipeline Running Modes](./ml-pipelines/pipeline-running-modes.md) -- Understand local, remote, dev, and production run modes
+- [CLI Reference](./cli.md) -- Full command reference for the `ma` CLI
+- [Set Up Triggers](./set-up-triggers.md) -- Schedule and automate pipeline execution
+- [ML Pipelines Overview](./ml-pipelines/index.md) -- End-to-end guide to building ML workflows
