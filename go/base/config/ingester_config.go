@@ -26,7 +26,6 @@ type MySQLConfig struct {
 	ConnMaxLifetime time.Duration `yaml:"connMaxLifetime"`
 }
 
-
 // IngesterConfig holds ingester controller configuration
 type IngesterConfig struct {
 	ConcurrentReconciles int           `yaml:"concurrentReconciles"`
