@@ -233,8 +233,7 @@ func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMe
 
 	// Add label selector if provided
 	if listOptions != nil && listOptions.LabelSelector != "" {
-		// TODO: Implement proper label selector parsing and SQL generation
-		// For now, this is a simplified version
+		// Label selector filtering not yet implemented
 	}
 
 	// Add ordering
@@ -313,19 +312,16 @@ func (m *mysqlMetadataStorage) Delete(ctx context.Context, typeMeta *metav1.Type
 
 // DeleteCollection deletes a collection of objects
 func (m *mysqlMetadataStorage) DeleteCollection(ctx context.Context, namespace string, deleteOptions *metav1.DeleteOptions, listOptions *metav1.ListOptions) error {
-	// TODO: Implement based on list options and label selectors
 	return fmt.Errorf("DeleteCollection not yet implemented")
 }
 
 // QueryByTemplateID queries objects with a predefined query template
 func (m *mysqlMetadataStorage) QueryByTemplateID(ctx context.Context, typeMeta *metav1.TypeMeta, templateID string, listOptionsExt *apipb.ListOptionsExt, listResponse *storage.ListResponse) error {
-	// TODO: Implement template-based queries
 	return fmt.Errorf("QueryByTemplateID not yet implemented")
 }
 
 // Backfill performs backfill operation
 func (m *mysqlMetadataStorage) Backfill(ctx context.Context, createFn storage.PrepareBackfillParams, opts storage.BackfillOptions) (endTime *time.Time, err error) {
-	// TODO: Implement backfill logic
 	return nil, fmt.Errorf("Backfill not yet implemented")
 }
 
@@ -391,7 +387,6 @@ func (m *mysqlMetadataStorage) fullUpsert(ctx context.Context, tx *sql.Tx, table
 }
 
 func (m *mysqlMetadataStorage) directUpdate(ctx context.Context, tx *sql.Tx, tableName string, metaObj metav1.Object, object runtime.Object) error {
-	// TODO: Implement direct update with optimistic concurrency control
 	return fmt.Errorf("direct update not yet implemented")
 }
 
