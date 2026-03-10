@@ -247,6 +247,57 @@ export function Sandbox() {
           </Block>
         </Tab>
 
+        <Tab title="Form - Sticky Footer">
+          <Block marginTop="24px" maxWidth="600px">
+            <Form
+              onSubmit={(values) => console.log('Submitted:', values)}
+              footer={{
+                left: <span>Last saved 2m ago</span>,
+                right: <Button type="submit">Save changes</Button>,
+              }}
+            >
+              <FormGroup title="Personal Information" description="Your name and contact details.">
+                <StringField name="firstName" label="First Name" />
+                <StringField name="lastName" label="Last Name" />
+                <StringField name="email" label="Email Address" />
+                <StringField name="phone" label="Phone Number" />
+              </FormGroup>
+
+              <FormGroup title="Professional Details" description="Your role and team affiliation.">
+                <SelectField
+                  name="department"
+                  label="Department"
+                  options={[
+                    { id: 'engineering', label: 'Engineering' },
+                    { id: 'product', label: 'Product' },
+                    { id: 'design', label: 'Design' },
+                    { id: 'data', label: 'Data Science' },
+                  ]}
+                />
+                <StringField name="jobTitle" label="Job Title" />
+                <StringField name="manager" label="Manager Name" />
+              </FormGroup>
+
+              <FormGroup
+                title="Account Configuration"
+                description="Settings applied to your account on creation."
+              >
+                <SelectField
+                  name="region"
+                  label="Region"
+                  options={[
+                    { id: 'us-east', label: 'US East' },
+                    { id: 'us-west', label: 'US West' },
+                    { id: 'eu-west', label: 'EU West' },
+                    { id: 'ap-south', label: 'AP South' },
+                  ]}
+                />
+                <StringField name="slackHandle" label="Slack Handle" />
+              </FormGroup>
+            </Form>
+          </Block>
+        </Tab>
+
         <Tab title="Form - Focus on Error">
           <Block marginTop="24px" maxWidth="600px">
             <Notification
