@@ -31,7 +31,7 @@ go_test(
     deps = [
         "//go/api:go_default_library",
         "//go/storage:go_default_library",
-        "//proto-go/api:go_default_library",
+        "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_go_logr_logr//:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
