@@ -11,10 +11,6 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/utils",
     visibility = ["//visibility:public"],
     deps = [
-        "//go/api:go_default_library",
-        "//go/components/jobs/common/constants:go_default_library",
-        "//proto/api:go_default_library",
-        "//proto/api/v2:go_default_library",
         "@com_github_gogo_protobuf//types:go_default_library",
         "@io_k8s_api//core/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/api/resource:go_default_library",
@@ -35,9 +31,6 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
-        "//go/components/jobs/common/constants:go_default_library",
-        "//proto/api:go_default_library",
-        "//proto/api/v2:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
         "@io_k8s_api//core/v1:go_default_library",

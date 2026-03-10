@@ -9,8 +9,6 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common",
     visibility = ["//visibility:public"],
     deps = [
-        "//go/components/inferenceserver/modelconfig:go_default_library",
-        "//proto/api/v2:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
         "@org_uber_go_zap//:go_default_library",
     ],

@@ -12,7 +12,6 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/api/crd",
     visibility = ["//visibility:public"],
     deps = [
-        "//go/api/utils:go_default_library",
         "@com_github_cenkalti_backoff//:go_default_library",
         "@io_k8s_apiextensions_apiserver//pkg/apis/apiextensions/v1:go_default_library",
         "@io_k8s_apiextensions_apiserver//pkg/client/clientset/clientset:go_default_library",
@@ -45,9 +44,6 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
-        "//go/api/crd/crdmocks:go_default_library",
-        "//proto/test/kubeproto/conversion/v1:go_default_library",
-        "//proto/test/kubeproto/conversion/v2:go_default_library",
         "@com_github_golang_mock//gomock:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
         "@io_k8s_api//core/v1:go_default_library",

@@ -9,13 +9,6 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/worker",
     visibility = ["//visibility:public"],
     deps = [
-        "//go/base/blobstore:go_default_library",
-        "//go/base/blobstore/minio:go_default_library",
-        "//go/worker/activities:go_default_library",
-        "//go/worker/starlark:go_default_library",
-        "//go/worker/workflowfx:go_default_library",
-        "//go/worker/workflows:go_default_library",
-        "//proto/api/v2:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//plugin:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
         "@org_golang_google_grpc//credentials:go_default_library",

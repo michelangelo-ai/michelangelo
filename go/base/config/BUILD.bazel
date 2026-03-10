@@ -12,9 +12,7 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/base/config",
     visibility = ["//visibility:public"],
     deps = [
-        "//go/base/env:go_default_library",
         "//go/components/ingester:go_default_library",
-        "//go/storage:go_default_library",
         "//go/storage/mysql:go_default_library",
         "@io_k8s_client_go//rest:go_default_library",
         "@io_k8s_sigs_controller_runtime//:go_default_library",
@@ -31,7 +29,6 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
-        "//go/base/env:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
         "@org_uber_go_config//:go_default_library",
