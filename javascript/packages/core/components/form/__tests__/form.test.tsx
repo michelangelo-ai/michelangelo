@@ -7,6 +7,7 @@ import { FormDialog } from '#core/components/form/components/form-dialog/form-di
 import { FormErrorBanner } from '#core/components/form/components/form-error-banner/form-error-banner';
 import { StringField } from '#core/components/form/fields/string/string-field';
 import { Form } from '#core/components/form/form';
+import { useForm } from '#core/components/form/hooks/use-form';
 import { combineValidators } from '#core/components/form/validation/combine-validators';
 import { minLength, required } from '#core/components/form/validation/validators';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
@@ -216,6 +217,104 @@ describe('Form', () => {
 
       await user.type(screen.getByLabelText('Email'), 'test@example.com');
       await user.click(screen.getByRole('button', { name: 'External Submit' }));
+
+      await waitFor(() =>
+        expect(onSubmit).toHaveBeenCalledWith(
+          { email: 'test@example.com' },
+          expect.anything(),
+          expect.anything()
+        )
+      );
+    });
+
+    it('useForm change() updates field value before submit', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+
+      function SetStatusButton() {
+        const { change } = useForm();
+        return <button onClick={() => change('status', 'in-progress')}>Set Status</button>;
+      }
+
+      render(
+        <Form onSubmit={onSubmit}>
+          <StringField name="status" label="Status" />
+          <SetStatusButton />
+          <button type="submit">Submit</button>
+        </Form>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Set Status' }));
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+      await waitFor(() =>
+        expect(onSubmit).toHaveBeenCalledWith(
+          { status: 'in-progress' },
+          expect.anything(),
+          expect.anything()
+        )
+      );
+    });
+
+    it('useForm multiple change() calls accumulate', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+
+      function SetFieldsButton() {
+        const { change } = useForm();
+        return (
+          <button
+            onClick={() => {
+              change('first', 'alpha');
+              change('second', 'beta');
+            }}
+          >
+            Set Fields
+          </button>
+        );
+      }
+
+      render(
+        <Form onSubmit={onSubmit}>
+          <StringField name="first" label="First" />
+          <StringField name="second" label="Second" />
+          <SetFieldsButton />
+          <button type="submit">Submit</button>
+        </Form>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Set Fields' }));
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+      await waitFor(() =>
+        expect(onSubmit).toHaveBeenCalledWith(
+          { first: 'alpha', second: 'beta' },
+          expect.anything(),
+          expect.anything()
+        )
+      );
+    });
+
+    it('useForm submit() triggers onSubmit programmatically', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+
+      function ProgrammaticSubmitButton() {
+        const { submit } = useForm();
+        return <button onClick={() => void submit()}>Programmatic Submit</button>;
+      }
+
+      render(
+        <Form onSubmit={onSubmit} initialValues={{ email: 'test@example.com' }}>
+          <StringField name="email" label="Email" />
+          <ProgrammaticSubmitButton />
+        </Form>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Programmatic Submit' }));
 
       await waitFor(() =>
         expect(onSubmit).toHaveBeenCalledWith(
