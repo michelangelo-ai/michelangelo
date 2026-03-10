@@ -24,8 +24,7 @@ export const TILE_OVERRIDES = {
       ':disabled': {
         opacity: 0.5,
         ...($selected
-          ? // https://github.com/uber/baseweb/blob/main/src/tile/styled-components.ts#L35-L38
-            { boxShadow: `inset 0px 0px 0px 3px ${$theme.colors.borderSelected}` }
+          ? { boxShadow: `inset 0px 0px 0px 3px ${$theme.colors.borderSelected}` }
           : {}),
       },
     }),
