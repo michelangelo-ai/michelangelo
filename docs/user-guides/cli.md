@@ -4,19 +4,18 @@ The Michelangelo CLI (`ma`) provides a unified way to manage resources using sta
 
 ## Command summary
 
+All resource types support `get`, `apply`, and `delete` (see [supported resource types](#supported-resource-types) below). Additional commands:
+
 | Command | Description |
 |---------|-------------|
-| `ma <type> get` | List or retrieve resources |
-| `ma <type> apply -f <file>` | Create or update a resource from YAML |
-| `ma <type> delete` | Delete a resource |
 | `ma pipeline run` | Execute a registered pipeline |
 | `ma pipeline dev-run` | Run a pipeline without registering it |
 | `ma pipeline_run kill` | Terminate a running pipeline run |
 | `ma trigger_run kill` | Terminate a running trigger |
 | `ma sandbox create` | Set up a local development environment |
-| `ma sandbox delete` | Remove the local development environment |
+| `ma sandbox delete` | Tear down the local environment |
 
-Supported resource types:
+### Supported resource types
 
 | Resource Type | CLI Name | Description | Supported Operations |
 |---------------|----------|-------------|----------------------|
