@@ -5,6 +5,7 @@ import { FormControl } from '#core/components/form/components/form-control';
 import { useField } from '#core/components/form/hooks/use-field';
 import { buildSelectOverrides } from './build-select-overrides';
 import { formatSelectedValue } from './format-selected-value';
+import { serializeKey } from './serialize-key';
 
 import type { SelectFieldProps, SelectOption } from './types';
 
@@ -39,13 +40,13 @@ export function SelectField<V = string | number>({
   const { baseUIOptions, findByValue, findByKey } = useMemo(() => {
     const map = new Map<string, SelectOption<V>>();
     const adapted = options.map((opt) => {
-      const key = JSON.stringify(opt.id);
+      const key = serializeKey(opt.id);
       map.set(key, opt);
       return { id: key, label: opt.label, disabled: opt.disabled };
     });
     return {
       baseUIOptions: adapted,
-      findByValue: (v: V) => map.get(JSON.stringify(v)),
+      findByValue: (v: V) => map.get(serializeKey(v)),
       findByKey: (key: string) => map.get(key),
     };
   }, [options]);
@@ -86,7 +87,7 @@ export function SelectField<V = string | number>({
   const baseUIValue = useMemo(() => {
     const items: Array<{ id: string; label: string; disabled?: boolean }> = [];
     for (const item of formatSelectedValue(input.value)) {
-      const key = JSON.stringify(item);
+      const key = serializeKey(item);
       const matched = findByKey(key);
       if (matched) {
         items.push({ id: key, label: matched.label, disabled: matched.disabled });

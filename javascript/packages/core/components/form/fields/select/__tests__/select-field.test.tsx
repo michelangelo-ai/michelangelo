@@ -450,6 +450,82 @@ describe('SelectField', () => {
     );
   });
 
+  it('matches object id regardless of key order', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    const objectOptions = [
+      { id: { tier: 'free', limit: 100 }, label: 'Free Tier' },
+      { id: { tier: 'pro', limit: 10000 }, label: 'Pro Tier' },
+    ];
+
+    render(
+      <>
+        <SelectField
+          name="plan"
+          label="Plan"
+          options={objectOptions}
+          initialValue={{ limit: 10000, tier: 'pro' }}
+        />
+        <button type="submit">Submit</button>
+      </>,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getFormProviderWrapper({ onSubmit }),
+      ])
+    );
+
+    expect(screen.getByText('Pro Tier')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        { plan: { tier: 'pro', limit: 10000 } },
+        expect.anything(),
+        expect.anything()
+      )
+    );
+  });
+
+  it('matches nested object id regardless of key order', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    const objectOptions = [
+      { id: { config: { region: 'us', zone: 'east' }, name: 'prod' }, label: 'Production' },
+      { id: { config: { region: 'eu', zone: 'west' }, name: 'staging' }, label: 'Staging' },
+    ];
+
+    render(
+      <>
+        <SelectField
+          name="env"
+          label="Environment"
+          options={objectOptions}
+          initialValue={{ name: 'staging', config: { zone: 'west', region: 'eu' } }}
+        />
+        <button type="submit">Submit</button>
+      </>,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getFormProviderWrapper({ onSubmit }),
+      ])
+    );
+
+    expect(screen.getByText('Staging')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        { env: { config: { region: 'eu', zone: 'west' }, name: 'staging' } },
+        expect.anything(),
+        expect.anything()
+      )
+    );
+  });
+
   it('does not clear value when creatable even if it has no matching option', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
