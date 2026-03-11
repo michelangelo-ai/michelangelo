@@ -8,6 +8,7 @@ import CheckCircle from '@mui/icons-material/CheckCircle';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CloseIcon from '@mui/icons-material/Close';
 import CropSquareIcon from '@mui/icons-material/CropSquare';
+import Delete from '@mui/icons-material/Delete';
 import Info from '@mui/icons-material/Info';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardBackspaceIcon from '@mui/icons-material/KeyboardBackspace';
@@ -39,5 +40,6 @@ export const ICONS = {
   sortAscending: createMuiIconAdapter(ArrowUpwardIcon),
   sortDescending: createMuiIconAdapter(ArrowDownwardIcon),
   stars: createMuiIconAdapter(AutoAwesomeIcon),
+  trashCan: createMuiIconAdapter(Delete),
   x: createMuiIconAdapter(CloseIcon),
 } as const;

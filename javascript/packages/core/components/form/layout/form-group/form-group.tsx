@@ -1,5 +1,5 @@
 import React from 'react';
-import { useStyletron } from 'baseui';
+import { mergeOverrides, useStyletron } from 'baseui';
 
 import { Box } from '#core/components/box/box';
 import { CollapsibleBox } from '#core/components/box/collapsible-box';
@@ -14,19 +14,36 @@ export const FormGroup: React.FC<FormGroupProps> = ({
   tooltip,
   collapsible = false,
   endEnhancer,
+  overrides = {},
   children,
 }) => {
   const [css, theme] = useStyletron();
 
-  const enhancedTitle =
-    title && (tooltip ?? endEnhancer) ? (
+  const titleWithTooltip =
+    title && tooltip ? (
       <div className={css({ display: 'flex', alignItems: 'center', gap: theme.sizing.scale100 })}>
         {title}
-        {tooltip ? <HelpTooltip text={tooltip} /> : null}
-        {endEnhancer}
+        <HelpTooltip text={tooltip} />
       </div>
     ) : (
       title
+    );
+
+  const enhancedTitle =
+    titleWithTooltip && endEnhancer ? (
+      <div
+        className={css({
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: '100%',
+        })}
+      >
+        {titleWithTooltip}
+        {endEnhancer}
+      </div>
+    ) : (
+      titleWithTooltip
     );
 
   const enhancedDescription = description ? <Markdown>{description}</Markdown> : undefined;
@@ -54,13 +71,16 @@ export const FormGroup: React.FC<FormGroupProps> = ({
     <Box
       title={enhancedTitle}
       description={enhancedDescription}
-      overrides={{
-        BoxContainer: {
-          style: {
-            marginBottom: theme.sizing.scale600,
+      overrides={mergeOverrides(
+        {
+          BoxContainer: {
+            style: {
+              marginBottom: theme.sizing.scale600,
+            },
           },
         },
-      }}
+        overrides
+      )}
     >
       {children}
     </Box>

@@ -105,3 +105,11 @@ export interface FormApi {
   change: (name: string, value: unknown) => void;
   submit: () => Promise<object | undefined> | undefined;
 }
+export interface ArrayFieldOptions {
+  /**
+   * Pre-populates with empty entries _on mount_ when the array has fewer items than this value,
+   * and prevents removal when the array has fewer items than this value.
+   */
+  minItems?: number;
+  readOnly?: boolean;
+}

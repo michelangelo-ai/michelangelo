@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { DeleteAlt, Plus } from 'baseui/icon';
 import { FORM_ERROR } from 'final-form';
 import { vi } from 'vitest';
 
@@ -8,6 +9,8 @@ import { FormErrorBanner } from '#core/components/form/components/form-error-ban
 import { StringField } from '#core/components/form/fields/string/string-field';
 import { Form } from '#core/components/form/form';
 import { useForm } from '#core/components/form/hooks/use-form';
+import { ArrayFormGroup } from '#core/components/form/layout/array-form-group/array-form-group';
+import { ArrayFormRow } from '#core/components/form/layout/array-form-row/array-form-row';
 import { combineValidators } from '#core/components/form/validation/combine-validators';
 import { minLength, required } from '#core/components/form/validation/validators';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
@@ -370,6 +373,117 @@ describe('Form', () => {
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
       expect(screen.getByTestId('custom-footer')).toBeInTheDocument();
+    });
+
+    describe('Repeated layouts', () => {
+      const icons = { plus: Plus, deleteAlt: DeleteAlt };
+
+      it('submits ArrayFormGroup data as a nested array', async () => {
+        const user = userEvent.setup();
+        const onSubmit = vi.fn();
+
+        render(
+          <Form onSubmit={onSubmit}>
+            <ArrayFormGroup rootFieldPath="addresses" groupLabel="Address" minItems={1}>
+              {(name) => <StringField name={`${name}.street`} label="Street" />}
+            </ArrayFormGroup>
+            <button type="submit">Submit</button>
+          </Form>,
+          buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper({ icons })])
+        );
+
+        await waitFor(() => screen.getByRole('textbox', { name: 'Street' }));
+        await user.type(screen.getByRole('textbox', { name: 'Street' }), '123 Main St');
+        await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+        await waitFor(() =>
+          expect(onSubmit).toHaveBeenCalledWith(
+            { addresses: [{ street: '123 Main St' }] },
+            expect.anything(),
+            expect.anything()
+          )
+        );
+      });
+
+      it('submits ArrayFormRow data as a nested array', async () => {
+        const user = userEvent.setup();
+        const onSubmit = vi.fn();
+
+        render(
+          <Form onSubmit={onSubmit}>
+            <ArrayFormRow rootFieldPath="tags" minItems={1}>
+              {(name) => <StringField name={`${name}.value`} label="Tag" />}
+            </ArrayFormRow>
+            <button type="submit">Submit</button>
+          </Form>,
+          buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper({ icons })])
+        );
+
+        await waitFor(() => screen.getByRole('textbox', { name: 'Tag' }));
+        await user.type(screen.getByRole('textbox', { name: 'Tag' }), 'ml');
+        await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+        await waitFor(() =>
+          expect(onSubmit).toHaveBeenCalledWith(
+            { tags: [{ value: 'ml' }] },
+            expect.anything(),
+            expect.anything()
+          )
+        );
+      });
+
+      it('populates ArrayFormGroup fields from initialValues', async () => {
+        render(
+          <Form
+            onSubmit={vi.fn()}
+            initialValues={{
+              addresses: [{ street: '1 Infinite Loop' }, { street: '1600 Amphitheatre' }],
+            }}
+          >
+            <ArrayFormGroup rootFieldPath="addresses" groupLabel="Address">
+              {(name) => <StringField name={`${name}.street`} label="Street" />}
+            </ArrayFormGroup>
+            <button type="submit">Submit</button>
+          </Form>,
+          buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper({ icons })])
+        );
+
+        const fields = await screen.findAllByRole('textbox', { name: 'Street' });
+        expect(fields).toHaveLength(2);
+        expect(fields[0]).toHaveValue('1 Infinite Loop');
+        expect(fields[1]).toHaveValue('1600 Amphitheatre');
+      });
+
+      it('submits multiple added items', async () => {
+        const user = userEvent.setup();
+        const onSubmit = vi.fn();
+
+        render(
+          <Form onSubmit={onSubmit}>
+            <ArrayFormGroup rootFieldPath="contacts" groupLabel="Contact" minItems={1}>
+              {(name) => <StringField name={`${name}.email`} label="Email" />}
+            </ArrayFormGroup>
+            <button type="submit">Submit</button>
+          </Form>,
+          buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper({ icons })])
+        );
+
+        await waitFor(() => screen.getByRole('textbox', { name: 'Email' }));
+        await user.type(screen.getByRole('textbox', { name: 'Email' }), 'a@example.com');
+        await user.click(screen.getByRole('button', { name: /add contact/i }));
+
+        const fields = await screen.findAllByRole('textbox', { name: 'Email' });
+        await user.type(fields[1], 'b@example.com');
+        await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+        await waitFor(() =>
+          expect(onSubmit).toHaveBeenCalledWith(
+            { contacts: [{ email: 'a@example.com' }, { email: 'b@example.com' }] },
+            expect.anything(),
+            expect.anything()
+          )
+        );
+      });
     });
   });
 
