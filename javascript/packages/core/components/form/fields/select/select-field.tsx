@@ -50,11 +50,6 @@ export function SelectField<V = string | number>({
     };
   }, [options]);
 
-  const resolveOriginalId = (serializedKey: string): V => {
-    const original = findByKey(serializedKey);
-    return (original ? original.id : serializedKey) as V;
-  };
-
   // Clear field value when it doesn't match any available option.
   // Deps intentionally exclude input/multi to avoid re-running on every value change,
   // which would loop since we call onChange inside.
@@ -77,11 +72,12 @@ export function SelectField<V = string | number>({
   }, [findByValue, isLoading]);
 
   const handleChange = (params: OnChangeParams) => {
+    const selected = params.value as Array<{ id: string }>;
+
     if (multi) {
-      const values = params.value.map((item) => resolveOriginalId(String(item.id)));
-      input.onChange(values);
-    } else if (params.value.length > 0) {
-      input.onChange(resolveOriginalId(String(params.value[0].id)));
+      input.onChange(selected.map((item) => findByKey(item.id)?.id ?? (item.id as V)));
+    } else if (selected.length > 0) {
+      input.onChange(findByKey(selected[0].id)?.id ?? (selected[0].id as V));
     } else {
       input.onChange('' as V | V[]);
     }
