@@ -98,3 +98,9 @@ export interface FieldInput<T = unknown> {
 export type FieldRegistry = Map<string, FieldRegistryEntry>;
 
 export type FieldRegistryEntry = { label: string };
+
+export interface FormApi {
+  fieldRegistry: FieldRegistry;
+  change: (name: string, value: unknown) => void;
+  submit: () => Promise<object | undefined> | undefined;
+}
