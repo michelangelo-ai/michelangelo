@@ -13,7 +13,6 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/base/env:go_default_library",
-        "//go/components/ingester:go_default_library",
         "//go/storage:go_default_library",
         "//go/storage/mysql:go_default_library",
         "@io_k8s_client_go//rest:go_default_library",
@@ -27,6 +26,7 @@ go_test(
     name = "go_default_test",
     srcs = [
         "config_test.go",
+        "ingester_config_test.go",
         "yaml_test.go",
     ],
     embed = [":go_default_library"],

@@ -26,8 +26,13 @@ func provideMetadataStorage(
 	return mysqlstorage.NewMetadataStorage(mysqlConfig.ToMySQLConfig(), scheme)
 }
 
-func provideIngesterConfig(config baseconfig.IngesterConfig) baseconfig.IngesterConfig {
-	return config
+func provideIngesterConfig(config baseconfig.IngesterConfig) ingester.Config {
+	return ingester.Config{
+		ConcurrentReconciles:    config.ConcurrentReconciles,
+		RequeuePeriod:           config.RequeuePeriod,
+		ConcurrentReconcilesMap: config.ConcurrentReconcilesMap,
+		RequeuePeriodMap:        config.RequeuePeriodMap,
+	}
 }
 
 func mysqlConfigEnabled(config baseconfig.MySQLConfig) bool {

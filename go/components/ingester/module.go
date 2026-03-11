@@ -3,7 +3,6 @@ package ingester
 import (
 	"fmt"
 
-	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.uber.org/fx"
@@ -22,8 +21,8 @@ type registerParams struct {
 	fx.In
 	Manager         ctrl.Manager
 	Scheme          *runtime.Scheme
-	MetadataStorage storage.MetadataStorage       `optional:"true"`
-	IngesterConfig  baseconfig.IngesterConfig     `optional:"true"`
+	MetadataStorage storage.MetadataStorage `optional:"true"`
+	Config          Config                  `optional:"true"`
 	Logger          *zap.Logger
 }
 
@@ -51,7 +50,7 @@ func register(p registerParams) error {
 		}
 
 		// Get controller-specific config (supports per-CRD configuration)
-		controllerConfig := p.IngesterConfig.GetControllerConfig(gvk.Kind)
+		controllerConfig := p.Config.GetControllerConfig(gvk.Kind)
 
 		reconciler := &Reconciler{
 			Client:          p.Manager.GetClient(),

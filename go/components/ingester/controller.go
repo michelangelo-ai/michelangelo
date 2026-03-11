@@ -23,10 +23,33 @@ const (
 
 // Config holds configuration for the ingester controller
 type Config struct {
-	// ConcurrentReconciles is the number of concurrent reconciliations
+	// ConcurrentReconciles is the global default number of concurrent reconciliations
 	ConcurrentReconciles int `yaml:"concurrentReconciles"`
-	// RequeuePeriod is the period for requeuing reconciliations
+	// RequeuePeriod is the global default period for requeuing reconciliations
 	RequeuePeriod time.Duration `yaml:"requeuePeriod"`
+	// ConcurrentReconcilesMap allows per-kind concurrency overrides
+	ConcurrentReconcilesMap map[string]int `yaml:"concurrentReconcilesMap"`
+	// RequeuePeriodMap allows per-kind requeue period overrides
+	RequeuePeriodMap map[string]time.Duration `yaml:"requeuePeriodMap"`
+}
+
+// GetControllerConfig returns the resolved config for a specific CRD kind,
+// falling back to global defaults when no per-kind override is set.
+func (c Config) GetControllerConfig(kind string) Config {
+	concurrency := c.ConcurrentReconciles
+	requeuePeriod := c.RequeuePeriod
+
+	if val, ok := c.ConcurrentReconcilesMap[kind]; ok {
+		concurrency = val
+	}
+	if val, ok := c.RequeuePeriodMap[kind]; ok {
+		requeuePeriod = val
+	}
+
+	return Config{
+		ConcurrentReconciles: concurrency,
+		RequeuePeriod:        requeuePeriod,
+	}
 }
 
 // Reconciler reconciles a generic CRD object with metadata storage
