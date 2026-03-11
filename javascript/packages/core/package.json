@@ -1,7 +1,7 @@
 {
   "name": "@uber/michelangelo-core",
   "license": "UNLICENSED",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "type": "module",
   "main": "./dist/michelangelo-core.js",
   "module": "./dist/michelangelo-core.js",
