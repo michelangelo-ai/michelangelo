@@ -28,8 +28,39 @@ type MySQLConfig struct {
 
 // IngesterConfig holds ingester controller configuration
 type IngesterConfig struct {
-	ConcurrentReconciles int           `yaml:"concurrentReconciles"`
-	RequeuePeriod        time.Duration `yaml:"requeuePeriod"`
+	// Deprecated: Use ConcurrentReconcilesMap instead
+	ConcurrentReconciles int `yaml:"concurrentReconciles"`
+	// Deprecated: Use RequeuePeriodMap instead
+	RequeuePeriod time.Duration `yaml:"requeuePeriod"`
+
+	// ConcurrentReconcilesMap allows per-controller concurrency configuration
+	ConcurrentReconcilesMap map[string]int           `yaml:"concurrentReconcilesMap"`
+	RequeuePeriodMap        map[string]time.Duration `yaml:"requeuePeriodMap"`
+}
+
+// GetControllerConfig returns the config for a specific CRD kind
+// Falls back to legacy single values if map is not configured
+func (c IngesterConfig) GetControllerConfig(crdKind string) ingester.Config {
+	concurrency := c.ConcurrentReconciles // Default from legacy field
+	requeuePeriod := c.RequeuePeriod      // Default from legacy field
+
+	// Override with map values if present
+	if c.ConcurrentReconcilesMap != nil {
+		if val, ok := c.ConcurrentReconcilesMap[crdKind]; ok {
+			concurrency = val
+		}
+	}
+
+	if c.RequeuePeriodMap != nil {
+		if val, ok := c.RequeuePeriodMap[crdKind]; ok {
+			requeuePeriod = val
+		}
+	}
+
+	return ingester.Config{
+		ConcurrentReconciles: concurrency,
+		RequeuePeriod:        requeuePeriod,
+	}
 }
 
 // ToMySQLConfig converts to mysql.Config
@@ -47,6 +78,7 @@ func (c MySQLConfig) ToMySQLConfig() mysql.Config {
 }
 
 // ToIngesterConfig converts to ingester.Config
+// Deprecated: Use GetControllerConfig for per-controller configuration
 func (c IngesterConfig) ToIngesterConfig() ingester.Config {
 	return ingester.Config{
 		ConcurrentReconciles: c.ConcurrentReconciles,

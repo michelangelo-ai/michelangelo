@@ -26,8 +26,8 @@ func provideMetadataStorage(
 	return mysqlstorage.NewMetadataStorage(mysqlConfig.ToMySQLConfig(), scheme)
 }
 
-func provideIngesterConfig(config baseconfig.IngesterConfig) ingester.Config {
-	return config.ToIngesterConfig()
+func provideIngesterConfig(config baseconfig.IngesterConfig) baseconfig.IngesterConfig {
+	return config
 }
 
 func mysqlConfigEnabled(config baseconfig.MySQLConfig) bool {

@@ -3,6 +3,7 @@ package ingester
 import (
 	"fmt"
 
+	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.uber.org/fx"
@@ -21,8 +22,8 @@ type registerParams struct {
 	fx.In
 	Manager         ctrl.Manager
 	Scheme          *runtime.Scheme
-	MetadataStorage storage.MetadataStorage `optional:"true"`
-	Config          Config                  `optional:"true"`
+	MetadataStorage storage.MetadataStorage       `optional:"true"`
+	IngesterConfig  baseconfig.IngesterConfig     `optional:"true"`
 	Logger          *zap.Logger
 }
 
@@ -49,20 +50,25 @@ func register(p registerParams) error {
 			return fmt.Errorf("object %s does not implement client.Object", gvk.Kind)
 		}
 
+		// Get controller-specific config (supports per-CRD configuration)
+		controllerConfig := p.IngesterConfig.GetControllerConfig(gvk.Kind)
+
 		reconciler := &Reconciler{
 			Client:          p.Manager.GetClient(),
 			Log:             ctrl.Log.WithName("ingester").WithName(gvk.Kind),
 			Scheme:          p.Scheme,
 			TargetKind:      clientObj,
 			MetadataStorage: p.MetadataStorage,
-			Config:          p.Config,
+			Config:          controllerConfig,
 		}
 
 		if err := reconciler.SetupWithManager(p.Manager); err != nil {
 			return fmt.Errorf("failed to setup ingester for %s: %w", gvk.Kind, err)
 		}
 
-		log.Info("Ingester controller registered successfully")
+		log.Info("Ingester controller registered successfully",
+			zap.Int("concurrentReconciles", controllerConfig.ConcurrentReconciles),
+			zap.Duration("requeuePeriod", controllerConfig.RequeuePeriod))
 	}
 
 	return nil
