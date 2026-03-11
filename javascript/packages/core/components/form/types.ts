@@ -48,6 +48,23 @@ export interface FormProps<FieldValues extends FormData = FormData> {
    * ```
    */
   render?: (formElement: React.ReactNode) => React.ReactNode;
+
+  /**
+   * Renders a sticky footer fixed to the bottom of the viewport.
+   *
+   * @note `right` is usually reserved for form actions (e.g., submit button).
+   * @note `left` is usually reserved for secondary info, status text.
+   *
+   * @example
+   * ```tsx
+   * // Object with left and right content
+   * <Form footer={{ right: <SubmitButton>Save</SubmitButton>, left: <span>Last saved 2m ago</span> }}>
+   *
+   * // ReactNode for full control
+   * <Form footer={<MyCustomFooter />}>
+   * ```
+   */
+  footer?: { left?: React.ReactNode; right?: React.ReactNode } | React.ReactNode;
 }
 
 export interface FormInstance {

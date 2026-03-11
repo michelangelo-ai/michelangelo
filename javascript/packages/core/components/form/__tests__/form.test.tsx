@@ -225,6 +225,53 @@ describe('Form', () => {
         )
       );
     });
+
+    it('submits form via sticky footer shorthand right content', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+
+      render(
+        <Form onSubmit={onSubmit} footer={{ right: <button type="submit">Save</button> }}>
+          <StringField name="email" label="Email" />
+        </Form>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      await user.type(screen.getByLabelText('Email'), 'test@example.com');
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+
+      await waitFor(() =>
+        expect(onSubmit).toHaveBeenCalledWith(
+          { email: 'test@example.com' },
+          expect.anything(),
+          expect.anything()
+        )
+      );
+    });
+
+    it('renders sticky footer with shorthand left and right content', () => {
+      render(
+        <Form
+          onSubmit={vi.fn()}
+          footer={{ left: <span>Last saved 2m ago</span>, right: <button>Save</button> }}
+        >
+          <StringField name="email" label="Email" />
+        </Form>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+      expect(screen.getByText('Last saved 2m ago')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    });
+
+    it('renders custom footer ReactNode directly', () => {
+      render(
+        <Form onSubmit={vi.fn()} footer={<div data-testid="custom-footer">Custom</div>}>
+          <StringField name="email" label="Email" />
+        </Form>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+      expect(screen.getByTestId('custom-footer')).toBeInTheDocument();
+    });
   });
 
   describe('validation', () => {

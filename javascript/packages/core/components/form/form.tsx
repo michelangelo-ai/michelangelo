@@ -3,8 +3,10 @@ import { Form as FinalForm } from 'react-final-form';
 import { useStyletron } from 'baseui';
 import createFocusOnErrorDecorator from 'final-form-focus';
 
+import { StickyFooter } from '#core/components/form/components/sticky-footer/sticky-footer';
 import { FormContext } from './form-context';
 
+import type { ReactNode } from 'react';
 import type { FieldRegistry, FormData, FormProps } from './types';
 
 const focusOnErrorDecorator = createFocusOnErrorDecorator();
@@ -15,6 +17,7 @@ export const Form = <FieldValues extends FormData = FormData>({
   id,
   children,
   render,
+  footer,
   focusOnError = true,
 }: FormProps<FieldValues>) => {
   const [css, theme] = useStyletron();
@@ -42,6 +45,7 @@ export const Form = <FieldValues extends FormData = FormData>({
               onSubmit={handleSubmit}
             >
               {children}
+              {resolveFooter(footer)}
             </form>
           );
 
@@ -51,3 +55,14 @@ export const Form = <FieldValues extends FormData = FormData>({
     </FormContext.Provider>
   );
 };
+
+function resolveFooter(footer: FormProps['footer']): ReactNode {
+  if (!footer) return null;
+
+  if (typeof footer === 'object' && ('left' in footer || 'right' in footer)) {
+    const { left, right } = footer;
+    return <StickyFooter leftContent={left} rightContent={right} />;
+  }
+
+  return footer as ReactNode;
+}
