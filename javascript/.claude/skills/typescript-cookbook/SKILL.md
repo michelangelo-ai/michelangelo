@@ -14,5 +14,5 @@ user-invocable: false
 
 ## Naming
 
-- **No T suffix** — use `Props`, `User`, not `TProps`, `TUser`
+- **No T suffix** — use `Props`, `User`, not `PropsT`, `UserT`
 - **PascalCase** for all types and interfaces

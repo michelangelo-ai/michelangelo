@@ -10,7 +10,7 @@ user-invocable: false
 
 - **Direct imports only** — no `index.ts` barrel exports; import directly from source files
 - **Co-locate related code** — types, context, hooks, tests, and utils live alongside the component they belong to
-- **Flat over nested** — prefer flat structures when file count is manageable (~10 files)
+- **Flat over nested** — start flat; introduce a subdirectory only when you have multiple files of the same type (e.g., several hooks → `hooks/`, several utils → `utils/`)
 
 ## Directory Structure
 
