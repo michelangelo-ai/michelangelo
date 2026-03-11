@@ -40,4 +40,5 @@ user-invocable: false
 ## Anti-Patterns
 
 - ❌ `index.ts` barrel exports — import directly from source
+- ❌ Default exports — use named exports for all modules
 - ❌ Generic filenames without namespace (`action-button.tsx` vs `table-action-button.tsx`)
