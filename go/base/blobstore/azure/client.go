@@ -112,3 +112,71 @@ func (c *azureBlobClient) downloadBlob(ctx context.Context, originalURI, blobURL
 func (c *azureBlobClient) Scheme() string {
 	return c.scheme
 }
+
+// Put uploads data to Azure Blob Storage at the given URI.
+// The blobURI is expected to be in the format "abfss://container@storageaccount.blob.core.windows.net/path".
+func (c *azureBlobClient) Put(ctx context.Context, blobURI string, data []byte) error {
+	parsedURL, err := url.Parse(blobURI)
+	if err != nil {
+		return fmt.Errorf("failed to parse url: %w", err)
+	}
+
+	if parsedURL.Scheme != c.scheme {
+		return fmt.Errorf("scheme %s is not supported by azure blob client", parsedURL.Scheme)
+	}
+
+	container, blobPath := c.parseABFSSURL(parsedURL)
+	blobURL := c.buildBlobURL(container, blobPath)
+
+	req, err := http.NewRequestWithContext(ctx, "PUT", blobURL, strings.NewReader(string(data)))
+	if err != nil {
+		return fmt.Errorf("failed to create request for %s: %w", blobURI, err)
+	}
+	req.Header.Set("x-ms-blob-type", "BlockBlob")
+	req.ContentLength = int64(len(data))
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to put object to %s: %w", blobURI, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to put object to %s: HTTP %d", blobURI, resp.StatusCode)
+	}
+
+	return nil
+}
+
+// Delete removes a blob from Azure Blob Storage at the given URI.
+// The blobURI is expected to be in the format "abfss://container@storageaccount.blob.core.windows.net/path".
+func (c *azureBlobClient) Delete(ctx context.Context, blobURI string) error {
+	parsedURL, err := url.Parse(blobURI)
+	if err != nil {
+		return fmt.Errorf("failed to parse url: %w", err)
+	}
+
+	if parsedURL.Scheme != c.scheme {
+		return fmt.Errorf("scheme %s is not supported by azure blob client", parsedURL.Scheme)
+	}
+
+	container, blobPath := c.parseABFSSURL(parsedURL)
+	blobURL := c.buildBlobURL(container, blobPath)
+
+	req, err := http.NewRequestWithContext(ctx, "DELETE", blobURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request for %s: %w", blobURI, err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete object from %s: %w", blobURI, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to delete object from %s: HTTP %d", blobURI, resp.StatusCode)
+	}
+
+	return nil
+}

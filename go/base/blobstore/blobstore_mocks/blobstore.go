@@ -62,3 +62,31 @@ func (mr *MockBlobStoreClientMockRecorder) Scheme() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scheme", reflect.TypeOf((*MockBlobStoreClient)(nil).Scheme))
 }
+
+// Put mocks base method.
+func (m *MockBlobStoreClient) Put(ctx context.Context, blobURI string, data []byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Put", ctx, blobURI, data)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Put indicates an expected call of Put.
+func (mr *MockBlobStoreClientMockRecorder) Put(ctx, blobURI, data interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Put", reflect.TypeOf((*MockBlobStoreClient)(nil).Put), ctx, blobURI, data)
+}
+
+// Delete mocks base method.
+func (m *MockBlobStoreClient) Delete(ctx context.Context, blobURI string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, blobURI)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockBlobStoreClientMockRecorder) Delete(ctx, blobURI interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockBlobStoreClient)(nil).Delete), ctx, blobURI)
+}

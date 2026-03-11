@@ -12,6 +12,8 @@ import (
 
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore/minio"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/workflowclient"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
@@ -89,10 +91,14 @@ func options() fx.Option {
 		fx.Provide(baseconfig.GetMetadataStorageConfig),
 		fx.Provide(baseconfig.GetMySQLConfig),
 		fx.Provide(baseconfig.GetIngesterConfig),
+		fx.Provide(baseconfig.GetBlobStorageConfig),
 		fx.Provide(baseconfig.GetWorkflowClientConfig),
 		fx.Provide(getTallyScope),
 		fx.Provide(provideMetadataStorage),
 		fx.Provide(provideIngesterConfig),
+		fx.Provide(provideBlobStorage),
+		blobstore.Module,
+		minio.Module,
 		apiHandler.CtrlMgrModule,
 		spark.Module,
 		ray.Module,

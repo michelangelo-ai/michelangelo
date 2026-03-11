@@ -70,6 +70,9 @@ func (fs *fakeStorage) Scheme() string {
 	return fs.scheme
 }
 
+func (fs *fakeStorage) Put(_ context.Context, _ string, _ []byte) error { return nil }
+func (fs *fakeStorage) Delete(_ context.Context, _ string) error        { return nil }
+
 // TestActivities_Read_Success verifies that activities.Read returns the expected result
 // when the Storage implementation successfully reads the data.
 func (r *Suite) TestActivities_Read_Success() {

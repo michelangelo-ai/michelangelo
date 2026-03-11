@@ -23,6 +23,7 @@ const (
 	_workflowClientConfigKey  = "workflowClient"
 	_mysqlConfigKey           = "mysql"
 	_ingesterConfigKey        = "ingester"
+	_blobStorageConfigKey     = "blobStorage"
 )
 
 // K8sConfig is the configuration for k8s REST client.
@@ -129,4 +130,11 @@ func GetIngesterConfig(provider config.Provider) (IngesterConfig, error) {
 	ingesterConfig := IngesterConfig{}
 	err := provider.Get(_ingesterConfigKey).Populate(&ingesterConfig)
 	return ingesterConfig, err
+}
+
+// GetBlobStorageConfig parses the configuration file and returns the blob storage configuration.
+func GetBlobStorageConfig(provider config.Provider) (BlobStorageConfig, error) {
+	blobStorageConfig := BlobStorageConfig{}
+	err := provider.Get(_blobStorageConfigKey).Populate(&blobStorageConfig)
+	return blobStorageConfig, err
 }
