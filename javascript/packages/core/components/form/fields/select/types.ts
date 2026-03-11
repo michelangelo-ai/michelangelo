@@ -6,12 +6,19 @@ export interface SelectOption<V = string | number> {
   disabled?: boolean;
 }
 
-export interface SelectFieldProps<V = string | number> extends BaseFieldProps<V | V[]> {
+interface SelectFieldOwnProps<V> {
   options: SelectOption<V>[];
   clearable?: boolean;
   searchable?: boolean;
-  multi?: boolean;
   creatable?: boolean;
   isLoading?: boolean;
-  maxOptions?: number;
+  /**
+   * Limit the number of visible options in the dropdown.
+   * By default there is no limit.
+   */
+  visibleOptionLimit?: number;
 }
+
+export type SelectFieldProps<V = string | number> =
+  | (SelectFieldOwnProps<V> & BaseFieldProps<V> & { multi?: false })
+  | (SelectFieldOwnProps<V> & BaseFieldProps<V[]> & { multi: true });

@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { filterOptions as defaultFilterOptions, OnChangeParams, Select } from 'baseui/select';
+import { filterOptions, OnChangeParams, Select } from 'baseui/select';
 
 import { FormControl } from '#core/components/form/components/form-control';
 import { useField } from '#core/components/form/hooks/use-field';
@@ -7,23 +7,6 @@ import { buildSelectOverrides } from './build-select-overrides';
 import { formatSelectedValue } from './format-selected-value';
 
 import type { SelectFieldProps, SelectOption } from './types';
-
-/**
- * BaseUI requires option IDs to be string | number. To support arbitrary ID types
- * (including objects), we serialize IDs to strings for BaseUI and resolve them back
- * to their originals for form state via a lookup map.
- */
-const serialize = JSON.stringify;
-
-function buildOptionLookup<V>(options: SelectOption<V>[]) {
-  const lookup = new Map<string, SelectOption<V>>();
-  const normalizedOptions = options.map((opt) => {
-    const key = serialize(opt.id);
-    lookup.set(key, opt);
-    return { id: key, label: opt.label, disabled: opt.disabled };
-  });
-  return { normalizedOptions, lookup };
-}
 
 export function SelectField<V = string | number>({
   name,
@@ -38,7 +21,7 @@ export function SelectField<V = string | number>({
   caption,
   placeholder,
   options,
-  maxOptions,
+  visibleOptionLimit,
   isLoading = false,
   clearable = true,
   searchable = true,
@@ -53,10 +36,22 @@ export function SelectField<V = string | number>({
     label,
   });
 
-  const { normalizedOptions, lookup } = useMemo(() => buildOptionLookup(options), [options]);
+  const { baseUIOptions, findByValue, findByKey } = useMemo(() => {
+    const map = new Map<string, SelectOption<V>>();
+    const adapted = options.map((opt) => {
+      const key = JSON.stringify(opt.id);
+      map.set(key, opt);
+      return { id: key, label: opt.label, disabled: opt.disabled };
+    });
+    return {
+      baseUIOptions: adapted,
+      findByValue: (v: V) => map.get(JSON.stringify(v)),
+      findByKey: (key: string) => map.get(key),
+    };
+  }, [options]);
 
   const resolveOriginalId = (serializedKey: string): V => {
-    const original = lookup.get(serializedKey);
+    const original = findByKey(serializedKey);
     return (original ? original.id : serializedKey) as V;
   };
 
@@ -71,32 +66,32 @@ export function SelectField<V = string | number>({
 
     if (multi) {
       const values = currentValue as V[];
-      const validValues = values.filter((v) => lookup.has(serialize(v)));
+      const validValues = values.filter((v) => findByValue(v));
       if (validValues.length !== values.length) {
-        input.onChange(validValues as V | V[]);
+        input.onChange(validValues);
       }
-    } else if (!lookup.has(serialize(currentValue))) {
+    } else if (!findByValue(currentValue as V)) {
       input.onChange('' as V | V[]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lookup, isLoading]);
+  }, [findByValue, isLoading]);
 
   const handleChange = (params: OnChangeParams) => {
     if (multi) {
       const values = params.value.map((item) => resolveOriginalId(String(item.id)));
-      input.onChange(values as V | V[]);
+      input.onChange(values);
     } else if (params.value.length > 0) {
-      input.onChange(resolveOriginalId(String(params.value[0].id)) as V | V[]);
+      input.onChange(resolveOriginalId(String(params.value[0].id)));
     } else {
       input.onChange('' as V | V[]);
     }
   };
 
-  const selectedValue = useMemo(() => {
+  const baseUIValue = useMemo(() => {
     const items: Array<{ id: string; label: string; disabled?: boolean }> = [];
     for (const item of formatSelectedValue(input.value)) {
-      const key = serialize(item);
-      const matched = lookup.get(key);
+      const key = JSON.stringify(item);
+      const matched = findByKey(key);
       if (matched) {
         items.push({ id: key, label: matched.label, disabled: matched.disabled });
       } else if (creatable) {
@@ -104,7 +99,7 @@ export function SelectField<V = string | number>({
       }
     }
     return items;
-  }, [input.value, lookup, creatable]);
+  }, [input.value, findByKey, creatable]);
 
   return (
     <FormControl
@@ -116,8 +111,8 @@ export function SelectField<V = string | number>({
     >
       <Select
         id={name}
-        value={selectedValue}
-        options={normalizedOptions}
+        value={baseUIValue}
+        options={baseUIOptions}
         onChange={handleChange}
         onBlur={input.onBlur}
         placeholder={!disabled && !readOnly ? placeholder : ''}
@@ -128,7 +123,7 @@ export function SelectField<V = string | number>({
         overrides={buildSelectOverrides(name, disabled, readOnly)}
         creatable={creatable}
         filterOptions={(options, filterValue, excludeOptions, newProps) =>
-          defaultFilterOptions(options, filterValue, excludeOptions, newProps).slice(0, maxOptions)
+          filterOptions(options, filterValue, excludeOptions, newProps).slice(0, visibleOptionLimit)
         }
         isLoading={isLoading}
         // Modified getOptionLabel in BaseWeb Select to avoid adding "Create" prefix on user input for

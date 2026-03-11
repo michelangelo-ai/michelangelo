@@ -406,7 +406,7 @@ describe('SelectField', () => {
     );
   });
 
-  it('limits the number of visible options with maxOptions', async () => {
+  it('limits the number of visible options with visibleOptionLimit', async () => {
     const user = userEvent.setup();
     const manyOptions = Array.from({ length: 10 }, (_, i) => ({
       id: `opt-${i}`,
@@ -414,7 +414,7 @@ describe('SelectField', () => {
     }));
 
     render(
-      <SelectField name="choice" label="Choice" options={manyOptions} maxOptions={3} />,
+      <SelectField name="choice" label="Choice" options={manyOptions} visibleOptionLimit={3} />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper()])
     );
 
@@ -444,6 +444,34 @@ describe('SelectField', () => {
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
         { priority: 'low' },
+        expect.anything(),
+        expect.anything()
+      )
+    );
+  });
+
+  it('does not clear value when creatable even if it has no matching option', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    render(
+      <>
+        <SelectField name="priority" label="Priority" options={options} creatable />
+        <button type="submit">Submit</button>
+      </>,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getFormProviderWrapper({ initialValues: { priority: 'custom' }, onSubmit }),
+      ])
+    );
+
+    expect(screen.getByText('custom')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        { priority: 'custom' },
         expect.anything(),
         expect.anything()
       )
