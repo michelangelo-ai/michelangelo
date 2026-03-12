@@ -80,6 +80,7 @@ export const InlineRadioField: React.FC<RadioFieldProps> = ({
         disabled={disabled}
         onChange={handleChange}
         onBlur={input.onBlur}
+        onFocus={input.onFocus}
         overrides={{
           RadioGroupRoot: {
             style: ({ $theme }: { $theme: Theme }) => ({ gap: $theme.sizing.scale600 }),

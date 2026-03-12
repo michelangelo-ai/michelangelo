@@ -93,6 +93,7 @@ export interface FieldInput<T = unknown> {
   name: string;
   onChange: (value: T) => void;
   onBlur: () => void;
+  onFocus: () => void;
 }
 
 export type FieldRegistry = Map<string, FieldRegistryEntry>;

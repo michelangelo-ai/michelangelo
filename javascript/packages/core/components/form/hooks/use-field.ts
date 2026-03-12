@@ -36,6 +36,7 @@ export function useField<T = unknown>(
     name: field.input.name,
     onChange: field.input.onChange,
     onBlur: field.input.onBlur,
+    onFocus: field.input.onFocus,
   };
 
   const meta: FieldState = {

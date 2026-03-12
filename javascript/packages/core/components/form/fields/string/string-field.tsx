@@ -40,6 +40,7 @@ export const StringField: React.FC<BaseFieldProps<string>> = ({
         name={input.name}
         onChange={(e) => input.onChange(e.currentTarget.value)}
         onBlur={input.onBlur}
+        onFocus={input.onFocus}
         placeholder={placeholder}
         readOnly={readOnly}
         disabled={disabled}

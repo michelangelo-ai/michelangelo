@@ -44,6 +44,7 @@ export const TextareaField: React.FC<TextareaFieldProps> = ({
         value={input.value ?? ''}
         onChange={(e) => input.onChange(e.currentTarget.value)}
         onBlur={input.onBlur}
+        onFocus={input.onFocus}
         placeholder={placeholder}
         readOnly={readOnly}
         disabled={disabled}
