@@ -1,5 +1,5 @@
 import React from 'react';
-import { useStyletron } from 'baseui';
+import { mergeOverrides, useStyletron } from 'baseui';
 import { FormControl as BaseFormControl } from 'baseui/form-control';
 
 import { Label } from './label/label';
@@ -13,6 +13,7 @@ export const FormControl: React.FC<FormControlProps> = ({
   caption,
   error,
   counter,
+  overrides = {},
   children,
 }) => {
   const [css] = useStyletron();
@@ -24,7 +25,7 @@ export const FormControl: React.FC<FormControlProps> = ({
         caption={caption}
         counter={counter}
         error={error}
-        overrides={{
+        overrides={mergeOverrides(overrides, {
           ControlContainer: {
             style: {
               // For form fields, spacing is handled by form layout components. The marginBottom
@@ -32,7 +33,7 @@ export const FormControl: React.FC<FormControlProps> = ({
               marginBottom: 0,
             },
           },
-        }}
+        })}
       >
         {children}
       </BaseFormControl>

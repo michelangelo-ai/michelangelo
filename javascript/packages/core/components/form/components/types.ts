@@ -1,3 +1,5 @@
+import type { FormControlOverrides } from 'baseui/form-control';
+
 export interface FormControlProps {
   label?: string;
   required?: boolean;
@@ -8,5 +10,6 @@ export interface FormControlProps {
     length: number;
     maxLength: number;
   };
+  overrides?: FormControlOverrides;
   children: React.ReactNode;
 }

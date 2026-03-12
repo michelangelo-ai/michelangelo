@@ -7,8 +7,11 @@ import { HeadingXXLarge, LabelLarge, ParagraphSmall } from 'baseui/typography';
 
 import { CellType } from '#core/components/cell/constants';
 import { FormErrorBanner } from '#core/components/form/components/form-error-banner/form-error-banner';
+import { CheckboxField } from '#core/components/form/fields/checkbox/checkbox-field';
+import { NumberField } from '#core/components/form/fields/number/number-field';
 import { SelectField } from '#core/components/form/fields/select/select-field';
 import { StringField } from '#core/components/form/fields/string/string-field';
+import { UrlField } from '#core/components/form/fields/url/url-field';
 import { Form } from '#core/components/form/form';
 import { FormGroup } from '#core/components/form/layout/form-group/form-group';
 import { required } from '#core/components/form/validation/validators';
@@ -380,6 +383,86 @@ export function Sandbox() {
             </Form>
           </Block>
         </Tab>
+        <Tab title="Form - New Fields">
+          <Block marginTop="24px" maxWidth="600px">
+            <Form
+              onSubmit={(values) => console.log('Training config submitted:', values)}
+              footer={{
+                left: <span>Configure your training run</span>,
+                right: <Button type="submit">Launch Training</Button>,
+              }}
+            >
+              <FormGroup
+                title="Data Sources"
+                description="Locations of training and evaluation datasets."
+              >
+                <UrlField
+                  name="trainingDataUrl"
+                  label="Training Data URL"
+                  required
+                  placeholder="https://storage.example.com/datasets/train.parquet"
+                  caption="Must be accessible by the training cluster."
+                />
+                <UrlField
+                  name="validationDataUrl"
+                  label="Validation Data URL"
+                  placeholder="https://storage.example.com/datasets/val.parquet"
+                />
+              </FormGroup>
+
+              <FormGroup
+                title="Hyperparameters"
+                description="Core training settings. Changing these affects convergence and runtime."
+              >
+                <NumberField
+                  name="learningRate"
+                  label="Learning Rate"
+                  required
+                  placeholder="0.001"
+                  caption="Typical range: 1e-5 to 0.1"
+                />
+                <NumberField
+                  name="batchSize"
+                  label="Batch Size"
+                  required
+                  placeholder="32"
+                />
+                <NumberField
+                  name="maxEpochs"
+                  label="Max Epochs"
+                  placeholder="100"
+                  caption="Training stops early if validation loss plateaus."
+                />
+                <NumberField
+                  name="warmupSteps"
+                  label="Warmup Steps"
+                  placeholder="500"
+                />
+              </FormGroup>
+
+              <FormGroup
+                title="Evaluation Metrics"
+                description="Select which metrics to compute and log during training."
+              >
+                <CheckboxField
+                  name="metrics"
+                  label="Metrics to Track"
+                  required
+                  validate={required('Select at least one metric.')}
+                  options={[
+                    { value: 'accuracy', label: 'Accuracy' },
+                    { value: 'precision', label: 'Precision' },
+                    { value: 'recall', label: 'Recall' },
+                    { value: 'f1', label: 'F1 Score', description: 'Harmonic mean of precision and recall' },
+                    { value: 'auc_roc', label: 'AUC-ROC', description: 'Area under the ROC curve' },
+                    { value: 'log_loss', label: 'Log Loss' },
+                  ]}
+                />
+              </FormGroup>
+            </Form>
+          </Block>
+        </Tab>
+
       </Tabs>
     </MainViewContainer>
   );
