@@ -78,11 +78,7 @@ describe('UrlField', () => {
   it('renders label', () => {
     render(
       <UrlField name="url" label="Website" />,
-      buildWrapper([
-        getBaseProviderWrapper(),
-        getIconProviderWrapper(),
-        getFormProviderWrapper({}),
-      ])
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
     );
 
     expect(screen.getByText('Website')).toBeInTheDocument();

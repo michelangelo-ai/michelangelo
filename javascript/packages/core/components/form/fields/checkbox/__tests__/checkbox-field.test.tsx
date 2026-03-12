@@ -149,6 +149,8 @@ describe('CheckboxField', () => {
     );
 
     const checkboxes = screen.getAllByRole('checkbox');
-    checkboxes.forEach((cb) => expect(cb).toBeDisabled());
+    checkboxes.forEach((cb) => {
+      expect(cb).toBeDisabled();
+    });
   });
 });

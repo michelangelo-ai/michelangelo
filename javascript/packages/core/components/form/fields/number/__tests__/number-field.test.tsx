@@ -41,11 +41,7 @@ describe('NumberField', () => {
     await user.click(screen.getByRole('button', { name: 'Submit' }));
 
     await waitFor(() =>
-      expect(onSubmit).toHaveBeenCalledWith(
-        { count: 42 },
-        expect.anything(),
-        expect.anything()
-      )
+      expect(onSubmit).toHaveBeenCalledWith({ count: 42 }, expect.anything(), expect.anything())
     );
   });
 
