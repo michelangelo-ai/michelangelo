@@ -8,7 +8,7 @@ user-invocable: false
 
 ## What to Test
 
-- **User-facing behavior** — `screen.getByText()`, `screen.getByRole()`, not `container.firstChild`
+- **User-facing behavior** — test what users see and interact with, not internal component structure
 - **Business logic** — test your decisions, not the tools implementing them
 - **Success path + key edge cases** — skip scenarios already covered by dependencies
 - **No duplication** — if higher-level tests cover the behavior, don't also test the implementation details
@@ -28,6 +28,38 @@ user-invocable: false
 - Use `describe` blocks only when tests benefit from grouping (shared setup, related assertions)
 - Keep tests flat when individual test names provide enough context
 - Prefer `expect(fn(args)).toEqual(result)` over assigning to intermediate variables
+
+## Querying Elements
+
+Query priority: `getByRole` → `getByLabelText` → `getByText` → `getByTestId`
+
+**Only use `getByTestId` if the element has no semantic role** (spinners, skeletons, custom visual elements) **or is a mock component**. Every other use of `getByTestId` is a bug — fix it by using an accessible query or by adding `aria-label`/`role` to the component under test.
+
+```typescript
+// ❌ Wrong — element has a role
+screen.getByTestId('submit-button');
+// ✅ Fix
+screen.getByRole('button', { name: /submit/i });
+
+// ❌ Wrong — element has text content
+screen.getByTestId('error-message');
+// ✅ Fix
+screen.getByText(/something went wrong/i);
+
+// ✅ Correct — spinner has no semantic role
+screen.queryByTestId('loading-spinner');
+
+// ✅ Correct — testId is on the mock itself, not the real component.
+// The real MetricChart has no accessible role worth testing here;
+// the test cares only that the parent rendered it with the right name.
+vi.mock('../MetricChart', () => ({
+  MetricChart: ({ name }: { name: string }) => (
+    <div data-testid={`metric-chart-${name}`} />
+  ),
+}));
+// ...
+screen.getByTestId('metric-chart-accuracy');
+```
 
 ## Anti-Patterns
 
