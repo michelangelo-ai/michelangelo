@@ -4,7 +4,10 @@ load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 
 go_library(
     name = "go_default_library",
-    srcs = ["main.go"],
+    srcs = [
+        "ingester_providers.go",
+        "main.go",
+    ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/cmd/controllermgr",
     visibility = ["//visibility:private"],
     deps = [
@@ -20,6 +23,7 @@ go_library(
         "//go/components/inferenceserver/backends:go_default_library",
         "//go/components/inferenceserver/modelconfig:go_default_library",
         "//go/components/inferenceserver/plugins/oss:go_default_library",
+        "//go/components/ingester:go_default_library",
         "//go/components/jobs/client:go_default_library",
         "//go/components/jobs/cluster:go_default_library",
         "//go/components/jobs/scheduler:go_default_library",
@@ -30,6 +34,8 @@ go_library(
         "//go/components/triggerrun:go_default_library",
         "//go/controllermgr:go_default_library",
         "//go/kubeproto/metrics:go_default_library",
+        "//go/storage:go_default_library",
+        "//go/storage/mysql:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_go_logr_logr//:go_default_library",
         "@com_github_go_logr_zapr//:go_default_library",

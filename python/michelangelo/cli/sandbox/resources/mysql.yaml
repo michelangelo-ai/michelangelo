@@ -16,6 +16,8 @@ spec:
           value: root
         - name: MYSQL_DATABASE
           value: temporal
+      # Note: Cadence auto-setup will create cadence/cadence_visibility databases
+      # Ingester will create michelangelo database via mysql-ingester.yaml Job
       readinessProbe:
         exec:
           command:

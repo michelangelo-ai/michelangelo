@@ -10,6 +10,7 @@ require (
 	github.com/dave/dst v0.27.3
 	github.com/go-logr/logr v1.4.2
 	github.com/go-logr/zapr v1.3.0
+	github.com/go-sql-driver/mysql v1.9.3
 	github.com/gobuffalo/flect v1.0.3
 	github.com/gogo/protobuf v1.3.2
 	github.com/gogo/status v1.1.0
@@ -53,6 +54,7 @@ require (
 )
 
 require (
+	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/apache/thrift v0.16.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect

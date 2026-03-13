@@ -190,6 +190,10 @@ necessary, and this assertion will be removed.
 """
         )
 
+    # Get GitHub username from environment variable
+    env_github_username = "GITHUB_USERNAME"
+    github_username = os.environ.get(env_github_username, "USERNAME")
+
     # Create a temporary registry file with the GitHub Container Registry
     # authentication.
     registry = {
@@ -201,7 +205,7 @@ necessary, and this assertion will be removed.
         "configs": {
             "ghcr.io": {
                 "auth": {
-                    "username": "USERNAME",
+                    "username": github_username,
                     "password": cr_pat,
                 },
             },
@@ -219,7 +223,8 @@ necessary, and this assertion will be removed.
 
     resources = [
         "boot.yaml",
-        "mysql.yaml",
+        "mysql.yaml",  # MySQL database
+        "mysql-ingester.yaml",  # Auto-generated ingester schema from protobuf
         "michelangelo-config.yaml",
         "aws-credentials.yaml",
     ]

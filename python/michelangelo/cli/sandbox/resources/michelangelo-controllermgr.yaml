@@ -9,6 +9,7 @@ spec:
   containers:
     - name: app
       image: ghcr.io/michelangelo-ai/controllermgr:main
+      imagePullPolicy: IfNotPresent
       volumeMounts:
         - name: config-volume
           mountPath: /config
@@ -58,7 +59,40 @@ data:
       awsAccessKeyId: minioadmin
       awsSecretAccessKey: minioadmin
       awsEndpointUrl: minio:9091
-    
+
+    # Reuse the Cadence MySQL service for ingester metadata storage in sandbox.
+    metadataStorage:
+      enableMetadataStorage: true
+      deletionDelay: 10s
+      enableResourceVersionCache: false
+
+    mysql:
+      host: mysql
+      port: 3306
+      user: root
+      password: root
+      database: michelangelo
+
+    ingester:
+      # Legacy global defaults (still supported for backwards compatibility)
+      concurrentReconciles: 2
+      requeuePeriod: 30s
+
+      # New per-controller configuration (recommended)
+      # Controllers not listed here will use the global defaults above
+      concurrentReconcilesMap:
+        PipelineRun: 10    # High-throughput workload
+        Deployment: 3      # Medium concurrency
+        Pipeline: 3        # Medium concurrency
+        Revision: 3        # Medium concurrency
+        # Model: 5         # Example: uncomment to override Model concurrency
+        # InferenceServer: 2  # Example: uncomment to override InferenceServer
+
+      # Optional: per-controller requeue periods
+      # requeuePeriodMap:
+      #   Deployment: 60s
+      #   Pipeline: 45s
+
     workflowClient:
       service: cadence-frontend
       host: cadence:7833

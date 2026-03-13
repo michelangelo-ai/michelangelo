@@ -8,6 +8,7 @@ spec:
   containers:
     - name: michelangelo-apiserver
       image: ghcr.io/michelangelo-ai/apiserver:main
+      imagePullPolicy: IfNotPresent
       ports:
         - containerPort: 14566
       volumeMounts:

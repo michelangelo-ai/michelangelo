@@ -22,6 +22,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	inferenceserverOSSPlugin "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss"
+	"github.com/michelangelo-ai/michelangelo/go/components/ingester"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/scheduler"
@@ -86,13 +87,18 @@ func options() fx.Option {
 		fx.Provide(scheme),
 		fx.Provide(baseconfig.GetK8sConfig),
 		fx.Provide(baseconfig.GetMetadataStorageConfig),
+		fx.Provide(baseconfig.GetMySQLConfig),
+		fx.Provide(baseconfig.GetIngesterConfig),
 		fx.Provide(baseconfig.GetWorkflowClientConfig),
 		fx.Provide(getTallyScope),
+		fx.Provide(provideMetadataStorage),
+		fx.Provide(provideIngesterConfig),
 		apiHandler.CtrlMgrModule,
 		spark.Module,
 		ray.Module,
 		triggerrun.Module,
 		workflowclient.Module,
+		ingester.Module,
 		pipeline.Module,
 		pipelinerun.Module,
 		controllermgr.Module,

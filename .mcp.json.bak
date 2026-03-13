@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "code-mcp": {
+      "command": "aifx",
+      "args": [
+        "mcp",
+        "run",
+        "code-mcp"
+      ]
+    }
+  }
+}

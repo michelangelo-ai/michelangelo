@@ -1,0 +1,19 @@
+apiVersion: michelangelo.api/v2
+kind: Model
+metadata:
+  name: ingester-test-model
+  namespace: ingester-test
+  labels:
+    test: ingester
+    algorithm: xgboost
+spec:
+  owner:
+    name: hkriplani
+  description: Test model for ingester validation
+  algorithm: xgboost
+  trainingFramework: sklearn
+  source: TRAINING
+  kind: MODEL_KIND_REGRESSION
+  modelFamily:
+    namespace: ingester-test
+    name: ingester-test-model-family
