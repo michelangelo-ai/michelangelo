@@ -264,7 +264,11 @@ export function Sandbox() {
                       label="With descriptions (vertical)"
                       options={[
                         { id: 'logging', label: 'Logging', description: 'Enable request logging' },
-                        { id: 'metrics', label: 'Metrics', description: 'Collect performance metrics' },
+                        {
+                          id: 'metrics',
+                          label: 'Metrics',
+                          description: 'Collect performance metrics',
+                        },
                         { id: 'tracing', label: 'Tracing', description: 'Distributed tracing' },
                       ]}
                     />
@@ -305,10 +309,18 @@ export function Sandbox() {
               <FormGroup title="FormGrid + FormColumn">
                 <FormNote content="A 4-column grid — each `FormColumn` occupies one column." />
                 <FormGrid>
-                  <FormColumn><StringField name="col1" label="Column 1" /></FormColumn>
-                  <FormColumn><StringField name="col2" label="Column 2" /></FormColumn>
-                  <FormColumn><StringField name="col3" label="Column 3" /></FormColumn>
-                  <FormColumn><StringField name="col4" label="Column 4" /></FormColumn>
+                  <FormColumn>
+                    <StringField name="col1" label="Column 1" />
+                  </FormColumn>
+                  <FormColumn>
+                    <StringField name="col2" label="Column 2" />
+                  </FormColumn>
+                  <FormColumn>
+                    <StringField name="col3" label="Column 3" />
+                  </FormColumn>
+                  <FormColumn>
+                    <StringField name="col4" label="Column 4" />
+                  </FormColumn>
                 </FormGrid>
               </FormGroup>
 
