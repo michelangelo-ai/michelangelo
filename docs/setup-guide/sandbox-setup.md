@@ -135,7 +135,7 @@ This command should install all the dependencies from pyproject.toml.
 
 ```bash
 cd $REPO_ROOT/python
-poetry install -E ma
+poetry install
 ```
 
 if you see the following error when setting up sandbox
@@ -160,32 +160,106 @@ ModuleNotFoundError: No module named 'grpc_reflection'
 
 ## Running Michelangelo's API sandbox environment
 
-```bash
-cd $REPO_ROOT/python
-poetry run ma sandbox --help
-poetry run ma sandbox create
+The `ma sandbox` command manages a local Kubernetes development environment using K3d. It sets up the API server, controller manager, workflow engine, object storage, and all supporting services.
+
+> For a quick command reference, see the [CLI Reference - Sandbox Commands](../user-guides/cli.md#sandbox-commands).
+
+### Sandbox lifecycle
+
+The typical sandbox workflow follows this pattern:
+
+```
+create → (develop) → stop → start → (develop) → delete
 ```
 
-For creating for Temporal Workflow Engine
+1. **Create** a sandbox to set up the full environment
+2. **Develop** using the running cluster
+3. **Stop** when not actively developing (preserves state)
+4. **Start** to resume development
+5. **Delete** when the sandbox is no longer needed
+
+### Sandbox commands
+
+#### Create
+
+Create a K3d cluster with all Michelangelo services.
 
 ```bash
-poetry run ma sandbox create --workflow temporal
+ma sandbox create [OPTIONS]
 ```
 
-or
+**Options:**
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--workflow cadence\|temporal` | Choose workflow engine | `cadence` |
+| `--exclude [services]` | Exclude services: `apiserver`, `controllermgr`, `ui`, `worker` | none |
+| `--create-compute-cluster` | Create an additional Ray compute cluster for distributed jobs | disabled |
+| `--compute-cluster-name <name>` | Custom name for the compute cluster | auto-generated |
+| `--include-experimental [services]` | Include experimental services | none |
+
+**Examples:**
 
 ```bash
+# Create a full sandbox with all services (default: Cadence workflow engine)
+ma sandbox create
+
+# Create sandbox with Temporal workflow engine
+ma sandbox create --workflow temporal
+
+# Create sandbox without UI, with a Ray compute cluster
+ma sandbox create --exclude ui --create-compute-cluster
+
+# Create sandbox excluding multiple services
+ma sandbox create --exclude apiserver --exclude ui
+```
+
+#### Delete
+
+Tear down the K3d cluster and remove all associated resources.
+
+```bash
+ma sandbox delete
+```
+
+#### Start / Stop
+
+Start or stop an existing sandbox cluster without destroying it. Stopping preserves the cluster state so you can resume later.
+
+```bash
+# Stop the sandbox (preserves state)
+ma sandbox stop
+
+# Start a stopped sandbox
+ma sandbox start
+```
+
+#### Demo
+
+Create pre-configured demo resources for quickly testing pipelines or inference.
+
+```bash
+# Create demo pipeline resources (registers a sample pipeline and runs it)
+ma sandbox demo pipeline
+
+# Create demo inference server resources
+ma sandbox demo inference
+```
+
+### Quick start
+
+The fastest way to get a working Michelangelo environment:
+
+```bash
+# 1. Install dependencies
 cd $REPO_ROOT/python
 poetry install
-source .venv/bin/activate
-ma sandbox --help
+
+# 2. Create the sandbox
 ma sandbox create
-```
 
-For creating for Temporal Workflow Engine
-
-```bash
-ma sandbox create --workflow temporal
+# 3. Create demo resources to verify everything works
+ma sandbox demo pipeline
 ```
 
 ### Debugging container issue in Sandbox
