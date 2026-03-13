@@ -18,6 +18,7 @@ go_library(
         "//go/api:go_default_library",
         "//go/api/utils:go_default_library",
         "//go/storage:go_default_library",
+        "//go/storage/blobstorage:go_default_library",
         "//proto/api:go_default_library",
         "@com_github_go_logr_logr//:go_default_library",
         "@com_github_go_logr_zapr//:go_default_library",
