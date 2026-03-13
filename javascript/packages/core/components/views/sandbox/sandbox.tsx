@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FormSpy } from 'react-final-form';
 import { Block } from 'baseui/block';
 import { Button } from 'baseui/button';
 import { Notification } from 'baseui/notification';
@@ -13,6 +14,8 @@ import { SelectField } from '#core/components/form/fields/select/select-field';
 import { StringField } from '#core/components/form/fields/string/string-field';
 import { UrlField } from '#core/components/form/fields/url/url-field';
 import { Form } from '#core/components/form/form';
+import { ArrayFormGroup } from '#core/components/form/layout/array-form-group/array-form-group';
+import { ArrayFormRow } from '#core/components/form/layout/array-form-row/array-form-row';
 import { FormColumn } from '#core/components/form/layout/form-column/form-column';
 import { FormGrid } from '#core/components/form/layout/form-grid/form-grid';
 import { FormGroup } from '#core/components/form/layout/form-group/form-group';
@@ -378,6 +381,61 @@ export function Sandbox() {
                 />
                 <StringField name="slackHandle" label="Slack Handle" />
               </FormGroup>
+            </Form>
+          </Block>
+        </Tab>
+
+        <Tab title="Repeated Fields">
+          <Block marginTop="24px" maxWidth="600px">
+            <Form onSubmit={(values) => console.log('Submitted:', values)}>
+              <ArrayFormGroup
+                rootFieldPath="addresses"
+                groupLabel="Address"
+                minItems={1}
+                description="Addresses are required."
+                tooltip="Addresses are required."
+              >
+                {(name) => (
+                  <>
+                    <StringField name={`${name}.street`} label="Street" validate={required()} />
+                    <StringField name={`${name}.city`} label="City" validate={required()} />
+                    <StringField name={`${name}.postcode`} label="Postcode" />
+                  </>
+                )}
+              </ArrayFormGroup>
+
+              <FormGroup
+                title="Supporting links"
+                description="Inline repeated fields using ArrayFormRow."
+              >
+                <ArrayFormRow rootFieldPath="links" span={[1, 2]} minItems={1}>
+                  {(name) => (
+                    <>
+                      <StringField name={`${name}.name`} label="Name" />
+                      <StringField name={`${name}.url`} label="URL" />
+                    </>
+                  )}
+                </ArrayFormRow>
+              </FormGroup>
+
+              <Block display="flex" justifyContent="flex-end" marginTop="scale600">
+                <Button type="submit">Submit</Button>
+              </Block>
+
+              <FormSpy subscription={{ values: true }}>
+                {({ values }) => (
+                  <Block
+                    as="pre"
+                    marginTop="scale600"
+                    padding="scale600"
+                    backgroundColor="backgroundSecondary"
+                    font="font300"
+                    overrides={{ Block: { style: { borderRadius: '8px', overflow: 'auto' } } }}
+                  >
+                    {JSON.stringify(values, null, 2)}
+                  </Block>
+                )}
+              </FormSpy>
             </Form>
           </Block>
         </Tab>

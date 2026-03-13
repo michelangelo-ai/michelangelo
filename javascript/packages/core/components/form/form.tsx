@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { Form as FinalForm } from 'react-final-form';
 import { useStyletron } from 'baseui';
+import arrayMutators from 'final-form-arrays';
 import createFocusOnErrorDecorator from 'final-form-focus';
 
 import { StickyFooter } from '#core/components/form/components/sticky-footer/sticky-footer';
@@ -28,6 +29,7 @@ export const Form = <FieldValues extends FormData = FormData>({
       <FinalForm
         onSubmit={onSubmit}
         initialValues={initialValues}
+        mutators={{ ...arrayMutators }}
         decorators={focusOnError ? [focusOnErrorDecorator] : undefined}
         render={({ handleSubmit }) => {
           const formElement = (

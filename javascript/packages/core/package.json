@@ -24,6 +24,7 @@
     "@uiw/react-codemirror": "^4.21.23",
     "baseui": "15.0.0",
     "final-form": "4.20.10",
+    "final-form-arrays": "^1.1.2",
     "final-form-focus": "^1.1.2",
     "lodash": "^4.17.21",
     "markdown-to-jsx": "7.4.7",
@@ -31,6 +32,7 @@
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-final-form": "6.5.9",
+    "react-final-form-arrays": "^3.1.4",
     "validator": "^13.15.15"
   },
   "devDependencies": {
