@@ -56,7 +56,7 @@ it('adds a row when "Add more" is clicked', async () => {
   );
 
   await waitFor(() => screen.getByRole('textbox', { name: 'Tag' }));
-  await user.click(screen.getByRole('button', { name: /add more/i }));
+  await user.click(screen.getByRole('button', { name: /Add more/ }));
 
   expect(screen.getAllByRole('textbox', { name: 'Tag' })).toHaveLength(2);
 });
@@ -94,7 +94,7 @@ it('removes a row when remove is clicked', async () => {
   await waitFor(() => screen.getByRole('textbox', { name: 'Tag' }));
 
   // Add a second row so the remove button appears
-  await user.click(screen.getByRole('button', { name: /add more/i }));
+  await user.click(screen.getByRole('button', { name: /Add more/ }));
   expect(screen.getAllByRole('textbox', { name: 'Tag' })).toHaveLength(2);
 
   // Remove one row
@@ -115,10 +115,10 @@ it('uses addLabel for the add button', () => {
     ])
   );
 
-  expect(screen.getByRole('button', { name: 'Add tag' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Add tag/ })).toBeInTheDocument();
 });
 
-it('Hides add and remove buttons when readOnly is true', async () => {
+it('hides add and remove buttons when readOnly', async () => {
   render(
     <ArrayFormRow rootFieldPath="tags" minItems={2} readOnly>
       {(name) => <StringField name={`${name}.value`} label="Tag" />}
