@@ -4,6 +4,6 @@ export const ListContainer = styled('ul', {
   margin: 0,
   padding: 0,
   listStyle: 'none',
-  maxHeight: '340px',
+  maxHeight: '400px',
   overflowY: 'auto',
 });
