@@ -421,7 +421,9 @@ describe('SelectField', () => {
     const select = screen.getByRole('combobox', { name: 'Choice' });
     await user.click(select);
 
-    expect(screen.getAllByRole('option')).toHaveLength(3);
+    await waitFor(() => {
+      expect(screen.getAllByRole('option')).toHaveLength(3);
+    });
   });
 
   it('does not clear value while options are loading', async () => {
