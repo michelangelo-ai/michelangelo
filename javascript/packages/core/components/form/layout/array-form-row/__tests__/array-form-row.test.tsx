@@ -117,6 +117,8 @@ it('uses addLabel for the add button', () => {
 
   expect(screen.getByRole('button', { name: 'Add tag' })).toBeInTheDocument();
 });
+
+it('Hides add and remove buttons when readOnly is true', async () => {
   render(
     <ArrayFormRow rootFieldPath="tags" minItems={2} readOnly>
       {(name) => <StringField name={`${name}.value`} label="Tag" />}

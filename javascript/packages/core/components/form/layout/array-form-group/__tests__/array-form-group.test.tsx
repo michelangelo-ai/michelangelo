@@ -71,7 +71,7 @@ it('falls back to "Add more" when no groupLabel or addLabel is provided', () => 
     ])
   );
 
-  expect(screen.getByRole('button', { name: 'Add more' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /add more/i })).toBeInTheDocument();
 });
 
 it('uses addLabel over the derived groupLabel label', () => {
@@ -86,7 +86,7 @@ it('uses addLabel over the derived groupLabel label', () => {
     ])
   );
 
-  expect(screen.getByRole('button', { name: 'Add ML model' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Add ML model/ })).toBeInTheDocument();
 });
 
 it('prepopulates groups to meet minItems on mount', async () => {

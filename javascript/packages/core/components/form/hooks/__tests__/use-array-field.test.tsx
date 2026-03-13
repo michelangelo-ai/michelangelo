@@ -14,12 +14,18 @@ it('remove does not drop below minItems even when called directly without an isR
         {entries.map(({ id }, index) => (
           <div key={id}>
             <span>Item {index + 1}</span>
-            <button type="button" aria-label={`Remove item ${index + 1}`} onClick={() => remove(index)}>
+            <button
+              type="button"
+              aria-label={`Remove item ${index + 1}`}
+              onClick={() => remove(index)}
+            >
               Remove
             </button>
           </div>
         ))}
-        <button type="button" onClick={add}>Add</button>
+        <button type="button" onClick={add}>
+          Add
+        </button>
       </div>
     );
   }
