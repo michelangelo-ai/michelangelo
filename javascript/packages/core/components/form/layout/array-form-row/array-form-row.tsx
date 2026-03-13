@@ -17,6 +17,7 @@ export function ArrayFormRow({
   children,
   name,
   span,
+  addLabel = 'Add more',
 }: ArrayFormRowProps) {
   const [css, theme] = useStyletron();
   const { entries, add, remove, isRemovable } = useArrayField(rootFieldPath, {
@@ -73,7 +74,7 @@ export function ArrayFormRow({
           }}
           onClick={add}
         >
-          Add more
+          {addLabel}
         </Button>
       )}
     </>

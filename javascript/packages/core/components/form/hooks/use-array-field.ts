@@ -54,12 +54,15 @@ export function useArrayField(
     }
   }, [fields, minItems]);
 
+  const isRemovable = (fields.length ?? 0) > minItems && !readOnly;
+
   const add = () => {
     entryIds.current.push(crypto.randomUUID());
     fields.push({});
   };
 
   const remove = (index: number) => {
+    if (!isRemovable) return;
     entryIds.current.splice(index, 1);
     fields.remove(index);
   };
@@ -71,6 +74,6 @@ export function useArrayField(
     })),
     add,
     remove,
-    isRemovable: (fields.length ?? 0) > minItems && !readOnly,
+    isRemovable,
   };
 }

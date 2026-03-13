@@ -103,7 +103,20 @@ it('removes a row when remove is clicked', async () => {
   await waitFor(() => expect(screen.getAllByRole('textbox', { name: 'Tag' })).toHaveLength(1));
 });
 
-it('hides add and remove buttons when readOnly', async () => {
+it('uses addLabel for the add button', () => {
+  render(
+    <ArrayFormRow rootFieldPath="tags" addLabel="Add tag">
+      {(name) => <StringField name={`${name}.value`} label="Tag" />}
+    </ArrayFormRow>,
+    buildWrapper([
+      getBaseProviderWrapper(),
+      getIconProviderWrapper({ icons }),
+      getFormProviderWrapper({}),
+    ])
+  );
+
+  expect(screen.getByRole('button', { name: 'Add tag' })).toBeInTheDocument();
+});
   render(
     <ArrayFormRow rootFieldPath="tags" minItems={2} readOnly>
       {(name) => <StringField name={`${name}.value`} label="Tag" />}

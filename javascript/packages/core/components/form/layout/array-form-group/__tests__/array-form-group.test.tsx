@@ -59,6 +59,36 @@ it('uses groupLabel in add button label', () => {
   expect(screen.getByRole('button', { name: /add address/i })).toBeInTheDocument();
 });
 
+it('falls back to "Add more" when no groupLabel or addLabel is provided', () => {
+  render(
+    <ArrayFormGroup rootFieldPath="addresses">
+      {(name) => <StringField name={`${name}.street`} label="Street" />}
+    </ArrayFormGroup>,
+    buildWrapper([
+      getBaseProviderWrapper(),
+      getIconProviderWrapper({ icons }),
+      getFormProviderWrapper({}),
+    ])
+  );
+
+  expect(screen.getByRole('button', { name: 'Add more' })).toBeInTheDocument();
+});
+
+it('uses addLabel over the derived groupLabel label', () => {
+  render(
+    <ArrayFormGroup rootFieldPath="models" groupLabel="ML Model" addLabel="Add ML model">
+      {(name) => <StringField name={`${name}.name`} label="Name" />}
+    </ArrayFormGroup>,
+    buildWrapper([
+      getBaseProviderWrapper(),
+      getIconProviderWrapper({ icons }),
+      getFormProviderWrapper({}),
+    ])
+  );
+
+  expect(screen.getByRole('button', { name: 'Add ML model' })).toBeInTheDocument();
+});
+
 it('prepopulates groups to meet minItems on mount', async () => {
   render(
     <ArrayFormGroup rootFieldPath="addresses" groupLabel="Address" minItems={3}>

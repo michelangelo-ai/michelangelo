@@ -12,6 +12,7 @@ import type { ArrayFormGroupProps } from './types';
 export function ArrayFormGroup({
   rootFieldPath,
   groupLabel,
+  addLabel: addLabelProp,
   minItems = 0,
   readOnly = false,
   children,
@@ -24,7 +25,7 @@ export function ArrayFormGroup({
     minItems,
     readOnly,
   });
-  const addLabel = groupLabel ? `Add ${groupLabel.toLowerCase()}` : 'Add more';
+  const addLabel = addLabelProp ?? (groupLabel ? `Add ${groupLabel.toLowerCase()}` : 'Add more');
 
   return (
     <>
@@ -36,7 +37,7 @@ export function ArrayFormGroup({
             tooltip={tooltip}
             collapsible={collapsible}
             endEnhancer={
-              isRemovable ? (
+              isRemovable && (
                 <Button
                   type="button"
                   kind={KIND.secondary}
@@ -48,7 +49,7 @@ export function ArrayFormGroup({
                 >
                   Remove
                 </Button>
-              ) : undefined
+              )
             }
             overrides={{
               // FormGroup comes with marginBottom that intends to be applied to separate groups in the

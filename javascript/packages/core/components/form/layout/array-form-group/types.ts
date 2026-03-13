@@ -10,4 +10,13 @@ export interface ArrayFormGroupProps
    * Omit to render groups without a title.
    */
   groupLabel?: string;
+
+  /**
+   * Label for the add button. Overrides the default derived from `groupLabel`.
+   * Use when the default lowercased label is inappropriate, e.g. for acronyms:
+   * `addLabel="Add ML model"` instead of `"Add ml model"`.
+   *
+   * @default `"Add ${groupLabel.toLowerCase()}"` or `"Add more"` if no groupLabel
+   */
+  addLabel?: string;
 }
