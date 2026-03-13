@@ -7,10 +7,16 @@ import { HeadingXXLarge, LabelLarge, ParagraphSmall } from 'baseui/typography';
 
 import { CellType } from '#core/components/cell/constants';
 import { FormErrorBanner } from '#core/components/form/components/form-error-banner/form-error-banner';
+import { CheckboxField } from '#core/components/form/fields/checkbox/checkbox-field';
+import { NumberField } from '#core/components/form/fields/number/number-field';
 import { SelectField } from '#core/components/form/fields/select/select-field';
 import { StringField } from '#core/components/form/fields/string/string-field';
+import { UrlField } from '#core/components/form/fields/url/url-field';
 import { Form } from '#core/components/form/form';
+import { FormColumn } from '#core/components/form/layout/form-column/form-column';
+import { FormGrid } from '#core/components/form/layout/form-grid/form-grid';
 import { FormGroup } from '#core/components/form/layout/form-group/form-group';
+import { FormNote } from '#core/components/form/layout/form-note/form-note';
 import { required } from '#core/components/form/validation/validators';
 import { TextEditor } from '#core/components/text-editor/text-editor';
 import { DetailView } from '#core/components/views/detail-view/detail-view';
@@ -244,6 +250,84 @@ export function Sandbox() {
             >
               <Execution schema={executionSchema} data={{}} />
             </DetailView>
+          </Block>
+        </Tab>
+
+        <Tab title="New Fields">
+          <Block marginTop="24px" maxWidth="900px">
+            <Form onSubmit={(values) => console.log('Submitted:', values)}>
+              <FormGroup title="Checkbox Field">
+                <Block display="flex" gridGap="scale800">
+                  <Block flex="1">
+                    <CheckboxField
+                      name="featuresVertical"
+                      label="With descriptions (vertical)"
+                      options={[
+                        { id: 'logging', label: 'Logging', description: 'Enable request logging' },
+                        {
+                          id: 'metrics',
+                          label: 'Metrics',
+                          description: 'Collect performance metrics',
+                        },
+                        { id: 'tracing', label: 'Tracing', description: 'Distributed tracing' },
+                      ]}
+                    />
+                  </Block>
+                  <Block flex="1">
+                    <CheckboxField
+                      name="featuresHorizontal"
+                      label="Without descriptions (horizontal wrap)"
+                      options={[
+                        { id: 'logging', label: 'Logging' },
+                        { id: 'metrics', label: 'Metrics' },
+                        { id: 'tracing', label: 'Tracing' },
+                      ]}
+                    />
+                  </Block>
+                </Block>
+              </FormGroup>
+
+              <FormGroup title="Number Field">
+                <NumberField name="timeout" label="Timeout (seconds)" placeholder="30" />
+                <NumberField name="retries" label="Max Retries" defaultValue={3} />
+              </FormGroup>
+
+              <FormGroup title="URL Field">
+                <UrlField
+                  name="docsUrl"
+                  label="Documentation"
+                  urlName="View docs"
+                  initialValue="https://example.com/docs"
+                />
+                <UrlField name="emptyUrl" label="Empty URL (no value)" />
+              </FormGroup>
+
+              <FormGroup title="FormNote">
+                <FormNote content="This is a **formatted** note with [a link](https://example.com) and `inline code`." />
+              </FormGroup>
+
+              <FormGroup title="FormGrid + FormColumn">
+                <FormNote content="A 4-column grid — each `FormColumn` occupies one column." />
+                <FormGrid>
+                  <FormColumn>
+                    <StringField name="col1" label="Column 1" />
+                  </FormColumn>
+                  <FormColumn>
+                    <StringField name="col2" label="Column 2" />
+                  </FormColumn>
+                  <FormColumn>
+                    <StringField name="col3" label="Column 3" />
+                  </FormColumn>
+                  <FormColumn>
+                    <StringField name="col4" label="Column 4" />
+                  </FormColumn>
+                </FormGrid>
+              </FormGroup>
+
+              <Block display="flex" justifyContent="flex-end" marginTop="scale600">
+                <Button type="submit">Submit</Button>
+              </Block>
+            </Form>
           </Block>
         </Tab>
 

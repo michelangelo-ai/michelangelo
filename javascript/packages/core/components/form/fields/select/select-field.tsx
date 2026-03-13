@@ -112,6 +112,7 @@ export function SelectField<V = string | number>({
         options={baseUIOptions}
         onChange={handleChange}
         onBlur={input.onBlur}
+        onFocus={input.onFocus}
         placeholder={!disabled && !readOnly ? placeholder : ''}
         disabled={disabled}
         clearable={!disabled && !readOnly && clearable}

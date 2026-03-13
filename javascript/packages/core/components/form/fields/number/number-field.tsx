@@ -1,11 +1,12 @@
-import { Textarea } from 'baseui/textarea';
+import React from 'react';
+import { Input } from 'baseui/input';
 
 import { FormControl } from '#core/components/form/components/form-control';
 import { useField } from '#core/components/form/hooks/use-field';
 
-import type { TextareaFieldProps } from './types';
+import type { BaseFieldProps } from '#core/components/form/fields/types';
 
-export const TextareaField: React.FC<TextareaFieldProps> = ({
+export const NumberField: React.FC<BaseFieldProps<number | undefined>> = ({
   name,
   label,
   defaultValue,
@@ -17,17 +18,14 @@ export const TextareaField: React.FC<TextareaFieldProps> = ({
   placeholder,
   description,
   caption,
-  rows,
-  maxLength,
 }) => {
-  const { input, meta } = useField<string>(name, {
+  const { input, meta } = useField<number | undefined>(name, {
     required,
     validate,
     defaultValue,
     initialValue,
     label,
   });
-  const currentLength = input.value?.length ?? 0;
 
   return (
     <FormControl
@@ -36,21 +34,25 @@ export const TextareaField: React.FC<TextareaFieldProps> = ({
       description={description}
       caption={caption}
       error={meta.touched && meta.error ? meta.error : undefined}
-      counter={maxLength ? { length: currentLength, maxLength } : undefined}
     >
-      <Textarea
+      <Input
         id={input.name}
+        type="number"
+        value={input.value == null ? '' : String(input.value)}
         name={input.name}
-        value={input.value ?? ''}
-        onChange={(e) => input.onChange(e.currentTarget.value)}
+        onChange={(e) => input.onChange(parseNumber(e.currentTarget.value))}
         onBlur={input.onBlur}
         onFocus={input.onFocus}
         placeholder={placeholder}
         readOnly={readOnly}
         disabled={disabled}
-        rows={rows}
-        maxLength={maxLength}
       />
     </FormControl>
   );
 };
+
+function parseNumber(s: string): number | undefined {
+  if (s === '') return undefined;
+  const n = Number(s);
+  return isNaN(n) ? undefined : n;
+}

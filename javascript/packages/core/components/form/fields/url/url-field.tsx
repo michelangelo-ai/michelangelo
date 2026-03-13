@@ -1,22 +1,24 @@
-import { Input } from 'baseui/input';
+import React from 'react';
 
 import { FormControl } from '#core/components/form/components/form-control';
 import { useField } from '#core/components/form/hooks/use-field';
+import { Link } from '#core/components/link/link';
+import { TruncatedText } from '#core/components/truncated-text/truncated-text';
+import { isAbsoluteURL } from '#core/utils/string-utils';
 
-import type { BaseFieldProps } from '#core/components/form/fields/types';
+import type { UrlFieldProps } from './types';
 
-export const StringField: React.FC<BaseFieldProps<string>> = ({
+export const UrlField: React.FC<UrlFieldProps> = ({
   name,
   label,
   defaultValue,
   initialValue,
   required,
   validate,
-  readOnly,
-  disabled,
-  placeholder,
   description,
   caption,
+  placeholder,
+  urlName,
 }) => {
   const { input, meta } = useField<string>(name, {
     required,
@@ -26,6 +28,8 @@ export const StringField: React.FC<BaseFieldProps<string>> = ({
     label,
   });
 
+  const value = input.value;
+
   return (
     <FormControl
       label={label}
@@ -34,17 +38,13 @@ export const StringField: React.FC<BaseFieldProps<string>> = ({
       caption={caption}
       error={meta.touched && meta.error ? meta.error : undefined}
     >
-      <Input
-        id={input.name}
-        value={input.value ?? ''}
-        name={input.name}
-        onChange={(e) => input.onChange(e.currentTarget.value)}
-        onBlur={input.onBlur}
-        onFocus={input.onFocus}
-        placeholder={placeholder}
-        readOnly={readOnly}
-        disabled={disabled}
-      />
+      {isAbsoluteURL(value) ? (
+        <Link href={value}>
+          <TruncatedText>{urlName ?? label ?? value}</TruncatedText>
+        </Link>
+      ) : (
+        <span>{placeholder}</span>
+      )}
     </FormControl>
   );
 };

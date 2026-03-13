@@ -47,6 +47,7 @@ export const BooleanField: React.FC<BooleanFieldProps> = ({
         checked={input.value ?? false}
         onChange={readOnly ? undefined : handleChange}
         onBlur={input.onBlur}
+        onFocus={input.onFocus}
         disabled={disabled}
         checkmarkType={toggle ? STYLE_TYPE.toggle_round : STYLE_TYPE.default}
         labelPlacement={LABEL_PLACEMENT.right}
