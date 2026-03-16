@@ -1,0 +1,40 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "handler.go",
+        "utils.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/storage/blobstorage",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/api:go_default_library",
+        "//go/base/blobstore:go_default_library",
+        "//go/storage:go_default_library",
+        "@io_k8s_apimachinery//pkg/api/meta:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["handler_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//go/api:go_default_library",
+        "//go/base/blobstore:go_default_library",
+        "//go/storage:go_default_library",
+        "//proto/api:go_default_library",
+        "//proto/api/v2:go_default_library",
+        "@com_github_gogo_protobuf//types:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@com_github_stretchr_testify//mock:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@io_k8s_apimachinery//pkg/types:go_default_library",
+    ],
+)
