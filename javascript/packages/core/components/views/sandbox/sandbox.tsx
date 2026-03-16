@@ -397,8 +397,18 @@ export function Sandbox() {
               >
                 {(name) => (
                   <>
-                    <StringField name={`${name}.street`} label="Street" validate={required()} />
-                    <StringField name={`${name}.city`} label="City" validate={required()} />
+                    <StringField
+                      name={`${name}.street`}
+                      label="Street"
+                      validate={required()}
+                      caption="This is a **formatted** caption with [a link](https://example.com) and `inline code`."
+                    />
+                    <StringField
+                      name={`${name}.city`}
+                      label="City"
+                      validate={required()}
+                      caption="This is a very long caption for the City field that demonstrates truncated text and tooltip behavior. The content intentionally exceeds the typical visible width of a form field caption, so when the field is constrained in a narrow container, the caption text will be truncated with an ellipsis. Hovering over the caption will show the full text in a tooltip, making it accessible and user-friendly while ensuring layout consistency. You can include additional helpful details here, such as formatting guidance, requirements, or other user instructions that might not fit easily in a single visible line."
+                    />
                     <StringField name={`${name}.postcode`} label="Postcode" />
                   </>
                 )}
