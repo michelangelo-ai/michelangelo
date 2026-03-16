@@ -431,12 +431,26 @@ func TestHandler_MergeWithExternalBlob_PlainObject_FullUnmarshal(t *testing.T) {
 	assert.Equal(t, "from blob", target.Spec.Description)
 }
 
-// TestHandler_ClearBlobFields_Steps verifies that ClearBlobFields removes Steps from
-// PipelineRunStatus so the field is not persisted in ETCD/MySQL.
+// TestHandler_ClearBlobFields_Steps verifies that ClearBlobFields clears Input and Output
+// from each step so those large Struct fields are not persisted in ETCD/MySQL.
+// Step metadata (name, state, etc.) is kept so ETCD retains lightweight step status.
 func TestHandler_ClearBlobFields_Steps(t *testing.T) {
 	pr := testPipelineRun("pr1", "uid1", "rv1")
 	pr.Status.Steps = []*v2.PipelineRunStepInfo{
-		{Name: "step1", State: v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED},
+		{
+			Name:  "step1",
+			State: v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+			Input: &pbtypes.Struct{
+				Fields: map[string]*pbtypes.Value{
+					"lr": {Kind: &pbtypes.Value_StringValue{StringValue: "0.01"}},
+				},
+			},
+			Output: &pbtypes.Struct{
+				Fields: map[string]*pbtypes.Value{
+					"accuracy": {Kind: &pbtypes.Value_StringValue{StringValue: "0.95"}},
+				},
+			},
+		},
 	}
 	pr.Status.Conditions = []*apipb.Condition{
 		{Type: "Ready", Message: "all good"},
@@ -444,6 +458,109 @@ func TestHandler_ClearBlobFields_Steps(t *testing.T) {
 
 	pr.ClearBlobFields()
 
-	assert.Nil(t, pr.Status.Steps, "Steps must be cleared by ClearBlobFields")
+	// Step metadata must survive so ETCD retains lightweight step status.
+	require.Len(t, pr.Status.Steps, 1)
+	assert.Equal(t, "step1", pr.Status.Steps[0].Name)
+	assert.Equal(t, v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED, pr.Status.Steps[0].State)
+	// Large Struct payloads must be cleared before the ETCD write.
+	assert.Nil(t, pr.Status.Steps[0].Input, "Input must be cleared by ClearBlobFields")
+	assert.Nil(t, pr.Status.Steps[0].Output, "Output must be cleared by ClearBlobFields")
 	assert.Nil(t, pr.Status.Conditions, "Conditions must be cleared by ClearBlobFields")
+}
+
+// TestHandleUpdate_PipelineRun_StepInputOutputClearedInMySQL_RestoredOnGet is an
+// end-to-end integration test for the blob-storage write+read cycle:
+//
+//  1. HandleUpdate writes a PipelineRun with step Input/Output to blob storage and MySQL.
+//     The version written to MySQL must have Input/Output cleared (blob fields only in S3).
+//  2. A simulated API GET reads the MySQL version (cleared fields) and calls
+//     MergeWithExternalBlob to restore Input/Output from S3.
+//  3. The final result must contain the original Input/Output values.
+func TestHandleUpdate_PipelineRun_StepInputOutputClearedInMySQL_RestoredOnGet(t *testing.T) {
+	mem := newMemClient("s3")
+	h := newTestHandler(mem, Config{BucketName: "test-bucket", EnabledCRDs: map[string]bool{"pipelinerun": true}})
+	ms := new(mockMetadataStorage)
+
+	// Build a PipelineRun whose steps carry large Input/Output payloads.
+	pr := testPipelineRun("pr-e2e", "uid-e2e", "rv1")
+	pr.Status.Steps = []*v2.PipelineRunStepInfo{
+		{
+			Name:  "train",
+			State: v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+			Input: &pbtypes.Struct{
+				Fields: map[string]*pbtypes.Value{
+					"learning_rate": {Kind: &pbtypes.Value_StringValue{StringValue: "0.001"}},
+				},
+			},
+			Output: &pbtypes.Struct{
+				Fields: map[string]*pbtypes.Value{
+					"accuracy": {Kind: &pbtypes.Value_StringValue{StringValue: "0.97"}},
+				},
+			},
+		},
+	}
+
+	// --- Write path ---
+
+	// No previous UUID in MySQL (first sync).
+	ms.On("GetByID", mock.Anything, "uid-e2e", mock.Anything).Return(fmt.Errorf("not found"))
+
+	// Capture the object that HandleUpdate passes to MySQL.Upsert.
+	var mysqlObj *v2.PipelineRun
+	ms.On("Upsert", mock.Anything, mock.Anything, false, mock.Anything).
+		Run(func(args mock.Arguments) {
+			obj := args.Get(1).(*v2.PipelineRun)
+			mysqlObj = obj.DeepCopy()
+		}).Return(nil)
+
+	require.NoError(t, HandleUpdate(context.Background(), pr, ms, false, nil, h))
+
+	// ── Assertion 1: blob (S3) has the full object ──────────────────────────────
+	require.NotEmpty(t, mem.objects, "full object must be uploaded to S3")
+
+	// Download and unmarshal the blob to verify Input/Output are present in S3.
+	var blobKey string
+	for k := range mem.objects {
+		blobKey = k
+	}
+	var blobPR v2.PipelineRun
+	require.NoError(t, json.Unmarshal(mem.objects[blobKey], &blobPR))
+	require.Len(t, blobPR.Status.Steps, 1)
+	require.NotNil(t, blobPR.Status.Steps[0].Input, "Input must be present in S3 blob")
+	require.NotNil(t, blobPR.Status.Steps[0].Output, "Output must be present in S3 blob")
+	assert.Equal(t, "0.001", blobPR.Status.Steps[0].Input.Fields["learning_rate"].GetStringValue())
+	assert.Equal(t, "0.97", blobPR.Status.Steps[0].Output.Fields["accuracy"].GetStringValue())
+
+	// ── Assertion 2: MySQL version has steps but NO Input/Output ────────────────
+	require.NotNil(t, mysqlObj, "Upsert must have been called")
+	require.Len(t, mysqlObj.Status.Steps, 1)
+	assert.Equal(t, "train", mysqlObj.Status.Steps[0].Name, "step metadata must survive in MySQL")
+	assert.Equal(t, v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED, mysqlObj.Status.Steps[0].State)
+	assert.Nil(t, mysqlObj.Status.Steps[0].Input, "Input must NOT be stored in MySQL")
+	assert.Nil(t, mysqlObj.Status.Steps[0].Output, "Output must NOT be stored in MySQL")
+
+	// --- Read path (simulated API GET) ---
+
+	// The object retrieved from MySQL has the blob annotation but cleared step fields.
+	fromMySQL := testPipelineRun("pr-e2e", "uid-e2e", "rv2")
+	fromMySQL.Annotations = pr.Annotations // carries BlobStorageUUIDAnnotation set by HandleUpdate
+	fromMySQL.Status.Steps = []*v2.PipelineRunStepInfo{
+		{
+			Name:  "train",
+			State: v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+			// Input and Output are absent — as stored in MySQL.
+		},
+	}
+
+	require.NoError(t, h.MergeWithExternalBlob(context.Background(), fromMySQL))
+
+	// ── Assertion 3: GET response has Input/Output restored from S3 ─────────────
+	require.Len(t, fromMySQL.Status.Steps, 1)
+	step := fromMySQL.Status.Steps[0]
+	require.NotNil(t, step.Input, "Input must be restored from S3 on GET")
+	require.NotNil(t, step.Output, "Output must be restored from S3 on GET")
+	assert.Equal(t, "0.001", step.Input.Fields["learning_rate"].GetStringValue())
+	assert.Equal(t, "0.97", step.Output.Fields["accuracy"].GetStringValue())
+	// ETCD metadata (ResourceVersion) must be preserved — not overwritten by blob copy.
+	assert.Equal(t, "rv2", fromMySQL.ResourceVersion)
 }

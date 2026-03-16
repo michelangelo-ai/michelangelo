@@ -62,7 +62,8 @@ func HandleDelete(
 //  1. Retrieve the current UUID annotation from MySQL (tracks last uploaded resource version).
 //  2. Skip upload if resource version is unchanged.
 //  3. Upload the full object to blob storage (sets BlobStorageUUIDAnnotation in memory).
-//  4. Upsert to MySQL (Phase 1: full object including any blob fields).
+//  4. Deep-copy the object, call ClearBlobFields on the copy, and upsert the stripped copy to
+//     MySQL so that large payloads (step Input/Output, Conditions, etc.) are not stored in etcd.
 //  5. Best-effort: mark the previous blob snapshot for cleanup via UpdateTags.
 func updateInternal(
 	ctx context.Context,
@@ -83,7 +84,17 @@ func updateInternal(
 		return err
 	}
 
-	if err := metadataStorage.Upsert(ctx, obj, direct, indexedFields); err != nil {
+	// Phase 2: clear blob fields on a deep copy so that large payloads (step
+	// Input/Output, Conditions, etc.) are not persisted in MySQL/etcd.
+	// The original obj is left intact so the caller continues to see all fields.
+	objToWrite := obj
+	if blobFieldObj, ok := obj.(storage.ObjectWithBlobFields); ok && blobFieldObj.HasBlobFields() {
+		copied := obj.DeepCopyObject().(client.Object)
+		copied.(storage.ObjectWithBlobFields).ClearBlobFields()
+		objToWrite = copied
+	}
+
+	if err := metadataStorage.Upsert(ctx, objToWrite, direct, indexedFields); err != nil {
 		return err
 	}
 
