@@ -61,7 +61,7 @@ export function ArrayFormGroup({
           </FormGroup>
         </RepeatedLayoutProvider>
       ))}
-      {!readOnly && <AddButton label={addLabel} shape="pill" onClick={add} />}
+      {!readOnly && <AddButton label={addLabel} shape={SHAPE.pill} onClick={add} />}
     </>
   );
 }
