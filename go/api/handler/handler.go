@@ -122,7 +122,7 @@ func (handler *apiHandler) Get(
 		// pending deleted, so we should proceed to the section below to get from the metadata storage.
 		if !isDeletedImmutableObject(obj) {
 			log.Info("Find object in ETCD")
-			return nil
+			return surfaceGrpcError(handler.handleBlobStorageForGet(ctx, obj, log), "get", namespace, name)
 		}
 	}
 	// if the k8s client error is not "not found", return the error
@@ -136,7 +136,9 @@ func (handler *apiHandler) Get(
 			return surfaceGrpcError(err, "get", namespace, name)
 		}
 
-		handler.handleBlobStorageForGet(ctx, obj, log)
+		if err = handler.handleBlobStorageForGet(ctx, obj, log); err != nil {
+			return surfaceGrpcError(err, "get", namespace, name)
+		}
 		log.Info("Find object in metadata storage")
 	}
 
@@ -549,12 +551,14 @@ func (handler *apiHandler) handleMetadataStorageForCreate(ctx context.Context, o
 }
 
 // handleBlobStorageForGet handles blob storage logic during get operations
-func (handler *apiHandler) handleBlobStorageForGet(ctx context.Context, obj ctrlRTClient.Object, log logr.Logger) {
+func (handler *apiHandler) handleBlobStorageForGet(ctx context.Context, obj ctrlRTClient.Object, log logr.Logger) error {
 	if handler.blobHandler.IsObjectInteresting(obj) {
-		if terrablobErr := handler.blobHandler.MergeWithExternalBlob(ctx, obj); terrablobErr != nil {
-			log.Error(terrablobErr, "Failed to merging with blob storage")
+		if err := handler.blobHandler.MergeWithExternalBlob(ctx, obj); err != nil {
+			log.Error(err, "Failed to merging with blob storage")
+			return err
 		}
 	}
+	return nil
 }
 
 // checkDryRun checks if the dry run option is valid (either empty or []string{"All"}), if not returns an error

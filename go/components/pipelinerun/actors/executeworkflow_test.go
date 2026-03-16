@@ -8,6 +8,7 @@ import (
 
 	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	uberconfig "go.uber.org/config"
 	"go.uber.org/zap/zaptest"
@@ -2981,6 +2982,184 @@ func TestGetWorkflowUrl(t *testing.T) {
 				require.Empty(t, result)
 			} else {
 				require.Equal(t, testCase.expectedUrl, result)
+			}
+		})
+	}
+}
+func TestGetStepInfoFromTaskProgress(t *testing.T) {
+	tests := []struct {
+		name              string
+		taskProgress      TaskProgress
+		namespace         string
+		wantOutput        bool
+		wantOutputFields  map[string]string
+		wantInput         bool
+		wantInputFields   map[string]string
+		wantCachedOutputs bool
+		wantCachedName    string
+		wantState         v2.PipelineRunStepState
+		wantMessage       string
+	}{
+		{
+			name: "output resource name goes to StepCachedOutputs; stepInfo.Output is set by enrichStepOutput not here",
+			taskProgress: TaskProgress{
+				TaskPath:  "pipeline/step1",
+				TaskName:  "step1",
+				TaskState: pipelinerunutils.UniflowTaskStateSucceeded,
+				Output:    "my-cached-output-abc",
+			},
+			namespace:         "default",
+			wantOutput:        false, // populated by enrichStepOutput, not getStepInfoFromTaskProgress
+			wantCachedOutputs: true,
+			wantCachedName:    "my-cached-output-abc",
+			wantState:         v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+		},
+		{
+			name: "valid JSON input sets Input struct",
+			taskProgress: TaskProgress{
+				TaskPath:  "pipeline/step2",
+				TaskName:  "step2",
+				TaskState: pipelinerunutils.UniflowTaskStateRunning,
+				Input:     `{"lr": "0.01", "epochs": "10"}`,
+			},
+			namespace:       "default",
+			wantInput:       true,
+			wantInputFields: map[string]string{"lr": "0.01", "epochs": "10"},
+			wantState:       v2.PIPELINE_RUN_STEP_STATE_RUNNING,
+		},
+		{
+			name: "output resource name and input both set correctly",
+			taskProgress: TaskProgress{
+				TaskPath:  "pipeline/step3",
+				TaskName:  "step3",
+				TaskState: pipelinerunutils.UniflowTaskStateSucceeded,
+				Input:     `{"dataset": "train_v2"}`,
+				Output:    "cached-out-xyz",
+			},
+			namespace:         "default",
+			wantOutput:        false, // set by enrichStepOutput via CachedOutput lookup
+			wantInput:         true,
+			wantInputFields:   map[string]string{"dataset": "train_v2"},
+			wantCachedOutputs: true,
+			wantCachedName:    "cached-out-xyz",
+			wantState:         v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+		},
+		{
+			name: "non-JSON output is used as resource name but Output struct stays nil",
+			taskProgress: TaskProgress{
+				TaskPath:  "pipeline/step4",
+				TaskName:  "step4",
+				TaskState: pipelinerunutils.UniflowTaskStateSucceeded,
+				Output:    "cached-output-resource-name",
+			},
+			namespace:         "default",
+			wantOutput:        false,
+			wantCachedOutputs: true,
+			wantCachedName:    "cached-output-resource-name",
+			wantState:         v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+		},
+		{
+			name: "non-JSON input leaves Input struct nil",
+			taskProgress: TaskProgress{
+				TaskPath:  "pipeline/step5",
+				TaskName:  "step5",
+				TaskState: pipelinerunutils.UniflowTaskStateRunning,
+				Input:     "not-valid-json",
+			},
+			namespace: "default",
+			wantInput: false,
+			wantState: v2.PIPELINE_RUN_STEP_STATE_RUNNING,
+		},
+		{
+			name: "empty output and input leaves both nil",
+			taskProgress: TaskProgress{
+				TaskPath:  "pipeline/step6",
+				TaskName:  "step6",
+				TaskState: pipelinerunutils.UniflowTaskStatePending,
+			},
+			namespace:         "default",
+			wantOutput:        false,
+			wantInput:         false,
+			wantCachedOutputs: false,
+			wantState:         v2.PIPELINE_RUN_STEP_STATE_PENDING,
+		},
+		{
+			name: "failed state captures message",
+			taskProgress: TaskProgress{
+				TaskPath:    "pipeline/step7",
+				TaskName:    "step7",
+				TaskState:   pipelinerunutils.UniflowTaskStateFailed,
+				TaskMessage: "out of memory",
+			},
+			namespace:   "default",
+			wantState:   v2.PIPELINE_RUN_STEP_STATE_FAILED,
+			wantMessage: "out of memory",
+		},
+		{
+			name: "skipped state",
+			taskProgress: TaskProgress{
+				TaskPath:  "pipeline/step8",
+				TaskName:  "step8",
+				TaskState: pipelinerunutils.UniflowTaskStateSkipped,
+			},
+			namespace: "default",
+			wantState: v2.PIPELINE_RUN_STEP_STATE_SKIPPED,
+		},
+		{
+			name: "killed state captures message",
+			taskProgress: TaskProgress{
+				TaskPath:    "pipeline/step9",
+				TaskName:    "step9",
+				TaskState:   pipelinerunutils.UniflowTaskStateKilled,
+				TaskMessage: "killed by user",
+			},
+			namespace:   "default",
+			wantState:   v2.PIPELINE_RUN_STEP_STATE_KILLED,
+			wantMessage: "killed by user",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stepInfo := getStepInfoFromTaskProgress(&tt.taskProgress, tt.namespace)
+
+			assert.Equal(t, tt.taskProgress.TaskPath, stepInfo.Name)
+			assert.Equal(t, tt.taskProgress.TaskName, stepInfo.DisplayName)
+			assert.Equal(t, tt.wantState, stepInfo.State)
+
+			if tt.wantMessage != "" {
+				assert.Equal(t, tt.wantMessage, stepInfo.Message)
+			}
+
+			if tt.wantOutput {
+				require.NotNil(t, stepInfo.Output, "expected Output to be set")
+				for k, v := range tt.wantOutputFields {
+					val, ok := stepInfo.Output.Fields[k]
+					require.True(t, ok, "expected field %q in Output.Fields", k)
+					assert.Equal(t, v, val.GetStringValue())
+				}
+			} else {
+				assert.Nil(t, stepInfo.Output, "expected Output to be nil")
+			}
+
+			if tt.wantInput {
+				require.NotNil(t, stepInfo.Input, "expected Input to be set")
+				for k, v := range tt.wantInputFields {
+					val, ok := stepInfo.Input.Fields[k]
+					require.True(t, ok, "expected field %q in Input.Fields", k)
+					assert.Equal(t, v, val.GetStringValue())
+				}
+			} else {
+				assert.Nil(t, stepInfo.Input, "expected Input to be nil")
+			}
+
+			if tt.wantCachedOutputs {
+				require.NotNil(t, stepInfo.StepCachedOutputs)
+				require.Len(t, stepInfo.StepCachedOutputs.IntermediateVars, 1)
+				assert.Equal(t, tt.wantCachedName, stepInfo.StepCachedOutputs.IntermediateVars[0].Name)
+				assert.Equal(t, tt.namespace, stepInfo.StepCachedOutputs.IntermediateVars[0].Namespace)
+			} else {
+				assert.Nil(t, stepInfo.StepCachedOutputs)
 			}
 		})
 	}

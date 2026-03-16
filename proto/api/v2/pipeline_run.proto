@@ -290,7 +290,7 @@ message PipelineRunStatus {
   // - Resource usage metrics
   // - Input/output artifacts
   // This provides granular tracking and observability at the step level.
-  repeated PipelineRunStepInfo steps = 8;
+  repeated PipelineRunStepInfo steps = 8 [(michelangelo.api.external_storage) = true];
 
   // Source pipeline that this PipelineRun executes, containing:
   // - Pipeline definition and configuration

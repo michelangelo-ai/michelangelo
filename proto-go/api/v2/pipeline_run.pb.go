@@ -5898,6 +5898,9 @@ func (m *PipelineRun) ClearBlobFields() {
 	if m.Status.Conditions != nil {
 		m.Status.Conditions = nil
 	}
+	if m.Status.Steps != nil {
+		m.Status.Steps = nil
+	}
 	if m.Status.SourcePipeline != nil {
 		m.Status.SourcePipeline = nil
 	}

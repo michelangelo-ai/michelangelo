@@ -75,7 +75,7 @@ def resource_dict(cpu, memory, disk = None, gpu = None, gpu_sku = ""):
         res["gpu_sku"] = gpu_sku
     return res
 
-def report_progress(task_path, task_name, task_log = "", task_message = "", task_state = "", start_time = "", end_time = "", output = "", retry_attempt_id = "", first_activity_id = "", activity_id = ""):
+def report_progress(task_path, task_name, task_log = "", task_message = "", task_state = "", start_time = "", end_time = "", output = "", retry_attempt_id = "", first_activity_id = "", activity_id = "", input = ""):
     if type(retry_attempt_id) != "str":
         retry_attempt_id = str(retry_attempt_id)
     state_dict = {
@@ -87,6 +87,7 @@ def report_progress(task_path, task_name, task_log = "", task_message = "", task
         "start_time": start_time,
         "end_time": end_time,
         "output": output,
+        "input": input,
         "retry_attempt_id": retry_attempt_id,
         "first_activity_id": first_activity_id,
         "current_activity_id": activity_id,
@@ -346,6 +347,7 @@ def process_terminated_job(
         end_time_seconds = time.time()
         end_time_formatted_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
 
+        input_json = json.dumps({"args": list(args), "kwargs": kwargs}) if (args or kwargs) else ""
         report_progress(
             task_path = task_path,
             task_name = task_name,
@@ -355,6 +357,7 @@ def process_terminated_job(
             start_time = start_time_formatted_str,
             end_time = end_time_formatted_str,
             output = created_cached_output.get("metadata", {}).get("name", ""),
+            input = input_json,
             retry_attempt_id = retry_attempt_id,
         )
         print("{} job succeeded, attempt ({} / {}) succeeded".format(job_type, str(retry_attempt_id), str(total_retry_attempt)))
