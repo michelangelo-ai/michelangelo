@@ -1,6 +1,6 @@
-import { useStyletron } from 'baseui';
 import { Button, KIND, SHAPE, SIZE } from 'baseui/button';
 
+import { AddButton } from '#core/components/form/components/add-button/add-button';
 import { useArrayField } from '#core/components/form/hooks/use-array-field';
 import { FormGroup } from '#core/components/form/layout/form-group/form-group';
 import { Icon } from '#core/components/icon/icon';
@@ -20,7 +20,6 @@ export function ArrayFormGroup({
   tooltip,
   collapsible,
 }: ArrayFormGroupProps) {
-  const [, theme] = useStyletron();
   const { entries, add, remove, isRemovable } = useArrayField(rootFieldPath, {
     minItems,
     readOnly,
@@ -62,23 +61,7 @@ export function ArrayFormGroup({
           </FormGroup>
         </RepeatedLayoutProvider>
       ))}
-      {!readOnly && (
-        <Button
-          type="button"
-          kind={KIND.secondary}
-          shape={SHAPE.pill}
-          size={SIZE.compact}
-          startEnhancer={
-            <Icon name="plus" color={theme.colors.contentPrimary} size={theme.sizing.scale600} />
-          }
-          overrides={{
-            BaseButton: { style: { marginBottom: theme.sizing.scale600, width: '260px' } },
-          }}
-          onClick={add}
-        >
-          {addLabel}
-        </Button>
-      )}
+      {!readOnly && <AddButton label={addLabel} shape="pill" onClick={add} />}
     </>
   );
 }

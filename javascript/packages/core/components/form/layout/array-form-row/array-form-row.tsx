@@ -2,6 +2,7 @@ import React from 'react';
 import { useStyletron } from 'baseui';
 import { Button, KIND, SHAPE, SIZE } from 'baseui/button';
 
+import { AddButton } from '#core/components/form/components/add-button/add-button';
 import { useArrayField } from '#core/components/form/hooks/use-array-field';
 import { FormRow } from '#core/components/form/layout/form-row/form-row';
 import { Icon } from '#core/components/icon/icon';
@@ -61,22 +62,7 @@ export function ArrayFormRow({
           </RepeatedLayoutProvider>
         );
       })}
-      {!readOnly && (
-        <Button
-          type="button"
-          kind={KIND.secondary}
-          size={SIZE.compact}
-          startEnhancer={
-            <Icon name="plus" color={theme.colors.contentPrimary} size={theme.sizing.scale600} />
-          }
-          overrides={{
-            BaseButton: { style: { marginBottom: theme.sizing.scale600, width: '260px' } },
-          }}
-          onClick={add}
-        >
-          {addLabel}
-        </Button>
-      )}
+      {!readOnly && <AddButton label={addLabel} onClick={add} />}
     </>
   );
 }
