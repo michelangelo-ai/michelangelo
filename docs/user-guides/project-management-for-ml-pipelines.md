@@ -13,33 +13,17 @@ A project must be created before you can register or run pipelines. See [Pipelin
 
 ## Prerequisites
 
-Before creating a project, ensure:
+Before creating a project, complete the initial setup:
 
-1. **The Michelangelo CLI is installed.** See the [CLI Reference](./cli.md) for setup instructions.
-2. **The sandbox environment is running.** Follow the [Sandbox Setup Guide](../setup-guide/sandbox-setup.md) to install the required software (Docker, kubectl, k3d) and create a local development environment:
+1. **Set up the Michelangelo CLI and sandbox environment.** See the [CLI Reference - Prerequisites](./cli.md#prerequisites) for installation and setup instructions.
 
-   ```bash
-   ma sandbox create
-   ```
-
-   This starts all required services in a local Kubernetes cluster, including the API server (`localhost:14566`), MinIO object storage (`localhost:9091`), and a workflow engine (Cadence by default).
-
-3. **Dependencies are installed.** [Poetry](https://python-poetry.org/docs/#installation) must be installed first, then install the project dependencies:
-
-   ```bash
-   cd python/
-   poetry install
-   ```
-
-4. **Verify the environment is ready:**
+2. **Verify the environment is ready:**
 
    ```bash
    ma project get --namespace="default"
    ```
 
    If the sandbox is running correctly, this command returns successfully (an empty list is expected for a new environment).
-
-> **Alternative:** If you prefer to run only the API server without the full sandbox environment, see the [Sandbox Setup Guide](../setup-guide/sandbox-setup.md) for standalone setup options. Note that project creation requires a running database and workflow engine in addition to the API server.
 
 ## Create a project
 
