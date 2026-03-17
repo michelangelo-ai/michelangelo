@@ -425,7 +425,7 @@ message PipelineRunStepInfo {
   // Contains structured data like metrics, artifacts and results.
   // Used to pass data between steps and analyze pipeline outcomes.
   // Optional field that may be empty if the step produces no outputs.
-  google.protobuf.Struct output = 6;
+  google.protobuf.Struct output = 6 [(michelangelo.api.external_storage) = true];
 
   // Nested sub-steps executed as part of this step.
   // Used to represent hierarchical workflows where steps contain child steps.
@@ -448,7 +448,7 @@ message PipelineRunStepInfo {
   // Contains the resolved values after parameter substitution and overrides.
   // Used to track what inputs were actually used when the step ran.
   // Optional field that may be empty if the step takes no inputs.
-  google.protobuf.Struct input = 10;
+  google.protobuf.Struct input = 10 [(michelangelo.api.external_storage) = true];
 
   // A collection of cached outputs generated in the step that are stored in blob storage.
   // Contains intermediate variables, checkpoints, and raw models that can be reused.

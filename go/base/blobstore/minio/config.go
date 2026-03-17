@@ -13,6 +13,7 @@ type (
 		AwsAccessKeyId     string `yaml:"awsAccessKeyId"`
 		AwsSecretAccessKey string `yaml:"awsSecretAccessKey"`
 		AwsEndpointUrl     string `yaml:"awsEndpointUrl"`
+		BucketName         string `yaml:"bucketName"`
 	}
 )
 
