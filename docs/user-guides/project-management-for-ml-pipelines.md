@@ -16,19 +16,20 @@ A project must be created before you can register or run pipelines. See [Pipelin
 Before creating a project, ensure:
 
 1. **The Michelangelo CLI is installed.** See the [CLI Reference](./cli.md) for setup instructions.
-2. **The API server is running:**
+2. **The sandbox environment is running.** Follow the [Sandbox Setup Guide](../setup-guide/sandbox-setup.md) to create a local development environment:
 
-```bash
-bazel run //go/cmd/apiserver:apiserver
-```
+   ```bash
+   ma sandbox create
+   ```
+
+   This starts all required services (API server, database, workflow engine, and object storage) in a local Kubernetes cluster.
 
 3. **Dependencies are installed:**
 
-```bash
-export REPO_ROOT="/path/to/michelangelo"
-cd $REPO_ROOT/python/
-poetry install
-```
+   ```bash
+   cd python/
+   poetry install
+   ```
 
 ## Create a project
 
