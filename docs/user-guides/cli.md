@@ -36,29 +36,30 @@ All resource types support `get`, `apply`, and `delete` (see [supported resource
 
 ## Prerequisites
 
-1. **Install Python >= 3.9** and [Poetry](https://python-poetry.org/)
+1. **Install [Python >= 3.9](https://www.python.org/downloads/)** and **[Poetry](https://python-poetry.org/docs/#installation)**.
 
-2. **Clone and install dependencies:**
+2. **Install dependencies:**
 
    ```bash
-   export REPO_ROOT="/Users/{username}/michelangelo"
-   cd $REPO_ROOT/python/
+   cd python/
    poetry install
    ```
 
-3. **Start the API server** (from repository root):
+3. **Start the sandbox environment.** Follow the [Sandbox Setup Guide](../setup-guide/sandbox-setup.md) to install the required software (Docker, kubectl, k3d) and create a local development environment:
 
    ```bash
-   bazel run //go/cmd/apiserver:apiserver
+   ma sandbox create
    ```
 
-   > **Tip:** You can also use `ma sandbox create` to set up a complete local development environment with the API server, workflow engine, and all dependencies. See [Sandbox commands](#sandbox-commands) for details.
+   This starts all required services, including the API server (`localhost:14566`), database, workflow engine, and object storage. See [Sandbox commands](#sandbox-commands) for the full command reference.
 
-4. **(Optional) Configure API server address:**
+4. **(Optional) Configure a custom API server address:**
 
    ```bash
    export MACTL_ADDRESS="127.0.0.1:14566"
    ```
+
+   The default address (`127.0.0.1:14566`) works automatically with the sandbox. Only set this if you are connecting to a different API server instance.
 
 ## Usage
 
@@ -71,7 +72,7 @@ cd $REPO_ROOT/python/
 ma <RESOURCE_TYPE> <COMMAND> [ARGS]
 ```
 
-The examples below omit the `cd` step for brevity.
+We will abstract this part like `ma <RESOURCE_TYPE> <COMMAND>` in below.
 
 ### GET - Retrieve resource
 
@@ -246,29 +247,21 @@ ma pipeline dev-run -f "./examples/bert_cola/pipeline.yaml" --file-sync --storag
 
 ##### Differences between dev-run and remote-run
 
-| Mode | Command | Uncommitted changes | Creates PipelineRun | Visible in MA Studio |
-|------|---------|---------------------|---------------------|----------------------|
-| **dev-run** | `ma pipeline dev-run` | No (committed code only) | Yes | PipelineRun only |
-| **dev-run --file-sync** | `ma pipeline dev-run --file-sync` | Yes | Yes | PipelineRun only |
-| **remote-run** | `python workflow.py remote-run` | No (committed code only) | No | No |
-| **remote-run --file-sync** | `python workflow.py remote-run --file-sync` | Yes | No | No |
+**1. dev-run: Test Pipeline from Local File**
 
-**dev-run** runs a pipeline directly from your committed git snapshot via the Michelangelo API server. It creates a PipelineRun entity but no Pipeline entity. Adding `--file-sync` enables testing uncommitted changes by syncing local file diffs to the remote container.
+`pipeline dev-run` command runs a pipeline directly from your committed git snapshot. Pipeline run will be controlled by Michelangelo API server and controller. This command creates a PipelineRun entity but no Pipeline entity, so you will not see the pipeline entity information in MA Studio.
 
 **remote-run** (invoked via `python my_workflow.py remote-run`, not an `ma` command) bypasses the Michelangelo API server and submits your workflow directly to Cadence/Temporal. No Michelangelo entities are created, and pipeline status is not visible in MA Studio.
 
-<details>
-<summary>Technical details</summary>
+**2. dev-run --file-sync: Test Pipeline + Uncommitted Changes**
 
-**dev-run**: Reads your pipeline configuration from a local YAML file and creates a PipelineRun Michelangelo entity with the pipeline specification embedded inline (rather than referencing a registered Pipeline resource). Execution path: ma command → API Server → PipelineRun entity → Controller Manager → Cadence/Temporal.
+Adding `--file-sync` to the `pipeline dev-run` command enables testing of uncommitted code changes without needing to commit or rebuild Docker images.
 
 **dev-run --file-sync**: Creates two tarballs: a workflow tarball (from committed code) and a file-sync tarball (containing only files changed via `git diff`). When the container starts, `sitecustomize.py` downloads the file-sync tarball and overlays changed files on top of the base code. The file-sync URL is passed via the `UF_FILE_SYNC_TARBALL_URL` environment variable.
 
 **remote-run**: Creates a workflow tarball from committed code and sends it straight to the workflow engine without creating any Michelangelo entities.
 
 **remote-run --file-sync**: Creates two tarballs: a workflow tarball (base64-encoded in the Cadence CLI input) and a file-sync tarball (uploaded to S3). The S3 URL is passed as an environment variable to the container.
-
-</details>
 
 ### Pipeline_run
 
