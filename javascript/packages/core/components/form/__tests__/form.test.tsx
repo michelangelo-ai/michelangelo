@@ -147,15 +147,11 @@ describe('Form', () => {
       await user.click(screen.getByRole('button', { name: 'Submit' }));
 
       await waitFor(() =>
-        expect(onSubmit).toHaveBeenCalledWith(
-          { code: 'ABC' },
-          expect.anything(),
-          expect.anything()
-        )
+        expect(onSubmit).toHaveBeenCalledWith({ code: 'ABC' }, expect.anything(), expect.anything())
       );
     });
 
-    it('applies format to transform stored value for display', async () => {
+    it('applies format to transform stored value for display', () => {
       render(
         <Form onSubmit={vi.fn()} initialValues={{ price: '1000' }}>
           <StringField
