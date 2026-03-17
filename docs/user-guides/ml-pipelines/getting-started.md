@@ -11,9 +11,14 @@ Build and run your first ML pipeline on Michelangelo in minutes. This guide walk
 
 ## Prerequisites
 
-* Python 3.9+
-* [Poetry](https://python-poetry.org/) installed
-* For remote runs: Docker and access to a Kubernetes cluster (or use the [local sandbox](./running-uniflow.md))
+1. **[Python 3.9+](https://www.python.org/downloads/)** and **[Poetry](https://python-poetry.org/docs/#installation)** installed.
+2. **A running sandbox environment.** Follow the [Sandbox Setup Guide](../../setup-guide/sandbox-setup.md) to install the required software (Docker, kubectl, k3d) and start the local development environment:
+
+   ```bash
+   ma sandbox create
+   ```
+
+   This starts all required services (API server, database, workflow engine, and object storage) in a local Kubernetes cluster. For local-only runs (no remote execution), you can skip this step.
 
 ## Environment setup
 

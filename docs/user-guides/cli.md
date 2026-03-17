@@ -36,29 +36,30 @@ All resource types support `get`, `apply`, and `delete` (see [supported resource
 
 ## Prerequisites
 
-1. **Install Python >= 3.9** and [Poetry](https://python-poetry.org/)
+1. **Install [Python >= 3.9](https://www.python.org/downloads/)** and **[Poetry](https://python-poetry.org/docs/#installation)**.
 
-2. **Clone and install dependencies:**
+2. **Install dependencies:**
 
    ```bash
-   export REPO_ROOT="/Users/{username}/michelangelo"
-   cd $REPO_ROOT/python/
+   cd python/
    poetry install
    ```
 
-3. **Start the API server** (from repository root):
+3. **Start the sandbox environment.** Follow the [Sandbox Setup Guide](../setup-guide/sandbox-setup.md) to install the required software (Docker, kubectl, k3d) and create a local development environment:
 
    ```bash
-   bazel run //go/cmd/apiserver:apiserver
+   ma sandbox create
    ```
 
-   > **Tip:** You can also use `ma sandbox create` to set up a complete local development environment with the API server, workflow engine, and all dependencies. See [Sandbox commands](#sandbox-commands) for details.
+   This starts all required services, including the API server (`localhost:14566`), database, workflow engine, and object storage. See [Sandbox commands](#sandbox-commands) for the full command reference.
 
-4. **(Optional) Configure API server address:**
+4. **(Optional) Configure a custom API server address:**
 
    ```bash
    export MACTL_ADDRESS="127.0.0.1:14566"
    ```
+
+   The default address (`127.0.0.1:14566`) works automatically with the sandbox. Only set this if you are connecting to a different API server instance.
 
 ## Usage
 
