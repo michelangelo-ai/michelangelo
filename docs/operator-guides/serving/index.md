@@ -1,10 +1,10 @@
-# Michelangelo Inference
+# Michelangelo Serving
 
 Michelangelo provides a unified way to deploy and serve ML models on Kubernetes. This guide covers the architecture, controller lifecycles, and core concepts that operators and contributors should understand.
 
-## **What Is Michelangelo Inference?**
+## **What Is Michelangelo Serving?**
 
-Michelangelo Inference is a control plane for managing ML model serving infrastructure. It handles the complete lifecycle of inference servers and model deployments, from provisioning to traffic routing to cleanup.
+Michelangelo Serving is a control plane for managing ML model serving infrastructure. It handles the complete lifecycle of inference servers and model deployments, from provisioning to traffic routing to cleanup.
 
 Users define *what to deploy*, and Michelangelo handles:
 
@@ -49,7 +49,7 @@ The Deployment controller manages model rollouts to inference servers:
    Model artifacts are staged for loading.
 3. **Resource Acquisition**
    Model is added to the inference server's Model Config.
-4. **Traffic Routing**
+4. **Model Traffic Routing**
    Endpoint Routes are created to expose the model.
 5. **Completion**
    The model is fully deployed and serving.
@@ -61,7 +61,7 @@ The Deployment controller manages model rollouts to inference servers:
 | **Validation** | Verify model and server configuration |
 | **Asset Preparation** | Stage model artifacts |
 | **Resource Acquisition** | Add model to server config |
-| **Traffic Routing** | Configure network routes |
+| **Model Traffic Routing** | Configure network routes to the deployed model |
 | **Rollout Complete** | Model is live |
 
 If issues occur, the system automatically rolls back:
