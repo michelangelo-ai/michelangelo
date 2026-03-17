@@ -18,6 +18,8 @@ export const BooleanField: React.FC<BooleanFieldProps> = ({
   disabled,
   description,
   caption,
+  format,
+  parse,
   checkboxLabel,
   toggle = false,
 }) => {
@@ -27,6 +29,8 @@ export const BooleanField: React.FC<BooleanFieldProps> = ({
     defaultValue,
     initialValue,
     label,
+    format,
+    parse,
   });
 
   const handleChange = (event: React.FormEvent<HTMLInputElement>) => {

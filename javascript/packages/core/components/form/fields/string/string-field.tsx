@@ -17,6 +17,8 @@ export const StringField: React.FC<BaseFieldProps<string>> = ({
   placeholder,
   description,
   caption,
+  format,
+  parse,
 }) => {
   const { input, meta } = useField<string>(name, {
     required,
@@ -24,6 +26,8 @@ export const StringField: React.FC<BaseFieldProps<string>> = ({
     defaultValue,
     initialValue,
     label,
+    format,
+    parse,
   });
 
   return (

@@ -19,6 +19,8 @@ export const InlineRadioField: React.FC<RadioFieldProps> = ({
   disabled,
   description,
   caption,
+  format,
+  parse,
   options,
   align = ALIGN.horizontal,
 }) => {
@@ -28,6 +30,8 @@ export const InlineRadioField: React.FC<RadioFieldProps> = ({
     defaultValue,
     initialValue,
     label,
+    format,
+    parse,
   });
 
   const isBoolean = options.every(({ value }) => typeof value === 'boolean');

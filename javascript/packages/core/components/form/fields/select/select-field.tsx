@@ -21,6 +21,8 @@ export function SelectField<V = string | number>({
   description,
   caption,
   placeholder,
+  format,
+  parse,
   options,
   visibleOptionLimit,
   isLoading = false,
@@ -35,6 +37,8 @@ export function SelectField<V = string | number>({
     defaultValue,
     initialValue,
     label,
+    format,
+    parse,
   });
 
   const { baseUIOptions, findByValue, findByKey } = useMemo(() => {

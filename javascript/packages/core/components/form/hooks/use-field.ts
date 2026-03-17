@@ -15,6 +15,10 @@ export function useField<T = unknown>(
     defaultValue?: T;
     initialValue?: T;
     label?: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    parse?: (value: any) => T;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    format?: (value: T) => any;
   }
 ): { input: FieldInput<T>; meta: FieldState } {
   useFieldRegistration(name, options?.label);
@@ -29,6 +33,8 @@ export function useField<T = unknown>(
     validate,
     defaultValue: options?.defaultValue,
     initialValue: options?.initialValue,
+    parse: options?.parse,
+    format: options?.format,
   });
 
   const input: FieldInput<T> = {

@@ -64,6 +64,20 @@ export interface BaseFieldProps<T = unknown> {
   caption?: string;
 
   /**
+   * Transforms the input value before storing it in form state.
+   * Called with the input value.
+   */
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  parse?: (value: any) => T;
+
+  /**
+   * Transforms the field value for display in the input.
+   * Called with the field value from form state.
+   */
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  format?: (value: T) => any;
+
+  /**
    * Validation function called on each value change after the field is touched.
    * Returns an error message string when invalid, or `undefined` when valid.
    * Use `combineValidators` to compose multiple validators.

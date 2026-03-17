@@ -27,6 +27,8 @@ export const CardRadioField: React.FC<RadioFieldProps> = ({
   disabled,
   description,
   caption,
+  format,
+  parse,
   options,
 }) => {
   const [, theme] = useStyletron();
@@ -36,6 +38,8 @@ export const CardRadioField: React.FC<RadioFieldProps> = ({
     defaultValue,
     initialValue,
     label,
+    format,
+    parse,
   });
 
   const selectedIndex = useMemo(

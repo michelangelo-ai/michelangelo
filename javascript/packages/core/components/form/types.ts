@@ -91,7 +91,7 @@ export interface FieldState {
 export interface FieldInput<T = unknown> {
   value: T;
   name: string;
-  onChange: (value: T) => void;
+  onChange: (value: unknown) => void;
   onBlur: () => void;
   onFocus: () => void;
 }
