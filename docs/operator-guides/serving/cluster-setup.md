@@ -2,11 +2,11 @@
 
 Deploy a model to a Triton inference server running in a local Michelangelo sandbox cluster.
 
-### Prerequisites
+## Prerequisites
 - **Repository**: Local checkout with `$REPOROOT` pointing to the repo root
 - **Tooling**: `poetry`, `docker`, `k3d`
 
-### Procedure
+## Procedure
 
 1) Change to the Python workspace:
 
