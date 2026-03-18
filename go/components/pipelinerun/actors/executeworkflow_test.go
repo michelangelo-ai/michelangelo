@@ -3081,8 +3081,8 @@ func TestEnrichStepOutput(t *testing.T) {
 					StorageUri: "mock://result.json",
 				},
 			},
-			blobContent:  `[1, 2, 3]`,
-			expectOutput: true,
+			blobContent:    `[1, 2, 3]`,
+			expectOutput:   true,
 			expectedFields: []string{"result"},
 		},
 		{
