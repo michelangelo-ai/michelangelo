@@ -22,6 +22,7 @@ spec:
   template:
     metadata:
       labels:
+        app: michelangelo-ingester
     spec:
       restartPolicy: OnFailure
       
