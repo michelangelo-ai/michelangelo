@@ -3,15 +3,8 @@ package config
 import (
 	"time"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/ingester"
 	"github.com/michelangelo-ai/michelangelo/go/storage/mysql"
 )
-
-// Config holds the configuration for ingester setup
-type Config struct {
-	MySQL    MySQLConfig    `yaml:"mysql"`
-	Ingester IngesterConfig `yaml:"ingester"`
-}
 
 // MySQLConfig holds MySQL configuration
 type MySQLConfig struct {
@@ -45,13 +38,5 @@ func (c MySQLConfig) ToMySQLConfig() mysql.Config {
 		MaxOpenConns:    c.MaxOpenConns,
 		MaxIdleConns:    c.MaxIdleConns,
 		ConnMaxLifetime: c.ConnMaxLifetime,
-	}
-}
-
-// ToIngesterConfig converts to ingester.Config
-func (c IngesterConfig) ToIngesterConfig() ingester.Config {
-	return ingester.Config{
-		ConcurrentReconciles: c.ConcurrentReconciles,
-		RequeuePeriod:        c.RequeuePeriod,
 	}
 }
