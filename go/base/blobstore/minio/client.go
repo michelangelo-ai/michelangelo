@@ -1,7 +1,6 @@
 package minio
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -24,20 +23,29 @@ type minioClient struct {
 // unmarshals the JSON data, and returns the result.
 // The blobURI is expected to be in the format "s3://bucket/path".
 func (a *minioClient) Get(ctx context.Context, blobURI string) ([]byte, error) {
-	bucket, filePath, err := parseURI(blobURI, a.scheme)
+	// Split the path into bucket and file path.
+	parsedURL, err := url.Parse(blobURI)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse url: %w", err)
 	}
+	if parsedURL.Scheme != a.scheme {
+		return nil, fmt.Errorf("scheme %s is not supported by minio client", parsedURL.Scheme)
+	}
+	bucket := parsedURL.Host
+	filePath := parsedURL.Path[1:]
 
+	// Retrieve the object from the specified bucket and file path.
 	output, err := a.s3Client.GetObject(ctx, bucket, filePath, minio.GetObjectOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get object: %w", err)
 	}
 
+	// Read all data from the retrieved object.
 	data, err := io.ReadAll(output)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read object: %w", err)
 	}
+	// Close the object to release any associated resources.
 	if err = output.Close(); err != nil {
 		return nil, fmt.Errorf("failed to close object: %w", err)
 	}
@@ -45,51 +53,7 @@ func (a *minioClient) Get(ctx context.Context, blobURI string) ([]byte, error) {
 	return data, nil
 }
 
-// Put uploads data to S3 storage at the given URI.
-// The blobURI is expected to be in the format "s3://bucket/path".
-func (a *minioClient) Put(ctx context.Context, blobURI string, data []byte) error {
-	bucket, filePath, err := parseURI(blobURI, a.scheme)
-	if err != nil {
-		return err
-	}
-
-	_, err = a.s3Client.PutObject(ctx, bucket, filePath, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{
-		ContentType: "application/octet-stream",
-	})
-	if err != nil {
-		return fmt.Errorf("failed to put object: %w", err)
-	}
-
-	return nil
-}
-
-// Delete removes an object from S3 storage at the given URI.
-// The blobURI is expected to be in the format "s3://bucket/path".
-func (a *minioClient) Delete(ctx context.Context, blobURI string) error {
-	bucket, filePath, err := parseURI(blobURI, a.scheme)
-	if err != nil {
-		return err
-	}
-
-	if err := a.s3Client.RemoveObject(ctx, bucket, filePath, minio.RemoveObjectOptions{}); err != nil {
-		return fmt.Errorf("failed to delete object: %w", err)
-	}
-
-	return nil
-}
-
 // Scheme returns the scheme identifier used by this client.
 func (a *minioClient) Scheme() string {
 	return a.scheme
-}
-
-func parseURI(blobURI, scheme string) (bucket, filePath string, err error) {
-	parsedURL, err := url.Parse(blobURI)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to parse url: %w", err)
-	}
-	if parsedURL.Scheme != scheme {
-		return "", "", fmt.Errorf("scheme %s is not supported by minio client", parsedURL.Scheme)
-	}
-	return parsedURL.Host, parsedURL.Path[1:], nil
 }
