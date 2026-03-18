@@ -34,7 +34,7 @@ class TestGitValidator:
     def test_init_default_config(self):
         validator = GitValidator()
         assert validator.main_branches == ["main", "master"]
-        assert validator.bypass_env == "MA_IGNORE_GIT_CLEAN_CHECK"
+        assert validator.bypass_env == "MACTL_IGNORE_GIT_CLEAN_CHECK"
 
     def test_init_custom_config(self):
         config = {
@@ -51,8 +51,10 @@ class TestGitValidator:
             stdout="/path/to/repo\n", stderr="", returncode=0
         )
 
-        validator = GitValidator()
-        root = validator._detect_workspace_root()
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("WORKSPACE_ROOT", None)
+            validator = GitValidator()
+            root = validator._detect_workspace_root()
 
         assert root == "/path/to/repo"
         mock_run.assert_called_once_with(
@@ -68,9 +70,12 @@ class TestGitValidator:
             128, "git", stderr="fatal: not a git repository"
         )
 
-        validator = GitValidator()
-        with pytest.raises(ValueError, match="Not in a git repository"):
-            validator._detect_workspace_root()
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("WORKSPACE_ROOT", None)
+            os.environ.pop("BUILDKITE", None)
+            validator = GitValidator()
+            with pytest.raises(ValueError, match="Not in a git repository"):
+                validator._detect_workspace_root()
 
     @patch("subprocess.run")
     def test_get_branch_name_success(self, mock_run):
@@ -78,8 +83,10 @@ class TestGitValidator:
             stdout="feature/new-model\n", stderr="", returncode=0
         )
 
-        validator = GitValidator()
-        branch = validator._get_branch_name("/path/to/repo")
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("BUILDKITE", None)
+            validator = GitValidator()
+            branch = validator._get_branch_name("/path/to/repo")
 
         assert branch == "feature/new-model"
         mock_run.assert_called_once_with(
@@ -94,9 +101,11 @@ class TestGitValidator:
     def test_get_branch_name_detached_head(self, mock_run):
         mock_run.return_value = MagicMock(stdout="HEAD\n", stderr="", returncode=0)
 
-        validator = GitValidator()
-        with pytest.raises(ValueError, match="detached HEAD state"):
-            validator._get_branch_name("/path/to/repo")
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("BUILDKITE", None)
+            validator = GitValidator()
+            with pytest.raises(ValueError, match="detached HEAD state"):
+                validator._get_branch_name("/path/to/repo")
 
     @patch("subprocess.run")
     def test_get_commit_hash_success(self, mock_run):
@@ -141,55 +150,121 @@ class TestGitValidator:
         )
 
         validator = GitValidator()
-        with pytest.raises(subprocess.CalledProcessError):
+        with pytest.raises(ValueError, match="No git remote 'origin' configured"):
             validator._get_repo_url("/path/to/repo")
 
-    @patch.object(GitValidator, "_get_repo_url")
-    @patch.object(GitValidator, "_get_commit_hash")
-    @patch.object(GitValidator, "_get_branch_name")
-    @patch.object(GitValidator, "_detect_workspace_root")
-    def test_get_git_info_auto_detect(
-        self, mock_detect_root, mock_get_branch, mock_get_commit, mock_get_repo
-    ):
-        mock_detect_root.return_value = "/path/to/repo"
-        mock_get_branch.return_value = "main"
-        mock_get_commit.return_value = "abc123"
-        mock_get_repo.return_value = "https://github.com/org/repo.git"
+    def test_is_buildkite_true(self):
+        with patch.dict(os.environ, {"BUILDKITE": "true"}):
+            validator = GitValidator()
+            assert validator._is_buildkite() is True
 
+    def test_is_buildkite_false(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("BUILDKITE", None)
+            validator = GitValidator()
+            assert validator._is_buildkite() is False
+
+    def test_is_buildkite_case_insensitive(self):
+        with patch.dict(os.environ, {"BUILDKITE": "True"}):
+            validator = GitValidator()
+            assert validator._is_buildkite() is True
+
+    @patch("subprocess.run")
+    def test_is_clean_no_changes(self, mock_run):
+        mock_run.side_effect = [
+            MagicMock(stdout="", stderr="", returncode=0),
+            MagicMock(stdout="Everything up-to-date", stderr="", returncode=0),
+        ]
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("MACTL_IGNORE_GIT_CLEAN_CHECK", None)
+            validator = GitValidator()
+            assert validator._is_clean("/path/to/repo") is True
+
+        assert mock_run.call_count == 2
+        mock_run.assert_any_call(
+            ["git", "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            cwd="/path/to/repo",
+            check=True,
+        )
+        mock_run.assert_any_call(
+            ["git", "push", "-n"],
+            capture_output=True,
+            text=True,
+            cwd="/path/to/repo",
+            check=False,
+        )
+
+    @patch("subprocess.run")
+    def test_is_clean_uncommitted_changes(self, mock_run):
+        mock_run.return_value = MagicMock(
+            stdout=" M file.txt\n", stderr="", returncode=0
+        )
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("MACTL_IGNORE_GIT_CLEAN_CHECK", None)
+            validator = GitValidator()
+            assert validator._is_clean("/path/to/repo") is False
+
+        mock_run.assert_called_once_with(
+            ["git", "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            cwd="/path/to/repo",
+            check=True,
+        )
+
+    @patch("subprocess.run")
+    def test_is_clean_unpushed_commits(self, mock_run):
+        mock_run.side_effect = [
+            MagicMock(stdout="", stderr="", returncode=0),
+            MagicMock(
+                stdout="",
+                stderr="To github.com:org/repo.git\n   abc123..def456  main -> main",
+                returncode=0,
+            ),
+        ]
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("MACTL_IGNORE_GIT_CLEAN_CHECK", None)
+            validator = GitValidator()
+            assert validator._is_clean("/path/to/repo") is False
+
+    @patch("subprocess.run")
+    def test_is_clean_bypass_env(self, mock_run):
+        with patch.dict(os.environ, {"MACTL_IGNORE_GIT_CLEAN_CHECK": "true"}):
+            validator = GitValidator()
+            assert validator._is_clean("/path/to/repo") is True
+            mock_run.assert_not_called()
+
+    def test_is_on_main_in_buildkite(self):
+        with patch.dict(os.environ, {"BUILDKITE": "true"}):
+            validator = GitValidator()
+            assert validator._is_on_main("feature/test") is True
+
+    def test_is_on_main_main_branch(self):
         validator = GitValidator()
-        git_info = validator.get_git_info()
+        assert validator._is_on_main("main") is True
+        assert validator._is_on_main("master") is True
 
-        assert git_info.repo == "https://github.com/org/repo.git"
-        assert git_info.branch_name == "main"
-        assert git_info.commit_hash == "abc123"
-        assert git_info.is_clean is False
-        assert git_info.is_on_main is False
+    def test_is_on_main_feature_branch(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("BUILDKITE", None)
+            validator = GitValidator()
+            assert validator._is_on_main("feature/test") is False
+            assert validator._is_on_main("develop") is False
 
-        mock_detect_root.assert_called_once()
-        mock_get_branch.assert_called_once_with("/path/to/repo")
-        mock_get_commit.assert_called_once_with("/path/to/repo")
-        mock_get_repo.assert_called_once_with("/path/to/repo")
-
-    @patch.object(GitValidator, "_get_repo_url")
-    @patch.object(GitValidator, "_get_commit_hash")
-    @patch.object(GitValidator, "_get_branch_name")
-    def test_get_git_info_explicit_root(
-        self, mock_get_branch, mock_get_commit, mock_get_repo
-    ):
-        mock_get_branch.return_value = "feature/test"
-        mock_get_commit.return_value = "def456"
-        mock_get_repo.return_value = "https://github.com/org/repo.git"
-
-        validator = GitValidator()
-        git_info = validator.get_git_info(workspace_root="/custom/path")
-
-        assert git_info.repo == "https://github.com/org/repo.git"
-        assert git_info.branch_name == "feature/test"
-        assert git_info.commit_hash == "def456"
-
-        mock_get_branch.assert_called_once_with("/custom/path")
-        mock_get_commit.assert_called_once_with("/custom/path")
-        mock_get_repo.assert_called_once_with("/custom/path")
+    def test_is_on_main_custom_branches(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("BUILDKITE", None)
+            validator = GitValidator(
+                {"main_branches": ["main", "production", "release"]}
+            )
+            assert validator._is_on_main("production") is True
+            assert validator._is_on_main("release") is True
+            assert validator._is_on_main("master") is False
 
     @patch.object(GitValidator, "_get_repo_url")
     @patch.object(GitValidator, "_get_commit_hash")
@@ -221,48 +296,71 @@ class TestGitValidator:
     @patch.object(GitValidator, "_get_commit_hash")
     @patch.object(GitValidator, "_get_branch_name")
     @patch.object(GitValidator, "_detect_workspace_root")
-    def test_get_git_info_external_params_custom_branch(
+    def test_get_git_info_external_main_branch_is_on_main(
         self, mock_detect_root, mock_get_branch, mock_get_commit, mock_get_repo
     ):
         mock_detect_root.return_value = "/path/to/repo"
         mock_get_repo.return_value = "https://github.com/org/repo.git"
 
-        config = {"main_branches": ["main", "production"]}
-        validator = GitValidator(config)
-        git_info = validator.get_git_info(
-            external_branch="production", external_commit="prod123"
-        )
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("BUILDKITE", None)
+            config = {"main_branches": ["main", "production"]}
+            validator = GitValidator(config)
+            git_info = validator.get_git_info(
+                external_branch="production", external_commit="prod123"
+            )
 
         assert git_info.branch_name == "production"
         assert git_info.is_on_main is True
 
-        git_info = validator.get_git_info(
-            external_branch="feature/test", external_commit="feat123"
-        )
+    @patch.object(GitValidator, "_get_repo_url")
+    @patch.object(GitValidator, "_get_commit_hash")
+    @patch.object(GitValidator, "_get_branch_name")
+    @patch.object(GitValidator, "_detect_workspace_root")
+    def test_get_git_info_external_feature_branch_not_on_main(
+        self, mock_detect_root, mock_get_branch, mock_get_commit, mock_get_repo
+    ):
+        mock_detect_root.return_value = "/path/to/repo"
+        mock_get_repo.return_value = "https://github.com/org/repo.git"
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("BUILDKITE", None)
+            config = {"main_branches": ["main", "production"]}
+            validator = GitValidator(config)
+            git_info = validator.get_git_info(
+                external_branch="feature/test", external_commit="feat123"
+            )
 
         assert git_info.branch_name == "feature/test"
         assert git_info.is_on_main is False
 
-    @patch.object(GitValidator, "_get_repo_url")
-    @patch.object(GitValidator, "_get_commit_hash")
-    @patch.object(GitValidator, "_get_branch_name")
-    def test_get_git_info_external_branch_only_ignored(
-        self, mock_get_branch, mock_get_commit, mock_get_repo
-    ):
-        mock_get_branch.return_value = "main"
-        mock_get_commit.return_value = "abc123"
-        mock_get_repo.return_value = "https://github.com/org/repo.git"
+    def test_detect_workspace_root_uses_env_var(self):
+        with (
+            patch.dict(os.environ, {"WORKSPACE_ROOT": "/env/path"}),
+            patch("subprocess.run") as mock_run,
+        ):
+            validator = GitValidator()
+            root = validator._detect_workspace_root()
+            assert root == "/env/path"
+            mock_run.assert_not_called()
 
-        validator = GitValidator()
-        git_info = validator.get_git_info(
-            workspace_root="/path", external_branch="external-only"
-        )
+    @patch("subprocess.run")
+    def test_is_clean_bypass_env_case_insensitive(self, mock_run):
+        with patch.dict(os.environ, {"MACTL_IGNORE_GIT_CLEAN_CHECK": "TRUE"}):
+            validator = GitValidator()
+            assert validator._is_clean("/path/to/repo") is True
+            mock_run.assert_not_called()
 
-        assert git_info.branch_name == "main"
-        assert git_info.commit_hash == "abc123"
-
-        mock_get_branch.assert_called_once()
-        mock_get_commit.assert_called_once()
+    @patch("subprocess.run")
+    def test_get_branch_name_buildkite_no_branch_env(self, mock_run):
+        mock_run.return_value = MagicMock(stdout="main\n", stderr="", returncode=0)
+        env = {"BUILDKITE": "true"}
+        with patch.dict(os.environ, env, clear=False):
+            os.environ.pop("BUILDKITE_BRANCH", None)
+            validator = GitValidator()
+            branch = validator._get_branch_name("/path")
+        assert branch == "main"
+        mock_run.assert_called_once()
 
 
 class TestGitValidatorIntegration:
@@ -314,7 +412,7 @@ class TestGitValidatorIntegration:
         assert git_info.branch_name in ["main", "master"]
         assert len(git_info.commit_hash) == 40
         assert git_info.is_clean is False
-        assert git_info.is_on_main is False
+        assert git_info.is_on_main is True
 
     def test_integration_feature_branch(self, temp_git_repo):
         subprocess.run(
@@ -329,3 +427,79 @@ class TestGitValidatorIntegration:
 
         assert git_info.branch_name == "feature/test"
         assert len(git_info.commit_hash) == 40
+        assert git_info.is_on_main is False
+
+    def test_integration_buildkite_detection(self, temp_git_repo):
+        env = {"BUILDKITE": "true", "BUILDKITE_BRANCH": "ci-branch"}
+        with patch.dict(os.environ, env):
+            validator = GitValidator()
+            git_info = validator.get_git_info(workspace_root=temp_git_repo)
+
+            assert git_info.branch_name == "ci-branch"
+            assert git_info.is_on_main is True
+
+    def test_integration_not_clean_when_commits_unpushed(self, temp_git_repo):
+        validator = GitValidator()
+        git_info = validator.get_git_info(workspace_root=temp_git_repo)
+
+        assert git_info.is_clean is False
+
+    def test_integration_bypass_clean_check(self, temp_git_repo):
+        with patch.dict(os.environ, {"MACTL_IGNORE_GIT_CLEAN_CHECK": "true"}):
+            validator = GitValidator()
+            git_info = validator.get_git_info(workspace_root=temp_git_repo)
+
+            assert git_info.is_clean is True
+
+    def test_integration_workspace_root_env_var(self, temp_git_repo):
+        with patch.dict(os.environ, {"WORKSPACE_ROOT": temp_git_repo}):
+            validator = GitValidator()
+            git_info = validator.get_git_info()
+
+            assert git_info.repo == "https://github.com/test/repo.git"
+            assert git_info.branch_name in ["main", "master"]
+
+    def test_integration_external_ci_params(self, temp_git_repo):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("BUILDKITE", None)
+            validator = GitValidator()
+            git_info = validator.get_git_info(
+                workspace_root=temp_git_repo,
+                external_branch="ci-branch",
+                external_commit="abc123def456789",
+            )
+
+        assert git_info.branch_name == "ci-branch"
+        assert git_info.commit_hash == "abc123def456789"
+        assert git_info.is_clean is True
+        assert git_info.is_on_main is False
+
+    def test_integration_custom_main_branches(self, temp_git_repo):
+        subprocess.run(
+            ["git", "checkout", "-b", "production"],
+            cwd=temp_git_repo,
+            check=True,
+            capture_output=True,
+        )
+
+        test_file = os.path.join(temp_git_repo, "test2.txt")
+        with open(test_file, "w") as f:
+            f.write("test content 2")
+        subprocess.run(
+            ["git", "add", "test2.txt"],
+            cwd=temp_git_repo,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "Second commit"],
+            cwd=temp_git_repo,
+            check=True,
+            capture_output=True,
+        )
+
+        validator = GitValidator({"main_branches": ["main", "production"]})
+        git_info = validator.get_git_info(workspace_root=temp_git_repo)
+
+        assert git_info.branch_name == "production"
+        assert git_info.is_on_main is True

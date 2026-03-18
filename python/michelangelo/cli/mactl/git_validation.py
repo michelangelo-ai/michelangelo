@@ -5,6 +5,7 @@ to ensure resources are created/updated from a clean git state with
 proper branch permissions.
 """
 
+import os
 import subprocess
 from dataclasses import dataclass
 from typing import Optional
@@ -44,11 +45,13 @@ class GitValidator:
                 - main_branches: List of main branch names
                   (default: ['main', 'master'])
                 - bypass_env: Environment variable to bypass checks
-                  (default: 'MA_IGNORE_GIT_CLEAN_CHECK')
+                  (default: 'MACTL_IGNORE_GIT_CLEAN_CHECK')
         """
         self.config = config or {}
         self.main_branches = self.config.get("main_branches", ["main", "master"])
-        self.bypass_env = self.config.get("bypass_env", "MA_IGNORE_GIT_CLEAN_CHECK")
+        self.bypass_env = self.config.get(
+            "bypass_env", "MACTL_IGNORE_GIT_CLEAN_CHECK"
+        )
 
     def get_git_info(
         self,
@@ -78,26 +81,36 @@ class GitValidator:
                 branch_name=external_branch,
                 commit_hash=external_commit,
                 is_clean=True,
-                is_on_main=external_branch in self.main_branches,
+                is_on_main=self._is_on_main(external_branch),
             )
 
+        branch = self._get_branch_name(root)
         return GitInfo(
             repo=self._get_repo_url(root),
-            branch_name=self._get_branch_name(root),
+            branch_name=branch,
             commit_hash=self._get_commit_hash(root),
-            is_clean=False,
-            is_on_main=False,
+            is_clean=self._is_clean(root),
+            is_on_main=self._is_on_main(branch),
         )
 
     def _detect_workspace_root(self) -> str:
         """Detect git workspace root.
 
+        Priority order:
+        1. WORKSPACE_ROOT environment variable
+        2. git rev-parse --show-toplevel
+        3. Current working directory (Buildkite fallback)
+
         Returns:
             Absolute path to workspace root.
 
         Raises:
-            ValueError: If not in a git repository.
+            ValueError: If not in a git repository and not in CI/CD mode.
         """
+        workspace_root = os.environ.get("WORKSPACE_ROOT")
+        if workspace_root:
+            return workspace_root
+
         try:
             result = subprocess.run(
                 ["git", "rev-parse", "--show-toplevel"],
@@ -107,6 +120,8 @@ class GitValidator:
             )
             return result.stdout.strip()
         except subprocess.CalledProcessError as e:
+            if self._is_buildkite():
+                return os.getcwd()
             raise ValueError(
                 "Not in a git repository. Please run this command from "
                 f"within a git repository.\nGit error: {e.stderr.strip()}"
@@ -125,6 +140,11 @@ class GitValidator:
             ValueError: If in detached HEAD state.
             subprocess.CalledProcessError: If git command fails.
         """
+        if self._is_buildkite():
+            branch = os.environ.get("BUILDKITE_BRANCH", "")
+            if branch:
+                return branch
+
         result = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
             capture_output=True,
@@ -173,13 +193,79 @@ class GitValidator:
             Remote URL (e.g., "https://github.com/org/repo.git").
 
         Raises:
-            subprocess.CalledProcessError: If git command fails or no remote configured.
+            ValueError: If no git remote 'origin' is configured.
+            subprocess.CalledProcessError: If git command fails.
         """
+        try:
+            result = subprocess.run(
+                ["git", "config", "--get", "remote.origin.url"],
+                capture_output=True,
+                text=True,
+                cwd=root,
+                check=True,
+            )
+            return result.stdout.strip()
+        except subprocess.CalledProcessError as e:
+            raise ValueError(
+                "No git remote 'origin' configured. Please add a remote origin."
+            ) from e
+
+    def _is_buildkite(self) -> bool:
+        """Check if running in Buildkite CI/CD environment.
+
+        Returns:
+            True if BUILDKITE environment variable is set to 'true'.
+        """
+        return os.environ.get("BUILDKITE", "").lower() == "true"
+
+    def _is_clean(self, root: str) -> bool:
+        """Check if git workspace is clean.
+
+        A workspace is clean if:
+        1. No uncommitted changes (git status --porcelain is empty)
+        2. All commits are pushed (git push -n shows 'Everything up-to-date')
+
+        Args:
+            root: Workspace root path.
+
+        Returns:
+            True if workspace is clean, False otherwise.
+        """
+        if os.environ.get(self.bypass_env, "").lower() == "true":
+            return True
+
+        try:
+            result = subprocess.run(
+                ["git", "status", "--porcelain"],
+                capture_output=True,
+                text=True,
+                cwd=root,
+                check=True,
+            )
+            if result.stdout.strip():
+                return False
+        except subprocess.CalledProcessError:
+            return False
+
         result = subprocess.run(
-            ["git", "config", "--get", "remote.origin.url"],
+            ["git", "push", "-n"],
             capture_output=True,
             text=True,
             cwd=root,
-            check=True,
+            check=False,
         )
-        return result.stdout.strip()
+        output = result.stdout + result.stderr
+        return "Everything up-to-date" in output
+
+    def _is_on_main(self, branch_name: str) -> bool:
+        """Check if branch is a main branch.
+
+        Args:
+            branch_name: Branch name to check.
+
+        Returns:
+            True if branch is main/master or running in Buildkite.
+        """
+        if self._is_buildkite():
+            return True
+        return branch_name in self.main_branches
