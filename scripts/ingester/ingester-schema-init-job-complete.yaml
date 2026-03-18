@@ -611,7 +611,6 @@ spec:
   template:
     metadata:
       labels:
-        app: michelangelo-ingester
         component: schema-init
     spec:
       restartPolicy: OnFailure
