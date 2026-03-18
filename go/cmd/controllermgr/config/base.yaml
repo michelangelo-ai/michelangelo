@@ -1,14 +1,15 @@
 controllermgr:
-  metricsBindAddress: ${METRICS_ADDRESS::8091}
-  healthProbeBindAddress: ${HEALTH_ADDRESS::8081}
+  metricsBindAddress: ${METRICS_ADDRESS::8084}
+  healthProbeBindAddress: ${HEALTH_ADDRESS::8083}
   leaderElection: false
   leaderElectionID: decaf1259.michelangelo.uber.com
 
 workflowClient:
   service: cadence-frontend
-  host: michelangelo-worker:7833
+  host: localhost:7233
   transport: grpc
   domain: default
+  provider: Temporal
   # taskList is a used as a fallback if project.Metatdata.Annotations["michelangelo/worker_queue"] is empty
   taskList: default # TODO: MaCTL support for adding project.Metatdata.Annotations["michelangelo/worker_queue"] to project CRD
   executionUrlFormat: http://localhost:8088/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}
@@ -28,4 +29,4 @@ minio:
   awsRegion: us-east-1
   awsAccessKeyId: minioadmin
   awsSecretAccessKey: minioadmin
-  awsEndpointUrl: minio:9091
+  awsEndpointUrl: localhost:9091

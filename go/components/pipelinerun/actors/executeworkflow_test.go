@@ -2985,3 +2985,163 @@ func TestGetWorkflowUrl(t *testing.T) {
 		})
 	}
 }
+
+func TestGetStepInfoFromTaskProgressInput(t *testing.T) {
+	testCases := []struct {
+		name          string
+		taskProgress  TaskProgress
+		expectedInput *pbtypes.Struct
+	}{
+		{
+			name: "input with args and kwargs",
+			taskProgress: TaskProgress{
+				TaskName:  "train",
+				TaskPath:  "examples.train",
+				TaskState: "succeeded",
+				Input:     `{"args": ["a", "b"], "kwargs": {"lr": 0.01}}`,
+			},
+			expectedInput: &pbtypes.Struct{
+				Fields: map[string]*pbtypes.Value{
+					"args": {Kind: &pbtypes.Value_ListValue{ListValue: &pbtypes.ListValue{
+						Values: []*pbtypes.Value{
+							{Kind: &pbtypes.Value_StringValue{StringValue: "a"}},
+							{Kind: &pbtypes.Value_StringValue{StringValue: "b"}},
+						},
+					}}},
+					"kwargs": {Kind: &pbtypes.Value_StructValue{StructValue: &pbtypes.Struct{
+						Fields: map[string]*pbtypes.Value{
+							"lr": {Kind: &pbtypes.Value_NumberValue{NumberValue: 0.01}},
+						},
+					}}},
+				},
+			},
+		},
+		{
+			name: "empty input",
+			taskProgress: TaskProgress{
+				TaskName:  "train",
+				TaskPath:  "examples.train",
+				TaskState: "running",
+				Input:     "",
+			},
+			expectedInput: nil,
+		},
+		{
+			name: "invalid json input",
+			taskProgress: TaskProgress{
+				TaskName:  "train",
+				TaskPath:  "examples.train",
+				TaskState: "running",
+				Input:     "not-json",
+			},
+			expectedInput: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			stepInfo := getStepInfoFromTaskProgress(&tc.taskProgress, "test-ns")
+			require.Equal(t, tc.expectedInput, stepInfo.Input)
+		})
+	}
+}
+
+func TestEnrichStepOutput(t *testing.T) {
+	testCases := []struct {
+		name           string
+		taskProgress   TaskProgress
+		cachedOutput   *v2.CachedOutput
+		blobContent    string
+		expectOutput   bool
+		expectedFields []string
+	}{
+		{
+			name: "variable type with JSON object output",
+			taskProgress: TaskProgress{
+				Output: "uf-vars-abc",
+			},
+			cachedOutput: &v2.CachedOutput{
+				Spec: v2.CachedOutputSpec{
+					Type:       v2.CACHED_OUTPUT_TYPE_VARIABLE,
+					StorageUri: "mock://result.json",
+				},
+			},
+			blobContent:    `{"accuracy": 0.95, "loss": 0.05}`,
+			expectOutput:   true,
+			expectedFields: []string{"accuracy", "loss"},
+		},
+		{
+			name: "variable type with JSON array output wrapped in result",
+			taskProgress: TaskProgress{
+				Output: "uf-vars-arr",
+			},
+			cachedOutput: &v2.CachedOutput{
+				Spec: v2.CachedOutputSpec{
+					Type:       v2.CACHED_OUTPUT_TYPE_VARIABLE,
+					StorageUri: "mock://result.json",
+				},
+			},
+			blobContent:  `[1, 2, 3]`,
+			expectOutput: true,
+			expectedFields: []string{"result"},
+		},
+		{
+			name: "checkpoint type is skipped",
+			taskProgress: TaskProgress{
+				Output: "uf-ckpt-abc",
+			},
+			cachedOutput: &v2.CachedOutput{
+				Spec: v2.CachedOutputSpec{
+					Type:       v2.CACHED_OUTPUT_TYPE_TRAINING_CKPT,
+					StorageUri: "mock://ckpt",
+				},
+			},
+			expectOutput: false,
+		},
+		{
+			name: "empty output name is skipped",
+			taskProgress: TaskProgress{
+				Output: "",
+			},
+			expectOutput: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			workflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+			blobStoreClient := blobstoreMock.NewMockBlobStoreClient(ctrl)
+
+			scheme := runtime.NewScheme()
+			require.NoError(t, v2.AddToScheme(scheme))
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			if tc.cachedOutput != nil {
+				tc.cachedOutput.Name = tc.taskProgress.Output
+				tc.cachedOutput.Namespace = "test-ns"
+				require.NoError(t, fakeClient.Create(context.Background(), tc.cachedOutput))
+			}
+			if tc.blobContent != "" {
+				blobStoreClient.EXPECT().Get(gomock.Any(), "mock://result.json").Return([]byte(tc.blobContent), nil)
+			}
+
+			apiHandlerInstance := apiHandler.NewFakeAPIHandler(fakeClient)
+			actor := setUpExecuteWorkflowActor(t, workflowClient, blobStoreClient, apiHandlerInstance)
+
+			stepInfo := &v2.PipelineRunStepInfo{}
+			actor.enrichStepOutput(context.Background(), "test-ns", &tc.taskProgress, stepInfo)
+
+			if !tc.expectOutput {
+				require.Nil(t, stepInfo.Output)
+			} else {
+				require.NotNil(t, stepInfo.Output)
+				for _, field := range tc.expectedFields {
+					_, ok := stepInfo.Output.Fields[field]
+					require.True(t, ok, "expected field %q in output", field)
+				}
+			}
+		})
+	}
+}
