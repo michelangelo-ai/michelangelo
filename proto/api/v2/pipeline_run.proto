@@ -280,7 +280,7 @@ message PipelineRunStatus {
   // Each condition represents a task's state (e.g. Pending, Running, Completed).
   // The aggregate state of all conditions determines the overall pipeline run status.
   // This enables granular tracking of task-level progress and failures.
-  repeated Condition conditions = 7;
+  repeated Condition conditions = 7 [(michelangelo.api.external_storage) = true];
 
   // Records detailed information about each step in the pipeline run execution.
   // Each step represents a task or stage in the workflow and includes:
@@ -297,7 +297,7 @@ message PipelineRunStatus {
   // - Version/revision information
   // - Input parameters and dependencies
   // This provides the workflow template that gets instantiated for execution.
-  SourcePipeline source_pipeline = 10;
+  SourcePipeline source_pipeline = 10 [(michelangelo.api.external_storage) = true];
 
   // Exception type indicating the category of failure for a failed PipelineRun.
   // Can be either a system error (infrastructure/platform issues) or

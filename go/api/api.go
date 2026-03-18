@@ -29,10 +29,6 @@ const (
 	// object can be changed in MySQL later on.
 	ImmutableAnnotation = "michelangelo/Immutable"
 
-	// BlobStorageUUIDAnnotation tracks the resource version of the last object snapshot
-	// uploaded to blob storage. Used by the ingester to detect whether a new upload is needed.
-	BlobStorageUUIDAnnotation = "michelangelo/BlobStorageUUID"
-
 	/////////////////////////// K8s Labels ///////////////////////////
 
 	// SpecUpdateTimestampLabel is used to record the last time the spec of the object is updated.

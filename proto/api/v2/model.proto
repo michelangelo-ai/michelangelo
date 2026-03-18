@@ -180,7 +180,7 @@ message ModelSpec {
   // - Feature grouping and relationships
   // This enables validation of input data and ensures the model receives
   // properly formatted features at inference time.
-  DataSchema input_schema = 8;
+  DataSchema input_schema = 8 [(michelangelo.api.external_storage) = true];
 
   // Schema defining the target variables that the model predicts. The schema specifies:
   // - Names and data types of prediction outputs (numeric, categorical, etc.)
@@ -189,7 +189,7 @@ message ModelSpec {
   // - Relationships between multiple prediction targets
   // This enables validation of model outputs and proper handling of predictions
   // by downstream systems.
-  DataSchema predict_fields = 9;
+  DataSchema predict_fields = 9 [(michelangelo.api.external_storage) = true];
 
   // Schema defining which fields should be published to output channels like:
   // - Kafka: For real-time streaming outputs
@@ -199,7 +199,7 @@ message ModelSpec {
   // - Stored for offline analysis
   // - Made available for monitoring
   // The schema validates the structure and types of published fields.
-  DataSchema published_fields = 10;
+  DataSchema published_fields = 10 [(michelangelo.api.external_storage) = true];
 
   // Schema defining the transformed features produced by feature engineering.
   // This includes:
@@ -208,7 +208,7 @@ message ModelSpec {
   // - Intermediate computed values
   // - Feature combinations and interactions
   // The schema validates the structure of transformed features used by the model.
-  DataSchema derived_fields = 11;
+  DataSchema derived_fields = 11 [(michelangelo.api.external_storage) = true];
 
   // The value of the positive label that represents the "true" or "positive" class in binary classification.
   // For example:
@@ -410,7 +410,7 @@ message ModelSpec {
   repeated FeatureImportanceMap feature_importance_list = 31;
 
   // Output schema defines the schema of the output of the model.
-  DataSchema output_schema = 32;
+  DataSchema output_schema = 32 [(michelangelo.api.external_storage) = true];
 }
 
 // IncrementalTrainingSpec defines configuration for incremental model training.
