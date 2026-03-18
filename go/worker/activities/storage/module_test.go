@@ -24,9 +24,6 @@ func (d *dummyStorage) Scheme() string {
 	return d.scheme
 }
 
-func (d *dummyStorage) Put(_ context.Context, _ string, _ []byte) error { return nil }
-func (d *dummyStorage) Delete(_ context.Context, _ string) error        { return nil }
-
 // dummyWorker is a mock worker that records activities registered with it.
 type dummyWorker struct {
 	registeredActivities []interface{}
