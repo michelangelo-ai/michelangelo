@@ -7,7 +7,7 @@ import { required as requiredValidator } from '#core/components/form/validation/
 import type { FieldValidator } from '#core/components/form/validation/types';
 import type { FieldInput, FieldState } from '../types';
 
-export function useField<T = unknown>(
+export function useField<T = unknown, InputValue = T>(
   name: string,
   options?: {
     validate?: FieldValidator;
@@ -15,12 +15,10 @@ export function useField<T = unknown>(
     defaultValue?: T;
     initialValue?: T;
     label?: string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    parse?: (value: any) => T;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    format?: (value: T) => any;
+    parse?: (value: InputValue) => T;
+    format?: (value: T) => InputValue;
   }
-): { input: FieldInput<T>; meta: FieldState } {
+): { input: FieldInput<T, InputValue>; meta: FieldState } {
   useFieldRegistration(name, options?.label);
 
   const composedValidate = options?.required
@@ -29,7 +27,7 @@ export function useField<T = unknown>(
 
   const validate = composedValidate ? (value: T) => composedValidate(value as unknown) : undefined;
 
-  const field = useReactFinalFormField<T>(name, {
+  const field = useReactFinalFormField<T, HTMLInputElement, InputValue>(name, {
     validate,
     defaultValue: options?.defaultValue,
     initialValue: options?.initialValue,
@@ -37,7 +35,7 @@ export function useField<T = unknown>(
     format: options?.format,
   });
 
-  const input: FieldInput<T> = {
+  const input: FieldInput<T, InputValue> = {
     value: field.input.value,
     name: field.input.name,
     onChange: field.input.onChange,

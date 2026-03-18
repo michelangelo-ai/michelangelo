@@ -1,6 +1,6 @@
 import type { FieldValidator } from '#core/components/form/validation/types';
 
-export interface BaseFieldProps<T = unknown> {
+export interface BaseFieldProps<T = unknown, InputValue = T> {
   /** Unique ID of the field,
    *
    *  - Identifies the field input in the form
@@ -67,15 +67,13 @@ export interface BaseFieldProps<T = unknown> {
    * Transforms the input value before storing it in form state.
    * Called with the input value.
    */
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  parse?: (value: any) => T;
+  parse?: (value: InputValue) => T;
 
   /**
    * Transforms the field value for display in the input.
    * Called with the field value from form state.
    */
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  format?: (value: T) => any;
+  format?: (value: T) => InputValue;
 
   /**
    * Validation function called on each value change after the field is touched.
