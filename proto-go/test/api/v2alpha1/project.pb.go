@@ -3132,8 +3132,7 @@ func (m *Project) ClearBlobFields() {
 
 func (m *Project) FillBlobFields(object k8sruntime.Object) {
 	other := object.(*Project)
-	m.Spec = other.Spec
-	m.Status = other.Status
+	_ = other
 }
 
 // UnmarshalJSON unmarshals a JSON value into a NotificationControl.

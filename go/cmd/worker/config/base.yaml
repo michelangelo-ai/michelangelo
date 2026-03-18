@@ -1,5 +1,5 @@
 worker:
-  address: localhost:14566
+  address: localhost:14567
   maApiServiceName: ma-apiserver
 
 logging:
@@ -9,14 +9,14 @@ logging:
 
 workflow-engine:
   # for cadence
-  host: 127.0.0.1:7833
+#  host: 127.0.0.1:7833
   # for temporal
-#  host: 127.0.0.1:7233
+  host: 127.0.0.1:7233
   transport: grpc
   # for cadence
-  provider: cadence
+#  provider: cadence
     # for temporal
-#  provider: temporal
+  provider: temporal
   workers:
     - domain: default
       taskList: default

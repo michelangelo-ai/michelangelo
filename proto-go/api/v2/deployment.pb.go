@@ -6757,8 +6757,7 @@ func (m *Deployment) ClearBlobFields() {
 
 func (m *Deployment) FillBlobFields(object k8sruntime.Object) {
 	other := object.(*Deployment)
-	m.Spec = other.Spec
-	m.Status = other.Status
+	_ = other
 }
 
 // UnmarshalJSON unmarshals a JSON value into a DeviceIntegrityLevel.

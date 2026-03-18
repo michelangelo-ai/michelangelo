@@ -25,7 +25,6 @@ go_library(
         "//go/components/inferenceserver/backends:go_default_library",
         "//go/components/inferenceserver/modelconfig:go_default_library",
         "//go/components/inferenceserver/plugins/oss:go_default_library",
-        "//go/components/ingester:go_default_library",
         "//go/components/jobs/client:go_default_library",
         "//go/components/jobs/cluster:go_default_library",
         "//go/components/jobs/scheduler:go_default_library",

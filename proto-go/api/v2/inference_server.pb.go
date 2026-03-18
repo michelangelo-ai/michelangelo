@@ -2881,8 +2881,7 @@ func (m *InferenceServer) ClearBlobFields() {
 
 func (m *InferenceServer) FillBlobFields(object k8sruntime.Object) {
 	other := object.(*InferenceServer)
-	m.Spec = other.Spec
-	m.Status = other.Status
+	_ = other
 }
 
 // UnmarshalJSON unmarshals a JSON value into a TenancyType.

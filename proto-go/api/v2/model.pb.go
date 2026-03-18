@@ -5614,8 +5614,11 @@ func (m *Model) ClearBlobFields() {
 
 func (m *Model) FillBlobFields(object k8sruntime.Object) {
 	other := object.(*Model)
-	m.Spec = other.Spec
-	m.Status = other.Status
+	m.Spec.InputSchema = other.Spec.InputSchema
+	m.Spec.PredictFields = other.Spec.PredictFields
+	m.Spec.PublishedFields = other.Spec.PublishedFields
+	m.Spec.DerivedFields = other.Spec.DerivedFields
+	m.Spec.OutputSchema = other.Spec.OutputSchema
 }
 
 // UnmarshalJSON unmarshals a JSON value into a ModelKind.

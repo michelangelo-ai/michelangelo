@@ -87,7 +87,7 @@ message PipelineRunSpec {
   // - Environment variables and runtime settings
   // The input data is passed as a structured object that can be accessed
   // by pipeline tasks during execution.
-  google.protobuf.Struct input = 4;
+  google.protobuf.Struct input = 4 [(michelangelo.api.external_storage) = true];
 
   // Resume configuration for continuing execution from a previous pipeline run.
   // This allows restarting failed runs or continuing from specific steps.

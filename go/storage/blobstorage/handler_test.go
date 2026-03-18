@@ -8,7 +8,6 @@ import (
 	"time"
 
 	pbtypes "github.com/gogo/protobuf/types"
-	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -149,9 +148,6 @@ func TestHandler_UploadToBlobStorage(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, key)
 
-	// Annotation should be set on the in-memory object.
-	assert.Equal(t, "rv1", model.Annotations[api.BlobStorageUUIDAnnotation])
-
 	// Data should be in the store.
 	data, ok := mem.objects[key]
 	require.True(t, ok, "expected blob to be stored")
@@ -174,21 +170,24 @@ func TestHandler_MergeWithExternalBlob(t *testing.T) {
 	_, err := h.UploadToBlobStorage(context.Background(), original)
 	require.NoError(t, err)
 
-	// Now create an empty model with the annotation and merge.
+	// Now create an empty model with the same UID and merge.
 	target := &v2.Model{
 		TypeMeta:   original.TypeMeta,
-		ObjectMeta: metav1.ObjectMeta{Name: "m1", Namespace: "default", UID: "uid1", Annotations: original.Annotations},
+		ObjectMeta: metav1.ObjectMeta{Name: "m1", Namespace: "default", UID: "uid1"},
 	}
 	require.NoError(t, h.MergeWithExternalBlob(context.Background(), target))
 	assert.Equal(t, "original description", target.Spec.Description)
 }
 
-func TestHandler_MergeWithExternalBlob_NoAnnotation(t *testing.T) {
+func TestHandler_MergeWithExternalBlob_NoUID(t *testing.T) {
 	mem := newMemClient("s3")
 	h := newTestHandler(mem, Config{BucketName: "test-bucket"})
 
-	model := testModel("m1", "uid1", "rv1")
-	// No annotation — should be a no-op.
+	model := &v2.Model{
+		TypeMeta:   metav1.TypeMeta{Kind: "Model"},
+		ObjectMeta: metav1.ObjectMeta{Name: "m1", Namespace: "default"}, // no UID
+	}
+	// No UID — should be a no-op.
 	require.NoError(t, h.MergeWithExternalBlob(context.Background(), model))
 }
 
@@ -238,33 +237,12 @@ func TestHandleUpdate_Interesting_UploadsAndUpserts(t *testing.T) {
 	ms := new(mockMetadataStorage)
 	model := testModel("m1", "uid1", "rv1")
 
-	// GetByID returns error (first sync — no previous UUID).
-	ms.On("GetByID", mock.Anything, "uid1", mock.Anything).Return(fmt.Errorf("not found"))
 	ms.On("Upsert", mock.Anything, mock.Anything, false, mock.Anything).Return(nil)
 
 	err := HandleUpdate(context.Background(), model, ms, false, nil, h)
 	require.NoError(t, err)
 	assert.NotEmpty(t, mem.objects, "object should be uploaded to blob storage")
 	ms.AssertCalled(t, "Upsert", mock.Anything, mock.Anything, false, mock.Anything)
-}
-
-func TestHandleUpdate_SkipsUploadWhenUnchanged(t *testing.T) {
-	mem := newMemClient("s3")
-	h := newTestHandler(mem, Config{BucketName: "bucket", EnabledCRDs: map[string]bool{"model": true}})
-	ms := new(mockMetadataStorage)
-
-	model := testModel("m1", "uid1", "rv1")
-
-	// GetByID returns object whose annotation matches current resource version → skip.
-	ms.On("GetByID", mock.Anything, "uid1", mock.Anything).Run(func(args mock.Arguments) {
-		obj := args.Get(2).(runtime.Object)
-		obj.(*v2.Model).Annotations = map[string]string{api.BlobStorageUUIDAnnotation: "rv1"}
-	}).Return(nil)
-
-	err := HandleUpdate(context.Background(), model, ms, false, nil, h)
-	require.NoError(t, err)
-	assert.Empty(t, mem.objects, "upload should be skipped when resource version is unchanged")
-	ms.AssertNotCalled(t, "Upsert")
 }
 
 // --- HandleDelete tests ---
@@ -291,20 +269,8 @@ func TestHandleDelete_Interesting_DeletesFromBothStores(t *testing.T) {
 	// Pre-upload so there is something to delete.
 	_, err := h.UploadToBlobStorage(context.Background(), model)
 	require.NoError(t, err)
-	blobKey := fmt.Sprintf("s3://bucket/model/default/m1/uid1/rv1")
-	_ = blobKey
 	require.NotEmpty(t, mem.objects)
 
-	// GetByID returns the model with the blob annotation.
-	ms.On("GetByID", mock.Anything, "uid1", mock.Anything).Run(func(args mock.Arguments) {
-		obj := args.Get(2).(runtime.Object)
-		m := obj.(*v2.Model)
-		m.TypeMeta = model.TypeMeta
-		m.Name = "m1"
-		m.Namespace = "default"
-		m.UID = "uid1"
-		m.Annotations = map[string]string{api.BlobStorageUUIDAnnotation: "rv1"}
-	}).Return(nil)
 	ms.On("Delete", mock.Anything, typeMeta, "default", "m1").Return(nil)
 
 	err = HandleDelete(context.Background(), typeMeta, model, ms, h)
@@ -346,12 +312,9 @@ func TestHandler_MergeWithExternalBlob_BlobFieldObject_PreservesMetadata(t *test
 
 	_, err := h.UploadToBlobStorage(context.Background(), original)
 	require.NoError(t, err)
-	annotation := original.Annotations[api.BlobStorageUUIDAnnotation]
-	require.Equal(t, "rv1", annotation)
 
 	// Simulate what ETCD returns: same object but Steps cleared, newer ResourceVersion.
 	target := testPipelineRun("pr1", "uid1", "rv2")
-	target.Annotations = map[string]string{api.BlobStorageUUIDAnnotation: annotation}
 	// Steps is nil — as if ClearBlobFields ran before the ETCD write.
 
 	require.NoError(t, h.MergeWithExternalBlob(context.Background(), target))
@@ -396,7 +359,6 @@ func TestHandler_MergeWithExternalBlob_BlobFieldObject_WithInputOutput(t *testin
 	require.NoError(t, err)
 
 	target := testPipelineRun("pr2", "uid2", "rv3")
-	target.Annotations = original.Annotations
 
 	require.NoError(t, h.MergeWithExternalBlob(context.Background(), target))
 
@@ -425,7 +387,7 @@ func TestHandler_MergeWithExternalBlob_PlainObject_FullUnmarshal(t *testing.T) {
 
 	target := &v2.Model{
 		TypeMeta:   original.TypeMeta,
-		ObjectMeta: metav1.ObjectMeta{Name: "m1", Namespace: "default", UID: "uid1", Annotations: original.Annotations},
+		ObjectMeta: metav1.ObjectMeta{Name: "m1", Namespace: "default", UID: "uid1"},
 	}
 	require.NoError(t, h.MergeWithExternalBlob(context.Background(), target))
 	assert.Equal(t, "from blob", target.Spec.Description)
@@ -502,9 +464,6 @@ func TestHandleUpdate_PipelineRun_StepInputOutputClearedInMySQL_RestoredOnGet(t 
 
 	// --- Write path ---
 
-	// No previous UUID in MySQL (first sync).
-	ms.On("GetByID", mock.Anything, "uid-e2e", mock.Anything).Return(fmt.Errorf("not found"))
-
 	// Capture the object that HandleUpdate passes to MySQL.Upsert.
 	var mysqlObj *v2.PipelineRun
 	ms.On("Upsert", mock.Anything, mock.Anything, false, mock.Anything).
@@ -541,9 +500,8 @@ func TestHandleUpdate_PipelineRun_StepInputOutputClearedInMySQL_RestoredOnGet(t 
 
 	// --- Read path (simulated API GET) ---
 
-	// The object retrieved from MySQL has the blob annotation but cleared step fields.
+	// The object retrieved from MySQL has cleared step fields; UID is used to locate the blob.
 	fromMySQL := testPipelineRun("pr-e2e", "uid-e2e", "rv2")
-	fromMySQL.Annotations = pr.Annotations // carries BlobStorageUUIDAnnotation set by HandleUpdate
 	fromMySQL.Status.Steps = []*v2.PipelineRunStepInfo{
 		{
 			Name:  "train",

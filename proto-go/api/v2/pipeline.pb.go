@@ -3129,8 +3129,10 @@ func (m *Pipeline) ClearBlobFields() {
 
 func (m *Pipeline) FillBlobFields(object k8sruntime.Object) {
 	other := object.(*Pipeline)
-	m.Spec = other.Spec
-	m.Status = other.Status
+	if m.Spec.Manifest != nil && other.Spec.Manifest != nil {
+		m.Spec.Manifest.Content = other.Spec.Manifest.Content
+	}
+	m.Status.RegisteredWorkflow = other.Status.RegisteredWorkflow
 }
 
 // UnmarshalJSON unmarshals a JSON value into a PipelineManifest_Type.

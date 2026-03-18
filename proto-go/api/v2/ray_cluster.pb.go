@@ -3866,8 +3866,7 @@ func (m *RayCluster) ClearBlobFields() {
 
 func (m *RayCluster) FillBlobFields(object k8sruntime.Object) {
 	other := object.(*RayCluster)
-	m.Spec = other.Spec
-	m.Status = other.Status
+	_ = other
 }
 
 // UnmarshalJSON unmarshals a JSON value into a TerminationType.

@@ -459,6 +459,16 @@ func genCRDIndexedFields(crdName string, crdRootMsg *protogen.Message, crdBuf *b
 
 func findBlobFields(curMsg *protogen.Message, pathPrefix string, blobFields *[]string,
 	processedMessageTypes *map[protogen.GoIdent]bool, extTypes *protoregistry.Types) {
+	findBlobFieldsWithDepth(curMsg, pathPrefix, blobFields, extTypes, 0)
+}
+
+const maxBlobFieldDepth = 4
+
+func findBlobFieldsWithDepth(curMsg *protogen.Message, pathPrefix string, blobFields *[]string,
+	extTypes *protoregistry.Types, depth int) {
+	if depth >= maxBlobFieldDepth {
+		return
+	}
 	for _, field := range curMsg.Fields {
 		options, err := util.GetFieldOptions(field, extTypes)
 		if err != nil {
@@ -472,18 +482,13 @@ func findBlobFields(curMsg *protogen.Message, pathPrefix string, blobFields *[]s
 
 		// Only find blob fields in messages that are declared in the same package (e.g. michelangelo.api.v2)
 		if field.Message != nil && field.Message.GoIdent.GoImportPath == curMsg.GoIdent.GoImportPath {
-			// Maintain processed message types along the recursion path to avoid getting into infinite recursion
-			if _, found := (*processedMessageTypes)[field.Message.GoIdent]; !found {
-				(*processedMessageTypes)[field.Message.GoIdent] = true
-				// When recursing into a repeated field, mark child paths with "[]" so the
-				// code generator knows to emit a range loop instead of a direct assignment.
-				childPrefix := newPrefix
-				if field.Desc.IsList() {
-					childPrefix = newPrefix + "[]"
-				}
-				findBlobFields(field.Message, childPrefix, blobFields, processedMessageTypes, extTypes)
-				delete(*processedMessageTypes, field.Message.GoIdent)
+			// When recursing into a repeated field, mark child paths with "[]" so the
+			// code generator knows to emit a range loop instead of a direct assignment.
+			childPrefix := newPrefix
+			if field.Desc.IsList() {
+				childPrefix = newPrefix + "[]"
 			}
+			findBlobFieldsWithDepth(field.Message, childPrefix, blobFields, extTypes, depth+1)
 		}
 	}
 }
@@ -599,7 +604,6 @@ func genCRDBlobFields(crdName string, crdMsg *protogen.Message, crdBuf *bytes.Bu
 	var blobFields []string
 	processedMessageTypes := make(map[protogen.GoIdent]bool)
 	findBlobFields(crdMsg, "", &blobFields, &processedMessageTypes, extTypes)
-
 	hasBlobFields := len(blobFields) > 0
 	typeInfo := struct {
 		Name          string
@@ -608,8 +612,124 @@ func genCRDBlobFields(crdName string, crdMsg *protogen.Message, crdBuf *bytes.Bu
 	templates.CRDHasBlobFields.Execute(crdBuf, typeInfo)
 	crdBuf.Write([]byte("\n"))
 	genClearCrdFields(crdName, blobFields, crdBuf)
-	templates.CRDFillBlobFields.Execute(crdBuf, typeInfo)
-	crdBuf.Write([]byte("\n"))
+	genFillCrdFields(crdName, blobFields, crdBuf)
+}
+
+// genFillCrdFields generates the FillBlobFields method body, which is the field-level
+// inverse of ClearBlobFields: it copies only the blob-annotated fields from other into m,
+// leaving all other etcd/MySQL metadata (ResourceVersion, non-blob Spec/Status fields) intact.
+func genFillCrdFields(crdName string, blobFields []string, crdBuf *bytes.Buffer) {
+	typeInfo := struct{ Name string }{crdName}
+	templates.CRDFillBlobFieldsHeader.Execute(crdBuf, typeInfo)
+
+	if len(blobFields) == 0 {
+		crdBuf.Write([]byte("\t_ = other\n}\n\n"))
+		return
+	}
+
+	for _, blobFieldName := range blobFields {
+		if hasRepeatedSegment(blobFieldName) {
+			genFillRepeatedBlobField(parsePathSegments(blobFieldName), "m", "other", "\t", 0, crdBuf)
+		} else {
+			paths := strings.Split(blobFieldName, ".")
+			// Build a nil guard for intermediate (non-leaf) path components, for both m and other.
+			// Spec and Status are embedded structs, not pointers, so they are skipped.
+			guard := ""
+			mCur := "m"
+			otherCur := "other"
+			for i := 0; i < len(paths)-1; i++ {
+				mCur += "." + paths[i]
+				otherCur += "." + paths[i]
+				if paths[i] == "Spec" || paths[i] == "Status" {
+					continue
+				}
+				if guard != "" {
+					guard += " && "
+				}
+				guard += mCur + " != nil && " + otherCur + " != nil"
+			}
+			mLeaf := "m." + blobFieldName
+			otherLeaf := "other." + blobFieldName
+			if guard != "" {
+				crdBuf.Write([]byte(fmt.Sprintf("\tif %s {\n", guard)))
+				crdBuf.Write([]byte(fmt.Sprintf("\t\t%s = %s\n", mLeaf, otherLeaf)))
+				crdBuf.Write([]byte("\t}\n"))
+			} else {
+				crdBuf.Write([]byte(fmt.Sprintf("\t%s = %s\n", mLeaf, otherLeaf)))
+			}
+		}
+	}
+	crdBuf.Write([]byte("}\n\n"))
+}
+
+// genFillRepeatedBlobField emits Go code to copy a blob field that is nested inside one or
+// more repeated (slice) fields, using index-based access on other to match elements by position.
+func genFillRepeatedBlobField(segs []blobFieldSegment, mRootExpr, otherRootExpr, indent string, loopIdx int, crdBuf *bytes.Buffer) {
+	// Find the first repeated segment in the remaining path.
+	firstRepIdx := -1
+	for i, s := range segs {
+		if s.repeated {
+			firstRepIdx = i
+			break
+		}
+	}
+
+	if firstRepIdx == -1 {
+		// No more repeated segments — emit direct assignment for the remaining path.
+		mLeaf := mRootExpr
+		otherLeaf := otherRootExpr
+		for _, s := range segs {
+			mLeaf += "." + s.name
+			otherLeaf += "." + s.name
+		}
+		crdBuf.Write([]byte(fmt.Sprintf("%s%s = %s\n", indent, mLeaf, otherLeaf)))
+		return
+	}
+
+	// Build the range expressions: mRootExpr + all segments up to and including the repeated one.
+	mRangeExpr := mRootExpr
+	otherRangeExpr := otherRootExpr
+	for _, s := range segs[:firstRepIdx+1] {
+		mRangeExpr += "." + s.name
+		otherRangeExpr += "." + s.name
+	}
+
+	// Build a nil guard for any non-repeated pointer fields that precede the repeated segment.
+	// Check both m and other sides. Spec and Status are embedded structs, so skip them.
+	prefixGuard := ""
+	mCur := mRootExpr
+	otherCur := otherRootExpr
+	for _, s := range segs[:firstRepIdx] {
+		mCur += "." + s.name
+		otherCur += "." + s.name
+		if s.name == "Spec" || s.name == "Status" {
+			continue
+		}
+		if prefixGuard != "" {
+			prefixGuard += " && "
+		}
+		prefixGuard += mCur + " != nil && " + otherCur + " != nil"
+	}
+
+	idxVar := fmt.Sprintf("i%d", loopIdx)
+	loopVar := fmt.Sprintf("_v%d", loopIdx)
+	otherElem := fmt.Sprintf("%s[%s]", otherRangeExpr, idxVar)
+
+	emitLoop := func(ind string) {
+		crdBuf.Write([]byte(fmt.Sprintf("%sfor %s, %s := range %s {\n", ind, idxVar, loopVar, mRangeExpr)))
+		crdBuf.Write([]byte(fmt.Sprintf("%s\tif %s != nil && %s < len(%s) && %s != nil {\n", ind, loopVar, idxVar, otherRangeExpr, otherElem)))
+		genFillRepeatedBlobField(segs[firstRepIdx+1:], loopVar, otherElem, ind+"\t\t", loopIdx+1, crdBuf)
+		crdBuf.Write([]byte(fmt.Sprintf("%s\t}\n", ind)))
+		crdBuf.Write([]byte(fmt.Sprintf("%s}\n", ind)))
+	}
+
+	if prefixGuard != "" {
+		crdBuf.Write([]byte(fmt.Sprintf("%sif %s {\n", indent, prefixGuard)))
+		emitLoop(indent + "\t")
+		crdBuf.Write([]byte(fmt.Sprintf("%s}\n", indent)))
+	} else {
+		emitLoop(indent)
+	}
 }
 
 func genClearCrdFields(crdName string, blobFields []string, crdBuf *bytes.Buffer) {

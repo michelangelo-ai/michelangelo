@@ -9,7 +9,6 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/storage/blobstorage",
     visibility = ["//visibility:public"],
     deps = [
-        "//go/api:go_default_library",
         "//go/base/blobstore:go_default_library",
         "//go/storage:go_default_library",
         "@io_k8s_apimachinery//pkg/api/meta:go_default_library",
@@ -24,7 +23,6 @@ go_test(
     srcs = ["handler_test.go"],
     embed = [":go_default_library"],
     deps = [
-        "//go/api:go_default_library",
         "//go/base/blobstore:go_default_library",
         "//go/storage:go_default_library",
         "//proto/api:go_default_library",

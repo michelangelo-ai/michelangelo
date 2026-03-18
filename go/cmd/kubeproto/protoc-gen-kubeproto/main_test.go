@@ -663,3 +663,44 @@ func TestGenClearRepeatedBlobField(t *testing.T) {
 	assert.Contains(t, out, "if m.Spec.Any != nil {")       // existing plain-field path
 	assert.Contains(t, out, "for _, _v0 := range m.Status.Steps {") // new repeated-field path
 }
+
+// TestGenFillCrdFields verifies that genFillCrdFields emits correct field-level copy code
+// (the inverse of ClearBlobFields) without replacing entire Spec or Status.
+func TestGenFillCrdFields(t *testing.T) {
+	var buf bytes.Buffer
+
+	// Simple non-repeated field: Spec.Input
+	genFillCrdFields("MyMsg", []string{"Spec.Input"}, &buf)
+	out := buf.String()
+	assert.Contains(t, out, "func (m *MyMsg) FillBlobFields(object k8sruntime.Object) {")
+	assert.Contains(t, out, "other := object.(*MyMsg)")
+	assert.Contains(t, out, "m.Spec.Input = other.Spec.Input")
+	assert.NotContains(t, out, "m.Spec = other.Spec")
+	assert.NotContains(t, out, "m.Status = other.Status")
+
+	// Nested non-repeated field with pointer guards: Spec.PipelineSpec.Manifest.Content
+	buf.Reset()
+	genFillCrdFields("MyMsg", []string{"Spec.PipelineSpec.Manifest.Content"}, &buf)
+	out = buf.String()
+	assert.Contains(t, out, "m.Spec.PipelineSpec != nil && other.Spec.PipelineSpec != nil")
+	assert.Contains(t, out, "m.Spec.PipelineSpec.Manifest != nil && other.Spec.PipelineSpec.Manifest != nil")
+	assert.Contains(t, out, "m.Spec.PipelineSpec.Manifest.Content = other.Spec.PipelineSpec.Manifest.Content")
+
+	// Single repeated segment: Status.Steps[].Input
+	buf.Reset()
+	genFillCrdFields("MyMsg", []string{"Status.Steps[].Input"}, &buf)
+	out = buf.String()
+	assert.Contains(t, out, "for i0, _v0 := range m.Status.Steps {")
+	assert.Contains(t, out, "i0 < len(other.Status.Steps)")
+	assert.Contains(t, out, "other.Status.Steps[i0] != nil")
+	assert.Contains(t, out, "_v0.Input = other.Status.Steps[i0].Input")
+
+	// Double nested repeated: Status.Steps[].SubSteps[].Output
+	buf.Reset()
+	genFillCrdFields("MyMsg", []string{"Status.Steps[].SubSteps[].Output"}, &buf)
+	out = buf.String()
+	assert.Contains(t, out, "for i0, _v0 := range m.Status.Steps {")
+	assert.Contains(t, out, "for i1, _v1 := range _v0.SubSteps {")
+	assert.Contains(t, out, "i1 < len(other.Status.Steps[i0].SubSteps)")
+	assert.Contains(t, out, "_v1.Output = other.Status.Steps[i0].SubSteps[i1].Output")
+}

@@ -2637,8 +2637,7 @@ func (m *TestIndexing) ClearBlobFields() {
 
 func (m *TestIndexing) FillBlobFields(object k8sruntime.Object) {
 	other := object.(*TestIndexing)
-	m.Spec = other.Spec
-	m.Status = other.Status
+	_ = other
 }
 
 // UnmarshalJSON unmarshals a JSON value into a EnumType.

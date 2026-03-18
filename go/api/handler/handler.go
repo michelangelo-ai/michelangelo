@@ -98,7 +98,13 @@ func (handler *apiHandler) Create(ctx context.Context, obj ctrlRTClient.Object, 
 	}
 
 	// If the object does not exist in MetadataStorage, create it in K8s/ETCD.
-	err = handler.k8sHandler.Create(ctx, obj, opts)
+	fmt.Printf("[HANDLER] Create: calling PrepareForWrite for %T name=%q\n", obj, obj.GetName())
+	objToWrite, blobErr := handler.blobHandler.PrepareForWrite(ctx, obj)
+	if blobErr != nil {
+		fmt.Printf("[HANDLER] Create: PrepareForWrite error: %v\n", blobErr)
+		return surfaceGrpcError(blobErr, "create", objMeta.GetNamespace(), objMeta.GetName())
+	}
+	err = handler.k8sHandler.Create(ctx, objToWrite, opts)
 
 	return surfaceGrpcError(err, "create", objMeta.GetNamespace(), objMeta.GetName())
 }
@@ -176,7 +182,13 @@ func (handler *apiHandler) Update(ctx context.Context, obj ctrlRTClient.Object, 
 		return err
 	}
 
-	err = handler.k8sHandler.Update(ctx, obj, opts)
+	fmt.Printf("[HANDLER] Update: calling PrepareForWrite for %T name=%q\n", obj, obj.GetName())
+	objToWrite, blobErr := handler.blobHandler.PrepareForWrite(ctx, obj)
+	if blobErr != nil {
+		fmt.Printf("[HANDLER] Update: PrepareForWrite error: %v\n", blobErr)
+		return surfaceGrpcError(blobErr, "update", tmpObj.GetNamespace(), tmpObj.GetName())
+	}
+	err = handler.k8sHandler.Update(ctx, objToWrite, opts)
 
 	// If the object does not exist in K8s/ETCD, update it in MetadataStorage directly.
 	if apiErrors.IsNotFound(err) && storage.EnableMetadataStorage(&handler.conf) {
@@ -219,7 +231,13 @@ func (handler *apiHandler) UpdateStatus(ctx context.Context, obj ctrlRTClient.Ob
 	if err != nil {
 		return err
 	}
-	err = handler.k8sHandler.UpdateStatus(ctx, obj, opts)
+	fmt.Printf("[HANDLER] UpdateStatus: calling PrepareForWrite for %T name=%q\n", obj, obj.GetName())
+	objToWrite, blobErr := handler.blobHandler.PrepareForWrite(ctx, obj)
+	if blobErr != nil {
+		fmt.Printf("[HANDLER] UpdateStatus: PrepareForWrite error: %v\n", blobErr)
+		return surfaceGrpcError(blobErr, "updateStatus", tmpObj.GetNamespace(), tmpObj.GetName())
+	}
+	err = handler.k8sHandler.UpdateStatus(ctx, objToWrite, opts)
 
 	return surfaceGrpcError(err, "updateStatus", tmpObj.GetNamespace(), tmpObj.GetName())
 }

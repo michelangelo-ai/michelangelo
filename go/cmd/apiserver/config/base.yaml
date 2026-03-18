@@ -1,11 +1,11 @@
 apiserver:
   yarpc:
     host: "localhost"
-    port: 14566
+    port: 14567
   crdSync:
     enableCRDUpdate: true
     enableCRDDeletion: true
-    skipIncompatibleCheck: false
+    skipIncompatibleCheck: true
     crdVersions:
       project:
         versions: [v2]
@@ -16,3 +16,15 @@ k8s:
   burst: 600
 metadataStorage:
   enableMetadataStorage: false
+
+minio:
+  awsRegion: us-east-1
+  awsAccessKeyId: minioadmin
+  awsSecretAccessKey: minioadmin
+  awsEndpointUrl: localhost:9091
+
+blobStorage:
+  enabled: true
+  bucketName: entities
+  enabledCRDs:
+    pipelinerun: true

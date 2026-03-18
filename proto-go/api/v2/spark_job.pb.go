@@ -3004,8 +3004,7 @@ func (m *SparkJob) ClearBlobFields() {
 
 func (m *SparkJob) FillBlobFields(object k8sruntime.Object) {
 	other := object.(*SparkJob)
-	m.Spec = other.Spec
-	m.Status = other.Status
+	_ = other
 }
 
 func init() {

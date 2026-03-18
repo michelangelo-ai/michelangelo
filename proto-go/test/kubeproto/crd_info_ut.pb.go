@@ -1000,8 +1000,7 @@ func (m *TestCRD) ClearBlobFields() {
 
 func (m *TestCRD) FillBlobFields(object k8sruntime.Object) {
 	other := object.(*TestCRD)
-	m.Spec = other.Spec
-	m.Status = other.Status
+	_ = other
 }
 
 func init() {

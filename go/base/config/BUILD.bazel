@@ -13,6 +13,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/base/env:go_default_library",
+        "//go/components/ingester:go_default_library",
         "//go/storage:go_default_library",
         "//go/storage/blobstorage:go_default_library",
         "//go/storage/mysql:go_default_library",

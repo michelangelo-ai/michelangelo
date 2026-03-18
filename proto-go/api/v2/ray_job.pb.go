@@ -1755,8 +1755,7 @@ func (m *RayJob) ClearBlobFields() {
 
 func (m *RayJob) FillBlobFields(object k8sruntime.Object) {
 	other := object.(*RayJob)
-	m.Spec = other.Spec
-	m.Status = other.Status
+	_ = other
 }
 
 // UnmarshalJSON unmarshals a JSON value into a RayJobState.

@@ -63,12 +63,10 @@ var CRDUnmarshalEnum = template.Must(template.New("unmarshalJSON").Parse(unmarsh
 var CRDClearBlobFieldsHeader = template.Must(template.New("crdClearBlobFields").Parse(`func (m *{{.Name}}) ClearBlobFields() {
 `))
 
-// CRDFillBlobFields is a template of the FillBlobFields() function
-var CRDFillBlobFields = template.Must(template.New("crFillBlobFields").Parse(`func (m *{{.Name}}) FillBlobFields(object k8sruntime.Object) {
+// CRDFillBlobFieldsHeader is a template of the FillBlobFields() function signature.
+// The body is generated field-by-field by genFillCrdFields in main.go.
+var CRDFillBlobFieldsHeader = template.Must(template.New("crdFillBlobFieldsHeader").Parse(`func (m *{{.Name}}) FillBlobFields(object k8sruntime.Object) {
 	other := object.(*{{.Name}})
-	m.Spec = other.Spec
-	m.Status = other.Status
-}
 `))
 
 // CRDGetIndexedFieldsHeader is a template for the GetIndexedKeyValuePairs() function signature.

@@ -37,8 +37,8 @@ func register(p registerParams) error {
 
 	p.Logger.Info("Setting up ingester controllers")
 
-	// List of CRD objects to watch
-	crdObjects := v2.AllCRDObjects
+	// List of CRD objects to watch (CrdObjects has TypeMeta set via init())
+	crdObjects := v2.CrdObjects
 
 	for _, obj := range crdObjects {
 		gvk := obj.GetObjectKind().GroupVersionKind()

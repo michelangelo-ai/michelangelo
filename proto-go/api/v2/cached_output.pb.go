@@ -2552,8 +2552,7 @@ func (m *CachedOutput) ClearBlobFields() {
 
 func (m *CachedOutput) FillBlobFields(object k8sruntime.Object) {
 	other := object.(*CachedOutput)
-	m.Spec = other.Spec
-	m.Status = other.Status
+	_ = other
 }
 
 // UnmarshalJSON unmarshals a JSON value into a CachedOutputType.
