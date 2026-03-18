@@ -1,9 +1,12 @@
 import type { BaseFieldProps } from '../types';
 
-export interface DateFieldProps extends BaseFieldProps<string> {
+export interface DateFieldProps extends BaseFieldProps<string, Date | null> {
   /** @default DATE_FORMAT.ISO_DATE_STRING */
   dateFormat?: DATE_FORMAT;
-  /** Restricts selectable dates to today or earlier */
+  /**
+   * Restricts selectable dates to today or earlier
+   * @default false
+   */
   noFutureDate?: boolean;
 }
 

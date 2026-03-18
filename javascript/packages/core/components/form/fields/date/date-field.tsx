@@ -48,8 +48,7 @@ export const DateField: React.FC<DateFieldProps> = ({
 }) => {
   const { format, parse } = useDateFormatters(dateFormat);
 
-  // Date format can be epoch seconds string or ISO string
-  const { input, meta } = useField<string>(name, {
+  const { input, meta } = useField<string, Date | null>(name, {
     required,
     validate,
     defaultValue,
@@ -73,9 +72,8 @@ export const DateField: React.FC<DateFieldProps> = ({
         >
           <DatePicker
             id={input.name}
-            // Form state is string (epoch/ISO), but format() converts it to Date for the picker
-            value={input.value as unknown as Date | null}
-            onChange={({ date }) => {
+            value={input.value}
+            onChange={({ date }: { date: Date | null }) => {
               // For single date pickers, DatePicker onChange can be invoked with null date.
               // This is particularly problematic when user simply opens and closes date selection
               // without selecting a date. In this case, don't propagate the null value to the form.
