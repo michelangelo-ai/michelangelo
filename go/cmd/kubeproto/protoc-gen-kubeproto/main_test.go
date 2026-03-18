@@ -2,7 +2,6 @@ package main
 
 import (
 	_ "embed"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"go/token"
@@ -628,79 +627,4 @@ func TestInlineEmbedding(t *testing.T) {
 
 	assert.Equal(t, "extra-value", jsonMap["additional_field"])
 	assert.NotNil(t, jsonMap["debugging_info"])
-}
-
-// TestGenClearRepeatedBlobField verifies that genClearCrdFields emits correct Go code
-// (range loops with nil guards) when a blob field path passes through a repeated field.
-func TestGenClearRepeatedBlobField(t *testing.T) {
-	var buf bytes.Buffer
-
-	// Single repeated segment: Status.Steps[].Input
-	genClearCrdFields("MyMsg", []string{"Status.Steps[].Input"}, &buf)
-	out := buf.String()
-	assert.Contains(t, out, "func (m *MyMsg) ClearBlobFields() {")
-	assert.Contains(t, out, "for _, _v0 := range m.Status.Steps {")
-	assert.Contains(t, out, "if _v0 != nil {")
-	assert.Contains(t, out, "if _v0.Input != nil {")
-	assert.Contains(t, out, "_v0.Input = nil")
-	// Must not try to access the field directly through the slice.
-	assert.NotContains(t, out, "m.Status.Steps.Input")
-
-	// Double nested repeated segment: Status.Steps[].SubSteps[].Output
-	buf.Reset()
-	genClearCrdFields("MyMsg", []string{"Status.Steps[].SubSteps[].Output"}, &buf)
-	out = buf.String()
-	assert.Contains(t, out, "for _, _v0 := range m.Status.Steps {")
-	assert.Contains(t, out, "for _, _v1 := range _v0.SubSteps {")
-	assert.Contains(t, out, "if _v1 != nil {")
-	assert.Contains(t, out, "if _v1.Output != nil {")
-	assert.Contains(t, out, "_v1.Output = nil")
-
-	// Mixed: one plain field and one field behind a repeated segment.
-	buf.Reset()
-	genClearCrdFields("MyMsg", []string{"Spec.Any", "Status.Steps[].Input"}, &buf)
-	out = buf.String()
-	assert.Contains(t, out, "if m.Spec.Any != nil {")       // existing plain-field path
-	assert.Contains(t, out, "for _, _v0 := range m.Status.Steps {") // new repeated-field path
-}
-
-// TestGenFillCrdFields verifies that genFillCrdFields emits correct field-level copy code
-// (the inverse of ClearBlobFields) without replacing entire Spec or Status.
-func TestGenFillCrdFields(t *testing.T) {
-	var buf bytes.Buffer
-
-	// Simple non-repeated field: Spec.Input
-	genFillCrdFields("MyMsg", []string{"Spec.Input"}, &buf)
-	out := buf.String()
-	assert.Contains(t, out, "func (m *MyMsg) FillBlobFields(object k8sruntime.Object) {")
-	assert.Contains(t, out, "other := object.(*MyMsg)")
-	assert.Contains(t, out, "m.Spec.Input = other.Spec.Input")
-	assert.NotContains(t, out, "m.Spec = other.Spec")
-	assert.NotContains(t, out, "m.Status = other.Status")
-
-	// Nested non-repeated field with pointer guards: Spec.PipelineSpec.Manifest.Content
-	buf.Reset()
-	genFillCrdFields("MyMsg", []string{"Spec.PipelineSpec.Manifest.Content"}, &buf)
-	out = buf.String()
-	assert.Contains(t, out, "m.Spec.PipelineSpec != nil && other.Spec.PipelineSpec != nil")
-	assert.Contains(t, out, "m.Spec.PipelineSpec.Manifest != nil && other.Spec.PipelineSpec.Manifest != nil")
-	assert.Contains(t, out, "m.Spec.PipelineSpec.Manifest.Content = other.Spec.PipelineSpec.Manifest.Content")
-
-	// Single repeated segment: Status.Steps[].Input
-	buf.Reset()
-	genFillCrdFields("MyMsg", []string{"Status.Steps[].Input"}, &buf)
-	out = buf.String()
-	assert.Contains(t, out, "for i0, _v0 := range m.Status.Steps {")
-	assert.Contains(t, out, "i0 < len(other.Status.Steps)")
-	assert.Contains(t, out, "other.Status.Steps[i0] != nil")
-	assert.Contains(t, out, "_v0.Input = other.Status.Steps[i0].Input")
-
-	// Double nested repeated: Status.Steps[].SubSteps[].Output
-	buf.Reset()
-	genFillCrdFields("MyMsg", []string{"Status.Steps[].SubSteps[].Output"}, &buf)
-	out = buf.String()
-	assert.Contains(t, out, "for i0, _v0 := range m.Status.Steps {")
-	assert.Contains(t, out, "for i1, _v1 := range _v0.SubSteps {")
-	assert.Contains(t, out, "i1 < len(other.Status.Steps[i0].SubSteps)")
-	assert.Contains(t, out, "_v1.Output = other.Status.Steps[i0].SubSteps[i1].Output")
 }

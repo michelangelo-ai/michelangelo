@@ -1348,7 +1348,8 @@ func (m *Project) ClearBlobFields() {
 
 func (m *Project) FillBlobFields(object k8sruntime.Object) {
 	other := object.(*Project)
-	_ = other
+	m.Spec = other.Spec
+	m.Status = other.Status
 }
 
 func init() {

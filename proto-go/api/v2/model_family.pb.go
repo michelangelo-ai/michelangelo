@@ -1123,7 +1123,8 @@ func (m *ModelFamily) ClearBlobFields() {
 
 func (m *ModelFamily) FillBlobFields(object k8sruntime.Object) {
 	other := object.(*ModelFamily)
-	_ = other
+	m.Spec = other.Spec
+	m.Status = other.Status
 }
 
 func init() {

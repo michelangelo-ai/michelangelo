@@ -2649,7 +2649,8 @@ func (m *TestObject) ClearBlobFields() {
 
 func (m *TestObject) FillBlobFields(object k8sruntime.Object) {
 	other := object.(*TestObject)
-	_ = other
+	m.Spec = other.Spec
+	m.Status = other.Status
 }
 
 // UnmarshalJSON unmarshals a JSON value into a E1.

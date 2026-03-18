@@ -3656,7 +3656,8 @@ func (m *TriggerRun) ClearBlobFields() {
 
 func (m *TriggerRun) FillBlobFields(object k8sruntime.Object) {
 	other := object.(*TriggerRun)
-	_ = other
+	m.Spec = other.Spec
+	m.Status = other.Status
 }
 
 // UnmarshalJSON unmarshals a JSON value into a Notification_NotificationType.

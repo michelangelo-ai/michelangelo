@@ -134,34 +134,38 @@ func TestReconciler_HandleDeletion(t *testing.T) {
 	_ = v2.AddToScheme(scheme)
 
 	now := metav1.Now()
+	gracePeriod := int64(0) // Expired
 
-	// Object with DeletionTimestamp set and no DeletionDelay configured — finalizer should be removed.
+	// Create a test model with deletion timestamp
 	model := &v2.Model{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "michelangelo.uber.com/v2",
 			Kind:       "Model",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:              "test-model",
-			Namespace:         "default",
-			UID:               types.UID("test-uid"),
-			DeletionTimestamp: &now,
-			Finalizers:        []string{api.IngesterFinalizer},
+			Name:                       "test-model",
+			Namespace:                  "default",
+			UID:                        types.UID("test-uid"),
+			DeletionTimestamp:          &now,
+			DeletionGracePeriodSeconds: &gracePeriod,
+			Finalizers:                 []string{api.IngesterFinalizer},
 		},
 		Spec: v2.ModelSpec{
 			Description: "Test model for deletion",
 		},
 	}
 
+	// Create fake client
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(model).
 		Build()
 
-	// Storage should NOT be called — handleDeletion only removes the finalizer.
-	// Deletion from storage is handled by handleDeletionAnnotation.
+	// Create mock storage
 	mockStorage := new(MockMetadataStorage)
+	mockStorage.On("Delete", mock.Anything, mock.Anything, "default", "test-model").Return(nil)
 
+	// Create reconciler
 	reconciler := &Reconciler{
 		Client:          fakeClient,
 		Log:             logr.Discard(),
@@ -171,10 +175,10 @@ func TestReconciler_HandleDeletion(t *testing.T) {
 		Config: Config{
 			ConcurrentReconciles: 1,
 			RequeuePeriod:        30 * time.Second,
-			// No DeletionDelay: finalizer removed immediately.
 		},
 	}
 
+	// Test reconcile
 	req := ctrl.Request{
 		NamespacedName: types.NamespacedName{
 			Name:      "test-model",
@@ -186,62 +190,11 @@ func TestReconciler_HandleDeletion(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, ctrl.Result{}, result)
 
-	// Storage must not be called during k8s-initiated deletion.
-	mockStorage.AssertNotCalled(t, "Delete")
-	mockStorage.AssertNotCalled(t, "Upsert")
-}
+	// Verify that Delete was called
+	mockStorage.AssertCalled(t, "Delete", mock.Anything, mock.Anything, "default", "test-model")
 
-func TestReconciler_HandleDeletion_WithDelay(t *testing.T) {
-	scheme := runtime.NewScheme()
-	_ = v2.AddToScheme(scheme)
-
-	now := metav1.Now()
-
-	model := &v2.Model{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "michelangelo.uber.com/v2",
-			Kind:       "Model",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              "test-model",
-			Namespace:         "default",
-			UID:               types.UID("test-uid"),
-			DeletionTimestamp: &now,
-			Finalizers:        []string{api.IngesterFinalizer},
-		},
-	}
-
-	fakeClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithObjects(model).
-		Build()
-
-	mockStorage := new(MockMetadataStorage)
-
-	reconciler := &Reconciler{
-		Client:          fakeClient,
-		Log:             logr.Discard(),
-		Scheme:          scheme,
-		TargetKind:      &v2.Model{},
-		MetadataStorage: mockStorage,
-		Config: Config{
-			ConcurrentReconciles: 1,
-			DeletionDelay:        60 * time.Second,
-		},
-	}
-
-	req := ctrl.Request{
-		NamespacedName: types.NamespacedName{
-			Name:      "test-model",
-			Namespace: "default",
-		},
-	}
-
-	result, err := reconciler.Reconcile(context.Background(), req)
-	require.NoError(t, err)
-	// Should requeue after the remaining delay, not return empty result.
-	assert.True(t, result.Requeue || result.RequeueAfter > 0, "expected requeue during deletion delay")
-	mockStorage.AssertNotCalled(t, "Delete")
+	// Note: The object is deleted from K8s after finalizer removal, so we can't check the finalizer state
+	// The fact that reconciliation succeeded means the finalizer was removed and K8s deletion proceeded
 }
 
 func TestReconciler_HandleDeletionAnnotation(t *testing.T) {

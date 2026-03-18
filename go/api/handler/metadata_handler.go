@@ -6,7 +6,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
-	"github.com/michelangelo-ai/michelangelo/go/storage/blobstorage"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -42,7 +41,7 @@ func (m *MetadataHandlerImpl) Get(ctx context.Context, namespace, name string, o
 
 // Update implements MetadataHandler.Update by delegating to the handleUpdate function.
 func (m *MetadataHandlerImpl) Update(ctx context.Context, obj ctrlRTClient.Object) error {
-	return handleUpdate(ctx, obj, m.storage, false, nil, m.blobStorage)
+	return handleUpdate(ctx, obj, m.storage, true, nil, m.blobStorage)
 }
 
 // Delete implements MetadataHandler.Delete by delegating to the handleDelete function.
@@ -106,12 +105,12 @@ func (n *NullMetadataHandler) List(ctx context.Context, namespace string, opts *
 	return apiErrors.NewNotFound(schema.GroupResource{}, "")
 }
 
-// handleUpdate is a helper function for updating objects in metadata storage and blob storage.
-// It delegates to blobstorage.HandleUpdate which uploads to blob storage (if the object is
-// interesting) before upserting to metadata storage, matching the ingester's write path.
+// handleUpdate is a helper function for updating objects in metadata storage.
+// This function handles the actual update operation by delegating to the storage layer.
 func handleUpdate(ctx context.Context, obj ctrlRTClient.Object, metadataStorage storage.MetadataStorage, direct bool,
 	indexedFields []storage.IndexedField, handler storage.BlobStorage) error {
-	return blobstorage.HandleUpdate(ctx, obj, metadataStorage, direct, indexedFields, handler)
+	// TODO(#555): update the object in blob storage
+	return metadataStorage.Upsert(ctx, obj, direct, indexedFields)
 }
 
 // handleDelete is a helper function for deleting objects from metadata storage and blob storage.

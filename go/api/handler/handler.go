@@ -98,13 +98,7 @@ func (handler *apiHandler) Create(ctx context.Context, obj ctrlRTClient.Object, 
 	}
 
 	// If the object does not exist in MetadataStorage, create it in K8s/ETCD.
-	fmt.Printf("[HANDLER] Create: calling PrepareForWrite for %T name=%q\n", obj, obj.GetName())
-	objToWrite, blobErr := handler.blobHandler.PrepareForWrite(ctx, obj)
-	if blobErr != nil {
-		fmt.Printf("[HANDLER] Create: PrepareForWrite error: %v\n", blobErr)
-		return surfaceGrpcError(blobErr, "create", objMeta.GetNamespace(), objMeta.GetName())
-	}
-	err = handler.k8sHandler.Create(ctx, objToWrite, opts)
+	err = handler.k8sHandler.Create(ctx, obj, opts)
 
 	return surfaceGrpcError(err, "create", objMeta.GetNamespace(), objMeta.GetName())
 }
@@ -128,7 +122,7 @@ func (handler *apiHandler) Get(
 		// pending deleted, so we should proceed to the section below to get from the metadata storage.
 		if !isDeletedImmutableObject(obj) {
 			log.Info("Find object in ETCD")
-			return surfaceGrpcError(handler.handleBlobStorageForGet(ctx, obj, log), "get", namespace, name)
+			return nil
 		}
 	}
 	// if the k8s client error is not "not found", return the error
@@ -142,9 +136,7 @@ func (handler *apiHandler) Get(
 			return surfaceGrpcError(err, "get", namespace, name)
 		}
 
-		if err = handler.handleBlobStorageForGet(ctx, obj, log); err != nil {
-			return surfaceGrpcError(err, "get", namespace, name)
-		}
+		handler.handleBlobStorageForGet(ctx, obj, log)
 		log.Info("Find object in metadata storage")
 	}
 
@@ -182,13 +174,7 @@ func (handler *apiHandler) Update(ctx context.Context, obj ctrlRTClient.Object, 
 		return err
 	}
 
-	fmt.Printf("[HANDLER] Update: calling PrepareForWrite for %T name=%q\n", obj, obj.GetName())
-	objToWrite, blobErr := handler.blobHandler.PrepareForWrite(ctx, obj)
-	if blobErr != nil {
-		fmt.Printf("[HANDLER] Update: PrepareForWrite error: %v\n", blobErr)
-		return surfaceGrpcError(blobErr, "update", tmpObj.GetNamespace(), tmpObj.GetName())
-	}
-	err = handler.k8sHandler.Update(ctx, objToWrite, opts)
+	err = handler.k8sHandler.Update(ctx, obj, opts)
 
 	// If the object does not exist in K8s/ETCD, update it in MetadataStorage directly.
 	if apiErrors.IsNotFound(err) && storage.EnableMetadataStorage(&handler.conf) {
@@ -231,13 +217,7 @@ func (handler *apiHandler) UpdateStatus(ctx context.Context, obj ctrlRTClient.Ob
 	if err != nil {
 		return err
 	}
-	fmt.Printf("[HANDLER] UpdateStatus: calling PrepareForWrite for %T name=%q\n", obj, obj.GetName())
-	objToWrite, blobErr := handler.blobHandler.PrepareForWrite(ctx, obj)
-	if blobErr != nil {
-		fmt.Printf("[HANDLER] UpdateStatus: PrepareForWrite error: %v\n", blobErr)
-		return surfaceGrpcError(blobErr, "updateStatus", tmpObj.GetNamespace(), tmpObj.GetName())
-	}
-	err = handler.k8sHandler.UpdateStatus(ctx, objToWrite, opts)
+	err = handler.k8sHandler.UpdateStatus(ctx, obj, opts)
 
 	return surfaceGrpcError(err, "updateStatus", tmpObj.GetNamespace(), tmpObj.GetName())
 }
@@ -569,14 +549,12 @@ func (handler *apiHandler) handleMetadataStorageForCreate(ctx context.Context, o
 }
 
 // handleBlobStorageForGet handles blob storage logic during get operations
-func (handler *apiHandler) handleBlobStorageForGet(ctx context.Context, obj ctrlRTClient.Object, log logr.Logger) error {
+func (handler *apiHandler) handleBlobStorageForGet(ctx context.Context, obj ctrlRTClient.Object, log logr.Logger) {
 	if handler.blobHandler.IsObjectInteresting(obj) {
-		if err := handler.blobHandler.MergeWithExternalBlob(ctx, obj); err != nil {
-			log.Error(err, "Failed to merging with blob storage")
-			return err
+		if terrablobErr := handler.blobHandler.MergeWithExternalBlob(ctx, obj); terrablobErr != nil {
+			log.Error(terrablobErr, "Failed to merging with blob storage")
 		}
 	}
-	return nil
 }
 
 // checkDryRun checks if the dry run option is valid (either empty or []string{"All"}), if not returns an error

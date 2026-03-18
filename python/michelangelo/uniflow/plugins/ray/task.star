@@ -118,7 +118,6 @@ def task(
                     print("ray | found cache output", "cached_result_json_url:", cached_result_json_url)
                     end_time_seconds = time.time()
                     end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
-                    input_json = json.dumps({"args": list(args), "kwargs": kwargs}) if (args or kwargs) else ""
                     report_progress(
                         task_path = task_path,
                         task_name = task_name,
@@ -128,7 +127,6 @@ def task(
                         start_time = start_time_formated_str,
                         end_time = end_time_formated_str,
                         output = cached_output.get("metadata", {}).get("name", ""),
-                        input = input_json,
                         retry_attempt_id = "",
                     )
                     result = io_read_json(cached_result_json_url)
@@ -368,7 +366,6 @@ def report_ray_task_result(job, task_path, task_name, cluster_url, start_time_fo
             start_time = start_time_formated_str,
             end_time = end_time_formated_str,
             output = cached_output_name,
-            input = json.dumps({"args": list(args), "kwargs": kwargs}) if (args or kwargs) else "",
             retry_attempt_id = retry_attempt_id,
         )
         return TASK_STATE_SUCCEEDED
@@ -384,7 +381,6 @@ def report_ray_task_result(job, task_path, task_name, cluster_url, start_time_fo
             start_time = start_time_formated_str,
             end_time = end_time_formated_str,
             output = cached_output_name,
-            input = json.dumps({"args": list(args), "kwargs": kwargs}) if (args or kwargs) else "",
             retry_attempt_id = retry_attempt_id,
         )
         return TASK_STATE_KILLED
@@ -401,7 +397,6 @@ def report_ray_task_result(job, task_path, task_name, cluster_url, start_time_fo
             start_time = start_time_formated_str,
             end_time = end_time_formated_str,
             output = cached_output_name,
-            input = json.dumps({"args": list(args), "kwargs": kwargs}) if (args or kwargs) else "",
             retry_attempt_id = retry_attempt_id,
         )
         return TASK_STATE_FAILED

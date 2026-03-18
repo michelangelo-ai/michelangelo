@@ -1750,7 +1750,8 @@ func (m *Revision) ClearBlobFields() {
 
 func (m *Revision) FillBlobFields(object k8sruntime.Object) {
 	other := object.(*Revision)
-	_ = other
+	m.Spec = other.Spec
+	m.Status = other.Status
 }
 
 // UnmarshalJSON unmarshals a JSON value into a RevisionState.

@@ -84,7 +84,7 @@ message PipelineManifest {
   // recommend to use an embedded TypedStruct as suggested by the Envoy
   // Proxy project.
   // https://blog.envoyproxy.io/dynamic-extensibility-and-protocol-buffers-dcd0bf0b8801
-  google.protobuf.Any content = 4 [(michelangelo.api.external_storage) = true];
+  google.protobuf.Any content = 4;
 
   // map of ids to corresponding pipeline run parameters, each id in the map can trigger one pipeline run
   map<string, PipelineExecutionParameters> params_map = 5;
@@ -246,7 +246,7 @@ message PipelineStatus {
   // - Resource requirements
   // - Scheduling constraints
   // The workflow is stored externally for scalability.
-  google.protobuf.Any registered_workflow = 4 [(michelangelo.api.external_storage) = true];
+  google.protobuf.Any registered_workflow = 4;
 
   // Reference to the latest revision of this pipeline from main branch.
   michelangelo.api.ResourceIdentifier latest_revision = 5 [

@@ -4953,8 +4953,8 @@ func (m *TestMsg3) ClearBlobFields() {
 
 func (m *TestMsg3) FillBlobFields(object k8sruntime.Object) {
 	other := object.(*TestMsg3)
-	m.Spec.Any = other.Spec.Any
-	m.Status.Any = other.Status.Any
+	m.Spec = other.Spec
+	m.Status = other.Status
 }
 
 func init() {
@@ -9584,16 +9584,8 @@ func (m *TestObject) ClearBlobFields() {
 
 func (m *TestObject) FillBlobFields(object k8sruntime.Object) {
 	other := object.(*TestObject)
-	if m.Spec.InputSchema != nil && other.Spec.InputSchema != nil {
-		m.Spec.InputSchema.Metadata = other.Spec.InputSchema.Metadata
-	}
-	m.Spec.Any = other.Spec.Any
-	if m.Spec.Msg_3 != nil && other.Spec.Msg_3 != nil {
-		m.Spec.Msg_3.Spec.Any = other.Spec.Msg_3.Spec.Any
-	}
-	if m.Spec.Msg_3 != nil && other.Spec.Msg_3 != nil {
-		m.Spec.Msg_3.Status.Any = other.Spec.Msg_3.Status.Any
-	}
+	m.Spec = other.Spec
+	m.Status = other.Status
 }
 
 // UnmarshalJSON unmarshals a JSON value into a DataType.

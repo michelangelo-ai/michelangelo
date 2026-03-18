@@ -1466,7 +1466,8 @@ func (m *Cluster) ClearBlobFields() {
 
 func (m *Cluster) FillBlobFields(object k8sruntime.Object) {
 	other := object.(*Cluster)
-	_ = other
+	m.Spec = other.Spec
+	m.Status = other.Status
 }
 
 // UnmarshalJSON unmarshals a JSON value into a ClusterSpec_SLAType.

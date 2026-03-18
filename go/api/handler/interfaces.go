@@ -107,11 +107,6 @@ type BlobHandler interface {
 	// DeleteFromBlobStorage removes blob data associated with an object.
 	// This is called during object deletion to prevent storage leaks.
 	DeleteFromBlobStorage(ctx context.Context, obj ctrlRTClient.Object) error
-
-	// PrepareForWrite uploads the object to blob storage (if interesting) and returns
-	// a deep-copy with blob fields cleared, ready to be written to etcd.
-	// If the object is not interesting, the original object is returned unchanged.
-	PrepareForWrite(ctx context.Context, obj ctrlRTClient.Object) (ctrlRTClient.Object, error)
 }
 
 // ValidationHandler abstracts object validation operations for consistent validation logic.

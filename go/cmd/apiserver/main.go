@@ -5,14 +5,10 @@ import (
 	apihandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/auth"
 	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
-	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
-	"github.com/michelangelo-ai/michelangelo/go/base/blobstore/minio"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
 	projectapihook "github.com/michelangelo-ai/michelangelo/go/components/project/apihook"
 	"github.com/michelangelo-ai/michelangelo/go/logging"
-	"github.com/michelangelo-ai/michelangelo/go/storage"
-	"github.com/michelangelo-ai/michelangelo/go/storage/blobstorage"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/uber-go/tally"
 	uberconfig "go.uber.org/config"
@@ -35,8 +31,6 @@ func opts() fx.Option {
 		env.Module,
 		baseconfig.Module,
 		zapfx.Module,
-		blobstore.Module,
-		minio.Module,
 		fx.Invoke(printConfig),
 		apihandler.APIServerModule,
 		auth.DummyAuthModule,
@@ -45,8 +39,6 @@ func opts() fx.Option {
 		fx.Provide(baseconfig.GetK8sConfig),
 		fx.Provide(getYARPCConfig),
 		fx.Provide(baseconfig.GetMetadataStorageConfig),
-		fx.Provide(baseconfig.GetBlobStorageConfig),
-		fx.Provide(provideBlobStorage),
 		fx.Provide(provideDispatcher),
 		fx.Provide(getScheme),
 		fx.Invoke(projectapihook.RegisterProjectAPIHook),
@@ -90,13 +82,3 @@ func getScheme() (*runtime.Scheme, error) {
 func printConfig(logger *zap.Logger, provider uberconfig.Provider) {
 	logger.Info("Configuration", zap.Any("config", provider.Get(uberconfig.Root)))
 }
-
-// provideBlobStorage returns a BlobStorage implementation backed by the given BlobStore.
-// Returns nil when blob storage is disabled in config, making it optional for the API server.
-func provideBlobStorage(store *blobstore.BlobStore, config baseconfig.BlobStorageConfig) storage.BlobStorage {
-	if !config.Enabled {
-		return nil
-	}
-	return blobstorage.New(store, config.ToBlobStorageConfig())
-}
-

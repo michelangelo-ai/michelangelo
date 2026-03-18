@@ -350,7 +350,6 @@ func TestK8sAndMetadataStorage(t *testing.T) {
 
 	// Get a job from k8s/ETCD
 	j1 := v2pb.RayJob{}
-	mockBlobStorage.EXPECT().MergeWithExternalBlob(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	err = handler.Get(context.Background(), initObjs[0].GetNamespace(), initObjs[0].GetName(), nil, &j1)
 	assert.NoError(t, err)
 	j1.ResourceVersion = "" // Remove the resource version set by fake k8s client
@@ -427,7 +426,6 @@ func TestK8sAndMetadataStorage(t *testing.T) {
 	assert.NoError(t, err)
 	// job3 is marked as deleting
 	j3 := v2pb.RayJob{}
-	mockBlobStorage.EXPECT().MergeWithExternalBlob(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	err = handler.Get(context.Background(), job3.Namespace, job3.Name, nil, &j3)
 	assert.NoError(t, err)
 	assert.True(t, utils.IsDeleting(&j3))

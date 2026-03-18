@@ -64,8 +64,7 @@ type TaskProgress struct {
 	TaskState         string   `json:"task_state"`          // represents the current execution state (e.g., "running", "succeeded", "failed", "pending")
 	StartTime         string   `json:"start_time"`          // timestamp when the task execution began
 	EndTime           string   `json:"end_time"`            // timestamp when the task execution completed
-	Input             string   `json:"input"`               // contains the serialized input data used by the task during execution
-	Output            string   `json:"output"`              // CachedOutput resource name produced by the task upon completion
+	Output            string   `json:"output"`              // contains the serialized output data produced by the task upon completion
 	RetryAttemptID    string   `json:"retry_attempt_id"`    // identifies the specific retry attempt for this task execution
 	FirstActivityID   string   `json:"first_activity_id"`   // ID of the first activity in this task
 	CurrentActivityID string   `json:"current_activity_id"` // ID of the currently executing activity
@@ -814,49 +813,11 @@ func (a *ExecuteWorkflowActor) constructPipelineRunStepInfo(ctx context.Context,
 	}
 
 	for _, stepName := range stepOrder {
-		step := stepMap[stepName]
-		a.enrichStepOutput(ctx, step, pipelineRun.Namespace, logger)
-		orderedStepInfo = append(orderedStepInfo, step)
+		orderedStepInfo = append(orderedStepInfo, stepMap[stepName])
 	}
 
 	logger.Info("Ordered Step Info", zap.Any("orderedStepInfo", orderedStepInfo))
 	return orderedStepInfo, nil
-}
-
-// enrichStepOutput fetches the CachedOutput resource for the step, reads the result JSON
-// from blob storage, and populates stepInfo.Output as a structured object.
-func (a *ExecuteWorkflowActor) enrichStepOutput(ctx context.Context, stepInfo *v2.PipelineRunStepInfo, namespace string, logger *zap.Logger) {
-	if stepInfo.StepCachedOutputs == nil || len(stepInfo.StepCachedOutputs.IntermediateVars) == 0 {
-		return
-	}
-	cachedOutputName := stepInfo.StepCachedOutputs.IntermediateVars[0].Name
-	if cachedOutputName == "" {
-		return
-	}
-
-	cachedOutput := &v2.CachedOutput{}
-	if err := a.apiHandler.Get(ctx, namespace, cachedOutputName, nil, cachedOutput); err != nil {
-		logger.Info("enrichStepOutput: CachedOutput not found, skipping", zap.String("name", cachedOutputName), zap.Error(err))
-		return
-	}
-
-	storageURI := cachedOutput.Spec.GetStorageUri()
-	if storageURI == "" {
-		return
-	}
-
-	data, err := a.blobStore.Get(ctx, storageURI)
-	if err != nil {
-		logger.Info("enrichStepOutput: failed to fetch blob, skipping", zap.String("uri", storageURI), zap.Error(err))
-		return
-	}
-
-	outputStruct := &pbtypes.Struct{}
-	if err := jsonpb.UnmarshalString(string(data), outputStruct); err != nil {
-		logger.Info("enrichStepOutput: failed to parse result JSON, skipping", zap.String("uri", storageURI), zap.Error(err))
-		return
-	}
-	stepInfo.Output = outputStruct
 }
 
 func mergePipelineRunStepInfo(oldStepInfo *v2.PipelineRunStepInfo, newStepInfo *v2.PipelineRunStepInfo) *v2.PipelineRunStepInfo {
@@ -945,13 +906,6 @@ func getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *
 					Name:      taskProgress.Output,
 				},
 			},
-		}
-	}
-
-	if taskProgress.Input != "" {
-		inputStruct := &pbtypes.Struct{}
-		if err := jsonpb.UnmarshalString(taskProgress.Input, inputStruct); err == nil {
-			stepInfo.Input = inputStruct
 		}
 	}
 
