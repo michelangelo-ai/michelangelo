@@ -592,7 +592,7 @@ export function Sandbox() {
                   await new Promise((resolve) => setTimeout(resolve, 1000));
                 }}
                 confirmLabel="Delete"
-                confirmButtonColor="#DE1135"
+                destructive
               >
                 Are you sure you want to delete this pipeline? This action cannot be undone.
               </ConfirmDialog>

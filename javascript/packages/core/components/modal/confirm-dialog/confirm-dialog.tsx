@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Banner, KIND as BANNER_KIND } from 'baseui/banner';
 import { Button, KIND } from 'baseui/button';
 import { PLACEMENT, SIZE } from 'baseui/dialog';
+import type { Theme } from 'baseui/theme';
 
 import { Dialog } from '#core/components/dialog/dialog';
 
@@ -33,7 +34,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   heading,
   onConfirm,
   confirmLabel = 'Confirm',
-  confirmButtonColor,
+  destructive = false,
   children,
   size = SIZE.small,
 }) => {
@@ -71,7 +72,17 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           <Button
             isLoading={isLoading}
             onClick={handleConfirm}
-            style={confirmButtonColor ? { backgroundColor: confirmButtonColor } : undefined}
+            overrides={
+              destructive
+                ? {
+                    BaseButton: {
+                      style: ({ $theme }: { $theme: Theme }) => ({
+                        backgroundColor: $theme.colors.backgroundNegative,
+                      }),
+                    },
+                  }
+                : undefined
+            }
           >
             {confirmLabel}
           </Button>

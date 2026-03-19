@@ -8,8 +8,8 @@ export interface ConfirmDialogProps {
   onConfirm: () => Promise<void> | void;
   /** Label for the confirm button. Defaults to 'Confirm'. */
   confirmLabel?: string;
-  /** Background color for the confirm button (e.g. theme.colors.backgroundNegative for destructive actions). */
-  confirmButtonColor?: string;
+  /** Renders the confirm button in red using the design system's negative color. Use for irreversible actions (e.g. delete). */
+  destructive?: boolean;
   children?: ReactNode;
   size?: DialogSize;
 }
