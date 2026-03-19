@@ -27,11 +27,11 @@ from michelangelo.cli.mactl.grpc_tools import list_services
 
 # Load configuration
 # Priority: env vars (highest) > RC file > defaults (lowest)
-_config = load_config()
+_CONFIG = load_config()
 
-ADDRESS = _config["address"]
-USE_TLS: bool = _config["use_tls"]
-METADATA = list(_config["metadata"].items())
+ADDRESS = _CONFIG["address"]
+USE_TLS: bool = _CONFIG["use_tls"]
+METADATA = list(_CONFIG["metadata"].items())
 
 METADATA_STUB = [*METADATA, ("ttl", "600")]
 
@@ -58,12 +58,40 @@ def kebab_to_snake(name: str) -> str:
     return name.replace("-", "_")
 
 
-def read_module_from_file(crd_name: str) -> Union[object, None]:
+def read_plugin_modules(crd_name: str, plugin_dirs: list[str]) -> list[object]:
+    """Read and load plugin modules from given directories.
+
+    Args:
+        crd_name (str): The name of the CRD.
+        plugin_dirs (list[str]): List of directories to search for plugins.
+            The later directories have higher priority.
+    """
+    _LOG.info("Read plugin modules from directories: %r", plugin_dirs)
+    plugin_modules = []
+    for i, plugin_dir in enumerate(plugin_dirs):
+        plugin_module = read_module_from_file(crd_name, Path(plugin_dir), i)
+        if plugin_module is not None:
+            plugin_modules.append(plugin_module)
+    _LOG.info("Total %d plugin modules are loaded.", len(plugin_modules))
+    return plugin_modules
+
+
+def read_module_from_file(
+    crd_name: str, plugin_dir: Path, num: int = 0
+) -> Union[object, None]:
     """Read and load a plugin module from a given file path."""
-    _LOG.info("Check Plugin directory: %r", DEFAULT_DIR_PLUGINS)
-    plugin_dir = DEFAULT_DIR_PLUGINS / "entity" / crd_name
-    if not plugin_dir.exists():
-        _LOG.info("Plugin directory does not exist: %r", plugin_dir)
+    _LOG.info("Check Plugin directory: %r", plugin_dir)
+    if not plugin_dir.exists() or not plugin_dir.is_dir():
+        _LOG.warning(
+            "Plugin base directory does not exist (or not a directory): %r", plugin_dir
+        )
+        return
+
+    plugin_dir = plugin_dir / "entity" / crd_name
+    if not plugin_dir.exists() or not plugin_dir.is_dir():
+        _LOG.info(
+            "Plugin directory does not exist (or not a directory): %r", plugin_dir
+        )
         return
 
     plugin_main = plugin_dir / "main.py"
@@ -79,7 +107,7 @@ def read_module_from_file(crd_name: str) -> Union[object, None]:
         sys.path.insert(0, str(plugin_parent_path))
 
     spec = spec_from_file_location(
-        f"plugin_{crd_name}_main", str(plugin_main.resolve())
+        f"plugin_{crd_name}_main_{num}", str(plugin_main.resolve())
     )
     if spec is None:
         _LOG.error("Failed to load plugin spec for %r", plugin_main)
@@ -96,11 +124,16 @@ def read_module_from_file(crd_name: str) -> Union[object, None]:
 def read_plugins(crd: CRD, channel: Channel) -> None:
     """Read and apply plugins for a given crd."""
     _LOG.info("Read plugins for crd: %r", crd)
-    plugin_module = read_module_from_file(crd.name)
-    if plugin_module is None:
-        return
+    plugin_modules = read_plugin_modules(
+        crd.name, [str(DEFAULT_DIR_PLUGINS), *_CONFIG["plugins"]]
+    )
 
-    plugin_module.apply_plugins(crd, channel)
+    for i, plugin in enumerate(plugin_modules):
+        _LOG.info("Applying plugin module #%d: %r", i, plugin)
+        if hasattr(plugin, "apply_plugins"):
+            plugin.apply_plugins(crd, channel)
+        else:
+            _LOG.debug("`apply_plugins` function not found in plugin module %r", plugin)
     _LOG.info("Apply plugin done for %r entity", crd.name)
     return
 
@@ -110,19 +143,20 @@ def read_plugin_command(
 ) -> None:
     """Read and apply plugins for a given crd."""
     _LOG.info("Read plugins for crd: %r", crd)
-    plugin_module = read_module_from_file(crd.name)
-    if plugin_module is None:
-        return
-
-    if hasattr(plugin_module, "apply_plugin_command"):
-        plugin_module.apply_plugin_command(crd, user_command_action, crds, channel)
-        _LOG.info("Apply plugin done for %r entity", crd.name)
-        return
-
-    _LOG.info(
-        "Plugin module %r does not have `apply_plugin_command` function",
-        plugin_module,
+    plugin_modules = read_plugin_modules(
+        crd.name, [str(DEFAULT_DIR_PLUGINS), *_CONFIG["plugins"]]
     )
+
+    for i, plugin in enumerate(plugin_modules):
+        _LOG.info("Applying plugin module #%d: %r", i, plugin)
+        if hasattr(plugin, "apply_plugin_command"):
+            plugin.apply_plugin_command(crd, user_command_action, crds, channel)
+        else:
+            _LOG.debug(
+                "`apply_plugin_command` function found in plugin module %r", plugin
+            )
+    _LOG.info("Apply plugin done for %r entity", crd.name)
+    return
 
 
 def get_crd_name_from_yaml(yaml_path_string: str) -> str:

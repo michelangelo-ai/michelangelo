@@ -4,6 +4,7 @@ import os
 import tempfile
 from argparse import Namespace
 from importlib import reload
+from inspect import Parameter
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
@@ -12,13 +13,20 @@ from michelangelo.cli.mactl import mactl
 from michelangelo.cli.mactl.crd import CRD
 from michelangelo.cli.mactl.mactl import (
     ADDRESS,
+    DEFAULT_DIR_PLUGINS,
     check_crd,
     create_serivce_classes,
     discover_crds,
     handle_crd_action_help,
     pre_parse_args,
     read_module_from_file,
+    read_plugin_command,
+    read_plugin_modules,
+    read_plugins,
 )
+
+PWD = Path(__file__).parent.resolve()
+PLUGIN_TEST_DIR = PWD / "test" / "plugin_test"
 
 
 class ServiceClassCreationTest(TestCase):
@@ -345,11 +353,114 @@ class TLSErrorHandlingTest(TestCase):
             self.assertEqual(str(context.exception), "Failed to create SSL credentials")
 
 
+class ReadPluginsTest(TestCase):
+    """Tests for reading multiple plugins."""
+
+    def test_read_plugin_modules_read_multiple(self):
+        """Test read_plugins returns a list of loaded modules."""
+        res = read_plugin_modules(
+            "pipeline",
+            [
+                str(DEFAULT_DIR_PLUGINS),
+                str(PLUGIN_TEST_DIR / "plugins_1"),
+                str(PLUGIN_TEST_DIR / "plugins_2"),
+            ],
+        )
+
+        self.assertEqual(len(res), 3)
+        self.assertEqual(res[0].__name__, "plugin_pipeline_main_0")
+        self.assertEqual(
+            res[0].__file__,
+            str(DEFAULT_DIR_PLUGINS / "entity" / "pipeline" / "main.py"),
+        )
+        self.assertEqual(res[1].__name__, "plugin_pipeline_main_1")
+        self.assertEqual(
+            res[1].__file__,
+            str(PLUGIN_TEST_DIR / "plugins_1" / "entity" / "pipeline" / "main.py"),
+        )
+        self.assertEqual(res[2].__name__, "plugin_pipeline_main_2")
+        self.assertEqual(
+            res[2].__file__,
+            str(PLUGIN_TEST_DIR / "plugins_2" / "entity" / "pipeline" / "main.py"),
+        )
+
+    @patch.dict(
+        "michelangelo.cli.mactl.mactl._CONFIG",
+        {
+            "plugins": [
+                str(PLUGIN_TEST_DIR / "plugins_1"),
+                str(PLUGIN_TEST_DIR / "plugins_2"),
+            ]
+        },
+        clear=False,
+    )
+    def test_read_plugin_multiple(self):
+        """Test for `read_plugin()` with multiple plugin directories."""
+        crd = CRD(
+            name="pipeline",
+            full_name="michelangelo.api.v2.PipelineService",
+            metadata=[],
+        )
+        mock_channel = MagicMock()
+
+        # Run function.
+        read_plugins(crd, mock_channel)
+
+        # Check new function signature
+        self.assertTrue("fly" in crd.func_signature)
+        self.assertEqual(
+            crd.func_signature["fly"],
+            {
+                "help": "Fly away all pipelines.",
+                "args": [
+                    {
+                        "args": ["-n", "--namespace"],
+                        "func_signature": Parameter(
+                            "namespace",
+                            Parameter.POSITIONAL_OR_KEYWORD,
+                        ),
+                        "kwargs": {
+                            "help": "Namespace of the resource",
+                            "required": True,
+                            "type": str,
+                        },
+                    }
+                ],
+            },
+        )
+
+    @patch.dict(
+        "michelangelo.cli.mactl.mactl._CONFIG",
+        {
+            "plugins": [
+                str(PLUGIN_TEST_DIR / "plugins_1"),
+                str(PLUGIN_TEST_DIR / "plugins_2"),
+            ]
+        },
+        clear=False,
+    )
+    def test_read_plugin_command_multiple(self):
+        """Test for `read_plugin_command()` with multiple plugin directories."""
+        crd = CRD(
+            name="pipeline",
+            full_name="michelangelo.api.v2.PipelineService",
+            metadata=[],
+        )
+        mock_channel = MagicMock()
+
+        # Run function
+        read_plugin_command(crd, "apply", {"pipeline": crd}, mock_channel)
+        # Run overwritten function. mock args would be okay.
+        res = crd.func_crd_metadata_converter(Mock(), Mock(), Mock())
+
+        # Check result
+        self.assertEqual(res, {"test_spec": "plugin_1_test"})
+
+
 class ReadModuleFromFileTest(TestCase):
     """Tests for read_module_from_file function."""
 
-    @patch("michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS")
-    def test_successful_module_loading(self, mock_default_dir_plugins):
+    def test_successful_module_loading(self):
         """Test successful loading of a plugin module."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create plugin directory structure
@@ -360,42 +471,55 @@ class ReadModuleFromFileTest(TestCase):
             main_py = plugin_dir / "main.py"
             main_py.write_text("test_var = 'hello'")
 
-            # Mock DEFAULT_DIR_PLUGINS to point to our temp directory
-            mock_default_dir_plugins.__truediv__.return_value = Path(tmpdir) / "entity"
-
             # Execute
-            result = read_module_from_file("test_entity")
+            result = read_module_from_file("test_entity", Path(tmpdir))
 
             # Verify module was loaded and has the expected attribute
             self.assertIsNotNone(result)
             self.assertEqual(result.test_var, "hello")
 
-    @patch("michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS")
-    def test_plugin_directory_does_not_exist(self, mock_default_dir_plugins):
+    def test_plugin_directory_does_not_exist(self):
         """Test when plugin directory does not exist."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Mock DEFAULT_DIR_PLUGINS but don't create the directory
-            mock_default_dir_plugins.__truediv__.return_value = Path(tmpdir) / "entity"
-
-            # Execute
-            result = read_module_from_file("nonexistent_entity")
+            # Execute with non-existent entity
+            result = read_module_from_file("nonexistent_entity", Path(tmpdir))
 
             # Verify returns None
             self.assertIsNone(result)
 
-    @patch("michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS")
-    def test_main_py_does_not_exist(self, mock_default_dir_plugins):
+    def test_main_py_does_not_exist(self):
         """Test when main.py file does not exist in plugin directory."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create plugin directory but no main.py
             plugin_dir = Path(tmpdir) / "entity" / "test_entity"
             plugin_dir.mkdir(parents=True)
 
-            # Mock DEFAULT_DIR_PLUGINS
-            mock_default_dir_plugins.__truediv__.return_value = Path(tmpdir) / "entity"
+            # Execute
+            result = read_module_from_file("test_entity", Path(tmpdir))
+
+            # Verify returns None
+            self.assertIsNone(result)
+
+    def test_plugin_base_directory_does_not_exist(self):
+        """Test when plugin base directory does not exist (line 84)."""
+        # Use a non-existent path
+        nonexistent_path = Path("/tmp/nonexistent_plugin_dir_12345")
+
+        # Execute
+        result = read_module_from_file("test_entity", nonexistent_path)
+
+        # Verify returns None
+        self.assertIsNone(result)
+
+    def test_plugin_base_directory_is_not_a_directory(self):
+        """Test when plugin base directory is a file, not a directory (line 84)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a file instead of directory
+            file_path = Path(tmpdir) / "plugin_file.txt"
+            file_path.write_text("not a directory")
 
             # Execute
-            result = read_module_from_file("test_entity")
+            result = read_module_from_file("test_entity", file_path)
 
             # Verify returns None
             self.assertIsNone(result)
