@@ -406,6 +406,9 @@ endpoint_url = "http://localhost:9091"
 rpc-caller = "grpcurl"
 rpc-service = "ma-apiserver"
 rpc-encoding = "proto"
+
+[plugin]
+dirs = []  # Add custom plugin directories here
 ```
 
 ### Configurable fields
@@ -432,6 +435,48 @@ Custom gRPC metadata headers are placed under the `[metadata]` section.
 - `rpc-caller` - Identifies the calling client (example: `grpcurl`)
 - `rpc-service` - Target service name (example: `ma-apiserver`)
 - `rpc-encoding` - Protocol encoding format (example: `proto`)
+
+#### Custom plugins
+
+The `ma` CLI supports custom plugins to extend entity-specific commands and behavior. Plugin configuration is placed under the `[plugin]` section.
+
+**Built-in plugins**: The CLI includes built-in plugins located at `python/michelangelo/cli/mactl/plugins/entity/` that provide core functionality for entities like `pipeline`, `pipeline_run`, and `trigger_run`.
+
+**Custom plugin directories**: You can add additional plugin directories by specifying them in the configuration file:
+
+```toml
+[plugin]
+dirs = [
+    "/path/to/your/custom/plugins",
+    "/another/plugin/directory"
+]
+```
+
+**Plugin directory structure**: Each plugin directory should follow this structure:
+
+```
+your-plugin-directory/
+└── entity/
+    └── {entity_type}/
+        └── main.py
+```
+
+For example, to create a custom pipeline plugin:
+
+```
+my-plugins/
+└── entity/
+    └── pipeline/
+        ├── __init__.py
+        └── main.py
+```
+
+**Required plugin functions**: Plugin modules should implement one or both of these functions:
+
+- `apply_plugins(crd: CRD, channel: Channel)` - Adds custom command signatures to the entity
+- `apply_plugin_command(crd: CRD, target_command: str, crds: dict[str, CRD], channel: Channel)` - Applies logic for specific commands (e.g., `apply`, `create`)
+
+**Note**: Support for per-module plugin configuration via `plugin.modules` is coming soon.
 
 ### Environment variables
 
