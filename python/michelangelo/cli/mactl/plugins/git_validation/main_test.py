@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from michelangelo.cli.mactl.git_validation import GitInfo, GitValidator
+from michelangelo.cli.mactl.plugins.git_validation.main import GitInfo, GitValidator
 
 
 class TestGitInfo:
