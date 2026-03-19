@@ -120,7 +120,7 @@ class GitValidator:
             return result.stdout.strip()
         except subprocess.CalledProcessError as e:
             if self._is_buildkite():
-                # Use BUILDKITE_BUILD_CHECKOUT_PATH (standard Buildkite variable for repo root)
+                # Use BUILDKITE_BUILD_CHECKOUT_PATH (standard Buildkite variable)
                 # to handle cases where the job may have changed directories
                 return os.environ.get("BUILDKITE_BUILD_CHECKOUT_PATH", os.getcwd())
             raise ValueError(
