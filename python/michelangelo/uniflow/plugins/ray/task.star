@@ -355,6 +355,7 @@ def report_ray_task_result(job, task_path, task_name, cluster_url, start_time_fo
         result_json_url = result_url,
     )
     cached_output_name = created_cached_output.get("metadata", {}).get("name", "")
+    input_str = json.dumps({"args": args, "kwargs": kwargs}) if (args or kwargs) else ""
 
     if job["status"]["state"] == "RAY_JOB_STATE_SUCCEEDED":
         report_progress(
@@ -367,6 +368,7 @@ def report_ray_task_result(job, task_path, task_name, cluster_url, start_time_fo
             end_time = end_time_formated_str,
             output = cached_output_name,
             retry_attempt_id = retry_attempt_id,
+            input = input_str,
         )
         return TASK_STATE_SUCCEEDED
     elif job["status"]["state"] == "RAY_JOB_STATE_KILLED":
@@ -382,6 +384,7 @@ def report_ray_task_result(job, task_path, task_name, cluster_url, start_time_fo
             end_time = end_time_formated_str,
             output = cached_output_name,
             retry_attempt_id = retry_attempt_id,
+            input = input_str,
         )
         return TASK_STATE_KILLED
     else:
@@ -398,6 +401,7 @@ def report_ray_task_result(job, task_path, task_name, cluster_url, start_time_fo
             end_time = end_time_formated_str,
             output = cached_output_name,
             retry_attempt_id = retry_attempt_id,
+            input = input_str,
         )
         return TASK_STATE_FAILED
 
