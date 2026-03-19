@@ -45,6 +45,9 @@ export function PhaseEntityView<T extends object = object>({
 
   const currentEntityConfig = entities.find((entity) => entity.id === currentEntity);
   if (!currentEntityConfig) {
+    // No entity in URL — useEffect above is about to redirect to the first entity.
+    // Return null to avoid flashing the error view during that redirect.
+    if (!currentEntity) return null;
     return (
       <ErrorView
         buttonConfig={{
