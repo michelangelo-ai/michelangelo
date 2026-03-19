@@ -387,10 +387,12 @@ class ReadPluginsTest(TestCase):
     @patch.dict(
         "michelangelo.cli.mactl.mactl._CONFIG",
         {
-            "plugins": [
-                str(PLUGIN_TEST_DIR / "plugins_1"),
-                str(PLUGIN_TEST_DIR / "plugins_2"),
-            ]
+            "plugin": {
+                "dirs": [
+                    str(PLUGIN_TEST_DIR / "plugins_1"),
+                    str(PLUGIN_TEST_DIR / "plugins_2"),
+                ],
+            },
         },
         clear=False,
     )
@@ -432,10 +434,12 @@ class ReadPluginsTest(TestCase):
     @patch.dict(
         "michelangelo.cli.mactl.mactl._CONFIG",
         {
-            "plugins": [
-                str(PLUGIN_TEST_DIR / "plugins_1"),
-                str(PLUGIN_TEST_DIR / "plugins_2"),
-            ]
+            "plugin": {
+                "dirs": [
+                    str(PLUGIN_TEST_DIR / "plugins_1"),
+                    str(PLUGIN_TEST_DIR / "plugins_2"),
+                ],
+            },
         },
         clear=False,
     )
