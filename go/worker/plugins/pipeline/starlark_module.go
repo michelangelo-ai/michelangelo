@@ -17,8 +17,8 @@ import (
 	computils "github.com/michelangelo-ai/michelangelo/go/components/utils"
 	trigger "github.com/michelangelo-ai/michelangelo/go/worker/activities/trigger"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/utils"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 var _ starlark.HasAttrs = (*module)(nil)
