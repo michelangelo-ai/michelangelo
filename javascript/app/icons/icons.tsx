@@ -13,6 +13,7 @@ import Info from '@mui/icons-material/Info';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardBackspaceIcon from '@mui/icons-material/KeyboardBackspace';
 import Launch from '@mui/icons-material/Launch';
+import MenuIcon from '@mui/icons-material/Menu';
 import SearchIcon from '@mui/icons-material/Search';
 import SettingsIcon from '@mui/icons-material/Settings';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
@@ -31,8 +32,10 @@ export const ICONS = {
   circleX: createMuiIconAdapter(CancelIcon),
   circleCheck: createMuiIconAdapter(CheckCircle),
   circleCheckFilled: createMuiIconAdapter(CheckCircle),
+  close: createMuiIconAdapter(CloseIcon),
   deleteAlt: createMuiIconAdapter(CancelIcon),
   diamondEmpty: createMuiIconAdapter(CropSquareIcon),
+  menu: createMuiIconAdapter(MenuIcon),
   playerNext: createMuiIconAdapter(SkipNextIcon),
   plus: createMuiIconAdapter(AddIcon),
   search: createMuiIconAdapter(SearchIcon),
