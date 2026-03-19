@@ -49,9 +49,7 @@ class GitValidator:
         """
         self.config = config or {}
         self.main_branches = self.config.get("main_branches", ["main", "master"])
-        self.bypass_env = self.config.get(
-            "bypass_env", "MACTL_IGNORE_GIT_CLEAN_CHECK"
-        )
+        self.bypass_env = self.config.get("bypass_env", "MACTL_IGNORE_GIT_CLEAN_CHECK")
 
     def get_git_info(
         self,
