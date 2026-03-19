@@ -23,11 +23,13 @@ import { FormNote } from '#core/components/form/layout/form-note/form-note';
 import { required } from '#core/components/form/validation/validators';
 import { TextEditor } from '#core/components/text-editor/text-editor';
 import { DetailView } from '#core/components/views/detail-view/detail-view';
+import { TaskListRenderer } from '#core/components/views/execution/components/task-list-renderer';
 import { TASK_STATE } from '#core/components/views/execution/constants';
 import { Execution } from '#core/components/views/execution/execution';
 import { MainViewContainer } from '#core/components/views/main-view-container';
 import { failurePipelineRun, successfulPipelineRun } from './fixtures/execution-data';
 
+import type { TaskListRendererProps } from '#core/components/views/execution/components/types';
 import type { ExecutionDetailViewSchema } from '#core/components/views/execution/types';
 
 const sampleJson = {
@@ -156,6 +158,46 @@ const executionSchema: ExecutionDetailViewSchema = {
   },
 };
 
+const parentDebugData = {
+  status: {
+    steps: [
+      {
+        subSteps: [
+          {
+            subSteps: [],
+            displayName: 'ASL Step 1',
+            state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED',
+          },
+          {
+            subSteps: [],
+            displayName: 'ASL Step 2',
+            state: 'PIPELINE_RUN_STEP_STATE_RUNNING',
+          },
+        ],
+        displayName: 'Execute Workflow',
+        state: 'PIPELINE_RUN_STEP_STATE_RUNNING',
+      },
+    ],
+  },
+};
+
+function ParentDebugRenderer({ taskList, parent, onTaskClick }: TaskListRendererProps) {
+  return (
+    <Block>
+      <Block
+        padding="scale300"
+        marginBottom="scale300"
+        backgroundColor="backgroundSecondary"
+        font="font200"
+        overrides={{ Block: { style: { borderRadius: '4px', fontFamily: 'monospace' } } }}
+      >
+        parent = {parent ? <strong>{parent.name}</strong> : <em>undefined</em>}
+      </Block>
+      <TaskListRenderer taskList={taskList} parent={parent} onTaskClick={onTaskClick} />
+    </Block>
+  );
+}
+
 export function Sandbox() {
   const [activeKey, setActiveKey] = useState('0');
   const [jsonValue, setJsonValue] = useState(JSON.stringify(sampleJson, null, 2));
@@ -252,6 +294,29 @@ export function Sandbox() {
               }
             >
               <Execution schema={executionSchema} data={{}} />
+            </DetailView>
+          </Block>
+        </Tab>
+
+        <Tab title="Execution - Parent Debug">
+          <Block marginTop="24px">
+            <Block marginBottom="scale600" font="font300">
+              Each row in the task flow shows a <code>parent =</code> banner. After the fix, the
+              detail panel for <strong>Execute Workflow</strong> should show{' '}
+              <code>parent = Execute Workflow</code> — not <code>parent = undefined</code>.
+            </Block>
+            <DetailView
+              subtitle="Debug"
+              title="execute-workflow-parent-fix"
+              onGoBack={() => console.log('back')}
+            >
+              <Execution
+                schema={executionSchema}
+                data={parentDebugData}
+                overrides={{
+                  TaskListRenderer: { component: ParentDebugRenderer },
+                }}
+              />
             </DetailView>
           </Block>
         </Tab>
