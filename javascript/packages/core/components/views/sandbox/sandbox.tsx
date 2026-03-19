@@ -539,7 +539,9 @@ export function Sandbox() {
         <Tab title="ConfirmDialog">
           <Block marginTop="24px" display="flex" flexDirection="column" gridGap="scale600">
             <Block>
-              <Block marginBottom="scale400"><strong>Basic — success after 1s</strong></Block>
+              <Block marginBottom="scale400">
+                <strong>Basic — success after 1s</strong>
+              </Block>
               <Button onClick={() => setIsBasicConfirmOpen(true)}>Open</Button>
               <ConfirmDialog
                 isOpen={isBasicConfirmOpen}
@@ -555,7 +557,9 @@ export function Sandbox() {
             </Block>
 
             <Block>
-              <Block marginBottom="scale400"><strong>Error — stays open and shows error message</strong></Block>
+              <Block marginBottom="scale400">
+                <strong>Error — stays open and shows error message</strong>
+              </Block>
               <Button onClick={() => setIsErrorConfirmOpen(true)}>Open</Button>
               <ConfirmDialog
                 isOpen={isErrorConfirmOpen}
@@ -563,7 +567,10 @@ export function Sandbox() {
                 heading="Archive model"
                 onConfirm={async () => {
                   await new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Server error: unable to archive at this time.')), 1000)
+                    setTimeout(
+                      () => reject(new Error('Server error: unable to archive at this time.')),
+                      1000
+                    )
                   );
                 }}
                 confirmLabel="Archive"
@@ -573,7 +580,9 @@ export function Sandbox() {
             </Block>
 
             <Block>
-              <Block marginBottom="scale400"><strong>Destructive — red confirm button</strong></Block>
+              <Block marginBottom="scale400">
+                <strong>Destructive — red confirm button</strong>
+              </Block>
               <Button onClick={() => setIsDestructiveConfirmOpen(true)}>Open</Button>
               <ConfirmDialog
                 isOpen={isDestructiveConfirmOpen}

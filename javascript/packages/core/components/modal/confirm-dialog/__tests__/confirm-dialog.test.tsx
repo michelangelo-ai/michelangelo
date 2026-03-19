@@ -5,7 +5,6 @@ import { vi } from 'vitest';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
-
 import { ConfirmDialog } from '../confirm-dialog';
 
 const wrapper = buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()]);
@@ -44,12 +43,7 @@ it('renders body content as children', async () => {
 
 it('renders with default confirm label when confirmLabel is omitted', async () => {
   render(
-    <ConfirmDialog
-      isOpen={true}
-      onDismiss={vi.fn()}
-      heading="Minimal"
-      onConfirm={vi.fn()}
-    />,
+    <ConfirmDialog isOpen={true} onDismiss={vi.fn()} heading="Minimal" onConfirm={vi.fn()} />,
     wrapper
   );
 
@@ -73,10 +67,7 @@ it('calls onConfirm and auto-closes on success', async () => {
   const onConfirm = vi.fn().mockResolvedValue(undefined);
   const onDismiss = vi.fn();
 
-  render(
-    <ConfirmDialog {...defaultProps} onConfirm={onConfirm} onDismiss={onDismiss} />,
-    wrapper
-  );
+  render(<ConfirmDialog {...defaultProps} onConfirm={onConfirm} onDismiss={onDismiss} />, wrapper);
 
   await user.click(screen.getByRole('button', { name: 'Confirm button text' }));
 
@@ -99,10 +90,7 @@ it('shows error message and stays open when onConfirm throws', async () => {
   const onConfirm = vi.fn().mockRejectedValue(new Error('Delete failed'));
   const onDismiss = vi.fn();
 
-  render(
-    <ConfirmDialog {...defaultProps} onConfirm={onConfirm} onDismiss={onDismiss} />,
-    wrapper
-  );
+  render(<ConfirmDialog {...defaultProps} onConfirm={onConfirm} onDismiss={onDismiss} />, wrapper);
 
   await user.click(screen.getByRole('button', { name: 'Confirm button text' }));
 
@@ -127,7 +115,10 @@ it('disables cancel button while loading', async () => {
   const user = userEvent.setup();
   let resolveConfirm!: () => void;
   const onConfirm = vi.fn(
-    () => new Promise<void>((resolve) => { resolveConfirm = resolve; })
+    () =>
+      new Promise<void>((resolve) => {
+        resolveConfirm = resolve;
+      })
   );
 
   render(<ConfirmDialog {...defaultProps} onConfirm={onConfirm} />, wrapper);
