@@ -4,15 +4,19 @@ import { Cell, Grid } from 'baseui/layout-grid';
 
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { Phase } from '#core/types/common/studio-types';
+import { MenuDrawer } from './menu-drawer';
 import { BreadcrumbContainer, PlainLink } from './styled-components';
 
 import type { CategoryConfig } from '#core/types/common/studio-types';
 
 /**
+ * A breadcrumb navigation with an integrated hamburger menu drawer.
+ *
  * Reads the current URL to build the breadcrumb trail:
  * Home > Project > Category > Phase > Entity > EntityId
  *
  * Category and Phase segments are derived from the supplied categories config.
+ * The menu drawer shows all phases from all supplied categories.
  *
  * @example
  * ```tsx
@@ -24,8 +28,9 @@ import type { CategoryConfig } from '#core/types/common/studio-types';
  */
 export function BreadcrumbBar({ categories }: { categories: CategoryConfig[] }) {
   const [css, theme] = useStyletron();
-  const { phase, entityId } = useStudioParams('base');
+  const { projectId, phase, entityId } = useStudioParams('base');
   const isProjectPage = phase === Phase.Project;
+  const allPhases = categories.flatMap((c) => c.phases);
 
   return (
     <BreadcrumbContainer>
@@ -34,6 +39,7 @@ export function BreadcrumbBar({ categories }: { categories: CategoryConfig[] }) 
           <div
             className={css({ display: 'flex', alignItems: 'center', gap: theme.sizing.scale600 })}
           >
+            <MenuDrawer phases={allPhases} projectId={projectId} />
             <Breadcrumbs
               overrides={{
                 Root: {
