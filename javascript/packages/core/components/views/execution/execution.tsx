@@ -63,7 +63,10 @@ export function Execution<
             onTaskClick={(clickedTask) => {
               scrollToTask(clickedTask);
             }}
-            overrides={{ TaskListRenderer: overrides?.TaskListRenderer }}
+            overrides={{
+              TaskListRenderer: overrides?.TaskListRenderer,
+              SubTaskListRenderer: overrides?.SubTaskListRenderer,
+            }}
           />
         </TaskContentStack>
       </Box>

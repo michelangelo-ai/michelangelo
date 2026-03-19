@@ -28,7 +28,10 @@ export function TaskBody<TTaskRecord extends object>(props: TaskBodyProps<TTaskR
           <TaskFlow
             matrix={matrix}
             onTaskClick={scrollToTask}
-            overrides={{ TaskListRenderer: overrides?.TaskListRenderer }}
+            overrides={{
+              TaskListRenderer: overrides?.TaskListRenderer,
+              SubTaskListRenderer: overrides?.SubTaskListRenderer,
+            }}
           />
         </Box>
         {subTasks.map((task, index) => (
