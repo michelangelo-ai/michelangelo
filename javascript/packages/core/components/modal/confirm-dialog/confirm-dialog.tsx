@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { Banner, KIND as BANNER_KIND } from 'baseui/banner';
 import { Button, KIND } from 'baseui/button';
 import { PLACEMENT, SIZE } from 'baseui/dialog';
-import type { Theme } from 'baseui/theme';
 
 import { Dialog } from '#core/components/dialog/dialog';
 
+import type { Theme } from 'baseui/theme';
 import type { ConfirmDialogProps } from './types';
 
 /**
