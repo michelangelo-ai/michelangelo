@@ -6,7 +6,7 @@
 #   cp .ma/config.toml.example ~/.ma/config.toml
 #   vim ~/.ma/config.toml  # Edit with your settings
 
-address = "127.0.0.1:14566"
+address = "127.0.0.1:15566"
 use_tls = false
 
 # Advanced: Custom gRPC metadata

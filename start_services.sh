@@ -63,7 +63,7 @@ echo "- Controllermgr: 'Starting CRD schema comparison service' with 'interval:3
 echo "- CRD Check will run every 5 minutes and report schema differences"
 echo ""
 echo "📊 Service Endpoints:"
-echo "- API Server YARPC: localhost:14566"
+echo "- API Server YARPC: localhost:15566"
 echo "- Controllermgr Metrics: localhost:8082"
 echo "- Controllermgr Health: localhost:8083"
 echo "- MinIO Console: localhost:9090"

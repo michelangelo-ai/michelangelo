@@ -14,7 +14,7 @@ else:
 _LOG = getLogger(__name__)
 
 DEFAULT_CONFIG = {
-    "address": "127.0.0.1:14566",
+    "address": "127.0.0.1:15566",
     "use_tls": False,
     "metadata": {
         "rpc-caller": "grpcurl",
