@@ -288,10 +288,10 @@ func (r *module) runPipeline(t *starlark.Thread, _ *starlark.Builtin, args starl
 	// Always wait for completion (synchronous by design)
 	// Use sensor with timeout and poll settings
 	if timeoutSeconds == 0 {
-		timeoutSeconds = int64(utils.CadenceLongTimeout.Seconds())
+		timeoutSeconds = int64(utils.LongTimeout.Seconds())
 	}
 
-	srp := utils.CadenceDefaultSensorRetryPolicy
+	srp := utils.DefaultSensorRetryPolicy
 	srp.ExpirationInterval = time.Duration(timeoutSeconds) * time.Second
 	srp.InitialInterval = time.Duration(pollSeconds) * time.Second
 	sensorCtx := workflow.WithRetryPolicy(ctx, srp)

@@ -184,22 +184,29 @@ def create_pipeline_run(
     actor: str | None = None,
 ) -> PipelineRun:
     """Creates a pipeline run with the specified parameters.
+
     Intended for internal use only.
 
     Args:
         namespace: str: Namespace where the pipeline will run.
         pipeline_name: str: Name of the pipeline to execute.
-        pipeline_revision (Optional): str: Git sha of the specific revision of the pipeline to run.
-            If not provided, the latest revision will be used. Only the first 12 characters are used.
-        environ (Optional): dict: Dictionary containing environment variables (default: None).
+        pipeline_revision (Optional): str: Git sha of the specific revision of
+            the pipeline to run. If not provided, the latest revision will be
+            used. Only the first 12 characters are used.
+        environ (Optional): dict: Dictionary containing environment variables
+            (default: None).
         args (Optional): list: List containing arguments (default: None).
-        kwargs (Optional): dict: Dictionary containing keyword arguments (default: None).
-        input_data (Optional): dict: Direct input dictionary for orchestration pipelines (default: None).
-            Cannot be used together with environ, args, or kwargs.
-        actor (Optional): str: Name of the actor creating the pipeline run (default: None).
+        kwargs (Optional): dict: Dictionary containing keyword arguments
+            (default: None).
+        input_data (Optional): dict: Direct input dictionary for orchestration
+            pipelines (default: None). Cannot be used together with environ,
+            args, or kwargs.
+        actor (Optional): str: Name of the actor creating the pipeline run
+            (default: None).
 
     Returns:
-        PipelineRun: Pipeline run object, which is intended to be used with the poll_pipeline_run method.
+        PipelineRun: Pipeline run object, intended to be used with the
+        poll_pipeline_run method.
 
     Raises:
         ValueError: If input_data is used together with environ/args/kwargs.
@@ -210,7 +217,8 @@ def create_pipeline_run(
     ):
         raise ValueError(
             "cannot use 'input_data' together with 'environ', 'args', or 'kwargs'; "
-            "'input_data' is for orchestration pipelines, while 'environ'/'args'/'kwargs' are for Uniflow pipelines"
+            "'input_data' is for orchestration pipelines, while "
+            "'environ'/'args'/'kwargs' are for Uniflow pipelines"
         )
 
     # Generate pipeline run name
@@ -253,7 +261,8 @@ def create_pipeline_run(
 
     # Create pipeline run via API
     log.info(
-        f"Creating pipeline run {name} for pipeline {pipeline_name} in namespace {namespace}"
+        f"Creating pipeline run {name} for pipeline "
+        f"{pipeline_name} in namespace {namespace}"
     )
     created_run = APIClient.PipelineRunService.create_pipeline_run(
         pipeline_run=pipeline_run, create_options=CreateOptions()
@@ -269,6 +278,7 @@ def poll_pipeline_run(
     poll_seconds: int = _DEFAULT_POLL_SECONDS,
 ) -> dict[str, Any]:
     """Polls a created pipeline run until it reaches a terminal state or times out.
+
     Intended for internal use only.
 
     Args:
@@ -279,7 +289,8 @@ def poll_pipeline_run(
         poll_seconds: int: Interval between status checks in seconds (default: 10).
 
     Returns:
-        dict: Pipeline run result containing status and metadata in the following format:
+        dict: Pipeline run result containing status and metadata in the
+        following format:
         {
             "metadata": {
                 "name": str,
