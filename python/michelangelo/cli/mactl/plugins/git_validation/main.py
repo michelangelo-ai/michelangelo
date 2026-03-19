@@ -97,7 +97,8 @@ class GitValidator:
         Priority order:
         1. WORKSPACE_ROOT environment variable
         2. git rev-parse --show-toplevel
-        3. Current working directory (Buildkite fallback)
+        3. BUILDKITE_BUILD_CHECKOUT_PATH (Buildkite standard variable)
+        4. Current working directory (fallback)
 
         Returns:
             Absolute path to workspace root.
@@ -119,7 +120,9 @@ class GitValidator:
             return result.stdout.strip()
         except subprocess.CalledProcessError as e:
             if self._is_buildkite():
-                return os.getcwd()
+                # Use BUILDKITE_BUILD_CHECKOUT_PATH (standard Buildkite variable for repo root)
+                # to handle cases where the job may have changed directories
+                return os.environ.get("BUILDKITE_BUILD_CHECKOUT_PATH", os.getcwd())
             raise ValueError(
                 "Not in a git repository. Please run this command from "
                 f"within a git repository.\nGit error: {e.stderr.strip()}"
@@ -139,6 +142,7 @@ class GitValidator:
             subprocess.CalledProcessError: If git command fails.
         """
         if self._is_buildkite():
+            # Use BUILDKITE_BRANCH (standard Buildkite variable) if available
             branch = os.environ.get("BUILDKITE_BRANCH", "")
             if branch:
                 return branch
@@ -265,5 +269,6 @@ class GitValidator:
             True if branch is main/master or running in Buildkite.
         """
         if self._is_buildkite():
+            # Skip main branch check in CI
             return True
         return branch_name in self.main_branches
