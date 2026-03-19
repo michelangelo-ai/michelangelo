@@ -17,6 +17,8 @@ export const UrlField: React.FC<UrlFieldProps> = ({
   validate,
   description,
   caption,
+  format,
+  parse,
   placeholder,
   urlName,
 }) => {
@@ -26,6 +28,8 @@ export const UrlField: React.FC<UrlFieldProps> = ({
     defaultValue,
     initialValue,
     label,
+    format,
+    parse,
   });
 
   const value = input.value;

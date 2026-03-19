@@ -18,6 +18,8 @@ export const NumberField: React.FC<BaseFieldProps<number | undefined>> = ({
   placeholder,
   description,
   caption,
+  format,
+  parse,
 }) => {
   const { input, meta } = useField<number | undefined>(name, {
     required,
@@ -25,6 +27,8 @@ export const NumberField: React.FC<BaseFieldProps<number | undefined>> = ({
     defaultValue,
     initialValue,
     label,
+    format,
+    parse,
   });
 
   return (

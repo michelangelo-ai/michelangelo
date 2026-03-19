@@ -127,6 +127,77 @@ describe('Form', () => {
       expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('from-field-initial');
     });
 
+    it('applies parse to transform input before storing in form state', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+
+      render(
+        <Form onSubmit={onSubmit}>
+          <StringField
+            name="code"
+            label="Code"
+            parse={(value: unknown) => String(value).toUpperCase()}
+          />
+          <button type="submit">Submit</button>
+        </Form>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      await user.type(screen.getByLabelText('Code'), 'abc');
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+      await waitFor(() =>
+        expect(onSubmit).toHaveBeenCalledWith({ code: 'ABC' }, expect.anything(), expect.anything())
+      );
+    });
+
+    it('applies format to transform stored value for display', () => {
+      render(
+        <Form onSubmit={vi.fn()} initialValues={{ price: '1000' }}>
+          <StringField
+            name="price"
+            label="Price"
+            format={(value: string) => (value ? `$${value}` : '')}
+          />
+        </Form>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      expect(screen.getByRole('textbox', { name: 'Price' })).toHaveValue('$1000');
+    });
+
+    it('applies format and parse together as inverse transforms', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+
+      render(
+        <Form onSubmit={onSubmit} initialValues={{ tag: 'initial' }}>
+          <StringField
+            name="tag"
+            label="Tag"
+            format={(value: string) => (value ? `#${value}` : '')}
+            parse={(value: unknown) => String(value).replace(/^#/, '')}
+          />
+          <button type="submit">Submit</button>
+        </Form>,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      expect(screen.getByRole('textbox', { name: 'Tag' })).toHaveValue('#initial');
+
+      await user.clear(screen.getByRole('textbox', { name: 'Tag' }));
+      await user.type(screen.getByRole('textbox', { name: 'Tag' }), '#updated');
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+      await waitFor(() =>
+        expect(onSubmit).toHaveBeenCalledWith(
+          { tag: 'updated' },
+          expect.anything(),
+          expect.anything()
+        )
+      );
+    });
+
     it('supports external submit button via form id', async () => {
       const user = userEvent.setup();
       const onSubmit = vi.fn();

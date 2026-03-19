@@ -17,6 +17,8 @@ export const TextareaField: React.FC<TextareaFieldProps> = ({
   placeholder,
   description,
   caption,
+  format,
+  parse,
   rows,
   maxLength,
 }) => {
@@ -26,6 +28,8 @@ export const TextareaField: React.FC<TextareaFieldProps> = ({
     defaultValue,
     initialValue,
     label,
+    format,
+    parse,
   });
   const currentLength = input.value?.length ?? 0;
 

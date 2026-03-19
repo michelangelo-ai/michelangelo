@@ -88,10 +88,10 @@ export interface FieldState {
   touched: boolean;
 }
 
-export interface FieldInput<T = unknown> {
-  value: T;
+export interface FieldInput<T = unknown, InputValue = T> {
+  value: InputValue;
   name: string;
-  onChange: (value: T) => void;
+  onChange: (value: InputValue) => void;
   onBlur: () => void;
   onFocus: () => void;
 }

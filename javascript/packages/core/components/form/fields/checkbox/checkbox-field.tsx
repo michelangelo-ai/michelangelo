@@ -19,6 +19,8 @@ export const CheckboxField: React.FC<CheckboxFieldProps> = ({
   disabled,
   description,
   caption,
+  format,
+  parse,
   options,
 }) => {
   const [css, theme] = useStyletron();
@@ -29,6 +31,8 @@ export const CheckboxField: React.FC<CheckboxFieldProps> = ({
     defaultValue,
     initialValue,
     label,
+    format,
+    parse,
   });
 
   const { value = [], onChange } = input;
