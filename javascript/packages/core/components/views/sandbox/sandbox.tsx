@@ -21,6 +21,7 @@ import { FormGrid } from '#core/components/form/layout/form-grid/form-grid';
 import { FormGroup } from '#core/components/form/layout/form-group/form-group';
 import { FormNote } from '#core/components/form/layout/form-note/form-note';
 import { required } from '#core/components/form/validation/validators';
+import { ConfirmDialog } from '#core/components/modal/confirm-dialog/confirm-dialog';
 import { TextEditor } from '#core/components/text-editor/text-editor';
 import { DetailView } from '#core/components/views/detail-view/detail-view';
 import { TASK_STATE } from '#core/components/views/execution/constants';
@@ -162,6 +163,9 @@ export function Sandbox() {
   const [readOnlyValue] = useState(
     JSON.stringify({ message: 'This is read-only', timestamp: new Date().toISOString() }, null, 2)
   );
+  const [isBasicConfirmOpen, setIsBasicConfirmOpen] = useState(false);
+  const [isErrorConfirmOpen, setIsErrorConfirmOpen] = useState(false);
+  const [isDestructiveConfirmOpen, setIsDestructiveConfirmOpen] = useState(false);
 
   return (
     <MainViewContainer hasBreadcrumb={false}>
@@ -530,6 +534,60 @@ export function Sandbox() {
                 <Button type="submit">Submit — watch it scroll on error</Button>
               </Block>
             </Form>
+          </Block>
+        </Tab>
+        <Tab title="ConfirmDialog">
+          <Block marginTop="24px" display="flex" flexDirection="column" gridGap="scale600">
+            <Block>
+              <Block marginBottom="scale400"><strong>Basic — success after 1s</strong></Block>
+              <Button onClick={() => setIsBasicConfirmOpen(true)}>Open</Button>
+              <ConfirmDialog
+                isOpen={isBasicConfirmOpen}
+                onDismiss={() => setIsBasicConfirmOpen(false)}
+                heading="Delete pipeline"
+                onConfirm={async () => {
+                  await new Promise((resolve) => setTimeout(resolve, 1000));
+                }}
+                confirmLabel="Delete"
+              >
+                Are you sure you want to delete this pipeline? This action cannot be undone.
+              </ConfirmDialog>
+            </Block>
+
+            <Block>
+              <Block marginBottom="scale400"><strong>Error — stays open and shows error message</strong></Block>
+              <Button onClick={() => setIsErrorConfirmOpen(true)}>Open</Button>
+              <ConfirmDialog
+                isOpen={isErrorConfirmOpen}
+                onDismiss={() => setIsErrorConfirmOpen(false)}
+                heading="Archive model"
+                onConfirm={async () => {
+                  await new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Server error: unable to archive at this time.')), 1000)
+                  );
+                }}
+                confirmLabel="Archive"
+              >
+                This will archive the model and remove it from active deployments.
+              </ConfirmDialog>
+            </Block>
+
+            <Block>
+              <Block marginBottom="scale400"><strong>Destructive — red confirm button</strong></Block>
+              <Button onClick={() => setIsDestructiveConfirmOpen(true)}>Open</Button>
+              <ConfirmDialog
+                isOpen={isDestructiveConfirmOpen}
+                onDismiss={() => setIsDestructiveConfirmOpen(false)}
+                heading="Delete pipeline"
+                onConfirm={async () => {
+                  await new Promise((resolve) => setTimeout(resolve, 1000));
+                }}
+                confirmLabel="Delete"
+                confirmButtonColor="#DE1135"
+              >
+                Are you sure you want to delete this pipeline? This action cannot be undone.
+              </ConfirmDialog>
+            </Block>
           </Block>
         </Tab>
       </Tabs>
