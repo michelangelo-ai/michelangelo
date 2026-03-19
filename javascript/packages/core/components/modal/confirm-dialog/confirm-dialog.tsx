@@ -71,11 +71,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           <Button
             isLoading={isLoading}
             onClick={() => void handleConfirm()}
-            overrides={
-              confirmButtonColor
-                ? { BaseButton: { style: { backgroundColor: confirmButtonColor } } }
-                : undefined
-            }
+            style={confirmButtonColor ? { backgroundColor: confirmButtonColor } : undefined}
           >
             {confirmLabel}
           </Button>

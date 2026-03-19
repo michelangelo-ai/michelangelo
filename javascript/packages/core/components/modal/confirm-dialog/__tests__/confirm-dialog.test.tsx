@@ -131,12 +131,13 @@ it('disables cancel button while loading', async () => {
   resolveConfirm();
 });
 
-it('renders confirm button with custom color when confirmButtonColor is provided', async () => {
+it('applies confirmButtonColor as inline background on the confirm button', async () => {
   render(<ConfirmDialog {...defaultProps} confirmButtonColor="#DE1135" />, wrapper);
 
   await screen.findByRole('dialog', { name: 'Confirm modal title' });
-  // Button is present and interactive — visual color is verified via snapshot/visual tests
-  expect(screen.getByRole('button', { name: 'Confirm button text' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Confirm button text' })).toHaveStyle({
+    backgroundColor: '#DE1135',
+  });
 });
 
 it('clears error and resets state when dialog is reopened', async () => {

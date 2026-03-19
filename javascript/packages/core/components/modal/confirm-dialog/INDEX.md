@@ -56,7 +56,7 @@ No production application code currently imports `ConfirmDialog` — it is avail
 | Shows error and stays open on throw | Banner with thrown `Error.message` appears; `onDismiss` not called |
 | Re-enables confirm button after error | Confirm button is not disabled after the async error resolves |
 | Disables cancel while loading | Cancel is `disabled` during the in-flight async window |
-| Custom confirmButtonColor | Confirm button is present and interactive (visual color asserted via visual tests) |
+| Custom confirmButtonColor | Confirm button has `backgroundColor: '#DE1135'` inline style |
 | Clears error on reopen | Closing (`isOpen=false`) then reopening (`isOpen=true`) removes the previous error banner |
 
 ### Notable patterns
@@ -108,13 +108,13 @@ No production application code currently imports `ConfirmDialog` — it is avail
 
 ### `confirmButtonColor` applied via BaseUI `overrides` rather than a typed color token
 
-**What:** The destructive button color is passed as a raw CSS string and applied through `overrides: { BaseButton: { style: { backgroundColor: ... } } }` on the BaseUI `Button`.
+**What:** The destructive button color is passed as a raw CSS string and applied as an inline `style={{ backgroundColor: confirmButtonColor }}` on the BaseUI `Button`.
 
-**Why:** BaseUI's `Button` does not expose a `color` or `backgroundColor` prop directly. The `overrides` API is the supported extension point for style customization in BaseUI.
+**Why:** Inline style is directly assertable in tests via `toHaveStyle`, unlike Styletron-generated class names which are not inspectable per-element in jsdom. A background color override doesn't need to interact with Styletron's cascade.
 
-**Root cause:** BaseUI's `Button` component manages its own background via internal style functions based on `kind`; overriding via the `style` key in `overrides.BaseButton` bypasses that and applies directly to the rendered element.
+**Root cause:** BaseUI's `Button` overrides apply styles through Styletron (atomic CSS class injection), which `getComputedStyle` in jsdom cannot resolve. Inline style bypasses this and makes the value testable.
 
-**Port or simplify?:** Keep for now. If a design token for "destructive button" is introduced into the design system, replace `confirmButtonColor` with an enum prop (e.g., `variant: 'destructive'`) and remove the raw color string from the API surface.
+**Port or simplify?:** Keep as inline style. If hover/active state is ever needed for the destructive variant, switch to a typed `variant` enum and handle it via overrides with a `$theme` style function.
 
 ### State reset via `useEffect` watching `isOpen` rather than resetting in the dismiss handler
 
