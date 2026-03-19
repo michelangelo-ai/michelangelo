@@ -29,7 +29,7 @@ DEFAULT_CONFIG = {
     "plugin": {
         "dirs": [],
         "modules": {},
-    }
+    },
 }
 
 
