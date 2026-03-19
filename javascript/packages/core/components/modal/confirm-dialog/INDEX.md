@@ -81,7 +81,7 @@ No production application code currently imports `ConfirmDialog` — it is avail
 3. **Confirm button uses `isLoading` not `disabled`:** The confirm button passes `isLoading` to BaseUI's `Button`, which shows a spinner and prevents re-click internally. Do not replace this with `disabled`.
 4. **Error extracted from `Error` instance:** The catch block checks `err instanceof Error` before reading `.message`; non-Error rejections fall back to `'An unexpected error occurred.'` This must be preserved for non-standard rejection values.
 5. **`onDismiss` is not called on failure:** When `onConfirm` throws, only `setIsLoading(false)` is called — the dialog stays open. `onDismiss` is only called on success.
-6. **`void handleConfirm()` at the call site:** The confirm button's `onClick` uses `() => void handleConfirm()` to satisfy the `void`-returning `onClick` type while still running the async handler. This is intentional, not an oversight.
+6. **`handleConfirm` passed directly as `onClick`:** The confirm button uses `onClick={handleConfirm}` — TypeScript allows this because React's `onClick: () => void` return type means "return value is not used", not "must return void", so an async function is assignable.
 7. **Placement hardcoded to `topCenter`:** `ConfirmDialog` always renders at `PLACEMENT.topCenter`. This is not exposed as a prop — it is a design constraint for this component type.
 
 ## Implementation Decisions

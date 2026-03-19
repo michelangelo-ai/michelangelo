@@ -70,7 +70,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         primaryAction: (
           <Button
             isLoading={isLoading}
-            onClick={() => void handleConfirm()}
+            onClick={handleConfirm}
             style={confirmButtonColor ? { backgroundColor: confirmButtonColor } : undefined}
           >
             {confirmLabel}
