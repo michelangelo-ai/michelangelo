@@ -426,8 +426,16 @@ describe('Execution view', () => {
     const CustomTaskListRenderer = ({ taskList }: { taskList: unknown[] }) => (
       <div>top-level: {taskList.length} tasks</div>
     );
-    const CustomSubTaskListRenderer = ({ taskList, parent }: { taskList: unknown[]; parent?: Task }) => (
-      <div>subtasks of {parent!.name}: {taskList.length} tasks</div>
+    const CustomSubTaskListRenderer = ({
+      taskList,
+      parent,
+    }: {
+      taskList: unknown[];
+      parent?: Task;
+    }) => (
+      <div>
+        subtasks of {parent!.name}: {taskList.length} tasks
+      </div>
     );
 
     const executionData = {
@@ -465,8 +473,16 @@ describe('Execution view', () => {
   });
 
   it('should fall back to TaskListRenderer for subtask rows when SubTaskListRenderer is not provided', () => {
-    const CustomTaskListRenderer = ({ taskList, parent }: { taskList: unknown[]; parent?: Task }) => (
-      <div>{parent ? `subtasks of ${parent.name}` : 'top-level'}: {taskList.length} tasks</div>
+    const CustomTaskListRenderer = ({
+      taskList,
+      parent,
+    }: {
+      taskList: unknown[];
+      parent?: Task;
+    }) => (
+      <div>
+        {parent ? `subtasks of ${parent.name}` : 'top-level'}: {taskList.length} tasks
+      </div>
     );
 
     const executionData = {
