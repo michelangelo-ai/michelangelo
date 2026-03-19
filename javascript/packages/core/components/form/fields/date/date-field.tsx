@@ -9,27 +9,6 @@ import { DATE_FORMAT, type DateFieldProps } from './types';
 import { useDateFormatters } from './use-date-formatters';
 
 import type { Theme } from 'baseui';
-import type { DatepickerOverrides } from 'baseui/datepicker';
-
-const READ_ONLY_OVERRIDES: DatepickerOverrides = {
-  Input: {
-    props: {
-      readOnly: true,
-      onFocus: () => undefined,
-      overrides: {
-        InputContainer: {
-          style: ({ $theme }: { $theme: Theme }) => ({
-            backgroundColor: $theme.colors.backgroundPrimary,
-          }),
-        },
-      },
-    },
-  },
-};
-
-const isEmptyInputValue = (value: unknown): boolean => {
-  return isNil(value) || value === '' || (isArray(value) && !value.length);
-};
 
 export const DateField: React.FC<DateFieldProps> = ({
   name,
@@ -88,10 +67,32 @@ export const DateField: React.FC<DateFieldProps> = ({
             onClose={input.onBlur}
             maxDate={noFutureDate ? new Date() : undefined}
             disabled={disabled}
-            overrides={readOnly ? READ_ONLY_OVERRIDES : undefined}
+            overrides={
+              readOnly
+                ? {
+                    Input: {
+                      props: {
+                        readOnly: true,
+                        onFocus: () => undefined,
+                        overrides: {
+                          InputContainer: {
+                            style: ({ $theme }: { $theme: Theme }) => ({
+                              backgroundColor: $theme.colors.backgroundPrimary,
+                            }),
+                          },
+                        },
+                      },
+                    },
+                  }
+                : undefined
+            }
           />
         </FormControl>
       </Cell>
     </Grid>
   );
 };
+
+function isEmptyInputValue(value: unknown): boolean {
+  return isNil(value) || value === '' || (isArray(value) && !value.length);
+}
