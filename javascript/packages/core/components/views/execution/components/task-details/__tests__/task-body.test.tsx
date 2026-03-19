@@ -8,6 +8,7 @@ import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { createTask } from '../__fixtures__/task-details-fixtures';
 import { TaskBody } from '../task-body';
 
+import type { Task } from '#core/components/views/execution/types';
 import type { TaskBodySchema } from '../renderers/types';
 
 describe('TaskBody', () => {
@@ -199,5 +200,26 @@ describe('TaskBody', () => {
     );
 
     expect(screen.queryByText('Unknown')).not.toBeInTheDocument();
+  });
+
+  it('should pass the current task as parent to TaskListRenderer when rendering subtasks', () => {
+    const ParentLabelRenderer = ({ parent }: { parent?: Task }) => (
+      <div>subtasks of {parent?.name ?? 'unknown'}</div>
+    );
+
+    const taskWithSubtasks = createTask({
+      name: 'Execute Workflow',
+      subTasks: [createTask({ name: 'Child 1' }), createTask({ name: 'Child 2' })],
+    });
+
+    render(
+      <TaskBody
+        task={taskWithSubtasks}
+        overrides={{ TaskListRenderer: { component: ParentLabelRenderer } }}
+      />,
+      buildWrapper([getRouterWrapper()])
+    );
+
+    expect(screen.getByText('subtasks of Execute Workflow')).toBeInTheDocument();
   });
 });

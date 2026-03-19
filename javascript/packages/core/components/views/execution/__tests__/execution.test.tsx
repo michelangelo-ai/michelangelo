@@ -415,10 +415,11 @@ describe('Execution view', () => {
       screen.getByText('Custom TaskListRenderer for main execution with 1 tasks')
     ).toBeInTheDocument();
 
-    // Should use custom renderer for Parent Task subtasks (2 child tasks)
+    // Should use custom renderer for Parent Task subtasks (2 child tasks) —
+    // appears once in the overview matrix and once in the detail panel TaskBody
     expect(
-      screen.getByText('Custom TaskListRenderer for Parent Task subtasks with 2 tasks')
-    ).toBeInTheDocument();
+      screen.getAllByText('Custom TaskListRenderer for Parent Task subtasks with 2 tasks')
+    ).toHaveLength(2);
   });
 
   it('should use custom taskList when provided', () => {
