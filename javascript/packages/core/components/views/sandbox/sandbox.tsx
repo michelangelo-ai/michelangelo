@@ -23,14 +23,13 @@ import { FormNote } from '#core/components/form/layout/form-note/form-note';
 import { required } from '#core/components/form/validation/validators';
 import { TextEditor } from '#core/components/text-editor/text-editor';
 import { DetailView } from '#core/components/views/detail-view/detail-view';
+import { TaskListRenderer } from '#core/components/views/execution/components/task-list-renderer';
 import { TASK_STATE } from '#core/components/views/execution/constants';
 import { Execution } from '#core/components/views/execution/execution';
-import { TaskListRenderer } from '#core/components/views/execution/components/task-list-renderer';
-
-import type { TaskListRendererProps } from '#core/components/views/execution/components/types';
 import { MainViewContainer } from '#core/components/views/main-view-container';
 import { failurePipelineRun, successfulPipelineRun } from './fixtures/execution-data';
 
+import type { TaskListRendererProps } from '#core/components/views/execution/components/types';
 import type { ExecutionDetailViewSchema } from '#core/components/views/execution/types';
 
 const sampleJson = {
@@ -302,8 +301,8 @@ export function Sandbox() {
         <Tab title="Execution - Parent Debug">
           <Block marginTop="24px">
             <Block marginBottom="scale600" font="font300">
-              Each row in the task flow shows a <code>parent =</code> banner. After the fix,
-              the detail panel for <strong>Execute Workflow</strong> should show{' '}
+              Each row in the task flow shows a <code>parent =</code> banner. After the fix, the
+              detail panel for <strong>Execute Workflow</strong> should show{' '}
               <code>parent = Execute Workflow</code> — not <code>parent = undefined</code>.
             </Block>
             <DetailView
