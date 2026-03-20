@@ -139,7 +139,7 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
 	if err != nil || len(gvks) == 0 {
 		return ctrl.Result{}, fmt.Errorf("failed to get GVK for %T: %w", object, err)
 	}
-	// TODO(#942): gvks[0] may be non-deterministic when a type is registered under multiple
+	// TODO(#943): gvks[0] may be non-deterministic when a type is registered under multiple
 	// versions. See issue for planned multi-GVK selection strategy.
 	typeMeta := &metav1.TypeMeta{
 		Kind:       gvks[0].Kind,
@@ -171,7 +171,7 @@ func (r *Reconciler) handleDeletionAnnotation(ctx context.Context, log logr.Logg
 	if err != nil || len(gvks) == 0 {
 		return ctrl.Result{}, fmt.Errorf("failed to get GVK for %T: %w", object, err)
 	}
-	// TODO(#942): gvks[0] may be non-deterministic when a type is registered under multiple
+	// TODO(#943): gvks[0] may be non-deterministic when a type is registered under multiple
 	// versions. See issue for planned multi-GVK selection strategy.
 	typeMeta := &metav1.TypeMeta{
 		Kind:       gvks[0].Kind,
@@ -238,7 +238,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err != nil || len(gvks) == 0 {
 		return fmt.Errorf("failed to get GVK for %T: %w", r.TargetKind, err)
 	}
-	// TODO(#942): scheme.ObjectKinds may return multiple GVKs (e.g. v1 and v1beta1 for the same
+	// TODO(#943): scheme.ObjectKinds may return multiple GVKs (e.g. v1 and v1beta1 for the same
 	// type). We currently take gvks[0] which may be non-deterministic. Add explicit multi-GVK
 	// selection strategy (prefer storage version, or error if multiple exist).
 	kind := gvks[0].Kind
