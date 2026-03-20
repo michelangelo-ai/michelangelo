@@ -3,7 +3,6 @@ import { useStyletron } from 'baseui';
 import { Box } from '#core/components/box/box';
 import { ErrorView } from '#core/components/error-view/error-view';
 import { CircleExclamationMark } from '#core/components/illustrations/circle-exclamation-mark/circle-exclamation-mark';
-import { CircleExclamationMarkKind } from '#core/components/illustrations/circle-exclamation-mark/types';
 import { TaskDetails } from './components/task-details/task-details';
 import { TaskFlow } from './components/task-flow';
 import { TaskStateIcon } from './components/task-state-icon';
@@ -30,13 +29,7 @@ export function Execution<
   if (!taskList.length) {
     return (
       <ErrorView
-        illustration={
-          <CircleExclamationMark
-            height="64px"
-            width="64px"
-            kind={CircleExclamationMarkKind.PRIMARY}
-          />
-        }
+        illustration={<CircleExclamationMark height="64px" width="64px" />}
         title={schema.emptyState.title}
         description={schema.emptyState.description}
       />

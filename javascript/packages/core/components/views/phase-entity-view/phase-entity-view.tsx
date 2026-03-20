@@ -5,7 +5,6 @@ import { Tab, Tabs } from 'baseui/tabs-motion';
 
 import { ErrorView } from '#core/components/error-view/error-view';
 import { CircleExclamationMark } from '#core/components/illustrations/circle-exclamation-mark/circle-exclamation-mark';
-import { CircleExclamationMarkKind } from '#core/components/illustrations/circle-exclamation-mark/types';
 import { PageHeader } from '#core/components/page-header/page-header';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { EntityTable } from './entity-table';
@@ -55,12 +54,7 @@ export function PhaseEntityView<T extends object = object>({
           content: 'Go home',
         }}
         description={`Entity "${currentEntity}" not found`}
-        illustration={
-          <CircleExclamationMark
-            kind={CircleExclamationMarkKind.ERROR}
-            width={theme.sizing.scale1600}
-          />
-        }
+        illustration={<CircleExclamationMark width={theme.sizing.scale1600} />}
         title="Entity not found"
       />
     );

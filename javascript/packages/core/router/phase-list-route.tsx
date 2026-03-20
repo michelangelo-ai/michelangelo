@@ -3,7 +3,6 @@ import { useStyletron } from 'baseui';
 
 import { ErrorView } from '#core/components/error-view/error-view';
 import { CircleExclamationMark } from '#core/components/illustrations/circle-exclamation-mark/circle-exclamation-mark';
-import { CircleExclamationMarkKind } from '#core/components/illustrations/circle-exclamation-mark/types';
 import { PhaseEntityView } from '#core/components/views/phase-entity-view/phase-entity-view';
 import { isListableEntity } from '#core/components/views/phase-entity-view/utils';
 import { PHASES } from '#core/config/phases/phases';
@@ -30,12 +29,7 @@ export function PhaseListRoute({ phases = PHASES }: { phases?: Record<string, Ph
       <ErrorView
         title="Phase not found"
         description={`Phase "${phase}" configuration not found. Available phases: ${Object.keys(phases).join(', ')}`}
-        illustration={
-          <CircleExclamationMark
-            kind={CircleExclamationMarkKind.ERROR}
-            width={theme.sizing.scale1600}
-          />
-        }
+        illustration={<CircleExclamationMark width={theme.sizing.scale1600} />}
         buttonConfig={{
           onClick: () => navigate(`/${projectId}`),
           content: 'Go home',
@@ -51,12 +45,7 @@ export function PhaseListRoute({ phases = PHASES }: { phases?: Record<string, Ph
       <ErrorView
         title="Phase has no active entities"
         description={`Phase "${phase}" has no active entities with list views configured.`}
-        illustration={
-          <CircleExclamationMark
-            kind={CircleExclamationMarkKind.ERROR}
-            width={theme.sizing.scale1600}
-          />
-        }
+        illustration={<CircleExclamationMark width={theme.sizing.scale1600} />}
         buttonConfig={{
           onClick: () => navigate(`/${projectId}`),
           content: 'Go home',

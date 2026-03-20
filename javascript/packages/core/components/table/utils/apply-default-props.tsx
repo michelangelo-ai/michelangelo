@@ -1,5 +1,4 @@
 import { CircleExclamationMark } from '#core/components/illustrations/circle-exclamation-mark/circle-exclamation-mark';
-import { CircleExclamationMarkKind } from '#core/components/illustrations/circle-exclamation-mark/types';
 import { TableBody } from '../components/table-body/table-body';
 import { TableHeader } from '../components/table-header/table-header';
 import { TableLoadingState } from '../components/table-loading-state';
@@ -32,13 +31,7 @@ export function applyDefaultProps<T extends TableData = TableData>(
   return {
     ...props,
     emptyState: props.emptyState ?? {
-      icon: (
-        <CircleExclamationMark
-          kind={CircleExclamationMarkKind.PRIMARY}
-          height="64px"
-          width="64px"
-        />
-      ),
+      icon: <CircleExclamationMark height="64px" width="64px" />,
       title: 'No data',
       content: 'No data is present.',
     },
