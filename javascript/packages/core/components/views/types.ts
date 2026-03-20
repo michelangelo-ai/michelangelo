@@ -9,7 +9,6 @@ import type { DetailPageConfig } from '#core/components/views/detail-view/types/
 
 export type MainViewContainerProps = {
   children: ReactNode;
-  hasBreadcrumb?: boolean;
 };
 
 export type ViewConfig<T extends object = object> = ListViewConfig<T> | DetailViewConfig<T>;

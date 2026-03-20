@@ -210,7 +210,7 @@ export function Sandbox() {
   const [isDestructiveConfirmOpen, setIsDestructiveConfirmOpen] = useState(false);
 
   return (
-    <MainViewContainer hasBreadcrumb={false}>
+    <MainViewContainer>
       <HeadingXXLarge>Component Sandbox</HeadingXXLarge>
       <Block marginBottom="24px">This is a sandbox for testing WIP components and features.</Block>
 
