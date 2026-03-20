@@ -40,7 +40,11 @@ func register(p registerParams) error {
 	crdObjects := v2.AllCRDObjects
 
 	for _, obj := range crdObjects {
-		gvk := obj.GetObjectKind().GroupVersionKind()
+		gvks, _, err := p.Scheme.ObjectKinds(obj)
+		if err != nil || len(gvks) == 0 {
+			return fmt.Errorf("failed to get GVK for %T: %w", obj, err)
+		}
+		gvk := gvks[0]
 		log := p.Logger.With(zap.String("kind", gvk.Kind))
 
 		// Cast runtime.Object to client.Object

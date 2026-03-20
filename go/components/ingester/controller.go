@@ -135,10 +135,15 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
 	log.Info("Deleting from metadata storage")
 
 	// Delete from metadata storage
-	gvk := object.GetObjectKind().GroupVersionKind()
+	gvks, _, err := r.Scheme.ObjectKinds(object)
+	if err != nil || len(gvks) == 0 {
+		return ctrl.Result{}, fmt.Errorf("failed to get GVK for %T: %w", object, err)
+	}
+	// TODO(#943): gvks[0] may be non-deterministic when a type is registered under multiple
+	// versions. See issue for planned multi-GVK selection strategy.
 	typeMeta := &metav1.TypeMeta{
-		Kind:       gvk.Kind,
-		APIVersion: gvk.GroupVersion().String(),
+		Kind:       gvks[0].Kind,
+		APIVersion: gvks[0].GroupVersion().String(),
 	}
 
 	if err := r.MetadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil {
@@ -162,10 +167,15 @@ func (r *Reconciler) handleDeletionAnnotation(ctx context.Context, log logr.Logg
 	log.Info("Object marked for deletion via annotation")
 
 	// Delete from metadata storage first
-	gvk := object.GetObjectKind().GroupVersionKind()
+	gvks, _, err := r.Scheme.ObjectKinds(object)
+	if err != nil || len(gvks) == 0 {
+		return ctrl.Result{}, fmt.Errorf("failed to get GVK for %T: %w", object, err)
+	}
+	// TODO(#943): gvks[0] may be non-deterministic when a type is registered under multiple
+	// versions. See issue for planned multi-GVK selection strategy.
 	typeMeta := &metav1.TypeMeta{
-		Kind:       gvk.Kind,
-		APIVersion: gvk.GroupVersion().String(),
+		Kind:       gvks[0].Kind,
+		APIVersion: gvks[0].GroupVersion().String(),
 	}
 
 	if err := r.MetadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil {
@@ -224,7 +234,14 @@ func (r *Reconciler) handleImmutableObject(ctx context.Context, log logr.Logger,
 
 // SetupWithManager sets up the controller with the Manager
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
-	kind := r.TargetKind.GetObjectKind().GroupVersionKind().Kind
+	gvks, _, err := r.Scheme.ObjectKinds(r.TargetKind)
+	if err != nil || len(gvks) == 0 {
+		return fmt.Errorf("failed to get GVK for %T: %w", r.TargetKind, err)
+	}
+	// TODO(#943): scheme.ObjectKinds may return multiple GVKs (e.g. v1 and v1beta1 for the same
+	// type). We currently take gvks[0] which may be non-deterministic. Add explicit multi-GVK
+	// selection strategy (prefer storage version, or error if multiple exist).
+	kind := gvks[0].Kind
 	controllerName := fmt.Sprintf("ingester_%s", kind)
 
 	concurrentReconciles := r.Config.ConcurrentReconciles
