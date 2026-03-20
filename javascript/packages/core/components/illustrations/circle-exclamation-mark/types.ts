@@ -1,3 +1,10 @@
 import type { IllustrationProps } from '../types';
 
-export type CircleExclamationMarkProps = Partial<IllustrationProps>;
+export enum CircleExclamationMarkKind {
+  ERROR,
+  PRIMARY,
+}
+
+export type CircleExclamationMarkProps = Partial<IllustrationProps> & {
+  kind?: CircleExclamationMarkKind;
+};
