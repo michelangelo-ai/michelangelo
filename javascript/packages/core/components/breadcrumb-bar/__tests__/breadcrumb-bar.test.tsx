@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
@@ -210,5 +211,174 @@ describe('BreadcrumbBar — unknown phase/entity fallback', () => {
       ])
     );
     expect(screen.getByText('unknown-models')).toBeInTheDocument();
+  });
+});
+
+describe('BreadcrumbBar — menu drawer', () => {
+  it('renders the Menu button', () => {
+    render(
+      <BreadcrumbBar
+        categories={[
+          {
+            id: 'core-ml',
+            name: 'Core ML',
+            phases: [
+              { id: 'train', name: 'Train & Evaluate', icon: '', state: 'active', entities: [] },
+            ],
+          },
+        ]}
+      />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getRouterWrapper({ location: '/my-project' }),
+      ])
+    );
+    expect(screen.getByRole('button', { name: /menu/i })).toBeInTheDocument();
+  });
+
+  it('opens the drawer and shows the phase and entities', async () => {
+    render(
+      <BreadcrumbBar
+        categories={[
+          {
+            id: 'core-ml',
+            name: 'Core ML',
+            phases: [
+              {
+                id: 'train',
+                name: 'Train & Evaluate',
+                icon: '',
+                state: 'active',
+                entities: [
+                  {
+                    id: 'models',
+                    name: 'trained models',
+                    state: 'active',
+                    service: 'model',
+                    views: [],
+                  },
+                ],
+              },
+            ],
+          },
+        ]}
+      />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getRouterWrapper({ location: '/my-project' }),
+      ])
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /menu/i }));
+
+    expect(screen.getByText('Train & Evaluate')).toBeInTheDocument();
+    expect(screen.getByText('Trained models')).toBeInTheDocument();
+  });
+
+  it('navigates to the entity route when an active entity is clicked', async () => {
+    render(
+      <BreadcrumbBar
+        categories={[
+          {
+            id: 'core-ml',
+            name: 'Core ML',
+            phases: [
+              {
+                id: 'train',
+                name: 'Train & Evaluate',
+                icon: '',
+                state: 'active',
+                entities: [
+                  {
+                    id: 'models',
+                    name: 'trained models',
+                    state: 'active',
+                    service: 'model',
+                    views: [],
+                  },
+                ],
+              },
+            ],
+          },
+        ]}
+      />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getRouterWrapper({ location: '/my-project' }),
+      ])
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /menu/i }));
+    await userEvent.click(screen.getByText('Trained models'));
+
+    expect(screen.getByText(/\/my-project\/train\/models/)).toBeInTheDocument();
+  });
+
+  it('does not navigate when a disabled entity is clicked', async () => {
+    render(
+      <BreadcrumbBar
+        categories={[
+          {
+            id: 'core-ml',
+            name: 'Core ML',
+            phases: [
+              {
+                id: 'train',
+                name: 'Train & Evaluate',
+                icon: '',
+                state: 'active',
+                entities: [
+                  {
+                    id: 'pipelines',
+                    name: 'pipelines',
+                    state: 'disabled',
+                    service: 'pipeline',
+                    views: [],
+                  },
+                ],
+              },
+            ],
+          },
+        ]}
+      />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getRouterWrapper({ location: '/my-project' }),
+      ])
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /menu/i }));
+    await userEvent.click(screen.getByText('Pipelines'));
+
+    expect(screen.queryByText(/\/my-project\/train/)).not.toBeInTheDocument();
+  });
+
+  it('shows "Coming soon" tag for coming-soon phases', async () => {
+    render(
+      <BreadcrumbBar
+        categories={[
+          {
+            id: 'core-ml',
+            name: 'Core ML',
+            phases: [
+              { id: 'retrain', name: 'Retrain', icon: '', state: 'comingSoon', entities: [] },
+            ],
+          },
+        ]}
+      />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getRouterWrapper({ location: '/my-project' }),
+      ])
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /menu/i }));
+
+    expect(screen.getByText('Coming soon')).toBeInTheDocument();
   });
 });
