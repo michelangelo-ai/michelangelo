@@ -422,6 +422,97 @@ describe('Execution view', () => {
     ).toHaveLength(2);
   });
 
+  it('should use SubTaskListRenderer for subtask rows and TaskListRenderer for the top-level row', () => {
+    const CustomTaskListRenderer = ({ taskList }: { taskList: unknown[] }) => (
+      <div>top-level: {taskList.length} tasks</div>
+    );
+    const CustomSubTaskListRenderer = ({
+      taskList,
+      parent,
+    }: {
+      taskList: unknown[];
+      parent?: Task;
+    }) => (
+      <div>
+        subtasks of {parent!.name}: {taskList.length} tasks
+      </div>
+    );
+
+    const executionData = {
+      status: {
+        steps: [
+          buildStep({
+            displayName: 'Parent Task',
+            state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED',
+            subSteps: [
+              buildStep({ displayName: 'Child 1', state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED' }),
+              buildStep({ displayName: 'Child 2', state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED' }),
+            ],
+          }),
+        ],
+      },
+    };
+
+    render(
+      <Execution
+        schema={buildSchema()}
+        data={executionData}
+        overrides={{
+          TaskListRenderer: { component: CustomTaskListRenderer },
+          SubTaskListRenderer: { component: CustomSubTaskListRenderer },
+        }}
+      />,
+      buildWrapper([getRouterWrapper()])
+    );
+
+    // Top-level row (no parent) uses TaskListRenderer
+    expect(screen.getByText('top-level: 1 tasks')).toBeInTheDocument();
+
+    // Subtask rows (parent defined) use SubTaskListRenderer — once in overview, once in TaskBody
+    expect(screen.getAllByText('subtasks of Parent Task: 2 tasks')).toHaveLength(2);
+  });
+
+  it('should fall back to TaskListRenderer for subtask rows when SubTaskListRenderer is not provided', () => {
+    const CustomTaskListRenderer = ({
+      taskList,
+      parent,
+    }: {
+      taskList: unknown[];
+      parent?: Task;
+    }) => (
+      <div>
+        {parent ? `subtasks of ${parent.name}` : 'top-level'}: {taskList.length} tasks
+      </div>
+    );
+
+    const executionData = {
+      status: {
+        steps: [
+          buildStep({
+            displayName: 'Parent Task',
+            state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED',
+            subSteps: [
+              buildStep({ displayName: 'Child 1', state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED' }),
+            ],
+          }),
+        ],
+      },
+    };
+
+    render(
+      <Execution
+        schema={buildSchema()}
+        data={executionData}
+        overrides={{ TaskListRenderer: { component: CustomTaskListRenderer } }}
+      />,
+      buildWrapper([getRouterWrapper()])
+    );
+
+    // TaskListRenderer is used for both top-level and subtask rows
+    expect(screen.getByText('top-level: 1 tasks')).toBeInTheDocument();
+    expect(screen.getAllByText('subtasks of Parent Task: 1 tasks')).toHaveLength(2);
+  });
+
   it('should use custom taskList when provided', () => {
     const customTaskList = [
       {

@@ -16,22 +16,30 @@ export function TaskFlow<TTaskRecord extends object = object>({
     overrides?.TaskListRenderer,
     TaskListRenderer
   );
+  const [SubTaskListRendererComponent, subTaskListRendererProps] = getOverrides(
+    overrides?.SubTaskListRenderer ?? overrides?.TaskListRenderer,
+    TaskListRenderer
+  );
 
   return (
     <>
-      {matrix.map((item, index) => (
-        <React.Fragment key={index}>
-          {index > 0 && <TaskSeparator />}
-          <TaskFlowContainer>
-            <TaskListRendererComponent
-              taskList={item.taskList}
-              onTaskClick={onTaskClick}
-              parent={item.parent}
-              {...taskListRendererProps}
-            />
-          </TaskFlowContainer>
-        </React.Fragment>
-      ))}
+      {matrix.map((item, index) => {
+        const Renderer = item.parent ? SubTaskListRendererComponent : TaskListRendererComponent;
+        const rendererProps = item.parent ? subTaskListRendererProps : taskListRendererProps;
+        return (
+          <React.Fragment key={index}>
+            {index > 0 && <TaskSeparator />}
+            <TaskFlowContainer>
+              <Renderer
+                taskList={item.taskList}
+                onTaskClick={onTaskClick}
+                parent={item.parent}
+                {...rendererProps}
+              />
+            </TaskFlowContainer>
+          </React.Fragment>
+        );
+      })}
     </>
   );
 }

@@ -192,18 +192,25 @@ export type Task<TTaskRecord extends object = object> = {
  *
  * Enables customization of execution rendering for different pipeline types:
  * - taskList: Override task data (bypasses buildTaskList)
- * - TaskListRenderer: Override how each taskList within matrix items is rendered
+ * - TaskListRenderer: Override how the top-level row is rendered
+ * - SubTaskListRenderer: Override how subtask rows are rendered (parent is always defined);
+ *   falls back to TaskListRenderer if not provided
  *
  * Example usage for ASL pipeline types:
  * ```
  * const overrides = {
  *   taskList: enhancedTasksWithASL,
- *   TaskListRenderer: { component: ASLTaskListRenderer }
+ *   SubTaskListRenderer: { component: ASLTaskListRenderer }
  * };
  * ```
  */
 export type ExecutionOverrides<TTaskRecord extends object = object> = {
   TaskListRenderer?: {
+    component?: ComponentType<TaskListRendererProps<TTaskRecord>>;
+    props?: Partial<TaskListRendererProps<TTaskRecord>>;
+  };
+  /** Override for subtask rows only — parent is always defined when this fires */
+  SubTaskListRenderer?: {
     component?: ComponentType<TaskListRendererProps<TTaskRecord>>;
     props?: Partial<TaskListRendererProps<TTaskRecord>>;
   };
