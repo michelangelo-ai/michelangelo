@@ -516,7 +516,6 @@ def save_model(model, output_path: str):
 - `s3://bucket/path/to/file.parquet`
 - `hdfs://namenode/path/to/data`
 - `file:///local/path/to/file.csv`
-- `tb://terrablob/path` (Uber internal)
 
 All handled via [fsspec](https://filesystem-spec.readthedocs.io/) for consistent API across storage backends.
 
