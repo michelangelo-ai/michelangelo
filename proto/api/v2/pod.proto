@@ -31,7 +31,7 @@ import "michelangelo/api/options.proto";
 // - Training and inference jobs
 // - Batch and streaming workloads
 // Default values are allowed and validated on input.
-// TODO: Replace with K8s Quantity in ResourceRequirements
+// TODO(#931): Replace with K8s Quantity in ResourceRequirements
 message ResourceSpec {
   // CPU limit in number of CPU cores. This field specifies:
   // - The maximum number of CPU cores allocated to the Pod
@@ -181,7 +181,7 @@ message PodSpec {
   // - Used for secure data access in distributed jobs
   // - Temporary credential with expiration
   // - Should be rotated periodically
-  // TODO: Replace with K8s Secrets for improved security
+  // TODO(#932): Replace with K8s Secrets for improved security
   string hdfs_delegation_token = 5;
 
   // Custom module to run during Pod initialization. This field specifies:
