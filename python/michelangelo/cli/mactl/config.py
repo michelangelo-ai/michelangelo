@@ -26,7 +26,10 @@ DEFAULT_CONFIG = {
         "secret_access_key": "minioadmin",
         "endpoint_url": "http://localhost:9091",
     },
-    "plugins": [],
+    "plugin": {
+        "dirs": [],
+        "modules": {},
+    },
 }
 
 

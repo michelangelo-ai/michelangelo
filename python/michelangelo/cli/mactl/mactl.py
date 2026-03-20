@@ -125,7 +125,7 @@ def read_plugins(crd: CRD, channel: Channel) -> None:
     """Read and apply plugins for a given crd."""
     _LOG.info("Read plugins for crd: %r", crd)
     plugin_modules = read_plugin_modules(
-        crd.name, [str(DEFAULT_DIR_PLUGINS), *_CONFIG["plugins"]]
+        crd.name, [str(DEFAULT_DIR_PLUGINS), *_CONFIG["plugin"]["dirs"]]
     )
 
     for i, plugin in enumerate(plugin_modules):
@@ -144,7 +144,7 @@ def read_plugin_command(
     """Read and apply plugins for a given crd."""
     _LOG.info("Read plugins for crd: %r", crd)
     plugin_modules = read_plugin_modules(
-        crd.name, [str(DEFAULT_DIR_PLUGINS), *_CONFIG["plugins"]]
+        crd.name, [str(DEFAULT_DIR_PLUGINS), *_CONFIG["plugin"]["dirs"]]
     )
 
     for i, plugin in enumerate(plugin_modules):
