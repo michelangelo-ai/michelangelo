@@ -32,9 +32,9 @@ export function Execution<
       <ErrorView
         illustration={
           <CircleExclamationMark
-            kind={CircleExclamationMarkKind.PRIMARY}
             height="64px"
             width="64px"
+            kind={CircleExclamationMarkKind.PRIMARY}
           />
         }
         title={schema.emptyState.title}
