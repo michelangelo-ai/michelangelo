@@ -46,7 +46,7 @@ npm install --global yarn
 yarn --version  # Verify installation
 ```
 
-**For full-stack development (optional):** following [Michelangelo Sandbox Getting Started](../../setup-guide/sandbox-setup).
+**For full-stack development (optional):** following [Michelangelo Sandbox Getting Started](../../getting-started/sandbox-setup).
 
 **Note:** The sandbox is optional for UI development. You can develop UI components and pages without a running API server by mocking responses or working with static data.
 
@@ -111,4 +111,4 @@ A: Yes, you can work with mock data or specifically on data-independent function
 - [Vite Documentation](https://vitejs.dev/)
 - [Yarn Workspaces Guide](https://classic.yarnpkg.com/en/docs/workspaces/)
 - [Node Version Manager (nvm)](https://github.com/nvm-sh/nvm)
-- [Michelangelo Sandbox Documentation](../../setup-guide/sandbox-setup)
+- [Michelangelo Sandbox Documentation](../../getting-started/sandbox-setup)

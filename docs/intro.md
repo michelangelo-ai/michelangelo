@@ -14,14 +14,14 @@ Michelangelo is an end-to-end ML platform for building, deploying, and managing 
 
 Understand what the platform does, how it compares to your current stack, and whether it fits your use case.
 
-- **[Overview](/docs/about/overview)** — What Michelangelo is, how it works, and how familiar tools map to it
-- **[Core Concepts](/docs/about/core-concepts-and-key-terms)** — Projects, workflows, tasks, and the key terms you'll encounter
+- **[Overview](/docs/getting-started/overview)** — What Michelangelo is, how it works, and how familiar tools map to it
+- **[Core Concepts](/docs/getting-started/core-concepts-and-key-terms)** — Projects, workflows, tasks, and the key terms you'll encounter
 
 ### I want to build my first pipeline
 
 Get a local environment running and build an end-to-end ML pipeline.
 
-- **[Sandbox Setup](/docs/setup-guide/sandbox-setup)** — Set up a local Michelangelo cluster (~20 min)
+- **[Sandbox Setup](/docs/getting-started/sandbox-setup)** — Set up a local Michelangelo cluster (~20 min)
 - **[Getting Started with Pipelines](/docs/user-guides/ml-pipelines/getting-started)** — Build your first pipeline from scratch (~30 min)
 - **[Example Projects](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples)** — Boston Housing, BERT text classification, GPT fine-tuning, and more
 
