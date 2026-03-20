@@ -144,3 +144,16 @@ export { useTableSelectionContext } from '#core/components/table/plugins/selecti
 export { FilterMode } from '#core/components/table/components/filter/types';
 export type { ColumnConfig } from '#core/components/table/types/column-types';
 export type { TableProps } from '#core/components/table/types/table-types';
+
+// Execution View
+export { Execution } from '#core/components/views/execution/execution';
+export type {
+  ExecutionDetailViewSchema,
+  ExecutionOverrides,
+  Task,
+  TaskState,
+} from '#core/components/views/execution/types';
+export type { TaskListRendererProps } from '#core/components/views/execution/components/types';
+export { TASK_STATE } from '#core/components/views/execution/constants';
+export { TaskListRenderer } from '#core/components/views/execution/components/task-list-renderer';
+export { TaskStepCard } from '#core/components/views/execution/components/task-step-card/task-step-card';
