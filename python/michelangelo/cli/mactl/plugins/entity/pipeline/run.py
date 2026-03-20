@@ -28,7 +28,7 @@ from michelangelo.cli.mactl.utils import get_user_name
 
 _LOG = getLogger(__name__)
 
-# TODO: Add E2E tests for pipeline run command with representative scenarios
+# TODO(#938): Add E2E tests for pipeline run command with representative scenarios
 # (normal run, resume from checkpoint)
 
 

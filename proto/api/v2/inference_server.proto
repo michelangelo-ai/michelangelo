@@ -24,7 +24,7 @@ message ServingSpec {
   // a default template will be used.
   string container_build_template = 2;
 
-  // TODO: Add serving time dependencies.
+  // TODO(#933): Add serving time dependencies.
 }
 
 // Ownership spec for the InferenceServer. Used for capacity attribution and

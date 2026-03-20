@@ -47,10 +47,10 @@ message RevisionSpec {
     }
   ];
 
-  // TODO: deprecate this field
+  // TODO(#930): deprecate this field
   string git_ref = 6;
 
-  // TODO: deprecate this field
+  // TODO(#930): deprecate this field
   string git_branch = 7;
 
   // The URL to the code review tool such as Differential or Review
