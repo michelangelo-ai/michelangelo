@@ -8,8 +8,6 @@ Ensure you have the following installed before building:
 
 - **[Bazel](https://bazel.build/install)** — the project uses Bazel `7.4.1` (see `.bazelversion`)
 - **[Go](https://go.dev/doc/install)** — version `1.24.0+` (see `go/go.mod`)
-- **[Node.js](https://nodejs.org/)** — version `22.11.0` (see `javascript/package.json`)
-- **[Yarn](https://classic.yarnpkg.com/en/docs/install)** — version `1.22.22+`
 - **[Python](https://www.python.org/downloads/)** — version `3.9+`
 - **[Poetry](https://python-poetry.org/docs/#installation)** — for Python dependency management
 
@@ -48,8 +46,7 @@ To run the worker against a sandbox (without the worker component):
 
 ```bash
 # Start sandbox without the worker
-cd $REPO_ROOT/python
-poetry run ma sandbox create --exclude worker
+sandbox create --exclude worker
 
 # Then run the worker locally
 bazel run //go/cmd/worker
@@ -81,16 +78,6 @@ docker run --rm --network=host \
   -e CONFIG_DIR=./go/cmd/controllermgr/config \
   -v $HOME/.kube:/root/.kube \
   bazel/go/cmd/controllermgr:image
-```
-
-### Running Go Tests
-
-```bash
-# Run all Go tests
-bazel test //go/...
-
-# Run tests for a specific package
-bazel test //go/cmd/apiserver/...
 ```
 
 ### Managing Go Dependencies
@@ -140,57 +127,6 @@ poetry run ma sandbox create
 ```
 
 For more detail, see the [Sandbox Setup Guide](../setup-guide/sandbox-setup.md).
-
-## JavaScript / UI
-
-The frontend lives in `javascript/` and uses a Yarn workspaces monorepo with two packages (`core`, `rpc`) and an `app`.
-
-### Setup
-
-```bash
-cd $REPO_ROOT/javascript
-yarn install --frozen-lockfile
-yarn generate   # generates gRPC client code
-```
-
-Or use the combined setup script:
-
-```bash
-yarn setup
-```
-
-### Development
-
-```bash
-# Start the dev server
-yarn dev
-
-# Type check
-yarn typecheck
-
-# Lint
-yarn lint
-
-# Format check
-yarn format
-```
-
-### Testing
-
-```bash
-# Run all tests
-yarn test
-
-# Watch mode
-yarn test:watch
-
-# Coverage
-yarn test:coverage
-
-# Run tests for a specific package
-yarn test:core
-yarn test:rpc
-```
 
 ## IDE Setup
 
