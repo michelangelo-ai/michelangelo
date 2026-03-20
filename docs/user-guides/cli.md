@@ -51,15 +51,15 @@ All resource types support `get`, `apply`, and `delete` (see [supported resource
    ma sandbox create
    ```
 
-   This starts all required services, including the API server (`localhost:14566`), database, workflow engine, and object storage. See [Sandbox commands](#sandbox-commands) for the full command reference.
+   This starts all required services, including the API server (`localhost:15566`), database, workflow engine, and object storage. See [Sandbox commands](#sandbox-commands) for the full command reference.
 
 4. **(Optional) Configure a custom API server address:**
 
    ```bash
-   export MACTL_ADDRESS="127.0.0.1:14566"
+   export MACTL_ADDRESS="127.0.0.1:15566"
    ```
 
-   The default address (`127.0.0.1:14566`) works automatically with the sandbox. Only set this if you are connecting to a different API server instance.
+   The default address (`127.0.0.1:15566`) works automatically with the sandbox. Only set this if you are connecting to a different API server instance.
 
 ## Usage
 
@@ -394,7 +394,7 @@ The configuration file is located at `~/.ma/config.toml` and uses TOML format.
 
 ```toml
 [ma]
-address = "127.0.0.1:14566"
+address = "127.0.0.1:15566"
 use_tls = false
 
 [minio]
@@ -417,7 +417,7 @@ dirs = []  # Add custom plugin directories here
 
 API server configuration is placed under the `[ma]` section.
 
-- `address` - Address of the API server (default: `127.0.0.1:14566`)
+- `address` - Address of the API server (default: `127.0.0.1:15566`)
 - `use_tls` - Whether the client uses TLS credentials (default: `false`)
 
 #### MinIO credentials

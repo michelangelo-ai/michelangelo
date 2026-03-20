@@ -9,7 +9,7 @@ The sandbox maps NodePorts from the k3d cluster to localhost for easy access.
 | MySQL | 3306 | 30001 | `mysql` | 3306 | Storage for Cadence/Temporal |
 | MinIO (Console) | 9090 | 30008 | `minio` | 9090 | Web UI for MinIO |
 | MinIO (S3 API) | 9091 | 30007 | `minio` | 9091 | S3-compatible API endpoint |
-| Michelangelo API Server | 14566 | 30009 | `ma-apiserver` | 14566 | gRPC API (YARPC) |
+| Michelangelo API Server | 15566 | 30009 | `ma-apiserver` | 15566 | gRPC API (YARPC) |
 | Envoy (gRPC-web proxy) | 8081 | 30010 | `envoy` | 8081 | gRPC-web → gRPC proxy for UI/clients |
 | Cadence Frontend (gRPC) | 7833 | 30002 | `cadence` | 7833 | Cadence SDK/clients |
 | Cadence Frontend (TChannel) | 7933 | 30003 | `cadence` | 7933 | Cadence internal comms |
@@ -24,7 +24,7 @@ Quick links:
 Notes:
 
 - Envoy is applied unless `--exclude ui` is used. If excluded, the 8081 mapping may be unused.
-- The API server is reachable inside the cluster at `michelangelo-apiserver:14566` and externally via `localhost:14566`.
+- The API server is reachable inside the cluster at `michelangelo-apiserver:15566` and externally via `localhost:15566`.
 
 ### Temporal mode
 
@@ -62,7 +62,7 @@ These ports are primarily for intra-cluster communication but are listed for ref
   - Controller Manager webhook/manager: 9443
   - Metrics: 8080
   - Health probe: 8081
-- `michelangelo-apiserver` (service `ma-apiserver`): 14566
+- `michelangelo-apiserver` (service `ma-apiserver`): 15566
 - `minio`: 9090 (console), 9091 (S3 API)
 - `mysql`: 3306
 - `cadence`: 7833 (gRPC), 7933 (TChannel)

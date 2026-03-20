@@ -30,7 +30,7 @@ _kube_ports = [
     "3306:30001",  # MySQL
     "9091:30007",  # MinIO
     "9090:30008",  # MinIO Console
-    "14566:30009",  # Michelangelo API Server
+    "15566:30009",  # Michelangelo API Server
     "8081:30010",  # Envoy gRPC --> gRPC-web proxy
     "8090:30011",  # Michelangelo UI
     "3000:30012",  # Grafana
