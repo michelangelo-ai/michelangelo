@@ -553,3 +553,11 @@ def process_dataset(dataset: ray.data.Dataset) -> ray.data.Dataset:
 - Avoids serialization/deserialization overhead
 - Enables distributed processing of large datasets
 - Automatic caching and reuse
+
+---
+
+## What's next?
+
+- **Ready to start building?** [Set up your local sandbox](../setup-guide/sandbox-setup) and then follow [Getting Started with Pipelines](../user-guides/ml-pipelines/getting-started)
+- **Want to see complete examples?** Browse [end-to-end tutorials](../user-guides#learning-by-examples) for XGBoost, BERT, GPT fine-tuning, and recommendation systems
+- **Interested in the CLI?** See the [CLI Reference](../user-guides/cli) for pipeline and project management commands

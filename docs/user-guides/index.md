@@ -77,3 +77,11 @@ Choose a tutorial based on your ML domain:
 | Example | Description | Techniques |
 | ----- | ----- | ----- |
 | [**Amazon Books Recommendation**](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/amazon_books_qwen) | Build dual-encoder recommendation system | Embedding learning, similarity search |
+
+---
+
+## What's next?
+
+- **New to ML Pipelines?** Start with the [ML Pipelines Overview](./ml-pipelines/index.md), then follow [Getting Started with Pipelines](./ml-pipelines/getting-started.md)
+- **Have your pipeline running?** Learn about [Pipeline Running Modes](./ml-pipelines/pipeline-running-modes.md) and [Caching and Resume](./ml-pipelines/cache-and-pipelinerun-resume-form.md)
+- **Ready for production?** Set up [Pipeline Triggers](./set-up-triggers.md) for automated scheduling
