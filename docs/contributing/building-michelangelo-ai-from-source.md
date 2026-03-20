@@ -46,7 +46,8 @@ To run the worker against a sandbox (without the worker component):
 
 ```bash
 # Start sandbox without the worker
-sandbox create --exclude worker
+cd $REPO_ROOT/python
+poetry run ma sandbox create --exclude worker
 
 # Then run the worker locally
 bazel run //go/cmd/worker
@@ -58,7 +59,8 @@ The Kubernetes controller manager. Requires a Kubernetes config connected to a M
 
 ```bash
 # Create a sandbox cluster first
-sandbox.sh create
+cd $REPO_ROOT/python
+poetry run ma sandbox create
 
 # Start the controller manager
 bazel run //go/cmd/controllermgr
