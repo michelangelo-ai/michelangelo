@@ -514,9 +514,7 @@ func TestHelperFunctions(t *testing.T) {
 }
 
 // TestSchemeGVKResolution verifies that all CRD objects in AllCRDObjects resolve to
-// unique, non-empty kinds via the scheme. This is the root cause of the CrashLoopBackOff:
-// GetObjectKind().GroupVersionKind() returns empty on bare structs, causing every
-// controller to be named "ingester_" and the second registration to fail.
+// unique, non-empty kinds via the scheme.
 func TestSchemeGVKResolution(t *testing.T) {
 	scheme := runtime.NewScheme()
 	require.NoError(t, v2.AddToScheme(scheme))
