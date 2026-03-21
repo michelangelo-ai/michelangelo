@@ -21,6 +21,11 @@ const (
 	gatewayName            = "ma-gateway"
 	httpRouteNameSuffix    = "httproute"
 	inferenceServiceSuffix = "inference-service"
+
+	// filterTypeURLRewrite is the Gateway API HTTPRoute filter type string for URL
+	// path rewriting. Named constant prevents silent breakage if the string drifts
+	// from the Gateway API spec.
+	filterTypeURLRewrite = "URLRewrite"
 )
 
 var (
@@ -125,7 +130,7 @@ func (h *httpRouteManager) CheckDeploymentRouteStatus(ctx context.Context, logge
 				}
 
 				filterType, _, _ := unstructured.NestedString(filterMap, "type")
-				if filterType == "URLRewrite" {
+				if filterType == filterTypeURLRewrite {
 					path, urlRewritePathFound, _ := unstructured.NestedMap(filterMap, "urlRewrite", "path")
 					if urlRewritePathFound {
 						rewriteValue, _, _ := unstructured.NestedString(path, "replacePrefixMatch")
@@ -289,7 +294,7 @@ func buildHTTPRoute(name, namespace string, labels, annotations map[string]strin
 						"backendRefs": []interface{}{backendRef},
 						"filters": []interface{}{
 							map[string]interface{}{
-								"type": "URLRewrite",
+								"type": filterTypeURLRewrite,
 								"urlRewrite": map[string]interface{}{
 									"path": map[string]interface{}{
 										"type":               "ReplacePrefixMatch",

@@ -20,6 +20,11 @@ var _ Backend = &tritonBackend{}
 
 const (
 	defaultTritonImageTag = "23.04-py3"
+
+	// k8sProgressDeadlineExceeded is the Kubernetes DeploymentCondition reason string
+	// that signals a rolling update has stalled. Named constant prevents silent
+	// breakage if the comparison string drifts from the Kubernetes API.
+	k8sProgressDeadlineExceeded = "ProgressDeadlineExceeded"
 )
 
 // Triton Server Management
@@ -388,7 +393,7 @@ func (b *tritonBackend) getStateFromDeployment(logger *zap.Logger, deployment *a
 
 	// Check if deployment has failed (Progressing condition is False with a failure reason)
 	if progressingCondition != nil && progressingCondition.Status == corev1.ConditionFalse {
-		if progressingCondition.Reason == "ProgressDeadlineExceeded" {
+		if progressingCondition.Reason == k8sProgressDeadlineExceeded {
 			logger.Warn("Deployment progress deadline exceeded",
 				zap.String("deployment", deploymentName),
 				zap.String("message", progressingCondition.Message))
