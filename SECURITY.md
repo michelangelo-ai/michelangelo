@@ -2,9 +2,7 @@
 
 ## Supported Versions
 
-| Version | Supported |
-| ------- | --------- |
-| latest  | ✅        |
+We are currently in pre-1.0 development. Only the **latest release** receives security fixes — please upgrade to the latest version. Older versions are not patched.
 
 ## Reporting a Vulnerability
 

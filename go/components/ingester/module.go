@@ -56,14 +56,14 @@ func register(p registerParams) error {
 		// Get controller-specific config (supports per-CRD configuration)
 		controllerConfig := p.Config.GetControllerConfig(gvk.Kind)
 
-		reconciler := &Reconciler{
-			Client:          p.Manager.GetClient(),
-			Log:             ctrl.Log.WithName("ingester").WithName(gvk.Kind),
-			Scheme:          p.Scheme,
-			TargetKind:      clientObj,
-			MetadataStorage: p.MetadataStorage,
-			Config:          controllerConfig,
-		}
+		reconciler := NewReconciler(
+			p.Manager.GetClient(),
+			ctrl.Log.WithName("ingester").WithName(gvk.Kind),
+			p.Scheme,
+			clientObj,
+			p.MetadataStorage,
+			WithConfig(controllerConfig),
+		)
 
 		if err := reconciler.SetupWithManager(p.Manager); err != nil {
 			return fmt.Errorf("failed to setup ingester for %s: %w", gvk.Kind, err)

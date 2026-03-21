@@ -101,17 +101,14 @@ func TestReconciler_HandleSync(t *testing.T) {
 	mockStorage.On("Upsert", mock.Anything, mock.Anything, false, mock.Anything).Return(nil)
 
 	// Create reconciler
-	reconciler := &Reconciler{
-		Client:          fakeClient,
-		Log:             logr.Discard(),
-		Scheme:          scheme,
-		TargetKind:      &v2.Deployment{},
-		MetadataStorage: mockStorage,
-		Config: Config{
-			ConcurrentReconciles: 1,
-			RequeuePeriod:        30 * time.Second,
-		},
-	}
+	reconciler := NewReconciler(
+		fakeClient,
+		logr.Discard(),
+		scheme,
+		&v2.Deployment{},
+		mockStorage,
+		WithConfig(Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second}),
+	)
 
 	// Test reconcile
 	req := ctrl.Request{
@@ -166,17 +163,14 @@ func TestReconciler_HandleDeletion(t *testing.T) {
 	mockStorage.On("Delete", mock.Anything, mock.Anything, "default", "test-model").Return(nil)
 
 	// Create reconciler
-	reconciler := &Reconciler{
-		Client:          fakeClient,
-		Log:             logr.Discard(),
-		Scheme:          scheme,
-		TargetKind:      &v2.Model{},
-		MetadataStorage: mockStorage,
-		Config: Config{
-			ConcurrentReconciles: 1,
-			RequeuePeriod:        30 * time.Second,
-		},
-	}
+	reconciler := NewReconciler(
+		fakeClient,
+		logr.Discard(),
+		scheme,
+		&v2.Model{},
+		mockStorage,
+		WithConfig(Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second}),
+	)
 
 	// Test reconcile
 	req := ctrl.Request{
@@ -232,17 +226,14 @@ func TestReconciler_HandleDeletionAnnotation(t *testing.T) {
 	mockStorage.On("Delete", mock.Anything, mock.Anything, "default", "test-model").Return(nil)
 
 	// Create reconciler
-	reconciler := &Reconciler{
-		Client:          fakeClient,
-		Log:             logr.Discard(),
-		Scheme:          scheme,
-		TargetKind:      &v2.Model{},
-		MetadataStorage: mockStorage,
-		Config: Config{
-			ConcurrentReconciles: 1,
-			RequeuePeriod:        30 * time.Second,
-		},
-	}
+	reconciler := NewReconciler(
+		fakeClient,
+		logr.Discard(),
+		scheme,
+		&v2.Model{},
+		mockStorage,
+		WithConfig(Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second}),
+	)
 
 	// Test reconcile
 	req := ctrl.Request{
@@ -297,17 +288,14 @@ func TestReconciler_HandleImmutableKind(t *testing.T) {
 	mockStorage.On("Upsert", mock.Anything, mock.Anything, false, mock.Anything).Return(nil)
 
 	// Create reconciler
-	reconciler := &Reconciler{
-		Client:          fakeClient,
-		Log:             logr.Discard(),
-		Scheme:          scheme,
-		TargetKind:      &v2.Model{},
-		MetadataStorage: mockStorage,
-		Config: Config{
-			ConcurrentReconciles: 1,
-			RequeuePeriod:        30 * time.Second,
-		},
-	}
+	reconciler := NewReconciler(
+		fakeClient,
+		logr.Discard(),
+		scheme,
+		&v2.Model{},
+		mockStorage,
+		WithConfig(Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second}),
+	)
 
 	req := ctrl.Request{
 		NamespacedName: types.NamespacedName{
@@ -364,17 +352,14 @@ func TestReconciler_HandleImmutableObject(t *testing.T) {
 	mockStorage.On("Upsert", mock.Anything, mock.Anything, false, mock.Anything).Return(nil)
 
 	// Create reconciler
-	reconciler := &Reconciler{
-		Client:          fakeClient,
-		Log:             logr.Discard(),
-		Scheme:          scheme,
-		TargetKind:      &v2.Model{},
-		MetadataStorage: mockStorage,
-		Config: Config{
-			ConcurrentReconciles: 1,
-			RequeuePeriod:        30 * time.Second,
-		},
-	}
+	reconciler := NewReconciler(
+		fakeClient,
+		logr.Discard(),
+		scheme,
+		&v2.Model{},
+		mockStorage,
+		WithConfig(Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second}),
+	)
 
 	// Test reconcile
 	req := ctrl.Request{
@@ -410,17 +395,14 @@ func TestReconciler_ObjectNotFound(t *testing.T) {
 	mockStorage := new(MockMetadataStorage)
 
 	// Create reconciler
-	reconciler := &Reconciler{
-		Client:          fakeClient,
-		Log:             logr.Discard(),
-		Scheme:          scheme,
-		TargetKind:      &v2.Model{},
-		MetadataStorage: mockStorage,
-		Config: Config{
-			ConcurrentReconciles: 1,
-			RequeuePeriod:        30 * time.Second,
-		},
-	}
+	reconciler := NewReconciler(
+		fakeClient,
+		logr.Discard(),
+		scheme,
+		&v2.Model{},
+		mockStorage,
+		WithConfig(Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second}),
+	)
 
 	// Test reconcile for non-existent object
 	req := ctrl.Request{
@@ -499,16 +481,12 @@ func TestHelperFunctions(t *testing.T) {
 	t.Run("getRequeuePeriod", func(t *testing.T) {
 		// Test with configured period
 		r := &Reconciler{
-			Config: Config{
-				RequeuePeriod: 60 * time.Second,
-			},
+			config: Config{RequeuePeriod: 60 * time.Second},
 		}
 		assert.Equal(t, 60*time.Second, r.getRequeuePeriod())
 
 		// Test with default
-		r2 := &Reconciler{
-			Config: Config{},
-		}
+		r2 := &Reconciler{}
 		assert.Equal(t, defaultRequeuePeriod, r2.getRequeuePeriod())
 	})
 }
@@ -562,14 +540,14 @@ func TestHandleDeletion_CorrectTypeMeta(t *testing.T) {
 		return true
 	}), "default", "test-model").Return(nil)
 
-	reconciler := &Reconciler{
-		Client:          fakeClient,
-		Log:             logr.Discard(),
-		Scheme:          scheme,
-		TargetKind:      &v2.Model{},
-		MetadataStorage: mockStorage,
-		Config:          Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second},
-	}
+	reconciler := NewReconciler(
+		fakeClient,
+		logr.Discard(),
+		scheme,
+		&v2.Model{},
+		mockStorage,
+		WithConfig(Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second}),
+	)
 
 	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{
 		NamespacedName: types.NamespacedName{Name: "test-model", Namespace: "default"},
@@ -608,14 +586,14 @@ func TestHandleDeletionAnnotation_CorrectTypeMeta(t *testing.T) {
 		return true
 	}), "default", "test-model").Return(nil)
 
-	reconciler := &Reconciler{
-		Client:          fakeClient,
-		Log:             logr.Discard(),
-		Scheme:          scheme,
-		TargetKind:      &v2.Model{},
-		MetadataStorage: mockStorage,
-		Config:          Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second},
-	}
+	reconciler := NewReconciler(
+		fakeClient,
+		logr.Discard(),
+		scheme,
+		&v2.Model{},
+		mockStorage,
+		WithConfig(Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second}),
+	)
 
 	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{
 		NamespacedName: types.NamespacedName{Name: "test-model", Namespace: "default"},
