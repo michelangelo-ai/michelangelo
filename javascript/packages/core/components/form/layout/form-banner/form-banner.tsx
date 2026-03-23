@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useStyletron } from 'baseui';
+import { ARTWORK_TYPE } from 'baseui/banner';
 
 import { Banner } from '#core/components/banner/banner';
 import { Icon } from '#core/components/icon/icon';
@@ -13,12 +15,22 @@ export const FormBanner: React.FC<FormBannerProps> = ({
   content,
 }) => {
   const [dismissed, setDismissed] = useState(false);
+  const [_, theme] = useStyletron();
 
   if (dismissed) return null;
 
   return (
     <Banner
       title={title}
+      artwork={{
+        type: ARTWORK_TYPE.icon,
+        icon: () => (
+          <Icon
+            name={kind === 'info' ? 'circleI' : 'circleExclamation'}
+            size={theme.sizing.scale800}
+          />
+        ),
+      }}
       kind={kind}
       action={
         dismissible

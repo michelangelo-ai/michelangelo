@@ -9,6 +9,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CloseIcon from '@mui/icons-material/Close';
 import CropSquareIcon from '@mui/icons-material/CropSquare';
 import Delete from '@mui/icons-material/Delete';
+import ErrorIcon from '@mui/icons-material/Error';
 import Info from '@mui/icons-material/Info';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardBackspaceIcon from '@mui/icons-material/KeyboardBackspace';
@@ -32,6 +33,7 @@ export const ICONS = {
   circleX: createMuiIconAdapter(CancelIcon),
   circleCheck: createMuiIconAdapter(CheckCircle),
   circleCheckFilled: createMuiIconAdapter(CheckCircle),
+  circleExclamation: createMuiIconAdapter(ErrorIcon),
   close: createMuiIconAdapter(CloseIcon),
   deleteAlt: createMuiIconAdapter(CancelIcon),
   diamondEmpty: createMuiIconAdapter(CropSquareIcon),
