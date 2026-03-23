@@ -1,11 +1,5 @@
 # Ingester Controller: Design Document
 
-**Branch**: `hkriplani/feat-ingester`
-**Date**: 2026-03-09
-**Status**: Validated in sandbox (see [sandbox validation report](ingester-sandbox-validation.md))
-
----
-
 ## Overview
 
 The **Ingester** is a generic Kubernetes controller that watches all 13 Michelangelo CRDs and durably syncs them into MySQL. Its purpose is to decouple metadata storage from etcd: objects created through the Michelangelo API Server are kept in sync with a relational database, enabling rich querying, long-term retention, and eventual etcd offload for historical/immutable records.
