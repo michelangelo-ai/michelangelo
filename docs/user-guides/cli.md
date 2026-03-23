@@ -357,8 +357,7 @@ spec:
   description: My ML Project
   owner:
     owningTeam: "michelangelo"
-    owners:
-      - craig.marker
+    owners: "sample name"
   tier: 4
   gitRepo: https://github.com/uber/michelangelo
   rootDir: python/michelangelo/cli/sandbox/crds
