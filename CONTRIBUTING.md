@@ -40,7 +40,7 @@ This project and everyone participating in it is governed by our [Code of Conduc
 
 If you want to ask a question about the project, there are a few options available to you.
 
-* Check and read our [Documentation](https://github.com/michelangelo-ai/michelangelo/wiki),
+* Check and read our [Documentation](https://michelangelo-ai.github.io/michelangelo/)
 * Search our existing [Issues](https://github.com/michelangelo-ai/michelangelo/issues) as this may also help you.
 * Join our Community (coming soon) to engage with other users and contributors,
 
@@ -70,7 +70,7 @@ This section guides you through submitting an enhancement or new functionality i
 ### Before Submitting an Enhancement or Feature
 
 * Make sure that you are using the latest version of the project.
-* **Read the [documentation](https://github.com/michelangelo-ai/michelangelo/wiki) carefully** and find out if the functionality you’re proposing is already covered, this may well be through configuration.
+* **Read the [documentation](https://michelangelo-ai.github.io/michelangelo/) carefully** and find out if the functionality you’re proposing is already covered, this may well be through configuration.
 * Perform a [search](https://github.com/michelangelo-ai/michelangelo/issues) to see if the enhancement has already been suggested. If it has, add a comment to the existing issue instead of opening a new one.
 * Consider whether your **idea fits with the scope and aims of the project** and keep in mind that we want features that will be useful to the majority of our users and not just a handful.
 
