@@ -12,7 +12,7 @@ export function CircleExclamationMark({
   const [, theme] = useStyletron();
   const ringColor =
     kind === CircleExclamationMarkKind.ERROR
-      ? theme.colors.borderNegative
+      ? theme.colors.contentNegative
       : theme.colors.contentStateDisabled;
 
   return (
