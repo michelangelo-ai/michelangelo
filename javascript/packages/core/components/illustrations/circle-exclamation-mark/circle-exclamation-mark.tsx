@@ -12,8 +12,8 @@ export function CircleExclamationMark({
   const [, theme] = useStyletron();
   const ringColor =
     kind === CircleExclamationMarkKind.ERROR
-      ? theme.colors.backgroundNegative
-      : theme.colors.contentPrimary;
+      ? theme.colors.borderNegative
+      : theme.colors.contentStateDisabled;
 
   return (
     <svg
