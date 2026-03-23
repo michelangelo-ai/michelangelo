@@ -33,10 +33,7 @@ export function TaskPanel(props: CollapsibleBoxProps & { id?: string; state?: Ta
       },
       ...(state && {
         style: ({ $theme }: { $theme: Theme }) => ({
-          borderColor:
-            $theme.colors[
-              STATE_TO_STYLE_MAP[state].borderColorName as keyof typeof $theme.colors
-            ],
+          borderColor: $theme.colors[STATE_TO_STYLE_MAP[state].borderColorName],
         }),
       }),
     },
