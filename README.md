@@ -8,6 +8,9 @@
 
 Michelangelo-AI is an open-source platform designed to streamline the development, deployment, and monitoring of machine learning models at scale. It offers a comprehensive suite of tools and services that facilitate the entire machine learning lifecycle, from data management to model serving.
 
+:warning: **Beta Notice**
+ This project is currently in beta. APIs and features may evolve, and breaking changes may occur as we continue to improve and stabilize the platform.
+
 **Open Source Initiative**
 
 As part of the **AI Platform Open Source team**, we are extending these capabilities beyond Uber by open-sourcing an **end-to-end lifecycle management system** grounded in our extensive operational expertise. Our goals are to:
