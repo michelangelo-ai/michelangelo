@@ -113,60 +113,6 @@ For more advanced tasks, such as training DL models, setting up customized retra
 
 CanvasFlex provides a highly customized, code driven ML development experience by applying software development principles to ML development. Users can create their own dependencies that can be managed in the UI environment.
 
-## What Can I Build?
-
-Michelangelo supports a wide range of ML use cases. Here are some common examples to inspire your first project:
-
-### Classification & Prediction
-- **Churn Prediction**: Identify customers likely to cancel subscriptions
-  - _Approach_: Train XGBoost model in MA Studio UI with historical user behavior data
-  - _Features_: Usage frequency, support tickets, payment history
-  - _Deployment_: Batch predictions daily, results to business intelligence dashboard
-
-- **Fraud Detection**: Flag suspicious transactions in real-time
-  - _Approach_: Deep learning model via CanvasFlex workflow
-  - _Features_: Transaction patterns, device fingerprints, network analysis
-  - _Deployment_: Online inference server with <100ms latency requirements
-
-### Ranking & Recommendation
-- **Content Recommendation**: Personalize content feeds for users
-  - _Approach_: Multi-stage pipeline with candidate generation → ranking
-  - _Features_: User preferences, content embeddings, interaction history
-  - _Deployment_: Online serving with A/B testing framework
-
-- **Search Ranking**: Improve search result relevance
-  - _Approach_: Learning-to-rank model with custom loss function
-  - _Features_: Query-document similarity, click-through rates, dwell time
-  - _Deployment_: Hybrid batch (model updates) + online (inference)
-
-### Time Series & Forecasting
-- **Demand Forecasting**: Predict product demand for inventory planning
-  - _Approach_: Time series model with external regressors
-  - _Features_: Historical sales, seasonality, promotions, weather
-  - _Deployment_: Scheduled batch predictions (weekly/monthly)
-
-- **Anomaly Detection**: Monitor system metrics for unusual patterns
-  - _Approach_: Unsupervised learning with custom Uniflow pipeline
-  - _Features_: System logs, performance metrics, error rates
-  - _Deployment_: Streaming inference with alerting
-
-### Natural Language Processing
-- **Sentiment Analysis**: Classify customer feedback sentiment
-  - _Approach_: Fine-tuned transformer model (BERT/RoBERTa)
-  - _Features_: Review text, ratings, metadata
-  - _Deployment_: Batch processing for historical data, online for real-time feedback
-
-- **Text Classification**: Categorize support tickets automatically
-  - _Approach_: Multi-label classification with pre-trained embeddings
-  - _Features_: Ticket description, user history, urgency signals
-  - _Deployment_: Online inference integrated with ticketing system
-
-### Computer Vision
-- **Image Classification**: Categorize product images
-  - _Approach_: Transfer learning from pre-trained CNN (ResNet, EfficientNet)
-  - _Features_: Raw images + metadata
-  - _Deployment_: Batch processing for catalog updates
-
 **Not sure where to start?** Check out our [user guides](../user-guides) for end-to-end examples.
 
 ## Architecture
