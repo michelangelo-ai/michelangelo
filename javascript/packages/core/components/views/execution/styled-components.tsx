@@ -1,8 +1,10 @@
 import { styled, Theme } from 'baseui';
 
 import { CollapsibleBox } from '#core/components/box/collapsible-box';
+import { STATE_TO_STYLE_MAP } from '#core/components/views/execution/constants';
 
 import type { CollapsibleBoxProps } from '#core/components/box/types';
+import type { TaskState } from '#core/components/views/execution/types';
 
 export const TaskSeparator = styled('hr', ({ $theme }) => ({
   border: 'none',
@@ -20,8 +22,8 @@ export const TaskContentStack = styled('div', ({ $theme }) => ({
   gap: $theme.sizing.scale800,
 }));
 
-export function TaskPanel(props: CollapsibleBoxProps & { id?: string }) {
-  const { id, defaultExpanded, overrides: userOverrides, ...collapsibleBoxProps } = props;
+export function TaskPanel(props: CollapsibleBoxProps & { id?: string; state?: TaskState }) {
+  const { id, defaultExpanded, state, overrides: userOverrides, ...collapsibleBoxProps } = props;
 
   const taskPanelOverrides = {
     Container: {
@@ -29,6 +31,14 @@ export function TaskPanel(props: CollapsibleBoxProps & { id?: string }) {
         id,
         onClick: (e: MouseEvent) => e.stopPropagation(),
       },
+      ...(state && {
+        style: ({ $theme }: { $theme: Theme }) => ({
+          borderColor:
+            $theme.colors[
+              STATE_TO_STYLE_MAP[state].borderColorName as keyof typeof $theme.colors
+            ],
+        }),
+      }),
     },
     Content: {
       style: ({ $theme }: { $theme: Theme }) => ({
