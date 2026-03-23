@@ -1,11 +1,5 @@
 # Ingester Sandbox Validation Report
 
-**Date**: 2026-03-09
-**Branch**: `hkriplani/feat-ingester`
-**Sandbox Cluster**: k3d `michelangelo-sandbox`
-
----
-
 ## Summary
 
 This document records the end-to-end validation of the Ingester controller in a sandbox environment.
