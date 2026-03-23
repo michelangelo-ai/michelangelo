@@ -33,7 +33,7 @@ These are the frameworks, interfaces, and compute engines provided by Michelange
 
 #### MA Studio (No Code UI)
 
-**MA Studio** is Michelangelo's UI environment. The standard, code-free ML development experience guides users through the different phases of the ML development lifecycle. This environment provides all the essential tools which allow ML developers to build, train, deploy, monitor, and debug your machine learning models in a single unified visual interface to boost your productivity. **_(Currently, Preparing and Training models are available for open source users. More features will be made available soon.)_**
+**MA Studio** is Michelangelo's UI environment. The standard, code-free ML development experience guides users through the different phases of the ML development lifecycle. This environment provides all the essential tools which allow ML developers to build, train, deploy, monitor, and debug your machine learning models in a single unified visual interface to boost your productivity. 
 
 Users can use the no-code dev environment to perform standardized ML tasks without writing a single line of code, including:
 * Prepare data sources for training models or making batch predictions
