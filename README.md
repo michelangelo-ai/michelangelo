@@ -1,3 +1,9 @@
+[![GitHub Release](https://img.shields.io/github/v/release/michelangelo-ai/michelangelo)](https://github.com/michelangelo-ai/michelangelo/releases)
+[![License](https://img.shields.io/github/license/michelangelo-ai/michelangelo)](http://www.apache.org/licenses/LICENSE-2.0)
+[![Build Status](https://github.com/michelangelo-ai/michelangelo/actions/workflows/ci-checks.yml/badge.svg)](https://github.com/michelangelo-ai/michelangelo/actions/workflows/ci-checks.yml)
+[![codecov](https://codecov.io/gh/michelangelo-ai/michelangelo/graph/badge.svg?token=HKJDT0I6CW)](https://codecov.io/gh/michelangelo-ai/michelangelo)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11481/badge)](https://www.bestpractices.dev/projects/11481)
+
 # Michelangelo-AI
 
 Michelangelo-AI is an open-source platform designed to streamline the development, deployment, and monitoring of machine learning models at scale. It offers a comprehensive suite of tools and services that facilitate the entire machine learning lifecycle, from data management to model serving.
@@ -48,12 +54,12 @@ Please refer to the Sandbox Setup section of the documentation.
 ## Contributing
 
 We welcome contributions to Michelangelo-AI!  
-If you're interested in contributing, please read our [Contributing Guidelines](https://github.com/michelangelo-ai/michelangelo/wiki/Contributing-Guidelines) to get started.
+If you're interested in contributing, please read our [Contributing Guidelines](https://github.com/michelangelo-ai/michelangelo/blob/main/CONTRIBUTING.md) to get started.
 
 
 ## License
 
-This project is licensed under [LICENSE](https://github.com/michelangelo-ai/michelangelo/blob/main/LICENSE) before public release.
+This project is licensed under the [Apache 2.0 License](https://github.com/michelangelo-ai/michelangelo/blob/main/LICENSE) before public release.
 
 
 ## Acknowledgments
