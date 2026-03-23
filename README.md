@@ -44,7 +44,7 @@ Here's a basic example of how to train and deploy a model using Michelangelo-AI:
 3. **Model Evaluation**: Evaluate the trained model's performance.
 4. **Model Deployment**: Deploy the model to the production environment.
 
-For detailed instructions and advanced usage, refer to the [Michelangelo-AI Wiki](https://github.com/michelangelo-ai/michelangelo/wiki).
+For detailed instructions and advanced usage, refer to the [Michelangelo-AI Docs](https://michelangelo-ai.github.io/michelangelo/).
 
 ## Build and Test
 
