@@ -7,12 +7,8 @@ global.fetch = vi.fn();
 const mockFetch = fetch as ReturnType<typeof vi.fn>;
 
 // Mock window.location
-const mockLocation = {
-  hostname: 'localhost',
-};
-
 Object.defineProperty(global, 'window', {
-  value: { location: mockLocation },
+  value: { location: { hostname: 'localhost' } },
   writable: true,
 });
 

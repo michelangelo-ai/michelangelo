@@ -9,8 +9,6 @@ import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wr
 import { getFormProviderWrapper } from '#core/test/wrappers/get-form-provider-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
 
-const icons = { plus: Plus, deleteAlt: DeleteAlt };
-
 it('renders numbered group titles when groupLabel is provided', async () => {
   render(
     <ArrayFormGroup rootFieldPath="addresses" groupLabel="Address" minItems={2}>
@@ -18,7 +16,7 @@ it('renders numbered group titles when groupLabel is provided', async () => {
     </ArrayFormGroup>,
     buildWrapper([
       getBaseProviderWrapper(),
-      getIconProviderWrapper({ icons }),
+      getIconProviderWrapper({ icons: { plus: Plus, deleteAlt: DeleteAlt } }),
       getFormProviderWrapper({}),
     ])
   );
@@ -35,7 +33,7 @@ it('renders no title when groupLabel is omitted', async () => {
     </ArrayFormGroup>,
     buildWrapper([
       getBaseProviderWrapper(),
-      getIconProviderWrapper({ icons }),
+      getIconProviderWrapper({ icons: { plus: Plus, deleteAlt: DeleteAlt } }),
       getFormProviderWrapper({}),
     ])
   );
@@ -51,7 +49,7 @@ it('uses groupLabel in add button label', () => {
     </ArrayFormGroup>,
     buildWrapper([
       getBaseProviderWrapper(),
-      getIconProviderWrapper({ icons }),
+      getIconProviderWrapper({ icons: { plus: Plus, deleteAlt: DeleteAlt } }),
       getFormProviderWrapper({}),
     ])
   );
@@ -66,7 +64,7 @@ it('falls back to "Add more" when no groupLabel or addLabel is provided', () => 
     </ArrayFormGroup>,
     buildWrapper([
       getBaseProviderWrapper(),
-      getIconProviderWrapper({ icons }),
+      getIconProviderWrapper({ icons: { plus: Plus, deleteAlt: DeleteAlt } }),
       getFormProviderWrapper({}),
     ])
   );
@@ -81,7 +79,7 @@ it('uses addLabel over the derived groupLabel label', () => {
     </ArrayFormGroup>,
     buildWrapper([
       getBaseProviderWrapper(),
-      getIconProviderWrapper({ icons }),
+      getIconProviderWrapper({ icons: { plus: Plus, deleteAlt: DeleteAlt } }),
       getFormProviderWrapper({}),
     ])
   );
@@ -96,7 +94,7 @@ it('prepopulates groups to meet minItems on mount', async () => {
     </ArrayFormGroup>,
     buildWrapper([
       getBaseProviderWrapper(),
-      getIconProviderWrapper({ icons }),
+      getIconProviderWrapper({ icons: { plus: Plus, deleteAlt: DeleteAlt } }),
       getFormProviderWrapper({}),
     ])
   );
@@ -113,7 +111,7 @@ it('adds a group when the add button is clicked', async () => {
     </ArrayFormGroup>,
     buildWrapper([
       getBaseProviderWrapper(),
-      getIconProviderWrapper({ icons }),
+      getIconProviderWrapper({ icons: { plus: Plus, deleteAlt: DeleteAlt } }),
       getFormProviderWrapper({}),
     ])
   );
@@ -132,7 +130,7 @@ it('hides remove when at minItems', async () => {
     </ArrayFormGroup>,
     buildWrapper([
       getBaseProviderWrapper(),
-      getIconProviderWrapper({ icons }),
+      getIconProviderWrapper({ icons: { plus: Plus, deleteAlt: DeleteAlt } }),
       getFormProviderWrapper({}),
     ])
   );
@@ -148,7 +146,7 @@ it('hides add and remove buttons when readOnly', async () => {
     </ArrayFormGroup>,
     buildWrapper([
       getBaseProviderWrapper(),
-      getIconProviderWrapper({ icons }),
+      getIconProviderWrapper({ icons: { plus: Plus, deleteAlt: DeleteAlt } }),
       getFormProviderWrapper({}),
     ])
   );
@@ -167,7 +165,7 @@ it('typing in the remaining group after removing the first does not corrupt valu
     </ArrayFormGroup>,
     buildWrapper([
       getBaseProviderWrapper(),
-      getIconProviderWrapper({ icons }),
+      getIconProviderWrapper({ icons: { plus: Plus, deleteAlt: DeleteAlt } }),
       getFormProviderWrapper({}),
     ])
   );

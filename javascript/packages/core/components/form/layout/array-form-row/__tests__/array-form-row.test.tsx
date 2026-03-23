@@ -9,8 +9,6 @@ import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wr
 import { getFormProviderWrapper } from '#core/test/wrappers/get-form-provider-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
 
-const icons = { plus: Plus, deleteAlt: DeleteAlt };
-
 it('renders children for each initial item', () => {
   render(
     <ArrayFormRow rootFieldPath="tags" minItems={2}>
@@ -18,7 +16,7 @@ it('renders children for each initial item', () => {
     </ArrayFormRow>,
     buildWrapper([
       getBaseProviderWrapper(),
-      getIconProviderWrapper({ icons }),
+      getIconProviderWrapper({ icons: { plus: Plus, deleteAlt: DeleteAlt } }),
       getFormProviderWrapper({}),
     ])
   );
@@ -33,7 +31,7 @@ it('prepopulates rows to meet minItems on mount', async () => {
     </ArrayFormRow>,
     buildWrapper([
       getBaseProviderWrapper(),
-      getIconProviderWrapper({ icons }),
+      getIconProviderWrapper({ icons: { plus: Plus, deleteAlt: DeleteAlt } }),
       getFormProviderWrapper({}),
     ])
   );
@@ -50,7 +48,7 @@ it('adds a row when "Add more" is clicked', async () => {
     </ArrayFormRow>,
     buildWrapper([
       getBaseProviderWrapper(),
-      getIconProviderWrapper({ icons }),
+      getIconProviderWrapper({ icons: { plus: Plus, deleteAlt: DeleteAlt } }),
       getFormProviderWrapper({}),
     ])
   );
@@ -68,7 +66,7 @@ it('hides remove button when at minItems', async () => {
     </ArrayFormRow>,
     buildWrapper([
       getBaseProviderWrapper(),
-      getIconProviderWrapper({ icons }),
+      getIconProviderWrapper({ icons: { plus: Plus, deleteAlt: DeleteAlt } }),
       getFormProviderWrapper({}),
     ])
   );
@@ -86,7 +84,7 @@ it('removes a row when remove is clicked', async () => {
     </ArrayFormRow>,
     buildWrapper([
       getBaseProviderWrapper(),
-      getIconProviderWrapper({ icons }),
+      getIconProviderWrapper({ icons: { plus: Plus, deleteAlt: DeleteAlt } }),
       getFormProviderWrapper({}),
     ])
   );
@@ -110,7 +108,7 @@ it('uses addLabel for the add button', () => {
     </ArrayFormRow>,
     buildWrapper([
       getBaseProviderWrapper(),
-      getIconProviderWrapper({ icons }),
+      getIconProviderWrapper({ icons: { plus: Plus, deleteAlt: DeleteAlt } }),
       getFormProviderWrapper({}),
     ])
   );
@@ -125,7 +123,7 @@ it('hides add and remove buttons when readOnly', async () => {
     </ArrayFormRow>,
     buildWrapper([
       getBaseProviderWrapper(),
-      getIconProviderWrapper({ icons }),
+      getIconProviderWrapper({ icons: { plus: Plus, deleteAlt: DeleteAlt } }),
       getFormProviderWrapper({}),
     ])
   );

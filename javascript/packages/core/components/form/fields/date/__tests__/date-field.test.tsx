@@ -7,21 +7,21 @@ import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wr
 import { getFormProviderWrapper } from '#core/test/wrappers/get-form-provider-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
 
-const wrapper = buildWrapper([
-  getBaseProviderWrapper(),
-  getIconProviderWrapper(),
-  getFormProviderWrapper({}),
-]);
-
 describe('DateField', () => {
   it('renders with label', () => {
-    render(<DateField name="date" label="Start Date" />, wrapper);
+    render(
+      <DateField name="date" label="Start Date" />,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
+    );
 
     expect(screen.getByText('Start Date')).toBeInTheDocument();
   });
 
   it('shows required indicator when required', () => {
-    render(<DateField name="date" label="Start Date" required />, wrapper);
+    render(
+      <DateField name="date" label="Start Date" required />,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
+    );
 
     expect(
       screen.getAllByText((_, element) => element?.textContent === 'Start Date*').length
@@ -29,7 +29,10 @@ describe('DateField', () => {
   });
 
   it('displays caption text', () => {
-    render(<DateField name="date" label="Start Date" caption="Select a start date" />, wrapper);
+    render(
+      <DateField name="date" label="Start Date" caption="Select a start date" />,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
+    );
 
     expect(screen.getByText('Select a start date')).toBeInTheDocument();
   });
@@ -37,26 +40,35 @@ describe('DateField', () => {
   it('displays help tooltip when description is provided', () => {
     render(
       <DateField name="date" label="Start Date" description="When the pipeline should start" />,
-      wrapper
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
     );
 
     expect(screen.getByRole('img', { name: 'help' })).toBeInTheDocument();
   });
 
   it('renders with placeholder', () => {
-    render(<DateField name="date" label="Start Date" />, wrapper);
+    render(
+      <DateField name="date" label="Start Date" />,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
+    );
 
     expect(screen.getByPlaceholderText('MM/dd/yyyy')).toBeInTheDocument();
   });
 
   it('hides placeholder when disabled', () => {
-    render(<DateField name="date" label="Start Date" disabled />, wrapper);
+    render(
+      <DateField name="date" label="Start Date" disabled />,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
+    );
 
     expect(screen.queryByPlaceholderText('MM/dd/yyyy')).not.toBeInTheDocument();
   });
 
   it('hides placeholder when readOnly', () => {
-    render(<DateField name="date" label="Start Date" readOnly />, wrapper);
+    render(
+      <DateField name="date" label="Start Date" readOnly />,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
+    );
 
     expect(screen.queryByPlaceholderText('MM/dd/yyyy')).not.toBeInTheDocument();
   });
@@ -89,7 +101,10 @@ describe('DateField', () => {
   });
 
   it('applies readOnly overrides when readOnly is true', () => {
-    render(<DateField name="date" label="Start Date" readOnly />, wrapper);
+    render(
+      <DateField name="date" label="Start Date" readOnly />,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
+    );
 
     expect(screen.getByRole('textbox')).toHaveAttribute('readonly');
   });

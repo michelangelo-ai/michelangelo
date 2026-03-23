@@ -7,22 +7,21 @@ import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wr
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
 import { ConfirmDialog } from '../confirm-dialog';
 
-const wrapper = buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()]);
-
-const defaultProps = {
-  isOpen: true,
-  onDismiss: vi.fn(),
-  heading: 'Confirm modal title',
-  onConfirm: vi.fn(),
-  confirmLabel: 'Confirm button text',
-};
-
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 it('renders dialog with heading and buttons', async () => {
-  render(<ConfirmDialog {...defaultProps} />, wrapper);
+  render(
+    <ConfirmDialog
+      isOpen={true}
+      onDismiss={vi.fn()}
+      heading="Confirm modal title"
+      onConfirm={vi.fn()}
+      confirmLabel="Confirm button text"
+    />,
+    buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+  );
 
   await screen.findByRole('dialog', { name: 'Confirm modal title' });
   expect(screen.getByRole('button', { name: 'Confirm button text' })).toBeInTheDocument();
@@ -31,10 +30,16 @@ it('renders dialog with heading and buttons', async () => {
 
 it('renders body content as children', async () => {
   render(
-    <ConfirmDialog {...defaultProps}>
+    <ConfirmDialog
+      isOpen={true}
+      onDismiss={vi.fn()}
+      heading="Confirm modal title"
+      onConfirm={vi.fn()}
+      confirmLabel="Confirm button text"
+    >
       <p>Confirm modal body</p>
     </ConfirmDialog>,
-    wrapper
+    buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
   );
 
   await screen.findByRole('dialog', { name: 'Confirm modal title' });
@@ -44,7 +49,7 @@ it('renders body content as children', async () => {
 it('renders with default confirm label when confirmLabel is omitted', async () => {
   render(
     <ConfirmDialog isOpen={true} onDismiss={vi.fn()} heading="Minimal" onConfirm={vi.fn()} />,
-    wrapper
+    buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
   );
 
   await screen.findByRole('dialog', { name: 'Minimal' });
@@ -52,7 +57,16 @@ it('renders with default confirm label when confirmLabel is omitted', async () =
 });
 
 it('does not render when closed', async () => {
-  render(<ConfirmDialog {...defaultProps} isOpen={false} />, wrapper);
+  render(
+    <ConfirmDialog
+      isOpen={false}
+      onDismiss={vi.fn()}
+      heading="Confirm modal title"
+      onConfirm={vi.fn()}
+      confirmLabel="Confirm button text"
+    />,
+    buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+  );
 
   try {
     await screen.findByRole('dialog', {}, { timeout: 100 });
@@ -67,7 +81,16 @@ it('calls onConfirm and auto-closes on success', async () => {
   const onConfirm = vi.fn().mockResolvedValue(undefined);
   const onDismiss = vi.fn();
 
-  render(<ConfirmDialog {...defaultProps} onConfirm={onConfirm} onDismiss={onDismiss} />, wrapper);
+  render(
+    <ConfirmDialog
+      isOpen={true}
+      onDismiss={onDismiss}
+      heading="Confirm modal title"
+      onConfirm={onConfirm}
+      confirmLabel="Confirm button text"
+    />,
+    buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+  );
 
   await user.click(screen.getByRole('button', { name: 'Confirm button text' }));
 
@@ -79,7 +102,16 @@ it('calls onDismiss when cancel is clicked', async () => {
   const user = userEvent.setup();
   const onDismiss = vi.fn();
 
-  render(<ConfirmDialog {...defaultProps} onDismiss={onDismiss} />, wrapper);
+  render(
+    <ConfirmDialog
+      isOpen={true}
+      onDismiss={onDismiss}
+      heading="Confirm modal title"
+      onConfirm={vi.fn()}
+      confirmLabel="Confirm button text"
+    />,
+    buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+  );
 
   await user.click(screen.getByRole('button', { name: 'Cancel' }));
   expect(onDismiss).toHaveBeenCalledTimes(1);
@@ -90,7 +122,16 @@ it('shows error message and stays open when onConfirm throws', async () => {
   const onConfirm = vi.fn().mockRejectedValue(new Error('Delete failed'));
   const onDismiss = vi.fn();
 
-  render(<ConfirmDialog {...defaultProps} onConfirm={onConfirm} onDismiss={onDismiss} />, wrapper);
+  render(
+    <ConfirmDialog
+      isOpen={true}
+      onDismiss={onDismiss}
+      heading="Confirm modal title"
+      onConfirm={onConfirm}
+      confirmLabel="Confirm button text"
+    />,
+    buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+  );
 
   await user.click(screen.getByRole('button', { name: 'Confirm button text' }));
 
@@ -103,7 +144,16 @@ it('re-enables confirm button after error', async () => {
   const user = userEvent.setup();
   const onConfirm = vi.fn().mockRejectedValue(new Error('Failed'));
 
-  render(<ConfirmDialog {...defaultProps} onConfirm={onConfirm} />, wrapper);
+  render(
+    <ConfirmDialog
+      isOpen={true}
+      onDismiss={vi.fn()}
+      heading="Confirm modal title"
+      onConfirm={onConfirm}
+      confirmLabel="Confirm button text"
+    />,
+    buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+  );
 
   await user.click(screen.getByRole('button', { name: 'Confirm button text' }));
   await screen.findByText('Failed');
@@ -121,7 +171,16 @@ it('disables cancel button while loading', async () => {
       })
   );
 
-  render(<ConfirmDialog {...defaultProps} onConfirm={onConfirm} />, wrapper);
+  render(
+    <ConfirmDialog
+      isOpen={true}
+      onDismiss={vi.fn()}
+      heading="Confirm modal title"
+      onConfirm={onConfirm}
+      confirmLabel="Confirm button text"
+    />,
+    buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+  );
 
   await user.click(screen.getByRole('button', { name: 'Confirm button text' }));
 
@@ -132,7 +191,17 @@ it('disables cancel button while loading', async () => {
 });
 
 it('applies confirmButtonColor as inline background on the confirm button', async () => {
-  render(<ConfirmDialog {...defaultProps} destructive />, wrapper);
+  render(
+    <ConfirmDialog
+      isOpen={true}
+      onDismiss={vi.fn()}
+      heading="Confirm modal title"
+      onConfirm={vi.fn()}
+      confirmLabel="Confirm button text"
+      destructive
+    />,
+    buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+  );
 
   await screen.findByRole('dialog', { name: 'Confirm modal title' });
   expect(screen.getByRole('button', { name: 'Confirm button text' })).toHaveStyle({
@@ -146,8 +215,14 @@ it('clears error and resets state when dialog is reopened', async () => {
   const onDismiss = vi.fn();
 
   const { rerender } = render(
-    <ConfirmDialog {...defaultProps} onConfirm={onConfirm} onDismiss={onDismiss} />,
-    wrapper
+    <ConfirmDialog
+      isOpen={true}
+      onDismiss={onDismiss}
+      heading="Confirm modal title"
+      onConfirm={onConfirm}
+      confirmLabel="Confirm button text"
+    />,
+    buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
   );
 
   await user.click(screen.getByRole('button', { name: 'Confirm button text' }));
@@ -155,10 +230,22 @@ it('clears error and resets state when dialog is reopened', async () => {
 
   // Close and reopen
   rerender(
-    <ConfirmDialog {...defaultProps} isOpen={false} onConfirm={onConfirm} onDismiss={onDismiss} />
+    <ConfirmDialog
+      isOpen={false}
+      onDismiss={onDismiss}
+      heading="Confirm modal title"
+      onConfirm={onConfirm}
+      confirmLabel="Confirm button text"
+    />
   );
   rerender(
-    <ConfirmDialog {...defaultProps} isOpen={true} onConfirm={onConfirm} onDismiss={onDismiss} />
+    <ConfirmDialog
+      isOpen={true}
+      onDismiss={onDismiss}
+      heading="Confirm modal title"
+      onConfirm={onConfirm}
+      confirmLabel="Confirm button text"
+    />
   );
 
   await screen.findByRole('dialog', { name: 'Confirm modal title' });

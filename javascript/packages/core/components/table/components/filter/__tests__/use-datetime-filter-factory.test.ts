@@ -4,18 +4,17 @@ import { createMockRow } from '../__fixtures__/mock-row';
 import { DatetimeFilterValue } from '../datetime/types';
 import { useDatetimeFilterFactory } from '../datetime/use-datetime-filter-factory';
 
-const MOCK_COLUMN = {
-  id: 'createdAt',
-  label: 'Created At',
-  accessor: 'createdAt',
-  type: 'DATE',
-};
+// TODO(#977): — column param is partially unused in filter factories.
+// isFilterInactive, getActiveFilter, and buildTableFilterFn do not depend on
+// column identity; only getFilterSummary reads column.label. The factory API
+// should make this explicit (e.g. accept label separately, or make column optional).
 
 describe('Datetime Filter', () => {
   describe('Empty filter behavior', () => {
     it('shows all rows when no range or selection provided', () => {
       const { result } = renderHook(() => useDatetimeFilterFactory());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column is structurally unused in isFilterInactive
+      const filterHook = result.current({});
 
       const emptyFilter: DatetimeFilterValue = {
         operation: 'RANGE_DATETIME',
@@ -30,7 +29,8 @@ describe('Datetime Filter', () => {
 
     it('considers filter active when range is provided', () => {
       const { result } = renderHook(() => useDatetimeFilterFactory());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column is structurally unused in isFilterInactive
+      const filterHook = result.current({});
 
       const rangeFilter: DatetimeFilterValue = {
         operation: 'RANGE_DATETIME',
@@ -45,7 +45,8 @@ describe('Datetime Filter', () => {
 
     it('considers filter active when selection is provided', () => {
       const { result } = renderHook(() => useDatetimeFilterFactory());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column is structurally unused in isFilterInactive
+      const filterHook = result.current({});
 
       const selectionFilter: DatetimeFilterValue = {
         operation: 'RANGE_DATETIME',
@@ -62,7 +63,8 @@ describe('Datetime Filter', () => {
   describe('Filter Display Functions', () => {
     it('returns empty string for inactive filters', () => {
       const { result } = renderHook(() => useDatetimeFilterFactory());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column is structurally unused when filter is inactive
+      const filterHook = result.current({});
 
       const inactiveFilter: DatetimeFilterValue = {
         operation: 'RANGE_DATETIME',
@@ -78,7 +80,11 @@ describe('Datetime Filter', () => {
 
     it('returns description for active filters', () => {
       const { result } = renderHook(() => useDatetimeFilterFactory());
-      const filterHook = result.current(MOCK_COLUMN);
+      const filterHook = result.current({
+        id: 'createdAt',
+        label: 'Created At',
+        accessor: 'createdAt',
+      });
 
       const activeFilter: DatetimeFilterValue = {
         operation: 'RANGE_DATETIME',
@@ -93,9 +99,8 @@ describe('Datetime Filter', () => {
     });
 
     it('handles column without label in filter summary', () => {
-      const columnWithoutLabel = { ...MOCK_COLUMN, label: undefined };
       const { result } = renderHook(() => useDatetimeFilterFactory());
-      const filterHook = result.current(columnWithoutLabel);
+      const filterHook = result.current({ id: 'createdAt', accessor: 'createdAt' });
 
       const activeFilter: DatetimeFilterValue = {
         operation: 'RANGE_DATETIME',
@@ -112,7 +117,8 @@ describe('Datetime Filter', () => {
   describe('Filter Function Behavior', () => {
     it('returns true for inactive filters (show all rows)', () => {
       const { result } = renderHook(() => useDatetimeFilterFactory<{ createdAt: number }>());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column is structurally unused when filter is inactive
+      const filterHook = result.current({});
       const filterFn = filterHook.buildTableFilterFn();
 
       const mockRow = createMockRow({ createdAt: 1672531200 }); // 2023-01-01
@@ -130,7 +136,8 @@ describe('Datetime Filter', () => {
 
     it('filters rows based on date range (epoch seconds)', () => {
       const { result } = renderHook(() => useDatetimeFilterFactory<{ createdAt: number }>());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column.id falls back to columnId param in getCellValueForColumn
+      const filterHook = result.current({});
       const filterFn = filterHook.buildTableFilterFn();
 
       const jan1Row = createMockRow({ createdAt: 1672531200 }); // 2023-01-01
@@ -152,7 +159,8 @@ describe('Datetime Filter', () => {
 
     it('filters rows based on date range (string epoch seconds)', () => {
       const { result } = renderHook(() => useDatetimeFilterFactory<{ createdAt: string }>());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column.id falls back to columnId param in getCellValueForColumn
+      const filterHook = result.current({});
       const filterFn = filterHook.buildTableFilterFn();
 
       const validRow = createMockRow({ createdAt: '1672531200' }); // 2023-01-01
@@ -172,7 +180,8 @@ describe('Datetime Filter', () => {
 
     it('should not filter rows with null/undefined cell values', () => {
       const { result } = renderHook(() => useDatetimeFilterFactory());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column.id falls back to columnId param in getCellValueForColumn
+      const filterHook = result.current({});
       const filterFn = filterHook.buildTableFilterFn();
 
       const nullRow = createMockRow({ createdAt: null });
@@ -194,7 +203,8 @@ describe('Datetime Filter', () => {
 
     it('should not filter rows with invalid date values', () => {
       const { result } = renderHook(() => useDatetimeFilterFactory<{ createdAt: string }>());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column.id falls back to columnId param in getCellValueForColumn
+      const filterHook = result.current({});
       const filterFn = filterHook.buildTableFilterFn();
 
       const invalidDateRow = createMockRow({ createdAt: 'invalid-number' });
@@ -212,7 +222,8 @@ describe('Datetime Filter', () => {
 
     it('handles string dates stored in localStorage', () => {
       const { result } = renderHook(() => useDatetimeFilterFactory<{ createdAt: number }>());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column.id falls back to columnId param in getCellValueForColumn
+      const filterHook = result.current({});
       const filterFn = filterHook.buildTableFilterFn();
 
       const validRow = createMockRow({ createdAt: 1672531200 }); // 2023-01-01
@@ -233,7 +244,8 @@ describe('Datetime Filter', () => {
       // When start or end date is missing, the filter returns true for all rows
       // This is defensive behavior to avoid hiding data due to malformed filters
       const { result } = renderHook(() => useDatetimeFilterFactory<{ createdAt: number }>());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column is structurally unused when filter range is incomplete
+      const filterHook = result.current({});
       const filterFn = filterHook.buildTableFilterFn();
 
       const mockRow = createMockRow({ createdAt: 1672531200 }); // 2023-01-01
@@ -251,7 +263,8 @@ describe('Datetime Filter', () => {
 
     it('has autoRemove property set to isFilterInactive function', () => {
       const { result } = renderHook(() => useDatetimeFilterFactory());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column is structurally unused in isFilterInactive
+      const filterHook = result.current({});
       const filterFn = filterHook.buildTableFilterFn();
 
       const inactiveFilter: DatetimeFilterValue = {

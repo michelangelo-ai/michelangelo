@@ -7,15 +7,12 @@ import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wr
 import { getFormProviderWrapper } from '#core/test/wrappers/get-form-provider-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
 
-const wrapper = buildWrapper([
-  getBaseProviderWrapper(),
-  getIconProviderWrapper(),
-  getFormProviderWrapper({}),
-]);
-
 describe('NumberField', () => {
   it('renders with label', () => {
-    render(<NumberField name="count" label="Count" />, wrapper);
+    render(
+      <NumberField name="count" label="Count" />,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
+    );
 
     expect(screen.getByText('Count')).toBeInTheDocument();
     expect(screen.getByRole('spinbutton')).toBeInTheDocument();
@@ -59,7 +56,10 @@ describe('NumberField', () => {
   });
 
   it('is disabled when disabled prop is true', () => {
-    render(<NumberField name="count" label="Count" disabled />, wrapper);
+    render(
+      <NumberField name="count" label="Count" disabled />,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
+    );
 
     expect(screen.getByRole('spinbutton')).toBeDisabled();
   });
@@ -95,7 +95,10 @@ describe('NumberField', () => {
   });
 
   it('displays caption text', () => {
-    render(<NumberField name="count" label="Count" caption="Enter a number" />, wrapper);
+    render(
+      <NumberField name="count" label="Count" caption="Enter a number" />,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
+    );
 
     expect(screen.getByText('Enter a number')).toBeInTheDocument();
   });
