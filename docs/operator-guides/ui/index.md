@@ -35,4 +35,4 @@ The Michelangelo UI is built with React and communicates with the Michelangelo A
 - **Containerized deployment**: Complete UI deployed to Kubernetes clusters
 - **Component integration**: Individual React components embedded in existing applications
 
-For internal architecture documentation (providers, hooks, types, and component patterns), see the [UI Developer Reference](../../dev/ui/index.md).
+For internal architecture documentation (providers, hooks, types, and component patterns), see the [UI Developer Reference](../../contributing/dev/ui/index.md).

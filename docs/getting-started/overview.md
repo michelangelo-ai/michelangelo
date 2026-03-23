@@ -303,3 +303,11 @@ A: Yes, with proper configuration. Michelangelo supports:
 ---
 
 **Still have questions?** Check out our [documentation](../), join the [community forum](https://github.com/michelangelo-ai/michelangelo/discussions), or explore the [user guides](../user-guides).
+
+---
+
+## What's next?
+
+- **Ready to build?** [Set up your local sandbox](./sandbox-setup) and follow the [Getting Started with Pipelines](../user-guides/ml-pipelines/getting-started) guide (~30 min)
+- **Want to understand the concepts first?** Read [Core Concepts and Key Terms](./core-concepts-and-key-terms)
+- **Looking for examples?** Browse [end-to-end tutorials](../user-guides#learning-by-examples) covering XGBoost, BERT, GPT fine-tuning, and recommendation systems

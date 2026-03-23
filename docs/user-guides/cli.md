@@ -45,7 +45,7 @@ All resource types support `get`, `apply`, and `delete` (see [supported resource
    poetry install
    ```
 
-3. **Start the sandbox environment.** Follow the [Sandbox Setup Guide](../setup-guide/sandbox-setup.md) to install the required software (Docker, kubectl, k3d) and create a local development environment:
+3. **Start the sandbox environment.** Follow the [Sandbox Setup Guide](../getting-started/sandbox-setup.md) to install the required software (Docker, kubectl, k3d) and create a local development environment:
 
    ```bash
    ma sandbox create
@@ -315,7 +315,7 @@ ma trigger_run kill --namespace=ma-dev-test --name=training-pipeline-cron-trigge
 
 ## Sandbox commands
 
-The `ma sandbox` commands manage a local K3d development environment. For prerequisites, setup walkthrough, and detailed options, see the [Sandbox Setup Guide](../setup-guide/sandbox-setup.md).
+The `ma sandbox` commands manage a local K3d development environment. For prerequisites, setup walkthrough, and detailed options, see the [Sandbox Setup Guide](../getting-started/sandbox-setup.md).
 
 | Command | Description |
 |---------|-------------|

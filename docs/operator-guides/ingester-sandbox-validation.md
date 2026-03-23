@@ -29,7 +29,7 @@ It covers sandbox creation, MySQL schema verification, CR creation, MySQL sync v
 | Deployment | ✅ | ✅ | ✅ | ✅ |
 | SparkJob | ✅ | ❌ | N/A | N/A |
 
-> **SparkJob note**: The SparkJob business controller (`spark/job/client/client.go:185`) has a pre-existing nil pointer panic that causes a double-panic crash of the entire controllermgr. This is unrelated to the ingester and prevents SparkJob from being synced. See [Known Issues](#known-issues).
+> **SparkJob note**: The SparkJob business controller (`spark/job/client/client.go:185`) has a pre-existing nil pointer panic that causes a double-panic crash of the entire controllermgr. This is unrelated to the ingester and prevents SparkJob from being synced. See [Known Issues](#known-issues-found-during-validation).
 
 ---
 

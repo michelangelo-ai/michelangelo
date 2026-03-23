@@ -11,7 +11,7 @@ Ensure you have the following installed before building:
 - **[Python](https://www.python.org/downloads/)** — version `3.9+`
 - **[Poetry](https://python-poetry.org/docs/#installation)** — for Python dependency management
 
-For the full sandbox environment (Docker, kubectl, k3d, GitHub token), see the [Sandbox Setup Guide](../setup-guide/sandbox-setup.md).
+For the full sandbox environment (Docker, kubectl, k3d, GitHub token), see the [Sandbox Setup Guide](../getting-started/sandbox-setup.md).
 
 ### macOS: Set C++ Compiler for Bazel
 
@@ -128,8 +128,8 @@ cd $REPO_ROOT/python
 poetry run ma sandbox create
 ```
 
-For more detail, see the [Sandbox Setup Guide](../setup-guide/sandbox-setup.md).
+For more detail, see the [Sandbox Setup Guide](../getting-started/sandbox-setup.md).
 
 ## IDE Setup
 
-For IDE configuration (VS Code, Cursor, GoLand), see the [IDE and Bazel Setup Guide](../setup-guide/setup-ide-and-bazel.md).
+For IDE configuration (VS Code, Cursor, GoLand), see the [IDE and Bazel Setup Guide](../getting-started/setup-ide-and-bazel.md).

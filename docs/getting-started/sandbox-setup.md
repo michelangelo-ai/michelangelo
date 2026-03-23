@@ -410,3 +410,11 @@ Debugging workflow running in the cluster
     uf-ray-td7pb-head-svc    ClusterIP   None            <none>        10001/TCP,8265/TCP,8080/TCP,6379/TCP,8000/TCP   62s
     ```
     3. Run `kubectl port-forward svc/<service name> 8265:8265 -n default`
+
+---
+
+## What's next?
+
+- **Build your first pipeline** — Follow [Getting Started with ML Pipelines](../user-guides/ml-pipelines/getting-started) to create a training workflow (~30 min)
+- **Explore example projects** — Try [Boston Housing XGBoost](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/boston_housing_xgb), [BERT Text Classification](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/bert_cola), or [GPT Fine-tuning](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/gpt_oss_20b_finetune)
+- **Learn the CLI** — See the [CLI Reference](../user-guides/cli) for managing pipelines and projects
