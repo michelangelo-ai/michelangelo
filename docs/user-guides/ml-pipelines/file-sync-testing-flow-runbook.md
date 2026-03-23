@@ -87,3 +87,13 @@ ma pipeline dev_run --file-sync --file <path_to_pipeline.yaml>
 2. **Run with file sync** \- your changes are tested remotely in 2-5 minutes  
 3. **Iterate quickly** \- repeat steps 1-2 until satisfied  
 4. **Commit and rebuild image** only when ready for production
+
+## Troubleshooting
+1. No fsspec credentials, once kicking off remote run, it failed with below error:
+```2026-03-23 09:14:44,722 |    ERROR | michelangelo.uniflow.core.file_sync      | Failed to upload tarball: Unable to locate credentials```
+setup credentials before starting remote run workflow
+```
+export AWS_ACCESS_KEY_ID=minioadmin
+export AWS_SECRET_ACCESS_KEY=minioadmin
+export AWS_ENDPOINT_URL=http://localhost:9091
+```
