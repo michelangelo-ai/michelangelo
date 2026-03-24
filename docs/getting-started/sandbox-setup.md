@@ -9,6 +9,7 @@ This guide assumes you have the following software installed and configured on y
 * [Docker](https://docs.docker.com/get-started/get-docker)
 * [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl)
 * [k3d](https://k3d.io)
+* [Helm](https://helm.sh/docs/intro/install/)
 
 #### 1. Docker
 
@@ -57,6 +58,18 @@ brew install kubectl
 ```bash
 brew install k3d
 ```
+
+#### 4. Helm
+
+[Helm](https://helm.sh/) is the package manager for Kubernetes. The sandbox uses Helm to install cluster components such as the KubeRay operator, Spark operator, and Temporal.
+
+**Installation:**
+
+```bash
+brew install helm
+```
+
+For other installation methods, see the [official Helm install guide](https://helm.sh/docs/intro/install/).
 
 ### GitHub Personal Access Token
 
