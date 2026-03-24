@@ -52,14 +52,58 @@ func (c Config) GetControllerConfig(kind string) Config {
 	}
 }
 
-// Reconciler reconciles a generic CRD object with metadata storage
+// Option configures a Reconciler. Use the WithXxx functions below.
+type Option func(*Reconciler)
+
+// WithConfig sets controller configuration (concurrency limits and requeue period).
+// If not provided, NewReconciler uses conservative defaults:
+//   - 1 concurrent reconcile per controller
+//   - 30s requeue period (defaultRequeuePeriod)
+//
+// Callers that need per-kind overrides should use Config.GetControllerConfig before passing.
+func WithConfig(cfg Config) Option {
+	return func(r *Reconciler) { r.config = cfg }
+}
+
+// Reconciler reconciles a generic CRD object with metadata storage.
+//
+// All fields are unexported. Exported struct fields become permanent public API surface —
+// external packages can depend on them directly, making future removal a breaking change.
+// Use NewReconciler() to construct instances.
 type Reconciler struct {
 	client.Client
-	Log             logr.Logger
-	Scheme          *runtime.Scheme
-	TargetKind      client.Object
-	MetadataStorage storage.MetadataStorage
-	Config          Config
+	log             logr.Logger
+	scheme          *runtime.Scheme
+	targetKind      client.Object
+	metadataStorage storage.MetadataStorage
+	config          Config
+}
+
+// NewReconciler creates a new Reconciler for the given CRD target kind.
+//
+// The c, log, scheme, targetKind, and metadataStorage parameters are required.
+// Use WithConfig to set concurrency and requeue configuration; the default is
+// 1 concurrent reconcile and a 30s requeue period.
+func NewReconciler(
+	c client.Client,
+	log logr.Logger,
+	scheme *runtime.Scheme,
+	targetKind client.Object,
+	metadataStorage storage.MetadataStorage,
+	opts ...Option,
+) *Reconciler {
+	r := &Reconciler{
+		Client:          c,
+		log:             log,
+		scheme:          scheme,
+		targetKind:      targetKind,
+		metadataStorage: metadataStorage,
+		config:          Config{ConcurrentReconciles: 1, RequeuePeriod: defaultRequeuePeriod},
+	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
 }
 
 // Reconcile is the main reconciliation loop
@@ -67,11 +111,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	log := r.Log.WithValues("namespace", req.Namespace, "name", req.Name)
+	log := r.log.WithValues("namespace", req.Namespace, "name", req.Name)
 	log.Info("Reconciling object")
 
 	// Create a new instance of the target kind
-	object := r.TargetKind.DeepCopyObject().(client.Object)
+	object := r.targetKind.DeepCopyObject().(client.Object)
 
 	// Fetch the object from K8s
 	if err := r.Get(ctx, req.NamespacedName, object); err != nil {
@@ -113,7 +157,7 @@ func (r *Reconciler) handleSync(ctx context.Context, log logr.Logger, object cli
 	}
 
 	// Upsert to metadata storage (includes all fields - no blob separation)
-	if err := r.MetadataStorage.Upsert(ctx, object, false, indexedFields); err != nil {
+	if err := r.metadataStorage.Upsert(ctx, object, false, indexedFields); err != nil {
 		log.Error(err, "Failed to upsert object to metadata storage")
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
@@ -135,13 +179,18 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
 	log.Info("Deleting from metadata storage")
 
 	// Delete from metadata storage
-	gvk := object.GetObjectKind().GroupVersionKind()
+	gvks, _, err := r.scheme.ObjectKinds(object)
+	if err != nil || len(gvks) == 0 {
+		return ctrl.Result{}, fmt.Errorf("failed to get GVK for %T: %w", object, err)
+	}
+	// TODO(#943): gvks[0] may be non-deterministic when a type is registered under multiple
+	// versions. See issue for planned multi-GVK selection strategy.
 	typeMeta := &metav1.TypeMeta{
-		Kind:       gvk.Kind,
-		APIVersion: gvk.GroupVersion().String(),
+		Kind:       gvks[0].Kind,
+		APIVersion: gvks[0].GroupVersion().String(),
 	}
 
-	if err := r.MetadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil {
+	if err := r.metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil {
 		log.Error(err, "Failed to delete from metadata storage")
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
@@ -162,13 +211,18 @@ func (r *Reconciler) handleDeletionAnnotation(ctx context.Context, log logr.Logg
 	log.Info("Object marked for deletion via annotation")
 
 	// Delete from metadata storage first
-	gvk := object.GetObjectKind().GroupVersionKind()
+	gvks, _, err := r.scheme.ObjectKinds(object)
+	if err != nil || len(gvks) == 0 {
+		return ctrl.Result{}, fmt.Errorf("failed to get GVK for %T: %w", object, err)
+	}
+	// TODO(#943): gvks[0] may be non-deterministic when a type is registered under multiple
+	// versions. See issue for planned multi-GVK selection strategy.
 	typeMeta := &metav1.TypeMeta{
-		Kind:       gvk.Kind,
-		APIVersion: gvk.GroupVersion().String(),
+		Kind:       gvks[0].Kind,
+		APIVersion: gvks[0].GroupVersion().String(),
 	}
 
-	if err := r.MetadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil {
+	if err := r.metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil {
 		log.Error(err, "Failed to delete from metadata storage")
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
@@ -200,7 +254,7 @@ func (r *Reconciler) handleImmutableObject(ctx context.Context, log logr.Logger,
 		indexedFields = indexedObj.GetIndexedKeyValuePairs()
 	}
 
-	if err := r.MetadataStorage.Upsert(ctx, object, false, indexedFields); err != nil {
+	if err := r.metadataStorage.Upsert(ctx, object, false, indexedFields); err != nil {
 		log.Error(err, "Failed to ensure object is in metadata storage")
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
@@ -224,16 +278,23 @@ func (r *Reconciler) handleImmutableObject(ctx context.Context, log logr.Logger,
 
 // SetupWithManager sets up the controller with the Manager
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
-	kind := r.TargetKind.GetObjectKind().GroupVersionKind().Kind
+	gvks, _, err := r.scheme.ObjectKinds(r.targetKind)
+	if err != nil || len(gvks) == 0 {
+		return fmt.Errorf("failed to get GVK for %T: %w", r.targetKind, err)
+	}
+	// TODO(#943): scheme.ObjectKinds may return multiple GVKs (e.g. v1 and v1beta1 for the same
+	// type). We currently take gvks[0] which may be non-deterministic. Add explicit multi-GVK
+	// selection strategy (prefer storage version, or error if multiple exist).
+	kind := gvks[0].Kind
 	controllerName := fmt.Sprintf("ingester_%s", kind)
 
-	concurrentReconciles := r.Config.ConcurrentReconciles
+	concurrentReconciles := r.config.ConcurrentReconciles
 	if concurrentReconciles <= 0 {
 		concurrentReconciles = 1
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(r.TargetKind).
+		For(r.targetKind).
 		Named(controllerName).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: concurrentReconciles,
@@ -244,8 +305,8 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 // Helper functions
 
 func (r *Reconciler) getRequeuePeriod() time.Duration {
-	if r.Config.RequeuePeriod > 0 {
-		return r.Config.RequeuePeriod
+	if r.config.RequeuePeriod > 0 {
+		return r.config.RequeuePeriod
 	}
 	return defaultRequeuePeriod
 }

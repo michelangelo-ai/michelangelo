@@ -311,7 +311,7 @@ necessary, and this assertion will be removed.
         )
 
     # Determine buckets to create based on enabled services
-    bucket_names = ["logs", "default"]
+    bucket_names = ["logs", "default", "deploy-models"]
     if "mlflow" in ns.include_experimental:
         bucket_names.append("mlflow")
         print("🪣 Adding MLflow bucket to S3 setup")
@@ -393,7 +393,7 @@ def _create_bucket_setup(bucket_names):
 
     # Replace the hardcoded bucket names with our dynamic list
     modified_content = content.replace(
-        'value: "logs,default"', f'value: "{bucket_names_str}"'
+        'value: "logs,default,deploy-models"', f'value: "{bucket_names_str}"'
     )
 
     # Create temporary file with modified content

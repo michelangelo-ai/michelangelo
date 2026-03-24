@@ -195,7 +195,7 @@ To manage your workflow through MA Studio and the `ma` CLI, register it as a pip
 apiVersion: michelangelo.api/v2
 kind: Pipeline
 metadata:
-  namespace: my-project
+  namespace: my-project  # Your project name
   name: boston-housing-xgb
   annotations:
     michelangelo/uniflow-image: docker.io/library/my-workflow:latest

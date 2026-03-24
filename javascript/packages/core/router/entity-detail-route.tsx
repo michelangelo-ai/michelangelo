@@ -85,6 +85,7 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
           <CircleExclamationMark
             kind={CircleExclamationMarkKind.ERROR}
             width={theme.sizing.scale1600}
+            height={theme.sizing.scale1600}
           />
         }
         buttonConfig={{

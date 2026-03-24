@@ -1,6 +1,5 @@
 import React from 'react';
 import { DatePicker } from 'baseui/datepicker';
-import { Cell, Grid } from 'baseui/layout-grid';
 import { isArray, isNil } from 'lodash';
 
 import { FormControl } from '#core/components/form/components/form-control';
@@ -40,56 +39,52 @@ export const DateField: React.FC<DateFieldProps> = ({
   });
 
   return (
-    <Grid gridColumns={1} gridMargins={[0]} gridMaxWidth={0}>
-      <Cell>
-        <FormControl
-          label={label}
-          required={required}
-          description={description}
-          caption={caption}
-          error={meta.touched && meta.error ? meta.error : undefined}
-        >
-          <DatePicker
-            id={input.name}
-            value={input.value}
-            onChange={({ date }: { date: Date | null }) => {
-              // For single date pickers, DatePicker onChange can be invoked with null date.
-              // This is particularly problematic when user simply opens and closes date selection
-              // without selecting a date. In this case, don't propagate the null value to the form.
-              if (isNil(date) && isEmptyInputValue(input.value)) return;
-              input.onChange(date);
-            }}
-            placeholder={!disabled && !readOnly ? (placeholder ?? 'MM/dd/yyyy') : ''}
-            formatString="MM/dd/yyyy"
-            mask="99/99/9999"
-            onOpen={input.onFocus}
-            onRangeChange={input.onBlur}
-            onClose={input.onBlur}
-            maxDate={noFutureDate ? new Date() : undefined}
-            disabled={disabled}
-            overrides={
-              readOnly
-                ? {
-                    Input: {
-                      props: {
-                        readOnly: true,
-                        onFocus: () => undefined,
-                        overrides: {
-                          InputContainer: {
-                            style: ({ $theme }: { $theme: Theme }) => ({
-                              backgroundColor: $theme.colors.backgroundPrimary,
-                            }),
-                          },
-                        },
+    <FormControl
+      label={label}
+      required={required}
+      description={description}
+      caption={caption}
+      error={meta.touched && meta.error ? meta.error : undefined}
+    >
+      <DatePicker
+        id={input.name}
+        value={input.value}
+        onChange={({ date }: { date: Date | null }) => {
+          // For single date pickers, DatePicker onChange can be invoked with null date.
+          // This is particularly problematic when user simply opens and closes date selection
+          // without selecting a date. In this case, don't propagate the null value to the form.
+          if (isNil(date) && isEmptyInputValue(input.value)) return;
+          input.onChange(date);
+        }}
+        placeholder={!disabled && !readOnly ? (placeholder ?? 'MM/dd/yyyy') : ''}
+        formatString="MM/dd/yyyy"
+        mask="99/99/9999"
+        onOpen={input.onFocus}
+        onRangeChange={input.onBlur}
+        onClose={input.onBlur}
+        maxDate={noFutureDate ? new Date() : undefined}
+        disabled={disabled}
+        overrides={
+          readOnly
+            ? {
+                Input: {
+                  props: {
+                    readOnly: true,
+                    onFocus: () => undefined,
+                    overrides: {
+                      InputContainer: {
+                        style: ({ $theme }: { $theme: Theme }) => ({
+                          backgroundColor: $theme.colors.backgroundPrimary,
+                        }),
                       },
                     },
-                  }
-                : undefined
-            }
-          />
-        </FormControl>
-      </Cell>
-    </Grid>
+                  },
+                },
+              }
+            : undefined
+        }
+      />
+    </FormControl>
   );
 };
 

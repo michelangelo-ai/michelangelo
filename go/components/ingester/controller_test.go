@@ -101,17 +101,14 @@ func TestReconciler_HandleSync(t *testing.T) {
 	mockStorage.On("Upsert", mock.Anything, mock.Anything, false, mock.Anything).Return(nil)
 
 	// Create reconciler
-	reconciler := &Reconciler{
-		Client:          fakeClient,
-		Log:             logr.Discard(),
-		Scheme:          scheme,
-		TargetKind:      &v2.Deployment{},
-		MetadataStorage: mockStorage,
-		Config: Config{
-			ConcurrentReconciles: 1,
-			RequeuePeriod:        30 * time.Second,
-		},
-	}
+	reconciler := NewReconciler(
+		fakeClient,
+		logr.Discard(),
+		scheme,
+		&v2.Deployment{},
+		mockStorage,
+		WithConfig(Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second}),
+	)
 
 	// Test reconcile
 	req := ctrl.Request{
@@ -166,17 +163,14 @@ func TestReconciler_HandleDeletion(t *testing.T) {
 	mockStorage.On("Delete", mock.Anything, mock.Anything, "default", "test-model").Return(nil)
 
 	// Create reconciler
-	reconciler := &Reconciler{
-		Client:          fakeClient,
-		Log:             logr.Discard(),
-		Scheme:          scheme,
-		TargetKind:      &v2.Model{},
-		MetadataStorage: mockStorage,
-		Config: Config{
-			ConcurrentReconciles: 1,
-			RequeuePeriod:        30 * time.Second,
-		},
-	}
+	reconciler := NewReconciler(
+		fakeClient,
+		logr.Discard(),
+		scheme,
+		&v2.Model{},
+		mockStorage,
+		WithConfig(Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second}),
+	)
 
 	// Test reconcile
 	req := ctrl.Request{
@@ -232,17 +226,14 @@ func TestReconciler_HandleDeletionAnnotation(t *testing.T) {
 	mockStorage.On("Delete", mock.Anything, mock.Anything, "default", "test-model").Return(nil)
 
 	// Create reconciler
-	reconciler := &Reconciler{
-		Client:          fakeClient,
-		Log:             logr.Discard(),
-		Scheme:          scheme,
-		TargetKind:      &v2.Model{},
-		MetadataStorage: mockStorage,
-		Config: Config{
-			ConcurrentReconciles: 1,
-			RequeuePeriod:        30 * time.Second,
-		},
-	}
+	reconciler := NewReconciler(
+		fakeClient,
+		logr.Discard(),
+		scheme,
+		&v2.Model{},
+		mockStorage,
+		WithConfig(Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second}),
+	)
 
 	// Test reconcile
 	req := ctrl.Request{
@@ -297,17 +288,14 @@ func TestReconciler_HandleImmutableKind(t *testing.T) {
 	mockStorage.On("Upsert", mock.Anything, mock.Anything, false, mock.Anything).Return(nil)
 
 	// Create reconciler
-	reconciler := &Reconciler{
-		Client:          fakeClient,
-		Log:             logr.Discard(),
-		Scheme:          scheme,
-		TargetKind:      &v2.Model{},
-		MetadataStorage: mockStorage,
-		Config: Config{
-			ConcurrentReconciles: 1,
-			RequeuePeriod:        30 * time.Second,
-		},
-	}
+	reconciler := NewReconciler(
+		fakeClient,
+		logr.Discard(),
+		scheme,
+		&v2.Model{},
+		mockStorage,
+		WithConfig(Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second}),
+	)
 
 	req := ctrl.Request{
 		NamespacedName: types.NamespacedName{
@@ -364,17 +352,14 @@ func TestReconciler_HandleImmutableObject(t *testing.T) {
 	mockStorage.On("Upsert", mock.Anything, mock.Anything, false, mock.Anything).Return(nil)
 
 	// Create reconciler
-	reconciler := &Reconciler{
-		Client:          fakeClient,
-		Log:             logr.Discard(),
-		Scheme:          scheme,
-		TargetKind:      &v2.Model{},
-		MetadataStorage: mockStorage,
-		Config: Config{
-			ConcurrentReconciles: 1,
-			RequeuePeriod:        30 * time.Second,
-		},
-	}
+	reconciler := NewReconciler(
+		fakeClient,
+		logr.Discard(),
+		scheme,
+		&v2.Model{},
+		mockStorage,
+		WithConfig(Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second}),
+	)
 
 	// Test reconcile
 	req := ctrl.Request{
@@ -410,17 +395,14 @@ func TestReconciler_ObjectNotFound(t *testing.T) {
 	mockStorage := new(MockMetadataStorage)
 
 	// Create reconciler
-	reconciler := &Reconciler{
-		Client:          fakeClient,
-		Log:             logr.Discard(),
-		Scheme:          scheme,
-		TargetKind:      &v2.Model{},
-		MetadataStorage: mockStorage,
-		Config: Config{
-			ConcurrentReconciles: 1,
-			RequeuePeriod:        30 * time.Second,
-		},
-	}
+	reconciler := NewReconciler(
+		fakeClient,
+		logr.Discard(),
+		scheme,
+		&v2.Model{},
+		mockStorage,
+		WithConfig(Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second}),
+	)
 
 	// Test reconcile for non-existent object
 	req := ctrl.Request{
@@ -499,16 +481,126 @@ func TestHelperFunctions(t *testing.T) {
 	t.Run("getRequeuePeriod", func(t *testing.T) {
 		// Test with configured period
 		r := &Reconciler{
-			Config: Config{
-				RequeuePeriod: 60 * time.Second,
-			},
+			config: Config{RequeuePeriod: 60 * time.Second},
 		}
 		assert.Equal(t, 60*time.Second, r.getRequeuePeriod())
 
 		// Test with default
-		r2 := &Reconciler{
-			Config: Config{},
-		}
+		r2 := &Reconciler{}
 		assert.Equal(t, defaultRequeuePeriod, r2.getRequeuePeriod())
 	})
+}
+
+// TestSchemeGVKResolution verifies that all CRD objects in AllCRDObjects resolve to
+// unique, non-empty kinds via the scheme.
+func TestSchemeGVKResolution(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, v2.AddToScheme(scheme))
+
+	seen := map[string]bool{}
+	for _, obj := range v2.AllCRDObjects {
+		gvks, _, err := scheme.ObjectKinds(obj)
+		require.NoError(t, err, "scheme.ObjectKinds failed for %T", obj)
+		require.NotEmpty(t, gvks, "no GVKs found for %T", obj)
+
+		kind := gvks[0].Kind
+		assert.NotEmpty(t, kind, "empty kind for %T — GetObjectKind() was likely used instead of scheme", obj)
+		assert.False(t, seen[kind], "duplicate kind %q — controller name collision would crash controllermgr", kind)
+		seen[kind] = true
+	}
+}
+
+// TestHandleDeletion_CorrectTypeMeta verifies that handleDeletion passes the correct
+// Kind and APIVersion (resolved from scheme) to storage.Delete, not an empty TypeMeta
+// from GetObjectKind() which returns empty after controller-runtime deserialization.
+func TestHandleDeletion_CorrectTypeMeta(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = v2.AddToScheme(scheme)
+
+	now := metav1.Now()
+	gracePeriod := int64(0)
+
+	model := &v2.Model{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:                       "test-model",
+			Namespace:                  "default",
+			UID:                        types.UID("test-uid"),
+			DeletionTimestamp:          &now,
+			DeletionGracePeriodSeconds: &gracePeriod,
+			Finalizers:                 []string{api.IngesterFinalizer},
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(model).Build()
+
+	var capturedTypeMeta *metav1.TypeMeta
+	mockStorage := new(MockMetadataStorage)
+	mockStorage.On("Delete", mock.Anything, mock.MatchedBy(func(tm *metav1.TypeMeta) bool {
+		capturedTypeMeta = tm
+		return true
+	}), "default", "test-model").Return(nil)
+
+	reconciler := NewReconciler(
+		fakeClient,
+		logr.Discard(),
+		scheme,
+		&v2.Model{},
+		mockStorage,
+		WithConfig(Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second}),
+	)
+
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: "test-model", Namespace: "default"},
+	})
+	require.NoError(t, err)
+
+	require.NotNil(t, capturedTypeMeta)
+	assert.Equal(t, "Model", capturedTypeMeta.Kind, "Kind must come from scheme, not empty GetObjectKind()")
+	assert.NotEmpty(t, capturedTypeMeta.APIVersion, "APIVersion must come from scheme")
+}
+
+// TestHandleDeletionAnnotation_CorrectTypeMeta verifies the same scheme-based GVK
+// resolution in the annotation deletion path.
+func TestHandleDeletionAnnotation_CorrectTypeMeta(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = v2.AddToScheme(scheme)
+
+	model := &v2.Model{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-model",
+			Namespace: "default",
+			UID:       types.UID("test-uid"),
+			Annotations: map[string]string{
+				api.DeletingAnnotation: "true",
+			},
+			Finalizers: []string{api.IngesterFinalizer},
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(model).Build()
+
+	var capturedTypeMeta *metav1.TypeMeta
+	mockStorage := new(MockMetadataStorage)
+	mockStorage.On("Delete", mock.Anything, mock.MatchedBy(func(tm *metav1.TypeMeta) bool {
+		capturedTypeMeta = tm
+		return true
+	}), "default", "test-model").Return(nil)
+
+	reconciler := NewReconciler(
+		fakeClient,
+		logr.Discard(),
+		scheme,
+		&v2.Model{},
+		mockStorage,
+		WithConfig(Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second}),
+	)
+
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: "test-model", Namespace: "default"},
+	})
+	require.NoError(t, err)
+
+	require.NotNil(t, capturedTypeMeta)
+	assert.Equal(t, "Model", capturedTypeMeta.Kind, "Kind must come from scheme, not empty GetObjectKind()")
+	assert.NotEmpty(t, capturedTypeMeta.APIVersion, "APIVersion must come from scheme")
 }

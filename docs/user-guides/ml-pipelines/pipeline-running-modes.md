@@ -182,9 +182,11 @@ Enterprises need **production-grade pipeline execution** with full CI/CD, govern
 
 ### Usage
 
+The `namespace` flag specifies your project.
+
 ```shell
-ma pipeline run --namespace="my-namespace" --name="my-pipeline"
-ma pipeline run --namespace="my-namespace" --name="my-pipeline" --resume_from=previous-run:step
+ma pipeline run --namespace="my-project" --name="my-pipeline"
+ma pipeline run --namespace="my-project" --name="my-pipeline" --resume_from=previous-run:step
 ```
 
 ## Decision tree: which mode should I use?

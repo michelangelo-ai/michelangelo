@@ -22,7 +22,7 @@ def convert_crd_metadata_pipeline_apply(
     repo = Repo(".", search_parent_directories=True)
     _LOG.info("Current git repository info: %r", repo)
 
-    # TODO: update path retrieval logic
+    # TODO(#941): update path retrieval logic
     res = {"spec": deepcopy(yaml_dict["spec"])}
     """
     res["metadata"] = {
@@ -39,7 +39,7 @@ def convert_crd_metadata_pipeline_apply(
     }
     # assert yaml_path.resolve().is_relative_to(PWD)
     # "path": str(yaml_path.relative_to(PWD)),
-    # TODO: retrieve path from Project.
+    # TODO(#941): retrieve path from Project.
     res["spec"]["manifest"] = {
         "path": (
             "platforms/uberai/michelangelo/ma_integration_test/pipelines"

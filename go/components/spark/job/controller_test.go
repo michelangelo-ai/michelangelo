@@ -122,7 +122,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 
 			r := &Reconciler{
 				Client: fakeClientWrapper,
-				SparkClient: &mockSparkClient{
+				sparkClient: &mockSparkClient{
 					createJobErr: tc.createErr,
 					getStatusErr: tc.getStatusErr,
 					status:       tc.getStatus,

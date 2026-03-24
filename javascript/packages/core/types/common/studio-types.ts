@@ -136,6 +136,23 @@ export interface PhaseConfig {
 }
 
 /**
+ * Groups phases into a logical category for display and filtering purposes.
+ *
+ * @example
+ * ```ts
+ * const CATEGORIES: CategoryConfig[] = [
+ *   { id: 'core-ml', name: 'Core ML', phases: [DATA_PHASE, TRAIN_PHASE] },
+ *   { id: 'gen-ai', name: 'Gen AI', phases: [GENAI_LLM_PHASE, GENAI_DATA_PHASE] },
+ * ];
+ * ```
+ */
+export interface CategoryConfig {
+  id: string;
+  name: string;
+  phases: PhaseConfig[];
+}
+
+/**
  * Phase state controlling overall phase behavior and appearance
  *
  * @example

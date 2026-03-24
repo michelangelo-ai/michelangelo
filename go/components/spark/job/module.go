@@ -36,10 +36,5 @@ func register(
 	mgr manager.Manager,
 	sparkClient Client,
 ) error {
-	// Create SparkApplication client
-	return (&Reconciler{
-		Client:      mgr.GetClient(),
-		SparkClient: sparkClient,
-		env:         env,
-	}).Register(mgr)
+	return NewReconciler(mgr.GetClient(), sparkClient, env).Register(mgr)
 }

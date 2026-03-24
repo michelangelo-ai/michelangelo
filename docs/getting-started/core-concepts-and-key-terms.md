@@ -33,7 +33,7 @@ These are the frameworks, interfaces, and compute engines provided by Michelange
 
 #### MA Studio (No Code UI)
 
-**MA Studio** is Michelangelo's UI environment. The standard, code-free ML development experience guides users through the different phases of the ML development lifecycle. This environment provides all the essential tools which allow ML developers to build, train, deploy, monitor, and debug your machine learning models in a single unified visual interface to boost your productivity. **_(Currently, Preparing and Training models are available for open source users. More features will be made available soon.)_**
+**MA Studio** is Michelangelo's UI environment. The standard, code-free ML development experience guides users through the different phases of the ML development lifecycle. This environment provides all the essential tools which allow ML developers to build, train, deploy, monitor, and debug your machine learning models in a single unified visual interface to boost your productivity. 
 
 Users can use the no-code dev environment to perform standardized ML tasks without writing a single line of code, including:
 * Prepare data sources for training models or making batch predictions
@@ -553,3 +553,11 @@ def process_dataset(dataset: ray.data.Dataset) -> ray.data.Dataset:
 - Avoids serialization/deserialization overhead
 - Enables distributed processing of large datasets
 - Automatic caching and reuse
+
+---
+
+## What's next?
+
+- **Ready to start building?** [Set up your local sandbox](./sandbox-setup) and then follow [Getting Started with Pipelines](../user-guides/ml-pipelines/getting-started)
+- **Want to see complete examples?** Browse [end-to-end tutorials](../user-guides#learning-by-examples) for XGBoost, BERT, GPT fine-tuning, and recommendation systems
+- **Interested in the CLI?** See the [CLI Reference](../user-guides/cli) for pipeline and project management commands

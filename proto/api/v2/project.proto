@@ -147,12 +147,12 @@ enum ProjectPhase {
   PROJECT_PHASE_DEVELOPMENT = 1;
 
   // If a project is READY and in DEVELOPMENT phase, user can promote
-  // it to STAGING phase TODO: only server as a label for users. there
+  // it to STAGING phase TODO(#927): only server as a label for users. there
   // is no side effect of marking a project as STAGING.
   PROJECT_PHASE_STAGING = 2;
 
   // If a project is READY and in STAGING phase, user can promote it
-  // to PRODUCTION phase TODO: only server as a label for users. there
+  // to PRODUCTION phase TODO(#927): only server as a label for users. there
   // is no side effect of marking a project as PRODUCTION.
   PROJECT_PHASE_PRODUCTION = 3;
 

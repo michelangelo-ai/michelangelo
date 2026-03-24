@@ -40,7 +40,11 @@ func register(p registerParams) error {
 	crdObjects := v2.AllCRDObjects
 
 	for _, obj := range crdObjects {
-		gvk := obj.GetObjectKind().GroupVersionKind()
+		gvks, _, err := p.Scheme.ObjectKinds(obj)
+		if err != nil || len(gvks) == 0 {
+			return fmt.Errorf("failed to get GVK for %T: %w", obj, err)
+		}
+		gvk := gvks[0]
 		log := p.Logger.With(zap.String("kind", gvk.Kind))
 
 		// Cast runtime.Object to client.Object
@@ -52,14 +56,14 @@ func register(p registerParams) error {
 		// Get controller-specific config (supports per-CRD configuration)
 		controllerConfig := p.Config.GetControllerConfig(gvk.Kind)
 
-		reconciler := &Reconciler{
-			Client:          p.Manager.GetClient(),
-			Log:             ctrl.Log.WithName("ingester").WithName(gvk.Kind),
-			Scheme:          p.Scheme,
-			TargetKind:      clientObj,
-			MetadataStorage: p.MetadataStorage,
-			Config:          controllerConfig,
-		}
+		reconciler := NewReconciler(
+			p.Manager.GetClient(),
+			ctrl.Log.WithName("ingester").WithName(gvk.Kind),
+			p.Scheme,
+			clientObj,
+			p.MetadataStorage,
+			WithConfig(controllerConfig),
+		)
 
 		if err := reconciler.SetupWithManager(p.Manager); err != nil {
 			return fmt.Errorf("failed to setup ingester for %s: %w", gvk.Kind, err)
