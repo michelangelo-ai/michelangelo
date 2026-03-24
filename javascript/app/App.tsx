@@ -1,7 +1,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom-v5-compat';
 import { normalizeConnectError, request } from '@michelangelo/rpc';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { CoreApp } from '@michelangelo-ai/core';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Client as Styletron } from 'styletron-engine-atomic';
 import { Provider as StyletronProvider } from 'styletron-react';
 
