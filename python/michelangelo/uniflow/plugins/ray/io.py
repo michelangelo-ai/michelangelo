@@ -67,7 +67,7 @@ class RayDatasetIO(IO[Dataset]):
         """
         assert metadata is None
         fs, path = _fs_path(url)
-        return ray.data.read_parquet(path, filesystem=fs)
+        return ray.data.read_parquet(path, filesystem=fs, file_extensions=["parquet"])
 
 
 def _fs_path(url: str) -> tuple[Any, str]:

@@ -388,8 +388,9 @@ def report_ray_task_result(job, task_path, task_name, cluster_url, start_time_fo
         )
         return TASK_STATE_KILLED
     else:
-        error_type = job.get("errorType", "internal")
-        message = job.get("message", "unknown error")
+        status = job.get("status", {})
+        error_type = status.get("errorType", job.get("errorType", "internal"))
+        message = status.get("message", job.get("message", "unknown error"))
         task_message = "Ray Job Failed with {} Error: {}".format(error_type, message)
         report_progress(
             task_path = task_path,

@@ -294,7 +294,7 @@ def train(
 
     scaling_config = create_scaling_config(
         trainer_cpu=None,
-        cpu_per_worker=4,
+        cpu_per_worker=1,
     )
     log.info("scaling_config: %r", scaling_config)
 
@@ -309,6 +309,7 @@ def train(
     assert data_schema
 
     trainer = XGBoostTrainer(
+        train_loop_per_worker=None,
         label_column=data_schema.names[-1],  # assuming the last column is the label
         params=params,
         num_boost_round=10,
@@ -330,7 +331,7 @@ def train(
 
 @uniflow.workflow()
 def train_workflow(
-    dataset_cols: str,
+    dataset_cols: str = "CRIM,ZN,INDUS,CHAS,NOX,RM,AGE,DIS,RAD,TAX,PTRATIO,B,LSTAT,target",
 ):
     """Complete XGBoost training workflow for Boston Housing dataset.
 
