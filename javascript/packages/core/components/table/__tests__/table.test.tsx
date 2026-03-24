@@ -1361,7 +1361,7 @@ describe('Table', () => {
       });
 
       it('resets to first page when current page becomes invalid due to filtering', async () => {
-        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
+        const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) });
 
         render(
           <Table
@@ -1402,7 +1402,7 @@ describe('Table', () => {
       });
 
       it('does not reset page when current page remains valid after filtering', async () => {
-        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
+        const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) });
 
         render(
           <Table
