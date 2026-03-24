@@ -19,6 +19,7 @@ export const CheckboxField: React.FC<CheckboxFieldProps> = ({
   disabled,
   description,
   caption,
+  labelAddon,
   format,
   parse,
   options,
@@ -52,6 +53,7 @@ export const CheckboxField: React.FC<CheckboxFieldProps> = ({
       label={label}
       required={required}
       description={description}
+      labelAddon={labelAddon}
       caption={caption}
       error={meta.touched && meta.error ? meta.error : undefined}
     >

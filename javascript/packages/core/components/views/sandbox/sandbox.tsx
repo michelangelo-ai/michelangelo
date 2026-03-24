@@ -12,8 +12,10 @@ import { CheckboxField } from '#core/components/form/fields/checkbox/checkbox-fi
 import { NumberField } from '#core/components/form/fields/number/number-field';
 import { SelectField } from '#core/components/form/fields/select/select-field';
 import { StringField } from '#core/components/form/fields/string/string-field';
+import { TextareaField } from '#core/components/form/fields/textarea/textarea-field';
 import { UrlField } from '#core/components/form/fields/url/url-field';
 import { Form } from '#core/components/form/form';
+import { useForm } from '#core/components/form/hooks/use-form';
 import { ArrayFormGroup } from '#core/components/form/layout/array-form-group/array-form-group';
 import { ArrayFormRow } from '#core/components/form/layout/array-form-row/array-form-row';
 import { FormColumn } from '#core/components/form/layout/form-column/form-column';
@@ -199,6 +201,75 @@ function ParentDebugRenderer({ taskList, parent, onTaskClick }: TaskListRenderer
   );
 }
 
+function LabelAddonExamples() {
+  const { change } = useForm();
+
+  return (
+    <>
+      <FormGroup title="Select with clear addon">
+        <SelectField
+          name="region"
+          label="Region"
+          labelAddon={
+            <Button size="mini" kind="tertiary" onClick={() => change('region', '')} type="button">
+              Clear
+            </Button>
+          }
+          options={[
+            { id: 'us-east', label: 'US East' },
+            { id: 'us-west', label: 'US West' },
+            { id: 'eu-west', label: 'EU West' },
+            { id: 'ap-south', label: 'AP South' },
+          ]}
+        />
+      </FormGroup>
+
+      <FormGroup title="Textarea with max length limit and addon">
+        <TextareaField
+          name="description"
+          label="Description"
+          maxLength={200}
+          rows={3}
+          labelAddon={
+            <Button
+              size="mini"
+              kind="tertiary"
+              onClick={() =>
+                change('description', 'Auto-generated description for the selected region.')
+              }
+              type="button"
+            >
+              Generate
+            </Button>
+          }
+        />
+      </FormGroup>
+
+      <FormGroup title="Textarea with only addon">
+        <TextareaField
+          name="addressLine1"
+          label="Address Line 1"
+          rows={3}
+          labelAddon={
+            <Button
+              size="mini"
+              kind="tertiary"
+              onClick={() => change('addressLine1', '')}
+              type="button"
+            >
+              Clear
+            </Button>
+          }
+        />
+      </FormGroup>
+
+      <FormGroup title="Textarea with only max length limit">
+        <TextareaField name="addressLine2" label="Address Line 2" rows={3} maxLength={100} />
+      </FormGroup>
+    </>
+  );
+}
+
 export function Sandbox() {
   const [activeKey, setActiveKey] = useState('0');
   const [jsonValue, setJsonValue] = useState(JSON.stringify(sampleJson, null, 2));
@@ -322,6 +393,17 @@ export function Sandbox() {
                 }}
               />
             </DetailView>
+          </Block>
+        </Tab>
+
+        <Tab title="Fields - Label addon">
+          <Block marginTop="24px" maxWidth="600px">
+            <Form onSubmit={(values) => console.log('Submitted:', values)}>
+              <LabelAddonExamples />
+              <Block display="flex" justifyContent="flex-end" marginTop="scale600">
+                <Button type="submit">Submit</Button>
+              </Block>
+            </Form>
           </Block>
         </Tab>
 
