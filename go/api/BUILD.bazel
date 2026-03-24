@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "api.go",
+        "ext_registry.go",
         "interface.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/api",

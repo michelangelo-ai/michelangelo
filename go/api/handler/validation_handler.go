@@ -17,13 +17,25 @@ func NewValidationHandler() ValidationHandler {
 }
 
 // ValidateCreate implements ValidationHandler.ValidateCreate by delegating to the api.Validate function.
+// It runs both base validation and any registered extension validators.
 func (v *ValidationHandlerImpl) ValidateCreate(obj ctrlRTClient.Object) error {
-	return api.Validate(obj)
+	// Run base validation first
+	if err := api.Validate(obj); err != nil {
+		return err
+	}
+	// Run extension validation (if any ext package is imported)
+	return api.ValidateExt(obj)
 }
 
 // ValidateUpdate implements ValidationHandler.ValidateUpdate by delegating to the api.Validate function.
+// It runs both base validation and any registered extension validators.
 func (v *ValidationHandlerImpl) ValidateUpdate(obj ctrlRTClient.Object) error {
-	return api.Validate(obj)
+	// Run base validation first
+	if err := api.Validate(obj); err != nil {
+		return err
+	}
+	// Run extension validation (if any ext package is imported)
+	return api.ValidateExt(obj)
 }
 
 // ValidateDelete implements ValidationHandler.ValidateDelete as a no-op.
