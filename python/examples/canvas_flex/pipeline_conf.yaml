@@ -1,0 +1,208 @@
+meta:
+  name: explainer_torch_maker_boston_housing
+  project_id: ma_dev_test
+  workflow_version: v2
+  proto_module: idl.data.michelangelo.maf.app.training_pb2.TrainingAppSpec
+feature_prep:
+  meta:
+    name: builtin_feature_prep
+    module: data.michelangelo.app_framework.steps.feature_prep.HiveFeaturePrep
+  source:
+    hive_table:
+      table_name: michelangelo.dl_example_datasets_boston_housing_fp64_label
+      start_date: "2016-01-01T00:00:00Z"
+      end_date: "2016-01-02T00:00:00Z"
+  splits:
+    train_ratio: 0.7
+transform:
+  meta:
+    name: builtin_transform
+    module: data.michelangelo.app_framework.steps.transform.MATransform
+  dsl:
+    age_1: 'nFill(nVal("age")-1, 0.0).toInt'
+    age_2: 'nFill(nVal("age")-1, 0.0).toInt'
+    age_3: 'nFill(nVal("age")-1, 0.0).toInt'
+    age_4: 'nFill(nVal("age")-1, 0.0).toInt'
+  feature_batch_bucketizers:
+    - name: Bucketizer
+      input_cols: ['age']
+      bucketizer_args:
+        splits_shared: [0, 18, 25, 35, 45, 55, 65, 200]
+    - name: QuantileDiscretizer
+      input_cols: ['crim', 'tax']
+      quantile_discretizer_args:
+        num_buckets_shared: 20
+  feature_group_scalers:
+    - name: StandardScaler
+      input_cols: ['age_after_Bucketizer_0', 'b', 'crim_after_QuantileDiscretizer_1', 'dis', 'lstat', 'rad', 'rm', 'tax_after_QuantileDiscretizer_1']
+      output_col: scaler_output_vec
+  skip_compute_stats: true
+trainer:
+  meta:
+    name: torch_trainer
+    module: data.michelangelo.app_framework.steps.TorchEstimatorTrainer
+  features:
+    - name: scaler_output_vec
+    - name: age
+      embedding:
+        fully_connected:
+          input_dim: 200
+          output_dim: 8
+    - name: derived_age_1
+      embedding:
+        fully_connected:
+          input_dim: 200
+          output_dim: 8
+    - name: derived_age_2
+      embedding:
+        fully_connected:
+          input_dim: 200
+          output_dim: 8
+    - name: derived_age_3
+    - name: derived_age_4
+  torch:
+    optimizer:
+      module: torch.optim.Adam
+      args:
+        lr: "0.01"
+        betas->0: '0.6214097507424637'
+        betas->1: '0.8163828505472781'
+        weight_decay: '1.2367151663850924e-05'
+    lr_scheduler:
+      module: data.michelangelo.app_framework.models.torch.lr_scheduler.RelativeCosineAnnealingLR
+      args:
+        T_max: "140000"
+        eta_min: "0.01"
+      interval_type: "step"
+    loss:
+      module: data.michelangelo.app_framework.models.torch.loss.asymmetric_huber_loss
+    model_maker:
+      graph:
+        layer_1:
+          module: "blocks.Linear"
+          inputs: ["scaler_output_vec"]
+          outputs: ["internal_0"]
+          args:
+            in_feature_size: "8"
+            out_feature_size: "10"
+            activation_fn: "torch.nn.ReLU"
+        layer_2:
+          module: "blocks.DeepMoECross"
+          inputs: ["internal_0"]
+          outputs: ["internal_1"]
+          args:
+            in_feature_size: "10"
+            proj_feature_size: "4"
+            num_experts: "4"
+            depth: "4"
+            gate_sizes->0: "8"
+            gate_sizes->1: "4"
+        layer_3:
+          module: "blocks.EmbeddingBag"
+          inputs: ["derived_age_3", "derived_age_4"]
+          outputs: ["internal_2"]
+          args:
+            num_embeddings: "200"
+            embed_dim: "16"
+        layer_4:
+          module: "blocks.EmbeddingBag"
+          inputs: ["derived_age_3", "derived_age_4"]
+          outputs: ["internal_3"]
+          args:
+            num_embeddings: "200"
+            embed_dim: "8"
+        layer_5:
+          module: "blocks.Bilinear"
+          inputs: ["internal_2", "internal_3"]
+          outputs: ["internal_4"]
+          args:
+            in1_feature_size: "16"
+            in2_feature_size: "8"
+            out_feature_size: "8"
+        layer_6:
+          module: "blocks.FastTransformer"
+          inputs:
+            - embedding_age
+            - embedding_derived_age_1
+            - embedding_derived_age_2
+            - internal_4
+          outputs: ["internal_5"]
+          args:
+            num_atten_layers: "1"
+            num_atten_heads: "1"
+            d_model: "8"
+            d_k: "1"
+        layer_7:
+          module: "blocks.Cat"
+          inputs: ["internal_1", "internal_5"]
+          outputs: ["internal_6"]
+        layer_8:
+          module: "graphs.MLP"
+          inputs: ["internal_6"]
+          outputs: ["predict"]
+          args:
+            input_size: "42"
+            layer_sizes->0: "80"
+            layer_sizes->1: "10"
+            layer_sizes->2: "1"
+            use_bn: "true"
+            dropout_rate: "0.5"
+            activation_fn: "torch.nn.ReLU"
+    metrics:
+      - name: MSE
+        module: torch.nn.functional.mse_loss
+      - name: MAE
+        module: torch.nn.functional.l1_loss
+      - name: Bias
+        module: data.michelangelo.app_framework.models.torch.loss.bias
+    estimator:
+      epochs: 2
+      batch_size: 64
+      partitions_per_process: 3
+      log_every_n_steps: 5
+      verbose: True
+    train_async_data_loader_queue_size: 10
+    val_async_data_loader_queue_size: 5
+    prefix_path: null
+  labels:
+    - name: medv
+  outputs:
+    - name: predict
+  save_model_metadata_for_explain: True
+assembler:
+  meta:
+    name: mlcode_assembler
+    module: data.michelangelo.app_framework.steps.MAAssembler
+  project:
+    project_id: ma_dev_test
+  export_raw_model: True
+  derived_fields:
+    - feature_match:DERIVED
+evaluator:
+  meta:
+    name: mlcode_evaluator
+    module: data.michelangelo.app_framework.steps.evaluator.MARegressionEvaluator
+  regression_eval:
+    label_cols:
+      - 'medv'
+    prediction_cols:
+      - 'predict'
+  explainer:
+    explainer:
+      module: data.michelangelo.app_framework.steps.explainer.torch_explainer.TorchIGExplainer
+      args:
+        target: "0"
+        target_index: "0"
+    model_loader_args:
+      training_type: torch
+    model_wrapper:
+      module: data.michelangelo.app_framework.steps.explainer.torch_explainer.TensorDictTorchModelWrapper
+    baseline: 1
+pusher:
+  meta:
+    name: mlcode_pusher
+    module: data.michelangelo.app_framework.steps.MAPusherV1
+  project_id: ma_dev_test
+  model_desc: mlcode_boston_example_model
+  requires_gpu: false
+  predict_column: predict

@@ -6,8 +6,8 @@ Support workflow parameters via dict or Starlark-compatible parameters.
 """
 
 import michelangelo.uniflow.core as uniflow
-from examples.bert_cola.data import load_data
-from examples.bert_cola.train import train
+from examples.pytorch_boston_housing.data import load_data
+from examples.pytorch_boston_housing.train import train
 from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
 

@@ -22,6 +22,8 @@ type TemporalClientOut struct {
 	TemporalClient clientInterface.WorkflowClient
 }
 
+var _ clientInterface.WorkflowClient = &TemporalClient{}
+
 var Module = fx.Options(
 	fx.Provide(NewTemporalClient),
 )

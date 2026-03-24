@@ -67,7 +67,21 @@ class RayDatasetIO(IO[Dataset]):
         """
         assert metadata is None
         fs, path = _fs_path(url)
-        return ray.data.read_parquet(path, filesystem=fs)
+
+        # Filter to only read .parquet files, excluding Spark metadata files like .crc, _SUCCESS, etc.
+        import glob
+        import os
+
+        # If path is a directory, find all .parquet files in it
+        if os.path.isdir(path):
+            parquet_files = glob.glob(os.path.join(path, "*.parquet"))
+            if not parquet_files:
+                raise FileNotFoundError(f"No .parquet files found in directory: {path}")
+            # Use the list of parquet files instead of the directory
+            return ray.data.read_parquet(parquet_files, filesystem=fs)
+        else:
+            # If path is a file, use it directly (assuming it's a parquet file)
+            return ray.data.read_parquet(path, filesystem=fs)
 
 
 def _fs_path(url: str) -> tuple[Any, str]:
