@@ -130,6 +130,28 @@ poetry run ma sandbox create
 
 For more detail, see the [Sandbox Setup Guide](../getting-started/sandbox-setup.md).
 
+### Check before create commit
+
+```bash
+# under `$REPO_ROOT/python` directory
+$ poetry run pre-commit
+```
+
+### Check in manual
+
+```bash
+# under `$REPO_ROOT/python` directory
+# lint check
+$ poetry run ruff check $PYTHON_FILE_NAME
+
+# Run formatter
+$ poetry run ruff format $PYTHON_FILE_NAME
+```
+
+
 ## IDE Setup
 
 For IDE configuration (VS Code, Cursor, GoLand), see the [IDE and Bazel Setup Guide](../getting-started/setup-ide-and-bazel.md).
+
+
+
