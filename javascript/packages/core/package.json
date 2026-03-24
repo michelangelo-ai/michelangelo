@@ -1,6 +1,6 @@
 {
-  "name": "@uber/michelangelo-core",
-  "license": "UNLICENSED",
+  "name": "@michelangelo-ai/core",
+  "license": "Apache-2.0",
   "version": "0.1.15",
   "type": "module",
   "main": "./dist/michelangelo-core.js",
@@ -56,6 +56,9 @@
     "react-router-dom-v5-compat": "^6.29.0",
     "styletron-engine-atomic": "^1.0.0",
     "styletron-react": "^6.1.1"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "exports": {
     ".": {

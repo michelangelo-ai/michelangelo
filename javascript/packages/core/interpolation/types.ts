@@ -102,7 +102,7 @@ export interface InterpolationContext<U extends StudioParamsView = 'base'>
  * @example
  * ```typescript
  * // In your application code:
- * declare module '@uber/michelangelo-core' {
+ * declare module '@michelangelo-ai/core' {
  *   interface InterpolationContextExtensions {
  *     user: { uuid: string; email: string; username: string };
  *     project: { id: string; name: string };

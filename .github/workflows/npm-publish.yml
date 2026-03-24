@@ -1,0 +1,75 @@
+name: Publish @michelangelo-ai/core to npm
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'javascript/packages/core/**'
+
+jobs:
+  check-version-change:
+    runs-on: ubuntu-latest
+    outputs:
+      version-changed: ${{ steps.check.outputs.changed }}
+      new-version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check if core package.json version changed
+        id: check
+        run: |
+          if git diff HEAD~1 HEAD --name-only | grep -q "javascript/packages/core/package.json"; then
+            VERSION=$(jq -r '.version' javascript/packages/core/package.json)
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "📦 core version changed to: $VERSION"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "📦 core version unchanged, skipping publish"
+          fi
+
+  publish:
+    needs: check-version-change
+    if: needs.check-version-change.outputs.version-changed == 'true'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.11.0
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'yarn'
+          cache-dependency-path: javascript/yarn.lock
+
+      - name: Set up buf CLI
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies
+        run: |
+          cd javascript
+          yarn setup
+
+      - name: Build @michelangelo-ai/core
+        run: |
+          cd javascript
+          yarn workspace @michelangelo-ai/core build
+
+      - name: Publish to npm
+        run: |
+          cd javascript/packages/core
+          npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
