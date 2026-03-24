@@ -47,8 +47,7 @@ def io_read_json(url):
 def get_task_image(task_name):
     global_image = os.environ.get("UF_TASK_IMAGE", "")
     task_image = os.environ.get("UF_TASK_IMAGE_" + task_name, global_image)
-    if task_image == "":
-        fail("failed to get task image:", task_name)
+    # Return empty string if no image is configured (optional image support)
     return task_image
 
 # Get the task name for the task.
