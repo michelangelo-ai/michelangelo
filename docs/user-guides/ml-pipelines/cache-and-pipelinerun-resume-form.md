@@ -48,7 +48,7 @@ If `cache_enabled=False`, we will force rerun the `feature_join` task and the pr
 
 Uniflow pipeline runs support resume from a specific step. This relies on the Uniflow cache logic.
 
-Resume from a specific step using the `ma` CLI:
+Resume from a specific step using the `ma` CLI (the `-n` flag specifies your project):
 
 ```bash
 ma pipeline run -n <namespace> --revision <pipeline-revision-name> --resume_from <pipeline-run-name>:<step-name>
