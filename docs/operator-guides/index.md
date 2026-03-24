@@ -189,8 +189,8 @@ These live in the controller manager ConfigMap:
 
 ```yaml
 minio:
-  awsRegion: ap-southeast-1   # AWS region for S3
-  awsEndpointUrl: s3.ap-southeast-1.amazonaws.com
+  awsRegion: sample   # AWS region 
+  awsEndpointUrl: sample.amazonaws.com
   useIam: true                # Use IAM roles for authentication
 ```
 
