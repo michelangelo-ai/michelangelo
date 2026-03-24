@@ -34,6 +34,8 @@ All resource types support `get`, `apply`, and `delete` (see [supported resource
 | SparkJob | `spark_job` | Job submitted to a Spark cluster | get, apply, delete |
 | CachedOutput | `cached_output` | Cached task output for pipeline resume | get, apply, delete |
 
+> **Note:** In Michelangelo, a *project* is the workspace where your pipelines, models, and triggers live. In YAML files and CLI flags, your project is identified by the `namespace` field — these refer to the same thing. See the [Project Management guide](./project-management-for-ml-pipelines.md) for details.
+
 ## Prerequisites
 
 1. **Install [Python >= 3.9](https://www.python.org/downloads/)** and **[Poetry](https://python-poetry.org/docs/#installation)**.
@@ -76,7 +78,7 @@ We will abstract this part like `ma <RESOURCE_TYPE> <COMMAND>` in below.
 
 ### GET - Retrieve resource
 
-Retrieve information about an existing resource by namespace and name. If you don't specify the `--name` field, it lists all resources under the specified namespace.
+Retrieve information about an existing resource by project and name. If you don't specify the `--name` field, it lists all resources under the specified project.
 
 Syntax:
 
@@ -90,19 +92,19 @@ Examples:
 
 ```bash
 # List all projects
-ma project get --namespace="ma-dev-test"
+ma project get --namespace="my-project"
 
-# List all pipelines in a namespace
-ma pipeline get --namespace="ma-dev-test"
+# List all pipelines in a project
+ma pipeline get --namespace="my-project"
 
 # Get a specific pipeline
-ma pipeline get --namespace="ma-dev-test" --name="bert-cola-test"
+ma pipeline get --namespace="my-project" --name="bert-cola-test"
 
 # Get a specific project
-ma project get --namespace="ma-dev-test" --name="my-project"
+ma project get --namespace="my-project" --name="my-project"
 
 # Get a pipeline run
-ma pipeline_run get --namespace="ma-dev-test" --name="run-001"
+ma pipeline_run get --namespace="my-project" --name="run-001"
 ```
 
 #### Arguments
@@ -135,7 +137,7 @@ ma project apply --file="./project.yaml"
 
 ### DELETE - Remove a resource
 
-Delete a specific resource by namespace and name.
+Delete a specific resource by project and name.
 
 Syntax:
 
@@ -149,13 +151,13 @@ Examples:
 
 ```bash
 # Delete a pipeline
-ma pipeline delete --namespace="ma-dev-test" --name="bert-cola-test"
+ma pipeline delete --namespace="my-project" --name="bert-cola-test"
 
 # Delete a project
-ma project delete --namespace="ma-dev-test" --name="my-project"
+ma project delete --namespace="my-project" --name="my-project"
 
 # Delete a pipeline run
-ma pipeline_run delete --namespace="ma-dev-test" --name="run-001"
+ma pipeline_run delete --namespace="my-project" --name="run-001"
 ```
 
 ## Type-specific commands
@@ -180,7 +182,7 @@ Example:
 
 ```bash
 # Run a registered pipeline
-ma pipeline run --namespace="ma-dev-test" --name="bert-cola-test"
+ma pipeline run --namespace="my-project" --name="bert-cola-test"
 ```
 
 ##### Arguments
@@ -200,7 +202,7 @@ ma pipeline run --namespace="<namespace>" --name="<pipeline_name>" --resume_from
 Example:
 
 ```bash
-ma pipeline run --namespace="ma-dev-test" --name="bert-cola-test" --resume_from=run-1759873504-b93b7f612:train
+ma pipeline run --namespace="my-project" --name="bert-cola-test" --resume_from=run-1759873504-b93b7f612:train
 ```
 
 #### DEV RUN - Execute a pipeline in DEV mode
@@ -285,10 +287,10 @@ Example:
 
 ```bash
 # Kill a pipeline run with confirmation prompt
-ma pipeline_run kill --namespace=ma-dev-test --name=pipeline-run-20251118-194500-8cdb1538
+ma pipeline_run kill --namespace=my-project --name=pipeline-run-20251118-194500-8cdb1538
 
 # Kill a pipeline run without confirmation prompt
-ma pipeline_run kill --namespace=ma-dev-test --name=pipeline-run-20251118-194500-8cdb1538 --yes
+ma pipeline_run kill --namespace=my-project --name=pipeline-run-20251118-194500-8cdb1538 --yes
 ```
 
 ### Trigger_run
@@ -307,10 +309,10 @@ Example:
 
 ```bash
 # Kill a trigger run with confirmation prompt
-ma trigger_run kill --namespace=ma-dev-test --name=training-pipeline-cron-trigger
+ma trigger_run kill --namespace=my-project --name=training-pipeline-cron-trigger
 
 # Kill a trigger run without confirmation prompt
-ma trigger_run kill --namespace=ma-dev-test --name=training-pipeline-cron-trigger --yes
+ma trigger_run kill --namespace=my-project --name=training-pipeline-cron-trigger --yes
 ```
 
 ## Sandbox commands
@@ -337,7 +339,7 @@ The `ma sandbox` commands manage a local K3d development environment. For prereq
 apiVersion: michelangelo.api/v2
 kind: Pipeline
 metadata:
-  namespace: "ma-dev-test"
+  namespace: "my-project"  # Your project name
   name: "my-pipeline"
 spec:
   type: "PIPELINE_TYPE_TRAIN"
@@ -351,8 +353,8 @@ spec:
 apiVersion: michelangelo.api/v2
 kind: Project
 metadata:
-  name: ma-dev-test
-  namespace: ma-dev-test
+  name: my-project
+  namespace: my-project
 spec:
   description: My ML Project
   owner:
@@ -370,11 +372,11 @@ apiVersion: michelangelo.api/v2
 kind: PipelineRun
 metadata:
   name: run-training-pipeline
-  namespace: ma-dev-test
+  namespace: my-project
 spec:
   pipeline:
     name: training-pipeline
-    namespace: ma-dev-test
+    namespace: my-project
 ```
 
 ## Configuration
@@ -492,7 +494,7 @@ The following environment variables override config file settings:
 ### Common Issues
 
 1. Connection refused: Ensure the API server is running and accessible
-2. Resource not found: Verify namespace and resource name are correct
+2. Resource not found: Verify project name and resource name are correct
 3. YAML parsing errors: Check YAML syntax and required fields
 4. Permission denied: Ensure proper authentication/authorization setup
 
