@@ -1212,27 +1212,11 @@ def _create_compute_cluster_crd(cluster_name: str):
     # Ensure ma-system namespace exists
     _ensure_namespace_exists("ma-system")
 
-    # Get kubeconfig for the Ray jobs cluster
-    kubeconfig = subprocess.check_output(
-        ["k3d", "kubeconfig", "get", cluster_name]
-    ).decode()
-
-    # Parse the kubeconfig YAML
-    kubeconfig_data = yaml.safe_load(kubeconfig)
-
-    # Extract server URL from clusters[0].cluster.server
-    server_url = kubeconfig_data["clusters"][0]["cluster"]["server"]
-
-    # Extract host and port from server URL
-    # Example: "https://host.docker.internal:52910"
-    import re
-
-    match = re.search(r"(https://[^:]+):(\d+)", server_url)
-    if not match:
-        raise ValueError(
-            f"Could not extract cluster host and port from server URL: {server_url}"
-        )
-    host, port = match.groups()
+    # Use the in-cluster Kubernetes API address. The controller manager runs
+    # inside the same cluster, so the external k3d address (e.g. 0.0.0.0:39955)
+    # won't work from inside pods.
+    host = "https://kubernetes.default.svc"
+    port = "443"
 
     # Create Cluster CRD manifest
     cluster_crd = {
@@ -1270,7 +1254,6 @@ def _create_compute_cluster_crd(cluster_name: str):
         print(f"\nCreated Cluster CRD '{cluster_name}' in the sandbox cluster")
         print(f"Cluster host: {host}")
         print(f"Cluster port: {port}")
-        print(f"Server URL: {server_url}")
 
 
 def _create_compute_cluster_secrets(cluster_name: str):

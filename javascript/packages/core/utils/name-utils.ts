@@ -19,7 +19,11 @@ const UUID_SUFFIX_LENGTH = 8;
  * ```
  */
 export const generateSuffix = (config: { withDate: boolean } = { withDate: false }): string => {
-  const uuidSuffix = `${SUFFIX_DELIMITER}${crypto.randomUUID().substring(0, UUID_SUFFIX_LENGTH)}`;
+  const uuid = crypto.randomUUID?.() ?? (() => {
+    const h = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0'));
+    return `${h.slice(0, 4).join('')}-${h.slice(4, 6).join('')}-${h.slice(6, 8).join('')}-${h.slice(8, 10).join('')}-${h.slice(10).join('')}`;
+  })();
+  const uuidSuffix = `${SUFFIX_DELIMITER}${uuid.substring(0, UUID_SUFFIX_LENGTH)}`;
 
   if (config.withDate) {
     const isoString = new Date().toISOString();
