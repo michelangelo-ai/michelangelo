@@ -13,7 +13,8 @@ Build and run your first ML pipeline on Michelangelo in minutes. This guide walk
 
 * Python 3.9+
 * [Poetry](https://python-poetry.org/) installed
-* For remote runs: Docker and access to a Kubernetes cluster (or use the [local sandbox](../../getting-started/sandbox-setup.md))
+* For remote runs: Docker and access to a Kubernetes cluster (or use the [local sandbox](/getting-started/sandbox-setup.md))
+* [Create a project](/docs/user-guides/project-management-for-ml-pipelines/)
 
 ## Environment setup
 
