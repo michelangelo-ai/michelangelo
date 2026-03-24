@@ -59,6 +59,7 @@ export function PhaseEntityView<T extends object = object>({
           <CircleExclamationMark
             kind={CircleExclamationMarkKind.ERROR}
             width={theme.sizing.scale1600}
+            height={theme.sizing.scale1600}
           />
         }
         title="Entity not found"
