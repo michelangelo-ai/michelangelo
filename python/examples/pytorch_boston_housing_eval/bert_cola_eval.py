@@ -4,7 +4,7 @@ from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
 
 @uniflow.workflow()
-def train_workflow():
+def eval_workflow():
     model = get_model()
     train_data, validation_data, test_data = eval(
         model,
@@ -29,4 +29,4 @@ if __name__ == "__main__":
     # this is example docker image, we don't need to pull it from docker registry
     ctx.environ["IMAGE_PULL_POLICY"] = "Never"
     ctx.environ["S3_ALLOW_BUCKET_CREATION"] = "True"
-    ctx.run(train_workflow)
+    ctx.run(eval_workflow)
