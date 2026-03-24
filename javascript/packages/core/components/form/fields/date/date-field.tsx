@@ -21,6 +21,7 @@ export const DateField: React.FC<DateFieldProps> = ({
   disabled,
   description,
   caption,
+  labelAddon,
   noFutureDate,
   dateFormat = DATE_FORMAT.ISO_DATE_STRING,
 }) => {
@@ -43,6 +44,7 @@ export const DateField: React.FC<DateFieldProps> = ({
       label={label}
       required={required}
       description={description}
+      labelAddon={labelAddon}
       caption={caption}
       error={meta.touched && meta.error ? meta.error : undefined}
     >

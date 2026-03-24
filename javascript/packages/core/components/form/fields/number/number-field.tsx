@@ -18,6 +18,7 @@ export const NumberField: React.FC<BaseFieldProps<number | undefined>> = ({
   placeholder,
   description,
   caption,
+  labelAddon,
   format,
   parse,
 }) => {
@@ -36,6 +37,7 @@ export const NumberField: React.FC<BaseFieldProps<number | undefined>> = ({
       label={label}
       required={required}
       description={description}
+      labelAddon={labelAddon}
       caption={caption}
       error={meta.touched && meta.error ? meta.error : undefined}
     >
