@@ -330,6 +330,6 @@ Available wrapper functions:
 
 ## Related Documentation
 
-- [Architecture Overview](./) - Technology stack and build process
-- [Types and Patterns](types-and-patterns) - TypeScript types and conventions
-- [Core Systems](core-systems) - Providers, hooks, and error handling
+- [Architecture Overview](./index.md) - Technology stack and build process
+- [Types and Patterns](./types-and-patterns.md) - TypeScript types and conventions
+- [Core Systems](./core-systems.md) - Providers, hooks, and error handling

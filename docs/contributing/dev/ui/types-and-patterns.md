@@ -217,6 +217,6 @@ import { useStudioQuery } from '#core/hooks';
 
 ## Related Documentation
 
-- [Architecture Overview](./) - Technology stack and build process
-- [Core Systems](core-systems) - Providers, hooks, and error handling
-- [UI Components](ui-components) - Table, cell, and form systems
+- [Architecture Overview](./index.md) - Technology stack and build process
+- [Core Systems](./core-systems.md) - Providers, hooks, and error handling
+- [UI Components](./ui-components.md) - Table, cell, and form systems

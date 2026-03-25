@@ -8,7 +8,7 @@ on:
       - 'website/**'
 
 jobs:
-  build:
+  validate-docs:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -24,6 +24,23 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Check for relative links without .md extension
+        working-directory: .
+        run: |
+          # Relative doc links without .md are passed through as raw href values.
+          # GitHub Pages adds trailing slashes, which breaks browser resolution of
+          # relative paths. Links with .md are resolved by Docusaurus at build time.
+          matches=$(grep -rEn '\]\(\.\./|\]\(\./' docs/ --include='*.md' \
+            | grep -v '\.md[)#]' | grep -v '\.png)' | grep -v '\.jpg)' \
+            | grep -v '\.svg)' | grep -v '\.gif)' | grep -v '\.go)' \
+            | grep -v 'http' || true)
+          if [ -n "$matches" ]; then
+            while IFS=: read -r file line content; do
+              echo "::error file=${file},line=${line}::Relative link without .md extension will break on GitHub Pages. Use ./foo.md instead of ./foo"
+            done <<< "$matches"
+            exit 1
+          fi
 
       - name: Build
         id: build

@@ -218,10 +218,10 @@ The best way to learn is to explore working examples:
 
 Detailed API references for each configuration type:
 
-- [Cell Types Reference](cell-type-reference)
-- [Table Configuration Reference](table-configuration-reference)
-- [Phase Configuration Reference](phase-configuration-reference)
-- [Entity Configuration Reference](entity-configuration-reference)
+- [Cell Types Reference](./cell-type-reference.md)
+- [Table Configuration Reference](./table-configuration-reference.md)
+- [Phase Configuration Reference](./phase-configuration-reference.md)
+- [Entity Configuration Reference](./entity-configuration-reference.md)
 
 ### FAQ
 

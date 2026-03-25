@@ -111,7 +111,7 @@ import { normalizeConnectError } from '#rpc/normalize-connect-error';
 
 ## Related Documentation
 
-- [Core Systems](core-systems) - Providers, hooks, and error handling
-- [Types and Patterns](types-and-patterns) - TypeScript types and React component patterns
-- [UI Components](ui-components) - Table, cell, form, and styling systems
-- [Configuration API](configuration/configuration-api) - Defining phases, entities, and views
+- [Core Systems](./core-systems.md) - Providers, hooks, and error handling
+- [Types and Patterns](./types-and-patterns.md) - TypeScript types and React component patterns
+- [UI Components](./ui-components.md) - Table, cell, form, and styling systems
+- [Configuration API](./configuration/configuration-api.md) - Defining phases, entities, and views
