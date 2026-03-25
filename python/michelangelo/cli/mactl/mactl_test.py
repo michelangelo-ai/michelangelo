@@ -816,9 +816,7 @@ class ProxySupportTest(TestCase):
     def test_run_with_proxy_for_service_name(
         self, mock_config, mock_insecure_channel, mock_main
     ):
-        """Test run() uses proxy when address is service name and proxy is configured.
-
-        """
+        """Test proxy usage when address is service name and proxy configured."""
         mock_proxy_instance = MagicMock()
         mock_proxy_instance.create_tunnel.return_value = "localhost:12345"
         mock_proxy_instance.__enter__ = Mock(return_value=mock_proxy_instance)
