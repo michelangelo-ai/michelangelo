@@ -25,7 +25,7 @@ Version and organize trained models:
 
 ### **5. Deploy Your Model**
 Serve predictions in production:
-* [**Deploy Models**](docs/operator-guides/serving) - Deploy models for real-time inference and batch scoring
+* [**Deploy Models**](../operator-guides/serving) - Deploy models for real-time inference and batch scoring
 
 ---
 
