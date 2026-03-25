@@ -349,7 +349,9 @@ def train(
 
 @uniflow.workflow()
 def train_workflow(
-    dataset_cols: str = "CRIM,ZN,INDUS,CHAS,NOX,RM,AGE,DIS,RAD,TAX,PTRATIO,B,LSTAT,target",
+    dataset_cols: str = (
+        "CRIM,ZN,INDUS,CHAS,NOX,RM,AGE,DIS,RAD,TAX,PTRATIO,B,LSTAT,target"
+    ),
 ):
     """Complete XGBoost training workflow for Boston Housing dataset.
 
