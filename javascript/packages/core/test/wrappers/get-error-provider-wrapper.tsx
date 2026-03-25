@@ -1,7 +1,8 @@
 import { ErrorProvider } from '#core/providers/error-provider/error-provider';
-import { ErrorContextValue } from '#core/providers/error-provider/types';
 import { ApplicationError } from '#core/types/error-types';
-import { WrapperComponentProps } from './types';
+
+import type { ErrorContextValue } from '#core/providers/error-provider/types';
+import type { WrapperComponentProps } from './types';
 
 /**
  * Creates a React wrapper for testing components that use error handling features.

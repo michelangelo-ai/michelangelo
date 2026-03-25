@@ -16,12 +16,12 @@ import {
   expectTableRows,
 } from '../__fixtures__/table-test-helpers';
 import { FilterMode } from '../components/filter/types';
-import { TableBodyProps } from '../components/table-body/types';
 import { useTableSelectionContext } from '../plugins/selection/table-selection-context';
 import { Table } from '../table';
 
 import type { TableRow } from '#core/components/table/types/row-types';
 import type { Accessor } from '#core/types/common/studio-types';
+import type { TableBodyProps } from '../components/table-body/types';
 import type { TablePaginationProps } from '../components/table-pagination/types';
 
 describe('Table', () => {

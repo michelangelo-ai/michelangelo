@@ -1,9 +1,9 @@
 import { useCellToString } from '#core/components/cell/use-cell-to-string';
-import { ColumnConfig } from '#core/components/table/types/column-types';
-import { TableData } from '#core/components/table/types/data-types';
 import { getCellValueForColumn } from './get-cell-value-for-column';
 
 import type { Row } from '@tanstack/react-table';
+import type { ColumnConfig } from '#core/components/table/types/column-types';
+import type { TableData } from '#core/components/table/types/data-types';
 import type { FilterHook } from '../types';
 
 /**

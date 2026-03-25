@@ -2,7 +2,8 @@ import { MODEL_ENTITY_CONFIG } from '#core/config/entities/model/model';
 import { PIPELINE_ENTITY_CONFIG } from '#core/config/entities/pipeline/pipeline';
 import { RUN_ENTITY_CONFIG } from '#core/config/entities/run/run';
 import { TRIGGER_ENTITY_CONFIG } from '#core/config/entities/trigger/trigger';
-import { PhaseConfig } from '#core/types/common/studio-types';
+
+import type { PhaseConfig } from '#core/types/common/studio-types';
 
 export const TRAIN_PHASE: PhaseConfig = {
   id: 'train',

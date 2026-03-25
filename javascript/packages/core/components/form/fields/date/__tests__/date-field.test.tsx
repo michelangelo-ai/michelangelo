@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 
 import { DateField } from '#core/components/form/fields/date/date-field';
-import { DATE_FORMAT } from '#core/components/form/fields/date/types';
+import { DateFormat } from '#core/components/form/fields/date/types';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getFormProviderWrapper } from '#core/test/wrappers/get-form-provider-wrapper';
@@ -75,7 +75,7 @@ describe('DateField', () => {
 
   it('displays initial value with ISO format', () => {
     render(
-      <DateField name="date" label="Start Date" dateFormat={DATE_FORMAT.ISO_DATE_STRING} />,
+      <DateField name="date" label="Start Date" dateFormat={DateFormat.ISO_DATE_STRING} />,
       buildWrapper([
         getBaseProviderWrapper(),
         getIconProviderWrapper(),
@@ -89,7 +89,7 @@ describe('DateField', () => {
   it('displays initial value with epoch format', () => {
     // 1705276800 = 2024-01-15T00:00:00.000Z
     render(
-      <DateField name="date" label="Start Date" dateFormat={DATE_FORMAT.EPOCH_SECONDS} />,
+      <DateField name="date" label="Start Date" dateFormat={DateFormat.EPOCH_SECONDS} />,
       buildWrapper([
         getBaseProviderWrapper(),
         getIconProviderWrapper(),

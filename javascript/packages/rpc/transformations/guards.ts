@@ -1,4 +1,4 @@
-import { HasTypeName } from './types';
+import type { HasTypeName } from './types';
 
 /**
  * Type predicate to check if an object has a $typeName property

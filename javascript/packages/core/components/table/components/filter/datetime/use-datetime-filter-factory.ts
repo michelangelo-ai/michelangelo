@@ -1,11 +1,11 @@
 import { DatetimeColumn } from 'baseui/data-table';
 
-import { ColumnConfig } from '#core/components/table/types/column-types';
-import { TableData } from '#core/components/table/types/data-types';
 import { getDateFromEpochSeconds } from '#core/utils/time-utils';
 import { getCellValueForColumn } from '../categorical/get-cell-value-for-column';
 
 import type { Row } from '@tanstack/react-table';
+import type { ColumnConfig } from '#core/components/table/types/column-types';
+import type { TableData } from '#core/components/table/types/data-types';
 import type { FilterHook } from '../types';
 import type { DatetimeFilterValue } from './types';
 

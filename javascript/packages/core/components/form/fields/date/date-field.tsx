@@ -4,7 +4,7 @@ import { isArray, isNil } from 'lodash';
 
 import { FormControl } from '#core/components/form/components/form-control';
 import { useField } from '#core/components/form/hooks/use-field';
-import { DATE_FORMAT, type DateFieldProps } from './types';
+import { type DateFieldProps, DateFormat } from './types';
 import { useDateFormatters } from './use-date-formatters';
 
 import type { Theme } from 'baseui';
@@ -22,7 +22,7 @@ export const DateField: React.FC<DateFieldProps> = ({
   description,
   caption,
   noFutureDate,
-  dateFormat = DATE_FORMAT.ISO_DATE_STRING,
+  dateFormat = DateFormat.ISO_DATE_STRING,
 }) => {
   const { format, parse } = useDateFormatters(dateFormat);
 

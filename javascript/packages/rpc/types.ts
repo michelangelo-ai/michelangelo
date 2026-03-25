@@ -1,6 +1,5 @@
-import { Message } from '@bufbuild/protobuf';
-
-import { getRpcHandlers } from './handlers';
+import type { Message } from '@bufbuild/protobuf';
+import type { getRpcHandlers } from './handlers';
 
 /**
  * @see {@link getRpcHandlers}

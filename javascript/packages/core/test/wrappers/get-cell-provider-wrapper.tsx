@@ -1,6 +1,7 @@
-import { CellRenderer } from '#core/components/cell/types';
 import { CellProvider } from '#core/providers/cell-provider/cell-provider';
-import { WrapperComponentProps } from './types';
+
+import type { CellRenderer } from '#core/components/cell/types';
+import type { WrapperComponentProps } from './types';
 
 export function getCellProviderWrapper({
   renderers = {},

@@ -1,8 +1,9 @@
 import { useContext } from 'react';
 
-import { ErrorNormalizer } from '#core/types/error-types';
 import { ErrorContext } from './error-context';
 import { normalizeUniversalError } from './normalize-universal-error';
+
+import type { ErrorNormalizer } from '#core/types/error-types';
 
 /**
  * Returns a function that normalizes any error to ApplicationError format for

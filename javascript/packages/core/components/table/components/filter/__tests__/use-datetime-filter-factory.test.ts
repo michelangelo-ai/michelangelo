@@ -1,8 +1,9 @@
 import { renderHook } from '@testing-library/react';
 
 import { createMockRow } from '../__fixtures__/mock-row';
-import { DatetimeFilterValue } from '../datetime/types';
 import { useDatetimeFilterFactory } from '../datetime/use-datetime-filter-factory';
+
+import type { DatetimeFilterValue } from '../datetime/types';
 
 // TODO(#977): — column param is partially unused in filter factories.
 // isFilterInactive, getActiveFilter, and buildTableFilterFn do not depend on

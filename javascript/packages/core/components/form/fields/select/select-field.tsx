@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { filterOptions, OnChangeParams, Select } from 'baseui/select';
+import { filterOptions, Select } from 'baseui/select';
 
 import { FormControl } from '#core/components/form/components/form-control';
 import { useField } from '#core/components/form/hooks/use-field';
@@ -7,6 +7,7 @@ import { buildSelectOverrides } from './build-select-overrides';
 import { formatSelectedValue } from './format-selected-value';
 import { serializeKey } from './serialize-key';
 
+import type { OnChangeParams } from 'baseui/select';
 import type { SelectFieldProps, SelectOption } from './types';
 
 export function SelectField<V = string | number>({

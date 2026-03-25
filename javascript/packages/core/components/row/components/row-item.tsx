@@ -1,10 +1,10 @@
 import { useStyletron } from 'baseui';
 
 import { DefaultCellRenderer } from '#core/components/cell/renderers/default-cell-renderer';
-import { CellRenderer } from '#core/components/cell/types';
 import { getObjectValue } from '#core/utils/object-utils';
 import { RowLabel } from './row-label';
 
+import type { CellRenderer } from '#core/components/cell/types';
 import type { RowProps } from '#core/components/row/types';
 
 export const RowItem = (props: {

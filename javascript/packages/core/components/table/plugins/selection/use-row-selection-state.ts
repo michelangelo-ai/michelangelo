@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { ControlledTableState, TableState } from '../../types/table-types';
+import type { ControlledTableState, TableState } from '../../types/table-types';
 
 /**
  * Provides controlled/uncontrolled state management for row selection enabling/disabling

@@ -1,5 +1,5 @@
 import { getDateFromEpochSeconds, getEpochSecondsFromDate } from '#core/utils/time-utils';
-import { DATE_FORMAT } from './types';
+import { DateFormat } from './types';
 
 type UseDateFormattersReturn = {
   format: (value: string) => Date | null;
@@ -19,15 +19,15 @@ type UseDateFormattersReturn = {
  * @param dateFormat - Controls the persisted date format (epoch or ISO).
  */
 export function useDateFormatters(
-  dateFormat: DATE_FORMAT = DATE_FORMAT.ISO_DATE_STRING
+  dateFormat: DateFormat = DateFormat.ISO_DATE_STRING
 ): UseDateFormattersReturn {
   const toDate =
-    dateFormat === DATE_FORMAT.EPOCH_SECONDS
+    dateFormat === DateFormat.EPOCH_SECONDS
       ? (value: string) => (value ? getDateFromEpochSeconds(parseInt(value)) : null)
       : (value: string) => (value ? new Date(value) : null);
 
   const fromDate =
-    dateFormat === DATE_FORMAT.EPOCH_SECONDS
+    dateFormat === DateFormat.EPOCH_SECONDS
       ? (date: Date | null) => (date ? String(getEpochSecondsFromDate(date)) : '')
       : (date: Date | null) => (date ? date.toISOString() : '');
 

@@ -1,10 +1,11 @@
-import { ReactNode } from 'react';
 import { useStyletron } from 'baseui';
 import { ACCESSIBILITY_TYPE, PLACEMENT, StatefulTooltip } from 'baseui/tooltip';
 
 import { Icon } from '#core/components/icon/icon';
 import { IconKind } from '#core/components/icon/types';
 import { Markdown } from '#core/components/markdown/markdown';
+
+import type { ReactNode } from 'react';
 
 /**
  * Displays a help icon with a tooltip containing markdown-formatted help text.

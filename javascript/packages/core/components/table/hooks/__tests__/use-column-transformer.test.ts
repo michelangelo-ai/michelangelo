@@ -1,4 +1,3 @@
-import { CellContext } from '@tanstack/react-table';
 import { renderHook, screen } from '@testing-library/react';
 import { render } from '@testing-library/react';
 
@@ -7,6 +6,7 @@ import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { useColumnTransformer } from '../use-column-transformer';
 
+import type { CellContext } from '@tanstack/react-table';
 import type { ColumnConfig } from '../../types/column-types';
 
 describe('useColumnTransformer', () => {
