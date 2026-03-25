@@ -31,10 +31,18 @@ jobs:
           # Relative doc links without .md are passed through as raw href values.
           # GitHub Pages adds trailing slashes, which breaks browser resolution of
           # relative paths. Links with .md are resolved by Docusaurus at build time.
-          matches=$(grep -rEn '\]\(\.\./|\]\(\./' docs/ --include='*.md' \
-            | grep -v '\.md[)#]' | grep -v '\.png)' | grep -v '\.jpg)' \
-            | grep -v '\.svg)' | grep -v '\.gif)' | grep -v '\.go)' \
-            | grep -v 'http' || true)
+  SKIP_MD_EXTENSIONS='\.md[)#]'
+  SKIP_IMAGE_EXTENSIONS='\.(png|jpg|svg|gif)\)'
+  SKIP_CODE_EXTENSIONS='\.go\)'
+  SKIP_REMOTE_LINKS='http'
+
+  # Search for relative links, then drop (grep -v) the ones that match our skip patterns
+  matches=$(grep -rEn '\]\(\.\.?/' docs/ --include='*.md' | \
+    grep -vE "$SKIP_MD_EXTENSIONS"    | \
+    grep -vE "$SKIP_IMAGE_EXTENSIONS" | \
+    grep -vE "$SKIP_CODE_EXTENSIONS"  | \
+    grep -vE "$SKIP_REMOTE_LINKS"     | \
+    || true)
           if [ -n "$matches" ]; then
             while IFS=: read -r file line content; do
               echo "::error file=${file},line=${line}::Relative link without .md extension will break on GitHub Pages. Use ./foo.md instead of ./foo"
