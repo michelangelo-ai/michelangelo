@@ -71,22 +71,22 @@ describe('TextareaField', () => {
     expect(screen.queryByText(/\d+ \/ \d+/)).not.toBeInTheDocument();
   });
 
-  it('renders labelAddon', () => {
+  it('renders labelEndEnhancer', () => {
     render(
-      <TextareaField name="notes" label="Notes" labelAddon={<button>Generate</button>} />,
+      <TextareaField name="notes" label="Notes" labelEndEnhancer={<button>Generate</button>} />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
     );
 
     expect(screen.getByRole('button', { name: 'Generate' })).toBeInTheDocument();
   });
 
-  it('renders labelAddon alongside character count', () => {
+  it('renders labelEndEnhancer alongside character count', () => {
     render(
       <TextareaField
         name="notes"
         label="Notes"
         maxLength={100}
-        labelAddon={<button>Generate</button>}
+        labelEndEnhancer={<button>Generate</button>}
       />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
     );
@@ -95,7 +95,7 @@ describe('TextareaField', () => {
     expect(screen.getByRole('button', { name: 'Generate' })).toBeInTheDocument();
   });
 
-  it('updates character count alongside labelAddon as user types', async () => {
+  it('updates character count alongside labelEndEnhancer as user types', async () => {
     const user = userEvent.setup();
 
     render(
@@ -103,7 +103,7 @@ describe('TextareaField', () => {
         name="notes"
         label="Notes"
         maxLength={50}
-        labelAddon={<button>Generate</button>}
+        labelEndEnhancer={<button>Generate</button>}
       />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
     );

@@ -210,7 +210,7 @@ function LabelAddonExamples() {
         <SelectField
           name="region"
           label="Region"
-          labelAddon={
+          labelEndEnhancer={
             <Button size="mini" kind="tertiary" onClick={() => change('region', '')} type="button">
               Clear
             </Button>
@@ -230,7 +230,7 @@ function LabelAddonExamples() {
           label="Description"
           maxLength={200}
           rows={3}
-          labelAddon={
+          labelEndEnhancer={
             <Button
               size="mini"
               kind="tertiary"
@@ -250,7 +250,7 @@ function LabelAddonExamples() {
           name="addressLine1"
           label="Address Line 1"
           rows={3}
-          labelAddon={
+          labelEndEnhancer={
             <Button
               size="mini"
               kind="tertiary"
