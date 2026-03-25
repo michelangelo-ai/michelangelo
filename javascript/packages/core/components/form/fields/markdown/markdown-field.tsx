@@ -25,7 +25,7 @@ export const MarkdownField: React.FC<MarkdownFieldProps> = ({
   placeholder,
   description,
   caption,
-  labelAddon,
+  labelEndEnhancer,
   format,
   parse,
   rows,
@@ -48,7 +48,7 @@ export const MarkdownField: React.FC<MarkdownFieldProps> = ({
       label={label}
       required={required}
       description={description}
-      labelAddon={labelAddon}
+      labelEndEnhancer={labelEndEnhancer}
       caption={caption}
       error={meta.touched && meta.error ? meta.error : undefined}
       counter={maxLength ? { length: currentLength, maxLength } : undefined}
