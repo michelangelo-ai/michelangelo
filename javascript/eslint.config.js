@@ -1,5 +1,8 @@
 // javascript/eslint.config.js
 import js from '@eslint/js';
+
+import noFixtureConstants from './eslint-local-rules/no-fixture-constants.js';
+import noModuleScopeTestSetup from './eslint-local-rules/no-module-scope-test-setup.js';
 import tseslint from 'typescript-eslint';
 import prettierConfig from 'eslint-config-prettier';
 import baseUIEslint from 'eslint-plugin-baseui';
@@ -63,6 +66,7 @@ export default [
       '**/coverage/**',
       'eslint.config.js',
       '**/vite-env.d.ts',
+      'eslint-local-rules/**',
     ],
   },
 
@@ -147,6 +151,28 @@ export default [
     },
     plugins: sharedPlugins,
     rules: sharedRules,
+  },
+
+  // All package tests — enforce test setup conventions
+  {
+    files: ['packages/**/__tests__/**/*.{ts,tsx}'],
+    plugins: {
+      local: { rules: { 'no-module-scope-test-setup': noModuleScopeTestSetup } },
+    },
+    rules: {
+      'local/no-module-scope-test-setup': 'error',
+    },
+  },
+
+  // All package fixtures — enforce factory function exports only
+  {
+    files: ['packages/**/__fixtures__/**/*.{ts,tsx}'],
+    plugins: {
+      local: { rules: { 'no-fixture-constants': noFixtureConstants } },
+    },
+    rules: {
+      'local/no-fixture-constants': 'error',
+    },
   },
 
   // Core package
