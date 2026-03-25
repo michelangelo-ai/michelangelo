@@ -2,10 +2,12 @@ import { Outlet } from 'react-router-dom-v5-compat';
 
 import { BreadcrumbBar } from '#core/components/breadcrumb-bar/breadcrumb-bar';
 
+import type { NavLink } from '#core/components/breadcrumb-bar/types';
 import type { CategoryConfig } from '#core/types/common/studio-types';
 
 interface Props {
   categories: CategoryConfig[];
+  topLevelLinks?: NavLink[];
 }
 
 /**
@@ -13,6 +15,9 @@ interface Props {
  *
  * Renders as a pathless Route element so child routes inherit its matched params,
  * allowing useStudioParams (and useParams) to resolve correctly inside BreadcrumbBar.
+ *
+ * Top-level links (e.g. to pages outside the project context) can be provided via
+ * `topLevelLinks` and appear at the top of the menu drawer.
  *
  * @example
  * ```tsx
@@ -23,10 +28,10 @@ interface Props {
  * </Routes>
  * ```
  */
-export function StudioBar({ categories }: Props) {
+export function StudioBar({ categories, topLevelLinks }: Props) {
   return (
     <>
-      <BreadcrumbBar categories={categories} />
+      <BreadcrumbBar categories={categories} topLevelLinks={topLevelLinks} />
       <Outlet />
     </>
   );

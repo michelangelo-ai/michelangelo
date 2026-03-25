@@ -6,11 +6,18 @@ import { ANCHOR, Drawer } from 'baseui/drawer';
 import { Icon } from '#core/components/icon/icon';
 import { Tag } from '#core/components/tag/tag';
 import { PhaseEntityList } from './phase-entity-list';
-import { PhaseHeader } from './styled-components';
+import { PhaseHeader, TopLevelNavLink } from './styled-components';
 
 import type { PhaseConfig } from '#core/types/common/studio-types';
+import type { NavLink } from './types';
 
-export function MenuDrawer({ phases, projectId }: { phases: PhaseConfig[]; projectId: string }) {
+interface Props {
+  phases: PhaseConfig[];
+  projectId: string;
+  topLevelLinks?: NavLink[];
+}
+
+export function MenuDrawer({ phases, projectId, topLevelLinks }: Props) {
   const [css, theme] = useStyletron();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -55,9 +62,30 @@ export function MenuDrawer({ phases, projectId }: { phases: PhaseConfig[]; proje
           },
         }}
       >
-        <div
+        <nav
           className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale400 })}
         >
+          {topLevelLinks && topLevelLinks.length > 0 && (
+            <div>
+              <ul className={css({ listStyle: 'none', margin: 0, padding: 0 })}>
+                {topLevelLinks.map((link) => (
+                  <li key={link.path}>
+                    <TopLevelNavLink to={link.path} onClick={() => setIsMenuOpen(false)}>
+                      {link.label}
+                      <Icon name="chevronRight" title="" />
+                    </TopLevelNavLink>
+                  </li>
+                ))}
+              </ul>
+              <hr
+                className={css({
+                  borderTop: `1px solid ${theme.colors.borderOpaque}`,
+                  borderBottom: 0,
+                  margin: 0,
+                })}
+              />
+            </div>
+          )}
           <span
             className={css({
               ...theme.typography.HeadingXSmall,
@@ -85,7 +113,7 @@ export function MenuDrawer({ phases, projectId }: { phases: PhaseConfig[]; proje
               />
             </div>
           ))}
-        </div>
+        </nav>
       </Drawer>
     </>
   );

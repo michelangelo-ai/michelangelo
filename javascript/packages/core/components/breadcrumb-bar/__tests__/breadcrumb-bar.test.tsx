@@ -381,4 +381,61 @@ describe('BreadcrumbBar — menu drawer', () => {
 
     expect(screen.getByText('Coming soon')).toBeInTheDocument();
   });
+
+  it('renders top-level links with correct hrefs in the drawer', async () => {
+    render(
+      <BreadcrumbBar
+        categories={[
+          {
+            id: 'core-ml',
+            name: 'Core ML',
+            phases: [
+              { id: 'train', name: 'Train & Evaluate', icon: '', state: 'active', entities: [] },
+            ],
+          },
+        ]}
+        topLevelLinks={[
+          { label: 'Settings', path: '/settings' },
+          { label: 'Dashboard', path: '/dashboard' },
+        ]}
+      />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getRouterWrapper({ location: '/my-project' }),
+      ])
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /menu/i }));
+
+    expect(screen.getByRole('link', { name: /settings/i })).toHaveAttribute('href', '/settings');
+    expect(screen.getByRole('link', { name: /dashboard/i })).toHaveAttribute('href', '/dashboard');
+  });
+
+  it('navigates when a top-level link is clicked', async () => {
+    render(
+      <BreadcrumbBar
+        categories={[
+          {
+            id: 'core-ml',
+            name: 'Core ML',
+            phases: [
+              { id: 'train', name: 'Train & Evaluate', icon: '', state: 'active', entities: [] },
+            ],
+          },
+        ]}
+        topLevelLinks={[{ label: 'Settings', path: '/settings' }]}
+      />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getRouterWrapper({ location: '/my-project' }),
+      ])
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /menu/i }));
+    await userEvent.click(screen.getByRole('link', { name: /settings/i }));
+
+    expect(screen.getByText(/Current pathname: \/settings/)).toBeInTheDocument();
+  });
 });
