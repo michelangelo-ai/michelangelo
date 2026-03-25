@@ -17,7 +17,7 @@ export const UrlField: React.FC<UrlFieldProps> = ({
   validate,
   description,
   caption,
-  labelAddon,
+  labelEndEnhancer,
   format,
   parse,
   placeholder,
@@ -40,7 +40,7 @@ export const UrlField: React.FC<UrlFieldProps> = ({
       label={label}
       required={required}
       description={description}
-      labelAddon={labelAddon}
+      labelEndEnhancer={labelEndEnhancer}
       caption={caption}
       error={meta.touched && meta.error ? meta.error : undefined}
     >

@@ -12,7 +12,7 @@ export const FormControl: React.FC<FormControlProps> = ({
   label,
   required,
   description,
-  labelAddon,
+  labelEndEnhancer,
   caption,
   error,
   counter,
@@ -20,16 +20,16 @@ export const FormControl: React.FC<FormControlProps> = ({
 }) => {
   const [css, theme] = useStyletron();
 
-  const labelEndEnhancer =
-    counter || labelAddon ? (
-      <LabelEndEnhancerContent counter={counter} labelAddon={labelAddon} />
+  const composedLabelEndEnhancer =
+    counter || labelEndEnhancer ? (
+      <LabelEndEnhancerContent counter={counter} labelEndEnhancer={labelEndEnhancer} />
     ) : undefined;
 
   return (
     <div className={css({ width: '100%' })}>
       <BaseFormControl
         label={label && <Label label={label} required={required} description={description} />}
-        labelEndEnhancer={labelEndEnhancer}
+        labelEndEnhancer={composedLabelEndEnhancer}
         caption={
           caption && (
             <TruncatedText>
@@ -66,9 +66,9 @@ export const FormControl: React.FC<FormControlProps> = ({
   );
 };
 
-const LabelEndEnhancerContent: React.FC<Pick<FormControlProps, 'counter' | 'labelAddon'>> = ({
+const LabelEndEnhancerContent: React.FC<Pick<FormControlProps, 'counter' | 'labelEndEnhancer'>> = ({
   counter,
-  labelAddon,
+  labelEndEnhancer,
 }) => {
   const [css, theme] = useStyletron();
 
@@ -84,7 +84,7 @@ const LabelEndEnhancerContent: React.FC<Pick<FormControlProps, 'counter' | 'labe
           {counter.length}/{counter.maxLength}
         </span>
       )}
-      {labelAddon}
+      {labelEndEnhancer}
     </>
   );
 };

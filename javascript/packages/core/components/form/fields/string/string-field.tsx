@@ -17,7 +17,7 @@ export const StringField: React.FC<BaseFieldProps<string>> = ({
   placeholder,
   description,
   caption,
-  labelAddon,
+  labelEndEnhancer,
   format,
   parse,
 }) => {
@@ -36,7 +36,7 @@ export const StringField: React.FC<BaseFieldProps<string>> = ({
       label={label}
       required={required}
       description={description}
-      labelAddon={labelAddon}
+      labelEndEnhancer={labelEndEnhancer}
       caption={caption}
       error={meta.touched && meta.error ? meta.error : undefined}
     >

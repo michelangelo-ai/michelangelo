@@ -2,7 +2,7 @@ export interface FormControlProps {
   label?: string;
   required?: boolean;
   description?: string;
-  labelAddon?: React.ReactNode;
+  labelEndEnhancer?: React.ReactNode;
   /** Rendered as Markdown. */
   caption?: string;
   error?: string;

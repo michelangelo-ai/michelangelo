@@ -19,7 +19,7 @@ export const InlineRadioField: React.FC<RadioFieldProps> = ({
   disabled,
   description,
   caption,
-  labelAddon,
+  labelEndEnhancer,
   format,
   parse,
   options,
@@ -51,7 +51,7 @@ export const InlineRadioField: React.FC<RadioFieldProps> = ({
         label={label}
         required={required}
         description={description}
-        labelAddon={labelAddon}
+        labelEndEnhancer={labelEndEnhancer}
         caption={caption}
         error={meta.touched && meta.error ? meta.error : undefined}
       >
@@ -76,7 +76,7 @@ export const InlineRadioField: React.FC<RadioFieldProps> = ({
       label={label}
       required={required}
       description={description}
-      labelAddon={labelAddon}
+      labelEndEnhancer={labelEndEnhancer}
       caption={caption}
       error={meta.touched && meta.error ? meta.error : undefined}
     >

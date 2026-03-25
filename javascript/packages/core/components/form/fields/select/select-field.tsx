@@ -20,7 +20,7 @@ export function SelectField<V = string | number>({
   disabled,
   description,
   caption,
-  labelAddon,
+  labelEndEnhancer,
   placeholder,
   format,
   parse,
@@ -108,7 +108,7 @@ export function SelectField<V = string | number>({
       label={label}
       required={required}
       description={description}
-      labelAddon={labelAddon}
+      labelEndEnhancer={labelEndEnhancer}
       caption={caption}
       error={meta.touched && meta.error ? meta.error : undefined}
     >
