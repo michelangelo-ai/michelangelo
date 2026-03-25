@@ -4,8 +4,6 @@
  * Wrappers, props, and component configurations defined at the top of a test
  * file accumulate invisible shared state across tests, making failures harder
  * to reason about. Inline everything inside each test instead.
- *
- * @see testing-standards skill — "Anti-Patterns" section
  */
 
 /** @type {import('eslint').Rule.RuleModule} */
@@ -26,8 +24,6 @@ const rule = {
         '    render(<Foo />, buildWrapper([getBaseProviderWrapper()]));',
         '  });',
         '',
-        'If this declaration is intentional (e.g. a shared test utility), suppress with:',
-        '  // eslint-disable-next-line local/no-module-scope-test-setup',
       ].join('\n'),
 
       noModuleScopeSetupConst: [

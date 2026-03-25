@@ -1,11 +1,12 @@
 /**
  * @fileoverview Disallows non-function exports in __fixtures__ files.
  *
- * Fixture files must export factory functions, not plain values. A shared
- * constant gives every test the same object reference — mutations in one
- * test bleed into others. A factory function returns a fresh copy per call.
+ * Constants in fixture files could be shared across tests. This accumulates
+ * invisible shared state across tests, making failures harder to reason about.
+ * Imported fixture constants also make reasoning about expectations more difficult,
+ * since there is redirection between the fixture and the test.
  *
- * @see testing-standards skill — "Anti-Patterns" section
+ * Inline everything inside each test instead.
  */
 
 /** @type {import('eslint').Rule.RuleModule} */
@@ -18,15 +19,13 @@ const rule = {
     },
     messages: {
       noFixtureConstant: [
-        "'{{ name }}' exports a plain value. Fixture files must only export factory functions.",
-        'Wrap it in a factory so each test gets a fresh copy:',
+        "'{{ name }}' exports a plain value. Fixture files must only export functions. For",
+        ' values that are shared across tests, use a factory function.',
         '',
         '  export function create{{ name }}(overrides = {}) {',
         '    return { ...defaults, ...overrides };',
         '  }',
         '',
-        'If this export is intentional, suppress with:',
-        '  // eslint-disable-next-line local/no-fixture-constants',
       ].join('\n'),
     },
     schema: [],
