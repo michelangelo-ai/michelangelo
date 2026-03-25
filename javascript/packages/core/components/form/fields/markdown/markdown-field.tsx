@@ -7,6 +7,12 @@ import { Markdown } from '#core/components/markdown/markdown';
 
 import type { MarkdownFieldProps } from './types';
 
+/**
+ * Markdown-aware text field with dual rendering modes.
+ *
+ * In edit mode, displays a plain textarea for raw markdown input.
+ * In read-only mode, renders the stored value as formatted markdown.
+ */
 export const MarkdownField: React.FC<MarkdownFieldProps> = ({
   name,
   label,
@@ -61,13 +67,13 @@ export const MarkdownField: React.FC<MarkdownFieldProps> = ({
             paddingRight: theme.sizing.scale550,
           })}
         >
-          <Markdown>{input.value ?? ''}</Markdown>
+          <Markdown>{input.value}</Markdown>
         </div>
       ) : (
         <Textarea
           id={input.name}
           name={input.name}
-          value={input.value ?? ''}
+          value={input.value}
           onChange={(e) => input.onChange(e.currentTarget.value)}
           onBlur={input.onBlur}
           onFocus={input.onFocus}
