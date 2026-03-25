@@ -115,7 +115,7 @@ For more advanced tasks, such as training DL models, setting up customized retra
 
 CanvasFlex provides a highly customized, code driven ML development experience by applying software development principles to ML development. Users can create their own dependencies that can be managed in the UI environment.
 
-**Not sure where to start?** Check out our [user guides](../user-guides) for end-to-end examples.
+**Not sure where to start?** Check out our [user guides](../user-guides/index.md) for end-to-end examples.
 
 ## Architecture
 
@@ -250,12 +250,12 @@ A: Yes, with proper configuration. Michelangelo supports:
 
 ---
 
-**Still have questions?** Check out our [documentation](../), join the [community forum](https://github.com/michelangelo-ai/michelangelo/discussions), or explore the [user guides](../user-guides).
+**Still have questions?** Check out our [documentation](../intro.md), join the [community forum](https://github.com/michelangelo-ai/michelangelo/discussions), or explore the [user guides](../user-guides/index.md).
 
 ---
 
 ## What's next?
 
-- **Ready to build?** [Set up your local sandbox](./sandbox-setup) and follow the [Getting Started with Pipelines](../user-guides/ml-pipelines/getting-started) guide (~30 min)
-- **Want to understand the concepts first?** Read [Core Concepts and Key Terms](./core-concepts-and-key-terms)
-- **Looking for examples?** Browse [end-to-end tutorials](../user-guides#learning-by-examples) covering XGBoost, BERT, GPT fine-tuning, and recommendation systems
+- **Ready to build?** [Set up your local sandbox](./sandbox-setup.md) and follow the [Getting Started with Pipelines](../user-guides/ml-pipelines/getting-started.md) guide (~30 min)
+- **Want to understand the concepts first?** Read [Core Concepts and Key Terms](./core-concepts-and-key-terms.md)
+- **Looking for examples?** Browse [end-to-end tutorials](../user-guides/index.md#learning-by-examples) covering XGBoost, BERT, GPT fine-tuning, and recommendation systems

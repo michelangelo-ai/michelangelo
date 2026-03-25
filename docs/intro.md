@@ -14,28 +14,27 @@ Michelangelo is an end-to-end ML platform for building, deploying, and managing 
 
 Understand what the platform does, how it compares to your current stack, and whether it fits your use case.
 
-- **[Overview](/docs/getting-started/overview)** — What Michelangelo is, how it works, and how familiar tools map to it
-- **[Core Concepts](/docs/getting-started/core-concepts-and-key-terms)** — Projects, workflows, tasks, and the key terms you'll encounter
+- **[Overview](./getting-started/overview.md)** — What Michelangelo is, how it works, and how familiar tools map to it
+- **[Core Concepts](./getting-started/core-concepts-and-key-terms.md)** — Projects, workflows, tasks, and the key terms you'll encounter
 
 ### I want to build my first pipeline
 
 Get a local environment running and build an end-to-end ML pipeline.
 
-- **[Sandbox Setup](/docs/getting-started/sandbox-setup)** — Set up a local Michelangelo cluster (~20 min)
-- **[Getting Started with Pipelines](/docs/user-guides/ml-pipelines/getting-started)** — Build your first pipeline from scratch (~30 min)
+- **[Sandbox Setup](./getting-started/sandbox-setup.md)** — Set up a local Michelangelo cluster (~20 min)
+- **[Getting Started with Pipelines](./user-guides/ml-pipelines/getting-started.md)** — Build your first pipeline from scratch (~30 min)
 - **[Example Projects](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples)** — Boston Housing, BERT text classification, GPT fine-tuning, and more
 
 ### I'm deploying or operating the platform
 
 Set up infrastructure, configure compute clusters, and deploy the UI.
 
-- **[Operator Guides](/docs/operator-guides)** — API framework, compute clusters, and serving infrastructure
-- **[Building from Source](/docs/contributing/building-michelangelo-ai-from-source)** — Compile and run the platform locally
+- **[Operator Guides](./operator-guides/index.md)** — API framework, compute clusters, and serving infrastructure
+- **[Building from Source](./contributing/building-michelangelo-ai-from-source.md)** — Compile and run the platform locally
 
 ### I want to contribute
 
-- **[Developer Guide](/docs/contributing/developer-guide)** — Contribution workflow and development practices
-- **[Documentation Guide](/docs/contributing/documentation-guide)** — How to write and structure docs
+- **[Documentation Guide](./contributing/documentation-guide.md)** — How to write and structure docs
 
 ## What Michelangelo is — and isn't
 
@@ -58,5 +57,5 @@ Understanding scope helps you decide if Michelangelo is the right tool.
 ## Quick links
 
 - [GitHub Repository](https://github.com/michelangelo-ai/michelangelo)
-- [CLI Reference](/docs/user-guides/cli)
-- [ML Pipelines Overview](/docs/user-guides/ml-pipelines)
+- [CLI Reference](./user-guides/cli.md)
+- [ML Pipelines Overview](./user-guides/ml-pipelines/index.md)

@@ -242,6 +242,6 @@ Available providers:
 
 ## Related Documentation
 
-- [Architecture Overview](./) - Technology stack and build process
-- [Types and Patterns](types-and-patterns) - TypeScript types and conventions
-- [UI Components](ui-components) - Table, cell, and form systems
+- [Architecture Overview](./index.md) - Technology stack and build process
+- [Types and Patterns](./types-and-patterns.md) - TypeScript types and conventions
+- [UI Components](./ui-components.md) - Table, cell, and form systems
