@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 
-import { UserTimeZone } from '#core/providers/user-provider/types';
+import { TimeZone } from '#core/types/time-types';
 import { mockTimezone } from '#core/test/utils/mock-timezone';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
@@ -28,7 +28,7 @@ describe('DateTime', () => {
       <DateTime timestamp="1720656639" />,
       buildWrapper([
         getBaseProviderWrapper(),
-        getUserProviderWrapper({ timeZone: UserTimeZone.Local }),
+        getUserProviderWrapper({ timeZone: TimeZone.Local }),
       ])
     );
 
@@ -40,7 +40,7 @@ describe('DateTime', () => {
       <DateTime timestamp="1720656639" />,
       buildWrapper([
         getBaseProviderWrapper(),
-        getUserProviderWrapper({ timeZone: UserTimeZone.UTC }),
+        getUserProviderWrapper({ timeZone: TimeZone.UTC }),
       ])
     );
 
@@ -52,7 +52,7 @@ describe('DateTime', () => {
       <DateTime timestamp={1720656639} />,
       buildWrapper([
         getBaseProviderWrapper(),
-        getUserProviderWrapper({ timeZone: UserTimeZone.Local }),
+        getUserProviderWrapper({ timeZone: TimeZone.Local }),
       ])
     );
 

@@ -1,4 +1,4 @@
-import type { StudioParamsView } from '#core/hooks/routing/use-studio-params/types';
+import type { StudioParamsView } from '#core/types/common/view-types';
 import type { InterpolationContext } from './types';
 
 /**
