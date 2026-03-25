@@ -398,6 +398,7 @@ def run():
 
     if _is_service_name(ADDRESS) and proxy_module_path:
         import importlib
+
         proxy_mod = importlib.import_module(proxy_module_path)
         cli_proxy_class = proxy_mod.CLIProxy
         with cli_proxy_class() as proxy:
