@@ -47,6 +47,16 @@ const sharedRules = {
   // Disabled due to BaseUI 15 compatibility issues
   // 'baseui/deprecated-theme-api': 'warn',
   // 'baseui/deprecated-component-api': 'warn',
+  'no-nested-ternary': 'error',
+  eqeqeq: ['error', 'always', { null: 'ignore' }],
+  'no-restricted-syntax': [
+    'error',
+    {
+      selector: 'ExportDefaultDeclaration',
+      message:
+        'Use named exports. Default exports make imports harder to refactor and autocomplete.',
+    },
+  ],
   'baseui/no-deep-imports': 'warn',
   '@typescript-eslint/array-type': 'off',
   '@typescript-eslint/consistent-type-definitions': 'off',
@@ -222,6 +232,19 @@ export default [
     },
     plugins: sharedPlugins,
     rules: sharedRules,
+  },
+
+  // Allow default exports in config files and type declarations (required by their frameworks)
+  {
+    files: [
+      'vitest.config.ts',
+      '**/vite.config.ts',
+      '**/vite.config.production.ts',
+      '**/*.d.ts',
+    ],
+    rules: {
+      'no-restricted-syntax': 'off',
+    },
   },
 
   // Disable conflicting style rules (Prettier)

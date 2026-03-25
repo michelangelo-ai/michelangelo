@@ -20,7 +20,14 @@ export function toFlatDotPathMap(
 
   for (const [key, value] of Object.entries(obj)) {
     const isIndex = /^\d+$/.test(key);
-    const path = prefix ? (isIndex ? `${prefix}[${key}]` : `${prefix}.${key}`) : key;
+    let path: string;
+    if (!prefix) {
+      path = key;
+    } else if (isIndex) {
+      path = `${prefix}[${key}]`;
+    } else {
+      path = `${prefix}.${key}`;
+    }
 
     if (value !== null && typeof value === 'object') {
       Object.assign(result, toFlatDotPathMap(value as Record<string, unknown>, path));
