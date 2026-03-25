@@ -15,7 +15,7 @@
     "@mui/icons-material": "^7.1.0",
     "@mui/material": "^7.1.0",
     "@tanstack/react-query": "5.39.0",
-    "@uber/michelangelo-core": "*",
+    "@michelangelo-ai/core": "*",
     "baseui": "15.0.0",
     "react-router-dom": "5.3.4",
     "react-router-dom-v5-compat": "6.29.0",
