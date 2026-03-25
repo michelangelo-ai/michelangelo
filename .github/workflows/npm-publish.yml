@@ -70,6 +70,4 @@ jobs:
       - name: Publish to npm
         run: |
           cd javascript/packages/core
-          npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          npm publish --provenance --access public
