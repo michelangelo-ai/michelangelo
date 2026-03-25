@@ -1,6 +1,6 @@
 import { type UserContextType } from '#core/providers/user-provider/types';
-import { TimeZone } from '#core/types/time-types';
 import { UserProvider } from '#core/providers/user-provider/user-provider';
+import { TimeZone } from '#core/types/time-types';
 import { WrapperComponentProps } from './types';
 
 /**
