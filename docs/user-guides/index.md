@@ -45,7 +45,7 @@ Serve predictions in production:
 * [Prepare your data](./prepare-your-data.md)
 * [Train a model](./train-and-register-a-model.md)
 * [Manage your models](./model-registry-guide.md)
-* [Deploy models](docs/operator-guides/serving)
+* [Deploy models](../operator-guides/serving)
 
 ### **Advanced Topics**
 
