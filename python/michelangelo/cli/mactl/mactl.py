@@ -3,6 +3,7 @@
 A command line interface to interact with the Michelangelo API server via gRPC.
 """
 
+import importlib
 import logging
 import re
 import sys
@@ -397,8 +398,6 @@ def run():
     proxy_module_path = _CONFIG["plugin"].get("proxy", "")
 
     if _is_service_name(ADDRESS) and proxy_module_path:
-        import importlib
-
         proxy_mod = importlib.import_module(proxy_module_path)
         cli_proxy_class = proxy_mod.CLIProxy
         with cli_proxy_class() as proxy:
