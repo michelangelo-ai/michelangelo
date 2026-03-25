@@ -1,6 +1,6 @@
 ---
 name: File and Directory structuring
-description: "Trigger when implementing any new feature, hook, or component — decisions about where to put new files and how to import them must follow these rules. Also trigger when adding imports or spotting barrel exports (index.ts), which are banned in this codebase."
+description: 'Trigger when implementing any new feature, hook, or component — decisions about where to put new files and how to import them must follow these rules. Also trigger when adding imports.'
 user-invocable: false
 ---
 
@@ -8,7 +8,6 @@ user-invocable: false
 
 ## Import Strategy
 
-- **Direct imports only** — no `index.ts` barrel exports; import directly from source files
 - **Co-locate related code** — types, context, hooks, tests, and utils live alongside the component they belong to
 - **Flat over nested** — start flat; introduce a subdirectory only when you have multiple files of the same type (e.g., several hooks → `hooks/`, several utils → `utils/`)
 
@@ -39,6 +38,5 @@ user-invocable: false
 
 ## Anti-Patterns
 
-- ❌ `index.ts` barrel exports — import directly from source
 - ❌ Default exports — use named exports for all modules
 - ❌ Generic filenames without namespace (`action-button.tsx` vs `table-action-button.tsx`)

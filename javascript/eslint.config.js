@@ -13,15 +13,6 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
 import globals from 'globals';
 
-// Local rules plugin (single shared reference required by ESLint flat config)
-const localPlugin = {
-  rules: {
-    'no-module-scope-test-setup': noModuleScopeTestSetup,
-    'no-fixture-constants': noFixtureConstants,
-    'no-barrel-exports': noBarrelExports,
-  },
-};
-
 // Shared plugins (used in app and packages/*)
 const sharedPlugins = {
   prettier: prettierPlugin,
@@ -166,7 +157,9 @@ export default [
   // All package tests — enforce test setup conventions
   {
     files: ['packages/**/__tests__/**/*.{ts,tsx}'],
-    plugins: { local: localPlugin },
+    plugins: {
+      local: { rules: { 'no-module-scope-test-setup': noModuleScopeTestSetup } },
+    },
     rules: {
       'local/no-module-scope-test-setup': 'error',
     },
@@ -175,21 +168,26 @@ export default [
   // All package fixtures — enforce factory function exports only
   {
     files: ['packages/**/__fixtures__/**/*.{ts,tsx}'],
-    plugins: { local: localPlugin },
+    plugins: {
+      local: { rules: { 'no-fixture-constants': noFixtureConstants } },
+    },
     rules: {
       'local/no-fixture-constants': 'error',
     },
   },
 
-  // App and core — no barrel exports in index files
+  // App and packages — no barrel exports in index files
   {
-    files: ['packages/core/**/*.{ts,tsx}', 'app/**/*.{ts,tsx}'],
+    files: ['packages/core/**/*.{ts,tsx}', 'packages/rpc/**/*.{ts,tsx}', 'app/**/*.{ts,tsx}'],
     ignores: [
       'packages/core/index.tsx',
-      'packages/core/**/__tests__/**/*.{ts,tsx}',
-      'packages/core/**/__fixtures__/**/*.{ts,tsx}',
+      'packages/rpc/index.ts',
+      'packages/**/__tests__/**/*.{ts,tsx}',
+      'packages/**/__fixtures__/**/*.{ts,tsx}',
     ],
-    plugins: { local: localPlugin },
+    plugins: {
+      local: { rules: { 'no-barrel-exports': noBarrelExports } },
+    },
     rules: {
       'local/no-barrel-exports': 'error',
     },
