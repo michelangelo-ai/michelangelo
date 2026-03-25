@@ -16,8 +16,6 @@ workflowClient:
 k8s:
   qps: 300
   burst: 600
-metadataStorage:
-  enableMetadataStorage: false
 
 controllers:
   rayCluster:
@@ -29,3 +27,17 @@ minio:
   awsAccessKeyId: minioadmin
   awsSecretAccessKey: minioadmin
   awsEndpointUrl: localhost:9091
+
+
+# Reuse the Cadence MySQL service for ingester metadata storage in sandbox.
+metadataStorage:
+  enableMetadataStorage: true
+  deletionDelay: 10s
+  enableResourceVersionCache: false
+
+mysql:
+  host: localhost
+  port: 3306
+  user: root
+  password: root
+  database: michelangelo
