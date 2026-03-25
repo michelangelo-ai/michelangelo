@@ -5,6 +5,7 @@ training on the Boston Housing dataset.
 """
 
 import logging
+import os
 from dataclasses import dataclass
 from typing import Optional
 
@@ -12,11 +13,11 @@ import numpy as np
 import pandas as pd
 import ray
 import ray.data
-import xgboost  # noqa: F401 - needed for metabuild dependency discovery
+import xgboost
 import xgboost_ray  # noqa: F401 - needed for metabuild dependency discovery
 from pyspark.sql import DataFrame
-from ray.train import CheckpointConfig, RunConfig, ScalingConfig
-from ray.train.xgboost import XGBoostTrainer
+from ray.train import RunConfig, ScalingConfig
+from ray.train.xgboost import RayTrainReportCallback, XGBoostTrainer
 
 import michelangelo.uniflow.core as uniflow
 from michelangelo.uniflow.plugins.ray import RayTask
@@ -298,21 +299,38 @@ def train(
     )
     log.info("scaling_config: %r", scaling_config)
 
-    run_config = RunConfig(
-        checkpoint_config=CheckpointConfig(
-            checkpoint_at_end=True,
-        ),
-    )
+    storage_url = os.environ.get("UF_STORAGE_URL", "")
+    run_config = RunConfig(storage_path=f"{storage_url}/ray_results")
     log.info("run_config: %r", run_config)
 
     data_schema = train_data.schema()
     assert data_schema
 
+    label_column = data_schema.names[-1]  # assuming the last column is the label
+
+    def train_loop_per_worker():
+        train_shard = ray.train.get_dataset_shard("train")
+        validation_shard = ray.train.get_dataset_shard("validation")
+
+        train_df = train_shard.materialize().to_pandas()
+        validation_df = validation_shard.materialize().to_pandas()
+
+        feature_cols = [c for c in train_df.columns if c != label_column]
+        dtrain = xgboost.DMatrix(train_df[feature_cols], label=train_df[label_column])
+        dvalidation = xgboost.DMatrix(
+            validation_df[feature_cols], label=validation_df[label_column]
+        )
+
+        xgboost.train(
+            params,
+            dtrain=dtrain,
+            evals=[(dvalidation, "validation")],
+            num_boost_round=10,
+            callbacks=[RayTrainReportCallback()],
+        )
+
     trainer = XGBoostTrainer(
-        train_loop_per_worker=None,
-        label_column=data_schema.names[-1],  # assuming the last column is the label
-        params=params,
-        num_boost_round=10,
+        train_loop_per_worker,
         scaling_config=scaling_config,
         run_config=run_config,
         datasets={
