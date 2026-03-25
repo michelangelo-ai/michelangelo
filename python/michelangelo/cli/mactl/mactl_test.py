@@ -14,6 +14,7 @@ from michelangelo.cli.mactl.crd import CRD
 from michelangelo.cli.mactl.mactl import (
     ADDRESS,
     DEFAULT_DIR_PLUGINS,
+    _is_service_name,
     check_crd,
     create_serivce_classes,
     discover_crds,
@@ -787,3 +788,115 @@ class MainFunctionTest(TestCase):
 
         # Verify Phase 5: Execute action
         mock_crd.create.assert_called_once_with(name="test")
+
+
+class ProxySupportTest(TestCase):
+    """Tests for proxy support functionality."""
+
+    def test_is_service_name_with_service_name(self):
+        """Test _is_service_name returns True for service names."""
+        self.assertTrue(_is_service_name("my-service"))
+        self.assertTrue(_is_service_name("apiserver"))
+        self.assertTrue(_is_service_name("backend-api"))
+
+    def test_is_service_name_with_host_port(self):
+        """Test _is_service_name returns False for host:port addresses."""
+        self.assertFalse(_is_service_name("localhost:8080"))
+        self.assertFalse(_is_service_name("api.example.com:443"))
+        self.assertFalse(_is_service_name("127.0.0.1:5000"))
+
+    def test_is_service_name_with_domain(self):
+        """Test _is_service_name returns False for domain names."""
+        self.assertFalse(_is_service_name("api.example.com"))
+        self.assertFalse(_is_service_name("sub.domain.example.org"))
+
+    @patch("michelangelo.cli.mactl.mactl.main")
+    @patch("michelangelo.cli.mactl.mactl.insecure_channel")
+    @patch("michelangelo.cli.mactl.mactl._CONFIG")
+    def test_run_with_proxy_for_service_name(
+        self, mock_config, mock_insecure_channel, mock_main
+    ):
+        """Test run() uses proxy when address is service name and proxy is configured."""
+        mock_proxy_instance = MagicMock()
+        mock_proxy_instance.create_tunnel.return_value = "localhost:12345"
+        mock_proxy_instance.__enter__ = Mock(return_value=mock_proxy_instance)
+        mock_proxy_instance.__exit__ = Mock(return_value=None)
+
+        mock_proxy_class = MagicMock(return_value=mock_proxy_instance)
+
+        mock_proxy_module = MagicMock()
+        mock_proxy_module.CLIProxy = mock_proxy_class
+
+        mock_channel = MagicMock()
+        mock_insecure_channel.return_value.__enter__ = Mock(return_value=mock_channel)
+        mock_insecure_channel.return_value.__exit__ = Mock(return_value=None)
+
+        mock_config.__getitem__.return_value = {
+            "proxy": "my.proxy.module",
+        }
+
+        with (
+            patch("michelangelo.cli.mactl.mactl.ADDRESS", "my-service"),
+            patch("michelangelo.cli.mactl.mactl.USE_TLS", False),
+            patch("importlib.import_module", return_value=mock_proxy_module),
+        ):
+            from michelangelo.cli.mactl.mactl import run
+
+            run()
+
+        mock_proxy_instance.create_tunnel.assert_called_once_with("my-service")
+        mock_insecure_channel.assert_called_once_with("localhost:12345")
+        mock_main.assert_called_once_with(mock_channel)
+
+    @patch("michelangelo.cli.mactl.mactl.main")
+    @patch("michelangelo.cli.mactl.mactl.insecure_channel")
+    @patch("michelangelo.cli.mactl.mactl._CONFIG")
+    def test_run_without_proxy_for_host_port(
+        self, mock_config, mock_insecure_channel, mock_main
+    ):
+        """Test run() skips proxy when address is host:port."""
+        mock_channel = MagicMock()
+        mock_insecure_channel.return_value.__enter__ = Mock(return_value=mock_channel)
+        mock_insecure_channel.return_value.__exit__ = Mock(return_value=None)
+
+        mock_config.__getitem__.return_value = {
+            "proxy": "my.proxy.module",
+        }
+
+        with (
+            patch("michelangelo.cli.mactl.mactl.ADDRESS", "localhost:8080"),
+            patch("michelangelo.cli.mactl.mactl.USE_TLS", False),
+        ):
+            from michelangelo.cli.mactl.mactl import run
+
+            run()
+
+        mock_insecure_channel.assert_called_once_with("localhost:8080")
+        mock_main.assert_called_once_with(mock_channel)
+
+    @patch("michelangelo.cli.mactl.mactl.main")
+    @patch("michelangelo.cli.mactl.mactl.insecure_channel")
+    @patch("michelangelo.cli.mactl.mactl._CONFIG")
+    def test_run_without_proxy_when_not_configured(
+        self, mock_config, mock_insecure_channel, mock_main
+    ):
+        """Test run() skips proxy when proxy module is not configured."""
+        mock_channel = MagicMock()
+        mock_insecure_channel.return_value.__enter__ = Mock(return_value=mock_channel)
+        mock_insecure_channel.return_value.__exit__ = Mock(return_value=None)
+
+        mock_config.__getitem__.return_value = {
+            "proxy": "",
+        }
+
+        with (
+            patch("michelangelo.cli.mactl.mactl.ADDRESS", "my-service"),
+            patch("michelangelo.cli.mactl.mactl.USE_TLS", False),
+        ):
+            from michelangelo.cli.mactl.mactl import run
+
+            run()
+
+        mock_insecure_channel.assert_called_once_with("my-service")
+        mock_main.assert_called_once_with(mock_channel)
+
