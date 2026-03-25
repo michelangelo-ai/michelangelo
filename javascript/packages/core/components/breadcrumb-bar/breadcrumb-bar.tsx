@@ -8,6 +8,7 @@ import { MenuDrawer } from './menu-drawer';
 import { BreadcrumbContainer, PlainLink } from './styled-components';
 
 import type { CategoryConfig } from '#core/types/common/studio-types';
+import type { NavLink } from './types';
 
 /**
  * A breadcrumb navigation with an integrated hamburger menu drawer.
@@ -18,6 +19,10 @@ import type { CategoryConfig } from '#core/types/common/studio-types';
  * Category and Phase segments are derived from the supplied categories config.
  * The menu drawer shows all phases from all supplied categories.
  *
+ * Top-level links (e.g. to pages outside the project context) can be provided via
+ * `topLevelLinks` and are rendered at the top of the menu drawer, above the
+ * project/phase hierarchy.
+ *
  * @example
  * ```tsx
  * const CATEGORIES: CategoryConfig[] = [
@@ -26,7 +31,13 @@ import type { CategoryConfig } from '#core/types/common/studio-types';
  * <BreadcrumbBar categories={CATEGORIES} />
  * ```
  */
-export function BreadcrumbBar({ categories }: { categories: CategoryConfig[] }) {
+export function BreadcrumbBar({
+  categories,
+  topLevelLinks,
+}: {
+  categories: CategoryConfig[];
+  topLevelLinks?: NavLink[];
+}) {
   const [css, theme] = useStyletron();
   const { projectId, phase, entityId } = useStudioParams('base');
   const isProjectPage = phase === Phase.Project;
@@ -39,7 +50,7 @@ export function BreadcrumbBar({ categories }: { categories: CategoryConfig[] }) 
           <div
             className={css({ display: 'flex', alignItems: 'center', gap: theme.sizing.scale600 })}
           >
-            <MenuDrawer phases={allPhases} projectId={projectId} />
+            <MenuDrawer phases={allPhases} projectId={projectId} topLevelLinks={topLevelLinks} />
             <Breadcrumbs
               overrides={{
                 Root: {
