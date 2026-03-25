@@ -101,11 +101,13 @@ Many teams start with the **UI for initial experiments**, then transition to **c
 ### Michelangelo User Interface (MA UI)
 The UI environment provides a standard, code-free ML development experience. It guides users through the different phases of the ML development lifecycle. Uber's internal term for the UI is MA Studio (you may see it appear on this site in screenshots of the UI). This environment provides all the essential tools which allow ML developers to build, train, deploy, monitor, and debug their machine learning models in a single unified visual interface to boost their productivity. 
 
-**Currently, Preparing and Training models are available for open source users. More features will be made available soon.**
-
 Users can use the no-code dev environment to perform standardized ML tasks without writing a single line of code, including:
 * Prepare data sources for training models or making batch predictions
 * Build and train XGB models, classic ML models, and Deep Learning models
+* Compare trained model performance and debug model issues
+* Deploy the models for making predictions
+* Monitor model performance in production
+* Debug production model and data issues
 
 ### CanvasFlex: opinionated predefined ML workflow
 
