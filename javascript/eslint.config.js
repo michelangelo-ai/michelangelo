@@ -1,6 +1,7 @@
 // javascript/eslint.config.js
 import js from '@eslint/js';
 
+import noBarrelExports from './eslint-local-rules/no-barrel-exports.js';
 import noFixtureConstants from './eslint-local-rules/no-fixture-constants.js';
 import noModuleScopeTestSetup from './eslint-local-rules/no-module-scope-test-setup.js';
 import tseslint from 'typescript-eslint';
@@ -11,6 +12,15 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
 import globals from 'globals';
+
+// Local rules plugin (single shared reference required by ESLint flat config)
+const localPlugin = {
+  rules: {
+    'no-module-scope-test-setup': noModuleScopeTestSetup,
+    'no-fixture-constants': noFixtureConstants,
+    'no-barrel-exports': noBarrelExports,
+  },
+};
 
 // Shared plugins (used in app and packages/*)
 const sharedPlugins = {
@@ -156,9 +166,7 @@ export default [
   // All package tests — enforce test setup conventions
   {
     files: ['packages/**/__tests__/**/*.{ts,tsx}'],
-    plugins: {
-      local: { rules: { 'no-module-scope-test-setup': noModuleScopeTestSetup } },
-    },
+    plugins: { local: localPlugin },
     rules: {
       'local/no-module-scope-test-setup': 'error',
     },
@@ -167,11 +175,23 @@ export default [
   // All package fixtures — enforce factory function exports only
   {
     files: ['packages/**/__fixtures__/**/*.{ts,tsx}'],
-    plugins: {
-      local: { rules: { 'no-fixture-constants': noFixtureConstants } },
-    },
+    plugins: { local: localPlugin },
     rules: {
       'local/no-fixture-constants': 'error',
+    },
+  },
+
+  // App and core — no barrel exports in index files
+  {
+    files: ['packages/core/**/*.{ts,tsx}', 'app/**/*.{ts,tsx}'],
+    ignores: [
+      'packages/core/index.tsx',
+      'packages/core/**/__tests__/**/*.{ts,tsx}',
+      'packages/core/**/__fixtures__/**/*.{ts,tsx}',
+    ],
+    plugins: { local: localPlugin },
+    rules: {
+      'local/no-barrel-exports': 'error',
     },
   },
 
