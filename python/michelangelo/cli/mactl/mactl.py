@@ -399,7 +399,7 @@ def run():
     if _is_service_name(ADDRESS) and proxy_module_path:
         import importlib
         proxy_mod = importlib.import_module(proxy_module_path)
-        CLIProxy = getattr(proxy_mod, "CLIProxy")
+        CLIProxy = proxy_mod.CLIProxy
         with CLIProxy() as proxy:
             local_address = proxy.create_tunnel(ADDRESS)
             with insecure_channel(local_address) as channel:
