@@ -17,7 +17,9 @@ export const createMuiIconAdapter = (Icon: ComponentType<SvgIconProps>) => {
         {...compatibleProps}
         htmlColor={color}
         shapeRendering={String(shapeRendering)}
-        titleAccess={String(title)}
+        // title is an optional Icon property; without checking for existence, the icon
+        // will include literal string "undefined" or "null" in the title attribute.
+        titleAccess={title ? String(title) : undefined}
         sx={{ ...style, fontSize: scaledSize }}
       />
     );

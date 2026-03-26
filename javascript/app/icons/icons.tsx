@@ -15,6 +15,8 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardBackspaceIcon from '@mui/icons-material/KeyboardBackspace';
 import Launch from '@mui/icons-material/Launch';
 import MenuIcon from '@mui/icons-material/Menu';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import SearchIcon from '@mui/icons-material/Search';
 import SettingsIcon from '@mui/icons-material/Settings';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
@@ -38,7 +40,9 @@ export const ICONS = {
   deleteAlt: createMuiIconAdapter(CancelIcon),
   diamondEmpty: createMuiIconAdapter(CropSquareIcon),
   menu: createMuiIconAdapter(MenuIcon),
+  overflowMenu: createMuiIconAdapter(MoreVertIcon),
   playerNext: createMuiIconAdapter(SkipNextIcon),
+  playerPlay: createMuiIconAdapter(PlayArrowIcon),
   plus: createMuiIconAdapter(AddIcon),
   search: createMuiIconAdapter(SearchIcon),
   settings: createMuiIconAdapter(SettingsIcon),
