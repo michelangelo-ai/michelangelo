@@ -1,4 +1,3 @@
-import { ReactNode } from 'react';
 import { render, screen } from '@testing-library/react';
 import { Alert } from 'baseui/icon';
 
@@ -6,6 +5,8 @@ import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { Link } from '../link';
+
+import type { ReactNode } from 'react';
 
 describe('Link', () => {
   describe('internal link', () => {

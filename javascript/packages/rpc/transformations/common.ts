@@ -1,4 +1,4 @@
-import { ExtractEntityFromResponse, HasTypeName } from './types';
+import type { ExtractEntityFromResponse, HasTypeName } from './types';
 
 /**
  * Extracts the main entity from a response

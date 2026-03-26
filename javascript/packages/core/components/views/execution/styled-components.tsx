@@ -1,8 +1,9 @@
-import { styled, Theme } from 'baseui';
+import { styled } from 'baseui';
 
 import { CollapsibleBox } from '#core/components/box/collapsible-box';
 import { STATE_TO_STYLE_MAP } from '#core/components/views/execution/constants';
 
+import type { Theme } from 'baseui';
 import type { CollapsibleBoxProps } from '#core/components/box/types';
 import type { TaskState } from '#core/components/views/execution/types';
 

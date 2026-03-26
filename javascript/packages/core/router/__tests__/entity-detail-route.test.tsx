@@ -4,10 +4,6 @@ import { vi } from 'vitest';
 
 import { CellType } from '#core/components/cell/constants';
 import { buildTableConfigFactory } from '#core/components/views/__fixtures__/table-config-factory';
-import {
-  CustomDetailPageConfig,
-  TableDetailPageConfig,
-} from '#core/components/views/detail-view/types/detail-view-schema-types';
 import { buildExecutionSchemaFactory } from '#core/components/views/execution/__fixtures__/execution-schema-factory';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
@@ -21,6 +17,11 @@ import {
   buildPhaseConfigFactory,
 } from '../__fixtures__/phase-config-factory';
 import { EntityDetailRoute } from '../entity-detail-route';
+
+import type {
+  CustomDetailPageConfig,
+  TableDetailPageConfig,
+} from '#core/components/views/detail-view/types/detail-view-schema-types';
 
 describe('EntityDetailRoute', () => {
   const buildEntity = buildEntityConfigFactory({

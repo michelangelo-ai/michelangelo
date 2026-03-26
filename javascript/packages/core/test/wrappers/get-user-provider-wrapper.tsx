@@ -1,7 +1,8 @@
 import { type UserContextType } from '#core/providers/user-provider/types';
 import { UserProvider } from '#core/providers/user-provider/user-provider';
 import { TimeZone } from '#core/types/time-types';
-import { WrapperComponentProps } from './types';
+
+import type { WrapperComponentProps } from './types';
 
 /**
  * Creates a React wrapper for testing components that use service features.

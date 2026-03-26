@@ -66,9 +66,44 @@ const sharedRules = {
     'error',
     { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
   ],
+  '@typescript-eslint/ban-ts-comment': [
+    'error',
+    {
+      'ts-ignore': true,
+      'ts-expect-error': 'allow-with-description',
+      'ts-nocheck': true,
+      'ts-check': false,
+    },
+  ],
+  '@typescript-eslint/naming-convention': [
+    'error',
+    {
+      selector: 'typeLike',
+      format: ['PascalCase'],
+      custom: { regex: 'T$', match: false },
+    },
+    {
+      selector: 'typeParameter',
+      format: ['PascalCase'],
+    },
+  ],
+  '@typescript-eslint/consistent-type-imports': [
+    'error',
+    {
+      prefer: 'type-imports',
+      fixStyle: 'separate-type-imports',
+      disallowTypeAnnotations: false,
+    },
+  ],
 };
 
 export default [
+  {
+    linterOptions: {
+      reportUnusedDisableDirectives: 'error',
+    },
+  },
+
   {
     ignores: [
       '**/node_modules/**',

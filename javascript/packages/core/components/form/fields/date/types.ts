@@ -1,8 +1,8 @@
 import type { BaseFieldProps } from '../types';
 
 export interface DateFieldProps extends BaseFieldProps<string, Date | null> {
-  /** @default DATE_FORMAT.ISO_DATE_STRING */
-  dateFormat?: DATE_FORMAT;
+  /** @default DateFormat.ISO_DATE_STRING */
+  dateFormat?: DateFormat;
   /**
    * Restricts selectable dates to today or earlier
    * @default false
@@ -10,7 +10,7 @@ export interface DateFieldProps extends BaseFieldProps<string, Date | null> {
   noFutureDate?: boolean;
 }
 
-export enum DATE_FORMAT {
+export enum DateFormat {
   /**
    * Anticipates date as epoch seconds string. String is artifact of int64 protobuf fields
    * being typed as Strings in TypeScript

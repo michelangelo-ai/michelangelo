@@ -1,5 +1,6 @@
 import { CellType } from '#core/components/cell/constants';
-import { Cell } from '#core/components/cell/types';
+
+import type { Cell } from '#core/components/cell/types';
 
 /**
  * Cell configurations rendered for Pipeline Runs:

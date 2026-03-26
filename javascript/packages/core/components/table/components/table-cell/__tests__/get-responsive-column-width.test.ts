@@ -1,7 +1,7 @@
-import { DeepPartial } from '#core/types/utility-types';
 import { getResponsiveColumnWidth } from '../get-responsive-column-width';
 
 import type { Theme } from 'baseui';
+import type { DeepPartial } from '#core/types/utility-types';
 
 describe('getResponsiveColumnWidth', () => {
   it('creates responsive max width styles for multiple breakpoints', () => {

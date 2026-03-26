@@ -1,5 +1,6 @@
 import { getRpcHandlers } from './handlers';
-import { OmitTypeName, RpcHandlerType } from './types';
+
+import type { OmitTypeName, RpcHandlerType } from './types';
 
 /**
  * Makes a gRPC-web request to the Michelangelo API.

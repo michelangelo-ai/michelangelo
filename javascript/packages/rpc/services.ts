@@ -1,4 +1,4 @@
-import { createClient, Interceptor } from '@connectrpc/connect';
+import { createClient } from '@connectrpc/connect';
 import { createGrpcWebTransport } from '@connectrpc/connect-web';
 
 import { ModelService } from './gen/michelangelo/api/v2/model_svc_pb';
@@ -7,6 +7,8 @@ import { PipelineService } from './gen/michelangelo/api/v2/pipeline_svc_pb';
 import { ProjectService } from './gen/michelangelo/api/v2/project_svc_pb';
 import { TriggerRunService } from './gen/michelangelo/api/v2/trigger_run_svc_pb';
 import { getRuntimeConfig } from './runtime-config';
+
+import type { Interceptor } from '@connectrpc/connect';
 
 // This interceptor is used to set the headers for the RPC request to
 // be compatible with the Michelangelo API yarpc server.

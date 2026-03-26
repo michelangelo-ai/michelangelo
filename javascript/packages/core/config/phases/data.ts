@@ -1,6 +1,7 @@
-import { PhaseConfig } from '#core/types/common/studio-types';
 import { PIPELINE_ENTITY_CONFIG } from '../entities/pipeline/pipeline';
 import { RUN_ENTITY_CONFIG } from '../entities/run/run';
+
+import type { PhaseConfig } from '#core/types/common/studio-types';
 
 export const DATA_PHASE: PhaseConfig = {
   id: 'data',

@@ -181,7 +181,7 @@ export { UrlField } from '#core/components/form/fields/url/url-field';
 export { NumberField } from '#core/components/form/fields/number/number-field';
 export { CheckboxField } from '#core/components/form/fields/checkbox/checkbox-field';
 export { DateField } from '#core/components/form/fields/date/date-field';
-export { DATE_FORMAT } from '#core/components/form/fields/date/types';
+export { DateFormat } from '#core/components/form/fields/date/types';
 
 // Form Layout
 export { FormGroup } from '#core/components/form/layout/form-group/form-group';

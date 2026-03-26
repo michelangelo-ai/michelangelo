@@ -1,5 +1,6 @@
 import { getServices } from './services';
-import { ExtractUnaryRpc } from './types';
+
+import type { ExtractUnaryRpc } from './types';
 
 let handlersPromise: Promise<Awaited<ReturnType<typeof createHandlers>>> | null = null;
 
