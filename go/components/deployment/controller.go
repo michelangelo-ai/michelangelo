@@ -78,16 +78,20 @@ const (
 	_timeFormat = "20060102-121314"
 )
 
-// Reconciler reconciles a Deployment object
+// Reconciler reconciles a Deployment object.
+//
+// All fields are unexported. Exported struct fields become permanent public API surface —
+// external packages can depend on them directly, making future removal a breaking change.
+// All dependencies are injected via NewReconciler() or SetupWithManager() instead.
+// This follows the same pattern used by controllers in kubernetes/kubernetes.
 type Reconciler struct {
 	api.Handler
-	// TODO(#549): refactor so these are not exported
-	Log               logr.Logger
-	Recorder          record.EventRecorder
-	Registrar         pluginmanager.Registrar[plugins.Plugin]
-	Engine            conditionInterfaces.Engine[*v2pb.Deployment]
-	RevisionManager   revision.Manager
-	Scope             tally.Scope
+	log               logr.Logger
+	recorder          record.EventRecorder
+	registrar         pluginmanager.Registrar[plugins.Plugin]
+	engine            conditionInterfaces.Engine[*v2pb.Deployment]
+	revisionManager   revision.Manager
+	scope             tally.Scope
 	apiHandlerFactory apiHandler.Factory
 	auditLogEmitter   logging.AuditLog
 }
@@ -96,19 +100,19 @@ type Reconciler struct {
 func NewReconciler(apiHandlerFactory apiHandler.Factory, registrar pluginmanager.Registrar[plugins.Plugin]) *Reconciler {
 	return &Reconciler{
 		apiHandlerFactory: apiHandlerFactory,
-		Registrar:         registrar,
-		Engine:            defaultengine.NewDefaultEngine[*v2pb.Deployment](createEngineLogger()),
-		RevisionManager:   revision.NewNoOpManager(),
-		Scope:             tally.NoopScope,
+		registrar:         registrar,
+		engine:            defaultengine.NewDefaultEngine[*v2pb.Deployment](createEngineLogger()),
+		revisionManager:   revision.NewNoOpManager(),
+		scope:             tally.NoopScope,
 		auditLogEmitter:   &logging.DummyAuditLog{},
 	}
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
-	r.Log = mgr.GetLogger().
+	r.log = mgr.GetLogger().
 		WithName(_deploymentKey)
-	r.Recorder = mgr.GetEventRecorderFor(_deploymentKey)
+	r.recorder = mgr.GetEventRecorderFor(_deploymentKey)
 	handler, err := r.apiHandlerFactory.GetAPIHandler(mgr.GetClient())
 	if err != nil {
 		return err
@@ -131,7 +135,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.7.2/pkg/reconcile
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := r.Log.WithValues(_deploymentKey, req.NamespacedName.String())
+	log := r.log.WithValues(_deploymentKey, req.NamespacedName.String())
 	ctx, cancel := context.WithTimeout(ctx, _reconciliationTimeout)
 	defer cancel()
 	defer func() {
@@ -140,7 +144,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	}()
 
-	metrics := NewControllerMetrics(r.Scope)
+	metrics := NewControllerMetrics(r.scope)
 	defer metrics.reconcileMetrics.duration.Start().Stop()
 	metrics.reconcileMetrics.count.Inc(1)
 
@@ -248,7 +252,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 		message := "Maximum attempts reached to reconcile the resource. Will not proceed with rollout or rollback " +
 			"until the resource is updated again. If in cleanup, we will no longer reconcile."
 		log.Info(message)
-		r.Recorder.Event(deployment, _normalType, _earlyTerminationEvent, message)
+		r.recorder.Event(deployment, _normalType, _earlyTerminationEvent, message)
 		metrics.terminalCounter.Inc(1)
 		newStage, shouldRequeue := getTerminalStage(*deployment)
 		stage = newStage
@@ -286,20 +290,12 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 		// Make sure that we only set the conditions to nil after the upserting the revision, so we keep track of the
 		// latest set of conditions to render.
 		if terminal {
-			// if the rollout failed, we want to render a snapshot of the failing conditions
-			if deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED {
-				deployment.Status.ConditionsSnapshot = deployment.Status.Conditions
-			}
-			deployment.Status.Conditions = nil
-			if deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE || deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED {
-				runtimeCtx := plugins.RequestContext{
-					Deployment: deployment,
-					Logger:     log,
-				}
-				plugin.PopulateMessage(ctx, runtimeCtx, deployment)
-			}
+			// Guard clause: extracted to handleTerminalTransition() to keep this block
+			// at ≤2 levels of nesting. Previously this was 4 levels deep:
+			// reconcile → originalStage!=stage → terminal → stage check.
+			r.handleTerminalTransition(ctx, log, plugin, deployment)
 		}
-		r.Recorder.Event(deployment, _normalType, _stageChangeEvent, message)
+		r.recorder.Event(deployment, _normalType, _stageChangeEvent, message)
 	}
 
 	// TODO(#550): Make the GetState call return just the deployment state instead of the entire status payload
@@ -325,7 +321,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 
 		// We only want to delete all revisions when the deployment is marked for deletion.
 		if !deployment.GetDeletionTimestamp().IsZero() {
-			err = r.RevisionManager.DeleteAllRevisions(ctx, deployment.GetNamespace(), deployment.GetName(), "Deployment")
+			err = r.revisionManager.DeleteAllRevisions(ctx, deployment.GetNamespace(), deployment.GetName(), "Deployment")
 			if err != nil {
 				log.Error(err, "Failed to delete all revisions for deployment. This is not critical. "+
 					"Note that if a revision with the same name is recreated, the deployment history may be inaccurate.")
@@ -352,7 +348,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 
 	// TODO(#551): Add runtime context to match Uber internal pattern exactly
 	// The Uber internal code uses: runtimeContext := conditions.NewRequestContext(log, r.Recorder)
-	// and passes it to all Engine.Run() calls: r.Engine.Run(ctx, runtimeContext, conditionPlugin, deployment)
+	// and passes it to all Engine.Run() calls: r.engine.Run(ctx, runtimeContext, conditionPlugin, deployment)
 	// This requires updating the Engine interface to match Uber's 4-parameter signature
 	// For now, our simplified Engine interface uses 3 parameters: Engine.Run(ctx, conditionPlugin, deployment)
 
@@ -364,7 +360,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 		}
 
 		conditionPlugin = plugin.GetCleanupPlugin()
-		result, err = r.Engine.Run(ctx, conditionPlugin, deployment)
+		result, err = r.engine.Run(ctx, conditionPlugin, deployment)
 		if err != nil {
 			log.Error(err, "Cleanup plugin processing failed with error")
 			return result, err
@@ -395,7 +391,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 			}
 
 			conditionPlugin = plugin.GetRollbackPlugin()
-			result, err = r.Engine.Run(ctx, conditionPlugin, deployment)
+			result, err = r.engine.Run(ctx, conditionPlugin, deployment)
 			if err != nil {
 				log.Error(err, "Rollback plugin processing failed with error")
 				return result, err
@@ -409,7 +405,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 					"deployment", deployment.Name)
 				return result, err
 			}
-			result, err = r.Engine.Run(ctx, conditionPlugin, deployment)
+			result, err = r.engine.Run(ctx, conditionPlugin, deployment)
 			if err != nil {
 				log.Error(err, "Rollout plugin processing failed with error")
 				return result, err
@@ -442,7 +438,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 					"deployment", deployment.Name)
 				return result, err
 			}
-			result, err = r.Engine.Run(ctx, conditionPlugin, deployment)
+			result, err = r.engine.Run(ctx, conditionPlugin, deployment)
 			if err != nil {
 				log.Error(err, "Rollout plugin processing failed with error")
 				return result, err
@@ -452,7 +448,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 		metrics.steadyStateMetrics.initiatedCount.Inc(1)
 
 		conditionPlugin = plugin.GetSteadyStatePlugin()
-		result, err = r.Engine.Run(ctx, conditionPlugin, deployment)
+		result, err = r.engine.Run(ctx, conditionPlugin, deployment)
 		if err != nil {
 			log.Error(err, "Steady state plugin processing failed with error")
 			return result, err
@@ -460,6 +456,30 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 	}
 	removeConditionsForDeployment(deployment, conditionPlugin)
 	return result, nil
+}
+
+// handleTerminalTransition clears active conditions and populates the deployment message
+// after reaching a terminal stage.
+//
+// Extracted from reconcile() to keep the stage-transition block at ≤2 nesting levels.
+// Without this helper, the caller had 4 levels: reconcile → originalStage!=stage → terminal → stage check.
+func (r *Reconciler) handleTerminalTransition(ctx context.Context, log logr.Logger, plugin plugins.Plugin, deployment *v2pb.Deployment) {
+	// Capture a snapshot of failing conditions before clearing them, so that
+	// operators can inspect what went wrong after the fact.
+	if deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED {
+		deployment.Status.ConditionsSnapshot = deployment.Status.Conditions
+	}
+	deployment.Status.Conditions = nil
+
+	// Populate the human-readable message for terminal stages that are visible to users.
+	if deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE ||
+		deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED {
+		runtimeCtx := plugins.RequestContext{
+			Deployment: deployment,
+			Logger:     log,
+		}
+		plugin.PopulateMessage(ctx, runtimeCtx, deployment)
+	}
 }
 
 // handleStageTransition will ensure that the deployment controller performs the correct set of actions
@@ -486,7 +506,7 @@ func (r *Reconciler) handleStageTransition(
 		return false
 	}
 
-	log := r.Log.WithValues(_deploymentKey, fmt.Sprintf("%s/%s", deployment.Namespace, deployment.Name))
+	log := r.log.WithValues(_deploymentKey, fmt.Sprintf("%s/%s", deployment.Namespace, deployment.Name))
 
 	switch deployment.Status.Stage {
 	// Terminal stages
@@ -563,11 +583,11 @@ func (r *Reconciler) handleStageTransition(
 
 func (r *Reconciler) getPlugin(deployment v2pb.Deployment) (plugins.Plugin, error) {
 	if deployment.Spec.Definition == nil {
-		return r.Registrar.GetPlugin(v2pb.TARGET_TYPE_INFERENCE_SERVER.String(), "", &deployment)
+		return r.registrar.GetPlugin(v2pb.TARGET_TYPE_INFERENCE_SERVER.String(), "", &deployment)
 	}
 
 	definition := deployment.Spec.Definition
-	return r.Registrar.GetPlugin(definition.Type.String(), definition.SubType, &deployment)
+	return r.registrar.GetPlugin(definition.Type.String(), definition.SubType, &deployment)
 }
 
 func (r *Reconciler) incrementRolloutCount(deployment *v2pb.Deployment, log logr.Logger) {
@@ -607,7 +627,7 @@ func (r *Reconciler) getObservability(log logr.Logger, namespace string) plugins
 	}
 	return plugins.ObservabilityContext{
 		Logger: log,
-		Scope:  r.Scope.Tagged(tags),
+		Scope:  r.scope.Tagged(tags),
 	}
 }
 
@@ -639,7 +659,7 @@ func (r *Reconciler) createDeploymentEvent(ctx context.Context, deployment *v2pb
 	// 2. Create a DeploymentEvent resource with the marshaled deployment content
 	// 3. Save it to the cluster for audit/tracking purposes
 	// For now, this is a no-op but maintains the same function signature as Uber internal
-	r.Log.V(1).Info("createDeploymentEvent called (no-op in simplified version)",
+	r.log.V(1).Info("createDeploymentEvent called (no-op in simplified version)",
 		"deployment", fmt.Sprintf("%s/%s", deployment.Namespace, deployment.Name),
 		"stage", deployment.Status.Stage)
 	return nil

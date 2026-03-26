@@ -10,7 +10,7 @@ Production deployment using sandbox manifests as templates for your infrastructu
 - **For: Platform operators**
 - **Use case: Full ML platform deployment with UI**
 
-→ **[Deploying Michelangelo UI](./deploying-michelangelo-ui)**
+→ **[Deploying Michelangelo UI](./deploying-michelangelo-ui.md)**
 
 ### Integrate with Existing React App
 Add Michelangelo components to your existing React application as npm dependencies that connect to your infrastructure.
@@ -18,7 +18,7 @@ Add Michelangelo components to your existing React application as npm dependenci
 - **For: Frontend developers, application teams**
 - **Use case: Separate frontend/backend infrastructure, or embedding ML capabilities in existing developer tools**
 
-→ **[React Library Integration](./michelangelo-react-library)**
+→ **[React Library Integration](./michelangelo-react-library.md)**
 
 ### Local Development
 Set up a development environment for contributing to the UI codebase.
@@ -26,7 +26,7 @@ Set up a development environment for contributing to the UI codebase.
 - **For: Contributors, UI developers**
 - **Use case: UI development and contributions**
 
-→ **[Local Development Setup](./local-development-setup)**
+→ **[Local Development Setup](./local-development-setup.md)**
 
 ## Architecture
 
@@ -35,4 +35,4 @@ The Michelangelo UI is built with React and communicates with the Michelangelo A
 - **Containerized deployment**: Complete UI deployed to Kubernetes clusters
 - **Component integration**: Individual React components embedded in existing applications
 
-For internal architecture documentation (providers, hooks, types, and component patterns), see the [UI Developer Reference](../../dev/ui/index.md).
+For internal architecture documentation (providers, hooks, types, and component patterns), see the [UI Developer Reference](../../contributing/dev/ui/index.md).

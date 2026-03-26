@@ -1,0 +1,18 @@
+apiVersion: michelangelo.api/v2
+kind: Pipeline
+metadata:
+  name: ingester-test-pipeline
+  namespace: ingester-test
+  labels:
+    test: ingester
+spec:
+  description: Test pipeline for ingester validation
+  owner:
+    name: hkriplani
+  type: PIPELINE_TYPE_TRAIN
+  manifest:
+    type: PIPELINE_MANIFEST_TYPE_UNIFLOW
+    uniflowTar: s3://default/test.tar
+  commit:
+    gitRef: "main"
+    branch: "main"

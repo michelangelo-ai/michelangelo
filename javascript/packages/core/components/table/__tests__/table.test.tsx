@@ -16,12 +16,12 @@ import {
   expectTableRows,
 } from '../__fixtures__/table-test-helpers';
 import { FilterMode } from '../components/filter/types';
-import { TableBodyProps } from '../components/table-body/types';
 import { useTableSelectionContext } from '../plugins/selection/table-selection-context';
 import { Table } from '../table';
 
 import type { TableRow } from '#core/components/table/types/row-types';
 import type { Accessor } from '#core/types/common/studio-types';
+import type { TableBodyProps } from '../components/table-body/types';
 import type { TablePaginationProps } from '../components/table-pagination/types';
 
 describe('Table', () => {
@@ -1071,7 +1071,7 @@ describe('Table', () => {
     it('limits rows to page size when pagination is enabled', () => {
       render(
         <Table
-          data={buildLargeDataset(100)}
+          data={buildLargeDataset(20)}
           columns={testColumns}
           pageSizes={[
             { id: 10, label: '10' },
@@ -1094,7 +1094,7 @@ describe('Table', () => {
 
     it('hides pagination when disablePagination is true', () => {
       render(
-        <Table data={buildLargeDataset(100)} columns={testColumns} disablePagination={true} />,
+        <Table data={buildLargeDataset(20)} columns={testColumns} disablePagination={true} />,
         buildWrapper([
           getBaseProviderWrapper(),
           getInterpolationProviderWrapper(),
@@ -1131,7 +1131,7 @@ describe('Table', () => {
 
       render(
         <Table
-          data={buildLargeDataset(50)}
+          data={buildLargeDataset(20)}
           columns={testColumns}
           pagination={CustomPaginationComponent}
         />,
@@ -1156,7 +1156,7 @@ describe('Table', () => {
 
       render(
         <Table
-          data={buildLargeDataset(30)}
+          data={buildLargeDataset(15)}
           columns={testColumns}
           pagination={CustomPaginationComponent}
           disablePagination={true}
@@ -1169,12 +1169,12 @@ describe('Table', () => {
       );
 
       expect(screen.queryByTestId('custom-pagination')).not.toBeInTheDocument();
-      expect(screen.getAllByRole('row')).toHaveLength(31);
+      expect(screen.getAllByRole('row')).toHaveLength(16);
     });
 
     it('shows different data when navigating between pages with custom pagination', async () => {
       const user = userEvent.setup();
-      const pagedData = buildTableData(50, 3);
+      const pagedData = buildTableData(25, 3);
 
       const CustomPagination = (props: TablePaginationProps) => (
         <div>
@@ -1212,7 +1212,7 @@ describe('Table', () => {
 
     it('changes page size with custom pagination', async () => {
       const user = userEvent.setup();
-      const pagedData = buildLargeDataset(50);
+      const pagedData = buildLargeDataset(30);
 
       const CustomPagination = (props: TablePaginationProps) => (
         <div>
@@ -1249,7 +1249,7 @@ describe('Table', () => {
         ])
       );
 
-      expect(screen.getByText('Page 1 of 5')).toBeInTheDocument();
+      expect(screen.getByText('Page 1 of 3')).toBeInTheDocument();
 
       await user.selectOptions(screen.getByRole('combobox'), '25');
 
@@ -1350,85 +1350,91 @@ describe('Table', () => {
       expectTableRows({ dataRows: 5 });
     });
 
-    it('resets to first page when current page becomes invalid due to filtering', async () => {
-      const user = userEvent.setup();
+    describe('filter-driven page reset', () => {
+      beforeEach(() => {
+        vi.useFakeTimers();
+      });
 
-      render(
-        <Table
-          data={buildLargeDataset(50)}
-          columns={testColumns}
-          pageSizes={[{ id: 10, label: '10' }]}
-          actionBarConfig={{ enableFilters: true }}
-        />,
-        buildWrapper([
-          getBaseProviderWrapper(),
-          getInterpolationProviderWrapper(),
-          getRouterWrapper(),
-        ])
-      );
+      afterEach(() => {
+        vi.runOnlyPendingTimers();
+        vi.useRealTimers();
+      });
 
-      // Verify we start on page 1 of 5
-      expect(
-        screen.getByRole('button', { name: 'next page. current page 1 of 5' })
-      ).toBeInTheDocument();
+      it('resets to first page when current page becomes invalid due to filtering', async () => {
+        const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) });
 
-      // Navigate to page 5 using the next button
-      const nextButton = screen.getByRole('button', { name: /next page/i });
-      await user.click(nextButton);
-      await user.click(nextButton);
-      await user.click(nextButton);
-      await user.click(nextButton);
+        render(
+          <Table
+            data={buildLargeDataset(15)}
+            columns={testColumns}
+            pageSizes={[{ id: 5, label: '5' }]}
+            actionBarConfig={{ enableFilters: true }}
+          />,
+          buildWrapper([
+            getBaseProviderWrapper(),
+            getInterpolationProviderWrapper(),
+            getRouterWrapper(),
+          ])
+        );
 
-      await screen.findByRole('button', { name: 'next page. current page 5 of 5' });
+        // Verify we start on page 1 of 3
+        expect(
+          screen.getByRole('button', { name: 'next page. current page 1 of 3' })
+        ).toBeInTheDocument();
 
-      // Apply column filter that drastically reduces results
-      await user.click(screen.getByRole('button', { name: 'Add filter' }));
-      await user.click(screen.getByTestId('filter-option-Column1'));
-      await user.click(screen.getByLabelText('row1-col1-data'));
-      await user.click(screen.getByRole('button', { name: 'Apply' }));
+        // Navigate to page 3 using the next button
+        const nextButton = screen.getByRole('button', { name: /next page/i });
+        await user.click(nextButton);
+        await user.click(nextButton);
 
-      // Verify table page index is reset to 1 and data is displayed correctly
-      await screen.findByRole('button', { name: 'next page. current page 1 of 1' });
-      expect(screen.getByText('row1-col1-data')).toBeInTheDocument();
-      expect(screen.queryByText('row2-col1-data')).not.toBeInTheDocument();
-    });
+        await screen.findByRole('button', { name: 'next page. current page 3 of 3' });
 
-    it('does not reset page when current page remains valid after filtering', async () => {
-      const user = userEvent.setup();
+        // Apply column filter that drastically reduces results
+        await user.click(screen.getByRole('button', { name: 'Add filter' }));
+        await user.click(screen.getByTestId('filter-option-Column1'));
+        await user.click(screen.getByLabelText('row1-col1-data'));
+        await user.click(screen.getByRole('button', { name: 'Apply' }));
 
-      render(
-        <Table
-          data={buildLargeDataset(50)}
-          columns={testColumns}
-          pageSizes={[{ id: 5, label: '5' }]}
-          actionBarConfig={{ enableFilters: true }}
-        />,
-        buildWrapper([
-          getBaseProviderWrapper(),
-          getInterpolationProviderWrapper(),
-          getRouterWrapper(),
-        ])
-      );
+        // Verify table page index is reset to 1 and data is displayed correctly
+        await screen.findByRole('button', { name: 'next page. current page 1 of 1' });
+        expect(screen.getByText('row1-col1-data')).toBeInTheDocument();
+        expect(screen.queryByText('row2-col1-data')).not.toBeInTheDocument();
+      });
 
-      // Navigate to page 2
-      const nextButton = screen.getByRole('button', { name: /next page/i });
-      await user.click(nextButton);
-      await screen.findByRole('button', { name: 'next page. current page 2 of 10' });
+      it('does not reset page when current page remains valid after filtering', async () => {
+        const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) });
 
-      // Apply filter that still leaves 2 pages
-      await user.click(screen.getByRole('button', { name: 'Add filter' }));
-      await user.click(screen.getByTestId('filter-option-Column1'));
-      await user.click(screen.getByLabelText('row5-col1-data'));
-      await user.click(screen.getByLabelText('row10-col1-data'));
-      await user.click(screen.getByLabelText('row15-col1-data'));
-      await user.click(screen.getByLabelText('row20-col1-data'));
-      await user.click(screen.getByLabelText('row25-col1-data'));
-      await user.click(screen.getByLabelText('row30-col1-data'));
-      await user.click(screen.getByLabelText('row35-col1-data'));
-      await user.click(screen.getByRole('button', { name: 'Apply' }));
+        render(
+          <Table
+            data={buildLargeDataset(6)}
+            columns={testColumns}
+            pageSizes={[{ id: 3, label: '3' }]}
+            actionBarConfig={{ enableFilters: true }}
+          />,
+          buildWrapper([
+            getBaseProviderWrapper(),
+            getInterpolationProviderWrapper(),
+            getRouterWrapper(),
+          ])
+        );
 
-      // Should stay on page 2 since it's still valid (filtered results create 2 pages)
-      await screen.findByRole('button', { name: 'next page. current page 2 of 2' });
+        // Navigate to page 2
+        const nextButton = screen.getByRole('button', { name: /next page/i });
+        await user.click(nextButton);
+        await screen.findByRole('button', { name: 'next page. current page 2 of 2' });
+
+        // Apply filter that still leaves 2 pages (4 rows with pageSize=3 → 2 pages)
+        await user.click(screen.getByRole('button', { name: 'Add filter' }));
+        await user.click(screen.getByTestId('filter-option-Column1'));
+        await user.click(screen.getByLabelText('row1-col1-data'));
+        await user.click(screen.getByLabelText('row2-col1-data'));
+        await user.click(screen.getByLabelText('row3-col1-data'));
+        await user.click(screen.getByLabelText('row4-col1-data'));
+        await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+        // Should stay on page 2 since it's still valid (filtered results create 2 pages)
+        await screen.findByRole('button', { name: 'next page. current page 2 of 2' });
+      });
     });
   });
 

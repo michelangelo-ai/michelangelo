@@ -1,8 +1,14 @@
-# Running Uniflow Pipelines
+# Running Uniflow pipelines
 
 This guide covers how to run Uniflow pipelines locally and remotely.
 
-## Environment Setup
+## What you'll learn
+
+* How to set up your environment for local and remote execution
+* The differences between local and remote execution modes
+* How to debug workflows and container issues
+
+## Environment setup
 
 Create Python virtual environment and install packages:
 
@@ -13,7 +19,7 @@ poetry install
 
 This will create a `.venv` directory if it doesn't already exist. This directory contains a Python virtual environment with all the dependencies installed. You can activate this virtual environment and use it like any other Python virtual environment, or you can run commands via the Poetry CLI, e.g., `poetry run python`, `poetry run pytest`, etc.
 
-## Execution Modes
+## Execution modes
 
 Uniflow supports two primary modes of execution: **Local Execution** and **Remote Execution**. Each is suited for different stages of development and deployment.
 
@@ -26,9 +32,9 @@ Local execution runs workflows directly in a standard Python environment, making
 - Simple to run and test locally
 
 #### Limitations
-- **No Caching or Retries**: Features like caching, retries, and `apply_local_diff` are not supported.
-- **No Resource Constraints**: Configurations for CPU, GPU, memory, and worker instances are ignored.
-- **No Authentication Support**: If your tasks depend on external cloud services (e.g., S3, HDFS, Kubernetes APIs), local mode does not support automatic authentication. Test these interactions in remote environments.
+- **No caching or retries**: Features like caching, retries, and `apply_local_diff` are not supported.
+- **No resource constraints**: Configurations for CPU, GPU, memory, and worker instances are ignored.
+- **No authentication support**: If your tasks depend on external cloud services (e.g., S3, HDFS, Kubernetes APIs), local mode does not support automatic authentication. Test these interactions in remote environments.
 
 #### Example
 ```bash
@@ -45,7 +51,7 @@ Remote execution deploys workflows to a **Kubernetes** cluster for production-sc
 - Handles large datasets and distributed execution
 - Secure cloud access (via service accounts, mounted credentials, etc.)
 
-#### Running a Workflow Remotely
+#### Running a workflow remotely
 
 ```bash
 PYTHONPATH=. poetry run python ./examples/bert_cola/bert_cola.py remote-run \
@@ -67,15 +73,15 @@ Run Id: 56f90eb2-c570-4926-a1fe-993816cd1baf
 2. Install dependencies: `poetry install -E example`
 3. See the [BERT-COLA README](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/README.md)
 
-### Local Runs
+### Local runs
 
 ```bash
 PYTHONPATH=. poetry run python ./examples/bert_cola/bert_cola.py
 ```
 
-### Remote Runs
+### Remote runs
 
-Install Cadence for command-line interaction with cadence workflow:
+Install Cadence for command-line interaction with Cadence workflow:
 ```bash
 brew install cadence-workflow
 ```
@@ -108,14 +114,14 @@ Running workflows in remote mode requires a docker container that contains code 
      --yes
    ```
 
-## Debugging Workflows
+## Debugging workflows
 
 ### Useful URLs
 - **Cadence** (workflow status): http://localhost:8088/domains/default/workflows
 - **MinIO** (object storage): http://localhost:9090/browser/default
 - **Ray Dashboard**: http://localhost:8265
 
-### Accessing Ray Dashboard for Failed Tasks
+### Accessing Ray Dashboard for failed tasks
 
 1. Set `breakpoint=True` in task to keep Ray cluster running:
    ```python
@@ -135,7 +141,7 @@ Running workflows in remote mode requires a docker container that contains code 
    kubectl port-forward svc/<service-name> 8265:8265 -n default
    ```
 
-## Debugging Container Issues
+## Debugging container issues
 
 ```bash
 # Check pod status

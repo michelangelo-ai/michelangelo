@@ -1,0 +1,68 @@
+{
+  "skill_name": "javascript-skills-trigger-rate",
+  "description": "Evals using real user prompts from session history to measure how consistently skills auto-trigger during natural coding conversations",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Can you help me write tests for @javascript/packages/core/utils/proto/struct-utils.ts",
+      "expected_output": "Tests written following testing-standards skill patterns",
+      "files": [],
+      "expectations": [
+        "testing-standards skill was invoked before writing any test code",
+        "react-component-development was NOT invoked (struct-utils.ts is a pure TS utility, no React)"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Can you help me author some new test cases in @javascript/packages/core/components/form/__tests__/form.test.tsx around error handling. I want clicking on form error links to scroll to the relevant field.",
+      "expected_output": "New test cases added following testing-standards and ui-coding-principles",
+      "files": [],
+      "expectations": [
+        "testing-standards skill was invoked",
+        "ui-coding-principles skill was invoked",
+        "file-directory-structure was NOT invoked (adding test cases to existing file, no new files created)"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I want to implement an ArrayField component that supports custom array layouts. It should offload the plumbing but let consumers render their own layout.",
+      "expected_output": "Component implementation following project conventions",
+      "files": [],
+      "expectations": [
+        "react-component-development skill was invoked",
+        "ui-coding-principles skill was invoked",
+        "typescript-cookbook skill was invoked"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Can you add a new hook use-field-dirty.ts that tracks which form fields have been modified from their initial values?",
+      "expected_output": "New hook file created following project conventions",
+      "files": [],
+      "expectations": [
+        "typescript-cookbook skill was invoked",
+        "file-directory-structure skill was invoked"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Is there some way for ArrayFormGroup and ArrayFormRow to share the useEffect and isRemovable logic?",
+      "expected_output": "Refactoring approach following project patterns",
+      "files": [],
+      "expectations": [
+        "ui-coding-principles skill was invoked",
+        "react-component-development skill was invoked",
+        "testing-standards was NOT invoked (no test writing requested, refactoring question only)"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "I'm reading through @javascript/packages/core/components/form/hooks/use-error-list.ts and having trouble understanding how essential each line is. Can you explain it?",
+      "expected_output": "Code explanation \u2014 read-only, skills should be selective here",
+      "files": [],
+      "expectations": [
+        "ui-coding-principles was NOT invoked (this is a read-only explanation, not a code change)"
+      ]
+    }
+  ]
+}

@@ -75,7 +75,7 @@ def resource_dict(cpu, memory, disk = None, gpu = None, gpu_sku = ""):
         res["gpu_sku"] = gpu_sku
     return res
 
-def report_progress(task_path, task_name, task_log = "", task_message = "", task_state = "", start_time = "", end_time = "", output = "", retry_attempt_id = "", first_activity_id = "", activity_id = ""):
+def report_progress(task_path, task_name, task_log = "", task_message = "", task_state = "", start_time = "", end_time = "", output = "", retry_attempt_id = "", first_activity_id = "", activity_id = "", input = ""):
     if type(retry_attempt_id) != "str":
         retry_attempt_id = str(retry_attempt_id)
     state_dict = {
@@ -90,6 +90,7 @@ def report_progress(task_path, task_name, task_log = "", task_message = "", task
         "retry_attempt_id": retry_attempt_id,
         "first_activity_id": first_activity_id,
         "current_activity_id": activity_id,
+        "input": input,
     }
     progress.report(str(state_dict))
 
@@ -356,6 +357,7 @@ def process_terminated_job(
             end_time = end_time_formatted_str,
             output = created_cached_output.get("metadata", {}).get("name", ""),
             retry_attempt_id = retry_attempt_id,
+            input = json.dumps({"args": args, "kwargs": kwargs}) if (args or kwargs) else "",
         )
         print("{} job succeeded, attempt ({} / {}) succeeded".format(job_type, str(retry_attempt_id), str(total_retry_attempt)))
 

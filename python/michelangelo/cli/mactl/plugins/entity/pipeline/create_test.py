@@ -202,6 +202,7 @@ class PipelineCreateTest(TestCase):
             bazel_target="",
             project=project,
             pipeline=pipeline,
+            storage_url=None,
         )
 
     @patch(
@@ -256,7 +257,7 @@ class PipelineCreateTest(TestCase):
     ):
         """Test get_pipeline_config_and_tar when subprocess raises Exception (line 111).
 
-        TODO: This test is for coverage only and should be revised later.
+        TODO(#940): This test is for coverage only and should be revised later.
         """
         repo_root = Path("/fake/repo")
         config_file_relative_path = "pipelines/pipeline.yaml"
@@ -292,7 +293,7 @@ class PipelineCreateTest(TestCase):
     ):
         """Test tar path FileNotFoundError with fallback to remote_path (line 127).
 
-        TODO: This test is for coverage only and should be revised later.
+        TODO(#940): This test is for coverage only and should be revised later.
         """
         repo_root = Path("/fake/repo")
         config_file_relative_path = "pipelines/pipeline.yaml"
@@ -354,7 +355,7 @@ class PipelineCreateTest(TestCase):
     ):
         """Test input file FileNotFoundError (lines 142-143).
 
-        TODO: This test is for coverage only and should be revised later.
+        TODO(#940): This test is for coverage only and should be revised later.
         """
         repo_root = Path("/fake/repo")
         config_file_relative_path = "pipelines/pipeline.yaml"
@@ -407,7 +408,7 @@ class PipelineCreateTest(TestCase):
     ):
         """Test JSON parsing error (line 147).
 
-        TODO: This test is for coverage only and should be revised later.
+        TODO(#940): This test is for coverage only and should be revised later.
         """
         repo_root = Path("/fake/repo")
         config_file_relative_path = "pipelines/pipeline.yaml"

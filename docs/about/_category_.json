@@ -1,9 +1,9 @@
 {
-  "label": "About Michelangelo",
-  "position": 2,
-  "collapsed": false,
+  "label": "About",
+  "position": 6,
+  "collapsed": true,
   "link": {
-    "type": "doc",
-    "id": "about/index"
+    "type": "generated-index",
+    "title": "About"
   }
 }

@@ -1,7 +1,7 @@
-import { InterpolationContextExtensions } from '#core/interpolation/types';
 import { InterpolationContext } from './interpolation-context';
 
 import type { ReactNode } from 'react';
+import type { InterpolationContextExtensions } from '#core/interpolation/types';
 
 /**
  * Provides shared data context for interpolations throughout the component tree.

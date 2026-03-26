@@ -5,23 +5,38 @@ import { useField } from '#core/components/form/hooks/use-field';
 
 import type { BaseFieldProps } from '#core/components/form/fields/types';
 
-export const StringField: React.FC<BaseFieldProps> = ({
+export const StringField: React.FC<BaseFieldProps<string>> = ({
   name,
   label,
+  defaultValue,
+  initialValue,
   required,
+  validate,
   readOnly,
   disabled,
   placeholder,
   description,
   caption,
+  labelEndEnhancer,
+  format,
+  parse,
 }) => {
-  const { input, meta } = useField<string>(name);
+  const { input, meta } = useField<string>(name, {
+    required,
+    validate,
+    defaultValue,
+    initialValue,
+    label,
+    format,
+    parse,
+  });
 
   return (
     <FormControl
       label={label}
       required={required}
       description={description}
+      labelEndEnhancer={labelEndEnhancer}
       caption={caption}
       error={meta.touched && meta.error ? meta.error : undefined}
     >
@@ -31,6 +46,7 @@ export const StringField: React.FC<BaseFieldProps> = ({
         name={input.name}
         onChange={(e) => input.onChange(e.currentTarget.value)}
         onBlur={input.onBlur}
+        onFocus={input.onFocus}
         placeholder={placeholder}
         readOnly={readOnly}
         disabled={disabled}

@@ -1,7 +1,5 @@
 package workflowfx
 
-import "crypto/tls"
-
 const (
 	ConfigKey        = "workflow-engine"
 	ProviderCadence  = "cadence"
@@ -13,6 +11,7 @@ const (
 //	cadence:
 //	  host: 127.0.0.1:7833
 //	  transport: grpc
+//	  useTLS: false
 //	  workers:
 //	    - domain: default
 //	      taskList: default
@@ -24,7 +23,7 @@ type Config struct {
 	Workers   []WorkerConfig `yaml:"workers"`
 	Client    ClientConfig   `yaml:"client"`
 	Provider  string         `yaml:"provider"`
-	TLSConfig *tls.Config    `yaml:"-"` // Not configured via YAML, set programmatically
+	UseTLS    bool           `yaml:"useTLS"`
 }
 
 type WorkerConfig struct {

@@ -47,22 +47,17 @@ jobs:
         with:
           path: |
             ~/.cache/bazel
-          key: bazel-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
+          key: bazel-coverage-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
           restore-keys: |
-            bazel-${{ runner.os }}-
+            bazel-coverage-${{ runner.os }}-
 
-      - name: Run tests with Bazel
-        run: |
-          ./tools/bazel test //go/... \
-            --test_output=errors \
-            --test_summary=detailed
-
-      - name: Generate coverage with Bazel
+      - name: Run tests and generate coverage with Bazel
         run: |
           ./tools/bazel coverage //go/... \
             --combined_report=lcov \
             --instrumentation_filter="//go/[^/]*" \
-            --test_output=errors
+            --test_output=errors \
+            --test_summary=detailed
 
       - name: Process coverage data
         run: |
@@ -107,25 +102,6 @@ jobs:
             echo "total: (statements) 0%" > coverage.txt
           fi
 
-      - name: Generate alternative coverage report
-        if: env.COVERAGE == '0' || env.COVERAGE == ''
-        run: |
-          # Alternative: use bazel coverage with go tool format
-          echo "Attempting alternative coverage method..."
-
-          # Run coverage and capture output
-          ./tools/bazel coverage //go/... --combined_report=lcov || true
-
-          # Try to find any coverage data
-          find bazel-out -name "*.dat" -o -name "*.lcov" | head -10
-
-          # Set a placeholder
-          echo "COVERAGE=18.2" >> $GITHUB_ENV
-          echo "⚠️  Using cached coverage estimate"
-
-          # Create coverage.txt for combined workflow
-          echo "total: (statements) 18.2%" > coverage.txt
-
       - name: "Check coverage threshold (baseline: 60%)"
         run: |
           BASELINE=60
@@ -143,28 +119,6 @@ jobs:
             echo "📈 Goal: Maintain baseline and enforce 90% on new code"
           fi
 
-      # Codecov upload disabled - coverage is reported via PR comments and artifacts
-      # - name: Upload coverage to Codecov
-      #   uses: codecov/codecov-action@v4
-      #   with:
-      #     files: ./coverage.dat
-      #     flags: go
-      #     name: go-coverage
-      #     fail_ci_if_error: false
-      #     token: ${{ secrets.CODECOV_TOKEN }}
-
-      - name: Get test results summary
-        id: test_summary
-        run: |
-          # Count test results from Bazel
-          echo "Extracting test summary..."
-
-          # Get number of passing tests
-          PASSED=$(./tools/bazel test //go/... --test_summary=short 2>&1 | \
-            grep "tests pass" | awk '{print $1}' || echo "unknown")
-
-          echo "TESTS_PASSED=$PASSED" >> $GITHUB_ENV
-
       - name: Coverage report PR comment
         uses: marocchino/sticky-pull-request-comment@v2
         if: github.event_name == 'pull_request'
@@ -174,39 +128,11 @@ jobs:
             ## Go Coverage Report (Bazel)
 
             **Total Coverage:** ${{ env.COVERAGE }}%
-            **Tests Passed:** ${{ env.TESTS_PASSED }}
 
             **Coverage Policy:**
             - **Baseline (existing code):** ≥60% (current coverage)
             - **New/changed code:** ≥90% ✅ **STRICTLY ENFORCED**
             - **Long-term goal:** Improve baseline to 90%
-
-            <details>
-            <summary>Coverage Summary</summary>
-
-            ```
-            ${{ steps.test_summary.outputs.summary || 'See artifacts for details' }}
-            ```
-
-            </details>
-
-            <details>
-            <summary>📊 How to view detailed coverage</summary>
-
-            Download the coverage artifacts from this run and open `coverage-html/index.html`
-
-            Or run locally:
-            ```bash
-            bazel coverage //go/...
-            genhtml bazel-out/_coverage/_coverage_report.dat -o coverage-html
-            open coverage-html/index.html
-            ```
-
-            </details>
-
-            ---
-
-            **Note:** This project uses Bazel. Run `bazel test //go/...` locally to test.
 
             [View detailed HTML report in artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
@@ -226,7 +152,6 @@ jobs:
           echo "## Go Coverage Report (Bazel)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Total Coverage:** ${{ env.COVERAGE }}%" >> $GITHUB_STEP_SUMMARY
-          echo "**Tests Passed:** ${{ env.TESTS_PASSED }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Coverage Policy" >> $GITHUB_STEP_SUMMARY
           echo "- **Baseline (existing code):** ≥60% (current coverage)" >> $GITHUB_STEP_SUMMARY
@@ -249,21 +174,3 @@ jobs:
             cat coverage-summary.txt >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
           fi
-
-  coverage-quality-gate:
-    name: Coverage Quality Gate
-    runs-on: ubuntu-latest
-    needs: test-and-coverage
-    if: github.event_name == 'pull_request'
-
-    steps:
-      - name: Check coverage meets requirements
-        run: |
-          echo "✅ Go coverage checks completed"
-          echo "- Baseline coverage: ≥60% (current coverage)"
-          echo "- New code coverage: ≥90% ✅ STRICTLY ENFORCED"
-          echo ""
-          echo "📝 Coverage Policy:"
-          echo "- Existing code must maintain baseline (60%)"
-          echo "- New/changed code must meet 90% coverage"
-          echo "- Long-term goal: Improve baseline to 90%"

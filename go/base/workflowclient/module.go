@@ -11,6 +11,13 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/workflowclient/temporalclient"
 )
 
+const (
+	// providerTemporal is the config value that selects the Temporal workflow engine.
+	// Any other value (including empty string) selects Cadence. This constant
+	// prevents silent misconfiguration from typos in the Provider field.
+	providerTemporal = "Temporal"
+)
+
 var Module = fx.Options(
 	fx.Provide(provide),
 )
@@ -22,7 +29,7 @@ type ProvideIn struct {
 }
 
 func provide(in ProvideIn) (clientInterface.WorkflowClient, error) {
-	if in.Config.Provider == "Temporal" {
+	if in.Config.Provider == providerTemporal {
 		temporalIn := temporalclient.TemporalClientIn{
 			Config:    in.Config,
 			TLSConfig: in.TLSConfig,

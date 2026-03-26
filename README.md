@@ -1,6 +1,14 @@
+[![GitHub Release](https://img.shields.io/github/v/release/michelangelo-ai/michelangelo)](https://github.com/michelangelo-ai/michelangelo/releases)
+[![License](https://img.shields.io/github/license/michelangelo-ai/michelangelo)](http://www.apache.org/licenses/LICENSE-2.0)
+[![codecov](https://codecov.io/gh/michelangelo-ai/michelangelo/graph/badge.svg?token=HKJDT0I6CW)](https://codecov.io/gh/michelangelo-ai/michelangelo)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11481/badge)](https://www.bestpractices.dev/projects/11481)
+
 # Michelangelo-AI
 
 Michelangelo-AI is an open-source platform designed to streamline the development, deployment, and monitoring of machine learning models at scale. It offers a comprehensive suite of tools and services that facilitate the entire machine learning lifecycle, from data management to model serving.
+
+:warning: **Beta Notice**
+ This project is currently in beta. APIs and features may evolve, and breaking changes may occur as we continue to improve and stabilize the platform.
 
 **Open Source Initiative**
 
@@ -24,7 +32,7 @@ We are **incrementally open-sourcing Michelangelo’s core capabilities**, ensur
 
 ## Installation
 
-To install Michelangelo-AI, follow [Sandbox Setup](https://github.com/michelangelo-ai/michelangelo/wiki/Sandbox-Setup) guide until GitHub respository is public.
+To install Michelangelo-AI, follow [Sandbox Setup](https://michelangelo-ai.github.io/michelangelo/docs/getting-started/sandbox-setup) guide until GitHub respository is public.
 
 ## Usage
 
@@ -35,7 +43,7 @@ Here's a basic example of how to train and deploy a model using Michelangelo-AI:
 3. **Model Evaluation**: Evaluate the trained model's performance.
 4. **Model Deployment**: Deploy the model to the production environment.
 
-For detailed instructions and advanced usage, refer to the [Michelangelo-AI Wiki](https://github.com/michelangelo-ai/michelangelo/wiki).
+For detailed instructions and advanced usage, refer to the [Michelangelo-AI Docs](https://michelangelo-ai.github.io/michelangelo/).
 
 ## Build and Test
 
@@ -48,12 +56,12 @@ Please refer to the Sandbox Setup section of the documentation.
 ## Contributing
 
 We welcome contributions to Michelangelo-AI!  
-If you're interested in contributing, please read our [Contributing Guidelines](https://github.com/michelangelo-ai/michelangelo/wiki/Contributing-Guidelines) to get started.
+If you're interested in contributing, please read our [Contributing Guidelines](https://github.com/michelangelo-ai/michelangelo/blob/main/CONTRIBUTING.md) to get started.
 
 
 ## License
 
-This project is licensed under [LICENSE](https://github.com/michelangelo-ai/michelangelo/blob/main/LICENSE) before public release.
+This project is licensed under the [Apache 2.0 License](https://github.com/michelangelo-ai/michelangelo/blob/main/LICENSE) before public release.
 
 
 ## Acknowledgments

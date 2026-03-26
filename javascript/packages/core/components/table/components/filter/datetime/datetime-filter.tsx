@@ -1,10 +1,10 @@
 import { DatetimeColumn } from 'baseui/data-table';
 
 import { UNIFIED_API_ORIGIN_DATE } from './constants';
-import { DatetimeFilterValue } from './types';
 import { convertStringParamsToDate } from './utils';
 
 import type { ColumnFilterProps } from '../types';
+import type { DatetimeFilterValue } from './types';
 
 export function DatetimeFilter<TData = unknown>({
   close,

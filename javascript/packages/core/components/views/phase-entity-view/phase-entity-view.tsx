@@ -45,6 +45,9 @@ export function PhaseEntityView<T extends object = object>({
 
   const currentEntityConfig = entities.find((entity) => entity.id === currentEntity);
   if (!currentEntityConfig) {
+    // No entity in URL — useEffect above is about to redirect to the first entity.
+    // Return null to avoid flashing the error view during that redirect.
+    if (!currentEntity) return null;
     return (
       <ErrorView
         buttonConfig={{
@@ -56,6 +59,7 @@ export function PhaseEntityView<T extends object = object>({
           <CircleExclamationMark
             kind={CircleExclamationMarkKind.ERROR}
             width={theme.sizing.scale1600}
+            height={theme.sizing.scale1600}
           />
         }
         title="Entity not found"

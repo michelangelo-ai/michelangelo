@@ -59,7 +59,7 @@ message Affinity {
   // - Match production resources: {env: "prod"}
   ResourceAffinity resource_affinity = 2;
 
-  // TODO: Add inter-job and anti-affinity
+  // TODO(#928): Add inter-job and anti-affinity
 }
 
 // AssignmentInfo provides information about where a job is assigned to run.
@@ -153,7 +153,7 @@ message SchedulingSpec {
   // - Development and test workloads
   bool preemptible = 1;
 
-  // TODO: Add priority related information
+  // TODO(#929): Add priority related information
 }
 
 // SchedulingInfo tracks job scheduling attempts and history.

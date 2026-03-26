@@ -11,6 +11,13 @@ export interface FormProps<FieldValues extends FormData = FormData> {
   children: React.ReactNode;
 
   /**
+   * When true, focuses the first field with a validation error on failed submit.
+   *
+   * @default true
+   */
+  focusOnError?: boolean;
+
+  /**
    * Optional render prop for wrapping the form element.
    * When provided, the form element is passed to this function, allowing
    * components outside the form element to access form state via useFormState.
@@ -41,12 +48,39 @@ export interface FormProps<FieldValues extends FormData = FormData> {
    * ```
    */
   render?: (formElement: React.ReactNode) => React.ReactNode;
+
+  /**
+   * Renders a sticky footer fixed to the bottom of the viewport.
+   *
+   * @note `right` is usually reserved for form actions (e.g., submit button).
+   * @note `left` is usually reserved for secondary info, status text.
+   *
+   * @example
+   * ```tsx
+   * // Object with left and right content
+   * <Form footer={{ right: <SubmitButton>Save</SubmitButton>, left: <span>Last saved 2m ago</span> }}>
+   *
+   * // ReactNode for full control
+   * <Form footer={<MyCustomFooter />}>
+   * ```
+   */
+  footer?: { left?: React.ReactNode; right?: React.ReactNode } | React.ReactNode;
+}
+
+export interface FormInstance {
+  fieldRegistry: FieldRegistry;
 }
 
 export interface FormState<FieldValues extends FormData = FormData> {
   submitting: boolean;
   submitError?: string;
   values?: FieldValues;
+  submitFailed?: boolean;
+  hasValidationErrors?: boolean;
+  errors?: Record<string, unknown>;
+  submitErrors?: Record<string, unknown>;
+  touched?: Record<string, boolean>;
+  modifiedSinceLastSubmit?: boolean;
 }
 
 export interface FieldState {
@@ -54,9 +88,28 @@ export interface FieldState {
   touched: boolean;
 }
 
-export interface FieldInput<T = unknown> {
-  value: T;
+export interface FieldInput<T = unknown, InputValue = T> {
+  value: InputValue;
   name: string;
-  onChange: (value: T) => void;
+  onChange: (value: InputValue) => void;
   onBlur: () => void;
+  onFocus: () => void;
+}
+
+export type FieldRegistry = Map<string, FieldRegistryEntry>;
+
+export type FieldRegistryEntry = { label: string };
+
+export interface FormApi {
+  fieldRegistry: FieldRegistry;
+  change: (name: string, value: unknown) => void;
+  submit: () => Promise<object | undefined> | undefined;
+}
+export interface ArrayFieldOptions {
+  /**
+   * Pre-populates with empty entries _on mount_ when the array has fewer items than this value,
+   * and prevents removal when the array has fewer items than this value.
+   */
+  minItems?: number;
+  readOnly?: boolean;
 }

@@ -6,7 +6,8 @@ import { Phase } from '#core/types/common/studio-types';
 import { VIEW_TYPE_TO_PARAMS } from './constants';
 import { normalizeEntityParam } from './normalize-entity-param';
 
-import type { QueryParams, RouteParams, StudioParamsView, ViewTypeToParamType } from './types';
+import type { StudioParamsView } from '#core/types/common/view-types';
+import type { QueryParams, RouteParams, ViewTypeToParamType } from './types';
 
 /**
  * Hook to get and transform studio parameters based on the view type.

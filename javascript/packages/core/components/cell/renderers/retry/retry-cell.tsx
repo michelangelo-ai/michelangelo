@@ -60,13 +60,10 @@ export const RetryCell = (props: CellRendererProps<string>) => {
       return;
     }
 
-    // Strip protobuf internals so toBinary() re-normalizes nested messages
-    const { $typeName: _, $unknown: __, ...specFields } = pipelineRun.spec;
-
     const updatedPipelineRun = {
       metadata: pipelineRun.metadata,
       spec: {
-        ...specFields,
+        ...pipelineRun.spec,
         retryInfo: {
           activityId: value,
           workflowId,

@@ -14,15 +14,17 @@ const config: Config = {
 
   // GitHub Pages deployment config
   url: 'https://michelangelo-ai.github.io',
-  baseUrl: '/',
+  baseUrl: '/michelangelo/',
   organizationName: 'michelangelo-ai',
   projectName: 'michelangelo',
 
   onBrokenLinks: 'throw',
-  onBrokenMarkdownLinks: 'throw',
 
   markdown: {
     format: 'md',
+    hooks: {
+      onBrokenMarkdownLinks: 'throw',
+    },
   },
 
   i18n: {

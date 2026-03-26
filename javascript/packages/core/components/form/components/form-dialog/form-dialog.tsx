@@ -4,7 +4,7 @@ import { PLACEMENT, SIZE } from 'baseui/dialog';
 import { FORM_ERROR } from 'final-form';
 
 import { Dialog } from '#core/components/dialog/dialog';
-import { FormErrorBanner } from '#core/components/form/components/form-error-banner';
+import { FormErrorBanner } from '#core/components/form/components/form-error-banner/form-error-banner';
 import { SubmitButton } from '#core/components/form/components/submit-button/submit-button';
 import { Form } from '#core/components/form/form';
 

@@ -230,8 +230,8 @@ func (this *ProjectSpec) Validate(prefix string) error {
 		if v == 0 {
 			return status.Error(codes.InvalidArgument, prefix+n+" "+"must be a non-zero number")
 		}
-		if !(v >= 1 && v <= 4) {
-			return status.Error(codes.InvalidArgument, prefix+n+" "+"must be in the range [1,4]")
+		if !(v >= 1 && v <= 5) {
+			return status.Error(codes.InvalidArgument, prefix+n+" "+"must be in the range [1,5]")
 		}
 	}
 	{

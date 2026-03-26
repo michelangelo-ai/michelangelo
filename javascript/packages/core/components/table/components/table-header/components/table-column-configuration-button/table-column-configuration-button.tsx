@@ -1,13 +1,14 @@
 import { useStyletron } from 'baseui';
 import { Button, KIND, SIZE } from 'baseui/button';
 import { Checkbox } from 'baseui/checkbox';
-import { List, SharedStylePropsArg, StyledCloseHandle, StyledLabel } from 'baseui/dnd-list';
+import { List, StyledCloseHandle, StyledLabel } from 'baseui/dnd-list';
 import { PLACEMENT, StatefulPopover } from 'baseui/popover';
 
 import { Icon } from '#core/components/icon/icon';
-import { TableData } from '#core/components/table/types/data-types';
 import { createColumnListChangeHandler } from './utils';
 
+import type { SharedStylePropsArg } from 'baseui/dnd-list';
+import type { TableData } from '#core/components/table/types/data-types';
 import type { ConfigurableColumn, TableColumnConfigurationButtonProps } from './types';
 
 export function TableColumnConfigurationButton<T extends TableData = TableData>({

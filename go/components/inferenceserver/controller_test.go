@@ -190,7 +190,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 			reconciler := &Reconciler{
 				Handler:  handler,
 				logger:   zap.NewNop(),
-				Recorder: fakeRecorder,
+				recorder: fakeRecorder,
 				plugin:   backendPlugin,
 				engine:   mockEngine,
 			}

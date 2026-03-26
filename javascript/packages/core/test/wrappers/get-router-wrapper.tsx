@@ -1,6 +1,6 @@
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom-v5-compat';
 
-import { WrapperComponentProps } from './types';
+import type { WrapperComponentProps } from './types';
 
 /**
  * Creates a React Router wrapper for testing components that use routing features.

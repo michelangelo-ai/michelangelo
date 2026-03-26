@@ -186,7 +186,7 @@ class LoadConfigTest(TestCase):
 
         result = load_config()
 
-        self.assertEqual(result["address"], "127.0.0.1:14566")
+        self.assertEqual(result["address"], "127.0.0.1:15566")
         self.assertFalse(result["use_tls"])
 
     @patch("michelangelo.cli.mactl.config._apply_env_overrides")
@@ -301,7 +301,7 @@ class DefaultConstantsTest(TestCase):
 
     def test_default_config_values(self):
         """Test DEFAULT_CONFIG default values."""
-        self.assertEqual(DEFAULT_CONFIG["address"], "127.0.0.1:14566")
+        self.assertEqual(DEFAULT_CONFIG["address"], "127.0.0.1:15566")
         self.assertFalse(DEFAULT_CONFIG["use_tls"])
         self.assertIn("metadata", DEFAULT_CONFIG)
         self.assertEqual(DEFAULT_CONFIG["metadata"]["rpc-caller"], "grpcurl")

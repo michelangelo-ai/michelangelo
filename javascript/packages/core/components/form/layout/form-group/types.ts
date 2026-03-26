@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { BoxOverrides } from '#core/components/box/types';
 
 export interface FormGroupProps {
   title?: string;
@@ -18,6 +19,9 @@ export interface FormGroupProps {
 
   /** Additional content for the header (e.g., action buttons) */
   endEnhancer?: ReactNode;
+
+  /** BaseUI overrides for the underlying Box container */
+  overrides?: BoxOverrides;
 
   children: ReactNode;
 }

@@ -79,12 +79,61 @@ class PrepareColumnInfoTest(TestCase):
             ],
         )
 
+    def test_prepare_column_info_empty_timestamp(self):
+        """Test prepare_column_info handles empty timestamp gracefully."""
+        # Mock Entity with empty timestamp
+        mock_item = Mock()
+        mock_item.metadata.namespace = "test-ns"
+        mock_item.metadata.name = "test-name"
+        mock_item.metadata.labels = {"michelangelo/UpdateTimestamp": ""}
+
+        # run func
+        result = prepare_column_info()
+
+        # Check results
+        retrieval_funcs = [col.pop("retrieve_func") for col in result]
+
+        # Should return "N/A" for empty timestamp instead of crashing
+        self.assertEqual(
+            [func(mock_item) for func in retrieval_funcs],
+            [
+                "test-ns",
+                "test-name",
+                "N/A",
+            ],
+        )
+
+    def test_prepare_column_info_missing_timestamp(self):
+        """Test prepare_column_info handles missing timestamp label."""
+        # Mock Entity without timestamp label
+        mock_item = Mock()
+        mock_item.metadata.namespace = "test-ns"
+        mock_item.metadata.name = "test-name"
+        mock_item.metadata.labels = {}
+
+        # run func
+        result = prepare_column_info()
+
+        # Check results
+        retrieval_funcs = [col.pop("retrieve_func") for col in result]
+
+        # Should return "N/A" for missing timestamp
+        self.assertEqual(
+            [func(mock_item) for func in retrieval_funcs],
+            [
+                "test-ns",
+                "test-name",
+                "N/A",
+            ],
+        )
+
 
 class ListFuncImplTest(TestCase):
     """Test cases for list_func_impl function."""
 
-    @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
-    def test_list_func_impl(self, mock_call_kwargs):
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.ParseDict")
+    def test_list_func_impl(self, mock_parse_dict, mock_call):
         """Test list_func_impl extracts list fields and formats output."""
         # Create CrdMethodInfo instance
         crd_method_info = CrdMethodInfo(
@@ -108,15 +157,55 @@ class ListFuncImplTest(TestCase):
                 Mock(items=[mock_item]),
             )
         ]
-        mock_call_kwargs.return_value = mock_response
+        mock_call.return_value = mock_response
 
         # Execute - should not raise any exceptions
-        list_func_impl(crd_method_info, Mock(arguments={"namespace": "test-namespace"}))
-
-        # Verify crd_method_call_kwargs was called with correct arguments
-        mock_call_kwargs.assert_called_once_with(
-            crd_method_info, namespace="test-namespace"
+        list_func_impl(
+            crd_method_info,
+            Mock(arguments={"namespace": "test-namespace", "limit": 100}),
         )
+
+        # Verify ParseDict was called with correct request dict
+        call_args = mock_parse_dict.call_args
+        request_dict = call_args[0][0]
+        self.assertEqual(request_dict["namespace"], "test-namespace")
+        self.assertEqual(request_dict["list_options_ext"]["pagination"]["limit"], 100)
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.ParseDict")
+    def test_list_func_impl_with_limit_warning(self, mock_parse_dict, mock_call):
+        """Test list_func_impl shows warning when result count equals limit."""
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="michelangelo.api.v2.ProjectService",
+            method_name="List",
+            input_class=Mock,
+            output_class=Mock,
+        )
+
+        mock_items = [MagicMock() for _ in range(10)]
+        for item in mock_items:
+            item.metadata.namespace = "test-ns"
+            item.metadata.name = "test-project"
+            item.metadata.labels = {"michelangelo/UpdateTimestamp": "1640000000000000"}
+
+        mock_response = Mock()
+        mock_response.ListFields.return_value = [
+            (
+                Mock(name="project_list"),
+                Mock(items=mock_items),
+            )
+        ]
+        mock_call.return_value = mock_response
+
+        list_func_impl(
+            crd_method_info,
+            Mock(arguments={"namespace": "test-namespace", "limit": 10}),
+        )
+
+        call_args = mock_parse_dict.call_args
+        request_dict = call_args[0][0]
+        self.assertEqual(request_dict["list_options_ext"]["pagination"]["limit"], 10)
 
 
 class DeleteFuncImplTest(TestCase):
@@ -166,6 +255,36 @@ class GetFuncImplTest(TestCase):
         mock_call_kwargs.assert_called_once_with(
             crd_method_info, namespace="ns", name="proj"
         )
+
+    def test_get_func_impl_without_name_calls_list(self):
+        """Test get_func_impl without name calls list with limit."""
+        mock_crd = Mock()
+        mock_crd.list = Mock(return_value="list_result")
+        mock_crd.generate_list = Mock()
+
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Get",
+            input_class=Mock,
+            output_class=Mock,
+        )
+
+        result = get_func_impl(
+            crd_method_info,
+            Mock(
+                arguments={
+                    "self": mock_crd,
+                    "namespace": "ns",
+                    "name": None,
+                    "limit": 50,
+                }
+            ),
+        )
+
+        mock_crd.generate_list.assert_called_once_with(crd_method_info.channel)
+        mock_crd.list.assert_called_once_with(namespace="ns", limit=50)
+        self.assertEqual(result, "list_result")
 
 
 class ApplyFuncImplTest(TestCase):

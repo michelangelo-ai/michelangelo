@@ -36,19 +36,19 @@ func NewCadenceClient(in CadenceClientIn) (CadenceClientOut, error) {
 		},
 	}
 
-	// Add TLS configuration if UseTLS is enabled
+	// Set UseTLS flag and prepare TLS configuration
+	workflowFxConfig.UseTLS = in.Config.UseTLS
+	var tlsConfig *tls.Config
 	if in.Config.UseTLS {
-		var tlsConfig *tls.Config
 		if in.TLSConfig != nil {
 			tlsConfig = in.TLSConfig
 		} else {
 			// Default to empty TLS configuration if none provided
 			tlsConfig = &tls.Config{}
 		}
-		workflowFxConfig.TLSConfig = tlsConfig
 	}
 
-	workflowServiceClient, err := defaultCadenceClientFactory.NewCadenceClient(workflowFxConfig)
+	workflowServiceClient, err := defaultCadenceClientFactory.NewCadenceClient(workflowFxConfig, tlsConfig)
 	if err != nil {
 		return CadenceClientOut{}, err
 	}

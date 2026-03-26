@@ -1,40 +1,59 @@
 # Michelangelo User Guides
 
-
 This guide provides you step by step how to build, train, and deploy machine learning models at scale using Michelangelo's unified ML platform.
 
-## **Get Started**
+## **Getting Started: Your First ML Workflow**
 
-New to Michelangelo? Start here to learn the complete ML workflow:
+New to Michelangelo? Follow this step-by-step path to build your first end-to-end ML pipeline:
 
-### **Core Tutorials**
+### **1. Understand ML Pipelines (Start Here)**
+Before diving into specific tasks, understand how Michelangelo orchestrates ML workflows:
+* [**ML Pipelines Overview**](./ml-pipelines/index.md) - Learn about tasks, workflows, and pipelines
+* [**Getting Started with Pipelines**](./ml-pipelines/getting-started.md) - Build your first pipeline in 30 minutes
 
-| Tutorial | Description |
-| ----- | ----- |
-| **Data Preparation** | Transform and prepare datasets using Ray and Spark distributed processing. Load CSVs, clean data, and create train/validation splits. |
-| **Model Training** | Train models locally or at scale with distributed computing. Use scikit-learn for simple cases or Lightning Trainer SDK for deep learning. |
-| **Model Registry** | Version, track, and manage trained models with MLflow integration. Organize experiments and model artifacts. |
-| **Model Deployment** | Deploy models for real-time inference and batch scoring. Set up REST endpoints and monitor production models. |
+### **2. Prepare Your Data**
+Get your data ready for training:
+* [**Prepare Your Data**](./prepare-your-data.md) - Load, clean, and split datasets using Ray and Spark
+
+### **3. Train Your Model**
+Develop and train your ML model:
+* [**Train and Register a Model**](./train-and-register-a-model.md) - Train locally or at scale with distributed computing
+
+### **4. Manage Your Models**
+Version and organize trained models:
+* [**Model Registry Guide**](./model-registry-guide.md) - Version, track, and manage trained models
+
+### **5. Deploy Your Model**
+Serve predictions in production:
+* [**Deploy Models**](../operator-guides/serving/index.md) - Deploy models for real-time inference and batch scoring
+
+---
 
 ## **Quick Navigation**
 
-Choose your path based on your current goal:
+### **Core Concepts**
+
+| Concept | Learn About It |
+| ----- | ----- |
+| **How to build a pipeline** | [ML Pipelines Overview](./ml-pipelines/index.md) |
+| **When to use each execution mode** | [Pipeline Running Modes](./ml-pipelines/pipeline-running-modes.md) |
+| **How caching and resumability work** | [Caching and Resume](./ml-pipelines/cache-and-pipelinerun-resume-form.md) |
+| **How to iterate rapidly** | [File Sync Testing](./ml-pipelines/file-sync-testing-flow-runbook.md) |
 
 ### **Specific Tasks**
 
-* [Prepare your data](https://github.com/michelangelo-ai/michelangelo/wiki/Prepare-Your-Data)
-* [Train a model](https://github.com/michelangelo-ai/michelangelo/wiki/Train-and-Register-a-Model)
-* [Mode registry guide](https://github.com/michelangelo-ai/michelangelo/wiki/Model-Registry-Guide)
-* Deploy models _(Coming Soon)_
+* [Prepare your data](./prepare-your-data.md)
+* [Train a model](./train-and-register-a-model.md)
+* [Manage your models](./model-registry-guide.md)
+* [Deploy models](../operator-guides/serving/index.md)
 
-## **What You'll Learn**
+### **Advanced Topics**
 
-By the end of these tutorials, you'll be able to:
+* [Set Up Pipeline Triggers](./set-up-triggers.md) - Schedule pipelines to run automatically
+* [CLI Reference](./cli.md) - Command-line tools for pipeline and project management
+* [Project Management](./project-management-for-ml-pipelines.md) - Create and manage MA Studio projects
 
-* Prepare datasets efficiently using Ray and Spark
-* Train models both locally and with distributed computing
-* Register models using mode package SDK
-* Deploy models for real-time serving
+---
 
 ## **Learning by Examples**
 
@@ -58,3 +77,11 @@ Choose a tutorial based on your ML domain:
 | Example | Description | Techniques |
 | ----- | ----- | ----- |
 | [**Amazon Books Recommendation**](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/amazon_books_qwen) | Build dual-encoder recommendation system | Embedding learning, similarity search |
+
+---
+
+## What's next?
+
+- **New to ML Pipelines?** Start with the [ML Pipelines Overview](./ml-pipelines/index.md), then follow [Getting Started with Pipelines](./ml-pipelines/getting-started.md)
+- **Have your pipeline running?** Learn about [Pipeline Running Modes](./ml-pipelines/pipeline-running-modes.md) and [Caching and Resume](./ml-pipelines/cache-and-pipelinerun-resume-form.md)
+- **Ready for production?** Set up [Pipeline Triggers](./set-up-triggers.md) for automated scheduling

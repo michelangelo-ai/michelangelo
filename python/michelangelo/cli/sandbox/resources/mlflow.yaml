@@ -70,7 +70,7 @@ spec:
                       sys.exit(1)
           "
           # Start MLflow tracking server
-          mlflow server --backend-store-uri mysql+pymysql://root:root@mysql:3306/mlflow --default-artifact-root s3://mlflow --host 0.0.0.0 --port 5000 --serve-artifacts --no-host-validation
+          mlflow server --backend-store-uri mysql+pymysql://root:root@mysql:3306/mlflow --default-artifact-root s3://mlflow --host 0.0.0.0 --port 5000 --serve-artifacts
         readinessProbe:
           httpGet:
             path: /health

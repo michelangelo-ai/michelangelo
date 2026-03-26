@@ -57,7 +57,7 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 		return nil, err
 	}
 	if timeout == 0 {
-		timeout = int64(utils.CadenceLongTimeout.Seconds())
+		timeout = int64(utils.LongTimeout.Seconds())
 	}
 
 	var cluster v2pb.RayCluster
@@ -78,7 +78,7 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 	cluster = *response.RayCluster
 	activityID := response.ActivityID
 
-	srp := utils.CadenceDefaultSensorRetryPolicy
+	srp := utils.DefaultSensorRetryPolicy
 	srp.ExpirationInterval = time.Second * time.Duration(timeout)
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	sensorCtx := workflow.WithRetryPolicy(ctx, srp)
@@ -189,7 +189,7 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 	rayJob = *createRes.RayJob
 
 	var sensorRes ray.SensorRayJobResponse
-	srp := utils.CadenceDefaultSensorRetryPolicy
+	srp := utils.DefaultSensorRetryPolicy
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	sensorCtx := workflow.WithRetryPolicy(ctx, srp)
 	if err := workflow.ExecuteActivity(sensorCtx, ray.Activities.SensorRayJob, v2pb.GetRayJobRequest{
@@ -230,7 +230,7 @@ func (r *module) terminateCluster(t *starlark.Thread, _ *starlark.Builtin, args 
 	}
 
 	var res v2pb.UpdateRayClusterResponse
-	srp := utils.CadenceDefaultSensorRetryPolicy
+	srp := utils.DefaultSensorRetryPolicy
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	sensorCtx := workflow.WithRetryPolicy(ctx, srp)
 	if err := workflow.ExecuteActivity(sensorCtx, ray.Activities.TerminateCluster, ray.TerminateClusterRequest{

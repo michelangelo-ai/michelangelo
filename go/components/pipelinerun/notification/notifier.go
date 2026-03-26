@@ -133,12 +133,3 @@ func getEffectiveState(pipelineRun *v2pb.PipelineRun) v2pb.PipelineRunState {
 	}
 	return pipelineRun.Status.State
 }
-
-// ShouldNotify determines if a pipeline run state change should trigger notifications.
-// Public method for testing and debugging.
-func (n *PipelineRunNotifier) ShouldNotify(
-	oldPipelineRun, newPipelineRun *v2pb.PipelineRun,
-) bool {
-	logger := n.logger.With(zap.String("method", "ShouldNotify"))
-	return n.shouldNotify(oldPipelineRun, newPipelineRun, logger)
-}

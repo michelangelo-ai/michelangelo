@@ -64,7 +64,8 @@ type TaskProgress struct {
 	TaskState         string   `json:"task_state"`          // represents the current execution state (e.g., "running", "succeeded", "failed", "pending")
 	StartTime         string   `json:"start_time"`          // timestamp when the task execution began
 	EndTime           string   `json:"end_time"`            // timestamp when the task execution completed
-	Output            string   `json:"output"`              // contains the serialized output data produced by the task upon completion
+	Output            string   `json:"output"`              // cached output resource name produced by the task upon completion
+	Input             string   `json:"input"`               // JSON-encoded args/kwargs passed to the task
 	RetryAttemptID    string   `json:"retry_attempt_id"`    // identifies the specific retry attempt for this task execution
 	FirstActivityID   string   `json:"first_activity_id"`   // ID of the first activity in this task
 	CurrentActivityID string   `json:"current_activity_id"` // ID of the currently executing activity
@@ -802,13 +803,16 @@ func (a *ExecuteWorkflowActor) constructPipelineRunStepInfo(ctx context.Context,
 
 		if _, existingTask := stepMap[taskName]; !existingTask {
 			stepOrder = append(stepOrder, taskName)
-			stepMap[taskName] = getStepInfoFromTaskProgress(&taskProgress, pipelineRun.Namespace)
+			stepInfo := getStepInfoFromTaskProgress(&taskProgress, pipelineRun.Namespace)
+			a.enrichStepOutput(ctx, pipelineRun.Namespace, &taskProgress, stepInfo)
+			stepMap[taskName] = stepInfo
 			continue
 		}
 
 		// Merge the task progress
 		oldStepInfo := stepMap[taskName]
 		newStepInfo := getStepInfoFromTaskProgress(&taskProgress, pipelineRun.Namespace)
+		a.enrichStepOutput(ctx, pipelineRun.Namespace, &taskProgress, newStepInfo)
 		stepMap[taskName] = mergePipelineRunStepInfo(oldStepInfo, newStepInfo)
 	}
 
@@ -906,6 +910,15 @@ func getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *
 					Name:      taskProgress.Output,
 				},
 			},
+		}
+	}
+
+	if taskProgress.Input != "" {
+		var inputMap map[string]interface{}
+		if err := json.Unmarshal([]byte(taskProgress.Input), &inputMap); err == nil {
+			if s, err := structFromMap(inputMap); err == nil {
+				stepInfo.Input = s
+			}
 		}
 	}
 
@@ -1159,4 +1172,62 @@ func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipel
 	}
 
 	return nil
+}
+
+// structFromMap converts a map[string]interface{} to a *pbtypes.Struct.
+func structFromMap(m map[string]interface{}) (*pbtypes.Struct, error) {
+	b, err := json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+	s := &pbtypes.Struct{}
+	if err := jsonpb.UnmarshalString(string(b), s); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// enrichStepOutput reads the CachedOutput CR and populates stepInfo.Output with the content of storage_uri.
+// Only variable-type outputs (JSON) are read; binary types (checkpoints, raw models) are skipped.
+// Content is capped at maxStepOutputBytes to avoid bloating the CR.
+func (a *ExecuteWorkflowActor) enrichStepOutput(ctx context.Context, namespace string, taskProgress *TaskProgress, stepInfo *v2.PipelineRunStepInfo) {
+	const maxStepOutputBytes = 64 * 1024 // 64KB
+
+	if taskProgress.Output == "" {
+		return
+	}
+	co := &v2.CachedOutput{}
+	if err := a.apiHandler.Get(ctx, namespace, taskProgress.Output, nil, co); err != nil {
+		a.logger.Warn("Failed to fetch CachedOutput for step output enrichment",
+			zap.String("name", taskProgress.Output), zap.Error(err))
+		return
+	}
+
+	// Only read JSON content for variable-type outputs; skip binary types
+	if co.Spec.Type != v2.CACHED_OUTPUT_TYPE_VARIABLE {
+		return
+	}
+	if co.Spec.StorageUri == "" {
+		return
+	}
+
+	data, err := a.blobStore.Get(ctx, co.Spec.StorageUri)
+	if err != nil {
+		a.logger.Warn("Failed to read CachedOutput storage_uri", zap.String("uri", co.Spec.StorageUri), zap.Error(err))
+		return
+	}
+	if len(data) > maxStepOutputBytes {
+		data = data[:maxStepOutputBytes]
+	}
+
+	s := &pbtypes.Struct{}
+	if err := jsonpb.UnmarshalString(string(data), s); err != nil {
+		// Content may be a JSON array — wrap it so it fits in a Struct
+		wrapped := `{"result":` + string(data) + `}`
+		if err2 := jsonpb.UnmarshalString(wrapped, s); err2 != nil {
+			a.logger.Warn("Failed to parse CachedOutput content as JSON struct", zap.String("uri", co.Spec.StorageUri), zap.Error(err))
+			return
+		}
+	}
+	stepInfo.Output = s
 }

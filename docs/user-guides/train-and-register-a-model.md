@@ -191,7 +191,7 @@ The SDK automates all distributed concerns.
 
 Your models are now ready to move forward:
 
-* Continue to [**Model Registry**](https://github.com/michelangelo-ai/michelangelo/wiki/Model-Registry-Guide) to save and version  
+* Continue to [**Model Registry**](./model-registry-guide.md) to save and version
 * Continue to **Model Deployment** _(Coming Soon)_ for inference
 
 ## Troubleshooting

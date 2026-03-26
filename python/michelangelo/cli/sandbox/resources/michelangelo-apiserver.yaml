@@ -8,8 +8,9 @@ spec:
   containers:
     - name: michelangelo-apiserver
       image: ghcr.io/michelangelo-ai/apiserver:main
+      imagePullPolicy: IfNotPresent
       ports:
-        - containerPort: 14566
+        - containerPort: 15566
       volumeMounts:
         - name: config-volume
           mountPath: /config
@@ -29,10 +30,10 @@ spec:
   selector:
     app: michelangelo-apiserver
   ports:
-    - name: "14566"
-      port: 14566 # port export to the k8s cluster
+    - name: "15566"
+      port: 15566 # port export to the k8s cluster
       nodePort: 30009 # port export to the external world
-      targetPort: 14566 # port inside the container
+      targetPort: 15566 # port inside the container
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -45,7 +46,7 @@ data:
     apiserver:
       yarpc:
         host: 0.0.0.0
-        port: 14566
+        port: 15566
       k8s:
         qps: 300
         burst: 600

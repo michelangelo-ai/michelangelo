@@ -28,10 +28,10 @@ const (
 	SparkAppFailedCondition  string = "SparkAppFailed"
 )
 
-const CadenceLongTimeout = time.Hour * 24 * 365 * 10 // 10 years, practically - no timeout
-const CadenceLongRetry = time.Hour * 24 * 365 * 10   // 10 years, practically - no timeout
+const LongTimeout = time.Hour * 24 * 365 * 10 // 10 years, practically - no timeout
+const LongRetry = time.Hour * 24 * 365 * 10   // 10 years, practically - no timeout
 
-var CadenceDefaultNonRetriableErrorReasons = []string{
+var DefaultNonRetriableErrorReasons = []string{
 	"cadenceInternal:Panic",                  // panics
 	"cadenceInternal:Generic",                // cadence converter errors (similar to invalid-argument)
 	"400",                                    // bad-request https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
@@ -51,23 +51,23 @@ var CadenceDefaultNonRetriableErrorReasons = []string{
 	yarpcerrors.CodeInternal.String(),         // server error; serious error, like panic
 }
 
-// CadenceDefaultRetryPolicy is the default retry policy for Cadence workflows with
+// DefaultRetryPolicy is the default retry policy for workflows with
 // a 15-second initial interval and 5-minute expiration.
-var CadenceDefaultRetryPolicy = workflow.RetryPolicy{
+var DefaultRetryPolicy = workflow.RetryPolicy{
 	InitialInterval:          time.Second * 15,
 	BackoffCoefficient:       1,
 	ExpirationInterval:       time.Minute * 5,
-	NonRetriableErrorReasons: CadenceDefaultNonRetriableErrorReasons,
+	NonRetriableErrorReasons: DefaultNonRetriableErrorReasons,
 	MaximumAttempts:          1,
 }
 
-// CadenceDefaultSensorRetryPolicy is the default retry policy for sensor workflows
+// DefaultSensorRetryPolicy is the default retry policy for sensor workflows
 // with a 10-second initial interval and long timeout for polling operations.
-var CadenceDefaultSensorRetryPolicy = workflow.RetryPolicy{
+var DefaultSensorRetryPolicy = workflow.RetryPolicy{
 	InitialInterval:          time.Second * 10,
 	BackoffCoefficient:       1,
-	ExpirationInterval:       CadenceLongTimeout,
-	NonRetriableErrorReasons: CadenceDefaultNonRetriableErrorReasons,
+	ExpirationInterval:       LongTimeout,
+	NonRetriableErrorReasons: DefaultNonRetriableErrorReasons,
 }
 
 // AsStar converts a Go value to a Starlark value by marshaling through JSON.
