@@ -112,9 +112,7 @@ Reconcile(object)
     ├── object not found in K8s ──→ no-op (already gone)
     │
     ├── DeletionTimestamp set ──→ handleDeletion()
-    │       └── grace period expired?
-    │               ├── no  → requeue after 30s
-    │               └── yes → MySQL.Delete() → RemoveFinalizer → done
+    │       └── MySQL.Delete() → RemoveFinalizer → done
     │
     ├── annotation michelangelo/Deleting = "true" ──→ handleDeletionAnnotation()
     │       └── MySQL.Delete() → RemoveFinalizer → K8s.Delete() → done
