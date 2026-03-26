@@ -3,6 +3,7 @@
 A command line interface to interact with the Michelangelo API server via gRPC.
 """
 
+import importlib
 import logging
 import re
 import sys
@@ -387,8 +388,23 @@ def main(channel: Channel):
     """
 
 
+def _is_service_name(address: str) -> bool:
+    """Check if address is a service name (not host:port)."""
+    return ":" not in address and "." not in address
+
+
 def run():
     """Entry point for mactl."""
+    proxy_module_path = _CONFIG["plugin"].get("proxy", "")
+
+    if _is_service_name(ADDRESS) and proxy_module_path:
+        proxy_mod = importlib.import_module(proxy_module_path)
+        cli_proxy_class = proxy_mod.CLIProxy
+        with cli_proxy_class() as proxy:
+            local_address = proxy.create_tunnel(ADDRESS)
+            with insecure_channel(local_address) as channel:
+                return main(channel)
+
     if USE_TLS:
         _LOG.info(
             "Using TLS (forced via MACTL_USE_TLS=%r) to connect to %r",
@@ -400,11 +416,10 @@ def run():
             return main(channel)
 
     _LOG.info(
-        "Using TLS (forced via MACTL_USE_TLS=%r) to connect to %r",
+        "Using insecure connection (MACTL_USE_TLS=%r) to connect to %r",
         USE_TLS,
         ADDRESS,
     )
-    # Use secure TLS connection
     # Use insecure connection for local development
     with insecure_channel(ADDRESS) as channel:
         return main(channel)
