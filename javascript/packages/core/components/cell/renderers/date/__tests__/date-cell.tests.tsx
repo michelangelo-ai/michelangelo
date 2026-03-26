@@ -1,10 +1,10 @@
 import { render, screen } from '@testing-library/react';
 
-import { UserTimeZone } from '#core/providers/user-provider/types';
 import { mockTimezone } from '#core/test/utils/mock-timezone';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getUserProviderWrapper } from '#core/test/wrappers/get-user-provider-wrapper';
+import { TimeZone } from '#core/types/time-types';
 import { DateCell } from '../date-cell';
 
 describe('DateCell', () => {
@@ -34,10 +34,7 @@ describe('DateCell', () => {
         record={{ spec: { date: '1720656639' } }}
         value="1720656639"
       />,
-      buildWrapper([
-        getBaseProviderWrapper(),
-        getUserProviderWrapper({ timeZone: UserTimeZone.Local }),
-      ])
+      buildWrapper([getBaseProviderWrapper(), getUserProviderWrapper({ timeZone: TimeZone.Local })])
     );
 
     expect(screen.getByText('2024/07/11 02:10:39 (GMT+2)')).toBeInTheDocument();

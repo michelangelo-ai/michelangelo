@@ -1,8 +1,5 @@
-export enum UserTimeZone {
-  Local = 'local',
-  UTC = 'utc',
-}
+import { TimeZone } from '#core/types/time-types';
 
 export type UserContextType = {
-  timeZone: UserTimeZone;
+  timeZone: TimeZone;
 };

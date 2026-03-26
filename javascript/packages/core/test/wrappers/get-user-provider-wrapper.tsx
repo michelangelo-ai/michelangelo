@@ -1,5 +1,6 @@
-import { type UserContextType, UserTimeZone } from '#core/providers/user-provider/types';
+import { type UserContextType } from '#core/providers/user-provider/types';
 import { UserProvider } from '#core/providers/user-provider/user-provider';
+import { TimeZone } from '#core/types/time-types';
 import { WrapperComponentProps } from './types';
 
 /**
@@ -22,7 +23,7 @@ import { WrapperComponentProps } from './types';
  */
 export function getUserProviderWrapper(userProvider?: Partial<UserContextType>) {
   const base = {
-    timeZone: UserTimeZone.UTC,
+    timeZone: TimeZone.UTC,
   };
 
   return function ServiceProviderWrapper({ children }: WrapperComponentProps) {

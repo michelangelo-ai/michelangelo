@@ -1,8 +1,6 @@
-import type {
-  StudioParamsView,
-  ViewTypeToParamType,
-} from '#core/hooks/routing/use-studio-params/types';
+import type { ViewTypeToParamType } from '#core/hooks/routing/use-studio-params/types';
 import type { RepeatedLayoutState } from '#core/providers/repeated-layout-provider/types';
+import type { StudioParamsView } from '#core/types/common/view-types';
 import type { FunctionInterpolation } from './function-interpolation';
 import type { StringInterpolation } from './string-interpolation';
 
