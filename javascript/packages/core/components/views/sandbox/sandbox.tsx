@@ -9,6 +9,7 @@ import { HeadingXXLarge, LabelLarge, ParagraphSmall } from 'baseui/typography';
 import { CellType } from '#core/components/cell/constants';
 import { FormErrorBanner } from '#core/components/form/components/form-error-banner/form-error-banner';
 import { CheckboxField } from '#core/components/form/fields/checkbox/checkbox-field';
+import { MarkdownField } from '#core/components/form/fields/markdown/markdown-field';
 import { NumberField } from '#core/components/form/fields/number/number-field';
 import { SelectField } from '#core/components/form/fields/select/select-field';
 import { StringField } from '#core/components/form/fields/string/string-field';
@@ -454,6 +455,23 @@ export function Sandbox() {
                   initialValue="https://example.com/docs"
                 />
                 <UrlField name="emptyUrl" label="Empty URL (no value)" />
+              </FormGroup>
+
+              <FormGroup title="Markdown Field">
+                <MarkdownField
+                  name="markdownEditable"
+                  label="Editable Markdown"
+                  placeholder="Enter **markdown** content here..."
+                  rows={4}
+                />
+                <MarkdownField
+                  name="markdownReadOnly"
+                  label="Read-Only Markdown"
+                  initialValue={
+                    '# Hello\nThis is **bold** and *italic* text.\n\n- Item 1\n- Item 2\n\n[Link](https://example.com)'
+                  }
+                  readOnly
+                />
               </FormGroup>
 
               <FormGroup title="FormNote">
