@@ -1,6 +1,7 @@
 // javascript/eslint.config.js
 import js from '@eslint/js';
 
+import noBarrelExports from './eslint-local-rules/no-barrel-exports.js';
 import noFixtureConstants from './eslint-local-rules/no-fixture-constants.js';
 import noModuleScopeTestSetup from './eslint-local-rules/no-module-scope-test-setup.js';
 import tseslint from 'typescript-eslint';
@@ -172,6 +173,23 @@ export default [
     },
     rules: {
       'local/no-fixture-constants': 'error',
+    },
+  },
+
+  // App and packages — no barrel exports in index files
+  {
+    files: ['packages/core/**/*.{ts,tsx}', 'packages/rpc/**/*.{ts,tsx}', 'app/**/*.{ts,tsx}'],
+    ignores: [
+      'packages/core/index.tsx',
+      'packages/rpc/index.ts',
+      'packages/**/__tests__/**/*.{ts,tsx}',
+      'packages/**/__fixtures__/**/*.{ts,tsx}',
+    ],
+    plugins: {
+      local: { rules: { 'no-barrel-exports': noBarrelExports } },
+    },
+    rules: {
+      'local/no-barrel-exports': 'error',
     },
   },
 
