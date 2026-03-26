@@ -1,6 +1,6 @@
 import type { BaseFieldProps } from '../types';
 
-export interface TextareaFieldProps extends BaseFieldProps<string> {
+export interface MarkdownFieldProps extends BaseFieldProps<string> {
   rows?: number;
   /**
    * Limits input length and displays a character counter in the label row.
@@ -8,9 +8,4 @@ export interface TextareaFieldProps extends BaseFieldProps<string> {
    * followed by the enhancer content.
    */
   maxLength?: number;
-}
-
-export interface MaxLengthLabelEnhancerProps {
-  maxLength: number;
-  currentLength: number;
 }

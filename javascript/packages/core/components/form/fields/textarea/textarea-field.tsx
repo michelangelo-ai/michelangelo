@@ -17,6 +17,7 @@ export const TextareaField: React.FC<TextareaFieldProps> = ({
   placeholder,
   description,
   caption,
+  labelEndEnhancer,
   format,
   parse,
   rows,
@@ -38,6 +39,7 @@ export const TextareaField: React.FC<TextareaFieldProps> = ({
       label={label}
       required={required}
       description={description}
+      labelEndEnhancer={labelEndEnhancer}
       caption={caption}
       error={meta.touched && meta.error ? meta.error : undefined}
       counter={maxLength ? { length: currentLength, maxLength } : undefined}
@@ -54,6 +56,13 @@ export const TextareaField: React.FC<TextareaFieldProps> = ({
         disabled={disabled}
         rows={rows}
         maxLength={maxLength}
+        overrides={{
+          Input: {
+            style: {
+              resize: 'vertical',
+            },
+          },
+        }}
       />
     </FormControl>
   );

@@ -182,10 +182,12 @@ export { NumberField } from '#core/components/form/fields/number/number-field';
 export { CheckboxField } from '#core/components/form/fields/checkbox/checkbox-field';
 export { DateField } from '#core/components/form/fields/date/date-field';
 export { DateFormat } from '#core/components/form/fields/date/types';
+export { MarkdownField } from '#core/components/form/fields/markdown/markdown-field';
 
 // Form Layout
 export { FormGroup } from '#core/components/form/layout/form-group/form-group';
 export { FormRow } from '#core/components/form/layout/form-row/form-row';
+export { FormColumn } from '#core/components/form/layout/form-column/form-column';
 export { FormBanner } from '#core/components/form/layout/form-banner/form-banner';
 export { FormStep } from '#core/components/form/layout/form-step/form-step';
 export { ArrayFormRow } from '#core/components/form/layout/array-form-row/array-form-row';

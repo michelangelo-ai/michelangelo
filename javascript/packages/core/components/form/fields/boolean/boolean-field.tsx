@@ -18,6 +18,7 @@ export const BooleanField: React.FC<BooleanFieldProps> = ({
   disabled,
   description,
   caption,
+  labelEndEnhancer,
   format,
   parse,
   checkboxLabel,
@@ -44,6 +45,7 @@ export const BooleanField: React.FC<BooleanFieldProps> = ({
       label={label}
       required={required}
       description={description}
+      labelEndEnhancer={labelEndEnhancer}
       caption={caption}
       error={meta.touched && meta.error ? meta.error : undefined}
     >

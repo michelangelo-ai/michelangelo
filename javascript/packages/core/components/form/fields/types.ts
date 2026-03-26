@@ -64,6 +64,12 @@ export interface BaseFieldProps<T = unknown, InputValue = T> {
   caption?: string;
 
   /**
+   * Arbitrary content rendered at the far right of the label row.
+   * Can be a React component, text, or an action button.
+   */
+  labelEndEnhancer?: React.ReactNode;
+
+  /**
    * Transforms the input value before storing it in form state.
    * Called with the input value.
    */
