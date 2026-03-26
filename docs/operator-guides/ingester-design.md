@@ -478,39 +478,7 @@ if metadataStorageEnabled {
 ```
 
 ### 5.6 Adding a New CRD to the Ingester
-
-To add a new CRD (e.g., `BatchJob`) to the ingester:
-
-1. Add it to `AllCRDObjects` in `proto/api/v2/crd_objects.go`:
-   ```go
-   var AllCRDObjects = []runtime.Object{
-       // ... existing
-       &BatchJob{},
-   }
-   ```
-
-2. Optionally implement `IndexedObject` on the type:
-   ```go
-   func (b *BatchJob) GetIndexedKeyValuePairs() []storage.IndexedField {
-       return []storage.IndexedField{
-           {Key: "job_type", Value: b.Spec.JobType},
-       }
-   }
-   ```
-
-3. Add the MySQL table in the schema init SQL:
-   ```sql
-   CREATE TABLE IF NOT EXISTS batchjob (
-       uid          VARCHAR(64) NOT NULL PRIMARY KEY,
-       -- ... standard columns
-       job_type     VARCHAR(128),
-       INDEX idx_namespace_name (namespace, name)
-   );
-   CREATE TABLE IF NOT EXISTS batchjob_labels ( ... );
-   CREATE TABLE IF NOT EXISTS batchjob_annotations ( ... );
-   ```
-
-No changes to the ingester controller or module are needed — the loop over `AllCRDObjects` handles it automatically.
+TODO(#1011): rewrite this section
 
 ---
 

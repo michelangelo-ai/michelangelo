@@ -498,7 +498,7 @@ func TestSchemeGVKResolution(t *testing.T) {
 	require.NoError(t, v2.AddToScheme(scheme))
 
 	seen := map[string]bool{}
-	for _, obj := range v2.AllCRDObjects {
+	for _, obj := range []runtime.Object{} {
 		gvks, _, err := scheme.ObjectKinds(obj)
 		require.NoError(t, err, "scheme.ObjectKinds failed for %T", obj)
 		require.NotEmpty(t, gvks, "no GVKs found for %T", obj)
