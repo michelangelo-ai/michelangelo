@@ -149,7 +149,7 @@ result = trainer.train(run_config, scaling_config)
 
 ## Next Steps
 
-* Continue to [Model Training guide](https://github.com/michelangelo-ai/michelangelo/wiki/Train-and-Register-a-Model)  
+* Continue to [Model Training guide](./train-and-register-a-model.md)
 * Check troubleshooting section
 
 ## Common Issues

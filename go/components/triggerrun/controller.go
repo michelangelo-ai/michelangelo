@@ -72,6 +72,11 @@ type Params struct {
 
 // Reconciler reconciles TriggerRun resources through a state machine.
 //
+// All fields are unexported. Exported struct fields become permanent public API surface —
+// external packages can depend on them directly, making future removal a breaking change.
+// All dependencies are injected via NewReconciler() or Register() instead.
+// This follows the same pattern used by controllers in kubernetes/kubernetes.
+//
 // The reconciler manages the complete lifecycle of trigger runs, from initial workflow
 // start through terminal states (SUCCEEDED, FAILED, or KILLED). It delegates execution
 // to the appropriate Runner based on the trigger type.
@@ -85,15 +90,15 @@ type Params struct {
 // based on the maximumConcurrentReconciles setting.
 type Reconciler struct {
 	api.Handler
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	log    logr.Logger
+	scheme *runtime.Scheme
 
 	apiHandlerFactory apiHandler.Factory
 
-	CronTrigger       Runner // Executes cron-scheduled workflows
-	IntervalTrigger   Runner // Executes interval-based workflows
-	BackfillTrigger   Runner // Executes backfill workflows
-	BatchRerunTrigger Runner // Executes batch rerun workflows
+	cronTrigger       Runner // Executes cron-scheduled workflows
+	intervalTrigger   Runner // Executes interval-based workflows
+	backfillTrigger   Runner // Executes backfill workflows
+	batchRerunTrigger Runner // Executes batch rerun workflows
 }
 
 // NewReconciler creates a new TriggerRun Reconciler with the provided dependencies.
@@ -103,10 +108,10 @@ type Reconciler struct {
 func NewReconciler(p Params) *Reconciler {
 	return &Reconciler{
 		apiHandlerFactory: p.APIHandlerFactory,
-		CronTrigger:       p.CronTrigger,
-		IntervalTrigger:   p.IntervalTrigger,
-		BackfillTrigger:   p.BackfillTrigger,
-		BatchRerunTrigger: p.BatchRerunTrigger,
+		cronTrigger:       p.CronTrigger,
+		intervalTrigger:   p.IntervalTrigger,
+		backfillTrigger:   p.BackfillTrigger,
+		batchRerunTrigger: p.BatchRerunTrigger,
 	}
 }
 
@@ -119,7 +124,7 @@ func NewReconciler(p Params) *Reconciler {
 // If the resource has been deleted, reconciliation completes without error. Other fetch
 // errors are returned to be retried by the controller framework.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := r.Log.WithValues("triggerRun", req.NamespacedName)
+	log := r.log.WithValues("triggerRun", req.NamespacedName)
 	triggerRun := &v2pb.TriggerRun{}
 	if err := r.Get(ctx, req.NamespacedName.Namespace, req.NamespacedName.Name, &metav1.GetOptions{},
 		triggerRun); err != nil {
@@ -241,13 +246,13 @@ StateMachine:
 //
 // Returns an error if API handler creation or controller registration fails.
 func (r *Reconciler) Register(mgr ctrl.Manager) error {
-	r.Scheme = mgr.GetScheme()
+	r.scheme = mgr.GetScheme()
 	handler, err := r.apiHandlerFactory.GetAPIHandler(mgr.GetClient())
 	if err != nil {
 		return err
 	}
 	r.Handler = handler
-	r.Log = mgr.GetLogger().
+	r.log = mgr.GetLogger().
 		WithName("triggerRun")
 
 	return ctrl.NewControllerManagedBy(mgr).
@@ -265,12 +270,12 @@ func (r *Reconciler) getRunner(tr *v2pb.TriggerRun) Runner {
 	triggerType := GetTriggerType(tr)
 	switch triggerType {
 	case TriggerTypeInterval:
-		return r.IntervalTrigger
+		return r.intervalTrigger
 	case TriggerTypeBackfill:
-		return r.BackfillTrigger
+		return r.backfillTrigger
 	case TriggerTypeBatchRerun:
-		return r.BatchRerunTrigger
+		return r.batchRerunTrigger
 	default:
-		return r.CronTrigger
+		return r.cronTrigger
 	}
 }

@@ -1,5 +1,5 @@
-import { UserTimeZone } from '#core/providers/user-provider/types';
 import { mockTimezone } from '#core/test/utils/mock-timezone';
+import { TimeZone } from '#core/types/time-types';
 import { timestampToString } from '../time-utils';
 
 describe('time-utils', () => {
@@ -33,24 +33,20 @@ describe('time-utils', () => {
     });
 
     test('formats date correctly in UTC timezone', () => {
-      expect(timestampToString(1719907200, UserTimeZone.UTC)).toBe('2024/07/02 08:00:00 (UTC)');
-      expect(timestampToString(1720656639, UserTimeZone.UTC)).toBe('2024/07/11 00:10:39 (UTC)');
-      expect(timestampToString('1720656639', UserTimeZone.UTC)).toBe('2024/07/11 00:10:39 (UTC)');
+      expect(timestampToString(1719907200, TimeZone.UTC)).toBe('2024/07/02 08:00:00 (UTC)');
+      expect(timestampToString(1720656639, TimeZone.UTC)).toBe('2024/07/11 00:10:39 (UTC)');
+      expect(timestampToString('1720656639', TimeZone.UTC)).toBe('2024/07/11 00:10:39 (UTC)');
     });
 
     test('formats date correctly in local timezone', () => {
       // GMT does not include summer time shift.
-      expect(timestampToString(1705063132, UserTimeZone.Local)).toBe('2024/01/12 13:38:52 (GMT+1)');
-      expect(timestampToString('1705063132', UserTimeZone.Local)).toBe(
-        '2024/01/12 13:38:52 (GMT+1)'
-      );
+      expect(timestampToString(1705063132, TimeZone.Local)).toBe('2024/01/12 13:38:52 (GMT+1)');
+      expect(timestampToString('1705063132', TimeZone.Local)).toBe('2024/01/12 13:38:52 (GMT+1)');
 
       // GMT includes summer time shift.
-      expect(timestampToString(1719907200, UserTimeZone.Local)).toBe('2024/07/02 10:00:00 (GMT+2)');
-      expect(timestampToString(1720656639, UserTimeZone.Local)).toBe('2024/07/11 02:10:39 (GMT+2)');
-      expect(timestampToString('1720656639', UserTimeZone.Local)).toBe(
-        '2024/07/11 02:10:39 (GMT+2)'
-      );
+      expect(timestampToString(1719907200, TimeZone.Local)).toBe('2024/07/02 10:00:00 (GMT+2)');
+      expect(timestampToString(1720656639, TimeZone.Local)).toBe('2024/07/11 02:10:39 (GMT+2)');
+      expect(timestampToString('1720656639', TimeZone.Local)).toBe('2024/07/11 02:10:39 (GMT+2)');
     });
   });
 });

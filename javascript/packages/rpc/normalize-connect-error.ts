@@ -1,7 +1,7 @@
 import { ConnectError } from '@connectrpc/connect';
-import { ApplicationError, GrpcStatusCode } from '@uber/michelangelo-core';
+import { ApplicationError, GrpcStatusCode } from '@michelangelo-ai/core';
 
-import type { ErrorNormalizer } from '@uber/michelangelo-core';
+import type { ErrorNormalizer } from '@michelangelo-ai/core';
 
 /**
  * Normalizes Connect RPC errors to ApplicationError format

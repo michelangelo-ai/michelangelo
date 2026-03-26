@@ -3,31 +3,33 @@ import { renderHook } from '@testing-library/react';
 import { createMockRow } from '../__fixtures__/mock-row';
 import { useCategoricalFilterFactory } from '../categorical/use-categorical-filter-factory';
 
-const MOCK_COLUMN = {
-  id: 'department',
-  label: 'Department',
-  accessor: 'department',
-};
+// TODO(#977): — column param is partially unused in filter factories.
+// isFilterInactive, getActiveFilter, and buildTableFilterFn do not depend on
+// column identity; only getFilterSummary reads column.label. The factory API
+// should make this explicit (e.g. accept label separately, or make column optional).
 
 describe('Categorical Filter', () => {
   describe('Empty filter behavior', () => {
     it('shows all rows when no values selected', () => {
       const { result } = renderHook(() => useCategoricalFilterFactory());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column is structurally unused in isFilterInactive
+      const filterHook = result.current({});
 
       expect(filterHook.isFilterInactive([])).toBe(true);
     });
 
     it('should consider empty array as inactive filter', () => {
       const { result } = renderHook(() => useCategoricalFilterFactory());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column is structurally unused in isFilterInactive
+      const filterHook = result.current({});
 
       expect(filterHook.isFilterInactive([])).toBe(true);
     });
 
     it('should consider undefined as inactive filter', () => {
       const { result } = renderHook(() => useCategoricalFilterFactory());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column is structurally unused in isFilterInactive
+      const filterHook = result.current({});
 
       // @ts-expect-error undefined is not a valid filter value
       expect(filterHook.isFilterInactive(undefined)).toBe(true);
@@ -35,7 +37,8 @@ describe('Categorical Filter', () => {
 
     it('should consider non-empty array as active filter', () => {
       const { result } = renderHook(() => useCategoricalFilterFactory());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column is structurally unused in isFilterInactive
+      const filterHook = result.current({});
 
       expect(filterHook.isFilterInactive(['Engineering'])).toBe(false);
     });
@@ -44,21 +47,24 @@ describe('Categorical Filter', () => {
   describe('Filter Display Functions', () => {
     it('should return empty string for inactive filters in getActiveFilter', () => {
       const { result } = renderHook(() => useCategoricalFilterFactory());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column is structurally unused when filter is inactive
+      const filterHook = result.current({});
 
       expect(filterHook.getActiveFilter([])).toBe('');
     });
 
     it('should format single value in getActiveFilter', () => {
       const { result } = renderHook(() => useCategoricalFilterFactory());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column shape does not affect cellToString for plain string values
+      const filterHook = result.current({});
 
       expect(filterHook.getActiveFilter(['Engineering'])).toBe('Engineering');
     });
 
     it('should format multiple values in getActiveFilter', () => {
       const { result } = renderHook(() => useCategoricalFilterFactory());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column shape does not affect cellToString for plain string values
+      const filterHook = result.current({});
 
       expect(filterHook.getActiveFilter(['Engineering', 'Marketing'])).toBe(
         'Engineering, Marketing'
@@ -67,14 +73,19 @@ describe('Categorical Filter', () => {
 
     it('should return empty string for inactive filters in getFilterSummary', () => {
       const { result } = renderHook(() => useCategoricalFilterFactory());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column is structurally unused when filter is inactive
+      const filterHook = result.current({});
 
       expect(filterHook.getFilterSummary([])).toBe('');
     });
 
     it('should format filter summary with count and label', () => {
       const { result } = renderHook(() => useCategoricalFilterFactory());
-      const filterHook = result.current(MOCK_COLUMN);
+      const filterHook = result.current({
+        id: 'department',
+        label: 'Department',
+        accessor: 'department',
+      });
 
       expect(filterHook.getFilterSummary(['Engineering'])).toBe('(1) Department: Engineering');
       expect(filterHook.getFilterSummary(['Engineering', 'Marketing'])).toBe(
@@ -86,7 +97,8 @@ describe('Categorical Filter', () => {
   describe('Filter Function Behavior', () => {
     it('should return true for inactive filters (show all rows)', () => {
       const { result } = renderHook(() => useCategoricalFilterFactory<{ department: string }>());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column is structurally unused when filter is inactive
+      const filterHook = result.current({});
       const filterFn = filterHook.buildTableFilterFn();
 
       const mockRow = createMockRow({ department: 'Engineering' });
@@ -96,7 +108,8 @@ describe('Categorical Filter', () => {
 
     it('should filter rows based on included values', () => {
       const { result } = renderHook(() => useCategoricalFilterFactory<{ department: string }>());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column.id falls back to columnId param in getCellValueForColumn
+      const filterHook = result.current({});
       const filterFn = filterHook.buildTableFilterFn();
 
       const engineeringRow = createMockRow({ department: 'Engineering' });
@@ -110,7 +123,8 @@ describe('Categorical Filter', () => {
 
     it('should have autoRemove property set to isFilterInactive function', () => {
       const { result } = renderHook(() => useCategoricalFilterFactory());
-      const filterHook = result.current(MOCK_COLUMN);
+      // @ts-expect-error (#977) column is structurally unused in isFilterInactive
+      const filterHook = result.current({});
       const filterFn = filterHook.buildTableFilterFn();
 
       expect(filterFn.autoRemove!([])).toBe(true);

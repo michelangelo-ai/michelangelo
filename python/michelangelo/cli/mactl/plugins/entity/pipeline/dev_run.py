@@ -110,6 +110,23 @@ def add_function_signature(crd: CRD) -> None:
                         "help": "Enable file synchronization for local code changes",
                     },
                 },
+                {
+                    "func_signature": Parameter(
+                        "storage_url",
+                        Parameter.POSITIONAL_OR_KEYWORD,
+                        default=None,
+                    ),
+                    "args": ["--storage-url"],
+                    "kwargs": {
+                        "type": str,
+                        "required": False,
+                        "default": None,
+                        "help": (
+                            "Storage URL for file synchronization tarballs "
+                            "(e.g., s3://bucket/path). Defaults to s3://default/uniflow"
+                        ),
+                    },
+                },
             ],
         },
     )
@@ -166,6 +183,9 @@ def generate_dev_run(
         # Handle optional file_sync parameter
         _file_sync = bound_args.arguments.get("file_sync", False)  # pragma: no cover
 
+        # Handle optional storage_url parameter
+        _storage_url = bound_args.arguments.get("storage_url")
+
         environment_variables = _process_env_variables(
             bound_args.arguments.get("env", [])
         )
@@ -181,7 +201,7 @@ def generate_dev_run(
         )
 
         pipeline_dev_run_dict = _self.func_crd_metadata_converter(
-            yaml_dict, input_class, yaml_path
+            yaml_dict, input_class, yaml_path, _storage_url
         )
 
         _LOG.debug("CR content: %r", pipeline_dev_run_dict)
@@ -209,7 +229,10 @@ def generate_dev_run(
 
 
 def convert_crd_metadata_pipeline_dev_run(
-    yaml_dict: dict, crd_class: type[Message], yaml_path: Path
+    yaml_dict: dict,
+    crd_class: type[Message],
+    yaml_path: Path,
+    storage_url: Optional[str] = None,
 ) -> dict:
     """Convert CRD metadata for pipeline dev-run command.
 
@@ -234,7 +257,7 @@ def convert_crd_metadata_pipeline_dev_run(
 
     workflow_inputs, uniflow_tar_path, workflow_function_name = (
         handle_workflow_inputs_retrieval(
-            repo_root, config_file_relative_path, project, pipeline
+            repo_root, config_file_relative_path, project, pipeline, storage_url
         )
     )
 

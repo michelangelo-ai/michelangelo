@@ -21,14 +21,17 @@ export function TaskBody<TTaskRecord extends object>(props: TaskBodyProps<TTaskR
   const resolver = useInterpolationResolver();
 
   if (subTasks?.length) {
-    const matrix = buildTaskMatrix(subTasks);
+    const matrix = buildTaskMatrix(subTasks, task);
     return (
       <TaskContentStack>
         <Box>
           <TaskFlow
             matrix={matrix}
             onTaskClick={scrollToTask}
-            overrides={{ TaskListRenderer: overrides?.TaskListRenderer }}
+            overrides={{
+              TaskListRenderer: overrides?.TaskListRenderer,
+              SubTaskListRenderer: overrides?.SubTaskListRenderer,
+            }}
           />
         </Box>
         {subTasks.map((task, index) => (

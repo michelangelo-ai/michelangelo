@@ -1,8 +1,14 @@
-# Pipeline Running Modes
+# Pipeline running modes
 
 Michelangelo AI provides four running modes that correspond to different stages of the machine learning development lifecycle. Each mode solves specific problems developers face when moving from initial experimentation to production deployment.
 
-## The Problem: ML Development Complexity
+## What you'll learn
+
+* The four pipeline running modes and when to use each one
+* Trade-offs between speed, completeness, and reliability
+* How to choose the right mode for your development stage
+
+## The problem: ML development complexity
 
 Machine learning workflows have unique challenges:
 
@@ -11,7 +17,7 @@ Machine learning workflows have unique challenges:
 * **Staging Stage**: Need production-like execution with safety controls  
 * **Production Stage**: Need enterprise-grade reliability, scheduling, and monitoring
 
-## Running Modes overview
+## Running modes overview
 
 | Mode | Development Stage | Problem Solved | Value Proposition |
 | ----- | ----- | ----- | ----- |
@@ -20,9 +26,9 @@ Machine learning workflows have unique challenges:
 | **Pipeline Dev Run** | Build Integration | "Does my Dockerfile actually work?" | **20+ mins** \- Full image building |
 | **Pipeline Run** | Production Deployment | "How do I deploy my committed code?" | **Varies** \- Only accepts committed code |
 
-## Local Run Mode
+## Local Run mode
 
-### Why This Mode Exists
+### Why this mode exists
 
 Data scientists and ML engineers need to iterate quickly on workflow logic without the overhead of containers, clusters, or configuration files. The \#1 pain point in ML development is slow feedback loops.
 
@@ -35,12 +41,12 @@ Data scientists and ML engineers need to iterate quickly on workflow logic witho
 
 ### When to Use
 
-* **Stage**: Initial development and experimentation  
-* **Scenario**: "Can I test this change right now?" — Need immediate feedback  
-* **Team**: Individual data scientists prototyping  
+* **Stage**: Initial development and experimentation
+* **Scenario**: "Can I test this change right now?" — Need immediate feedback
+* **Team**: Individual data scientists prototyping
 * **Duration**: Hours to days during active development
 
-### Execution Timing
+### Execution timing
 
 * **Provisioning**: **Instant** (0 seconds)  
 * **Execution**: **Immediate** — Runs your code instantly  
@@ -57,9 +63,9 @@ Data scientists and ML engineers need to iterate quickly on workflow logic witho
 poetry run python workflow.py
 ```
 
-## Remote Run Mode
+## Remote Run mode
 
-### Why This Mode Exists
+### Why this mode exists
 
 Teams need to test workflows with **larger datasets and compute** without waiting for slow image builds. This solves: "My workflow works locally, but I need real compute power right now."
 
@@ -72,17 +78,17 @@ Teams need to test workflows with **larger datasets and compute** without waitin
 
 ### When to Use
 
-* **Stage**: Functional \+ scaling tests  
-* **Scenario**: "My laptop can’t handle this dataset"  
+* **Stage**: Functional \+ scaling tests
+* **Scenario**: "My laptop can’t handle this dataset"
 * **Team**: Devs validating compute-heavy logic
 
-### Execution Timing
+### Execution timing
 
 * **Provisioning**: **2–5 mins**  
 * **Execution**: Starts fast using prebuilt images  
 * **Best for**: GPU workloads, large datasets, memory-intensive tasks
 
-### Speed vs Process Trade-off
+### Speed vs process trade-off
 
 * **Speed**: Fast (no build pipeline)  
 * **Process**: Lightweight governance
@@ -105,9 +111,9 @@ poetry run python workflow.py remote-run --storage-url s3://my-bucket/workflows 
 * `--file-sync`  
 * `--yes`
 
-## Pipeline Dev Run Mode
+## Pipeline Dev Run mode
 
-### Why This Mode Exists
+### Why this mode exists
 
 Engineers must validate the **entire pipeline**, including container image builds, dependency resolution, and resume functionality — without pushing to production.
 
@@ -124,13 +130,13 @@ Engineers must validate the **entire pipeline**, including container image build
 * **Scenario**: "Does my Dockerfile actually work?"  
 * **Team**: ML engineers validating pipeline end-to-end
 
-### Execution Timing
+### Execution timing
 
-* **Provisioning \+ Building**: **20+ mins**  
-* **Execution**: Depends on pipeline  
+* **Provisioning \+ Building**: **20+ mins**
+* **Execution**: Depends on pipeline
 * **Best for**: Pre-production verification
 
-### Completeness vs Speed Trade-off
+### Completeness vs speed trade-off
 
 * **Completeness**: High  
 * **Speed**: Slowest (build \+ run)
@@ -138,14 +144,15 @@ Engineers must validate the **entire pipeline**, including container image build
 ### Usage
 
 ```shell
-ma pipeline dev_run -f pipeline.yaml
-ma pipeline dev_run -f pipeline.yaml --env DATASET_SIZE=1000
-ma pipeline dev_run -f pipeline.yaml --resume_from my-run-123:train
+ma pipeline dev-run -f pipeline.yaml
+ma pipeline dev-run -f pipeline.yaml --env=DATASET_SIZE=1000
+ma pipeline dev-run -f pipeline.yaml --resume_from=my-run-123:train
+ma pipeline dev-run -f pipeline.yaml --file-sync
 ```
 
-## Pipeline Run Mode
+## Pipeline Run mode
 
-### Why This Mode Exists
+### Why this mode exists
 
 Enterprises need **production-grade pipeline execution** with full CI/CD, governance, monitoring, and rollback support.
 
@@ -162,34 +169,36 @@ Enterprises need **production-grade pipeline execution** with full CI/CD, govern
 * **Scenario**: "How do I deploy my committed code?"  
 * **Team**: Production ML \+ platform teams
 
-### Execution Timing
+### Execution timing
 
-* **Provisioning**: Depends on CI/CD  
-* **Execution**: Production-grade reliability  
+* **Provisioning**: Depends on CI/CD
+* **Execution**: Production-grade reliability
 * **Requirements**: Code must be committed
 
-### Reliability vs Agility Trade-off
+### Reliability vs agility trade-off
 
 * **Reliability**: Maximum  
 * **Agility**: Lower
 
 ### Usage
 
+The `namespace` flag specifies your project.
+
 ```shell
-ma pipeline run -n my-namespace --name my-pipeline
-ma pipeline run -n my-namespace --name my-pipeline --resume_from previous-run:step
+ma pipeline run --namespace="my-project" --name="my-pipeline"
+ma pipeline run --namespace="my-project" --name="my-pipeline" --resume_from=previous-run:step
 ```
 
-## Decision Tree: Which Mode Should I Use?
+## Decision tree: which mode should I use?
 
-### Stage-Based
+### Stage-based
 
 * **Early Development** → Local Run  
 * **Scaling Tests** → Remote Run  
 * **Integration Testing** → Pipeline Dev Run  
 * **Production Deployment** → Pipeline Run
 
-### Concern-Based
+### Concern-based
 
 | Concern | Mode |
 | ----- | ----- |

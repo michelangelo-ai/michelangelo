@@ -245,11 +245,11 @@ func TestPipelineRunNotifier_ShouldNotify(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create notifier (workflow client not used in ShouldNotify)
+			// Create notifier (workflow client not used in shouldNotify)
 			logger := zap.NewNop()
 			notifier := NewPipelineRunNotifier(nil, logger)
 
-			result := notifier.ShouldNotify(tt.oldPipelineRun, tt.newPipelineRun)
+			result := notifier.shouldNotify(tt.oldPipelineRun, tt.newPipelineRun, logger)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

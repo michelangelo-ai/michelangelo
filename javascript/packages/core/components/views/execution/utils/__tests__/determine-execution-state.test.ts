@@ -1,7 +1,8 @@
 import { createTask } from '#core/components/views/execution/components/task-details/__fixtures__/task-details-fixtures';
 import { TASK_STATE } from '#core/components/views/execution/constants';
-import { Task } from '#core/components/views/execution/types';
 import { determineExecutionState } from '../determine-execution-state';
+
+import type { Task } from '#core/components/views/execution/types';
 
 describe('determineExecutionState', () => {
   it('should return PENDING for empty task list', () => {

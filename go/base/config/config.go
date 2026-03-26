@@ -21,6 +21,8 @@ const (
 	_k8sConfigKey             = "k8s"
 	_metadataStorageConfigKey = "metadataStorage"
 	_workflowClientConfigKey  = "workflowClient"
+	_mysqlConfigKey           = "mysql"
+	_ingesterConfigKey        = "ingester"
 )
 
 // K8sConfig is the configuration for k8s REST client.
@@ -113,4 +115,18 @@ func GetWorkflowClientConfig(provider config.Provider) (WorkflowClientConfig, er
 	workflowClientConfig := WorkflowClientConfig{}
 	err := provider.Get(_workflowClientConfigKey).Populate(&workflowClientConfig)
 	return workflowClientConfig, err
+}
+
+// GetMySQLConfig parses the configuration file and returns the MySQL configuration.
+func GetMySQLConfig(provider config.Provider) (MySQLConfig, error) {
+	mysqlConfig := MySQLConfig{}
+	err := provider.Get(_mysqlConfigKey).Populate(&mysqlConfig)
+	return mysqlConfig, err
+}
+
+// GetIngesterConfig parses the configuration file and returns the ingester configuration.
+func GetIngesterConfig(provider config.Provider) (IngesterConfig, error) {
+	ingesterConfig := IngesterConfig{}
+	err := provider.Get(_ingesterConfigKey).Populate(&ingesterConfig)
+	return ingesterConfig, err
 }

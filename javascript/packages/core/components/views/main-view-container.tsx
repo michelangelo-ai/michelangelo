@@ -1,13 +1,10 @@
 import { Cell, Grid } from 'baseui/layout-grid';
 
-import { BREADCRUMB_BAR_HEIGHT } from './constants';
-
 import type { MainViewContainerProps } from './types';
 
 /**
  * MainViewContainer is a layout wrapper component that provides consistent padding and spacing
- * for full-page layouts and components. It automatically handles top margin spacing based on
- * breadcrumb visibility.
+ * for full-page layouts and components.
  *
  * This component should be used to wrap any full-page content to ensure consistent layout
  * alignment and spacing across the application.
@@ -25,23 +22,10 @@ import type { MainViewContainerProps } from './types';
  * </MainViewContainer>
  * ```
  *
- * @property {boolean} [hasBreadcrumb=true] - Whether the page has a breadcrumb navigation. Controls top margin spacing.
- * @property {React.ReactNode} children - The content to be rendered within the container.
  */
-export const MainViewContainer = ({ hasBreadcrumb = true, children }: MainViewContainerProps) => {
+export const MainViewContainer = ({ children }: MainViewContainerProps) => {
   return (
-    <Grid
-      gridColumns={1}
-      gridGutters={0}
-      gridGaps={0}
-      overrides={{
-        Grid: {
-          style: {
-            marginTop: hasBreadcrumb ? BREADCRUMB_BAR_HEIGHT : 0,
-          },
-        },
-      }}
-    >
+    <Grid gridColumns={1} gridGutters={0} gridGaps={0}>
       <Cell>{children}</Cell>
     </Grid>
   );

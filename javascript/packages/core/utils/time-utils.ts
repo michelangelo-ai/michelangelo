@@ -1,6 +1,6 @@
 import { isNil } from 'lodash';
 
-import { UserTimeZone } from '#core/providers/user-provider/types';
+import { TimeZone } from '#core/types/time-types';
 
 /**
  * Converts a timestamp to a string.
@@ -13,7 +13,7 @@ import { UserTimeZone } from '#core/providers/user-provider/types';
  */
 export function timestampToString(
   timestampRaw?: string | number,
-  timeZone?: UserTimeZone
+  timeZone?: TimeZone
 ): string | null {
   if (isNil(timestampRaw)) {
     return null;
@@ -32,7 +32,7 @@ export function timestampToString(
     minute: '2-digit',
     second: '2-digit',
     hour12: false,
-    timeZone: timeZone === UserTimeZone.UTC ? 'UTC' : undefined,
+    timeZone: timeZone === TimeZone.UTC ? 'UTC' : undefined,
   });
 
   const formattedDate = formatter
@@ -42,7 +42,7 @@ export function timestampToString(
 
   const timeZoneFormatter = new Intl.DateTimeFormat('en-US', {
     timeZoneName: 'short',
-    timeZone: timeZone === UserTimeZone.UTC ? 'UTC' : undefined,
+    timeZone: timeZone === TimeZone.UTC ? 'UTC' : undefined,
   });
 
   const timeZoneString = timeZoneFormatter.format(date).split(' ').pop() ?? '';

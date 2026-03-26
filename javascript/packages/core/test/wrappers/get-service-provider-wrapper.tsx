@@ -3,8 +3,9 @@ import { isEqual } from 'lodash';
 import { vi } from 'vitest';
 
 import { ServiceProvider } from '#core/providers/service-provider/service-provider';
-import { ServiceContextType } from '#core/providers/service-provider/types';
-import { WrapperComponentProps } from './types';
+
+import type { ServiceContextType } from '#core/providers/service-provider/types';
+import type { WrapperComponentProps } from './types';
 
 /**
  * Creates a React wrapper for testing components that use service features.

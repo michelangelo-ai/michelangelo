@@ -20,7 +20,7 @@ jobs:
     steps:
       # Checkout the repository
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # Cache Bazel outputs
       - name: Cache Bazel Outputs
@@ -28,9 +28,9 @@ jobs:
         with:
           path: |
             ~/.cache/bazel
-          key: bazel-test-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
+          key: bazel-main-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
           restore-keys: |
-            bazel-test-${{ runner.os }}-
+            bazel-main-${{ runner.os }}-
 
       # Run Bazel tests
       - name: Run Bazel Test
@@ -87,17 +87,17 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # Cache Bazel outputs to speed up Bazel commands
-      - name: Cache Bazel Outputs
-        uses: actions/cache@v4
+      # Restore-only: reuse the cache saved by bazel-build (no redundant save)
+      - name: Restore Bazel Cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             ~/.cache/bazel
-          key: bazel-dirty-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
+          key: bazel-main-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
           restore-keys: |
-            bazel-dirty-${{ runner.os }}-
+            bazel-main-${{ runner.os }}-
 
       - name: Run Gazelle
         run: |

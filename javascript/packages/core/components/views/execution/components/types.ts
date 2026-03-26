@@ -3,7 +3,7 @@ import type { ExecutionOverrides, Task } from '#core/components/views/execution/
 export type TaskFlowProps<TTaskRecord extends object = object> = {
   matrix: TaskMatrixItem<TTaskRecord>[];
   onTaskClick: (task: Task<TTaskRecord>) => void;
-  overrides?: Pick<ExecutionOverrides<TTaskRecord>, 'TaskListRenderer'>;
+  overrides?: Pick<ExecutionOverrides<TTaskRecord>, 'TaskListRenderer' | 'SubTaskListRenderer'>;
 };
 
 export type TaskListRendererProps<TTaskRecord extends object = object> = {

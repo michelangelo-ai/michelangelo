@@ -1,0 +1,23 @@
+apiVersion: michelangelo.api/v2
+kind: InferenceServer
+metadata:
+  name: ingester-test-inferenceserver
+  namespace: ingester-test
+  labels:
+    test: ingester
+spec:
+  tenancyType: TENANCY_TYPE_DEDICATED
+  backendType: BACKEND_TYPE_TRITON
+  ownerSpec:
+    tier: 4
+  initSpec:
+    resourceSpec:
+      cpu: 1
+      memory: "2Gi"
+    servingSpec:
+      version: "latest"
+    numInstances: 1
+  decomSpec:
+    decommission: false
+  owner:
+    name: hkriplani

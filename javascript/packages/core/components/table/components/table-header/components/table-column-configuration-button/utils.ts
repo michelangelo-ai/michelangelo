@@ -1,7 +1,6 @@
 import { arrayMove } from 'baseui/dnd-list';
 
-import { TableData } from '#core/components/table/types/data-types';
-
+import type { TableData } from '#core/components/table/types/data-types';
 import type {
   ColumnOrderState,
   ControlledTableState,

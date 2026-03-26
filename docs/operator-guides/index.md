@@ -36,7 +36,7 @@ The following diagram shows the relationship between each of the services in Mic
 apiserver:
   yarpc:
     host: 0.0.0.0
-    port: 14566
+    port: 15566
   k8s:
     qps: 300
     burst: 600
@@ -153,7 +153,7 @@ static_resources:
                   address:
                     socket_address:
                       address: michelangelo-apiserver
-                      port_value: 14566
+                      port_value: 15566
 ```
 
 ### **Public UI Config**
@@ -189,8 +189,8 @@ These live in the controller manager ConfigMap:
 
 ```yaml
 minio:
-  awsRegion: ap-southeast-1   # AWS region for S3
-  awsEndpointUrl: s3.ap-southeast-1.amazonaws.com
+  awsRegion: sample   # AWS region 
+  awsEndpointUrl: sample.amazonaws.com
   useIam: true                # Use IAM roles for authentication
 ```
 

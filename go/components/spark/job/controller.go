@@ -43,9 +43,20 @@ import (
 const (
 	// requeueAfter defines the delay before retrying reconciliation.
 	requeueAfter = 10 * time.Second
+
+	// sparkAppState* constants mirror the Spark Operator's ApplicationStateType strings.
+	// The Spark Operator returns these as plain strings from its status field; using
+	// named constants here prevents silent breakage if the comparison strings drift.
+	sparkAppStateRunning   = "RUNNING"
+	sparkAppStateCompleted = "COMPLETED"
+	sparkAppStateFailed    = "FAILED"
 )
 
 // Reconciler manages the lifecycle of SparkJob custom resources.
+//
+// All fields are unexported. Exported struct fields become permanent public API surface —
+// external packages can depend on them directly, making future removal a breaking change.
+// Use NewReconciler() to construct instances.
 //
 // The reconciler ensures Spark jobs are submitted to the Spark Operator and monitors
 // their execution status. It handles job creation via the Spark client and continuously
@@ -58,8 +69,17 @@ const (
 //   - Handling job failures and error messages
 type Reconciler struct {
 	client.Client             // Kubernetes client for local operations
-	SparkClient   Client      // Client for Spark Operator interactions
+	sparkClient   Client      // Client for Spark Operator interactions
 	env           env.Context // Environment configuration context
+}
+
+// NewReconciler creates a new SparkJob reconciler with the required dependencies.
+func NewReconciler(c client.Client, sparkClient Client, env env.Context) *Reconciler {
+	return &Reconciler{
+		Client:      c,
+		sparkClient: sparkClient,
+		env:         env,
+	}
 }
 
 // Reconcile implements the Kubernetes reconciliation loop for SparkJob resources.
@@ -117,26 +137,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	} else if stateStr != nil {
 		logger.Info("Found SparkApplication", "ID", sparkJob.Status.ApplicationId, "status", *stateStr, "errorMessage", errorMessage)
 		sparkJob.Status.JobUrl = url
-		// go through all the status constants and set to running, succeeded, killed
-		/*
-			NewState              ApplicationStateType = ""
-			SubmittedState        ApplicationStateType = "SUBMITTED"
-			RunningState          ApplicationStateType = "RUNNING"
-			CompletedState        ApplicationStateType = "COMPLETED"
-			FailedState           ApplicationStateType = "FAILED"
-			FailedSubmissionState ApplicationStateType = "SUBMISSION_FAILED"
-			PendingRerunState     ApplicationStateType = "PENDING_RERUN"
-			InvalidatingState     ApplicationStateType = "INVALIDATING"
-			SucceedingState       ApplicationStateType = "SUCCEEDING"
-			FailingState          ApplicationStateType = "FAILING"
-			UnknownState          ApplicationStateType = "UNKNOWN"
-		*/
 		switch *stateStr {
-		case "RUNNING":
+		case sparkAppStateRunning:
 			setCondition(&sparkJob.Status.StatusConditions, constants.SparkAppRunningCondition, apipb.CONDITION_STATUS_TRUE, "Spark application is running", "Running")
-		case "COMPLETED":
+		case sparkAppStateCompleted:
 			setCondition(&sparkJob.Status.StatusConditions, constants.SucceededCondition, apipb.CONDITION_STATUS_TRUE, "Spark job succeeded", "Succeeded")
-		case "FAILED":
+		case sparkAppStateFailed:
 			// Use the error message from SparkApplication if available, otherwise use a default
 			failureMessage := "Spark job failed"
 			if errorMessage != "" {
@@ -220,7 +226,7 @@ func setCondition(conditions *[]*apipb.Condition, conditionType string, status a
 //
 // Returns an error if creation fails.
 func (r *Reconciler) createJob(ctx context.Context, log logr.Logger, job *v2pb.SparkJob) error {
-	return r.SparkClient.CreateJob(ctx, log, job)
+	return r.sparkClient.CreateJob(ctx, log, job)
 }
 
 // getJobStatus retrieves the current status of a SparkApplication.
@@ -233,5 +239,5 @@ func (r *Reconciler) createJob(ctx context.Context, log logr.Logger, job *v2pb.S
 //   - Error message if job failed
 //   - Error if status retrieval fails
 func (r *Reconciler) getJobStatus(ctx context.Context, logger logr.Logger, job *v2pb.SparkJob) (*string, string, string, error) {
-	return r.SparkClient.GetJobStatus(ctx, logger, job)
+	return r.sparkClient.GetJobStatus(ctx, logger, job)
 }

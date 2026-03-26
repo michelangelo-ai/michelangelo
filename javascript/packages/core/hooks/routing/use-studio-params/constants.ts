@@ -1,4 +1,5 @@
-import type { ParamsTransformer, StudioParamsView } from './types';
+import type { StudioParamsView } from '#core/types/common/view-types';
+import type { ParamsTransformer } from './types';
 
 /**
  * A mapping of view types to their corresponding parameter transformers.

@@ -112,7 +112,7 @@ func TestGen(t *testing.T) {
 	assert.NotContains(t, c, `func (m *TestExtEnum) UnmarshalJSON(b []byte) error {`)
 	assert.NotContains(t, c, `func (m *SomeExternalEnum) UnmarshalJSON(b []byte) error {`)
 
-	//TODO(https://github.com/uber/michelangelo/issues/65): assert.Contains(t, c, expectedCRDDescription)
+	//TODO(https://github.com/michelangelo-ai/michelangelo/issues/924): assert.Contains(t, c, expectedCRDDescription)
 
 	assert.True(t, groupInfoFile != nil)
 	c = groupInfoFile.GetContent()

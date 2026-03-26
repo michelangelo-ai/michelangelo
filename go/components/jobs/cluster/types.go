@@ -114,27 +114,33 @@ func (c *clusterMap) getClustersByFilter(filter FilterType) []*v2pb.Cluster {
 	switch filter {
 	case ReadyClusters:
 		c.m.Range(func(_, value any) bool {
-			if d, ok := value.(*Data); ok {
-				if isClusterReady(d.GetClusterStatus()) {
-					result = append(result, d.cachedObj)
-				}
+			d, ok := value.(*Data)
+			if !ok {
+				return true
+			}
+			if isClusterReady(d.GetClusterStatus()) {
+				result = append(result, d.cachedObj)
 			}
 			return true
 		})
 	case UnreadyClusters:
 		c.m.Range(func(_, value any) bool {
-			if d, ok := value.(*Data); ok {
-				if !isClusterReady(d.GetClusterStatus()) {
-					result = append(result, d.cachedObj)
-				}
+			d, ok := value.(*Data)
+			if !ok {
+				return true
+			}
+			if !isClusterReady(d.GetClusterStatus()) {
+				result = append(result, d.cachedObj)
 			}
 			return true
 		})
 	case AllClusters:
 		c.m.Range(func(_, value any) bool {
-			if d, ok := value.(*Data); ok {
-				result = append(result, d.cachedObj)
+			d, ok := value.(*Data)
+			if !ok {
+				return true
 			}
+			result = append(result, d.cachedObj)
 			return true
 		})
 	}

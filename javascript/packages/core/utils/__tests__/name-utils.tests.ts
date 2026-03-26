@@ -2,19 +2,17 @@ import { vi } from 'vitest';
 
 import { generateSuffix } from '../name-utils';
 
-const mockCrypto = {
-  randomUUID: vi.fn(() => 'abcd1234-5678-90ef-ghij-klmnopqrstuv'),
-};
-Object.defineProperty(global, 'crypto', {
-  value: mockCrypto,
-  writable: true,
-});
-
-// Mock Date constructor for predictable timestamps
 const originalDate = Date;
-const mockDate = new Date('2024-01-01T12:00:00.000Z');
 
 beforeEach(() => {
+  Object.defineProperty(global, 'crypto', {
+    value: {
+      randomUUID: vi.fn(() => 'abcd1234-5678-90ef-ghij-klmnopqrstuv'),
+    },
+    writable: true,
+  });
+
+  const mockDate = new Date('2024-01-01T12:00:00.000Z');
   // @ts-expect-error only mocking Date methods required for testing
   global.Date = vi.fn(() => mockDate);
   global.Date.parse = originalDate.parse;

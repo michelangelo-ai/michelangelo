@@ -31,3 +31,7 @@ dist-ssr
 
 # Generated files
 gen/
+
+# Claude skill eval outputs (generated artifacts — commit only evals.json)
+.claude/skills-workspace/eval-*/
+.claude/skills-workspace/history.json

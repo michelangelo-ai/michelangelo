@@ -1,5 +1,4 @@
-import { ReactNode, useMemo } from 'react';
-import { CellContext, SortingFnOption } from '@tanstack/react-table';
+import { useMemo } from 'react';
 
 import { FilterMode } from '../components/filter/types';
 import { useFilterFactory } from '../components/filter/use-filter-factory';
@@ -7,6 +6,8 @@ import { transformRows } from '../components/table-body/row-transformer';
 import { TableCell } from '../components/table-cell/table-cell';
 import { normalizeColumnAccessor } from '../utils/normalize-column-accessor';
 
+import type { CellContext, SortingFnOption } from '@tanstack/react-table';
+import type { ReactNode } from 'react';
 import type { AccessorFn } from '#core/types/common/studio-types';
 import type { TableFilterFn } from '../components/filter/types';
 import type { ColumnConfig } from '../types/column-types';

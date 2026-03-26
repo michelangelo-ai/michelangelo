@@ -14,7 +14,7 @@ else:
 _LOG = getLogger(__name__)
 
 DEFAULT_CONFIG = {
-    "address": "127.0.0.1:14566",
+    "address": "127.0.0.1:15566",
     "use_tls": False,
     "metadata": {
         "rpc-caller": "grpcurl",
@@ -25,6 +25,10 @@ DEFAULT_CONFIG = {
         "access_key_id": "minioadmin",
         "secret_access_key": "minioadmin",
         "endpoint_url": "http://localhost:9091",
+    },
+    "plugin": {
+        "dirs": [],
+        "modules": {},
     },
 }
 

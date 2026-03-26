@@ -1,6 +1,6 @@
 import type { BaseFieldProps } from '../types';
 
-export interface BooleanFieldProps extends BaseFieldProps {
+export interface BooleanFieldProps extends BaseFieldProps<boolean> {
   /**
    * Custom label for the checkbox itself.
    *

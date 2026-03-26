@@ -30,7 +30,7 @@ _kube_ports = [
     "3306:30001",  # MySQL
     "9091:30007",  # MinIO
     "9090:30008",  # MinIO Console
-    "14566:30009",  # Michelangelo API Server
+    "15566:30009",  # Michelangelo API Server
     "8081:30010",  # Envoy gRPC --> gRPC-web proxy
     "8090:30011",  # Michelangelo UI
     "3000:30012",  # Grafana
@@ -190,6 +190,10 @@ necessary, and this assertion will be removed.
 """
         )
 
+    # Get GitHub username from environment variable
+    env_github_username = "GITHUB_USERNAME"
+    github_username = os.environ.get(env_github_username, "USERNAME")
+
     # Create a temporary registry file with the GitHub Container Registry
     # authentication.
     registry = {
@@ -201,7 +205,7 @@ necessary, and this assertion will be removed.
         "configs": {
             "ghcr.io": {
                 "auth": {
-                    "username": "USERNAME",
+                    "username": github_username,
                     "password": cr_pat,
                 },
             },
@@ -219,7 +223,8 @@ necessary, and this assertion will be removed.
 
     resources = [
         "boot.yaml",
-        "mysql.yaml",
+        "mysql.yaml",  # MySQL database
+        "mysql-ingester.yaml",  # Auto-generated ingester schema from protobuf
         "michelangelo-config.yaml",
         "aws-credentials.yaml",
     ]
@@ -306,7 +311,7 @@ necessary, and this assertion will be removed.
         )
 
     # Determine buckets to create based on enabled services
-    bucket_names = ["logs", "default"]
+    bucket_names = ["logs", "default", "deploy-models"]
     if "mlflow" in ns.include_experimental:
         bucket_names.append("mlflow")
         print("🪣 Adding MLflow bucket to S3 setup")
@@ -341,13 +346,13 @@ necessary, and this assertion will be removed.
         if "worker" not in ns.exclude:
             _kube_create(_dir / "resources/michelangelo-temporal-worker.yaml")
         if "controllermgr" not in ns.exclude:
-            resources.append("michelangelo-temporal-controllermgr.yaml")
+            _kube_create(_dir / "resources/michelangelo-temporal-controllermgr.yaml")
     elif ns.workflow == "cadence":
         _create_cadence_domain(links)
         if "worker" not in ns.exclude:
             _kube_create(_dir / "resources/michelangelo-worker.yaml")
         if "controllermgr" not in ns.exclude:
-            resources.append("michelangelo-controllermgr.yaml")
+            _kube_create(_dir / "resources/michelangelo-controllermgr.yaml")
     else:
         raise ValueError(f"Unsupported workflow engine: {ns.workflow}")
 
@@ -388,7 +393,7 @@ def _create_bucket_setup(bucket_names):
 
     # Replace the hardcoded bucket names with our dynamic list
     modified_content = content.replace(
-        'value: "logs,default"', f'value: "{bucket_names_str}"'
+        'value: "logs,default,deploy-models"', f'value: "{bucket_names_str}"'
     )
 
     # Create temporary file with modified content

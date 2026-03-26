@@ -175,4 +175,86 @@ describe('RadioField', () => {
 
     expect(screen.getByText('Choose your deployment target')).toBeInTheDocument();
   });
+
+  it('pre-selects the option matching initial value', () => {
+    render(
+      <RadioField name="environment" label="Environment" options={options} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getFormProviderWrapper({ initialValues: { environment: 'staging' } }),
+      ])
+    );
+
+    expect(screen.getByRole('radio', { name: 'Staging' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Development' })).not.toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Production' })).not.toBeChecked();
+  });
+});
+
+describe('RadioField with card layout', () => {
+  const optionsWithDescriptions = [
+    { value: 'dev', label: 'Development', description: 'For local testing' },
+    { value: 'staging', label: 'Staging', description: 'Pre-production environment' },
+    { value: 'prod', label: 'Production', description: 'Live environment' },
+  ];
+
+  it('renders card tiles with descriptions when options have descriptions', () => {
+    render(
+      <RadioField name="environment" label="Environment" options={optionsWithDescriptions} />,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
+    );
+
+    expect(screen.getByText('Environment')).toBeInTheDocument();
+    expect(screen.getByText('Development')).toBeInTheDocument();
+    expect(screen.getByText('For local testing')).toBeInTheDocument();
+    expect(screen.getByText('Staging')).toBeInTheDocument();
+    expect(screen.getByText('Pre-production environment')).toBeInTheDocument();
+    expect(screen.getByText('Production')).toBeInTheDocument();
+    expect(screen.getByText('Live environment')).toBeInTheDocument();
+  });
+
+  it('handles tile selection', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    render(
+      <>
+        <RadioField name="environment" label="Environment" options={optionsWithDescriptions} />
+        <button type="submit">Submit</button>
+      </>,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getFormProviderWrapper({ onSubmit }),
+      ])
+    );
+
+    await user.click(screen.getByText('Staging'));
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        { environment: 'staging' },
+        expect.anything(),
+        expect.anything()
+      )
+    );
+  });
+
+  it('disables all tiles when disabled prop is set', () => {
+    render(
+      <RadioField
+        name="environment"
+        label="Environment"
+        options={optionsWithDescriptions}
+        disabled
+      />,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
+    );
+
+    const tiles = screen.getAllByRole('radio');
+    tiles.forEach((tile) => {
+      expect(tile).toBeDisabled();
+    });
+  });
 });

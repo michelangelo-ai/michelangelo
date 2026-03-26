@@ -1,6 +1,8 @@
-import { ColumnRenderState, VisibilityCapability } from '#core/components/table/types/column-types';
-import { TableData } from '#core/components/table/types/data-types';
-
+import type {
+  ColumnRenderState,
+  VisibilityCapability,
+} from '#core/components/table/types/column-types';
+import type { TableData } from '#core/components/table/types/data-types';
 import type { ControlledTableState } from '#core/components/table/types/table-types';
 
 export interface TableColumnConfigurationButtonProps<T extends TableData = TableData> {

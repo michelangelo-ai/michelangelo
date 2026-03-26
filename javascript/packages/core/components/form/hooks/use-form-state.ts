@@ -34,6 +34,12 @@ export function useFormState<FieldValues extends FormData = FormData>(
         submitting: subscription.submitting,
         submitError: subscription.submitError,
         values: subscription.values,
+        submitFailed: subscription.submitFailed,
+        hasValidationErrors: subscription.hasValidationErrors,
+        errors: subscription.errors,
+        submitErrors: subscription.submitErrors,
+        touched: subscription.touched,
+        modifiedSinceLastSubmit: subscription.modifiedSinceLastSubmit,
       }
     : undefined;
 
@@ -45,5 +51,11 @@ export function useFormState<FieldValues extends FormData = FormData>(
     submitting: formState.submitting,
     submitError: formState.submitError as unknown,
     values: formState.values as FieldValues | undefined,
+    submitFailed: formState.submitFailed,
+    hasValidationErrors: formState.hasValidationErrors,
+    errors: formState.errors as Record<string, unknown> | undefined,
+    submitErrors: formState.submitErrors as Record<string, unknown> | undefined,
+    touched: formState.touched as Record<string, boolean> | undefined,
+    modifiedSinceLastSubmit: formState.modifiedSinceLastSubmit,
   } as FormState<FieldValues> | Partial<FormState<FieldValues>>;
 }

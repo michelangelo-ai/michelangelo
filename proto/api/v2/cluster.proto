@@ -22,6 +22,9 @@ enum DCType {
 
   // Cloud GCP
   DC_TYPE_CLOUD_GCP = 2;
+
+  // Cloud OCI
+  DC_TYPE_CLOUD_OCI = 3;
 }
 
 // Specification of the cluster where a ML job will be launched,

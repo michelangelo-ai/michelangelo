@@ -22,7 +22,7 @@ from michelangelo.gen.api.typed_struct_pb2 import TypedStruct
 
 _LOG = getLogger(__name__)
 
-# TODO: Add end-to-end tests for get_pipeline_config_and_tar()
+# TODO(#939): Add end-to-end tests for get_pipeline_config_and_tar()
 # with real config files and subprocess execution
 
 # Constants for registration output files
@@ -37,6 +37,7 @@ def get_pipeline_config_and_tar(
     project: str,
     pipeline: str,
     yaml_dict: Optional[dict] = None,
+    storage_url: Optional[str] = None,
 ) -> tuple[Struct, str, str]:
     """Run pipeline registration via subprocess to get uniflow artifacts.
 
@@ -54,6 +55,7 @@ def get_pipeline_config_and_tar(
         project: Project name
         pipeline: Pipeline name
         yaml_dict: Optional YAML dictionary (unused)
+        storage_url: Optional storage URL for dev run functionality
 
     Returns:
         tuple: (workflow_inputs as Struct, uniflow_tar_path as string,
@@ -88,7 +90,7 @@ def get_pipeline_config_and_tar(
                 pipeline=pipeline,
                 config_file_path=str(config_file_path),
                 output_dir=str(tmp_path),
-                storage_url=None,  # Use default S3 path
+                storage_url=storage_url,  # Use provided storage URL or default
                 output_filename=None,  # Use default filename
                 environ=None,
                 args=None,
@@ -218,7 +220,11 @@ def convert_crd_metadata_pipeline_create(
 
 
 def handle_workflow_inputs_retrieval(
-    repo_root: Path, config_file_relative_path: str, project: str, pipeline: str
+    repo_root: Path,
+    config_file_relative_path: str,
+    project: str,
+    pipeline: str,
+    storage_url: Optional[str] = None,
 ) -> tuple[dict, str, str]:
     """Handle workflow inputs retrieval from subprocess registration."""
     workflow_inputs = None
@@ -234,6 +240,7 @@ def handle_workflow_inputs_retrieval(
                 bazel_target="",  # Not used
                 project=project,
                 pipeline=pipeline,
+                storage_url=storage_url,
             )
         )
         _LOG.info("Successfully obtained pipeline config and tar")

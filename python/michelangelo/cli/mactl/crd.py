@@ -241,7 +241,10 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
         _LOG.debug("No name argument passed. List CRD in the namespace.")
         _self: CRD = bound_args.arguments["self"]
         _self.generate_list(crd_method_info.channel)
-        return _self.list(namespace=get_single_arg(bound_args.arguments, "namespace"))
+        return _self.list(
+            namespace=get_single_arg(bound_args.arguments, "namespace"),
+            limit=bound_args.arguments.get("limit", 100),
+        )
 
     call_res = crd_method_call_kwargs(
         crd_method_info,
@@ -269,9 +272,14 @@ def prepare_column_info() -> list[dict]:
         },
         {
             "column_name": "LAST_UPDATED_SPEC",
-            "retrieve_func": lambda item: datetime.fromtimestamp(
-                int(item.metadata.labels["michelangelo/UpdateTimestamp"]) / 1_000_000
-            ).strftime("%Y-%m-%d_%H:%M:%S"),
+            "retrieve_func": lambda item: (
+                datetime.fromtimestamp(
+                    int(item.metadata.labels["michelangelo/UpdateTimestamp"])
+                    / 1_000_000
+                ).strftime("%Y-%m-%d_%H:%M:%S")
+                if item.metadata.labels.get("michelangelo/UpdateTimestamp", "")
+                else "N/A"
+            ),
             "max_length": len("LAST_UPDATED_SPEC") + 1,
         },
     ]
@@ -314,10 +322,23 @@ def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mes
     """Default common CRD member method implementation for LIST method."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
-    call_res = crd_method_call_kwargs(
-        crd_method_info,
-        **{"namespace": get_single_arg(bound_args.arguments, "namespace")},
-    )
+    limit = bound_args.arguments.get("limit", 100)
+
+    request_dict = {
+        "namespace": get_single_arg(bound_args.arguments, "namespace"),
+        "list_options": {"limit": limit},
+        "list_options_ext": {
+            "pagination": {
+                "offset": 0,
+                "limit": limit,
+            }
+        },
+    }
+
+    request_input = crd_method_info.input_class()
+    ParseDict(request_dict, request_input)
+    _LOG.info("ListRequest built: %r", request_input)
+    call_res = crd_method_call(crd_method_info, request_input)
     _LOG.debug("Succeed to list CRDs: %r", type(call_res))
     results = {k.name: v for k, v in call_res.ListFields() if k.name.endswith("_list")}
     _LOG.debug(
@@ -330,6 +351,16 @@ def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mes
     raw_elems = results[next(iter(results))]
 
     print_list_formatted(raw_elems.items)
+
+    # Show warning if we got exactly the limit (there might be more)
+    if len(raw_elems.items) == limit:
+        print(
+            f"\n⚠️  The response is limited to {limit} pipelines. "
+            f"There may be more than {limit} results. "
+            f"Consider a larger limit with --limit argument or using filter "
+            f"to narrow down the result. (default: 100)"
+        )
+
     return call_res
 
 
@@ -500,6 +531,21 @@ class CRD:
                             "help": "Name of the resource",
                         },
                     },
+                    {
+                        "func_signature": Parameter(
+                            "limit", Parameter.POSITIONAL_OR_KEYWORD, default=100
+                        ),
+                        "args": ["--limit"],
+                        "kwargs": {
+                            "dest": "limit",
+                            "type": int,
+                            "default": 100,
+                            "help": (
+                                "Maximum number of items to return when listing "
+                                "(default: 100)"
+                            ),
+                        },
+                    },
                 ],
             },
         }
@@ -665,7 +711,7 @@ class CRD:
         self.create = MethodType(bound_func, self)
         _LOG.debug("Generated CREATE injected well: %r", self.create)
 
-    def generate_list(self, channel: Channel):
+    def generate_list(self, channel: Channel, parser: Optional[ArgumentParser] = None):
         """Generate list function of this class."""
         _LOG.info("Generate LIST method for %r / %r", self.name, self.full_name)
 
@@ -674,11 +720,13 @@ class CRD:
             self.full_name,
             *self._extract_method_info(channel, self.full_name, "List"),
         )
+
+        self.configure_parser("list", parser)
         list_func_signature = Signature(
-            [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
-            + [
-                Parameter(name, Parameter.POSITIONAL_OR_KEYWORD)
-                for name in ["namespace"]
+            [
+                Parameter("self", Parameter.POSITIONAL_OR_KEYWORD),
+                Parameter("namespace", Parameter.POSITIONAL_OR_KEYWORD),
+                Parameter("limit", Parameter.POSITIONAL_OR_KEYWORD, default=100),
             ]
         )
 
