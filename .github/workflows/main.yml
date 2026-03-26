@@ -7,11 +7,13 @@ on:
     paths-ignore:
       - 'docs/**'
       - 'website/**'
+      - 'javascript/**'
   pull_request:
     branches: [main]
     paths-ignore:
       - 'docs/**'
       - 'website/**'
+      - 'javascript/**'
 
 jobs:
   bazel-build:
