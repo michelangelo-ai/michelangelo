@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/michelangelo-ai/michelangelo/go/storage"
-	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -37,7 +36,7 @@ func register(p registerParams) error {
 	p.Logger.Info("Setting up ingester controllers")
 
 	// List of CRD objects to watch
-	crdObjects := v2.AllCRDObjects
+	crdObjects := []runtime.Object{}
 
 	for _, obj := range crdObjects {
 		gvks, _, err := p.Scheme.ObjectKinds(obj)
