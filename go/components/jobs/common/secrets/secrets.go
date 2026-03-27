@@ -11,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -60,23 +59,23 @@ type InClusterClientSet struct {
 	ClientSet kubernetes.Interface `name:"inClusterClientSet"`
 }
 
-func NewInClusterClientSet() InClusterClientSet {
-	// Try in-cluster config first, then fall back to kubeconfig for local development
-	cfg, err := rest.InClusterConfig()
+// InClusterClientSetParams has params for the InClusterClientSet constructor
+type InClusterClientSetParams struct {
+	fx.In
+
+	Config *rest.Config
+}
+
+// NewInClusterClientSet creates a Kubernetes clientset using the injected rest.Config.
+// This allows the client to work both in-cluster and locally (via kubeconfig).
+func NewInClusterClientSet(p InClusterClientSetParams) (InClusterClientSet, error) {
+	k8sClusterClient, err := kubernetes.NewForConfig(p.Config)
 	if err != nil {
-		// Fall back to kubeconfig (controller-runtime's GetConfig handles this)
-		cfg, err = ctrl.GetConfig()
-		if err != nil {
-			panic(err)
-		}
-	}
-	k8sClusterClient, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		panic(err)
+		return InClusterClientSet{}, err
 	}
 	return InClusterClientSet{
 		ClientSet: k8sClusterClient,
-	}
+	}, nil
 }
 
 // Result has the result of the constructor
