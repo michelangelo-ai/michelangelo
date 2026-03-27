@@ -38,8 +38,10 @@ class LoadTomlFileTest(TestCase):
 
     def test_returns_empty_dict_on_read_exception(self):
         """Test _load_toml_file returns empty dict on exception."""
-        with patch.object(Path, "exists", return_value=True):
-            with patch("builtins.open", side_effect=OSError("permission denied")):
+        with (
+            patch.object(Path, "exists", return_value=True),
+            patch("builtins.open", side_effect=OSError("permission denied")),
+        ):
                 result = _load_toml_file(Path("/fake/config.toml"))
 
         self.assertEqual(result, {})
