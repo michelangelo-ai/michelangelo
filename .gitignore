@@ -328,7 +328,3 @@ checkpoints/
 /tmp/
 */tmp/
 **/tmp/
-
-# Claude Code configuration (local tool settings)
-.claude/
-.mcp.json*
