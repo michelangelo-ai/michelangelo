@@ -42,7 +42,7 @@ class LoadTomlFileTest(TestCase):
             patch.object(Path, "exists", return_value=True),
             patch("builtins.open", side_effect=OSError("permission denied")),
         ):
-                result = _load_toml_file(Path("/fake/config.toml"))
+            result = _load_toml_file(Path("/fake/config.toml"))
 
         self.assertEqual(result, {})
 
@@ -189,7 +189,7 @@ class LoadConfigTest(TestCase):
     def test_user_config_overrides_package_config(self, mock_load_toml, mock_apply_env):
         """Test user_config.toml values override config.toml values."""
         mock_load_toml.side_effect = [
-            {"address": "pkg-address:8888"},   # PACKAGE_CONFIG_FILE
+            {"address": "pkg-address:8888"},  # PACKAGE_CONFIG_FILE
             {"address": "user-address:9999"},  # USER_CONFIG_FILE
         ]
         mock_apply_env.side_effect = lambda x: x
