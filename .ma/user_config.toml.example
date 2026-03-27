@@ -1,13 +1,11 @@
 # MaCTL User Configuration (~/.ma/user_config.toml)
-# Personal overrides for MaCTL. This file is yours — the package never overwrites it.
-# Settings here take precedence over ~/.ma/config.toml (package defaults).
 #
 # Usage:
 #   mkdir -p ~/.ma
 #   cp .ma/user_config.toml.example ~/.ma/user_config.toml
 #   vim ~/.ma/user_config.toml  # Edit with your settings
 #
-# Only set values you want to override; everything else falls through to package defaults.
+# Only set values you want to override; everything else falls through to project defaults.
 
 address = "127.0.0.1:15566"
 use_tls = false
@@ -33,5 +31,5 @@ modules = {}
 # Configuration priority (highest to lowest):
 # 1. Environment variables (MACTL_ADDRESS, MACTL_USE_TLS, AWS_*)
 # 2. This file (~/.ma/user_config.toml)
-# 3. ~/.ma/config.toml (package defaults)
+# 3. ~/.ma/config.toml (project defaults)
 # 4. Built-in defaults

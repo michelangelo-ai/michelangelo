@@ -91,7 +91,7 @@ def load_config() -> dict:
     Priority (highest to lowest):
     1. Environment variables (MACTL_ADDRESS, MACTL_USE_TLS, AWS_*)
     2. ~/.ma/user_config.toml (user overrides)
-    3. ~/.ma/config.toml (package defaults)
+    3. ~/.ma/config.toml (project defaults)
     4. Built-in DEFAULT_CONFIG
 
     Returns:
