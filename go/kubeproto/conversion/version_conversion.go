@@ -112,6 +112,10 @@ func fieldIgnored(extTypes *protoregistry.Types, f *protogen.Field) bool {
 	return opts.Bool("ignore_unmapped")
 }
 
+func isRealOneof(f *protogen.Field) bool {
+	return f.Oneof != nil && !f.Oneof.Desc.IsSynthetic()
+}
+
 func findHubMessage(gen *protogen.Plugin, hubProtoPkg, hubMsgName string) *protogen.Message {
 	for _, f := range gen.Files {
 		if string(f.Desc.Package()) != hubProtoPkg {
@@ -206,7 +210,7 @@ func generateAssignmentsSpokeToHub(g *protogen.GeneratedFile, file *protogen.Fil
 	}
 	mapped := map[string]struct{}{} // hub fields that are mapped to a spoke field
 	for _, sf := range spokeMsg.Fields {
-		if fieldIgnored(extTypes, sf) {
+		if fieldIgnored(extTypes, sf) || isRealOneof(sf) {
 			continue
 		}
 		targetName := string(sf.Desc.Name())
@@ -219,6 +223,12 @@ func generateAssignmentsSpokeToHub(g *protogen.GeneratedFile, file *protogen.Fil
 		}
 		generateFieldAssignment(g, file, extTypes, spokeMsg, hubMsg, sf, hf, true)
 		mapped[targetName] = struct{}{}
+	}
+	for _, oo := range spokeMsg.Oneofs {
+		if oo.Desc.IsSynthetic() {
+			continue
+		}
+		generateOneofGroupConversion(g, file, extTypes, spokeMsg, hubMsg, oo, hubFields, mapped, true)
 	}
 	// Enforce unmapped hub fields unless explicitly ignored
 	ignore := readIgnoreUnmappedHubFields(extTypes, spokeMsg) // hub fields that are explicitly ignored
@@ -235,9 +245,13 @@ func generateAssignmentsSpokeToHub(g *protogen.GeneratedFile, file *protogen.Fil
 }
 
 func generateAssignmentsHubToSpoke(g *protogen.GeneratedFile, file *protogen.File, extTypes *protoregistry.Types, spokeMsg *protogen.Message, hubMsg *protogen.Message) {
+	hubFields := map[string]*protogen.Field{}
+	for _, hf := range hubMsg.Fields {
+		hubFields[string(hf.Desc.Name())] = hf
+	}
 	rev := map[string]*protogen.Field{}
 	for _, sf := range spokeMsg.Fields {
-		if fieldIgnored(extTypes, sf) {
+		if fieldIgnored(extTypes, sf) || isRealOneof(sf) {
 			continue
 		}
 		hName := string(sf.Desc.Name())
@@ -247,11 +261,20 @@ func generateAssignmentsHubToSpoke(g *protogen.GeneratedFile, file *protogen.Fil
 		rev[hName] = sf
 	}
 	for _, hf := range hubMsg.Fields {
+		if isRealOneof(hf) {
+			continue
+		}
 		sf := rev[string(hf.Desc.Name())]
 		if sf == nil {
 			continue
 		}
 		generateFieldAssignment(g, file, extTypes, spokeMsg, hubMsg, sf, hf, false)
+	}
+	for _, oo := range spokeMsg.Oneofs {
+		if oo.Desc.IsSynthetic() {
+			continue
+		}
+		generateOneofGroupConversion(g, file, extTypes, spokeMsg, hubMsg, oo, hubFields, nil, false)
 	}
 }
 
@@ -394,7 +417,7 @@ func generateFieldAssignment(g *protogen.GeneratedFile, file *protogen.File, ext
 		return
 	}
 
-	// Map field
+	// Map field (oneof fields cannot be map or repeated in protobuf)
 	if sf.Desc.IsMap() {
 		if !hf.Desc.IsMap() {
 			typeMismatch(file, spokeMsg, hubMsg, sf, hf)
@@ -460,6 +483,150 @@ func generateFieldAssignment(g *protogen.GeneratedFile, file *protogen.File, ext
 		g.P("\t}")
 		g.P("}")
 		return
+	}
+}
+
+func generateOneofGroupConversion(g *protogen.GeneratedFile, file *protogen.File, extTypes *protoregistry.Types,
+	spokeMsg *protogen.Message, hubMsg *protogen.Message,
+	spokeOneof *protogen.Oneof,
+	hubFieldsByName map[string]*protogen.Field,
+	mapped map[string]struct{},
+	spokeToHub bool) {
+
+	type fieldPair struct {
+		spoke *protogen.Field
+		hub   *protogen.Field
+	}
+	var pairs []fieldPair
+	var hubOneof *protogen.Oneof
+
+	for _, sf := range spokeOneof.Fields {
+		if fieldIgnored(extTypes, sf) {
+			continue
+		}
+		targetName := string(sf.Desc.Name())
+		if rn := getFieldRename(extTypes, sf); rn != "" {
+			targetName = rn
+		}
+		hf := hubFieldsByName[targetName]
+		if hf == nil {
+			continue
+		}
+		if !isRealOneof(hf) {
+			logger.Panic(fmt.Sprintf("%s: spoke oneof field '%s.%s' maps to hub non-oneof field '%s.%s'",
+				file.Desc.Path(), spokeMsg.GoIdent.GoName, sf.GoName, hubMsg.GoIdent.GoName, hf.GoName))
+		}
+		if hubOneof == nil {
+			hubOneof = hf.Oneof
+		} else if hubOneof != hf.Oneof {
+			logger.Panic(fmt.Sprintf("%s: spoke oneof '%s' in '%s' maps to multiple hub oneofs in '%s'",
+				file.Desc.Path(), spokeOneof.Desc.Name(), spokeMsg.GoIdent.GoName, hubMsg.GoIdent.GoName))
+		}
+		pairs = append(pairs, fieldPair{spoke: sf, hub: hf})
+		if mapped != nil {
+			mapped[targetName] = struct{}{}
+		}
+	}
+
+	if len(pairs) == 0 || hubOneof == nil {
+		return
+	}
+
+	if spokeToHub {
+		g.P("switch v := in.", spokeOneof.GoName, ".(type) {")
+		for _, pair := range pairs {
+			g.P("case *", g.QualifiedGoIdent(pair.spoke.GoIdent), ":")
+			generateOneofFieldAssignment(g, file, extTypes, spokeMsg, hubMsg,
+				pair.spoke, pair.hub, pair.spoke, pair.hub, hubOneof.GoName, true)
+		}
+		g.P("}")
+	} else {
+		hubToPair := make(map[*protogen.Field]*fieldPair, len(pairs))
+		for i := range pairs {
+			hubToPair[pairs[i].hub] = &pairs[i]
+		}
+		g.P("switch v := in.", hubOneof.GoName, ".(type) {")
+		for _, hf := range hubOneof.Fields {
+			pair := hubToPair[hf]
+			if pair == nil {
+				continue
+			}
+			g.P("case *", g.QualifiedGoIdent(pair.hub.GoIdent), ":")
+			generateOneofFieldAssignment(g, file, extTypes, spokeMsg, hubMsg,
+				pair.spoke, pair.hub, pair.hub, pair.spoke, spokeOneof.GoName, false)
+		}
+		g.P("}")
+	}
+}
+
+func generateOneofFieldAssignment(g *protogen.GeneratedFile, file *protogen.File, extTypes *protoregistry.Types,
+	spokeMsg *protogen.Message, hubMsg *protogen.Message,
+	sf *protogen.Field, hf *protogen.Field,
+	inField *protogen.Field, outField *protogen.Field,
+	outOneofGoName string,
+	spokeToHub bool) {
+
+	convertName := func(msgName string) string {
+		if spokeToHub {
+			return "Convert" + msgName + "ToHub"
+		}
+		return "Convert" + msgName + "FromHub"
+	}
+
+	switch sf.Desc.Kind() {
+	case protoreflect.MessageKind:
+		if hf.Desc.Kind() != protoreflect.MessageKind {
+			typeMismatch(file, spokeMsg, hubMsg, sf, hf)
+		}
+		if sameLocalPackage(file, sf.Message) {
+			msgName := sf.Message.GoIdent.GoName
+			if r := getMessageRename(extTypes, sf.Message); r != "" {
+				msgName = r
+			}
+			if msgName != hf.Message.GoIdent.GoName {
+				typeMismatch(file, spokeMsg, hubMsg, sf, hf)
+			}
+			g.P("if v.", inField.GoName, " != nil {")
+			g.P("\tt := &", g.QualifiedGoIdent(outField.Message.GoIdent), "{}")
+			g.P("\t", convertName(sf.Message.GoIdent.GoName), "(v.", inField.GoName, ", t)")
+			g.P("\tout.", outOneofGoName, " = &", g.QualifiedGoIdent(outField.GoIdent), "{", outField.GoName, ": t}")
+			g.P("}")
+		} else if isSameExternalMessage(sf, hf) {
+			protoClone := protogen.GoIdent{GoImportPath: "github.com/gogo/protobuf/proto", GoName: "Clone"}
+			g.P("out.", outOneofGoName, " = &", g.QualifiedGoIdent(outField.GoIdent), "{",
+				outField.GoName, ": ", g.QualifiedGoIdent(protoClone), "(v.", inField.GoName,
+				").(*", g.QualifiedGoIdent(outField.Message.GoIdent), ")}")
+		} else {
+			typeMismatch(file, spokeMsg, hubMsg, sf, hf)
+		}
+	case protoreflect.EnumKind:
+		if hf.Desc.Kind() != protoreflect.EnumKind {
+			typeMismatch(file, spokeMsg, hubMsg, sf, hf)
+		}
+		spokeEnum := sf.Enum
+		hubEnum := hf.Enum
+		if rn := getEnumRename(extTypes, spokeEnum); rn != "" {
+			if rn != string(hubEnum.Desc.Name()) {
+				typeMismatch(file, spokeMsg, hubMsg, sf, hf)
+			}
+		} else if spokeEnum.Desc.Name() != hubEnum.Desc.Name() {
+			typeMismatch(file, spokeMsg, hubMsg, sf, hf)
+		}
+		g.P("out.", outOneofGoName, " = &", g.QualifiedGoIdent(outField.GoIdent), "{",
+			outField.GoName, ": ", g.QualifiedGoIdent(outField.Enum.GoIdent), "(int32(v.", inField.GoName, "))}")
+	case protoreflect.BoolKind, protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Sfixed32Kind,
+		protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind,
+		protoreflect.Uint32Kind, protoreflect.Fixed32Kind,
+		protoreflect.Uint64Kind, protoreflect.Fixed64Kind,
+		protoreflect.FloatKind, protoreflect.DoubleKind,
+		protoreflect.StringKind, protoreflect.BytesKind:
+		if sf.Desc.Kind() != hf.Desc.Kind() {
+			typeMismatch(file, spokeMsg, hubMsg, sf, hf)
+		}
+		g.P("out.", outOneofGoName, " = &", g.QualifiedGoIdent(outField.GoIdent), "{",
+			outField.GoName, ": v.", inField.GoName, "}")
+	default:
+		typeMismatch(file, spokeMsg, hubMsg, sf, hf)
 	}
 }
 
