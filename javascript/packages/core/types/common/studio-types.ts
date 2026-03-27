@@ -1,3 +1,4 @@
+import type { ActionSchema } from '#core/components/actions/types';
 import type { ViewConfig } from '#core/components/views/types';
 import type { QueryConfig } from '#core/types/query-types';
 
@@ -103,10 +104,10 @@ export interface PhaseEntityConfig<T extends object = object> {
   /** List of view configurations for this entity */
   views: ViewConfig<T>[];
   /**
-   * Optional actions component for this entity
-   * Rendered in table rows for list views and in detail view headers
+   * Optional actions to render for this entity.
+   * Rendered in table rows for list views.
    */
-  actions?: React.ComponentType<{ record: T }>;
+  actions?: ActionSchema<T>[];
 }
 
 /**
