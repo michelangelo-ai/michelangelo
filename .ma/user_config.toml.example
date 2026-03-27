@@ -28,8 +28,7 @@ endpoint_url = "http://localhost:9091"
 
 [plugin]
 dirs = []
-
-[plugin.modules]
+modules = {}
 
 # Configuration priority (highest to lowest):
 # 1. Environment variables (MACTL_ADDRESS, MACTL_USE_TLS, AWS_*)
