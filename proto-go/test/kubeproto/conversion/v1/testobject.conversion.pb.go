@@ -234,6 +234,18 @@ func ConvertTestObjectSpecToHub(in *TestObjectSpec, out *v2.TestObjectSpec) erro
 			out.F5[k] = t
 		}
 	}
+	switch v := in.TestOneof.(type) {
+	case *TestObjectSpec_OneofStr:
+		out.TestOneof = &v2.TestObjectSpec_OneofStr{OneofStr: v.OneofStr}
+	case *TestObjectSpec_OneofInt:
+		out.TestOneof = &v2.TestObjectSpec_OneofInt{OneofInt: v.OneofInt}
+	case *TestObjectSpec_OneofMsg:
+		if v.OneofMsg != nil {
+			t := &v2.M1{}
+			ConvertM1ToHub(v.OneofMsg, t)
+			out.TestOneof = &v2.TestObjectSpec_OneofMsg{OneofMsg: t}
+		}
+	}
 	return nil
 }
 
@@ -282,6 +294,18 @@ func ConvertTestObjectSpecFromHub(in *v2.TestObjectSpec, out *TestObjectSpec) er
 			t := &M2{}
 			ConvertM2FromHub(v, t)
 			out.F5[k] = t
+		}
+	}
+	switch v := in.TestOneof.(type) {
+	case *v2.TestObjectSpec_OneofStr:
+		out.TestOneof = &TestObjectSpec_OneofStr{OneofStr: v.OneofStr}
+	case *v2.TestObjectSpec_OneofInt:
+		out.TestOneof = &TestObjectSpec_OneofInt{OneofInt: v.OneofInt}
+	case *v2.TestObjectSpec_OneofMsg:
+		if v.OneofMsg != nil {
+			t := &M1{}
+			ConvertM1FromHub(v.OneofMsg, t)
+			out.TestOneof = &TestObjectSpec_OneofMsg{OneofMsg: t}
 		}
 	}
 	return nil

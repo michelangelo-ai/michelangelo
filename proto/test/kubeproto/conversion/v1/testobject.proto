@@ -19,6 +19,11 @@ message TestObjectSpec {
   repeated M1 f4 = 4;
   map<string, M2> f5 = 5;
   repeated int32 int_list = 6 [(michelangelo.api.ignore_unmapped) = true];
+  oneof test_oneof {
+    string oneof_str = 7;
+    int32 oneof_int = 8;
+    M1 oneof_msg = 9;
+  }
 }
 
 // Defines the status of a TestObject.
