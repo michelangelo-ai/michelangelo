@@ -3,19 +3,13 @@ name: JavaScript Coverage
 on:
   pull_request:
     paths:
-      - '**/*.js'
-      - '**/*.mjs'
-      - '**/*.cjs'
-      - '**/package.json'
-      - '**/package-lock.json'
+      - 'javascript/**'
       - '.github/workflows/javascript-coverage.yml'
   push:
     branches:
       - main
     paths:
-      - '**/*.js'
-      - '**/*.mjs'
-      - '**/*.cjs'
+      - 'javascript/**'
 
 permissions:
   contents: read
