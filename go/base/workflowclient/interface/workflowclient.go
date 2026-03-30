@@ -107,4 +107,10 @@ type WorkflowClient interface {
 	GetActivityTaskCompletedEventType() string
 	// GetDecisionTaskCompletedEventType returns the engine-specific event type string for DecisionTaskCompleted
 	GetDecisionTaskCompletedEventType() string
+	// PauseSchedule pauses a workflow schedule by schedule ID
+	PauseSchedule(ctx context.Context, scheduleID string) error
+	// UnpauseSchedule unpauses a workflow schedule by schedule ID
+	UnpauseSchedule(ctx context.Context, scheduleID string) error
+	// DeleteSchedule deletes a workflow schedule by schedule ID
+	DeleteSchedule(ctx context.Context, scheduleID string) error
 }

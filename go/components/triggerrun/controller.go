@@ -260,6 +260,11 @@ StateMachine:
 		// Handle actions using the new action field
 		actionToPerform := triggerRun.Spec.Action
 
+		// Backward compat: if Spec.Kill is set and no explicit action, treat as KILL
+		if actionToPerform == v2pb.TRIGGER_RUN_ACTION_NO_ACTION && triggerRun.Spec.Kill {
+			actionToPerform = v2pb.TRIGGER_RUN_ACTION_KILL
+		}
+
 		switch actionToPerform {
 		case v2pb.TRIGGER_RUN_ACTION_KILL:
 			status, err := runner.Kill(ctx, triggerRun)

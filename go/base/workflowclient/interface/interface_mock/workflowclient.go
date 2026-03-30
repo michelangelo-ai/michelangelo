@@ -226,3 +226,45 @@ func (mr *MockWorkflowClientMockRecorder) TerminateWorkflow(ctx, workflowID, run
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TerminateWorkflow", reflect.TypeOf((*MockWorkflowClient)(nil).TerminateWorkflow), ctx, workflowID, runID, reason)
 }
+
+// PauseSchedule mocks base method.
+func (m *MockWorkflowClient) PauseSchedule(ctx context.Context, scheduleID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PauseSchedule", ctx, scheduleID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PauseSchedule indicates an expected call of PauseSchedule.
+func (mr *MockWorkflowClientMockRecorder) PauseSchedule(ctx, scheduleID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PauseSchedule", reflect.TypeOf((*MockWorkflowClient)(nil).PauseSchedule), ctx, scheduleID)
+}
+
+// UnpauseSchedule mocks base method.
+func (m *MockWorkflowClient) UnpauseSchedule(ctx context.Context, scheduleID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UnpauseSchedule", ctx, scheduleID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UnpauseSchedule indicates an expected call of UnpauseSchedule.
+func (mr *MockWorkflowClientMockRecorder) UnpauseSchedule(ctx, scheduleID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnpauseSchedule", reflect.TypeOf((*MockWorkflowClient)(nil).UnpauseSchedule), ctx, scheduleID)
+}
+
+// DeleteSchedule mocks base method.
+func (m *MockWorkflowClient) DeleteSchedule(ctx context.Context, scheduleID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteSchedule", ctx, scheduleID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteSchedule indicates an expected call of DeleteSchedule.
+func (mr *MockWorkflowClientMockRecorder) DeleteSchedule(ctx, scheduleID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSchedule", reflect.TypeOf((*MockWorkflowClient)(nil).DeleteSchedule), ctx, scheduleID)
+}

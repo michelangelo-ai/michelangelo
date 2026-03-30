@@ -274,3 +274,18 @@ func (c *CadenceClient) GetActivityTaskCompletedEventType() string {
 func (c *CadenceClient) GetDecisionTaskCompletedEventType() string {
 	return shared.EventTypeDecisionTaskCompleted.String()
 }
+
+// PauseSchedule is not supported by Cadence (schedules are a Temporal feature)
+func (c *CadenceClient) PauseSchedule(_ context.Context, scheduleID string) error {
+	return fmt.Errorf("PauseSchedule not supported by Cadence provider (scheduleID: %s)", scheduleID)
+}
+
+// UnpauseSchedule is not supported by Cadence (schedules are a Temporal feature)
+func (c *CadenceClient) UnpauseSchedule(_ context.Context, scheduleID string) error {
+	return fmt.Errorf("UnpauseSchedule not supported by Cadence provider (scheduleID: %s)", scheduleID)
+}
+
+// DeleteSchedule is not supported by Cadence (schedules are a Temporal feature)
+func (c *CadenceClient) DeleteSchedule(_ context.Context, scheduleID string) error {
+	return fmt.Errorf("DeleteSchedule not supported by Cadence provider (scheduleID: %s)", scheduleID)
+}

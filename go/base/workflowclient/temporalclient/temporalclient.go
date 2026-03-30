@@ -368,3 +368,25 @@ func (c *TemporalClient) GetDecisionTaskCompletedEventType() string {
 	// In Temporal, DecisionTask is called WorkflowTask
 	return temporalEnumsV1.EVENT_TYPE_WORKFLOW_TASK_COMPLETED.String()
 }
+
+// PauseSchedule pauses a Temporal schedule by schedule ID
+func (c *TemporalClient) PauseSchedule(ctx context.Context, scheduleID string) error {
+	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
+	return handle.Pause(ctx, temporalClient.SchedulePauseOptions{
+		Note: "paused by michelangelo",
+	})
+}
+
+// UnpauseSchedule unpauses a Temporal schedule by schedule ID
+func (c *TemporalClient) UnpauseSchedule(ctx context.Context, scheduleID string) error {
+	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
+	return handle.Unpause(ctx, temporalClient.ScheduleUnpauseOptions{
+		Note: "unpaused by michelangelo",
+	})
+}
+
+// DeleteSchedule deletes a Temporal schedule by schedule ID
+func (c *TemporalClient) DeleteSchedule(ctx context.Context, scheduleID string) error {
+	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
+	return handle.Delete(ctx)
+}
