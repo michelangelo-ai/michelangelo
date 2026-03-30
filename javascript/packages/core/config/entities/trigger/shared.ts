@@ -13,6 +13,7 @@ export const TRIGGER_STATE_CELL_CONFIG: Cell = {
     3: 'Failed',
     4: 'Succeeded',
     5: 'Pending Kill',
+    6: 'Paused',
   },
   stateColorMap: {
     0: 'gray',

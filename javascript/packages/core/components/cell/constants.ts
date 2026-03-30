@@ -8,6 +8,7 @@ import { StateCell } from './renderers/state/state-cell';
 import { TagCell } from './renderers/tag/tag-cell';
 import { TextCell } from './renderers/text/text-cell';
 import { TypeCell } from './renderers/type/type-cell';
+import { KillTriggerCell, PauseTriggerCell, ResumeTriggerCell } from './renderers/trigger-action/trigger-action-cell';
 
 import type { CellRenderer } from './types';
 
@@ -88,6 +89,21 @@ export enum CellType {
    * @description Renders a **Retry Button** for failed tasks
    */
   RETRY = 'RETRY',
+
+  /**
+   * @description Renders a **Kill Button** for trigger runs
+   */
+  TRIGGER_KILL = 'TRIGGER_KILL',
+
+  /**
+   * @description Renders a **Pause Button** for trigger runs
+   */
+  TRIGGER_PAUSE = 'TRIGGER_PAUSE',
+
+  /**
+   * @description Renders a **Resume Button** for trigger runs
+   */
+  TRIGGER_RESUME = 'TRIGGER_RESUME',
 }
 
 export const CELL_RENDERERS: Record<string, CellRenderer<unknown>> = {
@@ -102,4 +118,7 @@ export const CELL_RENDERERS: Record<string, CellRenderer<unknown>> = {
   [CellType.TAG]: TagCell,
   [CellType.TYPE]: TypeCell,
   [CellType.TEXT]: TextCell,
+  [CellType.TRIGGER_KILL]: KillTriggerCell,
+  [CellType.TRIGGER_PAUSE]: PauseTriggerCell,
+  [CellType.TRIGGER_RESUME]: ResumeTriggerCell,
 };

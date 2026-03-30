@@ -16,6 +16,9 @@ export const TRIGGER_LIST_CONFIG: ListViewConfig<object> = {
       { id: 'spec.actor.name', label: 'Started by', type: CellType.TEXT },
       TRIGGER_PIPELINE_CELL_CONFIG,
       TRIGGER_STATE_CELL_CONFIG,
+      { id: 'data', label: 'Kill', type: CellType.TRIGGER_KILL },
+      { id: 'data', label: 'Pause', type: CellType.TRIGGER_PAUSE },
+      { id: 'data', label: 'Resume', type: CellType.TRIGGER_RESUME },
     ],
   },
 };

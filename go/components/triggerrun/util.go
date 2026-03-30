@@ -369,3 +369,85 @@ func GetTriggerType(tr *v2pb.TriggerRun) string {
 	}
 	return TriggerTypeUnknown
 }
+
+// pauseWorkflow pauses a recurring trigger workflow schedule.
+//
+// This function suspends workflow schedule execution for recurring triggers (cron/interval)
+// to prevent new executions from being scheduled. The workflow schedule remains alive but inactive.
+//
+// Returns State=PAUSED on success. If the trigger is not recurring or schedule is not found,
+// returns appropriate error state.
+func pauseWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Logger, workflowClient clientInterface.WorkflowClient, domain string) (v2pb.TriggerRunStatus, error) {
+	wid := generateWorkflowID(triggerRun)
+
+	// Only cron and interval triggers can be paused (they use schedules)
+	triggerType := GetTriggerType(triggerRun)
+	if triggerType != TriggerTypeCron && triggerType != TriggerTypeInterval {
+		log.Info("pause not supported for non-recurring trigger type", "triggerType", triggerType)
+		triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_FAILED
+		triggerRun.Status.ErrorMessage = fmt.Sprintf("pause operation not supported for trigger type: %s", triggerType)
+		return triggerRun.Status, fmt.Errorf("pause not supported for trigger type %s", triggerType)
+	}
+
+	scheduleID := wid + "-schedule"
+	log.Info("pausing schedule for recurring trigger", "scheduleID", scheduleID, "triggerType", triggerType)
+
+	err := workflowClient.PauseSchedule(ctx, scheduleID)
+	if err != nil {
+		log.Error(err, "failed to pause schedule",
+			"operation", "pause_schedule",
+			"namespace", triggerRun.Namespace,
+			"name", triggerRun.Name,
+			"scheduleID", scheduleID)
+		triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_FAILED
+		triggerRun.Status.ErrorMessage = err.Error()
+		return triggerRun.Status, fmt.Errorf("pause schedule for trigger %s/%s: %w",
+			triggerRun.Namespace, triggerRun.Name, err)
+	}
+
+	log.Info("schedule paused successfully", "scheduleID", scheduleID)
+	triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_PAUSED
+	triggerRun.Status.ErrorMessage = ""
+	return triggerRun.Status, nil
+}
+
+// resumeWorkflow resumes a paused recurring trigger workflow schedule.
+//
+// This function reactivates workflow schedule execution for previously paused recurring triggers,
+// allowing new executions to be scheduled again according to the original schedule.
+//
+// Returns State=RUNNING on success. If the trigger is not recurring or schedule is not found,
+// returns appropriate error state.
+func resumeWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Logger, workflowClient clientInterface.WorkflowClient, domain string) (v2pb.TriggerRunStatus, error) {
+	wid := generateWorkflowID(triggerRun)
+
+	// Only cron and interval triggers can be resumed (they use schedules)
+	triggerType := GetTriggerType(triggerRun)
+	if triggerType != TriggerTypeCron && triggerType != TriggerTypeInterval {
+		log.Info("resume not supported for non-recurring trigger type", "triggerType", triggerType)
+		triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_FAILED
+		triggerRun.Status.ErrorMessage = fmt.Sprintf("resume operation not supported for trigger type: %s", triggerType)
+		return triggerRun.Status, fmt.Errorf("resume not supported for trigger type %s", triggerType)
+	}
+
+	scheduleID := wid + "-schedule"
+	log.Info("resuming schedule for recurring trigger", "scheduleID", scheduleID, "triggerType", triggerType)
+
+	err := workflowClient.UnpauseSchedule(ctx, scheduleID)
+	if err != nil {
+		log.Error(err, "failed to resume schedule",
+			"operation", "resume_schedule",
+			"namespace", triggerRun.Namespace,
+			"name", triggerRun.Name,
+			"scheduleID", scheduleID)
+		triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_FAILED
+		triggerRun.Status.ErrorMessage = err.Error()
+		return triggerRun.Status, fmt.Errorf("resume schedule for trigger %s/%s: %w",
+			triggerRun.Namespace, triggerRun.Name, err)
+	}
+
+	log.Info("schedule resumed successfully", "scheduleID", scheduleID)
+	triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_RUNNING
+	triggerRun.Status.ErrorMessage = ""
+	return triggerRun.Status, nil
+}

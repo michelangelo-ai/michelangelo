@@ -158,3 +158,25 @@ func (r *cronTrigger) GetStatus(
 	domain := r.WorkflowClient.GetDomain()
 	return getRecurringRunWorkflowStatus(ctx, triggerRun, log, r.WorkflowClient, domain)
 }
+
+// Pause suspends the cron trigger schedule to prevent new executions.
+//
+// This method pauses the Temporal Schedule associated with the cron trigger,
+// preventing new workflow executions from being scheduled while keeping the
+// trigger run in a recoverable state.
+//
+// Returns TriggerRunStatus with State=PAUSED on success.
+func (c *cronTrigger) Pause(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
+	return pauseWorkflow(ctx, triggerRun, c.Log, c.WorkflowClient, c.WorkflowClient.GetDomain())
+}
+
+// Resume reactivates a paused cron trigger schedule.
+//
+// This method resumes the Temporal Schedule associated with the cron trigger,
+// allowing new workflow executions to be scheduled according to the original
+// cron expression.
+//
+// Returns TriggerRunStatus with State=RUNNING on success.
+func (c *cronTrigger) Resume(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
+	return resumeWorkflow(ctx, triggerRun, c.Log, c.WorkflowClient, c.WorkflowClient.GetDomain())
+}
