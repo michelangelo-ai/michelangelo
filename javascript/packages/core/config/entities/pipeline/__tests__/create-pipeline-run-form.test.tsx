@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { CreatePipelineRunDialog } from '#core/config/entities/pipeline/create-pipeline-run-dialog';
+import { CreatePipelineRunForm } from '#core/config/entities/pipeline/create-pipeline-run-form';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
@@ -13,20 +14,17 @@ import {
   getServiceProviderWrapper,
 } from '#core/test/wrappers/get-service-provider-wrapper';
 
-import type { Pipeline } from '#core/config/entities/pipeline/types';
-
-describe('CreatePipelineRunDialog', () => {
-  const mockPipeline: Pipeline = {
-    metadata: {
-      name: 'test-pipeline',
-      namespace: 'test-namespace',
-    },
-    spec: {
-      owner: {
-        name: 'test-owner',
-      },
-    },
-  };
+describe('CreatePipelineRunForm', () => {
+  // Stateful wrapper providing real isOpen state so FormDialog can close on success.
+  // Defined inside describe (not module level) and data is co-located.
+  function FormWrapper() {
+    const [isOpen, setIsOpen] = useState(true);
+    const data = {
+      metadata: { name: 'test-pipeline', namespace: 'test-namespace' },
+      spec: { owner: { name: 'test-owner' } },
+    };
+    return <CreatePipelineRunForm record={data} isOpen={isOpen} onClose={() => setIsOpen(false)} />;
+  }
 
   it('submits pipeline run with correct data structure and closes dialog', async () => {
     const user = userEvent.setup();
@@ -36,7 +34,7 @@ describe('CreatePipelineRunDialog', () => {
     });
 
     render(
-      <CreatePipelineRunDialog record={mockPipeline} />,
+      <FormWrapper />,
       buildWrapper([
         getBaseProviderWrapper(),
         getIconProviderWrapper(),
@@ -47,7 +45,6 @@ describe('CreatePipelineRunDialog', () => {
       ])
     );
 
-    await user.click(screen.getByRole('button', { name: 'Run' }));
     const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
     const submitButton = within(dialog).getByRole('button', { name: 'Run' });
     await user.click(submitButton);
@@ -85,7 +82,7 @@ describe('CreatePipelineRunDialog', () => {
     });
 
     render(
-      <CreatePipelineRunDialog record={mockPipeline} />,
+      <FormWrapper />,
       buildWrapper([
         getBaseProviderWrapper(),
         getIconProviderWrapper(),
@@ -96,7 +93,6 @@ describe('CreatePipelineRunDialog', () => {
       ])
     );
 
-    await user.click(screen.getByRole('button', { name: 'Run' }));
     const dialog = await screen.findByRole('dialog');
     const submitButton = within(dialog).getByRole('button', { name: 'Run' });
     await user.click(submitButton);
