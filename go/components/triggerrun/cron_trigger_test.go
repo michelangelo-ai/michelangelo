@@ -130,6 +130,7 @@ func TestKill(t *testing.T) {
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+				mockClient.EXPECT().DeleteTrigger(gomock.Any(), gomock.Any()).Return(nil)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
 				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).AnyTimes().Return(nil, fmt.Errorf("failed to list open workflow")).Times(4)
@@ -143,6 +144,7 @@ func TestKill(t *testing.T) {
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+				mockClient.EXPECT().DeleteTrigger(gomock.Any(), gomock.Any()).Return(nil)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
 				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).AnyTimes().Return(
@@ -161,6 +163,7 @@ func TestKill(t *testing.T) {
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+				mockClient.EXPECT().DeleteTrigger(gomock.Any(), gomock.Any()).Return(nil)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
 				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).AnyTimes().Return(
@@ -180,6 +183,7 @@ func TestKill(t *testing.T) {
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+				mockClient.EXPECT().DeleteTrigger(gomock.Any(), gomock.Any()).Return(nil)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
 				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).AnyTimes().Return(

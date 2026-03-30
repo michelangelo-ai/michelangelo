@@ -389,23 +389,22 @@ func pauseWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Lo
 		return triggerRun.Status, fmt.Errorf("pause not supported for trigger type %s", triggerType)
 	}
 
-	scheduleID := wid + "-schedule"
-	log.Info("pausing schedule for recurring trigger", "scheduleID", scheduleID, "triggerType", triggerType)
+	log.Info("pausing trigger", "workflowID", wid, "triggerType", triggerType)
 
-	err := workflowClient.PauseSchedule(ctx, scheduleID)
+	err := workflowClient.PauseTrigger(ctx, wid)
 	if err != nil {
-		log.Error(err, "failed to pause schedule",
-			"operation", "pause_schedule",
+		log.Error(err, "failed to pause trigger",
+			"operation", "pause_trigger",
 			"namespace", triggerRun.Namespace,
 			"name", triggerRun.Name,
-			"scheduleID", scheduleID)
+			"workflowID", wid)
 		triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_FAILED
 		triggerRun.Status.ErrorMessage = err.Error()
-		return triggerRun.Status, fmt.Errorf("pause schedule for trigger %s/%s: %w",
+		return triggerRun.Status, fmt.Errorf("pause trigger %s/%s: %w",
 			triggerRun.Namespace, triggerRun.Name, err)
 	}
 
-	log.Info("schedule paused successfully", "scheduleID", scheduleID)
+	log.Info("trigger paused successfully", "workflowID", wid)
 	triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_PAUSED
 	triggerRun.Status.ErrorMessage = ""
 	return triggerRun.Status, nil
@@ -430,23 +429,22 @@ func resumeWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.L
 		return triggerRun.Status, fmt.Errorf("resume not supported for trigger type %s", triggerType)
 	}
 
-	scheduleID := wid + "-schedule"
-	log.Info("resuming schedule for recurring trigger", "scheduleID", scheduleID, "triggerType", triggerType)
+	log.Info("resuming trigger", "workflowID", wid, "triggerType", triggerType)
 
-	err := workflowClient.UnpauseSchedule(ctx, scheduleID)
+	err := workflowClient.UnpauseTrigger(ctx, wid)
 	if err != nil {
-		log.Error(err, "failed to resume schedule",
-			"operation", "resume_schedule",
+		log.Error(err, "failed to resume trigger",
+			"operation", "resume_trigger",
 			"namespace", triggerRun.Namespace,
 			"name", triggerRun.Name,
-			"scheduleID", scheduleID)
+			"workflowID", wid)
 		triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_FAILED
 		triggerRun.Status.ErrorMessage = err.Error()
-		return triggerRun.Status, fmt.Errorf("resume schedule for trigger %s/%s: %w",
+		return triggerRun.Status, fmt.Errorf("resume trigger %s/%s: %w",
 			triggerRun.Namespace, triggerRun.Name, err)
 	}
 
-	log.Info("schedule resumed successfully", "scheduleID", scheduleID)
+	log.Info("trigger resumed successfully", "workflowID", wid)
 	triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_RUNNING
 	triggerRun.Status.ErrorMessage = ""
 	return triggerRun.Status, nil

@@ -118,24 +118,22 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 	}, nil
 }
 
-// Kill terminates a running cron-scheduled workflow and deletes the Temporal schedule.
+// Kill terminates a running cron-scheduled workflow and removes the recurring trigger.
 //
-// This method stops the recurring workflow execution and removes the underlying
-// Temporal schedule to prevent future runs. It performs the following:
-//  1. Deletes the Temporal schedule (prevents future executions)
-//  2. Terminates any currently open workflow execution
+// DeleteTrigger handles engine-specific cleanup:
+//   - Temporal: deletes the associated schedule to prevent future executions
+//   - Cadence: terminates the cron workflow directly (schedule is embedded in the workflow)
 //
-// Returns State=KILLED on success. Schedule deletion errors are logged but not fatal
-// (the schedule may have already been deleted).
+// Returns State=KILLED on success. DeleteTrigger errors are logged but non-fatal
+// (the trigger may have already been removed).
 func (r *cronTrigger) Kill(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
 	log := r.Log.WithValues("triggerRun", k8stypes.NamespacedName{
 		Namespace: triggerRun.Namespace,
 		Name:      triggerRun.Name,
 	})
 	wid := generateWorkflowID(triggerRun)
-	scheduleID := wid + "-schedule"
-	if err := r.WorkflowClient.DeleteSchedule(ctx, scheduleID); err != nil {
-		log.Error(err, "failed to delete schedule (may already be deleted)", "scheduleID", scheduleID)
+	if err := r.WorkflowClient.DeleteTrigger(ctx, wid); err != nil {
+		log.Error(err, "failed to delete trigger (may already be deleted)", "workflowID", wid)
 	}
 	domain := r.WorkflowClient.GetDomain()
 	return killWorkflow(ctx, triggerRun, log, r.WorkflowClient, domain)

@@ -369,24 +369,27 @@ func (c *TemporalClient) GetDecisionTaskCompletedEventType() string {
 	return temporalEnumsV1.EVENT_TYPE_WORKFLOW_TASK_COMPLETED.String()
 }
 
-// PauseSchedule pauses a Temporal schedule by schedule ID
-func (c *TemporalClient) PauseSchedule(ctx context.Context, scheduleID string) error {
+// PauseTrigger pauses the Temporal schedule associated with the given workflow ID.
+func (c *TemporalClient) PauseTrigger(ctx context.Context, workflowID string) error {
+	scheduleID := workflowID + "-schedule"
 	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
 	return handle.Pause(ctx, temporalClient.SchedulePauseOptions{
 		Note: "paused by michelangelo",
 	})
 }
 
-// UnpauseSchedule unpauses a Temporal schedule by schedule ID
-func (c *TemporalClient) UnpauseSchedule(ctx context.Context, scheduleID string) error {
+// UnpauseTrigger resumes the Temporal schedule associated with the given workflow ID.
+func (c *TemporalClient) UnpauseTrigger(ctx context.Context, workflowID string) error {
+	scheduleID := workflowID + "-schedule"
 	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
 	return handle.Unpause(ctx, temporalClient.ScheduleUnpauseOptions{
 		Note: "unpaused by michelangelo",
 	})
 }
 
-// DeleteSchedule deletes a Temporal schedule by schedule ID
-func (c *TemporalClient) DeleteSchedule(ctx context.Context, scheduleID string) error {
+// DeleteTrigger deletes the Temporal schedule associated with the given workflow ID.
+func (c *TemporalClient) DeleteTrigger(ctx context.Context, workflowID string) error {
+	scheduleID := workflowID + "-schedule"
 	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
 	return handle.Delete(ctx)
 }

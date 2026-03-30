@@ -227,44 +227,44 @@ func (mr *MockWorkflowClientMockRecorder) TerminateWorkflow(ctx, workflowID, run
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TerminateWorkflow", reflect.TypeOf((*MockWorkflowClient)(nil).TerminateWorkflow), ctx, workflowID, runID, reason)
 }
 
-// PauseSchedule mocks base method.
-func (m *MockWorkflowClient) PauseSchedule(ctx context.Context, scheduleID string) error {
+// PauseTrigger mocks base method.
+func (m *MockWorkflowClient) PauseTrigger(ctx context.Context, workflowID string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PauseSchedule", ctx, scheduleID)
+	ret := m.ctrl.Call(m, "PauseTrigger", ctx, workflowID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// PauseSchedule indicates an expected call of PauseSchedule.
-func (mr *MockWorkflowClientMockRecorder) PauseSchedule(ctx, scheduleID interface{}) *gomock.Call {
+// PauseTrigger indicates an expected call of PauseTrigger.
+func (mr *MockWorkflowClientMockRecorder) PauseTrigger(ctx, workflowID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PauseSchedule", reflect.TypeOf((*MockWorkflowClient)(nil).PauseSchedule), ctx, scheduleID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PauseTrigger", reflect.TypeOf((*MockWorkflowClient)(nil).PauseTrigger), ctx, workflowID)
 }
 
-// UnpauseSchedule mocks base method.
-func (m *MockWorkflowClient) UnpauseSchedule(ctx context.Context, scheduleID string) error {
+// UnpauseTrigger mocks base method.
+func (m *MockWorkflowClient) UnpauseTrigger(ctx context.Context, workflowID string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UnpauseSchedule", ctx, scheduleID)
+	ret := m.ctrl.Call(m, "UnpauseTrigger", ctx, workflowID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// UnpauseSchedule indicates an expected call of UnpauseSchedule.
-func (mr *MockWorkflowClientMockRecorder) UnpauseSchedule(ctx, scheduleID interface{}) *gomock.Call {
+// UnpauseTrigger indicates an expected call of UnpauseTrigger.
+func (mr *MockWorkflowClientMockRecorder) UnpauseTrigger(ctx, workflowID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnpauseSchedule", reflect.TypeOf((*MockWorkflowClient)(nil).UnpauseSchedule), ctx, scheduleID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnpauseTrigger", reflect.TypeOf((*MockWorkflowClient)(nil).UnpauseTrigger), ctx, workflowID)
 }
 
-// DeleteSchedule mocks base method.
-func (m *MockWorkflowClient) DeleteSchedule(ctx context.Context, scheduleID string) error {
+// DeleteTrigger mocks base method.
+func (m *MockWorkflowClient) DeleteTrigger(ctx context.Context, workflowID string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteSchedule", ctx, scheduleID)
+	ret := m.ctrl.Call(m, "DeleteTrigger", ctx, workflowID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// DeleteSchedule indicates an expected call of DeleteSchedule.
-func (mr *MockWorkflowClientMockRecorder) DeleteSchedule(ctx, scheduleID interface{}) *gomock.Call {
+// DeleteTrigger indicates an expected call of DeleteTrigger.
+func (mr *MockWorkflowClientMockRecorder) DeleteTrigger(ctx, workflowID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSchedule", reflect.TypeOf((*MockWorkflowClient)(nil).DeleteSchedule), ctx, scheduleID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTrigger", reflect.TypeOf((*MockWorkflowClient)(nil).DeleteTrigger), ctx, workflowID)
 }
