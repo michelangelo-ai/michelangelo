@@ -273,6 +273,100 @@ func TestGetStatus(t *testing.T) {
 	}
 }
 
+func TestPause(t *testing.T) {
+	tests := []struct {
+		name                   string
+		workflowClientProvider func(t *testing.T) clientInterface.WorkflowClient
+		expectedStatus         v2pb.TriggerRunStatus
+		expectError            bool
+	}{
+		{
+			name: "pause succeeded",
+			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
+				ctrl := gomock.NewController(t)
+				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+				mockClient.EXPECT().GetDomain().Return("test-domain")
+				mockClient.EXPECT().PauseTrigger(gomock.Any(), gomock.Any()).Return(nil)
+				return mockClient
+			},
+			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_PAUSED},
+			expectError:    false,
+		},
+		{
+			name: "pause failed",
+			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
+				ctrl := gomock.NewController(t)
+				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+				mockClient.EXPECT().GetDomain().Return("test-domain")
+				mockClient.EXPECT().PauseTrigger(gomock.Any(), gomock.Any()).Return(fmt.Errorf("failed to pause"))
+				return mockClient
+			},
+			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_FAILED, ErrorMessage: "failed to pause"},
+			expectError:    true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ct := setupCronTrigger(t, test.workflowClientProvider(t))
+			trStatus, err := ct.Pause(context.Background(), _triggerRun.DeepCopy())
+			if test.expectError {
+				assert.Error(t, err, test.name)
+			} else {
+				assert.NoError(t, err, test.name)
+			}
+			assert.Equal(t, test.expectedStatus, trStatus, test.name)
+		})
+	}
+}
+
+func TestResume(t *testing.T) {
+	tests := []struct {
+		name                   string
+		workflowClientProvider func(t *testing.T) clientInterface.WorkflowClient
+		expectedStatus         v2pb.TriggerRunStatus
+		expectError            bool
+	}{
+		{
+			name: "resume succeeded",
+			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
+				ctrl := gomock.NewController(t)
+				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+				mockClient.EXPECT().GetDomain().Return("test-domain")
+				mockClient.EXPECT().UnpauseTrigger(gomock.Any(), gomock.Any()).Return(nil)
+				return mockClient
+			},
+			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
+			expectError:    false,
+		},
+		{
+			name: "resume failed",
+			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
+				ctrl := gomock.NewController(t)
+				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+				mockClient.EXPECT().GetDomain().Return("test-domain")
+				mockClient.EXPECT().UnpauseTrigger(gomock.Any(), gomock.Any()).Return(fmt.Errorf("failed to resume"))
+				return mockClient
+			},
+			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_FAILED, ErrorMessage: "failed to resume"},
+			expectError:    true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ct := setupCronTrigger(t, test.workflowClientProvider(t))
+			trStatus, err := ct.Resume(context.Background(), _triggerRun.DeepCopy())
+			if test.expectError {
+				assert.Error(t, err, test.name)
+			} else {
+				assert.NoError(t, err, test.name)
+			}
+			assert.Equal(t, test.expectedStatus, trStatus, test.name)
+		})
+	}
+}
+
 func setupCronTrigger(t *testing.T, workflowClient clientInterface.WorkflowClient) *cronTrigger {
 	trigger := NewCronTrigger(
 		zapr.NewLogger(zap.NewNop()),
