@@ -2,7 +2,6 @@
 
 import argparse
 import base64
-import os
 import shutil
 import subprocess
 import sys
