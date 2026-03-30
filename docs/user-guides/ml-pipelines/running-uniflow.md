@@ -155,7 +155,6 @@ kubectl delete pod minio
 kubectl apply -f michelangelo/cli/sandbox/resources/minio.yaml
 
 # Test docker pull
-docker login ghcr.io -u [your-id] -p [CR_PAT]
 docker pull ghcr.io/michelangelo-ai/worker:latest
 
 # Debug container starting issues
