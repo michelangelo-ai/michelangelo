@@ -19,7 +19,6 @@ class CreateFunctionTest(TestCase):
     @patch("michelangelo.cli.sandbox.sandbox._assert_command")
     @patch("michelangelo.cli.sandbox.sandbox._kube_create")
     @patch("michelangelo.cli.sandbox.sandbox._exec")
-    @patch("michelangelo.cli.sandbox.sandbox.os.environ.get")
     @patch("michelangelo.cli.sandbox.sandbox.tempfile.NamedTemporaryFile")
     @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_secrets")
     @patch("michelangelo.cli.sandbox.sandbox._apply_compute_cluster_rbac")
@@ -32,7 +31,6 @@ class CreateFunctionTest(TestCase):
         mock_apply_rbac,
         mock_create_secrets,
         mock_tempfile,
-        mock_env_get,
         mock_exec,
         mock_kube_create,
         mock_assert_command,
@@ -52,8 +50,7 @@ class CreateFunctionTest(TestCase):
             compute_cluster_name="test-compute-cluster",
         )
 
-        # Mock environment variable and dependencies
-        mock_env_get.return_value = "test-token"
+        # Mock dependencies
         mock_check_output.return_value = (
             b"kuberay\thttps://ray-project.github.io/kuberay-helm\n"
         )
@@ -80,7 +77,6 @@ class CreateFunctionTest(TestCase):
     @patch("michelangelo.cli.sandbox.sandbox._assert_command")
     @patch("michelangelo.cli.sandbox.sandbox._kube_create")
     @patch("michelangelo.cli.sandbox.sandbox._exec")
-    @patch("michelangelo.cli.sandbox.sandbox.os.environ.get")
     @patch("michelangelo.cli.sandbox.sandbox.tempfile.NamedTemporaryFile")
     @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_secrets")
     @patch("michelangelo.cli.sandbox.sandbox._apply_compute_cluster_rbac")
@@ -93,7 +89,6 @@ class CreateFunctionTest(TestCase):
         mock_apply_rbac,
         mock_create_secrets,
         mock_tempfile,
-        mock_env_get,
         mock_exec,
         mock_kube_create,
         mock_assert_command,
@@ -113,8 +108,7 @@ class CreateFunctionTest(TestCase):
             compute_cluster_name="test-compute-cluster",
         )
 
-        # Mock environment variable and dependencies
-        mock_env_get.return_value = "test-token"
+        # Mock dependencies
         mock_check_output.return_value = (
             b"kuberay\thttps://ray-project.github.io/kuberay-helm\n"
         )

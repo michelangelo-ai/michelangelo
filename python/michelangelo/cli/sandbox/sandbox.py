@@ -2,8 +2,6 @@
 
 import argparse
 import base64
-import json
-import os
 import shutil
 import subprocess
 import sys
@@ -166,58 +164,6 @@ def _create(ns: argparse.Namespace):
 
     for p in ports:
         args += ["-p", f"{p}@agent:0"]
-
-    # TODO: andrii: Remove the following block once Michelangelo is publicly accessible.
-    # BLOCK START ----------------------------------------------------------------------
-    # Handle the GitHub Container Registry authentication.
-    env_cr_pat = "CR_PAT"
-    cr_pat = os.environ.get(env_cr_pat)
-    if not cr_pat:
-        _err_exit(
-            """
-CR_PAT environment variable is not set. To pull Michelangelo's containers
-from the GitHub Container Registry, please create a GitHub personal access
-token (classic) with the "read:packages" scope. Then, save this token to the
-CR_PAT environment variable, e.g.: `export CR_PAT=ghp_...`.
-
-For a detailed guide, check:
-https://docs.github.com/en/packages/working-with-a-github-packages-registry/
-working-with-the-container-registry#authenticating-with-a-personal-access-token-classic.
-
-Be aware that CR_PAT environment variable is required while Michelangelo is NOT
-publicly accessible. Once we become public, the token will no longer be
-necessary, and this assertion will be removed.
-"""
-        )
-
-    # Get GitHub username from environment variable
-    env_github_username = "GITHUB_USERNAME"
-    github_username = os.environ.get(env_github_username, "USERNAME")
-
-    # Create a temporary registry file with the GitHub Container Registry
-    # authentication.
-    registry = {
-        "mirrors": {
-            "ghcr.io": {
-                "endpoint": ["https://ghcr.io"],
-            },
-        },
-        "configs": {
-            "ghcr.io": {
-                "auth": {
-                    "username": github_username,
-                    "password": cr_pat,
-                },
-            },
-        },
-    }
-
-    with tempfile.NamedTemporaryFile(mode="wt", delete=False) as registry_file:
-        json.dump(registry, registry_file)
-        registry_file.flush()
-        args += ["--registry-config", registry_file.name]
-
-    # BLOCK END ----------------------------------------------------------------------
 
     _exec(*args)
 

@@ -58,30 +58,6 @@ brew install kubectl
 brew install k3d
 ```
 
-### GitHub Personal Access Token
-
-Michelangelo is not publicly available yet, so we keep Michelangelo's Docker containers in the private GitHub Container
-Registry, which requires a [GitHub personal access token (classic)](https://github.com/settings/tokens) for authentication.
-
-To enable authentication for the sandbox, please create a GitHub personal access token (classic) with the
-"read:packages" scope and save it to the `CR_PAT` environment variable. For example, you can add the following line to
-your shell configuration file (such as `.bashrc` or `.zshrc`, depending on the shell you use):
-
-```bash
-$ export CR_PAT=your_token_...
-$ echo 'export CR_PAT=your_token_...' >> ~/.zshrc
-$ source ~/.zshrc
-
-# login before running ma sandbox so that MA docker image can be pulled
-$ docker login ghcr.io -u [your github id] -p [CR_PAT]
-```
-
-For a more detailed guide, please refer
-to https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-with-a-personal-access-token-classic.
-
-> Be aware that `CR_PAT` environment variable is required while Michelangelo is NOT publicly accessible. Once we become
-> public, the token will no longer be necessary, and this section will be removed.
-
 ### Python Environment
 
 This project requires Python version 3.9 or higher to run certain scripts and tools.
@@ -279,7 +255,6 @@ kubectl delete pod minio
 kubectl apply -f michelangelo/cli/sandbox/resources/minio.yaml
 
 # Test docker pull
-docker login ghcr.io -u [your id] -p [CR_PAT]
 docker pull ghcr.io/michelangelo-ai/worker:sha-6161efe@sha256:aae98f00b82d744e453432a9008027fc74d44b78cc1731cb995c7ee654a8225d
 
 # Debugging container starting issue

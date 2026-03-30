@@ -33,8 +33,6 @@ It covers sandbox creation, MySQL schema verification, CR creation, MySQL sync v
 
 #### Delete Existing Sandbox
 ```bash
-export CR_PAT="placeholder"
-export GITHUB_USERNAME="hkriplani"
 python3 python/michelangelo/cli/sandbox/sandbox.py delete
 ```
 **Output**:
@@ -57,11 +55,6 @@ pod/michelangelo-apiserver created
 pod/michelangelo-controllermgr created
 NAME: kuberay-operator ... STATUS: deployed
 ```
-
-> **Note**: `CR_PAT` is required for pulling from ghcr.io. Since images were cached locally, they were imported into the k3d cluster manually via:
-> ```bash
-> docker save <image> | ctr -n k8s.io images import -
-> ```
 
 #### Verify All Pods Running
 ```bash
