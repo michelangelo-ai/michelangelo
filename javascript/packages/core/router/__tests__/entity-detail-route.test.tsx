@@ -18,6 +18,7 @@ import {
 } from '../__fixtures__/phase-config-factory';
 import { EntityDetailRoute } from '../entity-detail-route';
 
+import type { ActionComponentProps } from '#core/components/actions/types';
 import type {
   CustomDetailPageConfig,
   TableDetailPageConfig,
@@ -713,5 +714,70 @@ describe('EntityDetailRoute', () => {
       'href',
       '/myproject/train/runs/run-2?page=test-trigger-123'
     );
+  });
+
+  test('renders entity-level actions in the detail page header', async () => {
+    const user = userEvent.setup();
+    const RunDialog = ({ isOpen, onClose }: ActionComponentProps) =>
+      isOpen ? (
+        <div role="dialog">
+          Run form <button onClick={onClose}>Close</button>
+        </div>
+      ) : null;
+
+    const testPhases = {
+      train: buildPhase({
+        id: 'train',
+        entities: [
+          buildEntity({
+            actions: [
+              {
+                display: { label: 'Run', icon: 'playerPlay' },
+                component: RunDialog,
+                hierarchy: 'primary',
+              },
+            ],
+            views: [
+              {
+                type: 'detail',
+                metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
+                pages: [
+                  {
+                    id: 'execution',
+                    label: 'Execution',
+                    ...buildExecutionSchema(),
+                  },
+                ],
+              },
+            ],
+          }),
+        ],
+      }),
+    };
+
+    const mockRequest = vi.fn().mockResolvedValue({
+      pipelineRun: {
+        metadata: { creationTimestamp: { seconds: 1640995200 } },
+        status: { state: 'SUCCESS', steps: [] },
+      },
+    });
+
+    render(
+      <EntityDetailRoute phases={testPhases} />,
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({ location: '/myproject/train/runs/run-123' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    const runButton = await screen.findByRole('button', { name: 'Run' });
+    expect(runButton).toBeInTheDocument();
+
+    await user.click(runButton);
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Run form');
+
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

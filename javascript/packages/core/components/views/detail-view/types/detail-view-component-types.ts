@@ -1,3 +1,5 @@
+import type { ActionConfig, Data } from '#core/components/actions/types';
+
 export interface DetailViewProps extends DetailHeaderBaseProps {
   /**
    * Content displayed at the bottom of the header container
@@ -18,6 +20,10 @@ export interface DetailHeaderBaseProps {
    */
   title?: string;
   onGoBack?: () => void;
+
+  actions?: ActionConfig[];
+  record?: Data;
+  loading?: boolean;
 }
 
 export interface DetailViewTab {

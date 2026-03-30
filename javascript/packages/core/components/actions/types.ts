@@ -20,6 +20,15 @@ export type ActionConfigBase = {
    * @see {@link ActionTriggerDisplay}
    */
   display: ActionTriggerDisplay;
+
+  /**
+   * Visual hierarchy of the action's trigger button
+   *
+   * @note Actions without an explicit hierarchy default to tertiary (overflow menu).
+   *
+   * @see {@link ActionHierarchy}
+   */
+  hierarchy?: ActionHierarchy;
 };
 
 /**
@@ -31,6 +40,12 @@ type ActionTriggerDisplay = {
   label: string;
   icon?: string;
 };
+
+export enum ActionHierarchy {
+  primary = 'primary',
+  secondary = 'secondary',
+  tertiary = 'tertiary',
+}
 
 export type Data = Record<string, unknown>;
 
