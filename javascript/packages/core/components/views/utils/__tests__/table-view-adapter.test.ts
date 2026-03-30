@@ -77,6 +77,20 @@ describe('adaptTableConfigToTableProps', () => {
     expect(result.loading).toBe(false);
   });
 
+  it('returns undefined actions when config has no actions', () => {
+    const result = adaptTableConfigToTableProps(buildTableConfig(), mockRuntimeProps);
+    expect(result.actions).toBeUndefined();
+  });
+
+  it('returns a render function when actions are configured', () => {
+    // Full actions interaction is tested at the PhaseEntityView level.
+    const tableConfig = buildTableConfig({
+      actions: [{ display: { label: 'Delete' }, component: () => null }],
+    });
+    const result = adaptTableConfigToTableProps(tableConfig, mockRuntimeProps);
+    expect(typeof result.actions).toBe('function');
+  });
+
   describe('should correctly map disable flags to actionBar enables', () => {
     const testCases = [
       {
