@@ -50,8 +50,8 @@ describe('PhaseEntityView', () => {
       ])
     );
 
-    expect(screen.getByRole('tab', { name: 'pipelines' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'models' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Pipelines' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Models' })).toBeInTheDocument();
   });
 
   it('renders data fetched from the API in the table', async () => {
