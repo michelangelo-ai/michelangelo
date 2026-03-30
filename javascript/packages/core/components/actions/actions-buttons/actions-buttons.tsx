@@ -16,7 +16,7 @@ type ActionsButtonsProps<T extends Data = Data> = {
 };
 
 /**
- * Renders action buttons in the detail page header, partitioned by hierarchy.
+ * Renders action buttons partitioned by hierarchy level and manages the selected action.
  *
  * Primary actions render as a fixed-width filled button, secondary as pill-shaped
  * buttons, and tertiary actions collapse into an overflow popover.
