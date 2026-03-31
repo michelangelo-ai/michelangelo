@@ -571,7 +571,10 @@ class PipelineCreateTest(TestCase):
         self.assertIn("intervalSchedule", result["trigger-2"])
 
     def test_validation_missing_both_batch_policy_and_max_concurrency(self):
-        """Test validation fails when neither batchPolicy nor maxConcurrency is present."""
+        """Test validation fails when neither batchPolicy nor maxConcurrency is present.
+
+        Ensures proper validation error when trigger lacks execution control.
+        """
         trigger_map = {
             "invalid-trigger": {
                 "cronSchedule": {"cron": "0 0 * * *"},
@@ -633,4 +636,3 @@ class PipelineCreateTest(TestCase):
         self.assertIn("maxConcurrency", result["dual-control"])
         self.assertEqual(result["dual-control"]["batchPolicy"]["batchSize"], 5)
         self.assertEqual(result["dual-control"]["maxConcurrency"], 3)
-
