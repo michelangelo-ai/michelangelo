@@ -26,6 +26,16 @@ const rule = {
         '',
       ].join('\n'),
 
+      noModuleScopeWrapperHelper: [
+        "'{{ name }}' wraps buildWrapper() at module scope.",
+        'Move the buildWrapper() call inline into each test so every test is self-contained:',
+        '',
+        '  it("renders", () => {',
+        '    render(<Foo />, buildWrapper([getBaseProviderWrapper()]));',
+        '  });',
+        '',
+      ].join('\n'),
+
       noModuleScopeSetupConst: [
         "'{{ name }}' is declared at module scope but looks like test setup (props, options, config).",
         'Inline it inside each test so every test is self-contained:',
@@ -66,6 +76,21 @@ const rule = {
       return false;
     }
 
+    function bodyCallsBuildWrapper(node) {
+      if (!node) return false;
+      if (callsBuildWrapper(node)) return true;
+      if (node.type === 'BlockStatement') {
+        return node.body.some(bodyCallsBuildWrapper);
+      }
+      if (node.type === 'ReturnStatement') {
+        return bodyCallsBuildWrapper(node.argument);
+      }
+      if (node.type === 'ExpressionStatement') {
+        return bodyCallsBuildWrapper(node.expression);
+      }
+      return false;
+    }
+
     /**
      * Heuristic: does this initializer look like test setup data?
      * Matches object literals, array literals, and JSX — the common shapes
@@ -82,6 +107,18 @@ const rule = {
     }
 
     return {
+      FunctionDeclaration(node) {
+        if (!isModuleScope(node)) return;
+        const name = node.id?.name ?? '<anonymous>';
+        if (bodyCallsBuildWrapper(node.body)) {
+          context.report({
+            node,
+            messageId: 'noModuleScopeWrapperHelper',
+            data: { name },
+          });
+        }
+      },
+
       VariableDeclaration(node) {
         if (!isModuleScope(node)) return;
 
@@ -93,6 +130,19 @@ const rule = {
             context.report({
               node: declarator,
               messageId: 'noModuleScopeWrapper',
+            });
+            continue;
+          }
+
+          if (
+            init &&
+            (init.type === 'ArrowFunctionExpression' || init.type === 'FunctionExpression') &&
+            bodyCallsBuildWrapper(init.body)
+          ) {
+            context.report({
+              node: declarator,
+              messageId: 'noModuleScopeWrapperHelper',
+              data: { name },
             });
             continue;
           }

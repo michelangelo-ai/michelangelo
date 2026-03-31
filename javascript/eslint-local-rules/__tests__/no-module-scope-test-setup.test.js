@@ -54,6 +54,14 @@ tester.run('no-module-scope-test-setup', rule, {
       name: 'import statement at module scope',
       code: `import { render } from '@testing-library/react';`,
     },
+    {
+      name: 'module-scope function unrelated to buildWrapper',
+      code: `function formatLabel(name) { return name.toUpperCase(); }`,
+    },
+    {
+      name: 'buildWrapper inside a function called inside a test',
+      code: `it('renders', () => { const w = buildWrapper([getBaseProviderWrapper()]); render(el, w); });`,
+    },
   ],
 
   invalid: [
@@ -89,6 +97,21 @@ tester.run('no-module-scope-test-setup', rule, {
         { messageId: 'noModuleScopeWrapper' },
         { messageId: 'noModuleScopeSetupConst', data: { name: 'options' } },
       ],
+    },
+    {
+      name: 'function declaration wrapping buildWrapper at module scope',
+      code: `function buildTestWrapper(req) { return buildWrapper([getBaseProviderWrapper(), getServiceProviderWrapper({ request: req })]); }`,
+      errors: [{ messageId: 'noModuleScopeWrapperHelper', data: { name: 'buildTestWrapper' } }],
+    },
+    {
+      name: 'arrow function variable wrapping buildWrapper at module scope',
+      code: `const buildTestWrapper = (req) => buildWrapper([getBaseProviderWrapper(), getServiceProviderWrapper({ request: req })]);`,
+      errors: [{ messageId: 'noModuleScopeWrapperHelper', data: { name: 'buildTestWrapper' } }],
+    },
+    {
+      name: 'block-body arrow function variable wrapping buildWrapper at module scope',
+      code: `const buildTestWrapper = (req) => { return buildWrapper([getBaseProviderWrapper()]); };`,
+      errors: [{ messageId: 'noModuleScopeWrapperHelper', data: { name: 'buildTestWrapper' } }],
     },
   ],
 });
