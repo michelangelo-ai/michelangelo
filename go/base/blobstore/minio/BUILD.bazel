@@ -20,7 +20,13 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["config_test.go"],
+    srcs = [
+        "client_test.go",
+        "config_test.go",
+    ],
     embed = [":go_default_library"],
-    deps = ["@org_uber_go_config//:go_default_library"],
+    deps = [
+        "//go/base/blobstore:go_default_library",
+        "@org_uber_go_config//:go_default_library",
+    ],
 )
