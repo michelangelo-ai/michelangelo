@@ -1,5 +1,6 @@
 import { forwardRef } from 'react';
 import { ARTWORK_SIZES, ListItemLabel, MenuAdapter } from 'baseui/list';
+import { ACCESSIBILITY_TYPE, PLACEMENT, StatefulTooltip } from 'baseui/tooltip';
 
 import { Icon } from '#core/components/icon/icon';
 
@@ -19,7 +20,10 @@ type ActionMenuItemProps = {
 export const ActionMenuItem = forwardRef<HTMLLIElement, ActionMenuItemProps>((props, ref) => {
   const { item: action, record, onSelectAction, ...baseMenuProps } = props;
 
-  return (
+  const disabledRule = action.disabled?.find((rule) => rule.condition(record));
+  const isDisabled = !!disabledRule;
+
+  const menuItem = (
     <MenuAdapter
       // MenuAdapter is a thin wrapper around BaseWeb's list components that adds
       // support for artwork & handles interaction states & accessibility. The props
@@ -34,10 +38,27 @@ export const ActionMenuItem = forwardRef<HTMLLIElement, ActionMenuItemProps>((pr
       }
       artworkSize={ARTWORK_SIZES.MEDIUM}
       overrides={{ Root: { style: { height: '44px' } } }}
-      onClick={() => onSelectAction({ component: action.component, record })}
+      $disabled={isDisabled}
+      onClick={
+        isDisabled ? undefined : () => onSelectAction({ component: action.component, record })
+      }
     >
       <ListItemLabel>{action.display.label}</ListItemLabel>
     </MenuAdapter>
+  );
+
+  if (!isDisabled || !disabledRule.message) return menuItem;
+
+  return (
+    <StatefulTooltip
+      content={disabledRule.message}
+      accessibilityType={ACCESSIBILITY_TYPE.tooltip}
+      showArrow
+      placement={PLACEMENT.top}
+    >
+      {/* Wrapper div required for BaseUI tooltip event delegation */}
+      <div>{menuItem}</div>
+    </StatefulTooltip>
   );
 });
 
