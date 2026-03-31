@@ -242,6 +242,8 @@ A: Yes. Michelangelo enforces:
 - Audit logs for all operations
 - Compliance with SOC 2, GDPR, HIPAA (depending on deployment)
 
+See the [Compliance Guide](../operator-guides/compliance.md) for configuration steps specific to each framework.
+
 **Q: Can I use Michelangelo for regulated industries (healthcare, finance)?**
 A: Yes, with proper configuration. Michelangelo supports:
 - Data residency requirements (region-specific storage)
