@@ -1,170 +1,91 @@
 # Sandbox Setup
 
+Set up a local Michelangelo environment on your machine. This gives you a fully functional cluster with the API server, controller manager, workflow engine, object storage, and all supporting services.
+
+**Time estimate**: ~20 minutes (assuming prerequisites are installed).
+
 ## Prerequisites
 
-### Required Software
+Before you begin, make sure you have the following installed. Run each verification command to confirm:
 
-This guide assumes you have the following software installed and configured on your system. Please follow the instructions below for each prerequisite.
+| Tool | Install | Verify |
+|------|---------|--------|
+| **Docker** | [Get Docker](https://docs.docker.com/get-started/get-docker) or [Colima](https://github.com/abiosoft/colima) | `docker --version` |
+| **kubectl** | `brew install kubectl` or [official guide](https://kubernetes.io/docs/tasks/tools/#kubectl) | `kubectl version --client` |
+| **k3d** | `brew install k3d` | `k3d --version` |
+| **Python 3.11ru+** | [python.org](https://www.python.org/downloads/) | `python3 --version` |
+| **Poetry** | `curl -sSL https://install.python-poetry.org \| python3 -` | `poetry --version` |
 
-* [Docker](https://docs.docker.com/get-started/get-docker)
-* [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl)
-* [k3d](https://k3d.io)
+### Configure `host.docker.internal`
 
-#### 1. Docker
+Docker containers need to communicate with services on your host machine. Verify this hostname resolves correctly:
 
-Please follow the official Docker installation guide for your operating system: [Official Docker Documentation](https://docs.docker.com/get-started/get-docker)
+1. Open your hosts file: `sudo nano /etc/hosts`
+2. Look for this line:
+   ```
+   127.0.0.1 host.docker.internal
+   ```
+3. If missing, add it to the end of the file and save.
 
-Alternatively, we can use [Colima](https://github.com/abiosoft/colima) for starting the docker runtime.
+### Install Python dependencies
 
-**Important Configuration: Accessing Your Host from Docker Containers (`host.docker.internal`)**
-
-Docker often requires containers to communicate with services running directly on your host machine (your laptop or development server). To facilitate this, Docker provides a special hostname: `host.docker.internal`. This name resolves to your host's internal IP address (typically `127.0.0.1`).
-
-**Verification and Configuration:**
-
-1.  **Open your system's `hosts` file**: Open your terminal and run: `sudo nano /etc/hosts` (or use your preferred text editor).
-
-2.  **Check for the entry:** Look for a line similar to:
-
-    ```
-    127.0.0.1 host.docker.internal
-    ```
-
-3.  **Add the entry if missing:** If you don't find this line, add it to the end of the file.
-
-**Why is this important?**
-
-Ensuring this entry exists allows containers managed by Docker (including the Kubernetes nodes created by `k3d`) to easily connect back to services running on your local development machine using the consistent `host.docker.internal` address.
-
-#### 2. kubectl
-
-`kubectl` is the command-line tool for interacting with Kubernetes clusters. You will use it to manage and inspect your `k3d` cluster.
-
-**Installation:**
-
-Follow the official Kubernetes documentation for installing `kubectl`: [Install kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl)
+From the repository root, install the Michelangelo Python packages:
 
 ```bash
-brew install kubectl
-```
-
-#### 3. k3d
-
-`k3d` is a lightweight tool to run local Kubernetes clusters in Docker. It simplifies the process of setting up a Kubernetes environment for development and testing.
-
-**Installation:**
-
-```bash
-brew install k3d
-```
-
-### Python Environment
-
-This project requires Python version 3.9 or higher to run certain scripts and tools.
-
-**Installation:**
-
-Please download and install Python 3.9+ from the [official Python downloads page](https://www.python.org/downloads/).
-
-**Verification:**
-
-Open your terminal or command prompt and verify the installed Python version. The command might vary slightly depending on your system:
-
-```bash
-python3 --version
-# or
-python --version
-```
-The output should display a version number that starts with 3.9 or a higher minor or patch version (e.g., Python 3.9.x, Python 3.10.y).
-
-#### Poetry - Python Dependency Management
-
-Poetry is used to manage the project's Python dependencies, ensuring that you have the correct versions of all necessary libraries for development and running Python-based tools.
-
-**Installation:**
-
-Follow the official Poetry installation guide for your operating system: [Poetry Installation](https://python-poetry.org/docs/#installing-with-the-official-installer). Michelangelo recommends running the official installer script:
-
-```bash
-curl -sSL https://install.python-poetry.org | python3 -
-```
-
-Make sure to follow the instructions provided during the installation process, which might include adding Poetry's bin directory (e.g., ~/.local/bin on Linux/macOS) to your system's PATH environment variable so you can run the poetry command globally.
-
-**Verification:**
-
-Open a new terminal or command prompt and check the installed Poetry version:
-
-```bash
-poetry --version
-```
-
-This command should output the installed Poetry version number.
-
-**Install dependencies**
-
-```bash
+cd <repo-root>/python
 poetry install
 ```
 
-This command should install all the dependencies from pyproject.toml.
+> **Tip**: Replace `<repo-root>` with the path where you cloned the Michelangelo repository (e.g., `~/michelangelo`).
+
+---
+
+## Quick start
+
+The fastest way to get a working Michelangelo environment:
 
 ```bash
-cd $REPO_ROOT/python
+# 1. Install dependencies (from the repository root)
+cd <repo-root>/python
 poetry install
+source .venv/bin/activate
+
+# 2. Create the sandbox (~10-15 min on first run)
+ma sandbox create
+
+# 3. Verify everything works by running the demo pipeline
+ma sandbox demo pipeline
 ```
 
-if you see the following error when setting up sandbox
+When `ma sandbox create` completes successfully, you should see all Michelangelo services starting up in your K3d cluster. You can verify with:
 
-```python
-Traceback (most recent call last):
-  File "<string>", line 1, in <module>
-  File "/Users/frank.chen.cst/.pyenv/versions/3.9.22/lib/python3.9/importlib/__init__.py", line 127, in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-  File "<frozen importlib._bootstrap>", line 1030, in _gcd_import
-  File "<frozen importlib._bootstrap>", line 1007, in _find_and_load
-  File "<frozen importlib._bootstrap>", line 986, in _find_and_load_unlocked
-  File "<frozen importlib._bootstrap>", line 680, in _load_unlocked
-  File "<frozen importlib._bootstrap_external>", line 850, in exec_module
-  File "<frozen importlib._bootstrap>", line 228, in _call_with_frames_removed
-  File "/Users/frank.chen.cst/Desktop/michelangelo/python/michelangelo/cli/cli.py", line 5, in <module>
-    from michelangelo.cli.ma import ma
-  File "/Users/frank.chen.cst/Desktop/michelangelo/python/michelangelo/cli/ma/ma.py", line 39, in <module>
-    from grpc_reflection.v1alpha import reflection_pb2, reflection_pb2_grpc
-ModuleNotFoundError: No module named 'grpc_reflection'
+```bash
+kubectl get pods
 ```
 
-## Running Michelangelo's API sandbox environment
+All pods should show `Running` status. See [Sandbox Ports and Endpoints](./ma-sandbox-ports-and-endpoints.md) for the full list of services and their URLs.
 
-The `ma sandbox` command manages a local Kubernetes development environment using K3d. It sets up the API server, controller manager, workflow engine, object storage, and all supporting services.
+---
 
-> For a quick command reference, see the [CLI Reference - Sandbox Commands](../user-guides/cli.md#sandbox-commands).
+## Sandbox commands
 
-### Sandbox lifecycle
+The `ma sandbox` command manages your local Kubernetes development environment.
 
-The typical sandbox workflow follows this pattern:
+> For a complete command reference, see the [CLI Reference - Sandbox Commands](../user-guides/cli.md#sandbox-commands).
+
+### Lifecycle
+
+The typical sandbox workflow:
 
 ```
 create → (develop) → stop → start → (develop) → delete
 ```
 
-1. **Create** a sandbox to set up the full environment
-2. **Develop** using the running cluster
-3. **Stop** when not actively developing (preserves state)
-4. **Start** to resume development
-5. **Delete** when the sandbox is no longer needed
-
-### Sandbox commands
-
-#### Create
-
-Create a K3d cluster with all Michelangelo services.
+### Create
 
 ```bash
 ma sandbox create [OPTIONS]
 ```
-
-**Options:**
 
 | Flag | Description | Default |
 |------|-------------|---------|
@@ -177,219 +98,189 @@ ma sandbox create [OPTIONS]
 **Examples:**
 
 ```bash
-# Create a full sandbox with all services (default: Cadence workflow engine)
+# Full sandbox with all services (default: Cadence workflow engine)
 ma sandbox create
 
-# Create sandbox with Temporal workflow engine
+# Sandbox with Temporal workflow engine
 ma sandbox create --workflow temporal
 
-# Create sandbox without UI, with a Ray compute cluster
+# Sandbox without UI, with a Ray compute cluster
 ma sandbox create --exclude ui --create-compute-cluster
-
-# Create sandbox excluding multiple services
-ma sandbox create --exclude apiserver --exclude ui
 ```
 
-#### Delete
+### Stop / Start
 
-Tear down the K3d cluster and remove all associated resources.
+Pause and resume your sandbox without losing state:
+
+```bash
+ma sandbox stop    # preserves state
+ma sandbox start   # resume where you left off
+```
+
+### Delete
+
+Tear down the cluster and remove all resources:
 
 ```bash
 ma sandbox delete
 ```
 
-#### Start / Stop
+### Demo
 
-Start or stop an existing sandbox cluster without destroying it. Stopping preserves the cluster state so you can resume later.
+Create pre-configured demo resources for testing:
 
 ```bash
-# Stop the sandbox (preserves state)
-ma sandbox stop
-
-# Start a stopped sandbox
-ma sandbox start
+ma sandbox demo pipeline    # registers and runs a sample pipeline
+ma sandbox demo inference   # sets up demo inference server
 ```
 
-#### Demo
+---
 
-Create pre-configured demo resources for quickly testing pipelines or inference.
+## Running your first workflow
+
+Once your sandbox is running, you can run Uniflow workflows locally or remotely.
+
+### Local execution
+
+Local execution runs workflows directly in your Python environment -- great for rapid development and debugging.
 
 ```bash
-# Create demo pipeline resources (registers a sample pipeline and runs it)
-ma sandbox demo pipeline
-
-# Create demo inference server resources
-ma sandbox demo inference
+cd <repo-root>/python
+poetry install --extras example
+PYTHONPATH=. poetry run python ./examples/bert_cola/bert_cola.py
 ```
 
-### Quick start
+> **Note**: Local execution doesn't support caching, retries, or resource constraints. Use remote execution for production-like behavior.
 
-The fastest way to get a working Michelangelo environment:
+### Remote execution
+
+Remote execution deploys workflows to your sandbox's Kubernetes cluster, with full caching, retries, and resource management.
+
+**Setup:**
+
+1. Build a Docker image with your workflow code:
+   ```bash
+   cd <repo-root>/python
+   docker build -t examples:latest -f ./examples/Dockerfile .
+   ```
+
+2. Import the image into your K3d cluster:
+   ```bash
+   k3d image import examples:latest -c michelangelo-sandbox
+   ```
+
+3. Set up MinIO storage (object storage for workflow artifacts):
+   - Open the MinIO Console at http://localhost:9090
+   - Log in with username `minioadmin` and password `minioadmin` (these are default sandbox credentials, not for production use)
+   - Click "Create Bucket" and create a bucket named `default`
+
+4. Set up the Cadence workflow domain (if using Cadence):
+   ```bash
+   brew install cadence-workflow
+   cadence --do default d re
+   ```
+
+5. Run your workflow:
+   ```bash
+   PYTHONPATH=. poetry run python ./examples/bert_cola/bert_cola.py \
+     remote-run \
+     --image docker.io/library/examples:latest \
+     --storage-url s3://default \
+     --yes
+   ```
+
+**Monitoring your workflow:**
+
+| Service | URL | What to check |
+|---------|-----|---------------|
+| Cadence Web UI | http://localhost:8088/domains/default/workflows | Workflow status and history |
+| MinIO Console | http://localhost:9090/browser/default | Stored artifacts and data |
+| Ray Dashboard | http://localhost:8265 | Ray task execution (requires port-forward, see below) |
+
+To access the Ray Dashboard for tasks running in the cluster:
+
+1. Find the Ray head service: `kubectl get svc | grep ray`
+2. Port-forward it: `kubectl port-forward svc/<ray-head-svc-name> 8265:8265 -n default`
+
+For more details on execution modes, see [Pipeline Running Modes](../user-guides/ml-pipelines/pipeline-running-modes.md).
+
+---
+
+## Troubleshooting
+
+### `ModuleNotFoundError: No module named 'grpc_reflection'`
+
+This error occurs when Python dependencies aren't fully installed. Fix it by reinstalling from the `python/` directory:
 
 ```bash
-# 1. Install dependencies
-cd $REPO_ROOT/python
+cd <repo-root>/python
 poetry install
-
-# 2. Create the sandbox
-ma sandbox create
-
-# 3. Create demo resources to verify everything works
-ma sandbox demo pipeline
 ```
 
-### Debugging container issue in Sandbox
-
-Test docker pull issues
+If the error persists, try removing the virtual environment and reinstalling:
 
 ```bash
-# Check pod status
-kubectl get pods
-kubectl get pods -n ray-system
-kubectl logs michelangelo-worker
-kubectl describe pod michelangelo-worker
+rm -rf .venv
+poetry install
+```
 
-# Delete and start for the partial pod failure
-# Example for minio
+### Pods stuck in `ImagePullBackOff` or `ErrImagePull`
+
+The cluster can't pull a Docker image. Check which image is failing:
+
+```bash
+kubectl describe pod <pod-name> | grep -A 5 "Events"
+```
+
+Common causes:
+- **Network issues**: Ensure Docker can reach `ghcr.io` (try `docker pull ghcr.io/michelangelo-ai/worker:latest`)
+- **Image doesn't exist**: Verify the image tag matches what's available in the registry
+
+### Pods stuck in `CrashLoopBackOff`
+
+A service is starting but immediately crashing. Check its logs:
+
+```bash
+kubectl logs <pod-name>
+```
+
+To restart a single service (e.g., MinIO):
+
+```bash
 kubectl delete pod minio
-kubectl apply -f michelangelo/cli/sandbox/resources/minio.yaml
-
-# Test docker pull
-docker pull ghcr.io/michelangelo-ai/worker:sha-6161efe@sha256:aae98f00b82d744e453432a9008027fc74d44b78cc1731cb995c7ee654a8225d
-
-# Debugging container starting issue
-docker images
-docker exec -it k3d-michelangelo-sandbox-server-0 crictl images
+kubectl apply -f <repo-root>/python/michelangelo/cli/sandbox/resources/minio.yaml
 ```
 
-## Running Michelangelo Uniflow
+### Port already in use
 
-**Environment Setup: Mac**
-
-* Create Python virtual environment and install packages
+If `ma sandbox create` fails because a port is already bound:
 
 ```bash
-cd $REPO_ROOT/python
+# Find what's using the port (e.g., port 9090)
+lsof -i :9090
+
+# Kill the process if it's safe to do so
+kill <PID>
+```
+
+See [Sandbox Ports and Endpoints](./ma-sandbox-ports-and-endpoints.md) for the full list of ports used.
+
+### Poetry install fails with build errors on macOS
+
+If you see C++ compilation errors during `poetry install`:
+
+```bash
+export CC=clang
+export CXX=clang++
 poetry install
 ```
 
-This will create a .venv directory if it doesn't already exist. This directory contains a Python virtual environment with all the dependencies installed. You can activate this virtual environment and use it like any other Python virtual environment, or you can run commands via the Poetry CLI, e.g., poetry run python, poetry run pytest, etc.
-
-### Execution Modes
-
-Uniflow supports two primary modes of execution: **Local Execution** and **Remote Execution**. Each is suited for different stages of development and deployment.
-
-#### Local Execution
-
-Local execution runs workflows directly in a standard Python environment, making it ideal for rapid iteration and debugging.
-
-##### Pros
-
-* Fast feedback loop for development
-* Simple to run and test locally
-
-##### Limitations
-
-* **No Caching or Retries**
-  Features like caching, retries, and `apply_local_diff` are not supported.
-* **No Resource Constraints**
-  Configurations for CPU, GPU, memory, and worker instances are ignored.
-* **No Authentication Support**
-  If your tasks depend on external cloud services (e.g., S3, HDFS, Kubernetes APIs), local mode does not support automatic authentication. Test these interactions in remote environments.
-
-##### Example
-
-```bash
-python your_workflow_script.py
-```
-
-#### Remote Execution
-
-Remote execution deploys workflows to a **Kubernetes** cluster for production-scale workloads, fault tolerance, and reproducibility.
-
-##### Benefits
-
-* Full support for resource constraints (CPU/GPU)
-* Caching and retry mechanisms enabled
-* Handles large datasets and distributed execution
-* Secure cloud access (via service accounts, mounted credentials, etc.)
-
-##### Running a Workflow Remotely
-
-```bash
-PYTHONPATH=. poetry run python ./examples/bert_cola/bert_cola.py remote-run \
-  --image docker.io/library/my_image:latest \
-  --storage-url s3://<my_bucket_name> \
-  --yes
-```
-
-Sample Output:
-
-```sh
-.com/cadence-workflow/starlark-worker/cadstar.(*Service).Run
---execution_timeout 315360000
---workflow_id examples.bert_cola.bert_cola.train_workflow.97lal
-
-Started Workflow Id: examples.bert_cola.bert_cola.train_workflow.97lal
-Run Id: 56f90eb2-c570-4926-a1fe-993816cd1baf
-```
-
-### Run example: bert cola
-
-* Go to python repo: `cd $REPO_ROOT/python`
-* Install dependencies: `poetry install -E example`
-* README: [bert cola README.md](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/README.md)
-
-**Local runs**
-
-* Run examples: `PYTHONPATH=. poetry run python ./examples/bert_cola/bert_cola.py`
-
-**Remote runs**
-
-Install Cadence for command-line interaction with cadence workflow
-
-```bash
-brew install cadence-workflow
-```
-
-Running workflows in the remote mode requires a docker container that contains code of the workflow tasks. Build a new revision of the project's container, or use an existing revision if you didn't change task code.
-
-* Build docker image: `docker build -t examples:latest -f ./examples/Dockerfile .`
-  * Note: you may experience an error with poetry that installed with brew, please uninstall in brew and install with curl above and docker build with option `--no-cache`
-
-In order for Kubernetes to pull the image, push it to a registry that the cluster has access to. For example, push it to
-
-* Push images to registry `k3d image import examples:latest -c michelangelo-sandbox`
-* Create default bucket http://localhost:9090/buckets, login as minioadmin and password as minioadmin, click "Create Bucket" and create a bucket with the name default.
-* Create default domain http://localhost:8088/domains/default/ if not exists in Cadence, `cadence --do default d re`
-* Run example: `PYTHONPATH=. poetry run python ./examples/bert_cola/bert_cola.py  remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes`
-
-Debugging workflow running in the cluster
-
-* Cadence for workflow status - http://localhost:8088/domains/default/workflows
-* Minio for object storage - http://localhost:9090/browser/default
-* Ray cluster dashboard - http://localhost:8265
-  * to access the Ray cluster dashboard for the failed ray task, you need to port forward the Kubernetes service.
-    1. Set the breakpoint = True in task to keep run ray cluster.
-    ```python
-    # example/bert_cola/data.py or train.py
-    @uniflow.task(config=RayTask(
-       ...
-       breakpoint=True,
-    ))
-    ```
-    2. Run `kubectl get svc` to get the service name and copy it
-    ```sh
-    NAME                     TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)                                         AGE
-    ...
-    uf-ray-td7pb-head-svc    ClusterIP   None            <none>        10001/TCP,8265/TCP,8080/TCP,6379/TCP,8000/TCP   62s
-    ```
-    3. Run `kubectl port-forward svc/<service name> 8265:8265 -n default`
+Add those exports to your `~/.zshrc` to make them permanent.
 
 ---
 
 ## What's next?
 
-- **Build your first pipeline** — Follow [Getting Started with ML Pipelines](../user-guides/ml-pipelines/getting-started.md) to create a training workflow (~30 min)
-- **Explore example projects** — Try [Boston Housing XGBoost](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/boston_housing_xgb), [BERT Text Classification](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/bert_cola), or [GPT Fine-tuning](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/gpt_oss_20b_finetune)
-- **Learn the CLI** — See the [CLI Reference](../user-guides/cli.md) for managing pipelines and projects
+- **Build your first pipeline** -- Follow [Getting Started with ML Pipelines](../user-guides/ml-pipelines/getting-started.md) to create a training workflow (~30 min)
+- **Explore example projects** -- Try [Boston Housing XGBoost](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/boston_housing_xgb), [BERT Text Classification](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/bert_cola), or [GPT Fine-tuning](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/gpt_oss_20b_finetune)
+- **Learn the CLI** -- See the [CLI Reference](../user-guides/cli.md) for managing pipelines and projects

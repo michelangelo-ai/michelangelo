@@ -13,7 +13,7 @@ If you're an ML practitioner familiar with training models, managing experiments
 ### End-to-End ML Lifecycle Management
 - **One platform** for data preparation, training, deployment, and monitoring - no need to stitch together multiple tools
 - **Automatic versioning** for datasets, models, and experiments - reproducibility built in by default
-- **Production-grade infrastructure** - benefit from Uber's scale-tested ML infrastructure without MLOps overhead
+- **Production-grade infrastructure** - battle-tested ML infrastructure that handles scale, so you can focus on models
 
 ### Flexible Development Options
 - **No-code UI** for rapid prototyping and standard workflows - perfect for quick experiments and business analysts
@@ -93,15 +93,15 @@ Pick the approach that matches your workflow and expertise:
 #### Hybrid Approach
 Many teams start with the **UI for initial experiments**, then transition to **code for production workflows**. You can:
 - Train initial models in the UI to validate feasibility
-- Committed YAML configurations by UI and extend in CanvasFlex/rebuild in Uniflow
+- Export YAML configurations from the UI and extend them in CanvasFlex, or rebuild in Uniflow
 - Use the UI for monitoring while managing training/deployment pipelines
 
 ## Machine Learning Tools
 
-### Michelangelo User Interface (MA UI)
-The UI environment provides a standard, code-free ML development experience. It guides users through the different phases of the ML development lifecycle. Uber's internal term for the UI is MA Studio (you may see it appear on this site in screenshots of the UI). This environment provides all the essential tools which allow ML developers to build, train, deploy, monitor, and debug their machine learning models in a single unified visual interface to boost their productivity. 
+### Michelangelo User Interface (MA Studio)
+The MA Studio UI provides a standard, code-free ML development experience. It guides you through the different phases of the ML development lifecycle, providing all the essential tools to build, train, deploy, monitor, and debug your machine learning models in a single unified visual interface.
 
-Users can use the no-code dev environment to perform standardized ML tasks without writing a single line of code, including:
+You can use the no-code environment to perform standardized ML tasks without writing a single line of code, including:
 * Prepare data sources for training models or making batch predictions
 * Build and train XGB models, classic ML models, and Deep Learning models
 * Compare trained model performance and debug model issues
@@ -121,9 +121,9 @@ CanvasFlex provides a highly customized, code driven ML development experience b
 
 ### Ecosystem Overview
 
-At Uber, Machine Learning (ML) is critical because of the complexity and scale of all the decisions that we have to make. ML can reduce uncertainty in our processes, making our products more targeted and our user experience better. There are also so many factors and signals influencing our systems that we often need ML to make sense of what’s happening.
+Machine Learning at scale requires coordinating many moving parts: data preparation, experiment tracking, model training, deployment, and monitoring. Michelangelo provides an integrated ecosystem that handles all of these concerns, enabling teams to focus on building great models rather than managing infrastructure.
 
-We make millions of predictions every second, and hundreds of applied scientists, engineers, product managers, and researchers work on ML solutions daily. Uber relies on a unique ecosystem (pictured below) of internal tooling to scale ML solutions with speed, accuracy, and reliability.
+The diagram below shows how Michelangelo’s components work together:
 
 ![Michelangelo Ecosystem Diagram](./images/michelangelo-ecosystem.png)
 

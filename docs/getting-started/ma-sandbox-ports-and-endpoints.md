@@ -1,5 +1,7 @@
 # MA Sandbox Ports and Endpoints
 
+Use this reference when connecting to services in your local Michelangelo sandbox. The sandbox maps ports from the K3d cluster to localhost so you can access all services directly from your browser or CLI.
+
 ### Default (Cadence) mode
 
 The sandbox maps NodePorts from the k3d cluster to localhost for easy access.
@@ -43,7 +45,7 @@ All other sandbox ports (MySQL, MinIO, API Server, Envoy) remain the same as in 
 
 ### Optional Ray jobs cluster
 
-If you pass `--create-jobs-cluster`, a dedicated k3d cluster for Ray jobs is created with the following host mappings:
+If you pass `--create-compute-cluster`, a dedicated k3d cluster for Ray jobs is created with the following host mappings:
 
 | Service | Host port | Purpose |
 |---|---:|---|
@@ -68,3 +70,17 @@ These ports are primarily for intra-cluster communication but are listed for ref
 - `cadence`: 7833 (gRPC), 7933 (TChannel)
 - `cadence-web`: 8088
 - `envoy`: 8081
+
+### Troubleshooting port conflicts
+
+If a service fails to start because its port is already in use, find and stop the conflicting process:
+
+```bash
+# Find what's using a port (e.g., 9090)
+lsof -i :9090
+
+# Stop the process if safe to do so
+kill <PID>
+```
+
+Then restart your sandbox with `ma sandbox delete && ma sandbox create`.
