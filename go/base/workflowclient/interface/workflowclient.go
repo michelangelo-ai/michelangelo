@@ -111,6 +111,7 @@ type WorkflowClient interface {
 	PauseTrigger(ctx context.Context, workflowID string) error
 	// UnpauseTrigger resumes a paused recurring trigger by workflow ID.
 	UnpauseTrigger(ctx context.Context, workflowID string) error
-	// DeleteTrigger deletes a recurring trigger by workflow ID.
-	DeleteTrigger(ctx context.Context, workflowID string) error
+	// DeleteTrigger deletes a recurring trigger and terminates any running execution.
+	// workflowID identifies the trigger; runID is the currently running execution (empty if none).
+	DeleteTrigger(ctx context.Context, workflowID string, runID string) error
 }

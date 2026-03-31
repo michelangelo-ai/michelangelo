@@ -285,9 +285,12 @@ func (c *CadenceClient) UnpauseTrigger(_ context.Context, workflowID string) err
 	return fmt.Errorf("UnpauseTrigger not supported by Cadence provider (workflowID: %s)", workflowID)
 }
 
-// DeleteTrigger terminates the cron workflow for the given workflow ID.
+// DeleteTrigger terminates the cron workflow for the given workflow ID and run ID.
 // In Cadence, recurring triggers are implemented as long-running cron workflows,
 // so terminating the workflow stops all future executions.
-func (c *CadenceClient) DeleteTrigger(ctx context.Context, workflowID string) error {
-	return c.Client.TerminateWorkflow(ctx, workflowID, "", "trigger killed", nil)
+func (c *CadenceClient) DeleteTrigger(ctx context.Context, workflowID string, runID string) error {
+	if runID == "" {
+		return nil
+	}
+	return c.Client.TerminateWorkflow(ctx, workflowID, runID, "trigger killed", nil)
 }

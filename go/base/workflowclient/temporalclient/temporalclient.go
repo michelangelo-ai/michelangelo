@@ -387,9 +387,15 @@ func (c *TemporalClient) UnpauseTrigger(ctx context.Context, workflowID string) 
 	})
 }
 
-// DeleteTrigger deletes the Temporal schedule associated with the given workflow ID.
-func (c *TemporalClient) DeleteTrigger(ctx context.Context, workflowID string) error {
+// DeleteTrigger deletes the Temporal schedule and terminates any running workflow execution.
+func (c *TemporalClient) DeleteTrigger(ctx context.Context, workflowID string, runID string) error {
 	scheduleID := workflowID + "-schedule"
 	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
-	return handle.Delete(ctx)
+	if err := handle.Delete(ctx); err != nil {
+		return err
+	}
+	if runID == "" {
+		return nil
+	}
+	return c.Client.TerminateWorkflow(ctx, workflowID, runID, "trigger killed")
 }

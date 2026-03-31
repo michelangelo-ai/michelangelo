@@ -656,23 +656,33 @@ func TestGetWorkflowExecutionHistory(t *testing.T) {
 
 func TestDeleteTrigger(t *testing.T) {
 	workflowID := "testWorkflowID"
+	runID := "testRunID"
 
 	testCases := []struct {
 		name     string
+		runID    string
 		mockFunc func(mockClient *cadencemocks.Client)
 		errMsg   string
 	}{
 		{
-			name: "DeleteTrigger Succeeded",
+			name:  "DeleteTrigger Succeeded",
+			runID: runID,
 			mockFunc: func(mockClient *cadencemocks.Client) {
-				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, "", "trigger killed", mock.Anything).Return(nil)
+				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, runID, "trigger killed", mock.Anything).Return(nil)
 			},
 			errMsg: "",
 		},
 		{
-			name: "DeleteTrigger Failed",
+			name:     "DeleteTrigger - no open execution, idempotent",
+			runID:    "",
+			mockFunc: func(mockClient *cadencemocks.Client) {},
+			errMsg:   "",
+		},
+		{
+			name:  "DeleteTrigger Failed",
+			runID: runID,
 			mockFunc: func(mockClient *cadencemocks.Client) {
-				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, "", "trigger killed", mock.Anything).Return(fmt.Errorf("terminate error"))
+				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, runID, "trigger killed", mock.Anything).Return(fmt.Errorf("terminate error"))
 			},
 			errMsg: "terminate error",
 		},
@@ -685,7 +695,7 @@ func TestDeleteTrigger(t *testing.T) {
 			client := &CadenceClient{
 				Client: mockClient,
 			}
-			err := client.DeleteTrigger(context.Background(), workflowID)
+			err := client.DeleteTrigger(context.Background(), workflowID, testCase.runID)
 			if testCase.errMsg != "" {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), testCase.errMsg)

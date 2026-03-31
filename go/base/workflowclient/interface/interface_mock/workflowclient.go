@@ -256,15 +256,15 @@ func (mr *MockWorkflowClientMockRecorder) UnpauseTrigger(ctx, workflowID interfa
 }
 
 // DeleteTrigger mocks base method.
-func (m *MockWorkflowClient) DeleteTrigger(ctx context.Context, workflowID string) error {
+func (m *MockWorkflowClient) DeleteTrigger(ctx context.Context, workflowID string, runID string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteTrigger", ctx, workflowID)
+	ret := m.ctrl.Call(m, "DeleteTrigger", ctx, workflowID, runID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteTrigger indicates an expected call of DeleteTrigger.
-func (mr *MockWorkflowClientMockRecorder) DeleteTrigger(ctx, workflowID interface{}) *gomock.Call {
+func (mr *MockWorkflowClientMockRecorder) DeleteTrigger(ctx, workflowID, runID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTrigger", reflect.TypeOf((*MockWorkflowClient)(nil).DeleteTrigger), ctx, workflowID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTrigger", reflect.TypeOf((*MockWorkflowClient)(nil).DeleteTrigger), ctx, workflowID, runID)
 }

@@ -652,15 +652,28 @@ func TestUnpauseTrigger(t *testing.T) {
 
 func TestDeleteTrigger(t *testing.T) {
 	workflowID := "testWorkflowID"
+	runID := "testRunID"
 	scheduleID := workflowID + "-schedule"
 
 	testCases := []struct {
 		name     string
+		runID    string
 		mockFunc func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle)
 		errMsg   string
 	}{
 		{
-			name: "success",
+			name:  "success - with running execution",
+			runID: runID,
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
+				mockScheduleHandle.On("Delete", mock.Anything).Return(nil)
+				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, runID, "trigger killed").Return(nil)
+			},
+		},
+		{
+			name:  "success - no running execution",
+			runID: "",
 			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
 				mockClient.On("ScheduleClient").Return(mockScheduleClient)
 				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
@@ -668,13 +681,25 @@ func TestDeleteTrigger(t *testing.T) {
 			},
 		},
 		{
-			name: "error",
+			name:  "error - delete schedule failed",
+			runID: runID,
 			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
 				mockClient.On("ScheduleClient").Return(mockScheduleClient)
 				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
 				mockScheduleHandle.On("Delete", mock.Anything).Return(fmt.Errorf("delete error"))
 			},
 			errMsg: "delete error",
+		},
+		{
+			name:  "error - terminate workflow failed",
+			runID: runID,
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
+				mockScheduleHandle.On("Delete", mock.Anything).Return(nil)
+				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, runID, "trigger killed").Return(fmt.Errorf("terminate error"))
+			},
+			errMsg: "terminate error",
 		},
 	}
 
@@ -685,7 +710,7 @@ func TestDeleteTrigger(t *testing.T) {
 			mockScheduleHandle := temporalMocks.NewScheduleHandle(t)
 			client := &TemporalClient{Client: mockClient}
 			testCase.mockFunc(mockClient, mockScheduleClient, mockScheduleHandle)
-			err := client.DeleteTrigger(context.Background(), workflowID)
+			err := client.DeleteTrigger(context.Background(), workflowID, testCase.runID)
 			if testCase.errMsg != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), testCase.errMsg)
