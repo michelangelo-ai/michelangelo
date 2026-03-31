@@ -107,4 +107,11 @@ type WorkflowClient interface {
 	GetActivityTaskCompletedEventType() string
 	// GetDecisionTaskCompletedEventType returns the engine-specific event type string for DecisionTaskCompleted
 	GetDecisionTaskCompletedEventType() string
+	// PauseTrigger pauses a recurring trigger by workflow ID.
+	PauseTrigger(ctx context.Context, workflowID string) error
+	// UnpauseTrigger resumes a paused recurring trigger by workflow ID.
+	UnpauseTrigger(ctx context.Context, workflowID string) error
+	// DeleteTrigger deletes a recurring trigger and terminates any running execution.
+	// workflowID identifies the trigger; runID is the currently running execution (empty if none).
+	DeleteTrigger(ctx context.Context, workflowID string, runID string) error
 }

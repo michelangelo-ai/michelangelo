@@ -654,6 +654,78 @@ func TestGetWorkflowExecutionHistory(t *testing.T) {
 	}
 }
 
+func TestDeleteTrigger(t *testing.T) {
+	workflowID := "testWorkflowID"
+	runID := "testRunID"
+
+	testCases := []struct {
+		name     string
+		runID    string
+		mockFunc func(mockClient *cadencemocks.Client)
+		errMsg   string
+	}{
+		{
+			name:  "DeleteTrigger Succeeded",
+			runID: runID,
+			mockFunc: func(mockClient *cadencemocks.Client) {
+				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, runID, "trigger killed", mock.Anything).Return(nil)
+			},
+			errMsg: "",
+		},
+		{
+			name:     "DeleteTrigger - no open execution, idempotent",
+			runID:    "",
+			mockFunc: func(mockClient *cadencemocks.Client) {},
+			errMsg:   "",
+		},
+		{
+			name:  "DeleteTrigger Failed",
+			runID: runID,
+			mockFunc: func(mockClient *cadencemocks.Client) {
+				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, runID, "trigger killed", mock.Anything).Return(fmt.Errorf("terminate error"))
+			},
+			errMsg: "terminate error",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mockClient := &cadencemocks.Client{}
+			testCase.mockFunc(mockClient)
+			client := &CadenceClient{
+				Client: mockClient,
+			}
+			err := client.DeleteTrigger(context.Background(), workflowID, testCase.runID)
+			if testCase.errMsg != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), testCase.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestPauseTrigger(t *testing.T) {
+	workflowID := "testWorkflowID"
+	client := &CadenceClient{
+		Client: &cadencemocks.Client{},
+	}
+	err := client.PauseTrigger(context.Background(), workflowID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not supported")
+}
+
+func TestUnpauseTrigger(t *testing.T) {
+	workflowID := "testWorkflowID"
+	client := &CadenceClient{
+		Client: &cadencemocks.Client{},
+	}
+	err := client.UnpauseTrigger(context.Background(), workflowID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not supported")
+}
+
 // Mock implementation of cadence history iterator
 type mockHistoryIterator struct {
 	events       []*shared.HistoryEvent

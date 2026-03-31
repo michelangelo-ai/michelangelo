@@ -226,3 +226,45 @@ func (mr *MockWorkflowClientMockRecorder) TerminateWorkflow(ctx, workflowID, run
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TerminateWorkflow", reflect.TypeOf((*MockWorkflowClient)(nil).TerminateWorkflow), ctx, workflowID, runID, reason)
 }
+
+// PauseTrigger mocks base method.
+func (m *MockWorkflowClient) PauseTrigger(ctx context.Context, workflowID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PauseTrigger", ctx, workflowID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PauseTrigger indicates an expected call of PauseTrigger.
+func (mr *MockWorkflowClientMockRecorder) PauseTrigger(ctx, workflowID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PauseTrigger", reflect.TypeOf((*MockWorkflowClient)(nil).PauseTrigger), ctx, workflowID)
+}
+
+// UnpauseTrigger mocks base method.
+func (m *MockWorkflowClient) UnpauseTrigger(ctx context.Context, workflowID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UnpauseTrigger", ctx, workflowID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UnpauseTrigger indicates an expected call of UnpauseTrigger.
+func (mr *MockWorkflowClientMockRecorder) UnpauseTrigger(ctx, workflowID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnpauseTrigger", reflect.TypeOf((*MockWorkflowClient)(nil).UnpauseTrigger), ctx, workflowID)
+}
+
+// DeleteTrigger mocks base method.
+func (m *MockWorkflowClient) DeleteTrigger(ctx context.Context, workflowID string, runID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteTrigger", ctx, workflowID, runID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteTrigger indicates an expected call of DeleteTrigger.
+func (mr *MockWorkflowClientMockRecorder) DeleteTrigger(ctx, workflowID, runID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTrigger", reflect.TypeOf((*MockWorkflowClient)(nil).DeleteTrigger), ctx, workflowID, runID)
+}

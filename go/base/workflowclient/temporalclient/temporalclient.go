@@ -368,3 +368,34 @@ func (c *TemporalClient) GetDecisionTaskCompletedEventType() string {
 	// In Temporal, DecisionTask is called WorkflowTask
 	return temporalEnumsV1.EVENT_TYPE_WORKFLOW_TASK_COMPLETED.String()
 }
+
+// PauseTrigger pauses the Temporal schedule associated with the given workflow ID.
+func (c *TemporalClient) PauseTrigger(ctx context.Context, workflowID string) error {
+	scheduleID := workflowID + "-schedule"
+	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
+	return handle.Pause(ctx, temporalClient.SchedulePauseOptions{
+		Note: "paused by michelangelo",
+	})
+}
+
+// UnpauseTrigger resumes the Temporal schedule associated with the given workflow ID.
+func (c *TemporalClient) UnpauseTrigger(ctx context.Context, workflowID string) error {
+	scheduleID := workflowID + "-schedule"
+	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
+	return handle.Unpause(ctx, temporalClient.ScheduleUnpauseOptions{
+		Note: "unpaused by michelangelo",
+	})
+}
+
+// DeleteTrigger deletes the Temporal schedule and terminates any running workflow execution.
+func (c *TemporalClient) DeleteTrigger(ctx context.Context, workflowID string, runID string) error {
+	scheduleID := workflowID + "-schedule"
+	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
+	if err := handle.Delete(ctx); err != nil {
+		return err
+	}
+	if runID == "" {
+		return nil
+	}
+	return c.Client.TerminateWorkflow(ctx, workflowID, runID, "trigger killed")
+}

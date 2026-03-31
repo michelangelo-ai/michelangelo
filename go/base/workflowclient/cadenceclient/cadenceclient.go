@@ -274,3 +274,23 @@ func (c *CadenceClient) GetActivityTaskCompletedEventType() string {
 func (c *CadenceClient) GetDecisionTaskCompletedEventType() string {
 	return shared.EventTypeDecisionTaskCompleted.String()
 }
+
+// PauseTrigger is not supported by Cadence (schedules are a Temporal feature)
+func (c *CadenceClient) PauseTrigger(_ context.Context, workflowID string) error {
+	return fmt.Errorf("PauseTrigger not supported by Cadence provider (workflowID: %s)", workflowID)
+}
+
+// UnpauseTrigger is not supported by Cadence (schedules are a Temporal feature)
+func (c *CadenceClient) UnpauseTrigger(_ context.Context, workflowID string) error {
+	return fmt.Errorf("UnpauseTrigger not supported by Cadence provider (workflowID: %s)", workflowID)
+}
+
+// DeleteTrigger terminates the cron workflow for the given workflow ID and run ID.
+// In Cadence, recurring triggers are implemented as long-running cron workflows,
+// so terminating the workflow stops all future executions.
+func (c *CadenceClient) DeleteTrigger(ctx context.Context, workflowID string, runID string) error {
+	if runID == "" {
+		return nil
+	}
+	return c.Client.TerminateWorkflow(ctx, workflowID, runID, "trigger killed", nil)
+}

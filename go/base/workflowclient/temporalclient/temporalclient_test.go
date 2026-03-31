@@ -557,3 +557,166 @@ func TestCreateScheduleForCron(t *testing.T) {
 
 // Note: Temporal retry methods are tested via integration with the actual Temporal client.
 // Core retry functionality is tested in CadenceClient and ExecuteWorkflowActor tests.
+
+func TestPauseTrigger(t *testing.T) {
+	workflowID := "testWorkflowID"
+	scheduleID := workflowID + "-schedule"
+
+	testCases := []struct {
+		name     string
+		mockFunc func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle)
+		errMsg   string
+	}{
+		{
+			name: "success",
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
+				mockScheduleHandle.On("Pause", mock.Anything, mock.Anything).Return(nil)
+			},
+		},
+		{
+			name: "error",
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
+				mockScheduleHandle.On("Pause", mock.Anything, mock.Anything).Return(fmt.Errorf("pause error"))
+			},
+			errMsg: "pause error",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mockClient := temporalMocks.NewClient(t)
+			mockScheduleClient := temporalMocks.NewScheduleClient(t)
+			mockScheduleHandle := temporalMocks.NewScheduleHandle(t)
+			client := &TemporalClient{Client: mockClient}
+			testCase.mockFunc(mockClient, mockScheduleClient, mockScheduleHandle)
+			err := client.PauseTrigger(context.Background(), workflowID)
+			if testCase.errMsg != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), testCase.errMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestUnpauseTrigger(t *testing.T) {
+	workflowID := "testWorkflowID"
+	scheduleID := workflowID + "-schedule"
+
+	testCases := []struct {
+		name     string
+		mockFunc func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle)
+		errMsg   string
+	}{
+		{
+			name: "success",
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
+				mockScheduleHandle.On("Unpause", mock.Anything, mock.Anything).Return(nil)
+			},
+		},
+		{
+			name: "error",
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
+				mockScheduleHandle.On("Unpause", mock.Anything, mock.Anything).Return(fmt.Errorf("unpause error"))
+			},
+			errMsg: "unpause error",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mockClient := temporalMocks.NewClient(t)
+			mockScheduleClient := temporalMocks.NewScheduleClient(t)
+			mockScheduleHandle := temporalMocks.NewScheduleHandle(t)
+			client := &TemporalClient{Client: mockClient}
+			testCase.mockFunc(mockClient, mockScheduleClient, mockScheduleHandle)
+			err := client.UnpauseTrigger(context.Background(), workflowID)
+			if testCase.errMsg != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), testCase.errMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestDeleteTrigger(t *testing.T) {
+	workflowID := "testWorkflowID"
+	runID := "testRunID"
+	scheduleID := workflowID + "-schedule"
+
+	testCases := []struct {
+		name     string
+		runID    string
+		mockFunc func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle)
+		errMsg   string
+	}{
+		{
+			name:  "success - with running execution",
+			runID: runID,
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
+				mockScheduleHandle.On("Delete", mock.Anything).Return(nil)
+				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, runID, "trigger killed").Return(nil)
+			},
+		},
+		{
+			name:  "success - no running execution",
+			runID: "",
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
+				mockScheduleHandle.On("Delete", mock.Anything).Return(nil)
+			},
+		},
+		{
+			name:  "error - delete schedule failed",
+			runID: runID,
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
+				mockScheduleHandle.On("Delete", mock.Anything).Return(fmt.Errorf("delete error"))
+			},
+			errMsg: "delete error",
+		},
+		{
+			name:  "error - terminate workflow failed",
+			runID: runID,
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
+				mockScheduleHandle.On("Delete", mock.Anything).Return(nil)
+				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, runID, "trigger killed").Return(fmt.Errorf("terminate error"))
+			},
+			errMsg: "terminate error",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mockClient := temporalMocks.NewClient(t)
+			mockScheduleClient := temporalMocks.NewScheduleClient(t)
+			mockScheduleHandle := temporalMocks.NewScheduleHandle(t)
+			client := &TemporalClient{Client: mockClient}
+			testCase.mockFunc(mockClient, mockScheduleClient, mockScheduleHandle)
+			err := client.DeleteTrigger(context.Background(), workflowID, testCase.runID)
+			if testCase.errMsg != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), testCase.errMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
