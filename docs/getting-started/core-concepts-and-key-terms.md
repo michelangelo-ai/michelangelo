@@ -237,14 +237,14 @@ Uniflow tasks support standard Python types plus ML-specific formats:
 | **Collections** | dict, list, tuple | Multiple values, configurations |
 | **Structured** | dataclass, Pydantic models | Complex typed configurations, validation |
 | **ML Artifacts** | Ray Datasets, model files via Ref | Large datasets, trained models |
-| **Files** | Paths with s3://, hdfs://, file://, tb:// | Reading/writing data from storage |
+| **Files** | Paths with s3://, hdfs://, file:// | Reading/writing data from storage |
 | **Remote References** | Ref pointers | Lightweight references to heavy objects |
 
 **Key Features**:
 - **Automatic serialization**: Uniflow handles serialization/deserialization automatically
 - **Type safety**: Use Python type hints for better error checking
 - **Caching**: Results are cached based on input types and values
-- **Protocol support**: Access files via s3://, hdfs://, file://, tb:// (via [fsspec](https://filesystem-spec.readthedocs.io/))
+- **Protocol support**: Access files via s3://, hdfs://, file:// (via [fsspec](https://filesystem-spec.readthedocs.io/))
 
 **Common Patterns**:
 ```python
@@ -507,7 +507,7 @@ def read_file(file_path: str):
 
 @uniflow.task()
 def save_model(model, output_path: str):
-    # Supports s3://, hdfs://, file://, tb:// protocols
+    # Supports s3://, hdfs://, file:// protocols
     with open(output_path, "wb") as f:
         pickle.dump(model, f)
 ```
@@ -516,7 +516,6 @@ def save_model(model, output_path: str):
 - `s3://bucket/path/to/file.parquet`
 - `hdfs://namenode/path/to/data`
 - `file:///local/path/to/file.csv`
-- `tb://terrablob/path` (Uber internal)
 
 All handled via [fsspec](https://filesystem-spec.readthedocs.io/) for consistent API across storage backends.
 
