@@ -1,5 +1,7 @@
 # Custom Docker Images for Feature Branches and Sandbox Testing
 
+> **Who is this for?** This guide is for **contributors** developing Michelangelo's core platform services (API server, controller manager, worker). If you're building ML pipelines using the Michelangelo SDK, you don't need custom Docker images -- the default sandbox images work out of the box.
+
 This guide explains how to build and publish custom Docker images for a feature branch using the dev release workflow, update sandbox manifests to reference those images, and run the sandbox to test your changes.
 
 
@@ -27,9 +29,10 @@ on:
 ```bash
 git add .github/workflows/dev-release.yml
 git commit -m "Enable dev release for my-feature-branch"
-# Force-push only if you intend to overwrite remote history
-git push -f origin $(git branch --show-current)
+git push origin $(git branch --show-current)
 ```
+
+> **Caution**: Only use `git push -f` (force push) if you intentionally need to overwrite remote history. In most cases, a regular `git push` is sufficient and safer.
 
 ### 4) Wait for images to be published
 - Monitor the GitHub Actions run for `Dev Release` on your branch.
@@ -72,14 +75,15 @@ spec:
 Note: The repository already contains working examples where the image tag equals the branch name.
 
 ### 6) Start the sandbox to test your changes
-From the repo root:
+From the `python/` directory in the repo root:
 ```bash
 poetry install
-poetry run ma sandbox create
+source .venv/bin/activate
+ma sandbox create
 ```
 
 Useful operations:
-- Recreate: `poetry run ma sandbox delete && poetry run ma sandbox create`
+- Recreate: `ma sandbox delete && ma sandbox create`
 - Inspect: `kubectl get pods -A | grep michelangelo`
 - Logs (example): `kubectl logs pod/michelangelo-controllermgr -f`
 
@@ -96,5 +100,5 @@ Useful operations:
 
 ### Cleanup
 ```bash
-poetry run ma sandbox delete
+ma sandbox delete
 ```

@@ -151,7 +151,7 @@ $ poetry run ruff format $PYTHON_FILE_NAME
 
 ## IDE Setup
 
-For IDE configuration (VS Code, Cursor, GoLand), see the [IDE and Bazel Setup Guide](../getting-started/setup-ide-and-bazel.md).
+For IDE configuration (VS Code, Cursor, GoLand), see the [IDE and Bazel Setup Guide](./dev-environment.md).
 
 
 
