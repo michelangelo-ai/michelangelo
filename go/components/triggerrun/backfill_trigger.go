@@ -142,7 +142,6 @@ func (r *backfillTrigger) Kill(ctx context.Context, triggerRun *v2pb.TriggerRun)
 		Namespace: triggerRun.Namespace,
 		Name:      triggerRun.Name,
 	})
-	domain := r.WorkflowClient.GetDomain()
 	if triggerRun.Status.State != v2pb.TRIGGER_RUN_STATE_RUNNING {
 		err := fmt.Errorf("cannot kill backfill trigger run in state: %s", &triggerRun.Status.State)
 		log.Error(err, "kill backfill trigger run failed")
@@ -151,7 +150,7 @@ func (r *backfillTrigger) Kill(ctx context.Context, triggerRun *v2pb.TriggerRun)
 			ErrorMessage: err.Error(),
 		}, err
 	}
-	return killWorkflow(ctx, triggerRun, log, r.WorkflowClient, domain)
+	return killWorkflow(ctx, triggerRun, log, r.WorkflowClient)
 }
 
 // GetStatus retrieves the execution status of a backfill workflow.

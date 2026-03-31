@@ -34,46 +34,24 @@ type CreateTriggerRequest struct {
 	TriggerRun *v2pb.TriggerRun // The TriggerRun resource containing execution parameters
 }
 
-// killWorkflow terminates a running workflow execution.
+// killWorkflow stops a workflow execution and removes the trigger.
 //
 // This shared utility function is used by all Runner implementations to stop
-// workflow execution. It performs the following operations:
-//  1. Generate workflow ID from TriggerRun namespace and name
-//  2. Query for open workflow execution using workflow client
-//  3. Call TerminateWorkflow if execution is running
-//  4. Return KILLED status regardless of whether workflow was running (idempotent)
+// workflow execution. DeleteTrigger handles engine-specific cleanup:
+//   - Temporal: deletes the associated schedule
+//   - Cadence: terminates the workflow directly (schedule is embedded in the workflow)
 //
-// Returns State=KILLED on success. If no workflow is running, returns KILLED
-// without error (idempotent behavior).
-func killWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Logger, workflowClient clientInterface.WorkflowClient, domain string) (v2pb.TriggerRunStatus, error) {
+// Returns State=KILLED on success, or an error if DeleteTrigger fails.
+func killWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Logger, workflowClient clientInterface.WorkflowClient) (v2pb.TriggerRunStatus, error) {
 	wid := generateWorkflowID(triggerRun)
-	rid, err := getWorkflowOpenRunID(ctx, wid, workflowClient, domain)
-	if err != nil {
-		log.Error(err, "failed to get workflow execution info",
-			"operation", "get_workflow_runid",
+	if err := workflowClient.DeleteTrigger(ctx, wid); err != nil {
+		log.Error(err, "failed to delete trigger",
+			"operation", "delete_trigger",
 			"namespace", triggerRun.Namespace,
 			"name", triggerRun.Name,
-			"workflowId", wid)
-		return triggerRun.Status, fmt.Errorf("get workflow execution info for trigger %s/%s: %w",
-			triggerRun.Namespace, triggerRun.Name, err)
+			"workflowID", wid)
+		return triggerRun.Status, fmt.Errorf("delete trigger for %s/%s: %w", triggerRun.Namespace, triggerRun.Name, err)
 	}
-	if rid == nil || *rid == "" {
-		log.Info("no open execution, scheduled run already killed")
-		triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_KILLED
-		return triggerRun.Status, nil
-	}
-	err = workflowClient.TerminateWorkflow(ctx, wid, *rid, "trigger killed")
-	if err != nil {
-		log.Error(err, "failed to terminate scheduled workflow",
-			"operation", "terminate_workflow",
-			"namespace", triggerRun.Namespace,
-			"name", triggerRun.Name,
-			"workflowId", wid,
-			"runId", *rid)
-		return triggerRun.Status, fmt.Errorf("terminate workflow for trigger %s/%s: %w",
-			triggerRun.Namespace, triggerRun.Name, err)
-	}
-	log.Info("scheduled workflow terminated")
 	triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_KILLED
 	return triggerRun.Status, nil
 }

@@ -126,73 +126,24 @@ func TestKill(t *testing.T) {
 		expectError            bool
 	}{
 		{
-			name: "failed to list open workflow for scheduled run",
+			name: "delete trigger succeeded",
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().DeleteTrigger(gomock.Any(), gomock.Any()).Return(nil)
-				mockClient.EXPECT().GetDomain().Return("test-domain")
 				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
-				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).AnyTimes().Return(nil, fmt.Errorf("failed to list open workflow")).Times(4)
-				return mockClient
-			},
-			expectedStatus: _triggerRun.Status,
-			expectError:    true,
-		},
-		{
-			name: "empty open workflow - cadence completed or already killed",
-			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
-				ctrl := gomock.NewController(t)
-				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-				mockClient.EXPECT().DeleteTrigger(gomock.Any(), gomock.Any()).Return(nil)
-				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
-				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).AnyTimes().Return(
-					&clientInterface.ListOpenWorkflowExecutionsResponse{
-						Executions: []clientInterface.WorkflowExecutionInfo{
-							{Execution: &clientInterface.WorkflowExecution{RunID: ""}},
-						},
-					}, nil)
 				return mockClient
 			},
 			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_KILLED},
 			expectError:    false,
 		},
 		{
-			name: "cancel workflow - succeeded",
+			name: "delete trigger failed",
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-				mockClient.EXPECT().DeleteTrigger(gomock.Any(), gomock.Any()).Return(nil)
-				mockClient.EXPECT().GetDomain().Return("test-domain")
+				mockClient.EXPECT().DeleteTrigger(gomock.Any(), gomock.Any()).Return(fmt.Errorf("failed to delete trigger"))
 				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
-				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).AnyTimes().Return(
-					&clientInterface.ListOpenWorkflowExecutionsResponse{
-						Executions: []clientInterface.WorkflowExecutionInfo{
-							{Execution: &clientInterface.WorkflowExecution{RunID: _runID}},
-						},
-					}, nil)
-				mockClient.EXPECT().TerminateWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-				return mockClient
-			},
-			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_KILLED},
-			expectError:    false,
-		},
-		{
-			name: "cancel workflow - failed",
-			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
-				ctrl := gomock.NewController(t)
-				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-				mockClient.EXPECT().DeleteTrigger(gomock.Any(), gomock.Any()).Return(nil)
-				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
-				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).AnyTimes().Return(
-					&clientInterface.ListOpenWorkflowExecutionsResponse{
-						Executions: []clientInterface.WorkflowExecutionInfo{
-							{Execution: &clientInterface.WorkflowExecution{RunID: _runID}},
-						},
-					}, nil)
-				mockClient.EXPECT().TerminateWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("failed to cancel workflow"))
 				return mockClient
 			},
 			expectedStatus: v2pb.TriggerRunStatus{State: _triggerRun.Status.State},

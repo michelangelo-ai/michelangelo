@@ -118,25 +118,18 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 	}, nil
 }
 
-// Kill terminates a running cron-scheduled workflow and removes the recurring trigger.
+// Kill stops the cron trigger by delegating to the shared killWorkflow utility.
 //
-// DeleteTrigger handles engine-specific cleanup:
-//   - Temporal: deletes the associated schedule to prevent future executions
-//   - Cadence: terminates the cron workflow directly (schedule is embedded in the workflow)
+// killWorkflow handles engine-specific cleanup via DeleteTrigger and then
+// terminates any open workflow execution.
 //
-// Returns State=KILLED on success. DeleteTrigger errors are logged but non-fatal
-// (the trigger may have already been removed).
+// Returns State=KILLED on success.
 func (r *cronTrigger) Kill(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
 	log := r.Log.WithValues("triggerRun", k8stypes.NamespacedName{
 		Namespace: triggerRun.Namespace,
 		Name:      triggerRun.Name,
 	})
-	wid := generateWorkflowID(triggerRun)
-	if err := r.WorkflowClient.DeleteTrigger(ctx, wid); err != nil {
-		log.Error(err, "failed to delete trigger (may already be deleted)", "workflowID", wid)
-	}
-	domain := r.WorkflowClient.GetDomain()
-	return killWorkflow(ctx, triggerRun, log, r.WorkflowClient, domain)
+	return killWorkflow(ctx, triggerRun, log, r.WorkflowClient)
 }
 
 // GetStatus retrieves the execution status of a cron-scheduled workflow.
