@@ -130,8 +130,14 @@ func TestKill(t *testing.T) {
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-				mockClient.EXPECT().DeleteTrigger(gomock.Any(), gomock.Any()).Return(nil)
+				mockClient.EXPECT().GetDomain().Return("test-domain")
 				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
+				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).Return(&clientInterface.ListOpenWorkflowExecutionsResponse{
+					Executions: []clientInterface.WorkflowExecutionInfo{
+						{Execution: &clientInterface.WorkflowExecution{RunID: _runID}},
+					},
+				}, nil)
+				mockClient.EXPECT().DeleteTrigger(gomock.Any(), gomock.Any(), _runID).Return(nil)
 				return mockClient
 			},
 			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_KILLED},
@@ -142,8 +148,14 @@ func TestKill(t *testing.T) {
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-				mockClient.EXPECT().DeleteTrigger(gomock.Any(), gomock.Any()).Return(fmt.Errorf("failed to delete trigger"))
+				mockClient.EXPECT().GetDomain().Return("test-domain")
 				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
+				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).Return(&clientInterface.ListOpenWorkflowExecutionsResponse{
+					Executions: []clientInterface.WorkflowExecutionInfo{
+						{Execution: &clientInterface.WorkflowExecution{RunID: _runID}},
+					},
+				}, nil)
+				mockClient.EXPECT().DeleteTrigger(gomock.Any(), gomock.Any(), _runID).Return(fmt.Errorf("failed to delete trigger"))
 				return mockClient
 			},
 			expectedStatus: v2pb.TriggerRunStatus{State: _triggerRun.Status.State},
