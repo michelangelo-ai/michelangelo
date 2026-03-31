@@ -24,9 +24,18 @@ var Module = fx.Options(
 // It creates an underlying S3 client with static credentials.
 // Returns a pointer to minioClient or an error if initialization fails.
 func newClient(config Config) (BlobStoreClientOut, error) {
+	var creds *credentials.Credentials
+	if config.UseEnvAws {
+		creds = credentials.NewEnvAWS()
+	} else if config.UseIAM {
+		creds = credentials.NewIAM("")
+	} else {
+		creds = credentials.NewStaticV4(config.AwsAccessKeyId, config.AwsSecretAccessKey, "")
+	}
+
 	s3Client, err := minio.New(config.AwsEndpointUrl, &minio.Options{
-		Creds:  credentials.NewStaticV4(config.AwsAccessKeyId, config.AwsSecretAccessKey, ""),
-		Secure: false,
+		Creds:  creds,
+		Secure: true,
 	})
 	if err != nil {
 		return BlobStoreClientOut{}, err

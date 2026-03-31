@@ -16,6 +16,8 @@ minio:
   awsAccessKeyId: "testAccessKey"
   awsSecretAccessKey: "testSecretKey"
   awsEndpointUrl: "http://localhost:9000"
+  useEnvAws: true
+  useIam: false
 `
 
 	// Create a new YAML provider using the YAML configuration.
@@ -43,6 +45,12 @@ minio:
 	if conf.AwsEndpointUrl != "http://localhost:9000" {
 		t.Errorf("expected AwsEndpointUrl 'http://localhost:9000', got %q", conf.AwsEndpointUrl)
 	}
+	if !conf.UseEnvAws {
+		t.Errorf("expected UseEnvAws to be true, got %v", conf.UseEnvAws)
+	}
+	if conf.UseIAM {
+		t.Errorf("expected UseIAM to be false, got %v", conf.UseIAM)
+	}
 }
 
 // TestNewConfig_MissingKey verifies that newConfig returns an empty Config struct
@@ -64,8 +72,8 @@ notminio:
 		t.Fatalf("newConfig returned error: %v", err)
 	}
 
-	// Since the "minio" key is missing, all fields should be empty.
-	if conf.AwsRegion != "" || conf.AwsAccessKeyId != "" || conf.AwsSecretAccessKey != "" || conf.AwsEndpointUrl != "" {
+	// Since the "minio" key is missing, all fields should be empty/false.
+	if conf.AwsRegion != "" || conf.AwsAccessKeyId != "" || conf.AwsSecretAccessKey != "" || conf.AwsEndpointUrl != "" || conf.UseEnvAws || conf.UseIAM {
 		t.Errorf("expected empty Config when key is missing, got %+v", conf)
 	}
 }
