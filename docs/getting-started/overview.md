@@ -192,7 +192,7 @@ A: Yes. Deploy multiple model versions to the same endpoint with traffic splitti
 A: Uniflow automatically:
 - Retries transient failures (network issues, spot instance preemption)
 - Preserves logs and intermediate outputs for debugging
-- Sends notifications (email, Slack) on terminal state
+- Sends notifications (email, Slack) on terminal state — see [Pipeline Notifications](../user-guides/notifications.md)
 
 ### Monitoring & Operations
 
