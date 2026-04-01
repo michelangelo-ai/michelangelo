@@ -22,7 +22,7 @@ This guide covers setting up a local development environment for contributing to
 ### Technologies
 - **Build Tool**: Vite 6.2+
 - **Package Manager**: Yarn (required for workspaces)
-- **Development**: Node.js 22.11.0
+- **Development**: Node.js 24.14.1
 - **Protobuf**: buf CLI for code generation
 - **Container**: Docker for sandbox environment
 
@@ -30,14 +30,14 @@ This guide covers setting up a local development environment for contributing to
 
 ### Prerequisites
 
-**Node.js 22.11.0:**
+**Node.js 24.14.1:**
 ```bash
 # Using nvm (recommended)
-nvm install 22.11.0
-nvm use 22.11.0
+nvm install 24.14.1
+nvm use 24.14.1
 
 # Verify installation
-node --version  # Should output v22.11.0
+node --version  # Should output v24.14.1
 ```
 
 **Yarn:**
