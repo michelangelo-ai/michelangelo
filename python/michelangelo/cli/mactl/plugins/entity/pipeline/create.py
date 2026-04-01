@@ -206,13 +206,6 @@ def convert_crd_metadata_pipeline_create(
         "uid": str(uuid4()),
     }
 
-    # Process trigger configurations if present
-    trigger_map = yaml_dict.get("spec", {}).get("triggerMap")
-    if trigger_map:
-        res["spec"]["manifest"]["triggerMap"] = (
-            populate_pipeline_spec_with_trigger_configs(trigger_map)
-        )
-
     return populate_pipeline_spec_with_workflow_inputs(
         res,
         yaml_dict,
@@ -387,6 +380,13 @@ def populate_pipeline_spec_with_workflow_inputs(
 ) -> dict:
     """Populate pipeline spec with workflow inputs."""
     res["spec"] = deepcopy(yaml_dict["spec"])
+
+    trigger_map = None
+    if "manifest" in res["spec"] and "triggerMap" in res["spec"]["manifest"]:
+        trigger_map = populate_pipeline_spec_with_trigger_configs(
+            res["spec"]["manifest"]["triggerMap"]
+        )
+
     res["spec"]["commit"] = {
         "branch": repo.active_branch.name,
         "git_ref": repo.head.commit.hexsha,
@@ -399,6 +399,10 @@ def populate_pipeline_spec_with_workflow_inputs(
         "filePath": config_file_relative_path,
         "type": "PIPELINE_MANIFEST_TYPE_UNIFLOW",
     }
+
+    if trigger_map:
+        res["spec"]["manifest"]["triggerMap"] = trigger_map
+
     res["spec"]["owner"] = {"name": get_user_name()}
 
     # Add uniflow artifacts if registration succeeded
