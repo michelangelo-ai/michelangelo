@@ -74,6 +74,12 @@ def init_arguments(p: argparse.ArgumentParser):
         help="Choose workflow engine: cadence or temporal (default: cadence).",
     )
     create_p.add_argument(
+        "--wait-timeout",
+        type=int,
+        default=600,
+        help="Seconds to wait for pods to be ready (default: 600).",
+    )
+    create_p.add_argument(
         "--create-compute-cluster",
         action="store_true",
         help="Create an additional cluster for Ray jobs.",
@@ -287,7 +293,7 @@ def _create(ns: argparse.Namespace):
     if "spark" not in ns.exclude:
         _create_spark_operator(helm_existing_repos)
 
-    _kube_wait()
+    _kube_wait(timeout=ns.wait_timeout)
 
     if ns.workflow == "temporal":
         _setup_temporal(links, helm_existing_repos)
@@ -864,7 +870,7 @@ def _kube_apply(path: Path):
     _exec("kubectl", "apply", "-f", str(path))
 
 
-def _kube_wait(pods: bool = True, jobs: bool = True):
+def _kube_wait(pods: bool = True, jobs: bool = True, timeout: int = 600):
     if pods:
         # Wait for all non-job pods to be ready
         _exec(
@@ -874,7 +880,7 @@ def _kube_wait(pods: bool = True, jobs: bool = True):
             "pod",
             "-l",
             "app",
-            "--timeout=600s",
+            f"--timeout={timeout}s",
         )
     if jobs:
         _exec(
@@ -883,7 +889,7 @@ def _kube_wait(pods: bool = True, jobs: bool = True):
             "--all",
             "jobs",
             "--for=condition=complete",
-            "--timeout=600s",
+            f"--timeout={timeout}s",
         )
 
 
