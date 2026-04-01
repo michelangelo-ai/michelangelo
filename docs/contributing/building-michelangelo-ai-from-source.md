@@ -2,6 +2,48 @@
 
 To contribute to the Michelangelo repository, follow the instructions below to build from the main branch.
 
+## Architecture for Contributors
+
+Before diving into build commands, here is a map of the main subsystems and where their code lives. Use this to orient yourself when exploring the repo or deciding where a change belongs.
+
+| Subsystem | Language | Directory | Description |
+|-----------|----------|-----------|-------------|
+| **API Server** | Go | `go/cmd/apiserver/` | Central gRPC server; CRUD for all Michelangelo resources |
+| **Controller Manager** | Go | `go/cmd/controllermgr/` | Kubernetes controllers (RayCluster, SparkJob, InferenceServer, …) |
+| **Worker** | Go | `go/cmd/worker/` | Temporal/Cadence workflow and activity workers |
+| **Ingester** | Go | `go/components/ingester/` | Watches Kubernetes events and propagates state |
+| **Scheduler** | Go | `go/components/scheduler/` | Job assignment strategy and queue interfaces |
+| **Inference Backends** | Go | `go/components/inferenceserver/backends/` | Backend, ModelConfigProvider, RouteProvider plugin interfaces |
+| **Proto / API** | Protobuf | `proto/` | All gRPC service and message definitions |
+| **Generated Go** | Go | `go/gen/` | Auto-generated gRPC stubs — do not edit directly |
+| **Python SDK (Uniflow)** | Python | `python/michelangelo/uniflow/` | `@task` / `@workflow` decorators and execution runtime |
+| **Python CLI (ma)** | Python | `python/michelangelo/cli/` | `ma` command-line tool |
+| **UI** | TypeScript/React | `javascript/` | MA Studio browser interface |
+| **Docs** | Markdown | `docs/` | Documentation source (rendered by Docusaurus in `website/`) |
+
+**How the subsystems connect at runtime:**
+
+```
+ma CLI / SDK
+     │
+     │ gRPC (port 443 / 15566)
+     ▼
+API Server ──► etcd (via Kubernetes CRDs)
+     │
+     ▼
+Controller Manager ──► Kubernetes API (RayCluster, SparkJob CRDs)
+     │                          │
+     │                          ▼
+     │                  Compute Cluster (Ray / Spark pods)
+     │
+     ▼
+Worker ──► Temporal/Cadence ──► Workflow execution
+```
+
+Contributions typically fall into one of these layers. If you are unsure which package to modify, start with the proto definitions for API changes, the controller manager for Kubernetes resource lifecycle changes, or the Uniflow Python SDK for task/workflow runtime changes.
+
+---
+
 ## Prerequisites
 
 Ensure you have the following installed before building:
