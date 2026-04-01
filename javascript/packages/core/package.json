@@ -57,6 +57,10 @@
     "styletron-engine-atomic": "^1.0.0",
     "styletron-react": "^6.1.1"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michelangelo-ai/michelangelo"
+  },
   "publishConfig": {
     "access": "public"
   },
