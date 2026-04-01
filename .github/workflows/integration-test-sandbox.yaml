@@ -1,6 +1,8 @@
 name: Sandbox integration tests
 
 on:
+  push:
+    branches: ["badcount/inte-test"]
   workflow_run:
     workflows: ["Build examples Docker image"]
     types: [completed]
@@ -53,7 +55,10 @@ jobs:
             echo "value=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event_name }}" = "workflow_run" ]; then
             branch="${{ github.event.workflow_run.head_branch }}"
-            # Sanitize: replace '/' with '-' to match docker/metadata-action branch tag
+            tag="${branch//\//-}"
+            echo "value=${tag}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_name }}" != "main" ]; then
+            branch="${{ github.ref_name }}"
             tag="${branch//\//-}"
             echo "value=${tag}" >> "$GITHUB_OUTPUT"
           else
