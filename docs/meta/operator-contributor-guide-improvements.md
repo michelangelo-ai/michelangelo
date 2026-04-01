@@ -4,7 +4,7 @@ This document proposes improvements to the operator and contributor guides based
 
 ## Background
 
-**Operator guide** targets adopters integrating Michelangelo with external ML systems (MLflow, Kubernetes clusters, schedulers, etc.).
+**Operator guide** targets adopters integrating Michelangelo with external ML systems (experiment tracking servers, Kubernetes clusters, schedulers, etc.).
 **Contributor guide** targets developers contributing features to the codebase.
 
 The analysis below identifies structural gaps and specific missing documents, with priority order and rationale.
@@ -73,17 +73,11 @@ Key patterns worth adopting:
 
 Rename `operator-guides/index.md` → `operator-guides/platform-setup.md` and create a new `index.md` as a navigation hub. The hub should describe operator personas (initial deployment, adding compute capacity, integrating ML tooling, ongoing operations) and link to the relevant guide for each.
 
-#### 2. New: Running MLflow Alongside Michelangelo
+#### 2. New: External Integrations Index
 
-**File:** `operator-guides/integrations/mlflow.md`
+**File:** `operator-guides/integrations/index.md`
 
-Michelangelo does not have a native MLflow integration. However, adopters commonly want to run MLflow alongside Michelangelo so their users can log experiments from Uniflow tasks. This guide covers what operators need to set up:
-- Deploying an MLflow tracking server as a separate Kubernetes service
-- Ensuring network connectivity from Uniflow task pods to the MLflow server
-- Making `MLFLOW_TRACKING_URI` available to users
-- Troubleshooting network policy and S3 artifact permission issues
-
-Users call the standard MLflow Python client from `@uniflow.task()` code directly — Michelangelo does not intercept or coordinate these calls.
+A landing page surfacing Michelangelo's existing extension points as first-class integration surfaces. Links to: custom serving backends (existing), custom job scheduler backends (existing), Kueue/Volcano (existing). Modeled on Flyte's Plugin Setup section — makes these guides discoverable rather than buried sub-pages.
 
 #### 3. New: Monitoring & Observability Guide
 
@@ -133,7 +127,7 @@ The current platform setup doc has a table of "domain settings to update" but no
 
 **File:** `operator-guides/integrations/index.md`
 
-A landing page for all integration guides, modeled on Flyte's Plugin Setup section. Links to: MLflow (new), custom serving backends (existing), custom job scheduler backends (existing), Kueue/Volcano (existing). Makes the existing extension point docs discoverable as first-class integration surfaces rather than buried sub-pages.
+A landing page for all integration guides, modeled on Flyte's Plugin Setup section. Links to: custom serving backends (existing), custom job scheduler backends (existing), Kueue/Volcano (existing). Makes the existing extension point docs discoverable as first-class integration surfaces rather than buried sub-pages.
 
 ---
 
@@ -209,13 +203,12 @@ Add an "Architecture for contributors" section at the top: a diagram or table ma
 
 | Priority | Item | Rationale |
 |---|---|---|
-| 1 | MLflow integration guide | Directly addresses stated adopter use case |
-| 2 | Contributing overview / `CONTRIBUTING.md` | Unblocks external contributors entirely |
-| 3 | Operator guide index restructure | Navigation foundation everything else builds on |
-| 4 | PR process + testing strategy | Most common friction points for first contributors |
-| 5 | Troubleshooting guide | High operator value, fast to write from existing knowledge |
-| 6 | Auth/OIDC guide | Required for any production deployment |
-| 7 | Monitoring & observability | Required for production SLOs |
-| 8 | Network/ingress guide | Unblocks non-Uber deployments |
-| 9 | CI pipeline guide | Contributor quality-of-life |
-| 10 | Go code style guide | Polish, reduces review comments |
+| 1 | Contributing overview / `CONTRIBUTING.md` | Unblocks external contributors entirely |
+| 2 | Operator guide index restructure | Navigation foundation everything else builds on |
+| 3 | PR process + testing strategy | Most common friction points for first contributors |
+| 4 | Troubleshooting guide | High operator value, fast to write from existing knowledge |
+| 5 | Auth/OIDC guide | Required for any production deployment |
+| 6 | Monitoring & observability | Required for production SLOs |
+| 7 | Network/ingress guide | Unblocks non-Uber deployments |
+| 8 | CI pipeline guide | Contributor quality-of-life |
+| 9 | Go code style guide | Polish, reduces review comments |
