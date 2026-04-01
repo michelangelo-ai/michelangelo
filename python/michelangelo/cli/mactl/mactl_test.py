@@ -920,10 +920,15 @@ PLUGIN_TEST_DIR_2 = PLUGIN_TEST_DIR / "plugins_2"
 class DiscoverAllPluginsTest(TestCase):
     """Tests for discover_all_plugins function."""
 
-    @patch("michelangelo.cli.mactl.mactl._CONFIG", {"plugin": {"dirs": [str(PLUGIN_TEST_DIR_1)]}})
+    @patch(
+        "michelangelo.cli.mactl.mactl._CONFIG",
+        {"plugin": {"dirs": [str(PLUGIN_TEST_DIR_1)]}},
+    )
     def test_discovers_plugins_from_configured_dirs(self):
         """Core: discovers entity plugins from configured plugin directories."""
-        with patch("michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS", Path("/nonexistent")):
+        with patch(
+            "michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS", Path("/nonexistent")
+        ):
             registry = discover_all_plugins()
 
         self.assertIn("pipeline", registry)
@@ -934,18 +939,23 @@ class DiscoverAllPluginsTest(TestCase):
     @patch("michelangelo.cli.mactl.mactl._CONFIG", {"plugin": {"dirs": []}})
     def test_returns_empty_registry_when_no_entity_dir(self):
         """Edge: returns empty registry when plugin dir has no entity/ subdirectory."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS", Path(tmpdir)):
-                registry = discover_all_plugins()
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            patch("michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS", Path(tmpdir)),
+        ):
+            registry = discover_all_plugins()
 
         self.assertEqual(registry, {})
 
-    @patch("michelangelo.cli.mactl.mactl._CONFIG", {
-        "plugin": {"dirs": [str(PLUGIN_TEST_DIR_1), str(PLUGIN_TEST_DIR_2)]}
-    })
+    @patch(
+        "michelangelo.cli.mactl.mactl._CONFIG",
+        {"plugin": {"dirs": [str(PLUGIN_TEST_DIR_1), str(PLUGIN_TEST_DIR_2)]}},
+    )
     def test_accumulates_plugins_from_multiple_dirs(self):
         """Edge: accumulates plugins from multiple configured directories."""
-        with patch("michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS", Path("/nonexistent")):
+        with patch(
+            "michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS", Path("/nonexistent")
+        ):
             registry = discover_all_plugins()
 
         self.assertIn("pipeline", registry)
@@ -954,7 +964,9 @@ class DiscoverAllPluginsTest(TestCase):
     @patch("michelangelo.cli.mactl.mactl._CONFIG", {})
     def test_returns_empty_registry_when_plugin_config_missing(self):
         """Edge: returns empty registry when plugin config key is absent."""
-        with patch("michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS", Path("/nonexistent")):
+        with patch(
+            "michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS", Path("/nonexistent")
+        ):
             registry = discover_all_plugins()
 
         self.assertEqual(registry, {})
@@ -1005,9 +1017,13 @@ class ApplyCommandPluginsTest(TestCase):
         mock_crds = {"pipeline": mock_crd}
         mock_plugin = MagicMock(spec=["apply_plugin_command"])
 
-        apply_command_plugins(mock_crd, "create", mock_crds, mock_channel, {"pipeline": [mock_plugin]})
+        apply_command_plugins(
+            mock_crd, "create", mock_crds, mock_channel, {"pipeline": [mock_plugin]}
+        )
 
-        mock_plugin.apply_plugin_command.assert_called_once_with(mock_crd, "create", mock_crds, mock_channel)
+        mock_plugin.apply_plugin_command.assert_called_once_with(
+            mock_crd, "create", mock_crds, mock_channel
+        )
 
     def test_no_op_when_entity_not_in_registry(self):
         """Edge: does nothing when entity has no plugins in registry."""
@@ -1015,7 +1031,9 @@ class ApplyCommandPluginsTest(TestCase):
         mock_crd.name = "model"
         mock_plugin = MagicMock(spec=["apply_plugin_command"])
 
-        apply_command_plugins(mock_crd, "create", {}, MagicMock(), {"pipeline": [mock_plugin]})
+        apply_command_plugins(
+            mock_crd, "create", {}, MagicMock(), {"pipeline": [mock_plugin]}
+        )
 
         mock_plugin.apply_plugin_command.assert_not_called()
 
@@ -1025,5 +1043,7 @@ class ApplyCommandPluginsTest(TestCase):
         mock_crd.name = "pipeline"
         mock_plugin = MagicMock(spec=[])  # no apply_plugin_command
 
-        apply_command_plugins(mock_crd, "create", {}, MagicMock(), {"pipeline": [mock_plugin]})
+        apply_command_plugins(
+            mock_crd, "create", {}, MagicMock(), {"pipeline": [mock_plugin]}
+        )
         # no exception raised, plugin silently skipped
