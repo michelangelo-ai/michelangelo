@@ -312,9 +312,7 @@ def discover_all_plugins() -> dict[str, list[object]]:
             _LOG.debug("Found entity plugin: %s", entity_name)
 
             plugin_module = read_module_from_file(
-                entity_name,
-                plugin_dir,
-                len(registry.get(entity_name, []))
+                entity_name, plugin_dir, len(registry.get(entity_name, []))
             )
 
             if plugin_module is not None:
@@ -326,16 +324,14 @@ def discover_all_plugins() -> dict[str, list[object]]:
     _LOG.info(
         "Plugin discovery complete. Found plugins for %d entities: %s",
         len(registry),
-        list(registry.keys())
+        list(registry.keys()),
     )
 
     return registry
 
 
 def apply_entity_plugins(
-    crd: CRD,
-    channel: Channel,
-    plugin_registry: dict[str, list[object]]
+    crd: CRD, channel: Channel, plugin_registry: dict[str, list[object]]
 ) -> None:
     """Apply entity-level plugins from pre-loaded registry.
 
@@ -358,8 +354,7 @@ def apply_entity_plugins(
             plugin.apply_plugins(crd, channel)
         else:
             _LOG.debug(
-                "Plugin module %r has no 'apply_plugins' function (skipped)",
-                plugin
+                "Plugin module %r has no 'apply_plugins' function (skipped)", plugin
             )
 
     _LOG.info("Entity plugins applied for '%s'", crd.name)
@@ -370,7 +365,7 @@ def apply_command_plugins(
     action: str,
     crds: dict[str, CRD],
     channel: Channel,
-    plugin_registry: dict[str, list[object]]
+    plugin_registry: dict[str, list[object]],
 ) -> None:
     """Apply command-level plugins from pre-loaded registry.
 
@@ -388,8 +383,7 @@ def apply_command_plugins(
         return
 
     _LOG.info(
-        "Applying %d command plugin(s) for '%s.%s'",
-        len(plugins), crd.name, action
+        "Applying %d command plugin(s) for '%s.%s'", len(plugins), crd.name, action
     )
 
     for i, plugin in enumerate(plugins):
@@ -399,7 +393,7 @@ def apply_command_plugins(
         else:
             _LOG.debug(
                 "Plugin module %r has no 'apply_plugin_command' function (skipped)",
-                plugin
+                plugin,
             )
 
     _LOG.info("Command plugins applied for '%s.%s'", crd.name, action)
@@ -473,11 +467,7 @@ def main(channel: Channel, plugin_registry: dict[str, list[object]]):
     user_command_crd = str(namespace.entity)
 
     # Apply entity-level plugins from registry
-    apply_entity_plugins(
-        crds[user_command_crd],
-        channel,
-        plugin_registry
-    )
+    apply_entity_plugins(crds[user_command_crd], channel, plugin_registry)
 
     # Handle CRD-level help (e.g., "ma project --help" or "ma project -h")
     handle_crd_action_help(crds[user_command_crd], remaining)
@@ -488,11 +478,7 @@ def main(channel: Channel, plugin_registry: dict[str, list[object]]):
 
     # Apply command-level plugins from registry
     apply_command_plugins(
-        crds[user_command_crd],
-        user_command_action,
-        crds,
-        channel,
-        plugin_registry
+        crds[user_command_crd], user_command_action, crds, channel, plugin_registry
     )
 
     _LOG.debug(

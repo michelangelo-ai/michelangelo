@@ -781,7 +781,11 @@ class MainFunctionTest(TestCase):
         mock_kebab_to_snake.assert_called_once_with("create")
         mock_check_crd.assert_called_once_with(mock_crd, "create")
         mock_apply_command_plugins.assert_called_once_with(
-            mock_crd, "create", {"project": mock_crd}, mock_channel, mock_plugin_registry
+            mock_crd,
+            "create",
+            {"project": mock_crd},
+            mock_channel,
+            mock_plugin_registry,
         )
 
         # Verify ArgumentParser was created and used
