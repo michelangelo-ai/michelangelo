@@ -73,18 +73,17 @@ Key patterns worth adopting:
 
 Rename `operator-guides/index.md` → `operator-guides/platform-setup.md` and create a new `index.md` as a navigation hub. The hub should describe operator personas (initial deployment, adding compute capacity, integrating ML tooling, ongoing operations) and link to the relevant guide for each.
 
-#### 2. New: MLflow Integration Guide
+#### 2. New: Running MLflow Alongside Michelangelo
 
 **File:** `operator-guides/integrations/mlflow.md`
 
-Covers:
-- Configuring the MLflow tracking server endpoint in Michelangelo
-- How experiment runs and metrics from PipelineRuns flow into MLflow
-- Using MLflow for model evaluation — connecting evaluation outputs to MLflow experiments
-- Model registry integration: pushing trained models from Michelangelo to MLflow Model Registry
-- Environment variable and ConfigMap fields for the MLflow connection
+Michelangelo does not have a native MLflow integration. However, adopters commonly want to run MLflow alongside Michelangelo so their users can log experiments from Uniflow tasks. This guide covers what operators need to set up:
+- Deploying an MLflow tracking server as a separate Kubernetes service
+- Ensuring network connectivity from Uniflow task pods to the MLflow server
+- Making `MLFLOW_TRACKING_URI` available to users
+- Troubleshooting network policy and S3 artifact permission issues
 
-This is the most important missing document given that MLflow integration is a primary adopter use case (experiment tracking, evaluation, model registry).
+Users call the standard MLflow Python client from `@uniflow.task()` code directly — Michelangelo does not intercept or coordinate these calls.
 
 #### 3. New: Monitoring & Observability Guide
 
