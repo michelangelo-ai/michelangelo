@@ -1,8 +1,8 @@
 # Architecture Decision Records
 
-This directory contains Architecture Decision Records (ADRs) for cross-cutting concerns that span multiple parts of the codebase — proto/API design, authentication conventions, shared infrastructure patterns, etc.
+This directory contains Architecture Decision Records (ADRs) for cross-cutting concerns that span multiple parts of the codebase.
 
-Language- or runtime-specific decisions live alongside the code they govern:
+Language live alongside the code they govern:
 
 ```
 decisions/              ← cross-cutting decisions (this directory)
@@ -63,6 +63,6 @@ If a decision is later reversed, mark its status as `Superseded by` rather than 
 
 ## Index
 
-| ADR | Title | Status |
-|-----|-------|--------|
-| — | *(none yet)* | — |
+| ADR | Title        | Status |
+| --- | ------------ | ------ |
+| —   | _(none yet)_ | —      |
