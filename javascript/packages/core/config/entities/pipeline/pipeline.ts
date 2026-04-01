@@ -1,3 +1,4 @@
+import { ActionHierarchy } from '#core/components/actions/types';
 import { CreatePipelineRunForm } from './create-pipeline-run-form';
 import { PIPELINE_DETAIL_CONFIG } from './detail';
 import { PIPELINE_LIST_CONFIG } from './list';
@@ -14,7 +15,7 @@ export const PIPELINE_ENTITY_CONFIG: PhaseEntityConfig = {
     {
       display: { label: 'Run', icon: 'playerPlay' },
       component: CreatePipelineRunForm,
-      hierarchy: 'primary',
+      hierarchy: ActionHierarchy.PRIMARY,
     },
   ],
 };

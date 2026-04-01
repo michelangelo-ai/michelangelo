@@ -42,9 +42,9 @@ type ActionTriggerDisplay = {
 };
 
 export enum ActionHierarchy {
-  primary = 'primary',
-  secondary = 'secondary',
-  tertiary = 'tertiary',
+  PRIMARY = 'primary',
+  SECONDARY = 'secondary',
+  TERTIARY = 'tertiary',
 }
 
 export type Data = Record<string, unknown>;

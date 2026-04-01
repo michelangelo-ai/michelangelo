@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
+import { ActionHierarchy } from '#core/components/actions/types';
 import { CellType } from '#core/components/cell/constants';
 import { buildTableConfigFactory } from '#core/components/views/__fixtures__/table-config-factory';
 import { buildExecutionSchemaFactory } from '#core/components/views/execution/__fixtures__/execution-schema-factory';
@@ -734,7 +735,7 @@ describe('EntityDetailRoute', () => {
               {
                 display: { label: 'Run', icon: 'playerPlay' },
                 component: RunDialog,
-                hierarchy: 'primary',
+                hierarchy: ActionHierarchy.PRIMARY,
               },
             ],
             views: [
