@@ -288,7 +288,7 @@ def discover_all_plugins() -> dict[str, list[object]]:
     _LOG.info("Discovering all entity plugins...")
 
     registry: dict[str, list[object]] = {}
-    plugin_dirs = [str(DEFAULT_DIR_PLUGINS), *_CONFIG["plugin"]["dirs"]]
+    plugin_dirs = [str(DEFAULT_DIR_PLUGINS), *_CONFIG.get("plugin", {}).get("dirs", [])]
 
     for plugin_dir_path in plugin_dirs:
         plugin_dir = Path(plugin_dir_path)
