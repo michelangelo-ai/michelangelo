@@ -46,7 +46,7 @@ For a fresh deployment, follow this recommended reading order:
 
 | Guide | Description |
 |-------|-------------|
-| [MLflow](integrations/mlflow.md) | Experiment tracking, model registry sync, and evaluation with MLflow |
+| [MLflow](integrations/mlflow.md) | Deploying MLflow alongside Michelangelo so users can log experiments from Uniflow tasks |
 
 ## Operations
 
