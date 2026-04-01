@@ -1,6 +1,8 @@
 name: Sandbox integration tests
 
 on:
+  push:
+    branches: ["badcount/inte-test"]
   workflow_dispatch:
     inputs:
       image_tag:
