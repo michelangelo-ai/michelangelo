@@ -1,54 +1,77 @@
-# MLflow Integration
+# Using MLflow with Michelangelo
 
-Michelangelo integrates with [MLflow](https://mlflow.org) for experiment tracking, model registry synchronization, and evaluation. This guide explains how to configure the integration and use it from your workflows.
+Michelangelo does not have a native MLflow integration — there are no Michelangelo config fields for MLflow and no built-in synchronization between the two systems. However, MLflow can be deployed alongside Michelangelo and called directly from user code running inside `@uniflow.task()` functions.
 
-## Prerequisites
+This guide covers what operators need to set up so that users can reach an MLflow tracking server from their Uniflow tasks.
 
-- Michelangelo control plane deployed and running
-- MLflow tracking server accessible from the Michelangelo worker pods (check network policies)
-- MLflow version 2.x or later
+## What Operators Need to Do
 
-## Configuration
+### 1. Deploy an MLflow tracking server
 
-Set the MLflow tracking server URI in the controller manager ConfigMap overlay:
+Deploy MLflow separately, outside of Michelangelo. The tracking server needs to be accessible from the Kubernetes worker pods that run Uniflow tasks:
 
 ```yaml
-mlflow:
-  trackingUri: http://mlflow.your-domain.com:5000
-```
-
-Apply the updated overlay and restart the controller manager:
-
-```bash
-kubectl rollout restart deployment/michelangelo-controllermgr -n ma-system
-```
-
-Verify the connection:
-
-```bash
-kubectl -n ma-system logs deployment/michelangelo-controllermgr | grep mlflow
-```
-
-### Using a Secured MLflow Server
-
-If your MLflow server requires authentication, provide credentials via a Kubernetes Secret:
-
-```yaml
-apiVersion: v1
-kind: Secret
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: mlflow-credentials
-  namespace: ma-system
-stringData:
-  MLFLOW_TRACKING_USERNAME: your-username
-  MLFLOW_TRACKING_PASSWORD: your-password
+  name: mlflow
+  namespace: mlflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mlflow
+  template:
+    metadata:
+      labels:
+        app: mlflow
+    spec:
+      containers:
+      - name: mlflow
+        image: ghcr.io/mlflow/mlflow:latest
+        args:
+        - mlflow
+        - server
+        - --backend-store-uri=postgresql://user:pass@postgres:5432/mlflow
+        - --default-artifact-root=s3://your-bucket/mlflow
+        - --host=0.0.0.0
+        ports:
+        - containerPort: 5000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow
+  namespace: mlflow
+spec:
+  selector:
+    app: mlflow
+  ports:
+  - port: 5000
 ```
 
-Reference it in the controller manager deployment via environment variables. Do not hardcode credentials in the ConfigMap.
+Point `--default-artifact-root` at the same S3 bucket Michelangelo uses if you want model artifacts to live in one place.
 
-## Experiment Tracking
+### 2. Check network connectivity
 
-Log parameters, metrics, and artifacts from any `@uniflow.task()` using the standard MLflow Python client. The tracking server URI is inherited from the pod environment — no additional configuration is needed in your task code.
+Uniflow tasks run as pods in the Kubernetes cluster. Ensure pods in the namespace where jobs run can reach the MLflow service:
+
+```bash
+# Test connectivity from a pod in the jobs namespace
+kubectl run connectivity-test --rm -it --restart=Never \
+  --image=curlimages/curl -- \
+  curl -s http://mlflow.mlflow.svc.cluster.local:5000/health
+```
+
+If you have `NetworkPolicy` resources that restrict egress, add a rule allowing pods in the jobs namespace to reach the MLflow service.
+
+### 3. Make the tracking URI available to task pods
+
+Users need `MLFLOW_TRACKING_URI` accessible in their task containers. The simplest approach is to document the URI so users can set it in their code or pipeline configuration.
+
+## What Users Can Do
+
+Once network connectivity is in place, users call the standard MLflow Python client from their `@uniflow.task()` functions. Michelangelo does not intercept or modify these calls:
 
 ```python
 import mlflow
@@ -56,6 +79,7 @@ import michelangelo.uniflow.core as uniflow
 
 @uniflow.task()
 def train_model(data_path: str, learning_rate: float = 0.001):
+    mlflow.set_tracking_uri("http://mlflow.mlflow.svc.cluster.local:5000")
     mlflow.set_experiment("my-training-experiment")
 
     with mlflow.start_run():
@@ -63,152 +87,34 @@ def train_model(data_path: str, learning_rate: float = 0.001):
         mlflow.log_param("learning_rate", learning_rate)
 
         # ... training code ...
-        accuracy = evaluate(model, val_data)
-        loss = compute_loss(model, val_data)
 
         mlflow.log_metric("accuracy", accuracy)
         mlflow.log_metric("val_loss", loss)
-
-        # Log the model artifact
         mlflow.pytorch.log_model(model, artifact_path="model")
 
     return model
 ```
 
-Each `PipelineRun` maps to one or more MLflow runs within the configured experiment. Use `mlflow.set_experiment()` to group runs by pipeline or use case.
-
-### Tagging Runs with Pipeline Metadata
-
-Link MLflow runs back to Michelangelo pipeline runs for traceability:
-
-```python
-import os
-import mlflow
-import michelangelo.uniflow.core as uniflow
-
-@uniflow.task()
-def train_model(data_path: str):
-    with mlflow.start_run():
-        # Tag with Michelangelo metadata available as environment variables
-        mlflow.set_tag("michelangelo.pipeline", os.getenv("MA_PIPELINE_NAME", "unknown"))
-        mlflow.set_tag("michelangelo.run_id", os.getenv("MA_PIPELINE_RUN_ID", "unknown"))
-
-        # ... training and logging ...
-```
-
-## Model Registry Integration
-
-Register a trained model to both the Michelangelo model registry and the MLflow Model Registry in a single workflow step.
-
-```python
-import mlflow
-import michelangelo.uniflow.core as uniflow
-from michelangelo.sdk.model import ModelRegistryClient
-
-@uniflow.task()
-def register_model(model, model_name: str, version_description: str):
-    # 1. Log and register in MLflow
-    with mlflow.start_run():
-        model_info = mlflow.pytorch.log_model(
-            model,
-            artifact_path="model",
-            registered_model_name=model_name,   # registers in MLflow Model Registry
-        )
-
-    # 2. Register in Michelangelo model registry
-    # The S3 artifact path from MLflow and Michelangelo's storage are compatible
-    # when both point to the same S3 bucket
-    client = ModelRegistryClient()
-    client.register(
-        name=model_name,
-        artifact_uri=model_info.model_uri,       # s3://your-bucket/mlflow/...
-        description=version_description,
-    )
-
-    return model_info.model_uri
-```
-
-Both registries store model artifacts in S3-compatible storage. When `minio.awsEndpointUrl` in the controller manager ConfigMap matches the MLflow artifact store configuration, the same S3 paths are accessible from both registries.
-
-## Evaluation Integration
-
-Use MLflow's search API to compare outcomes across PipelineRuns for a given experiment:
-
-```python
-import mlflow
-
-def compare_runs(experiment_name: str, metric: str = "accuracy", n_top: int = 5):
-    """Retrieve the top N runs by a given metric for an experiment."""
-    runs = mlflow.search_runs(
-        experiment_names=[experiment_name],
-        order_by=[f"metrics.{metric} DESC"],
-        max_results=n_top,
-    )
-    return runs[["run_id", "params.learning_rate", f"metrics.{metric}",
-                  "tags.michelangelo.pipeline", "tags.michelangelo.run_id"]]
-```
-
-This makes it straightforward to identify which PipelineRun configuration produced the best model before promoting to the Michelangelo model registry.
-
-### Automated Evaluation Pipelines
-
-Integrate evaluation into a Uniflow workflow:
-
-```python
-import mlflow
-import michelangelo.uniflow.core as uniflow
-
-@uniflow.task()
-def evaluate_and_promote(model_name: str, experiment_name: str, accuracy_threshold: float = 0.90):
-    """Promote a model only if it exceeds the accuracy threshold."""
-    runs = mlflow.search_runs(
-        experiment_names=[experiment_name],
-        filter_string=f"metrics.accuracy > {accuracy_threshold}",
-        order_by=["metrics.accuracy DESC"],
-        max_results=1,
-    )
-
-    if runs.empty:
-        raise ValueError(f"No runs met the accuracy threshold of {accuracy_threshold}")
-
-    best_run_id = runs.iloc[0]["run_id"]
-    model_uri = f"runs:/{best_run_id}/model"
-
-    # Transition the best run's model to Production stage in MLflow
-    client = mlflow.MlflowClient()
-    latest_version = client.get_latest_versions(model_name, stages=["None"])[0]
-    client.transition_model_version_stage(
-        name=model_name,
-        version=latest_version.version,
-        stage="Production",
-    )
-
-    return model_uri
-
-@uniflow.workflow()
-def training_pipeline(data_path: str, model_name: str):
-    model = train_model(data_path)
-    _ = register_model(model, model_name, "Trained on latest dataset")
-    best_uri = evaluate_and_promote(model_name, "my-training-experiment")
-    return best_uri
-```
-
 ## Troubleshooting
 
-### MLflow server unreachable from worker pods
+### MLflow server unreachable from task pods
 
 ```bash
-# Test connectivity from a worker pod
-kubectl -n ma-system exec deployment/michelangelo-worker -- \
-  curl -s http://mlflow.your-domain.com:5000/health
+# Identify which namespace jobs run in
+kubectl get pods -A | grep ray
+
+# Test connectivity from a pod in that namespace
+kubectl -n <jobs-namespace> run test --rm -it --restart=Never \
+  --image=curlimages/curl -- \
+  curl -sv http://mlflow.mlflow.svc.cluster.local:5000/health
 ```
 
-If the request times out, check your `NetworkPolicy` resources in `ma-system`. The worker pods must be able to reach the MLflow tracking server on port 5000 (or whichever port you configured).
+Check your `NetworkPolicy` resources if the connection is refused or times out.
 
-### S3 artifact path mismatches
+### S3 artifact upload failures
 
-MLflow stores artifacts at paths like `s3://bucket/mlflow/<experiment_id>/<run_id>/artifacts/`. Michelangelo's storage root is configured separately via `minio.awsEndpointUrl`. If both are using the same S3 bucket and endpoint, paths are directly compatible. If they differ (e.g., different buckets or endpoints), set `MLFLOW_S3_ENDPOINT_URL` in your task pod environment to explicitly point MLflow at the correct S3 endpoint.
+If MLflow is configured to store artifacts in S3 and uploads fail from task pods, verify that the task pod's IAM role or service account has `s3:PutObject` on the MLflow artifact bucket/prefix. This is a separate permission from the one Michelangelo uses for its own artifact storage.
 
-### Experiment name conflicts
+### MLflow experiment name conflicts
 
-MLflow experiments are global to the tracking server. Use a naming convention that includes the team or project name to avoid conflicts across teams sharing the same MLflow server: `<team>/<project>/<experiment>`, for example `ml-team/fraud-detection/v2-training`.
+MLflow experiments are global to the tracking server. If multiple teams share one MLflow server, establish a naming convention: `<team>/<project>/<experiment>`, for example `ml-team/fraud-detection/v2-training`.
