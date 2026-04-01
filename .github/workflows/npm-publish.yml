@@ -1,6 +1,7 @@
 name: Publish @michelangelo-ai/core to npm
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
@@ -33,7 +34,7 @@ jobs:
 
   publish:
     needs: check-version-change
-    if: needs.check-version-change.outputs.version-changed == 'true'
+    if: needs.check-version-change.outputs.version-changed == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     permissions:
