@@ -62,7 +62,7 @@ def init_arguments(p: argparse.ArgumentParser):
         "--exclude",
         help=(
             "Excludes specified services. "
-            "Available options: apiserver, controllermgr, ui, worker"
+            "Available options: apiserver, controllermgr, ui, worker, prometheus, grafana"
         ),
         nargs="+",
         default=[],
@@ -201,22 +201,24 @@ def _create(ns: argparse.Namespace):
 
     # Prometheus & Grafana
 
-    resources.append("prometheus.yaml")
-    resources.append("grafana.yaml")
-    links.append(
-        (
-            "Prometheus",
-            "http://localhost:9092",
-            "",
+    if "prometheus" not in ns.exclude:
+        resources.append("prometheus.yaml")
+        links.append(
+            (
+                "Prometheus",
+                "http://localhost:9092",
+                "",
+            )
         )
-    )
-    links.append(
-        (
-            "Grafana Dashboard",
-            "http://localhost:3000",
-            "[Username: admin; Password: admin]",
+    if "grafana" not in ns.exclude:
+        resources.append("grafana.yaml")
+        links.append(
+            (
+                "Grafana Dashboard",
+                "http://localhost:3000",
+                "[Username: admin; Password: admin]",
+            )
         )
-    )
 
     if "apiserver" not in ns.exclude:
         resources.append("michelangelo-apiserver.yaml")

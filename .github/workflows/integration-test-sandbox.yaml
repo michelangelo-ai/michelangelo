@@ -91,12 +91,30 @@ jobs:
       - name: Tag image as examples:latest
         run: docker tag ghcr.io/${{ github.repository_owner }}/examples:${{ steps.tag.outputs.value }} docker.io/library/examples:latest
 
+      # Pre-pull heavy images so they're in the host Docker cache.
+      - name: Pre-pull sandbox images
+        run: docker pull mysql:8.0
+
       # Create the k3d sandbox with all services.
+      # Exclude prometheus and grafana — not needed for the integration test.
+      # Run in background so we can import mysql into k3d as soon as the cluster
+      # exists, before the kubectl wait times out waiting for the image pull.
       - name: Create sandbox
-        run: poetry run ma sandbox create --workflow cadence
+        run: |
+          poetry run ma sandbox create --workflow cadence --exclude prometheus grafana &
+          SANDBOX_PID=$!
+
+          # Wait for the k3d cluster to be created, then immediately import mysql
+          # so containerd has it locally before the pod tries to pull from Docker Hub.
+          echo "Waiting for k3d cluster to be ready..."
+          while ! k3d cluster get michelangelo-sandbox 2>/dev/null; do sleep 2; done
+          echo "Cluster ready — importing mysql image into k3d..."
+          k3d image import mysql:8.0 --cluster michelangelo-sandbox
+
+          wait $SANDBOX_PID
 
       # Import image so IMAGE_PULL_POLICY=Never works inside k3d.
-      - name: Import image into k3d
+      - name: Import examples image into k3d
         run: k3d image import docker.io/library/examples:latest --cluster michelangelo-sandbox
 
       # Run the integration test script.
