@@ -101,7 +101,7 @@ jobs:
       # exists, before the kubectl wait times out waiting for the image pull.
       - name: Create sandbox
         run: |
-          poetry run ma sandbox create --workflow cadence --exclude prometheus grafana &
+          poetry run ma sandbox create --workflow cadence --exclude prometheus grafana ui ray spark &
           SANDBOX_PID=$!
 
           # Wait for the k3d cluster to be created, then immediately import mysql

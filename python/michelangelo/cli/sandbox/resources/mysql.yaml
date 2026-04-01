@@ -28,11 +28,11 @@ spec:
             - -u
             - root
             - -proot
-        initialDelaySeconds: 30
+        initialDelaySeconds: 10
         periodSeconds: 10
         timeoutSeconds: 5
         successThreshold: 1
-        failureThreshold: 3
+        failureThreshold: 50
       livenessProbe:
         exec:
           command:
@@ -43,11 +43,11 @@ spec:
             - -u
             - root
             - -proot
-        initialDelaySeconds: 60
+        initialDelaySeconds: 30
         periodSeconds: 30
         timeoutSeconds: 5
         successThreshold: 1
-        failureThreshold: 3
+        failureThreshold: 10
 ---
 apiVersion: v1
 kind: Service
