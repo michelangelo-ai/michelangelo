@@ -26,7 +26,7 @@ spec:
     spec:
       containers:
       - name: ui
-        image: ghcr.io/michelangelo-ai/ui:craig-upgrade-node-24
+        image: ghcr.io/michelangelo-ai/ui:main
         imagePullPolicy: Always
         ports:
         - containerPort: 80
