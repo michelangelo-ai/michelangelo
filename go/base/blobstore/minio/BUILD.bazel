@@ -21,7 +21,6 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
-        "backward_compat_test.go",
         "client_test.go",
         "config_test.go",
     ],
