@@ -1,6 +1,6 @@
 # Operator Guides
 
-These guides cover deploying, configuring, and integrating Michelangelo in a Kubernetes environment. They are written for platform engineers and infrastructure operators responsible for running Michelangelo in production or staging environments.
+These guides cover deploying, configuring, and integrating Michelangelo in a Kubernetes environment. They target platform engineers and infrastructure operators who are responsible for running Michelangelo in production and for connecting it to the broader ML infrastructure their teams already use — experiment tracking, model registries, compute clusters, schedulers, and serving frameworks.
 
 ## Getting Started
 
@@ -41,6 +41,18 @@ For a fresh deployment, follow this recommended reading order:
 |-------|-------------|
 | [Deploying the UI](ui/deploying-michelangelo-ui.md) | Deploy the Michelangelo web UI to Kubernetes |
 | [Local UI Development](ui/local-development-setup.md) | Run the UI locally for development |
+
+## Integrating with Your ML Stack
+
+Michelangelo is designed to be adopted alongside existing ML infrastructure. These guides cover how to connect Michelangelo to the systems your teams already use.
+
+| Guide | Description |
+|-------|-------------|
+| [Experiment Tracking](integrations/experiment-tracking.md) | Connect Uniflow tasks to your experiment tracking server for logging metrics, parameters, and artifacts |
+| [Model Registry](integrations/model-registry.md) | How Michelangelo's model registry works and how downstream systems consume registered models |
+| [Custom Serving Backend](serving/integrate-custom-backend.md) | Add support for any inference framework — Triton, vLLM, TensorRT-LLM, or your own |
+| [Custom Job Scheduler](jobs/extend-michelangelo-batch-job-scheduler-system.md) | Replace or extend the job scheduler — integrate Kueue, Volcano, or a custom assignment strategy |
+| [Register a Compute Cluster](jobs/register-a-compute-cluster-to-michelangelo-control-plane.md) | Connect an existing Kubernetes cluster so Michelangelo can dispatch jobs to it |
 
 ## Operations
 
