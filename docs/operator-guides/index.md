@@ -42,12 +42,6 @@ For a fresh deployment, follow this recommended reading order:
 | [Deploying the UI](ui/deploying-michelangelo-ui.md) | Deploy the Michelangelo web UI to Kubernetes |
 | [Local UI Development](ui/local-development-setup.md) | Run the UI locally for development |
 
-## Integrations
-
-| Guide | Description |
-|-------|-------------|
-| [MLflow](integrations/mlflow.md) | Deploying MLflow alongside Michelangelo so users can log experiments from Uniflow tasks |
-
 ## Operations
 
 | Guide | Description |
