@@ -1,8 +1,9 @@
 name: Sandbox integration tests
 
 on:
-  push:
-    branches: ["badcount/inte-test"]
+  workflow_run:
+    workflows: ["Build examples Docker image"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       image_tag:
@@ -24,10 +25,13 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  EXAMPLES_IMAGE: ghcr.io/${{ github.repository_owner }}/examples:${{ inputs.image_tag || 'latest' }}
 
 jobs:
   sandbox-e2e:
+    # For workflow_run: only proceed if the triggering build succeeded.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
@@ -40,6 +44,21 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      # Compute the image tag: use the input if provided, otherwise derive from branch/event.
+      - name: Compute image tag
+        id: tag
+        run: |
+          if [ -n "${{ inputs.image_tag }}" ]; then
+            echo "value=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_run" ]; then
+            branch="${{ github.event.workflow_run.head_branch }}"
+            # Sanitize: replace '/' with '-' to match docker/metadata-action branch tag
+            tag="${branch//\//-}"
+            echo "value=${tag}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=latest" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Set up Python + Poetry
         uses: ./.github/actions/setup-python-poetry
@@ -62,10 +81,10 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pull examples image
-        run: docker pull ${{ env.EXAMPLES_IMAGE }}
+        run: docker pull ghcr.io/${{ github.repository_owner }}/examples:${{ steps.tag.outputs.value }}
 
       - name: Tag image as examples:latest
-        run: docker tag ${{ env.EXAMPLES_IMAGE }} docker.io/library/examples:latest
+        run: docker tag ghcr.io/${{ github.repository_owner }}/examples:${{ steps.tag.outputs.value }} docker.io/library/examples:latest
 
       # Create the k3d sandbox with all services.
       - name: Create sandbox
