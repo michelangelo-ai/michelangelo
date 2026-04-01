@@ -1,0 +1,83 @@
+name: Sandbox integration tests
+
+# Run on demand or on a nightly schedule against main.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *"   # 03:00 UTC every day
+
+jobs:
+  sandbox-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: ./python
+
+    steps:
+      # ------------------------------------------------------------------
+      # Checkout & base tools
+      # ------------------------------------------------------------------
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python + Poetry
+        uses: ./.github/actions/setup-python-poetry
+
+      # ------------------------------------------------------------------
+      # Install k3d, kubectl, helm  (not pre-installed on ubuntu-latest)
+      # ------------------------------------------------------------------
+      - name: Install k3d
+        run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      # ------------------------------------------------------------------
+      # Create the sandbox (k3d cluster + all services)
+      # ------------------------------------------------------------------
+      - name: Create sandbox
+        run: poetry run mactl sandbox create --workflow cadence
+        env:
+          # k3d pulls images from Docker Hub; no credentials needed for public images.
+          DOCKER_BUILDKIT: "1"
+
+      # ------------------------------------------------------------------
+      # Build the examples Docker image and import it into k3d so that
+      # IMAGE_PULL_POLICY=Never works for task pods.
+      # ------------------------------------------------------------------
+      - name: Build task Docker image
+        run: docker build -t ma-it:latest -f ./examples/Dockerfile .
+
+      - name: Import image into k3d
+        run: k3d image import ma-it:latest --cluster michelangelo-sandbox
+
+      # ------------------------------------------------------------------
+      # Run the integration tests
+      # ------------------------------------------------------------------
+      - name: Run integration tests
+        run: |
+          poetry run pytest \
+            -m "integration" \
+            -v \
+            --timeout=1800 \
+            tests/integration/test_pipeline_e2e.py
+        env:
+          MA_API_SERVER: "localhost:15566"
+          MINIO_ENDPOINT: "http://localhost:9091"
+          MINIO_ACCESS_KEY: minioadmin
+          MINIO_SECRET_KEY: minioadmin
+          MA_IT_NAMESPACE: ma-integration-test
+          MA_IT_IMAGE: ma-it:latest
+          # Sandbox was already created above; no need to recreate.
+          MA_IT_CREATE_SANDBOX: "false"
+
+      # ------------------------------------------------------------------
+      # Always delete the sandbox, even if tests fail.
+      # ------------------------------------------------------------------
+      - name: Delete sandbox
+        if: always()
+        run: poetry run mactl sandbox delete
