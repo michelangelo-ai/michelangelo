@@ -69,7 +69,7 @@ jobs:
 
       # Create the k3d sandbox with all services.
       - name: Create sandbox
-        run: poetry run mactl sandbox create --workflow cadence
+        run: poetry run ma sandbox create --workflow cadence
 
       # Import image so IMAGE_PULL_POLICY=Never works inside k3d.
       - name: Import image into k3d
@@ -88,4 +88,4 @@ jobs:
 
       - name: Delete sandbox
         if: always()
-        run: poetry run mactl sandbox delete
+        run: poetry run ma sandbox delete
