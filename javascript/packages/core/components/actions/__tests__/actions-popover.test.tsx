@@ -113,4 +113,98 @@ describe('ActionsPopover', () => {
     unmount();
     expect(document.body.style.overflow).toBe('');
   });
+
+  it('closes menu on Escape', async () => {
+    const user = userEvent.setup();
+    render(
+      <ActionsPopover
+        actions={[{ display: { label: 'Delete' }, component: DeleteDialog }]}
+        record={{}}
+      />,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+    );
+    await user.click(screen.getByRole('button', { name: 'Actions' }));
+    expect(await screen.findByRole('option', { name: 'Delete' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await waitFor(() => {
+      expect(screen.queryByRole('option', { name: 'Delete' })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('disabled actions', () => {
+    const disabledAction = {
+      display: { label: 'Delete' },
+      component: DeleteDialog,
+      disabled: [{ condition: () => true, message: 'Cannot delete' }],
+    };
+
+    it('renders a disabled action as visible in the menu', async () => {
+      const user = userEvent.setup();
+      render(
+        <ActionsPopover actions={[disabledAction]} record={{}} />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+      await user.click(screen.getByRole('button', { name: 'Actions' }));
+      expect(await screen.findByRole('option', { name: 'Delete' })).toBeInTheDocument();
+    });
+
+    it('does not open the action component when a disabled action is clicked', async () => {
+      const user = userEvent.setup();
+      render(
+        <ActionsPopover actions={[disabledAction]} record={{}} />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+      await user.click(screen.getByRole('button', { name: 'Actions' }));
+      await user.click(await screen.findByRole('option', { name: 'Delete' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('shows the disabled message tooltip when the item is hovered', async () => {
+      const user = userEvent.setup();
+      render(
+        <ActionsPopover actions={[disabledAction]} record={{}} />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+      await user.click(screen.getByRole('button', { name: 'Actions' }));
+      await user.hover(await screen.findByRole('option', { name: 'Delete' }));
+      expect(await screen.findByText('Cannot delete')).toBeInTheDocument();
+    });
+
+    it('closes the menu on Escape when the disabled tooltip is visible', async () => {
+      const user = userEvent.setup();
+      render(
+        <ActionsPopover actions={[disabledAction]} record={{}} />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+      await user.click(screen.getByRole('button', { name: 'Actions' }));
+      await user.hover(await screen.findByRole('option', { name: 'Delete' }));
+      await screen.findByText('Cannot delete'); // tooltip visible confirms item is highlighted
+      await user.keyboard('{Escape}');
+      await waitFor(() => {
+        expect(screen.queryByRole('option', { name: 'Delete' })).not.toBeInTheDocument();
+      });
+    });
+
+    it('passes the record to the disabled condition', async () => {
+      const user = userEvent.setup();
+      const condition = vi.fn().mockReturnValue(false);
+      const record = { id: '42' };
+      render(
+        <ActionsPopover
+          actions={[
+            {
+              display: { label: 'Delete' },
+              component: DeleteDialog,
+              disabled: [{ condition, message: 'nope' }],
+            },
+          ]}
+          record={record}
+        />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+      await user.click(screen.getByRole('button', { name: 'Actions' }));
+      await screen.findByRole('option', { name: 'Delete' });
+      expect(condition).toHaveBeenCalledWith(record);
+    });
+  });
 });
