@@ -83,12 +83,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Pull examples image
-        run: docker pull ghcr.io/${{ github.repository_owner }}/examples:${{ steps.tag.outputs.value }}
-
-      - name: Tag image as examples:latest
-        run: docker tag ghcr.io/${{ github.repository_owner }}/examples:${{ steps.tag.outputs.value }} docker.io/library/examples:latest
-
       # Pre-pull heavy images so they're in the host Docker cache.
       - name: Pre-pull sandbox images
         run: docker pull mysql:8.0
@@ -101,19 +95,27 @@ jobs:
         run: $HOME/.local/bin/poetry run ma sandbox sync --workflow cadence
 
       # Import the examples image into k3s containerd.
-      # Skipped when the cluster already existed (sync path) and the image is
-      # already present.  On first run (create path) we import it here using a
-      # direct pipe to avoid the k3d-tools double-save deadlock.
+      # On first run: pull directly from GHCR into k3s containerd (ctr pull uses
+      # concurrent layer downloads and is much faster than docker save | ctr import).
+      # On subsequent runs: cluster is preserved via `ma sandbox stop`, so the
+      # image is already in containerd and this step is skipped entirely.
       - name: Import examples image into k3s containerd
         run: |
+          IMAGE_SRC="ghcr.io/${{ github.repository_owner }}/examples:${{ steps.tag.outputs.value }}"
+          IMAGE_DST="docker.io/library/examples:latest"
           SERVER="k3d-michelangelo-sandbox-server-0"
           if docker exec "${SERVER}" ctr -n k8s.io images ls \
-               | grep -q 'docker.io/library/examples:latest'; then
+               | grep -q "${IMAGE_DST}"; then
             echo "Image already present in k3s containerd, skipping import."
           else
-            echo "Importing examples image via docker save | ctr import ..."
-            docker save docker.io/library/examples:latest \
-              | docker exec -i "${SERVER}" ctr -n k8s.io images import -
+            echo "Pulling ${IMAGE_SRC} directly into k3s containerd..."
+            docker exec "${SERVER}" \
+              ctr -n k8s.io images pull \
+              --user "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" \
+              "${IMAGE_SRC}"
+            echo "Tagging as ${IMAGE_DST}..."
+            docker exec "${SERVER}" \
+              ctr -n k8s.io images tag "${IMAGE_SRC}" "${IMAGE_DST}"
           fi
 
       # Run the integration test script.
