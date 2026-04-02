@@ -100,6 +100,41 @@ def init_arguments(p: argparse.ArgumentParser):
         ),
     )
 
+    sync_p = sp.add_parser(
+        "sync",
+        help=(
+            "Redeploy services into an existing cluster, skipping cluster creation "
+            "and image import. Falls back to a full create if the cluster does not exist."
+        ),
+    )
+    sync_p.add_argument(
+        "--exclude",
+        help=(
+            "Excludes specified services. "
+            "Available options: apiserver, controllermgr, ui, worker, prometheus, grafana"
+        ),
+        nargs="+",
+        default=[],
+    )
+    sync_p.add_argument(
+        "--workflow",
+        choices=["cadence", "temporal"],
+        default="cadence",
+        help="Choose workflow engine: cadence or temporal (default: cadence).",
+    )
+    sync_p.add_argument(
+        "--wait-timeout",
+        type=int,
+        default=600,
+        help="Seconds to wait for pods to be ready (default: 600).",
+    )
+    sync_p.add_argument(
+        "--include-experimental",
+        help="Include experimental services.",
+        nargs="+",
+        default=[],
+    )
+
     demo_p = sp.add_parser(
         "demo", help="Create demo project and pipelines in the sandbox cluster."
     )
@@ -142,6 +177,8 @@ def run(ns: argparse.Namespace):
 
     if ns.action == "create":
         return _create(ns)
+    if ns.action == "sync":
+        return _sync(ns)
     if ns.action == "delete":
         return _delete(ns)
     if ns.action == "start":
@@ -173,6 +210,88 @@ def _create(ns: argparse.Namespace):
 
     _exec(*args)
 
+    _deploy_services(ns)
+
+
+def _sync(ns: argparse.Namespace):
+    """Redeploy services into an existing cluster without recreating it.
+
+    If the cluster does not exist, falls back to a full ``create``.  When the
+    cluster already exists the k3d cluster creation and ``k3d image import``
+    steps are skipped — the examples image is already present in the k3s
+    containerd content store from the previous run.  All Kubernetes resources
+    are deleted and re-created so each CI run starts with a clean application
+    state.
+    """
+    assert ns
+
+    cluster_exists = (
+        subprocess.run(
+            ["k3d", "cluster", "get", _michelangelo_sandbox_kube_cluster_name],
+            capture_output=True,
+        ).returncode
+        == 0
+    )
+
+    if not cluster_exists:
+        print("No existing cluster found — performing a full create.")
+        return _create(ns)
+
+    print(
+        "Existing cluster found — redeploying services "
+        "(skipping cluster create and image import)."
+    )
+
+    # Start the cluster in case it was stopped at the end of a previous run.
+    _exec("k3d", "cluster", "start", _michelangelo_sandbox_kube_cluster_name)
+
+    # Wait briefly for the API server to become reachable after start.
+    _exec(
+        "kubectl",
+        "wait",
+        "--for=condition=ready",
+        "node",
+        "--all",
+        "--timeout=120s",
+    )
+
+    # Wipe existing workloads so each run gets a clean application state.
+    # Ignore errors — some resource types may not exist on a fresh cluster.
+    print("Cleaning existing workloads...")
+    for resource_type in ["pods", "jobs", "deployments", "statefulsets", "daemonsets"]:
+        subprocess.run(
+            [
+                "kubectl",
+                "delete",
+                resource_type,
+                "--all",
+                "--grace-period=0",
+                "--force",
+                "--ignore-not-found=true",
+            ],
+            check=False,
+            capture_output=True,
+        )
+    for resource_type in ["configmap", "secret"]:
+        subprocess.run(
+            [
+                "kubectl",
+                "delete",
+                resource_type,
+                "--all",
+                "--ignore-not-found=true",
+            ],
+            check=False,
+            capture_output=True,
+        )
+    # Brief pause for deletion to propagate.
+    time.sleep(5)
+
+    _deploy_services(ns)
+
+
+def _deploy_services(ns: argparse.Namespace):
+    assert ns
     resources = [
         "boot.yaml",
         "mysql.yaml",  # MySQL database
@@ -376,7 +495,8 @@ def _create_spark_operator(helm_existing_repos):
 
     _exec(
         "helm",
-        "install",
+        "upgrade",
+        "--install",
         "spark-operator",
         "spark-operator/spark-operator",
         "--namespace",
@@ -407,7 +527,8 @@ def _create_kuberay_operator(helm_existing_repos):
 
     _exec(
         "helm",
-        "install",
+        "upgrade",
+        "--install",
         "kuberay-operator",
         "kuberay/kuberay-operator",
         "--version",

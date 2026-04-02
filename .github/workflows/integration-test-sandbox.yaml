@@ -93,13 +93,30 @@ jobs:
       - name: Pre-pull sandbox images
         run: docker pull mysql:8.0
 
-      # Create the k3d sandbox with all services.
-      - name: Create sandbox
-        run: $HOME/.local/bin/poetry run ma sandbox create --workflow cadence
+      # Create/sync the k3d sandbox with all services.
+      # `sync` reuses an existing cluster (skipping cluster create and image
+      # import) so that subsequent runs are fast; falls back to full create on
+      # first run.
+      - name: Sync sandbox
+        run: $HOME/.local/bin/poetry run ma sandbox sync --workflow cadence
 
-      # Import image so IMAGE_PULL_POLICY=Never works inside k3d.
-      - name: Import examples image into k3d
-        run: k3d image import docker.io/library/examples:latest --cluster michelangelo-sandbox
+      # Import the examples image into k3s containerd.
+      # Skipped when the cluster already existed (sync path) and the image is
+      # already present.  On first run (create path) we import it here using a
+      # direct pipe to avoid the k3d-tools double-save deadlock.
+      - name: Import examples image into k3s containerd
+        run: |
+          SERVER=$(k3d node list --cluster michelangelo-sandbox -o json \
+            | python3 -c "import json,sys; nodes=json.load(sys.stdin); \
+              print(next(n['name'] for n in nodes if n['role']=='server'))")
+          if docker exec "${SERVER}" ctr -n k8s.io images ls \
+               | grep -q 'docker.io/library/examples:latest'; then
+            echo "Image already present in k3s containerd, skipping import."
+          else
+            echo "Importing examples image via docker save | ctr import ..."
+            docker save docker.io/library/examples:latest \
+              | docker exec -i "${SERVER}" ctr -n k8s.io images import -
+          fi
 
       # Run the integration test script.
       - name: Run integration tests
@@ -112,6 +129,6 @@ jobs:
           POLL_INTERVAL: "30"
           TIMEOUT: "1800"
 
-      - name: Delete sandbox
+      - name: Stop sandbox
         if: always()
-        run: $HOME/.local/bin/poetry run ma sandbox delete
+        run: $HOME/.local/bin/poetry run ma sandbox stop || true
