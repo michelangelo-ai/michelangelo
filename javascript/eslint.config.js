@@ -254,12 +254,7 @@ export default [
 
   // Allow default exports in config files and type declarations (required by their frameworks)
   {
-    files: [
-      'vitest.config.ts',
-      '**/vite.config.ts',
-      '**/vite.config.production.ts',
-      '**/*.d.ts',
-    ],
+    files: ['vitest.config.ts', '**/vite.config.ts', '**/vite.config.production.ts', '**/*.d.ts'],
     rules: {
       'no-restricted-syntax': 'off',
     },
