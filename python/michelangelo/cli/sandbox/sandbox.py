@@ -430,11 +430,13 @@ def _deploy_services(ns: argparse.Namespace):
         raise ValueError(f"Unsupported workflow engine: {ns.workflow}")
 
     # Create separate compute cluster if requested
-    if ns.create_compute_cluster:
-        _create_compute_cluster(ns.compute_cluster_name)
-        _create_compute_cluster_crd(ns.compute_cluster_name)
-        _apply_compute_cluster_rbac(ns.compute_cluster_name)
-        _create_compute_cluster_secrets(ns.compute_cluster_name)
+    create_compute_cluster = getattr(ns, "create_compute_cluster", False)
+    compute_cluster_name = getattr(ns, "compute_cluster_name", _default_compute_kube_cluster_name)
+    if create_compute_cluster:
+        _create_compute_cluster(compute_cluster_name)
+        _create_compute_cluster_crd(compute_cluster_name)
+        _apply_compute_cluster_rbac(compute_cluster_name)
+        _create_compute_cluster_secrets(compute_cluster_name)
     else:
         # Use the control plane cluster as the default compute cluster if a
         # dedicated compute cluster is not requested
