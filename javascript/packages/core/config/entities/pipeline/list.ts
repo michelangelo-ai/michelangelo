@@ -9,6 +9,10 @@ export const PIPELINE_CELL_CONFIG: ColumnConfig<object>[] = [
     id: 'metadata.name',
     label: 'Name',
     url: '/${studio.projectId}/${studio.phase}/pipelines/${data.metadata.name}',
+    tooltip: {
+      content: 'Click to filter by this pipeline name',
+      action: 'filter',
+    },
   },
   { id: 'metadata.creationTimestamp.seconds', label: 'Created', type: CellType.DATE },
   PIPELINE_TYPE_CELL,
