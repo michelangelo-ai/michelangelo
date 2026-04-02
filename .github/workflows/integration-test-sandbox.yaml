@@ -65,23 +65,15 @@ jobs:
             echo "value=latest" >> "$GITHUB_OUTPUT"
           fi
 
+      # k3d, kubectl, and helm are pre-installed on the GCP self-hosted runner.
+      # Install Poetry + project dependencies using the system Python 3.11.
       - name: Install Poetry and dependencies
-        working-directory: ./python
         run: |
           curl -sSL https://install.python-poetry.org | python3 -
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           export PATH="$HOME/.local/bin:$PATH"
           poetry env use python3
           poetry install --no-interaction -E dev
-
-      - name: Install k3d
-        run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
-
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v4
-
-      - name: Install Helm
-        uses: azure/setup-helm@v4
 
       # Pull pre-built examples image from GHCR (built by build-examples-image.yaml).
       - name: Log in to GHCR
@@ -106,7 +98,7 @@ jobs:
       # exists, before the kubectl wait times out waiting for the image pull.
       - name: Create sandbox
         run: |
-          poetry run ma sandbox create --workflow cadence &
+          $HOME/.local/bin/poetry run ma sandbox create --workflow cadence &
           SANDBOX_PID=$!
 
           # Wait for the k3d cluster to be created, then immediately import mysql
@@ -135,4 +127,4 @@ jobs:
 
       - name: Delete sandbox
         if: always()
-        run: poetry run ma sandbox delete
+        run: $HOME/.local/bin/poetry run ma sandbox delete
