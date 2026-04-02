@@ -106,9 +106,7 @@ jobs:
       # direct pipe to avoid the k3d-tools double-save deadlock.
       - name: Import examples image into k3s containerd
         run: |
-          SERVER=$(k3d node list --cluster michelangelo-sandbox -o json \
-            | python3 -c "import json,sys; nodes=json.load(sys.stdin); \
-              print(next(n['name'] for n in nodes if n['role']=='server'))")
+          SERVER="k3d-michelangelo-sandbox-server-0"
           if docker exec "${SERVER}" ctr -n k8s.io images ls \
                | grep -q 'docker.io/library/examples:latest'; then
             echo "Image already present in k3s containerd, skipping import."
