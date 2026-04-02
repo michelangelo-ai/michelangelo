@@ -16,11 +16,13 @@ import KeyboardBackspaceIcon from '@mui/icons-material/KeyboardBackspace';
 import Launch from '@mui/icons-material/Launch';
 import MenuIcon from '@mui/icons-material/Menu';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import SearchIcon from '@mui/icons-material/Search';
 import SettingsIcon from '@mui/icons-material/Settings';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import SkipNextIcon from '@mui/icons-material/SkipNext';
+import StopCircleIcon from '@mui/icons-material/StopCircle';
 
 import { createMuiIconAdapter } from './mui-icon-adapter';
 
@@ -39,8 +41,10 @@ export const ICONS = {
   close: createMuiIconAdapter(CloseIcon),
   deleteAlt: createMuiIconAdapter(CancelIcon),
   diamondEmpty: createMuiIconAdapter(CropSquareIcon),
+  stopCircle: createMuiIconAdapter(StopCircleIcon),
   menu: createMuiIconAdapter(MenuIcon),
   overflowMenu: createMuiIconAdapter(MoreVertIcon),
+  pause: createMuiIconAdapter(PauseIcon),
   playerNext: createMuiIconAdapter(SkipNextIcon),
   playerPlay: createMuiIconAdapter(PlayArrowIcon),
   plus: createMuiIconAdapter(AddIcon),
