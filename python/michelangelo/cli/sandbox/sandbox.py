@@ -903,7 +903,7 @@ def _create_cadence_domain(links):
         env={
             "CADENCE_CLI_ADDRESS": "cadence:7933",
         },
-        retry_attempts=3,
+        retry_attempts=20,
     )
 
 
