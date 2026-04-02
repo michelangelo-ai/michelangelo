@@ -24,21 +24,21 @@ export const TRIGGER_ENTITY_CONFIG: PhaseEntityConfig = {
   views: [TRIGGER_LIST_CONFIG, TRIGGER_DETAIL_CONFIG],
   actions: [
     {
-      display: { label: 'Kill' },
+      display: { label: 'Kill', icon: 'stopCircle' },
       component: KillTriggerRunForm,
       disabled: [
         { condition: (r) => !isRunning(r), message: 'Only running trigger runs can be killed' },
       ],
     },
     {
-      display: { label: 'Pause' },
+      display: { label: 'Pause', icon: 'pause' },
       component: PauseTriggerRunForm,
       disabled: [
         { condition: (r) => !isRunning(r), message: 'Only running trigger runs can be paused' },
       ],
     },
     {
-      display: { label: 'Resume' },
+      display: { label: 'Resume', icon: 'playerPlay' },
       component: ResumeTriggerRunForm,
       disabled: [
         { condition: (r) => !isPaused(r), message: 'Only paused trigger runs can be resumed' },

@@ -41,15 +41,35 @@ function FormWrapper({
   return <Form record={record} isOpen={isOpen} onClose={() => setIsOpen(false)} />;
 }
 
-describe('KillTriggerRunForm', () => {
-  it('submits UpdateTriggerRun with KILL action and closes dialog on success', async () => {
+it.each([
+  {
+    Form: KillTriggerRunForm,
+    dialogName: 'Kill Trigger Run',
+    buttonLabel: 'Kill',
+    action: TriggerRunAction.KILL,
+  },
+  {
+    Form: PauseTriggerRunForm,
+    dialogName: 'Pause Trigger Run',
+    buttonLabel: 'Pause',
+    action: TriggerRunAction.PAUSE,
+  },
+  {
+    Form: ResumeTriggerRunForm,
+    dialogName: 'Resume Trigger Run',
+    buttonLabel: 'Resume',
+    action: TriggerRunAction.RESUME,
+  },
+])(
+  '$dialogName: submits UpdateTriggerRun with correct action and closes dialog',
+  async ({ Form, dialogName, buttonLabel, action }) => {
     const user = userEvent.setup();
     const mockRequest = createQueryMockRouter({
       UpdateTriggerRun: { triggerRun: { metadata: { name: 'my-trigger' } } },
     });
 
     render(
-      <FormWrapper Form={KillTriggerRunForm} />,
+      <FormWrapper Form={Form} />,
       buildWrapper([
         getBaseProviderWrapper(),
         getIconProviderWrapper(),
@@ -59,18 +79,16 @@ describe('KillTriggerRunForm', () => {
       ])
     );
 
-    const dialog = await screen.findByRole('dialog', { name: 'Kill Trigger Run' });
-    await user.click(within(dialog).getByRole('button', { name: 'Kill' }));
+    const dialog = await screen.findByRole('dialog', { name: dialogName });
+    await user.click(within(dialog).getByRole('button', { name: buttonLabel }));
 
     await waitFor(() => {
       expect(mockRequest).toHaveBeenCalledWith(
         'UpdateTriggerRun',
         expect.objectContaining({
+          // objectContaining doesn't preserve generics — cast required by Vitest's type inference
           triggerRun: expect.objectContaining({
-            spec: expect.objectContaining({ action: TriggerRunAction.KILL }) as Record<
-              string,
-              unknown
-            >,
+            spec: expect.objectContaining({ action }) as Record<string, unknown>,
           }) as Record<string, unknown>,
         })
       );
@@ -79,8 +97,10 @@ describe('KillTriggerRunForm', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
-  });
+  }
+);
 
+describe('KillTriggerRunForm', () => {
   it('keeps dialog open and displays error when submission fails', async () => {
     const user = userEvent.setup();
     const mockRequest = createQueryMockRouter({ UpdateTriggerRun: new Error('test') });
@@ -101,79 +121,5 @@ describe('KillTriggerRunForm', () => {
 
     await screen.findByText(/Test error/);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-  });
-});
-
-describe('PauseTriggerRunForm', () => {
-  it('submits UpdateTriggerRun with PAUSE action', async () => {
-    const user = userEvent.setup();
-    const mockRequest = createQueryMockRouter({
-      UpdateTriggerRun: { triggerRun: { metadata: { name: 'my-trigger' } } },
-    });
-
-    render(
-      <FormWrapper Form={PauseTriggerRunForm} />,
-      buildWrapper([
-        getBaseProviderWrapper(),
-        getIconProviderWrapper(),
-        getErrorProviderWrapper(),
-        getRouterWrapper({ location: '/test-ns/triggers' }),
-        getServiceProviderWrapper({ request: mockRequest }),
-      ])
-    );
-
-    const dialog = await screen.findByRole('dialog', { name: 'Pause Trigger Run' });
-    await user.click(within(dialog).getByRole('button', { name: 'Pause' }));
-
-    await waitFor(() => {
-      expect(mockRequest).toHaveBeenCalledWith(
-        'UpdateTriggerRun',
-        expect.objectContaining({
-          triggerRun: expect.objectContaining({
-            spec: expect.objectContaining({ action: TriggerRunAction.PAUSE }) as Record<
-              string,
-              unknown
-            >,
-          }) as Record<string, unknown>,
-        })
-      );
-    });
-  });
-});
-
-describe('ResumeTriggerRunForm', () => {
-  it('submits UpdateTriggerRun with RESUME action', async () => {
-    const user = userEvent.setup();
-    const mockRequest = createQueryMockRouter({
-      UpdateTriggerRun: { triggerRun: { metadata: { name: 'my-trigger' } } },
-    });
-
-    render(
-      <FormWrapper Form={ResumeTriggerRunForm} />,
-      buildWrapper([
-        getBaseProviderWrapper(),
-        getIconProviderWrapper(),
-        getErrorProviderWrapper(),
-        getRouterWrapper({ location: '/test-ns/triggers' }),
-        getServiceProviderWrapper({ request: mockRequest }),
-      ])
-    );
-
-    const dialog = await screen.findByRole('dialog', { name: 'Resume Trigger Run' });
-    await user.click(within(dialog).getByRole('button', { name: 'Resume' }));
-
-    await waitFor(() => {
-      expect(mockRequest).toHaveBeenCalledWith(
-        'UpdateTriggerRun',
-        expect.objectContaining({
-          triggerRun: expect.objectContaining({
-            spec: expect.objectContaining({ action: TriggerRunAction.RESUME }) as Record<
-              string,
-              unknown
-            >,
-          }) as Record<string, unknown>,
-        })
-      );
-    });
   });
 });
