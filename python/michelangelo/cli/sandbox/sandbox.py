@@ -392,7 +392,7 @@ def _deploy_services(ns: argparse.Namespace):
     # Create bucket setup with dynamic bucket list
     _create_bucket_setup(bucket_names)
     for r in resources:
-        _kube_create(_dir / "resources" / r)
+        _kube_apply(_dir / "resources" / r)
 
     _assert_command(
         "helm", "Helm not found, please install it: https://helm.sh/docs/intro/install/"
@@ -417,15 +417,15 @@ def _deploy_services(ns: argparse.Namespace):
     if ns.workflow == "temporal":
         _setup_temporal(links, helm_existing_repos)
         if "worker" not in ns.exclude:
-            _kube_create(_dir / "resources/michelangelo-temporal-worker.yaml")
+            _kube_apply(_dir / "resources/michelangelo-temporal-worker.yaml")
         if "controllermgr" not in ns.exclude:
-            _kube_create(_dir / "resources/michelangelo-temporal-controllermgr.yaml")
+            _kube_apply(_dir / "resources/michelangelo-temporal-controllermgr.yaml")
     elif ns.workflow == "cadence":
         _create_cadence_domain(links)
         if "worker" not in ns.exclude:
-            _kube_create(_dir / "resources/michelangelo-worker.yaml")
+            _kube_apply(_dir / "resources/michelangelo-worker.yaml")
         if "controllermgr" not in ns.exclude:
-            _kube_create(_dir / "resources/michelangelo-controllermgr.yaml")
+            _kube_apply(_dir / "resources/michelangelo-controllermgr.yaml")
     else:
         raise ValueError(f"Unsupported workflow engine: {ns.workflow}")
 
@@ -479,7 +479,7 @@ def _create_bucket_setup(bucket_names):
         temp_file.flush()
 
         # Apply the modified bucket setup
-        _exec("kubectl", "create", "-f", temp_file.name)
+        _exec("kubectl", "apply", "-f", temp_file.name)
 
     print(f"📦 Created bucket setup job with buckets: {bucket_names_str}")
 
