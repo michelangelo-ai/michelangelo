@@ -67,6 +67,8 @@ jobs:
 
       - name: Set up Python + Poetry
         uses: ./.github/actions/setup-python-poetry
+        with:
+          python-version: '3.11'
 
       - name: Install k3d
         run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
