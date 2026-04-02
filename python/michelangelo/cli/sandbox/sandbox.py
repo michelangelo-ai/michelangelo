@@ -284,8 +284,22 @@ def _sync(ns: argparse.Namespace):
             check=False,
             capture_output=True,
         )
-    # Brief pause for deletion to propagate.
-    time.sleep(5)
+    # Wait for all pods to fully terminate before deploying new ones.
+    # kubectl wait --for=condition=ready fails with NotFound if it starts
+    # watching pods that are still in Terminating state and then disappear.
+    print("Waiting for old pods to fully terminate...")
+    subprocess.run(
+        [
+            "kubectl",
+            "wait",
+            "pod",
+            "--all",
+            "--for=delete",
+            "--timeout=120s",
+        ],
+        check=False,
+        capture_output=True,
+    )
 
     _deploy_services(ns)
 
