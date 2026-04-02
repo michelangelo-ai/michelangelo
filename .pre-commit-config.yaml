@@ -11,3 +11,9 @@ repos:
         entry: bash tools/run_ruff.sh format
         language: system
         types: [python]
+      - id: prettier
+        name: prettier formatter
+        entry: bash -c 'cd javascript && yarn prettier --write "$@"' --
+        language: system
+        types_or: [ts, tsx, javascript, jsx, json, css, yaml, markdown]
+        pass_filenames: true
