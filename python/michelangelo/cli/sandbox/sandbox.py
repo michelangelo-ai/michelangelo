@@ -262,7 +262,9 @@ def _sync(ns: argparse.Namespace):
 
     # Delete only the Michelangelo application pods/deployments.
     # Infrastructure (mysql, cadence, minio, grafana, prometheus) is left running.
-    app_pods = ["michelangelo-apiserver", "envoy"]
+    # Worker and controllermgr are Pods (not Deployments) so they must be deleted
+    # explicitly; kubectl apply on a Completed pod is a no-op.
+    app_pods = ["michelangelo-apiserver", "envoy", "michelangelo-worker", "michelangelo-controllermgr"]
     app_deployments = ["michelangelo-ui"]
     print("Restarting app pods:", ", ".join(app_pods + app_deployments))
     for pod in app_pods:
@@ -281,6 +283,7 @@ def _sync(ns: argparse.Namespace):
     app_configs = [
         "michelangelo-config", "michelangelo-apiserver-config",
         "envoy-config", "public-config",
+        "michelangelo-worker-config", "michelangelo-controllermgr-config",
     ]
     for cm in app_configs:
         subprocess.run(
@@ -321,18 +324,6 @@ def _deploy_app_services(ns: argparse.Namespace):
     for r in app_resources:
         _kube_apply(_dir / "resources" / r)
 
-    # Wait only for app pods to become ready.
-    wait_timeout = getattr(ns, "wait_timeout", 600)
-    _exec(
-        "kubectl",
-        "wait",
-        "--for=condition=ready",
-        "pod",
-        "-l",
-        "app in (michelangelo-apiserver,envoy,michelangelo-ui)",
-        f"--timeout={wait_timeout}s",
-    )
-
     if ns.workflow == "cadence":
         # Domain registration is a one-time setup done by _create.
         # _sync keeps infrastructure (including Cadence) running between runs,
@@ -341,6 +332,18 @@ def _deploy_app_services(ns: argparse.Namespace):
             _kube_apply(_dir / "resources/michelangelo-worker.yaml")
         if "controllermgr" not in ns.exclude:
             _kube_apply(_dir / "resources/michelangelo-controllermgr.yaml")
+
+    # Wait for all app pods to become ready (includes worker + controllermgr if deployed).
+    wait_timeout = getattr(ns, "wait_timeout", 600)
+    _exec(
+        "kubectl",
+        "wait",
+        "--for=condition=ready",
+        "pod",
+        "-l",
+        "app in (michelangelo-apiserver,envoy,michelangelo-ui,michelangelo-worker,michelangelo-controllermgr)",
+        f"--timeout={wait_timeout}s",
+    )
 
 
 def _deploy_services(ns: argparse.Namespace):
