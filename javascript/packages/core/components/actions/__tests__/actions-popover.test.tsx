@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+import { ActionMenu } from '#core/components/actions/action-menu/action-menu';
 import { ActionsPopover } from '#core/components/actions/actions-popover';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
@@ -205,6 +206,74 @@ describe('ActionsPopover', () => {
       await user.click(screen.getByRole('button', { name: 'Actions' }));
       await screen.findByRole('option', { name: 'Delete' });
       expect(condition).toHaveBeenCalledWith(record);
+    });
+
+    it('uses the first matching rule message', async () => {
+      const user = userEvent.setup();
+      render(
+        <ActionsPopover
+          actions={[
+            {
+              display: { label: 'Delete' },
+              component: DeleteDialog,
+              disabled: [
+                { condition: () => false, message: 'Should not appear' },
+                { condition: () => true, message: 'Second rule matches' },
+              ],
+            },
+          ]}
+          record={{}}
+        />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+      await user.click(screen.getByRole('button', { name: 'Actions' }));
+      await user.hover(await screen.findByRole('option', { name: 'Delete' }));
+      expect(await screen.findByText('Second rule matches')).toBeInTheDocument();
+      expect(screen.queryByText('Should not appear')).not.toBeInTheDocument();
+    });
+
+    it('shows only one tooltip at a time when hovering between two disabled items', async () => {
+      const user = userEvent.setup();
+      render(
+        <ActionMenu
+          actions={[
+            {
+              display: { label: 'Delete' },
+              component: DeleteDialog,
+              disabled: [{ condition: () => true, message: 'Cannot delete' }],
+            },
+            {
+              display: { label: 'Archive' },
+              component: DeleteDialog,
+              disabled: [{ condition: () => true, message: 'Cannot archive' }],
+            },
+          ]}
+          record={{}}
+          onSelectAction={vi.fn()}
+        />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+      const deleteOption = await screen.findByRole('option', { name: 'Delete' });
+      const archiveOption = screen.getByRole('option', { name: 'Archive' });
+      await user.hover(deleteOption);
+      await screen.findByText('Cannot delete');
+      await user.hover(archiveOption);
+      expect(await screen.findByText('Cannot archive')).toBeInTheDocument();
+      expect(screen.queryByText('Cannot delete')).not.toBeInTheDocument();
+    });
+
+    it('enabled and disabled actions coexist — enabled action still opens its component', async () => {
+      const user = userEvent.setup();
+      render(
+        <ActionsPopover
+          actions={[disabledAction, { display: { label: 'Edit' }, component: DeleteDialog }]}
+          record={{}}
+        />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+      await user.click(screen.getByRole('button', { name: 'Actions' }));
+      await user.click(await screen.findByRole('option', { name: 'Edit' }));
+      expect(await screen.findByRole('dialog')).toBeInTheDocument();
     });
   });
 });

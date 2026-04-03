@@ -8,8 +8,6 @@ import type { MenuAdapterProps } from 'baseui/list';
 import type { ComponentActionConfig, Data, SelectedAction } from '#core/components/actions/types';
 
 type ActionMenuItemProps = {
-  // action-menu.tsx pre-computes disabled state before passing items to BaseUI —
-  // ActionConfig.disabled is a rule array; StatefulMenu expects a boolean.
   item: Omit<ComponentActionConfig, 'disabled'> & {
     disabled: boolean;
     disabledMessage: string | undefined;
@@ -19,10 +17,22 @@ type ActionMenuItemProps = {
   onClose?: () => void;
   hoveredItem: object | null;
   setHoveredItem: (item: object | null) => void;
+  keyboardActive: boolean;
+  setKeyboardActive: (active: boolean) => void;
 } & Omit<MenuAdapterProps, 'children' | 'item'>;
 
 export const ActionMenuItem = forwardRef<HTMLLIElement, ActionMenuItemProps>((props, ref) => {
-  const { item: action, record, onSelectAction, onClose, hoveredItem, setHoveredItem, ...baseMenuProps } = props;
+  const {
+    item: action,
+    record,
+    onSelectAction,
+    onClose,
+    hoveredItem,
+    setHoveredItem,
+    keyboardActive,
+    setKeyboardActive,
+    ...baseMenuProps
+  } = props;
   const isHovered = hoveredItem === action;
 
   const menuItem = (
@@ -55,20 +65,26 @@ export const ActionMenuItem = forwardRef<HTMLLIElement, ActionMenuItemProps>((pr
       accessibilityType={ACCESSIBILITY_TYPE.tooltip}
       showArrow
       placement={PLACEMENT.left}
-      isOpen={!!baseMenuProps.$isHighlighted || isHovered}
-      onMouseEnter={() => setHoveredItem(action)}
-      onMouseLeave={() => setHoveredItem(null)}
+      isOpen={(!!baseMenuProps.$isHighlighted && keyboardActive) || isHovered}
       popperOptions={{
         modifiers: {
           flip: { enabled: false }, // respect the placement prop; flip would override it
           preventOverflow: { enabled: true, boundariesElement: 'window', padding: 8 },
         },
       }}
-      overrides={{ Body: { style: { pointerEvents: 'none' } } }}
       onEsc={onClose}
+      // Pass hover handlers as Tooltip props — BaseUI's Popover calls these from
+      // onAnchorMouseEnter/onAnchorMouseLeave. Placing them on the wrapper div
+      // does NOT work because Popover's cloneElement replaces div-level handlers.
+      onMouseEnterDelay={0}
+      onMouseLeaveDelay={0}
+      onMouseEnter={() => {
+        setHoveredItem(action);
+        setKeyboardActive(false);
+      }}
+      onMouseLeave={() => setHoveredItem(null)}
     >
-      {/* Wrapper div required for BaseUI tooltip event delegation */}
-      <div>{menuItem}</div>
+      {menuItem}
     </Tooltip>
   );
 });
