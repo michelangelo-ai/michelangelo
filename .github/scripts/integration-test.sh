@@ -73,19 +73,16 @@ wait_for_run() {
   done
 }
 
-# Run a pipeline and return the generated run name.
-# Usage: run_name=$(run_pipeline <namespace> <pipeline-name>)
-run_pipeline() {
-  local ns="$1" name="$2"
-  log "Running pipeline '${name}' in namespace '${ns}'"
-  # ma pipeline run prints a proto response that includes metadata.name.
-  ma pipeline run -n "${ns}" --name "${name}" \
-    | grep -oP '(?<=name: ")[^"]+|(?<=name: )run-\S+' \
-    | head -1
-}
+# ---------------------------------------------------------------------------
+# Step 1: clean up namespace from previous runs for a fresh state
+# ---------------------------------------------------------------------------
+
+log "Cleaning up namespace '${NAMESPACE}' from previous runs..."
+kubectl delete namespace "${NAMESPACE}" --ignore-not-found=true --wait=true || true
+log "Namespace cleanup done."
 
 # ---------------------------------------------------------------------------
-# Step 1: upload bert_local.tar to MinIO
+# Step 2: upload bert_local.tar to MinIO
 # ---------------------------------------------------------------------------
 
 cd "${PYTHON_DIR}"
@@ -100,18 +97,19 @@ AWS_SECRET_ACCESS_KEY="${MINIO_SECRET_KEY}" \
 log "Upload complete."
 
 # ---------------------------------------------------------------------------
-# Step 2: create demo project + register demo pipelines
+# Step 3: create demo project + register demo pipelines
 # ---------------------------------------------------------------------------
 
 log "Creating demo project and registering pipelines..."
 ma sandbox demo pipeline
 
 # ---------------------------------------------------------------------------
-# Step 3: run training-pipeline (bert_cola)
+# Step 4: run training-pipeline (bert_cola)
 # ---------------------------------------------------------------------------
 
 log "=== Test: training-pipeline (bert_cola) ==="
-RUN_NAME=$(run_pipeline "${NAMESPACE}" "training-pipeline")
+# The demo setup already creates run-training-pipeline; wait for it directly.
+RUN_NAME="run-training-pipeline"
 log "Pipeline run name: ${RUN_NAME}"
 wait_for_run "${RUN_NAME}"
 
