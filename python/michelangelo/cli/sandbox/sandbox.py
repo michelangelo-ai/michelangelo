@@ -334,7 +334,9 @@ def _deploy_app_services(ns: argparse.Namespace):
     )
 
     if ns.workflow == "cadence":
-        _create_cadence_domain([])
+        # Domain registration is a one-time setup done by _create.
+        # _sync keeps infrastructure (including Cadence) running between runs,
+        # so the domain is already registered — no need to re-register.
         if "worker" not in ns.exclude:
             _kube_apply(_dir / "resources/michelangelo-worker.yaml")
         if "controllermgr" not in ns.exclude:
