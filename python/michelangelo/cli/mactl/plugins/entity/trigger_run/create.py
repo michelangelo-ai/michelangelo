@@ -92,9 +92,7 @@ def generate_create(crd: crd_module.CRD, channel: Channel, parser: ArgumentParse
         _self: crd_module.CRD = bound_args.arguments["self"]
         namespace = crd_module.get_single_arg(bound_args.arguments, "namespace")
         pipeline_name = crd_module.get_single_arg(bound_args.arguments, "pipeline")
-        trigger_name = crd_module.get_single_arg(
-            bound_args.arguments, "trigger_name"
-        )
+        trigger_name = crd_module.get_single_arg(bound_args.arguments, "trigger_name")
 
         _LOG.info(
             f"Creating TriggerRun for pipeline={pipeline_name}, "
@@ -214,9 +212,7 @@ def generate_create(crd: crd_module.CRD, channel: Channel, parser: ArgumentParse
             )
         except RpcError as err:
             _LOG.error(f"gRPC error creating TriggerRun: {err}")
-            raise RuntimeError(
-                f"Failed to create TriggerRun: {err.details()}"
-            ) from err
+            raise RuntimeError(f"Failed to create TriggerRun: {err.details()}") from err
 
         _LOG.info(
             f"Successfully created TriggerRun: {response.trigger_run.metadata.name}"

@@ -403,9 +403,7 @@ class GenerateCreateFunctionTest(TestCase):
     ):
         """Test ValueError when trigger name is not in the trigger map."""
         mock_msg_to_dict.return_value = {
-            "trigger_map": {
-                "existing-trigger": {"cronSchedule": {"cron": "0 0 * * *"}}
-            }
+            "trigger_map": {"existing-trigger": {"cronSchedule": {"cron": "0 0 * * *"}}}
         }
 
         mock_pipeline = Mock()
