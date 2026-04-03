@@ -104,7 +104,7 @@ log "Upload complete."
 # ---------------------------------------------------------------------------
 
 log "Creating demo project and registering pipelines..."
-ma sandbox demo create pipeline
+ma sandbox demo pipeline
 
 # ---------------------------------------------------------------------------
 # Step 3: run training-pipeline (bert_cola)
