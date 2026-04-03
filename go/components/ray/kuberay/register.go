@@ -26,6 +26,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&rayv1.RayCluster{},
 		&rayv1.RayClusterList{},
+		&rayv1.RayJob{},
+		&rayv1.RayJobList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil

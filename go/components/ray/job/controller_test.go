@@ -10,19 +10,20 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client/clientmocks"
 	jobscluster "github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
-	jobtypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
+	jobsutils "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/utils"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
-	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	corev1 "k8s.io/api/core/v1"
-	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/cache"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -31,7 +32,6 @@ import (
 const (
 	rayJobName      = "test-job"
 	testNamespace   = "default"
-	testClusterName = "test-cluster"
 	assignedCluster = "cluster-1"
 )
 
@@ -62,15 +62,17 @@ func (m *mockClusterCache) addCluster(name string, cluster *v2pb.Cluster) {
 	m.clusters[name] = cluster
 }
 
-func TestReconciler_Reconcile(t *testing.T) {
-	ctx := context.Background()
-
-	// Mock environment
+func newTestScheme() *runtime.Scheme {
 	scheme := runtime.NewScheme()
 	kubescheme.AddToScheme(scheme)
 	v2pb.AddToScheme(scheme)
+	return scheme
+}
 
-	// Test cases
+func TestReconciler_Reconcile(t *testing.T) {
+	ctx := context.Background()
+	scheme := newTestScheme()
+
 	tests := []struct {
 		name             string
 		setup            func() []client.Object
@@ -84,8 +86,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 		{
 			name: "No ray job",
 			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				return objects
+				return []client.Object{}
 			},
 			setupMocks:      func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {},
 			expectedState:   v2pb.RAY_JOB_STATE_INVALID,
@@ -99,19 +100,16 @@ func TestReconciler_Reconcile(t *testing.T) {
 		{
 			name: "Cluster not set",
 			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				rayJob := &v2pb.RayJob{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       rayJobName,
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Spec: v2pb.RayJobSpec{
-						Cluster: nil,
+				return []client.Object{
+					&v2pb.RayJob{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       rayJobName,
+							Namespace:  testNamespace,
+							Generation: 1,
+						},
+						Spec: v2pb.RayJobSpec{Cluster: nil},
 					},
 				}
-				objects = append(objects, rayJob)
-				return objects
 			},
 			setupMocks:      func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {},
 			expectedState:   v2pb.RAY_JOB_STATE_FAILED,
@@ -125,22 +123,21 @@ func TestReconciler_Reconcile(t *testing.T) {
 		{
 			name: "Cluster not found",
 			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				rayJob := &v2pb.RayJob{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       rayJobName,
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Spec: v2pb.RayJobSpec{
-						Cluster: &apipb.ResourceIdentifier{
-							Name:      "missing-cluster",
-							Namespace: testNamespace,
+				return []client.Object{
+					&v2pb.RayJob{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       rayJobName,
+							Namespace:  testNamespace,
+							Generation: 1,
+						},
+						Spec: v2pb.RayJobSpec{
+							Cluster: &apipb.ResourceIdentifier{
+								Name:      "missing-cluster",
+								Namespace: testNamespace,
+							},
 						},
 					},
 				}
-				objects = append(objects, rayJob)
-				return objects
 			},
 			setupMocks:      func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {},
 			expectedState:   v2pb.RAY_JOB_STATE_FAILED,
@@ -154,34 +151,32 @@ func TestReconciler_Reconcile(t *testing.T) {
 		{
 			name: "cluster is not ready",
 			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				rayJob := &v2pb.RayJob{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       rayJobName,
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Spec: v2pb.RayJobSpec{
-						Cluster: &apipb.ResourceIdentifier{
-							Name:      "existing-cluster",
-							Namespace: testNamespace,
+				return []client.Object{
+					&v2pb.RayJob{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       rayJobName,
+							Namespace:  testNamespace,
+							Generation: 1,
 						},
-						Entrypoint: "echo Hello World",
+						Spec: v2pb.RayJobSpec{
+							Cluster: &apipb.ResourceIdentifier{
+								Name:      "existing-cluster",
+								Namespace: testNamespace,
+							},
+							Entrypoint: "echo Hello World",
+						},
+					},
+					&v2pb.RayCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       "existing-cluster",
+							Namespace:  testNamespace,
+							Generation: 1,
+						},
+						Status: v2pb.RayClusterStatus{
+							State: v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+						},
 					},
 				}
-				cluster := &v2pb.RayCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "existing-cluster",
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Status: v2pb.RayClusterStatus{
-						State: v2pb.RAY_CLUSTER_STATE_PROVISIONING,
-					},
-				}
-				objects = append(objects, rayJob)
-				objects = append(objects, cluster)
-				return objects
 			},
 			setupMocks:      func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {},
 			expectedState:   v2pb.RAY_JOB_STATE_INITIALIZING,
@@ -193,128 +188,39 @@ func TestReconciler_Reconcile(t *testing.T) {
 			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {},
 		},
 		{
-			name: "job status unknown - requeue and initializing",
+			name: "cluster is ready but not assigned",
 			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				rayJob := &v2pb.RayJob{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       rayJobName,
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Spec: v2pb.RayJobSpec{
-						Cluster: &apipb.ResourceIdentifier{
-							Name:      "existing-cluster",
-							Namespace: testNamespace,
+				return []client.Object{
+					&v2pb.RayJob{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       rayJobName,
+							Namespace:  testNamespace,
+							Generation: 1,
 						},
-						Entrypoint: "echo Hello World",
-					},
-					Status: v2pb.RayJobStatus{
-						State: v2pb.RAY_JOB_STATE_INITIALIZING,
-						StatusConditions: []*apipb.Condition{
-							{
-								Type:   "Launched",
-								Status: apipb.CONDITION_STATUS_TRUE,
+						Spec: v2pb.RayJobSpec{
+							Cluster: &apipb.ResourceIdentifier{
+								Name:      "existing-cluster",
+								Namespace: testNamespace,
 							},
+							Entrypoint: "echo Hello World",
+						},
+					},
+					&v2pb.RayCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       "existing-cluster",
+							Namespace:  testNamespace,
+							Generation: 1,
+						},
+						Status: v2pb.RayClusterStatus{
+							State:      v2pb.RAY_CLUSTER_STATE_READY,
+							Assignment: nil,
 						},
 					},
 				}
-				cluster := &v2pb.RayCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "existing-cluster",
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Status: v2pb.RayClusterStatus{
-						State: v2pb.RAY_CLUSTER_STATE_READY,
-						Assignment: &v2pb.AssignmentInfo{
-							Cluster: assignedCluster,
-						},
-					},
-				}
-				objects = append(objects, rayJob)
-				objects = append(objects, cluster)
-				return objects
 			},
-			setupMocks: func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {
-				mcc.addCluster(assignedCluster, &v2pb.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: assignedCluster,
-					},
-				})
-				// Return an unknown/unsupported status string - mapper will set State to INVALID
-				mfc.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(&jobtypes.JobStatus{
-					Ray: &v2pb.RayJobStatus{
-						JobStatus: "SOMETHING_WEIRD",
-						State:     v2pb.RAY_JOB_STATE_INVALID,
-						Message:   "",
-					},
-				}, nil)
-			},
+			setupMocks:      func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {},
 			expectedState:   v2pb.RAY_JOB_STATE_INVALID,
-			expectedMessage: "",
-			errorAssertion:  require.NoError,
-			postCheck: func(res ctrl.Result) {
-				assert.Equal(t, requeueAfter, res.RequeueAfter)
-			},
-			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
-				assert.Equal(t, "SOMETHING_WEIRD", job.Status.JobStatus)
-			},
-		},
-		{
-			name: "get job status error - requeue and state unchanged",
-			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				rayJob := &v2pb.RayJob{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       rayJobName,
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Spec: v2pb.RayJobSpec{
-						Cluster: &apipb.ResourceIdentifier{
-							Name:      "existing-cluster",
-							Namespace: testNamespace,
-						},
-						Entrypoint: "echo Hello World",
-					},
-					Status: v2pb.RayJobStatus{
-						State: v2pb.RAY_JOB_STATE_INITIALIZING,
-						StatusConditions: []*apipb.Condition{
-							{
-								Type:   "Launched",
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-						},
-					},
-				}
-				cluster := &v2pb.RayCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "existing-cluster",
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Status: v2pb.RayClusterStatus{
-						State: v2pb.RAY_CLUSTER_STATE_READY,
-						Assignment: &v2pb.AssignmentInfo{
-							Cluster: assignedCluster,
-						},
-					},
-				}
-				objects = append(objects, rayJob)
-				objects = append(objects, cluster)
-				return objects
-			},
-			setupMocks: func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {
-				mcc.addCluster(assignedCluster, &v2pb.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: assignedCluster,
-					},
-				})
-				mfc.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("backend down"))
-			},
-			expectedState:   v2pb.RAY_JOB_STATE_INITIALIZING,
-			expectedMessage: "",
+			expectedMessage: "waiting for RayCluster assignment",
 			errorAssertion:  require.NoError,
 			postCheck: func(res ctrl.Result) {
 				assert.Equal(t, requeueAfter, res.RequeueAfter)
@@ -322,37 +228,37 @@ func TestReconciler_Reconcile(t *testing.T) {
 			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {},
 		},
 		{
-			name: "cluster is ready but not assigned",
+			name: "cluster assigned but not in cache",
 			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				rayJob := &v2pb.RayJob{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       rayJobName,
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Spec: v2pb.RayJobSpec{
-						Cluster: &apipb.ResourceIdentifier{
-							Name:      "existing-cluster",
-							Namespace: testNamespace,
+				return []client.Object{
+					&v2pb.RayJob{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       rayJobName,
+							Namespace:  testNamespace,
+							Generation: 1,
 						},
-						Entrypoint: "echo Hello World",
+						Spec: v2pb.RayJobSpec{
+							Cluster: &apipb.ResourceIdentifier{
+								Name:      "existing-cluster",
+								Namespace: testNamespace,
+							},
+							Entrypoint: "echo Hello World",
+						},
+					},
+					&v2pb.RayCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       "existing-cluster",
+							Namespace:  testNamespace,
+							Generation: 1,
+						},
+						Status: v2pb.RayClusterStatus{
+							State: v2pb.RAY_CLUSTER_STATE_READY,
+							Assignment: &v2pb.AssignmentInfo{
+								Cluster: "missing-cluster",
+							},
+						},
 					},
 				}
-				cluster := &v2pb.RayCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "existing-cluster",
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Status: v2pb.RayClusterStatus{
-						State:      v2pb.RAY_CLUSTER_STATE_READY,
-						Assignment: nil,
-					},
-				}
-				objects = append(objects, rayJob)
-				objects = append(objects, cluster)
-				return objects
 			},
 			setupMocks:      func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {},
 			expectedState:   v2pb.RAY_JOB_STATE_INVALID,
@@ -366,52 +272,48 @@ func TestReconciler_Reconcile(t *testing.T) {
 		{
 			name: "cluster is ready and assigned - job created successfully",
 			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				rayJob := &v2pb.RayJob{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       rayJobName,
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Spec: v2pb.RayJobSpec{
-						Cluster: &apipb.ResourceIdentifier{
-							Name:      "existing-cluster",
-							Namespace: testNamespace,
+				return []client.Object{
+					&v2pb.RayJob{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       rayJobName,
+							Namespace:  testNamespace,
+							Generation: 1,
 						},
-						Entrypoint: "echo Hello World",
-					},
-				}
-				cluster := &v2pb.RayCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "existing-cluster",
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Status: v2pb.RayClusterStatus{
-						State: v2pb.RAY_CLUSTER_STATE_READY,
-						Assignment: &v2pb.AssignmentInfo{
-							Cluster: assignedCluster,
+						Spec: v2pb.RayJobSpec{
+							Cluster: &apipb.ResourceIdentifier{
+								Name:      "existing-cluster",
+								Namespace: testNamespace,
+							},
+							Entrypoint: "echo Hello World",
 						},
 					},
-					Spec: v2pb.RayClusterSpec{
-						Head: &v2pb.RayHeadSpec{
-							Pod: &corev1.PodTemplateSpec{
-								Spec: corev1.PodSpec{
-									Containers: []corev1.Container{},
+					&v2pb.RayCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       "existing-cluster",
+							Namespace:  testNamespace,
+							Generation: 1,
+						},
+						Status: v2pb.RayClusterStatus{
+							State: v2pb.RAY_CLUSTER_STATE_READY,
+							Assignment: &v2pb.AssignmentInfo{
+								Cluster: assignedCluster,
+							},
+						},
+						Spec: v2pb.RayClusterSpec{
+							Head: &v2pb.RayHeadSpec{
+								Pod: &corev1.PodTemplateSpec{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{},
+									},
 								},
 							},
 						},
 					},
 				}
-				objects = append(objects, rayJob)
-				objects = append(objects, cluster)
-				return objects
 			},
 			setupMocks: func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {
 				mcc.addCluster(assignedCluster, &v2pb.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: assignedCluster,
-					},
+					ObjectMeta: metav1.ObjectMeta{Name: assignedCluster},
 				})
 				mfc.EXPECT().CreateJob(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 			},
@@ -422,7 +324,6 @@ func TestReconciler_Reconcile(t *testing.T) {
 				assert.Equal(t, requeueAfter, res.RequeueAfter)
 			},
 			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
-				// Verify LaunchedCondition is TRUE
 				var launchedCond *apipb.Condition
 				for _, cond := range job.GetStatus().StatusConditions {
 					if cond.Type == "Launched" {
@@ -435,441 +336,41 @@ func TestReconciler_Reconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "cluster assigned but not in cache",
-			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				rayJob := &v2pb.RayJob{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       rayJobName,
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Spec: v2pb.RayJobSpec{
-						Cluster: &apipb.ResourceIdentifier{
-							Name:      "existing-cluster",
-							Namespace: testNamespace,
-						},
-						Entrypoint: "echo Hello World",
-					},
-				}
-				cluster := &v2pb.RayCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "existing-cluster",
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Status: v2pb.RayClusterStatus{
-						State: v2pb.RAY_CLUSTER_STATE_READY,
-						Assignment: &v2pb.AssignmentInfo{
-							Cluster: "missing-cluster",
-						},
-					},
-				}
-				objects = append(objects, rayJob)
-				objects = append(objects, cluster)
-				return objects
-			},
-			setupMocks: func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {
-				// Don't add cluster to cache
-			},
-			expectedState:   v2pb.RAY_JOB_STATE_INVALID,
-			expectedMessage: "waiting for RayCluster assignment",
-			errorAssertion:  require.NoError,
-			postCheck: func(res ctrl.Result) {
-				assert.Equal(t, requeueAfter, res.RequeueAfter)
-			},
-			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {},
-		},
-		{
-			name: "job already launched - check running status",
-			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				rayJob := &v2pb.RayJob{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       rayJobName,
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Spec: v2pb.RayJobSpec{
-						Cluster: &apipb.ResourceIdentifier{
-							Name:      "existing-cluster",
-							Namespace: testNamespace,
-						},
-						Entrypoint: "echo Hello World",
-					},
-					Status: v2pb.RayJobStatus{
-						State: v2pb.RAY_JOB_STATE_INITIALIZING,
-						StatusConditions: []*apipb.Condition{
-							{
-								Type:   "Launched",
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-						},
-					},
-				}
-				cluster := &v2pb.RayCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "existing-cluster",
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Status: v2pb.RayClusterStatus{
-						State: v2pb.RAY_CLUSTER_STATE_READY,
-						Assignment: &v2pb.AssignmentInfo{
-							Cluster: assignedCluster,
-						},
-					},
-				}
-				objects = append(objects, rayJob)
-				objects = append(objects, cluster)
-				return objects
-			},
-			setupMocks: func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {
-				mcc.addCluster(assignedCluster, &v2pb.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: assignedCluster,
-					},
-				})
-				mfc.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(&jobtypes.JobStatus{
-					Ray: &v2pb.RayJobStatus{
-						JobStatus: string(v1.JobStatusRunning),
-						State:     v2pb.RAY_JOB_STATE_RUNNING,
-						Message:   "",
-					},
-				}, nil)
-			},
-			expectedState:   v2pb.RAY_JOB_STATE_RUNNING,
-			expectedMessage: "",
-			errorAssertion:  require.NoError,
-			postCheck: func(res ctrl.Result) {
-				assert.Equal(t, requeueAfter, res.RequeueAfter)
-			},
-			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {},
-		},
-		{
-			name: "job succeeded",
-			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				rayJob := &v2pb.RayJob{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       rayJobName,
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Spec: v2pb.RayJobSpec{
-						Cluster: &apipb.ResourceIdentifier{
-							Name:      "existing-cluster",
-							Namespace: testNamespace,
-						},
-						Entrypoint: "echo Hello World",
-					},
-					Status: v2pb.RayJobStatus{
-						State: v2pb.RAY_JOB_STATE_RUNNING,
-						StatusConditions: []*apipb.Condition{
-							{
-								Type:   "Launched",
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-						},
-					},
-				}
-				cluster := &v2pb.RayCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "existing-cluster",
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Status: v2pb.RayClusterStatus{
-						State: v2pb.RAY_CLUSTER_STATE_READY,
-						Assignment: &v2pb.AssignmentInfo{
-							Cluster: assignedCluster,
-						},
-					},
-					Spec: v2pb.RayClusterSpec{
-						Head: &v2pb.RayHeadSpec{
-							Pod: &corev1.PodTemplateSpec{
-								Spec: corev1.PodSpec{
-									Containers: []corev1.Container{},
-								},
-							},
-						},
-					},
-				}
-				objects = append(objects, rayJob)
-				objects = append(objects, cluster)
-				return objects
-			},
-			setupMocks: func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {
-				mcc.addCluster(assignedCluster, &v2pb.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: assignedCluster,
-					},
-				})
-				mfc.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(&jobtypes.JobStatus{
-					Ray: &v2pb.RayJobStatus{
-						JobStatus: "SUCCEEDED",
-						State:     v2pb.RAY_JOB_STATE_SUCCEEDED,
-						Message:   "",
-					},
-				}, nil)
-			},
-			expectedState:   v2pb.RAY_JOB_STATE_SUCCEEDED,
-			expectedMessage: "",
-			errorAssertion:  require.NoError,
-			postCheck: func(res ctrl.Result) {
-				// Terminal state, should not requeue
-				assert.Equal(t, time.Duration(0), res.RequeueAfter)
-			},
-			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
-				assert.Equal(t, "SUCCEEDED", job.Status.JobStatus)
-			},
-		},
-		{
-			name: "job failed",
-			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				rayJob := &v2pb.RayJob{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       rayJobName,
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Spec: v2pb.RayJobSpec{
-						Cluster: &apipb.ResourceIdentifier{
-							Name:      "existing-cluster",
-							Namespace: testNamespace,
-						},
-						Entrypoint: "echo Hello World",
-					},
-					Status: v2pb.RayJobStatus{
-						State: v2pb.RAY_JOB_STATE_RUNNING,
-						StatusConditions: []*apipb.Condition{
-							{
-								Type:   "Launched",
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-						},
-					},
-				}
-				cluster := &v2pb.RayCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "existing-cluster",
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Status: v2pb.RayClusterStatus{
-						State: v2pb.RAY_CLUSTER_STATE_READY,
-						Assignment: &v2pb.AssignmentInfo{
-							Cluster: assignedCluster,
-						},
-					},
-				}
-				objects = append(objects, rayJob)
-				objects = append(objects, cluster)
-				return objects
-			},
-			setupMocks: func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {
-				mcc.addCluster(assignedCluster, &v2pb.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: assignedCluster,
-					},
-				})
-				mfc.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(&jobtypes.JobStatus{
-					Ray: &v2pb.RayJobStatus{
-						JobStatus: "FAILED",
-						State:     v2pb.RAY_JOB_STATE_FAILED,
-						Message:   "Job execution failed",
-					},
-				}, nil)
-			},
-			expectedState:   v2pb.RAY_JOB_STATE_FAILED,
-			expectedMessage: "Job execution failed",
-			errorAssertion:  require.NoError,
-			postCheck: func(res ctrl.Result) {
-				assert.Equal(t, time.Duration(0), res.RequeueAfter)
-			},
-			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
-				assert.Equal(t, "FAILED", job.Status.JobStatus)
-			},
-		},
-		{
-			name: "job stopped",
-			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				rayJob := &v2pb.RayJob{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       rayJobName,
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Spec: v2pb.RayJobSpec{
-						Cluster: &apipb.ResourceIdentifier{
-							Name:      "existing-cluster",
-							Namespace: testNamespace,
-						},
-						Entrypoint: "echo Hello World",
-					},
-					Status: v2pb.RayJobStatus{
-						State: v2pb.RAY_JOB_STATE_RUNNING,
-						StatusConditions: []*apipb.Condition{
-							{
-								Type:   "Launched",
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-						},
-					},
-				}
-				cluster := &v2pb.RayCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "existing-cluster",
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Status: v2pb.RayClusterStatus{
-						State: v2pb.RAY_CLUSTER_STATE_READY,
-						Assignment: &v2pb.AssignmentInfo{
-							Cluster: assignedCluster,
-						},
-					},
-				}
-				objects = append(objects, rayJob)
-				objects = append(objects, cluster)
-				return objects
-			},
-			setupMocks: func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {
-				mcc.addCluster(assignedCluster, &v2pb.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: assignedCluster,
-					},
-				})
-				mfc.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(&jobtypes.JobStatus{
-					Ray: &v2pb.RayJobStatus{
-						JobStatus: "STOPPED",
-						State:     v2pb.RAY_JOB_STATE_KILLED,
-						Message:   "Job was stopped",
-					},
-				}, nil)
-			},
-			expectedState:   v2pb.RAY_JOB_STATE_KILLED,
-			expectedMessage: "Job was stopped",
-			errorAssertion:  require.NoError,
-			postCheck: func(res ctrl.Result) {
-				assert.Equal(t, time.Duration(0), res.RequeueAfter)
-			},
-			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
-				assert.Equal(t, "STOPPED", job.Status.JobStatus)
-			},
-		},
-		{
-			name: "job status empty - initializing",
-			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				rayJob := &v2pb.RayJob{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       rayJobName,
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Spec: v2pb.RayJobSpec{
-						Cluster: &apipb.ResourceIdentifier{
-							Name:      "existing-cluster",
-							Namespace: testNamespace,
-						},
-						Entrypoint: "echo Hello World",
-					},
-					Status: v2pb.RayJobStatus{
-						State: v2pb.RAY_JOB_STATE_INITIALIZING,
-						StatusConditions: []*apipb.Condition{
-							{
-								Type:   "Launched",
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-						},
-					},
-				}
-				cluster := &v2pb.RayCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "existing-cluster",
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Status: v2pb.RayClusterStatus{
-						State: v2pb.RAY_CLUSTER_STATE_READY,
-						Assignment: &v2pb.AssignmentInfo{
-							Cluster: assignedCluster,
-						},
-					},
-				}
-				objects = append(objects, rayJob)
-				objects = append(objects, cluster)
-				return objects
-			},
-			setupMocks: func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {
-				mcc.addCluster(assignedCluster, &v2pb.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: assignedCluster,
-					},
-				})
-				// Empty status string returned when KubeRay hasn't populated JobStatus yet
-				// Mapper will set State to INITIALIZING based on JobDeploymentStatus
-				mfc.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(&jobtypes.JobStatus{
-					Ray: &v2pb.RayJobStatus{
-						JobStatus:           "",
-						JobDeploymentStatus: string(v1.JobDeploymentStatusInitializing),
-						State:               v2pb.RAY_JOB_STATE_INITIALIZING,
-						Message:             "",
-					},
-				}, nil)
-			},
-			expectedState:   v2pb.RAY_JOB_STATE_INITIALIZING,
-			expectedMessage: "",
-			errorAssertion:  require.NoError,
-			postCheck: func(res ctrl.Result) {
-				// Should requeue to check again
-				assert.Equal(t, requeueAfter, res.RequeueAfter)
-			},
-			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {},
-		},
-		{
 			name: "job creation fails",
 			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				rayJob := &v2pb.RayJob{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       rayJobName,
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Spec: v2pb.RayJobSpec{
-						Cluster: &apipb.ResourceIdentifier{
-							Name:      "existing-cluster",
-							Namespace: testNamespace,
+				return []client.Object{
+					&v2pb.RayJob{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       rayJobName,
+							Namespace:  testNamespace,
+							Generation: 1,
 						},
-						Entrypoint: "echo Hello World",
-					},
-				}
-				cluster := &v2pb.RayCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "existing-cluster",
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Status: v2pb.RayClusterStatus{
-						State: v2pb.RAY_CLUSTER_STATE_READY,
-						Assignment: &v2pb.AssignmentInfo{
-							Cluster: assignedCluster,
+						Spec: v2pb.RayJobSpec{
+							Cluster: &apipb.ResourceIdentifier{
+								Name:      "existing-cluster",
+								Namespace: testNamespace,
+							},
+							Entrypoint: "echo Hello World",
 						},
 					},
+					&v2pb.RayCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       "existing-cluster",
+							Namespace:  testNamespace,
+							Generation: 1,
+						},
+						Status: v2pb.RayClusterStatus{
+							State: v2pb.RAY_CLUSTER_STATE_READY,
+							Assignment: &v2pb.AssignmentInfo{
+								Cluster: assignedCluster,
+							},
+						},
+					},
 				}
-				objects = append(objects, rayJob)
-				objects = append(objects, cluster)
-				return objects
 			},
 			setupMocks: func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {
 				mcc.addCluster(assignedCluster, &v2pb.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: assignedCluster,
-					},
+					ObjectMeta: metav1.ObjectMeta{Name: assignedCluster},
 				})
 				mfc.EXPECT().CreateJob(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("failed to create job"))
 			},
@@ -882,47 +383,51 @@ func TestReconciler_Reconcile(t *testing.T) {
 			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {},
 		},
 		{
-			name: "job already exists - should not fail",
+			name: "job already launched - requeues for watcher updates",
 			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				rayJob := &v2pb.RayJob{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       rayJobName,
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Spec: v2pb.RayJobSpec{
-						Cluster: &apipb.ResourceIdentifier{
-							Name:      "existing-cluster",
-							Namespace: testNamespace,
+				return []client.Object{
+					&v2pb.RayJob{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       rayJobName,
+							Namespace:  testNamespace,
+							Generation: 1,
 						},
-						Entrypoint: "echo Hello World",
-					},
-				}
-				cluster := &v2pb.RayCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "existing-cluster",
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Status: v2pb.RayClusterStatus{
-						State: v2pb.RAY_CLUSTER_STATE_READY,
-						Assignment: &v2pb.AssignmentInfo{
-							Cluster: assignedCluster,
+						Spec: v2pb.RayJobSpec{
+							Cluster: &apipb.ResourceIdentifier{
+								Name:      "existing-cluster",
+								Namespace: testNamespace,
+							},
+							Entrypoint: "echo Hello World",
+						},
+						Status: v2pb.RayJobStatus{
+							State: v2pb.RAY_JOB_STATE_INITIALIZING,
+							StatusConditions: []*apipb.Condition{
+								{
+									Type:   "Launched",
+									Status: apipb.CONDITION_STATUS_TRUE,
+								},
+							},
 						},
 					},
+					&v2pb.RayCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       "existing-cluster",
+							Namespace:  testNamespace,
+							Generation: 1,
+						},
+						Status: v2pb.RayClusterStatus{
+							State: v2pb.RAY_CLUSTER_STATE_READY,
+							Assignment: &v2pb.AssignmentInfo{
+								Cluster: assignedCluster,
+							},
+						},
+					},
 				}
-				objects = append(objects, rayJob)
-				objects = append(objects, cluster)
-				return objects
 			},
 			setupMocks: func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {
 				mcc.addCluster(assignedCluster, &v2pb.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: assignedCluster,
-					},
+					ObjectMeta: metav1.ObjectMeta{Name: assignedCluster},
 				})
-				mfc.EXPECT().CreateJob(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(apiErrors.NewAlreadyExists(schema.GroupResource{Group: "ray.io", Resource: "rayjobs"}, rayJobName))
 			},
 			expectedState:   v2pb.RAY_JOB_STATE_INITIALIZING,
 			expectedMessage: "",
@@ -930,24 +435,67 @@ func TestReconciler_Reconcile(t *testing.T) {
 			postCheck: func(res ctrl.Result) {
 				assert.Equal(t, requeueAfter, res.RequeueAfter)
 			},
-			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
-				// Should still mark as launched even if already exists
-				var launchedCond *apipb.Condition
-				for _, cond := range job.Status.StatusConditions {
-					if cond.Type == "Launched" {
-						launchedCond = cond
-						break
-					}
+			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {},
+		},
+		{
+			name: "job in terminal state - does not requeue",
+			setup: func() []client.Object {
+				return []client.Object{
+					&v2pb.RayJob{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       rayJobName,
+							Namespace:  testNamespace,
+							Generation: 1,
+						},
+						Spec: v2pb.RayJobSpec{
+							Cluster: &apipb.ResourceIdentifier{
+								Name:      "existing-cluster",
+								Namespace: testNamespace,
+							},
+							Entrypoint: "echo Hello World",
+						},
+						Status: v2pb.RayJobStatus{
+							State: v2pb.RAY_JOB_STATE_SUCCEEDED,
+							StatusConditions: []*apipb.Condition{
+								{
+									Type:   "Launched",
+									Status: apipb.CONDITION_STATUS_TRUE,
+								},
+							},
+						},
+					},
+					&v2pb.RayCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       "existing-cluster",
+							Namespace:  testNamespace,
+							Generation: 1,
+						},
+						Status: v2pb.RayClusterStatus{
+							State: v2pb.RAY_CLUSTER_STATE_READY,
+							Assignment: &v2pb.AssignmentInfo{
+								Cluster: assignedCluster,
+							},
+						},
+					},
 				}
-				assert.NotNil(t, launchedCond, "LaunchedCondition should exist")
-				assert.Equal(t, apipb.CONDITION_STATUS_TRUE, launchedCond.Status)
 			},
+			setupMocks: func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {
+				mcc.addCluster(assignedCluster, &v2pb.Cluster{
+					ObjectMeta: metav1.ObjectMeta{Name: assignedCluster},
+				})
+			},
+			expectedState:   v2pb.RAY_JOB_STATE_SUCCEEDED,
+			expectedMessage: "",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {},
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// Arrange
 			objects := tc.setup()
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).WithStatusSubresource(objects...).Build()
 
@@ -969,12 +517,10 @@ func TestReconciler_Reconcile(t *testing.T) {
 				Namespace: testNamespace,
 			}
 
-			// Act
 			res, err := r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: requestRayJob,
 			})
 
-			// Assert
 			tc.errorAssertion(t, err)
 			tc.postCheck(res)
 
@@ -988,3 +534,198 @@ func TestReconciler_Reconcile(t *testing.T) {
 		})
 	}
 }
+
+// TestRayJobEventHandler verifies KubeRay RayJob execution status is mapped onto
+// the global RayJob.
+func TestRayJobEventHandler(t *testing.T) {
+	scheme := newTestScheme()
+
+	newGlobalRayJob := func() *v2pb.RayJob {
+		return &v2pb.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       rayJobName,
+				Namespace:  testNamespace,
+				Generation: 1,
+			},
+			Status: v2pb.RayJobStatus{
+				StatusConditions: make([]*apipb.Condition, 0),
+			},
+		}
+	}
+
+	newLocalRayJob := func(status rayv1.JobStatus, deployStatus rayv1.JobDeploymentStatus, msg string) *rayv1.RayJob {
+		return &rayv1.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: rayJobName,
+				Labels: map[string]string{
+					constants.ProjectNameLabelKey: testNamespace,
+				},
+			},
+			Status: rayv1.RayJobStatus{
+				JobStatus:           status,
+				JobDeploymentStatus: deployStatus,
+				Message:             msg,
+			},
+		}
+	}
+
+	newReconciler := func(global *v2pb.RayJob) *Reconciler {
+		fakeClient := fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithObjects(global).
+			WithStatusSubresource(global).
+			Build()
+		return &Reconciler{Client: fakeClient, logger: ctrl.Log.WithName("test")}
+	}
+
+	getUpdated := func(t *testing.T, r *Reconciler) v2pb.RayJob {
+		var updated v2pb.RayJob
+		require.NoError(t, r.Get(context.Background(),
+			types.NamespacedName{Namespace: testNamespace, Name: rayJobName}, &updated))
+		return updated
+	}
+
+	t.Run("running status maps to RUNNING state", func(t *testing.T) {
+		r := newReconciler(newGlobalRayJob())
+
+		r.rayJobEventHandler(newLocalRayJob(rayv1.JobStatusRunning, rayv1.JobDeploymentStatusRunning, "job is running"))
+
+		updated := getUpdated(t, r)
+		assert.Equal(t, v2pb.RAY_JOB_STATE_RUNNING, updated.Status.State)
+		assert.Equal(t, string(rayv1.JobStatusRunning), updated.Status.JobStatus)
+		assert.Equal(t, string(rayv1.JobDeploymentStatusRunning), updated.Status.JobDeploymentStatus)
+		assert.Equal(t, "job is running", updated.Status.Message)
+	})
+
+	t.Run("succeeded status maps to SUCCEEDED state", func(t *testing.T) {
+		r := newReconciler(newGlobalRayJob())
+
+		r.rayJobEventHandler(newLocalRayJob(rayv1.JobStatusSucceeded, rayv1.JobDeploymentStatusComplete, ""))
+
+		updated := getUpdated(t, r)
+		assert.Equal(t, v2pb.RAY_JOB_STATE_SUCCEEDED, updated.Status.State)
+		assert.Equal(t, string(rayv1.JobStatusSucceeded), updated.Status.JobStatus)
+	})
+
+	t.Run("failed status maps to FAILED state", func(t *testing.T) {
+		r := newReconciler(newGlobalRayJob())
+
+		r.rayJobEventHandler(newLocalRayJob(rayv1.JobStatusFailed, rayv1.JobDeploymentStatusFailed, "boom"))
+
+		updated := getUpdated(t, r)
+		assert.Equal(t, v2pb.RAY_JOB_STATE_FAILED, updated.Status.State)
+		assert.Equal(t, "boom", updated.Status.Message)
+	})
+
+	t.Run("immutable job is skipped", func(t *testing.T) {
+		global := newGlobalRayJob()
+		utils.MarkImmutable(global)
+		r := newReconciler(global)
+
+		r.rayJobEventHandler(newLocalRayJob(rayv1.JobStatusRunning, rayv1.JobDeploymentStatusRunning, ""))
+
+		updated := getUpdated(t, r)
+		assert.NotEqual(t, v2pb.RAY_JOB_STATE_RUNNING, updated.Status.State)
+	})
+
+	t.Run("ill-formed object is ignored", func(t *testing.T) {
+		r := &Reconciler{logger: ctrl.Log.WithName("test")}
+		// Should not panic on non-RayJob object.
+		r.rayJobEventHandler("not-a-rayjob")
+	})
+}
+
+// TestRayJobDeleteEventHandler verifies KubeRay RayJob deletions transition the
+// global RayJob to a killed state.
+func TestRayJobDeleteEventHandler(t *testing.T) {
+	scheme := newTestScheme()
+
+	newLocalRayJob := func() *rayv1.RayJob {
+		return &rayv1.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: rayJobName,
+				Labels: map[string]string{
+					constants.ProjectNameLabelKey: testNamespace,
+				},
+			},
+		}
+	}
+
+	t.Run("tombstone is handled gracefully", func(t *testing.T) {
+		r := &Reconciler{logger: ctrl.Log.WithName("test")}
+		// Unusable tombstone payload should not panic.
+		r.rayJobDeleteEventHandler(cache.DeletedFinalStateUnknown{
+			Key: "default/deleted-job",
+			Obj: nil,
+		})
+	})
+
+	t.Run("external deletion sets succeeded=FALSE and killed=TRUE", func(t *testing.T) {
+		rayJob := &v2pb.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       rayJobName,
+				Namespace:  testNamespace,
+				Generation: 1,
+			},
+			Status: v2pb.RayJobStatus{
+				StatusConditions: make([]*apipb.Condition, 0),
+			},
+		}
+		fakeClient := fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithObjects(rayJob).
+			WithStatusSubresource(rayJob).
+			Build()
+		r := &Reconciler{Client: fakeClient, logger: ctrl.Log.WithName("test")}
+
+		r.rayJobDeleteEventHandler(newLocalRayJob())
+
+		var updated v2pb.RayJob
+		require.NoError(t, r.Get(context.Background(),
+			types.NamespacedName{Namespace: testNamespace, Name: rayJobName}, &updated))
+
+		succeeded := jobsutils.GetCondition(&updated.Status.StatusConditions, constants.SucceededCondition, updated.Generation)
+		assert.Equal(t, apipb.CONDITION_STATUS_FALSE, succeeded.Status)
+		assert.Equal(t, constants.ClusterKilled, succeeded.Reason)
+
+		killed := jobsutils.GetCondition(&updated.Status.StatusConditions, constants.KilledCondition, updated.Generation)
+		assert.Equal(t, apipb.CONDITION_STATUS_TRUE, killed.Status)
+	})
+
+	t.Run("controller-initiated deletion clears killing and sets killed", func(t *testing.T) {
+		rayJob := &v2pb.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       rayJobName,
+				Namespace:  testNamespace,
+				Generation: 1,
+			},
+			Status: v2pb.RayJobStatus{
+				StatusConditions: []*apipb.Condition{
+					{
+						Type:   constants.KillingCondition,
+						Status: apipb.CONDITION_STATUS_TRUE,
+					},
+				},
+			},
+		}
+		fakeClient := fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithObjects(rayJob).
+			WithStatusSubresource(rayJob).
+			Build()
+		r := &Reconciler{Client: fakeClient, logger: ctrl.Log.WithName("test")}
+
+		r.rayJobDeleteEventHandler(newLocalRayJob())
+
+		var updated v2pb.RayJob
+		require.NoError(t, r.Get(context.Background(),
+			types.NamespacedName{Namespace: testNamespace, Name: rayJobName}, &updated))
+
+		killing := jobsutils.GetCondition(&updated.Status.StatusConditions, constants.KillingCondition, updated.Generation)
+		assert.Equal(t, apipb.CONDITION_STATUS_FALSE, killing.Status)
+
+		killed := jobsutils.GetCondition(&updated.Status.StatusConditions, constants.KilledCondition, updated.Generation)
+		assert.Equal(t, apipb.CONDITION_STATUS_TRUE, killed.Status)
+	})
+}
+
