@@ -537,7 +537,7 @@ func (c *Client) Watcher(watcherParams []*WatcherParams, cluster *v2pb.Cluster) 
 	// Add appropriate client for each watcherParams
 	for _, wp := range watcherParams {
 		switch wp.ResourceName {
-		case constants.KubeRayResource:
+		case constants.KubeRayResource, constants.KubeRayJobResource:
 			wp.Client = clientSet.Ray
 		case corev1.ResourcePods.String(), corev1.ResourceConfigMaps.String():
 			wp.Client = clientSet.CoreV1
