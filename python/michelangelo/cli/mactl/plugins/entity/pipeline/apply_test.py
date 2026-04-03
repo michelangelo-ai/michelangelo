@@ -14,7 +14,10 @@ def _make_yaml_dict(spec=None):
         "apiVersion": "michelangelo.api/v2",
         "kind": "Pipeline",
         "metadata": {"name": "my-pipeline", "namespace": "my-project"},
-        "spec": spec or {"type": "PIPELINE_TYPE_TRAIN", "manifest": {"filePath": "examples.my_pipeline.workflow"}},
+        "spec": spec or {
+            "type": "PIPELINE_TYPE_TRAIN",
+            "manifest": {"filePath": "examples.my_pipeline.workflow"},
+        },
     }
 
 
@@ -37,15 +40,19 @@ class PipelineApplyTest(TestCase):
 
     def _patch_handle(self, return_value=(None, "", "")):
         return patch(
-            "michelangelo.cli.mactl.plugins.entity.pipeline.apply.handle_workflow_inputs_retrieval",
+            "michelangelo.cli.mactl.plugins.entity.pipeline.apply"
+            ".handle_workflow_inputs_retrieval",
             return_value=return_value,
         )
 
     def _patch_populate(self, return_value=None):
         if return_value is None:
-            return_value = {"spec": {"manifest": {"filePath": "full/path/pipeline.yaml"}}}
+            return_value = {
+                "spec": {"manifest": {"filePath": "full/path/pipeline.yaml"}}
+            }
         return patch(
-            "michelangelo.cli.mactl.plugins.entity.pipeline.apply.populate_pipeline_spec_with_workflow_inputs",
+            "michelangelo.cli.mactl.plugins.entity.pipeline.apply"
+            ".populate_pipeline_spec_with_workflow_inputs",
             return_value=return_value,
         )
 
@@ -54,7 +61,7 @@ class PipelineApplyTest(TestCase):
     # ------------------------------------------------------------------
 
     def test_registration_is_called(self):
-        """handle_workflow_inputs_retrieval is called with project, pipeline, and config path."""
+        """Handle_workflow_inputs_retrieval is called with project and pipeline."""
         yaml_dict = _make_yaml_dict()
         yaml_path = Path("/repo/my-project/my-pipeline/pipeline.yaml")
         mock_repo = _make_mock_repo(repo_root="/repo")
@@ -65,9 +72,9 @@ class PipelineApplyTest(TestCase):
             convert_crd_metadata_pipeline_apply(yaml_dict, Mock(), yaml_path)
 
         mock_handle.assert_called_once()
-        call_kwargs = mock_handle.call_args
+        call_args = mock_handle.call_args
         # project and pipeline come from yaml metadata
-        args = call_kwargs[0]
+        args = call_args[0]
         self.assertEqual(args[2], "my-project")   # project
         self.assertEqual(args[3], "my-pipeline")  # pipeline
         # config_file_relative_path is relative to repo root
@@ -77,8 +84,8 @@ class PipelineApplyTest(TestCase):
     # filePath is set to the full repo-relative path
     # ------------------------------------------------------------------
 
-    def test_filePath_set_to_repo_relative_path(self):
-        """populate_pipeline_spec_with_workflow_inputs receives the full repo-relative path."""
+    def test_file_path_set_to_repo_relative_path(self):
+        """Populate receives the full repo-relative path."""
         yaml_dict = _make_yaml_dict()
         yaml_path = Path("/repo/my-project/my-pipeline/pipeline.yaml")
         mock_repo = _make_mock_repo(repo_root="/repo")
@@ -88,7 +95,6 @@ class PipelineApplyTest(TestCase):
              self._patch_populate() as mock_populate:
             convert_crd_metadata_pipeline_apply(yaml_dict, Mock(), yaml_path)
 
-        _, call_kwargs = mock_populate.call_args[0], mock_populate.call_args
         # 6th positional arg is config_file_relative_path
         config_rel_path = mock_populate.call_args[0][6]
         self.assertEqual(config_rel_path, "my-project/my-pipeline/pipeline.yaml")
@@ -101,7 +107,9 @@ class PipelineApplyTest(TestCase):
         """The repo object (carrying commit SHA and branch) is passed to populate."""
         yaml_dict = _make_yaml_dict()
         yaml_path = Path("/repo/pipeline.yaml")
-        mock_repo = _make_mock_repo(sha="deadbeef", branch="feature/x", repo_root="/repo")
+        mock_repo = _make_mock_repo(
+            sha="deadbeef", branch="feature/x", repo_root="/repo"
+        )
 
         with self._patch_repo(mock_repo), \
              self._patch_handle(), \
@@ -118,7 +126,7 @@ class PipelineApplyTest(TestCase):
     # ------------------------------------------------------------------
 
     def test_uniflow_artifacts_forwarded_on_success(self):
-        """uniflowTar and workflow function name are passed through to populate."""
+        """Uniflow tar and workflow function name are passed through to populate."""
         yaml_dict = _make_yaml_dict()
         yaml_path = Path("/repo/pipeline.yaml")
         mock_repo = _make_mock_repo(repo_root="/repo")
@@ -128,7 +136,9 @@ class PipelineApplyTest(TestCase):
         fake_fn = "my_workflow"
 
         with self._patch_repo(mock_repo), \
-             self._patch_handle(return_value=(fake_workflow_inputs, fake_tar, fake_fn)), \
+             self._patch_handle(
+                 return_value=(fake_workflow_inputs, fake_tar, fake_fn)
+             ), \
              self._patch_populate() as mock_populate:
             convert_crd_metadata_pipeline_apply(yaml_dict, Mock(), yaml_path)
 
@@ -142,7 +152,7 @@ class PipelineApplyTest(TestCase):
     # ------------------------------------------------------------------
 
     def test_graceful_degradation_on_registration_failure(self):
-        """populate is still called (with empty tar/fn) when registration returns empty."""
+        """Populate is still called with empty tar/fn when registration fails."""
         yaml_dict = _make_yaml_dict()
         yaml_path = Path("/repo/pipeline.yaml")
         mock_repo = _make_mock_repo(repo_root="/repo")
@@ -164,7 +174,7 @@ class PipelineApplyTest(TestCase):
     # ------------------------------------------------------------------
 
     def test_metadata_included_in_result(self):
-        """Result must contain metadata with name, namespace, and annotations from yaml."""
+        """Result must contain metadata with name, namespace, annotations from yaml."""
         yaml_dict = _make_yaml_dict()
         yaml_path = Path("/repo/my-project/my-pipeline/pipeline.yaml")
         mock_repo = _make_mock_repo(repo_root="/repo")
@@ -176,7 +186,8 @@ class PipelineApplyTest(TestCase):
         with self._patch_repo(mock_repo), \
              self._patch_handle(), \
              patch(
-                 "michelangelo.cli.mactl.plugins.entity.pipeline.apply.populate_pipeline_spec_with_workflow_inputs",
+                 "michelangelo.cli.mactl.plugins.entity.pipeline.apply"
+                 ".populate_pipeline_spec_with_workflow_inputs",
                  side_effect=fake_populate,
              ):
             result = convert_crd_metadata_pipeline_apply(yaml_dict, Mock(), yaml_path)
@@ -187,9 +198,11 @@ class PipelineApplyTest(TestCase):
         self.assertIn("spec", result)
 
     def test_annotations_from_yaml_included_in_result(self):
-        """Annotations from yaml are included so full-replace preserves user-defined metadata."""
+        """Annotations from yaml are included so full-replace preserves metadata."""
         yaml_dict = _make_yaml_dict()
-        yaml_dict["metadata"]["annotations"] = {"michelangelo/uniflow-image": "docker.io/library/examples:v2"}
+        yaml_dict["metadata"]["annotations"] = {
+            "michelangelo/uniflow-image": "docker.io/library/examples:v2"
+        }
         yaml_path = Path("/repo/my-project/my-pipeline/pipeline.yaml")
         mock_repo = _make_mock_repo(repo_root="/repo")
 

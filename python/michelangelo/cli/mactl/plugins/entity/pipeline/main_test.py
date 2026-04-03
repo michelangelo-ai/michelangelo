@@ -30,7 +30,7 @@ class PipelineMainTest(TestCase):
         self.mock_channel = Mock()
 
     def test_create_command_sets_create_converter(self):
-        """create command sets func_crd_metadata_converter to convert_crd_metadata_pipeline_create."""
+        """Create command sets func_crd_metadata_converter to pipeline_create."""
         apply_plugin_command(self.mock_crd, "create", self.mock_crds, self.mock_channel)
 
         self.assertEqual(
@@ -39,7 +39,7 @@ class PipelineMainTest(TestCase):
         )
 
     def test_apply_command_sets_apply_converter(self):
-        """apply command sets func_crd_metadata_converter to convert_crd_metadata_pipeline_apply."""
+        """Apply command sets func_crd_metadata_converter to pipeline_apply."""
         apply_plugin_command(self.mock_crd, "apply", self.mock_crds, self.mock_channel)
 
         self.assertEqual(
@@ -48,7 +48,7 @@ class PipelineMainTest(TestCase):
         )
 
     def test_apply_and_create_use_different_converters(self):
-        """apply and create commands must use distinct converter functions."""
+        """Apply and create commands must use distinct converter functions."""
         apply_plugin_command(self.mock_crd, "apply", self.mock_crds, self.mock_channel)
         apply_converter = self.mock_crd.func_crd_metadata_converter
 
