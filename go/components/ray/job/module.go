@@ -2,6 +2,7 @@ package job
 
 import (
 	"github.com/go-logr/logr"
+	"github.com/uber-go/tally"
 	"go.uber.org/fx"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -23,6 +24,7 @@ func register(
 	mgr manager.Manager,
 	federatedClient jobsclient.FederatedClient,
 	clusterCache jobsCluster.RegisteredClustersCache,
+	metricsScope tally.Scope,
 ) error {
 	restConfig := mgr.GetConfig()
 	restConfig.QPS = conf.QPS
@@ -34,5 +36,6 @@ func register(
 		env,
 		federatedClient,
 		clusterCache,
+		metricsScope,
 	).Register(mgr)
 }
