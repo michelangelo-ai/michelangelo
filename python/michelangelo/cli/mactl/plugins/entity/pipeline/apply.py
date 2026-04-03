@@ -55,8 +55,8 @@ def convert_crd_metadata_pipeline_apply(
         "metadata": {
             "name": yaml_dict["metadata"]["name"],
             "namespace": yaml_dict["metadata"]["namespace"],
-            "annotations": yaml_dict.get("metadata", {}).get("annotations", {}),
-            "labels": yaml_dict.get("metadata", {}).get("labels", {}),
+            "annotations": yaml_dict["metadata"].get("annotations", {}),
+            "labels": yaml_dict["metadata"].get("labels", {}),
         }
     }
     populate_pipeline_spec_with_workflow_inputs(
