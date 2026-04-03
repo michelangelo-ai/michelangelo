@@ -1,6 +1,7 @@
 import { useStyletron } from 'baseui';
 import { Button, KIND, SHAPE, SIZE } from 'baseui/button';
 
+import { ActionsButtons } from '#core/components/actions/actions-buttons/actions-buttons';
 import { Icon } from '#core/components/icon/icon';
 import { ELLIPSIS_STYLES } from '#core/styles/constants';
 import { DetailHeaderContainer } from './styled-components';
@@ -8,7 +9,15 @@ import { DetailHeaderContainer } from './styled-components';
 import type { Theme } from 'baseui/theme';
 import type { DetailViewHeaderProps } from './types';
 
-export function DetailViewHeader({ subtitle, title, onGoBack, children }: DetailViewHeaderProps) {
+export function DetailViewHeader({
+  subtitle,
+  title,
+  onGoBack,
+  children,
+  actions,
+  record,
+  loading,
+}: DetailViewHeaderProps) {
   const [css, theme] = useStyletron();
 
   return (
@@ -18,6 +27,7 @@ export function DetailViewHeader({ subtitle, title, onGoBack, children }: Detail
           display: 'flex',
           gap: theme.sizing.scale800,
           justifyContent: 'flex-start',
+          alignItems: 'center',
         })}
       >
         <h5 className={css({ margin: 0, maxWidth: '50%' })}>
@@ -62,6 +72,11 @@ export function DetailViewHeader({ subtitle, title, onGoBack, children }: Detail
             </div>
           </div>
         </h5>
+        {actions && (
+          <div className={css({ marginLeft: 'auto', flexShrink: 0 })}>
+            <ActionsButtons actions={actions} record={record ?? {}} loading={loading} />
+          </div>
+        )}
       </div>
 
       {children}

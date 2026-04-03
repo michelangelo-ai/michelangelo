@@ -1,3 +1,5 @@
+import type { ActionConfig } from '#core/components/actions/types';
+
 export interface DetailViewProps extends DetailHeaderBaseProps {
   /**
    * Content displayed at the bottom of the header container
@@ -18,6 +20,19 @@ export interface DetailHeaderBaseProps {
    */
   title?: string;
   onGoBack?: () => void;
+
+  /**
+   * Configuration for set of action buttons that render within the header. These actions
+   * operate on the currently viewed entity record. For example, a "Delete" action would delete
+   * the currently viewed entity.
+   */
+  actions?: ActionConfig[];
+
+  /** The data for the currently viewed entity. */
+  record?: Record<string, unknown>;
+
+  /** Loading state for the currently viewed entity. Indicates that record data may be incomplete. */
+  loading?: boolean;
 }
 
 export interface DetailViewTab {
