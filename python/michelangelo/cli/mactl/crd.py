@@ -398,16 +398,38 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
             raise
 
     if message_instance is None:
-        # Create new CRD
+        # Create new CRD - use dedicated create converter if available (apply command
+        # uses a different converter for create vs update paths)
         _LOG.info("Create a new CRD")
         _self.generate_create(crd_method_info.channel)
-        return _self.create(_file)
+        original_converter = getattr(_self, "func_crd_metadata_converter", None)
+        create_converter = getattr(
+            _self, "func_crd_metadata_converter_for_create", original_converter
+        )
+        _self.func_crd_metadata_converter = create_converter
+        try:
+            return _self.create(_file)
+        finally:
+            _self.func_crd_metadata_converter = original_converter
 
-    # Update existing CRD
+    # Update existing CRD — full replace (not deep-merge).
+    # Build the complete desired-state object from local yaml + enrichment,
+    # then copy resourceVersion from the server for optimistic concurrency.
     _LOG.info("Retrieved message instance: %r", message_instance)
-    request_input = _self.read_yaml_and_update_crd_request(
-        crd_method_info.input_class, _file, message_instance
-    )
+    converter = getattr(_self, "func_crd_metadata_converter", None)
+    if converter is not None:
+        request_input = read_yaml_to_crd_request(
+            crd_method_info.input_class, _self.name, _file, converter
+        )
+        # Both request_input (UpdatePipelineRequest) and message_instance (GetPipelineResponse)
+        # wrap the pipeline under _self.name. Copy resourceVersion for optimistic concurrency.
+        existing = getattr(message_instance, _self.name)
+        inner = getattr(request_input, _self.name)
+        inner.metadata.resourceVersion = existing.metadata.resourceVersion
+    else:
+        request_input = _self.read_yaml_and_update_crd_request(
+            crd_method_info.input_class, _file, message_instance,
+        )
     call_res = crd_method_call(crd_method_info, request_input)
     print(call_res)
     return call_res
@@ -736,9 +758,18 @@ class CRD:
         _LOG.debug("Generated LIST injected well: %r", self.list)
 
     def read_yaml_and_update_crd_request(
-        self, input_class: type[Message], yaml_path_string: str, original_crd: Message
+        self,
+        input_class: type[Message],
+        yaml_path_string: str,
+        original_crd: Message,
+        func_crd_metadata_converter: Optional[Callable] = None,
     ) -> Message:
-        """Read a YAML file and update the original CRD request instance."""
+        """Read a YAML file and update the original CRD request instance.
+
+        When func_crd_metadata_converter is provided it is called on the raw
+        YAML dict before merging, replacing the raw values with the enriched
+        output (correct filePath, commit info, uniflow artifacts, etc.).
+        """
         original_crd_dict: dict = MessageToDict(
             original_crd, preserving_proto_field_name=True
         )
@@ -752,6 +783,11 @@ class CRD:
         yaml_dict.pop("apiVersion", None)
         yaml_dict.pop("kind", None)
         _LOG.debug("Finished to read YAML file: %r", yaml_dict)
+
+        if func_crd_metadata_converter is not None:
+            yaml_path = Path(yaml_path_string).resolve()
+            yaml_dict = func_crd_metadata_converter(yaml_dict, input_class, yaml_path)
+            _LOG.debug("Converted YAML dict via metadata converter: %r", yaml_dict)
 
         deep_update(original_crd_dict[self.name], yaml_dict)
         _LOG.debug("Updated CRD config dict: %r", original_crd_dict)

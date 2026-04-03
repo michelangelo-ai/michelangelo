@@ -6,6 +6,9 @@ from types import MethodType
 from grpc import Channel
 
 from michelangelo.cli.mactl.crd import CRD
+from michelangelo.cli.mactl.plugins.entity.pipeline.apply import (
+    convert_crd_metadata_pipeline_apply,
+)
 from michelangelo.cli.mactl.plugins.entity.pipeline.create import (
     convert_crd_metadata_pipeline_create,
 )
@@ -52,8 +55,11 @@ def apply_plugin_command(
     _LOG.info("Applying plugins to crd: %r / %r", crd, target_command)
     _LOG.debug("Available CRDs: %r", crds)
     _LOG.debug("gRPC Channel: %r", channel)
-    if target_command in ("apply", "create"):
+    if target_command == "create":
         crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_create
+    if target_command == "apply":
+        crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_apply
+        crd.func_crd_metadata_converter_for_create = convert_crd_metadata_pipeline_create
     if target_command == "run":
         crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_run
     if target_command == "dev_run":
