@@ -88,7 +88,7 @@ log "Project created."
 cd "${PYTHON_DIR}"
 
 log "Applying pipeline from examples/bert_cola/pipeline.yaml..."
-ma pipeline apply --file=examples/bert_cola/pipeline.yaml
+kubectl apply -f examples/bert_cola/pipeline.yaml
 log "Pipeline applied."
 
 # ---------------------------------------------------------------------------
