@@ -37,9 +37,9 @@ spec:
               path: 'glue'
               name: 'cola'
               tokenizer_max_length: 128
-      training-trigger-cron-daily-at-8am:
+      training-trigger-cron-every-minute-no-params:
         cronSchedule:
-          cron: "0 8 * * *"
+          cron: "* * * * *"
         maxConcurrency: 1
   commit:
     gitRef: "main"

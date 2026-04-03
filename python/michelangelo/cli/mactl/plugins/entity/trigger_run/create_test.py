@@ -179,13 +179,12 @@ class GenerateCreateFunctionTest(TestCase):
         pipeline_error=None,
         trigger_run_response=None,
         trigger_run_error=None,
-        trigger_map_dict=None,
     ):
         """Set up mocks, call generate_create, and return the CRD.
 
         This helper builds all the mocks needed to invoke the bound
-        create function.  It patches ParseDict, MessageToDict,
-        get_user_name, and uuid so the closure can run in isolation.
+        create function.  It patches get_methods_from_service and
+        get_message_class_by_name for the PipelineService lookup.
         """
         mock_crd = _make_crd_mock()
         mock_channel = Mock()
@@ -195,12 +194,36 @@ class GenerateCreateFunctionTest(TestCase):
         trigger_run_input_class = Mock()
         trigger_run_output_class = Mock()
 
-        def extract_side_effect(ch, service, method):
-            if "PipelineService" in service:
-                return ("Get", pipeline_input_class, pipeline_output_class)
-            return ("Create", trigger_run_input_class, trigger_run_output_class)
+        mock_crd._extract_method_info.return_value = (
+            "CreateTriggerRun",
+            trigger_run_input_class,
+            trigger_run_output_class,
+        )
 
-        mock_crd._extract_method_info.side_effect = extract_side_effect
+        # Mock PipelineService method lookup
+        mock_pipeline_method = Mock()
+        mock_pipeline_method.input_type = ".GetPipelineRequest"
+        mock_pipeline_method.output_type = ".GetPipelineResponse"
+
+        self._mock_get_methods = patch(
+            f"{_PATCH_PREFIX}.get_methods_from_service",
+            return_value=(
+                {"GetPipeline": mock_pipeline_method},
+                Mock(),
+            ),
+        )
+        self._mock_get_methods.start()
+
+        def get_class_side_effect(pool, name):
+            if "Request" in name:
+                return pipeline_input_class
+            return pipeline_output_class
+
+        self._mock_get_class = patch(
+            f"{_PATCH_PREFIX}.get_message_class_by_name",
+            side_effect=get_class_side_effect,
+        )
+        self._mock_get_class.start()
 
         # Channel stubs
         mock_pipeline_stub = Mock(
@@ -223,6 +246,13 @@ class GenerateCreateFunctionTest(TestCase):
 
         return mock_crd
 
+    def tearDown(self):
+        """Stop patches started by _setup_and_bind."""
+        for p in ("_mock_get_methods", "_mock_get_class"):
+            patcher = getattr(self, p, None)
+            if patcher:
+                patcher.stop()
+
     @patch(f"{_PATCH_PREFIX}.ParseDict")
     @patch(f"{_PATCH_PREFIX}.MessageToDict")
     @patch(f"{_PATCH_PREFIX}.uuid")
@@ -234,7 +264,12 @@ class GenerateCreateFunctionTest(TestCase):
         mock_get_user.return_value = "test-user"
         mock_uuid.uuid4.return_value = Mock(hex="a1b2c3d400000000")
         mock_msg_to_dict.return_value = {
-            "daily-01": {"cronSchedule": {"cron": "0 8 * * *"}, "maxConcurrency": 1}
+            "trigger_map": {
+                "daily-01": {
+                    "cronSchedule": {"cron": "0 8 * * *"},
+                    "maxConcurrency": 1,
+                }
+            }
         }
 
         mock_pipeline = Mock()
@@ -244,7 +279,7 @@ class GenerateCreateFunctionTest(TestCase):
         pipeline_resp.pipeline = mock_pipeline
 
         trigger_run_resp = Mock()
-        trigger_run_resp.trigger_run.metadata.name = "daily-01_a1b2c3d4"
+        trigger_run_resp.trigger_run.metadata.name = "daily-01-a1b2c3d4"
 
         mock_crd = self._setup_and_bind(
             pipeline_response=pipeline_resp,
@@ -262,7 +297,7 @@ class GenerateCreateFunctionTest(TestCase):
         # Second call is the TriggerRun create (first is GetPipelineRequest)
         trigger_run_dict = create_call_args[1][0][0]
         tr = trigger_run_dict["triggerRun"]
-        self.assertEqual(tr["metadata"]["name"], "daily-01_a1b2c3d4")
+        self.assertEqual(tr["metadata"]["name"], "daily-01-a1b2c3d4")
         self.assertEqual(tr["metadata"]["namespace"], "test-ns")
         self.assertEqual(tr["spec"]["sourceTriggerName"], "daily-01")
         self.assertEqual(tr["spec"]["actor"]["name"], "test-user")
@@ -282,7 +317,12 @@ class GenerateCreateFunctionTest(TestCase):
         mock_get_user.return_value = "user"
         mock_uuid.uuid4.return_value = Mock(hex="e70c6f9200000000")
         mock_msg_to_dict.return_value = {
-            "hourly": {"intervalSchedule": {"interval": "1h"}, "maxConcurrency": 2}
+            "trigger_map": {
+                "hourly": {
+                    "intervalSchedule": {"interval": "1h"},
+                    "maxConcurrency": 2,
+                }
+            }
         }
 
         mock_pipeline = Mock()
@@ -291,7 +331,7 @@ class GenerateCreateFunctionTest(TestCase):
         pipeline_resp.pipeline = mock_pipeline
 
         trigger_run_resp = Mock()
-        trigger_run_resp.trigger_run.metadata.name = "hourly_e70c6f92"
+        trigger_run_resp.trigger_run.metadata.name = "hourly-e70c6f92"
 
         mock_crd = self._setup_and_bind(
             pipeline_response=pipeline_resp,
@@ -303,7 +343,7 @@ class GenerateCreateFunctionTest(TestCase):
         create_call_dict = mock_parse_dict.call_args_list[1][0][0]
         self.assertEqual(
             create_call_dict["triggerRun"]["metadata"]["name"],
-            "hourly_e70c6f92",
+            "hourly-e70c6f92",
         )
 
     @patch(f"{_PATCH_PREFIX}.ParseDict")
@@ -363,7 +403,9 @@ class GenerateCreateFunctionTest(TestCase):
     ):
         """Test ValueError when trigger name is not in the trigger map."""
         mock_msg_to_dict.return_value = {
-            "existing-trigger": {"cronSchedule": {"cron": "0 0 * * *"}}
+            "trigger_map": {
+                "existing-trigger": {"cronSchedule": {"cron": "0 0 * * *"}}
+            }
         }
 
         mock_pipeline = Mock()
@@ -397,7 +439,12 @@ class GenerateCreateFunctionTest(TestCase):
         mock_get_user.return_value = "user"
         mock_uuid.uuid4.return_value = Mock(hex="0000000000000000")
         mock_msg_to_dict.return_value = {
-            "t1": {"cronSchedule": {"cron": "* * * * *"}, "maxConcurrency": 1}
+            "trigger_map": {
+                "t1": {
+                    "cronSchedule": {"cron": "* * * * *"},
+                    "maxConcurrency": 1,
+                }
+            }
         }
 
         mock_pipeline = Mock()
