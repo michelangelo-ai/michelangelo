@@ -58,7 +58,6 @@ data:
       awsAccessKeyId: minioadmin
       awsSecretAccessKey: minioadmin
       awsEndpointUrl: minio:9091
-      secure: false
     
     workflowClient:
       service: temporal-frontend
