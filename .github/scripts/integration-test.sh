@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Integration test: apply and run a pipeline end-to-end via mactl.
+# Integration test: apply and run a pipeline end-to-end.
 #
 # Usage:
 #   cd $REPO_ROOT/python
@@ -7,19 +7,27 @@
 #   ../.github/scripts/integration-test.sh
 #
 # Environment variables (all optional, defaults shown):
-#   MA_NAMESPACE    – project namespace               (ma-dev-test)
-#   POLL_INTERVAL   – seconds between status checks  (30)
-#   TIMEOUT         – max seconds to wait per run    (1800)
+#   MA_NAMESPACE     – project namespace               (ma-dev-test)
+#   MINIO_ENDPOINT   – MinIO API endpoint              (http://localhost:9091)
+#   MINIO_ACCESS_KEY – MinIO access key               (minioadmin)
+#   MINIO_SECRET_KEY – MinIO secret key               (minioadmin)
+#   POLL_INTERVAL    – seconds between status checks  (30)
+#   TIMEOUT          – max seconds to wait per run    (1800)
 
 set -euo pipefail
 
 NAMESPACE="${MA_NAMESPACE:-ma-dev-test}"
+MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://localhost:9091}"
+MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-minioadmin}"
+MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-minioadmin}"
 POLL_INTERVAL="${POLL_INTERVAL:-30}"
 TIMEOUT="${TIMEOUT:-1800}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 PYTHON_DIR="${REPO_ROOT}/python"
+
+TAR_LOCAL="${PYTHON_DIR}/michelangelo/cli/sandbox/demo/pipeline/bert_local.tar"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -73,7 +81,19 @@ kubectl delete namespace "${NAMESPACE}" --ignore-not-found=true --wait=true || t
 log "Namespace cleanup done."
 
 # ---------------------------------------------------------------------------
-# Step 2: create project
+# Step 2: upload bert_local.tar to MinIO
+# ---------------------------------------------------------------------------
+
+log "Uploading bert_local.tar to s3://default/bert_local.tar ..."
+AWS_ACCESS_KEY_ID="${MINIO_ACCESS_KEY}" \
+AWS_SECRET_ACCESS_KEY="${MINIO_SECRET_KEY}" \
+  aws s3 cp "${TAR_LOCAL}" s3://default/bert_local.tar \
+    --endpoint-url "${MINIO_ENDPOINT}" \
+    --region us-east-1
+log "Upload complete."
+
+# ---------------------------------------------------------------------------
+# Step 3: create project
 # ---------------------------------------------------------------------------
 
 log "Creating namespace and project '${NAMESPACE}'..."
@@ -82,17 +102,28 @@ kubectl apply -f "${PYTHON_DIR}/michelangelo/cli/sandbox/demo/project.yaml"
 log "Project created."
 
 # ---------------------------------------------------------------------------
-# Step 3: apply pipeline
+# Step 4: apply pipeline
 # ---------------------------------------------------------------------------
 
-cd "${PYTHON_DIR}"
-
-log "Applying pipeline from examples/bert_cola/pipeline.yaml..."
-kubectl apply -f examples/bert_cola/pipeline.yaml
+log "Applying bert-cola-test pipeline..."
+kubectl apply -f - <<'EOF'
+apiVersion: michelangelo.api/v2
+kind: Pipeline
+metadata:
+  name: bert-cola-test
+  namespace: ma-dev-test
+  annotations:
+    michelangelo/uniflow-image: docker.io/library/examples:latest
+spec:
+  type: PIPELINE_TYPE_TRAIN
+  manifest:
+    type: PIPELINE_MANIFEST_TYPE_UNIFLOW
+    uniflowTar: s3://default/bert_local.tar
+EOF
 log "Pipeline applied."
 
 # ---------------------------------------------------------------------------
-# Step 4: trigger a pipeline run
+# Step 5: trigger a pipeline run
 # ---------------------------------------------------------------------------
 
 log "Triggering pipeline run for 'bert-cola-test'..."
@@ -100,7 +131,7 @@ ma pipeline run -n "${NAMESPACE}" --name=bert-cola-test
 log "Pipeline run triggered."
 
 # ---------------------------------------------------------------------------
-# Step 5: find the run name and wait for it
+# Step 6: find the run name and wait for it
 # ---------------------------------------------------------------------------
 
 log "Waiting for pipelinerun to appear..."
