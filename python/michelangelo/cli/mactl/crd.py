@@ -227,7 +227,7 @@ def crd_method_call(crd_method_info, request_input: Message) -> Message:
     response = stub_method(
         request_input,
         metadata=METADATA_STUB,
-        timeout=30,
+        timeout=120,
     )
     _LOG.info("Stub method completed (%r): %r", type(response), response)
     return response
@@ -391,7 +391,12 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
 
     message_instance = None
     try:
-        message_instance = _self.get(_namespace, _name)
+        # Call the gRPC Get method directly to avoid get_func_impl's print side-effect.
+        message_instance = crd_method_call_kwargs(
+            _self._get_method_info,
+            namespace=_namespace,
+            name=_name,
+        )
     except RpcError as err:
         _LOG.debug("CRD %r / %r does not exist: %r", _namespace, _name, err)
         if err.code() != StatusCode.NOT_FOUND:
@@ -399,10 +404,13 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
 
     if message_instance is None:
         # Create new CRD - use dedicated create converter if available (apply command
-        # uses a different converter for create vs update paths)
+        # uses a different converter for create vs update paths).
+        # NOTE: The converter swap below is not thread-safe — concurrent apply calls on
+        # the same CRD instance would race. This is acceptable because mactl is a
+        # single-threaded CLI; do not share CRD instances across threads.
         _LOG.info("Create a new CRD")
         _self.generate_create(crd_method_info.channel)
-        original_converter = getattr(_self, "func_crd_metadata_converter", None)
+        original_converter = _self.func_crd_metadata_converter
         create_converter = getattr(
             _self, "func_crd_metadata_converter_for_create", original_converter
         )
@@ -416,20 +424,15 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
     # Build the complete desired-state object from local yaml + enrichment,
     # then copy resourceVersion from the server for optimistic concurrency.
     _LOG.info("Retrieved message instance: %r", message_instance)
-    converter = getattr(_self, "func_crd_metadata_converter", None)
-    if converter is not None:
-        request_input = read_yaml_to_crd_request(
-            crd_method_info.input_class, _self.name, _file, converter
-        )
-        # Both request_input (UpdatePipelineRequest) and message_instance (GetPipelineResponse)
-        # wrap the pipeline under _self.name. Copy resourceVersion for optimistic concurrency.
-        existing = getattr(message_instance, _self.name)
-        inner = getattr(request_input, _self.name)
-        inner.metadata.resourceVersion = existing.metadata.resourceVersion
-    else:
-        request_input = _self.read_yaml_and_update_crd_request(
-            crd_method_info.input_class, _file, message_instance,
-        )
+    converter = _self.func_crd_metadata_converter
+    request_input = read_yaml_to_crd_request(
+        crd_method_info.input_class, _self.name, _file, converter
+    )
+    # Both request_input (UpdatePipelineRequest) and message_instance (GetPipelineResponse)
+    # wrap the pipeline under _self.name. Copy resourceVersion for optimistic concurrency.
+    existing = getattr(message_instance, _self.name)
+    inner = getattr(request_input, _self.name)
+    inner.metadata.resourceVersion = existing.metadata.resourceVersion
     call_res = crd_method_call(crd_method_info, request_input)
     print(call_res)
     return call_res
@@ -686,6 +689,8 @@ class CRD:
             self.full_name,
             *self._extract_method_info(channel, self.full_name, "Get"),
         )
+
+        self._get_method_info = method_info
 
         self.configure_parser("get", parser)
         func_signature = self._read_signatures("get")
