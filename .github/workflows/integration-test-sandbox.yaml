@@ -118,15 +118,8 @@ jobs:
               ctr -n k8s.io images tag "${IMAGE_SRC}" "${IMAGE_DST}"
           fi
 
-      # Install AWS CLI v2 (required for MinIO compatibility).
-      - name: Install AWS CLI v2
-        run: |
-          curl -sSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
-          python3 -c "import zipfile; zipfile.ZipFile('/tmp/awscliv2.zip').extractall('/tmp/awscliv2')"
-          sudo /tmp/awscliv2/aws/install --update
-          rm -rf /tmp/awscliv2 /tmp/awscliv2.zip
-
       # Run the integration test script.
+      # AWS CLI v2 is pre-installed on the self-hosted runner (installed once on the VM).
       - name: Run integration tests
         run: |
           source .venv/bin/activate
@@ -137,6 +130,6 @@ jobs:
           POLL_INTERVAL: "30"
           TIMEOUT: "1800"
 
-      - name: Stop sandbox
-        if: always()
-        run: $HOME/.local/bin/poetry run ma sandbox stop || true
+      # Infrastructure (MySQL, Cadence, MinIO, Grafana, Prometheus) is intentionally
+      # kept running between CI runs so subsequent runs can skip the slow init phase.
+      # The cluster is only stopped if explicitly needed (e.g., manual teardown).

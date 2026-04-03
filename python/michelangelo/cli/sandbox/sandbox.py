@@ -214,7 +214,12 @@ def _create(ns: argparse.Namespace):
 
 
 def _sync(ns: argparse.Namespace):
-    """Redeploy services into an existing cluster without recreating it.
+    """Restart only Michelangelo app services in an existing cluster.
+
+    Infrastructure (MySQL, Cadence, MinIO, Grafana, Prometheus, kuberay,
+    spark-operator) is left running as-is.  Only the Michelangelo application
+    pods (apiserver, envoy, ui) are restarted so that a new image/config is
+    picked up quickly without touching the long-initializing infra.
 
     If the cluster does not exist, falls back to a full ``create``.  When the
     cluster already exists the k3d cluster creation and ``k3d image import``
@@ -238,14 +243,14 @@ def _sync(ns: argparse.Namespace):
         return _create(ns)
 
     print(
-        "Existing cluster found — redeploying services "
-        "(skipping cluster create and image import)."
+        "Existing cluster found — restarting app services "
+        "(leaving infrastructure running)."
     )
 
     # Start the cluster in case it was stopped at the end of a previous run.
     _exec("k3d", "cluster", "start", _michelangelo_sandbox_kube_cluster_name)
 
-    # Wait briefly for the API server to become reachable after start.
+    # Wait for the API server to become reachable after start.
     _exec(
         "kubectl",
         "wait",
@@ -255,53 +260,85 @@ def _sync(ns: argparse.Namespace):
         "--timeout=120s",
     )
 
-    # Wipe existing workloads so each run gets a clean application state.
-    # Ignore errors — some resource types may not exist on a fresh cluster.
-    print("Cleaning existing workloads...")
-    for resource_type in ["pods", "jobs", "deployments", "statefulsets", "daemonsets"]:
+    # Delete only the Michelangelo application pods/deployments.
+    # Infrastructure (mysql, cadence, minio, grafana, prometheus) is left running.
+    app_pods = ["michelangelo-apiserver", "envoy"]
+    app_deployments = ["michelangelo-ui"]
+    print("Restarting app pods:", ", ".join(app_pods + app_deployments))
+    for pod in app_pods:
         subprocess.run(
-            [
-                "kubectl",
-                "delete",
-                resource_type,
-                "--all",
-                "--grace-period=0",
-                "--force",
-                "--ignore-not-found=true",
-            ],
-            check=False,
-            capture_output=True,
+            ["kubectl", "delete", "pod", pod, "--force", "--grace-period=0",
+             "--ignore-not-found=true"],
+            check=False, capture_output=True,
         )
-    for resource_type in ["configmap", "secret"]:
+    for dep in app_deployments:
         subprocess.run(
-            [
-                "kubectl",
-                "delete",
-                resource_type,
-                "--all",
-                "--ignore-not-found=true",
-            ],
-            check=False,
-            capture_output=True,
+            ["kubectl", "delete", "deployment", dep, "--force", "--grace-period=0",
+             "--ignore-not-found=true"],
+            check=False, capture_output=True,
         )
-    # Wait for all pods to fully terminate before deploying new ones.
-    # kubectl wait --for=condition=ready fails with NotFound if it starts
-    # watching pods that are still in Terminating state and then disappear.
-    print("Waiting for old pods to fully terminate...")
+    # Delete and re-apply app configs/secrets so new values take effect.
+    app_configs = [
+        "michelangelo-config", "michelangelo-apiserver-config",
+        "envoy-config", "public-config",
+    ]
+    for cm in app_configs:
+        subprocess.run(
+            ["kubectl", "delete", "configmap", cm, "--ignore-not-found=true"],
+            check=False, capture_output=True,
+        )
     subprocess.run(
-        [
-            "kubectl",
-            "wait",
-            "pod",
-            "--all",
-            "--for=delete",
-            "--timeout=120s",
-        ],
-        check=False,
-        capture_output=True,
+        ["kubectl", "delete", "secret", "aws-credentials", "--ignore-not-found=true"],
+        check=False, capture_output=True,
     )
 
-    _deploy_services(ns)
+    print("Waiting for old app pods to fully terminate...")
+    subprocess.run(
+        ["kubectl", "wait", "pod", "--all", "--for=delete", "--timeout=60s"],
+        check=False, capture_output=True,
+    )
+
+    _deploy_app_services(ns)
+
+
+def _deploy_app_services(ns: argparse.Namespace):
+    """Apply only Michelangelo application resources (apiserver, envoy, ui,
+    worker, controllermgr).
+
+    Called by ``_sync`` to do a fast redeploy without touching infrastructure.
+    """
+    assert ns
+    app_resources = [
+        "michelangelo-config.yaml",
+        "aws-credentials.yaml",
+    ]
+    if "apiserver" not in ns.exclude:
+        app_resources.append("michelangelo-apiserver.yaml")
+    if "ui" not in ns.exclude:
+        app_resources.append("envoy.yaml")
+        app_resources.append("michelangelo-ui.yaml")
+
+    for r in app_resources:
+        _kube_apply(_dir / "resources" / r)
+
+    # Wait only for app pods to become ready.
+    wait_timeout = getattr(ns, "wait_timeout", 600)
+    _exec(
+        "kubectl",
+        "wait",
+        "--for=condition=ready",
+        "pod",
+        "-l",
+        "app in (michelangelo-apiserver,envoy,michelangelo-ui)",
+        f"--timeout={wait_timeout}s",
+    )
+
+    if ns.workflow == "cadence":
+        _create_cadence_domain([])
+        if "worker" not in ns.exclude:
+            _kube_apply(_dir / "resources/michelangelo-worker.yaml")
+        if "controllermgr" not in ns.exclude:
+            _kube_apply(_dir / "resources/michelangelo-controllermgr.yaml")
 
 
 def _deploy_services(ns: argparse.Namespace):
