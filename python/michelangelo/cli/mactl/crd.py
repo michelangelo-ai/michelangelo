@@ -12,7 +12,7 @@ from pathlib import Path
 from types import MethodType
 from typing import Any, Callable, Optional
 
-from google.protobuf.json_format import MessageToDict, ParseDict
+from google.protobuf.json_format import ParseDict
 from google.protobuf.message import Message
 from grpc import (
     Channel,
@@ -415,8 +415,9 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
     request_input = read_yaml_to_crd_request(
         crd_method_info.input_class, _self.name, _file, converter, yaml_dict=yaml_dict
     )
-    # Both request_input (UpdatePipelineRequest) and message_instance (GetPipelineResponse)
-    # wrap the pipeline under _self.name. Copy resourceVersion for optimistic concurrency.
+    # Both request_input (UpdatePipelineRequest) and message_instance
+    # (GetPipelineResponse) wrap the pipeline under _self.name.
+    # Copy resourceVersion for optimistic concurrency.
     existing = getattr(message_instance, _self.name)
     inner = getattr(request_input, _self.name)
     inner.metadata.resourceVersion = existing.metadata.resourceVersion

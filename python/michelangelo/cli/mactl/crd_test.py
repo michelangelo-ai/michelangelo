@@ -5,6 +5,8 @@ from inspect import Parameter, Signature
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
 
+from grpc import RpcError, StatusCode
+
 from michelangelo.cli.mactl.crd import (
     CRD,
     CrdMethodInfo,
@@ -17,6 +19,17 @@ from michelangelo.cli.mactl.crd import (
     list_func_impl,
     prepare_column_info,
 )
+
+
+class _FakeRpcError(RpcError):
+    """Minimal RpcError subclass for testing."""
+
+    def __init__(self, status_code: StatusCode) -> None:
+        self._code = status_code
+
+    def code(self) -> StatusCode:
+        """Return the status code."""
+        return self._code
 
 
 class PrepareColumnInfoTest(TestCase):
@@ -298,7 +311,7 @@ class ApplyFuncImplTest(TestCase):
         self, mock_yaml_to_dict: MagicMock, mock_read_yaml: MagicMock,
         mock_call_kwargs: MagicMock, _
     ):
-        """Test apply_func_impl uses full replace (read_yaml_to_crd_request) when converter is set."""
+        """Test apply uses full replace via read_yaml_to_crd_request."""
         crd_method_info = CrdMethodInfo(
             channel=Mock(),
             crd_full_name="test.Service",
@@ -330,6 +343,56 @@ class ApplyFuncImplTest(TestCase):
         # resourceVersion must be copied onto the inner pipeline message
         inner = getattr(mock_request, mock_crd.name)
         self.assertEqual(inner.metadata.resourceVersion, "42")
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
+    @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
+    def test_apply_func_impl_create_when_not_found(
+        self, mock_yaml_to_dict: MagicMock, mock_call_kwargs: MagicMock
+    ):
+        """Test apply_func_impl calls create when the resource does not exist."""
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Apply",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        mock_crd = Mock()
+        mock_crd.full_name = "test.Service"
+        mock_call_kwargs.side_effect = _FakeRpcError(StatusCode.NOT_FOUND)
+        parsed_yaml = {"metadata": {"namespace": "ns", "name": "name"}}
+        mock_yaml_to_dict.return_value = parsed_yaml
+
+        apply_func_impl(
+            crd_method_info, Mock(arguments={"self": mock_crd, "file": "f.yaml"})
+        )
+
+        mock_crd.generate_create.assert_called_once_with(crd_method_info.channel)
+        mock_crd.create.assert_called_once_with("f.yaml")
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
+    @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
+    def test_apply_func_impl_reraises_non_not_found_errors(
+        self, mock_yaml_to_dict: MagicMock, mock_call_kwargs: MagicMock
+    ):
+        """Test apply_func_impl re-raises RpcErrors that are not NOT_FOUND."""
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Apply",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        mock_crd = Mock()
+        mock_crd.full_name = "test.Service"
+        mock_call_kwargs.side_effect = _FakeRpcError(StatusCode.UNAVAILABLE)
+        parsed_yaml = {"metadata": {"namespace": "ns", "name": "name"}}
+        mock_yaml_to_dict.return_value = parsed_yaml
+
+        with self.assertRaises(RpcError):
+            apply_func_impl(
+                crd_method_info, Mock(arguments={"self": mock_crd, "file": "f.yaml"})
+            )
 
 
 class CreateFuncImplTest(TestCase):
