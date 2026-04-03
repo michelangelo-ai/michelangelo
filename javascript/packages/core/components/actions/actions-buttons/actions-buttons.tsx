@@ -29,7 +29,7 @@ export function ActionsButtons<T extends Data>({
   const [css, theme] = useStyletron();
   const [selectedAction, setSelectedAction] = useState<SelectedAction | null>(null);
 
-  if (!actions || actions.length === 0) return null;
+  if (actions.length === 0) return null;
 
   const { primary, secondary, tertiary } = partitionActions(actions);
   const ActiveComponent = selectedAction?.component;
