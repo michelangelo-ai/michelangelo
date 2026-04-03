@@ -59,7 +59,9 @@ def apply_plugin_command(
         crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_create
     if target_command == "apply":
         crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_apply
-        crd.func_crd_metadata_converter_for_create = convert_crd_metadata_pipeline_create
+        crd.func_crd_metadata_converter_for_create = (
+            convert_crd_metadata_pipeline_create
+        )
     if target_command == "run":
         crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_run
     if target_command == "dev_run":
