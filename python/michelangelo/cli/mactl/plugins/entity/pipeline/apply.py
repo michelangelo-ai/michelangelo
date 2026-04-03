@@ -47,10 +47,10 @@ def convert_crd_metadata_pipeline_apply(
         )
     )
 
-    # Include user-defined metadata from the yaml (name, namespace, annotations, labels).
-    # uid/resourceVersion/creationTimestamp are server-managed and not present in the yaml,
-    # so they are not included here — the caller is responsible for copying resourceVersion
-    # from the existing pipeline for optimistic concurrency.
+    # Include user-defined metadata from the yaml (name, namespace, annotations,
+    # labels). uid/resourceVersion/creationTimestamp are server-managed and not
+    # yaml, so they are not included here — the caller is responsible for copying
+    # resourceVersion from the existing pipeline for optimistic concurrency.
     res = {
         "metadata": {
             "name": yaml_dict["metadata"]["name"],
