@@ -25,9 +25,6 @@ on:
   schedule:
     - cron: "0 3 * * *"   # 03:00 UTC every day
 
-env:
-  REGISTRY: ghcr.io
-
 jobs:
   sandbox-e2e:
     # For workflow_run: only proceed if the triggering build succeeded.
@@ -38,7 +35,6 @@ jobs:
     timeout-minutes: 90
     permissions:
       contents: read
-      packages: read
     defaults:
       run:
         working-directory: ./python
@@ -47,25 +43,8 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      # Compute the image tag: use the input if provided, otherwise derive from branch/event.
-      - name: Compute image tag
-        id: tag
-        run: |
-          if [ -n "${{ inputs.image_tag }}" ]; then
-            echo "value=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event_name }}" = "workflow_run" ]; then
-            branch="${{ github.event.workflow_run.head_branch }}"
-            tag="${branch//\//-}"
-            echo "value=${tag}" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_name }}" != "main" ]; then
-            branch="${{ github.ref_name }}"
-            tag="${branch//\//-}"
-            echo "value=${tag}" >> "$GITHUB_OUTPUT"
-          else
-            echo "value=latest" >> "$GITHUB_OUTPUT"
-          fi
-
-      # k3d, kubectl, and helm are pre-installed on the GCP self-hosted runner.
+      # k3d, kubectl, helm, and AWS CLI v2 are pre-installed on the GCP self-hosted runner.
+      # The examples task image is pre-loaded into k3s containerd on the runner VM.
       # Install Poetry + project dependencies using the system Python 3.11.
       - name: Install Poetry and dependencies
         run: |
@@ -75,51 +54,13 @@ jobs:
           poetry env use python3
           poetry install --no-interaction -E dev
 
-      # Pull pre-built examples image from GHCR (built by build-examples-image.yaml).
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # Pre-pull heavy images so they're in the host Docker cache.
-      - name: Pre-pull sandbox images
-        run: docker pull mysql:8.0
-
-      # Create/sync the k3d sandbox with all services.
-      # `sync` reuses an existing cluster (skipping cluster create and image
-      # import) so that subsequent runs are fast; falls back to full create on
-      # first run.
+      # Sync restarts only Michelangelo app services (apiserver, envoy, ui, worker,
+      # controllermgr). Infrastructure (MySQL, Cadence, MinIO, Grafana, Prometheus)
+      # is kept running between runs — no re-init overhead.
       - name: Sync sandbox
         run: $HOME/.local/bin/poetry run ma sandbox sync --workflow cadence
 
-      # Import the examples image into k3s containerd.
-      # On first run: pull directly from GHCR into k3s containerd (ctr pull uses
-      # concurrent layer downloads and is much faster than docker save | ctr import).
-      # On subsequent runs: cluster is preserved via `ma sandbox stop`, so the
-      # image is already in containerd and this step is skipped entirely.
-      - name: Import examples image into k3s containerd
-        run: |
-          IMAGE_SRC="ghcr.io/${{ github.repository_owner }}/examples:${{ steps.tag.outputs.value }}"
-          IMAGE_DST="docker.io/library/examples:latest"
-          SERVER="k3d-michelangelo-sandbox-server-0"
-          if docker exec "${SERVER}" ctr -n k8s.io images ls \
-               | grep -q "${IMAGE_DST}"; then
-            echo "Image already present in k3s containerd, skipping import."
-          else
-            echo "Pulling ${IMAGE_SRC} directly into k3s containerd..."
-            docker exec "${SERVER}" \
-              ctr -n k8s.io images pull \
-              --user "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" \
-              "${IMAGE_SRC}"
-            echo "Tagging as ${IMAGE_DST}..."
-            docker exec "${SERVER}" \
-              ctr -n k8s.io images tag "${IMAGE_SRC}" "${IMAGE_DST}"
-          fi
-
       # Run the integration test script.
-      # AWS CLI v2 is pre-installed on the self-hosted runner (installed once on the VM).
       - name: Run integration tests
         run: |
           source .venv/bin/activate
@@ -130,6 +71,4 @@ jobs:
           POLL_INTERVAL: "30"
           TIMEOUT: "1800"
 
-      # Infrastructure (MySQL, Cadence, MinIO, Grafana, Prometheus) is intentionally
-      # kept running between CI runs so subsequent runs can skip the slow init phase.
-      # The cluster is only stopped if explicitly needed (e.g., manual teardown).
+      # Infrastructure is intentionally kept running between CI runs.
