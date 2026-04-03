@@ -65,7 +65,6 @@ jobs:
           ../.github/scripts/integration-test.sh
         env:
           MA_NAMESPACE: ma-dev-test
-          MA_IT_IMAGE: docker.io/library/examples:latest
           POLL_INTERVAL: "30"
           TIMEOUT: "1800"
 

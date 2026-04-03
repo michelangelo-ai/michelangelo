@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Integration test: register and run pipelines end-to-end via mactl.
+# Integration test: apply and run a pipeline end-to-end via mactl.
 #
 # Usage:
 #   cd $REPO_ROOT/python
@@ -8,26 +8,18 @@
 #
 # Environment variables (all optional, defaults shown):
 #   MA_NAMESPACE    – project namespace               (ma-dev-test)
-#   MINIO_ENDPOINT  – MinIO API endpoint              (http://localhost:9091)
-#   MINIO_ACCESS_KEY – MinIO access key              (minioadmin)
-#   MINIO_SECRET_KEY – MinIO secret key              (minioadmin)
 #   POLL_INTERVAL   – seconds between status checks  (30)
 #   TIMEOUT         – max seconds to wait per run    (1800)
 
 set -euo pipefail
 
 NAMESPACE="${MA_NAMESPACE:-ma-dev-test}"
-MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://localhost:9091}"
-MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-minioadmin}"
-MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-minioadmin}"
 POLL_INTERVAL="${POLL_INTERVAL:-30}"
 TIMEOUT="${TIMEOUT:-1800}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 PYTHON_DIR="${REPO_ROOT}/python"
-
-TAR_LOCAL="${PYTHON_DIR}/michelangelo/cli/sandbox/demo/pipeline/bert_local.tar"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -36,7 +28,6 @@ TAR_LOCAL="${PYTHON_DIR}/michelangelo/cli/sandbox/demo/pipeline/bert_local.tar"
 log() { echo "[$(date -u '+%H:%M:%S')] $*"; }
 
 # Wait until a pipeline run reaches a terminal state.
-# Usage: wait_for_run <run-name>
 wait_for_run() {
   local run_name="$1"
   local start elapsed state
@@ -82,34 +73,52 @@ kubectl delete namespace "${NAMESPACE}" --ignore-not-found=true --wait=true || t
 log "Namespace cleanup done."
 
 # ---------------------------------------------------------------------------
-# Step 2: upload bert_local.tar to MinIO
+# Step 2: create project
+# ---------------------------------------------------------------------------
+
+log "Creating namespace and project '${NAMESPACE}'..."
+kubectl create namespace "${NAMESPACE}"
+kubectl apply -f "${PYTHON_DIR}/michelangelo/cli/sandbox/demo/project.yaml"
+log "Project created."
+
+# ---------------------------------------------------------------------------
+# Step 3: apply pipeline
 # ---------------------------------------------------------------------------
 
 cd "${PYTHON_DIR}"
 
-log "Uploading bert_local.tar to s3://default/bert_local.tar ..."
-AWS_ACCESS_KEY_ID="${MINIO_ACCESS_KEY}" \
-AWS_SECRET_ACCESS_KEY="${MINIO_SECRET_KEY}" \
-  aws s3 cp "${TAR_LOCAL}" s3://default/bert_local.tar \
-    --endpoint-url "${MINIO_ENDPOINT}" \
-    --region us-east-1
-
-log "Upload complete."
+log "Applying pipeline from examples/bert_cola/pipeline.yaml..."
+ma pipeline apply --file=examples/bert_cola/pipeline.yaml
+log "Pipeline applied."
 
 # ---------------------------------------------------------------------------
-# Step 3: create demo project + register demo pipelines
+# Step 4: trigger a pipeline run
 # ---------------------------------------------------------------------------
 
-log "Creating demo project and registering pipelines..."
-ma sandbox demo pipeline
+log "Triggering pipeline run for 'bert-cola-test'..."
+ma pipeline run -n "${NAMESPACE}" --name=bert-cola-test
+log "Pipeline run triggered."
 
 # ---------------------------------------------------------------------------
-# Step 4: run training-pipeline (bert_cola)
+# Step 5: find the run name and wait for it
 # ---------------------------------------------------------------------------
 
-log "=== Test: training-pipeline (bert_cola) ==="
-# The demo setup already creates run-training-pipeline; wait for it directly.
-RUN_NAME="run-training-pipeline"
+log "Waiting for pipelinerun to appear..."
+for i in $(seq 1 10); do
+  RUN_NAME=$(kubectl get pipelinerun -n "${NAMESPACE}" \
+    --sort-by=.metadata.creationTimestamp \
+    -o jsonpath='{.items[-1].metadata.name}' 2>/dev/null || true)
+  if [[ -n "${RUN_NAME}" ]]; then
+    break
+  fi
+  sleep 3
+done
+
+if [[ -z "${RUN_NAME:-}" ]]; then
+  log "❌ No pipelinerun found in namespace '${NAMESPACE}'."
+  exit 1
+fi
+
 log "Pipeline run name: ${RUN_NAME}"
 wait_for_run "${RUN_NAME}"
 
