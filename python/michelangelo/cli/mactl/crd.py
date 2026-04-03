@@ -110,27 +110,6 @@ def yaml_to_dict(yaml_path_string: str) -> dict[str, Any]:
     return res
 
 
-def get_crd_namespace_and_name_from_yaml(yaml_path_string: str) -> tuple[str, str]:
-    """Reads a YAML file and returns its content as a dictionary."""
-    _LOG.info("Start to Read YAML file: %r", yaml_path_string)
-    yaml_dict = yaml_to_dict(yaml_path_string)
-
-    assert "metadata" in yaml_dict, "YAML must contain 'metadata' key"
-
-    metadata = yaml_dict["metadata"]
-
-    assert "namespace" in metadata, "YAML metadata must contain 'namespace' key"
-    assert "name" in metadata, "YAML metadata must contain 'name' key"
-
-    namespace = metadata["namespace"]
-    name = metadata["name"]
-
-    _LOG.info("Retrieved namespace: %r, name: %r", namespace, name)
-    assert isinstance(namespace, str), "kind must be a string"
-    assert isinstance(name, str), "kind must be a string"
-    return namespace, name
-
-
 def get_single_arg(arguments: dict, key: str) -> str:
     """Get a single argument from the arguments dictionary.
 
@@ -166,10 +145,16 @@ def read_yaml_to_crd_request(
     crd_name: str,
     yaml_path_string: str,
     func_crd_metadata_converter: Callable,
+    *,
+    yaml_dict: Optional[dict] = None,
 ) -> Message:
-    """Reads a YAML file and converts it to a CRD request instance."""
+    """Reads a YAML file and converts it to a CRD request instance.
+
+    If yaml_dict is provided it is used directly, avoiding a second file read.
+    """
     yaml_path = Path(yaml_path_string).resolve()
-    yaml_dict = yaml_to_dict(yaml_path_string)
+    if yaml_dict is None:
+        yaml_dict = yaml_to_dict(yaml_path_string)
     crd_dict = {
         crd_name: func_crd_metadata_converter(yaml_dict, crd_class, yaml_path),
     }
@@ -387,7 +372,9 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
 
     _file = get_single_arg(bound_args.arguments, "file")
 
-    _namespace, _name = get_crd_namespace_and_name_from_yaml(_file)
+    yaml_dict = yaml_to_dict(_file)
+    _namespace = yaml_dict["metadata"]["namespace"]
+    _name = yaml_dict["metadata"]["name"]
 
     message_instance = None
     try:
@@ -426,7 +413,7 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
     _LOG.info("Retrieved message instance: %r", message_instance)
     converter = _self.func_crd_metadata_converter
     request_input = read_yaml_to_crd_request(
-        crd_method_info.input_class, _self.name, _file, converter
+        crd_method_info.input_class, _self.name, _file, converter, yaml_dict=yaml_dict
     )
     # Both request_input (UpdatePipelineRequest) and message_instance (GetPipelineResponse)
     # wrap the pipeline under _self.name. Copy resourceVersion for optimistic concurrency.
@@ -465,6 +452,7 @@ class CRD:
         self.name = name
         self.full_name = full_name
         self.func_crd_metadata_converter = convert_crd_metadata
+        self._get_method_info: Optional[CrdMethodInfo] = None
         self.metadata = metadata
         self.func_signature: dict[str, dict] = {
             "apply": {
@@ -761,47 +749,6 @@ class CRD:
         bound_func = bind_signature(list_func_signature)(bound_func)
         self.list = MethodType(bound_func, self)
         _LOG.debug("Generated LIST injected well: %r", self.list)
-
-    def read_yaml_and_update_crd_request(
-        self,
-        input_class: type[Message],
-        yaml_path_string: str,
-        original_crd: Message,
-        func_crd_metadata_converter: Optional[Callable] = None,
-    ) -> Message:
-        """Read a YAML file and update the original CRD request instance.
-
-        When func_crd_metadata_converter is provided it is called on the raw
-        YAML dict before merging, replacing the raw values with the enriched
-        output (correct filePath, commit info, uniflow artifacts, etc.).
-        """
-        original_crd_dict: dict = MessageToDict(
-            original_crd, preserving_proto_field_name=True
-        )
-        _LOG.debug("Original CRD dict: %r", original_crd_dict)
-
-        yaml_dict = yaml_to_dict(yaml_path_string)
-        _LOG.debug(
-            "Remove top-level apiVersion/kind from YAML dict,"
-            " since we don't allow to change typemeta"
-        )
-        yaml_dict.pop("apiVersion", None)
-        yaml_dict.pop("kind", None)
-        _LOG.debug("Finished to read YAML file: %r", yaml_dict)
-
-        if func_crd_metadata_converter is not None:
-            yaml_path = Path(yaml_path_string).resolve()
-            yaml_dict = func_crd_metadata_converter(yaml_dict, input_class, yaml_path)
-            _LOG.debug("Converted YAML dict via metadata converter: %r", yaml_dict)
-
-        deep_update(original_crd_dict[self.name], yaml_dict)
-        _LOG.debug("Updated CRD config dict: %r", original_crd_dict)
-
-        res = input_class()
-        ParseDict(original_crd_dict, res)
-        _LOG.info("Updated CRD instance to send API (%r): %r", type(res), res)
-        return res
-
 
 def inject_func_signature(crd: CRD, function_name: str, signatures: dict) -> None:
     """Utility function for injecting function signature for plugin command."""

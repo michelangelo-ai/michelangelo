@@ -291,35 +291,12 @@ class ApplyFuncImplTest(TestCase):
     """Test cases for apply_func_impl function."""
 
     @patch("michelangelo.cli.mactl.crd.crd_method_call")
-    @patch("michelangelo.cli.mactl.crd.get_crd_namespace_and_name_from_yaml")
-    def test_apply_func_impl_update_no_converter_falls_back_to_deep_merge(
-        self, mock_get_ns: MagicMock, _
-    ):
-        """Test apply_func_impl falls back to deep-merge when no converter is set."""
-        crd_method_info = CrdMethodInfo(
-            channel=Mock(),
-            crd_full_name="test.Service",
-            method_name="Apply",
-            input_class=Mock,
-            output_class=Mock,
-        )
-        mock_crd = Mock(spec=["full_name", "get", "read_yaml_and_update_crd_request", "name"])
-        mock_crd.full_name = "test.Service"
-        mock_crd.get.return_value = Mock()
-        mock_crd.read_yaml_and_update_crd_request.return_value = Mock()
-        mock_get_ns.return_value = ("ns", "name")
-
-        apply_func_impl(
-            crd_method_info, Mock(arguments={"self": mock_crd, "file": "f.yaml"})
-        )
-
-        mock_crd.read_yaml_and_update_crd_request.assert_called_once()
-
-    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
     @patch("michelangelo.cli.mactl.crd.read_yaml_to_crd_request")
-    @patch("michelangelo.cli.mactl.crd.get_crd_namespace_and_name_from_yaml")
+    @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
     def test_apply_func_impl_update_with_converter_uses_full_replace(
-        self, mock_get_ns: MagicMock, mock_read_yaml: MagicMock, _
+        self, mock_yaml_to_dict: MagicMock, mock_read_yaml: MagicMock,
+        mock_call_kwargs: MagicMock, _
     ):
         """Test apply_func_impl uses full replace (read_yaml_to_crd_request) when converter is set."""
         crd_method_info = CrdMethodInfo(
@@ -336,23 +313,23 @@ class ApplyFuncImplTest(TestCase):
         mock_crd.func_crd_metadata_converter = mock_converter
         mock_existing = Mock()
         mock_existing.test.metadata.resourceVersion = "42"
-        mock_crd.get.return_value = mock_existing
+        mock_call_kwargs.return_value = mock_existing
+        parsed_yaml = {"metadata": {"namespace": "ns", "name": "name"}}
+        mock_yaml_to_dict.return_value = parsed_yaml
         mock_request = Mock()
         mock_read_yaml.return_value = mock_request
-        mock_get_ns.return_value = ("ns", "name")
 
         apply_func_impl(
             crd_method_info, Mock(arguments={"self": mock_crd, "file": "f.yaml"})
         )
 
         mock_read_yaml.assert_called_once_with(
-            crd_method_info.input_class, mock_crd.name, "f.yaml", mock_converter
+            crd_method_info.input_class, mock_crd.name, "f.yaml", mock_converter,
+            yaml_dict=parsed_yaml,
         )
         # resourceVersion must be copied onto the inner pipeline message
         inner = getattr(mock_request, mock_crd.name)
         self.assertEqual(inner.metadata.resourceVersion, "42")
-        # deep-merge must NOT be called
-        mock_crd.read_yaml_and_update_crd_request.assert_not_called()
 
 
 class CreateFuncImplTest(TestCase):
