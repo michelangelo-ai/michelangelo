@@ -926,22 +926,39 @@ def _setup_temporal(links, helm_existing_repos):
 
 
 def _create_cadence_domain(links):
-    _kube_run(
-        image="ubercadence/cli:v1.2.6",
-        command=[
-            "cadence",
-            "--domain",
-            _cadence_domain,
-            "domain",
-            "register",
-            "--rd",
-            "1",
-        ],
-        env={
-            "CADENCE_CLI_ADDRESS": "cadence:7933",
-        },
-        retry_attempts=20,
-    )
+    """Register the Cadence domain, treating 'already exists' as success.
+
+    On a fresh cluster the Cadence frontend takes 60-90 s to start, so we
+    retry up to 20 times.  When infrastructure is kept running between CI
+    runs the domain will already be registered; that is not an error.
+    """
+    pod_name = uuid.uuid4().hex
+    args = [
+        "kubectl", "run", pod_name,
+        "--restart=Never", "--rm", "--stdin",
+        "--image", "ubercadence/cli:v1.2.6",
+        "--env=CADENCE_CLI_ADDRESS=cadence:7933",
+        "--command", "--",
+        "cadence", "--domain", _cadence_domain, "domain", "register", "--rd", "1",
+    ]
+    for attempt in range(21):  # 0..20 inclusive = 21 tries
+        print("[+]", " ".join(args))
+        result = subprocess.run(args, capture_output=True, text=True)
+        combined = result.stdout + result.stderr
+        if result.returncode == 0:
+            return
+        if "Domain already exists" in combined or "already registered" in combined:
+            print(f"Cadence domain '{_cadence_domain}' already registered — skipping.")
+            return
+        if attempt < 20:
+            print(f"retrying after 5 seconds... (attempt {attempt + 1}/20)")
+            # Print captured output so the log is visible
+            if combined.strip():
+                print(combined.strip())
+            time.sleep(5)
+    # Last attempt failed — surface the error and exit
+    print(combined.strip())
+    sys.exit(result.returncode)
 
 
 def _create_demo_crs(ns: argparse.Namespace):
