@@ -7,7 +7,6 @@ import noModuleScopeTestSetup from './eslint-local-rules/no-module-scope-test-se
 import tseslint from 'typescript-eslint';
 import prettierConfig from 'eslint-config-prettier';
 import baseUIEslint from 'eslint-plugin-baseui';
-import prettierPlugin from 'eslint-plugin-prettier';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
@@ -15,7 +14,6 @@ import globals from 'globals';
 
 // Shared plugins (used in app and packages/*)
 const sharedPlugins = {
-  prettier: prettierPlugin,
   'react-hooks': reactHooks,
   'simple-import-sort': simpleImportSort,
   'react-refresh': reactRefresh,
@@ -25,7 +23,6 @@ const sharedPlugins = {
 // Shared rules (used in app and packages/*)
 const sharedRules = {
   ...reactHooks.configs.recommended.rules,
-  'prettier/prettier': 'error',
   'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
   'simple-import-sort/imports': [
     'error',
