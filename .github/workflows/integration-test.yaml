@@ -50,7 +50,7 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           export PATH="$HOME/.local/bin:$PATH"
           poetry env use python3
-          poetry install --no-interaction -E dev
+          poetry install --no-interaction -E dev -E example
 
       # Sync restarts only Michelangelo app services (apiserver, envoy, ui, worker,
       # controllermgr). Infrastructure (MySQL, Cadence, MinIO, Grafana, Prometheus)

@@ -27,8 +27,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 PYTHON_DIR="${REPO_ROOT}/python"
 
-TAR_LOCAL="${PYTHON_DIR}/michelangelo/cli/sandbox/demo/pipeline/bert_local.tar"
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -81,19 +79,7 @@ kubectl delete namespace "${NAMESPACE}" --ignore-not-found=true --wait=true || t
 log "Namespace cleanup done."
 
 # ---------------------------------------------------------------------------
-# Step 2: upload bert_local.tar to MinIO
-# ---------------------------------------------------------------------------
-
-log "Uploading bert_local.tar to s3://default/bert_local.tar ..."
-AWS_ACCESS_KEY_ID="${MINIO_ACCESS_KEY}" \
-AWS_SECRET_ACCESS_KEY="${MINIO_SECRET_KEY}" \
-  aws s3 cp "${TAR_LOCAL}" s3://default/bert_local.tar \
-    --endpoint-url "${MINIO_ENDPOINT}" \
-    --region us-east-1
-log "Upload complete."
-
-# ---------------------------------------------------------------------------
-# Step 3: create project
+# Step 2: create project
 # ---------------------------------------------------------------------------
 
 log "Creating namespace and project '${NAMESPACE}'..."
@@ -102,33 +88,34 @@ kubectl apply -f "${PYTHON_DIR}/michelangelo/cli/sandbox/demo/project.yaml"
 log "Project created."
 
 # ---------------------------------------------------------------------------
-# Step 4: apply pipeline
+# Step 3: install example dependencies
+# ---------------------------------------------------------------------------
+
+log "Installing example dependencies..."
+pip install "michelangelo[example]" --quiet
+log "Dependencies installed."
+
+# ---------------------------------------------------------------------------
+# Step 4: apply pipeline (builds and uploads uniflow tar to MinIO)
 # ---------------------------------------------------------------------------
 
 log "Applying bert-cola-test pipeline..."
-kubectl apply -f - <<'EOF'
-apiVersion: michelangelo.api/v2
-kind: Pipeline
-metadata:
-  name: bert-cola-test
-  namespace: ma-dev-test
-  annotations:
-    michelangelo/uniflow-image: docker.io/library/examples:latest
-spec:
-  type: PIPELINE_TYPE_TRAIN
-  manifest:
-    type: PIPELINE_MANIFEST_TYPE_UNIFLOW
-    uniflowTar: s3://default/bert_local.tar
-EOF
+AWS_ACCESS_KEY_ID="${MINIO_ACCESS_KEY}" \
+AWS_SECRET_ACCESS_KEY="${MINIO_SECRET_KEY}" \
+AWS_ENDPOINT_URL="${MINIO_ENDPOINT}" \
+  ma pipeline apply --file="${PYTHON_DIR}/examples/bert_cola/pipeline.yaml"
 log "Pipeline applied."
 
 # ---------------------------------------------------------------------------
-# Step 5: trigger a pipeline run
+# Step 5: trigger a dev pipeline run (builds tar and submits inline spec)
 # ---------------------------------------------------------------------------
 
-log "Triggering pipeline run for 'bert-cola-test'..."
-ma pipeline run -n "${NAMESPACE}" --name=bert-cola-test
-log "Pipeline run triggered."
+log "Triggering dev pipeline run for 'bert-cola-test'..."
+AWS_ACCESS_KEY_ID="${MINIO_ACCESS_KEY}" \
+AWS_SECRET_ACCESS_KEY="${MINIO_SECRET_KEY}" \
+AWS_ENDPOINT_URL="${MINIO_ENDPOINT}" \
+  ma pipeline dev-run --file="${PYTHON_DIR}/examples/bert_cola/pipeline.yaml"
+log "Pipeline dev-run triggered."
 
 # ---------------------------------------------------------------------------
 # Step 6: find the run name and wait for it
