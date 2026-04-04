@@ -5,15 +5,30 @@ sidebar_label: "Pipeline Notifications"
 
 # Pipeline Notifications
 
-Michelangelo can send email or Slack notifications when a pipeline run, trigger run, or pipeline reaches a terminal state. Notifications are configured directly in the resource spec YAML — no separate setup is required per pipeline.
+Stay informed about your ML pipeline outcomes without constantly checking the dashboard. Michelangelo can send you **email or Slack notifications** whenever a pipeline run succeeds, fails, gets stopped, or hits any other terminal state.
+
+Notifications are configured directly in your resource spec YAML — just add a `notifications` block and you're set. No separate setup, no external webhook configuration, and no per-pipeline toggles to manage.
 
 :::note
-Notification delivery requires platform-level integration with a Communication API Gateway (CAG). If notifications are not being delivered in your deployment, contact your Michelangelo operator to confirm the integration is configured. See the [operator integration note](#operator-integration) below.
+Notifications are configured through YAML specs only. The Michelangelo Studio UI does not currently support notification configuration.
 :::
 
-## Configuration
+:::caution Operator Implementation Required
+Notification delivery is not enabled by default in open-source deployments. The notification workflow fires correctly when pipeline states change, but the email and Slack delivery activities are stubs that must be implemented by your platform operator. See [Enabling Notification Delivery](#enabling-notification-delivery) for details.
+:::
 
-Add a `notifications` field to any `PipelineRun`, `TriggerRun`, or `Pipeline` spec. Each entry in the list is one notification rule — you can have multiple rules with different event types and destinations.
+## When to Use Notifications
+
+Notifications are especially useful when you:
+
+- **Run long training jobs** and want to know the moment they finish (or fail)
+- **Schedule recurring pipelines** with triggers and need alerts when something goes wrong
+- **Work as a team** and want pipeline outcomes posted to a shared Slack channel
+- **Run nightly backfills** and want a morning email summary of what succeeded or failed
+
+## Quick Start
+
+Here's the fastest way to get started: add a `notifications` block to your pipeline run spec to get an email when it succeeds or fails.
 
 ```yaml
 notifications:
@@ -24,41 +39,64 @@ notifications:
       - EVENT_TYPE_PIPELINE_RUN_STATE_FAILED
     emails:
       - "you@example.com"
-      - "team@example.com"
+```
 
+That's it! When you apply this spec with `ma apply -f your-spec.yaml`, Michelangelo will send you an email each time the run reaches one of those states.
+
+Want Slack notifications instead? Swap the type and destination:
+
+```yaml
+notifications:
   - notificationType: NOTIFICATION_TYPE_SLACK
     resourceType: RESOURCE_TYPE_PIPELINE_RUN
     eventTypes:
       - EVENT_TYPE_PIPELINE_RUN_STATE_FAILED
-      - EVENT_TYPE_PIPELINE_RUN_STATE_KILLED
     slackDestinations:
       - "#ml-alerts"
 ```
+
+You can also combine both in a single spec — see the [full example](#full-example) below.
+
+## Configuration Reference
+
+Add a `notifications` field to any `PipelineRun`, `TriggerRun`, or `Pipeline` spec. Each entry in the list is one notification rule, and you can have as many rules as you need with different event types and destinations.
+
+:::tip
+You can configure notifications in your YAML specs at any time. Messages will be delivered once your operator has [enabled notification delivery](#enabling-notification-delivery).
+:::
 
 ### Fields
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | `notificationType` | Yes | `NOTIFICATION_TYPE_EMAIL` or `NOTIFICATION_TYPE_SLACK` |
-| `resourceType` | Yes | The resource being watched. See [Resource Types](#resource-types). |
+| `resourceType` | Yes | The type of resource you're watching. See [Resource Types](#resource-types). |
 | `eventTypes` | Yes | One or more events that trigger this notification. See [Event Types](#event-types). |
 | `emails` | For email | List of recipient email addresses. |
-| `slackDestinations` | For Slack | List of Slack channel names (e.g. `#alerts`). These are channel names, not webhook URLs — routing is handled by the platform. |
+| `slackDestinations` | For Slack | List of Slack channel names (e.g., `#alerts`). Use channel names, not webhook URLs — the platform handles routing for you. |
 
-## Event Types
+### Resource Types
 
-Choose events based on the `resourceType` of the notification:
+| Resource type | What it watches |
+|---------------|-----------------|
+| `RESOURCE_TYPE_PIPELINE_RUN` | Individual pipeline run outcomes (success, failure, etc.) |
+| `RESOURCE_TYPE_TRIGGER_RUN` | Trigger run outcomes for scheduled or event-driven runs |
+| `RESOURCE_TYPE_PIPELINE` | Pipeline build events (build succeeded or failed) |
 
-### Pipeline Run events (`RESOURCE_TYPE_PIPELINE_RUN`)
+### Event Types
+
+Choose events based on the `resourceType` you're watching.
+
+#### Pipeline Run Events (`RESOURCE_TYPE_PIPELINE_RUN`)
 
 | Event type | When it fires |
 |------------|---------------|
 | `EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED` | Run completed successfully |
 | `EVENT_TYPE_PIPELINE_RUN_STATE_FAILED` | Run failed |
 | `EVENT_TYPE_PIPELINE_RUN_STATE_KILLED` | Run was manually stopped |
-| `EVENT_TYPE_PIPELINE_RUN_STATE_SKIPPED` | Run was skipped (e.g. by a trigger concurrency policy) |
+| `EVENT_TYPE_PIPELINE_RUN_STATE_SKIPPED` | Run was skipped (e.g., by a trigger concurrency policy) |
 
-### Trigger Run events (`RESOURCE_TYPE_TRIGGER_RUN`)
+#### Trigger Run Events (`RESOURCE_TYPE_TRIGGER_RUN`)
 
 | Event type | When it fires |
 |------------|---------------|
@@ -66,26 +104,19 @@ Choose events based on the `resourceType` of the notification:
 | `EVENT_TYPE_TRIGGER_RUN_STATE_FAILED` | Trigger run failed |
 | `EVENT_TYPE_TRIGGER_RUN_STATE_KILLED` | Trigger run was stopped |
 
-### Pipeline events (`RESOURCE_TYPE_PIPELINE`)
+#### Pipeline Events (`RESOURCE_TYPE_PIPELINE`)
 
 | Event type | When it fires |
 |------------|---------------|
 | `EVENT_TYPE_PIPELINE_STATE_READY` | Pipeline build succeeded and is ready to run |
 | `EVENT_TYPE_PIPELINE_STATE_ERROR` | Pipeline build failed |
 
-## Resource Types
-
-| Resource type | Use with |
-|---------------|----------|
-| `RESOURCE_TYPE_PIPELINE_RUN` | `PipelineRun` spec or any spec that creates runs |
-| `RESOURCE_TYPE_TRIGGER_RUN` | `TriggerRun` spec |
-| `RESOURCE_TYPE_PIPELINE` | `Pipeline` spec (build-time events) |
-
 ## Message Format
 
-Both channels receive the same information, formatted for the medium.
+Both email and Slack notifications include the same information, formatted appropriately for each medium.
 
-**Slack message:**
+**Slack message example:**
+
 ```
 Pipeline Run (my-training-run) has completed with state FAILED:
 - Name: my-training-run
@@ -95,16 +126,14 @@ Pipeline Run (my-training-run) has completed with state FAILED:
 - <https://michelangelo-studio.example.com/ma/my-project/train/runs/my-training-run|Michelangelo Studio URL>
 ```
 
-**Email:**
-- Subject: `Pipeline Run (my-training-run) has completed with state FAILED`
-- Sender: `michelangelo@uber.com`
-- Body contains the same fields as the Slack message, as plain text with a link to MA Studio
+**Email example:**
 
-For ASL (Amazon States Language) pipelines, a Cadence Log URL is appended to the message.
+- **Subject:** `Pipeline Run (my-training-run) has completed with state FAILED`
+- **Body:** Same fields as the Slack message, with a direct link to the run in Michelangelo Studio
 
-## Full Example: TriggerRun with Both Channels
+## Full Example
 
-This example sends email on success or failure and Slack only on failure or kill:
+This `TriggerRun` spec sets up a daily training pipeline backfill with dual-channel notifications — email on success or failure, and Slack only on failure or kill:
 
 ```yaml
 apiVersion: michelangelo.api/v2
@@ -146,16 +175,56 @@ Apply it with the CLI:
 ma apply -f trigger.yaml
 ```
 
-## Operator Integration
+## Updating or Removing Notifications
 
-Notification delivery is handled by two Temporal/Cadence activities in the Michelangelo worker:
+To change your notification settings, update the `notifications` block in your spec and re-apply:
 
-- `SendMessageToSlackActivity` — sends the formatted message to the specified Slack channel
-- `SendMessageToEmailActivity` — sends the formatted email to all recipients
+```bash
+ma apply -f your-spec.yaml
+```
 
-These activities are stubs that must be connected to a Communication API Gateway (CAG) or equivalent messaging service by your platform operator. The activities receive a `channel` + `text` (Slack) or a full email request struct (`to`, `cc`, `subject`, `html`, `text`, `send_as`) and are responsible for delivery.
+To stop receiving notifications, remove the `notifications` block entirely and re-apply the spec.
 
-If you are an operator implementing this integration, see:
-- `go/worker/activities/notification/activities.go` — activity stubs with the request types and integration comments
-- `go/worker/workflows/notification/workflows.go` — the workflow that calls the activities
+## Troubleshooting
+
+**I configured notifications but I'm not receiving them.**
+
+- Double-check that your `notificationType`, `resourceType`, and `eventTypes` are valid values from the tables above. Typos in enum values will be silently ignored.
+- For email, verify the addresses in `emails` are correct.
+- For Slack, confirm the channel name in `slackDestinations` exists and is accessible by the platform.
+- Notification delivery depends on operator-level implementation. If everything looks correct in your spec but notifications still aren't arriving, check with your platform administrator — see [Enabling Notification Delivery](#enabling-notification-delivery) below.
+
+**I'm only getting some of my notifications.**
+
+- Make sure you've listed all the event types you care about. For example, if you want alerts on both success and failure, you need both `EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED` and `EVENT_TYPE_PIPELINE_RUN_STATE_FAILED` in your `eventTypes` list.
+- Each notification rule is independent. If you have separate rules for email and Slack, check that each one has the correct event types.
+
+## Enabling Notification Delivery
+
+:::info For platform operators
+This section is for platform operators who are deploying Michelangelo and need to enable notification delivery. If you're an ML engineer configuring notifications, the sections above cover everything you need.
+:::
+
+Notification delivery is not enabled out of the box. The notification **workflow** (which listens for pipeline state changes and formats messages) is fully implemented and runs automatically. However, the two **delivery activities** that actually send messages are stubs that you must implement:
+
+- **`SendMessageToSlackActivity`** — receives a `channel` name and `text` payload; must deliver the message to the specified Slack channel
+- **`SendMessageToEmailActivity`** — receives a full email request (`to`, `cc`, `subject`, `html`, `text`, `send_as`); must deliver the email to all recipients
+
+### How to Implement
+
+1. **Implement the two activity functions** in `go/worker/activities/notification/activities.go`. Each activity receives a structured request with all the information needed to send the message. Add your email service client (e.g., SMTP, SendGrid, SES) and Slack API client to handle delivery.
+
+2. **Add your messaging clients as FX-injected dependencies.** Follow the pattern used by other Michelangelo activities — see `go/worker/activities/storage/` or `go/worker/activities/ray/` for examples of how dependencies are injected via the FX framework.
+
+3. **Rebuild and redeploy the worker binary.** Once the activities are implemented, the notification workflow will automatically invoke them when pipeline states change.
+
+### Reference Files
+
+- `go/worker/activities/notification/activities.go` — activity stubs with request types and integration comments
+- `go/worker/workflows/notification/workflows.go` — the workflow that invokes the activities
 - `go/base/notification/types/types.go` — message generation helpers
+
+## What's Next
+
+- [Pipeline Running Modes](./ml-pipelines/pipeline-running-modes.md) — learn about the different ways to execute your pipelines
+- [ML Pipelines Overview](./ml-pipelines/index.md) — understand the broader pipeline framework
