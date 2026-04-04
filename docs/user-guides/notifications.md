@@ -113,7 +113,7 @@ Choose events based on the `resourceType` you're watching.
 
 ## Message Format
 
-Both email and Slack notifications include the same information, formatted appropriately for each medium.
+Both email and Slack notifications include the same core information, formatted appropriately for each medium.
 
 **Slack message example:**
 
@@ -129,7 +129,15 @@ Pipeline Run (my-training-run) has completed with state FAILED:
 **Email example:**
 
 - **Subject:** `Pipeline Run (my-training-run) has completed with state FAILED`
-- **Body:** Same fields as the Slack message, with a direct link to the run in Michelangelo Studio
+- **Body:**
+  ```
+  Your Michelangelo Studio Pipeline Run Has Status Update:
+  - Name: my-training-run
+  - Project: my-project
+  - State: FAILED
+  - Pipeline Type: TRAIN
+  - Michelangelo Studio URL: https://michelangelo-studio.example.com/ma/my-project/train/runs/my-training-run
+  ```
 
 ## Full Example
 
