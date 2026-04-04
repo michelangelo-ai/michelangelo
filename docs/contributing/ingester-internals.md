@@ -348,7 +348,7 @@ go test ./go/components/ingester/... -v
 
 ### Integration / E2E Testing
 
-The [sandbox validation guide](../operator-guides/ingester-sandbox-validation.md) serves as the integration test suite. The steps are fully reproducible:
+The integration test suite uses test CRs from `scripts/ingester-test-crs/`. The steps are fully reproducible:
 
 ```bash
 # 1. Recreate sandbox
@@ -538,5 +538,5 @@ With 13 CRDs and `concurrentReconciles: 1`, there are 13 independent work queues
 ## Next Steps
 
 - Review [Ingester Configuration and Operations](../operator-guides/ingester-configuration.md) for operational documentation
-- Check the [sandbox validation guide](../operator-guides/ingester-sandbox-validation.md) for testing procedures
+- Reference test CRs in `scripts/ingester-test-crs/` for integration testing examples
 - See the code at `go/components/ingester/` for the full implementation

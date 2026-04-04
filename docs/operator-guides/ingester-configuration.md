@@ -318,8 +318,22 @@ Requeue errors typically indicate:
 
 ---
 
+## Verified Behavior
+
+When the ingester is correctly enabled:
+
+1. **All 13 controllers register** at startup (one per CRD kind)
+2. **Immediate sync on creation** — objects appear in MySQL within milliseconds
+3. **Immediate sync on update** — `res_version` and `update_time` advance in MySQL after every change
+4. **Full JSON stored** — complete object JSON in the `json` column
+5. **Indexed fields stored** — `algorithm`, `ray_version`, `entrypoint`, etc. in dedicated indexed columns
+6. **Labels synced** — label changes reflected in `*_labels` companion tables
+7. **Opt-in disabled by default** — ingester only runs when MySQL config is present in `michelangelo-controllermgr-config`
+8. **SparkJob blocked** — pre-existing nil pointer panic in the SparkJob business controller prevents sync (unrelated to ingester)
+
+---
+
 ## Next Steps
 
 - Review [Ingester Internals](../contributing/ingester-internals.md) for developer documentation
-- Check the [sandbox validation guide](./ingester-sandbox-validation.md) for testing procedures
 - Monitor logs and MySQL after enablement to verify steady-state operation
