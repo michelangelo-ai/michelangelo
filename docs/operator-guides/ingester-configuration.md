@@ -321,5 +321,5 @@ Requeue errors typically indicate:
 ## Next Steps
 
 - Review [Ingester Internals](../contributing/ingester-internals.md) for developer documentation
-- Check the sandbox validation guide (`docs/ingester-sandbox-validation.md`) for testing procedures
+- Check the [sandbox validation guide](./ingester-sandbox-validation.md) for testing procedures
 - Monitor logs and MySQL after enablement to verify steady-state operation
