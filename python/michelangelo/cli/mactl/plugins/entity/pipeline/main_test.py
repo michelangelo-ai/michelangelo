@@ -49,9 +49,7 @@ class PipelineMainTest(TestCase):
 
     def test_apply_command_sets_create_converter_for_create(self):
         """Apply command sets func_crd_metadata_converter_for_create."""
-        apply_plugin_command(
-            self.mock_crd, "apply", self.mock_crds, self.mock_channel
-        )
+        apply_plugin_command(self.mock_crd, "apply", self.mock_crds, self.mock_channel)
 
         self.assertEqual(
             self.mock_crd.func_crd_metadata_converter_for_create,

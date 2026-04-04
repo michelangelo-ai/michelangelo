@@ -378,9 +378,7 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
         raise ValueError(f"YAML {_file} must contain a 'metadata' mapping")
     for key in ("namespace", "name"):
         if key not in metadata or not isinstance(metadata[key], str):
-            raise ValueError(
-                f"YAML metadata must contain '{key}' as a string"
-            )
+            raise ValueError(f"YAML metadata must contain '{key}' as a string")
     _namespace = metadata["namespace"]
     _name = metadata["name"]
 
@@ -758,6 +756,7 @@ class CRD:
         bound_func = bind_signature(list_func_signature)(bound_func)
         self.list = MethodType(bound_func, self)
         _LOG.debug("Generated LIST injected well: %r", self.list)
+
 
 def inject_func_signature(crd: CRD, function_name: str, signatures: dict) -> None:
     """Utility function for injecting function signature for plugin command."""

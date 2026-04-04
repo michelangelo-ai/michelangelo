@@ -308,8 +308,11 @@ class ApplyFuncImplTest(TestCase):
     @patch("michelangelo.cli.mactl.crd.read_yaml_to_crd_request")
     @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
     def test_apply_func_impl_update_with_converter_uses_full_replace(
-        self, mock_yaml_to_dict: MagicMock, mock_read_yaml: MagicMock,
-        mock_call_kwargs: MagicMock, _
+        self,
+        mock_yaml_to_dict: MagicMock,
+        mock_read_yaml: MagicMock,
+        mock_call_kwargs: MagicMock,
+        _,
     ):
         """Test apply uses full replace via read_yaml_to_crd_request."""
         crd_method_info = CrdMethodInfo(
@@ -337,7 +340,10 @@ class ApplyFuncImplTest(TestCase):
         )
 
         mock_read_yaml.assert_called_once_with(
-            crd_method_info.input_class, mock_crd.name, "f.yaml", mock_converter,
+            crd_method_info.input_class,
+            mock_crd.name,
+            "f.yaml",
+            mock_converter,
             yaml_dict=parsed_yaml,
         )
         # resourceVersion must be copied onto the inner pipeline message
@@ -425,9 +431,7 @@ class ApplyFuncImplTest(TestCase):
         # Converter must be swapped to create_converter during create()
         mock_crd.create.assert_called_once_with("f.yaml")
         # After the call, original converter must be restored
-        self.assertIs(
-            mock_crd.func_crd_metadata_converter, original_converter
-        )
+        self.assertIs(mock_crd.func_crd_metadata_converter, original_converter)
 
 
 class CreateFuncImplTest(TestCase):
