@@ -14,7 +14,8 @@ def _make_yaml_dict(spec=None):
         "apiVersion": "michelangelo.api/v2",
         "kind": "Pipeline",
         "metadata": {"name": "my-pipeline", "namespace": "my-project"},
-        "spec": spec or {
+        "spec": spec
+        or {
             "type": "PIPELINE_TYPE_TRAIN",
             "manifest": {"filePath": "examples.my_pipeline.workflow"},
         },
@@ -66,16 +67,18 @@ class PipelineApplyTest(TestCase):
         yaml_path = Path("/repo/my-project/my-pipeline/pipeline.yaml")
         mock_repo = _make_mock_repo(repo_root="/repo")
 
-        with self._patch_repo(mock_repo), \
-             self._patch_handle() as mock_handle, \
-             self._patch_populate():
+        with (
+            self._patch_repo(mock_repo),
+            self._patch_handle() as mock_handle,
+            self._patch_populate(),
+        ):
             convert_crd_metadata_pipeline_apply(yaml_dict, Mock(), yaml_path)
 
         mock_handle.assert_called_once()
         call_args = mock_handle.call_args
         # project and pipeline come from yaml metadata
         args = call_args[0]
-        self.assertEqual(args[2], "my-project")   # project
+        self.assertEqual(args[2], "my-project")  # project
         self.assertEqual(args[3], "my-pipeline")  # pipeline
         # config_file_relative_path is relative to repo root
         self.assertIn("my-project/my-pipeline/pipeline.yaml", args[1])
@@ -90,9 +93,11 @@ class PipelineApplyTest(TestCase):
         yaml_path = Path("/repo/my-project/my-pipeline/pipeline.yaml")
         mock_repo = _make_mock_repo(repo_root="/repo")
 
-        with self._patch_repo(mock_repo), \
-             self._patch_handle(), \
-             self._patch_populate() as mock_populate:
+        with (
+            self._patch_repo(mock_repo),
+            self._patch_handle(),
+            self._patch_populate() as mock_populate,
+        ):
             convert_crd_metadata_pipeline_apply(yaml_dict, Mock(), yaml_path)
 
         # 6th positional arg is config_file_relative_path
@@ -111,9 +116,11 @@ class PipelineApplyTest(TestCase):
             sha="deadbeef", branch="feature/x", repo_root="/repo"
         )
 
-        with self._patch_repo(mock_repo), \
-             self._patch_handle(), \
-             self._patch_populate() as mock_populate:
+        with (
+            self._patch_repo(mock_repo),
+            self._patch_handle(),
+            self._patch_populate() as mock_populate,
+        ):
             convert_crd_metadata_pipeline_apply(yaml_dict, Mock(), yaml_path)
 
         # 4th positional arg to populate is the repo object
@@ -135,17 +142,17 @@ class PipelineApplyTest(TestCase):
         fake_tar = "s3://bucket/my.tar.gz"
         fake_fn = "my_workflow"
 
-        with self._patch_repo(mock_repo), \
-             self._patch_handle(
-                 return_value=(fake_workflow_inputs, fake_tar, fake_fn)
-             ), \
-             self._patch_populate() as mock_populate:
+        with (
+            self._patch_repo(mock_repo),
+            self._patch_handle(return_value=(fake_workflow_inputs, fake_tar, fake_fn)),
+            self._patch_populate() as mock_populate,
+        ):
             convert_crd_metadata_pipeline_apply(yaml_dict, Mock(), yaml_path)
 
         args = mock_populate.call_args[0]
-        self.assertEqual(args[2], fake_workflow_inputs)   # workflow_inputs
-        self.assertEqual(args[7], fake_tar)               # uniflow_tar_path
-        self.assertEqual(args[8], fake_fn)                # workflow_function_name
+        self.assertEqual(args[2], fake_workflow_inputs)  # workflow_inputs
+        self.assertEqual(args[7], fake_tar)  # uniflow_tar_path
+        self.assertEqual(args[8], fake_fn)  # workflow_function_name
 
     # ------------------------------------------------------------------
     # Graceful degradation: filePath still set when registration fails
@@ -158,14 +165,16 @@ class PipelineApplyTest(TestCase):
         mock_repo = _make_mock_repo(repo_root="/repo")
 
         # handle returns empty strings — the graceful-degradation case
-        with self._patch_repo(mock_repo), \
-             self._patch_handle(return_value=(None, "", "")), \
-             self._patch_populate() as mock_populate:
+        with (
+            self._patch_repo(mock_repo),
+            self._patch_handle(return_value=(None, "", "")),
+            self._patch_populate() as mock_populate,
+        ):
             convert_crd_metadata_pipeline_apply(yaml_dict, Mock(), yaml_path)
 
         mock_populate.assert_called_once()
         args = mock_populate.call_args[0]
-        self.assertIsNone(args[2])   # workflow_inputs
+        self.assertIsNone(args[2])  # workflow_inputs
         self.assertEqual(args[7], "")  # uniflow_tar_path
         self.assertEqual(args[8], "")  # workflow_function_name
 
@@ -183,13 +192,15 @@ class PipelineApplyTest(TestCase):
             res["spec"] = {"manifest": {"filePath": "full/path"}}
             return res
 
-        with self._patch_repo(mock_repo), \
-             self._patch_handle(), \
-             patch(
-                 "michelangelo.cli.mactl.plugins.entity.pipeline.apply"
-                 ".populate_pipeline_spec_with_workflow_inputs",
-                 side_effect=fake_populate,
-             ):
+        with (
+            self._patch_repo(mock_repo),
+            self._patch_handle(),
+            patch(
+                "michelangelo.cli.mactl.plugins.entity.pipeline.apply"
+                ".populate_pipeline_spec_with_workflow_inputs",
+                side_effect=fake_populate,
+            ),
+        ):
             result = convert_crd_metadata_pipeline_apply(yaml_dict, Mock(), yaml_path)
 
         self.assertIn("metadata", result)
@@ -206,9 +217,7 @@ class PipelineApplyTest(TestCase):
         yaml_path = Path("/repo/my-project/my-pipeline/pipeline.yaml")
         mock_repo = _make_mock_repo(repo_root="/repo")
 
-        with self._patch_repo(mock_repo), \
-             self._patch_handle(), \
-             self._patch_populate():
+        with self._patch_repo(mock_repo), self._patch_handle(), self._patch_populate():
             result = convert_crd_metadata_pipeline_apply(yaml_dict, Mock(), yaml_path)
 
         self.assertEqual(
