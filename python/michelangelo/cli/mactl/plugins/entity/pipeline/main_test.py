@@ -7,6 +7,12 @@ plugin-specific converters.
 from unittest import TestCase
 from unittest.mock import Mock
 
+from michelangelo.cli.mactl.plugins.entity.pipeline.apply import (
+    convert_crd_metadata_pipeline_apply,
+)
+from michelangelo.cli.mactl.plugins.entity.pipeline.create import (
+    convert_crd_metadata_pipeline_create,
+)
 from michelangelo.cli.mactl.plugins.entity.pipeline.main import (
     apply_plugin_command,
     apply_plugins,
@@ -23,20 +29,52 @@ class PipelineMainTest(TestCase):
         self.mock_crds = {"pipeline": self.mock_crd}
         self.mock_channel = Mock()
 
-    def test_apply_plugins_create_command(self):
-        """Test apply_plugins for create command."""
+    def test_create_command_sets_create_converter(self):
+        """Create command sets func_crd_metadata_converter to pipeline_create."""
         apply_plugin_command(self.mock_crd, "create", self.mock_crds, self.mock_channel)
 
-        # Verify that the metadata converter was set
-        self.assertTrue(hasattr(self.mock_crd, "func_crd_metadata_converter"))
-        # Cannot check the exact function due to mock imports, but verify it was set
-        self.assertIsNotNone(self.mock_crd.func_crd_metadata_converter)
+        self.assertEqual(
+            self.mock_crd.func_crd_metadata_converter,
+            convert_crd_metadata_pipeline_create,
+        )
+
+    def test_apply_command_sets_apply_converter(self):
+        """Apply command sets func_crd_metadata_converter to pipeline_apply."""
+        apply_plugin_command(self.mock_crd, "apply", self.mock_crds, self.mock_channel)
+
+        self.assertEqual(
+            self.mock_crd.func_crd_metadata_converter,
+            convert_crd_metadata_pipeline_apply,
+        )
+
+    def test_apply_command_sets_create_converter_for_create(self):
+        """Apply command sets func_crd_metadata_converter_for_create."""
+        apply_plugin_command(self.mock_crd, "apply", self.mock_crds, self.mock_channel)
+
+        self.assertEqual(
+            self.mock_crd.func_crd_metadata_converter_for_create,
+            convert_crd_metadata_pipeline_create,
+        )
+
+    def test_apply_and_create_use_different_converters(self):
+        """Apply and create commands must use distinct converter functions."""
+        apply_plugin_command(self.mock_crd, "apply", self.mock_crds, self.mock_channel)
+        apply_converter = self.mock_crd.func_crd_metadata_converter
+
+        create_crd = Mock()
+        apply_plugin_command(create_crd, "create", self.mock_crds, self.mock_channel)
+        create_converter = create_crd.func_crd_metadata_converter
+
+        self.assertIsNot(
+            apply_converter,
+            create_converter,
+            "apply and create must use different metadata converters",
+        )
 
     def test_apply_plugins_run_command(self):
         """Test apply_plugins for run command."""
         apply_plugin_command(self.mock_crd, "run", self.mock_crds, self.mock_channel)
 
-        # Verify that both the metadata converter and generate_run were set
         self.assertTrue(hasattr(self.mock_crd, "func_crd_metadata_converter"))
         self.assertTrue(hasattr(self.mock_crd, "generate_run"))
         self.assertIsNotNone(self.mock_crd.func_crd_metadata_converter)
@@ -48,7 +86,6 @@ class PipelineMainTest(TestCase):
             self.mock_crd, "dev_run", self.mock_crds, self.mock_channel
         )
 
-        # Verify that both the metadata converter and generate_dev_run were set
         self.assertTrue(hasattr(self.mock_crd, "func_crd_metadata_converter"))
         self.assertTrue(hasattr(self.mock_crd, "generate_dev_run"))
         self.assertIsNotNone(self.mock_crd.func_crd_metadata_converter)
@@ -58,61 +95,5 @@ class PipelineMainTest(TestCase):
         """Test that apply_plugins registers the kill command."""
         apply_plugins(self.mock_crd, self.mock_channel)
 
-        # Verify that generate_kill was set
         self.assertTrue(hasattr(self.mock_crd, "generate_kill"))
         self.assertIsNotNone(self.mock_crd.generate_kill)
-
-    def test_apply_command_sets_metadata_converter(self):
-        """Test that apply command sets func_crd_metadata_converter.
-
-        CRITICAL BUG FIX TEST: This test ensures that the 'apply' command
-        properly configures the metadata converter, which is essential for
-        pipeline registration.
-
-        Background:
-        - The CRD.apply() function auto-creates an instance if it doesn't exist
-          by calling CRD.create() internally (see crd.py:400-404)
-        - CRD.create() relies on func_crd_metadata_converter to process the YAML
-          (see crd.py:424-428)
-        - For pipelines, convert_crd_metadata_pipeline_create() performs critical
-          registration steps including:
-          1. Running subprocess registration to build the uniflow tar
-          2. Extracting the tar path and workflow inputs
-          3. Adding uniflow tar path to spec.manifest.uniflowTar
-          4. Adding workflow inputs to spec.manifest.content
-
-        Impact of bug:
-        - Without this converter, 'mactl apply -f pipeline.yaml' would create a
-          pipeline WITHOUT the uniflow tar path in the spec
-        - The pipeline would be registered in the metadata store, but would have
-          no executable code
-        - When triggered, the pipeline would fail because the uniflow tar is
-          missing
-        - This is a silent failure - the apply command succeeds, but the pipeline
-          is broken
-
-        Why this test matters:
-        - Ensures 'apply' and 'create' commands have identical behavior for new
-          pipelines
-        - Prevents regression where apply command bypasses critical registration
-          steps
-        - Documents the dependency between apply → create → metadata converter
-          → tar upload
-        """
-        # Test that apply command sets the metadata converter
-        apply_plugin_command(self.mock_crd, "apply", self.mock_crds, self.mock_channel)
-
-        # Verify that the metadata converter was set
-        self.assertTrue(hasattr(self.mock_crd, "func_crd_metadata_converter"))
-        self.assertIsNotNone(self.mock_crd.func_crd_metadata_converter)
-
-        # Verify it's the same converter as create command uses
-        create_crd = Mock()
-        create_crd.func_signature = {}
-        apply_plugin_command(create_crd, "create", self.mock_crds, self.mock_channel)
-
-        self.assertEqual(
-            self.mock_crd.func_crd_metadata_converter,
-            create_crd.func_crd_metadata_converter,
-            "apply and create commands must use the same metadata converter",
-        )
