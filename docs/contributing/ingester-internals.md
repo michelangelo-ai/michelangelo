@@ -1,51 +1,34 @@
-# Ingester Controller: Design Document
+# Ingester Controller: Architecture and Implementation
 
-## Overview
+This guide explains the internal design of the Ingester controller for developers who need to understand, extend, or modify the ingester code.
 
-The **Ingester** is a generic Kubernetes controller that watches all 13 Michelangelo CRDs and durably syncs them into MySQL. Its purpose is to decouple metadata storage from etcd: objects created through the Michelangelo API Server are kept in sync with a relational database, enabling rich querying, long-term retention, and eventual etcd offload for historical/immutable records.
+## Finalizer Implementation
 
-```
-                 ┌─────────────────┐
-  kubectl/gRPC → │  API Server     │ → creates CR in K8s + adds finalizer
-                 └────────┬────────┘
-                          │ K8s event
-                 ┌────────▼────────┐
-                 │  Ingester       │ → upserts to MySQL
-                 │  Controller     │ → removes finalizer on delete
-                 └────────┬────────┘
-                          │ SQL
-                 ┌────────▼────────┐
-                 │     MySQL       │ 13 tables + labels + annotations
-                 └─────────────────┘
-```
+The ingester uses Kubernetes finalizers to guarantee safe deletions: MySQL is always updated before an object is removed from etcd.
 
----
+### The Finalizer
 
-## 1. Finalizer Implementation
-
-### 1.1 The Finalizer
-
-The ingester uses a single Kubernetes finalizer to guarantee that no CR is deleted from etcd before it has been soft-deleted in MySQL:
+A single finalizer blocks deletion:
 
 ```go
 // go/api/api.go
 IngesterFinalizer = "michelangelo/Ingester"
 ```
 
-Kubernetes will not actually remove an object from the API server until all finalizers have been stripped. The ingester uses this guarantee to ensure MySQL is always updated before etcd loses the record.
+Kubernetes guarantees that objects are not removed from the API server until all finalizers are stripped. The ingester uses this to ensure MySQL is always updated before etcd loses the record.
 
-### 1.2 Finalizer Injection (API Server)
+### Finalizer Injection (API Server)
 
-The API Server adds the finalizer during the `Create` handler, before the object is written to etcd:
+The API Server injects the finalizer during object creation, before writing to etcd:
 
 ```go
 // go/api/handler/handler.go:546-547
 ctrlRTUtil.AddFinalizer(objMeta.(ctrlRTClient.Object), api.IngesterFinalizer)
 ```
 
-This means every CRD object that passes through the API Server carries the `michelangelo/Ingester` finalizer from birth. Objects created with `kubectl apply` that bypass the API Server handler will not have the finalizer and will not be tracked by the ingester.
+**Key invariant**: Every CRD object created through the API Server carries the `michelangelo/Ingester` finalizer from birth. Objects created with `kubectl apply` that bypass the API Server handler will not have the finalizer and will not be tracked by deletion.
 
-### 1.3 Finalizer Removal (Ingester Controller)
+### Finalizer Removal (Ingester Controller)
 
 The ingester removes the finalizer only after MySQL has been successfully updated:
 
@@ -60,9 +43,9 @@ if err := r.Update(ctx, object); err != nil {
 
 If MySQL is unreachable or the delete fails, the finalizer remains in place and the object stays in etcd. The controller retries every `requeuPeriod` (default: 30 seconds) until the operation succeeds.
 
-### 1.4 Annotation-Based Deletion
+### Annotation-Based Deletion
 
-Because the ingester finalizer blocks `kubectl delete` from completing until MySQL is updated, the API Server uses a different deletion path: it sets an annotation instead of issuing a K8s delete directly.
+Because the ingester finalizer blocks `kubectl delete` from completing, the API Server uses an alternative deletion path: it sets an annotation instead of issuing a Kubernetes delete directly.
 
 ```go
 // go/api/api.go
@@ -70,12 +53,13 @@ DeletingAnnotation = "michelangelo/Deleting"
 ```
 
 When the API Server receives a delete request and metadata storage is enabled:
+
 ```go
 // go/api/handler/handler.go:253,293
 annotation[api.DeletingAnnotation] = "true"
 ```
 
-The ingester detects this annotation, soft-deletes from MySQL, removes the finalizer, then issues the K8s delete:
+The ingester detects this annotation and handles the deletion asynchronously:
 
 ```
 annotation set → ingester detects → MySQL soft-delete → remove finalizer → K8s delete
@@ -83,7 +67,7 @@ annotation set → ingester detects → MySQL soft-delete → remove finalizer �
 
 This path ensures the API Server's delete request completes instantly from the caller's perspective while the ingester handles the MySQL cleanup asynchronously.
 
-### 1.5 Immutable Objects
+### Immutable Objects
 
 The `michelangelo/Immutable` annotation marks objects whose spec will never change again (e.g., completed PipelineRuns, archived Models). The ingester:
 
@@ -98,7 +82,7 @@ The object continues to exist in MySQL only, permanently freeing etcd memory.
 ImmutableAnnotation = "michelangelo/Immutable"
 ```
 
-### 1.6 Reconcile Decision Tree
+### Reconcile Decision Tree
 
 ```
 Reconcile(object)
@@ -118,15 +102,13 @@ Reconcile(object)
             └── MySQL.Upsert(proto + JSON + indexed fields + labels + annotations) → done
 ```
 
----
+## MySQL Storage Architecture
 
-## 2. MySQL Storage Architecture
-
-### 2.1 Schema Layout
+### Schema Layout
 
 For each of the 13 CRDs, there are 3 MySQL tables:
 
-| Table type | Naming | Purpose |
+| Table Type | Naming | Purpose |
 |-----------|--------|---------|
 | Main | `<kind>` | Core object data (uid, name, namespace, JSON, proto, indexed fields) |
 | Labels | `<kind>_labels` | Key-value label pairs per object UID |
@@ -152,7 +134,7 @@ The 13 CRDs and their table names (derived by `strings.ToLower(kind)`):
 
 **Total: 39 tables** (13 × 3)
 
-### 2.2 Main Table Schema
+### Main Table Schema
 
 ```sql
 CREATE TABLE model (
@@ -176,7 +158,7 @@ CREATE TABLE model (
 
 Soft deletes are used: `DELETE` sets `delete_time` rather than removing the row. All queries filter `WHERE delete_time IS NULL` for live objects.
 
-### 2.3 Upsert Strategy
+### Upsert Strategy
 
 The ingester uses `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL upsert):
 
@@ -194,11 +176,12 @@ ON DUPLICATE KEY UPDATE
 
 Labels and annotations are replaced fully on every upsert (delete all existing rows for the UID, re-insert from current state).
 
-### 2.4 Indexed Fields
+### Indexed Fields
 
-CRDs that implement `storage.IndexedObject` expose `GetIndexedKeyValuePairs()` to return fields that are stored in dedicated indexed columns. This allows MySQL queries like `WHERE algorithm = 'xgboost'` without JSON extraction.
+CRDs that implement `storage.IndexedObject` expose `GetIndexedKeyValuePairs()` to return fields that are stored in dedicated indexed columns. This allows MySQL queries without JSON extraction.
 
 Example for `Model`:
+
 ```go
 func (m *Model) GetIndexedKeyValuePairs() []storage.IndexedField {
     return []storage.IndexedField{
@@ -207,177 +190,9 @@ func (m *Model) GetIndexedKeyValuePairs() []storage.IndexedField {
 }
 ```
 
----
+## Code Examples
 
-## 3. Controller Registration and Opt-In Design
-
-### 3.1 Opt-In via Dependency Injection
-
-The ingester activates through a two-gate check in `go/cmd/controllermgr/ingester_providers.go`:
-
-```go
-func provideMetadataStorage(
-    storageConfig storage.MetadataStorageConfig,
-    mysqlConfig baseconfig.MySQLConfig,
-    scheme *runtime.Scheme,
-) (storage.MetadataStorage, error) {
-    // Gate 1: metadataStorage.enableMetadataStorage must be true
-    if !storage.EnableMetadataStorage(&storageConfig) {
-        return nil, nil
-    }
-    // Gate 2: mysql config must have host/user/database or enabled: true
-    if !mysqlConfigEnabled(mysqlConfig) {
-        return nil, fmt.Errorf("metadata storage is enabled but mysql config is empty")
-    }
-    return mysqlstorage.NewMetadataStorage(mysqlConfig.ToMySQLConfig(), scheme)
-}
-
-func mysqlConfigEnabled(config baseconfig.MySQLConfig) bool {
-    if config.Enabled {
-        return true
-    }
-    return config.Host != "" || config.Database != "" || config.User != ""
-}
-```
-
-When `provideMetadataStorage` returns `nil`, the ingester module detects it and skips setup:
-
-```go
-// go/components/ingester/module.go
-func register(p registerParams) error {
-    if p.MetadataStorage == nil {
-        p.Logger.Info("Metadata storage not configured, skipping ingester setup")
-        return nil
-    }
-    // register one Reconciler per CRD
-}
-```
-
-No other code changes are required to enable or disable the ingester.
-
-### 3.2 Configuration
-
-The ingester is configured via the controllermgr ConfigMap. Both `metadataStorage` and `mysql` stanzas are required to activate it:
-
-```yaml
-# michelangelo-controllermgr-config
-
-# Gate 1: must set enableMetadataStorage: true
-metadataStorage:
-  enableMetadataStorage: true
-  deletionDelay: 10s
-  enableResourceVersionCache: false
-
-# Gate 2: must provide mysql connection details
-mysql:
-  host: mysql
-  port: 3306
-  user: root
-  password: root
-  database: michelangelo
-  maxOpenConns: 25
-  maxIdleConns: 5
-  connMaxLifetime: 5m
-
-ingester:
-  concurrentReconciles: 2
-  requeuePeriod: 30s
-```
-
-If either stanza is absent, the ingester silently stays disabled with zero impact on the rest of the controllermgr.
-
-### 3.3 Controller Setup
-
-One `Reconciler` is registered per CRD kind, watching only that specific type:
-
-```go
-ctrl.NewControllerManagedBy(mgr).
-    For(r.TargetKind).                         // watch only this CRD type
-    Named(fmt.Sprintf("ingester_%s", kind)).   // unique controller name
-    WithOptions(controller.Options{
-        MaxConcurrentReconciles: concurrentReconciles,
-    }).
-    Complete(r)
-```
-
-With 13 CRDs and `concurrentReconciles: 1`, there are 13 independent work queues, each processing one object at a time.
-
----
-
-## 4. Migration Strategy
-
-### 4.1 Enabling the Ingester on a Running Cluster
-
-The ingester is designed to be enabled without downtime. Existing objects in etcd that predate the feature will be picked up automatically on the controller's first list-and-watch cycle.
-
-**Steps to enable on an existing cluster**:
-
-1. **Apply the schema init Job** to create the 39 MySQL tables:
-   ```bash
-   kubectl apply -f scripts/ingester/ingester-schema-init-job.yaml
-   kubectl wait --for=condition=complete job/ingester-schema-init --timeout=120s
-   ```
-
-2. **Update the controllermgr ConfigMap** to add both required stanzas:
-   ```bash
-   kubectl edit configmap michelangelo-controllermgr-config
-   # Add metadataStorage:, mysql:, and ingester: stanzas (see Section 3.2)
-   ```
-
-3. **Restart the controllermgr** (use rollout restart for Deployments, or delete the pod for bare Pods):
-   ```bash
-   # If controllermgr is a Deployment:
-   kubectl rollout restart deployment michelangelo-controllermgr
-   # If controllermgr is a bare Pod (e.g. sandbox):
-   kubectl delete pod michelangelo-controllermgr
-   ```
-
-4. **Verify controllers registered** (13 log lines expected):
-   ```bash
-   kubectl logs -l app=michelangelo-controllermgr | grep "Ingester controller registered"
-   ```
-
-5. **Verify backfill**: All existing objects will be reconciled once on startup. Check MySQL counts:
-   ```bash
-   for table in project modelfamily model pipeline pipelinerun inferenceserver \
-                revision cluster raycluster rayjob triggerrun deployment sparkjob; do
-     COUNT=$(kubectl exec pod/mysql -- mysql -uroot -proot michelangelo -sN \
-       -e "SELECT COUNT(*) FROM ${table} WHERE delete_time IS NULL;" 2>/dev/null)
-     echo "${table}: ${COUNT}"
-   done
-   ```
-
-### 4.2 Existing Objects Without the Finalizer
-
-Objects created before the ingester was enabled will not have the `michelangelo/Ingester` finalizer. The ingester still syncs them to MySQL (the `handleSync` path does not require a finalizer). However, when these objects are deleted via `kubectl delete`, the ingester will not intercept the deletion because there is no finalizer to block it.
-
-**Trade-off**: Historical objects created before the ingester are synced to MySQL but may not receive deletion events. Soft-delete records will remain with `delete_time IS NULL` even after the object is gone from etcd.
-
-**Mitigation options** (not yet implemented):
-- A backfill controller that periodically compares etcd state to MySQL and soft-deletes orphaned rows.
-- Require all delete operations to go through the API Server (which sets the `DeletingAnnotation`), bypassing the need for a finalizer on old objects.
-
-### 4.3 Schema Evolution
-
-Adding a new indexed column to an existing table requires a schema migration. The current schema init Job is idempotent for table creation (`CREATE TABLE IF NOT EXISTS`) but does not apply `ALTER TABLE` migrations.
-
-**Recommended approach for schema changes**:
-1. Add the new column in a separate migration Job.
-2. Update `GetIndexedKeyValuePairs()` to populate the new field.
-3. Trigger a reconcile of all affected objects (e.g., by bumping a resource version annotation) to populate the new column retroactively.
-
-### 4.4 Disabling the Ingester
-
-To disable the ingester without data loss:
-1. Remove the `mysql:` stanza from the controllermgr ConfigMap.
-2. Restart the controllermgr. The ingester module will detect `MetadataStorage == nil` and skip setup.
-3. MySQL data is preserved. The ingester can be re-enabled later and will re-sync from the current etcd state.
-
----
-
-## 5. Code Examples
-
-### 5.1 Full Reconcile Loop
+### Full Reconcile Loop
 
 ```go
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -406,7 +221,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 }
 ```
 
-### 5.2 Sync to MySQL
+### Sync to MySQL
 
 ```go
 func (r *Reconciler) handleSync(ctx context.Context, log logr.Logger, object client.Object) (ctrl.Result, error) {
@@ -422,7 +237,7 @@ func (r *Reconciler) handleSync(ctx context.Context, log logr.Logger, object cli
 }
 ```
 
-### 5.3 Deletion via Finalizer
+### Deletion via Finalizer
 
 ```go
 func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object client.Object) (ctrl.Result, error) {
@@ -445,7 +260,7 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
 }
 ```
 
-### 5.4 API Server Finalizer Injection
+### API Server Finalizer Injection
 
 ```go
 // handler.go (Create handler)
@@ -453,7 +268,7 @@ ctrlRTUtil.AddFinalizer(objMeta.(ctrlRTClient.Object), api.IngesterFinalizer)
 // then write to K8s
 ```
 
-### 5.5 API Server Annotation-Based Delete
+### API Server Annotation-Based Delete
 
 ```go
 // handler.go (Delete handler)
@@ -469,18 +284,14 @@ if metadataStorageEnabled {
 // else: normal K8s delete
 ```
 
-### 5.6 Adding a New CRD to the Ingester
-TODO(#1011): rewrite this section
+## Testing
 
----
-
-## 6. Testing Finalizers
-
-### 6.1 Unit Tests
+### Unit Tests
 
 The controller is tested using `controller-runtime`'s fake client and `testify/mock`. All 4 reconcile flows have dedicated tests in `go/components/ingester/controller_test.go`.
 
 **Test pattern**:
+
 ```go
 func TestReconciler_HandleDeletion(t *testing.T) {
     scheme := runtime.NewScheme()
@@ -527,7 +338,7 @@ func TestReconciler_HandleDeletion(t *testing.T) {
 | `TestReconciler_ObjectNotFound` | Object deleted before reconcile runs | No storage calls |
 | `TestHelperFunctions` | `isDeletingAnnotationSet`, `isImmutable`, `getRequeuePeriod` | Return correct values |
 
-### 6.2 Running Unit Tests
+### Running Unit Tests
 
 ```bash
 bazel test //go/components/ingester/...
@@ -535,7 +346,7 @@ bazel test //go/components/ingester/...
 go test ./go/components/ingester/... -v
 ```
 
-### 6.3 Integration / E2E Testing
+### Integration / E2E Testing
 
 The sandbox validation (`docs/ingester-sandbox-validation.md`) serves as the integration test suite. The steps are fully reproducible:
 
@@ -565,7 +376,7 @@ kubectl exec pod/mysql -- mysql -uroot -proot michelangelo -sN \
 # Expected: lightgbm
 ```
 
-### 6.4 Testing Finalizer Behavior Specifically
+### Testing Finalizer Behavior Specifically
 
 **Test: finalizer blocks K8s deletion until MySQL is updated**
 
@@ -593,24 +404,69 @@ kubectl exec pod/mysql -- mysql -uroot -proot michelangelo -sN \
 4. Object remains in `Terminating` state.
 5. Restore MySQL → ingester retries → MySQL updated → finalizer removed → object gone.
 
----
+## Controller Registration and Opt-In Design
 
-## 7. Known Limitations and Open Issues
+### Opt-In via Dependency Injection
 
-| Issue | Severity | Notes |
-|-------|----------|-------|
-| SparkJob double-panic in business controller | High | Pre-existing bug in `spark/job/client/client.go:185`. Crashes controllermgr, preventing SparkJob MySQL sync. Fix required in SparkJob controller. |
-| Pre-existing objects lack finalizer | Medium | Objects created before ingester was enabled won't get deletion events via finalizer. Soft-delete orphan cleanup not yet implemented. |
-| `DeleteCollection` not implemented | Medium | Returns error. Required for namespace-scoped bulk deletes. |
-| `QueryByTemplateID` not implemented | Low | Placeholder for template-based queries. |
-| `Backfill` not implemented | Low | Placeholder for historical data migration. |
-| Label selector in `List` not implemented | Low | SQL label filter not yet wired up. |
-| `directUpdate` not implemented | Low | Optimistic concurrency update path placeholder. |
-| No schema migration support | Medium | Schema init Job is create-only. `ALTER TABLE` for new columns requires manual intervention. |
+The ingester activates through a two-gate check in `go/cmd/controllermgr/ingester_providers.go`:
 
----
+```go
+func provideMetadataStorage(
+    storageConfig storage.MetadataStorageConfig,
+    mysqlConfig baseconfig.MySQLConfig,
+    scheme *runtime.Scheme,
+) (storage.MetadataStorage, error) {
+    // Gate 1: metadataStorage.enableMetadataStorage must be true
+    if !storage.EnableMetadataStorage(&storageConfig) {
+        return nil, nil
+    }
+    // Gate 2: mysql config must have host/user/database or enabled: true
+    if !mysqlConfigEnabled(mysqlConfig) {
+        return nil, fmt.Errorf("metadata storage is enabled but mysql config is empty")
+    }
+    return mysqlstorage.NewMetadataStorage(mysqlConfig.ToMySQLConfig(), scheme)
+}
 
-## 8. Architecture Summary
+func mysqlConfigEnabled(config baseconfig.MySQLConfig) bool {
+    if config.Enabled {
+        return true
+    }
+    return config.Host != "" || config.Database != "" || config.User != ""
+}
+```
+
+When `provideMetadataStorage` returns `nil`, the ingester module detects it and skips setup:
+
+```go
+// go/components/ingester/module.go
+func register(p registerParams) error {
+    if p.MetadataStorage == nil {
+        p.Logger.Info("Metadata storage not configured, skipping ingester setup")
+        return nil
+    }
+    // register one Reconciler per CRD
+}
+```
+
+No other code changes are required to enable or disable the ingester.
+
+### Controller Setup
+
+One `Reconciler` is registered per CRD kind, watching only that specific type:
+
+```go
+ctrl.NewControllerManagedBy(mgr).
+    For(r.TargetKind).                         // watch only this CRD type
+    Named(fmt.Sprintf("ingester_%s", kind)).   // unique controller name
+    WithOptions(controller.Options{
+        MaxConcurrentReconciles: concurrentReconciles,
+    }).
+    Complete(r)
+```
+
+With 13 CRDs and `concurrentReconciles: 1`, there are 13 independent work queues, each processing one object at a time.
+
+## Architecture Summary
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -663,3 +519,24 @@ kubectl exec pod/mysql -- mysql -uroot -proot michelangelo -sN \
 - **Safe deletions**: Finalizer guarantees MySQL is updated before etcd record is removed.
 - **Resilient**: Failed MySQL operations trigger requeue with backoff. Object stays in K8s until MySQL confirms.
 - **Idempotent**: Upsert is safe to call multiple times with the same object.
+
+## Known Limitations and Issues
+
+| Issue | Severity | Notes |
+|-------|----------|-------|
+| SparkJob double-panic in business controller | High | Pre-existing bug in `go/components/spark/job/client/client.go:185`. Crashes controllermgr, preventing SparkJob MySQL sync. Fix required in SparkJob controller. |
+| Pre-existing objects lack finalizer | Medium | Objects created before ingester was enabled won't get deletion events via finalizer. Soft-delete orphan cleanup not yet implemented. |
+| `DeleteCollection` not implemented | Medium | Returns error. Required for namespace-scoped bulk deletes. |
+| `QueryByTemplateID` not implemented | Low | Placeholder for template-based queries. |
+| `Backfill` not implemented | Low | Placeholder for historical data migration. |
+| Label selector in `List` not implemented | Low | SQL label filter not yet wired up. |
+| `directUpdate` not implemented | Low | Optimistic concurrency update path placeholder. |
+| No schema migration support | Medium | Schema init Job is create-only. `ALTER TABLE` for new columns requires manual intervention. |
+
+---
+
+## Next Steps
+
+- Review [Ingester Configuration and Operations](../operator-guides/ingester-configuration.md) for operational documentation
+- Check the sandbox validation guide (`docs/ingester-sandbox-validation.md`) for testing procedures
+- See the code at `go/components/ingester/` for the full implementation
