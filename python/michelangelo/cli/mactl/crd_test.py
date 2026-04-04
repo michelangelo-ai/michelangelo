@@ -394,6 +394,41 @@ class ApplyFuncImplTest(TestCase):
                 crd_method_info, Mock(arguments={"self": mock_crd, "file": "f.yaml"})
             )
 
+    @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
+    @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
+    def test_apply_create_path_uses_create_converter(
+        self, mock_yaml_to_dict: MagicMock, mock_call_kwargs: MagicMock
+    ):
+        """Apply swaps to func_crd_metadata_converter_for_create before create."""
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Apply",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        original_converter = Mock(name="apply_converter")
+        create_converter = Mock(name="create_converter")
+        mock_crd = Mock()
+        mock_crd.full_name = "test.Service"
+        mock_crd.func_crd_metadata_converter = original_converter
+        mock_crd.func_crd_metadata_converter_for_create = create_converter
+        mock_call_kwargs.side_effect = _FakeRpcError(StatusCode.NOT_FOUND)
+        mock_yaml_to_dict.return_value = {
+            "metadata": {"namespace": "ns", "name": "name"}
+        }
+
+        apply_func_impl(
+            crd_method_info, Mock(arguments={"self": mock_crd, "file": "f.yaml"})
+        )
+
+        # Converter must be swapped to create_converter during create()
+        mock_crd.create.assert_called_once_with("f.yaml")
+        # After the call, original converter must be restored
+        self.assertIs(
+            mock_crd.func_crd_metadata_converter, original_converter
+        )
+
 
 class CreateFuncImplTest(TestCase):
     """Test cases for create_func_impl function."""
