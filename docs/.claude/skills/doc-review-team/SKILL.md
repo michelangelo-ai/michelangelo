@@ -11,7 +11,7 @@ Create a 3-agent team to review and improve documentation at `$ARGUMENTS` for op
 
 Spawn three teammates in parallel:
 
-### Engineer (subagent_type: Explore)
+### Document Engineer (subagent_type: Explore)
 Audits the codebase against every claim in the docs. Reports CORRECT / OUTDATED / MISSING per section. Covers:
 - CLI commands and flags (verify against actual CLI code)
 - Code examples (verify imports, class names, API methods)
@@ -47,7 +47,7 @@ Key quality rules:
 ## Workflow
 
 1. All three start simultaneously
-2. Engineer and PM send findings to tech-writer
+2. Doc Engineer and PM send findings to tech-writer
 3. Team lead forwards key findings to tech-writer with actionable summaries
 4. Tech-writer writes improvements to disk
 5. Run broken link check after all files are written
