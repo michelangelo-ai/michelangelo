@@ -8,6 +8,7 @@ spec:
   containers:
     - name: mysql
       image: mysql:8.0
+      imagePullPolicy: IfNotPresent
       ports:
         - containerPort: 3306
           name: mysql
@@ -18,6 +19,9 @@ spec:
           value: temporal
       # Note: Cadence auto-setup will create cadence/cadence_visibility databases
       # Ingester will create michelangelo database via mysql-ingester.yaml Job
+      volumeMounts:
+        - name: mysql-data
+          mountPath: /var/lib/mysql
       readinessProbe:
         exec:
           command:
@@ -28,11 +32,11 @@ spec:
             - -u
             - root
             - -proot
-        initialDelaySeconds: 30
+        initialDelaySeconds: 10
         periodSeconds: 10
         timeoutSeconds: 5
         successThreshold: 1
-        failureThreshold: 3
+        failureThreshold: 50
       livenessProbe:
         exec:
           command:
@@ -43,11 +47,16 @@ spec:
             - -u
             - root
             - -proot
-        initialDelaySeconds: 60
+        initialDelaySeconds: 30
         periodSeconds: 30
         timeoutSeconds: 5
         successThreshold: 1
-        failureThreshold: 3
+        failureThreshold: 10
+  volumes:
+    - name: mysql-data
+      hostPath:
+        path: /shared/mysql-data
+        type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Service
