@@ -55,8 +55,6 @@ def apply_plugin_command(
     _LOG.info("Applying plugins to crd: %r / %r", crd, target_command)
     _LOG.debug("Available CRDs: %r", crds)
     _LOG.debug("gRPC Channel: %r", channel)
-    if target_command == "create":
-        crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_create
     if target_command == "apply":
         crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_apply
         crd.func_crd_metadata_converter_for_create = (
