@@ -12,9 +12,9 @@ from google.protobuf.json_format import ParseDict
 from google.protobuf.message import Message
 from grpc import Channel
 
+import michelangelo.cli.mactl.crd as _crd_module
 from michelangelo.cli.mactl.crd import (
     CRD,
-    METADATA_STUB,
     bind_signature,
     get_single_arg,
     inject_func_signature,
@@ -155,7 +155,7 @@ def generate_run(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = 
         )
         response = stub_method(
             request_input,
-            metadata=METADATA_STUB,
+            metadata=_crd_module.METADATA_STUB,
             timeout=30,
         )
         _LOG.info("Stub method completed (%r): %r", type(response), response)
