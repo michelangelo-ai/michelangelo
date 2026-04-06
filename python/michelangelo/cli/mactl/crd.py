@@ -373,11 +373,15 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
     _file = get_single_arg(bound_args.arguments, "file")
 
     yaml_dict = yaml_to_dict(_file)
-    metadata = yaml_dict.get("metadata")
+    if "metadata" not in yaml_dict:
+        raise ValueError(f"YAML {_file} is missing a 'metadata' key")
+    metadata = yaml_dict["metadata"]
     if not isinstance(metadata, dict):
-        raise ValueError(f"YAML {_file} must contain a 'metadata' mapping")
+        raise ValueError(
+            f"YAML {_file} 'metadata' must be a mapping, got {type(metadata).__name__}"
+        )
     for key in ("namespace", "name"):
-        if key not in metadata or not isinstance(metadata[key], str):
+        if not isinstance(metadata.get(key), str):
             raise ValueError(f"YAML metadata must contain '{key}' as a string")
     _namespace = metadata["namespace"]
     _name = metadata["name"]

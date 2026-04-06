@@ -433,6 +433,63 @@ class ApplyFuncImplTest(TestCase):
         # After the call, original converter must be restored
         self.assertIs(mock_crd.func_crd_metadata_converter, original_converter)
 
+    @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
+    def test_apply_func_impl_raises_when_metadata_missing(
+        self, mock_yaml_to_dict: MagicMock
+    ):
+        """apply_func_impl raises ValueError when YAML has no metadata key."""
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Apply",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        mock_yaml_to_dict.return_value = {"spec": {}}
+
+        with self.assertRaises(ValueError, msg="missing 'metadata' key"):
+            apply_func_impl(
+                crd_method_info, Mock(arguments={"self": Mock(), "file": "f.yaml"})
+            )
+
+    @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
+    def test_apply_func_impl_raises_when_metadata_not_dict(
+        self, mock_yaml_to_dict: MagicMock
+    ):
+        """apply_func_impl raises ValueError when metadata is not a mapping."""
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Apply",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        mock_yaml_to_dict.return_value = {"metadata": "not-a-dict"}
+
+        with self.assertRaises(ValueError, msg="metadata must be a mapping"):
+            apply_func_impl(
+                crd_method_info, Mock(arguments={"self": Mock(), "file": "f.yaml"})
+            )
+
+    @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
+    def test_apply_func_impl_raises_when_namespace_missing(
+        self, mock_yaml_to_dict: MagicMock
+    ):
+        """apply_func_impl raises ValueError when namespace is missing from metadata."""
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Apply",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        mock_yaml_to_dict.return_value = {"metadata": {"name": "my-pipeline"}}
+
+        with self.assertRaises(ValueError, msg="namespace must be a string"):
+            apply_func_impl(
+                crd_method_info, Mock(arguments={"self": Mock(), "file": "f.yaml"})
+            )
+
 
 class CreateFuncImplTest(TestCase):
     """Test cases for create_func_impl function."""
