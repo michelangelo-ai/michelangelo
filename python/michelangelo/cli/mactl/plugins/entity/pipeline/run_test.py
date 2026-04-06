@@ -3,6 +3,7 @@
 Tests helper functions for pipeline run generation.
 """
 
+from datetime import datetime, timezone
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
@@ -18,11 +19,13 @@ from michelangelo.cli.mactl.plugins.entity.pipeline.run import (
 class PipelineRunTest(TestCase):
     """Tests for pipeline run plugin."""
 
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.time")
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.uuid")
-    def test_generate_pipeline_run_name(self, mock_uuid, mock_time):
-        """Test pipeline run name generation."""
-        mock_time.time.return_value = 1705152000  # 2024-01-13 12:00:00
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.datetime")
+    def test_generate_pipeline_run_name(self, mock_datetime, mock_uuid):
+        """Test pipeline run name format: run-YYYYMMDD-HHMMSS-{uuid8}."""
+        mock_datetime.now.return_value = datetime(
+            2026, 4, 2, 14, 30, 22, tzinfo=timezone.utc
+        )
         mock_uuid.uuid4.return_value = MagicMock()
         mock_uuid.uuid4.return_value.__str__ = (
             lambda x: "abc123de-f456-7890-1234-567890abcdef"
@@ -30,8 +33,9 @@ class PipelineRunTest(TestCase):
 
         result = generate_pipeline_run_name()
 
-        self.assertEqual(result, "run-1705152000-abc123de")
-        mock_time.time.assert_called_once()
+        self.assertEqual(result, "run-20260402-143022-abc123de")
+        self.assertEqual(len(result), 28)
+        mock_datetime.now.assert_called_once()
         mock_uuid.uuid4.assert_called_once()
 
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.get_user_name")
