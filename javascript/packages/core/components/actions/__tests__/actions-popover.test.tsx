@@ -188,24 +188,22 @@ describe('ActionsPopover', () => {
 
     it('passes the record to the disabled condition', async () => {
       const user = userEvent.setup();
-      const condition = vi.fn().mockReturnValue(false);
-      const record = { id: '42' };
       render(
         <ActionsPopover
           actions={[
             {
               display: { label: 'Delete' },
               component: DeleteDialog,
-              disabled: [{ condition, message: 'nope' }],
+              disabled: [{ condition: (r) => r.status === 'locked', message: 'Item is locked' }],
             },
           ]}
-          record={record}
+          record={{ status: 'locked' }}
         />,
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
       await user.click(screen.getByRole('button', { name: 'Actions' }));
-      await screen.findByRole('option', { name: 'Delete' });
-      expect(condition).toHaveBeenCalledWith(record);
+      await user.hover(await screen.findByRole('option', { name: 'Delete' }));
+      expect(await screen.findByText('Item is locked')).toBeInTheDocument();
     });
 
     it('uses the first matching rule message', async () => {
@@ -260,6 +258,66 @@ describe('ActionsPopover', () => {
       await user.hover(archiveOption);
       expect(await screen.findByText('Cannot archive')).toBeInTheDocument();
       expect(screen.queryByText('Cannot delete')).not.toBeInTheDocument();
+    });
+
+    it('does not show the tooltip from auto-highlight when the menu opens', async () => {
+      render(
+        <ActionMenu
+          actions={[disabledAction]}
+          record={{}}
+          onSelectAction={vi.fn()}
+        />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+      await screen.findByRole('option', { name: 'Delete' });
+      expect(screen.queryByText('Cannot delete')).not.toBeInTheDocument();
+    });
+
+    it('shows the tooltip when a disabled item is highlighted via keyboard', async () => {
+      const user = userEvent.setup();
+      render(
+        <ActionMenu
+          actions={[
+            { display: { label: 'Edit' }, component: DeleteDialog },
+            disabledAction,
+          ]}
+          record={{}}
+          onSelectAction={vi.fn()}
+        />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+      await user.tab(); // focus the menu listbox
+      await user.keyboard('{ArrowDown}');
+      expect(await screen.findByText('Cannot delete')).toBeInTheDocument();
+    });
+
+    it('switches from keyboard tooltip to mouse tooltip when hovering a different item', async () => {
+      const user = userEvent.setup();
+      render(
+        <ActionMenu
+          actions={[
+            {
+              display: { label: 'Delete' },
+              component: DeleteDialog,
+              disabled: [{ condition: () => true, message: 'Cannot delete' }],
+            },
+            {
+              display: { label: 'Archive' },
+              component: DeleteDialog,
+              disabled: [{ condition: () => true, message: 'Cannot archive' }],
+            },
+          ]}
+          record={{}}
+          onSelectAction={vi.fn()}
+        />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+      await user.tab();
+      await user.keyboard('{ArrowDown}'); // highlights Archive (index 1)
+      expect(await screen.findByText('Cannot archive')).toBeInTheDocument();
+      await user.hover(screen.getByRole('option', { name: 'Delete' }));
+      expect(await screen.findByText('Cannot delete')).toBeInTheDocument();
+      expect(screen.queryByText('Cannot archive')).not.toBeInTheDocument();
     });
 
     it('enabled and disabled actions coexist — enabled action still opens its component', async () => {

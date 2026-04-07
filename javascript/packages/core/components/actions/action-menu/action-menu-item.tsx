@@ -7,7 +7,19 @@ import { Icon } from '#core/components/icon/icon';
 import type { MenuAdapterProps } from 'baseui/list';
 import type { ComponentActionConfig, Data, SelectedAction } from '#core/components/actions/types';
 
+/**
+ * Props for ActionMenuItem, combining BaseUI's MenuAdapter props with
+ * action-menu-level state for tooltip coordination.
+ *
+ * BaseUI injects `$isHighlighted`, `$disabled`, `onClick`, etc. via the
+ * Option override. The remaining props (`hoveredItem`, `keyboardActive`, etc.)
+ * are passed from ActionMenu through the override's `props` field.
+ */
 type ActionMenuItemProps = {
+  /**
+   * Item is the action configuration defined for a specific action in
+   * the ActionMenu list, passed as `item` per baseui MenuAdapter props.
+   */
   item: Omit<ComponentActionConfig, 'disabled'> & {
     disabled: boolean;
     disabledMessage: string | undefined;
@@ -15,8 +27,10 @@ type ActionMenuItemProps = {
   record: Data;
   onSelectAction: (action: SelectedAction) => void;
   onClose?: () => void;
+  /** The action currently under the mouse cursor, or null. Compared by object identity against `action` to derive `isHovered`. */
   hoveredItem: object | null;
   setHoveredItem: (item: object | null) => void;
+  /** True after any keydown inside the menu. False on mouse enter. Gates the keyboard tooltip path so auto-highlight on focus doesn't flash a tooltip. */
   keyboardActive: boolean;
   setKeyboardActive: (active: boolean) => void;
 } & Omit<MenuAdapterProps, 'children' | 'item'>;
@@ -37,6 +51,9 @@ export const ActionMenuItem = forwardRef<HTMLLIElement, ActionMenuItemProps>((pr
 
   const menuItem = (
     <MenuAdapter
+      // MenuAdapter is a thin wrapper around BaseWeb's list components that adds
+      // support for artwork & handles interaction states & accessibility. The props
+      // forwarding is required boilerplate to get the aforementioned benefits.
       {...baseMenuProps}
       ref={ref}
       role="option"
@@ -65,6 +82,8 @@ export const ActionMenuItem = forwardRef<HTMLLIElement, ActionMenuItemProps>((pr
       accessibilityType={ACCESSIBILITY_TYPE.tooltip}
       showArrow
       placement={PLACEMENT.left}
+      // Keyboard path: only when arrow keys were used (not auto-highlight on focus).
+      // Mouse path: only when this specific item is hovered (object identity).
       isOpen={(!!baseMenuProps.$isHighlighted && keyboardActive) || isHovered}
       popperOptions={{
         modifiers: {
@@ -73,11 +92,10 @@ export const ActionMenuItem = forwardRef<HTMLLIElement, ActionMenuItemProps>((pr
         },
       }}
       onEsc={onClose}
-      // Pass hover handlers as Tooltip props — BaseUI's Popover calls these from
-      // onAnchorMouseEnter/onAnchorMouseLeave. Placing them on the wrapper div
-      // does NOT work because Popover's cloneElement replaces div-level handlers.
       onMouseEnterDelay={0}
       onMouseLeaveDelay={0}
+      // Entering mouse mode: track this item as hovered and disable the keyboard
+      // path so the previously arrow-key-highlighted item's tooltip hides.
       onMouseEnter={() => {
         setHoveredItem(action);
         setKeyboardActive(false);

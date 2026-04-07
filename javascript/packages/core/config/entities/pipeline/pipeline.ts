@@ -14,12 +14,6 @@ export const PIPELINE_ENTITY_CONFIG: PhaseEntityConfig = {
   actions: [
     {
       display: { label: 'Run', icon: 'playerPlay' },
-      disabled: [
-        {
-          condition: () => true,
-          message: 'Pipeline is not available',
-        },
-      ],
       component: CreatePipelineRunForm,
       hierarchy: ActionHierarchy.PRIMARY,
     },
