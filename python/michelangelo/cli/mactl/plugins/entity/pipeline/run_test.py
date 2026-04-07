@@ -4,6 +4,7 @@ Tests helper functions for pipeline run generation.
 """
 
 from datetime import datetime, timezone
+from inspect import Parameter, Signature
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
@@ -271,3 +272,55 @@ class PipelineRunTest(TestCase):
         mock_get_methods.assert_called_once_with(
             mock_channel, "michelangelo.api.v2.PipelineRunService", mock_crd.metadata
         )
+
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.get_service_name")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.run.get_methods_from_service"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.run.get_message_class_by_name"
+    )
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.ParseDict")
+    def test_run_func_prints_and_returns_response(
+        self,
+        mock_parse_dict,
+        mock_get_message_class,
+        mock_get_methods,
+        mock_get_service_name,
+    ):
+        """Test that the generated run_func prints and returns the gRPC response."""
+        mock_get_service_name.return_value = "michelangelo.api.v2.PipelineRunService"
+
+        mock_method = MagicMock()
+        mock_method.input_type = ".michelangelo.api.v2.CreatePipelineRunRequest"
+        mock_method.output_type = ".michelangelo.api.v2.CreatePipelineRunResponse"
+        mock_pool = MagicMock()
+        mock_get_methods.return_value = ({"CreatePipelineRun": mock_method}, mock_pool)
+
+        mock_input_class = MagicMock()
+        mock_output_class = MagicMock()
+        mock_get_message_class.side_effect = [mock_input_class, mock_output_class]
+
+        mock_response = MagicMock()
+        mock_channel = MagicMock()
+        mock_channel.unary_unary.return_value.return_value = mock_response
+
+        mock_crd = MagicMock()
+        mock_crd.metadata = [("rpc-caller", "test")]
+        mock_crd.func_crd_metadata_converter.return_value = {"pipeline_run": {}}
+        mock_crd._read_signatures.return_value = Signature(
+            [
+                Parameter("self", Parameter.POSITIONAL_OR_KEYWORD),
+                Parameter("namespace", Parameter.POSITIONAL_OR_KEYWORD),
+                Parameter("name", Parameter.POSITIONAL_OR_KEYWORD),
+                Parameter(
+                    "resume_from", Parameter.POSITIONAL_OR_KEYWORD, default=None
+                ),
+            ]
+        )
+
+        generate_run(mock_crd, mock_channel)
+
+        with patch("builtins.print") as mock_print:
+            mock_crd.run(namespace="test-ns", name="test-pipeline")
+            mock_print.assert_called_once_with(mock_response)
