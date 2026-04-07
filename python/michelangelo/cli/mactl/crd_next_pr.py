@@ -1,7 +1,7 @@
 """CRD class and its member method implementations."""
 
 from argparse import ArgumentParser
-from collections.abc import MutableMapping, Sequence
+from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
@@ -69,26 +69,6 @@ def convert_crd_metadata(
     return res
 
 
-def deep_update(d: MutableMapping, u: MutableMapping):
-    """Update dict-like object in deep way.
-
-    ```py
-    d1 = {'a': {'a1': 1, 'a2': 2}}
-    d2 = {'a': {'a1': 7, 'a3': 9}}
-
-    deep_update(d1, d2)
-    print(d1)
-    # {'a': {'a1': 7, 'a2': 2, 'a3': 9}}
-    ```
-    """
-    for k, v in u.items():
-        if isinstance(v, MutableMapping) and isinstance(d.get(k), MutableMapping):
-            deep_update(d[k], v)
-        else:
-            d[k] = v
-    return d
-
-
 def yaml_to_dict(yaml_path_string: str) -> dict[str, Any]:
     """Converts a YAML string to a Python dictionary."""
     _LOG.info(
@@ -138,6 +118,23 @@ def get_single_arg(arguments: dict, key: str) -> str:
         raise ValueError(
             f'Argument "{key}" must be a string or a list with one element'
         )
+
+
+def get_crd_namespace_and_name_from_dict(
+    yaml_dict: dict, yaml_path_string: str
+) -> tuple[str, str]:
+    """Extract namespace and name from a pre-loaded YAML dict."""
+    if "metadata" not in yaml_dict:
+        raise ValueError(f"YAML {yaml_path_string} is missing a 'metadata' key")
+    metadata = yaml_dict["metadata"]
+    if not isinstance(metadata, dict):
+        raise ValueError(
+            f"YAML {yaml_path_string} 'metadata' must be a mapping, got {type(metadata).__name__}"
+        )
+    for key in ("namespace", "name"):
+        if not isinstance(metadata.get(key), str):
+            raise ValueError(f"YAML metadata must contain '{key}' as a string")
+    return metadata["namespace"], metadata["name"]
 
 
 def read_yaml_to_crd_request(
@@ -373,18 +370,7 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
     _file = get_single_arg(bound_args.arguments, "file")
 
     yaml_dict = yaml_to_dict(_file)
-    if "metadata" not in yaml_dict:
-        raise ValueError(f"YAML {_file} is missing a 'metadata' key")
-    metadata = yaml_dict["metadata"]
-    if not isinstance(metadata, dict):
-        raise ValueError(
-            f"YAML {_file} 'metadata' must be a mapping, got {type(metadata).__name__}"
-        )
-    for key in ("namespace", "name"):
-        if not isinstance(metadata.get(key), str):
-            raise ValueError(f"YAML metadata must contain '{key}' as a string")
-    _namespace = metadata["namespace"]
-    _name = metadata["name"]
+    _namespace, _name = get_crd_namespace_and_name_from_dict(yaml_dict, _file)
 
     message_instance = None
     try:

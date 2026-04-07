@@ -2,10 +2,22 @@
 
 from logging import getLogger
 from pathlib import Path
+from types import MethodType
 
 from git import Repo
+from google.protobuf.json_format import ParseDict
 from google.protobuf.message import Message
+from grpc import RpcError, StatusCode
 
+from michelangelo.cli.mactl.crd import (
+    CRD,
+    CrdMethodInfo,
+    bind_signature,
+    crd_method_call,
+    crd_method_call_kwargs,
+    read_yaml_to_crd_request,
+    yaml_to_dict,
+)
 from michelangelo.cli.mactl.plugins.entity.pipeline.create import (
     handle_workflow_inputs_retrieval,
     populate_pipeline_spec_with_workflow_inputs,
@@ -71,3 +83,102 @@ def convert_crd_metadata_pipeline_apply(
         workflow_function_name,
     )
     return res
+
+
+def _pipeline_apply_func_impl(
+    update_method_info: CrdMethodInfo,
+    get_method_info: CrdMethodInfo,
+    bound_args,
+) -> Message:
+    """Pipeline-level apply implementation with silent get (no print side-effect)."""
+    _self: CRD = bound_args.arguments["self"]
+    _file = bound_args.arguments["file"]
+
+    yaml_dict = yaml_to_dict(_file)
+    if "metadata" not in yaml_dict:
+        raise ValueError(f"YAML {_file} is missing a 'metadata' key")
+    metadata = yaml_dict["metadata"]
+    if not isinstance(metadata, dict):
+        raise ValueError(
+            f"YAML {_file} 'metadata' must be a mapping, got {type(metadata).__name__}"
+        )
+    for key in ("namespace", "name"):
+        if not isinstance(metadata.get(key), str):
+            raise ValueError(f"YAML metadata must contain '{key}' as a string")
+    _namespace = metadata["namespace"]
+    _name = metadata["name"]
+
+    message_instance = None
+    try:
+        # Use get_method_info captured in closure — avoids get_func_impl's print side-effect
+        # and removes the need for _get_method_info instance attribute.
+        message_instance = crd_method_call_kwargs(
+            get_method_info,
+            namespace=_namespace,
+            name=_name,
+        )
+    except RpcError as err:
+        _LOG.debug("Pipeline %r / %r does not exist: %r", _namespace, _name, err)
+        if err.code() != StatusCode.NOT_FOUND:
+            raise
+
+    if message_instance is None:
+        _LOG.info("Create a new pipeline")
+        _self.generate_create(update_method_info.channel)
+        original_converter = _self.func_crd_metadata_converter
+        create_converter = getattr(
+            _self, "func_crd_metadata_converter_for_create", original_converter
+        )
+        _self.func_crd_metadata_converter = create_converter
+        try:
+            return _self.create(_file)
+        finally:
+            _self.func_crd_metadata_converter = original_converter
+
+    _LOG.info("Updating existing pipeline: %r", message_instance)
+    converter = _self.func_crd_metadata_converter
+    request_input = read_yaml_to_crd_request(
+        update_method_info.input_class,
+        _self.name,
+        _file,
+        converter,
+        yaml_dict=yaml_dict,
+    )
+    existing = getattr(message_instance, _self.name)
+    inner = getattr(request_input, _self.name)
+    inner.metadata.resourceVersion = existing.metadata.resourceVersion
+    call_res = crd_method_call(update_method_info, request_input)
+    print(call_res)
+    return call_res
+
+
+def generate_pipeline_apply(crd: CRD, channel, parser=None) -> None:
+    """Override generate_apply for pipeline to avoid _get_method_info instance attribute.
+
+    Captures both get and update CrdMethodInfo in a closure so the apply
+    implementation can do a silent existence check without going through
+    get_func_impl (which prints the response as a side-effect).
+    """
+    from functools import partial
+
+    _LOG.info("Generate pipeline APPLY method for %r", crd.full_name)
+
+    get_method_info = CrdMethodInfo(
+        channel,
+        crd.full_name,
+        *crd._extract_method_info(channel, crd.full_name, "Get"),
+    )
+    update_method_info = CrdMethodInfo(
+        channel,
+        crd.full_name,
+        *crd._extract_method_info(channel, crd.full_name, "Update"),
+    )
+
+    crd.configure_parser("apply", parser)
+    func_signature = crd._read_signatures("apply")
+
+    bound_func = partial(_pipeline_apply_func_impl, update_method_info, get_method_info)
+    bound_func = bind_signature(func_signature)(bound_func)
+    crd.apply = MethodType(bound_func, crd)
+    _LOG.debug("Generated pipeline APPLY injected well: %r", crd.apply)
+
