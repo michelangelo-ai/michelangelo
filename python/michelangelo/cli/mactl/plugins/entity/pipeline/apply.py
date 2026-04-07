@@ -12,6 +12,7 @@ from michelangelo.cli.mactl.crd import (
     CrdMethodInfo,
     crd_method_call,
     crd_method_call_kwargs,
+    get_crd_namespace_and_name_from_yaml,
     read_yaml_to_crd_request,
     yaml_to_dict,
 )
@@ -97,18 +98,7 @@ def pipeline_apply_func_impl(
     _file = bound_args.arguments["file"]
 
     yaml_dict = yaml_to_dict(_file)
-    if "metadata" not in yaml_dict:
-        raise ValueError(f"YAML {_file} is missing a 'metadata' key")
-    metadata = yaml_dict["metadata"]
-    if not isinstance(metadata, dict):
-        raise ValueError(
-            f"YAML {_file} 'metadata' must be a mapping, got {type(metadata).__name__}"
-        )
-    for key in ("namespace", "name"):
-        if not isinstance(metadata.get(key), str):
-            raise ValueError(f"YAML metadata must contain '{key}' as a string")
-    _namespace = metadata["namespace"]
-    _name = metadata["name"]
+    _namespace, _name = get_crd_namespace_and_name_from_yaml(_file, yaml_dict=yaml_dict)
 
     message_instance = None
     try:

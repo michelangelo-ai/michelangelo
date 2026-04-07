@@ -110,24 +110,31 @@ def yaml_to_dict(yaml_path_string: str) -> dict[str, Any]:
     return res
 
 
-def get_crd_namespace_and_name_from_yaml(yaml_path_string: str) -> tuple[str, str]:
-    """Reads a YAML file and returns its content as a dictionary."""
+def get_crd_namespace_and_name_from_yaml(
+    yaml_path_string: str, *, yaml_dict: Optional[dict] = None
+) -> tuple[str, str]:
+    """Reads a YAML file and returns namespace and name from metadata.
+
+    If yaml_dict is provided it is used directly, avoiding a second file read.
+    """
     _LOG.info("Start to Read YAML file: %r", yaml_path_string)
-    yaml_dict = yaml_to_dict(yaml_path_string)
+    if yaml_dict is None:
+        yaml_dict = yaml_to_dict(yaml_path_string)
 
-    assert "metadata" in yaml_dict, "YAML must contain 'metadata' key"
-
+    if "metadata" not in yaml_dict:
+        raise ValueError(f"YAML {yaml_path_string} is missing a 'metadata' key")
     metadata = yaml_dict["metadata"]
-
-    assert "namespace" in metadata, "YAML metadata must contain 'namespace' key"
-    assert "name" in metadata, "YAML metadata must contain 'name' key"
+    if not isinstance(metadata, dict):
+        raise ValueError(
+            f"YAML {yaml_path_string} 'metadata' must be a mapping, got {type(metadata).__name__}"
+        )
+    for key in ("namespace", "name"):
+        if not isinstance(metadata.get(key), str):
+            raise ValueError(f"YAML metadata must contain '{key}' as a string")
 
     namespace = metadata["namespace"]
     name = metadata["name"]
-
     _LOG.info("Retrieved namespace: %r, name: %r", namespace, name)
-    assert isinstance(namespace, str), "kind must be a string"
-    assert isinstance(name, str), "kind must be a string"
     return namespace, name
 
 
