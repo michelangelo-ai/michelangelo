@@ -629,6 +629,7 @@ class YamlToDictTest(TestCase):
         """Raises ValueError for malformed YAML content."""
         import os
         import tempfile
+
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write("key: [unclosed")
             path = f.name
@@ -782,6 +783,7 @@ class YamlToDictSuccessTest(TestCase):
         """Returns a dict for valid YAML content."""
         import os
         import tempfile
+
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write("key: value\n")
             path = f.name
@@ -799,6 +801,7 @@ class ConfigureParserTest(TestCase):
     def test_configure_parser_adds_args(self, mock_extract):
         """configure_parser runs without error when a parser is provided."""
         from argparse import ArgumentParser
+
         mock_extract.return_value = ("GetTestCrd", Mock, Mock)
         crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
         parser = ArgumentParser()

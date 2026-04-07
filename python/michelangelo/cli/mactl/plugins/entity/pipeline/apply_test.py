@@ -252,6 +252,7 @@ class PipelineApplyFuncImplTest(TestCase):
 
     def _make_method_info(self):
         from michelangelo.cli.mactl.crd import CrdMethodInfo
+
         return CrdMethodInfo(
             channel=Mock(),
             crd_full_name="test.Service",
@@ -264,10 +265,16 @@ class PipelineApplyFuncImplTest(TestCase):
         return Mock(arguments={"self": crd, "file": file})
 
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.crd_method_call")
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.read_yaml_to_crd_request")
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.get_crd_namespace_and_name_from_yaml")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.apply.read_yaml_to_crd_request"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.apply.get_crd_namespace_and_name_from_yaml"
+    )
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.yaml_to_dict")
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.crd_method_call_kwargs")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.apply.crd_method_call_kwargs"
+    )
     def test_update_path(self, mock_get, mock_yaml, mock_ns, mock_read_yaml, mock_call):
         """Existing pipeline triggers update path with resourceVersion copy."""
         get_info = self._make_method_info()
@@ -287,8 +294,12 @@ class PipelineApplyFuncImplTest(TestCase):
         mock_read_yaml.assert_called_once()
         mock_call.assert_called_once_with(update_info, mock_request)
 
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.crd_method_call_kwargs")
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.get_crd_namespace_and_name_from_yaml")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.apply.crd_method_call_kwargs"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.apply.get_crd_namespace_and_name_from_yaml"
+    )
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.yaml_to_dict")
     def test_create_path_when_not_found(self, mock_yaml, mock_ns, mock_get):
         """NOT_FOUND triggers create path."""
@@ -304,8 +315,12 @@ class PipelineApplyFuncImplTest(TestCase):
         mock_crd.generate_create.assert_called_once_with(update_info.channel)
         mock_crd.create.assert_called_once_with("f.yaml")
 
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.crd_method_call_kwargs")
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.get_crd_namespace_and_name_from_yaml")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.apply.crd_method_call_kwargs"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.apply.get_crd_namespace_and_name_from_yaml"
+    )
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.yaml_to_dict")
     def test_reraises_non_not_found_errors(self, mock_yaml, mock_ns, mock_get):
         """Non-NOT_FOUND RpcErrors are re-raised."""
@@ -320,8 +335,12 @@ class PipelineApplyFuncImplTest(TestCase):
                 get_info, update_info, self._make_bound_args(Mock())
             )
 
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.crd_method_call_kwargs")
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.get_crd_namespace_and_name_from_yaml")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.apply.crd_method_call_kwargs"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.apply.get_crd_namespace_and_name_from_yaml"
+    )
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.yaml_to_dict")
     def test_create_path_uses_create_converter(self, mock_yaml, mock_ns, mock_get):
         """Create path swaps to func_crd_metadata_converter_for_create."""
