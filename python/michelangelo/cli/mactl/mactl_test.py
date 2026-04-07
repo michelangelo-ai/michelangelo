@@ -435,7 +435,10 @@ class ReadPluginsTest(TestCase):
             },
         )
 
-    @patch("michelangelo.cli.mactl.crd.CRD._extract_method_info", return_value=("GetPipeline", Mock, Mock))
+    @patch(
+        "michelangelo.cli.mactl.crd.CRD._extract_method_info",
+        return_value=("GetPipeline", Mock, Mock),
+    )
     @patch.dict(
         "michelangelo.cli.mactl.mactl._CONFIG",
         {

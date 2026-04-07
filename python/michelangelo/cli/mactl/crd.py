@@ -126,7 +126,8 @@ def get_crd_namespace_and_name_from_yaml(
     metadata = yaml_dict["metadata"]
     if not isinstance(metadata, dict):
         raise ValueError(
-            f"YAML {yaml_path_string} 'metadata' must be a mapping, got {type(metadata).__name__}"
+            f"YAML {yaml_path_string} 'metadata' must be a mapping, "
+            f"got {type(metadata).__name__}"
         )
     for key in ("namespace", "name"):
         if not isinstance(metadata.get(key), str):
@@ -701,7 +702,9 @@ class CRD:
         self.configure_parser("apply", parser)
         func_signature = self._read_signatures("apply")
 
-        bound_func = partial(getattr(self, "_apply_func_impl", apply_func_impl), method_info)
+        bound_func = partial(
+            getattr(self, "_apply_func_impl", apply_func_impl), method_info
+        )
         bound_func = bind_signature(func_signature)(bound_func)
         self.apply = MethodType(bound_func, self)
         _LOG.debug("Generated APPLY injected well: %r", self.apply)

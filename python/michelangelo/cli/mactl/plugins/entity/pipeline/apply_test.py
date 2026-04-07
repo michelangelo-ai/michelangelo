@@ -2,11 +2,22 @@
 
 from pathlib import Path
 from unittest import TestCase
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
+
+from grpc import RpcError, StatusCode
 
 from michelangelo.cli.mactl.plugins.entity.pipeline.apply import (
     convert_crd_metadata_pipeline_apply,
+    pipeline_apply_func_impl,
 )
+
+
+class _FakeRpcError(RpcError):
+    def __init__(self, code):
+        self._code = code
+
+    def code(self):
+        return self._code
 
 
 def _make_yaml_dict(spec=None):
@@ -234,3 +245,98 @@ class PipelineApplyTest(TestCase):
         with self.assertRaises(ValueError) as ctx:
             convert_crd_metadata_pipeline_apply("not a dict", Mock(), Path("/fake"))
         self.assertIn("Expected a dictionary", str(ctx.exception))
+
+
+class PipelineApplyFuncImplTest(TestCase):
+    """Tests for pipeline_apply_func_impl."""
+
+    def _make_method_info(self):
+        from michelangelo.cli.mactl.crd import CrdMethodInfo
+        return CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Get",
+            input_class=MagicMock(),
+            output_class=MagicMock(),
+        )
+
+    def _make_bound_args(self, crd, file="f.yaml"):
+        return Mock(arguments={"self": crd, "file": file})
+
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.crd_method_call")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.read_yaml_to_crd_request")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.get_crd_namespace_and_name_from_yaml")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.yaml_to_dict")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.crd_method_call_kwargs")
+    def test_update_path(self, mock_get, mock_yaml, mock_ns, mock_read_yaml, mock_call):
+        """Existing pipeline triggers update path with resourceVersion copy."""
+        get_info = self._make_method_info()
+        update_info = self._make_method_info()
+        mock_yaml.return_value = {"metadata": {"namespace": "ns", "name": "pipe"}}
+        mock_ns.return_value = ("ns", "pipe")
+        mock_existing = Mock()
+        mock_existing.pipeline.metadata.resourceVersion = "42"
+        mock_get.return_value = mock_existing
+        mock_crd = Mock()
+        mock_crd.name = "pipeline"
+        mock_request = Mock()
+        mock_read_yaml.return_value = mock_request
+
+        pipeline_apply_func_impl(get_info, update_info, self._make_bound_args(mock_crd))
+
+        mock_read_yaml.assert_called_once()
+        mock_call.assert_called_once_with(update_info, mock_request)
+
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.crd_method_call_kwargs")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.get_crd_namespace_and_name_from_yaml")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.yaml_to_dict")
+    def test_create_path_when_not_found(self, mock_yaml, mock_ns, mock_get):
+        """NOT_FOUND triggers create path."""
+        get_info = self._make_method_info()
+        update_info = self._make_method_info()
+        mock_yaml.return_value = {"metadata": {"namespace": "ns", "name": "pipe"}}
+        mock_ns.return_value = ("ns", "pipe")
+        mock_get.side_effect = _FakeRpcError(StatusCode.NOT_FOUND)
+        mock_crd = Mock()
+
+        pipeline_apply_func_impl(get_info, update_info, self._make_bound_args(mock_crd))
+
+        mock_crd.generate_create.assert_called_once_with(update_info.channel)
+        mock_crd.create.assert_called_once_with("f.yaml")
+
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.crd_method_call_kwargs")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.get_crd_namespace_and_name_from_yaml")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.yaml_to_dict")
+    def test_reraises_non_not_found_errors(self, mock_yaml, mock_ns, mock_get):
+        """Non-NOT_FOUND RpcErrors are re-raised."""
+        get_info = self._make_method_info()
+        update_info = self._make_method_info()
+        mock_yaml.return_value = {"metadata": {"namespace": "ns", "name": "pipe"}}
+        mock_ns.return_value = ("ns", "pipe")
+        mock_get.side_effect = _FakeRpcError(StatusCode.UNAVAILABLE)
+
+        with self.assertRaises(RpcError):
+            pipeline_apply_func_impl(
+                get_info, update_info, self._make_bound_args(Mock())
+            )
+
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.crd_method_call_kwargs")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.get_crd_namespace_and_name_from_yaml")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.yaml_to_dict")
+    def test_create_path_uses_create_converter(self, mock_yaml, mock_ns, mock_get):
+        """Create path swaps to func_crd_metadata_converter_for_create."""
+        get_info = self._make_method_info()
+        update_info = self._make_method_info()
+        mock_yaml.return_value = {"metadata": {"namespace": "ns", "name": "pipe"}}
+        mock_ns.return_value = ("ns", "pipe")
+        mock_get.side_effect = _FakeRpcError(StatusCode.NOT_FOUND)
+        original = Mock(name="original")
+        create_conv = Mock(name="create")
+        mock_crd = Mock()
+        mock_crd.func_crd_metadata_converter = original
+        mock_crd.func_crd_metadata_converter_for_create = create_conv
+
+        pipeline_apply_func_impl(get_info, update_info, self._make_bound_args(mock_crd))
+
+        mock_crd.create.assert_called_once_with("f.yaml")
+        self.assertIs(mock_crd.func_crd_metadata_converter, original)
