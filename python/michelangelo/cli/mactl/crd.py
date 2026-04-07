@@ -400,7 +400,8 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
 
     _file = get_single_arg(bound_args.arguments, "file")
 
-    _namespace, _name = get_crd_namespace_and_name_from_yaml(_file)
+    yaml_dict = yaml_to_dict(_file)
+    _namespace, _name = get_crd_namespace_and_name_from_yaml(_file, yaml_dict=yaml_dict)
 
     message_instance = None
     try:

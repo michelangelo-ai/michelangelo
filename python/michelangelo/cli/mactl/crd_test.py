@@ -292,7 +292,8 @@ class ApplyFuncImplTest(TestCase):
 
     @patch("michelangelo.cli.mactl.crd.crd_method_call")
     @patch("michelangelo.cli.mactl.crd.get_crd_namespace_and_name_from_yaml")
-    def test_apply_func_impl_update(self, mock_get_ns: MagicMock, _):
+    @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
+    def test_apply_func_impl_update(self, mock_yaml_to_dict: MagicMock, mock_get_ns: MagicMock, _):
         """Test apply_func_impl updates existing CRD."""
         crd_method_info = CrdMethodInfo(
             channel=Mock(),
