@@ -264,41 +264,68 @@ def _sync(ns: argparse.Namespace):
     # Infrastructure (mysql, cadence, minio, grafana, prometheus) is left running.
     # Worker and controllermgr are Pods (not Deployments) so they must be deleted
     # explicitly; kubectl apply on a Completed pod is a no-op.
-    app_pods = ["michelangelo-apiserver", "envoy", "michelangelo-worker", "michelangelo-controllermgr"]
+    app_pods = [
+        "michelangelo-apiserver",
+        "envoy",
+        "michelangelo-worker",
+        "michelangelo-controllermgr",
+    ]
     app_deployments = ["michelangelo-ui"]
     print("Restarting app pods:", ", ".join(app_pods + app_deployments))
     for pod in app_pods:
         subprocess.run(
-            ["kubectl", "delete", "pod", pod, "--force", "--grace-period=0",
-             "--ignore-not-found=true"],
-            check=False, capture_output=True,
+            [
+                "kubectl",
+                "delete",
+                "pod",
+                pod,
+                "--force",
+                "--grace-period=0",
+                "--ignore-not-found=true",
+            ],
+            check=False,
+            capture_output=True,
         )
     for dep in app_deployments:
         subprocess.run(
-            ["kubectl", "delete", "deployment", dep, "--force", "--grace-period=0",
-             "--ignore-not-found=true"],
-            check=False, capture_output=True,
+            [
+                "kubectl",
+                "delete",
+                "deployment",
+                dep,
+                "--force",
+                "--grace-period=0",
+                "--ignore-not-found=true",
+            ],
+            check=False,
+            capture_output=True,
         )
     # Delete and re-apply app configs/secrets so new values take effect.
     app_configs = [
-        "michelangelo-config", "michelangelo-apiserver-config",
-        "envoy-config", "public-config",
-        "michelangelo-worker-config", "michelangelo-controllermgr-config",
+        "michelangelo-config",
+        "michelangelo-apiserver-config",
+        "envoy-config",
+        "public-config",
+        "michelangelo-worker-config",
+        "michelangelo-controllermgr-config",
     ]
     for cm in app_configs:
         subprocess.run(
             ["kubectl", "delete", "configmap", cm, "--ignore-not-found=true"],
-            check=False, capture_output=True,
+            check=False,
+            capture_output=True,
         )
     subprocess.run(
         ["kubectl", "delete", "secret", "aws-credentials", "--ignore-not-found=true"],
-        check=False, capture_output=True,
+        check=False,
+        capture_output=True,
     )
 
     print("Waiting for old app pods to fully terminate...")
     subprocess.run(
         ["kubectl", "wait", "pod", "--all", "--for=delete", "--timeout=60s"],
-        check=False, capture_output=True,
+        check=False,
+        capture_output=True,
     )
 
     _deploy_app_services(ns)
@@ -468,7 +495,7 @@ def _deploy_services(ns: argparse.Namespace):
     if "spark" not in ns.exclude:
         _create_spark_operator(helm_existing_repos)
 
-    _kube_wait(timeout=ns.wait_timeout)
+    _kube_wait(timeout=getattr(ns, "wait_timeout", 600))
 
     if ns.workflow == "temporal":
         _setup_temporal(links, helm_existing_repos)
@@ -487,7 +514,9 @@ def _deploy_services(ns: argparse.Namespace):
 
     # Create separate compute cluster if requested
     create_compute_cluster = getattr(ns, "create_compute_cluster", False)
-    compute_cluster_name = getattr(ns, "compute_cluster_name", _default_compute_kube_cluster_name)
+    compute_cluster_name = getattr(
+        ns, "compute_cluster_name", _default_compute_kube_cluster_name
+    )
     if create_compute_cluster:
         _create_compute_cluster(compute_cluster_name)
         _create_compute_cluster_crd(compute_cluster_name)
@@ -939,12 +968,24 @@ def _create_cadence_domain(links):
     """
     pod_name = uuid.uuid4().hex
     args = [
-        "kubectl", "run", pod_name,
-        "--restart=Never", "--rm", "--stdin",
-        "--image", "ubercadence/cli:v1.2.6",
+        "kubectl",
+        "run",
+        pod_name,
+        "--restart=Never",
+        "--rm",
+        "--stdin",
+        "--image",
+        "ubercadence/cli:v1.2.6",
         "--env=CADENCE_CLI_ADDRESS=cadence:7933",
-        "--command", "--",
-        "cadence", "--domain", _cadence_domain, "domain", "register", "--rd", "1",
+        "--command",
+        "--",
+        "cadence",
+        "--domain",
+        _cadence_domain,
+        "domain",
+        "register",
+        "--rd",
+        "1",
     ]
     for attempt in range(21):  # 0..20 inclusive = 21 tries
         print("[+]", " ".join(args))
