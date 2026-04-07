@@ -12,7 +12,7 @@ from pathlib import Path
 from types import MethodType
 from typing import Any, Callable, Optional
 
-from google.protobuf.json_format import ParseDict
+from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.message import Message
 from grpc import (
     Channel,
@@ -108,6 +108,27 @@ def yaml_to_dict(yaml_path_string: str) -> dict[str, Any]:
 
     _LOG.info("YAML content loaded successfully: %r", list(res))
     return res
+
+
+def get_crd_namespace_and_name_from_yaml(yaml_path_string: str) -> tuple[str, str]:
+    """Reads a YAML file and returns its content as a dictionary."""
+    _LOG.info("Start to Read YAML file: %r", yaml_path_string)
+    yaml_dict = yaml_to_dict(yaml_path_string)
+
+    assert "metadata" in yaml_dict, "YAML must contain 'metadata' key"
+
+    metadata = yaml_dict["metadata"]
+
+    assert "namespace" in metadata, "YAML metadata must contain 'namespace' key"
+    assert "name" in metadata, "YAML metadata must contain 'name' key"
+
+    namespace = metadata["namespace"]
+    name = metadata["name"]
+
+    _LOG.info("Retrieved namespace: %r, name: %r", namespace, name)
+    assert isinstance(namespace, str), "kind must be a string"
+    assert isinstance(name, str), "kind must be a string"
+    return namespace, name
 
 
 def get_single_arg(arguments: dict, key: str) -> str:
@@ -212,7 +233,7 @@ def crd_method_call(crd_method_info, request_input: Message) -> Message:
     response = stub_method(
         request_input,
         metadata=METADATA_STUB,
-        timeout=120,
+        timeout=30,
     )
     _LOG.info("Stub method completed (%r): %r", type(response), response)
     return response
@@ -372,65 +393,27 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
 
     _file = get_single_arg(bound_args.arguments, "file")
 
-    yaml_dict = yaml_to_dict(_file)
-    if "metadata" not in yaml_dict:
-        raise ValueError(f"YAML {_file} is missing a 'metadata' key")
-    metadata = yaml_dict["metadata"]
-    if not isinstance(metadata, dict):
-        raise ValueError(
-            f"YAML {_file} 'metadata' must be a mapping, got {type(metadata).__name__}"
-        )
-    for key in ("namespace", "name"):
-        if not isinstance(metadata.get(key), str):
-            raise ValueError(f"YAML metadata must contain '{key}' as a string")
-    _namespace = metadata["namespace"]
-    _name = metadata["name"]
+    _namespace, _name = get_crd_namespace_and_name_from_yaml(_file)
 
     message_instance = None
     try:
-        # Call the gRPC Get method directly to avoid get_func_impl's print side-effect.
-        message_instance = crd_method_call_kwargs(
-            _self._get_method_info,
-            namespace=_namespace,
-            name=_name,
-        )
+        message_instance = _self.get(_namespace, _name)
     except RpcError as err:
         _LOG.debug("CRD %r / %r does not exist: %r", _namespace, _name, err)
         if err.code() != StatusCode.NOT_FOUND:
             raise
 
     if message_instance is None:
-        # Create new CRD - use dedicated create converter if available (apply command
-        # uses a different converter for create vs update paths).
-        # NOTE: The converter swap below is not thread-safe — concurrent apply calls on
-        # the same CRD instance would race. This is acceptable because mactl is a
-        # single-threaded CLI; do not share CRD instances across threads.
+        # Create new CRD
         _LOG.info("Create a new CRD")
         _self.generate_create(crd_method_info.channel)
-        original_converter = _self.func_crd_metadata_converter
-        create_converter = getattr(
-            _self, "func_crd_metadata_converter_for_create", original_converter
-        )
-        _self.func_crd_metadata_converter = create_converter
-        try:
-            return _self.create(_file)
-        finally:
-            _self.func_crd_metadata_converter = original_converter
+        return _self.create(_file)
 
-    # Update existing CRD — full replace (not deep-merge).
-    # Build the complete desired-state object from local yaml + enrichment,
-    # then copy resourceVersion from the server for optimistic concurrency.
+    # Update existing CRD
     _LOG.info("Retrieved message instance: %r", message_instance)
-    converter = _self.func_crd_metadata_converter
-    request_input = read_yaml_to_crd_request(
-        crd_method_info.input_class, _self.name, _file, converter, yaml_dict=yaml_dict
+    request_input = _self.read_yaml_and_update_crd_request(
+        crd_method_info.input_class, _file, message_instance
     )
-    # Both request_input (UpdatePipelineRequest) and message_instance
-    # (GetPipelineResponse) wrap the pipeline under _self.name.
-    # Copy resourceVersion for optimistic concurrency.
-    existing = getattr(message_instance, _self.name)
-    inner = getattr(request_input, _self.name)
-    inner.metadata.resourceVersion = existing.metadata.resourceVersion
     call_res = crd_method_call(crd_method_info, request_input)
     print(call_res)
     return call_res
@@ -463,7 +446,6 @@ class CRD:
         self.name = name
         self.full_name = full_name
         self.func_crd_metadata_converter = convert_crd_metadata
-        self._get_method_info: Optional[CrdMethodInfo] = None
         self.metadata = metadata
         self.func_signature: dict[str, dict] = {
             "apply": {
@@ -689,8 +671,6 @@ class CRD:
             *self._extract_method_info(channel, self.full_name, "Get"),
         )
 
-        self._get_method_info = method_info
-
         self.configure_parser("get", parser)
         func_signature = self._read_signatures("get")
 
@@ -713,7 +693,7 @@ class CRD:
         self.configure_parser("apply", parser)
         func_signature = self._read_signatures("apply")
 
-        bound_func = partial(apply_func_impl, method_info)
+        bound_func = partial(getattr(self, "_apply_func_impl", apply_func_impl), method_info)
         bound_func = bind_signature(func_signature)(bound_func)
         self.apply = MethodType(bound_func, self)
         _LOG.debug("Generated APPLY injected well: %r", self.apply)
@@ -760,6 +740,32 @@ class CRD:
         bound_func = bind_signature(list_func_signature)(bound_func)
         self.list = MethodType(bound_func, self)
         _LOG.debug("Generated LIST injected well: %r", self.list)
+
+    def read_yaml_and_update_crd_request(
+        self, input_class: type[Message], yaml_path_string: str, original_crd: Message
+    ) -> Message:
+        """Read a YAML file and update the original CRD request instance."""
+        original_crd_dict: dict = MessageToDict(
+            original_crd, preserving_proto_field_name=True
+        )
+        _LOG.debug("Original CRD dict: %r", original_crd_dict)
+
+        yaml_dict = yaml_to_dict(yaml_path_string)
+        _LOG.debug(
+            "Remove top-level apiVersion/kind from YAML dict,"
+            " since we don't allow to change typemeta"
+        )
+        yaml_dict.pop("apiVersion", None)
+        yaml_dict.pop("kind", None)
+        _LOG.debug("Finished to read YAML file: %r", yaml_dict)
+
+        deep_update(original_crd_dict[self.name], yaml_dict)
+        _LOG.debug("Updated CRD config dict: %r", original_crd_dict)
+
+        res = input_class()
+        ParseDict(original_crd_dict, res)
+        _LOG.info("Updated CRD instance to send API (%r): %r", type(res), res)
+        return res
 
 
 def inject_func_signature(crd: CRD, function_name: str, signatures: dict) -> None:

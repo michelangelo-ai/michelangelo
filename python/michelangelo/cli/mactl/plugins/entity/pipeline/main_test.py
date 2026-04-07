@@ -26,6 +26,7 @@ class PipelineMainTest(TestCase):
         """Set up test fixtures."""
         self.mock_crd = Mock()
         self.mock_crd.func_signature = {}  # Real dict for item assignment
+        self.mock_crd._extract_method_info.return_value = ("GetPipeline", Mock, Mock)
         self.mock_crds = {"pipeline": self.mock_crd}
         self.mock_channel = Mock()
 
@@ -46,6 +47,12 @@ class PipelineMainTest(TestCase):
             self.mock_crd.func_crd_metadata_converter_for_create,
             convert_crd_metadata_pipeline_create,
         )
+
+    def test_apply_command_sets_apply_func_impl(self):
+        """Apply command sets _apply_func_impl on the crd for silent get."""
+        apply_plugin_command(self.mock_crd, "apply", self.mock_crds, self.mock_channel)
+
+        self.assertTrue(callable(self.mock_crd._apply_func_impl))
 
     def test_apply_plugins_run_command(self):
         """Test apply_plugins for run command."""

@@ -435,6 +435,7 @@ class ReadPluginsTest(TestCase):
             },
         )
 
+    @patch("michelangelo.cli.mactl.crd.CRD._extract_method_info", return_value=("GetPipeline", Mock, Mock))
     @patch.dict(
         "michelangelo.cli.mactl.mactl._CONFIG",
         {
@@ -447,7 +448,7 @@ class ReadPluginsTest(TestCase):
         },
         clear=False,
     )
-    def test_read_plugin_command_multiple(self):
+    def test_read_plugin_command_multiple(self, _mock_extract):
         """Test for `read_plugin_command()` with multiple plugin directories."""
         crd = CRD(
             name="pipeline",

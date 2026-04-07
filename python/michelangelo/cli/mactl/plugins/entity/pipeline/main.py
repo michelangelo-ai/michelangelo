@@ -1,14 +1,15 @@
 """Pipeline entity plugin module."""
 
+from functools import partial
 from logging import getLogger
 from types import MethodType
 
 from grpc import Channel
 
-from michelangelo.cli.mactl.crd import CRD
+from michelangelo.cli.mactl.crd import CRD, CrdMethodInfo
 from michelangelo.cli.mactl.plugins.entity.pipeline.apply import (
     convert_crd_metadata_pipeline_apply,
-    generate_pipeline_apply,
+    pipeline_apply_func_impl,
 )
 from michelangelo.cli.mactl.plugins.entity.pipeline.create import (
     convert_crd_metadata_pipeline_create,
@@ -61,9 +62,12 @@ def apply_plugin_command(
         crd.func_crd_metadata_converter_for_create = (
             convert_crd_metadata_pipeline_create
         )
-        crd.generate_apply = MethodType(
-            lambda self, ch, parser=None: generate_pipeline_apply(self, ch, parser), crd
+        get_method_info = CrdMethodInfo(
+            channel,
+            crd.full_name,
+            *crd._extract_method_info(channel, crd.full_name, "Get"),
         )
+        crd._apply_func_impl = partial(pipeline_apply_func_impl, get_method_info)
     if target_command == "run":
         crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_run
     if target_command == "dev_run":

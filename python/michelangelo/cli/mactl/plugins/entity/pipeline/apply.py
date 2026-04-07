@@ -2,17 +2,14 @@
 
 from logging import getLogger
 from pathlib import Path
-from types import MethodType
 
 from git import Repo
-from google.protobuf.json_format import ParseDict
 from google.protobuf.message import Message
 from grpc import RpcError, StatusCode
 
 from michelangelo.cli.mactl.crd import (
     CRD,
     CrdMethodInfo,
-    bind_signature,
     crd_method_call,
     crd_method_call_kwargs,
     read_yaml_to_crd_request,
@@ -85,12 +82,17 @@ def convert_crd_metadata_pipeline_apply(
     return res
 
 
-def _pipeline_apply_func_impl(
-    update_method_info: CrdMethodInfo,
+def pipeline_apply_func_impl(
     get_method_info: CrdMethodInfo,
+    update_method_info: CrdMethodInfo,
     bound_args,
 ) -> Message:
-    """Pipeline-level apply implementation with silent get (no print side-effect)."""
+    """Pipeline apply implementation with silent get (no print side-effect).
+
+    get_method_info is captured via partial in apply_plugin_command so that
+    the existence check bypasses get_func_impl's print side-effect.
+    update_method_info is passed by generate_apply via the standard partial mechanism.
+    """
     _self: CRD = bound_args.arguments["self"]
     _file = bound_args.arguments["file"]
 
@@ -110,8 +112,6 @@ def _pipeline_apply_func_impl(
 
     message_instance = None
     try:
-        # Use get_method_info captured in closure — avoids get_func_impl's print side-effect
-        # and removes the need for _get_method_info instance attribute.
         message_instance = crd_method_call_kwargs(
             get_method_info,
             namespace=_namespace,
@@ -150,35 +150,3 @@ def _pipeline_apply_func_impl(
     call_res = crd_method_call(update_method_info, request_input)
     print(call_res)
     return call_res
-
-
-def generate_pipeline_apply(crd: CRD, channel, parser=None) -> None:
-    """Override generate_apply for pipeline to avoid _get_method_info instance attribute.
-
-    Captures both get and update CrdMethodInfo in a closure so the apply
-    implementation can do a silent existence check without going through
-    get_func_impl (which prints the response as a side-effect).
-    """
-    from functools import partial
-
-    _LOG.info("Generate pipeline APPLY method for %r", crd.full_name)
-
-    get_method_info = CrdMethodInfo(
-        channel,
-        crd.full_name,
-        *crd._extract_method_info(channel, crd.full_name, "Get"),
-    )
-    update_method_info = CrdMethodInfo(
-        channel,
-        crd.full_name,
-        *crd._extract_method_info(channel, crd.full_name, "Update"),
-    )
-
-    crd.configure_parser("apply", parser)
-    func_signature = crd._read_signatures("apply")
-
-    bound_func = partial(_pipeline_apply_func_impl, update_method_info, get_method_info)
-    bound_func = bind_signature(func_signature)(bound_func)
-    crd.apply = MethodType(bound_func, crd)
-    _LOG.debug("Generated pipeline APPLY injected well: %r", crd.apply)
-

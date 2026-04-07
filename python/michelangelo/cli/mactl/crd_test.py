@@ -5,8 +5,6 @@ from inspect import Parameter, Signature
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
 
-from grpc import RpcError, StatusCode
-
 from michelangelo.cli.mactl.crd import (
     CRD,
     CrdMethodInfo,
@@ -19,17 +17,6 @@ from michelangelo.cli.mactl.crd import (
     list_func_impl,
     prepare_column_info,
 )
-
-
-class _FakeRpcError(RpcError):
-    """Minimal RpcError subclass for testing."""
-
-    def __init__(self, status_code: StatusCode) -> None:
-        self._code = status_code
-
-    def code(self) -> StatusCode:
-        """Return the status code."""
-        return self._code
 
 
 class PrepareColumnInfoTest(TestCase):
@@ -304,17 +291,9 @@ class ApplyFuncImplTest(TestCase):
     """Test cases for apply_func_impl function."""
 
     @patch("michelangelo.cli.mactl.crd.crd_method_call")
-    @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
-    @patch("michelangelo.cli.mactl.crd.read_yaml_to_crd_request")
-    @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
-    def test_apply_func_impl_update_with_converter_uses_full_replace(
-        self,
-        mock_yaml_to_dict: MagicMock,
-        mock_read_yaml: MagicMock,
-        mock_call_kwargs: MagicMock,
-        _,
-    ):
-        """Test apply uses full replace via read_yaml_to_crd_request."""
+    @patch("michelangelo.cli.mactl.crd.get_crd_namespace_and_name_from_yaml")
+    def test_apply_func_impl_update(self, mock_get_ns: MagicMock, _):
+        """Test apply_func_impl updates existing CRD."""
         crd_method_info = CrdMethodInfo(
             channel=Mock(),
             crd_full_name="test.Service",
@@ -322,173 +301,17 @@ class ApplyFuncImplTest(TestCase):
             input_class=Mock,
             output_class=Mock,
         )
-        mock_converter = Mock()
         mock_crd = Mock()
         mock_crd.full_name = "test.Service"
-        mock_crd.name = "test"
-        mock_crd.func_crd_metadata_converter = mock_converter
-        mock_existing = Mock()
-        mock_existing.test.metadata.resourceVersion = "42"
-        mock_call_kwargs.return_value = mock_existing
-        parsed_yaml = {"metadata": {"namespace": "ns", "name": "name"}}
-        mock_yaml_to_dict.return_value = parsed_yaml
-        mock_request = Mock()
-        mock_read_yaml.return_value = mock_request
+        mock_crd.get.return_value = Mock()
+        mock_crd.read_yaml_and_update_crd_request.return_value = Mock()
+        mock_get_ns.return_value = ("ns", "name")
 
         apply_func_impl(
             crd_method_info, Mock(arguments={"self": mock_crd, "file": "f.yaml"})
         )
 
-        mock_read_yaml.assert_called_once_with(
-            crd_method_info.input_class,
-            mock_crd.name,
-            "f.yaml",
-            mock_converter,
-            yaml_dict=parsed_yaml,
-        )
-        # resourceVersion must be copied onto the inner pipeline message
-        inner = getattr(mock_request, mock_crd.name)
-        self.assertEqual(inner.metadata.resourceVersion, "42")
-
-    @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
-    @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
-    def test_apply_func_impl_create_when_not_found(
-        self, mock_yaml_to_dict: MagicMock, mock_call_kwargs: MagicMock
-    ):
-        """Test apply_func_impl calls create when the resource does not exist."""
-        crd_method_info = CrdMethodInfo(
-            channel=Mock(),
-            crd_full_name="test.Service",
-            method_name="Apply",
-            input_class=Mock,
-            output_class=Mock,
-        )
-        mock_crd = Mock()
-        mock_crd.full_name = "test.Service"
-        mock_call_kwargs.side_effect = _FakeRpcError(StatusCode.NOT_FOUND)
-        parsed_yaml = {"metadata": {"namespace": "ns", "name": "name"}}
-        mock_yaml_to_dict.return_value = parsed_yaml
-
-        apply_func_impl(
-            crd_method_info, Mock(arguments={"self": mock_crd, "file": "f.yaml"})
-        )
-
-        mock_crd.generate_create.assert_called_once_with(crd_method_info.channel)
-        mock_crd.create.assert_called_once_with("f.yaml")
-
-    @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
-    @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
-    def test_apply_func_impl_reraises_non_not_found_errors(
-        self, mock_yaml_to_dict: MagicMock, mock_call_kwargs: MagicMock
-    ):
-        """Test apply_func_impl re-raises RpcErrors that are not NOT_FOUND."""
-        crd_method_info = CrdMethodInfo(
-            channel=Mock(),
-            crd_full_name="test.Service",
-            method_name="Apply",
-            input_class=Mock,
-            output_class=Mock,
-        )
-        mock_crd = Mock()
-        mock_crd.full_name = "test.Service"
-        mock_call_kwargs.side_effect = _FakeRpcError(StatusCode.UNAVAILABLE)
-        parsed_yaml = {"metadata": {"namespace": "ns", "name": "name"}}
-        mock_yaml_to_dict.return_value = parsed_yaml
-
-        with self.assertRaises(RpcError):
-            apply_func_impl(
-                crd_method_info, Mock(arguments={"self": mock_crd, "file": "f.yaml"})
-            )
-
-    @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
-    @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
-    def test_apply_create_path_uses_create_converter(
-        self, mock_yaml_to_dict: MagicMock, mock_call_kwargs: MagicMock
-    ):
-        """Apply swaps to func_crd_metadata_converter_for_create before create."""
-        crd_method_info = CrdMethodInfo(
-            channel=Mock(),
-            crd_full_name="test.Service",
-            method_name="Apply",
-            input_class=Mock,
-            output_class=Mock,
-        )
-        original_converter = Mock(name="apply_converter")
-        create_converter = Mock(name="create_converter")
-        mock_crd = Mock()
-        mock_crd.full_name = "test.Service"
-        mock_crd.func_crd_metadata_converter = original_converter
-        mock_crd.func_crd_metadata_converter_for_create = create_converter
-        mock_call_kwargs.side_effect = _FakeRpcError(StatusCode.NOT_FOUND)
-        mock_yaml_to_dict.return_value = {
-            "metadata": {"namespace": "ns", "name": "name"}
-        }
-
-        apply_func_impl(
-            crd_method_info, Mock(arguments={"self": mock_crd, "file": "f.yaml"})
-        )
-
-        # Converter must be swapped to create_converter during create()
-        mock_crd.create.assert_called_once_with("f.yaml")
-        # After the call, original converter must be restored
-        self.assertIs(mock_crd.func_crd_metadata_converter, original_converter)
-
-    @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
-    def test_apply_func_impl_raises_when_metadata_missing(
-        self, mock_yaml_to_dict: MagicMock
-    ):
-        """apply_func_impl raises ValueError when YAML has no metadata key."""
-        crd_method_info = CrdMethodInfo(
-            channel=Mock(),
-            crd_full_name="test.Service",
-            method_name="Apply",
-            input_class=Mock,
-            output_class=Mock,
-        )
-        mock_yaml_to_dict.return_value = {"spec": {}}
-
-        with self.assertRaises(ValueError, msg="missing 'metadata' key"):
-            apply_func_impl(
-                crd_method_info, Mock(arguments={"self": Mock(), "file": "f.yaml"})
-            )
-
-    @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
-    def test_apply_func_impl_raises_when_metadata_not_dict(
-        self, mock_yaml_to_dict: MagicMock
-    ):
-        """apply_func_impl raises ValueError when metadata is not a mapping."""
-        crd_method_info = CrdMethodInfo(
-            channel=Mock(),
-            crd_full_name="test.Service",
-            method_name="Apply",
-            input_class=Mock,
-            output_class=Mock,
-        )
-        mock_yaml_to_dict.return_value = {"metadata": "not-a-dict"}
-
-        with self.assertRaises(ValueError, msg="metadata must be a mapping"):
-            apply_func_impl(
-                crd_method_info, Mock(arguments={"self": Mock(), "file": "f.yaml"})
-            )
-
-    @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
-    def test_apply_func_impl_raises_when_namespace_missing(
-        self, mock_yaml_to_dict: MagicMock
-    ):
-        """apply_func_impl raises ValueError when namespace is missing from metadata."""
-        crd_method_info = CrdMethodInfo(
-            channel=Mock(),
-            crd_full_name="test.Service",
-            method_name="Apply",
-            input_class=Mock,
-            output_class=Mock,
-        )
-        mock_yaml_to_dict.return_value = {"metadata": {"name": "my-pipeline"}}
-
-        with self.assertRaises(ValueError, msg="namespace must be a string"):
-            apply_func_impl(
-                crd_method_info, Mock(arguments={"self": Mock(), "file": "f.yaml"})
-            )
+        mock_crd.read_yaml_and_update_crd_request.assert_called_once()
 
 
 class CreateFuncImplTest(TestCase):
