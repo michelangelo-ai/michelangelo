@@ -233,25 +233,38 @@ def crd_method_call(crd_method_info, request_input: Message) -> Message:
     return response
 
 
-def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
-    """Default common CRD member method implementation for GET method."""
+def _get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
+    """Raw CRD GET implementation - returns message instance without printing."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
+
+    return crd_method_call_kwargs(
+        crd_method_info,
+        **{
+            "namespace": get_single_arg(bound_args.arguments, "namespace"),
+            "name": get_single_arg(bound_args.arguments, "name"),
+        },
+    )
+
+
+def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
+    """Default common CRD member method implementation for GET method.
+
+    Wrapper around _get that additionally handles list fallback and printing.
+    """
+    _LOG.info("Bound arguments: %r", bound_args.arguments)
+
+    _self: CRD = bound_args.arguments["self"]
 
     if "name" not in bound_args.arguments or not bound_args.arguments["name"]:
         _LOG.debug("No name argument passed. List CRD in the namespace.")
-        _self: CRD = bound_args.arguments["self"]
         _self.generate_list(crd_method_info.channel)
         return _self.list(
             namespace=get_single_arg(bound_args.arguments, "namespace"),
             limit=bound_args.arguments.get("limit", 100),
         )
 
-    call_res = crd_method_call_kwargs(
-        crd_method_info,
-        **{
-            "namespace": get_single_arg(bound_args.arguments, "namespace"),
-            "name": get_single_arg(bound_args.arguments, "name"),
-        },
+    call_res = _self._get(
+        **{k: v for k, v in bound_args.arguments.items() if k != "self"}
     )
     print(call_res)
     return call_res
@@ -391,7 +404,7 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
 
     message_instance = None
     try:
-        message_instance = _self.get(_namespace, _name)
+        message_instance = _self._get(_namespace, _name)
     except RpcError as err:
         _LOG.debug("CRD %r / %r does not exist: %r", _namespace, _name, err)
         if err.code() != StatusCode.NOT_FOUND:
@@ -650,15 +663,16 @@ class CRD:
         _LOG.debug("Generated DELETE injected well: %r", self.delete)
 
     def generate_get(self, channel: Channel, parser: Optional[ArgumentParser] = None):
-        """Generate get function of this class.
+        """Generate get and _get functions of this class.
 
-        Optionally configure argparse parser with arguments.
+        Both share the same signature. _get returns the raw message instance;
+        get is a wrapper that additionally handles list fallback and printing.
 
         Args:
             channel: gRPC channel
             parser: Optional ArgumentParser to configure with --namespace and --name
         """
-        _LOG.info("Generate GET method for %r / %r", self.name, self.full_name)
+        _LOG.info("Generate GET/_GET methods for %r / %r", self.name, self.full_name)
         method_info = CrdMethodInfo(
             channel,
             self.full_name,
@@ -668,10 +682,15 @@ class CRD:
         self.configure_parser("get", parser)
         func_signature = self._read_signatures("get")
 
-        bound_func = partial(get_func_impl, method_info)
-        bound_func = bind_signature(func_signature)(bound_func)
-        self.get = MethodType(bound_func, self)
-        _LOG.debug("Generated GET injected well: %r", self.get)
+        for attr_name, func_impl in [("_get", _get_func_impl), ("get", get_func_impl)]:
+            bound_func = partial(func_impl, method_info)
+            bound_func = bind_signature(func_signature)(bound_func)
+            setattr(self, attr_name, MethodType(bound_func, self))
+            _LOG.debug(
+                "Generated %s injected well: %r",
+                attr_name.upper(),
+                getattr(self, attr_name),
+            )
 
     def generate_apply(self, channel: Channel, parser: Optional[ArgumentParser] = None):
         """Generate apply function of this class."""

@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, Mock, patch
 from michelangelo.cli.mactl.crd import (
     CRD,
     CrdMethodInfo,
+    _get_func_impl,
     apply_func_impl,
     bind_signature,
     create_func_impl,
@@ -238,9 +239,12 @@ class DeleteFuncImplTest(TestCase):
 class GetFuncImplTest(TestCase):
     """Test cases for get_func_impl function."""
 
-    @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
-    def test_get_func_impl(self, mock_call_kwargs):
-        """Test get_func_impl with name calls crd_method_call_kwargs."""
+    def test_get_func_impl_with_name_calls_get(self):
+        """Test get_func_impl with name calls _self._get and prints result."""
+        mock_crd = Mock()
+        mock_response = Mock()
+        mock_crd._get.return_value = mock_response
+
         crd_method_info = CrdMethodInfo(
             channel=Mock(),
             crd_full_name="test.Service",
@@ -248,13 +252,13 @@ class GetFuncImplTest(TestCase):
             input_class=Mock,
             output_class=Mock,
         )
-        get_func_impl(
+        result = get_func_impl(
             crd_method_info,
-            Mock(arguments={"namespace": "ns", "name": "proj"}),
+            Mock(arguments={"self": mock_crd, "namespace": "ns", "name": "proj"}),
         )
-        mock_call_kwargs.assert_called_once_with(
-            crd_method_info, namespace="ns", name="proj"
-        )
+
+        mock_crd._get.assert_called_once_with(namespace="ns", name="proj")
+        self.assertEqual(result, mock_response)
 
     def test_get_func_impl_without_name_calls_list(self):
         """Test get_func_impl without name calls list with limit."""
@@ -287,6 +291,33 @@ class GetFuncImplTest(TestCase):
         self.assertEqual(result, "list_result")
 
 
+class GetFuncImplRawTest(TestCase):
+    """Test cases for _get_func_impl function."""
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
+    def test_get_func_impl_raw(self, mock_call_kwargs):
+        """Test _get_func_impl calls crd_method_call_kwargs and returns result."""
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Get",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        mock_response = Mock()
+        mock_call_kwargs.return_value = mock_response
+
+        result = _get_func_impl(
+            crd_method_info,
+            Mock(arguments={"namespace": "ns", "name": "proj"}),
+        )
+
+        mock_call_kwargs.assert_called_once_with(
+            crd_method_info, namespace="ns", name="proj"
+        )
+        self.assertEqual(result, mock_response)
+
+
 class ApplyFuncImplTest(TestCase):
     """Test cases for apply_func_impl function."""
 
@@ -303,7 +334,7 @@ class ApplyFuncImplTest(TestCase):
         )
         mock_crd = Mock()
         mock_crd.full_name = "test.Service"
-        mock_crd.get.return_value = Mock()
+        mock_crd._get.return_value = Mock()
         mock_crd.read_yaml_and_update_crd_request.return_value = Mock()
         mock_get_ns.return_value = ("ns", "name")
 
@@ -311,6 +342,7 @@ class ApplyFuncImplTest(TestCase):
             crd_method_info, Mock(arguments={"self": mock_crd, "file": "f.yaml"})
         )
 
+        mock_crd._get.assert_called_once_with("ns", "name")
         mock_crd.read_yaml_and_update_crd_request.assert_called_once()
 
 
@@ -453,7 +485,7 @@ class GenerateGetTest(TestCase):
 
     @patch.object(CRD, "_extract_method_info")
     def test_generate_get(self, mock_extract_method_info):
-        """Test generate_get creates the get method on CRD instance."""
+        """Test generate_get creates both get and _get methods on CRD instance."""
         mock_channel = Mock()
         mock_extract_method_info.return_value = ("GetTestCrd", Mock, Mock)
 
@@ -462,6 +494,8 @@ class GenerateGetTest(TestCase):
 
         self.assertTrue(hasattr(crd, "get"))
         self.assertTrue(callable(crd.get))
+        self.assertTrue(hasattr(crd, "_get"))
+        self.assertTrue(callable(crd._get))
 
     @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
     @patch.object(CRD, "_extract_method_info")
