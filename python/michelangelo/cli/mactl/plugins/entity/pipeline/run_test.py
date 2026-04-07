@@ -313,9 +313,7 @@ class PipelineRunTest(TestCase):
                 Parameter("self", Parameter.POSITIONAL_OR_KEYWORD),
                 Parameter("namespace", Parameter.POSITIONAL_OR_KEYWORD),
                 Parameter("name", Parameter.POSITIONAL_OR_KEYWORD),
-                Parameter(
-                    "resume_from", Parameter.POSITIONAL_OR_KEYWORD, default=None
-                ),
+                Parameter("resume_from", Parameter.POSITIONAL_OR_KEYWORD, default=None),
             ]
         )
 
