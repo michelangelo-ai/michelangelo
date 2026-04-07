@@ -11,7 +11,6 @@ from michelangelo.cli.mactl.crd import (
     CRD,
     CrdMethodInfo,
     crd_method_call,
-    crd_method_call_kwargs,
     get_crd_namespace_and_name_from_yaml,
     read_yaml_to_crd_request,
 )
@@ -83,14 +82,11 @@ def convert_crd_metadata_pipeline_apply(
 
 
 def pipeline_apply_func_impl(
-    get_method_info: CrdMethodInfo,
     update_method_info: CrdMethodInfo,
     bound_args,
 ) -> Message:
-    """Pipeline apply implementation with silent get (no print side-effect).
+    """Pipeline apply implementation.
 
-    get_method_info is captured via partial in apply_plugin_command so that
-    the existence check bypasses get_func_impl's print side-effect.
     update_method_info is passed by generate_apply via the standard partial mechanism.
     """
     _self: CRD = bound_args.arguments["self"]
@@ -100,11 +96,7 @@ def pipeline_apply_func_impl(
 
     message_instance = None
     try:
-        message_instance = crd_method_call_kwargs(
-            get_method_info,
-            namespace=_namespace,
-            name=_name,
-        )
+        message_instance = _self.get(_namespace, _name)
     except RpcError as err:
         _LOG.debug("Pipeline %r / %r does not exist: %r", _namespace, _name, err)
         if err.code() != StatusCode.NOT_FOUND:
