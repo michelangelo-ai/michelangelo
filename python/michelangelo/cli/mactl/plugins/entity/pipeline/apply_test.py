@@ -271,15 +271,13 @@ class PipelineApplyFuncImplTest(TestCase):
     @patch(
         "michelangelo.cli.mactl.plugins.entity.pipeline.apply.get_crd_namespace_and_name_from_yaml"
     )
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.yaml_to_dict")
     @patch(
         "michelangelo.cli.mactl.plugins.entity.pipeline.apply.crd_method_call_kwargs"
     )
-    def test_update_path(self, mock_get, mock_yaml, mock_ns, mock_read_yaml, mock_call):
+    def test_update_path(self, mock_get, mock_ns, mock_read_yaml, mock_call):
         """Existing pipeline triggers update path with resourceVersion copy."""
         get_info = self._make_method_info()
         update_info = self._make_method_info()
-        mock_yaml.return_value = {"metadata": {"namespace": "ns", "name": "pipe"}}
         mock_ns.return_value = ("ns", "pipe")
         mock_existing = Mock()
         mock_existing.pipeline.metadata.resourceVersion = "42"
@@ -300,12 +298,10 @@ class PipelineApplyFuncImplTest(TestCase):
     @patch(
         "michelangelo.cli.mactl.plugins.entity.pipeline.apply.get_crd_namespace_and_name_from_yaml"
     )
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.yaml_to_dict")
-    def test_create_path_when_not_found(self, mock_yaml, mock_ns, mock_get):
+    def test_create_path_when_not_found(self, mock_ns, mock_get):
         """NOT_FOUND triggers create path."""
         get_info = self._make_method_info()
         update_info = self._make_method_info()
-        mock_yaml.return_value = {"metadata": {"namespace": "ns", "name": "pipe"}}
         mock_ns.return_value = ("ns", "pipe")
         mock_get.side_effect = _FakeRpcError(StatusCode.NOT_FOUND)
         mock_crd = Mock()
@@ -321,12 +317,10 @@ class PipelineApplyFuncImplTest(TestCase):
     @patch(
         "michelangelo.cli.mactl.plugins.entity.pipeline.apply.get_crd_namespace_and_name_from_yaml"
     )
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.yaml_to_dict")
-    def test_reraises_non_not_found_errors(self, mock_yaml, mock_ns, mock_get):
+    def test_reraises_non_not_found_errors(self, mock_ns, mock_get):
         """Non-NOT_FOUND RpcErrors are re-raised."""
         get_info = self._make_method_info()
         update_info = self._make_method_info()
-        mock_yaml.return_value = {"metadata": {"namespace": "ns", "name": "pipe"}}
         mock_ns.return_value = ("ns", "pipe")
         mock_get.side_effect = _FakeRpcError(StatusCode.UNAVAILABLE)
 
@@ -341,12 +335,10 @@ class PipelineApplyFuncImplTest(TestCase):
     @patch(
         "michelangelo.cli.mactl.plugins.entity.pipeline.apply.get_crd_namespace_and_name_from_yaml"
     )
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.yaml_to_dict")
-    def test_create_path_uses_create_converter(self, mock_yaml, mock_ns, mock_get):
+    def test_create_path_uses_create_converter(self, mock_ns, mock_get):
         """Create path swaps to func_crd_metadata_converter_for_create."""
         get_info = self._make_method_info()
         update_info = self._make_method_info()
-        mock_yaml.return_value = {"metadata": {"namespace": "ns", "name": "pipe"}}
         mock_ns.return_value = ("ns", "pipe")
         mock_get.side_effect = _FakeRpcError(StatusCode.NOT_FOUND)
         original = Mock(name="original")

@@ -110,32 +110,24 @@ def yaml_to_dict(yaml_path_string: str) -> dict[str, Any]:
     return res
 
 
-def get_crd_namespace_and_name_from_yaml(
-    yaml_path_string: str, *, yaml_dict: Optional[dict] = None
-) -> tuple[str, str]:
-    """Reads a YAML file and returns namespace and name from metadata.
-
-    If yaml_dict is provided it is used directly, avoiding a second file read.
-    """
+def get_crd_namespace_and_name_from_yaml(yaml_path_string: str) -> tuple[str, str]:
+    """Reads a YAML file and returns its content as a dictionary."""
     _LOG.info("Start to Read YAML file: %r", yaml_path_string)
-    if yaml_dict is None:
-        yaml_dict = yaml_to_dict(yaml_path_string)
+    yaml_dict = yaml_to_dict(yaml_path_string)
 
-    if "metadata" not in yaml_dict:
-        raise ValueError(f"YAML {yaml_path_string} is missing a 'metadata' key")
+    assert "metadata" in yaml_dict, "YAML must contain 'metadata' key"
+
     metadata = yaml_dict["metadata"]
-    if not isinstance(metadata, dict):
-        raise ValueError(
-            f"YAML {yaml_path_string} 'metadata' must be a mapping, "
-            f"got {type(metadata).__name__}"
-        )
-    for key in ("namespace", "name"):
-        if not isinstance(metadata.get(key), str):
-            raise ValueError(f"YAML metadata must contain '{key}' as a string")
+
+    assert "namespace" in metadata, "YAML metadata must contain 'namespace' key"
+    assert "name" in metadata, "YAML metadata must contain 'name' key"
 
     namespace = metadata["namespace"]
     name = metadata["name"]
+
     _LOG.info("Retrieved namespace: %r, name: %r", namespace, name)
+    assert isinstance(namespace, str), "kind must be a string"
+    assert isinstance(name, str), "kind must be a string"
     return namespace, name
 
 
@@ -174,16 +166,10 @@ def read_yaml_to_crd_request(
     crd_name: str,
     yaml_path_string: str,
     func_crd_metadata_converter: Callable,
-    *,
-    yaml_dict: Optional[dict] = None,
 ) -> Message:
-    """Reads a YAML file and converts it to a CRD request instance.
-
-    If yaml_dict is provided it is used directly, avoiding a second file read.
-    """
+    """Reads a YAML file and converts it to a CRD request instance."""
     yaml_path = Path(yaml_path_string).resolve()
-    if yaml_dict is None:
-        yaml_dict = yaml_to_dict(yaml_path_string)
+    yaml_dict = yaml_to_dict(yaml_path_string)
     crd_dict = {
         crd_name: func_crd_metadata_converter(yaml_dict, crd_class, yaml_path),
     }
@@ -401,8 +387,7 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
 
     _file = get_single_arg(bound_args.arguments, "file")
 
-    yaml_dict = yaml_to_dict(_file)
-    _namespace, _name = get_crd_namespace_and_name_from_yaml(_file, yaml_dict=yaml_dict)
+    _namespace, _name = get_crd_namespace_and_name_from_yaml(_file)
 
     message_instance = None
     try:

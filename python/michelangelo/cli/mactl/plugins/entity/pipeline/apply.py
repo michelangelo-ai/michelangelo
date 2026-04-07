@@ -14,7 +14,6 @@ from michelangelo.cli.mactl.crd import (
     crd_method_call_kwargs,
     get_crd_namespace_and_name_from_yaml,
     read_yaml_to_crd_request,
-    yaml_to_dict,
 )
 from michelangelo.cli.mactl.plugins.entity.pipeline.create import (
     handle_workflow_inputs_retrieval,
@@ -97,8 +96,7 @@ def pipeline_apply_func_impl(
     _self: CRD = bound_args.arguments["self"]
     _file = bound_args.arguments["file"]
 
-    yaml_dict = yaml_to_dict(_file)
-    _namespace, _name = get_crd_namespace_and_name_from_yaml(_file, yaml_dict=yaml_dict)
+    _namespace, _name = get_crd_namespace_and_name_from_yaml(_file)
 
     message_instance = None
     try:
@@ -132,7 +130,6 @@ def pipeline_apply_func_impl(
         _self.name,
         _file,
         converter,
-        yaml_dict=yaml_dict,
     )
     existing = getattr(message_instance, _self.name)
     inner = getattr(request_input, _self.name)

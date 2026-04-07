@@ -313,10 +313,7 @@ class ApplyFuncImplTest(TestCase):
 
     @patch("michelangelo.cli.mactl.crd.crd_method_call")
     @patch("michelangelo.cli.mactl.crd.get_crd_namespace_and_name_from_yaml")
-    @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
-    def test_apply_func_impl_update(
-        self, mock_yaml_to_dict: MagicMock, mock_get_ns: MagicMock, _
-    ):
+    def test_apply_func_impl_update(self, mock_get_ns: MagicMock, _):
         """Test apply_func_impl updates existing CRD."""
         crd_method_info = CrdMethodInfo(
             channel=Mock(),
@@ -513,74 +510,42 @@ class GetCrdNamespaceAndNameFromYamlTest(TestCase):
     """Tests for get_crd_namespace_and_name_from_yaml."""
 
     @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
-    def test_reads_file_when_no_dict_provided(self, mock_yaml):
-        """Reads the YAML file when no yaml_dict is provided."""
+    def test_reads_namespace_and_name(self, mock_yaml):
+        """Reads namespace and name from YAML metadata."""
         mock_yaml.return_value = {"metadata": {"namespace": "ns", "name": "foo"}}
         ns, name = get_crd_namespace_and_name_from_yaml("f.yaml")
         self.assertEqual(ns, "ns")
         self.assertEqual(name, "foo")
         mock_yaml.assert_called_once_with("f.yaml")
 
-    def test_uses_provided_dict_without_reading_file(self):
-        """Uses the provided yaml_dict without reading the file."""
-        yaml_dict = {"metadata": {"namespace": "ns", "name": "foo"}}
-        ns, name = get_crd_namespace_and_name_from_yaml("f.yaml", yaml_dict=yaml_dict)
-        self.assertEqual(ns, "ns")
-        self.assertEqual(name, "foo")
+    @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
+    def test_raises_when_metadata_missing(self, mock_yaml):
+        """Raises AssertionError when metadata key is absent."""
+        mock_yaml.return_value = {"spec": {}}
+        with self.assertRaises(AssertionError):
+            get_crd_namespace_and_name_from_yaml("f.yaml")
 
-    def test_raises_when_metadata_missing(self):
-        """Raises ValueError when metadata key is absent."""
-        with self.assertRaises(ValueError):
-            get_crd_namespace_and_name_from_yaml("f.yaml", yaml_dict={"spec": {}})
-
-    def test_raises_when_metadata_not_dict(self):
-        """Raises ValueError when metadata is not a mapping."""
-        with self.assertRaises(ValueError):
-            get_crd_namespace_and_name_from_yaml(
-                "f.yaml", yaml_dict={"metadata": "bad"}
-            )
-
-    def test_raises_when_namespace_missing(self):
-        """Raises ValueError when namespace is absent from metadata."""
-        with self.assertRaises(ValueError):
-            get_crd_namespace_and_name_from_yaml(
-                "f.yaml", yaml_dict={"metadata": {"name": "foo"}}
-            )
-
-    def test_raises_when_name_missing(self):
-        """Raises ValueError when name is absent from metadata."""
-        with self.assertRaises(ValueError):
-            get_crd_namespace_and_name_from_yaml(
-                "f.yaml", yaml_dict={"metadata": {"namespace": "ns"}}
-            )
+    @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
+    def test_raises_when_namespace_missing(self, mock_yaml):
+        """Raises AssertionError when namespace is absent from metadata."""
+        mock_yaml.return_value = {"metadata": {"name": "foo"}}
+        with self.assertRaises(AssertionError):
+            get_crd_namespace_and_name_from_yaml("f.yaml")
 
 
 class ReadYamlToCrdRequestTest(TestCase):
     """Tests for read_yaml_to_crd_request."""
 
     @patch("michelangelo.cli.mactl.crd.ParseDict")
-    def test_uses_provided_yaml_dict(self, mock_parse):
-        """Passes yaml_dict directly to the converter without re-reading the file."""
-        yaml_dict = {"metadata": {"namespace": "ns"}}
-        converter = Mock(return_value={"converted": True})
-        crd_class = MagicMock()
-        read_yaml_to_crd_request(
-            crd_class, "pipeline", "f.yaml", converter, yaml_dict=yaml_dict
-        )
-        converter.assert_called_once()
-        # yaml_dict was passed directly — no file read needed
-        args = converter.call_args[0]
-        self.assertEqual(args[0], yaml_dict)
-
-    @patch("michelangelo.cli.mactl.crd.ParseDict")
     @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
-    def test_reads_file_when_no_dict_provided(self, mock_yaml, mock_parse):
-        """Reads the YAML file when yaml_dict is not provided."""
+    def test_reads_file_and_calls_converter(self, mock_yaml, mock_parse):
+        """Reads the YAML file and passes it through the converter."""
         mock_yaml.return_value = {"metadata": {"namespace": "ns"}}
         converter = Mock(return_value={})
         crd_class = MagicMock()
         read_yaml_to_crd_request(crd_class, "pipeline", "f.yaml", converter)
         mock_yaml.assert_called_once_with("f.yaml")
+        converter.assert_called_once()
 
 
 class ConvertCrdMetadataTest(TestCase):
@@ -693,10 +658,8 @@ class ApplyFuncImplCreateTest(TestCase):
     """Additional tests for apply_func_impl create/error paths."""
 
     @patch("michelangelo.cli.mactl.crd.get_crd_namespace_and_name_from_yaml")
-    @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
-    def test_create_path_when_not_found(self, mock_yaml, mock_ns):
+    def test_create_path_when_not_found(self, mock_ns):
         """NOT_FOUND triggers the create path."""
-        mock_yaml.return_value = {}
         mock_ns.return_value = ("ns", "name")
         crd_method_info = CrdMethodInfo(Mock(), "svc", "Apply", Mock, Mock)
         mock_crd = Mock()
@@ -709,10 +672,8 @@ class ApplyFuncImplCreateTest(TestCase):
         mock_crd.create.assert_called_once_with("f.yaml")
 
     @patch("michelangelo.cli.mactl.crd.get_crd_namespace_and_name_from_yaml")
-    @patch("michelangelo.cli.mactl.crd.yaml_to_dict")
-    def test_reraises_non_not_found(self, mock_yaml, mock_ns):
+    def test_reraises_non_not_found(self, mock_ns):
         """Non-NOT_FOUND RpcErrors are re-raised."""
-        mock_yaml.return_value = {}
         mock_ns.return_value = ("ns", "name")
         crd_method_info = CrdMethodInfo(Mock(), "svc", "Apply", Mock, Mock)
         mock_crd = Mock()
