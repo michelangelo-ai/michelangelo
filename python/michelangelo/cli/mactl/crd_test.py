@@ -12,12 +12,19 @@ from michelangelo.cli.mactl.crd import (
     CrdMethodInfo,
     apply_func_impl,
     bind_signature,
+    convert_crd_metadata,
     create_func_impl,
+    crd_method_call,
+    crd_method_call_kwargs,
     delete_func_impl,
+    get_crd_namespace_and_name_from_dict,
     get_func_impl,
+    get_single_arg,
     inject_func_signature,
     list_func_impl,
     prepare_column_info,
+    snake_to_camel,
+    yaml_to_dict,
 )
 
 
@@ -660,3 +667,200 @@ class GenerateGetTest(TestCase):
         call_args = mock_crd_method_call_kwargs.call_args
         self.assertEqual(call_args.kwargs["namespace"], "test-ns")
         self.assertEqual(call_args.kwargs["name"], "test-name")
+
+
+class ConvertCrdMetadataTest(TestCase):
+    """Test cases for convert_crd_metadata function."""
+
+    def test_moves_api_version_and_kind_to_type_meta(self):
+        yaml_dict = {"apiVersion": "v1", "kind": "Pipeline", "spec": {}}
+        result = convert_crd_metadata(yaml_dict, Mock(), Mock())
+        self.assertEqual(result["typeMeta"]["apiVersion"], "v1")
+        self.assertEqual(result["typeMeta"]["kind"], "Pipeline")
+        self.assertNotIn("apiVersion", result)
+        self.assertNotIn("kind", result)
+
+    def test_raises_when_not_dict(self):
+        with self.assertRaises(ValueError):
+            convert_crd_metadata("not-a-dict", Mock(), Mock())
+
+    def test_no_api_version_or_kind(self):
+        yaml_dict = {"spec": {"foo": "bar"}}
+        result = convert_crd_metadata(yaml_dict, Mock(), Mock())
+        self.assertNotIn("typeMeta", result)
+        self.assertEqual(result["spec"], {"foo": "bar"})
+
+
+
+
+class YamlToDictTest(TestCase):
+    """Test cases for yaml_to_dict function."""
+
+    def test_reads_yaml_file(self):
+        import tempfile, os
+        content = "metadata:\n  name: test\n  namespace: ns\n"
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(content)
+            path = f.name
+        try:
+            result = yaml_to_dict(path)
+            self.assertEqual(result["metadata"]["name"], "test")
+        finally:
+            os.unlink(path)
+
+    def test_raises_on_invalid_yaml(self):
+        import tempfile, os
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write("key: [unclosed")
+            path = f.name
+        try:
+            with self.assertRaises(ValueError):
+                yaml_to_dict(path)
+        finally:
+            os.unlink(path)
+
+
+class GetSingleArgTest(TestCase):
+    """Test cases for get_single_arg function."""
+
+    def test_returns_string(self):
+        self.assertEqual(get_single_arg({"file": "foo.yaml"}, "file"), "foo.yaml")
+
+    def test_returns_single_element_list(self):
+        self.assertEqual(get_single_arg({"file": ["foo.yaml"]}, "file"), "foo.yaml")
+
+    def test_raises_on_multi_element_list(self):
+        with self.assertRaises(ValueError):
+            get_single_arg({"file": ["a.yaml", "b.yaml"]}, "file")
+
+    def test_raises_on_missing_key(self):
+        with self.assertRaises(KeyError):
+            get_single_arg({}, "file")
+
+    def test_raises_on_invalid_type(self):
+        with self.assertRaises(ValueError):
+            get_single_arg({"file": 123}, "file")
+
+
+class SnakeToCamelTest(TestCase):
+    """Test cases for snake_to_camel function."""
+
+    def test_converts(self):
+        self.assertEqual(snake_to_camel("my_function_name"), "MyFunctionName")
+
+    def test_single_word(self):
+        self.assertEqual(snake_to_camel("pipeline"), "Pipeline")
+
+
+class CrdMethodCallTest(TestCase):
+    """Test cases for crd_method_call and crd_method_call_kwargs."""
+
+    def test_crd_method_call(self):
+        mock_channel = Mock()
+        mock_stub = Mock()
+        mock_channel.unary_unary.return_value = mock_stub
+        mock_response = Mock()
+        mock_stub.return_value = mock_response
+
+        input_class = MagicMock()
+        output_class = MagicMock()
+        info = CrdMethodInfo(
+            channel=mock_channel,
+            crd_full_name="test.Service",
+            method_name="Get",
+            input_class=input_class,
+            output_class=output_class,
+        )
+        request = Mock()
+        result = crd_method_call(info, request)
+        self.assertEqual(result, mock_response)
+        mock_channel.unary_unary.assert_called_once()
+
+    def test_crd_method_call_kwargs(self):
+        mock_channel = Mock()
+        mock_stub = Mock()
+        mock_channel.unary_unary.return_value = mock_stub
+        mock_response = Mock()
+        mock_stub.return_value = mock_response
+
+        input_class = MagicMock()
+        input_class.return_value = Mock()
+        output_class = MagicMock()
+        info = CrdMethodInfo(
+            channel=mock_channel,
+            crd_full_name="test.Service",
+            method_name="Get",
+            input_class=input_class,
+            output_class=output_class,
+        )
+        result = crd_method_call_kwargs(info, namespace="ns", name="foo")
+        self.assertEqual(result, mock_response)
+        input_class.assert_called_once_with(namespace="ns", name="foo")
+
+
+class GetCrdNamespaceAndNameFromDictTest(TestCase):
+    """Test cases for get_crd_namespace_and_name_from_dict."""
+
+    def test_returns_namespace_and_name(self):
+        yaml_dict = {"metadata": {"namespace": "ns", "name": "my-pipeline"}}
+        ns, name = get_crd_namespace_and_name_from_dict(yaml_dict, "f.yaml")
+        self.assertEqual(ns, "ns")
+        self.assertEqual(name, "my-pipeline")
+
+    def test_raises_when_metadata_missing(self):
+        with self.assertRaises(ValueError):
+            get_crd_namespace_and_name_from_dict({"spec": {}}, "f.yaml")
+
+    def test_raises_when_metadata_not_dict(self):
+        with self.assertRaises(ValueError):
+            get_crd_namespace_and_name_from_dict({"metadata": "bad"}, "f.yaml")
+
+    def test_raises_when_namespace_missing(self):
+        with self.assertRaises(ValueError):
+            get_crd_namespace_and_name_from_dict(
+                {"metadata": {"name": "foo"}}, "f.yaml"
+            )
+
+    def test_raises_when_name_missing(self):
+        with self.assertRaises(ValueError):
+            get_crd_namespace_and_name_from_dict(
+                {"metadata": {"namespace": "ns"}}, "f.yaml"
+            )
+
+
+class GenerateMethodsTest(TestCase):
+    """Test cases for CRD generate_* methods."""
+
+    @patch.object(CRD, "_extract_method_info")
+    def test_generate_delete(self, mock_extract):
+        mock_extract.return_value = ("DeletePipeline", Mock, Mock)
+        crd = CRD(name="pipeline", full_name="test.Service", metadata=[])
+        crd.generate_delete(Mock())
+        self.assertTrue(callable(crd.delete))
+
+    @patch.object(CRD, "_extract_method_info")
+    def test_generate_create(self, mock_extract):
+        mock_extract.return_value = ("CreatePipeline", Mock, Mock)
+        crd = CRD(name="pipeline", full_name="test.Service", metadata=[])
+        crd.generate_create(Mock())
+        self.assertTrue(callable(crd.create))
+
+    @patch.object(CRD, "_extract_method_info")
+    def test_generate_list(self, mock_extract):
+        mock_extract.return_value = ("ListPipeline", Mock, Mock)
+        crd = CRD(name="pipeline", full_name="test.Service", metadata=[])
+        crd.generate_list(Mock())
+        self.assertTrue(callable(crd.list))
+
+    @patch.object(CRD, "_extract_method_info")
+    def test_generate_apply(self, mock_extract):
+        mock_extract.return_value = ("UpdatePipeline", Mock, Mock)
+        crd = CRD(name="pipeline", full_name="test.Service", metadata=[])
+        crd.generate_apply(Mock())
+        self.assertTrue(callable(crd.apply))
+        self.assertTrue(callable(crd.get))
+
+    def test_repr(self):
+        crd = CRD(name="pipeline", full_name="test.Service", metadata=[])
+        self.assertIn("pipeline", repr(crd))
+        self.assertIn("test.Service", repr(crd))
