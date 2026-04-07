@@ -4,6 +4,8 @@
 
 * How to configure cron-based recurring triggers to run your pipeline on a schedule
 * How to configure backfill triggers to reprocess historical time windows
+* How to define triggers directly in your pipeline manifest using `trigger_map` for declarative, versionable configuration
+* How to create trigger runs from a pipeline's registered trigger configuration using `ma trigger_run create`
 * How to monitor your triggers and pipeline runs through the UI
 
 ## Prerequisites
@@ -19,73 +21,82 @@ Once you have these ready, you're all set to create your first trigger!
 
 ## Setting Up a Cron Trigger
 
-### 1\. Register the Pipeline
+### 1\. Register the Pipeline with Trigger Configuration
 
-Before you can set up a trigger, you'll need a registered pipeline with at least one revision. Registering creates the pipeline entity in the system, and your trigger will be linked to a specific revision of that pipeline.
+Triggers are defined directly in your pipeline YAML under `spec.manifest.triggerMap`. This keeps trigger configuration declarative and versioned alongside your pipeline definition.
 
-If you haven't registered your pipeline yet, head over to the [Train and Register a Model](./train-and-register-a-model.md) guide to get that set up first.
-
-### 2\. Create Your trigger.yaml
-
-Next, you'll create a YAML file that tells the system *when* and *how* to run your pipeline. This file is called a **TriggerRun** resource, and it connects a cron schedule to your registered pipeline revision.
-
-Here's a complete example you can copy and customize:
+Here's a complete example with a cron trigger:
 
 ```yaml
 apiVersion: michelangelo.api/v2
-kind: TriggerRun
+kind: Pipeline
 metadata:
-  name: training-pipeline-daily-trigger
+  name: training-pipeline
   namespace: ml-team                    # Your project name
 spec:
-  # Which pipeline and revision to run
-  pipeline:
-    name: training-pipeline
-    namespace: ml-team
-  revision:
-    name: rev-2024-03-01
-    namespace: ml-team
+  description: Training pipeline with cron trigger
+  owner:
+    name: your-username
+  type: PIPELINE_TYPE_TRAIN
+  manifest:
+    type: PIPELINE_MANIFEST_TYPE_UNIFLOW
+    filePath: examples.my_model.training
+    triggerMap:
+      daily-training:
+        cronSchedule:
+          cron: "0 9 * * 1-5"          # Runs at 9:00 AM on weekdays
+        maxConcurrency: 3
+      nightly-retrain:
+        cronSchedule:
+          cron: "0 2 * * *"            # Daily at 2 AM
+        batchPolicy:
+          batchSize: 10                # Runs per batch (default: 10)
+          wait: "600s"                 # Pause between batches (default: 600s)
+  commit:
+    gitRef: "main"
+    branch: "main"
+```
 
-  # Trigger configuration
-  trigger:
-    cron_schedule:
-      cron: "0 9 * * 1-5"       # Runs at 9:00 AM on weekdays
+Register the pipeline with its embedded triggers:
 
-    # How many pipeline runs can execute at the same time (optional)
-    # Set to 0 or omit for sequential batch execution
-    max_concurrency: 3
-
-    # Control how runs are grouped into batches (optional)
-    batch_policy:
-      batch_size: 10             # Runs per batch (default: 10)
-      wait: "600s"               # Pause between batches (default: 600s)
-
-  actor:
-    name: "your-username"
+```bash
+ma pipeline apply --file=training-pipeline.yaml
 ```
 
 > **Tip:** The cron expression uses the standard 5-field format: `minute hour day-of-month month day-of-week`. For example, `"0 9 * * 1-5"` means "every weekday at 9 AM." If you're testing and want runs every minute, you can temporarily use `"* * * * *"` — just remember to change it before going to production!
 
-#### Understanding the Key Fields
+#### Understanding the Trigger Fields
 
 | Field | Description |
 | :---- | :---- |
-| `spec.pipeline` | The pipeline you want to trigger, identified by `name` and `namespace` (your project). |
-| `spec.revision` | The specific pipeline revision to run. In the future, you'll be able to set `auto_flip: true` at the `spec` level to always use the latest revision — see [Automatic Revision Tracking (preview)](#automatic-revision-tracking-auto_flip--preview) for details. |
-| `spec.trigger.cron_schedule.cron` | A standard cron expression that controls the schedule. |
-| `spec.trigger.max_concurrency` | Maximum simultaneous pipeline runs. When set above 0, runs execute concurrently. When 0 or omitted, runs execute in sequential batches. |
-| `spec.trigger.batch_policy` | Controls batching: `batch_size` sets how many runs per batch (default: 10), and `wait` sets the pause between batches (default: 600 seconds). Ignored when `max_concurrency` is set above 0. |
-| `spec.actor.name` | Your username — identifies who created the trigger. |
+| `cronSchedule.cron` | A standard cron expression that controls the schedule. |
+| `maxConcurrency` | Maximum simultaneous pipeline runs. When set above 0, runs execute concurrently. When 0 or omitted, runs execute in sequential batches. |
+| `batchPolicy` | Controls batching: `batchSize` sets how many runs per batch (default: 10), and `wait` sets the pause between batches (default: 600 seconds). Ignored when `maxConcurrency` is set above 0. |
+| `parametersMap` | Define multiple parameter sets to create separate pipeline runs per cron cycle. See [Parameterized Triggers](#parameterized-triggers). |
 
-> **Tip:** If you need to run the same pipeline with different configurations (for example, one run per region), check out [Parameterized Triggers](#parameterized-triggers) in the Advanced Configuration section below.
+Each trigger must specify at least one of `batchPolicy` or `maxConcurrency`. If `batchPolicy` is used, both `batchSize` and `wait` are required. These rules are validated at pipeline registration time.
 
-### 3\. Register Your Trigger with the CLI
+### 2\. Create a Trigger Run
 
-Now that your `trigger.yaml` is ready, you can use the Michelangelo CLI to register and manage it. Here are the commands you'll need:
+Once the pipeline is registered, create a TriggerRun from any of the defined triggers:
+
+```bash
+ma trigger_run create \
+  --namespace=ml-team \
+  --pipeline=training-pipeline \
+  --trigger-name=daily-training
+```
+
+The command fetches the pipeline, extracts the trigger configuration from its `triggerMap`, and creates a TriggerRun CR with a unique name (e.g., `daily-training-a1b2c3d4`).
+
+### 3\. Manage Trigger Runs with the CLI
+
+Here are the commands for managing your trigger runs:
 
 | Action | Command |
 | :---- | :---- |
-| **Create or update a trigger** | `ma trigger_run apply --file=<path_to_trigger.yaml>` |
+| **Register pipeline with triggers** | `ma pipeline apply --file=<path_to_pipeline.yaml>` |
+| **Create trigger run** | `ma trigger_run create --namespace=<ns> --pipeline=<name> --trigger-name=<trigger>` |
 | **Check trigger status** | `ma trigger_run get --namespace=<ns> --name=<name>` |
 | **List all triggers** | `ma trigger_run list --namespace=<ns>` |
 | **Delete a trigger** | `ma trigger_run delete --namespace=<ns> --name=<name>` |
@@ -93,7 +104,6 @@ Now that your `trigger.yaml` is ready, you can use the Michelangelo CLI to regis
 
 A few things to keep in mind:
 
-- **`apply` handles both creation and updates.** If a trigger with the same name already exists, `apply` will update it with your new configuration.
 - **`kill` vs `delete`:** Use `kill` to stop a running trigger (it sets a kill flag and cleanly terminates the workflow). Use `delete` to remove the trigger resource entirely.
 - **`kill` will ask for confirmation** before proceeding. Add `--yes` to skip the prompt (useful in scripts).
 
@@ -306,41 +316,14 @@ You can notify on any combination of these events:
 
 > **Tip:** A common setup is to notify on failures via email (for immediate attention) and on successes via Slack (for team visibility). You can list multiple `event_types` in a single notification entry to consolidate alerts.
 
-### Pipeline Manifest Triggers (trigger_map)
+#### Validation Rules
 
-So far, we've been defining triggers as standalone `trigger.yaml` files. But there's another option: you can define triggers directly inside your pipeline manifest using the `trigger_map` field. This keeps your trigger configuration right next to your pipeline definition — everything in one place.
+Each trigger in `triggerMap` must satisfy these rules:
 
-Here's what it looks like in a pipeline manifest:
+- **Execution control required:** Every trigger must specify at least one of `batchPolicy` or `maxConcurrency` to control how pipeline runs are executed.
+- **Batch policy completeness:** If `batchPolicy` is specified, both `batchSize` and `wait` must be included.
 
-```yaml
-apiVersion: michelangelo.api/v2
-kind: Pipeline
-metadata:
-  name: training-pipeline
-  namespace: ml-team                    # Your project name
-spec:
-  manifest:
-    trigger_map:
-      daily_training:
-        cron_schedule:
-          cron: "0 9 * * 1-5"
-        max_concurrency: 2
-      weekly_full_retrain:
-        cron_schedule:
-          cron: "0 2 * * 0"            # Sundays at 2 AM
-        max_concurrency: 1
-```
-
-Each key in `trigger_map` (like `daily_training` or `weekly_full_retrain`) becomes a named trigger. You can define multiple triggers for the same pipeline, each with its own schedule and settings.
-
-#### When to Use trigger_map vs Standalone trigger.yaml
-
-| Approach | Best for |
-| :---- | :---- |
-| **`trigger_map` in pipeline manifest** | Triggers that are tightly coupled to the pipeline and should be versioned together. Great when the trigger is a natural part of the pipeline definition. |
-| **Standalone `trigger.yaml`** | Triggers that need to be managed independently, updated without re-registering the pipeline, or shared across revisions. Also required for backfill triggers with `start_timestamp`/`end_timestamp`. |
-
-> **Tip:** You can use both approaches together. For example, define your regular cron schedule in the pipeline manifest with `trigger_map`, and use a standalone `trigger.yaml` when you need to run a one-off backfill.
+Validation errors are raised at pipeline registration time, so you'll catch configuration problems early.
 
 ## Trigger States
 
@@ -353,7 +336,7 @@ As your trigger runs, it moves through different states. Understanding these sta
 | **FAILED** | Something went wrong and the trigger couldn't complete. Check the trigger details for error information. |
 | **KILLED** | The trigger was manually stopped using `ma trigger_run kill`. |
 | **PENDING_KILL** | A kill request has been sent but the trigger hasn't fully stopped yet. It will transition to KILLED shortly. |
-| **INVALID** | The trigger configuration has a problem — for example, a missing pipeline or revision. Review your `trigger.yaml` for errors. |
+| **INVALID** | The trigger configuration has a problem — for example, a missing pipeline or revision. Review your pipeline YAML's `triggerMap` for errors. |
 
 ### How States Transition
 
@@ -378,7 +361,7 @@ The output includes the trigger's current state, recent pipeline runs, and any e
 
 Running into issues? Here are a few common things to check:
 
-- **Trigger not starting?** Make sure your pipeline is registered and the revision name in your `trigger.yaml` matches exactly. You can verify with `ma trigger_run get --namespace=<ns> --name=<name>`.
+- **Trigger not starting?** Make sure your pipeline is registered and the trigger name matches one defined in the pipeline's `triggerMap`. You can verify with `ma trigger_run get --namespace=<ns> --name=<name>`.
 - **CLI command failing?** Double-check that your sandbox is running and your project exists. See the [Prerequisites](#prerequisites) section above.
 - **Cron not firing when you expect?** Verify your cron expression is correct — the 5-field format can be tricky. [crontab.guru](https://crontab.guru/) is a handy tool for testing expressions.
 - **Pipeline runs not showing up in the UI?** Check the trigger state with `ma trigger_run get`. If the trigger is in a `FAILED` or `INVALID` state, the output will include details about what went wrong.
