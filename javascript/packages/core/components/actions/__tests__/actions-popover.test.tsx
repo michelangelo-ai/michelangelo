@@ -262,11 +262,7 @@ describe('ActionsPopover', () => {
 
     it('does not show the tooltip from auto-highlight when the menu opens', async () => {
       render(
-        <ActionMenu
-          actions={[disabledAction]}
-          record={{}}
-          onSelectAction={vi.fn()}
-        />,
+        <ActionMenu actions={[disabledAction]} record={{}} onSelectAction={vi.fn()} />,
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
       await screen.findByRole('option', { name: 'Delete' });
@@ -277,10 +273,7 @@ describe('ActionsPopover', () => {
       const user = userEvent.setup();
       render(
         <ActionMenu
-          actions={[
-            { display: { label: 'Edit' }, component: DeleteDialog },
-            disabledAction,
-          ]}
+          actions={[{ display: { label: 'Edit' }, component: DeleteDialog }, disabledAction]}
           record={{}}
           onSelectAction={vi.fn()}
         />,

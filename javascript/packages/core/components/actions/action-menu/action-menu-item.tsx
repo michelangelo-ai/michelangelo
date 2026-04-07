@@ -27,10 +27,17 @@ type ActionMenuItemProps = {
   record: Data;
   onSelectAction: (action: SelectedAction) => void;
   onClose?: () => void;
-  /** The action currently under the mouse cursor, or null. Compared by object identity against `action` to derive `isHovered`. */
+  /**
+   * The action currently under the mouse cursor, or null.
+   * Compared by object identity against `action` to derive `isHovered`.
+   */
   hoveredItem: object | null;
   setHoveredItem: (item: object | null) => void;
-  /** True after any keydown inside the menu. False on mouse enter. Gates the keyboard tooltip path so auto-highlight on focus doesn't flash a tooltip. */
+  /**
+   * True after any keydown inside the menu. False on mouse enter.
+   * Gates the keyboard tooltip path so auto-highlight on focus
+   * doesn't flash a tooltip.
+   */
   keyboardActive: boolean;
   setKeyboardActive: (active: boolean) => void;
 } & Omit<MenuAdapterProps, 'children' | 'item'>;
@@ -63,7 +70,10 @@ export const ActionMenuItem = forwardRef<HTMLLIElement, ActionMenuItemProps>((pr
           : undefined
       }
       artworkSize={ARTWORK_SIZES.MEDIUM}
-      overrides={{ Root: { style: { height: '44px', opacity: action.disabled ? '0.4' : '1' } } }}
+      // Opacity rather than $theme.colors.menuFontDisabled because ListItemLabel's
+      // <p> sets its own color (contentPrimary), blocking CSS inheritance from the <li>.
+      // Opacity dims the entire item (icon + text) uniformly.
+      overrides={{ Root: { style: { height: '44px', opacity: action.disabled ? 0.4 : 1 } } }}
       $disabled={action.disabled}
       onClick={
         action.disabled ? undefined : () => onSelectAction({ component: action.component, record })
