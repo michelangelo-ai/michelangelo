@@ -1,8 +1,3 @@
----
-sidebar_position: 9
-sidebar_label: "Pipeline Notifications"
----
-
 # Pipeline Notifications
 
 Stay informed about your ML pipeline outcomes without constantly checking the dashboard. Michelangelo can send you **email or Slack notifications** whenever a pipeline run succeeds, fails, gets stopped, or hits any other terminal state.
@@ -206,25 +201,6 @@ To stop receiving notifications, remove the `notifications` block entirely and r
 
 - Make sure you've listed all the event types you care about. For example, if you want alerts on both success and failure, you need both `EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED` and `EVENT_TYPE_PIPELINE_RUN_STATE_FAILED` in your `eventTypes` list.
 - Each notification rule is independent. If you have separate rules for email and Slack, check that each one has the correct event types.
-
-## Enabling Notification Delivery
-
-:::info For platform operators
-This section is for platform operators who are deploying Michelangelo and need to enable notification delivery. If you're an ML engineer configuring notifications, the sections above cover everything you need.
-:::
-
-Notification delivery is not enabled out of the box. The notification **workflow** (which listens for pipeline state changes and formats messages) is fully implemented and runs automatically. However, the two **delivery activities** that actually send messages are stubs that you must implement:
-
-- **`SendMessageToSlackActivity`** — receives a `channel` name and `text` payload; must deliver the message to the specified Slack channel
-- **`SendMessageToEmailActivity`** — receives a full email request (`to`, `cc`, `subject`, `html`, `text`, `send_as`); must deliver the email to all recipients
-
-### How to Implement
-
-1. **Implement the two activity functions** in `go/worker/activities/notification/activities.go`. Each activity receives a structured request with all the information needed to send the message. Add your email service client (e.g., SMTP, SendGrid, SES) and Slack API client to handle delivery.
-
-2. **Add your messaging clients as FX-injected dependencies.** Follow the pattern used by other Michelangelo activities — see `go/worker/activities/storage/` or `go/worker/activities/ray/` for examples of how dependencies are injected via the FX framework.
-
-3. **Rebuild and redeploy the worker binary.** Once the activities are implemented, the notification workflow will automatically invoke them when pipeline states change.
 
 ### Reference Files
 
