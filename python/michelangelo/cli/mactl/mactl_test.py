@@ -1102,12 +1102,18 @@ class ApplyModuleOverridesTest(TestCase):
 
         original_func = mactl_mod._is_service_name
 
-        with patch("michelangelo.cli.mactl.mactl._CONFIG", {
-            "plugin": {"modules": {
-                "michelangelo.cli.mactl.mactl._is_service_name":
-                "michelangelo.cli.mactl.mactl.discover_all_plugins"
-            }}
-        }):
+        with patch(
+            "michelangelo.cli.mactl.mactl._CONFIG",
+            {
+                "plugin": {
+                    "modules": {
+                        "michelangelo.cli.mactl.mactl._is_service_name": (
+                            "michelangelo.cli.mactl.mactl.discover_all_plugins"
+                        )
+                    }
+                }
+            },
+        ):
             apply_module_overrides()
             self.assertIsNot(mactl_mod._is_service_name, original_func)
 
@@ -1121,9 +1127,10 @@ class ApplyModuleOverridesTest(TestCase):
             apply_module_overrides()
             mock_import.assert_not_called()
 
-    @patch("michelangelo.cli.mactl.mactl._CONFIG", {
-        "plugin": {"modules": {"nonexistent.module.func": "also.nonexistent.func"}}
-    })
+    @patch(
+        "michelangelo.cli.mactl.mactl._CONFIG",
+        {"plugin": {"modules": {"nonexistent.module.func": "also.nonexistent.func"}}},
+    )
     def test_non_fatal_on_import_error(self):
         """Edge: logs error and continues when module import fails."""
         # Should not raise even when the module doesn't exist

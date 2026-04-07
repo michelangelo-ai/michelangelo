@@ -310,8 +310,8 @@ def apply_module_overrides() -> None:
     for original_path, replacement_path in module_overrides.items():
         try:
             original_module_name, original_func_name = original_path.rsplit(".", 1)
-            replacement_module_name, replacement_func_name = (
-                replacement_path.rsplit(".", 1)
+            replacement_module_name, replacement_func_name = replacement_path.rsplit(
+                ".", 1
             )
 
             replacement_module = importlib.import_module(replacement_module_name)
@@ -608,6 +608,7 @@ def run():
             USE_TLS,
             ADDRESS,
         )
+        # Use secure TLS connection
         with secure_channel(ADDRESS, ssl_channel_credentials()) as channel:
             return main(channel, plugin_registry)
 
@@ -616,6 +617,7 @@ def run():
         USE_TLS,
         ADDRESS,
     )
+    # Use insecure connection for local development
     with insecure_channel(ADDRESS) as channel:
         return main(channel, plugin_registry)
 

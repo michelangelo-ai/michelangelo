@@ -104,7 +104,9 @@ def load_config() -> dict:
     # Layer 1: package config (~/.ma/config.toml)
     package_config = _load_toml_file(PACKAGE_CONFIG_FILE)
     if package_config:
-        _LOG.debug("Loaded package config (%r): %r", PACKAGE_CONFIG_FILE, package_config)
+        _LOG.debug(
+            "Loaded package config (%r): %r", PACKAGE_CONFIG_FILE, package_config
+        )
         config = _deep_merge(config, package_config)
 
     # Layer 2: user config (~/.ma/user_config.toml)
