@@ -46,6 +46,7 @@ def _load_toml_file(path: Path) -> dict:
         with open(path, "rb") as f:
             return tomllib.load(f)
     except Exception:
+        _LOG.warning("Failed to load config from %r: %r", path, sys.exc_info()[1])
         return {}
 
 
@@ -103,16 +104,19 @@ def load_config() -> dict:
     # Layer 1: package config (~/.ma/config.toml)
     package_config = _load_toml_file(PACKAGE_CONFIG_FILE)
     if package_config:
+        _LOG.debug("Loaded package config (%r): %r", PACKAGE_CONFIG_FILE, package_config)
         config = _deep_merge(config, package_config)
 
     # Layer 2: user config (~/.ma/user_config.toml)
     user_config = _load_toml_file(USER_CONFIG_FILE)
     if user_config:
+        _LOG.debug("Loaded package config (%r): %r", USER_CONFIG_FILE, user_config)
         config = _deep_merge(config, user_config)
 
     # Layer 3: environment variables
     config = _apply_env_overrides(config)
 
+    _LOG.info("MA command configuration loaded successfully: %r", config)
     return config
 
 
