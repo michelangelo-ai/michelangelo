@@ -62,7 +62,8 @@ def init_arguments(p: argparse.ArgumentParser):
         "--exclude",
         help=(
             "Excludes specified services. "
-            "Available options: apiserver, controllermgr, ui, worker, prometheus, grafana"
+            "Available options: apiserver, controllermgr, ui, worker, "
+            "prometheus, grafana"
         ),
         nargs="+",
         default=[],
@@ -104,14 +105,16 @@ def init_arguments(p: argparse.ArgumentParser):
         "sync",
         help=(
             "Redeploy services into an existing cluster, skipping cluster creation "
-            "and image import. Falls back to a full create if the cluster does not exist."
+            "and image import. Falls back to a full create if the cluster does not "
+            "exist."
         ),
     )
     sync_p.add_argument(
         "--exclude",
         help=(
             "Excludes specified services. "
-            "Available options: apiserver, controllermgr, ui, worker, prometheus, grafana"
+            "Available options: apiserver, controllermgr, ui, worker, "
+            "prometheus, grafana"
         ),
         nargs="+",
         default=[],
@@ -332,9 +335,9 @@ def _sync(ns: argparse.Namespace):
 
 
 def _deploy_app_services(ns: argparse.Namespace):
-    """Apply only Michelangelo application resources (apiserver, envoy, ui,
-    worker, controllermgr).
+    """Apply only Michelangelo application resources.
 
+    Applies: apiserver, envoy, ui, worker, controllermgr.
     Called by ``_sync`` to do a fast redeploy without touching infrastructure.
     """
     assert ns
@@ -360,7 +363,8 @@ def _deploy_app_services(ns: argparse.Namespace):
         if "controllermgr" not in ns.exclude:
             _kube_apply(_dir / "resources/michelangelo-controllermgr.yaml")
 
-    # Wait for all app pods to become ready (includes worker + controllermgr if deployed).
+    # Wait for all app pods to become ready (includes worker + controllermgr if
+    # deployed).
     wait_timeout = getattr(ns, "wait_timeout", 600)
     _exec(
         "kubectl",
@@ -368,7 +372,8 @@ def _deploy_app_services(ns: argparse.Namespace):
         "--for=condition=ready",
         "pod",
         "-l",
-        "app in (michelangelo-apiserver,envoy,michelangelo-ui,michelangelo-worker,michelangelo-controllermgr)",
+        "app in (michelangelo-apiserver,envoy,michelangelo-ui,"
+        "michelangelo-worker,michelangelo-controllermgr)",
         f"--timeout={wait_timeout}s",
     )
 
