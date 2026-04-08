@@ -1,5 +1,7 @@
 import type { ComponentType } from 'react';
 
+import type { DeepInterpolatable, Interpolatable } from '#core/interpolation/types';
+
 export type ActionConfig<T = Data> = ComponentActionConfig<T>;
 
 /**
@@ -13,7 +15,7 @@ export type ActionConfig<T = Data> = ComponentActionConfig<T>;
  * };
  * ```
  */
-export type ActionConfigBase<T = Data> = {
+export type ActionConfigBase = {
   /**
    * Controls how the action's trigger button is displayed to the user.
    *
@@ -35,7 +37,7 @@ export type ActionConfigBase<T = Data> = {
    * Rules are evaluated in order; the first match disables the item and
    * shows its message as a hover tooltip.
    */
-  disabled?: DisabledRule<T>[];
+  disabled?: DisabledRule[];
 };
 
 /**
@@ -56,7 +58,7 @@ export enum ActionHierarchy {
 
 export type Data = Record<string, unknown>;
 
-export type ComponentActionConfig<T = Data> = ActionConfigBase<T> & {
+export type ComponentActionConfig<T = Data> = ActionConfigBase & {
   component: ComponentType<ActionComponentProps<T>>;
 };
 
@@ -71,8 +73,17 @@ export type SelectedAction = {
   record: Data;
 };
 
+/**
+ * Schema version of {@link ActionConfig} — what config authors write.
+ * All leaf fields accept interpolated values via {@link DeepInterpolatable}.
+ *
+ * Components always receive the resolved {@link ActionConfig} — interpolation
+ * is resolved at the per-row boundary before reaching any rendering code.
+ */
+export type ActionConfigSchema<T = Data> = DeepInterpolatable<ActionConfig<T>>;
+
 /** A condition that disables an action for a specific record, with an optional hover tooltip. */
-type DisabledRule<T = Data> = {
-  condition: (record: T) => boolean;
+type DisabledRule = {
+  condition: Interpolatable<boolean>;
   message?: string;
 };

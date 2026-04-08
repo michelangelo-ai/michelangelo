@@ -6,6 +6,7 @@ import { ActionHierarchy } from '#core/components/actions/types';
 import { CellType } from '#core/components/cell/constants';
 import { buildTableConfigFactory } from '#core/components/views/__fixtures__/table-config-factory';
 import { buildExecutionSchemaFactory } from '#core/components/views/execution/__fixtures__/execution-schema-factory';
+import { interpolate } from '#core/interpolation/interpolate';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
@@ -780,5 +781,59 @@ describe('EntityDetailRoute', () => {
 
     await user.click(screen.getByRole('button', { name: 'Close' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  test('resolves interpolated action hierarchy in the detail page header', async () => {
+    const StubDialog = ({ isOpen }: ActionComponentProps) =>
+      isOpen ? <div role="dialog">Stub</div> : null;
+
+    const testPhases = {
+      train: buildPhase({
+        id: 'train',
+        entities: [
+          buildEntity({
+            actions: [
+              {
+                display: { label: 'Resume' },
+                component: StubDialog,
+                hierarchy: interpolate(({ data }) =>
+                  data?.status?.state === 'PAUSED'
+                    ? ActionHierarchy.PRIMARY
+                    : ActionHierarchy.TERTIARY
+                ),
+              },
+            ],
+            views: [
+              {
+                type: 'detail',
+                metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
+                pages: [
+                  { id: 'execution', label: 'Execution', ...buildExecutionSchema() },
+                ],
+              },
+            ],
+          }),
+        ],
+      }),
+    };
+
+    const mockRequest = vi.fn().mockResolvedValue({
+      pipelineRun: {
+        metadata: { creationTimestamp: { seconds: 1640995200 } },
+        status: { state: 'PAUSED', steps: [] },
+      },
+    });
+
+    render(
+      <EntityDetailRoute phases={testPhases} />,
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({ location: '/myproject/train/runs/run-123' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    // Hierarchy resolves to PRIMARY → renders as a direct button, not in overflow menu
+    expect(await screen.findByRole('button', { name: 'Resume' })).toBeInTheDocument();
   });
 });

@@ -127,6 +127,7 @@ export type {
   InterpolationContext,
   InterpolationContextExtensions,
   Interpolatable,
+  DeepInterpolatable,
   UserDataSources,
 } from '#core/interpolation/types';
 export { isInterpolation } from '#core/interpolation/utils/is-interpolation';
