@@ -25,7 +25,7 @@ For each file, assess:
 ## Quality Rules (Non-Negotiable)
 
 - Warm, friendly, approachable tone — never internal or corporate
-- No Uber-specific references, internal URLs, internal usernames, or internal service names
+- No company-specific references, internal URLs, internal usernames, or internal service names
 - No internal file paths (e.g. `/Users/frank.chen.cst/...`)
 - Prerequisites clearly stated at the top of each guide
 - Every guide ends with "Next Steps" or "What's Next" links
