@@ -28,7 +28,7 @@ Defines product positioning and audience. Covers:
 - Scope concerns: does any content belong in a different section?
 - Missing content: what would a new user need that isn't here?
 
-### Tech Writer (subagent_type: general-purpose)
+### Tech Writer (agent: tech-writer)
 Starts quality assessment immediately without waiting for teammates. Then writes improvements to disk. Assesses:
 1. Audience clarity — clear who this is for and what they'll achieve?
 2. Tone — warm, friendly, open-source welcoming? Or internal/corporate?
