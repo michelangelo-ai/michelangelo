@@ -28,5 +28,6 @@ export const PIPELINE_LIST_CONFIG: ListViewConfig<object> = {
   type: 'list',
   tableConfig: {
     columns: PIPELINE_CELL_CONFIG,
+    enableShareUrl: true,
   },
 };

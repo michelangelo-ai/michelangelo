@@ -54,4 +54,10 @@ export interface TableConfig<T extends TableData = TableData> {
 
   /** Optional actions to render in each table row */
   actions?: ActionConfig<T>[];
+
+  /**
+   * Whether to show a "Copy link" button that copies a shareable URL
+   * encoding the current filter/sort state to the clipboard.
+   */
+  enableShareUrl?: boolean;
 }

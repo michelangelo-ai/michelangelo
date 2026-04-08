@@ -29,7 +29,7 @@ import { globalFilterFn } from './utils/global-filter-fn';
 import { transformColumns } from './utils/transform-columns';
 
 import type { TableData } from './types/data-types';
-import type { TableProps } from './types/table-types';
+import type { InputTableState, TableProps, TableState } from './types/table-types';
 
 export function Table<T extends TableData = TableData>(inputProps: TableProps<T>) {
   const props = applyDefaultProps<T>(inputProps);
@@ -37,6 +37,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
   const [css, theme] = useStyletron();
 
   const { state, initialState } = composeTableState(props.state ?? {});
+  const buildShareUrl = (props.state as InputTableState & { buildShareUrl?: (s: Partial<TableState>) => string })?.buildShareUrl;
   const { enableRowSelection, setRowSelectionEnabled } = useRowSelectionState({
     state,
     initialState,
@@ -134,6 +135,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
           filterableColumns={transformedColumns.filter(
             (column) => column.canFilter && column.filterMode !== FilterMode.NONE
           )}
+          getShareUrl={buildShareUrl ? () => buildShareUrl(table.getState() as Partial<TableState>) : undefined}
         />
 
         <div
