@@ -1,7 +1,7 @@
 {
   "name": "@michelangelo-ai/core",
   "license": "Apache-2.0",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "type": "module",
   "main": "./dist/michelangelo-core.js",
   "module": "./dist/michelangelo-core.js",
