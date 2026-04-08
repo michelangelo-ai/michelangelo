@@ -331,8 +331,8 @@ def print_list_formatted(items: Sequence[Message]):
         )
 
 
-def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
-    """Default common CRD member method implementation for LIST method."""
+def _list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
+    """Raw CRD LIST implementation - returns response without printing."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
     limit = bound_args.arguments.get("limit", 100)
@@ -353,6 +353,23 @@ def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mes
     _LOG.info("ListRequest built: %r", request_input)
     call_res = crd_method_call(crd_method_info, request_input)
     _LOG.debug("Succeed to list CRDs: %r", type(call_res))
+    return call_res
+
+
+def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
+    """Default common CRD member method implementation for LIST method.
+
+    Wrapper around _list that additionally handles formatted printing and limit warning.
+    """
+    _LOG.info("Bound arguments: %r", bound_args.arguments)
+
+    _self: CRD = bound_args.arguments["self"]
+    limit = bound_args.arguments.get("limit", 100)
+
+    call_res = _self._list(
+        **{k: v for k, v in bound_args.arguments.items() if k != "self"}
+    )
+
     results = {k.name: v for k, v in call_res.ListFields() if k.name.endswith("_list")}
     _LOG.debug(
         "Extracted keys (%s): %r / %r",
@@ -731,8 +748,13 @@ class CRD:
         _LOG.debug("Generated CREATE injected well: %r", self.create)
 
     def generate_list(self, channel: Channel, parser: Optional[ArgumentParser] = None):
-        """Generate list function of this class."""
-        _LOG.info("Generate LIST method for %r / %r", self.name, self.full_name)
+        """Generate list and _list functions of this class.
+
+        Both share the same signature. _list returns the raw response;
+        list is a wrapper that additionally handles formatted printing
+        and limit warning.
+        """
+        _LOG.info("Generate LIST/_LIST methods for %r / %r", self.name, self.full_name)
 
         method_info = CrdMethodInfo(
             channel,
@@ -749,10 +771,18 @@ class CRD:
             ]
         )
 
-        bound_func = partial(list_func_impl, method_info)
-        bound_func = bind_signature(list_func_signature)(bound_func)
-        self.list = MethodType(bound_func, self)
-        _LOG.debug("Generated LIST injected well: %r", self.list)
+        for attr_name, func_impl in [
+            ("_list", _list_func_impl),
+            ("list", list_func_impl),
+        ]:
+            bound_func = partial(func_impl, method_info)
+            bound_func = bind_signature(list_func_signature)(bound_func)
+            setattr(self, attr_name, MethodType(bound_func, self))
+            _LOG.debug(
+                "Generated %s injected well: %r",
+                attr_name.upper(),
+                getattr(self, attr_name),
+            )
 
     def read_yaml_and_update_crd_request(
         self, input_class: type[Message], yaml_path_string: str, original_crd: Message

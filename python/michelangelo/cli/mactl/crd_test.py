@@ -9,6 +9,7 @@ from michelangelo.cli.mactl.crd import (
     CRD,
     CrdMethodInfo,
     _get_func_impl,
+    _list_func_impl,
     apply_func_impl,
     bind_signature,
     create_func_impl,
@@ -132,11 +133,9 @@ class PrepareColumnInfoTest(TestCase):
 class ListFuncImplTest(TestCase):
     """Test cases for list_func_impl function."""
 
-    @patch("michelangelo.cli.mactl.crd.crd_method_call")
     @patch("michelangelo.cli.mactl.crd.ParseDict")
-    def test_list_func_impl(self, mock_parse_dict, mock_call):
-        """Test list_func_impl extracts list fields and formats output."""
-        # Create CrdMethodInfo instance
+    def test_list_func_impl(self, mock_parse_dict):
+        """Test list_func_impl calls _self._list and formats output."""
         crd_method_info = CrdMethodInfo(
             channel=Mock(),
             crd_full_name="michelangelo.api.v2.ProjectService",
@@ -145,7 +144,6 @@ class ListFuncImplTest(TestCase):
             output_class=Mock,
         )
 
-        # Prepare Mock
         mock_item = MagicMock()
         mock_item.metadata.namespace = "test-ns"
         mock_item.metadata.name = "test-project"
@@ -158,23 +156,25 @@ class ListFuncImplTest(TestCase):
                 Mock(items=[mock_item]),
             )
         ]
-        mock_call.return_value = mock_response
 
-        # Execute - should not raise any exceptions
+        mock_crd = Mock()
+        mock_crd._list.return_value = mock_response
+
         list_func_impl(
             crd_method_info,
-            Mock(arguments={"namespace": "test-namespace", "limit": 100}),
+            Mock(
+                arguments={
+                    "self": mock_crd,
+                    "namespace": "test-namespace",
+                    "limit": 100,
+                }
+            ),
         )
 
-        # Verify ParseDict was called with correct request dict
-        call_args = mock_parse_dict.call_args
-        request_dict = call_args[0][0]
-        self.assertEqual(request_dict["namespace"], "test-namespace")
-        self.assertEqual(request_dict["list_options_ext"]["pagination"]["limit"], 100)
+        mock_crd._list.assert_called_once_with(namespace="test-namespace", limit=100)
 
-    @patch("michelangelo.cli.mactl.crd.crd_method_call")
     @patch("michelangelo.cli.mactl.crd.ParseDict")
-    def test_list_func_impl_with_limit_warning(self, mock_parse_dict, mock_call):
+    def test_list_func_impl_with_limit_warning(self, mock_parse_dict):
         """Test list_func_impl shows warning when result count equals limit."""
         crd_method_info = CrdMethodInfo(
             channel=Mock(),
@@ -197,16 +197,50 @@ class ListFuncImplTest(TestCase):
                 Mock(items=mock_items),
             )
         ]
-        mock_call.return_value = mock_response
+
+        mock_crd = Mock()
+        mock_crd._list.return_value = mock_response
 
         list_func_impl(
             crd_method_info,
-            Mock(arguments={"namespace": "test-namespace", "limit": 10}),
+            Mock(
+                arguments={"self": mock_crd, "namespace": "test-namespace", "limit": 10}
+            ),
+        )
+
+        mock_crd._list.assert_called_once_with(namespace="test-namespace", limit=10)
+
+
+class ListFuncImplRawTest(TestCase):
+    """Test cases for _list_func_impl function."""
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.ParseDict")
+    def test_list_func_impl_raw(self, mock_parse_dict, mock_call):
+        """Test _list_func_impl builds request and returns raw response.
+
+        It tests `_list` func without printing.
+        """
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="michelangelo.api.v2.ProjectService",
+            method_name="List",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        mock_response = Mock()
+        mock_call.return_value = mock_response
+
+        result = _list_func_impl(
+            crd_method_info,
+            Mock(arguments={"namespace": "test-namespace", "limit": 100}),
         )
 
         call_args = mock_parse_dict.call_args
         request_dict = call_args[0][0]
-        self.assertEqual(request_dict["list_options_ext"]["pagination"]["limit"], 10)
+        self.assertEqual(request_dict["namespace"], "test-namespace")
+        self.assertEqual(request_dict["list_options_ext"]["pagination"]["limit"], 100)
+        self.assertEqual(result, mock_response)
 
 
 class DeleteFuncImplTest(TestCase):
