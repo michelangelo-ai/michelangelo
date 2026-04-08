@@ -19,7 +19,7 @@ Audits the codebase against every claim in the docs. Reports CORRECT / OUTDATED 
 - File paths referenced in docs (verify they exist)
 - Enum values, config fields, YAML schemas (verify against proto/source)
 
-### Product Manager (subagent_type: Explore)
+### Product Manager (agent: product-manager)
 Defines product positioning and audience. Covers:
 - Target audience: who reads this, what do they already know?
 - Ideal user journey through the docs
