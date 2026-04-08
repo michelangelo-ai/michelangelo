@@ -173,16 +173,17 @@ export type Interpolatable<T, U extends StudioParamsView = 'base'> =
  * };
  * ```
  */
-export type DeepInterpolatable<T, U extends StudioParamsView = 'base'> =
-  T extends (...args: any[]) => any
+export type DeepInterpolatable<T, U extends StudioParamsView = 'base'> = T extends (
+  ...args: any[]
+) => any
+  ? T
+  : T extends ComponentType<any>
     ? T
-    : T extends ComponentType<any>
-      ? T
-      : T extends Array<infer El>
-        ? Array<DeepInterpolatable<El, U>>
-        : T extends object
-          ? { [K in keyof T]: DeepInterpolatable<T[K], U> }
-          : Interpolatable<T, U>;
+    : T extends Array<infer El>
+      ? Array<DeepInterpolatable<El, U>>
+      : T extends object
+        ? { [K in keyof T]: DeepInterpolatable<T[K], U> }
+        : Interpolatable<T, U>;
 
 /**
  * Function type for checking whether a property should be excluded from interpolation.

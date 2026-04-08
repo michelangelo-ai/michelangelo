@@ -807,9 +807,7 @@ describe('EntityDetailRoute', () => {
               {
                 type: 'detail',
                 metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
-                pages: [
-                  { id: 'execution', label: 'Execution', ...buildExecutionSchema() },
-                ],
+                pages: [{ id: 'execution', label: 'Execution', ...buildExecutionSchema() }],
               },
             ],
           }),

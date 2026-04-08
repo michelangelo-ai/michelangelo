@@ -18,7 +18,11 @@ type InterpolatableActionsPopoverProps = {
  * Table action render functions aren't React components and can't use hooks, so this thin
  * wrapper provides the per-row resolution boundary that the table view needs.
  */
-export function InterpolatableActionsPopover({ actions, record, ...rest }: InterpolatableActionsPopoverProps) {
+export function InterpolatableActionsPopover({
+  actions,
+  record,
+  ...rest
+}: InterpolatableActionsPopoverProps) {
   const resolve = useInterpolationResolver();
   const resolved = useMemo(
     () => resolve(actions, { row: record }) as ActionConfig[],
