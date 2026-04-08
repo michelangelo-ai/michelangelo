@@ -218,9 +218,15 @@ Immutable objects (like completed PipelineRuns) no longer consume etcd memory.
 
 ### Pre-Existing Objects
 
-Objects created before the ingester was enabled will NOT have the ingester finalizer. They are still synced to MySQL, but may not be intercepted during deletion via `kubectl delete`.
+Objects created before the ingester was enabled will NOT have the ingester finalizer. They are still synced to MySQL on the controller's first startup, but are not intercepted during deletion via `kubectl delete`. If a user deletes such an object directly through `kubectl`, Kubernetes removes it from etcd immediately — the ingester never sees the deletion — leaving behind an orphan row in MySQL with `delete_time IS NULL`. Over time this causes MySQL to drift out of sync with etcd.
 
-**Workaround**: Ensure all deletions go through the API Server, which sets the deletion annotation that the ingester monitors.
+Two mitigations are available:
+
+1. **Backfill controller (not yet implemented):** A periodic reconciliation controller that compares MySQL rows against etcd and soft-deletes any rows whose corresponding etcd object no longer exists. This is the cleanest long-term solution but requires additional engineering work.
+
+2. **Require all deletes through the API Server:** The API Server sets the `michelangelo/Deleting` annotation instead of issuing a direct Kubernetes delete, which the ingester detects and handles correctly even without a finalizer. Enforce this operationally by restricting direct `kubectl delete` access to CRD objects.
+
+Until a backfill controller is in place, option 2 is the recommended operational workaround.
 
 ### Schema Evolution
 
