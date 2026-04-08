@@ -293,8 +293,7 @@ describe('ProjectDetail', () => {
       expect(screen.getByText(/\/fraud-detection\/train\/pipelines/)).toBeInTheDocument();
     });
 
-    test('navigate button falls back to first entity when none are active', async () => {
-      const user = userEvent.setup();
+    test('navigate button is hidden when no entities are active', async () => {
       render(
         <ProjectDetail
           phases={[
@@ -329,8 +328,7 @@ describe('ProjectDetail', () => {
 
       await screen.findByText('Train & Evaluate');
 
-      await user.click(screen.getByRole('button'));
-      expect(screen.getByText(/\/fraud-detection\/train\/pipelines/)).toBeInTheDocument();
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
     });
   });
 });

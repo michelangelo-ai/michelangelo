@@ -89,12 +89,12 @@ export function PhaseCard(props: PhaseConfig & { projectId: string }) {
         </div>
       )}
 
-      {!isPhaseDisabled && entities.length > 0 && (
+      {entities.some((entity) => entity.state === 'active') && !isPhaseDisabled && (
         <Button
           kind={KIND.secondary}
           onClick={() => {
-            const firstEntity = entities.find((entity) => entity.state === 'active') ?? entities[0];
-            navigate(`/${projectId}/${id}/${firstEntity.id}`);
+            const firstActiveEntity = entities.find((entity) => entity.state === 'active')!;
+            navigate(`/${projectId}/${id}/${firstActiveEntity.id}`);
           }}
           shape={SHAPE.circle}
           overrides={{ BaseButton: { style: { marginTop: 'auto' } } }}
