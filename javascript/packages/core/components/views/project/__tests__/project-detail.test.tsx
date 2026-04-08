@@ -103,7 +103,9 @@ describe('ProjectDetail', () => {
       const pipelinesSpan = screen.getAllByText('Pipelines').find((el) => el.tagName === 'SPAN');
       expect(pipelinesSpan).toBeDefined();
 
-      const pipelineRunsSpan = screen.getAllByText('Pipeline runs').find((el) => el.tagName === 'SPAN');
+      const pipelineRunsSpan = screen
+        .getAllByText('Pipeline runs')
+        .find((el) => el.tagName === 'SPAN');
       expect(pipelineRunsSpan).toBeDefined();
 
       expect(screen.getByText('Data sources').tagName).toBe('SPAN');
