@@ -39,7 +39,6 @@ function TriggerRunActionForm({
 
   const handleSubmit = async (values: TriggerRun) => {
     if (mutation.isPending) return;
-    console.log('[TriggerRunActionForm] spec.action being sent:', values.spec.action);
     await mutation.mutateAsync({ triggerRun: values });
   };
 
