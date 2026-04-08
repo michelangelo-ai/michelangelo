@@ -50,6 +50,7 @@ Serve predictions in production:
 ### **Advanced Topics**
 
 * [Set Up Pipeline Triggers](./set-up-triggers.md) - Schedule pipelines to run automatically
+* [Pipeline Notifications](./notifications.md) - Get email and Slack alerts on pipeline run outcomes
 * [CLI Reference](./cli.md) - Command-line tools for pipeline and project management
 * [Project Management](./project-management-for-ml-pipelines.md) - Create and manage MA Studio projects
 
