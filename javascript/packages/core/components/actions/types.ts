@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import type { DeepInterpolatable, Interpolatable } from '#core/interpolation/types';
+import type { DeepInterpolatable } from '#core/interpolation/types';
 
 export type ActionConfig<T = Data> = ComponentActionConfig<T>;
 
@@ -83,6 +83,6 @@ export type ActionConfigSchema<T = Data> = DeepInterpolatable<ActionConfig<T>>;
 
 /** A condition that disables an action for a specific record, with an optional hover tooltip. */
 type DisabledRule = {
-  condition: Interpolatable<boolean>;
+  condition: boolean;
   message?: string;
 };
