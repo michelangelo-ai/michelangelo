@@ -4,6 +4,7 @@ import js from '@eslint/js';
 import noBarrelExports from './eslint-local-rules/no-barrel-exports.js';
 import noFixtureConstants from './eslint-local-rules/no-fixture-constants.js';
 import noModuleScopeTestSetup from './eslint-local-rules/no-module-scope-test-setup.js';
+import typesInTypesFile from './eslint-local-rules/types-in-types-file.js';
 import tseslint from 'typescript-eslint';
 import prettierConfig from 'eslint-config-prettier';
 import baseUIEslint from 'eslint-plugin-baseui';
@@ -185,7 +186,7 @@ export default [
     },
   },
 
-  // App and packages — no barrel exports in index files
+  // App and packages — no barrel exports, types must live in types.ts
   {
     files: ['packages/core/**/*.{ts,tsx}', 'packages/rpc/**/*.{ts,tsx}', 'app/**/*.{ts,tsx}'],
     ignores: [
@@ -195,10 +196,16 @@ export default [
       'packages/**/__fixtures__/**/*.{ts,tsx}',
     ],
     plugins: {
-      local: { rules: { 'no-barrel-exports': noBarrelExports } },
+      local: {
+        rules: {
+          'no-barrel-exports': noBarrelExports,
+          'types-in-types-file': typesInTypesFile,
+        },
+      },
     },
     rules: {
       'local/no-barrel-exports': 'error',
+      'local/types-in-types-file': 'error',
     },
   },
 
