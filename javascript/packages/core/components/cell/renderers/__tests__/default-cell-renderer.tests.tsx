@@ -33,7 +33,7 @@ describe('DefaultCellRenderer', () => {
     );
 
     const cell = screen.getByText('test value');
-    expect(cell.parentElement).toHaveStyle({ color: 'rgb(255, 0, 0)' });
+    expect(cell.parentElement).toHaveStyle({ color: 'red' });
   });
 
   it('should render provided cell type', () => {

@@ -14,7 +14,7 @@ export default defineConfig({
 
         test: {
           name: 'core',
-          environment: 'jsdom', // Simulate a browser environment for React components
+          environment: 'happy-dom', // Simulate a browser environment for React components
           include: ['packages/core/**/__tests__/**/*.{ts,tsx}'],
           setupFiles: ['./packages/core/test-setup.ts'],
           deps: {
