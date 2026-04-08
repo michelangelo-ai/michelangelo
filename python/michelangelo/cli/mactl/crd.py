@@ -687,9 +687,7 @@ class CRD:
         self.configure_parser("apply", parser)
         func_signature = self._read_signatures("apply")
 
-        bound_func = partial(
-            getattr(self, "_apply_func_impl", apply_func_impl), method_info
-        )
+        bound_func = partial(apply_func_impl, method_info)
         bound_func = bind_signature(func_signature)(bound_func)
         self.apply = MethodType(bound_func, self)
         _LOG.debug("Generated APPLY injected well: %r", self.apply)

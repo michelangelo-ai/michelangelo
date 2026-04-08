@@ -61,7 +61,9 @@ def apply_plugin_command(
         crd.func_crd_metadata_converter_for_create = (
             convert_crd_metadata_pipeline_create
         )
-        crd._apply_func_impl = pipeline_apply_func_impl
+        import michelangelo.cli.mactl.crd as crd_module
+
+        crd_module.apply_func_impl = pipeline_apply_func_impl
     if target_command == "run":
         crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_run
     if target_command == "dev_run":

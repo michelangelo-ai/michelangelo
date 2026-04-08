@@ -5,7 +5,7 @@ plugin-specific converters.
 """
 
 from unittest import TestCase
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from michelangelo.cli.mactl.plugins.entity.pipeline.apply import (
     convert_crd_metadata_pipeline_apply,
@@ -47,11 +47,17 @@ class PipelineMainTest(TestCase):
             convert_crd_metadata_pipeline_create,
         )
 
-    def test_apply_command_sets_apply_func_impl(self):
-        """Apply command sets _apply_func_impl on the crd for silent get."""
+    @patch("michelangelo.cli.mactl.crd.apply_func_impl")
+    def test_apply_command_sets_apply_func_impl(self, _):
+        """Apply command patches module-level apply_func_impl with pipeline impl."""
+        import michelangelo.cli.mactl.crd as crd_module
+        from michelangelo.cli.mactl.plugins.entity.pipeline.apply import (
+            pipeline_apply_func_impl,
+        )
+
         apply_plugin_command(self.mock_crd, "apply", self.mock_crds, self.mock_channel)
 
-        self.assertTrue(callable(self.mock_crd._apply_func_impl))
+        self.assertEqual(crd_module.apply_func_impl, pipeline_apply_func_impl)
 
     def test_apply_plugins_run_command(self):
         """Test apply_plugins for run command."""
