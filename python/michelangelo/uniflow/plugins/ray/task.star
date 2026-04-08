@@ -469,15 +469,18 @@ def ray_cluster_spec(
     support_gpu = head_resource.get("gpu", 0) + worker_resource.get("gpu", 0) * worker_instances > 0
 
     annotations = {}
+    labels = {}
     if debug_enabled:
         # Add SYS_PTRACE capability for profiling.
         annotations["michelangelo/profiling-ptrace-enabled"] = "true"
+    labels["ma/affinity-cluster"] = "oci-oke-dev"
 
     return {
         "metadata": {
             "generateName": "uf-ray-",
             "namespace": "default",
             "annotations": annotations,
+            "labels": labels,
         },
         "spec": {
             "user": {"name": USER_ID},

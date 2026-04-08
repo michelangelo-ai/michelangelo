@@ -6,6 +6,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	quotav1 "k8s.io/apiserver/pkg/quota/v1"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
@@ -48,9 +49,21 @@ type BatchRayCluster struct {
 
 var _ BatchJob = BatchRayCluster{}
 
-// GetAffinity returns the job affinity
+// GetAffinity returns the job affinity.
+// If the RayCluster has the label "ma/affinity-cluster", it builds an Affinity
+// with a resource selector targeting that cluster, enabling explicit cluster selection.
 func (r BatchRayCluster) GetAffinity() *v2pb.Affinity {
-	// TODO(#611): Add affinity to RayCluster as part of SKU management
+	if clusterName, ok := r.Labels[constants.ClusterAffinityLabelKey]; ok && clusterName != "" {
+		return &v2pb.Affinity{
+			ResourceAffinity: &v2pb.ResourceAffinity{
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						constants.ClusterAffinityLabelKey: clusterName,
+					},
+				},
+			},
+		}
+	}
 	return nil
 }
 
