@@ -37,7 +37,7 @@ export function PhaseCard(props: PhaseConfig & { projectId: string }) {
                 shape={SHAPE.circle}
                 size={SIZE.mini}
               >
-                <Icon name="arrowLaunch" title="Learn more" size={theme.sizing.scale500} />
+                <Icon name="arrowLaunch" size={theme.sizing.scale500} />
               </Button>
             )}
           </div>
