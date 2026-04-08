@@ -20,7 +20,7 @@ describe('ProjectDetail', () => {
   const buildPhase = buildPhaseConfigFactory();
   const buildEntity = buildEntityConfigFactory();
 
-  test('renders project description from API', async () => {
+  test('renders project name and description from API', async () => {
     render(
       <ProjectDetail phases={[]} />,
       buildWrapper([
@@ -33,11 +33,7 @@ describe('ProjectDetail', () => {
             GetProject: {
               project: {
                 metadata: { name: 'fraud-detection' },
-                spec: {
-                  description: 'Detects fraudulent transactions',
-                  owner: { owningTeam: 'ml-team' },
-                  tier: 'P0',
-                },
+                spec: { description: 'Detects fraudulent transactions' },
               },
             },
           }),
@@ -46,14 +42,20 @@ describe('ProjectDetail', () => {
     );
 
     expect(await screen.findByText('Detects fraudulent transactions')).toBeInTheDocument();
+    expect(screen.getByText('fraud-detection')).toBeInTheDocument();
   });
 
-  test('renders all three phase card names', async () => {
+  test('renders all three phase cards with correct states', async () => {
     render(
       <ProjectDetail
         phases={[
           buildPhase({ id: 'data', name: 'Prepare & Analyze Data', state: 'disabled', entities: [] }),
-          buildPhase({ id: 'train', name: 'Train & Evaluate', state: 'active', entities: [] }),
+          buildPhase({
+            id: 'train',
+            name: 'Train & Evaluate',
+            state: 'active',
+            entities: [buildEntity({ id: 'pipelines', name: 'pipelines' })],
+          }),
           buildPhase({ id: 'deploy', name: 'Deploy & Predict', state: 'comingSoon' }),
         ]}
       />,
@@ -67,11 +69,7 @@ describe('ProjectDetail', () => {
             GetProject: {
               project: {
                 metadata: { name: 'fraud-detection' },
-                spec: {
-                  description: 'Detects fraudulent transactions',
-                  owner: { owningTeam: 'ml-team' },
-                  tier: 'P0',
-                },
+                spec: { description: 'Detects fraudulent transactions' },
               },
             },
           }),
@@ -82,54 +80,130 @@ describe('ProjectDetail', () => {
     expect(await screen.findByText('Prepare & Analyze Data')).toBeInTheDocument();
     expect(screen.getByText('Train & Evaluate')).toBeInTheDocument();
     expect(screen.getByText('Deploy & Predict')).toBeInTheDocument();
+
+    expect(screen.getByRole('link', { name: 'Pipelines' })).toHaveAttribute(
+      'href',
+      '/fraud-detection/train/pipelines'
+    );
+    expect(screen.getByText('Coming soon')).toBeInTheDocument();
   });
 
-  describe('disabled phase', () => {
-    test('renders entities as plain text with no navigate button', async () => {
-      render(
-        <ProjectDetail
-          phases={[
-            buildPhase({
-              id: 'data',
-              name: 'Prepare & Analyze Data',
-              state: 'disabled',
-              entities: [
-                buildEntity({ id: 'pipelines', name: 'pipelines', state: 'disabled' }),
-                buildEntity({ id: 'runs', name: 'pipeline runs', state: 'disabled' }),
-                buildEntity({ id: 'datasources', name: 'data sources', state: 'disabled' }),
-              ],
-            }),
-          ]}
-        />,
-        buildWrapper([
-          getBaseProviderWrapper(),
-          getErrorProviderWrapper(),
-          getIconProviderWrapper(),
-          getRouterWrapper({ location: '/fraud-detection' }),
-          getServiceProviderWrapper({
-            request: createQueryMockRouter({
-              GetProject: {
-                project: {
-                  metadata: { name: 'fraud-detection' },
-                  spec: {
-                    description: 'Detects fraudulent transactions',
-                    owner: { owningTeam: 'ml-team' },
-                    tier: 'P0',
-                  },
-                },
-              },
-            }),
+  test('disabled phase renders entities as plain text with no navigate button', async () => {
+    render(
+      <ProjectDetail
+        phases={[
+          buildPhase({
+            id: 'data',
+            name: 'Prepare & Analyze Data',
+            state: 'disabled',
+            entities: [
+              buildEntity({ id: 'pipelines', name: 'pipelines', state: 'disabled' }),
+              buildEntity({ id: 'runs', name: 'pipeline runs', state: 'disabled' }),
+              buildEntity({ id: 'datasources', name: 'data sources', state: 'disabled' }),
+            ],
           }),
-        ])
-      );
+        ]}
+      />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getRouterWrapper({ location: '/fraud-detection' }),
+        getServiceProviderWrapper({
+          request: createQueryMockRouter({
+            GetProject: {
+              project: {
+                metadata: { name: 'fraud-detection' },
+                spec: { description: 'Detects fraudulent transactions' },
+              },
+            },
+          }),
+        }),
+      ])
+    );
 
-      await screen.findByText('Prepare & Analyze Data');
+    await screen.findByText('Prepare & Analyze Data');
 
-      expect(screen.getByText('Pipelines').tagName).toBe('SPAN');
-      expect(screen.getByText('Pipeline runs').tagName).toBe('SPAN');
-      expect(screen.getByText('Data sources').tagName).toBe('SPAN');
-      expect(screen.queryByRole('button')).not.toBeInTheDocument();
-    });
+    expect(screen.getByText('Pipelines')).toBeInTheDocument();
+    expect(screen.getByText('Pipeline runs')).toBeInTheDocument();
+    expect(screen.getByText('Data sources')).toBeInTheDocument();
+
+    expect(screen.queryByRole('link', { name: 'Pipelines' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Pipeline runs' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Data sources' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  test('comingSoon phase shows message and suppresses entity list', async () => {
+    render(
+      <ProjectDetail
+        phases={[
+          buildPhase({
+            id: 'deploy',
+            name: 'Deploy & Predict',
+            state: 'comingSoon',
+            entities: [buildEntity({ id: 'endpoints', name: 'endpoints' })],
+          }),
+        ]}
+      />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getRouterWrapper({ location: '/fraud-detection' }),
+        getServiceProviderWrapper({
+          request: createQueryMockRouter({
+            GetProject: {
+              project: {
+                metadata: { name: 'fraud-detection' },
+                spec: { description: 'Detects fraudulent transactions' },
+              },
+            },
+          }),
+        }),
+      ])
+    );
+
+    await screen.findByText('Deploy & Predict');
+
+    expect(screen.getByText('Coming soon')).toBeInTheDocument();
+    expect(screen.queryByText('Endpoints')).not.toBeInTheDocument();
+  });
+
+  test('phase description and learn more button render when docUrl is set', async () => {
+    render(
+      <ProjectDetail
+        phases={[
+          buildPhase({
+            id: 'train',
+            name: 'Train & Evaluate',
+            state: 'active',
+            description: 'Train your ML models',
+            docUrl: 'https://docs.example.com/train',
+            entities: [],
+          }),
+        ]}
+      />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getRouterWrapper({ location: '/fraud-detection' }),
+        getServiceProviderWrapper({
+          request: createQueryMockRouter({
+            GetProject: {
+              project: {
+                metadata: { name: 'fraud-detection' },
+                spec: { description: 'Detects fraudulent transactions' },
+              },
+            },
+          }),
+        }),
+      ])
+    );
+
+    expect(await screen.findByText('Train your ML models')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Learn more' })).toBeInTheDocument();
   });
 
   describe('active phase', () => {
@@ -160,11 +234,7 @@ describe('ProjectDetail', () => {
               GetProject: {
                 project: {
                   metadata: { name: 'fraud-detection' },
-                  spec: {
-                    description: 'Detects fraudulent transactions',
-                    owner: { owningTeam: 'ml-team' },
-                    tier: 'P0',
-                  },
+                  spec: { description: 'Detects fraudulent transactions' },
                 },
               },
             }),
@@ -184,11 +254,10 @@ describe('ProjectDetail', () => {
         expect(link).toHaveAttribute('href', href);
       }
 
-      for (const name of ['Evaluations', 'Notebooks']) {
-        const el = screen.getByText(name);
-        expect(el.tagName).toBe('SPAN');
-        expect(el).not.toHaveRole('link');
-      }
+      expect(screen.getByText('Evaluations')).toBeInTheDocument();
+      expect(screen.getByText('Notebooks')).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Evaluations' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Notebooks' })).not.toBeInTheDocument();
     });
 
     test('navigate button goes to first active entity', async () => {
@@ -205,11 +274,7 @@ describe('ProjectDetail', () => {
               GetProject: {
                 project: {
                   metadata: { name: 'fraud-detection' },
-                  spec: {
-                    description: 'Detects fraudulent transactions',
-                    owner: { owningTeam: 'ml-team' },
-                    tier: 'P0',
-                  },
+                  spec: { description: 'Detects fraudulent transactions' },
                 },
               },
             }),
@@ -222,13 +287,22 @@ describe('ProjectDetail', () => {
       await user.click(screen.getByRole('button'));
       expect(screen.getByText(/\/fraud-detection\/train\/pipelines/)).toBeInTheDocument();
     });
-  });
 
-  describe('comingSoon phase', () => {
-    test('shows "Coming soon" message with no navigate button', async () => {
+    test('navigate button falls back to first entity when none are active', async () => {
+      const user = userEvent.setup();
       render(
         <ProjectDetail
-          phases={[buildPhase({ id: 'deploy', name: 'Deploy & Predict', state: 'comingSoon' })]}
+          phases={[
+            buildPhase({
+              id: 'train',
+              name: 'Train & Evaluate',
+              state: 'active',
+              entities: [
+                buildEntity({ id: 'pipelines', name: 'pipelines', state: 'disabled' }),
+                buildEntity({ id: 'runs', name: 'pipeline runs', state: 'disabled' }),
+              ],
+            }),
+          ]}
         />,
         buildWrapper([
           getBaseProviderWrapper(),
@@ -240,11 +314,7 @@ describe('ProjectDetail', () => {
               GetProject: {
                 project: {
                   metadata: { name: 'fraud-detection' },
-                  spec: {
-                    description: 'Detects fraudulent transactions',
-                    owner: { owningTeam: 'ml-team' },
-                    tier: 'P0',
-                  },
+                  spec: { description: 'Detects fraudulent transactions' },
                 },
               },
             }),
@@ -252,8 +322,10 @@ describe('ProjectDetail', () => {
         ])
       );
 
-      expect(await screen.findByText('Coming soon')).toBeInTheDocument();
-      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+      await screen.findByText('Train & Evaluate');
+
+      await user.click(screen.getByRole('button'));
+      expect(screen.getByText(/\/fraud-detection\/train\/pipelines/)).toBeInTheDocument();
     });
   });
 });
