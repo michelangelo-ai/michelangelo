@@ -1,0 +1,48 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
+load("@rules_proto//proto:defs.bzl", "proto_library")
+
+# Proto library for ext validation protos
+proto_library(
+    name = "v2_ext_proto",
+    srcs = [
+        "model_ext.proto",
+        "project_ext.proto",
+    ],
+    import_prefix = "michelangelo",
+    strip_import_prefix = "/proto",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//proto/api:api_proto",
+    ],
+)
+
+# Go proto library with validation compiler
+# Generates Validate() methods for ext types
+go_proto_library(
+    name = "v2_ext_go_proto",
+    compilers = [
+        "@io_bazel_rules_go//proto:go_proto",
+        "//bazel/rules/proto:go_validation",  # Generates Validate() methods
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/proto/api/v2_ext",
+    proto = ":v2_ext_proto",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//proto/api:go_default_library",
+    ],
+)
+
+# Go library embedding the proto library with manual registration
+# Registration code in register.go connects ext validation to base types
+go_library(
+    name = "go_default_library",
+    srcs = ["register.go"],  # Manual registration code
+    embed = [":v2_ext_go_proto"],
+    importpath = "github.com/michelangelo-ai/michelangelo/proto/api/v2_ext",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/api:go_default_library",
+        "//proto/api/v2:go_default_library",
+    ],
+)

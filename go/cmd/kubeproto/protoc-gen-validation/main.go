@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -279,7 +280,24 @@ var _ = strconv.Itoa
 		g.P(buf.String())
 	}
 
+	// For *_ext.proto files, add a comment about manual registration
+	if isExtProto(file) {
+		g.P(`
+// NOTE: This is an extension proto (*_ext.proto).
+// To enable ext validation, create a register.go file that:
+// 1. Imports "github.com/michelangelo-ai/michelangelo/go/api"
+// 2. Calls api.RegisterExtValidator() in init() to map base types to ext validation
+// See proto/api/v2_ext/register.go for an example.
+`)
+	}
+
 	return g
+}
+
+// isExtProto checks if this is an extension proto file (ends with _ext.proto)
+func isExtProto(file *protogen.File) bool {
+	filename := filepath.Base(file.Desc.Path())
+	return strings.HasSuffix(filename, "_ext.proto")
 }
 
 func compilerErrField(field *protogen.Field, errMsg string) {
