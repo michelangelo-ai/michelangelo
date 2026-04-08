@@ -21,3 +21,8 @@ export enum DateFormat {
    */
   ISO_DATE_STRING = 'iso',
 }
+
+export type UseDateFormattersReturn = {
+  format: (value: string) => Date | null;
+  parse: (value: Date | null) => string;
+};

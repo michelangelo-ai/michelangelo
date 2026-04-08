@@ -1,10 +1,7 @@
 import { getDateFromEpochSeconds, getEpochSecondsFromDate } from '#core/utils/time-utils';
 import { DateFormat } from './types';
 
-type UseDateFormattersReturn = {
-  format: (value: string) => Date | null;
-  parse: (value: Date | null) => string;
-};
+import type { UseDateFormattersReturn } from './types';
 
 /**
  * Returns `format` and `parse` functions that translate between date formats
