@@ -31,6 +31,7 @@ export function PhaseCard(props: PhaseConfig & { projectId: string }) {
             {description}
             {docUrl && (
               <Button
+                aria-label="Learn more"
                 kind={KIND.tertiary}
                 onClick={() => window.open(docUrl, '_blank')}
                 shape={SHAPE.circle}

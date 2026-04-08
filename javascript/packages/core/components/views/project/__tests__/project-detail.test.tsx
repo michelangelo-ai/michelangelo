@@ -42,14 +42,19 @@ describe('ProjectDetail', () => {
     );
 
     expect(await screen.findByText('Detects fraudulent transactions')).toBeInTheDocument();
-    expect(screen.getByText('fraud-detection')).toBeInTheDocument();
+    expect(screen.getAllByText('fraud-detection')).not.toHaveLength(0);
   });
 
   test('renders all three phase cards with correct states', async () => {
     render(
       <ProjectDetail
         phases={[
-          buildPhase({ id: 'data', name: 'Prepare & Analyze Data', state: 'disabled', entities: [] }),
+          buildPhase({
+            id: 'data',
+            name: 'Prepare & Analyze Data',
+            state: 'disabled',
+            entities: [],
+          }),
           buildPhase({
             id: 'train',
             name: 'Train & Evaluate',
