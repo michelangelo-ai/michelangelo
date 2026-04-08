@@ -32,14 +32,15 @@ function TriggerRunActionForm({
     mutationName: 'UpdateTriggerRun',
   });
 
-  const handleSubmit = async (values: TriggerRun) => {
-    if (mutation.isPending) return;
-    await mutation.mutateAsync({ triggerRun: values });
-  };
-
   const initialValues: TriggerRun = {
     ...record,
     spec: { ...record.spec, action: ACTION_TO_ENUM[action] },
+  };
+
+  const handleSubmit = async (values: TriggerRun) => {
+    if (mutation.isPending) return;
+    console.log('[TriggerRunActionForm] spec.action being sent:', values.spec.action);
+    await mutation.mutateAsync({ triggerRun: values });
   };
 
   return (

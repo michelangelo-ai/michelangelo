@@ -35,6 +35,11 @@ function FormWrapper({
       pipeline: { name: 'test-pipeline', namespace: 'test-ns' },
       revision: { name: 'test-revision', namespace: 'test-ns' },
       actor: { name: 'test-user' },
+      sourceTriggerName: '',
+      autoFlip: false,
+      notifications: [],
+      kill: false,
+      action: TriggerRunAction.NO_ACTION,
     },
     status: { state: TriggerRunState.RUNNING },
   };
@@ -86,7 +91,6 @@ it.each([
       expect(mockRequest).toHaveBeenCalledWith(
         'UpdateTriggerRun',
         expect.objectContaining({
-          // objectContaining doesn't preserve generics — cast required by Vitest's type inference
           triggerRun: expect.objectContaining({
             spec: expect.objectContaining({ action }) as Record<string, unknown>,
           }) as Record<string, unknown>,
