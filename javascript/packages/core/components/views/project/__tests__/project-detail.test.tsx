@@ -289,7 +289,7 @@ describe('ProjectDetail', () => {
 
       await screen.findByText('Train & Evaluate');
 
-      await user.click(screen.getByRole('button'));
+      await user.click(screen.getByRole('button', { name: 'Go to Train & Evaluate' }));
       expect(screen.getByText(/\/fraud-detection\/train\/pipelines/)).toBeInTheDocument();
     });
 

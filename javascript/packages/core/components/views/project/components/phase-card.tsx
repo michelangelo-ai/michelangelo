@@ -91,6 +91,7 @@ export function PhaseCard(props: PhaseConfig & { projectId: string }) {
 
       {entities.some((entity) => entity.state === 'active') && !isPhaseDisabled && (
         <Button
+          aria-label={`Go to ${name}`}
           kind={KIND.secondary}
           onClick={() => {
             const firstActiveEntity = entities.find((entity) => entity.state === 'active')!;
