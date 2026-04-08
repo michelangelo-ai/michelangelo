@@ -1,5 +1,4 @@
 import type { ComponentType } from 'react';
-
 import type { DeepInterpolatable, Interpolatable } from '#core/interpolation/types';
 
 export type ActionConfig<T = Data> = ComponentActionConfig<T>;

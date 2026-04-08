@@ -134,7 +134,9 @@ describe('PhaseEntityView', () => {
                 component: StubDialog,
                 disabled: [
                   {
-                    condition: interpolate(({ data }) => data?.locked === true),
+                    condition: interpolate(
+                      ({ data }) => (data as { locked?: boolean } | undefined)?.locked === true
+                    ),
                     message: 'Record is locked',
                   },
                 ],

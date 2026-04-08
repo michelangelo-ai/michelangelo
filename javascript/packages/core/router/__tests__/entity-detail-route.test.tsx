@@ -796,11 +796,12 @@ describe('EntityDetailRoute', () => {
               {
                 display: { label: 'Resume' },
                 component: StubDialog,
-                hierarchy: interpolate(({ data }) =>
-                  data?.status?.state === 'PAUSED'
+                hierarchy: interpolate(({ data }) => {
+                  const record = data as { status?: { state?: string } } | undefined;
+                  return record?.status?.state === 'PAUSED'
                     ? ActionHierarchy.PRIMARY
-                    : ActionHierarchy.TERTIARY
-                ),
+                    : ActionHierarchy.TERTIARY;
+                }),
               },
             ],
             views: [
