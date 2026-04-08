@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import {
@@ -16,77 +16,68 @@ import {
 } from '#core/test/wrappers/get-service-provider-wrapper';
 import { ProjectDetail } from '../project-detail';
 
-const mockNavigate = vi.fn();
-vi.mock('react-router-dom-v5-compat', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react-router-dom-v5-compat')>();
-  return { ...actual, useNavigate: () => mockNavigate };
-});
-
 describe('ProjectDetail', () => {
   const buildPhase = buildPhaseConfigFactory();
   const buildEntity = buildEntityConfigFactory();
 
-  function renderProjectDetail() {
-    const mockRequest = createQueryMockRouter({
-      GetProject: {
-        project: {
-          metadata: { name: 'fraud-detection' },
-          spec: {
-            description: 'Detects fraudulent transactions',
-            owner: { owningTeam: 'ml-team' },
-            tier: 'P0',
-          },
-        },
-      },
-    });
-
-    const phases = [
-      buildPhase({
-        id: 'data',
-        name: 'Prepare & Analyze Data',
-        state: 'disabled',
-        entities: [
-          buildEntity({ id: 'pipelines', name: 'pipelines', state: 'disabled' }),
-          buildEntity({ id: 'runs', name: 'pipeline runs', state: 'disabled' }),
-          buildEntity({ id: 'datasources', name: 'data sources', state: 'disabled' }),
-        ],
-      }),
-      buildPhase({
-        id: 'train',
-        name: 'Train & Evaluate',
-        state: 'active',
-        entities: [
-          buildEntity({ id: 'pipelines', name: 'pipelines' }),
-          buildEntity({ id: 'runs', name: 'pipeline runs' }),
-          buildEntity({ id: 'triggers', name: 'triggers' }),
-          buildEntity({ id: 'models', name: 'trained models' }),
-          buildEntity({ id: 'evaluations', name: 'evaluations', state: 'disabled' }),
-          buildEntity({ id: 'notebooks', name: 'notebooks', state: 'disabled' }),
-        ],
-      }),
-      buildPhase({ id: 'deploy', name: 'Deploy & Predict', state: 'comingSoon' }),
-    ];
-
-    return render(
-      <ProjectDetail phases={phases} />,
+  test('renders project description from API', async () => {
+    render(
+      <ProjectDetail phases={[]} />,
       buildWrapper([
         getBaseProviderWrapper(),
         getErrorProviderWrapper(),
         getIconProviderWrapper(),
         getRouterWrapper({ location: '/fraud-detection' }),
-        getServiceProviderWrapper({ request: mockRequest }),
+        getServiceProviderWrapper({
+          request: createQueryMockRouter({
+            GetProject: {
+              project: {
+                metadata: { name: 'fraud-detection' },
+                spec: {
+                  description: 'Detects fraudulent transactions',
+                  owner: { owningTeam: 'ml-team' },
+                  tier: 'P0',
+                },
+              },
+            },
+          }),
+        }),
       ])
     );
-  }
-
-  test('renders project description from API', async () => {
-    renderProjectDetail();
 
     expect(await screen.findByText('Detects fraudulent transactions')).toBeInTheDocument();
   });
 
   test('renders all three phase card names', async () => {
-    renderProjectDetail();
+    render(
+      <ProjectDetail
+        phases={[
+          buildPhase({ id: 'data', name: 'Prepare & Analyze Data', state: 'disabled', entities: [] }),
+          buildPhase({ id: 'train', name: 'Train & Evaluate', state: 'active', entities: [] }),
+          buildPhase({ id: 'deploy', name: 'Deploy & Predict', state: 'comingSoon' }),
+        ]}
+      />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getRouterWrapper({ location: '/fraud-detection' }),
+        getServiceProviderWrapper({
+          request: createQueryMockRouter({
+            GetProject: {
+              project: {
+                metadata: { name: 'fraud-detection' },
+                spec: {
+                  description: 'Detects fraudulent transactions',
+                  owner: { owningTeam: 'ml-team' },
+                  tier: 'P0',
+                },
+              },
+            },
+          }),
+        }),
+      ])
+    );
 
     expect(await screen.findByText('Prepare & Analyze Data')).toBeInTheDocument();
     expect(screen.getByText('Train & Evaluate')).toBeInTheDocument();
@@ -94,36 +85,92 @@ describe('ProjectDetail', () => {
   });
 
   describe('disabled phase', () => {
-    test('renders all entities as plain text', async () => {
-      renderProjectDetail();
+    test('renders entities as plain text with no navigate button', async () => {
+      render(
+        <ProjectDetail
+          phases={[
+            buildPhase({
+              id: 'data',
+              name: 'Prepare & Analyze Data',
+              state: 'disabled',
+              entities: [
+                buildEntity({ id: 'pipelines', name: 'pipelines', state: 'disabled' }),
+                buildEntity({ id: 'runs', name: 'pipeline runs', state: 'disabled' }),
+                buildEntity({ id: 'datasources', name: 'data sources', state: 'disabled' }),
+              ],
+            }),
+          ]}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getErrorProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper({ location: '/fraud-detection' }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetProject: {
+                project: {
+                  metadata: { name: 'fraud-detection' },
+                  spec: {
+                    description: 'Detects fraudulent transactions',
+                    owner: { owningTeam: 'ml-team' },
+                    tier: 'P0',
+                  },
+                },
+              },
+            }),
+          }),
+        ])
+      );
 
       await screen.findByText('Prepare & Analyze Data');
 
-      // 'Pipelines' also appears in the active phase as a link — find the span specifically
-      const pipelinesSpan = screen.getAllByText('Pipelines').find((el) => el.tagName === 'SPAN');
-      expect(pipelinesSpan).toBeDefined();
-
-      const pipelineRunsSpan = screen
-        .getAllByText('Pipeline runs')
-        .find((el) => el.tagName === 'SPAN');
-      expect(pipelineRunsSpan).toBeDefined();
-
+      expect(screen.getByText('Pipelines').tagName).toBe('SPAN');
+      expect(screen.getByText('Pipeline runs').tagName).toBe('SPAN');
       expect(screen.getByText('Data sources').tagName).toBe('SPAN');
-    });
-
-    test('does not render a navigate button', async () => {
-      renderProjectDetail();
-
-      const heading = await screen.findByText('Prepare & Analyze Data');
-      const card = heading.closest('div[class]')!.parentElement!;
-
-      expect(within(card).queryByRole('button')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
     });
   });
 
   describe('active phase', () => {
-    test('renders active entities as links with correct hrefs', async () => {
-      renderProjectDetail();
+    const phase = buildPhase({
+      id: 'train',
+      name: 'Train & Evaluate',
+      state: 'active',
+      entities: [
+        buildEntity({ id: 'pipelines', name: 'pipelines' }),
+        buildEntity({ id: 'runs', name: 'pipeline runs' }),
+        buildEntity({ id: 'triggers', name: 'triggers' }),
+        buildEntity({ id: 'models', name: 'trained models' }),
+        buildEntity({ id: 'evaluations', name: 'evaluations', state: 'disabled' }),
+        buildEntity({ id: 'notebooks', name: 'notebooks', state: 'disabled' }),
+      ],
+    });
+
+    test('renders active entities as links and disabled entities as plain text', async () => {
+      render(
+        <ProjectDetail phases={[phase]} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getErrorProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper({ location: '/fraud-detection' }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetProject: {
+                project: {
+                  metadata: { name: 'fraud-detection' },
+                  spec: {
+                    description: 'Detects fraudulent transactions',
+                    owner: { owningTeam: 'ml-team' },
+                    tier: 'P0',
+                  },
+                },
+              },
+            }),
+          }),
+        ])
+      );
 
       const links: [string, string][] = [
         ['Pipelines', '/fraud-detection/train/pipelines'],
@@ -136,12 +183,6 @@ describe('ProjectDetail', () => {
         const link = await screen.findByRole('link', { name });
         expect(link).toHaveAttribute('href', href);
       }
-    });
-
-    test('renders disabled entities as plain text', async () => {
-      renderProjectDetail();
-
-      await screen.findByText('Train & Evaluate');
 
       for (const name of ['Evaluations', 'Notebooks']) {
         const el = screen.getByText(name);
@@ -152,34 +193,67 @@ describe('ProjectDetail', () => {
 
     test('navigate button goes to first active entity', async () => {
       const user = userEvent.setup();
-      renderProjectDetail();
+      render(
+        <ProjectDetail phases={[phase]} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getErrorProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper({ location: '/fraud-detection' }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetProject: {
+                project: {
+                  metadata: { name: 'fraud-detection' },
+                  spec: {
+                    description: 'Detects fraudulent transactions',
+                    owner: { owningTeam: 'ml-team' },
+                    tier: 'P0',
+                  },
+                },
+              },
+            }),
+          }),
+        ])
+      );
 
-      // Scope to the active phase card by walking up from a link unique to it
-      const pipelinesLink = await screen.findByRole('link', { name: 'Pipelines' });
-      let activeCard: HTMLElement = pipelinesLink;
-      while (activeCard.parentElement && within(activeCard).queryAllByRole('button').length === 0) {
-        activeCard = activeCard.parentElement;
-      }
+      await screen.findByText('Train & Evaluate');
 
-      await user.click(within(activeCard).getAllByRole('button').at(-1)!);
-      expect(mockNavigate).toHaveBeenCalledWith('/fraud-detection/train/pipelines');
+      await user.click(screen.getByRole('button'));
+      expect(screen.getByText(/\/fraud-detection\/train\/pipelines/)).toBeInTheDocument();
     });
   });
 
   describe('comingSoon phase', () => {
-    test('shows "Coming soon" message', async () => {
-      renderProjectDetail();
+    test('shows "Coming soon" message with no navigate button', async () => {
+      render(
+        <ProjectDetail
+          phases={[buildPhase({ id: 'deploy', name: 'Deploy & Predict', state: 'comingSoon' })]}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getErrorProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper({ location: '/fraud-detection' }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetProject: {
+                project: {
+                  metadata: { name: 'fraud-detection' },
+                  spec: {
+                    description: 'Detects fraudulent transactions',
+                    owner: { owningTeam: 'ml-team' },
+                    tier: 'P0',
+                  },
+                },
+              },
+            }),
+          }),
+        ])
+      );
 
       expect(await screen.findByText('Coming soon')).toBeInTheDocument();
-    });
-
-    test('does not render a navigate button', async () => {
-      renderProjectDetail();
-
-      const heading = await screen.findByText('Deploy & Predict');
-      const card = heading.closest('div[class]')!.parentElement!;
-
-      expect(within(card).queryByRole('button')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
     });
   });
 });
