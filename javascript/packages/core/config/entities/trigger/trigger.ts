@@ -1,3 +1,5 @@
+import { ActionHierarchy } from '#core/components/actions/types';
+import { interpolate } from '#core/interpolation/interpolate';
 import { TRIGGER_DETAIL_CONFIG } from './detail';
 import { TRIGGER_LIST_CONFIG } from './list';
 import {
@@ -26,22 +28,40 @@ export const TRIGGER_ENTITY_CONFIG: PhaseEntityConfig = {
     {
       display: { label: 'Kill', icon: 'stopCircle' },
       component: KillTriggerRunForm,
+      hierarchy: interpolate(({ data }) =>
+        isRunning(data) ? ActionHierarchy.SECONDARY : ActionHierarchy.TERTIARY
+      ),
       disabled: [
-        { condition: (r) => !isRunning(r), message: 'Only running trigger runs can be killed' },
+        {
+          condition: interpolate(({ data }) => !isRunning(data)),
+          message: 'Only running trigger runs can be killed',
+        },
       ],
     },
     {
       display: { label: 'Pause', icon: 'pause' },
       component: PauseTriggerRunForm,
+      hierarchy: interpolate(({ data }) =>
+        isRunning(data) ? ActionHierarchy.PRIMARY : ActionHierarchy.TERTIARY
+      ),
       disabled: [
-        { condition: (r) => !isRunning(r), message: 'Only running trigger runs can be paused' },
+        {
+          condition: interpolate(({ data }) => !isRunning(data)),
+          message: 'Only running trigger runs can be paused',
+        },
       ],
     },
     {
       display: { label: 'Resume', icon: 'playerPlay' },
       component: ResumeTriggerRunForm,
+      hierarchy: interpolate(({ data }) =>
+        isPaused(data) ? ActionHierarchy.PRIMARY : ActionHierarchy.TERTIARY
+      ),
       disabled: [
-        { condition: (r) => !isPaused(r), message: 'Only paused trigger runs can be resumed' },
+        {
+          condition: interpolate(({ data }) => !isPaused(data)),
+          message: 'Only paused trigger runs can be resumed',
+        },
       ],
     },
   ],
