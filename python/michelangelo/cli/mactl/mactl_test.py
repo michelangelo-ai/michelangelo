@@ -1,6 +1,7 @@
 """Unit tests for mactl CLI functions."""
 
 import os
+import sys
 import tempfile
 from argparse import Namespace
 from importlib import reload
@@ -15,8 +16,10 @@ from michelangelo.cli.mactl.mactl import (
     ADDRESS,
     DEFAULT_DIR_PLUGINS,
     _is_service_name,
+    add_plugin_dirs_to_syspath,
     apply_command_plugins,
     apply_entity_plugins,
+    apply_module_overrides,
     check_crd,
     create_serivce_classes,
     discover_all_plugins,
@@ -209,14 +212,14 @@ class TLSConnectionTest(TestCase):
             if should_use_tls:
                 credentials = mactl.ssl_channel_credentials()
                 with mactl.secure_channel(mactl.ADDRESS, credentials) as channel:
-                    mactl.main(channel)
+                    mactl.main(channel, {})
             else:
                 self.fail("TLS was expected to be enabled in this test.")
 
         # Verify TLS connection setup
         mock_ssl_creds.assert_called_once()
         mock_secure_channel.assert_called_once_with("test-server:443", mock_credentials)
-        mock_main.assert_called_once_with(mock_channel)
+        mock_main.assert_called_once_with(mock_channel, ANY)
 
     @patch("michelangelo.cli.mactl.mactl.main")
     @patch("michelangelo.cli.mactl.mactl.insecure_channel")
@@ -240,11 +243,11 @@ class TLSConnectionTest(TestCase):
                 self.fail("TLS was expected to be not enabled in this test.")
             else:
                 with mactl.insecure_channel(mactl.ADDRESS) as channel:
-                    mactl.main(channel)
+                    mactl.main(channel, {})
 
         # Verify insecure connection setup
         mock_insecure_channel.assert_called_once_with("localhost:5435")
-        mock_main.assert_called_once_with(mock_channel)
+        mock_main.assert_called_once_with(mock_channel, ANY)
 
     @patch("michelangelo.cli.mactl.mactl.main")
     @patch("michelangelo.cli.mactl.mactl.secure_channel")
@@ -273,12 +276,12 @@ class TLSConnectionTest(TestCase):
             if mactl.USE_TLS == "true":
                 credentials = mactl.ssl_channel_credentials()
                 with mactl.secure_channel(mactl.ADDRESS, credentials) as channel:
-                    mactl.main(channel)
+                    mactl.main(channel, {})
 
         # Verify context manager methods were called
         mock_secure_channel.return_value.__enter__.assert_called_once()
         mock_secure_channel.return_value.__exit__.assert_called_once()
-        mock_main.assert_called_once_with(mock_channel)
+        mock_main.assert_called_once_with(mock_channel, ANY)
 
         # Reset mocks
         mock_main.reset_mock()
@@ -298,12 +301,12 @@ class TLSConnectionTest(TestCase):
             # Test insecure channel usage
             if mactl.USE_TLS != "true":
                 with mactl.insecure_channel(mactl.ADDRESS) as channel:
-                    mactl.main(channel)
+                    mactl.main(channel, {})
 
         # Verify context manager methods were called
         mock_insecure_channel.return_value.__enter__.assert_called_once()
         mock_insecure_channel.return_value.__exit__.assert_called_once()
-        mock_main.assert_called_once_with(mock_channel)
+        mock_main.assert_called_once_with(mock_channel, ANY)
 
     def test_address_environment_variable_integration(self):
         """Test that MACTL_ADDRESS works with TLS configuration."""
@@ -858,7 +861,7 @@ class ProxySupportTest(TestCase):
 
         mock_proxy_instance.create_tunnel.assert_called_once_with("my-service")
         mock_insecure_channel.assert_called_once_with("localhost:12345")
-        mock_main.assert_called_once_with(mock_channel)
+        mock_main.assert_called_once_with(mock_channel, ANY)
 
     @patch("michelangelo.cli.mactl.mactl.main")
     @patch("michelangelo.cli.mactl.mactl.insecure_channel")
@@ -1047,3 +1050,88 @@ class ApplyCommandPluginsTest(TestCase):
             mock_crd, "create", {}, MagicMock(), {"pipeline": [mock_plugin]}
         )
         # no exception raised, plugin silently skipped
+
+
+class AddPluginDirsToSyspathTest(TestCase):
+    """Tests for add_plugin_dirs_to_syspath function."""
+
+    @patch(
+        "michelangelo.cli.mactl.mactl._CONFIG",
+        {"plugin": {"dirs": [str(PLUGIN_TEST_DIR_1)]}},
+    )
+    def test_adds_existing_dir_to_syspath(self):
+        """Core: adds an existing plugin dir to sys.path."""
+        resolved = str(PLUGIN_TEST_DIR_1.resolve())
+        original_path = [p for p in sys.path if p != resolved]
+
+        with patch("sys.path", list(original_path)):
+            add_plugin_dirs_to_syspath()
+            self.assertIn(resolved, sys.path)
+
+    @patch("michelangelo.cli.mactl.mactl._CONFIG", {"plugin": {"dirs": []}})
+    def test_no_op_when_dirs_empty(self):
+        """Edge: does nothing when plugin.dirs is empty."""
+        original_len = len(sys.path)
+        add_plugin_dirs_to_syspath()
+        self.assertEqual(len(sys.path), original_len)
+
+    @patch(
+        "michelangelo.cli.mactl.mactl._CONFIG",
+        {"plugin": {"dirs": ["/nonexistent/path"]}},
+    )
+    def test_warns_and_skips_missing_dir(self):
+        """Edge: skips and logs warning for non-existent directories."""
+        original_len = len(sys.path)
+        add_plugin_dirs_to_syspath()
+        self.assertEqual(len(sys.path), original_len)
+
+    @patch("michelangelo.cli.mactl.mactl._CONFIG", {})
+    def test_no_op_when_plugin_config_missing(self):
+        """Edge: does nothing when plugin config key is absent."""
+        original_len = len(sys.path)
+        add_plugin_dirs_to_syspath()
+        self.assertEqual(len(sys.path), original_len)
+
+
+class ApplyModuleOverridesTest(TestCase):
+    """Tests for apply_module_overrides function."""
+
+    def test_replaces_function_on_target_module(self):
+        """Core: replaces the target function via setattr on the original module."""
+        from michelangelo.cli.mactl import mactl as mactl_mod
+
+        original_func = mactl_mod._is_service_name
+
+        with patch(
+            "michelangelo.cli.mactl.mactl._CONFIG",
+            {
+                "plugin": {
+                    "modules": {
+                        "michelangelo.cli.mactl.mactl._is_service_name": (
+                            "michelangelo.cli.mactl.mactl.discover_all_plugins"
+                        )
+                    }
+                }
+            },
+        ):
+            apply_module_overrides()
+            self.assertIsNot(mactl_mod._is_service_name, original_func)
+
+        # restore to avoid affecting other tests
+        mactl_mod._is_service_name = original_func
+
+    @patch("michelangelo.cli.mactl.mactl._CONFIG", {"plugin": {}})
+    def test_no_op_when_modules_not_configured(self):
+        """Edge: does nothing when plugin.modules is absent."""
+        with patch("importlib.import_module") as mock_import:
+            apply_module_overrides()
+            mock_import.assert_not_called()
+
+    @patch(
+        "michelangelo.cli.mactl.mactl._CONFIG",
+        {"plugin": {"modules": {"nonexistent.module.func": "also.nonexistent.func"}}},
+    )
+    def test_non_fatal_on_import_error(self):
+        """Edge: logs error and continues when module import fails."""
+        # Should not raise even when the module doesn't exist
+        apply_module_overrides()  # no exception raised
