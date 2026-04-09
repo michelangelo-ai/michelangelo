@@ -31,7 +31,7 @@ Structure your findings as:
 - ❌ WRONG — [item]: doc says X, code says Y
 - ⚠️ MISSING — [item]: not documented, should be
 
-Send findings to both tech-writer and product-manager teammates.
+Report your findings to the team lead.
 
 ## Important
 
