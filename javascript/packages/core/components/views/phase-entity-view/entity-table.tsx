@@ -37,6 +37,10 @@ export function EntityTable<T extends object = object>({
   const entityTableState = useLocalStorageTableState({
     filterSettingsId: `${projectId}/${tableSettingsId}`,
     tableSettingsId,
+    ...(tableConfig.enableShareUrl && {
+      validColumnIds: tableConfig.columns.map((col) => col.id),
+      urlFilters: { enabled: true },
+    }),
   });
 
   const tableProps = adaptTableConfigToTableProps<T>(tableConfig, {

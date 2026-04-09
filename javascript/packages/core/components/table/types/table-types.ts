@@ -337,5 +337,7 @@ export type ControlledTableState = TableState & {
 export type InputTableState = Partial<
   Omit<ControlledTableState, 'pagination'> & {
     pagination?: Partial<Omit<PaginationState, 'pageIndex'>>;
+    /** Function that builds a shareable URL encoding the given table state. Provided by useLocalStorageTableState when urlFilters is configured. */
+    buildShareUrl?: (state: Partial<TableState>) => string;
   }
 >;

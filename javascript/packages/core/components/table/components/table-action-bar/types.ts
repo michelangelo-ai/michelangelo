@@ -6,7 +6,7 @@ import type {
   FilteringCapability,
 } from '#core/components/table/types/column-types';
 import type { TableData } from '#core/components/table/types/data-types';
-import type { ColumnFilter } from '#core/components/table/types/table-types';
+import type { ColumnFilter, TableState } from '#core/components/table/types/table-types';
 
 export interface TableActionBarProps<T extends TableData = TableData> {
   globalFilter: string;
@@ -16,6 +16,8 @@ export interface TableActionBarProps<T extends TableData = TableData> {
   preFilteredRows: FilterableRow<T>[];
   configuration: TableActionBarConfig;
   filterableColumns?: FilterableColumn<T>[];
+  /** Function that builds a shareable URL for the current table state. Required when configuration.enableShareUrl is true. */
+  getShareUrl?: () => string;
 }
 
 /**
@@ -37,6 +39,16 @@ export interface TableActionBarConfig {
   enableFilters?: boolean;
 
   /**
+   * Indicates whether a "Copy link" button is rendered that copies a shareable
+   * URL encoding the current table state to the clipboard.
+   * Requires `validColumnIds` and `urlFilters: { enabled: true }` to be configured
+   * on the `useLocalStorageTableState` hook.
+   *
+   * @default false
+   */
+  enableShareUrl?: boolean;
+
+  /**
    * ReactNode to be rendered in the middle section of the action bar.
    */
   middle?: ReactNode;
@@ -53,3 +65,6 @@ export type FilterableColumn<TData extends TableData = TableData> = Omit<
 > &
   ColumnRenderState<TData> &
   Omit<FilteringCapability, 'canFilter'>;
+
+// Re-exported for convenience — callers building share URLs directly can import from here.
+export type { TableState };
