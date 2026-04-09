@@ -62,10 +62,12 @@ jobs:
         working-directory: .
         run: |
           current_file=""
+          # Regex stored in variable to avoid bash [[ =~ ]] quoting issues
+          mdx_re='Markdown link with URL .([^ ]+). in source file "\.\./([^"]+)" \(([0-9]+):'
           while IFS= read -r line; do
             # Format 1: MDX compilation errors (markdown links caught during build)
             # e.g. Markdown link with URL `testing.md` in source file "../docs/contributing/index.md" (63:21) couldn't be resolved.
-            if [[ "$line" =~ Markdown\ link\ with\ URL\ .(.+).\ in\ source\ file\ \"\.\./(.*)"\ \(([0-9]+): ]]; then
+            if [[ "$line" =~ $mdx_re ]]; then
               broken_link="${BASH_REMATCH[1]}"
               source_file="${BASH_REMATCH[2]}"
               line_num="${BASH_REMATCH[3]}"
