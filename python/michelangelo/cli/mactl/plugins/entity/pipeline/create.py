@@ -274,6 +274,99 @@ def handle_workflow_inputs_retrieval(
     return workflow_inputs, uniflow_tar_path, workflow_function_name
 
 
+def populate_pipeline_spec_with_trigger_configs(trigger_map: dict) -> dict:
+    """Convert triggerMap from YAML to protobuf-compatible structure.
+
+    Processes trigger configurations including cron schedules, batch policies,
+    parameters, and concurrency settings for each trigger.
+
+    Args:
+        trigger_map: Dictionary mapping trigger names to trigger configurations
+            from YAML
+
+    Returns:
+        Dictionary containing processed trigger configurations ready for protobuf
+
+    Example YAML structure:
+        triggerMap:
+          training-trigger-cron-every-minute:
+            cronSchedule:
+              cron: "* * * * *"
+            batchPolicy:
+              batchSize: 1
+              wait: "60s"
+            parametersMap:
+              param-set-1:
+                kwArgs:
+                  key: value
+            maxConcurrency: 1
+    """
+    if not trigger_map:
+        _LOG.info("No triggers defined in pipeline spec")
+        return {}
+
+    converted_trigger_map = {}
+
+    for trigger_name, trigger_config in trigger_map.items():
+        _LOG.info(f"Processing trigger: {trigger_name}")
+
+        # Validate that at least one of batchPolicy or maxConcurrency is present
+        has_batch_policy = "batchPolicy" in trigger_config
+        has_max_concurrency = "maxConcurrency" in trigger_config
+
+        if not has_batch_policy and not has_max_concurrency:
+            raise ValueError(
+                f"Trigger '{trigger_name}' must specify at least one of "
+                "'batchPolicy' or 'maxConcurrency' to control execution"
+            )
+
+        converted_trigger = {}
+
+        # Process cron schedule
+        if "cronSchedule" in trigger_config:
+            converted_trigger["cronSchedule"] = {
+                "cron": trigger_config["cronSchedule"]["cron"]
+            }
+
+        # Process interval schedule
+        if "intervalSchedule" in trigger_config:
+            converted_trigger["intervalSchedule"] = {
+                "interval": trigger_config["intervalSchedule"]["interval"]
+            }
+
+        # Process batch policy
+        if has_batch_policy:
+            batch_policy = {}
+
+            # Validate that both batchSize and wait are present
+            if "batchSize" not in trigger_config["batchPolicy"]:
+                raise ValueError(
+                    f"Trigger '{trigger_name}': batchPolicy must include 'batchSize'"
+                )
+            if "wait" not in trigger_config["batchPolicy"]:
+                raise ValueError(
+                    f"Trigger '{trigger_name}': batchPolicy must include 'wait'"
+                )
+
+            batch_policy["batchSize"] = trigger_config["batchPolicy"]["batchSize"]
+            batch_policy["wait"] = trigger_config["batchPolicy"]["wait"]
+            converted_trigger["batchPolicy"] = batch_policy
+
+        # Process max concurrency
+        if has_max_concurrency:
+            converted_trigger["maxConcurrency"] = trigger_config["maxConcurrency"]
+
+        # Process parameters map
+        if "parametersMap" in trigger_config:
+            converted_trigger["parametersMap"] = trigger_config["parametersMap"]
+
+        converted_trigger_map[trigger_name] = converted_trigger
+        _LOG.info(f"Successfully processed trigger: {trigger_name}")
+
+    _LOG.info(f"Processed {len(trigger_map)} triggers for pipeline manifest")
+    return converted_trigger_map
+
+
 def populate_pipeline_spec_with_workflow_inputs(
     res: dict,
     yaml_dict: dict,
@@ -287,6 +380,13 @@ def populate_pipeline_spec_with_workflow_inputs(
 ) -> dict:
     """Populate pipeline spec with workflow inputs."""
     res["spec"] = deepcopy(yaml_dict["spec"])
+
+    trigger_map = None
+    if "manifest" in res["spec"] and "triggerMap" in res["spec"]["manifest"]:
+        trigger_map = populate_pipeline_spec_with_trigger_configs(
+            res["spec"]["manifest"]["triggerMap"]
+        )
+
     res["spec"]["commit"] = {
         "branch": repo.active_branch.name,
         "git_ref": repo.head.commit.hexsha,
@@ -299,6 +399,10 @@ def populate_pipeline_spec_with_workflow_inputs(
         "filePath": config_file_relative_path,
         "type": "PIPELINE_MANIFEST_TYPE_UNIFLOW",
     }
+
+    if trigger_map:
+        res["spec"]["manifest"]["triggerMap"] = trigger_map
+
     res["spec"]["owner"] = {"name": get_user_name()}
 
     # Add uniflow artifacts if registration succeeded

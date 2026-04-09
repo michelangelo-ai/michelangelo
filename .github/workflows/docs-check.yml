@@ -53,7 +53,9 @@ jobs:
       - name: Build
         id: build
         continue-on-error: true
-        run: bun run build 2>&1 | tee /tmp/build-output.txt
+        run: |
+          set -o pipefail
+          bun run build 2>&1 | tee /tmp/build-output.txt
 
       - name: Annotate broken links
         if: steps.build.outcome == 'failure'

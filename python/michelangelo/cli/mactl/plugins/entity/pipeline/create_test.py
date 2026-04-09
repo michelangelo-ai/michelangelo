@@ -14,6 +14,7 @@ from michelangelo.cli.mactl.plugins.entity.pipeline.create import (
     convert_crd_metadata_pipeline_create,
     get_pipeline_config_and_tar,
     handle_workflow_inputs_retrieval,
+    populate_pipeline_spec_with_trigger_configs,
     populate_pipeline_spec_with_workflow_inputs,
 )
 
@@ -453,3 +454,185 @@ class PipelineCreateTest(TestCase):
                 )
 
             self.assertIn("Error parsing uniflow input JSON", str(context.exception))
+
+    def test_empty_trigger_map(self):
+        """Test with empty trigger map returns empty dict."""
+        result = populate_pipeline_spec_with_trigger_configs({})
+        self.assertEqual(result, {})
+
+    def test_none_trigger_map(self):
+        """Test with None trigger map returns empty dict."""
+        result = populate_pipeline_spec_with_trigger_configs(None)
+        self.assertEqual(result, {})
+
+    def test_trigger_with_cron_and_max_concurrency(self):
+        """Test trigger with cron schedule and maxConcurrency."""
+        trigger_map = {
+            "daily-training": {
+                "cronSchedule": {"cron": "0 8 * * *"},
+                "maxConcurrency": 1,
+            }
+        }
+
+        result = populate_pipeline_spec_with_trigger_configs(trigger_map)
+
+        self.assertIn("daily-training", result)
+        self.assertEqual(result["daily-training"]["cronSchedule"]["cron"], "0 8 * * *")
+        self.assertEqual(result["daily-training"]["maxConcurrency"], 1)
+
+    def test_trigger_with_cron_and_batch_policy(self):
+        """Test trigger with cron schedule and batchPolicy."""
+        trigger_map = {
+            "every-minute": {
+                "cronSchedule": {"cron": "* * * * *"},
+                "batchPolicy": {"batchSize": 5, "wait": "60s"},
+            }
+        }
+
+        result = populate_pipeline_spec_with_trigger_configs(trigger_map)
+
+        self.assertIn("every-minute", result)
+        self.assertEqual(result["every-minute"]["cronSchedule"]["cron"], "* * * * *")
+        self.assertEqual(result["every-minute"]["batchPolicy"]["batchSize"], 5)
+        self.assertEqual(result["every-minute"]["batchPolicy"]["wait"], "60s")
+
+    def test_trigger_with_interval_schedule(self):
+        """Test trigger with interval schedule."""
+        trigger_map = {
+            "hourly-job": {
+                "intervalSchedule": {"interval": "1h"},
+                "maxConcurrency": 2,
+            }
+        }
+
+        result = populate_pipeline_spec_with_trigger_configs(trigger_map)
+
+        self.assertIn("hourly-job", result)
+        self.assertEqual(result["hourly-job"]["intervalSchedule"]["interval"], "1h")
+        self.assertEqual(result["hourly-job"]["maxConcurrency"], 2)
+
+    def test_trigger_with_parameters_map(self):
+        """Test trigger with parametersMap."""
+        trigger_map = {
+            "training-with-params": {
+                "cronSchedule": {"cron": "0 2 * * *"},
+                "maxConcurrency": 3,
+                "parametersMap": {
+                    "sst2-test": {
+                        "kwArgs": {
+                            "path": "glue",
+                            "name": "sst2",
+                            "tokenizer_max_length": 256,
+                        }
+                    },
+                    "cola-test": {
+                        "kwArgs": {
+                            "path": "glue",
+                            "name": "cola",
+                            "tokenizer_max_length": 128,
+                        }
+                    },
+                },
+            }
+        }
+
+        result = populate_pipeline_spec_with_trigger_configs(trigger_map)
+
+        self.assertIn("training-with-params", result)
+        self.assertIn("parametersMap", result["training-with-params"])
+        self.assertIn("sst2-test", result["training-with-params"]["parametersMap"])
+        self.assertIn("cola-test", result["training-with-params"]["parametersMap"])
+        self.assertEqual(
+            result["training-with-params"]["parametersMap"]["sst2-test"]["kwArgs"][
+                "tokenizer_max_length"
+            ],
+            256,
+        )
+
+    def test_multiple_triggers(self):
+        """Test multiple triggers in the map."""
+        trigger_map = {
+            "trigger-1": {
+                "cronSchedule": {"cron": "* * * * *"},
+                "maxConcurrency": 1,
+            },
+            "trigger-2": {
+                "intervalSchedule": {"interval": "30m"},
+                "batchPolicy": {"batchSize": 3, "wait": "30s"},
+            },
+        }
+
+        result = populate_pipeline_spec_with_trigger_configs(trigger_map)
+
+        self.assertEqual(len(result), 2)
+        self.assertIn("trigger-1", result)
+        self.assertIn("trigger-2", result)
+        self.assertIn("cronSchedule", result["trigger-1"])
+        self.assertIn("intervalSchedule", result["trigger-2"])
+
+    def test_validation_missing_both_batch_policy_and_max_concurrency(self):
+        """Test validation fails when neither batchPolicy nor maxConcurrency is present.
+
+        Ensures proper validation error when trigger lacks execution control.
+        """
+        trigger_map = {
+            "invalid-trigger": {
+                "cronSchedule": {"cron": "0 0 * * *"},
+            }
+        }
+
+        with self.assertRaises(ValueError) as context:
+            populate_pipeline_spec_with_trigger_configs(trigger_map)
+
+        self.assertIn("invalid-trigger", str(context.exception))
+        self.assertIn("must specify at least one of", str(context.exception))
+        self.assertIn("batchPolicy", str(context.exception))
+        self.assertIn("maxConcurrency", str(context.exception))
+
+    def test_validation_batch_policy_missing_batch_size(self):
+        """Test validation fails when batchPolicy is missing batchSize."""
+        trigger_map = {
+            "incomplete-batch": {
+                "cronSchedule": {"cron": "0 0 * * *"},
+                "batchPolicy": {"wait": "60s"},
+            }
+        }
+
+        with self.assertRaises(ValueError) as context:
+            populate_pipeline_spec_with_trigger_configs(trigger_map)
+
+        self.assertIn("incomplete-batch", str(context.exception))
+        self.assertIn("batchPolicy must include 'batchSize'", str(context.exception))
+
+    def test_validation_batch_policy_missing_wait(self):
+        """Test validation fails when batchPolicy is missing wait."""
+        trigger_map = {
+            "incomplete-batch": {
+                "cronSchedule": {"cron": "0 0 * * *"},
+                "batchPolicy": {"batchSize": 5},
+            }
+        }
+
+        with self.assertRaises(ValueError) as context:
+            populate_pipeline_spec_with_trigger_configs(trigger_map)
+
+        self.assertIn("incomplete-batch", str(context.exception))
+        self.assertIn("batchPolicy must include 'wait'", str(context.exception))
+
+    def test_trigger_with_both_batch_policy_and_max_concurrency(self):
+        """Test trigger can have both batchPolicy and maxConcurrency."""
+        trigger_map = {
+            "dual-control": {
+                "cronSchedule": {"cron": "0 0 * * *"},
+                "batchPolicy": {"batchSize": 5, "wait": "60s"},
+                "maxConcurrency": 3,
+            }
+        }
+
+        result = populate_pipeline_spec_with_trigger_configs(trigger_map)
+
+        self.assertIn("dual-control", result)
+        self.assertIn("batchPolicy", result["dual-control"])
+        self.assertIn("maxConcurrency", result["dual-control"])
+        self.assertEqual(result["dual-control"]["batchPolicy"]["batchSize"], 5)
+        self.assertEqual(result["dual-control"]["maxConcurrency"], 3)

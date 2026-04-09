@@ -100,6 +100,7 @@ export { useURLQueryString } from '#core/hooks/routing/use-url-query-string';
 export * from '#core/utils/object-utils';
 export * from '#core/utils/string-utils';
 export * from '#core/utils/time-utils';
+export { TimeZone } from '#core/types/time-types';
 
 export * from '#core/types/common/studio-types';
 export * from '#core/types/common/view-types';

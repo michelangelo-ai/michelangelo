@@ -29,7 +29,7 @@ ENV PYTHON_VERSION=3.9.18
 RUN wget https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSION.tgz && \
     tar xvf Python-$PYTHON_VERSION.tgz && \
     cd Python-$PYTHON_VERSION && \
-    ./configure --enable-optimizations && \
+    ./configure && \
     make -j$(nproc) && \
     make altinstall && \
     cd .. && \
@@ -39,9 +39,9 @@ RUN wget https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSIO
 RUN ln -sf /usr/local/bin/python3.9 /usr/bin/python3 && \
     ln -sf /usr/local/bin/python3.9 /usr/bin/python
 
-# Install pip and Poetry
+# Install pip and Poetry (pin to 1.x which supports Python 3.9)
 RUN python --version
-RUN curl -sSL https://install.python-poetry.org | python3 -
+RUN curl -sSL https://install.python-poetry.org | POETRY_VERSION=1.8.5 python3 -
 ENV PATH="/root/.local/bin:$PATH"
 RUN poetry --version
 
@@ -80,8 +80,12 @@ RUN mkdir -p ${SPARK_HOME}/conf && \
 # Install OpenJDK 11 (multi-arch compatible and open-source)
 RUN apt-get update && apt-get install -y openjdk-11-jdk
 
-# Set JAVA_HOME and update PATH
-ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-arm64
+# Detect JAVA_HOME at build time so the image works on both arm64 and amd64.
+RUN JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java)))) && \
+    echo "JAVA_HOME=${JAVA_HOME}" >> /etc/environment && \
+    echo "export JAVA_HOME=${JAVA_HOME}" >> /etc/profile.d/java.sh
+ARG TARGETARCH=amd64
+ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-${TARGETARCH}
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 # Set working directory

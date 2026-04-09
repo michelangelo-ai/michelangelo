@@ -9,6 +9,7 @@ import { HeadingXXLarge, LabelLarge, ParagraphSmall } from 'baseui/typography';
 import { CellType } from '#core/components/cell/constants';
 import { FormErrorBanner } from '#core/components/form/components/form-error-banner/form-error-banner';
 import { CheckboxField } from '#core/components/form/fields/checkbox/checkbox-field';
+import { MapField } from '#core/components/form/fields/map/map-field';
 import { MarkdownField } from '#core/components/form/fields/markdown/markdown-field';
 import { NumberField } from '#core/components/form/fields/number/number-field';
 import { SelectField } from '#core/components/form/fields/select/select-field';
@@ -762,6 +763,70 @@ export function Sandbox() {
                 Are you sure you want to delete this pipeline? This action cannot be undone.
               </ConfirmDialog>
             </Block>
+          </Block>
+        </Tab>
+
+        <Tab title="Map Field">
+          <Block marginTop="24px" maxWidth="600px">
+            <Form
+              onSubmit={(values) => console.log('Submitted:', values)}
+              initialValues={{
+                existingMap: { host: 'localhost', port: '8080', env: 'production' },
+                readOnlyMap: { region: 'us-east-1', cluster: 'primary' },
+              }}
+            >
+              <FormGroup title="Basic Map Field">
+                <MapField
+                  name="features"
+                  label="Features"
+                  keyConfig={{ placeholder: 'Feature name' }}
+                  valueConfig={{ placeholder: 'Transformation' }}
+                  emptyMessage="No features configured. Click 'Add more' to begin."
+                />
+              </FormGroup>
+
+              <FormGroup title="Pre-populated Map">
+                <MapField
+                  name="existingMap"
+                  label="Configuration"
+                  keyConfig={{ placeholder: 'Key' }}
+                  valueConfig={{ placeholder: 'Value' }}
+                />
+              </FormGroup>
+
+              <FormGroup title="Single Value Mode">
+                <MapField
+                  name="singleEntry"
+                  label="Primary Setting"
+                  singleValue
+                  keyConfig={{ placeholder: 'Setting name' }}
+                  valueConfig={{ placeholder: 'Setting value' }}
+                />
+              </FormGroup>
+
+              <FormGroup title="Read-Only Map">
+                <MapField name="readOnlyMap" label="Deployed Config" readOnly />
+              </FormGroup>
+
+              <Block display="flex" justifyContent="flex-end" marginTop="scale600">
+                <Button type="submit">Submit</Button>
+              </Block>
+
+              <FormSpy subscription={{ values: true }}>
+                {({ values }) => (
+                  <Block
+                    as="pre"
+                    marginTop="scale600"
+                    padding="scale600"
+                    backgroundColor="backgroundSecondary"
+                    font="font300"
+                    overrides={{ Block: { style: { borderRadius: '8px', overflow: 'auto' } } }}
+                  >
+                    {JSON.stringify(values, null, 2)}
+                  </Block>
+                )}
+              </FormSpy>
+            </Form>
           </Block>
         </Tab>
       </Tabs>
