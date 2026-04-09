@@ -53,15 +53,19 @@ jobs:
       - name: Build
         id: build
         continue-on-error: true
+        env:
+          CI_LINT: 'true'
+          NO_COLOR: '1'
         run: |
           set -o pipefail
           bun run build 2>&1 | tee /tmp/build-output.txt
 
       - name: Annotate broken links
-        if: steps.build.outcome == 'failure'
+        id: annotate
         working-directory: .
         run: |
           current_file=""
+          found_broken=false
           # Regex stored in variable to avoid bash [[ =~ ]] quoting issues
           mdx_re='Markdown link with URL .([^ ]+). in source file "\.\./([^"]+)" \(([0-9]+):'
           while IFS= read -r line; do
@@ -72,6 +76,7 @@ jobs:
               source_file="${BASH_REMATCH[2]}"
               line_num="${BASH_REMATCH[3]}"
               echo "::error file=${source_file},line=${line_num}::Broken link: '${broken_link}' could not be resolved"
+              found_broken=true
             fi
 
             # Format 2: Post-build broken route links
@@ -110,9 +115,14 @@ jobs:
                   done <<< "$matches"
                 fi
               fi
+              found_broken=true
             fi
           done < /tmp/build-output.txt
 
-      - name: Fail if build failed
-        if: steps.build.outcome == 'failure'
+          if [[ "$found_broken" == "true" ]]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fail if broken links or build error
+        if: steps.build.outcome == 'failure' || steps.annotate.outputs.found == 'true'
         run: exit 1
