@@ -8,40 +8,7 @@ Create or update a GitHub PR following the repo's pull request template.
 
 ## Template Format
 
-Always use this exact structure for the PR body, sourced from `.github/pull_request_template.md`:
-
-```
-**What type of PR is this? (check all applicable)**
-- [ ] Refactor
-- [ ] Feature
-- [ ] Bug Fix
-- [ ] Optimization
-- [ ] Documentation Update
-
-**What changed?**
-
-<description of what changed>
-
-**Why?**
-
-<reason for the change>
-
-**How did you test it?**
-
-<testing approach>
-
-**Potential risks**
-
-<risks or "None">
-
-**Release notes**
-
-<release notes or "N/A">
-
-**Documentation Changes**
-
-<doc changes or "N/A">
-```
+Read the template from `.github/pull_request_template.md` and use it as the exact structure for the PR body.
 
 ## Your Task
 
