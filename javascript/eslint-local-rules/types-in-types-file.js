@@ -16,8 +16,7 @@ const rule = {
   meta: {
     type: 'suggestion',
     docs: {
-      description:
-        'Require type/interface declarations to live in a types.ts file',
+      description: 'Require type/interface declarations to live in a types.ts file',
       recommended: true,
     },
     messages: {
@@ -41,7 +40,11 @@ const rule = {
     const basename = filename.split('/').pop() ?? '';
 
     // Allow everything inside types.ts files, files in a types/ directory, or *-types.ts files
-    if (/^types\.[tj]sx?$/.test(basename) || /[\\/]types[\\/]/.test(filename) || /-types\.[tj]sx?$/.test(basename)) {
+    if (
+      /^types\.[tj]sx?$/.test(basename) ||
+      /[\\/]types[\\/]/.test(filename) ||
+      /-types\.[tj]sx?$/.test(basename)
+    ) {
       return {};
     }
 
@@ -69,15 +72,12 @@ const rule = {
 
       // Collect type names used in function parameter annotations
       'FunctionDeclaration > Identifier.params, FunctionDeclaration > ObjectPattern.params, ArrowFunctionExpression > Identifier.params, ArrowFunctionExpression > ObjectPattern.params, FunctionExpression > Identifier.params, FunctionExpression > ObjectPattern.params'(
-        node,
+        node
       ) {
         const annotation = node.typeAnnotation?.typeAnnotation;
         if (!annotation) return;
 
-        if (
-          annotation.type === 'TSTypeReference' &&
-          annotation.typeName?.type === 'Identifier'
-        ) {
+        if (annotation.type === 'TSTypeReference' && annotation.typeName?.type === 'Identifier') {
           paramTypeNames.add(annotation.typeName.name);
         }
       },
@@ -93,10 +93,7 @@ const rule = {
           return;
         }
         for (const typeArg of node.typeArguments.params) {
-          if (
-            typeArg.type === 'TSTypeReference' &&
-            typeArg.typeName?.type === 'Identifier'
-          ) {
+          if (typeArg.type === 'TSTypeReference' && typeArg.typeName?.type === 'Identifier') {
             paramTypeNames.add(typeArg.typeName.name);
           }
         }
