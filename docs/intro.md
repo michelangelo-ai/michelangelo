@@ -6,8 +6,6 @@ title: Welcome
 
 # Welcome to Michelangelo
 
-[Broken markdown link for testing format 1](./this-page-does-not-exist.md)
-
 [Broken route link for testing format 2](/docs/this-route-does-not-exist)
 
 Michelangelo is an end-to-end ML platform for building, deploying, and managing machine learning models. Born at Uber — where it powers **25,000+ model trainings per month** and **~30 million predictions per second** — now open source.
