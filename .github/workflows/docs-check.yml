@@ -62,10 +62,12 @@ jobs:
         working-directory: .
         run: |
           current_file=""
+          # Regex stored in variable to avoid bash [[ =~ ]] quoting issues
+          mdx_re='Markdown link with URL .([^ ]+). in source file "\.\./([^"]+)" \(([0-9]+):'
           while IFS= read -r line; do
             # Format 1: MDX compilation errors (markdown links caught during build)
             # e.g. Markdown link with URL `testing.md` in source file "../docs/contributing/index.md" (63:21) couldn't be resolved.
-            if [[ "$line" =~ Markdown\ link\ with\ URL\ .(.+).\ in\ source\ file\ \"\.\./(.*)"\ \(([0-9]+): ]]; then
+            if [[ "$line" =~ $mdx_re ]]; then
               broken_link="${BASH_REMATCH[1]}"
               source_file="${BASH_REMATCH[2]}"
               line_num="${BASH_REMATCH[3]}"
@@ -74,7 +76,7 @@ jobs:
 
             # Format 2: Post-build broken route links
             # e.g. - Broken link on source page path = /michelangelo/docs/guides/api:
-            #         -> linking to /docs/nonexistent
+            #         -> linking to /michelangelo/docs/nonexistent
             if [[ "$line" =~ "Broken link on source page path = /michelangelo/"(.*): ]]; then
               page_path="${BASH_REMATCH[1]}"
               page_path="${page_path%/}"
@@ -86,15 +88,27 @@ jobs:
                 current_file=""
               fi
             fi
-            if [[ "$line" =~ "-> linking to "([^[:space:]]+) ]] && [[ -n "$current_file" ]]; then
+            if [[ "$line" =~ "-> linking to "([^[:space:]]+) ]]; then
               broken_link="${BASH_REMATCH[1]}"
-              line_nums=$(grep -n "$broken_link" "$current_file" 2>/dev/null | cut -d: -f1)
-              if [[ -n "$line_nums" ]]; then
-                while IFS= read -r line_num; do
-                  echo "::error file=${current_file},line=${line_num}::Broken link: '${broken_link}' could not be resolved"
-                done <<< "$line_nums"
+              # Strip baseUrl prefix so grep matches source text
+              search_link="${broken_link#/michelangelo}"
+              if [[ -n "$current_file" ]]; then
+                line_nums=$(grep -n "$search_link" "$current_file" 2>/dev/null | cut -d: -f1)
+                if [[ -n "$line_nums" ]]; then
+                  while IFS= read -r line_num; do
+                    echo "::error file=${current_file},line=${line_num}::Broken link: '${search_link}' could not be resolved"
+                  done <<< "$line_nums"
+                else
+                  echo "::error file=${current_file}::Broken link: '${search_link}' could not be resolved"
+                fi
               else
-                echo "::error file=${current_file}::Broken link: '${broken_link}' could not be resolved"
+                # Source file couldn't be resolved (e.g. custom slug), search all docs
+                matches=$(grep -rn "$search_link" docs/ --include='*.md' 2>/dev/null | head -5)
+                if [[ -n "$matches" ]]; then
+                  while IFS=: read -r file line_num _; do
+                    echo "::error file=${file},line=${line_num}::Broken link: '${search_link}' could not be resolved"
+                  done <<< "$matches"
+                fi
               fi
             fi
           done < /tmp/build-output.txt
