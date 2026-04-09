@@ -63,6 +63,18 @@ jobs:
         run: |
           current_file=""
           while IFS= read -r line; do
+            # Format 1: MDX compilation errors (markdown links caught during build)
+            # e.g. Markdown link with URL `testing.md` in source file "../docs/contributing/index.md" (63:21) couldn't be resolved.
+            if [[ "$line" =~ Markdown\ link\ with\ URL\ .(.+).\ in\ source\ file\ \"\.\./(.*)"\ \(([0-9]+): ]]; then
+              broken_link="${BASH_REMATCH[1]}"
+              source_file="${BASH_REMATCH[2]}"
+              line_num="${BASH_REMATCH[3]}"
+              echo "::error file=${source_file},line=${line_num}::Broken link: '${broken_link}' could not be resolved"
+            fi
+
+            # Format 2: Post-build broken route links
+            # e.g. - Broken link on source page path = /michelangelo/docs/guides/api:
+            #         -> linking to /docs/nonexistent
             if [[ "$line" =~ "Broken link on source page path = /michelangelo/"(.*): ]]; then
               page_path="${BASH_REMATCH[1]}"
               page_path="${page_path%/}"
