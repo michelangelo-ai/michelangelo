@@ -20,6 +20,17 @@ const rule = {
       recommended: true,
     },
     messages: {
+      inlineType: [
+        "'{{ name }}' is a type declaration outside of a types.ts file.",
+        'Consider inlining it at the call site instead of declaring it separately.',
+        '',
+        '  // Before',
+        '  type {{ name }} = { ... };',
+        '  function foo(arg: {{ name }}) { ... }',
+        '',
+        '  // After',
+        '  function foo(arg: { ... }) { ... }',
+      ].join('\n'),
       typesInTypesFile: [
         "'{{ name }}' is a type declaration outside of a types.ts file.",
         'Move it to a co-located types.ts and import from there.',
@@ -29,7 +40,6 @@ const rule = {
         '',
         '  // component.tsx',
         "  import type { {{ name }} } from './types';",
-        '',
       ].join('\n'),
     },
     schema: [],
@@ -48,14 +58,24 @@ const rule = {
       return {};
     }
 
-    // Track all type/interface declarations and their nodes
     const declaredTypes = [];
-
-    // Track names used as function parameter type annotations
     const paramTypeNames = new Set();
+    const countTypeRefs = new Map();
+
+    function isSmall(node) {
+      if (node.type === 'TSTypeAliasDeclaration') {
+        const t = node.typeAnnotation;
+        if (t.type === 'TSTypeLiteral') return t.members.length <= 2;
+        if (t.type === 'TSUnionType') return t.types.length <= 2;
+        return false;
+      }
+      if (node.type === 'TSInterfaceDeclaration') {
+        return node.body.body.length <= 2;
+      }
+      return false;
+    }
 
     return {
-      // Collect all type/interface declarations (exported or local)
       TSInterfaceDeclaration(node) {
         const name = node.id?.name;
         if (name) {
@@ -70,7 +90,6 @@ const rule = {
         }
       },
 
-      // Collect type names used in function parameter annotations
       'FunctionDeclaration > Identifier.params, FunctionDeclaration > ObjectPattern.params, ArrowFunctionExpression > Identifier.params, ArrowFunctionExpression > ObjectPattern.params, FunctionExpression > Identifier.params, FunctionExpression > ObjectPattern.params'(
         node
       ) {
@@ -82,7 +101,13 @@ const rule = {
         }
       },
 
-      // Collect Props types passed as generic args to forwardRef<Ref, Props>(...)
+      TSTypeReference(node) {
+        if (node.typeName?.type === 'Identifier') {
+          const name = node.typeName.name;
+          countTypeRefs.set(name, (countTypeRefs.get(name) ?? 0) + 1);
+        }
+      },
+
       CallExpression(node) {
         const callee = node.callee;
         if (
@@ -99,14 +124,16 @@ const rule = {
         }
       },
 
-      // At program exit, report types that aren't Props interfaces used as params
       'Program:exit'() {
         for (const { name, node } of declaredTypes) {
           if (name.endsWith('Props') && paramTypeNames.has(name)) continue;
 
+          const isSingleUse = (countTypeRefs.get(name) ?? 0) === 1;
+          const small = isSmall(node);
+
           context.report({
             node,
-            messageId: 'typesInTypesFile',
+            messageId: isSingleUse && small ? 'inlineType' : 'typesInTypesFile',
             data: { name },
           });
         }
