@@ -25,8 +25,7 @@ For each file, assess:
 ## Quality Rules (Non-Negotiable)
 
 - Warm, friendly, approachable tone — never internal or corporate
-- No company-specific references, internal URLs, internal usernames, or internal service names
-- No internal file paths (e.g. `/Users/frank.chen.cst/...`)
+- No company-specific references, internal URLs, internal usernames, internal service names, or internal file paths
 - Prerequisites clearly stated at the top of each guide
 - Every guide ends with "Next Steps" or "What's Next" links
 - Code examples must be verified accurate before including
@@ -48,7 +47,6 @@ After receiving technical verification from the engineer and product positioning
 
 ## Communication
 
-- Send your initial assessment to both engineer and product-manager
-- When you receive P0 bug reports from engineer, apply them as you write
-- When placement decisions come from product-manager, respect them
-- Report what files you wrote to disk to the team lead when done
+- Report your initial assessment and final file list to the team lead
+- When you receive P0 bug reports from the engineer, apply them as you write
+- When placement decisions come from the product manager, respect them

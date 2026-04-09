@@ -1,5 +1,5 @@
 ---
-name: engineer
+name: doc-engineer
 description: Audits codebase features against documentation. Use for verifying technical accuracy of docs — code examples, API methods, CLI flags, YAML schemas, proto enums, and file paths.
 model: sonnet
 tools: Read Glob Grep Bash

@@ -27,13 +27,13 @@ Always evaluate content against this model:
 - **Target audience**: Who reads this? What do they already know? What is their goal?
 - **User journey**: Which file first? What sequence?
 - **Value propositions**: 3-5 things every file should reinforce
-- **Open-source gaps**: What feels Uber-internal or corporate vs welcoming to OSS community?
+- **Open-source gaps**: What assumes internal context? e.g., internal URLs, company jargon, Uber-specific service names, or tone that presumes the reader is an employee
 - **Scope violations**: Content that belongs in a different section
 - **Missing content**: What would a new user need that isn't here?
 
 ## Output Format
 
-Send a structured product brief to tech-writer and engineer with:
+Report a structured product brief to the team lead with:
 1. Audience definition
 2. Recommended user journey
 3. Scope violations with specific file/section citations
