@@ -139,4 +139,12 @@ jobs:
 
       - name: Fail if broken links or build error
         if: steps.build.outcome == 'failure' || steps.annotate.outputs.found == 'true'
-        run: exit 1
+        run: |
+          if [[ "${{ steps.annotate.outputs.found }}" == "true" ]] && [[ "${{ steps.build.outcome }}" == "failure" ]]; then
+            echo "Build failed and broken links were found. See annotations above for details."
+          elif [[ "${{ steps.annotate.outputs.found }}" == "true" ]]; then
+            echo "Broken links were found. See annotations above for details."
+          else
+            echo "Build failed. Check the build step logs for details."
+          fi
+          exit 1
