@@ -551,3 +551,42 @@ class GenerateGetTest(TestCase):
         call_args = mock_crd_method_call_kwargs.call_args
         self.assertEqual(call_args.kwargs["namespace"], "test-ns")
         self.assertEqual(call_args.kwargs["name"], "test-name")
+
+
+class GenerateListTest(TestCase):
+    """Test cases for CRD.generate_list method."""
+
+    @patch.object(CRD, "_extract_method_info")
+    def test_generate_list(self, mock_extract_method_info):
+        """Test generate_list creates both list and _list methods on CRD instance."""
+        mock_channel = Mock()
+        mock_extract_method_info.return_value = ("ListTestCrd", Mock, Mock)
+
+        crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.generate_list(mock_channel)
+
+        self.assertTrue(hasattr(crd, "list"))
+        self.assertTrue(callable(crd.list))
+        self.assertTrue(hasattr(crd, "_list"))
+        self.assertTrue(callable(crd._list))
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.ParseDict")
+    @patch.object(CRD, "_extract_method_info")
+    def test_generate_list_raw_execution(
+        self, mock_extract_method_info, mock_parse_dict, mock_crd_method_call
+    ):
+        """Test the generated _list method returns raw response without printing."""
+        mock_channel = Mock()
+        mock_extract_method_info.return_value = ("ListTestCrd", Mock, Mock)
+        mock_response = Mock()
+        mock_crd_method_call.return_value = mock_response
+
+        crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.generate_list(mock_channel)
+
+        result = crd._list(namespace="test-ns")
+
+        self.assertEqual(result, mock_response)
+        request_dict = mock_parse_dict.call_args[0][0]
+        self.assertEqual(request_dict["namespace"], "test-ns")
