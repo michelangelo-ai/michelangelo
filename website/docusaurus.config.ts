@@ -18,12 +18,15 @@ const config: Config = {
   organizationName: 'michelangelo-ai',
   projectName: 'michelangelo',
 
-  onBrokenLinks: 'throw',
+  // In CI lint mode, use 'warn' so all broken links are reported at once
+  // rather than failing on the first one. The workflow fails the build after
+  // annotating every broken link.
+  onBrokenLinks: process.env.CI_LINT === 'true' ? 'warn' : 'throw',
 
   markdown: {
     format: 'md',
     hooks: {
-      onBrokenMarkdownLinks: 'throw',
+      onBrokenMarkdownLinks: process.env.CI_LINT === 'true' ? 'warn' : 'throw',
     },
   },
 
