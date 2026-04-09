@@ -41,10 +41,10 @@ export function ActionMenu(props: ActionMenuProps) {
   const items = useMemo(
     () =>
       props.actions.map((action) => {
-        const disabledRule = action.disabled?.find((rule) => rule.condition(props.record));
+        const disabledRule = action.disabled?.find((rule) => rule.condition);
         return { ...action, disabled: !!disabledRule, disabledMessage: disabledRule?.message };
       }),
-    [props.actions, props.record]
+    [props.actions]
   );
 
   return (

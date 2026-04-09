@@ -1,4 +1,4 @@
-import type { ActionConfig } from '#core/components/actions/types';
+import type { ActionConfigSchema } from '#core/components/actions/types';
 
 export interface DetailViewProps extends DetailHeaderBaseProps {
   /**
@@ -26,7 +26,7 @@ export interface DetailHeaderBaseProps {
    * operate on the currently viewed entity record. For example, a "Delete" action would delete
    * the currently viewed entity.
    */
-  actions?: ActionConfig[];
+  actions?: ActionConfigSchema<object>[];
 
   /** The data for the currently viewed entity. */
   record?: Record<string, unknown>;

@@ -136,7 +136,7 @@ describe('ActionsPopover', () => {
     const disabledAction = {
       display: { label: 'Delete' },
       component: DeleteDialog,
-      disabled: [{ condition: () => true, message: 'Cannot delete' }],
+      disabled: [{ condition: true, message: 'Cannot delete' }],
     };
 
     it('renders a disabled action as visible in the menu', async () => {
@@ -186,7 +186,7 @@ describe('ActionsPopover', () => {
       });
     });
 
-    it('passes the record to the disabled condition', async () => {
+    it('shows the disabled message when condition is true', async () => {
       const user = userEvent.setup();
       render(
         <ActionsPopover
@@ -194,7 +194,7 @@ describe('ActionsPopover', () => {
             {
               display: { label: 'Delete' },
               component: DeleteDialog,
-              disabled: [{ condition: (r) => r.status === 'locked', message: 'Item is locked' }],
+              disabled: [{ condition: true, message: 'Item is locked' }],
             },
           ]}
           record={{ status: 'locked' }}
@@ -215,8 +215,8 @@ describe('ActionsPopover', () => {
               display: { label: 'Delete' },
               component: DeleteDialog,
               disabled: [
-                { condition: () => false, message: 'Should not appear' },
-                { condition: () => true, message: 'Second rule matches' },
+                { condition: false, message: 'Should not appear' },
+                { condition: true, message: 'Second rule matches' },
               ],
             },
           ]}
@@ -238,12 +238,12 @@ describe('ActionsPopover', () => {
             {
               display: { label: 'Delete' },
               component: DeleteDialog,
-              disabled: [{ condition: () => true, message: 'Cannot delete' }],
+              disabled: [{ condition: true, message: 'Cannot delete' }],
             },
             {
               display: { label: 'Archive' },
               component: DeleteDialog,
-              disabled: [{ condition: () => true, message: 'Cannot archive' }],
+              disabled: [{ condition: true, message: 'Cannot archive' }],
             },
           ]}
           record={{}}
@@ -292,12 +292,12 @@ describe('ActionsPopover', () => {
             {
               display: { label: 'Delete' },
               component: DeleteDialog,
-              disabled: [{ condition: () => true, message: 'Cannot delete' }],
+              disabled: [{ condition: true, message: 'Cannot delete' }],
             },
             {
               display: { label: 'Archive' },
               component: DeleteDialog,
-              disabled: [{ condition: () => true, message: 'Cannot archive' }],
+              disabled: [{ condition: true, message: 'Cannot archive' }],
             },
           ]}
           record={{}}
