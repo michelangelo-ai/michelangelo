@@ -66,8 +66,24 @@ jobs:
         run: |
           current_file=""
           found_broken=false
+          declare -A seen_annotations
           # Regex stored in variable to avoid bash [[ =~ ]] quoting issues
           mdx_re='Markdown link with URL .([^ ]+). in source file "\.\./([^"]+)" \(([0-9]+):'
+
+          emit_annotation() {
+            local file="$1" line="$2" link="$3"
+            local key="${file}:${line}:${link}"
+            if [[ -z "${seen_annotations[$key]+x}" ]]; then
+              seen_annotations[$key]=1
+              if [[ -n "$line" ]]; then
+                echo "::error file=${file},line=${line}::Broken link: '${link}' could not be resolved"
+              else
+                echo "::error file=${file}::Broken link: '${link}' could not be resolved"
+              fi
+              found_broken=true
+            fi
+          }
+
           while IFS= read -r line; do
             # Format 1: MDX compilation errors (markdown links caught during build)
             # e.g. Markdown link with URL `testing.md` in source file "../docs/contributing/index.md" (63:21) couldn't be resolved.
@@ -75,8 +91,7 @@ jobs:
               broken_link="${BASH_REMATCH[1]}"
               source_file="${BASH_REMATCH[2]}"
               line_num="${BASH_REMATCH[3]}"
-              echo "::error file=${source_file},line=${line_num}::Broken link: '${broken_link}' could not be resolved"
-              found_broken=true
+              emit_annotation "$source_file" "$line_num" "$broken_link"
             fi
 
             # Format 2: Post-build broken route links
@@ -101,21 +116,20 @@ jobs:
                 line_nums=$(grep -n "$search_link" "$current_file" 2>/dev/null | cut -d: -f1)
                 if [[ -n "$line_nums" ]]; then
                   while IFS= read -r line_num; do
-                    echo "::error file=${current_file},line=${line_num}::Broken link: '${search_link}' could not be resolved"
+                    emit_annotation "$current_file" "$line_num" "$search_link"
                   done <<< "$line_nums"
                 else
-                  echo "::error file=${current_file}::Broken link: '${search_link}' could not be resolved"
+                  emit_annotation "$current_file" "" "$search_link"
                 fi
               else
                 # Source file couldn't be resolved (e.g. custom slug), search all docs
                 matches=$(grep -rn "$search_link" docs/ --include='*.md' 2>/dev/null | head -5)
                 if [[ -n "$matches" ]]; then
                   while IFS=: read -r file line_num _; do
-                    echo "::error file=${file},line=${line_num}::Broken link: '${search_link}' could not be resolved"
+                    emit_annotation "$file" "$line_num" "$search_link"
                   done <<< "$matches"
                 fi
               fi
-              found_broken=true
             fi
           done < /tmp/build-output.txt
 
