@@ -1,16 +1,3 @@
-/**
- * @fileoverview Type/interface declarations must live in a types.ts file.
- *
- * Scattering types across component files makes them hard to find and reuse.
- * Keeping them in a co-located types.ts keeps the type surface discoverable.
- *
- * Exceptions:
- *   - Component prop interfaces (name ending in "Props") used as a function
- *     parameter type or forwardRef generic argument in the same file are
- *     allowed — they are tightly coupled to the component.
- *   - Test and fixture files are excluded via ESLint config (not this rule).
- */
-
 /** @type {import('eslint').Rule.RuleModule} */
 const rule = {
   meta: {
