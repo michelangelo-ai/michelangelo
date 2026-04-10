@@ -138,10 +138,11 @@ If you want to fix a bug or propose a new feature you’ll do this through creat
 <a id="how-do-i-submit-a-good-pull-request"></a>
 ### How Do I Submit a Good Pull Request?
 
-* Use a **clear and descriptive title** for the Pull Request.
-* Follow this [Pull Request template](https://github.com/michelangelo-ai/michelangelo/blob/main/.github/pull_request_template.md).
+* Use a **clear and descriptive title** for the Pull Request — it becomes the commit subject on `main` after squash & merge.
+* Fill in the [Pull Request template](https://github.com/michelangelo-ai/michelangelo/blob/main/.github/pull_request_template.md):
+  * **Summary** — Write a short narrative explaining *what* the PR does and *why*. This section becomes the squash commit message, so focus on motivation and context rather than listing files changed.
+  * **Test plan** — Describe what you ran or verified: specific tests, manual steps, or screenshots.
 * **Link the issue** related to this Pull Request, if present.
-* Provide a **short description of the solution you proposed** in as many details as possible.
 * **Use comments in the code** that you provide to give us more context to any code based submissions.
 
 Thanks for contributing into our project.
