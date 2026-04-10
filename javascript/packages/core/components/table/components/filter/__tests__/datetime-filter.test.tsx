@@ -16,14 +16,12 @@ describe('DatetimeFilter', () => {
   const mockSetFilterValue = vi.fn();
   const mockGetFilterValue = vi.fn();
 
-  const mockColumn = {
-    id: 'createdAt',
-    label: 'Created At',
-    type: 'date',
-  };
-
-  const defaultProps: ColumnFilterProps = {
-    column: mockColumn,
+  const buildDefaultProps = (): ColumnFilterProps => ({
+    column: {
+      id: 'createdAt',
+      label: 'Created At',
+      type: 'date',
+    },
     close: mockClose,
     getFilterValue: mockGetFilterValue,
     setFilterValue: mockSetFilterValue,
@@ -32,7 +30,7 @@ describe('DatetimeFilter', () => {
       { getValue: () => 1680307200, record: { createdAt: 1680307200 } }, // 2023-04-01 epoch seconds
       { getValue: () => 1687824000, record: { createdAt: 1687824000 } }, // 2023-06-27 epoch seconds
     ],
-  };
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -41,7 +39,7 @@ describe('DatetimeFilter', () => {
 
   it('should use UNIFIED_API_ORIGIN_DATE as default start date', () => {
     render(
-      <DatetimeFilter {...defaultProps} />,
+      <DatetimeFilter {...buildDefaultProps()} />,
       buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
     );
 
@@ -61,7 +59,7 @@ describe('DatetimeFilter', () => {
     mockGetFilterValue.mockReturnValue(existingFilter);
 
     render(
-      <DatetimeFilter {...defaultProps} />,
+      <DatetimeFilter {...buildDefaultProps()} />,
       buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
     );
 
@@ -74,7 +72,7 @@ describe('DatetimeFilter', () => {
     mockGetFilterValue.mockReturnValue(undefined);
 
     render(
-      <DatetimeFilter {...defaultProps} />,
+      <DatetimeFilter {...buildDefaultProps()} />,
       buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
     );
 
@@ -96,7 +94,7 @@ describe('DatetimeFilter', () => {
     mockGetFilterValue.mockReturnValue(filterWithStringDates);
 
     render(
-      <DatetimeFilter {...defaultProps} />,
+      <DatetimeFilter {...buildDefaultProps()} />,
       buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
     );
 
@@ -117,7 +115,7 @@ describe('DatetimeFilter', () => {
     mockGetFilterValue.mockReturnValue(filter2022);
 
     render(
-      <DatetimeFilter {...defaultProps} />,
+      <DatetimeFilter {...buildDefaultProps()} />,
       buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
     );
 
@@ -130,7 +128,7 @@ describe('DatetimeFilter', () => {
     const user = userEvent.setup();
 
     render(
-      <DatetimeFilter {...defaultProps} />,
+      <DatetimeFilter {...buildDefaultProps()} />,
       buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
     );
 
@@ -151,7 +149,7 @@ describe('DatetimeFilter', () => {
     mockGetFilterValue.mockReturnValue(malformedFilter);
 
     render(
-      <DatetimeFilter {...defaultProps} />,
+      <DatetimeFilter {...buildDefaultProps()} />,
       buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
     );
 
@@ -171,7 +169,7 @@ describe('DatetimeFilter', () => {
     mockGetFilterValue.mockReturnValue(incompleteFilter);
 
     render(
-      <DatetimeFilter {...defaultProps} />,
+      <DatetimeFilter {...buildDefaultProps()} />,
       buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
     );
 

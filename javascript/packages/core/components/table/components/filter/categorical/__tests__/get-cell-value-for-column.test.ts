@@ -5,21 +5,15 @@ import type { FilterableRow } from '#core/components/table/components/filter/typ
 import type { ColumnConfig } from '#core/components/table/types/column-types';
 
 describe('getCellValueForColumn', () => {
-  const mockRecord = {
-    name: 'my-pipeline',
-    version: 'v1.0',
-    status: 'running',
-  };
-
   const createMockRow = (getValue: (id: string) => unknown): Row<unknown> =>
     ({
       getValue,
-      original: mockRecord,
+      original: { name: 'my-pipeline', version: 'v1.0', status: 'running' },
     }) as Row<unknown>;
 
   const createMockFilterableRow = (getValue: (id: string) => unknown): FilterableRow<unknown> => ({
     getValue,
-    record: mockRecord,
+    record: { name: 'my-pipeline', version: 'v1.0', status: 'running' },
   });
 
   describe('regular columns (no items)', () => {

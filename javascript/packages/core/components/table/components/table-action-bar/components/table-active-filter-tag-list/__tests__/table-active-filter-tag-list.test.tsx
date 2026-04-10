@@ -10,7 +10,7 @@ import { ActiveFilterTagList } from '../table-active-filter-tag-list';
 import type { FilterableColumn } from '#core/components/table/components/table-action-bar/types';
 
 describe('ActiveFilterTagList', () => {
-  const mockFilterableColumns: FilterableColumn[] = [
+  const buildFilterableColumns = (): FilterableColumn[] => [
     {
       id: 'testCol1',
       label: 'Option 1',
@@ -39,7 +39,7 @@ describe('ActiveFilterTagList', () => {
   ];
 
   test('renders nothing when no columns have active filters', () => {
-    const columnsWithoutFilters = mockFilterableColumns.map((col) => ({
+    const columnsWithoutFilters = buildFilterableColumns().map((col) => ({
       ...col,
       getFilterValue: () => undefined,
     }));
@@ -56,7 +56,7 @@ describe('ActiveFilterTagList', () => {
 
   test('renders active filter tags for columns with filter values', () => {
     render(
-      <ActiveFilterTagList filterableColumns={mockFilterableColumns} preFilteredRows={[]} />,
+      <ActiveFilterTagList filterableColumns={buildFilterableColumns()} preFilteredRows={[]} />,
       buildWrapper([getBaseProviderWrapper()])
     );
 
@@ -70,7 +70,7 @@ describe('ActiveFilterTagList', () => {
     const setFilterMock = vi.fn();
     const columnsWithMock = [
       {
-        ...mockFilterableColumns[0],
+        ...buildFilterableColumns()[0],
         setFilterValue: setFilterMock,
       },
     ];
@@ -90,7 +90,7 @@ describe('ActiveFilterTagList', () => {
     const user = userEvent.setup();
 
     render(
-      <ActiveFilterTagList filterableColumns={mockFilterableColumns} preFilteredRows={[]} />,
+      <ActiveFilterTagList filterableColumns={buildFilterableColumns()} preFilteredRows={[]} />,
       buildWrapper([getBaseProviderWrapper()])
     );
 

@@ -19,14 +19,12 @@ describe('CategoricalFilter', () => {
   const mockSetFilterValue = vi.fn();
   const mockGetFilterValue = vi.fn();
 
-  const mockColumn = {
-    id: 'department',
-    label: 'Department',
-    type: 'text',
-  };
-
-  const defaultProps: ColumnFilterProps = {
-    column: mockColumn,
+  const buildDefaultProps = (): ColumnFilterProps => ({
+    column: {
+      id: 'department',
+      label: 'Department',
+      type: 'text',
+    },
     close: mockClose,
     getFilterValue: mockGetFilterValue,
     setFilterValue: mockSetFilterValue,
@@ -37,7 +35,7 @@ describe('CategoricalFilter', () => {
       { getValue: () => 'Sales', record: { department: 'Sales' } },
       { getValue: () => 'Design', record: { department: 'Design' } },
     ],
-  };
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -47,7 +45,7 @@ describe('CategoricalFilter', () => {
   describe('sorting logic', () => {
     it('should sort values alphabetically when no filters are selected', () => {
       render(
-        <CategoricalFilter {...defaultProps} />,
+        <CategoricalFilter {...buildDefaultProps()} />,
         buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
       );
 
@@ -62,7 +60,7 @@ describe('CategoricalFilter', () => {
       mockGetFilterValue.mockReturnValue(['Sales', 'Design']);
 
       render(
-        <CategoricalFilter {...defaultProps} />,
+        <CategoricalFilter {...buildDefaultProps()} />,
         buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
       );
 
@@ -75,7 +73,7 @@ describe('CategoricalFilter', () => {
 
   it('should show no checkboxes checked when no filter is applied', () => {
     render(
-      <CategoricalFilter {...defaultProps} />,
+      <CategoricalFilter {...buildDefaultProps()} />,
       buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
     );
 
@@ -90,7 +88,7 @@ describe('CategoricalFilter', () => {
       const user = userEvent.setup();
 
       render(
-        <CategoricalFilter {...defaultProps} />,
+        <CategoricalFilter {...buildDefaultProps()} />,
         buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
       );
 
@@ -106,7 +104,7 @@ describe('CategoricalFilter', () => {
       mockGetFilterValue.mockReturnValue(['Engineering']);
 
       render(
-        <CategoricalFilter {...defaultProps} />,
+        <CategoricalFilter {...buildDefaultProps()} />,
         buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
       );
 
@@ -122,7 +120,7 @@ describe('CategoricalFilter', () => {
       const user = userEvent.setup();
 
       render(
-        <CategoricalFilter {...defaultProps} />,
+        <CategoricalFilter {...buildDefaultProps()} />,
         buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
       );
 
@@ -140,7 +138,7 @@ describe('CategoricalFilter', () => {
       const user = userEvent.setup();
 
       render(
-        <CategoricalFilter {...defaultProps} />,
+        <CategoricalFilter {...buildDefaultProps()} />,
         buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
       );
 
@@ -163,7 +161,7 @@ describe('CategoricalFilter', () => {
       const user = userEvent.setup();
 
       render(
-        <CategoricalFilter {...defaultProps} />,
+        <CategoricalFilter {...buildDefaultProps()} />,
         buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
       );
 
@@ -187,7 +185,7 @@ describe('CategoricalFilter', () => {
       mockGetFilterValue.mockReturnValue(['Engineering']);
 
       render(
-        <CategoricalFilter {...defaultProps} />,
+        <CategoricalFilter {...buildDefaultProps()} />,
         buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
       );
 
@@ -205,7 +203,7 @@ describe('CategoricalFilter', () => {
       mockGetFilterValue.mockReturnValue(['Engineering', 'Sales']);
 
       render(
-        <CategoricalFilter {...defaultProps} />,
+        <CategoricalFilter {...buildDefaultProps()} />,
         buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
       );
 
@@ -220,7 +218,7 @@ describe('CategoricalFilter', () => {
   describe('data extraction', () => {
     it('should extract unique values from preFilteredRows', () => {
       const propsWithDuplicates: ColumnFilterProps = {
-        ...defaultProps,
+        ...buildDefaultProps(),
         preFilteredRows: [
           { getValue: () => 'Engineering', record: { department: 'Engineering' } },
           { getValue: () => 'Engineering', record: { department: 'Engineering' } },
@@ -243,7 +241,7 @@ describe('CategoricalFilter', () => {
 
     it('should handle null and undefined values gracefully', () => {
       const propsWithNulls: ColumnFilterProps = {
-        ...defaultProps,
+        ...buildDefaultProps(),
         preFilteredRows: [
           { getValue: () => 'Engineering', record: { department: 'Engineering' } },
           { getValue: () => null, record: { department: null } },

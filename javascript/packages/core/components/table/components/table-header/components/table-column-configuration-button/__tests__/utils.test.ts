@@ -7,7 +7,7 @@ import type { TableData } from '#core/components/table/types/data-types';
 import type { ConfigurableColumn } from '../types';
 
 describe('createColumnListChangeHandler', () => {
-  const mockColumns: ConfigurableColumn<TableData>[] = [
+  const buildMockColumns = (): ConfigurableColumn<TableData>[] => [
     { type: CellType.TEXT, id: 'col1', label: 'Column 1', isVisible: true, canHide: false },
     { type: CellType.TEXT, id: 'col2', label: 'Column 2', isVisible: true, canHide: true },
     { type: CellType.TEXT, id: 'col3', label: 'Column 3', isVisible: false, canHide: true },
@@ -24,7 +24,7 @@ describe('createColumnListChangeHandler', () => {
 
   it('reorders columns when given position indices', () => {
     const handler = createColumnListChangeHandler(
-      mockColumns,
+      buildMockColumns(),
       mockSetColumnOrder,
       mockSetColumnVisibility
     );
@@ -37,7 +37,7 @@ describe('createColumnListChangeHandler', () => {
 
   it('toggles column visibility when newIndex is -1', () => {
     const handler = createColumnListChangeHandler(
-      mockColumns,
+      buildMockColumns(),
       mockSetColumnOrder,
       mockSetColumnVisibility
     );

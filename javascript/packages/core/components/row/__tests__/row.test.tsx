@@ -3,34 +3,48 @@ import { render, screen } from '@testing-library/react';
 import { Row } from '../row';
 
 describe('Row', () => {
-  const mockItems = [
-    { id: 'name', label: 'Name', hideEmpty: true },
-    { id: 'age', label: 'Age', hideEmpty: false },
-    { id: 'email', label: 'Email', hideEmpty: true },
-  ];
-
-  const mockRecord = {
-    name: 'John Doe',
-    age: 30,
-    email: undefined,
-  };
-
   it('renders skeleton loaders when loading is true', () => {
-    render(<Row items={mockItems} loading={true} />);
+    render(
+      <Row
+        items={[
+          { id: 'name', label: 'Name', hideEmpty: true },
+          { id: 'age', label: 'Age', hideEmpty: false },
+          { id: 'email', label: 'Email', hideEmpty: true },
+        ]}
+        loading={true}
+      />
+    );
     const skeletons = screen.getAllByTestId('loading');
-    expect(skeletons).toHaveLength(mockItems.length);
+    expect(skeletons).toHaveLength(3);
   });
 
   it('filters out empty items when hideEmpty is true', () => {
-    render(<Row items={mockItems} record={mockRecord} />);
+    render(
+      <Row
+        items={[
+          { id: 'name', label: 'Name', hideEmpty: true },
+          { id: 'age', label: 'Age', hideEmpty: false },
+          { id: 'email', label: 'Email', hideEmpty: true },
+        ]}
+        record={{ name: 'John Doe', age: 30, email: undefined }}
+      />
+    );
     expect(screen.getByText('John Doe')).toBeInTheDocument();
     expect(screen.getByText('30')).toBeInTheDocument();
     expect(screen.queryByText('Email')).not.toBeInTheDocument();
   });
 
   it('renders all items when hideEmpty is false', () => {
-    const itemsWithoutHideEmpty = mockItems.map((item) => ({ ...item, hideEmpty: false }));
-    render(<Row items={itemsWithoutHideEmpty} record={mockRecord} />);
+    render(
+      <Row
+        items={[
+          { id: 'name', label: 'Name', hideEmpty: false },
+          { id: 'age', label: 'Age', hideEmpty: false },
+          { id: 'email', label: 'Email', hideEmpty: false },
+        ]}
+        record={{ name: 'John Doe', age: 30, email: undefined }}
+      />
+    );
     expect(screen.getByText('John Doe')).toBeInTheDocument();
     expect(screen.getByText('30')).toBeInTheDocument();
     expect(screen.getByText('Email')).toBeInTheDocument();
@@ -49,7 +63,12 @@ describe('Row', () => {
       },
     };
 
-    render(<Row items={mockItems} overrides={overrides} />);
+    render(
+      <Row
+        items={[{ id: 'name', label: 'Name' }]}
+        overrides={overrides}
+      />
+    );
     expect(screen.getByTestId('custom-container')).toBeInTheDocument();
   });
 

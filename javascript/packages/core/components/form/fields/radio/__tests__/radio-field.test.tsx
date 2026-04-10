@@ -8,15 +8,13 @@ import { getFormProviderWrapper } from '#core/test/wrappers/get-form-provider-wr
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
 
 describe('RadioField', () => {
-  const options = [
-    { value: 'dev', label: 'Development' },
-    { value: 'staging', label: 'Staging' },
-    { value: 'prod', label: 'Production' },
-  ];
-
   it('renders with label and options', () => {
     render(
-      <RadioField name="environment" label="Environment" options={options} />,
+      <RadioField name="environment" label="Environment" options={[
+          { value: 'dev', label: 'Development' },
+          { value: 'staging', label: 'Staging' },
+          { value: 'prod', label: 'Production' },
+        ]} />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
     );
 
@@ -28,7 +26,11 @@ describe('RadioField', () => {
 
   it('shows required indicator when required', () => {
     render(
-      <RadioField name="environment" label="Environment" required options={options} />,
+      <RadioField name="environment" label="Environment" required options={[
+          { value: 'dev', label: 'Development' },
+          { value: 'staging', label: 'Staging' },
+          { value: 'prod', label: 'Production' },
+        ]} />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
     );
 
@@ -43,7 +45,11 @@ describe('RadioField', () => {
 
     render(
       <>
-        <RadioField name="environment" label="Environment" options={options} />
+        <RadioField name="environment" label="Environment" options={[
+          { value: 'dev', label: 'Development' },
+          { value: 'staging', label: 'Staging' },
+          { value: 'prod', label: 'Production' },
+        ]} />
         <button type="submit">Submit</button>
       </>,
       buildWrapper([
@@ -75,7 +81,11 @@ describe('RadioField', () => {
         name="environment"
         label="Environment"
         description="Select the target environment"
-        options={options}
+        options={[
+          { value: 'dev', label: 'Development' },
+          { value: 'staging', label: 'Staging' },
+          { value: 'prod', label: 'Production' },
+        ]}
       />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
     );
@@ -121,7 +131,11 @@ describe('RadioField', () => {
 
   it('displays as read-only input when readOnly is true', () => {
     render(
-      <RadioField name="environment" label="Environment" options={options} readOnly />,
+      <RadioField name="environment" label="Environment" options={[
+          { value: 'dev', label: 'Development' },
+          { value: 'staging', label: 'Staging' },
+          { value: 'prod', label: 'Production' },
+        ]} readOnly />,
       buildWrapper([
         getBaseProviderWrapper(),
         getIconProviderWrapper(),
@@ -135,8 +149,18 @@ describe('RadioField', () => {
   });
 
   it('disables all options when disabled prop is set', () => {
+    const options = [
+      { value: 'dev', label: 'Development' },
+      { value: 'staging', label: 'Staging' },
+      { value: 'prod', label: 'Production' },
+    ];
+
     render(
-      <RadioField name="environment" label="Environment" options={options} disabled />,
+      <RadioField name="environment" label="Environment" options={[
+          { value: 'dev', label: 'Development' },
+          { value: 'staging', label: 'Staging' },
+          { value: 'prod', label: 'Production' },
+        ]} disabled />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
     );
 
@@ -167,7 +191,11 @@ describe('RadioField', () => {
       <RadioField
         name="environment"
         label="Environment"
-        options={options}
+        options={[
+          { value: 'dev', label: 'Development' },
+          { value: 'staging', label: 'Staging' },
+          { value: 'prod', label: 'Production' },
+        ]}
         caption="Choose your deployment target"
       />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
@@ -178,7 +206,11 @@ describe('RadioField', () => {
 
   it('pre-selects the option matching initial value', () => {
     render(
-      <RadioField name="environment" label="Environment" options={options} />,
+      <RadioField name="environment" label="Environment" options={[
+          { value: 'dev', label: 'Development' },
+          { value: 'staging', label: 'Staging' },
+          { value: 'prod', label: 'Production' },
+        ]} />,
       buildWrapper([
         getBaseProviderWrapper(),
         getIconProviderWrapper(),
@@ -193,13 +225,13 @@ describe('RadioField', () => {
 });
 
 describe('RadioField with card layout', () => {
-  const optionsWithDescriptions = [
-    { value: 'dev', label: 'Development', description: 'For local testing' },
-    { value: 'staging', label: 'Staging', description: 'Pre-production environment' },
-    { value: 'prod', label: 'Production', description: 'Live environment' },
-  ];
-
   it('renders card tiles with descriptions when options have descriptions', () => {
+    const optionsWithDescriptions = [
+      { value: 'dev', label: 'Development', description: 'For local testing' },
+      { value: 'staging', label: 'Staging', description: 'Pre-production environment' },
+      { value: 'prod', label: 'Production', description: 'Live environment' },
+    ];
+
     render(
       <RadioField name="environment" label="Environment" options={optionsWithDescriptions} />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
@@ -220,7 +252,15 @@ describe('RadioField with card layout', () => {
 
     render(
       <>
-        <RadioField name="environment" label="Environment" options={optionsWithDescriptions} />
+        <RadioField
+          name="environment"
+          label="Environment"
+          options={[
+            { value: 'dev', label: 'Development', description: 'For local testing' },
+            { value: 'staging', label: 'Staging', description: 'Pre-production environment' },
+            { value: 'prod', label: 'Production', description: 'Live environment' },
+          ]}
+        />
         <button type="submit">Submit</button>
       </>,
       buildWrapper([
@@ -246,7 +286,11 @@ describe('RadioField with card layout', () => {
       <RadioField
         name="environment"
         label="Environment"
-        options={optionsWithDescriptions}
+        options={[
+          { value: 'dev', label: 'Development', description: 'For local testing' },
+          { value: 'staging', label: 'Staging', description: 'Pre-production environment' },
+          { value: 'prod', label: 'Production', description: 'Live environment' },
+        ]}
         disabled
       />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])

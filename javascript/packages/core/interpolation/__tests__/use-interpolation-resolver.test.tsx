@@ -12,16 +12,6 @@ import { useInterpolationResolver } from '../use-interpolation-resolver';
 import type { ExclusionCheck, InterpolationContext, UserDataSources } from '../types';
 
 describe('useInterpolationResolver', () => {
-  const page = { metadata: { namespace: 'abc-123', name: 'tester' }, spec: { id: 'SOME_ID' } };
-  const initialValues = {
-    metadata: { namespace: 'abc-123-original', name: 'tester-original' },
-    spec: { id: 'SOME_ID-original' },
-  };
-  const row = {
-    metadata: { namespace: 'row-namespace', name: 'row-name' },
-    spec: { id: 'row-spec-id' },
-  };
-
   let resolve: <T>(
     variables: T,
     input?: Partial<UserDataSources>,
@@ -37,7 +27,22 @@ describe('useInterpolationResolver', () => {
       ])
     );
     resolve = (interpolator, input, excludeProperty) =>
-      result.current(interpolator, { page, row, initialValues, ...input }, excludeProperty);
+      result.current(
+        interpolator,
+        {
+          page: { metadata: { namespace: 'abc-123', name: 'tester' }, spec: { id: 'SOME_ID' } },
+          row: {
+            metadata: { namespace: 'row-namespace', name: 'row-name' },
+            spec: { id: 'row-spec-id' },
+          },
+          initialValues: {
+            metadata: { namespace: 'abc-123-original', name: 'tester-original' },
+            spec: { id: 'SOME_ID-original' },
+          },
+          ...input,
+        },
+        excludeProperty
+      );
   });
 
   describe('No interpolation', () => {
@@ -420,7 +425,11 @@ describe('useInterpolationResolver', () => {
           `index: ${repeatedLayoutContext?.index}, path: ${repeatedLayoutContext?.rootFieldPath}`
       );
 
-      const resolved = result.current(interpolation, { page, row, initialValues });
+      const resolved = result.current(interpolation, {
+        page: { metadata: { namespace: 'abc-123', name: 'tester' }, spec: { id: 'SOME_ID' } },
+        row: { metadata: { namespace: 'row-namespace', name: 'row-name' }, spec: { id: 'row-spec-id' } },
+        initialValues: { metadata: { namespace: 'abc-123-original', name: 'tester-original' }, spec: { id: 'SOME_ID-original' } },
+      });
       expect(resolved).toBe('index: 2, path: items');
     });
 

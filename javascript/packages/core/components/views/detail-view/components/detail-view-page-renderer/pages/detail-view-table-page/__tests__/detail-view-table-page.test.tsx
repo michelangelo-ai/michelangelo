@@ -14,7 +14,7 @@ import { DetailViewTablePage } from '../detail-view-table-page';
 describe('DetailViewTablePage', () => {
   const buildTableConfig = buildTableConfigFactory();
 
-  const defaultProps = {
+  const buildProps = () => ({
     queryConfig: {
       endpoint: 'list',
       service: 'pipelineRun',
@@ -24,7 +24,7 @@ describe('DetailViewTablePage', () => {
       columns: [{ id: 'name', label: 'Run Name', type: CellType.TEXT }],
     }),
     pageId: 'test-table',
-  };
+  });
 
   test('fetches and displays table data when not loading', async () => {
     const mockRequest = createQueryMockRouter({
@@ -34,7 +34,7 @@ describe('DetailViewTablePage', () => {
     });
 
     render(
-      <DetailViewTablePage {...defaultProps} isDetailViewLoading={false} />,
+      <DetailViewTablePage {...buildProps()} isDetailViewLoading={false} />,
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/project/train/runs' }),
@@ -54,7 +54,7 @@ describe('DetailViewTablePage', () => {
     });
 
     render(
-      <DetailViewTablePage {...defaultProps} isDetailViewLoading={true} />,
+      <DetailViewTablePage {...buildProps()} isDetailViewLoading={true} />,
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/project/train/runs' }),
@@ -78,7 +78,7 @@ describe('DetailViewTablePage', () => {
 
     render(
       <DetailViewTablePage
-        {...defaultProps}
+        {...buildProps()}
         isDetailViewLoading={false}
         queryConfig={{
           endpoint: 'list',

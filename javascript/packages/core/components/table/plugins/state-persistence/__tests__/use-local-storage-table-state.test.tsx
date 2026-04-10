@@ -13,14 +13,14 @@ import { useLocalStorageTableState } from '../use-local-storage-table-state';
 import type { TableState } from '#core/components/table/types/table-types';
 
 describe('useLocalStorageTableState', () => {
-  const testData = [
+  const buildTestData = () => [
     { id: '1', name: 'Alice Johnson', department: 'Engineering', status: 'Active' },
     { id: '2', name: 'Bob Smith', department: 'Marketing', status: 'Inactive' },
     { id: '3', name: 'Carol Davis', department: 'Engineering', status: 'Active' },
     { id: '4', name: 'David Wilson', department: 'Sales', status: 'Active' },
   ];
 
-  const testColumns = [
+  const buildTestColumns = () => [
     { id: 'name', label: 'Name' },
     { id: 'department', label: 'Department' },
     { id: 'status', label: 'Status' },
@@ -239,8 +239,8 @@ describe('useLocalStorageTableState', () => {
 
       return (
         <Table
-          data={testData}
-          columns={testColumns}
+          data={buildTestData()}
+          columns={buildTestColumns()}
           state={tableState}
           actionBarConfig={{ enableSearch: true }}
         />
@@ -258,8 +258,8 @@ describe('useLocalStorageTableState', () => {
 
       return (
         <Table
-          data={testData}
-          columns={testColumns}
+          data={buildTestData()}
+          columns={buildTestColumns()}
           state={tableState}
           actionBarConfig={{ enableSearch: true }}
         />

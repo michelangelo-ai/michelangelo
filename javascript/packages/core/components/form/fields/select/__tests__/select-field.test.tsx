@@ -10,18 +10,16 @@ import { getFormProviderWrapper } from '#core/test/wrappers/get-form-provider-wr
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
 
 describe('SelectField', () => {
-  const options = [
-    { id: 'low', label: 'Low Priority' },
-    { id: 'medium', label: 'Medium Priority' },
-    { id: 'high', label: 'High Priority' },
-  ];
-
   it('renders with label and placeholder', () => {
     render(
       <SelectField
         name="priority"
         label="Priority"
-        options={options}
+        options={[
+          { id: 'low', label: 'Low Priority' },
+          { id: 'medium', label: 'Medium Priority' },
+          { id: 'high', label: 'High Priority' },
+        ]}
         placeholder="Select priority level"
       />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
@@ -33,7 +31,11 @@ describe('SelectField', () => {
 
   it('shows required indicator when required', () => {
     render(
-      <SelectField name="priority" label="Priority" required options={options} />,
+      <SelectField name="priority" label="Priority" required options={[
+          { id: 'low', label: 'Low Priority' },
+          { id: 'medium', label: 'Medium Priority' },
+          { id: 'high', label: 'High Priority' },
+        ]} />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
     );
 
@@ -50,7 +52,11 @@ describe('SelectField', () => {
         name="priority"
         label="Priority"
         description="Select the priority level for this task"
-        options={options}
+        options={[
+          { id: 'low', label: 'Low Priority' },
+          { id: 'medium', label: 'Medium Priority' },
+          { id: 'high', label: 'High Priority' },
+        ]}
       />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
     );
@@ -65,7 +71,11 @@ describe('SelectField', () => {
 
     render(
       <>
-        <SelectField name="priority" label="Priority" options={options} />
+        <SelectField name="priority" label="Priority" options={[
+          { id: 'low', label: 'Low Priority' },
+          { id: 'medium', label: 'Medium Priority' },
+          { id: 'high', label: 'High Priority' },
+        ]} />
         <button type="submit">Submit</button>
       </>,
       buildWrapper([
@@ -97,7 +107,11 @@ describe('SelectField', () => {
     const user = userEvent.setup();
 
     render(
-      <SelectField name="priority" label="Priority" options={options} searchable />,
+      <SelectField name="priority" label="Priority" options={[
+          { id: 'low', label: 'Low Priority' },
+          { id: 'medium', label: 'Medium Priority' },
+          { id: 'high', label: 'High Priority' },
+        ]} searchable />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper()])
     );
 
@@ -148,7 +162,11 @@ describe('SelectField', () => {
 
     render(
       <>
-        <SelectField name="priority" label="Priority" options={options} multi />
+        <SelectField name="priority" label="Priority" options={[
+          { id: 'low', label: 'Low Priority' },
+          { id: 'medium', label: 'Medium Priority' },
+          { id: 'high', label: 'High Priority' },
+        ]} multi />
         <button type="submit">Submit</button>
       </>,
       buildWrapper([
@@ -184,7 +202,11 @@ describe('SelectField', () => {
 
     render(
       <>
-        <SelectField name="priority" label="Priority" options={options} creatable />
+        <SelectField name="priority" label="Priority" options={[
+          { id: 'low', label: 'Low Priority' },
+          { id: 'medium', label: 'Medium Priority' },
+          { id: 'high', label: 'High Priority' },
+        ]} creatable />
         <button type="submit">Submit</button>
       </>,
       buildWrapper([
@@ -214,7 +236,11 @@ describe('SelectField', () => {
 
     render(
       <>
-        <SelectField name="priority" label="Priority" options={options} creatable />
+        <SelectField name="priority" label="Priority" options={[
+          { id: 'low', label: 'Low Priority' },
+          { id: 'medium', label: 'Medium Priority' },
+          { id: 'high', label: 'High Priority' },
+        ]} creatable />
         <button type="submit">Submit</button>
       </>,
       buildWrapper([
@@ -239,8 +265,16 @@ describe('SelectField', () => {
   it('omits clear button when readOnly or disabled', () => {
     render(
       <>
-        <SelectField name="disabled" label="Disabled" options={options} disabled />
-        <SelectField name="readonly" label="Read only" options={options} readOnly />
+        <SelectField name="disabled" label="Disabled" options={[
+          { id: 'low', label: 'Low Priority' },
+          { id: 'medium', label: 'Medium Priority' },
+          { id: 'high', label: 'High Priority' },
+        ]} disabled />
+        <SelectField name="readonly" label="Read only" options={[
+          { id: 'low', label: 'Low Priority' },
+          { id: 'medium', label: 'Medium Priority' },
+          { id: 'high', label: 'High Priority' },
+        ]} readOnly />
       </>,
       buildWrapper([
         getBaseProviderWrapper(),
@@ -259,14 +293,22 @@ describe('SelectField', () => {
         <SelectField
           name="disabled"
           label="Disabled"
-          options={options}
+          options={[
+          { id: 'low', label: 'Low Priority' },
+          { id: 'medium', label: 'Medium Priority' },
+          { id: 'high', label: 'High Priority' },
+        ]}
           disabled
           placeholder="Disabled placeholder"
         />
         <SelectField
           name="readonly"
           label="Read only"
-          options={options}
+          options={[
+          { id: 'low', label: 'Low Priority' },
+          { id: 'medium', label: 'Medium Priority' },
+          { id: 'high', label: 'High Priority' },
+        ]}
           readOnly
           placeholder="Read only placeholder"
         />
@@ -285,7 +327,11 @@ describe('SelectField', () => {
 
     render(
       <Form onSubmit={vi.fn()} focusOnError>
-        <SelectField name="priority" label="Priority" options={options} required />
+        <SelectField name="priority" label="Priority" options={[
+          { id: 'low', label: 'Low Priority' },
+          { id: 'medium', label: 'Medium Priority' },
+          { id: 'high', label: 'High Priority' },
+        ]} required />
         <button type="submit">Submit</button>
       </Form>,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
@@ -303,7 +349,11 @@ describe('SelectField', () => {
       <SelectField
         name="priority"
         label="Priority"
-        options={options}
+        options={[
+          { id: 'low', label: 'Low Priority' },
+          { id: 'medium', label: 'Medium Priority' },
+          { id: 'high', label: 'High Priority' },
+        ]}
         caption="Choose the appropriate priority level"
       />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
@@ -353,7 +403,11 @@ describe('SelectField', () => {
 
     render(
       <>
-        <SelectField name="priority" label="Priority" options={options} />
+        <SelectField name="priority" label="Priority" options={[
+          { id: 'low', label: 'Low Priority' },
+          { id: 'medium', label: 'Medium Priority' },
+          { id: 'high', label: 'High Priority' },
+        ]} />
         <button type="submit">Submit</button>
       </>,
       buildWrapper([
@@ -377,7 +431,11 @@ describe('SelectField', () => {
 
     render(
       <>
-        <SelectField name="priority" label="Priority" options={options} multi />
+        <SelectField name="priority" label="Priority" options={[
+          { id: 'low', label: 'Low Priority' },
+          { id: 'medium', label: 'Medium Priority' },
+          { id: 'high', label: 'High Priority' },
+        ]} multi />
         <button type="submit">Submit</button>
       </>,
       buildWrapper([
@@ -534,7 +592,11 @@ describe('SelectField', () => {
 
     render(
       <>
-        <SelectField name="priority" label="Priority" options={options} creatable />
+        <SelectField name="priority" label="Priority" options={[
+          { id: 'low', label: 'Low Priority' },
+          { id: 'medium', label: 'Medium Priority' },
+          { id: 'high', label: 'High Priority' },
+        ]} creatable />
         <button type="submit">Submit</button>
       </>,
       buildWrapper([
