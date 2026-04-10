@@ -53,16 +53,50 @@ jobs:
       - name: Build
         id: build
         continue-on-error: true
+        env:
+          CI_LINT: 'true'
+          NO_COLOR: '1'
         run: |
           set -o pipefail
           bun run build 2>&1 | tee /tmp/build-output.txt
 
       - name: Annotate broken links
-        if: steps.build.outcome == 'failure'
+        id: annotate
         working-directory: .
         run: |
           current_file=""
+          found_broken=false
+          declare -A seen_annotations
+          # Regex stored in variable to avoid bash [[ =~ ]] quoting issues
+          mdx_re='Markdown link with URL .([^ ]+). in source file "\.\./([^"]+)" \(([0-9]+):'
+
+          emit_annotation() {
+            local file="$1" line="$2" link="$3"
+            local key="${file}:${line}:${link}"
+            if [[ -z "${seen_annotations[$key]+x}" ]]; then
+              seen_annotations[$key]=1
+              if [[ -n "$line" ]]; then
+                echo "::error file=${file},line=${line}::Broken link: '${link}' could not be resolved"
+              else
+                echo "::error file=${file}::Broken link: '${link}' could not be resolved"
+              fi
+              found_broken=true
+            fi
+          }
+
           while IFS= read -r line; do
+            # Format 1: MDX compilation errors (markdown links caught during build)
+            # e.g. Markdown link with URL `testing.md` in source file "../docs/contributing/index.md" (63:21) couldn't be resolved.
+            if [[ "$line" =~ $mdx_re ]]; then
+              broken_link="${BASH_REMATCH[1]}"
+              source_file="${BASH_REMATCH[2]}"
+              line_num="${BASH_REMATCH[3]}"
+              emit_annotation "$source_file" "$line_num" "$broken_link"
+            fi
+
+            # Format 2: Post-build broken route links
+            # e.g. - Broken link on source page path = /michelangelo/docs/guides/api:
+            #         -> linking to /michelangelo/docs/nonexistent
             if [[ "$line" =~ "Broken link on source page path = /michelangelo/"(.*): ]]; then
               page_path="${BASH_REMATCH[1]}"
               page_path="${page_path%/}"
@@ -74,19 +108,43 @@ jobs:
                 current_file=""
               fi
             fi
-            if [[ "$line" =~ "-> linking to "([^[:space:]]+) ]] && [[ -n "$current_file" ]]; then
+            if [[ "$line" =~ "-> linking to "([^[:space:]]+) ]]; then
               broken_link="${BASH_REMATCH[1]}"
-              line_nums=$(grep -n "$broken_link" "$current_file" 2>/dev/null | cut -d: -f1)
-              if [[ -n "$line_nums" ]]; then
-                while IFS= read -r line_num; do
-                  echo "::error file=${current_file},line=${line_num}::Broken link: '${broken_link}' could not be resolved"
-                done <<< "$line_nums"
+              # Strip baseUrl prefix so grep matches source text
+              search_link="${broken_link#/michelangelo}"
+              if [[ -n "$current_file" ]]; then
+                line_nums=$(grep -n "$search_link" "$current_file" 2>/dev/null | cut -d: -f1)
+                if [[ -n "$line_nums" ]]; then
+                  while IFS= read -r line_num; do
+                    emit_annotation "$current_file" "$line_num" "$search_link"
+                  done <<< "$line_nums"
+                else
+                  emit_annotation "$current_file" "" "$search_link"
+                fi
               else
-                echo "::error file=${current_file}::Broken link: '${broken_link}' could not be resolved"
+                # Source file couldn't be resolved (e.g. custom slug), search all docs
+                matches=$(grep -rn "$search_link" docs/ --include='*.md' 2>/dev/null | head -5)
+                if [[ -n "$matches" ]]; then
+                  while IFS=: read -r file line_num _; do
+                    emit_annotation "$file" "$line_num" "$search_link"
+                  done <<< "$matches"
+                fi
               fi
             fi
           done < /tmp/build-output.txt
 
-      - name: Fail if build failed
-        if: steps.build.outcome == 'failure'
-        run: exit 1
+          if [[ "$found_broken" == "true" ]]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fail if broken links or build error
+        if: steps.build.outcome == 'failure' || steps.annotate.outputs.found == 'true'
+        run: |
+          if [[ "${{ steps.annotate.outputs.found }}" == "true" ]] && [[ "${{ steps.build.outcome }}" == "failure" ]]; then
+            echo "Build failed and broken links were found. See annotations above for details."
+          elif [[ "${{ steps.annotate.outputs.found }}" == "true" ]]; then
+            echo "Broken links were found. See annotations above for details."
+          else
+            echo "Build failed. Check the build step logs for details."
+          fi
+          exit 1
