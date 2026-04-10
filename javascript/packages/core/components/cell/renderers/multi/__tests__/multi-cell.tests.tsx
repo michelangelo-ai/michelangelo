@@ -11,7 +11,10 @@ describe('MultiCell', () => {
           id: 'multi',
           items: [{ id: 'nonExistent.path' }, { id: 'another.nonExistent.path' }],
         }}
-        record={{ metadata: { name: 'Test Pipeline' }, spec: { revisionId: 'rev-123', description: 'Test Description' } }}
+        record={{
+          metadata: { name: 'Test Pipeline' },
+          spec: { revisionId: 'rev-123', description: 'Test Description' },
+        }}
         value={undefined}
       />,
       { wrapper: getIconProviderWrapper() }
@@ -27,7 +30,10 @@ describe('MultiCell', () => {
           id: 'multi',
           items: [{ id: 'metadata.name' }, { id: 'spec.revisionId' }],
         }}
-        record={{ metadata: { name: 'Test Pipeline' }, spec: { revisionId: 'rev-123', description: 'Test Description' } }}
+        record={{
+          metadata: { name: 'Test Pipeline' },
+          spec: { revisionId: 'rev-123', description: 'Test Description' },
+        }}
         value={undefined}
       />,
       { wrapper: getIconProviderWrapper() }
@@ -45,7 +51,10 @@ describe('MultiCell', () => {
           icon: 'check',
           items: [{ id: 'metadata.name' }, { id: 'spec.revisionId' }],
         }}
-        record={{ metadata: { name: 'Test Pipeline' }, spec: { revisionId: 'rev-123', description: 'Test Description' } }}
+        record={{
+          metadata: { name: 'Test Pipeline' },
+          spec: { revisionId: 'rev-123', description: 'Test Description' },
+        }}
         value={undefined}
       />,
       { wrapper: getIconProviderWrapper() }
@@ -61,7 +70,10 @@ describe('MultiCell', () => {
           id: 'multi',
           items: [{ id: 'metadata.name', accessor: 'spec.description' }, { id: 'spec.revisionId' }],
         }}
-        record={{ metadata: { name: 'Test Pipeline' }, spec: { revisionId: 'rev-123', description: 'Test Description' } }}
+        record={{
+          metadata: { name: 'Test Pipeline' },
+          spec: { revisionId: 'rev-123', description: 'Test Description' },
+        }}
         value={undefined}
       />,
       { wrapper: getIconProviderWrapper() }
@@ -78,7 +90,10 @@ describe('MultiCell', () => {
           id: 'multi',
           items: [],
         }}
-        record={{ metadata: { name: 'Test Pipeline' }, spec: { revisionId: 'rev-123', description: 'Test Description' } }}
+        record={{
+          metadata: { name: 'Test Pipeline' },
+          spec: { revisionId: 'rev-123', description: 'Test Description' },
+        }}
         value={undefined}
       />,
       { wrapper: getIconProviderWrapper() }
