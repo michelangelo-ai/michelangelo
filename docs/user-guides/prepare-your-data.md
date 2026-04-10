@@ -14,7 +14,7 @@ Learn how to prepare data in Uniflow for the ML pipeline on Michelangelo using R
 
 ```py
 import ray.data as rd
-from michelangelo.sdk.workflow.variables import DatasetVariable
+from michelangelo.workflow.variables import DatasetVariable
 
 dataset = rd.read_parquet("s3://bucket/data.parquet") \
     .map_batches(clean_missing_values, batch_size=1000) \
@@ -22,8 +22,8 @@ dataset = rd.read_parquet("s3://bucket/data.parquet") \
     .map_batches(encode_categories)
 
 train_ds, val_ds = dataset.train_test_split(test_size=0.2)
-train_dv = DatasetVariable(value=train_ds)
-val_dv = DatasetVariable(value=val_ds)
+train_dv = DatasetVariable.create(train_ds)
+val_dv = DatasetVariable.create(val_ds)
 ```
 
 ### Common Preprocessing Functions
@@ -60,9 +60,9 @@ Michelangelo provides `DatasetVariable` to handle datasets across different fram
 
 | Framework | Usage | Load Method |
 | ----- | ----- | ----- |
-| Ray Datasets | `DatasetVariable(value=ray_dataset)` | `load_ray_dataset()` |
-| Pandas DataFrames | `DatasetVariable(value=pandas_df)` | `load_pandas_dataframe()` |
-| Spark DataFrames | `DatasetVariable(value=spark_df)` | `load_spark_dataframe()` |
+| Ray Datasets | `DatasetVariable.create(ray_dataset)` | `load_ray_dataset()` |
+| Pandas DataFrames | `DatasetVariable.create(pandas_df)` | `load_pandas_dataframe()` |
+| Spark DataFrames | `DatasetVariable.create(spark_df)` | `load_spark_dataframe()` |
 
 ### Direct Dataset Usage
 
@@ -73,7 +73,11 @@ Michelangelo provides `DatasetVariable` to handle datasets across different fram
 | Spark DataFrames | `spark.read.parquet(...)` | Large-scale processing |
 
 ```py
-@uniflow.task()
+import michelangelo.uniflow.core as uniflow
+import ray.data as rd
+from michelangelo.uniflow.plugins.ray import RayTask
+
+@uniflow.task(config=RayTask(head_cpu=2, head_memory="4Gi"))
 def process_data_directly(data_path: str):
     dataset = rd.read_parquet(data_path) \
         .map_batches(preprocessing_function) \
@@ -85,29 +89,34 @@ def process_data_directly(data_path: str):
 
 ```py
 import ray.data as rd
-from michelangelo.sdk.workflow.variables import DatasetVariable
+from michelangelo.workflow.variables import DatasetVariable
 
 ray_dataset = rd.read_parquet("s3://bucket/data.parquet")
-dataset_var = DatasetVariable(value=ray_dataset)
+dataset_var = DatasetVariable.create(ray_dataset)
 
 import pandas as pd
 pandas_df = pd.read_csv("local_file.csv")
-dataset_var = DatasetVariable(value=pandas_df)
+dataset_var = DatasetVariable.create(pandas_df)
 
 spark_df = spark.read.parquet("s3://bucket/data.parquet")
-dataset_var = DatasetVariable(value=spark_df)
+dataset_var = DatasetVariable.create(spark_df)
 ```
 
 ## Automatic Storage in Uniflow Tasks
 
 ```py
-@uniflow.task()
+import michelangelo.uniflow.core as uniflow
+import ray.data as rd
+from michelangelo.workflow.variables import DatasetVariable
+from michelangelo.uniflow.plugins.ray import RayTask
+
+@uniflow.task(config=RayTask(head_cpu=2, head_memory="4Gi"))
 def prepare_training_data(data_path: str):
     dataset = rd.read_parquet(data_path).map_batches(clean_and_normalize)
     train_ds, val_ds = dataset.train_test_split(test_size=0.2)
-    train_dv = DatasetVariable(value=train_ds)
+    train_dv = DatasetVariable.create(train_ds)
     train_dv.save_ray_dataset()
-    val_dv = DatasetVariable(value=val_ds)
+    val_dv = DatasetVariable.create(val_ds)
     val_dv.save_ray_dataset()
     return {
         "train": train_dv,
@@ -116,7 +125,7 @@ def prepare_training_data(data_path: str):
 ```
 
 ```py
-@uniflow.task()
+@uniflow.task(config=RayTask(head_cpu=2, head_memory="4Gi"))
 def use_prepared_data(datasets: dict):
     datasets["train"].load_ray_dataset()
     datasets["validation"].load_ray_dataset()

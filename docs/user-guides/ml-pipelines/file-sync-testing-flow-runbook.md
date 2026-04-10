@@ -35,10 +35,10 @@ python workflow.py remote-run \
     --file-sync
 ```
 
-`ma pipeline dev_run` support: add `--file-sync` flag to your ma pipeline dev-run command
+`ma pipeline dev-run` support: add `--file-sync` flag to your ma pipeline dev-run command
 
 ```shell
-ma pipeline dev_run --file-sync --file <path_to_pipeline.yaml>
+ma pipeline dev-run --file-sync --file <path_to_pipeline.yaml>
 ```
 
 ### Requirements
