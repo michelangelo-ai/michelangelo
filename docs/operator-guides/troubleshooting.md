@@ -223,9 +223,6 @@ kubectl logs deployment/michelangelo-ui
 
 # Check Envoy configuration
 kubectl get configmap envoy-config -o yaml
-
-# Verify the API server is reachable through Envoy
-curl -v https://michelangelo-envoy.your-domain/healthz
 ```
 
 **Likely causes**:
