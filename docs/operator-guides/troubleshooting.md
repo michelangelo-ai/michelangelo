@@ -218,8 +218,8 @@ kubectl -n ma-system get serviceaccount michelangelo-controllermgr -o yaml \
 **Diagnostics**:
 ```bash
 # Check Envoy and UI pod status
-kubectl -n ma-system get pods | grep -E "envoy|ui"
-kubectl -n ma-system logs deployment/michelangelo-ui
+kubectl get pods | grep -E "envoy|ui|apiserver"
+kubectl logs deployment/michelangelo-ui
 
 # Check Envoy configuration
 kubectl get configmap envoy-config -o yaml
