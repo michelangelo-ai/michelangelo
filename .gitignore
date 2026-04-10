@@ -332,3 +332,4 @@ checkpoints/
 
 # Add pytest coverage file with lcov format
 coverage.lcov
+.claude/skills/write-pull-request-description-workspace/
