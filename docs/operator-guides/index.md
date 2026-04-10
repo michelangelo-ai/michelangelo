@@ -63,9 +63,3 @@ Michelangelo is designed to be adopted alongside existing ML infrastructure. The
 | [Compliance](compliance.md) | SOC 2, GDPR, and HIPAA configuration |
 | [Troubleshooting](troubleshooting.md) | Common failure modes and `kubectl` diagnostic commands |
 
-## Ingester
-
-| Guide | Description |
-|-------|-------------|
-| [Ingester Design](ingester-design.md) | Architecture and design of the Michelangelo data ingester |
-| [Ingester Sandbox Validation](ingester-sandbox-validation.md) | Validate ingester behavior in a local sandbox |
