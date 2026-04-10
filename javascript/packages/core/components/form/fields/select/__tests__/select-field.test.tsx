@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
 /* eslint-disable local/no-module-scope-test-setup -- restructure into nested describes, see https://github.com/michelangelo-ai/michelangelo/issues/1088 */
-
 import { SelectField } from '#core/components/form/fields/select/select-field';
 import { Form } from '#core/components/form/form';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';

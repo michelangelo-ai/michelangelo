@@ -4,16 +4,6 @@ import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wr
 import { MultiCell } from '../multi-cell';
 
 describe('MultiCell', () => {
-  const mockRecord = {
-    metadata: {
-      name: 'Test Pipeline',
-    },
-    spec: {
-      revisionId: 'rev-123',
-      description: 'Test Description',
-    },
-  };
-
   it('should render dash when no data is available', () => {
     render(
       <MultiCell
@@ -21,7 +11,7 @@ describe('MultiCell', () => {
           id: 'multi',
           items: [{ id: 'nonExistent.path' }, { id: 'another.nonExistent.path' }],
         }}
-        record={mockRecord}
+        record={{ metadata: { name: 'Test Pipeline' }, spec: { revisionId: 'rev-123', description: 'Test Description' } }}
         value={undefined}
       />,
       { wrapper: getIconProviderWrapper() }
@@ -37,7 +27,7 @@ describe('MultiCell', () => {
           id: 'multi',
           items: [{ id: 'metadata.name' }, { id: 'spec.revisionId' }],
         }}
-        record={mockRecord}
+        record={{ metadata: { name: 'Test Pipeline' }, spec: { revisionId: 'rev-123', description: 'Test Description' } }}
         value={undefined}
       />,
       { wrapper: getIconProviderWrapper() }
@@ -55,7 +45,7 @@ describe('MultiCell', () => {
           icon: 'check',
           items: [{ id: 'metadata.name' }, { id: 'spec.revisionId' }],
         }}
-        record={mockRecord}
+        record={{ metadata: { name: 'Test Pipeline' }, spec: { revisionId: 'rev-123', description: 'Test Description' } }}
         value={undefined}
       />,
       { wrapper: getIconProviderWrapper() }
@@ -71,7 +61,7 @@ describe('MultiCell', () => {
           id: 'multi',
           items: [{ id: 'metadata.name', accessor: 'spec.description' }, { id: 'spec.revisionId' }],
         }}
-        record={mockRecord}
+        record={{ metadata: { name: 'Test Pipeline' }, spec: { revisionId: 'rev-123', description: 'Test Description' } }}
         value={undefined}
       />,
       { wrapper: getIconProviderWrapper() }
@@ -88,7 +78,7 @@ describe('MultiCell', () => {
           id: 'multi',
           items: [],
         }}
-        record={mockRecord}
+        record={{ metadata: { name: 'Test Pipeline' }, spec: { revisionId: 'rev-123', description: 'Test Description' } }}
         value={undefined}
       />,
       { wrapper: getIconProviderWrapper() }
