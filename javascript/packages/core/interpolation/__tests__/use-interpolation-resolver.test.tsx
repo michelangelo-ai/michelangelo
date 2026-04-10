@@ -1,6 +1,8 @@
 import { renderHook } from '@testing-library/react';
 import { lowerCase, upperCase } from 'lodash';
 
+/* eslint-disable local/no-module-scope-test-setup -- restructure into nested describes, see https://github.com/michelangelo-ai/michelangelo/issues/1088 */
+
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getInterpolationProviderWrapper } from '#core/test/wrappers/get-interpolation-provider-wrapper';
 import { getRepeatedLayoutProviderWrapper } from '#core/test/wrappers/get-repeated-layout-provider-wrapper';
@@ -12,6 +14,16 @@ import { useInterpolationResolver } from '../use-interpolation-resolver';
 import type { ExclusionCheck, InterpolationContext, UserDataSources } from '../types';
 
 describe('useInterpolationResolver', () => {
+  const page = { metadata: { namespace: 'abc-123', name: 'tester' }, spec: { id: 'SOME_ID' } };
+  const initialValues = {
+    metadata: { namespace: 'abc-123-original', name: 'tester-original' },
+    spec: { id: 'SOME_ID-original' },
+  };
+  const row = {
+    metadata: { namespace: 'row-namespace', name: 'row-name' },
+    spec: { id: 'row-spec-id' },
+  };
+
   let resolve: <T>(
     variables: T,
     input?: Partial<UserDataSources>,
@@ -27,22 +39,7 @@ describe('useInterpolationResolver', () => {
       ])
     );
     resolve = (interpolator, input, excludeProperty) =>
-      result.current(
-        interpolator,
-        {
-          page: { metadata: { namespace: 'abc-123', name: 'tester' }, spec: { id: 'SOME_ID' } },
-          row: {
-            metadata: { namespace: 'row-namespace', name: 'row-name' },
-            spec: { id: 'row-spec-id' },
-          },
-          initialValues: {
-            metadata: { namespace: 'abc-123-original', name: 'tester-original' },
-            spec: { id: 'SOME_ID-original' },
-          },
-          ...input,
-        },
-        excludeProperty
-      );
+      result.current(interpolator, { page, row, initialValues, ...input }, excludeProperty);
   });
 
   describe('No interpolation', () => {
@@ -425,11 +422,7 @@ describe('useInterpolationResolver', () => {
           `index: ${repeatedLayoutContext?.index}, path: ${repeatedLayoutContext?.rootFieldPath}`
       );
 
-      const resolved = result.current(interpolation, {
-        page: { metadata: { namespace: 'abc-123', name: 'tester' }, spec: { id: 'SOME_ID' } },
-        row: { metadata: { namespace: 'row-namespace', name: 'row-name' }, spec: { id: 'row-spec-id' } },
-        initialValues: { metadata: { namespace: 'abc-123-original', name: 'tester-original' }, spec: { id: 'SOME_ID-original' } },
-      });
+      const resolved = result.current(interpolation, { page, row, initialValues });
       expect(resolved).toBe('index: 2, path: items');
     });
 

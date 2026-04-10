@@ -1,83 +1,92 @@
-Flags shared variable declarations (object/array literals, `buildWrapper()` calls, wrapper helper functions) at module scope in test files. Treats `describe()` scope the same as module scope.
+Flags shared variable declarations at module scope in test files — object/array literals, `buildWrapper()` calls, and wrapper helper functions.
 
-## Why describe scope = module scope
+## Why this rule exists
 
-Most test files wrap everything in a top-level `describe`. A `const defaultProps = {...}` inside that describe is shared by every test in the file -- the same invisible coupling problem as module scope. The `describe` is structural, not a meaningful scope boundary.
+Shared test data creates invisible coupling between tests. When `const defaultProps` lives at the top of a file, every test silently inherits it. This causes three problems:
 
-This applies to all describe nesting levels, including `describe.each()`.
+1. **Fixtures grow to satisfy the most demanding test.** A simple "renders label" test inherits a 20-field props object because a sibling test needed all those fields. The reader can't tell which fields matter for _this_ test.
 
-## The recommended pattern for shared preconditions
+2. **Failures are harder to diagnose.** When a test fails, you have to scroll up to find the shared data, then figure out which parts of it are relevant.
 
-When tests genuinely share a precondition (e.g., "all these tests render a disabled phase"), use `beforeEach` with `render()` and query via `screen`:
+3. **Shared state resists change.** Adding a field to `defaultProps` affects every test. Removing one might break tests that silently depended on it. The blast radius of a "simple" change is the entire file.
+
+The fix is straightforward: each test declares exactly what it needs. Duplication is a feature — it makes each test a self-contained document of its preconditions.
+
+## What counts as module scope
+
+The outermost `describe()` in a test file is structural — it's just how files are organized. Variables declared there are shared across all tests, same as module scope.
+
+**Nested describes are different.** A `describe('disabled state')` is a semantic group — tests inside it share a precondition by design. The rule allows shared state in nested describes.
+
+## How to fix violations
+
+### Inline per test
+
+For plain data — props, options, config objects — inline directly:
 
 ```tsx
-describe('DISABLED phases', () => {
-  beforeEach(() => {
-    render(<Phase disabled />);
+// Before: shared data, invisible coupling
+describe('SelectField', () => {
+  const options = [
+    { id: 'low', label: 'Low' },
+    { id: 'high', label: 'High' },
+  ];
+
+  it('renders options', () => {
+    render(<SelectField options={options} />);
   });
 
-  it('shows disabled state', () => {
-    expect(screen.getByText('Disabled')).toBeInTheDocument();
+  it('submits selected value', () => {
+    render(<SelectField options={options} />);
+  });
+});
+
+// After: each test declares its own preconditions
+describe('SelectField', () => {
+  it('renders options', () => {
+    render(
+      <SelectField
+        options={[
+          { id: 'low', label: 'Low' },
+          { id: 'high', label: 'High' },
+        ]}
+      />
+    );
   });
 
-  it('prevents submission', () => {
-    expect(screen.getByRole('button')).toBeDisabled();
+  it('submits selected value', () => {
+    render(
+      <SelectField
+        options={[
+          { id: 'low', label: 'Low' },
+          { id: 'high', label: 'High' },
+        ]}
+      />
+    );
   });
 });
 ```
 
-The `describe` name tells you the precondition. `beforeEach` does the expensive side-effectful thing (render). Each test queries `screen` directly. No shared mutable data.
+### Group into nested describes
 
-## Anti-pattern: `let` + `beforeEach` for data
+When many tests share a precondition, create a nested describe. Use `beforeEach` for side-effectful setup like `render()`, and query with `screen`:
 
 ```tsx
-// Don't do this -- trades one smell for another
-describe('DISABLED phases', () => {
-  let props;
-  beforeEach(() => {
-    props = { disabled: true };
-  });
-  it('renders', () => {
-    render(<Phase {...props} />);
+describe('SelectField', () => {
+  describe('disabled state', () => {
+    beforeEach(() => {
+      render(<SelectField disabled options={[{ id: 'low', label: 'Low' }]} />);
+    });
+
+    it('shows disabled indicator', () => {
+      expect(screen.getByRole('combobox')).toBeDisabled();
+    });
+
+    it('prevents interaction', () => {
+      expect(screen.getByRole('combobox')).toHaveAttribute('aria-disabled');
+    });
   });
 });
 ```
 
-This replaces shared constants with shared mutable references. For plain data (props, options, config objects), inline it per test instead.
-
-## When to inline
-
-For plain data -- props objects, option arrays, config literals -- inline per test:
-
-```tsx
-describe('DISABLED phases', () => {
-  it('shows disabled state', () => {
-    render(<Phase disabled />);
-    expect(screen.getByText('Disabled')).toBeInTheDocument();
-  });
-
-  it('prevents submission', () => {
-    render(<Phase disabled />);
-    expect(screen.getByRole('button')).toBeDisabled();
-  });
-});
-```
-
-Each test is a complete, readable unit. The duplication cost is low (one line), and each test declares its own preconditions.
-
-## When `beforeEach` earns its place
-
-- `render()` / `renderHook()` -- side-effectful, benefits from centralized cleanup
-- Mock setup (`vi.fn()`, `vi.spyOn()`) that needs `.mockClear()` between tests
-- DOM setup that requires symmetric mount/unmount
-
-Not for plain data.
-
-## When to suppress
-
-Genuine domain constants shared across tests (not setup data):
-
-```ts
-// eslint-disable-next-line local/no-module-scope-test-setup
-const COLUMN_DEFINITIONS = [...]; // domain schema, not test setup
-```
+The describe name tells you the precondition. `beforeEach` renders it. Each test just asserts.
