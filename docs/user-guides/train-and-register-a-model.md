@@ -43,9 +43,10 @@ For basic (scikit-learn, lightweight PyTorch) training, load your dataset direct
 
 ```py
 import michelangelo.uniflow.core as uniflow
-from michelangelo.sdk.workflow.variables import DatasetVariable
+from michelangelo.workflow.variables import DatasetVariable
+from michelangelo.uniflow.plugins.ray import RayTask
 
-@uniflow.task()
+@uniflow.task(config=RayTask(head_cpu=2, head_memory="8Gi"))
 def train_model(train_dv: DatasetVariable, val_dv: DatasetVariable):
     """Simple training with scikit-learn"""
 
@@ -73,11 +74,10 @@ To scale training across CPUs/GPUs, wrap your training task using **RayTask**.
 ## Example: Distributed Deep Learning with Ray Workers
 
 ```py
-from michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer import (
-    LightningTrainer, LightningTrainerParam
+from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (
+    LightningTrainer, LightningTrainerParam, create_run_config, create_scaling_config
 )
 from michelangelo.uniflow.plugins.ray import RayTask
-from michelangelo.maf.ray.train import create_run_config, create_scaling_config
 from ray.train import CheckpointConfig
 
 @uniflow.task(

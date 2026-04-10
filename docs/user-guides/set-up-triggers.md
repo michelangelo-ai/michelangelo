@@ -87,7 +87,6 @@ Now that your `trigger.yaml` is ready, you can use the Michelangelo CLI to regis
 | :---- | :---- |
 | **Create or update a trigger** | `ma trigger_run apply --file=<path_to_trigger.yaml>` |
 | **Check trigger status** | `ma trigger_run get --namespace=<ns> --name=<name>` |
-| **List all triggers** | `ma trigger_run list --namespace=<ns>` |
 | **Delete a trigger** | `ma trigger_run delete --namespace=<ns> --name=<name>` |
 | **Kill a running trigger** | `ma trigger_run kill --namespace=<ns> --name=<name>` |
 
@@ -261,17 +260,17 @@ Here's an example that sends an email when a pipeline run fails, and a Slack mes
 spec:
   notifications:
     # Email alert on pipeline run failure
-    - notification_type: 1              # 1 = Email
-      event_types: [3]                  # 3 = Pipeline run failed
-      resource_type: 2                  # 2 = TriggerRun
+    - notification_type: NOTIFICATION_TYPE_EMAIL
+      event_types: [EVENT_TYPE_PIPELINE_RUN_STATE_FAILED]
+      resource_type: RESOURCE_TYPE_TRIGGER_RUN
       emails:
         - "team-alerts@example.com"
         - "your-email@example.com"
 
     # Slack message on trigger success
-    - notification_type: 2              # 2 = Slack
-      event_types: [7]                  # 7 = Trigger run succeeded
-      resource_type: 2                  # 2 = TriggerRun
+    - notification_type: NOTIFICATION_TYPE_SLACK
+      event_types: [EVENT_TYPE_TRIGGER_RUN_STATE_SUCCEEDED]
+      resource_type: RESOURCE_TYPE_TRIGGER_RUN
       slack_destinations:
         - "#ml-pipeline-alerts"
 ```
@@ -284,25 +283,25 @@ You can notify on any combination of these events:
 
 | Event | ID | Description |
 | :---- | :---- | :---- |
-| Pipeline run succeeded | `1` | A pipeline run completed successfully |
-| Pipeline run killed | `2` | A pipeline run was manually terminated |
-| Pipeline run failed | `3` | A pipeline run encountered an error |
-| Pipeline run skipped | `4` | A pipeline run was skipped |
-| Trigger run killed | `5` | The trigger itself was terminated |
-| Trigger run failed | `6` | The trigger encountered an error |
-| Trigger run succeeded | `7` | The trigger completed all scheduled runs |
-| Pipeline state ready | `8` | The pipeline is in a ready state |
-| Pipeline state error | `9` | The pipeline has entered an error state |
+| Pipeline run succeeded | `EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED` | A pipeline run completed successfully |
+| Pipeline run killed | `EVENT_TYPE_PIPELINE_RUN_STATE_KILLED` | A pipeline run was manually terminated |
+| Pipeline run failed | `EVENT_TYPE_PIPELINE_RUN_STATE_FAILED` | A pipeline run encountered an error |
+| Pipeline run skipped | `EVENT_TYPE_PIPELINE_RUN_STATE_SKIPPED` | A pipeline run was skipped |
+| Trigger run killed | `EVENT_TYPE_TRIGGER_RUN_STATE_KILLED` | The trigger itself was terminated |
+| Trigger run failed | `EVENT_TYPE_TRIGGER_RUN_STATE_FAILED` | The trigger encountered an error |
+| Trigger run succeeded | `EVENT_TYPE_TRIGGER_RUN_STATE_SUCCEEDED` | The trigger completed all scheduled runs |
+| Pipeline state ready | `EVENT_TYPE_PIPELINE_STATE_READY` | The pipeline is in a ready state |
+| Pipeline state error | `EVENT_TYPE_PIPELINE_STATE_ERROR` | The pipeline has entered an error state |
 
 #### Notification and Resource Types
 
 | Field | Value | Meaning |
 | :---- | :---- | :---- |
-| `notification_type` | `1` | Email |
-| `notification_type` | `2` | Slack |
-| `resource_type` | `1` | PipelineRun |
-| `resource_type` | `2` | TriggerRun |
-| `resource_type` | `3` | Pipeline |
+| `notification_type` | `NOTIFICATION_TYPE_EMAIL` | Email |
+| `notification_type` | `NOTIFICATION_TYPE_SLACK` | Slack |
+| `resource_type` | `RESOURCE_TYPE_PIPELINE_RUN` | PipelineRun |
+| `resource_type` | `RESOURCE_TYPE_TRIGGER_RUN` | TriggerRun |
+| `resource_type` | `RESOURCE_TYPE_PIPELINE` | Pipeline |
 
 > **Tip:** A common setup is to notify on failures via email (for immediate attention) and on successes via Slack (for team visibility). You can list multiple `event_types` in a single notification entry to consolidate alerts.
 

@@ -141,7 +141,9 @@ A: No. If you're using the UI, it's entirely point-and-click. If you're coding, 
 **Q: Can I use my existing Python ML code?**
 A: Yes! Wrap your training functions with `@uniflow.task()` decorator and you're ready to go. Example:
 ```python
-@uniflow.task()
+from michelangelo.uniflow.plugins.ray import RayTask
+
+@uniflow.task(config=RayTask(head_cpu=2, head_memory="4Gi"))
 def train_model(data_path: str):
     # Your existing training code here
     model = train_my_model(data_path)
