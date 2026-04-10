@@ -37,11 +37,16 @@ describe('TaskHeader', () => {
       },
     });
 
-    render(<TaskHeader task={task} metadata={[
-        { id: 'status', label: 'Status' },
-        { id: 'duration', label: 'Duration' },
-        { id: 'startTime', label: 'Started' },
-      ]} />);
+    render(
+      <TaskHeader
+        task={task}
+        metadata={[
+          { id: 'status', label: 'Status' },
+          { id: 'duration', label: 'Duration' },
+          { id: 'startTime', label: 'Started' },
+        ]}
+      />
+    );
 
     expect(screen.getByText('Task with Metadata')).toBeInTheDocument();
     expect(screen.getByText('Status')).toBeInTheDocument();
@@ -100,11 +105,16 @@ describe('TaskHeader', () => {
       record: { displayName: 'Incomplete Task' }, // Missing status, duration, startTime
     });
 
-    render(<TaskHeader task={task} metadata={[
-        { id: 'status', label: 'Status' },
-        { id: 'duration', label: 'Duration' },
-        { id: 'startTime', label: 'Started' },
-      ]} />);
+    render(
+      <TaskHeader
+        task={task}
+        metadata={[
+          { id: 'status', label: 'Status' },
+          { id: 'duration', label: 'Duration' },
+          { id: 'startTime', label: 'Started' },
+        ]}
+      />
+    );
 
     expect(screen.getByText('Incomplete Task')).toBeInTheDocument();
 

@@ -63,12 +63,7 @@ describe('Row', () => {
       },
     };
 
-    render(
-      <Row
-        items={[{ id: 'name', label: 'Name' }]}
-        overrides={overrides}
-      />
-    );
+    render(<Row items={[{ id: 'name', label: 'Name' }]} overrides={overrides} />);
     expect(screen.getByTestId('custom-container')).toBeInTheDocument();
   });
 

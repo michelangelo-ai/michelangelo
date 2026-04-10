@@ -3,9 +3,6 @@ import { vi } from 'vitest';
 import { CellType } from '#core/components/cell/constants';
 import { createColumnListChangeHandler } from '../utils';
 
-import type { TableData } from '#core/components/table/types/data-types';
-import type { ConfigurableColumn } from '../types';
-
 describe('createColumnListChangeHandler', () => {
   let mockSetColumnOrder: ReturnType<typeof vi.fn>;
   let mockSetColumnVisibility: ReturnType<typeof vi.fn>;

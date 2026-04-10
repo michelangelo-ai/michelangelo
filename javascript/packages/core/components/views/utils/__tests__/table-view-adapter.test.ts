@@ -77,7 +77,11 @@ describe('adaptTableConfigToTableProps', () => {
   });
 
   it('returns undefined actions when config has no actions', () => {
-    const result = adaptTableConfigToTableProps(buildTableConfig(), { data: [{ name: 'Item 1', status: 'Active' }], loading: false, error: undefined });
+    const result = adaptTableConfigToTableProps(buildTableConfig(), {
+      data: [{ name: 'Item 1', status: 'Active' }],
+      loading: false,
+      error: undefined,
+    });
     expect(result.actions).toBeUndefined();
   });
 
@@ -86,7 +90,11 @@ describe('adaptTableConfigToTableProps', () => {
     const tableConfig = buildTableConfig({
       actions: [{ display: { label: 'Delete' }, component: () => null }],
     });
-    const result = adaptTableConfigToTableProps(tableConfig, { data: [{ name: 'Item 1', status: 'Active' }], loading: false, error: undefined });
+    const result = adaptTableConfigToTableProps(tableConfig, {
+      data: [{ name: 'Item 1', status: 'Active' }],
+      loading: false,
+      error: undefined,
+    });
     expect(typeof result.actions).toBe('function');
   });
 
@@ -117,9 +125,13 @@ describe('adaptTableConfigToTableProps', () => {
     test.each(testCases)('$description', ({ input, expected }) => {
       const tableConfig = buildTableConfig(input);
 
-      expect(adaptTableConfigToTableProps(tableConfig, { data: [{ name: 'Item 1', status: 'Active' }], loading: false, error: undefined }).actionBarConfig).toEqual(
-        expected
-      );
+      expect(
+        adaptTableConfigToTableProps(tableConfig, {
+          data: [{ name: 'Item 1', status: 'Active' }],
+          loading: false,
+          error: undefined,
+        }).actionBarConfig
+      ).toEqual(expected);
     });
   });
 
@@ -135,7 +147,11 @@ describe('adaptTableConfigToTableProps', () => {
       enableStickySides: false,
     });
 
-    const result = adaptTableConfigToTableProps(config, { data: [{ name: 'Item 1', status: 'Active' }], loading: false, error: undefined });
+    const result = adaptTableConfigToTableProps(config, {
+      data: [{ name: 'Item 1', status: 'Active' }],
+      loading: false,
+      error: undefined,
+    });
 
     expect(result.actionBarConfig).toEqual({
       enableSearch: !config.disableSearch,
@@ -144,7 +160,11 @@ describe('adaptTableConfigToTableProps', () => {
 
     const { actionBarConfig: _actionBarConfig, ...passedThroughProps } = result;
 
-    const runtimeProps = { data: [{ name: 'Item 1', status: 'Active' }], loading: false, error: undefined };
+    const runtimeProps = {
+      data: [{ name: 'Item 1', status: 'Active' }],
+      loading: false,
+      error: undefined,
+    };
 
     const {
       disableSearch: _disableSearch,

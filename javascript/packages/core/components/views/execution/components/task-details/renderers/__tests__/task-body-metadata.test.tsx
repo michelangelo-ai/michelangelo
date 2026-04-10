@@ -13,11 +13,17 @@ describe('TaskBodyMetadata', () => {
       startTime: '2025-01-01T08:00:00Z',
     };
 
-    render(<TaskBodyMetadata label="Task Metadata" value={mockData} cells={[
+    render(
+      <TaskBodyMetadata
+        label="Task Metadata"
+        value={mockData}
+        cells={[
           { id: 'status', label: 'Status', type: CellType.TEXT, accessor: 'status' },
           { id: 'duration', label: 'Duration', type: CellType.TEXT, accessor: 'duration' },
           { id: 'startTime', label: 'Started', type: CellType.DATE, accessor: 'startTime' },
-        ]} />);
+        ]}
+      />
+    );
 
     const accordionButton = screen.getByRole('button', { name: /Task Metadata/ });
     expect(accordionButton).toBeInTheDocument();
@@ -31,11 +37,17 @@ describe('TaskBodyMetadata', () => {
   it('should handle undefined value gracefully', async () => {
     const user = userEvent.setup();
 
-    render(<TaskBodyMetadata label="Empty Metadata" value={undefined} cells={[
+    render(
+      <TaskBodyMetadata
+        label="Empty Metadata"
+        value={undefined}
+        cells={[
           { id: 'status', label: 'Status', type: CellType.TEXT, accessor: 'status' },
           { id: 'duration', label: 'Duration', type: CellType.TEXT, accessor: 'duration' },
           { id: 'startTime', label: 'Started', type: CellType.DATE, accessor: 'startTime' },
-        ]} />);
+        ]}
+      />
+    );
 
     const accordionButton = screen.getByRole('button', { name: /Empty Metadata/ });
     await user.click(accordionButton);
@@ -61,11 +73,17 @@ describe('TaskBodyMetadata', () => {
       status: 'Running',
     };
 
-    render(<TaskBodyMetadata label="Partial Metadata" value={partialData} cells={[
+    render(
+      <TaskBodyMetadata
+        label="Partial Metadata"
+        value={partialData}
+        cells={[
           { id: 'status', label: 'Status', type: CellType.TEXT, accessor: 'status' },
           { id: 'duration', label: 'Duration', type: CellType.TEXT, accessor: 'duration' },
           { id: 'startTime', label: 'Started', type: CellType.DATE, accessor: 'startTime' },
-        ]} />);
+        ]}
+      />
+    );
 
     const accordionButton = screen.getByRole('button', { name: /Partial Metadata/ });
     await user.click(accordionButton);
