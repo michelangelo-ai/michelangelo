@@ -254,7 +254,7 @@ Generated mocks land in `<package>/backendsmocks/` (package name + `mocks` suffi
 import "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
 ```
 
-See [Using Go Mocks in Unit Tests](../use-go-mocks-in-unit-test.md) for full mock usage patterns.
+See [Using Go Mocks in Unit Tests](../../use-go-mocks-in-unit-test.md) for full mock usage patterns.
 
 ### Table-driven tests
 
@@ -288,6 +288,6 @@ func TestValidateModelName(t *testing.T) {
 ## Related
 
 - [Error Handling](error-handling.md) — error wrapping, logging strategy, PR review checklist
-- [Using Go Mocks in Unit Tests](../use-go-mocks-in-unit-test.md) — mock generation and usage
-- [Managing Go Dependencies](../manage-go-dependencies.md) — `go mod tidy`, `bazel mod tidy`
-- [Testing Strategy](../testing.md) — unit, integration, and E2E test expectations
+- [Using Go Mocks in Unit Tests](../../use-go-mocks-in-unit-test.md) — mock generation and usage
+- [Managing Go Dependencies](../../manage-go-dependencies.md) — `go mod tidy`, `bazel mod tidy`
+- [Testing Strategy](../../testing.md) — unit, integration, and E2E test expectations
