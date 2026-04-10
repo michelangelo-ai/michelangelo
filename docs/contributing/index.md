@@ -30,7 +30,7 @@ Understanding which directory owns which subsystem helps you find the right code
 | Shared controller components | `go/components/` | Go |
 | Python SDK (Uniflow) | `python/michelangelo/uniflow/` | Python |
 | CLI (`ma`) | `python/michelangelo/` | Python |
-| Web UI | `ui/` | TypeScript/React |
+| Web UI | `javascript/` | TypeScript/React |
 | Bazel build configuration | `BUILD.bazel`, `WORKSPACE`, `*.bazel` | Bazel/Starlark |
 
 | Web UI | `javascript/` | TypeScript/React |
