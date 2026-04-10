@@ -33,7 +33,8 @@ Understanding which directory owns which subsystem helps you find the right code
 | Web UI | `ui/` | TypeScript/React |
 | Bazel build configuration | `BUILD.bazel`, `WORKSPACE`, `*.bazel` | Bazel/Starlark |
 
-### Key subsystems
+| Web UI | `javascript/` | TypeScript/React |
+| Bazel build configuration | `BUILD.bazel`, `MODULE.bazel`, `WORKSPACE.bazel` | Bazel/Starlark |
 
 **API server** (`go/cmd/apiserver/`) is a gRPC server that acts as the control plane API. It validates and stores resources (CRDs via the Kubernetes API), and invokes registered API hooks.
 
