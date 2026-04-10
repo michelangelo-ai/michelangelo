@@ -6,10 +6,17 @@ The focus is simplicity: **you control your training logic**, Michelangelo provi
 
 ## What You'll Learn
 
-* How datasets are passed to training tasks  
-* How to load Ray, Pandas, or Spark datasets  
-* How to scale training with Ray workers  
+* How datasets are passed to training tasks
+* How to load Ray, Pandas, or Spark datasets
+* How to scale training with Ray workers
 * How to use the Lightning Trainer SDK for deep learning
+
+## Prerequisites
+
+- **A running sandbox** — Remote training runs require a local Kubernetes cluster. Follow the [Sandbox Setup](../getting-started/sandbox-setup.md) guide if you haven't done this yet.
+- **A prepared dataset** — Training tasks expect datasets passed as `DatasetVariable`. See [Data Preparation](./prepare-your-data.md) for how to produce them.
+- **Python 3.11+, Poetry, and the Michelangelo SDK installed** — Run `cd python && poetry install` from the repo root.
+- **For distributed training:** A Docker image with your workflow code. See [Running Uniflow Pipelines](./ml-pipelines/running-uniflow.md) for image build steps.
 
 ## Understanding Training Inputs
 

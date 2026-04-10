@@ -6,6 +6,13 @@
 * When to use (and not use) file sync
 * What files get synced and the typical development flow
 
+## Prerequisites
+
+- **A running sandbox** — File sync pushes code to a remote cluster. Follow the [Sandbox Setup](../../getting-started/sandbox-setup.md) guide first.
+- **A Docker image already built for your workflow** — File sync patches an existing image; it does not build one. See [Running Uniflow Pipelines](./running-uniflow.md) for image build steps.
+- **A Git repository** — File sync uses Git metadata to determine which files changed since the image was built.
+- **Cloud storage credentials** — S3/MinIO access is required to upload the sync tarball (see Troubleshooting below).
+
 ## What is file sync?
 
 File Sync lets you test your local code changes on remote infrastructure **without rebuilding Docker images**. Instead of waiting 20+ minutes for image builds per task, you can sync your changes in 2-5 minutes.
@@ -89,11 +96,32 @@ ma pipeline dev-run --file-sync --file <path_to_pipeline.yaml>
 4. **Commit and rebuild image** only when ready for production
 
 ## Troubleshooting
-1. No fsspec credentials, once kicking off remote run, it failed with below error:
-```2026-03-23 09:14:44,722 |    ERROR | michelangelo.uniflow.core.file_sync      | Failed to upload tarball: Unable to locate credentials```
-setup credentials before starting remote run workflow
+
+### Missing cloud storage credentials
+
+If the sync fails with:
 ```
+Failed to upload tarball: Unable to locate credentials
+```
+
+Set credentials before running:
+
+```bash
 export AWS_ACCESS_KEY_ID=minioadmin
 export AWS_SECRET_ACCESS_KEY=minioadmin
 export AWS_ENDPOINT_URL=http://localhost:9091
 ```
+
+### Unexpected files being synced
+
+If more files are synced than expected, your Docker image may not have Git metadata. In that case, file sync sends all uncommitted changes rather than just the diff since the image was built. Ensure the image is built from your current branch with Git history included.
+
+### File sync not picking up changes
+
+File sync only includes files tracked by Git. If you added new files, make sure they are staged (`git add`) so Git is aware of them.
+
+## Next Steps
+
+- **Cache results between runs** — See [Uniflow caching and pipeline run resume](./cache-and-pipelinerun-resume-form.md) to skip unchanged steps and resume failed runs
+- **Run on a schedule** — See [Set Up Triggers](../set-up-triggers.md) to automate pipeline execution with cron triggers
+- **Build and register your model** — Once your code is validated, follow the [Model Registry Guide](../model-registry-guide.md) to package and version your model
