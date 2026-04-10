@@ -13,19 +13,6 @@ import { useLocalStorageTableState } from '../use-local-storage-table-state';
 import type { TableState } from '#core/components/table/types/table-types';
 
 describe('useLocalStorageTableState', () => {
-  const buildTestData = () => [
-    { id: '1', name: 'Alice Johnson', department: 'Engineering', status: 'Active' },
-    { id: '2', name: 'Bob Smith', department: 'Marketing', status: 'Inactive' },
-    { id: '3', name: 'Carol Davis', department: 'Engineering', status: 'Active' },
-    { id: '4', name: 'David Wilson', department: 'Sales', status: 'Active' },
-  ];
-
-  const buildTestColumns = () => [
-    { id: 'name', label: 'Name' },
-    { id: 'department', label: 'Department' },
-    { id: 'status', label: 'Status' },
-  ];
-
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
@@ -239,8 +226,17 @@ describe('useLocalStorageTableState', () => {
 
       return (
         <Table
-          data={buildTestData()}
-          columns={buildTestColumns()}
+          data={[
+            { id: '1', name: 'Alice Johnson', department: 'Engineering', status: 'Active' },
+            { id: '2', name: 'Bob Smith', department: 'Marketing', status: 'Inactive' },
+            { id: '3', name: 'Carol Davis', department: 'Engineering', status: 'Active' },
+            { id: '4', name: 'David Wilson', department: 'Sales', status: 'Active' },
+          ]}
+          columns={[
+            { id: 'name', label: 'Name' },
+            { id: 'department', label: 'Department' },
+            { id: 'status', label: 'Status' },
+          ]}
           state={tableState}
           actionBarConfig={{ enableSearch: true }}
         />
@@ -258,8 +254,17 @@ describe('useLocalStorageTableState', () => {
 
       return (
         <Table
-          data={buildTestData()}
-          columns={buildTestColumns()}
+          data={[
+            { id: '1', name: 'Alice Johnson', department: 'Engineering', status: 'Active' },
+            { id: '2', name: 'Bob Smith', department: 'Marketing', status: 'Inactive' },
+            { id: '3', name: 'Carol Davis', department: 'Engineering', status: 'Active' },
+            { id: '4', name: 'David Wilson', department: 'Sales', status: 'Active' },
+          ]}
+          columns={[
+            { id: 'name', label: 'Name' },
+            { id: 'department', label: 'Department' },
+            { id: 'status', label: 'Status' },
+          ]}
           state={tableState}
           actionBarConfig={{ enableSearch: true }}
         />

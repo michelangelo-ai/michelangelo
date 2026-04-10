@@ -9,28 +9,11 @@ import { UNIFIED_API_ORIGIN_DATE } from '../datetime/constants';
 import { DatetimeFilter } from '../datetime/datetime-filter';
 
 import type { DatetimeFilterValue } from '../datetime/types';
-import type { ColumnFilterProps } from '../types';
 
 describe('DatetimeFilter', () => {
   const mockClose = vi.fn();
   const mockSetFilterValue = vi.fn();
   const mockGetFilterValue = vi.fn();
-
-  const buildDefaultProps = (): ColumnFilterProps => ({
-    column: {
-      id: 'createdAt',
-      label: 'Created At',
-      type: 'date',
-    },
-    close: mockClose,
-    getFilterValue: mockGetFilterValue,
-    setFilterValue: mockSetFilterValue,
-    preFilteredRows: [
-      { getValue: () => 1672531200, record: { createdAt: 1672531200 } }, // 2023-01-01 epoch seconds
-      { getValue: () => 1680307200, record: { createdAt: 1680307200 } }, // 2023-04-01 epoch seconds
-      { getValue: () => 1687824000, record: { createdAt: 1687824000 } }, // 2023-06-27 epoch seconds
-    ],
-  });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -39,7 +22,17 @@ describe('DatetimeFilter', () => {
 
   it('should use UNIFIED_API_ORIGIN_DATE as default start date', () => {
     render(
-      <DatetimeFilter {...buildDefaultProps()} />,
+      <DatetimeFilter
+          column={{ id: 'createdAt', label: 'Created At', type: 'date' }}
+          close={mockClose}
+          getFilterValue={mockGetFilterValue}
+          setFilterValue={mockSetFilterValue}
+          preFilteredRows={[
+            { getValue: () => 1672531200, record: { createdAt: 1672531200 } },
+            { getValue: () => 1680307200, record: { createdAt: 1680307200 } },
+            { getValue: () => 1687824000, record: { createdAt: 1687824000 } },
+          ]}
+        />,
       buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
     );
 
@@ -59,7 +52,17 @@ describe('DatetimeFilter', () => {
     mockGetFilterValue.mockReturnValue(existingFilter);
 
     render(
-      <DatetimeFilter {...buildDefaultProps()} />,
+      <DatetimeFilter
+          column={{ id: 'createdAt', label: 'Created At', type: 'date' }}
+          close={mockClose}
+          getFilterValue={mockGetFilterValue}
+          setFilterValue={mockSetFilterValue}
+          preFilteredRows={[
+            { getValue: () => 1672531200, record: { createdAt: 1672531200 } },
+            { getValue: () => 1680307200, record: { createdAt: 1680307200 } },
+            { getValue: () => 1687824000, record: { createdAt: 1687824000 } },
+          ]}
+        />,
       buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
     );
 
@@ -72,7 +75,17 @@ describe('DatetimeFilter', () => {
     mockGetFilterValue.mockReturnValue(undefined);
 
     render(
-      <DatetimeFilter {...buildDefaultProps()} />,
+      <DatetimeFilter
+          column={{ id: 'createdAt', label: 'Created At', type: 'date' }}
+          close={mockClose}
+          getFilterValue={mockGetFilterValue}
+          setFilterValue={mockSetFilterValue}
+          preFilteredRows={[
+            { getValue: () => 1672531200, record: { createdAt: 1672531200 } },
+            { getValue: () => 1680307200, record: { createdAt: 1680307200 } },
+            { getValue: () => 1687824000, record: { createdAt: 1687824000 } },
+          ]}
+        />,
       buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
     );
 
@@ -94,7 +107,17 @@ describe('DatetimeFilter', () => {
     mockGetFilterValue.mockReturnValue(filterWithStringDates);
 
     render(
-      <DatetimeFilter {...buildDefaultProps()} />,
+      <DatetimeFilter
+          column={{ id: 'createdAt', label: 'Created At', type: 'date' }}
+          close={mockClose}
+          getFilterValue={mockGetFilterValue}
+          setFilterValue={mockSetFilterValue}
+          preFilteredRows={[
+            { getValue: () => 1672531200, record: { createdAt: 1672531200 } },
+            { getValue: () => 1680307200, record: { createdAt: 1680307200 } },
+            { getValue: () => 1687824000, record: { createdAt: 1687824000 } },
+          ]}
+        />,
       buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
     );
 
@@ -115,7 +138,17 @@ describe('DatetimeFilter', () => {
     mockGetFilterValue.mockReturnValue(filter2022);
 
     render(
-      <DatetimeFilter {...buildDefaultProps()} />,
+      <DatetimeFilter
+          column={{ id: 'createdAt', label: 'Created At', type: 'date' }}
+          close={mockClose}
+          getFilterValue={mockGetFilterValue}
+          setFilterValue={mockSetFilterValue}
+          preFilteredRows={[
+            { getValue: () => 1672531200, record: { createdAt: 1672531200 } },
+            { getValue: () => 1680307200, record: { createdAt: 1680307200 } },
+            { getValue: () => 1687824000, record: { createdAt: 1687824000 } },
+          ]}
+        />,
       buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
     );
 
@@ -128,7 +161,17 @@ describe('DatetimeFilter', () => {
     const user = userEvent.setup();
 
     render(
-      <DatetimeFilter {...buildDefaultProps()} />,
+      <DatetimeFilter
+          column={{ id: 'createdAt', label: 'Created At', type: 'date' }}
+          close={mockClose}
+          getFilterValue={mockGetFilterValue}
+          setFilterValue={mockSetFilterValue}
+          preFilteredRows={[
+            { getValue: () => 1672531200, record: { createdAt: 1672531200 } },
+            { getValue: () => 1680307200, record: { createdAt: 1680307200 } },
+            { getValue: () => 1687824000, record: { createdAt: 1687824000 } },
+          ]}
+        />,
       buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
     );
 
@@ -149,7 +192,17 @@ describe('DatetimeFilter', () => {
     mockGetFilterValue.mockReturnValue(malformedFilter);
 
     render(
-      <DatetimeFilter {...buildDefaultProps()} />,
+      <DatetimeFilter
+          column={{ id: 'createdAt', label: 'Created At', type: 'date' }}
+          close={mockClose}
+          getFilterValue={mockGetFilterValue}
+          setFilterValue={mockSetFilterValue}
+          preFilteredRows={[
+            { getValue: () => 1672531200, record: { createdAt: 1672531200 } },
+            { getValue: () => 1680307200, record: { createdAt: 1680307200 } },
+            { getValue: () => 1687824000, record: { createdAt: 1687824000 } },
+          ]}
+        />,
       buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
     );
 
@@ -169,7 +222,17 @@ describe('DatetimeFilter', () => {
     mockGetFilterValue.mockReturnValue(incompleteFilter);
 
     render(
-      <DatetimeFilter {...buildDefaultProps()} />,
+      <DatetimeFilter
+          column={{ id: 'createdAt', label: 'Created At', type: 'date' }}
+          close={mockClose}
+          getFilterValue={mockGetFilterValue}
+          setFilterValue={mockSetFilterValue}
+          preFilteredRows={[
+            { getValue: () => 1672531200, record: { createdAt: 1672531200 } },
+            { getValue: () => 1680307200, record: { createdAt: 1680307200 } },
+            { getValue: () => 1687824000, record: { createdAt: 1687824000 } },
+          ]}
+        />,
       buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
     );
 

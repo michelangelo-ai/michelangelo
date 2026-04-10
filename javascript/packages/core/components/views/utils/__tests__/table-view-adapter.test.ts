@@ -11,12 +11,6 @@ describe('adaptTableConfigToTableProps', () => {
     ],
   });
 
-  const buildRuntimeProps = () => ({
-    data: [{ name: 'Item 1', status: 'Active' }],
-    loading: false,
-    error: undefined as ApplicationError | undefined,
-  });
-
   it('should handle minimal TableConfig with only columns', () => {
     const minimalConfig = {
       columns: [
@@ -24,10 +18,15 @@ describe('adaptTableConfigToTableProps', () => {
         { id: 'status', label: 'Status' },
       ],
     };
-    const result = adaptTableConfigToTableProps(minimalConfig, buildRuntimeProps());
+    const runtimeProps = {
+      data: [{ name: 'Item 1', status: 'Active' }],
+      loading: false,
+      error: undefined as ApplicationError | undefined,
+    };
+    const result = adaptTableConfigToTableProps(minimalConfig, runtimeProps);
 
     expect(result).toEqual({
-      data: buildRuntimeProps().data,
+      data: runtimeProps.data,
       loading: false,
       error: undefined,
       columns: minimalConfig.columns,
@@ -78,7 +77,7 @@ describe('adaptTableConfigToTableProps', () => {
   });
 
   it('returns undefined actions when config has no actions', () => {
-    const result = adaptTableConfigToTableProps(buildTableConfig(), buildRuntimeProps());
+    const result = adaptTableConfigToTableProps(buildTableConfig(), { data: [{ name: 'Item 1', status: 'Active' }], loading: false, error: undefined });
     expect(result.actions).toBeUndefined();
   });
 
@@ -87,7 +86,7 @@ describe('adaptTableConfigToTableProps', () => {
     const tableConfig = buildTableConfig({
       actions: [{ display: { label: 'Delete' }, component: () => null }],
     });
-    const result = adaptTableConfigToTableProps(tableConfig, buildRuntimeProps());
+    const result = adaptTableConfigToTableProps(tableConfig, { data: [{ name: 'Item 1', status: 'Active' }], loading: false, error: undefined });
     expect(typeof result.actions).toBe('function');
   });
 
@@ -118,7 +117,7 @@ describe('adaptTableConfigToTableProps', () => {
     test.each(testCases)('$description', ({ input, expected }) => {
       const tableConfig = buildTableConfig(input);
 
-      expect(adaptTableConfigToTableProps(tableConfig, buildRuntimeProps()).actionBarConfig).toEqual(
+      expect(adaptTableConfigToTableProps(tableConfig, { data: [{ name: 'Item 1', status: 'Active' }], loading: false, error: undefined }).actionBarConfig).toEqual(
         expected
       );
     });
@@ -136,7 +135,7 @@ describe('adaptTableConfigToTableProps', () => {
       enableStickySides: false,
     });
 
-    const result = adaptTableConfigToTableProps(config, buildRuntimeProps());
+    const result = adaptTableConfigToTableProps(config, { data: [{ name: 'Item 1', status: 'Active' }], loading: false, error: undefined });
 
     expect(result.actionBarConfig).toEqual({
       enableSearch: !config.disableSearch,
@@ -145,11 +144,13 @@ describe('adaptTableConfigToTableProps', () => {
 
     const { actionBarConfig: _actionBarConfig, ...passedThroughProps } = result;
 
+    const runtimeProps = { data: [{ name: 'Item 1', status: 'Active' }], loading: false, error: undefined };
+
     const {
       disableSearch: _disableSearch,
       disableFilters: _disableFilters,
       ...expectedProps
-    } = { ...config, ...buildRuntimeProps() };
+    } = { ...config, ...runtimeProps };
 
     expect(passedThroughProps).toEqual(expectedProps);
   });
