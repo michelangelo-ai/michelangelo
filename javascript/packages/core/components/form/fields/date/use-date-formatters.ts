@@ -13,9 +13,10 @@ import { DateFormat } from './types';
  *
  * @param dateFormat - Controls the persisted date format (epoch or ISO).
  */
-export function useDateFormatters(
-  dateFormat: DateFormat = DateFormat.ISO_DATE_STRING
-): { format: (value: string) => Date | null; parse: (value: Date | null) => string } {
+export function useDateFormatters(dateFormat: DateFormat = DateFormat.ISO_DATE_STRING): {
+  format: (value: string) => Date | null;
+  parse: (value: Date | null) => string;
+} {
   const toDate =
     dateFormat === DateFormat.EPOCH_SECONDS
       ? (value: string) => (value ? getDateFromEpochSeconds(parseInt(value)) : null)
