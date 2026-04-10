@@ -1,0 +1,66 @@
+{
+  "expectations": [
+    {
+      "text": "Subject line is in imperative mood, under 60 characters, and mentions cron triggers or scheduled triggers",
+      "passed": true,
+      "evidence": "Subject line is 'Add cron trigger support with dynamic parameters' — imperative mood ('Add'), 49 characters, mentions 'cron trigger'."
+    },
+    {
+      "text": "Summary explains the user need: users need to schedule recurring pipeline runs with dynamically computed parameters",
+      "passed": true,
+      "evidence": "Summary states: 'Previously, workflows could only be triggered manually or via external schedulers with static configurations. This made it impossible to pass runtime-resolved parameters (e.g., dates, computed values) into scheduled workflow runs.'"
+    },
+    {
+      "text": "Summary groups changes into subsystems (trigger controller, workflow client extensions, worker activities/workflows, proto/config) rather than listing 48 files",
+      "passed": true,
+      "evidence": "Summary organizes by subsystem: 'TriggerRun controller manages cron trigger lifecycle', 'dedicated Cadence/Temporal activities and workflows handle the actual scheduling', 'workflow client interface is extended with status-mapping helpers and cron schedule support'. No individual files are listed in the summary body."
+    },
+    {
+      "text": "Summary does NOT include step-by-step implementation details like 'added mapCadenceStatusToInterface function'",
+      "passed": true,
+      "evidence": "The summary uses abstractions like 'status-mapping helpers' rather than naming specific functions. No step-by-step implementation details appear."
+    },
+    {
+      "text": "Summary mentions that both Cadence and Temporal workflow clients were extended to support cron scheduling",
+      "passed": true,
+      "evidence": "Summary states: 'The workflow client interface is extended with status-mapping helpers and cron schedule support so both Cadence and Temporal backends can run cron-triggered workflows through a unified API.'"
+    },
+    {
+      "text": "A test plan section exists",
+      "passed": true,
+      "evidence": "A '## Test plan' section exists with content: 'Added cron_trigger_test.go with 279 lines of tests covering trigger creation, parameter resolution, and execution lifecycle.'"
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  },
+  "claims": [
+    {
+      "claim": "cron_trigger_test.go has 279 lines of tests",
+      "type": "factual",
+      "verified": false,
+      "evidence": "Cannot verify the line count from available outputs — this is a claim from the PR description about the diff, not verifiable without the source code."
+    },
+    {
+      "claim": "Existing workflow client tests continue to pass with the expanded interface",
+      "type": "quality",
+      "verified": false,
+      "evidence": "No test execution output available to verify this claim."
+    }
+  ],
+  "eval_feedback": {
+    "suggestions": [
+      {
+        "assertion": "Summary groups changes into subsystems (trigger controller, workflow client extensions, worker activities/workflows, proto/config) rather than listing 48 files",
+        "reason": "The expectation lists four subsystem groups including proto/config, but the output doesn't explicitly mention proto/config as a subsystem. The assertion passed because the summary clearly organizes by subsystem rather than listing files, but a stricter assertion could check that all four named subsystems appear."
+      },
+      {
+        "reason": "No assertion checks the overall length or conciseness of the PR description. This is a 48-file diff, so verifying the description stays within a reasonable character/line budget would be a valuable discriminating test."
+      }
+    ],
+    "overall": "Assertions are well-targeted and cover the key qualities of a good PR description. The output is strong — concise, well-structured, and avoids common pitfalls. Minor gap: no assertion on overall brevity."
+  }
+}

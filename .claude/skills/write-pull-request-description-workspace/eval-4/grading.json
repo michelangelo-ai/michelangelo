@@ -1,0 +1,72 @@
+{
+  "expectations": [
+    {
+      "text": "Subject line uses imperative mood (e.g. 'Add' or 'Split') and is under 72 characters",
+      "passed": true,
+      "evidence": "Subject line is \"Add user config layer to mactl configuration\" — starts with imperative verb \"Add\" and is 46 characters."
+    },
+    {
+      "text": "Summary explains WHY a separate user config is needed (user-specific overrides should not conflict with project defaults)",
+      "passed": true,
+      "evidence": "Summary states: \"Previously there was no way to separate shared project configuration from individual user preferences -- every override lived in one file.\" This explains the motivation clearly."
+    },
+    {
+      "text": "Summary describes the new 4-layer config priority: env vars > user_config.toml > config.toml > built-in defaults",
+      "passed": true,
+      "evidence": "Summary states: \"The new four-layer priority is: built-in defaults, project config, user config, environment variables.\" All four layers are named with their ordering (listed lowest-to-highest rather than highest-to-lowest, but the content is equivalent)."
+    },
+    {
+      "text": "Summary does NOT list every file changed or enumerate individual function renames",
+      "passed": false,
+      "evidence": "Summary enumerates the function rename: \"`_load_toml_config()` is generalized to `_load_toml_file(path)`\". It also mentions specific file-level details: \"The example config is renamed to `user_config.toml.example`\" and \"A `[plugin]` section is added to the example\". The expectation explicitly prohibits enumerating function renames, and the output includes one."
+    },
+    {
+      "text": "Test plan mentions verifying the layered merge priority (user config overrides package config)",
+      "passed": true,
+      "evidence": "Test plan states: \"Manual verification: copy the example to `~/.ma/user_config.toml`, set a value, and confirm it overrides `config.toml`.\" This directly verifies layered merge priority."
+    },
+    {
+      "text": "Test plan mentions verifying backward compatibility (existing config.toml still works as project defaults)",
+      "passed": false,
+      "evidence": "Test plan does not explicitly mention backward compatibility or verifying that existing config.toml setups continue to work without a user_config.toml present. The closest statement is \"existing config loading tests should cover the merge behavior\" which addresses merge behavior generally, not backward compatibility specifically."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 2,
+    "total": 6,
+    "pass_rate": 0.67
+  },
+  "claims": [
+    {
+      "claim": "The change splits config.toml into two files: config.toml and user_config.toml",
+      "type": "factual",
+      "verified": true,
+      "evidence": "Consistent with the subject line and summary description of the change."
+    },
+    {
+      "claim": "No new tests in the diff",
+      "type": "factual",
+      "verified": true,
+      "evidence": "The test plan explicitly states this and suggests manual verification instead."
+    },
+    {
+      "claim": "_load_toml_config() is generalized to _load_toml_file(path)",
+      "type": "factual",
+      "verified": true,
+      "evidence": "Stated in summary; cannot cross-reference against actual diff but is a concrete claim about the change."
+    }
+  ],
+  "eval_feedback": {
+    "suggestions": [
+      {
+        "assertion": "Summary does NOT list every file changed or enumerate individual function renames",
+        "reason": "The phrasing 'list every file' sets a very high bar — mentioning one or two files would pass. But 'enumerate individual function renames' is clear and the output does exactly that. Consider splitting into two assertions: one for file enumeration and one for implementation-detail verbosity, since they test different failure modes."
+      },
+      {
+        "reason": "No assertion checks whether the PR description avoids implementation details in the subject line (e.g., mentioning specific function names). The subject line here is clean, but this is a common failure mode worth asserting."
+      }
+    ],
+    "overall": "Assertions are well-targeted. The backward-compatibility assertion caught a genuine gap in the test plan. The function-rename assertion correctly caught over-detailed summary content."
+  }
+}

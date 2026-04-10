@@ -1,34 +1,39 @@
 ---
 name: Write pull request (PR) description
 description: >-
-  Trigger this skill when the user asks to write a pull request (PR) description, create a pull request, draft a commit message, or summarize changes for a PR. Produces a complete PR body.
+  Trigger this skill when the user asks to write a pull request (PR)
+  description, create a pull request, or summarize changes for a PR.
+  Produces a complete PR title and body.
 user-invocable: true
 ---
 
-# Write Pull Request Description
-
 ## Flow
 
-1. **Align on scope** — Ask the developer which changes to include. Encourage staging the relevant files or providing git SHA(s). Check `git diff --staged` and `git diff` to understand what is ready.
+1. **Align on scope** — Run `git log --oneline main..HEAD` and `git diff main`
+   to see what's on the branch. Present a brief summary and confirm with the
+   developer: "These are the changes I see — should I cover all of them, or
+   a subset?"
 
-2. **Read each changed file** — Summarize what changed in each file before drafting.
+2. **Read each changed file** — Internally summarize what changed in each file
+   to build context. Do not output this to the developer.
 
-3. **Proactively ask clarifying questions** — If the motivation behind a change is unclear, ask rather than guess.
+3. **Proactively ask clarifying questions** — If the motivation behind a change
+   is unclear, ask rather than guess.
 
-4. **Draft the PR title** — This becomes the commit subject line on `main` after squash & merge. Follow the title guidelines below.
+4. **Draft the Summary** — Follow the principles and structure below.
 
-5. **Draft the Summary** — Follow the principles and structure below.
+5. **Draft the subject line** — Derive from the Summary. Follow the subject
+   line rules below.
 
-6. **Gather the Test plan** — Ask the developer how they verified this change.
-   - Which tests did you run? (unit, integration, e2e)
-   - Any manual verification steps?
-   - Did you test in a specific environment? (local, sandbox)
-   - Screenshots or logs to include?
+6. **Gather the Test plan** — Check the diff for new or modified test files and
+   note what you observe. Then ask the developer: "How did you verify this
+   works?" Combine their answer with any test signals from the diff.
 
-7. **Output the complete PR description** — Format as:
+7. **Output the complete commit message** — The first line is the subject
+   (which becomes the PR title), followed by a blank line, then the body:
 
    ```
-   Title: {pr title}
+   Fix race condition in concurrent form submissions
 
    ## Summary
    {narrative}
@@ -37,36 +42,27 @@ user-invocable: true
    {test details}
    ```
 
-## PR Title Guidelines
+## Subject Line Rules
 
-The PR title becomes the commit subject line on `main`. It should:
+The subject line completes the sentence: "If applied, this commit will \_\_\_."
 
-- Be under ~50 characters when possible (hard limit: 72)
-- Start with an action verb in imperative mood: "Add", "Fix", "Replace", "Remove"
+- Aim for around 50 characters — not a hard limit, but a rule of thumb
+  that forces concise thinking
+- Capitalize the first word
+- Use the imperative mood: "Add", "Fix", "Replace", "Remove"
 - Describe the _outcome_, not the mechanism
-- Omit articles ("a", "the") when they aren't needed for clarity
-- Never end with a period
-
-### Good titles
-
-- `Add Redis cache for user profile reads`
-- `Fix null pointer in batch job cleanup`
-- `Replace polling with WebSocket notifications`
-- `Remove deprecated v1 auth middleware`
-
-### Bad titles
-
-- `Update code` (too vague)
-- `Fixed the bug where users couldn't log in when...` (too long, past tense)
-- `cache.go, profile.go, handler.go changes` (lists files)
+- Do not end with a period
 
 ## Summary Core Principles
 
-- Focus on **why** the change was made, not how it works
+- Explain what problem the code solves, not how the code works
 - Explain what was wrong before, how it works now, and why this solution was chosen
-- Group related changes; separate distinct changes with blank lines
+- When renaming or restructuring, explain what motivated the change
+- Summarize the approach at the decision level, not step-by-step
 - Be concise, not persuasive
-- Leave out implementation details — code explains the "how"
+- Wrap body lines at 72 characters
+- If the branch name or commit messages reference a ticket (e.g., PROJ-123,
+  #456), include it. Ask the developer if unsure.
 
 ### Summary Structure
 
@@ -83,36 +79,73 @@ specific solution was chosen over alternatives. Include any
 non-obvious side effects or consequences.
 ```
 
+This structure is a ceiling, not a minimum. A one-line config change needs
+one sentence, not three paragraphs.
+
+### Example: Bug fix
+
+```
+Fix race condition in concurrent form submissions
+
+## Summary
+Concurrent form submissions could corrupt the session store
+because the save handler read and wrote session state without
+a lock. Under load testing, ~2% of submissions produced a 500.
+
+This adds a per-session mutex around the read-modify-write
+cycle. A lock-free approach using compare-and-swap was
+considered but rejected because the session store doesn't
+support atomic updates.
+
+## Test plan
+Added `TestConcurrentFormSubmission` — spawns 50 goroutines
+submitting simultaneously and asserts zero errors. Ran the
+existing integration suite locally; all passing.
+```
+
+### Example: Trivial change
+
+```
+Fix typo in validation error message
+
+## Summary
+"Ivalid email" → "Invalid email" in the signup form error text.
+
+## Test plan
+Visual verification in the browser. No logic change.
+```
+
 ## Test Plan Principles
 
 - Be specific: name the tests, commands, or manual steps
-- Include evidence when possible (screenshots, log output, CI links)
-- Mention what environments were tested
+- Include evidence when possible (screenshots, log output)
 - If no tests were added, explain why (e.g., "refactor with no behavior change,
   existing tests cover this")
 
 ## Situational Guidelines
 
-**Bug Fixes** — Summary should explain the root cause, not just the symptoms. Test plan should demonstrate the fix and ideally include a regression test.
+**Bug Fixes** — Summary should explain the root cause, not just the symptoms.
+Test plan should demonstrate the fix and ideally include a regression test.
 
-**Refactoring** — Summary should explain why refactoring was necessary, what architectural problem(s) it solves, and what it enables. Test plan can reference existing tests if behavior is unchanged.
+**Refactoring** — Summary should explain why refactoring was necessary, what
+architectural problem(s) it solves, and what it enables. Test plan can reference
+existing tests if behavior is unchanged.
 
-**Constant/Value Changes** — Don't detail the exact value. Focus on why the change was needed.
+**Breaking Changes** — Call out the breaking change prominently in the Summary.
+Name the affected API or behavior, what consumers need to change, and why the
+break was necessary.
 
-**Variable/Function Changes** — Don't detail renames or new exports. Explain why the function was needed and what problem it solves.
+**New Features** — Summary should explain the user need driving the feature.
+Test plan should cover happy path and key edge cases.
 
-**New Features** — Summary should explain the user need driving the feature. Test plan should cover happy path and key edge cases.
+**Configuration/Build Changes** — Summary should explain why the change was
+needed. Test plan should confirm the build/deploy still works.
 
-**Configuration/Build Changes** — Summary should explain why the change was needed. Test plan should confirm the build/deploy still works.
+## Tone
 
-## What NOT to Include in Summary
-
-- How code works (code is self-explanatory)
-- Variable name changes as standalone items
-- Exact configuration file modifications
-- Step-by-step implementation details
-- Where functions are imported or exported
-- Persuasive language about code quality
+Write in a direct, technical tone. Use short sentences. Avoid hedging ("might",
+"could potentially", "it seems"). The audience is busy engineers scanning PRs —
+every sentence should earn its place.
 
 ## Using Chat History
 
