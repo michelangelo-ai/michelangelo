@@ -1,27 +1,11 @@
-**What type of PR is this? (check all applicable)**
-- [ ] Refactor
-- [ ] Feature
-- [ ] Bug Fix
-- [ ] Optimization
-- [ ] Documentation Update
+## Summary
+<!-- What does this PR do and why? Write a short narrative, not a list of files.
 
-<!-- Describe what has changed in this PR -->
-**What changed?**
+Example: "To reduce DB load during peak traffic, this adds a Redis cache
+for the User Profile service, replacing direct PostgreSQL reads on the
+hot path." -->
 
 
-<!-- Tell your future self why have you made these changes -->
-**Why?**
+## Test plan
+<!-- What did you run or verify? Mention specific tests, manual steps, or paste screenshots. -->
 
-
-<!-- How have you verified this change? Tested locally? Added a unit test? Checked in staging env? -->
-**How did you test it?**
-
-
-<!-- Assuming the worst case, what can be broken when deploying this change to production? -->
-**Potential risks**
-
-<!-- Is it notable for release? e.g. schema updates, configuration or data migration required? If so, please mention it, and also update CHANGELOG.md -->
-**Release notes**
-
-<!-- Does this PR introduce a user-facing or API change? Is user document updated? Is the change backward compatible? If so please update in wiki https://github.com/michelangelo-ai/michelangelo/wiki? -->
-**Documentation Changes**
