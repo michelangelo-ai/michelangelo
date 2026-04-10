@@ -222,7 +222,7 @@ kubectl -n ma-system get pods | grep -E "envoy|ui"
 kubectl -n ma-system logs deployment/michelangelo-ui
 
 # Check Envoy configuration
-kubectl -n ma-system get configmap michelangelo-envoy-config -o yaml
+kubectl get configmap envoy-config -o yaml
 
 # Verify the API server is reachable through Envoy
 curl -v https://michelangelo-envoy.your-domain/healthz
