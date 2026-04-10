@@ -7,10 +7,6 @@ import type { ProjectService } from './gen/michelangelo/api/v2/project_svc_pb';
 import type { TriggerRunService } from './gen/michelangelo/api/v2/trigger_run_svc_pb';
 import type { getRpcHandlers } from './handlers';
 
-export interface RuntimeConfig {
-  apiBaseUrl: string;
-}
-
 export type Services = {
   ProjectService: ReturnType<typeof createClient<typeof ProjectService>>;
   PipelineService: ReturnType<typeof createClient<typeof PipelineService>>;
