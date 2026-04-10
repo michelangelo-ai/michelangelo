@@ -8,15 +8,15 @@ const rule = {
     },
     messages: {
       inlineType: [
-        "'{{ name }}' is a type declaration outside of a types.ts file.",
-        'Consider inlining it at the call site instead of declaring it separately.',
+        "'{{ name }}' is a small, single-use type outside of a types.ts file.",
+        'If the name adds clarity, move it to a co-located types.ts.',
+        'Otherwise, consider inlining it at the call site.',
         '',
-        '  // Before',
-        '  type {{ name }} = { ... };',
-        '  function foo(arg: {{ name }}) { ... }',
-        '',
-        '  // After',
+        '  // Inline',
         '  function foo(arg: { ... }) { ... }',
+        '',
+        '  // Or move to types.ts',
+        "  import type { {{ name }} } from './types';",
       ].join('\n'),
       typesInTypesFile: [
         "'{{ name }}' is a type declaration outside of a types.ts file.",
