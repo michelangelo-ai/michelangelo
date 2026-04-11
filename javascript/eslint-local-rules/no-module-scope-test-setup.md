@@ -90,3 +90,51 @@ describe('SelectField', () => {
 ```
 
 The describe name tells you the precondition. `beforeEach` renders it. Each test just asserts.
+
+### Use a factory function
+
+When tests exercise the same subject with mostly the same inputs, a factory function inside the `describe` block keeps each test explicit without repeating everything:
+
+```tsx
+describe('Foo', () => {
+  const buildProps = (overrides: Partial<ComponentProps<typeof Foo>> = {}) => ({
+    label: 'Default',
+    disabled: false,
+    ...overrides,
+  });
+
+  it('renders label', () => {
+    render(<Foo {...buildProps()} />);
+  });
+
+  it('handles disabled state', () => {
+    render(<Foo {...buildProps({ disabled: true })} />);
+  });
+});
+```
+
+The same pattern works for any function call — not just component props:
+
+```ts
+describe('processItem', () => {
+  const buildItem = (overrides: Partial<Item> = {}): Item => ({
+    id: 'item-1',
+    status: 'active',
+    ...overrides,
+  });
+
+  it('handles inactive items', () => {
+    expect(processItem(buildItem({ status: 'inactive' }))).toBe(false);
+  });
+});
+```
+
+**Pass all varying props through the overrides parameter.** Do not spread the factory result and then add extra props — that defeats the purpose and hides what each test actually needs:
+
+```tsx
+// Wrong — props needed by some tests aren't visible in the factory call
+render(<Foo {...buildProps()} disabled={true} />);
+
+// Right — everything a test needs flows through overrides
+render(<Foo {...buildProps({ disabled: true })} />);
+```
