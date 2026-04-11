@@ -61,23 +61,16 @@ const rule = {
   create(context) {
     const TEST_HOOKS = new Set(['it', 'test', 'beforeEach', 'afterEach', 'beforeAll', 'afterAll']);
 
-    /**
-     * Returns the callee name for a CallExpression, handling both plain
-     * identifiers (describe) and member expressions (describe.each).
-     */
     function getCalleeName(callExpr) {
       const { callee } = callExpr;
       if (callee.type === 'Identifier') return callee.name;
+      // describe.each, describe.skip, etc. — the name is on the object
       if (callee.type === 'MemberExpression' && callee.object?.type === 'Identifier') {
         return callee.object.name;
       }
       return null;
     }
 
-    /**
-     * Returns true when a CallExpression with the given callee name has a
-     * parent describe — i.e. it's nested, not the outermost file wrapper.
-     */
     function hasParentDescribe(callExpr) {
       let current = callExpr.parent;
       while (current) {
@@ -91,11 +84,13 @@ const rule = {
       return false;
     }
 
+    function isStandaloneFunction(node) {
+      return node.parent?.type !== 'CallExpression';
+    }
+
     /**
-     * Returns true when `node` sits at module scope. The outermost describe()
-     * in a file is just a wrapper — variables there are shared across all
-     * tests. Nested describes are semantic groups where shared state is the
-     * intended pattern.
+     * The outermost describe() in a file is just a wrapper — variables there are shared across all
+     * tests. Nested describes are semantic groups where shared state is the intended pattern.
      *
      * Walk up the AST:
      * - test hook (it/test/beforeEach/…) → inside a test → false
@@ -103,15 +98,6 @@ const rule = {
      * - top-level describe (no parent describe) → file wrapper → true
      * - Program → module scope → true
      */
-    /**
-     * Returns true when a function node is a standalone function — not a
-     * callback argument to describe/it/beforeEach/etc. Standalone functions
-     * (like component definitions) create real scope boundaries.
-     */
-    function isStandaloneFunction(node) {
-      return node.parent?.type !== 'CallExpression';
-    }
-
     function isModuleScope(node) {
       let current = node.parent;
       while (current) {
@@ -120,6 +106,8 @@ const rule = {
           (current.type === 'FunctionDeclaration' ||
             current.type === 'FunctionExpression' ||
             current.type === 'ArrowFunctionExpression') &&
+          // Only standalone functions create a real scope boundary. Test callbacks
+          // (arrows passed to it/describe/etc.) are transparent to this rule.
           isStandaloneFunction(current)
         ) {
           return false;
@@ -127,6 +115,8 @@ const rule = {
         if (current.type === 'CallExpression') {
           const name = getCalleeName(current);
           if (name && TEST_HOOKS.has(name)) return false;
+          // Top-level describe is a file wrapper → module scope. Nested describe is a
+          // semantic group → not module scope.
           if (name === 'describe') return !hasParentDescribe(current);
         }
         current = current.parent;
