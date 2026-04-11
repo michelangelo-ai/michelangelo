@@ -11,10 +11,12 @@ import {
 } from '#core/test/wrappers/get-service-provider-wrapper';
 import { DetailViewTablePage } from '../detail-view-table-page';
 
+import type { ComponentProps } from 'react';
+
 describe('DetailViewTablePage', () => {
   const buildTableConfig = buildTableConfigFactory();
 
-  const buildProps = () => ({
+  const buildProps = (overrides: Partial<ComponentProps<typeof DetailViewTablePage>> = {}) => ({
     queryConfig: {
       endpoint: 'list',
       service: 'pipelineRun',
@@ -24,6 +26,8 @@ describe('DetailViewTablePage', () => {
       columns: [{ id: 'name', label: 'Run Name', type: CellType.TEXT }],
     }),
     pageId: 'test-table',
+    isDetailViewLoading: false,
+    ...overrides,
   });
 
   test('fetches and displays table data when not loading', async () => {
@@ -34,7 +38,7 @@ describe('DetailViewTablePage', () => {
     });
 
     render(
-      <DetailViewTablePage {...buildProps()} isDetailViewLoading={false} />,
+      <DetailViewTablePage {...buildProps()} />,
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/project/train/runs' }),
@@ -54,7 +58,7 @@ describe('DetailViewTablePage', () => {
     });
 
     render(
-      <DetailViewTablePage {...buildProps()} isDetailViewLoading={true} />,
+      <DetailViewTablePage {...buildProps({ isDetailViewLoading: true })} />,
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/project/train/runs' }),
@@ -78,14 +82,14 @@ describe('DetailViewTablePage', () => {
 
     render(
       <DetailViewTablePage
-        {...buildProps()}
-        isDetailViewLoading={false}
-        queryConfig={{
-          endpoint: 'list',
-          service: 'pipelineRun',
-          serviceOptions: {},
-          clientOptions: { enabled: false },
-        }}
+        {...buildProps({
+          queryConfig: {
+            endpoint: 'list',
+            service: 'pipelineRun',
+            serviceOptions: {},
+            clientOptions: { enabled: false },
+          },
+        })}
       />,
       buildWrapper([
         getErrorProviderWrapper(),

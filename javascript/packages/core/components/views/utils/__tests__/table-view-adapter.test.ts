@@ -18,15 +18,14 @@ describe('adaptTableConfigToTableProps', () => {
         { id: 'status', label: 'Status' },
       ],
     };
-    const runtimeProps = {
+    const result = adaptTableConfigToTableProps(minimalConfig, {
       data: [{ name: 'Item 1', status: 'Active' }],
       loading: false,
       error: undefined as ApplicationError | undefined,
-    };
-    const result = adaptTableConfigToTableProps(minimalConfig, runtimeProps);
+    });
 
     expect(result).toEqual({
-      data: runtimeProps.data,
+      data: [{ name: 'Item 1', status: 'Active' }],
       loading: false,
       error: undefined,
       columns: minimalConfig.columns,

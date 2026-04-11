@@ -115,15 +115,14 @@ describe('getCellValueForColumn', () => {
 
     it('should warn and fallback when multi-cell column returns non-string', () => {
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => null);
-      const objectValue = { name: 'my-pipeline', version: 'v1.0' };
-      const row = createMockRow(() => objectValue);
+      const row = createMockRow(() => ({ name: 'my-pipeline', version: 'v1.0' }));
 
       const result = getCellValueForColumn(multiCellColumn, row, 'pipeline-info');
 
       expect(consoleSpy).toHaveBeenCalledWith(
         'Expected string from normalizeColumnAccessor for multi-cell column pipeline-info, got:',
         'object',
-        objectValue
+        { name: 'my-pipeline', version: 'v1.0' }
       );
       expect(result).toBe('{"name":"my-pipeline","version":"v1.0"}'); // safeStringify converts object to JSON, no __JOIN__ to split
 
