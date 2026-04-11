@@ -44,19 +44,84 @@ const rule = {
         '    render(<Foo options={[{ value: "a", label: "Option A" }]} />);',
         '  });',
         '',
-        'If this declaration is intentional (e.g. a domain constant shared across tests), suppress with:',
-        '  // eslint-disable-next-line local/no-module-scope-test-setup',
+        'If tests share a precondition, group them in a nested describe:',
+        '',
+        '  describe("disabled state", () => {',
+        '    beforeEach(() => { render(<Foo disabled options={[{ value: "a" }]} />); });',
+        '    it("shows label", () => { screen.getByText("Disabled"); });',
+        '  });',
+        '',
+        'Alternatively, use a factory function with an overrides parameter inside the describe — see no-module-scope-test-setup.md.',
+        '',
       ].join('\n'),
     },
     schema: [],
   },
 
   create(context) {
+    const TEST_HOOKS = new Set(['it', 'test', 'beforeEach', 'afterEach', 'beforeAll', 'afterAll']);
+
+    function getCalleeName(callExpr) {
+      const { callee } = callExpr;
+      if (callee.type === 'Identifier') return callee.name;
+      // describe.each, describe.skip, etc. — the name is on the object
+      if (callee.type === 'MemberExpression' && callee.object?.type === 'Identifier') {
+        return callee.object.name;
+      }
+      return null;
+    }
+
+    function hasParentDescribe(callExpr) {
+      let current = callExpr.parent;
+      while (current) {
+        if (current.type === 'Program') return false;
+        if (current.type === 'CallExpression') {
+          const name = getCalleeName(current);
+          if (name === 'describe') return true;
+        }
+        current = current.parent;
+      }
+      return false;
+    }
+
+    function isStandaloneFunction(node) {
+      return node.parent?.type !== 'CallExpression';
+    }
+
     /**
-     * Returns true when `node` is a direct child of Program — i.e. module scope.
+     * The outermost describe() in a file is just a wrapper — variables there are shared across all
+     * tests. Nested describes are semantic groups where shared state is the intended pattern.
+     *
+     * Walk up the AST:
+     * - test hook (it/test/beforeEach/…) → inside a test → false
+     * - nested describe (has a parent describe) → semantic group → false
+     * - top-level describe (no parent describe) → file wrapper → true
+     * - Program → module scope → true
      */
     function isModuleScope(node) {
-      return node.parent?.type === 'Program';
+      let current = node.parent;
+      while (current) {
+        if (current.type === 'Program') return true;
+        if (
+          (current.type === 'FunctionDeclaration' ||
+            current.type === 'FunctionExpression' ||
+            current.type === 'ArrowFunctionExpression') &&
+          // Only standalone functions create a real scope boundary. Test callbacks
+          // (arrows passed to it/describe/etc.) are transparent to this rule.
+          isStandaloneFunction(current)
+        ) {
+          return false;
+        }
+        if (current.type === 'CallExpression') {
+          const name = getCalleeName(current);
+          if (name && TEST_HOOKS.has(name)) return false;
+          // Top-level describe is a file wrapper → module scope. Nested describe is a
+          // semantic group → not module scope.
+          if (name === 'describe') return !hasParentDescribe(current);
+        }
+        current = current.parent;
+      }
+      return true;
     }
 
     /**

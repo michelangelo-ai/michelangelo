@@ -11,11 +11,11 @@ describe('isListableEntity', () => {
     columns: [{ id: 'name', label: 'Name', type: CellType.TEXT }],
   });
 
-  const testCases: Array<{
+  test.each<{
     name: string;
     entity: Pick<PhaseEntityConfig, 'state' | 'views'>;
     expected: boolean;
-  }> = [
+  }>([
     {
       name: 'active entity with list view',
       entity: {
@@ -113,9 +113,7 @@ describe('isListableEntity', () => {
       },
       expected: true,
     },
-  ];
-
-  test.each(testCases)('$name', ({ entity, expected }) => {
+  ])('$name', ({ entity, expected }) => {
     expect(isListableEntity(entity)).toBe(expected);
   });
 });
