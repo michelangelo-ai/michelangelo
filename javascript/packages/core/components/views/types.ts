@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { ActionConfig } from '#core/components/actions/types';
+import type { ActionConfigSchema } from '#core/components/actions/types';
 import type { Cell } from '#core/components/cell/types';
 import type { EmptyState } from '#core/components/table/components/table-empty-state/types';
 import type { PageSizeOption } from '#core/components/table/components/table-pagination/types';
@@ -53,5 +53,5 @@ export interface TableConfig<T extends TableData = TableData> {
   enableStickySides?: boolean;
 
   /** Optional actions to render in each table row */
-  actions?: ActionConfig<T>[];
+  actions?: ActionConfigSchema<T>[];
 }

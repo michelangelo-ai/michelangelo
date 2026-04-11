@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react';
+import type { DeepInterpolatable } from '#core/interpolation/types';
 
 export type ActionConfig<T = Data> = ComponentActionConfig<T>;
 
@@ -29,6 +30,13 @@ export type ActionConfigBase = {
    * @see {@link ActionHierarchy}
    */
   hierarchy?: ActionHierarchy;
+
+  /**
+   * Optional rules to disable this action for specific records.
+   * Rules are evaluated in order; the first match disables the item and
+   * shows its message as a hover tooltip.
+   */
+  disabled?: DisabledRule[];
 };
 
 /**
@@ -62,4 +70,19 @@ export type ActionComponentProps<T = Data> = {
 export type SelectedAction = {
   component: ComponentType<ActionComponentProps>;
   record: Data;
+};
+
+/**
+ * Schema version of {@link ActionConfig} — what config authors write.
+ * All leaf fields accept interpolated values via {@link DeepInterpolatable}.
+ *
+ * Components always receive the resolved {@link ActionConfig} — interpolation
+ * is resolved at the per-row boundary before reaching any rendering code.
+ */
+export type ActionConfigSchema<T = Data> = DeepInterpolatable<ActionConfig<T>>;
+
+/** A condition that disables an action for a specific record, with an optional hover tooltip. */
+type DisabledRule = {
+  condition: boolean;
+  message?: string;
 };

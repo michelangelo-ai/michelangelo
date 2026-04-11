@@ -8,18 +8,18 @@
 Michelangelo-AI is an open-source platform designed to streamline the development, deployment, and monitoring of machine learning models at scale. It offers a comprehensive suite of tools and services that facilitate the entire machine learning lifecycle, from data management to model serving.
 
 :warning: **Beta Notice**
- This project is currently in beta. APIs and features may evolve, and breaking changes may occur as we continue to improve and stabilize the platform.
+ This project is currently in beta. APIs and features may evolve, and breaking changes may occur as we continue to improve and stabilize the platform.
 
 **Open Source Initiative**
 
-As part of the **AI Platform Open Source team**, we are extending these capabilities beyond Uber by open-sourcing an **end-to-end lifecycle management system** grounded in our extensive operational expertise. Our goals are to:
+As part of our commitment to the ML community, we are open-sourcing an **end-to-end lifecycle management system** grounded in extensive operational expertise. Our goals are to:
 
 -   **Drive standardization** and interoperability across the ML ecosystem,
 -   **Enable easy adoption** of scalable ML solutions in new production use cases,
 -   **Foster innovation and trust** through collaboration with partner teams, and
 -   **Cultivate a vibrant and responsible ML culture** that empowers the community to build with confidence and speed.
 
-We are **incrementally open-sourcing Michelangelo’s core capabilities**, ensuring each release is production-proven and developer-ready. The documentation on this site reflects the current set of available features and will be continuously updated as new components are added to the open-source repository.
+We are **incrementally open-sourcing Michelangelo's core capabilities**, ensuring each release is production-proven and developer-ready. The documentation on this site reflects the current set of available features and will be continuously updated as new components are added to the open-source repository.
 
 ## Features
 
@@ -32,26 +32,50 @@ We are **incrementally open-sourcing Michelangelo’s core capabilities**, ensur
 
 ## Installation
 
-To install Michelangelo-AI, follow [Sandbox Setup](https://michelangelo-ai.github.io/michelangelo/docs/getting-started/sandbox-setup) guide until GitHub respository is public.
+Follow the [Sandbox Setup](https://michelangelo-ai.github.io/michelangelo/docs/getting-started/sandbox-setup/) guide to get a fully functional local environment running.
 
 ## Usage
 
-Here's a basic example of how to train and deploy a model using Michelangelo-AI:
+Here's a quick example of how to define and run an ML pipeline:
 
-1. **Data Preparation**: Load and preprocess your dataset.
-2. **Model Training**: Use the training module to train your model.
-3. **Model Evaluation**: Evaluate the trained model's performance.
-4. **Model Deployment**: Deploy the model to the production environment.
+```bash
+# Clone the repo and install dependencies
+git clone https://github.com/michelangelo-ai/michelangelo.git
+cd michelangelo/python
+poetry install
+source .venv/bin/activate
 
-For detailed instructions and advanced usage, refer to the [Michelangelo-AI Docs](https://michelangelo-ai.github.io/michelangelo/).
+# Spin up a local sandbox cluster
+ma sandbox create
+
+# Run the demo pipeline to verify everything works
+ma sandbox demo pipeline
+```
+
+To define your own pipeline, use the `@task` and `@workflow` decorators:
+
+```python
+import michelangelo.uniflow.core as uniflow
+
+@uniflow.task()
+def train(learning_rate: float = 0.01) -> str:
+    # your training logic here
+    return "model_path"
+
+@uniflow.workflow()
+def my_pipeline(learning_rate: float = 0.01):
+    model = train(learning_rate=learning_rate)
+```
+
+For a full walkthrough, see the [Getting Started with ML Pipelines](https://michelangelo-ai.github.io/michelangelo/docs/user-guides/ml-pipelines/getting-started/) guide.
 
 ## Build and Test
 
-Please refer to the User Guides in the documentation.
+See the [User Guides](https://michelangelo-ai.github.io/michelangelo/docs/user-guides/) in the documentation for instructions on running tests and working with the development environment.
 
 ## Consuming and Using the Containers
 
-Please refer to the Sandbox Setup section of the documentation.
+See the [Sandbox Setup](https://michelangelo-ai.github.io/michelangelo/docs/getting-started/sandbox-setup/) guide for instructions on running and importing container images into your local cluster.
 
 ## Contributing
 
@@ -61,9 +85,9 @@ If you're interested in contributing, please read our [Contributing Guidelines](
 
 ## License
 
-This project is licensed under the [Apache 2.0 License](https://github.com/michelangelo-ai/michelangelo/blob/main/LICENSE) before public release.
+This project is licensed under the [Apache 2.0 License](https://github.com/michelangelo-ai/michelangelo/blob/main/LICENSE).
 
 
 ## Acknowledgments
 
-We would like to thank all the contributors to this project.
+Thank you to the Michelangelo Open Source team for getting this project off the ground, and thank you in advance to our contributors.

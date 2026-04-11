@@ -1,3 +1,4 @@
+import type { ComponentType } from 'react';
 import type { ViewTypeToParamType } from '#core/hooks/routing/use-studio-params/types';
 import type { RepeatedLayoutState } from '#core/providers/repeated-layout-provider/types';
 import type { StudioParamsView } from '#core/types/common/view-types';
@@ -144,6 +145,44 @@ export type Interpolatable<T, U extends StudioParamsView = 'base'> =
   | string
   | FunctionInterpolation<T, U>
   | StringInterpolation<U>;
+
+/**
+ * Recursively wraps all leaf fields of `T` with {@link Interpolatable}, allowing
+ * every property in a config object to accept static values or interpolation patterns.
+ *
+ * - Functions and React components are preserved (not wrapped)
+ * - Arrays recurse into their element type
+ * - Objects recurse into each property
+ * - Primitives become `T | Interpolatable<T>`
+ *
+ * Use this to derive a "schema" version of a resolved config type:
+ *
+ * @example
+ * ```typescript
+ * type ActionConfigSchema = DeepInterpolatable<ActionConfig>;
+ *
+ * // Static values still compile — ActionConfig is assignable to ActionConfigSchema:
+ * const staticConfig: ActionConfigSchema = { hierarchy: ActionHierarchy.PRIMARY };
+ *
+ * // Interpolated values also compile:
+ * const dynamicConfig: ActionConfigSchema = {
+ *   hierarchy: interpolate(({ data }) =>
+ *     data.state === 'PAUSED' ? ActionHierarchy.PRIMARY : ActionHierarchy.TERTIARY
+ *   ),
+ * };
+ * ```
+ */
+export type DeepInterpolatable<T, U extends StudioParamsView = 'base'> = T extends (
+  ...args: any[]
+) => any
+  ? T
+  : T extends ComponentType<any>
+    ? T
+    : T extends Array<infer El>
+      ? Array<DeepInterpolatable<El, U>>
+      : T extends object
+        ? { [K in keyof T]: DeepInterpolatable<T[K], U> }
+        : Interpolatable<T, U>;
 
 /**
  * Function type for checking whether a property should be excluded from interpolation.

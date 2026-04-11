@@ -15,7 +15,6 @@ import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { useInterpolationResolver } from '#core/interpolation/use-interpolation-resolver';
 import { capitalizeFirstLetter } from '#core/utils/string-utils';
 
-import type { ActionConfig } from '#core/components/actions/types';
 import type { PhaseConfig } from '#core/types/common/studio-types';
 
 /**
@@ -104,7 +103,7 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
       subtitle={entityConfig!.name}
       title={entityId}
       onGoBack={returnToEntityList}
-      actions={entityConfig!.actions as ActionConfig[] | undefined}
+      actions={entityConfig!.actions}
       record={entityData}
       loading={isLoading}
       headerContent={

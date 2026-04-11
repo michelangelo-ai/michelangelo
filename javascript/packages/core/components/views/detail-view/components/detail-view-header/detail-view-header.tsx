@@ -1,12 +1,15 @@
+import { useMemo } from 'react';
 import { useStyletron } from 'baseui';
 import { Button, KIND, SHAPE, SIZE } from 'baseui/button';
 
 import { ActionsButtons } from '#core/components/actions/actions-buttons/actions-buttons';
 import { Icon } from '#core/components/icon/icon';
+import { useInterpolationResolver } from '#core/interpolation/use-interpolation-resolver';
 import { ELLIPSIS_STYLES } from '#core/styles/constants';
 import { DetailHeaderContainer } from './styled-components';
 
 import type { Theme } from 'baseui/theme';
+import type { ActionConfig } from '#core/components/actions/types';
 import type { DetailViewHeaderProps } from './types';
 
 export function DetailViewHeader({
@@ -19,6 +22,11 @@ export function DetailViewHeader({
   loading,
 }: DetailViewHeaderProps) {
   const [css, theme] = useStyletron();
+  const resolve = useInterpolationResolver();
+  const resolvedActions = useMemo(
+    () => (actions ? (resolve(actions, { page: record }) as ActionConfig[]) : undefined),
+    [resolve, actions, record]
+  );
 
   return (
     <DetailHeaderContainer>
@@ -72,9 +80,9 @@ export function DetailViewHeader({
             </div>
           </div>
         </h5>
-        {actions && (
+        {resolvedActions && (
           <div className={css({ marginLeft: 'auto', flexShrink: 0 })}>
-            <ActionsButtons actions={actions} record={record ?? {}} loading={loading} />
+            <ActionsButtons actions={resolvedActions} record={record ?? {}} loading={loading} />
           </div>
         )}
       </div>
