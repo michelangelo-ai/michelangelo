@@ -12,9 +12,9 @@ const config: Config = {
     experimental_faster: true,
   },
 
-  // Custom domain deployment config
-  url: 'https://michelangelo-ai.org',
-  baseUrl: '/',
+  // GitHub Pages project site config (revert to /michelangelo/ until custom domain is verified)
+  url: 'https://michelangelo-ai.github.io',
+  baseUrl: '/michelangelo/',
   organizationName: 'michelangelo-ai',
   projectName: 'michelangelo',
 
