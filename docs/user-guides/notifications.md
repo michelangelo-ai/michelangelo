@@ -9,7 +9,7 @@ Notifications are configured through YAML specs only. The Michelangelo Studio UI
 :::
 
 :::caution Operator Implementation Required
-Notification delivery is not enabled by default in open-source deployments. The notification workflow fires correctly when pipeline states change, but the email and Slack delivery activities are stubs that must be implemented by your platform operator. See the reference files below for implementation details.
+Notification delivery is not enabled by default in open-source deployments. The notification workflow fires correctly when pipeline states change, but the email and Slack delivery activities are stubs that must be implemented by your platform operator. See [Enabling Notification Delivery](#enabling-notification-delivery) below for details.
 :::
 
 ## When to Use Notifications
@@ -57,7 +57,7 @@ You can also combine both in a single spec — see the [full example](#full-exam
 Add a `notifications` field to any `PipelineRun`, `TriggerRun`, or `Pipeline` spec. Each entry in the list is one notification rule, and you can have as many rules as you need with different event types and destinations.
 
 :::tip
-You can configure notifications in your YAML specs at any time. Messages will be delivered once your operator has enabled notification delivery.
+You can configure notifications in your YAML specs at any time. Messages will be delivered once your operator has [enabled notification delivery](#enabling-notification-delivery).
 :::
 
 ### Fields
@@ -195,18 +195,25 @@ To stop receiving notifications, remove the `notifications` block entirely and r
 - Double-check that your `notificationType`, `resourceType`, and `eventTypes` are valid values from the tables above. Typos in enum values will be silently ignored.
 - For email, verify the addresses in `emails` are correct.
 - For Slack, confirm the channel name in `slackDestinations` exists and is accessible by the platform.
-- Notification delivery depends on operator-level implementation. If everything looks correct in your spec but notifications still aren't arriving, check with your platform administrator.
+- Notification delivery depends on operator-level implementation. If everything looks correct in your spec but notifications still aren't arriving, check with your platform administrator — see [Enabling Notification Delivery](#enabling-notification-delivery) below.
 
 **I'm only getting some of my notifications.**
 
 - Make sure you've listed all the event types you care about. For example, if you want alerts on both success and failure, you need both `EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED` and `EVENT_TYPE_PIPELINE_RUN_STATE_FAILED` in your `eventTypes` list.
 - Each notification rule is independent. If you have separate rules for email and Slack, check that each one has the correct event types.
 
-### Reference Files
+## Enabling Notification Delivery
 
-- `go/worker/activities/notification/activities.go` — activity stubs with request types and integration comments
-- `go/worker/workflows/notification/workflows.go` — the workflow that invokes the activities
-- `go/base/notification/types/types.go` — message generation helpers
+Notification delivery is not active in open-source deployments by default. The notification workflow fires correctly when pipeline states change, but the email and Slack delivery steps are stubs that your platform operator must implement.
+
+To enable delivery, an operator needs to provide concrete implementations for two activity stubs:
+
+- **Email delivery** — implement the email send activity to connect to your SMTP provider or email API (e.g., SendGrid, SES).
+- **Slack delivery** — implement the Slack send activity to post messages to channels using the Slack API or incoming webhooks.
+
+Once implemented and deployed, notifications configured in your specs will begin delivering automatically — no changes to your YAML are required.
+
+Contact your platform administrator if notifications are configured correctly but messages are not arriving.
 
 ## What's Next
 
