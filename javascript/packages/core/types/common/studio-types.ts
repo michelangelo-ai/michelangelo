@@ -1,4 +1,4 @@
-import type { ActionConfig } from '#core/components/actions/types';
+import type { ActionConfigSchema } from '#core/components/actions/types';
 import type { ViewConfig } from '#core/components/views/types';
 import type { QueryConfig } from '#core/types/query-types';
 
@@ -107,7 +107,7 @@ export interface PhaseEntityConfig<T extends object = object> {
    * Optional actions to render for this entity.
    * Rendered in table rows for list views.
    */
-  actions?: ActionConfig<T>[];
+  actions?: ActionConfigSchema<T>[];
 }
 
 /**

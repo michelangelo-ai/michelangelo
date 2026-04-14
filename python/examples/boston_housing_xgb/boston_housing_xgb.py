@@ -400,7 +400,7 @@ def train_workflow(
 if __name__ == "__main__":
     ctx = uniflow.create_context()
 
-    ctx.environ["IMAGE_PULL_POLICY"] = "Never"
+    ctx.environ["IMAGE_PULL_POLICY"] = "IfNotPresent"
     ctx.run(
         train_workflow,
         dataset_cols="CRIM,ZN,INDUS,CHAS,NOX,RM,AGE,DIS,RAD,TAX,PTRATIO,B,LSTAT,target",

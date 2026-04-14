@@ -62,7 +62,7 @@ To create a pipeline, we must create a directory under the project folder with t
 The **pipeline.yaml** file defines the metadata for the pipeline. This file is required to register the pipeline with MA Studio. The format of the **pipeline.yaml** file conforms to this protobuf.
 
 ```yaml
-apiVersion: michelangelo.uber.com/v2beta1
+apiVersion: michelangelo.api/v2
 kind: Pipeline
 metadata:
   namespace: my-project              # The name of the project
@@ -196,7 +196,7 @@ The **pipeline.yaml** file defines the metadata for the pipeline. This file is r
 Example:
 
 ```yaml
-apiVersion: michelangelo.uber.com/v2beta1
+apiVersion: michelangelo.api/v2
 kind: Pipeline
 metadata:
   namespace: my-project              # The name of the project

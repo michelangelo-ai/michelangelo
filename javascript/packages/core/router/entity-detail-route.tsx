@@ -103,6 +103,9 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
       subtitle={entityConfig!.name}
       title={entityId}
       onGoBack={returnToEntityList}
+      actions={entityConfig!.actions}
+      record={entityData}
+      loading={isLoading}
       headerContent={
         <Row items={resolvedDetailViewConfig!.metadata} record={entityData} loading={isLoading} />
       }
