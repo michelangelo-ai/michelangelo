@@ -28,12 +28,12 @@ spec:
 
 ### Health Probes
 
-The controller manager exposes health endpoints on port `8081`:
+The controller manager exposes health endpoints on port `8083` (configured via `healthProbeBindAddress`):
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET :8081/healthz` | Liveness — is the process alive? |
-| `GET :8081/readyz` | Readiness — is the controller ready to reconcile? |
+| `GET :8083/healthz` | Liveness — is the process alive? |
+| `GET :8083/readyz` | Readiness — is the controller ready to reconcile? |
 
 These are used by Kubernetes liveness and readiness probes, but you can also poll them from your monitoring stack for coarser-grained health checks.
 
