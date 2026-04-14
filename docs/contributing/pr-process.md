@@ -55,7 +55,7 @@ poetry run ruff format --check .
 poetry run pytest
 ```
 
-All CI checks (GitHub Actions) must also be green. See the [CI Guide](ci.md) for how to interpret failures.
+All CI checks (GitHub Actions) must also be green.
 
 ## Review Process
 
