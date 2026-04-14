@@ -59,7 +59,9 @@ static_resources:
                         max_age: "1728000"
                       routes:
                         - match: { prefix: "/" }
-                          route: { cluster: michelangelo-apiserver }
+                          route:
+                            cluster: michelangelo-apiserver
+                            max_grpc_timeout: 0s
                 http_filters:
                   - name: envoy.filters.http.cors
                     typed_config:
