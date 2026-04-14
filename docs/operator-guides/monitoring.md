@@ -96,29 +96,31 @@ groups:
 - name: michelangelo
   rules:
 
-  # Scheduling backlog: more than 50 jobs waiting for more than 5 minutes
-  - alert: JobSchedulingBacklogHigh
-    expr: michelangelo_scheduler_queue_depth > 50
+  # Pipeline run failure rate
+  - alert: PipelineRunFailureRateHigh
+    expr: rate(pipelinerun_result_failure_total[5m]) > 0
     for: 5m
     labels:
       severity: warning
     annotations:
-      summary: "Job scheduling backlog is high ({{ $value }} jobs)"
+      summary: "Pipeline run failures detected"
       description: >
-        The scheduler queue has {{ $value }} jobs waiting for more than 5 minutes.
-        Check cluster availability: kubectl -n ma-system get clusters
+        Pipeline runs are failing at {{ $value | humanize }} failures/sec.
+        Check failure reasons: kubectl -n ma-system get pipelineruns --field-selector status.phase=Failed
 
-  # No healthy compute clusters — new jobs cannot be scheduled
-  - alert: NoHealthyComputeClusters
-    expr: michelangelo_cluster_count{status="ready"} < 1
-    for: 2m
+  # Pipeline run duration: P99 above 1 hour
+  - alert: PipelineRunDurationHigh
+    expr: >
+      histogram_quantile(0.99,
+        rate(pipelinerun_duration_seconds_bucket[5m])
+      ) > 3600
+    for: 10m
     labels:
-      severity: critical
+      severity: warning
     annotations:
-      summary: "No healthy compute clusters available"
+      summary: "Pipeline run P99 duration above 1 hour"
       description: >
-        All registered compute clusters are unhealthy. No new jobs can be scheduled.
-        Check cluster status: kubectl -n ma-system describe clusters
+        The 99th percentile pipeline run duration is {{ $value | humanize }}s.
 
   # Controller reconcile errors — sustained error rate from any controller
   - alert: ControllerReconcileErrorRate
