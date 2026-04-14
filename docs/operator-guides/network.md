@@ -53,10 +53,10 @@ static_resources:
                         allow_origin_string_match:
                           - safe_regex:
                               regex: "https://app\\.your-domain\\.com"
-                        allow_methods: "GET, POST, PUT, DELETE, OPTIONS"
-                        allow_headers: "content-type, x-grpc-web, x-user-agent, authorization"
+                        allow_methods: "GET, POST, OPTIONS"
+                        allow_headers: "content-type, context-ttl-ms, grpc-timeout, rpc-caller, rpc-encoding, rpc-service, x-grpc-web, x-user-agent"
                         expose_headers: "grpc-status, grpc-message"
-                        allow_credentials: true
+                        max_age: "1728000"
                       routes:
                         - match: { prefix: "/" }
                           route: { cluster: michelangelo-apiserver }
