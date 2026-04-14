@@ -298,6 +298,8 @@ Control Plane Cluster                    Compute Cluster
 
 If your compute cluster enforces NetworkPolicy, ensure the control plane's egress IP range can reach the Kubernetes API server:
 
+> **Managed Kubernetes (EKS, GKE, AKS):** The API server runs outside the cluster on managed platforms and is not a schedulable pod. This NetworkPolicy only applies to self-managed clusters. For managed clusters, use your cloud provider's security groups or authorized networks instead.
+
 ```yaml
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
