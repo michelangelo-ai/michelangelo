@@ -12,7 +12,7 @@ Before diving into build commands, here is a map of the main subsystems and wher
 | **Controller Manager** | Go | `go/cmd/controllermgr/` | Kubernetes controllers (RayCluster, SparkJob, InferenceServer, …) |
 | **Worker** | Go | `go/cmd/worker/` | Temporal/Cadence workflow and activity workers |
 | **Ingester** | Go | `go/components/ingester/` | Watches Kubernetes events and propagates state |
-| **Scheduler** | Go | `go/components/scheduler/` | Job assignment strategy and queue interfaces |
+| **Scheduler** | Go | `go/components/jobs/scheduler/` | Job assignment strategy and queue interfaces |
 | **Inference Backends** | Go | `go/components/inferenceserver/backends/` | Backend, ModelConfigProvider, RouteProvider plugin interfaces |
 | **Proto / API** | Protobuf | `proto/` | All gRPC service and message definitions |
 | **Generated Go** | Go | `go/gen/` | Auto-generated gRPC stubs — do not edit directly |
