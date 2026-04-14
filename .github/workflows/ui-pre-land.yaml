@@ -49,6 +49,33 @@ jobs:
       - name: Type check
         run: yarn typecheck
 
+  format:
+    name: Format Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: javascript
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          path: .
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.1
+          cache: 'yarn'
+          cache-dependency-path: javascript/yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+        env:
+          WORKSPACE_ROOT: ${{ github.workspace }}
+
+      - name: Check formatting
+        run: yarn format
+
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest

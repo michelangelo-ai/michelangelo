@@ -272,6 +272,66 @@ def check_crd(crd: CRD, user_command_action: str) -> None:
         sys.exit(1)
 
 
+def add_plugin_dirs_to_syspath() -> None:
+    """Add custom plugin directories to sys.path.
+
+    Enables plugin.modules overrides to reference functions defined inside
+    plugin.dirs — so users can co-locate directory plugins and module overrides
+    in the same custom directory without managing sys.path separately.
+    """
+    plugin_dirs = _CONFIG.get("plugin", {}).get("dirs", [])
+
+    for plugin_dir_path in plugin_dirs:
+        plugin_dir = Path(plugin_dir_path)
+        if not plugin_dir.exists():
+            _LOG.warning("Custom plugin dir not found: %r", plugin_dir_path)
+            continue
+
+        resolved = str(plugin_dir.resolve())
+        if resolved not in sys.path:
+            sys.path.insert(0, resolved)
+            _LOG.info("Added to sys.path: %s", resolved)
+
+
+def apply_module_overrides() -> None:
+    """Apply module-level function overrides (highest priority).
+
+    Reads plugin.modules from config and replaces functions via setattr.
+    Runs after sys.path setup and before plugin discovery, so overridden
+    functions are picked up when plugin modules are imported.
+
+    Failures are non-fatal: logged as errors and skipped.
+    """
+    module_overrides = _CONFIG.get("plugin", {}).get("modules", {})
+
+    if not module_overrides:
+        return
+
+    for original_path, replacement_path in module_overrides.items():
+        try:
+            original_module_name, original_func_name = original_path.rsplit(".", 1)
+            replacement_module_name, replacement_func_name = replacement_path.rsplit(
+                ".", 1
+            )
+
+            replacement_module = importlib.import_module(replacement_module_name)
+            replacement_func = getattr(replacement_module, replacement_func_name)
+
+            original_module = importlib.import_module(original_module_name)
+            setattr(original_module, original_func_name, replacement_func)
+
+            _LOG.info(
+                "Module override applied: %s → %s", original_path, replacement_path
+            )
+        except Exception as e:
+            _LOG.error(
+                "Module override failed: %s → %s: %s",
+                original_path,
+                replacement_path,
+                e,
+            )
+
+
 def discover_all_plugins() -> dict[str, list[object]]:
     """Discover and import all entity plugins early.
 
@@ -521,7 +581,13 @@ def _is_service_name(address: str) -> bool:
 
 def run():
     """Entry point for mactl."""
-    # Discover all plugins early (before connection)
+    # Phase 0: Add plugin dirs to sys.path (before module override)
+    add_plugin_dirs_to_syspath()
+
+    # Phase 1: Apply module-level overrides (highest priority, before plugin import)
+    apply_module_overrides()
+
+    # Phase 2: Discover all plugins early (before connection)
     _LOG.info("Discovering all plugins...")
     plugin_registry = discover_all_plugins()
     _LOG.info("Plugin discovery complete")
@@ -534,7 +600,7 @@ def run():
         with cli_proxy_class() as proxy:
             local_address = proxy.create_tunnel(ADDRESS)
             with insecure_channel(local_address) as channel:
-                return main(channel)
+                return main(channel, plugin_registry)
 
     if USE_TLS:
         _LOG.info(

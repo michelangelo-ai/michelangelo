@@ -6,6 +6,11 @@
 * How cache keys are determined
 * How to resume a pipeline run from a specific step
 
+## Prerequisites
+
+- **A working remote execution setup** — Caching and resume only apply to remote runs. See [Running Uniflow Pipelines](./running-uniflow.md) to get remote execution working first.
+- **Ray or Spark tasks** — Only Ray and Spark tasks support caching. Local execution does not cache results.
+
 ## Task caching
 
 For each task in a Uniflow Remote Run, we cache and index the task results after execution. Next time you execute the task, you have the option to skip execution by reusing the cached results.
@@ -55,3 +60,9 @@ ma pipeline run -n <namespace> --revision <pipeline-revision-name> --resume_from
 ```
 
 **Important:** To skip a step during resume, Uniflow requires that the input of the step has not changed.
+
+## Next Steps
+
+- **Run pipelines on a schedule** — See [Set Up Triggers](../set-up-triggers.md) to automate pipeline execution with cron triggers
+- **Test changes without rebuilding** — Use [file sync](./file-sync-testing-flow-runbook.md) to iterate faster during development
+- **Monitor pipeline runs** — Open MA Studio at `http://localhost:8090/<your-project>` to view run history, step status, and cached results

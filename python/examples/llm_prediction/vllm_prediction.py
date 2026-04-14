@@ -86,7 +86,7 @@ if __name__ == "__main__":
     ctx.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0"
     ctx.environ["MA_NAMESPACE"] = "default"
     # this is example docker image, we don't need to pull it from docker registry
-    ctx.environ["IMAGE_PULL_POLICY"] = "Never"
+    ctx.environ["IMAGE_PULL_POLICY"] = "IfNotPresent"
 
     worker_gpu = 1
     worker_instances = 1

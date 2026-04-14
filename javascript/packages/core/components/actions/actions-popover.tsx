@@ -56,6 +56,11 @@ export function ActionsPopover<T extends Data>({
       <StatefulPopover
         focusLock
         placement={PLACEMENT.bottomLeft}
+        popperOptions={{
+          modifiers: {
+            preventOverflow: { enabled: true, boundariesElement: 'window', padding: 8 },
+          },
+        }}
         {...popoverProps}
         content={({ close }) => (
           <ActionMenu
@@ -65,6 +70,7 @@ export function ActionsPopover<T extends Data>({
               setActiveAction(action);
               close();
             }}
+            onClose={close}
           />
         )}
         onClose={enableScroll}
