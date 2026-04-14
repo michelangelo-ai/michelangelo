@@ -8,6 +8,7 @@ spec:
   containers:
     - name: minio
       image: minio/minio:RELEASE.2025-05-24T17-08-30Z
+      imagePullPolicy: IfNotPresent
       command:
         - /bin/bash
         - -c
@@ -18,7 +19,9 @@ spec:
           name: data-volume
   volumes:
     - name: data-volume
-      emptyDir: { }
+      hostPath:
+        path: /shared/minio-data
+        type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Service

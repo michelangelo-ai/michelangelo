@@ -5,9 +5,14 @@ import { ProjectDetail } from '#core/components/views/project/project-detail';
 import { ProjectList } from '#core/components/views/project/project-list';
 import { Sandbox } from '#core/components/views/sandbox/sandbox';
 import { CATEGORIES } from '#core/config/categories';
+import { DATA_PHASE } from '#core/config/phases/data';
+import { DEPLOY_PHASE } from '#core/config/phases/deploy';
+import { TRAIN_PHASE } from '#core/config/phases/train';
 import { EntityDetailRoute } from './entity-detail-route';
 import { PhaseListRoute } from './phase-list-route';
 import { StudioBar } from './studio-bar';
+
+const PROJECT_PHASES = [DATA_PHASE, TRAIN_PHASE, DEPLOY_PHASE];
 
 export function Router() {
   return (
@@ -33,7 +38,7 @@ export function Router() {
           path=":projectId"
           element={
             <MainViewContainer>
-              <ProjectDetail />
+              <ProjectDetail phases={PROJECT_PHASES} />
             </MainViewContainer>
           }
         />

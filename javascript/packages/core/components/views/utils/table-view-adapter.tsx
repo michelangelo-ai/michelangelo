@@ -1,6 +1,6 @@
-import { ActionsPopover } from '#core/components/actions/actions-popover';
+import { InterpolatableActionsPopover } from '#core/components/actions/interpolatable-actions-popover';
 
-import type { ActionConfig, Data } from '#core/components/actions/types';
+import type { ActionConfigSchema, Data } from '#core/components/actions/types';
 import type { TableActionBarConfig } from '#core/components/table/components/table-action-bar/types';
 import type { TableData } from '#core/components/table/types/data-types';
 import type { TableProps } from '#core/components/table/types/table-types';
@@ -37,8 +37,8 @@ export function adaptTableConfigToTableProps<T extends TableData = TableData>(
         ? ({ row }: { row: { record: T } }) => (
             // Actions require Record<string, unknown> but TableData is `unknown` — cast at the
             // table/actions boundary since entity records are always objects in practice.
-            <ActionsPopover
-              actions={config.actions as ActionConfig<Data>[]}
+            <InterpolatableActionsPopover
+              actions={config.actions as ActionConfigSchema<Data>[]}
               record={row.record as Data}
             />
           )

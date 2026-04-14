@@ -2,7 +2,7 @@ apiVersion: michelangelo.api/v2
 kind: PipelineRun
 metadata:
   annotations:
-    michelangelo/uniflow-image: docker.io/library/examples:latest
+    michelangelo/uniflow-image: ghcr.io/michelangelo-ai/examples:main
   labels:
     michelangelo/SpecUpdateTimestamp: "1770233943390974"
     michelangelo/UpdateTimestamp: "1770233943390974"

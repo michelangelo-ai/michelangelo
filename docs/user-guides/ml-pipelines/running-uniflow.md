@@ -8,6 +8,13 @@ This guide covers how to run Uniflow pipelines locally and remotely.
 * The differences between local and remote execution modes
 * How to debug workflows and container issues
 
+## Prerequisites
+
+- **A running sandbox environment** — Remote execution requires a local Kubernetes cluster. Follow the [Sandbox Setup](../../getting-started/sandbox-setup.md) guide if you haven't done this yet.
+- **Python 3.11+ and Poetry installed** — See the [Sandbox Setup prerequisites](../../getting-started/sandbox-setup.md#prerequisites).
+- **A Uniflow workflow defined** — See [Getting Started with ML Pipelines](./getting-started.md) for a walkthrough of defining tasks and workflows.
+- **Docker** — Required for building images used in remote execution.
+
 ## Environment setup
 
 Create Python virtual environment and install packages:
@@ -161,3 +168,10 @@ docker pull ghcr.io/michelangelo-ai/worker:latest
 docker images
 docker exec -it k3d-michelangelo-sandbox-server-0 crictl images
 ```
+
+## Next Steps
+
+- **Speed up iteration** — Use [file sync](./file-sync-testing-flow-runbook.md) to test local code changes on remote infrastructure without rebuilding Docker images
+- **Cache task results** — Learn how [Uniflow caching and pipeline run resume](./cache-and-pipelinerun-resume-form.md) can speed up repeated runs
+- **Run on a schedule** — See [Set Up Triggers](../set-up-triggers.md) to run your pipeline automatically on a cron schedule
+- **Register your model** — After a successful training run, follow the [Model Registry Guide](../model-registry-guide.md) to package and version your model

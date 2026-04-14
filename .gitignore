@@ -330,3 +330,5 @@ checkpoints/
 */tmp/
 **/tmp/
 
+# Add pytest coverage file with lcov format
+coverage.lcov

@@ -61,8 +61,9 @@ A **task** is the fundamental unit of computation in Uniflow. Tasks are modular 
 
 ```python
 import michelangelo.uniflow.core as uniflow
+from michelangelo.uniflow.plugins.ray import RayTask
 
-@uniflow.task()
+@uniflow.task(config=RayTask(head_cpu=2, head_memory="4Gi"))
 def train():
     print("training")
 ```
@@ -73,7 +74,7 @@ def train():
 A **workflow** orchestrates multiple tasks, managing dependencies and result passing.
 
 ```python
-@uniflow.workflow
+@uniflow.workflow()
 def train_workflow(dataset_id: str):
     train_data, valid_data, test_data = load_dataset(dataset_id)
     model = train(train_data, valid_data, test_data)
@@ -116,8 +117,8 @@ A business use case with a set of continuously trackable metrics.
 **Examples**:
 -   Predicting customer churn for a subscription service
 -   Fraud detection for financial transactions
--   Ranking restaurants on the UberEats home feed
--   Predicting cancellation rate for ride dispatch
+-   Recommending products on an e-commerce homepage
+-   Predicting delivery time estimates for a logistics platform
 
 ### Model Family
 
@@ -132,7 +133,7 @@ A Model Family is a group of related ML models within a project that address dif
 
 **Examples**:
 -   Model excellence scores track the quality of each model family
--   UberEats home feed ranking uses different model families optimizing for conversion rate, net inflow, service quality, and fairness
+-   A home feed ranking system uses different model families optimizing for conversion rate, content quality, and fairness
 
 ### Dataset
 
@@ -286,7 +287,7 @@ See [Appendix: Data Type Examples](#appendix-uniflow-data-type-examples) for det
 ## Example: Build a Pipeline
 
 ```python
-@uniflow.workflow
+@uniflow.workflow()
 def train_workflow(dataset_id: str):
     train_data, valid_data, test_data = load_dataset(dataset_id)
     model = train(train_data, valid_data, test_data)
@@ -360,12 +361,12 @@ Train Model (select XGBoost) → Evaluate → Deploy
 
 **Uniflow (Code) Path**:
 ```python
-@uniflow.task()
+@uniflow.task(config=RayTask(head_cpu=2, head_memory="4Gi"))
 def train_model(dataset):
     # Your training code
     return model
 
-@uniflow.workflow
+@uniflow.workflow()
 def training_pipeline(dataset_id: str):
     data = load_dataset(dataset_id)
     model = train_model(data)
