@@ -31,7 +31,7 @@ cd python
 poetry run pytest
 
 # Run a specific test file
-poetry run pytest tests/test_uniflow.py
+poetry run pytest tests/uniflow/core/test_build.py
 
 # With verbose output
 poetry run pytest -v
