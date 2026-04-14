@@ -15,7 +15,7 @@ Before diving into build commands, here is a map of the main subsystems and wher
 | **Scheduler** | Go | `go/components/jobs/scheduler/` | Job assignment strategy and queue interfaces |
 | **Inference Backends** | Go | `go/components/inferenceserver/backends/` | Backend, ModelConfigProvider, RouteProvider plugin interfaces |
 | **Proto / API** | Protobuf | `proto/` | All gRPC service and message definitions |
-| **Generated Go** | Go | `go/gen/` | Auto-generated gRPC stubs — do not edit directly |
+| **Generated Go** | Go | `proto-go/` | Auto-generated gRPC stubs — do not edit directly |
 | **Python SDK (Uniflow)** | Python | `python/michelangelo/uniflow/` | `@task` / `@workflow` decorators and execution runtime |
 | **Python CLI (ma)** | Python | `python/michelangelo/cli/` | `ma` command-line tool |
 | **UI** | TypeScript/React | `javascript/` | MA Studio browser interface |
