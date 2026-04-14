@@ -49,14 +49,16 @@ Envoy can expose an admin stats interface for scraping request counts, latency h
 
 ## Key Metrics
 
-### Job Scheduling
+### Pipeline Runs
 
 | Metric | Description | Unit |
 |--------|-------------|------|
-| `michelangelo_scheduler_queue_depth` | Jobs waiting in the scheduler queue | Count |
-| `michelangelo_scheduler_assignment_duration_seconds` | Time from job submission to cluster assignment | Seconds |
-| `michelangelo_job_provisioning_duration_seconds` | Time from assignment to Ray/Spark resources running | Seconds |
-| `michelangelo_cluster_count` | Registered compute clusters, by `status` label (`ready`, `unhealthy`) | Count |
+| `pipelinerun_result_total` | Pipeline run results, by `state`, `pipeline_type`, `environment`, `tier` | Count |
+| `pipelinerun_result_failure_total` | Failed pipeline runs, with `failure_reason` label | Count |
+| `pipelinerun_duration_seconds` | Pipeline run execution duration (histogram) | Seconds |
+| `pipelinerun_failed` | Gauge: 1 if most recent run failed, 0 if succeeded | Gauge |
+| `pipelinerun_step_success_total` | Step completions, by `step_name` and `pipeline_type` | Count |
+| `pipeline_ready_total` | Pipelines reaching Ready state | Count |
 
 ### Workflow Engine (Temporal)
 
