@@ -17,7 +17,7 @@
     "dev-production": "yarn workspace @michelangelo-ai/core build && yarn workspace @michelangelo/app dev-production",
     "format": "prettier --check .",
     "generate": "../tools/gen-grpc-client.sh --clients javascript",
-    "lint": "eslint .",
+    "lint": "eslint . --cache",
     "prebuild": "yarn generate",
     "setup": "yarn install --frozen-lockfile && yarn generate",
     "typecheck": "tsc -b && tsc --project tsconfig.vitest.json --noEmit",

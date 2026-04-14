@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { CellType } from '#core/components/cell/constants';
+import { interpolate } from '#core/interpolation/interpolate';
 import {
   buildEntityConfigFactory,
   buildPhaseConfigFactory,
@@ -115,5 +116,51 @@ describe('PhaseEntityView', () => {
     await user.click(await screen.findByRole('button', { name: 'Actions' }));
     await user.click(await screen.findByRole('option', { name: 'Run' }));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('resolves interpolated disabled conditions per-row', async () => {
+    const user = userEvent.setup();
+    const StubDialog = ({ isOpen }: ActionComponentProps) =>
+      isOpen ? <div role="dialog">Stub</div> : null;
+
+    render(
+      <PhaseEntityView
+        phaseConfig={buildPhaseConfig()}
+        entities={[
+          buildPipelineEntityConfig({
+            actions: [
+              {
+                display: { label: 'Delete' },
+                component: StubDialog,
+                disabled: [
+                  {
+                    condition: interpolate(
+                      ({ data }) => (data as { locked?: boolean } | undefined)?.locked === true
+                    ),
+                    message: 'Record is locked',
+                  },
+                ],
+              },
+            ],
+          }) as ListableEntity,
+        ]}
+      />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getServiceProviderWrapper({
+          request: createQueryMockRouter({
+            ListPipeline: { pipelineList: { items: [{ locked: true }] } },
+          }),
+        }),
+        getRouterWrapper({ location: '/project-1/training/pipeline' }),
+        getIconProviderWrapper(),
+      ])
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Actions' }));
+    const option = await screen.findByRole('option', { name: 'Delete' });
+    await user.hover(option);
+    expect(await screen.findByText('Record is locked')).toBeInTheDocument();
   });
 });

@@ -1,7 +1,7 @@
 {
   "name": "@michelangelo-ai/core",
   "license": "Apache-2.0",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "type": "module",
   "main": "./dist/michelangelo-core.js",
   "module": "./dist/michelangelo-core.js",
@@ -56,6 +56,10 @@
     "react-router-dom-v5-compat": "^6.29.0",
     "styletron-engine-atomic": "^1.0.0",
     "styletron-react": "^6.1.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michelangelo-ai/michelangelo"
   },
   "publishConfig": {
     "access": "public"

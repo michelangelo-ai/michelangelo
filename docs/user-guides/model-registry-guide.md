@@ -371,9 +371,10 @@ Package model registration as a task in your ML pipeline:
 import michelangelo.uniflow.core as uniflow
 from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
 from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
+from michelangelo.uniflow.plugins.ray import RayTask
 
 
-@uniflow.task()
+@uniflow.task(config=RayTask(head_cpu=2, head_memory="4Gi"))
 def package_model(model_path: str, model_class: str):
     """Package a trained model for deployment."""
     packager = CustomTritonPackager()
@@ -399,7 +400,7 @@ def package_model(model_path: str, model_class: str):
 This task can be chained after a training task in a workflow:
 
 ```py
-@uniflow.workflow
+@uniflow.workflow()
 def train_and_package(dataset_id: str):
     model_path = train_model(dataset_id)
     package_path = package_model(model_path, "myproject.models.MyModel")
