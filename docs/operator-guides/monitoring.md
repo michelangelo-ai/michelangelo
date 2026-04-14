@@ -60,13 +60,9 @@ Envoy can expose an admin stats interface for scraping request counts, latency h
 | `pipelinerun_step_success_total` | Step completions, by `step_name` and `pipeline_type` | Count |
 | `pipeline_ready_total` | Pipelines reaching Ready state | Count |
 
-### Workflow Engine (Temporal)
+### Workflow Engine
 
-| Metric | Description | Unit |
-|--------|-------------|------|
-| `temporal_task_queue_backlog` | Tasks queued but not yet picked up by a worker | Count |
-| `temporal_workflow_execution_failed_total` | Workflow execution failures | Count |
-| `temporal_activity_execution_latency` | Activity execution latency | Seconds |
+Workflow metrics are emitted by the Cadence or Temporal server, not by Michelangelo. Consult your workflow engine's documentation for its native Prometheus metrics. Michelangelo's worker-side reconcile metrics are captured under the `pipelinerun_*` counters above.
 
 ### Model Serving
 
