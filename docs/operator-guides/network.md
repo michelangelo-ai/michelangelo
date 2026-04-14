@@ -63,12 +63,12 @@ static_resources:
                             cluster: michelangelo-apiserver
                             max_grpc_timeout: 0s
                 http_filters:
-                  - name: envoy.filters.http.cors
-                    typed_config:
-                      "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.CorsPolicy
                   - name: envoy.filters.http.grpc_web
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_web.v3.GrpcWeb
+                  - name: envoy.filters.http.cors
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
