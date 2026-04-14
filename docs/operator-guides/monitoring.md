@@ -64,12 +64,13 @@ Envoy can expose an admin stats interface for scraping request counts, latency h
 
 Workflow metrics are emitted by the Cadence or Temporal server, not by Michelangelo. Consult your workflow engine's documentation for its native Prometheus metrics. Michelangelo's worker-side reconcile metrics are captured under the `pipelinerun_*` counters above.
 
-### Model Serving
+### Model Serving (Envoy)
+
+If you have enabled the Envoy admin interface, these standard Envoy metrics are available:
 
 | Metric | Description | Unit |
 |--------|-------------|------|
-| `michelangelo_inferenceserver_ready_count` | Healthy InferenceServer instances | Count |
-| `michelangelo_deployment_rollout_duration_seconds` | Time to complete a model rollout | Seconds |
+| `envoy_cluster_upstream_rq_total` | Total requests to inference backends | Count |
 | `envoy_cluster_upstream_rq_5xx` | 5xx error responses from inference backends | Count |
 | `envoy_cluster_upstream_rq_time` | Request latency histogram to inference servers | Seconds |
 
