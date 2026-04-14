@@ -183,8 +183,8 @@ Create a Grafana dashboard with these panels to get operational visibility at a 
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
-| Scheduling latency P50/P99 | `histogram_quantile(0.5, ...)` / `histogram_quantile(0.99, ...)` on `michelangelo_scheduler_assignment_duration_seconds` | Time series |
-| Job provisioning latency | `histogram_quantile(0.99, michelangelo_job_provisioning_duration_seconds_bucket)` | Time series |
+| Pipeline run duration P50/P99 | `histogram_quantile(0.5/0.99, rate(pipelinerun_duration_seconds_bucket[5m]))` | Time series |
+| Failure rate by reason | `rate(pipelinerun_result_failure_total[5m])` by `failure_reason` | Time series |
 
 ### Serving row
 
