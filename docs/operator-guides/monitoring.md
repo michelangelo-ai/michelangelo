@@ -43,14 +43,7 @@ The API server (port `15566`) exposes standard gRPC metrics. If you have a Prome
 
 ### Envoy Proxy
 
-Envoy exposes its admin stats interface on port `9901`. Add a scrape job for this port to collect request counts, latency histograms, and upstream error rates for all API traffic:
-
-```yaml
-# In your Prometheus static_configs or ServiceMonitor for Envoy
-- targets: ['michelangelo-envoy.ma-system.svc.cluster.local:9901']
-  labels:
-    job: michelangelo-envoy
-```
+Envoy can expose an admin stats interface for scraping request counts, latency histograms, and upstream error rates. The admin interface is **not enabled by default** in the Michelangelo Envoy configuration — you must add an `admin:` block to your Envoy ConfigMap to enable it. See the [Envoy admin documentation](https://www.envoyproxy.io/docs/envoy/latest/operations/admin) for setup instructions. Once enabled, add a Prometheus scrape job targeting the admin port.
 
 ---
 
