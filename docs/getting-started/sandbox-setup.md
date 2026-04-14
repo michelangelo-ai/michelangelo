@@ -13,8 +13,32 @@ Before you begin, make sure you have the following installed. Run each verificat
 | **Docker** | [Get Docker](https://docs.docker.com/get-started/get-docker) or [Colima](https://github.com/abiosoft/colima) | `docker --version` |
 | **kubectl** | `brew install kubectl` or [official guide](https://kubernetes.io/docs/tasks/tools/#kubectl) | `kubectl version --client` |
 | **k3d** | `brew install k3d` | `k3d --version` |
-| **Python 3.11ru+** | [python.org](https://www.python.org/downloads/) | `python3 --version` |
+| **Helm** | `brew install helm` or [official guide](https://helm.sh/docs/intro/install/) | `helm version` |
+| **Python 3.11+** | [python.org](https://www.python.org/downloads/) | `python3 --version` |
 | **Poetry** | `curl -sSL https://install.python-poetry.org \| python3 -` | `poetry --version` |
+
+### Colima resource requirements
+
+If you are using Colima as your Docker runtime, the default VM resources are too limited for the sandbox. Start Colima with at least:
+
+```bash
+colima start --cpu 4 --memory 8 --disk 60
+```
+
+| Resource | Minimum | Recommended |
+|----------|---------|-------------|
+| CPU cores | 4 | 6 |
+| Memory (GB) | 8 | 12 |
+| Disk (GB) | 60 | 100 |
+
+> **Warning:** Starting Colima with the default settings (2 CPU, 2 GB RAM) will cause pods to crash or fail to schedule. Always pass explicit resource flags.
+
+If Colima is already running with insufficient resources, stop it and restart with the new settings:
+
+```bash
+colima stop
+colima start --cpu 4 --memory 8 --disk 60
+```
 
 ### Configure `host.docker.internal`
 

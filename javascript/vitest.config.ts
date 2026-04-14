@@ -8,6 +8,9 @@ export default defineConfig({
     env: {
       TZ: 'UTC',
     },
+    coverage: {
+      exclude: ['packages/core/components/views/sandbox/**'],
+    },
     projects: [
       {
         extends: true,

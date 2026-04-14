@@ -7,7 +7,6 @@ import noModuleScopeTestSetup from './eslint-local-rules/no-module-scope-test-se
 import tseslint from 'typescript-eslint';
 import prettierConfig from 'eslint-config-prettier';
 import baseUIEslint from 'eslint-plugin-baseui';
-import prettierPlugin from 'eslint-plugin-prettier';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
@@ -15,7 +14,6 @@ import globals from 'globals';
 
 // Shared plugins (used in app and packages/*)
 const sharedPlugins = {
-  prettier: prettierPlugin,
   'react-hooks': reactHooks,
   'simple-import-sort': simpleImportSort,
   'react-refresh': reactRefresh,
@@ -25,7 +23,6 @@ const sharedPlugins = {
 // Shared rules (used in app and packages/*)
 const sharedRules = {
   ...reactHooks.configs.recommended.rules,
-  'prettier/prettier': 'error',
   'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
   'simple-import-sort/imports': [
     'error',
@@ -116,36 +113,6 @@ export default [
     ],
   },
 
-  // Root-level vitest config
-  {
-    files: ['vitest.config.ts'],
-    languageOptions: {
-      ecmaVersion: 2022,
-      sourceType: 'module',
-      parser: tseslint.parser,
-      parserOptions: {
-        project: new URL('./tsconfig.vitest.json', import.meta.url).pathname,
-        tsconfigRootDir: new URL('.', import.meta.url).pathname,
-      },
-      globals: globals.node,
-    },
-    plugins: sharedPlugins,
-    rules: sharedRules,
-  },
-
-  {
-    files: ['app/vite.config.ts'],
-    languageOptions: {
-      parser: tseslint.parser,
-      parserOptions: {
-        project: new URL('./app/tsconfig.app.json', import.meta.url).pathname,
-        tsconfigRootDir: new URL('./app', import.meta.url).pathname,
-      },
-      ecmaVersion: 2020,
-      sourceType: 'module',
-    },
-  },
-
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
@@ -158,8 +125,7 @@ export default [
       sourceType: 'module',
       parser: tseslint.parser,
       parserOptions: {
-        project: new URL('./app/tsconfig.app.json', import.meta.url).pathname,
-        tsconfigRootDir: new URL('./app', import.meta.url).pathname,
+        projectService: true,
       },
       globals: globals.browser,
     },
@@ -175,8 +141,7 @@ export default [
       sourceType: 'module',
       parser: tseslint.parser,
       parserOptions: {
-        project: new URL('./app/tsconfig.node.json', import.meta.url).pathname,
-        tsconfigRootDir: new URL('./app', import.meta.url).pathname,
+        projectService: true,
       },
       globals: globals.node,
     },
@@ -190,8 +155,7 @@ export default [
       sourceType: 'module',
       parser: tseslint.parser,
       parserOptions: {
-        project: new URL('./packages/core/tsconfig.test.json', import.meta.url).pathname,
-        tsconfigRootDir: new URL('./packages/core', import.meta.url).pathname,
+        projectService: true,
       },
       globals: globals.browser,
     },
@@ -247,8 +211,7 @@ export default [
       sourceType: 'module',
       parser: tseslint.parser,
       parserOptions: {
-        project: new URL('./packages/core/tsconfig.json', import.meta.url).pathname,
-        tsconfigRootDir: new URL('./packages/core', import.meta.url).pathname,
+        projectService: true,
       },
       globals: globals.browser,
     },
@@ -278,8 +241,7 @@ export default [
       sourceType: 'module',
       parser: tseslint.parser,
       parserOptions: {
-        project: new URL('./packages/rpc/tsconfig.json', import.meta.url).pathname,
-        tsconfigRootDir: new URL('./packages/rpc', import.meta.url).pathname,
+        projectService: true,
       },
       globals: globals.browser,
     },
@@ -289,15 +251,17 @@ export default [
 
   // Allow default exports in config files and type declarations (required by their frameworks)
   {
-    files: [
-      'vitest.config.ts',
-      '**/vite.config.ts',
-      '**/vite.config.production.ts',
-      '**/*.d.ts',
-    ],
+    files: ['vitest.config.ts', '**/vite.config.ts', '**/vite.config.production.ts', '**/*.d.ts'],
     rules: {
       'no-restricted-syntax': 'off',
     },
+  },
+
+  // vitest.config.ts is not included in any tsconfig discovered by projectService —
+  // disable type-aware rules for this single config file
+  {
+    files: ['vitest.config.ts'],
+    ...tseslint.configs.disableTypeChecked,
   },
 
   // Disable conflicting style rules (Prettier)

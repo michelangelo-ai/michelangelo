@@ -71,7 +71,7 @@ if __name__ == "__main__":
     ctx.environ[UF_PLUGIN_RAY_USE_FSSPEC] = "0"
     ctx.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0"
     ctx.environ["MA_NAMESPACE"] = "default"
-    ctx.environ["IMAGE_PULL_POLICY"] = "Never"
+    ctx.environ["IMAGE_PULL_POLICY"] = "IfNotPresent"
     ctx.environ["S3_ALLOW_BUCKET_CREATION"] = "True"
 
     # Use local model for testing

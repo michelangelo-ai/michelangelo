@@ -198,7 +198,7 @@ metadata:
   namespace: my-project  # Your project name
   name: boston-housing-xgb
   annotations:
-    michelangelo/uniflow-image: docker.io/library/my-workflow:latest
+    michelangelo/uniflow-image: ghcr.io/michelangelo-ai/examples:main
 spec:
   type: PIPELINE_TYPE_TRAIN
   manifest:

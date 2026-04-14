@@ -31,12 +31,13 @@ export function PhaseCard(props: PhaseConfig & { projectId: string }) {
             {description}
             {docUrl && (
               <Button
+                aria-label="Learn more"
                 kind={KIND.tertiary}
                 onClick={() => window.open(docUrl, '_blank')}
                 shape={SHAPE.circle}
                 size={SIZE.mini}
               >
-                <Icon name="arrowLaunch" title="Learn more" size={theme.sizing.scale500} />
+                <Icon name="arrowLaunch" size={theme.sizing.scale500} />
               </Button>
             )}
           </div>
@@ -88,12 +89,13 @@ export function PhaseCard(props: PhaseConfig & { projectId: string }) {
         </div>
       )}
 
-      {!isPhaseDisabled && entities.length > 0 && (
+      {entities.some((entity) => entity.state === 'active') && !isPhaseDisabled && (
         <Button
+          aria-label={`Go to ${name}`}
           kind={KIND.secondary}
           onClick={() => {
-            const firstEntity = entities.find((entity) => entity.state === 'active') ?? entities[0];
-            navigate(`/${projectId}/${id}/${firstEntity.id}`);
+            const firstActiveEntity = entities.find((entity) => entity.state === 'active')!;
+            navigate(`/${projectId}/${id}/${firstActiveEntity.id}`);
           }}
           shape={SHAPE.circle}
           overrides={{ BaseButton: { style: { marginTop: 'auto' } } }}

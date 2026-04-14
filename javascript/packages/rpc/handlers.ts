@@ -14,6 +14,9 @@ async function createHandlers() {
     GetProject: services.ProjectService.getProject as ExtractUnaryRpc<
       typeof services.ProjectService.getProject
     >,
+    GetPipeline: services.PipelineService.getPipeline as ExtractUnaryRpc<
+      typeof services.PipelineService.getPipeline
+    >,
     ListPipeline: services.PipelineService.listPipeline as ExtractUnaryRpc<
       typeof services.PipelineService.listPipeline
     >,
