@@ -57,7 +57,6 @@ Michelangelo is designed to be adopted alongside existing ML infrastructure. The
 | Guide | Description |
 |-------|-------------|
 | [Authentication](authentication.md) | OIDC identity provider setup, RBAC, session configuration, multi-tenant isolation |
-| [Monitoring & Observability](monitoring.md) | Prometheus metrics, Grafana dashboards, and alerting rules |
 | [Compliance](compliance.md) | SOC 2, GDPR, and HIPAA configuration |
 | [Troubleshooting](troubleshooting.md) | Common failure modes and `kubectl` diagnostic commands |
 
