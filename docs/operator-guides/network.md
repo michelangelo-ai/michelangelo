@@ -211,7 +211,7 @@ After setting hostnames in Ingress resources, propagate them through ConfigMaps:
 | UI Public Config | `apiBaseUrl` | `https://app.your-domain.com` |
 | Envoy CORS config | `allow_origin_string_match.regex` | Your UI domain |
 
-See [Platform Setup — Environment Overrides](platform-setup.md#environment-overrides--domain-settings) for the full list.
+See [Platform Setup — Environment Overrides](index.md#environment-overrides--domain-settings) for the full list.
 
 ---
 
