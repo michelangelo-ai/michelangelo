@@ -48,8 +48,6 @@ Michelangelo is designed to be adopted alongside existing ML infrastructure. The
 
 | Guide | Description |
 |-------|-------------|
-| [Experiment Tracking](integrations/experiment-tracking.md) | Connect Uniflow tasks to your experiment tracking server for logging metrics, parameters, and artifacts |
-| [Model Registry](integrations/model-registry.md) | How Michelangelo's model registry works and how downstream systems consume registered models |
 | [Custom Serving Backend](serving/integrate-custom-backend.md) | Add support for any inference framework — Triton, vLLM, TensorRT-LLM, or your own |
 | [Custom Job Scheduler](jobs/extend-michelangelo-batch-job-scheduler-system.md) | Replace or extend the job scheduler — integrate Kueue, Volcano, or a custom assignment strategy |
 | [Register a Compute Cluster](jobs/register-a-compute-cluster-to-michelangelo-control-plane.md) | Connect an existing Kubernetes cluster so Michelangelo can dispatch jobs to it |
