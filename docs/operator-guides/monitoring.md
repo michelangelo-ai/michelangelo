@@ -193,7 +193,7 @@ Create a Grafana dashboard with these panels to get operational visibility at a 
 | Request rate | `rate(envoy_cluster_upstream_rq_total[5m])` | Time series |
 | Request latency P50/P99 | `histogram_quantile(0.5/0.99, rate(envoy_cluster_upstream_rq_time_bucket[5m]))` | Time series |
 | 5xx error rate | `rate(envoy_cluster_upstream_rq_5xx[5m])` | Time series |
-| Active model deployments | `michelangelo_inferenceserver_ready_count` | Table |
+| Active model deployments | `envoy_cluster_upstream_rq_total` (by cluster) | Table |
 
 ### Controller health row
 
