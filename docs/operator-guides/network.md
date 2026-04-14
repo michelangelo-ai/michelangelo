@@ -360,7 +360,7 @@ Use this checklist when deploying Michelangelo to a new environment:
 
 ## Related
 
-- [Platform Setup — Environment Overrides](platform-setup.md#environment-overrides--domain-settings)
+- [Platform Setup — Environment Overrides](index.md#environment-overrides--domain-settings)
 - [Authentication](authentication.md)
 - [Register a Compute Cluster](jobs/register-a-compute-cluster-to-michelangelo-control-plane.md)
 - [Troubleshooting](troubleshooting.md)
