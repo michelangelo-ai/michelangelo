@@ -174,10 +174,10 @@ Create a Grafana dashboard with these panels to get operational visibility at a 
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
-| Job queue depth | `michelangelo_scheduler_queue_depth` | Time series |
-| Healthy compute clusters | `michelangelo_cluster_count{status="ready"}` | Stat |
-| Active InferenceServers | `michelangelo_inferenceserver_ready_count` | Stat |
-| Temporal task backlog | `temporal_task_queue_backlog` | Time series |
+| Pipeline run results | `rate(pipelinerun_result_total[5m])` | Time series |
+| Pipeline run failures | `pipelinerun_failed` | Stat |
+| Pipeline readiness | `pipeline_ready_total` | Stat |
+| Reconcile errors | `rate(controller_runtime_reconcile_errors_total[5m])` | Time series |
 
 ### Jobs row
 
