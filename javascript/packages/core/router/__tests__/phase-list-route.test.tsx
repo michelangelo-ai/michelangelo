@@ -25,7 +25,7 @@ describe('PhaseListRoute', () => {
     columns: [{ id: 'name', label: 'Name', type: CellType.TEXT }],
   });
 
-  const testPhaseEntityConfig: Record<string, PhaseConfig> = {
+  const buildTestPhaseEntityConfig = (): Record<string, PhaseConfig> => ({
     train: buildPhase({
       id: 'train',
       icon: 'train',
@@ -73,7 +73,7 @@ describe('PhaseListRoute', () => {
         }),
       ],
     }),
-  };
+  });
 
   test('renders tabs for active entities only, filtering out disabled ones', () => {
     const mockRequest = vi.fn().mockResolvedValue({
@@ -81,7 +81,7 @@ describe('PhaseListRoute', () => {
     });
 
     render(
-      <PhaseListRoute phases={testPhaseEntityConfig} />,
+      <PhaseListRoute phases={buildTestPhaseEntityConfig()} />,
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train/pipelines' }),
@@ -96,7 +96,7 @@ describe('PhaseListRoute', () => {
 
   test('shows error message for unknown phase', () => {
     render(
-      <PhaseListRoute phases={testPhaseEntityConfig} />,
+      <PhaseListRoute phases={buildTestPhaseEntityConfig()} />,
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/unknown-phase/entity' }),
@@ -151,7 +151,7 @@ describe('PhaseListRoute', () => {
     });
 
     render(
-      <PhaseListRoute phases={testPhaseEntityConfig} />,
+      <PhaseListRoute phases={buildTestPhaseEntityConfig()} />,
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train' }),
@@ -168,7 +168,7 @@ describe('PhaseListRoute', () => {
     });
 
     render(
-      <PhaseListRoute phases={testPhaseEntityConfig} />,
+      <PhaseListRoute phases={buildTestPhaseEntityConfig()} />,
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train/runs' }),
@@ -192,7 +192,7 @@ describe('PhaseListRoute', () => {
     });
 
     render(
-      <PhaseListRoute phases={testPhaseEntityConfig} />,
+      <PhaseListRoute phases={buildTestPhaseEntityConfig()} />,
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train/invalid-entity' }),
@@ -207,7 +207,7 @@ describe('PhaseListRoute', () => {
     const mockRequest = vi.fn().mockRejectedValue(new Error('Network error'));
 
     render(
-      <PhaseListRoute phases={testPhaseEntityConfig} />,
+      <PhaseListRoute phases={buildTestPhaseEntityConfig()} />,
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train/pipelines' }),
@@ -238,7 +238,7 @@ describe('PhaseListRoute', () => {
       });
 
     render(
-      <PhaseListRoute phases={testPhaseEntityConfig} />,
+      <PhaseListRoute phases={buildTestPhaseEntityConfig()} />,
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train/pipelines' }),

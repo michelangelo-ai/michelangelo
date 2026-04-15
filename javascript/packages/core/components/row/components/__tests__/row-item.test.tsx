@@ -5,19 +5,13 @@ import { RowItem } from '../row-item';
 import type { CellRenderer } from '#core/components/cell/types';
 
 describe('RowItem', () => {
-  const mockItem = {
-    id: 'name',
-    label: 'Name',
-    accessor: 'name',
-  };
-
-  const mockRecord = {
-    name: 'John Doe',
-    age: 30,
-  };
-
   it('renders with DefaultCellRenderer when no CellComponent is provided', () => {
-    render(<RowItem item={mockItem} record={mockRecord} />);
+    render(
+      <RowItem
+        item={{ id: 'name', label: 'Name', accessor: 'name' }}
+        record={{ name: 'John Doe', age: 30 }}
+      />
+    );
 
     expect(screen.getByText('Name')).toBeInTheDocument();
     expect(screen.getByText('John Doe')).toBeInTheDocument();
@@ -28,7 +22,13 @@ describe('RowItem', () => {
       <span data-testid="custom-cell">Custom: {value}</span>
     );
 
-    render(<RowItem item={mockItem} record={mockRecord} CellComponent={CustomCellRenderer} />);
+    render(
+      <RowItem
+        item={{ id: 'name', label: 'Name', accessor: 'name' }}
+        record={{ name: 'John Doe', age: 30 }}
+        CellComponent={CustomCellRenderer}
+      />
+    );
 
     expect(screen.getByText('Name')).toBeInTheDocument();
     expect(screen.getByText('Custom: John Doe')).toBeInTheDocument();

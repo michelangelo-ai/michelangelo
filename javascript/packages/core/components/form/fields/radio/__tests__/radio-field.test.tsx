@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+/* eslint-disable local/no-module-scope-test-setup -- restructure into nested describes, see https://github.com/michelangelo-ai/michelangelo/issues/1088 */
 import { RadioField } from '#core/components/form/fields/radio/radio-field';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
