@@ -128,7 +128,7 @@ kubectl patch configmap michelangelo-config \
   -p '{"data":{"TRACKING_URI":"http://tracking.internal:5000","TRACKING_API_KEY":"<your-api-key>"}}'
 ```
 
-Note that `michelangelo-config` is a ConfigMap, not a Secret — values are stored in plaintext. This is the same ConfigMap that holds AWS credentials for storage access. If your security requirements demand encrypted-at-rest credential storage, consider using [workload identity](https://kubernetes.io/docs/concepts/security/service-accounts/#workload-identity) (e.g., IRSA on AWS, Workload Identity on GKE) so that task pods authenticate to the tracking server via IAM roles rather than static keys.
+Note that `michelangelo-config` is a ConfigMap, not a Secret — values are stored in plaintext. This is the same ConfigMap that holds AWS credentials for storage access. If your security requirements demand encrypted-at-rest credential storage, consider using [workload identity](https://kubernetes.io/docs/concepts/security/service-accounts/) (e.g., IRSA on AWS, Workload Identity on GKE) so that task pods authenticate to the tracking server via IAM roles rather than static keys.
 
 **Never hardcode credentials in task code.**
 
@@ -178,9 +178,9 @@ You can manage this with a Kustomize overlay per cluster:
 ```
 overlays/
 ├── cluster-a/
-│   └── experiment-tracking-config.yaml   # cluster-A tracking URI
+│   └── michelangelo-config-patch.yaml   # cluster-A tracking URI
 └── cluster-b/
-    └── experiment-tracking-config.yaml   # cluster-B tracking URI (can differ)
+    └── michelangelo-config-patch.yaml   # cluster-B tracking URI (can differ)
 ```
 
 ---
