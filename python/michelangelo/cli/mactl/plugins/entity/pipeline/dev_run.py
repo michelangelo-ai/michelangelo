@@ -14,7 +14,6 @@ from grpc import Channel
 
 from michelangelo.cli.mactl.crd import (
     CRD,
-    METADATA_STUB,
     bind_signature,
     get_single_arg,
     inject_func_signature,
@@ -218,7 +217,7 @@ def generate_dev_run(
         )
         response = stub_method(
             request_input,
-            metadata=METADATA_STUB,
+            metadata=[*_self.metadata, ("ttl", "600")],
             timeout=30,
         )
         _LOG.info("Stub method completed (%r): %r", type(response), response)
