@@ -81,96 +81,56 @@ spec:
 
 ---
 
-## Step 2: Create a ConfigMap with the Tracking Server URI
+## Step 2: Add the Tracking URI to the `michelangelo-config` ConfigMap
 
-Store the tracking server URI in a ConfigMap in the namespace where Michelangelo dispatches jobs. This makes the value easy to update without touching task code.
+Michelangelo injects environment variables into every task pod (Ray head, Ray workers, Spark drivers, and Spark executors) via the `michelangelo-config` ConfigMap. This ConfigMap is mounted as an `envFrom` source, so every key in it becomes an environment variable in the pod.
+
+You created this ConfigMap when you [registered the compute cluster](../jobs/register-a-compute-cluster-to-michelangelo-control-plane.md). Add the tracking server URI as a new key:
+
+```bash
+kubectl patch configmap michelangelo-config \
+  --namespace=<compute-namespace> \
+  --type=merge \
+  -p '{"data":{"TRACKING_URI":"http://tracking.internal:5000"}}'
+```
+
+Or, if you manage the ConfigMap declaratively, add the key to your existing manifest:
 
 ```yaml
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: experiment-tracking-config
+  name: michelangelo-config
   namespace: <compute-namespace>
 data:
-  tracking_uri: "http://tracking.internal:5000"
+  # Existing keys — do not remove these
+  MA_FILE_SYSTEM: s3://default
+  MA_FILE_SYSTEM_S3_SCHEME: http
+  AWS_ACCESS_KEY_ID: minioadmin
+  AWS_SECRET_ACCESS_KEY: minioadmin
+  AWS_ENDPOINT_URL: << MINIO STORAGE URL >>
+  # Add your tracking URI
+  TRACKING_URI: "http://tracking.internal:5000"
 ```
 
-Apply it:
-
-```bash
-kubectl apply -f experiment-tracking-config.yaml
-```
+New task pods will pick up the updated ConfigMap automatically — no worker restart is needed. Already-running pods will not see the change until they are replaced.
 
 ---
 
-## Step 3: Inject the URI into Task Pods
+## Step 3: Handle Credentials (If Required)
 
-Michelangelo propagates environment variables from the worker configuration to task pods. Add the tracking server URI to the worker ConfigMap so it is available as an environment variable inside every task pod.
-
-In your `worker-configmap.yaml` overlay, add:
-
-```yaml
-worker:
-  extraEnv:
-    - name: TRACKING_URI
-      valueFrom:
-        configMapKeyRef:
-          name: experiment-tracking-config
-          key: tracking_uri
-```
-
-> **Note**: The exact field path for `extraEnv` depends on your Michelangelo version and worker configuration schema. Consult the [Worker Configuration reference](../platform-setup.md#worker-configuration) for the current field name.
-
-If your worker does not yet support `extraEnv`, you can inject the variable directly as a literal value:
-
-```yaml
-worker:
-  extraEnv:
-    - name: TRACKING_URI
-      value: "http://tracking.internal:5000"
-```
-
-After updating the ConfigMap, restart the worker deployment to apply:
+If your tracking server requires authentication, the simplest approach is to add the credential to `michelangelo-config` alongside the URI:
 
 ```bash
-kubectl rollout restart deployment/michelangelo-worker -n <michelangelo-namespace>
+kubectl patch configmap michelangelo-config \
+  --namespace=<compute-namespace> \
+  --type=merge \
+  -p '{"data":{"TRACKING_URI":"http://tracking.internal:5000","TRACKING_API_KEY":"<your-api-key>"}}'
 ```
 
----
+Note that `michelangelo-config` is a ConfigMap, not a Secret — values are stored in plaintext. This is the same ConfigMap that holds AWS credentials for storage access. If your security requirements demand encrypted-at-rest credential storage, consider using [workload identity](https://kubernetes.io/docs/concepts/security/service-accounts/#workload-identity) (e.g., IRSA on AWS, Workload Identity on GKE) so that task pods authenticate to the tracking server via IAM roles rather than static keys.
 
-## Step 4: Handle Credentials (If Required)
-
-If your tracking server requires authentication, store credentials in a Kubernetes Secret rather than the ConfigMap.
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: tracking-server-credentials
-  namespace: <compute-namespace>
-type: Opaque
-stringData:
-  api_key: "<your-api-key>"
-```
-
-Then reference it in the worker `extraEnv`:
-
-```yaml
-worker:
-  extraEnv:
-    - name: TRACKING_URI
-      valueFrom:
-        configMapKeyRef:
-          name: experiment-tracking-config
-          key: tracking_uri
-    - name: TRACKING_API_KEY
-      valueFrom:
-        secretKeyRef:
-          name: tracking-server-credentials
-          key: api_key
-```
-
-**Never hardcode credentials in ConfigMaps or task code.** Use Secrets and consider using an IAM role or workload identity where your tracking server supports it.
+**Never hardcode credentials in task code.**
 
 ---
 
@@ -250,4 +210,3 @@ def check_tracking_config():
 
 - [Register a Compute Cluster](../jobs/register-a-compute-cluster-to-michelangelo-control-plane.md)
 - [Worker Configuration](../platform-setup.md#worker-configuration)
-- [Model Registry Integration](model-registry.md)
