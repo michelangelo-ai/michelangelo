@@ -107,8 +107,8 @@ Failed to upload tarball: Unable to locate credentials
 Set credentials before running:
 
 ```bash
-export AWS_ACCESS_KEY_ID=ma-minio
-export AWS_SECRET_ACCESS_KEY=g0Sfr9hRcsfRXuBS
+export AWS_ACCESS_KEY_ID=minioadmin
+export AWS_SECRET_ACCESS_KEY=minioadmin
 export AWS_ENDPOINT_URL=http://localhost:9091
 ```
 

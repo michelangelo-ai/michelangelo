@@ -39,8 +39,8 @@ metadata:
 data:
   MA_FILE_SYSTEM: s3://default
   MA_FILE_SYSTEM_S3_SCHEME: http
-  AWS_ACCESS_KEY_ID: ma-minio
-  AWS_SECRET_ACCESS_KEY: g0Sfr9hRcsfRXuBS
+  AWS_ACCESS_KEY_ID: minioadmin
+  AWS_SECRET_ACCESS_KEY: minioadmin
   AWS_ENDPOINT_URL: << MINIO STORAGE URL >>
 EOF
 ```
@@ -49,8 +49,8 @@ Create the `aws-credentials` Secret for AWS CLI access (adjust values as needed 
 
 ```bash
 kubectl --context "${COMPUTE_CONTEXT}" create secret generic aws-credentials \
-  --from-literal=AWS_ACCESS_KEY_ID=ma-minio \
-  --from-literal=AWS_SECRET_ACCESS_KEY=g0Sfr9hRcsfRXuBS
+  --from-literal=AWS_ACCESS_KEY_ID=minioadmin \
+  --from-literal=AWS_SECRET_ACCESS_KEY=minioadmin
 ```
 
 ### 2) Apply RBAC for Ray management in the compute cluster

@@ -195,7 +195,7 @@ Remote execution deploys workflows to your sandbox's Kubernetes cluster, with fu
 
 3. Set up MinIO storage (object storage for workflow artifacts):
    - Open the MinIO Console at http://localhost:9090
-   - Log in with username `ma-minio` and password `ma-minio` (these are default sandbox credentials, not for production use)
+   - Log in with username `minioadmin` and password `minioadmin` (these are default sandbox credentials, not for production use)
    - Click "Create Bucket" and create a bucket named `default`
 
 4. Set up the Cadence workflow domain (if using Cadence):

@@ -34,7 +34,7 @@ This command:
 
 4) Upload your Triton model to MinIO storage:
 
-This step can be done manually or through a Uniflow Pipeline. Your model artifacts should be placed in the `deploy-models` bucket. The sandbox includes a MinIO instance accessible at `http://localhost:9000` (credentials: `ma-minio`/`ma-minio`). 
+This step can be done manually or through a Uniflow Pipeline. Your model artifacts should be placed in the `deploy-models` bucket. The sandbox includes a MinIO instance accessible at `http://localhost:9000` (credentials: `minioadmin`/`minioadmin`). 
 
 5) Apply a Deployment CR to load the model:
 
