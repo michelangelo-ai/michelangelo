@@ -49,6 +49,7 @@ Michelangelo is designed to be adopted alongside existing ML infrastructure. The
 
 | Guide | Description |
 |-------|-------------|
+| [Model Registry](integrations/model-registry.md) | Operate Michelangelo's built-in model registry, configure storage and RBAC, and integrate with serving and CI/CD |
 | [Experiment Tracking](integrations/experiment-tracking.md) | Connect an external experiment tracking server to Michelangelo task pods |
 | [Custom Serving Backend](serving/integrate-custom-backend.md) | Add support for any inference framework — Triton, vLLM, TensorRT-LLM, or your own |
 | [Custom Job Scheduler](jobs/extend-michelangelo-batch-job-scheduler-system.md) | Replace or extend the job scheduler — integrate Kueue, Volcano, or a custom assignment strategy |
