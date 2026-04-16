@@ -29,9 +29,7 @@ class PipelineCreateTest(TestCase):
 
         # Test with non-dict input
         with self.assertRaises(ValueError) as context:
-            convert_crd_metadata_pipeline(
-                "not a dict", mock_crd_class, yaml_path
-            )
+            convert_crd_metadata_pipeline("not a dict", mock_crd_class, yaml_path)
 
         self.assertIn("Expected a dictionary", str(context.exception))
 
@@ -83,9 +81,7 @@ class PipelineCreateTest(TestCase):
         expected_result = {"metadata": {}, "spec": {}}
         mock_populate.return_value = expected_result
 
-        result = convert_crd_metadata_pipeline(
-            yaml_dict, mock_crd_class, yaml_path
-        )
+        result = convert_crd_metadata_pipeline(yaml_dict, mock_crd_class, yaml_path)
 
         # Verify git repo was accessed
         mock_repo_class.assert_called_once_with(".", search_parent_directories=True)
