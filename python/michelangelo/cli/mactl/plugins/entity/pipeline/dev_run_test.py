@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, Mock, patch
 from michelangelo.cli.mactl.crd import CRD
 from michelangelo.cli.mactl.plugins.entity.pipeline.dev_run import (
     _process_env_variables,
+    add_function_signature,
     convert_crd_metadata_pipeline_dev_run,
     generate_dev_run,
     generate_pipeline_dev_run_object,
@@ -433,6 +434,69 @@ class PipelineDevRunTest(TestCase):
         # Verify get_methods_from_service was called
         mock_get_methods.assert_called_once_with(
             mock_channel, "michelangelo.api.v2.PipelineRunService", mock_crd.metadata
+        )
+
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.get_service_name")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.get_methods_from_service"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.get_message_class_by_name"
+    )
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.ParseDict")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.yaml_to_dict")
+    def test_dev_run_grpc_call_uses_crd_metadata(
+        self,
+        mock_yaml_to_dict,
+        mock_parse_dict,
+        mock_get_message_class,
+        mock_get_methods,
+        mock_get_service_name,
+    ):
+        """Regression: stub_method must be called with CRD metadata, not empty list.
+
+        Before the fix, METADATA_STUB was imported from crd.py at module load time
+        (when it was still []), so gRPC calls were sent with empty metadata and the
+        server rejected them with 'missing service name, caller name, encoding'.
+        """
+        crd_metadata = [
+            ("rpc-caller", "grpcurl"),
+            ("rpc-service", "ma-apiserver"),
+            ("rpc-encoding", "proto"),
+        ]
+        crd = CRD(
+            name="pipeline_run",
+            full_name="michelangelo.api.v2.PipelineRunService",
+            metadata=crd_metadata,
+        )
+        add_function_signature(crd)
+        crd.func_crd_metadata_converter = Mock(
+            return_value={"pipeline_run": {"spec": {}}}
+        )
+
+        mock_yaml_to_dict.return_value = {
+            "metadata": {"name": "test-pipeline", "namespace": "test-ns"}
+        }
+
+        mock_get_service_name.return_value = "michelangelo.api.v2.PipelineRunService"
+        mock_method = Mock()
+        mock_method.input_type = ".TestInput"
+        mock_method.output_type = ".TestOutput"
+        mock_get_methods.return_value = ({"CreatePipelineRun": mock_method}, Mock())
+        mock_get_message_class.side_effect = [Mock(), Mock()]
+
+        mock_stub = Mock(return_value=Mock())
+        mock_channel = Mock()
+        mock_channel.unary_unary.return_value = mock_stub
+
+        generate_dev_run(crd, mock_channel)
+        crd.dev_run(file="pipeline.yaml")
+
+        mock_stub.assert_called_once()
+        _, call_kwargs = mock_stub.call_args
+        self.assertEqual(
+            call_kwargs["metadata"],
+            [*crd_metadata, ("ttl", "600")],
         )
 
     def test_dev_run_func_extracts_storage_url_from_bound_args(self):
