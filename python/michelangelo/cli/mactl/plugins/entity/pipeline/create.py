@@ -181,8 +181,11 @@ def convert_crd_metadata_pipeline(
     repo_root = Path(repo.git.rev_parse("--show-toplevel")).resolve()
     _LOG.info("Current git repository info: %r", repo)
 
-    project = yaml_dict["metadata"]["namespace"]
+    # Extract project and pipeline names from metadata
+    project = yaml_dict["metadata"]["namespace"]  # Assuming namespace maps to project
     pipeline = yaml_dict["metadata"]["name"]
+
+    # Get relative path of config file from repo root
     config_file_relative_path = str(yaml_path.relative_to(repo_root))
 
     workflow_inputs, uniflow_tar_path, workflow_function_name = (
