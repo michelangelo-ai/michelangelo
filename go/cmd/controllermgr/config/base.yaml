@@ -26,6 +26,6 @@ controllers:
 
 minio:
   awsRegion: us-east-1
-  awsAccessKeyId: minioadmin
-  awsSecretAccessKey: minioadmin
+  awsAccessKeyId: ma-minio
+  awsSecretAccessKey: g0Sfr9hRcsfRXuBS
   awsEndpointUrl: localhost:9091

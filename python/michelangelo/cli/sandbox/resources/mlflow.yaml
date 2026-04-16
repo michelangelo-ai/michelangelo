@@ -26,9 +26,9 @@ spec:
         - name: MLFLOW_DEFAULT_ARTIFACT_ROOT
           value: "s3://mlflow"
         - name: AWS_ACCESS_KEY_ID
-          value: "minioadmin"
+          value: "ma-minio"
         - name: AWS_SECRET_ACCESS_KEY
-          value: "minioadmin"
+          value: "g0Sfr9hRcsfRXuBS"
         - name: MLFLOW_S3_ENDPOINT_URL
           value: "http://minio:9000"
         - name: MLFLOW_TRACKING_SERVER_HOST

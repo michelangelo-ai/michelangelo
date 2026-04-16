@@ -26,8 +26,8 @@ DEFAULT_CONFIG = {
         "rpc-encoding": "proto",
     },
     "minio": {
-        "access_key_id": "minioadmin",
-        "secret_access_key": "minioadmin",
+        "access_key_id": "ma-minio",
+        "secret_access_key": "g0Sfr9hRcsfRXuBS",
         "endpoint_url": "http://localhost:9091",
     },
     "plugin": {
