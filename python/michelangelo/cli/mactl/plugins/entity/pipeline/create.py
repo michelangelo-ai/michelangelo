@@ -6,7 +6,6 @@ from copy import deepcopy
 from logging import getLogger
 from pathlib import Path
 from typing import Optional
-from uuid import uuid4
 
 from git import Repo
 from google.protobuf.any_pb2 import Any
@@ -164,12 +163,14 @@ def get_pipeline_config_and_tar(
         return workflow_inputs, uniflow_tar_path, workflow_function_name
 
 
-def convert_crd_metadata_pipeline_create(
+def convert_crd_metadata_pipeline(
     yaml_dict: dict, crd_class: type[Message], yaml_path: Path
 ) -> dict:
-    """Convert CRD metadata for pipeline create crd.
+    """Convert CRD metadata for pipeline create or update.
 
     Integrates pipeline registration to get uniflow artifacts.
+    Returns user-defined metadata (name, namespace, annotations, labels) only;
+    server-managed fields (uid, resourceVersion, etc.) are intentionally omitted.
     """
     _LOG.info("Convert CRD metadata for class %r", crd_class)
     if not isinstance(yaml_dict, dict):
@@ -180,11 +181,8 @@ def convert_crd_metadata_pipeline_create(
     repo_root = Path(repo.git.rev_parse("--show-toplevel")).resolve()
     _LOG.info("Current git repository info: %r", repo)
 
-    # Extract project and pipeline names from metadata
-    project = yaml_dict["metadata"]["namespace"]  # Assuming namespace maps to project
+    project = yaml_dict["metadata"]["namespace"]
     pipeline = yaml_dict["metadata"]["name"]
-
-    # Get relative path of config file from repo root
     config_file_relative_path = str(yaml_path.relative_to(repo_root))
 
     workflow_inputs, uniflow_tar_path, workflow_function_name = (
@@ -193,17 +191,13 @@ def convert_crd_metadata_pipeline_create(
         )
     )
 
-    res = {}
-
-    res["metadata"] = {
-        "annotations": yaml_dict["metadata"].get("annotations", {}),
-        "labels": yaml_dict["metadata"].get("labels", {}),
-        "generateName": "",
-        "generation": "0",
-        "name": pipeline,
-        "namespace": project,
-        "resourceVersion": "0",
-        "uid": str(uuid4()),
+    res = {
+        "metadata": {
+            "name": pipeline,
+            "namespace": project,
+            "annotations": yaml_dict["metadata"].get("annotations", {}),
+            "labels": yaml_dict["metadata"].get("labels", {}),
+        }
     }
 
     return populate_pipeline_spec_with_workflow_inputs(
