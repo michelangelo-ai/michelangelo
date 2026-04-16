@@ -16,6 +16,7 @@ For a fresh deployment, follow this recommended reading order:
 | Guide | Description |
 |-------|-------------|
 | [Platform Setup](platform-setup.md) | ConfigMaps and key fields for API server, controller manager, worker, and UI/Envoy |
+| [Network & Ingress](network.md) | Envoy proxy, Ingress setup, TLS with cert-manager, and multi-cluster connectivity |
 | [API Framework](api-framework.md) | Architecture overview of the Michelangelo API and control plane |
 
 ## Jobs & Compute
@@ -48,6 +49,8 @@ Michelangelo is designed to be adopted alongside existing ML infrastructure. The
 
 | Guide | Description |
 |-------|-------------|
+| [Model Registry](integrations/model-registry.md) | Operate Michelangelo's built-in model registry, configure storage and RBAC, and integrate with serving and CI/CD |
+| [Experiment Tracking](integrations/experiment-tracking.md) | Connect an external experiment tracking server to Michelangelo task pods |
 | [Custom Serving Backend](serving/integrate-custom-backend.md) | Add support for any inference framework — Triton, vLLM, TensorRT-LLM, or your own |
 | [Custom Job Scheduler](jobs/extend-michelangelo-batch-job-scheduler-system.md) | Replace or extend the job scheduler — integrate Kueue, Volcano, or a custom assignment strategy |
 | [Register a Compute Cluster](jobs/register-a-compute-cluster-to-michelangelo-control-plane.md) | Connect an existing Kubernetes cluster so Michelangelo can dispatch jobs to it |
@@ -57,6 +60,7 @@ Michelangelo is designed to be adopted alongside existing ML infrastructure. The
 | Guide | Description |
 |-------|-------------|
 | [Authentication](authentication.md) | OIDC identity provider setup, RBAC, session configuration, multi-tenant isolation |
+| [Monitoring & Observability](monitoring.md) | Prometheus scrape config, key metrics, alerting rules, Grafana dashboards, structured logging |
 | [Compliance](compliance.md) | SOC 2, GDPR, and HIPAA configuration |
 | [Troubleshooting](troubleshooting.md) | Common failure modes and `kubectl` diagnostic commands |
 
