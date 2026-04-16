@@ -2,7 +2,7 @@
 
 This guide describes how to configure **Michelangelo server components** in Kubernetes cluster. It focuses on the **configuration surfaces** (ConfigMaps, fields, and key parameters).
 
-# Overview
+## Overview
 
 Michelangelo consists of four core server components:
 
@@ -20,13 +20,13 @@ This document explains:
 * What each field means
 * How to apply changes using Kustomize overlays
 
-# Michelangelo Service architecture diagram
+## Michelangelo Service architecture diagram
 
 The following diagram shows the relationship between each of the services in Michelangelo eco-system.
 
 ![Michelangelo Service Architecture](./images/ma-service-architecture.png)
 
-# Server Configuration
+## Server Configuration
 
 ## API Server Configuration
 
@@ -37,14 +37,15 @@ apiserver:
   yarpc:
     host: 0.0.0.0
     port: 15566
-  k8s:
-    qps: 300
-    burst: 600
   metadataStorage:
     enableMetadataStorage: false
   crdSync:
     enableCRDUpdate: true
-    enableIncompatibleUpdate: false
+    skipIncompatibleCheck: false
+
+k8s:
+  qps: 300
+  burst: 600
 ```
 
 ### **Field Explanations**
@@ -55,7 +56,7 @@ apiserver:
 | `k8s.qps/burst` | Throttling limits for Kubernetes API calls |
 | `enableMetadataStorage` | Enables metadata persistence |
 | `enableCRDUpdate` | Controls whether CRDs can be sync'd |
-| `enableIncompatibleUpdate` | Allows breaking CRD changes (use only during major migrations) |
+| `skipIncompatibleCheck` | Skips incompatible CRD change validation (use only during major migrations) |
 
 ## Controller Manager Configuration
 
@@ -64,10 +65,9 @@ apiserver:
 ```yaml
 controllermgr:
   metricsBindAddress: 8091
-  healthProbeBindAddress: 8081
+  healthProbeBindAddress: 8083
   leaderElection: false
   leaderElectionID: michelangelo.your-organization.com
-  port: 9443
 
 controllers:
   rayCluster:
@@ -179,7 +179,7 @@ You must customize domain-specific values in overlays:
 | Ingress | Hostnames for API server & UI |
 | Controller Manager | S3 region, endpoint, Temporal host |
 
-# Object Store Configuration
+## Object Store Configuration
 
 Object storage (MinIO / S3) is used by Michelangelo for artifacts and metadata.
 
@@ -200,13 +200,13 @@ minio:
 * `awsEndpointUrl` – S3 endpoint (`s3.amazonaws.com` or regional endpoint).
 * `useIam` – Set to `true` in production (do not hardcode keys in config).
 
-## **Storage Setup Checklist (from original guide)**
+### **Storage Setup Checklist**
 
 * Configure **AWS credentials/IAM roles** for pods that need S3 access.
 * Verify **region and endpoint** in the ConfigMap match your S3 setup.
 * Test connectivity from worker/controller pods to the bucket.
 
-# Workflow Engine Configuration (Temporal/Cadence)
+## Workflow Engine Configuration (Temporal/Cadence)
 
 Michelangelo uses a workflow engine (Temporal or Cadence) for orchestrating workflows. Most of your current guide examples use **Temporal**, and Cadence is used in sandbox/dev.
 
@@ -253,8 +253,17 @@ workflow-engine:
 * `workers[].taskList` – Task list (queue) used for workflow tasks.
 * `client.domain` – Client domain for starting workflows.
 
-## Temporal Setup (from original external dependencies)
+### Temporal Setup
 
 * Ensure Temporal is accessible at the configured endpoint.
 * Create required domains (`uniflow`, `default`, `production-uniflow`).
 * Configure task lists such as `production-uniflow`.
+
+---
+
+## Related
+
+- [Network & Ingress Configuration](network.md)
+- [Monitoring & Observability](monitoring.md)
+- [Authentication](authentication.md)
+- [Register a Compute Cluster](jobs/register-a-compute-cluster-to-michelangelo-control-plane.md)

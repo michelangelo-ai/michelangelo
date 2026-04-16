@@ -66,11 +66,20 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      # Label applied to Uniflow task pods — adjust to match your cluster
-      app.kubernetes.io/managed-by: michelangelo
+      # Replace with labels that match your task pods.
+      # Ray task pods use generateName: "uf-ray-" — check your cluster's
+      # actual pod labels with: kubectl get pods -n <compute-namespace> --show-labels
+      <your-pod-selector-label>: <your-value>
   policyTypes:
     - Egress
   egress:
+    # Allow DNS resolution (required for name-based tracking server URIs)
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow egress to the tracking server
     - to:
         - ipBlock:
             cidr: <tracking-server-ip>/32
@@ -103,12 +112,12 @@ metadata:
   name: michelangelo-config
   namespace: <compute-namespace>
 data:
-  # Existing keys — do not remove these
+  # Existing keys — replace these with your environment-specific values
   MA_FILE_SYSTEM: s3://default
   MA_FILE_SYSTEM_S3_SCHEME: http
-  AWS_ACCESS_KEY_ID: minioadmin
-  AWS_SECRET_ACCESS_KEY: minioadmin
-  AWS_ENDPOINT_URL: << MINIO STORAGE URL >>
+  AWS_ACCESS_KEY_ID: <your-access-key-id>
+  AWS_SECRET_ACCESS_KEY: <your-secret-access-key>
+  AWS_ENDPOINT_URL: <your-storage-endpoint>
   # Add your tracking URI
   TRACKING_URI: "http://tracking.internal:5000"
 ```
@@ -141,11 +150,12 @@ Once the operator has completed the steps above, users can access the tracking s
 ```python
 import os
 import michelangelo.uniflow.core as uniflow
+from michelangelo.uniflow.plugins.ray import RayTask
 
-@uniflow.task()
+@uniflow.task(config=RayTask(head_cpu=1, head_memory="2Gi"))
 def train_model(train_data, config: dict):
-    # Read tracking URI injected by the operator
-    tracking_uri = os.environ.get("TRACKING_URI")
+    # Read tracking URI injected by the operator — raises KeyError if missing
+    tracking_uri = os.environ["TRACKING_URI"]
 
     # Users initialize their tracking client — Michelangelo does not do this
     import your_tracking_client as tracker
@@ -196,12 +206,16 @@ kubectl exec -it <task-pod-name> -n <compute-namespace> -- env | grep TRACKING_U
 You can also run a minimal test task that prints the variable:
 
 ```python
-@uniflow.task()
+import os
+import michelangelo.uniflow.core as uniflow
+from michelangelo.uniflow.plugins.ray import RayTask
+
+@uniflow.task(config=RayTask(head_cpu=1, head_memory="1Gi"))
 def check_tracking_config():
-    import os
     uri = os.environ.get("TRACKING_URI", "NOT SET")
     print(f"Tracking URI: {uri}")
-    assert uri != "NOT SET", "TRACKING_URI environment variable is not set"
+    if uri == "NOT SET":
+        raise ValueError("TRACKING_URI environment variable is not set")
 ```
 
 ---
