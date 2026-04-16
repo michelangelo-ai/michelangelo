@@ -429,7 +429,7 @@ This integration test runs entirely within an ephemeral GitHub Actions runner. N
 ### Access Control and Encryption
 
 - **GHCR**: `GITHUB_TOKEN` (auto-provisioned per-job, repository-scoped) [6]
-- **MinIO**: `ma-minio`/`ma-minio` — sandbox credentials only, no production connectivity
+- **MinIO**: `key`/`password` — sandbox credentials only, no production connectivity
 - **MySQL**: `root`/`root` — sandbox credentials only, no production connectivity
 - k3d cluster is network-isolated to the GitHub Actions runner host; no external ingress
 
