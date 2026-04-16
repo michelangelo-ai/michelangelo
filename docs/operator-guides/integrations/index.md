@@ -6,12 +6,8 @@ Michelangelo is designed to run alongside the ML infrastructure your organizatio
 
 ## External System Integrations
 
-These guides cover connecting Michelangelo to systems that run outside the platform.
+> **Coming soon** — Guides for connecting Michelangelo to external experiment tracking servers and model registries are in progress. See #1041 and #1042.
 
-| Guide | Description |
-|-------|-------------|
-| [Experiment Tracking](experiment-tracking.md) | Make any experiment tracking server reachable from Uniflow task pods — network setup, URI injection, credential handling |
-| [Model Registry](model-registry.md) | How Michelangelo's model registry works and how downstream systems (serving, CI/CD pipelines, external governance registries) consume registered models |
 
 ---
 
