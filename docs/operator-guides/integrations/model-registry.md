@@ -1,116 +1,70 @@
 # Model Registry Integration
 
-This guide explains how Michelangelo's model registry works from an operator perspective: what Kubernetes resources back it, how model artifacts are stored and versioned, and how downstream systems (serving infrastructure, CI/CD pipelines, external registries) consume registered models.
+Unlike experiment tracking — where operators connect an external server — Michelangelo includes a built-in model registry. This guide explains how operators verify the registry is healthy, configure storage and access, and integrate registered models with downstream serving and CI/CD systems.
 
 ---
 
-## Overview
+## How the Model Registry Works
 
-Michelangelo includes a built-in model registry for versioning and tracking trained models produced by Uniflow pipelines. The registry is implemented as Kubernetes Custom Resources managed by the Controller Manager.
+The registry separates operator and user responsibilities cleanly:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ Uniflow Task (@uniflow.task)                                │
-│ └─ Registers model artifact → Michelangelo Model Registry  │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│ Operator Responsibility                                  │
+│ ├─ Provision the object store bucket and IAM policy      │
+│ ├─ Verify the Model CRD is installed                     │
+│ └─ Configure RBAC for namespace access                   │
+└──────────────────────────────────────────────────────────┘
                           ↓
-┌─────────────────────────────────────────────────────────────┐
-│ Model Registry (Controller Manager)                         │
-│ ├─ ModelVersion CRD (tracks metadata + artifact location)  │
-│ └─ Writes artifact to S3-compatible object store           │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│ User Responsibility (task code)                          │
+│ ├─ Register models from inside @uniflow.task functions   │
+│ └─ Platform creates a Model CR and writes artifacts      │
+└──────────────────────────────────────────────────────────┘
                           ↓
-┌─────────────────────────────────────────────────────────────┐
-│ Downstream Consumers                                        │
-│ ├─ InferenceServer (Michelangelo serving)                  │
-│ ├─ External serving infrastructure (reads from S3)         │
-│ └─ CI/CD pipelines (promote / gate on model metadata)      │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│ Downstream Consumers                                     │
+│ ├─ InferenceServer (Michelangelo serving layer)          │
+│ ├─ External serving infrastructure (reads from S3)       │
+│ └─ CI/CD pipelines (read artifact URIs from Model CRs)   │
+└──────────────────────────────────────────────────────────┘
 ```
+
+The registry is backed by a single Kubernetes Custom Resource: `Model` (CRD name `models.michelangelo.api`).
 
 ---
 
-## How Models Are Stored
+## Prerequisites
 
-### Object Store (S3 / MinIO)
+Before working through this guide, ensure you have completed:
 
-All model artifacts are stored in the S3-compatible object store configured in the Controller Manager. See [Object Store Configuration](../platform-setup.md#object-store-configuration) for the `minio.*` fields.
-
-Artifacts are written under a structured path:
-
-```
-s3://<bucket>/models/<namespace>/<model-name>/<version>/
-├── raw/          # Original training output (weights, checkpoints)
-└── deployable/   # Transformed for inference (e.g., Triton model repository layout)
-```
-
-Both formats are written for each registered version. The `raw` format is intended for fine-tuning or analysis workflows. The `deployable` format is what Michelangelo's InferenceServer (and compatible external serving systems) consume.
-
-### ModelVersion Custom Resource
-
-Each registered model version corresponds to a `ModelVersion` Custom Resource in Kubernetes:
-
-```yaml
-apiVersion: michelangelo.api/v2
-kind: ModelVersion
-metadata:
-  name: fraud-detector-v3
-  namespace: ml-team
-spec:
-  modelName: fraud-detector
-  version: 3
-  artifactPath: s3://models-bucket/models/ml-team/fraud-detector/3/
-  schema:
-    inputs:
-      - name: transaction_features
-        shape: [-1, 128]
-        dtype: float32
-    outputs:
-      - name: fraud_score
-        shape: [-1, 1]
-        dtype: float32
-status:
-  phase: Ready
-  rawArtifactPath: s3://models-bucket/models/ml-team/fraud-detector/3/raw/
-  deployableArtifactPath: s3://models-bucket/models/ml-team/fraud-detector/3/deployable/
-  registeredAt: "2026-03-15T09:12:00Z"
-```
+- **[Platform Setup](../platform-setup.md#object-store-configuration)** — the Controller Manager's `minio.*` fields must point to a reachable S3-compatible object store.
+- **Compute cluster registration** — at least one compute cluster registered with the Michelangelo control plane, so Uniflow tasks have somewhere to run.
+- Sufficient cluster permissions to create Roles and RoleBindings, and to inspect Custom Resource Definitions.
 
 ---
 
-## Listing and Querying the Registry
+## Step 1: Verify the Model CRD Is Installed
 
-Use `kubectl` to inspect registered models and versions:
+Confirm the `Model` CRD is present in the cluster before expecting any registration to succeed:
 
 ```bash
-# List all ModelVersions in a namespace
-kubectl get modelversions -n ml-team
-
-# Describe a specific version for full metadata and artifact paths
-kubectl describe modelversion fraud-detector-v3 -n ml-team
-
-# Get the artifact path for automation
-kubectl get modelversion fraud-detector-v3 -n ml-team \
-  -o jsonpath='{.status.deployableArtifactPath}'
+kubectl get crd models.michelangelo.api
 ```
 
-The Michelangelo API server also exposes model registry operations over gRPC. If you are integrating with an internal tool or CI/CD pipeline, use the `ma` CLI:
+If the CRD is missing, re-run the Michelangelo CRD installation step described in [Platform Setup](../platform-setup.md).
+
+You can also spot-check a namespace for any existing models:
 
 ```bash
-# List models in a namespace
-ma model list --namespace ml-team
-
-# Get artifact location for a specific version
-ma model get fraud-detector --version 3 --namespace ml-team
+kubectl get models -n <namespace>
 ```
 
 ---
 
-## Operator Configuration
+## Step 2: Configure S3 Permissions for Model Artifacts
 
-### S3 Permissions for Model Artifacts
-
-The Controller Manager writes model artifacts to S3. Ensure the IAM role or service account bound to the Controller Manager has the following permissions on the models bucket:
+The Controller Manager and task pods write model artifacts to your S3-compatible object store. The IAM role or service account bound to the Controller Manager needs the following permissions on the models bucket:
 
 ```json
 {
@@ -122,157 +76,56 @@ The Controller Manager writes model artifacts to S3. Ensure the IAM role or serv
     "s3:ListBucket"
   ],
   "Resource": [
-    "arn:aws:s3:::models-bucket",
-    "arn:aws:s3:::models-bucket/models/*"
+    "arn:aws:s3:::<your-models-bucket>",
+    "arn:aws:s3:::<your-models-bucket>/*"
   ]
 }
 ```
 
-Task pods (which produce the raw model files) also need write access to the same bucket path during the registration step. If task pods run under a different IAM role or service account, ensure they have equivalent permissions.
+Task pods produce the raw model files during registration. If task pods run under a different IAM role or service account than the Controller Manager, apply equivalent write permissions to that identity as well.
 
-### Enabling the Model Registry
+### Artifact URI discovery
 
-Model registry support is enabled by default when the Controller Manager is deployed. No additional configuration flag is required. To verify it is active, check that the `ModelVersion` CRD is installed:
+The exact S3 layout for a model's artifacts is set by your platform configuration — Michelangelo does not prescribe a fixed directory structure. Rather than hardcoding paths, read the actual locations from each `Model` resource after registration:
 
 ```bash
-kubectl get crd modelversions.michelangelo.api
+# Raw training artifact URIs (weights, checkpoints)
+kubectl get model <model-name> -n <namespace> \
+  -o jsonpath='{.spec.model_artifact_uri}'
+
+# Deployable artifact URIs (packaged for serving)
+kubectl get model <model-name> -n <namespace> \
+  -o jsonpath='{.spec.deployable_artifact_uri}'
 ```
 
-If the CRD is missing, re-run the Michelangelo CRD installation step (see [Platform Setup](../platform-setup.md)).
+These spec fields are the authoritative source for artifact location. Use them in any automation that needs to consume artifacts.
 
 ---
 
-## Integrating Downstream Systems
+## Step 3: Configure RBAC
 
-### Using Registered Models in Michelangelo's Serving Layer
-
-Michelangelo's `InferenceServer` resource references a `ModelVersion` directly:
-
-```yaml
-apiVersion: michelangelo.api/v2
-kind: InferenceServer
-metadata:
-  name: fraud-detector-serving
-  namespace: ml-team
-spec:
-  modelVersion:
-    name: fraud-detector-v3
-    namespace: ml-team
-  backend: triton
-  replicas: 2
-```
-
-The Controller Manager resolves the artifact path from the `ModelVersion` status and mounts it into the serving container automatically.
-
-### Consuming Artifacts from External Serving Infrastructure
-
-If your organization uses a serving system outside of Michelangelo, it can read model artifacts directly from S3 using the artifact paths from the `ModelVersion` status.
-
-Example: pulling the deployable artifact path and loading it into an external system:
-
-```bash
-ARTIFACT_PATH=$(kubectl get modelversion fraud-detector-v3 -n ml-team \
-  -o jsonpath='{.status.deployableArtifactPath}')
-
-# Pass the path to your external serving system's model loading command
-your-serving-tool load-model \
-  --source "$ARTIFACT_PATH" \
-  --name fraud-detector \
-  --version 3
-```
-
-Alternatively, access the same information via the API:
-
-```bash
-ma model get fraud-detector --version 3 --namespace ml-team --output json \
-  | jq '.deployableArtifactPath'
-```
-
-### Integrating with an External Model Registry
-
-Some organizations maintain a separate model registry for governance, compliance, or multi-platform visibility. You can sync Michelangelo model metadata to an external registry by:
-
-1. **Listening for `ModelVersion` events** using a Kubernetes controller or a simple watch loop:
-
-```bash
-kubectl get modelversions -n ml-team --watch -o json \
-  | jq 'select(.status.phase == "Ready")'
-```
-
-2. **Extracting the relevant fields** (name, version, artifact paths, schema) from the `ModelVersion` resource.
-
-3. **Registering the entry in your external registry** using that system's API.
-
-This pattern keeps Michelangelo as the authoritative source for artifact location, while your external registry holds the governance metadata (approval status, deployment lineage, access controls).
-
----
-
-## CI/CD Pipeline Integration
-
-### Gating Promotions on Model Version Status
-
-A common CI/CD pattern is to wait for a model version to reach `Ready` status before promoting it to a production serving target. Use `kubectl wait`:
-
-```bash
-kubectl wait modelversion fraud-detector-v3 \
-  --namespace ml-team \
-  --for=condition=Ready \
-  --timeout=600s
-```
-
-If this succeeds (exit code 0), the artifact is available at the path in `.status.deployableArtifactPath`. If it times out, treat the pipeline as failed.
-
-### Example: GitHub Actions Step
-
-```yaml
-- name: Wait for model to be ready
-  run: |
-    kubectl wait modelversion ${{ env.MODEL_VERSION }} \
-      --namespace ${{ env.NAMESPACE }} \
-      --for=condition=Ready \
-      --timeout=600s
-
-- name: Get artifact path
-  id: artifact
-  run: |
-    PATH=$(kubectl get modelversion ${{ env.MODEL_VERSION }} \
-      -n ${{ env.NAMESPACE }} \
-      -o jsonpath='{.status.deployableArtifactPath}')
-    echo "path=$PATH" >> $GITHUB_OUTPUT
-
-- name: Deploy to production serving
-  run: |
-    your-serving-tool deploy \
-      --artifact ${{ steps.artifact.outputs.path }} \
-      --target production
-```
-
----
-
-## RBAC for Model Registry Operations
-
-Grant teams read access to `ModelVersion` resources in their namespace:
+Grant teams read access to `Model` resources in their namespace:
 
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: model-registry-reader
-  namespace: ml-team
+  namespace: <namespace>
 rules:
   - apiGroups: ["michelangelo.api"]
-    resources: ["modelversions"]
+    resources: ["models"]
     verbs: ["get", "list", "watch"]
 ```
 
-For CI/CD service accounts that need to gate on model readiness:
+For CI/CD service accounts that need to inspect or forward model records:
 
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: ci-model-registry-reader
-  namespace: ml-team
+  namespace: <namespace>
 subjects:
   - kind: ServiceAccount
     name: ci-service-account
@@ -283,25 +136,273 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 ```
 
+For cluster-wide patterns and multi-tenant isolation, see [Authentication and RBAC](../authentication.md).
+
 ---
 
-## Retention and Cleanup
+## Verification
 
-Model artifacts in S3 are not automatically deleted when a `ModelVersion` resource is removed. Implement a retention policy at the object store level (S3 lifecycle rules) or via a scheduled cleanup job that queries old `ModelVersion` resources and removes the corresponding S3 objects.
+After completing the setup steps, run this smoke test to confirm the registry is operational.
 
-Example: list `ModelVersion` resources older than 90 days:
+**1. Check the CRD is registered:**
 
 ```bash
-kubectl get modelversions -A -o json \
-  | jq --arg cutoff "$(date -d '90 days ago' -u +%Y-%m-%dT%H:%M:%SZ)" \
-    '.items[] | select(.status.registeredAt < $cutoff) | {name: .metadata.name, namespace: .metadata.namespace, path: .status.rawArtifactPath}'
+kubectl get crd models.michelangelo.api
+```
+
+**2. List Model resources in a namespace** (requires at least one registered model):
+
+```bash
+# Using kubectl
+kubectl get models -n <namespace>
+
+# Using the ma CLI
+ma model get -n <namespace>
+```
+
+**3. Inspect a specific model:**
+
+```bash
+kubectl describe model <model-name> -n <namespace>
+```
+
+**4. Verify object store reachability from a compute pod:**
+
+```bash
+kubectl run storage-check \
+  --image=amazon/aws-cli \
+  --namespace=<compute-namespace> \
+  --restart=Never \
+  --rm -it -- \
+  s3 ls s3://<your-models-bucket>/
+```
+
+If any of these fail, see the [Troubleshooting](#troubleshooting) section below.
+
+---
+
+## The Model Custom Resource
+
+Every registered model is a `Model` resource. Here is a representative example:
+
+```yaml
+apiVersion: michelangelo.api/v2
+kind: Model
+metadata:
+  name: fraud-detector
+  namespace: ml-team
+  labels:
+    algorithm: xgboost
+spec:
+  owner:
+    name: <owner-username>
+  description: "Fraud detection model trained on transaction features"
+  algorithm: xgboost
+  trainingFramework: sklearn
+  kind: MODEL_KIND_BINARY_CLASSIFICATION
+  source: TRAINING
+  package_type: DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON
+  revision_id: 3
+  model_artifact_uri:
+    - s3://<your-bucket>/<path-to-raw-weights>
+  deployable_artifact_uri:
+    - s3://<your-bucket>/<path-to-serving-package>
+  input_schema:
+    schema_items:
+      - name: transaction_features
+        data_type: DATA_TYPE_FLOAT
+  output_schema:
+    schema_items:
+      - name: fraud_score
+        data_type: DATA_TYPE_DOUBLE
+```
+
+Key fields:
+
+| Field | Notes |
+|---|---|
+| `kind` | `Model` — there is no `ModelVersion` resource |
+| `spec.kind` | ML problem type (e.g. `MODEL_KIND_REGRESSION`, `MODEL_KIND_BINARY_CLASSIFICATION`) |
+| `spec.package_type` | How serving systems should interpret the deployable artifact (e.g. `DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON`) |
+| `spec.revision_id` | Integer version counter; users set this when creating the resource |
+| `spec.model_artifact_uri[]` | Repeated string — URIs to raw training artifacts |
+| `spec.deployable_artifact_uri[]` | Repeated string — URIs to packaged artifacts ready for serving |
+| `spec.input_schema` / `spec.output_schema` | `DataSchema` with `schema_items[]`; each item has `name` and `data_type` (not `dtype`) |
+| `status` | Empty — the Model resource carries no status conditions, phase, or timestamps |
+
+> **Heads-up:** `ModelStatus` is intentionally empty. Do not poll `kubectl wait --for=condition=Ready` on a `Model` — no such condition exists. If you need a readiness signal, key off the existence of the resource (and a non-empty `spec.deployable_artifact_uri[]`) or wait on a downstream resource such as an `InferenceServer`.
+
+---
+
+## Querying the Registry
+
+Use either `kubectl` or the `ma` CLI to inspect registered models.
+
+### kubectl
+
+```bash
+# List all models in a namespace
+kubectl get models -n <namespace>
+
+# Describe a specific model
+kubectl describe model <model-name> -n <namespace>
+
+# Read a single field for automation
+kubectl get model <model-name> -n <namespace> \
+  -o jsonpath='{.spec.deployable_artifact_uri[0]}'
+```
+
+### ma CLI
+
+The `ma model` subcommand supports `get`, `apply`, and `delete`. To list all models in a namespace, omit `--name`:
+
+```bash
+# List models in a namespace
+ma model get -n <namespace>
+
+# Get a specific model by name
+ma model get -n <namespace> --name <model-name>
+
+# Limit results when listing
+ma model get -n <namespace> --limit 20
+```
+
+`ma model` does not have a `list` subcommand or `--version` / `--output` flags. When you need structured output for scripting, use `kubectl` with `-o jsonpath` or `-o json`.
+
+---
+
+## Integrating with the Serving Layer
+
+Michelangelo's `InferenceServer` resource does not reference a `Model` resource by name in its spec. The wiring from a registered model to a running server flows through `Deployment` and `Revision` resources managed by the Controller Manager, which update a `modelconfig` ConfigMap consumed by the inference backend.
+
+A representative `InferenceServer` manifest:
+
+```yaml
+apiVersion: michelangelo.api/v2
+kind: InferenceServer
+metadata:
+  name: fraud-detector-server
+  namespace: ml-team
+spec:
+  tenancyType: TENANCY_TYPE_DEDICATED
+  backendType: BACKEND_TYPE_TRITON
+  ownerSpec:
+    tier: 1
+  initSpec:
+    resourceSpec:
+      cpu: 2
+      memory: "4Gi"
+    servingSpec:
+      version: "latest"
+    numInstances: 1
+  decomSpec:
+    decommission: false
+  owner:
+    name: <owner-username>
+```
+
+Key fields:
+
+| Field | Notes |
+|---|---|
+| `backendType` | Enum — `BACKEND_TYPE_TRITON`, `BACKEND_TYPE_LLM_D`, `BACKEND_TYPE_DYNAMO`, `BACKEND_TYPE_TORCHSERVE`. Not the lowercase string `"triton"`. |
+| `initSpec.numInstances` | Instance count — there is no `replicas` field |
+| `tenancyType` | `TENANCY_TYPE_DEDICATED` (one project per server) or `TENANCY_TYPE_MULTI_TENANT` |
+| `spec.modelVersion` | Does not exist — do not attempt to reference a Model directly from InferenceServer |
+
+The `InferenceServer` controller emits these conditions: `Cleanup`, `HealthCheck`, `BackendProvision`, `ModelConfigProvision`, `Validation`. There is no `Ready` condition; gate readiness on `BackendProvision` and `ModelConfigProvision` instead.
+
+For backend selection and configuration, see [Integrate a Custom Backend](../serving/integrate-custom-backend.md).
+
+---
+
+## CI/CD Pipeline Integration
+
+Because `Model` resources have no status conditions, CI/CD pipelines should check for the presence of the resource and read artifact URIs directly from the spec — `kubectl wait` is not applicable.
+
+### Example: GitHub Actions step
+
+```yaml
+- name: Check model is registered
+  run: |
+    kubectl get model "${{ env.MODEL_NAME }}" \
+      --namespace "${{ env.NAMESPACE }}"
+
+- name: Get artifact URI
+  id: model
+  run: |
+    ARTIFACT_URI=$(kubectl get model "${{ env.MODEL_NAME }}" \
+      -n "${{ env.NAMESPACE }}" \
+      -o jsonpath='{.spec.deployable_artifact_uri[0]}')
+    echo "deployable_uri=$ARTIFACT_URI" >> "$GITHUB_OUTPUT"
+
+- name: Forward artifact to serving infrastructure
+  run: |
+    your-serving-tool deploy \
+      --artifact "${{ steps.model.outputs.deployable_uri }}" \
+      --target production
+```
+
+The variable is named `ARTIFACT_URI`, not `PATH` — assigning to `PATH` would overwrite the shell's executable search path and break every subsequent command in the step.
+
+### Portable date math for retention scripts
+
+`date -d` is GNU coreutils only and fails on macOS / BSD. Use one of the following forms depending on where the script runs:
+
+```bash
+# GNU/Linux
+CUTOFF=$(date -d '90 days ago' -u +%Y-%m-%dT%H:%M:%SZ)
+
+# macOS / BSD
+CUTOFF=$(date -u -v-90d +%Y-%m-%dT%H:%M:%SZ)
+
+# Cross-platform (Python)
+CUTOFF=$(python3 -c "from datetime import datetime, timedelta, timezone; print((datetime.now(timezone.utc) - timedelta(days=90)).strftime('%Y-%m-%dT%H:%M:%SZ'))")
 ```
 
 ---
 
-## Related
+## Retention and Cleanup
 
-- [Object Store Configuration](../platform-setup.md#object-store-configuration)
-- [Experiment Tracking Integration](experiment-tracking.md)
-- [Custom Serving Backend](../serving/integrate-custom-backend.md)
-- [Authentication and RBAC](../authentication.md)
+Model artifacts in S3 are not automatically removed when a `Model` resource is deleted. Manage artifact lifecycle at the object store level using S3 lifecycle policies, or implement a periodic cleanup job that:
+
+1. Lists `Model` resources older than your retention window. Use `metadata.creationTimestamp` (a real Kubernetes field) as the time signal — there is no `status.registeredAt`:
+
+   ```bash
+   kubectl get models -A -o json \
+     | jq --arg cutoff "$CUTOFF" \
+       '.items[]
+        | select(.metadata.creationTimestamp < $cutoff)
+        | {namespace: .metadata.namespace,
+           name: .metadata.name,
+           model_uris: .spec.model_artifact_uri,
+           deployable_uris: .spec.deployable_artifact_uri}'
+   ```
+
+2. Reads `spec.model_artifact_uri[]` and `spec.deployable_artifact_uri[]` from each result to identify the S3 paths.
+3. Deletes the S3 objects first, then deletes the `Model` CR — that ordering avoids orphaned references if cleanup is interrupted.
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause | Resolution |
+|---|---|---|
+| `error: the server doesn't have a resource type "models"` | CRD not installed | Re-run the Michelangelo CRD installation step (see [Platform Setup](../platform-setup.md)) |
+| `kubectl get models` returns `No resources found` but CRD is present | No models registered yet, or wrong namespace | Confirm a registration task has run; check the namespace |
+| `spec.model_artifact_uri` empty after registration | Controller Manager lacks S3 write permissions, or the registration task failed | Check Controller Manager logs; verify IAM policy on the bucket |
+| `spec.deployable_artifact_uri` empty | Packaging step did not run or failed | Inspect the pipeline run logs for the registration task |
+| RBAC error reading models (`User ... cannot get resource "models"`) | Role missing the `michelangelo.api` API group | Use `apiGroups: ["michelangelo.api"]` (not `[""]`) and apply the manifest from [Step 3](#step-3-configure-rbac) |
+| `kubectl wait --for=condition=Ready` hangs on a Model | Model has no status conditions | Don't gate on Model conditions; use `spec.deployable_artifact_uri[0]` non-empty as the readiness signal, or wait on a downstream `InferenceServer` |
+| `InferenceServer` does not start serving | `backendType` set to lowercase string `"triton"` instead of enum value | Use `backendType: BACKEND_TYPE_TRITON` |
+
+For deeper diagnostic trees, see the [Troubleshooting Guide](../troubleshooting.md).
+
+---
+
+## What's Next
+
+- [Integrate a Custom Backend](../serving/integrate-custom-backend.md) — configure Triton, vLLM, TensorRT-LLM, or a custom inference framework to serve registered models.
+- [Authentication and RBAC](../authentication.md) — cluster-wide RBAC patterns and identity-provider setup.
+- [Experiment Tracking Integration](experiment-tracking.md) — connect an external experiment tracking server to link training runs to the models they produce.
+- [Object Store Configuration](../platform-setup.md#object-store-configuration) — review the full `minio.*` configuration reference.
