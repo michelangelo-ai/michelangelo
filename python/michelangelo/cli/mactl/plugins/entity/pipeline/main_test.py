@@ -27,7 +27,7 @@ class PipelineMainTest(TestCase):
         self.mock_channel = Mock()
 
     def test_apply_command_sets_converter(self):
-        """Apply command sets func_crd_metadata_converter to convert_crd_metadata_pipeline."""
+        """Apply command sets func_crd_metadata_converter to convert_crd_metadata_pipeline."""  # noqa: E501
         apply_plugin_command(self.mock_crd, "apply", self.mock_crds, self.mock_channel)
 
         self.assertEqual(
