@@ -408,7 +408,7 @@ def _deploy_services(ns: argparse.Namespace):
         (
             "MinIO Console",
             "http://localhost:9090",
-            "[Username: minioadmin; Password: minioadmin]",
+            "[Username: ma-minio; Password: g0Sfr9hRcsfRXuBS]",
         )
     )
 

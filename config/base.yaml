@@ -1,0 +1,29 @@
+controllermgr:
+  metricsBindAddress: ${METRICS_ADDRESS::8083}
+  healthProbeBindAddress: ${HEALTH_ADDRESS::8084}
+  leaderElection: false
+  leaderElectionID: decaf1259.michelangelo.uber.com
+  port: 9443
+
+workflowClient:
+  service: temporal
+  host: temporaltest-frontend:7233
+  transport: grpc
+  domain: default
+    
+k8s:
+  qps: 300
+  burst: 600
+metadataStorage:
+  enableMetadataStorage: false
+
+controllers:
+  rayCluster:
+    k8sQps: 300
+    k8sBurst: 600
+
+minio:
+  awsRegion: us-east-1
+  awsAccessKeyId: ma-minio
+  awsSecretAccessKey: g0Sfr9hRcsfRXuBS
+  awsEndpointUrl: http://minio:9091

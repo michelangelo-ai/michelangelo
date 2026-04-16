@@ -45,7 +45,7 @@ Without end-to-end coverage, a breaking change in any one component (a CRD schem
 - Inference pipeline testing (follow-on scope; see resource estimate section)
 - Performance or load testing
 - Testing Cadence UI or MinIO console
-- Testing Uber-internal auth/authFx integrations (sandbox uses minioadmin credentials)
+- Testing Uber-internal auth/authFx integrations (sandbox uses ma-minio credentials)
 - Full Playwright UI test suite (in-scope: HTTP smoke tests; full UI E2E testing is a follow-up)
 
 ---
@@ -429,7 +429,7 @@ This integration test runs entirely within an ephemeral GitHub Actions runner. N
 ### Access Control and Encryption
 
 - **GHCR**: `GITHUB_TOKEN` (auto-provisioned per-job, repository-scoped) [6]
-- **MinIO**: `minioadmin`/`minioadmin` — sandbox credentials only, no production connectivity
+- **MinIO**: `ma-minio`/`ma-minio` — sandbox credentials only, no production connectivity
 - **MySQL**: `root`/`root` — sandbox credentials only, no production connectivity
 - k3d cluster is network-isolated to the GitHub Actions runner host; no external ingress
 

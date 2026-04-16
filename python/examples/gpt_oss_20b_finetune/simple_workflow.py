@@ -89,8 +89,8 @@ if __name__ == "__main__":
 
     # These remain the same for both local and cluster
     ctx.environ["MLFLOW_DEFAULT_ARTIFACT_ROOT"] = "s3://mlflow"
-    ctx.environ["AWS_ACCESS_KEY_ID"] = "minioadmin"
-    ctx.environ["AWS_SECRET_ACCESS_KEY"] = "minioadmin"
+    ctx.environ["AWS_ACCESS_KEY_ID"] = "ma-minio"
+    ctx.environ["AWS_SECRET_ACCESS_KEY"] = "g0Sfr9hRcsfRXuBS"
 
     # Run the workflow
     ctx.run(

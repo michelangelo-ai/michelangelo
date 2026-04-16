@@ -106,7 +106,7 @@ Running workflows in remote mode requires a docker container that contains code 
    k3d image import examples:latest -c michelangelo-sandbox
    ```
 
-3. Create default bucket at http://localhost:9090/buckets (login: minioadmin/minioadmin)
+3. Create default bucket at http://localhost:9090/buckets (login: ma-minio/ma-minio)
 
 4. Create default domain if not exists:
    ```bash

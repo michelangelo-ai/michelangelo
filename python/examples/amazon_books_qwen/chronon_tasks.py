@@ -199,11 +199,11 @@ def compute_chronon_features_with_spark(
             .config("spark.hadoop.fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
             .config(
                 "spark.hadoop.fs.s3a.access.key",
-                os.getenv("AWS_ACCESS_KEY_ID", "minioadmin"),
+                os.getenv("AWS_ACCESS_KEY_ID", "ma-minio"),
             )
             .config(
                 "spark.hadoop.fs.s3a.secret.key",
-                os.getenv("AWS_SECRET_ACCESS_KEY", "minioadmin"),
+                os.getenv("AWS_SECRET_ACCESS_KEY", "g0Sfr9hRcsfRXuBS"),
             )
             .config(
                 "spark.hadoop.fs.s3a.endpoint",
@@ -241,11 +241,11 @@ def compute_chronon_features_with_spark(
         )
         spark.conf.set(
             "spark.hadoop.fs.s3a.access.key",
-            os.getenv("AWS_ACCESS_KEY_ID", "minioadmin"),
+            os.getenv("AWS_ACCESS_KEY_ID", "ma-minio"),
         )
         spark.conf.set(
             "spark.hadoop.fs.s3a.secret.key",
-            os.getenv("AWS_SECRET_ACCESS_KEY", "minioadmin"),
+            os.getenv("AWS_SECRET_ACCESS_KEY", "g0Sfr9hRcsfRXuBS"),
         )
         spark.conf.set(
             "spark.hadoop.fs.s3a.endpoint",
