@@ -8,14 +8,10 @@ import type { TriggerRun } from './types';
 
 const ACTION_TO_ENUM = {
   kill: TriggerRunAction.KILL,
-  pause: TriggerRunAction.PAUSE,
-  resume: TriggerRunAction.RESUME,
 } as const;
 
 const ACTION_CONFIG = {
   kill: { heading: 'Kill Trigger Run', submitLabel: 'Kill' },
-  pause: { heading: 'Pause Trigger Run', submitLabel: 'Pause' },
-  resume: { heading: 'Resume Trigger Run', submitLabel: 'Resume' },
 } as const;
 
 type Action = keyof typeof ACTION_CONFIG;
@@ -58,12 +54,4 @@ function TriggerRunActionForm({
 
 export const KillTriggerRunForm = (props: ActionComponentProps<TriggerRun>) => (
   <TriggerRunActionForm {...props} action="kill" />
-);
-
-export const PauseTriggerRunForm = (props: ActionComponentProps<TriggerRun>) => (
-  <TriggerRunActionForm {...props} action="pause" />
-);
-
-export const ResumeTriggerRunForm = (props: ActionComponentProps<TriggerRun>) => (
-  <TriggerRunActionForm {...props} action="resume" />
 );

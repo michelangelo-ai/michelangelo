@@ -11,18 +11,13 @@ import {
   createQueryMockRouter,
   getServiceProviderWrapper,
 } from '#core/test/wrappers/get-service-provider-wrapper';
-import {
-  KillTriggerRunForm,
-  PauseTriggerRunForm,
-  ResumeTriggerRunForm,
-} from '../trigger-run-action-form';
+import { KillTriggerRunForm } from '../trigger-run-action-form';
 import { TriggerRunAction, TriggerRunState } from '../types';
 
 import type { ActionComponentProps } from '#core/components/actions/types';
 import type { TriggerRun } from '../types';
 
 // Provides real isOpen state so FormDialog can close on success.
-// Record is co-located here since all three forms test the same trigger run.
 function FormWrapper({
   Form,
 }: {
@@ -52,18 +47,6 @@ it.each([
     dialogName: 'Kill Trigger Run',
     buttonLabel: 'Kill',
     action: TriggerRunAction.KILL,
-  },
-  {
-    Form: PauseTriggerRunForm,
-    dialogName: 'Pause Trigger Run',
-    buttonLabel: 'Pause',
-    action: TriggerRunAction.PAUSE,
-  },
-  {
-    Form: ResumeTriggerRunForm,
-    dialogName: 'Resume Trigger Run',
-    buttonLabel: 'Resume',
-    action: TriggerRunAction.RESUME,
   },
 ])(
   '$dialogName: submits UpdateTriggerRun with correct action and closes dialog',
