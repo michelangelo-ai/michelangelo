@@ -34,7 +34,6 @@ function TriggerRunActionForm({
   };
 
   const handleSubmit = async (values: TriggerRun) => {
-    if (mutation.isPending) return;
     await mutation.mutateAsync({ triggerRun: values });
   };
 
@@ -47,6 +46,10 @@ function TriggerRunActionForm({
       submitLabel={config.submitLabel}
       initialValues={initialValues}
     >
+    <p>
+      Kill run <strong>{record.metadata.name}</strong> in pipeline{' '}
+      <strong>{record.spec.pipeline.name}</strong>? This action cannot be undone.
+    </p>
       <StringField name="metadata.name" label="Trigger Run Name" readOnly />
     </FormDialog>
   );

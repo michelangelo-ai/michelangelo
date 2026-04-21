@@ -8,8 +8,10 @@ import { TriggerRunState } from './types';
 import type { PhaseEntityConfig } from '#core/types/common/studio-types';
 import type { TriggerRun } from './types';
 
-const isRunning = (record: unknown) =>
-  (record as TriggerRun).status?.state === TriggerRunState.RUNNING;
+const isKillable = (record: unknown) => {
+  const state = (record as TriggerRun).status?.state;
+  return state === TriggerRunState.RUNNING || state === TriggerRunState.PAUSED;
+};
 
 export const TRIGGER_ENTITY_CONFIG: PhaseEntityConfig = {
   id: 'triggers',
@@ -22,12 +24,12 @@ export const TRIGGER_ENTITY_CONFIG: PhaseEntityConfig = {
       display: { label: 'Kill', icon: 'stopCircle' },
       component: KillTriggerRunForm,
       hierarchy: interpolate(({ data }) =>
-        isRunning(data) ? ActionHierarchy.SECONDARY : ActionHierarchy.TERTIARY
+        isKillable(data) ? ActionHierarchy.SECONDARY : ActionHierarchy.TERTIARY
       ),
       disabled: [
         {
-          condition: interpolate(({ data }) => !isRunning(data)),
-          message: 'Only running trigger runs can be killed',
+          condition: interpolate(({ data }) => !isKillable(data)),
+          message: 'Only running or paused trigger runs can be killed',
         },
       ],
     },

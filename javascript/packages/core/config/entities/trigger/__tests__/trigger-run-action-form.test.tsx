@@ -106,7 +106,8 @@ describe('KillTriggerRunForm', () => {
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Kill' }));
 
-    await screen.findByText(/Test error/);
+    await within(dialog).findByText(/Test error/);
+    expect(mockRequest).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });
