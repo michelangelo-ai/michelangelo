@@ -33,6 +33,9 @@ func (e ClusterOnlyAssignmentStrategy) Select(_ context.Context, job BatchJob) (
 	if selector != nil && selector.MatchLabels != nil {
 		if name, ok := selector.MatchLabels[constants.ClusterAffinityLabelKey]; ok && name != "" {
 			if c := e.ClusterCache.GetCluster(name); c != nil {
+				e.log.Info("Assigned to the requested cluster",
+					constants.Job, job.GetName(),
+					"requested_cluster", name)
 				return &v2pb.AssignmentInfo{Cluster: name}, true, constants.AssignmentReasonClusterMatchedByAffinity, nil
 			}
 			e.log.Info("Requested cluster not found, using default selection",
