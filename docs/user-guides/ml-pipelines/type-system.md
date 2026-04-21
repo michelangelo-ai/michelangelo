@@ -2,7 +2,7 @@
 
 ## What you'll learn
 
-* What types UniFlow supports natively
+* What types Uniflow supports natively
 * The 5 codec types and when to use each
 * How to serialize custom data types
 * Best practices for type safety in workflows
@@ -10,9 +10,9 @@
 
 ---
 
-## Overview: UniFlow's Type System
+## Overview: Uniflow's Type System
 
-When data flows between tasks, UniFlow automatically **serializes** your Python objects for storage and **deserializes** them when the next task runs. This is powered by a flexible type system supporting 5 built-in codecs.
+When data flows between tasks, Uniflow automatically **serializes** your Python objects for storage and **deserializes** them when the next task runs. This is powered by a flexible type system supporting 5 built-in codecs.
 
 ### The 5 Built-In Codecs
 
@@ -141,7 +141,7 @@ class ModelMetrics:
 def compute_metrics(predictions, ground_truth) -> ModelMetrics:
     """
     Computes metrics and returns dataclass instance
-    UniFlow automatically serializes the entire object
+    Uniflow automatically serializes the entire object
     """
     from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
@@ -342,7 +342,7 @@ import pickle
 def save_model_binary(model) -> bytes:
     """
     Serialize model to bytes using pickle
-    UniFlow stores and serializes the bytes
+    Uniflow stores and serializes the bytes
     """
     return pickle.dumps(model)
 
@@ -461,7 +461,7 @@ def compute_quality(data: pd.DataFrame) -> DataQualityMetrics:
 
 ### Issue: "Type not serializable"
 
-**Cause:** Trying to return a type UniFlow doesn't know about
+**Cause:** Trying to return a type Uniflow doesn't know about
 
 **Solution:** Use one of the 5 codecs:
 1. Wrap in dataclass
