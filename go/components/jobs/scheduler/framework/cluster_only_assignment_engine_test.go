@@ -4,9 +4,11 @@ import (
 	"context"
 	"testing"
 
+	"go.uber.org/zap/zaptest"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/go-logr/logr"
+	"github.com/go-logr/zapr"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
@@ -55,6 +57,16 @@ func TestClusterOnlyEngine_Select(t *testing.T) {
 		return job
 	}
 
+	makeRayClusterJob := func(clusterLabel string) BatchJob {
+		labels := map[string]string{}
+		if clusterLabel != "" {
+			labels[constants.ClusterAffinityLabelKey] = clusterLabel
+		}
+		return BatchRayCluster{RayCluster: &v2pb.RayCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "rc", Namespace: "ns", Labels: labels},
+		}}
+	}
+
 	tests := []struct {
 		name        string
 		cache       cluster.RegisteredClustersCache
@@ -94,11 +106,35 @@ func TestClusterOnlyEngine_Select(t *testing.T) {
 			wantFound:  false,
 			wantReason: "no_clusters_found",
 		},
+		{
+			name:        "ray cluster label matches existing cluster",
+			cache:       newFakeClusterCache(makeCluster("c1"), makeCluster("c2")),
+			job:         makeRayClusterJob("c2"),
+			wantFound:   true,
+			wantReason:  "cluster_matched_by_affinity",
+			wantCluster: "c2",
+		},
+		{
+			name:        "ray cluster label for unknown cluster falls back to default",
+			cache:       newFakeClusterCache(makeCluster("c1")),
+			job:         makeRayClusterJob("unknown"),
+			wantFound:   true,
+			wantReason:  "cluster_default_selected",
+			wantCluster: "c1",
+		},
+		{
+			name:        "ray cluster without label selects first available",
+			cache:       newFakeClusterCache(makeCluster("first")),
+			job:         makeRayClusterJob(""),
+			wantFound:   true,
+			wantReason:  "cluster_default_selected",
+			wantCluster: "first",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			engine := NewClusterOnlyAssignmentStrategy(tt.cache)
+			engine := NewClusterOnlyAssignmentStrategy(tt.cache, zapr.NewLogger(zaptest.NewLogger(t)))
 
 			assign, found, reason, err := engine.Select(context.Background(), tt.job)
 			if err != nil {

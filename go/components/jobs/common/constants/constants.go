@@ -281,7 +281,7 @@ const (
 
 // Affinity labels
 const (
-	ClusterAffinityLabelKey string = "ma/affinity-cluster"
+	ClusterAffinityLabelKey string = "michelangelo/cluster-affinity"
 )
 
 // Assignment reasons
