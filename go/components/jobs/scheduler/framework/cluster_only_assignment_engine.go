@@ -18,8 +18,11 @@ type ClusterOnlyAssignmentStrategy struct {
 }
 
 // NewClusterOnlyAssignmentStrategy returns a new ClusterOnlyAssignmentStrategy
-func NewClusterOnlyAssignmentStrategy(cache cluster.RegisteredClustersCache) AssignmentStrategy {
-	return ClusterOnlyAssignmentStrategy{ClusterCache: cache}
+func NewClusterOnlyAssignmentStrategy(cache cluster.RegisteredClustersCache, log logr.Logger) AssignmentStrategy {
+	return ClusterOnlyAssignmentStrategy{
+		ClusterCache: cache,
+		log:          log,
+	}
 }
 
 // Select implements Engine.

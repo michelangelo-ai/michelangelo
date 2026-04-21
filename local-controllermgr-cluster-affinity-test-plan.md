@@ -53,15 +53,23 @@ exactly like CI does on `ubuntu-24.04`.
 > `--platform linux/amd64` and skip the bazelisk install dance.)
 
 ```bash
+# 0) One-time: create a Docker named volume for the bazel cache.
+#    DO NOT bind-mount $HOME/.cache/bazel-linux for the cache — Docker Desktop's
+#    file-sharing layer corrupts the Go SDK extraction (~10K small files), and
+#    bazel later fails analysis with:
+#      no such package '@@rules_go~~go_sdk~michelangelo__download_0//': error
+#      globbing ... src/go/build (No such file or directory)
+#    Named volumes live inside Docker's VM and have no host-FS bridge.
+docker volume create bazel-linux-cache
+
 # 1) Run bazel inside a Linux container to produce a Linux binary.
 #    Apple Silicon (linux/arm64) — install bazelisk inside ubuntu:24.04.
 #    First run is ~3 min for apt + bazel download; subsequent runs hit the
-#    bazel cache mounted at ~/.cache/bazel-linux and are fast.
-mkdir -p "$HOME/.cache/bazel-linux"
+#    bazel-linux-cache volume and are fast.
 docker run --rm \
   --platform linux/arm64 \
   -v "$PWD":/workspace \
-  -v "$HOME/.cache/bazel-linux":/root/.cache/bazel \
+  -v bazel-linux-cache:/root/.cache/bazel \
   -w /workspace \
   ubuntu:24.04 \
   bash -c '
@@ -77,7 +85,7 @@ docker run --rm \
 # Intel Mac / Linux amd64 alternative — official bazel image works directly:
 # docker run --rm --platform linux/amd64 \
 #   -v "$PWD":/workspace \
-#   -v "$HOME/.cache/bazel-linux":/root/.cache/bazel \
+#   -v bazel-linux-cache:/root/.cache/bazel \
 #   -w /workspace \
 #   gcr.io/bazel-public/bazel:7.4.1 \
 #   build //go/cmd/controllermgr
@@ -126,6 +134,11 @@ docker inspect ghcr.io/michelangelo-ai/controllermgr:local \
 > docker rmi -f ghcr.io/michelangelo-ai/controllermgr:local || true  # stale image
 > kubectl delete pod michelangelo-controllermgr --ignore-not-found   # force pull next sync
 > ```
+>
+> If you previously bind-mounted `~/.cache/bazel-linux` and got an
+> `error globbing ... src/go/build` failure, also nuke that directory and the
+> volume to start fresh: `rm -rf "$HOME/.cache/bazel-linux"` and
+> `docker volume rm bazel-linux-cache && docker volume create bazel-linux-cache`.
 
 ---
 
