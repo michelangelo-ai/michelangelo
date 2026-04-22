@@ -62,6 +62,45 @@ tester.run('no-module-scope-test-setup', rule, {
       name: 'buildWrapper inside a function called inside a test',
       code: `it('renders', () => { const w = buildWrapper([getBaseProviderWrapper()]); render(el, w); });`,
     },
+    // describe-scope: variables inside test hooks are allowed
+    {
+      name: 'variable inside it() inside describe()',
+      code: `describe('suite', () => { it('renders', () => { const props = { name: 'test' }; }); });`,
+    },
+    {
+      name: 'variable inside beforeEach() inside describe()',
+      code: `describe('suite', () => { beforeEach(() => { const props = { name: 'test' }; }); });`,
+    },
+    {
+      name: 'string constant inside describe()',
+      code: `describe('suite', () => { const LABEL = 'hello'; });`,
+    },
+    {
+      name: 'variable inside nested it() inside nested describe()',
+      code: `describe('outer', () => { describe('inner', () => { it('works', () => { const props = { a: 1 }; }); }); });`,
+    },
+    // nested describe: shared state is allowed (semantic grouping)
+    {
+      name: 'object literal in nested describe scope',
+      code: `describe('outer', () => { describe('inner', () => { const props = { a: 1 }; }); });`,
+    },
+    {
+      name: 'array literal in nested describe scope',
+      code: `describe('outer', () => { describe('disabled', () => { const options = [{ value: 'a' }]; }); });`,
+    },
+    {
+      name: 'buildWrapper in nested describe scope',
+      code: `describe('outer', () => { describe('inner', () => { const wrapper = buildWrapper([getBaseProviderWrapper()]); }); });`,
+    },
+    // function body: variables inside functions are never shared state
+    {
+      name: 'object literal inside function declaration at describe scope',
+      code: `describe('suite', () => { function Wrapper() { const data = { name: 'test' }; } });`,
+    },
+    {
+      name: 'object literal inside arrow function at describe scope',
+      code: `describe('suite', () => { const build = () => { const data = { name: 'test' }; return data; }; });`,
+    },
   ],
 
   invalid: [
@@ -111,6 +150,32 @@ tester.run('no-module-scope-test-setup', rule, {
     {
       name: 'block-body arrow function variable wrapping buildWrapper at module scope',
       code: `const buildTestWrapper = (req) => { return buildWrapper([getBaseProviderWrapper()]); };`,
+      errors: [{ messageId: 'noModuleScopeWrapperHelper', data: { name: 'buildTestWrapper' } }],
+    },
+    // describe-scope: should flag the same patterns
+    {
+      name: 'buildWrapper() at describe scope',
+      code: `describe('suite', () => { const wrapper = buildWrapper([getBaseProviderWrapper()]); });`,
+      errors: [{ messageId: 'noModuleScopeWrapper' }],
+    },
+    {
+      name: 'object literal at describe scope',
+      code: `describe('suite', () => { const defaultProps = { name: 'test', value: 42 }; });`,
+      errors: [{ messageId: 'noModuleScopeSetupConst', data: { name: 'defaultProps' } }],
+    },
+    {
+      name: 'array literal at describe scope',
+      code: `describe('suite', () => { const options = [{ value: 'a' }]; });`,
+      errors: [{ messageId: 'noModuleScopeSetupConst', data: { name: 'options' } }],
+    },
+    {
+      name: 'describe.each() scope (top-level)',
+      code: `describe.each([1, 2])('case %i', () => { const props = { a: 1 }; });`,
+      errors: [{ messageId: 'noModuleScopeSetupConst', data: { name: 'props' } }],
+    },
+    {
+      name: 'wrapper helper function at top-level describe scope',
+      code: `describe('suite', () => { function buildTestWrapper(req) { return buildWrapper([getBaseProviderWrapper()]); } });`,
       errors: [{ messageId: 'noModuleScopeWrapperHelper', data: { name: 'buildTestWrapper' } }],
     },
   ],

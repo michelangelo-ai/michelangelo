@@ -1,6 +1,7 @@
 import { renderHook } from '@testing-library/react';
 import { lowerCase, upperCase } from 'lodash';
 
+/* eslint-disable local/no-module-scope-test-setup -- restructure into nested describes, see https://github.com/michelangelo-ai/michelangelo/issues/1088 */
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getInterpolationProviderWrapper } from '#core/test/wrappers/get-interpolation-provider-wrapper';
 import { getRepeatedLayoutProviderWrapper } from '#core/test/wrappers/get-repeated-layout-provider-wrapper';
