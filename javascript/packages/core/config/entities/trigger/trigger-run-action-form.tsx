@@ -1,3 +1,5 @@
+import { useQueryClient } from '@tanstack/react-query';
+
 import { FormDialog } from '#core/components/form/components/form-dialog/form-dialog';
 import { StringField } from '#core/components/form/fields/string/string-field';
 import { useStudioMutation } from '#core/hooks/use-studio-mutation';
@@ -22,6 +24,8 @@ function TriggerRunActionForm({
   onClose,
   action,
 }: ActionComponentProps<TriggerRun> & { action: Action }) {
+  const queryClient = useQueryClient();
+
   const config = ACTION_CONFIG[action];
 
   const mutation = useStudioMutation<{ triggerRun: TriggerRun }, { triggerRun: TriggerRun }>({
@@ -35,6 +39,14 @@ function TriggerRunActionForm({
 
   const handleSubmit = async (values: TriggerRun) => {
     await mutation.mutateAsync({ triggerRun: values });
+
+    // We wait a few seconds before invalidating the queries so that the action can be processed
+    setTimeout(() => {                                             
+    void queryClient.invalidateQueries({
+      queryKey: ['GetTriggerRun', { name: record.metadata.name, namespace: record.metadata.namespace }],
+    });
+    void queryClient.invalidateQueries({ queryKey: ['ListTriggerRun'] });     
+      }, 2000);    
   };
 
   return (
@@ -46,10 +58,10 @@ function TriggerRunActionForm({
       submitLabel={config.submitLabel}
       initialValues={initialValues}
     >
-    <p>
-      Kill run <strong>{record.metadata.name}</strong> in pipeline{' '}
-      <strong>{record.spec.pipeline.name}</strong>? This action cannot be undone.
-    </p>
+      <p>
+        Kill run <strong>{record.metadata.name}</strong> in pipeline{' '}
+        <strong>{record.spec.pipeline.name}</strong>? This action cannot be undone.
+      </p>
       <StringField name="metadata.name" label="Trigger Run Name" readOnly />
     </FormDialog>
   );
