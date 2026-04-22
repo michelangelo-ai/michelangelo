@@ -2,7 +2,7 @@
   "name": "@michelangelo/rpc",
   "license": "Apache-2.0",
   "type": "module",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "scripts": {
     "build": "vite build",
     "test": "cd ../../ && yarn test:rpc"
