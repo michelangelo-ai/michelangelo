@@ -322,14 +322,14 @@ func getWorkflowURL(wid string, provider string) string {
 	return logURL + path
 }
 
-// isTerminateState checks if a TriggerRun is in a terminal state.
+// IsTerminateState checks if a TriggerRun is in a terminal state.
 //
 // Terminal states are SUCCEEDED, FAILED, or KILLED. Once a TriggerRun reaches
 // a terminal state, it should be marked immutable and no further reconciliation
 // is required.
 //
 // Returns true if the TriggerRun is in a terminal state, false otherwise.
-func isTerminateState(tr *v2pb.TriggerRun) bool {
+func IsTerminateState(tr *v2pb.TriggerRun) bool {
 	return tr.Status.State == v2pb.TRIGGER_RUN_STATE_FAILED || tr.Status.State == v2pb.TRIGGER_RUN_STATE_KILLED || tr.Status.State == v2pb.TRIGGER_RUN_STATE_SUCCEEDED
 }
 

@@ -157,7 +157,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 func (r *Reconciler) reconcile(
 	ctx context.Context, log logr.Logger, triggerRun *v2pb.TriggerRun,
 ) (ctrl.Result, error) {
-	if isTerminateState(triggerRun) {
+	if IsTerminateState(triggerRun) {
 		if !apiutils.IsImmutable(triggerRun) {
 			apiutils.MarkImmutable(triggerRun)
 			err := r.Update(ctx, triggerRun, &metav1.UpdateOptions{})
