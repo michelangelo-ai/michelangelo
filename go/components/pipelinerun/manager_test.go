@@ -7,8 +7,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -33,6 +35,11 @@ func newTestManager(t *testing.T, objects ...client.Object) (*managerImpl, clien
 // client returns the configured errors for List/Update. Use a nil error to
 // fall through to the real fake-client behavior.
 func newErroringManager(t *testing.T, listErr, updateErr error, objects ...client.Object) *managerImpl {
+	return newErroringManagerFull(t, listErr, updateErr, nil, objects...)
+}
+
+// newErroringManagerFull additionally allows injecting a Delete error.
+func newErroringManagerFull(t *testing.T, listErr, updateErr, deleteErr error, objects ...client.Object) *managerImpl {
 	scheme := runtime.NewScheme()
 	require.NoError(t, v2pb.AddToScheme(scheme))
 	k8sClient := fake.NewClientBuilder().
@@ -51,6 +58,12 @@ func newErroringManager(t *testing.T, listErr, updateErr error, objects ...clien
 					return updateErr
 				}
 				return c.Update(ctx, obj, opts...)
+			},
+			Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+				if deleteErr != nil {
+					return deleteErr
+				}
+				return c.Delete(ctx, obj, opts...)
 			},
 		}).
 		Build()
@@ -162,6 +175,54 @@ func TestKillPipelineRun_AlreadyTerminal(t *testing.T) {
 			require.False(t, pr.Spec.Kill)
 		})
 	}
+}
+
+func TestDeleteAllPipelineRuns(t *testing.T) {
+	pr1 := makePipelineRun("pr-1", "ns", "my-pipeline", "ns", v2pb.PIPELINE_RUN_STATE_SUCCEEDED)
+	pr2 := makePipelineRun("pr-2", "ns", "my-pipeline", "ns", v2pb.PIPELINE_RUN_STATE_KILLED)
+
+	mgr, k8sClient := newTestManager(t, pr1, pr2)
+	err := mgr.DeleteAllPipelineRuns(context.Background(), "ns", "my-pipeline")
+	require.NoError(t, err)
+
+	list := &v2pb.PipelineRunList{}
+	require.NoError(t, k8sClient.List(context.Background(), list, &client.ListOptions{Namespace: "ns"}))
+	require.Empty(t, list.Items)
+}
+
+func TestDeleteAllPipelineRuns_Empty(t *testing.T) {
+	mgr, _ := newTestManager(t)
+	err := mgr.DeleteAllPipelineRuns(context.Background(), "ns", "my-pipeline")
+	require.NoError(t, err)
+}
+
+func TestDeleteAllPipelineRuns_ListError(t *testing.T) {
+	listErr := errors.New("list boom")
+	mgr := newErroringManagerFull(t, listErr, nil, nil)
+
+	err := mgr.DeleteAllPipelineRuns(context.Background(), "ns", "my-pipeline")
+	require.Error(t, err)
+	require.ErrorIs(t, err, listErr)
+}
+
+func TestDeleteAllPipelineRuns_DeleteNotFoundContinues(t *testing.T) {
+	pr1 := makePipelineRun("pr-1", "ns", "my-pipeline", "ns", v2pb.PIPELINE_RUN_STATE_SUCCEEDED)
+	notFound := apiErrors.NewNotFound(schema.GroupResource{Resource: "pipelineruns"}, "pr-1")
+	mgr := newErroringManagerFull(t, nil, nil, notFound, pr1)
+
+	err := mgr.DeleteAllPipelineRuns(context.Background(), "ns", "my-pipeline")
+	require.NoError(t, err)
+}
+
+func TestDeleteAllPipelineRuns_DeleteError(t *testing.T) {
+	pr1 := makePipelineRun("pr-1", "ns", "my-pipeline", "ns", v2pb.PIPELINE_RUN_STATE_SUCCEEDED)
+	deleteErr := errors.New("delete boom")
+	mgr := newErroringManagerFull(t, nil, nil, deleteErr, pr1)
+
+	err := mgr.DeleteAllPipelineRuns(context.Background(), "ns", "my-pipeline")
+	require.Error(t, err)
+	require.ErrorIs(t, err, deleteErr)
+	require.Contains(t, err.Error(), "delete pipeline run ns/pr-1")
 }
 
 func TestIsTerminalState(t *testing.T) {
