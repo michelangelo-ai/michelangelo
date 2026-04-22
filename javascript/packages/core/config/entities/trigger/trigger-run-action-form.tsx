@@ -41,12 +41,15 @@ function TriggerRunActionForm({
     await mutation.mutateAsync({ triggerRun: values });
 
     // We wait a few seconds before invalidating the queries so that the action can be processed
-    setTimeout(() => {                                             
-    void queryClient.invalidateQueries({
-      queryKey: ['GetTriggerRun', { name: record.metadata.name, namespace: record.metadata.namespace }],
-    });
-    void queryClient.invalidateQueries({ queryKey: ['ListTriggerRun'] });     
-      }, 2000);    
+    setTimeout(() => {
+      void queryClient.invalidateQueries({
+        queryKey: [
+          'GetTriggerRun',
+          { name: record.metadata.name, namespace: record.metadata.namespace },
+        ],
+      });
+      void queryClient.invalidateQueries({ queryKey: ['ListTriggerRun'] });
+    }, 2000);
   };
 
   return (
