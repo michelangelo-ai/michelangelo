@@ -35,6 +35,27 @@ import (
 const (
 	// reconcileInterval defines how frequently non-terminal pipelines are reconciled.
 	reconcileInterval = 10 * time.Second
+
+	// cascadeDeleteKillTimeout bounds how long we wait for child TRs/PRs to reach
+	// a terminal state after we've issued a kill. If a workflow engine is down or
+	// a child is otherwise stuck, we stop looping and proceed with forceful CR
+	// deletion so the Pipeline CR can leave the Terminating state.
+	cascadeDeleteKillTimeout = 30 * time.Minute
+
+	// cascadeDeleteStartedAtAnnotation records when handleDeletion first fired.
+	// Used to gate the "started" counter (B3, one increment per cascade) and to
+	// detect the kill-timeout condition (C1).
+	cascadeDeleteStartedAtAnnotation = "michelangelo/cascade-delete-started-at"
+
+	// Metric reason labels for pipelineCascadeDeleteError.
+	reasonListError   = "list_error"
+	reasonDeleteError = "delete_error"
+	reasonUpdateError = "update_error"
+	reasonKillTimeout = "kill_timeout"
+
+	// Kind labels for pipelineCascadeDeleteActiveChildren.
+	kindTriggerRun  = "trigger_run"
+	kindPipelineRun = "pipeline_run"
 )
 
 // Reconciler implements the controller-runtime Reconciler interface for Pipeline resources.
@@ -146,6 +167,26 @@ func (r *Reconciler) handleDeletion(ctx context.Context, pipeline *v2pb.Pipeline
 	}
 	logger.Info("Pipeline is being deleted, starting cascade delete")
 
+	// Stamp cascade-delete-started-at on the first pass and increment the
+	// "started" counter exactly once per cascade (B3). The annotation is
+	// persisted alongside the next Update so a controller restart mid-cascade
+	// preserves the original start time.
+	firstPass := !hasCascadeStartedAt(pipeline)
+	if firstPass {
+		setCascadeStartedAt(pipeline, time.Now())
+		if err := r.Update(ctx, pipeline, &metav1.UpdateOptions{}); err != nil {
+			logger.Error("Failed to stamp cascade-delete-started-at annotation",
+				zap.Error(err),
+				zap.String("operation", "stamp_cascade_started_at"),
+				zap.String("namespace", pipeline.Namespace),
+				zap.String("name", pipeline.Name))
+			IncCascadeDeleteError(pipeline.Namespace, pipeline.Name, reasonUpdateError)
+			return ctrl.Result{}, fmt.Errorf("stamp cascade-delete-started-at on pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
+		}
+		IncCascadeDeleteStarted(pipeline.Namespace, pipeline.Name)
+	}
+	killTimedOut := !firstPass && time.Since(getCascadeStartedAt(pipeline)) > cascadeDeleteKillTimeout
+
 	triggerRuns, err := r.triggerRunManager.ListTriggerRunsForPipeline(ctx, pipeline.Namespace, pipeline.Name)
 	if err != nil {
 		logger.Error("Failed to list trigger runs for cascade delete",
@@ -153,6 +194,7 @@ func (r *Reconciler) handleDeletion(ctx context.Context, pipeline *v2pb.Pipeline
 			zap.String("operation", "list_trigger_runs"),
 			zap.String("namespace", pipeline.Namespace),
 			zap.String("name", pipeline.Name))
+		IncCascadeDeleteError(pipeline.Namespace, pipeline.Name, reasonListError)
 		return ctrl.Result{}, fmt.Errorf("list trigger runs for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
 	}
 
@@ -163,71 +205,90 @@ func (r *Reconciler) handleDeletion(ctx context.Context, pipeline *v2pb.Pipeline
 			zap.String("operation", "list_pipeline_runs"),
 			zap.String("namespace", pipeline.Namespace),
 			zap.String("name", pipeline.Name))
+		IncCascadeDeleteError(pipeline.Namespace, pipeline.Name, reasonListError)
 		return ctrl.Result{}, fmt.Errorf("list pipeline runs for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
 	}
 
 	if len(triggerRuns) == 0 && len(pipelineRuns) == 0 {
 		logger.Info("No children found, removing finalizer")
 		controllerutil.RemoveFinalizer(pipeline, api.PipelineFinalizer)
-		if updateErr := r.Update(ctx, pipeline, &metav1.UpdateOptions{}); updateErr != nil {
+		IncCascadeDeleteCompleted(pipeline.Namespace, pipeline.Name)
+		if err := r.Update(ctx, pipeline, &metav1.UpdateOptions{}); err != nil {
 			logger.Error("Failed to remove finalizer after cascade delete",
-				zap.Error(updateErr),
+				zap.Error(err),
 				zap.String("operation", "remove_finalizer"),
 				zap.String("namespace", pipeline.Namespace),
 				zap.String("name", pipeline.Name))
-			return ctrl.Result{}, fmt.Errorf("remove finalizer on pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, updateErr)
+			IncCascadeDeleteError(pipeline.Namespace, pipeline.Name, reasonUpdateError)
+			return ctrl.Result{}, fmt.Errorf("remove finalizer on pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
 		}
 		return ctrl.Result{}, nil
 	}
 
-	// Kill active TriggerRuns (best-effort)
-	activeTRs, err := r.triggerRunManager.ListActiveTriggerRunsForPipeline(ctx, pipeline.Namespace, pipeline.Name)
-	if err != nil {
-		logger.Error("Failed to list active trigger runs for cascade delete",
-			zap.Error(err),
-			zap.String("operation", "list_active_trigger_runs"),
-			zap.String("namespace", pipeline.Namespace),
-			zap.String("name", pipeline.Name))
-		return ctrl.Result{}, fmt.Errorf("list active trigger runs for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
-	}
-	if len(activeTRs) > 0 {
-		for _, tr := range activeTRs {
-			if killErr := r.triggerRunManager.KillTriggerRun(ctx, tr); killErr != nil {
-				logger.Error("Failed to kill trigger run during cascade delete",
-					zap.Error(killErr),
-					zap.String("operation", "kill_trigger_run"),
-					zap.String("namespace", tr.Namespace),
-					zap.String("name", tr.Name))
-			}
+	// Kill active TriggerRuns (best-effort) unless we've already timed out waiting.
+	if !killTimedOut {
+		activeTRs, err := r.triggerRunManager.ListActiveTriggerRunsForPipeline(ctx, pipeline.Namespace, pipeline.Name)
+		if err != nil {
+			logger.Error("Failed to list active trigger runs for cascade delete",
+				zap.Error(err),
+				zap.String("operation", "list_active_trigger_runs"),
+				zap.String("namespace", pipeline.Namespace),
+				zap.String("name", pipeline.Name))
+			IncCascadeDeleteError(pipeline.Namespace, pipeline.Name, reasonListError)
+			return ctrl.Result{}, fmt.Errorf("list active trigger runs for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
 		}
-		return ctrl.Result{RequeueAfter: reconcileInterval}, nil
+		SetCascadeDeleteActiveChildren(pipeline.Namespace, pipeline.Name, kindTriggerRun, len(activeTRs))
+		if len(activeTRs) > 0 {
+			for _, tr := range activeTRs {
+				if killErr := r.triggerRunManager.KillTriggerRun(ctx, tr); killErr != nil {
+					logger.Error("Failed to kill trigger run during cascade delete",
+						zap.Error(killErr),
+						zap.String("operation", "kill_trigger_run"),
+						zap.String("namespace", tr.Namespace),
+						zap.String("name", tr.Name))
+				}
+			}
+			return ctrl.Result{RequeueAfter: reconcileInterval}, nil
+		}
+
+		// Kill active PipelineRuns (best-effort)
+		activePRs, err := r.pipelineRunManager.ListActivePipelineRunsForPipeline(ctx, pipeline.Namespace, pipeline.Name)
+		if err != nil {
+			logger.Error("Failed to list active pipeline runs for cascade delete",
+				zap.Error(err),
+				zap.String("operation", "list_active_pipeline_runs"),
+				zap.String("namespace", pipeline.Namespace),
+				zap.String("name", pipeline.Name))
+			IncCascadeDeleteError(pipeline.Namespace, pipeline.Name, reasonListError)
+			return ctrl.Result{}, fmt.Errorf("list active pipeline runs for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
+		}
+		SetCascadeDeleteActiveChildren(pipeline.Namespace, pipeline.Name, kindPipelineRun, len(activePRs))
+		if len(activePRs) > 0 {
+			for _, pr := range activePRs {
+				if killErr := r.pipelineRunManager.KillPipelineRun(ctx, pr); killErr != nil {
+					logger.Error("Failed to kill pipeline run during cascade delete",
+						zap.Error(killErr),
+						zap.String("operation", "kill_pipeline_run"),
+						zap.String("namespace", pr.Namespace),
+						zap.String("name", pr.Name))
+				}
+			}
+			return ctrl.Result{RequeueAfter: reconcileInterval}, nil
+		}
+	} else {
+		// Kill timed out. Emit a loud warning, record the metric, and proceed with
+		// forceful deletion so the Pipeline CR is not stuck in Terminating forever.
+		logger.Warn("cascade delete kill timed out, proceeding with forceful CR deletion",
+			zap.Duration("timeout", cascadeDeleteKillTimeout),
+			zap.Int("triggerRuns", len(triggerRuns)),
+			zap.Int("pipelineRuns", len(pipelineRuns)))
+		IncCascadeDeleteError(pipeline.Namespace, pipeline.Name, reasonKillTimeout)
 	}
 
-	// Kill active PipelineRuns (best-effort)
-	activePRs, err := r.pipelineRunManager.ListActivePipelineRunsForPipeline(ctx, pipeline.Namespace, pipeline.Name)
-	if err != nil {
-		logger.Error("Failed to list active pipeline runs for cascade delete",
-			zap.Error(err),
-			zap.String("operation", "list_active_pipeline_runs"),
-			zap.String("namespace", pipeline.Namespace),
-			zap.String("name", pipeline.Name))
-		return ctrl.Result{}, fmt.Errorf("list active pipeline runs for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
-	}
-	if len(activePRs) > 0 {
-		for _, pr := range activePRs {
-			if err := r.pipelineRunManager.KillPipelineRun(ctx, pr); err != nil {
-				logger.Error("Failed to kill pipeline run during cascade delete",
-					zap.Error(err),
-					zap.String("operation", "kill_pipeline_run"),
-					zap.String("namespace", pr.Namespace),
-					zap.String("name", pr.Name))
-			}
-		}
-		return ctrl.Result{RequeueAfter: reconcileInterval}, nil
-	}
+	SetCascadeDeleteActiveChildren(pipeline.Namespace, pipeline.Name, kindTriggerRun, 0)
+	SetCascadeDeleteActiveChildren(pipeline.Namespace, pipeline.Name, kindPipelineRun, 0)
 
-	// All children are terminal — delete them (fatal: error causes requeue)
-	logger.Info("All children terminal, deleting",
+	logger.Info("All children terminal (or kill timed out), deleting",
 		zap.Int("triggerRuns", len(triggerRuns)),
 		zap.Int("pipelineRuns", len(pipelineRuns)))
 
@@ -237,6 +298,7 @@ func (r *Reconciler) handleDeletion(ctx context.Context, pipeline *v2pb.Pipeline
 			zap.String("operation", "delete_all_trigger_runs"),
 			zap.String("namespace", pipeline.Namespace),
 			zap.String("name", pipeline.Name))
+		IncCascadeDeleteError(pipeline.Namespace, pipeline.Name, reasonDeleteError)
 		return ctrl.Result{}, fmt.Errorf("delete trigger runs for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
 	}
 	if err := r.pipelineRunManager.DeleteAllPipelineRuns(ctx, pipeline.Namespace, pipeline.Name); err != nil {
@@ -245,6 +307,7 @@ func (r *Reconciler) handleDeletion(ctx context.Context, pipeline *v2pb.Pipeline
 			zap.String("operation", "delete_all_pipeline_runs"),
 			zap.String("namespace", pipeline.Namespace),
 			zap.String("name", pipeline.Name))
+		IncCascadeDeleteError(pipeline.Namespace, pipeline.Name, reasonDeleteError)
 		return ctrl.Result{}, fmt.Errorf("delete pipeline runs for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
 	}
 
@@ -264,6 +327,7 @@ func (r *Reconciler) handleDeletion(ctx context.Context, pipeline *v2pb.Pipeline
 	}
 
 	logger.Info("All children deleted, removing finalizer")
+	IncCascadeDeleteCompleted(pipeline.Namespace, pipeline.Name)
 	controllerutil.RemoveFinalizer(pipeline, api.PipelineFinalizer)
 	if err := r.Update(ctx, pipeline, &metav1.UpdateOptions{}); err != nil {
 		logger.Error("Failed to remove finalizer after cascade delete",
@@ -271,9 +335,41 @@ func (r *Reconciler) handleDeletion(ctx context.Context, pipeline *v2pb.Pipeline
 			zap.String("operation", "remove_finalizer"),
 			zap.String("namespace", pipeline.Namespace),
 			zap.String("name", pipeline.Name))
+		IncCascadeDeleteError(pipeline.Namespace, pipeline.Name, reasonUpdateError)
 		return ctrl.Result{}, fmt.Errorf("remove finalizer on pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
 	}
 	return ctrl.Result{}, nil
+}
+
+// hasCascadeStartedAt reports whether the cascade-delete-started-at annotation is set.
+func hasCascadeStartedAt(pipeline *v2pb.Pipeline) bool {
+	_, ok := pipeline.GetAnnotations()[cascadeDeleteStartedAtAnnotation]
+	return ok
+}
+
+// setCascadeStartedAt stamps the pipeline with the current time in RFC3339Nano.
+func setCascadeStartedAt(pipeline *v2pb.Pipeline, t time.Time) {
+	ann := pipeline.GetAnnotations()
+	if ann == nil {
+		ann = map[string]string{}
+	}
+	ann[cascadeDeleteStartedAtAnnotation] = t.UTC().Format(time.RFC3339Nano)
+	pipeline.SetAnnotations(ann)
+}
+
+// getCascadeStartedAt returns the parsed started-at timestamp, or the current
+// time if the annotation is missing or malformed (which effectively prevents a
+// false timeout on the first pass that writes it).
+func getCascadeStartedAt(pipeline *v2pb.Pipeline) time.Time {
+	v, ok := pipeline.GetAnnotations()[cascadeDeleteStartedAtAnnotation]
+	if !ok {
+		return time.Now()
+	}
+	t, err := time.Parse(time.RFC3339Nano, v)
+	if err != nil {
+		return time.Now()
+	}
+	return t
 }
 
 // formatRevisionName generates a standardized revision name for a pipeline.

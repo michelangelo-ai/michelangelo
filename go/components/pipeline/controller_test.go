@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/stretchr/testify/require"
@@ -283,10 +285,17 @@ type updateErroringHandler struct {
 	// the given type (e.g. "*v2pb.TriggerRunList"). This lets us assert the
 	// controller surfaces the exact failure path we expect.
 	listErrForType string
+	// updateErrAfterN, when > 0, allows that many Update calls to succeed
+	// before returning updateErr. Used to target the last Update in a
+	// multi-step path (e.g. the finalizer-remove at the bottom of
+	// handleDeletion which is preceded by an annotation stamp).
+	updateErrAfterN int
+	updateCalls     int
 }
 
 func (u *updateErroringHandler) Update(ctx context.Context, obj client.Object, opts *metav1.UpdateOptions) error {
-	if u.updateErr != nil {
+	u.updateCalls++
+	if u.updateErr != nil && u.updateCalls > u.updateErrAfterN {
 		return u.updateErr
 	}
 	return u.Handler.Update(ctx, obj, opts)
@@ -304,6 +313,10 @@ func setUpReconcilerWithUpdateErr(t *testing.T, initialObjects []client.Object, 
 }
 
 func setUpReconcilerWithErrors(t *testing.T, initialObjects []client.Object, updateErr, listErr error, listErrForType string) *Reconciler {
+	return setUpReconcilerWithErrorsAfterN(t, initialObjects, updateErr, listErr, listErrForType, 0)
+}
+
+func setUpReconcilerWithErrorsAfterN(t *testing.T, initialObjects []client.Object, updateErr, listErr error, listErrForType string, updateErrAfterN int) *Reconciler {
 	scheme := runtime.NewScheme()
 	require.NoError(t, v2pb.AddToScheme(scheme))
 	// Build the underlying fake client first; then wrap it with an interceptor
@@ -325,16 +338,18 @@ func setUpReconcilerWithErrors(t *testing.T, initialObjects []client.Object, upd
 		Build()
 	logger := zaptest.NewLogger(t)
 	handler := &updateErroringHandler{
-		Handler:        apiHandler.NewFakeAPIHandler(k8sClient),
-		updateErr:      updateErr,
-		listErr:        listErr,
-		listErrForType: listErrForType,
+		Handler:         apiHandler.NewFakeAPIHandler(k8sClient),
+		updateErr:       updateErr,
+		listErr:         listErr,
+		listErrForType:  listErrForType,
+		updateErrAfterN: updateErrAfterN,
 	}
 	return &Reconciler{
 		Handler:            handler,
 		logger:             logger,
 		triggerRunManager:  triggerrun.NewManager(managerClient, logger),
 		pipelineRunManager: pipelinerun.NewManager(managerClient, logger),
+		revisionManager:    revision.NewNoOpManager(),
 	}
 }
 
@@ -473,6 +488,10 @@ func TestCascadeDelete_ListPipelineRunsError(t *testing.T) {
 }
 
 func TestCascadeDelete_RemoveFinalizer_UpdateError(t *testing.T) {
+	// After PR #1113, handleDeletion issues an annotation-stamp Update before
+	// the final finalizer-remove Update. Configure the handler to let the
+	// stamp succeed and only fail the remove-finalizer Update so we still
+	// exercise the original error wrapping under test.
 	now := metav1.Now()
 	pipeline := &v2pb.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{
@@ -486,7 +505,7 @@ func TestCascadeDelete_RemoveFinalizer_UpdateError(t *testing.T) {
 		},
 	}
 	updateErr := errors.New("update boom")
-	reconciler := setUpReconcilerWithErrors(t, []client.Object{pipeline}, updateErr, nil, "")
+	reconciler := setUpReconcilerWithErrorsAfterN(t, []client.Object{pipeline}, updateErr, nil, "", 1)
 
 	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{
 		NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"},
@@ -1082,13 +1101,19 @@ func TestCascadeDelete_FinalUpdate_ErrorAfterDelete(t *testing.T) {
 		Status: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_KILLED},
 	}
 	updateErr := errors.New("final update boom")
-	// updateErroringHandler fails all Updates; we rely on the children-exist
-	// path reaching the final r.Update at the bottom of handleDeletion.
+	// updateErroringHandler is configured to let the first Update (stamp
+	// cascade-delete-started-at annotation) succeed and only fail the final
+	// Update (remove finalizer) so the error wrapping we assert on is the
+	// canonical "remove finalizer on pipeline ..." one.
 	scheme := runtime.NewScheme()
 	require.NoError(t, v2pb.AddToScheme(scheme))
 	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pipeline, killedTR).WithStatusSubresource(pipeline, killedTR).Build()
 	logger := zaptest.NewLogger(t)
-	handler := &updateErroringHandler{Handler: apiHandler.NewFakeAPIHandler(k8sClient), updateErr: updateErr}
+	handler := &updateErroringHandler{
+		Handler:         apiHandler.NewFakeAPIHandler(k8sClient),
+		updateErr:       updateErr,
+		updateErrAfterN: 1, // succeed for the annotation stamp, fail on finalizer remove
+	}
 	reconciler := &Reconciler{
 		Handler:            handler,
 		logger:             logger,
@@ -1103,4 +1128,93 @@ func TestCascadeDelete_FinalUpdate_ErrorAfterDelete(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, err, updateErr)
 	require.Contains(t, err.Error(), "remove finalizer on pipeline test-namespace/test-pipeline")
+}
+
+func TestCascadeDelete_KillTimeout(t *testing.T) {
+	// Seed a RUNNING TR. Fast-forward the started-at annotation past the timeout.
+	// Controller must stop killing, emit the kill_timeout metric, delete the CRs
+	// forcefully, and remove the finalizer so the Pipeline CR is not stuck in
+	// Terminating forever.
+	now := metav1.Now()
+	longAgo := time.Now().UTC().Add(-2 * cascadeDeleteKillTimeout).Format(time.RFC3339Nano)
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "test-pipeline",
+			Namespace:         "test-namespace",
+			Finalizers:        []string{api.PipelineFinalizer},
+			DeletionTimestamp: &now,
+			Annotations: map[string]string{
+				cascadeDeleteStartedAtAnnotation: longAgo,
+			},
+		},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{GitRef: "abc123", Branch: "main"},
+		},
+	}
+	stuckTR := &v2pb.TriggerRun{
+		ObjectMeta: metav1.ObjectMeta{Name: "tr-stuck", Namespace: "test-namespace"},
+		Spec: v2pb.TriggerRunSpec{
+			Pipeline: &apipb.ResourceIdentifier{Name: "test-pipeline", Namespace: "test-namespace"},
+		},
+		Status: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
+	}
+	reconciler := setUpReconciler(t, []client.Object{pipeline, stuckTR}, env.Context{})
+
+	result, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"},
+	})
+	require.NoError(t, err)
+	// Forceful delete path returns empty Result (no requeue) after removing the finalizer.
+	require.Equal(t, ctrl.Result{}, result)
+
+	// The stuck TR must have been force-deleted even though its workflow never terminated.
+	trList := &v2pb.TriggerRunList{}
+	require.NoError(t, reconciler.Handler.List(context.Background(), "test-namespace",
+		&metav1.ListOptions{}, nil, trList))
+	require.Empty(t, trList.Items)
+}
+
+func TestCascadeDelete_CounterIncrementsOncePerCascade(t *testing.T) {
+	// Regression for B3: the "started" counter must fire exactly once per cascade
+	// regardless of requeue count. We run two reconciles against a pipeline with
+	// an active TR. The first reconcile stamps the annotation + increments the
+	// counter; the second must NOT re-increment because the annotation is present.
+	now := metav1.Now()
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "test-pipeline",
+			Namespace:         "test-namespace",
+			Finalizers:        []string{api.PipelineFinalizer},
+			DeletionTimestamp: &now,
+		},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{GitRef: "abc123", Branch: "main"},
+		},
+	}
+	runningTR := &v2pb.TriggerRun{
+		ObjectMeta: metav1.ObjectMeta{Name: "tr-running", Namespace: "test-namespace"},
+		Spec: v2pb.TriggerRunSpec{
+			Pipeline: &apipb.ResourceIdentifier{Name: "test-pipeline", Namespace: "test-namespace"},
+		},
+		Status: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
+	}
+	reconciler := setUpReconciler(t, []client.Object{pipeline, runningTR}, env.Context{})
+
+	before := testutil.ToFloat64(pipelineCascadeDeleteStarted.WithLabelValues("test-namespace", "test-pipeline"))
+
+	// First reconcile: stamp annotation, increment counter.
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"},
+	})
+	require.NoError(t, err)
+	afterFirst := testutil.ToFloat64(pipelineCascadeDeleteStarted.WithLabelValues("test-namespace", "test-pipeline"))
+	require.Equal(t, before+1, afterFirst, "started counter must increment once on first pass")
+
+	// Second reconcile: annotation is present, counter must not increment again.
+	_, err = reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"},
+	})
+	require.NoError(t, err)
+	afterSecond := testutil.ToFloat64(pipelineCascadeDeleteStarted.WithLabelValues("test-namespace", "test-pipeline"))
+	require.Equal(t, afterFirst, afterSecond, "started counter must NOT increment on subsequent reconciles")
 }
