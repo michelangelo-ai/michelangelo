@@ -655,6 +655,154 @@ func TestCascadeDelete_KillTriggerRunError_LogsAndContinues(t *testing.T) {
 	require.ElementsMatch(t, []string{"tr-bad", "tr-good"}, trStub.killedNames)
 }
 
+func TestCascadeDelete_ActivePipelineRuns(t *testing.T) {
+	now := metav1.Now()
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "test-pipeline",
+			Namespace:         "test-namespace",
+			Finalizers:        []string{api.PipelineFinalizer},
+			DeletionTimestamp: &now,
+		},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{GitRef: "abc123", Branch: "main"},
+		},
+	}
+	runningPR := &v2pb.PipelineRun{
+		ObjectMeta: metav1.ObjectMeta{Name: "pr-running", Namespace: "test-namespace"},
+		Spec: v2pb.PipelineRunSpec{
+			Pipeline: &apipb.ResourceIdentifier{Name: "test-pipeline", Namespace: "test-namespace"},
+		},
+		Status: v2pb.PipelineRunStatus{State: v2pb.PIPELINE_RUN_STATE_RUNNING},
+	}
+
+	reconciler := setUpReconciler(t, []client.Object{pipeline, runningPR}, env.Context{})
+	result, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, ctrl.Result{RequeueAfter: reconcileInterval}, result)
+
+	updatedPR := &v2pb.PipelineRun{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "pr-running", &metav1.GetOptions{}, updatedPR))
+	require.True(t, updatedPR.Spec.Kill)
+}
+
+// stubPipelineRunManager implements pipelinerun.Manager with configurable
+// behavior to cover error branches in handleDeletion's PipelineRun path.
+type stubPipelineRunManager struct {
+	listAll       []*v2pb.PipelineRun
+	listAllErr    error
+	listActive    []*v2pb.PipelineRun
+	listActiveErr error
+	killErrByName map[string]error
+	killedNames   []string
+}
+
+func (s *stubPipelineRunManager) ListPipelineRunsForPipeline(ctx context.Context, namespace, pipelineName string) ([]*v2pb.PipelineRun, error) {
+	return s.listAll, s.listAllErr
+}
+
+func (s *stubPipelineRunManager) ListActivePipelineRunsForPipeline(ctx context.Context, namespace, pipelineName string) ([]*v2pb.PipelineRun, error) {
+	return s.listActive, s.listActiveErr
+}
+
+func (s *stubPipelineRunManager) KillPipelineRun(ctx context.Context, pr *v2pb.PipelineRun) error {
+	s.killedNames = append(s.killedNames, pr.Name)
+	if err, ok := s.killErrByName[pr.Name]; ok {
+		return err
+	}
+	return nil
+}
+
+func (s *stubPipelineRunManager) DeleteAllPipelineRuns(ctx context.Context, namespace, pipelineName string) error {
+	return nil
+}
+
+func setUpReconcilerWithStubManagers(t *testing.T, initialObjects []client.Object, trMgr triggerrun.Manager, prMgr pipelinerun.Manager) *Reconciler {
+	scheme := runtime.NewScheme()
+	require.NoError(t, v2pb.AddToScheme(scheme))
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initialObjects...).WithStatusSubresource(initialObjects...).Build()
+	logger := zaptest.NewLogger(t)
+	handler := apiHandler.NewFakeAPIHandler(k8sClient)
+	if trMgr == nil {
+		trMgr = triggerrun.NewManager(k8sClient, logger)
+	}
+	if prMgr == nil {
+		prMgr = pipelinerun.NewManager(k8sClient, logger)
+	}
+	return &Reconciler{
+		Handler:            handler,
+		logger:             logger,
+		triggerRunManager:  trMgr,
+		pipelineRunManager: prMgr,
+	}
+}
+
+func TestCascadeDelete_ListActivePipelineRunsError(t *testing.T) {
+	now := metav1.Now()
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "test-pipeline",
+			Namespace:         "test-namespace",
+			Finalizers:        []string{api.PipelineFinalizer},
+			DeletionTimestamp: &now,
+		},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{GitRef: "abc123", Branch: "main"},
+		},
+	}
+	activeErr := errors.New("list active pr boom")
+	prStub := &stubPipelineRunManager{
+		// First List (children check) returns one PR so we proceed past the empty-children branch.
+		listAll: []*v2pb.PipelineRun{
+			{ObjectMeta: metav1.ObjectMeta{Name: "pr-1", Namespace: "test-namespace"}},
+		},
+		listActiveErr: activeErr,
+	}
+	reconciler := setUpReconcilerWithStubManagers(t, []client.Object{pipeline}, nil, prStub)
+
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"},
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, err, activeErr)
+	require.Contains(t, err.Error(), "list active pipeline runs for pipeline test-namespace/test-pipeline")
+}
+
+func TestCascadeDelete_KillPipelineRunError_LogsAndContinues(t *testing.T) {
+	now := metav1.Now()
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "test-pipeline",
+			Namespace:         "test-namespace",
+			Finalizers:        []string{api.PipelineFinalizer},
+			DeletionTimestamp: &now,
+		},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{GitRef: "abc123", Branch: "main"},
+		},
+	}
+	active := []*v2pb.PipelineRun{
+		{ObjectMeta: metav1.ObjectMeta{Name: "pr-bad", Namespace: "test-namespace"}},
+		{ObjectMeta: metav1.ObjectMeta{Name: "pr-good", Namespace: "test-namespace"}},
+	}
+	prStub := &stubPipelineRunManager{
+		listAll:       active,
+		listActive:    active,
+		killErrByName: map[string]error{"pr-bad": errors.New("kill boom")},
+	}
+	reconciler := setUpReconcilerWithStubManagers(t, []client.Object{pipeline}, nil, prStub)
+
+	result, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, ctrl.Result{RequeueAfter: reconcileInterval}, result)
+
+	require.ElementsMatch(t, []string{"pr-bad", "pr-good"}, prStub.killedNames)
+}
+
 func setUpReconciler(t *testing.T, initialObjects []client.Object, env env.Context) *Reconciler {
 	scheme := runtime.NewScheme()
 	err := v2pb.AddToScheme(scheme)
