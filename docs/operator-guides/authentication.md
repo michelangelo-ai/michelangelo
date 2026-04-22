@@ -1,5 +1,9 @@
 # Authentication & Identity
 
+This guide is for platform operators and cluster administrators configuring authentication for a Michelangelo deployment.
+
+**Prerequisites**: A running Michelangelo control plane (see [Platform Setup](./platform-setup.md)) and `kubectl` access to the `ma-system` namespace.
+
 Authentication in Michelangelo operates at two levels:
 
 - **User authentication** — end users authenticate to the Michelangelo API and UI via an identity provider (IdP)

@@ -17,7 +17,7 @@ Pick the approach that matches your workflow and expertise:
 - Need to **prototype rapidly** before investing in custom code
 
 **Quick Start**:
-1. Navigate to MA Studio in the UI
+1. Navigate to MA Studio (available at your Michelangelo deployment URL, or `http://localhost:8080` in the [local sandbox](./sandbox-setup.md))
 2. Create a new project and define your use case
 3. Prepare your dataset using the Data Prep interface
 4. Train a model using pre-built templates
@@ -35,7 +35,7 @@ Pick the approach that matches your workflow and expertise:
 **Quick Start**:
 1. Install Michelangelo SDK: `pip install michelangelo`
 2. Define your workflow using Uniflow decorators (`@uniflow.task`, `@uniflow.workflow`)
-3. Test locally, then dev-run to Michelangelo APIServer
+3. Submit a dev-run to the Michelangelo API server (see [Sandbox Setup](./sandbox-setup.md))
 4. Monitor execution through the UI
 
 **Best for**: Custom architectures, multi-stage pipelines, A/B testing frameworks, feature engineering at scale
@@ -81,13 +81,14 @@ You can use the no-code environment to perform standardized ML tasks without wri
 
 ### CanvasFlex
 
-For more advanced tasks — custom retraining workflows, bespoke performance monitoring, DL model training — CanvasFlex provides an opinionated, predefined ML workflow with best practices applied. Manage pipelines visually while writing the logic in code.
+CanvasFlex is an opinionated, YAML-based workflow system for teams who want predefined best practices with code-driven customization. For more advanced tasks — custom retraining workflows, bespoke performance monitoring, DL model training — CanvasFlex provides a predefined ML workflow with best practices applied. Manage pipelines visually while writing the logic in code.
 
 ### Uniflow
 
 Uniflow is a Python orchestration framework for ML pipelines. Wrap your functions with `@uniflow.task` and `@uniflow.workflow` decorators to get distributed execution, automatic data passing between tasks, caching, and retries — without changing your model code.
 
 ```python
+import michelangelo.uniflow.core as uniflow
 from michelangelo.uniflow.plugins.ray import RayTask
 
 @uniflow.task(config=RayTask(head_cpu=2, head_memory="4Gi"))

@@ -97,7 +97,7 @@ A: Michelangelo provides:
 
 A: Yes, instantly. Every deployment is versioned. Click "Rollback" in the UI or use the CLI:
 ```bash
-ma deployment -f <deployment spec contains the desired model revision>
+ma deployment apply -f <deployment.yaml>
 ```
 
 **Q: How do I debug predictions?**
@@ -124,11 +124,7 @@ A: Use Michelangelo's Ray integration for out-of-core processing. Data is stream
 
 **Q: How do multiple team members collaborate?**
 
-A: Michelangelo provides:
-- **Shared projects** with role-based access (viewer, editor, admin)
-- **Model lineage** tracking who trained what and when
-- **Version control** for models, datasets, and pipelines
-- **Comments and annotations** on experiments and deployments
+A: Via shared projects with role-based access control. Your operator configured this — see the [Authentication guide](../operator-guides/authentication.md).
 
 **Q: Is my data secure?**
 
@@ -136,7 +132,7 @@ A: Yes. Michelangelo enforces:
 - Role-based access control (RBAC)
 - Encryption at rest and in transit
 - Audit logs for all operations
-- Compliance with SOC 2, GDPR, HIPAA (depending on deployment)
+- Audit logging and controls to support SOC 2, GDPR, and HIPAA compliance
 
 See the [Compliance Guide](../operator-guides/compliance.md) for configuration steps specific to each framework.
 
@@ -149,4 +145,9 @@ A: Yes, with proper configuration. Michelangelo supports:
 
 ---
 
-**Still have questions?** Join the [community forum](https://github.com/michelangelo-ai/michelangelo/discussions) or explore the [user guides](../user-guides/index.md).
+## What's next?
+
+- **Ready to build?** [Set up your local sandbox](./sandbox-setup.md) to run your first pipeline
+- **Understand the concepts**: Read [Core Concepts and Key Terms](./core-concepts-and-key-terms.md)
+- **Go deeper**: Browse the [user guides](../user-guides/index.md) for end-to-end tutorials
+- **Still have questions?** Join the [community forum](https://github.com/michelangelo-ai/michelangelo/discussions)

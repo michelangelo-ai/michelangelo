@@ -45,7 +45,7 @@ Users can use the no-code dev environment to perform standardized ML tasks witho
 
 #### Uniflow (Orchestration Framework)
 
-**Uniflow** is a structured, scalable orchestration framework designed to manage AI/ML pipelines at scale. It enables you to modularize your computation into **tasks**, chain them into **workflows**, and manage input/output artifacts efficiently.
+**Uniflow** is a Python orchestration framework for AI/ML pipelines. It enables you to modularize your computation into **tasks**, chain them into **workflows**, and manage input/output artifacts efficiently.
 
 ### Execution & Infrastructure
 
@@ -167,7 +167,7 @@ Collection of model metrics. Some examples are model performance report, feature
 
 ### Model Excellence Scores
 
-Model Excellent Scores (MES) provide visibility into the ML model quality throughout various stages of a model’s life cycle, such as feature quality, prediction performance, and model freshness.
+Model Excellence Scores (MES) provide visibility into the ML model quality throughout various stages of a model’s life cycle, such as feature quality, prediction performance, and model freshness.
 
 ### Deployment
 
@@ -209,22 +209,6 @@ Intermediate datasets are stored using Uniflow's abstract IO layer for:
 - Fault tolerance
 - Reuse across executions
 - Backend flexibility (S3, HDFS, Ray, etc.)
-
-#### Ray-based Implementation Example
-
-```python
-from michelangelo.uniflow.core.io_registry import IO
-from ray.data import Dataset
-
-class DatasetIO(IO[Dataset]):
-    def write(self, url: str, ds: Dataset):
-        fs, path = resolve_fs_path(url)
-        ds.write_parquet(path, filesystem=fs)
-
-    def read(self, url: str):
-        fs, path = resolve_fs_path(url)
-        return ray.data.read_parquet(path, filesystem=fs)
-```
 
 ---
 

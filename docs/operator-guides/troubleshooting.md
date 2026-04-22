@@ -1,6 +1,6 @@
 # Troubleshooting
 
-This guide covers common failure scenarios with diagnostic steps and likely causes. All commands assume `kubectl` is configured for the control plane cluster unless otherwise noted.
+This guide is for platform operators diagnosing issues with a Michelangelo deployment. All `kubectl` commands assume access to the control plane cluster.
 
 ---
 

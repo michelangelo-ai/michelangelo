@@ -7,10 +7,9 @@ Build and run your first ML pipeline on Michelangelo in minutes. This guide walk
 By the end of this guide you'll have a working pipeline that looks like this:
 
 ```
-dataset_id
-    └─▶ load_dataset()       # Ray task: splits data into train/val/test
-            └─▶ train()      # Ray task: trains a model on the splits
-                    └─▶ evaluate()   # Ray task: computes metrics, returns results
+dataset_cols
+    └─▶ feature_prep()    # Ray task: downloads data, splits into train/validation
+            └─▶ train()   # Ray task: trains XGBoost model on the splits
 ```
 
 Each step runs as an isolated, containerized task. Michelangelo handles data passing between them, caches intermediate results, and retries on transient failures — your code stays plain Python.

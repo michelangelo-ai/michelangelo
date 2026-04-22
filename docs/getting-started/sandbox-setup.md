@@ -14,7 +14,7 @@ Before you begin, make sure you have the following installed. Run each verificat
 | **kubectl** | `brew install kubectl` or [official guide](https://kubernetes.io/docs/tasks/tools/#kubectl) | `kubectl version --client` |
 | **k3d** | `brew install k3d` | `k3d --version` |
 | **Helm** | `brew install helm` or [official guide](https://helm.sh/docs/intro/install/) | `helm version` |
-| **Python 3.11+** | [python.org](https://www.python.org/downloads/) | `python3 --version` |
+| **Python 3.9+** | [python.org](https://www.python.org/downloads/) | `python3 --version` |
 | **Poetry** | `curl -sSL https://install.python-poetry.org \| python3 -` | `poetry --version` |
 
 ### Colima resource requirements
@@ -114,7 +114,7 @@ ma sandbox create [OPTIONS]
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--workflow cadence\|temporal` | Choose workflow engine | `cadence` |
-| `--exclude [services]` | Exclude services: `apiserver`, `controllermgr`, `ui`, `worker` | none |
+| `--exclude [services]` | Exclude services: `apiserver`, `controllermgr`, `ui`, `worker`, `prometheus`, `grafana` | none |
 | `--create-compute-cluster` | Create an additional Ray compute cluster for distributed jobs | disabled |
 | `--compute-cluster-name <name>` | Custom name for the compute cluster | auto-generated |
 | `--include-experimental [services]` | Include experimental services | none |
@@ -160,11 +160,7 @@ ma sandbox demo inference   # sets up demo inference server
 
 ---
 
-## What's next?
-
-- **Run your first pipeline**: Follow the [Getting Started with ML Pipelines](../user-guides/ml-pipelines/getting-started.md) guide to define tasks, build a workflow, and run it on your sandbox
-- **Understand the concepts**: Read [Core Concepts and Key Terms](./core-concepts-and-key-terms.md) to learn how projects, workflows, and deployments fit together
-- **Explore the services**: See [Sandbox Ports and Endpoints](./ma-sandbox-ports-and-endpoints.md) for a full list of local URLs for the UI, Ray Dashboard, MinIO, and more
+---
 
 ## Running your first workflow
 
