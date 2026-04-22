@@ -495,9 +495,7 @@ func TestCascadeDelete_RemoveFinalizer_UpdateError(t *testing.T) {
 	require.Contains(t, err.Error(), "remove finalizer on pipeline test-namespace/test-pipeline")
 }
 
-func TestCascadeDelete_WithChildrenRequeues(t *testing.T) {
-	// When children exist, handleDeletion does not remove the finalizer; it
-	// requeues after reconcileInterval so a subsequent PR can perform kill/delete.
+func TestCascadeDelete_ActiveTriggerRuns(t *testing.T) {
 	now := metav1.Now()
 	pipeline := &v2pb.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{
@@ -510,14 +508,142 @@ func TestCascadeDelete_WithChildrenRequeues(t *testing.T) {
 			Commit: &v2pb.CommitInfo{GitRef: "abc123", Branch: "main"},
 		},
 	}
-	tr := &v2pb.TriggerRun{
+	runningTR := &v2pb.TriggerRun{
 		ObjectMeta: metav1.ObjectMeta{Name: "tr-running", Namespace: "test-namespace"},
 		Spec: v2pb.TriggerRunSpec{
 			Pipeline: &apipb.ResourceIdentifier{Name: "test-pipeline", Namespace: "test-namespace"},
 		},
 		Status: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
 	}
-	reconciler := setUpReconciler(t, []client.Object{pipeline, tr}, env.Context{})
+	killedTR := &v2pb.TriggerRun{
+		ObjectMeta: metav1.ObjectMeta{Name: "tr-killed", Namespace: "test-namespace"},
+		Spec: v2pb.TriggerRunSpec{
+			Pipeline: &apipb.ResourceIdentifier{Name: "test-pipeline", Namespace: "test-namespace"},
+		},
+		Status: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_KILLED},
+	}
+
+	reconciler := setUpReconciler(t, []client.Object{pipeline, runningTR, killedTR}, env.Context{})
+	result, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, ctrl.Result{RequeueAfter: reconcileInterval}, result)
+
+	// Verify the running TR was marked for kill (both deprecated Spec.Kill and new Spec.Action)
+	updated := &v2pb.TriggerRun{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "tr-running", &metav1.GetOptions{}, updated))
+	require.Equal(t, v2pb.TRIGGER_RUN_ACTION_KILL, updated.Spec.Action)
+	require.True(t, updated.Spec.Kill)
+
+	// Finalizer should NOT have been removed yet.
+	updatedPipeline := &v2pb.Pipeline{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "test-pipeline", &metav1.GetOptions{}, updatedPipeline))
+	require.True(t, controllerutil.ContainsFinalizer(updatedPipeline, api.PipelineFinalizer))
+}
+
+// stubTriggerRunManager implements triggerrun.Manager with configurable behavior
+// so we can exercise error branches in handleDeletion that the real handler
+// can't deterministically trigger (e.g. ListActive after List succeeded).
+type stubTriggerRunManager struct {
+	listAll           []*v2pb.TriggerRun
+	listAllErr        error
+	listActive        []*v2pb.TriggerRun
+	listActiveErr     error
+	killErrByName     map[string]error
+	killedNames       []string
+}
+
+func (s *stubTriggerRunManager) ListTriggerRunsForPipeline(ctx context.Context, namespace, pipelineName string) ([]*v2pb.TriggerRun, error) {
+	return s.listAll, s.listAllErr
+}
+
+func (s *stubTriggerRunManager) ListActiveTriggerRunsForPipeline(ctx context.Context, namespace, pipelineName string) ([]*v2pb.TriggerRun, error) {
+	return s.listActive, s.listActiveErr
+}
+
+func (s *stubTriggerRunManager) KillTriggerRun(ctx context.Context, tr *v2pb.TriggerRun) error {
+	s.killedNames = append(s.killedNames, tr.Name)
+	if err, ok := s.killErrByName[tr.Name]; ok {
+		return err
+	}
+	return nil
+}
+
+func (s *stubTriggerRunManager) DeleteAllTriggerRuns(ctx context.Context, namespace, pipelineName string) error {
+	return nil
+}
+
+func setUpReconcilerWithStubTR(t *testing.T, initialObjects []client.Object, trMgr triggerrun.Manager) *Reconciler {
+	scheme := runtime.NewScheme()
+	require.NoError(t, v2pb.AddToScheme(scheme))
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initialObjects...).WithStatusSubresource(initialObjects...).Build()
+	logger := zaptest.NewLogger(t)
+	handler := apiHandler.NewFakeAPIHandler(k8sClient)
+	return &Reconciler{
+		Handler:            handler,
+		logger:             logger,
+		triggerRunManager:  trMgr,
+		pipelineRunManager: pipelinerun.NewManager(k8sClient, logger),
+	}
+}
+
+func TestCascadeDelete_ListActiveTriggerRunsError(t *testing.T) {
+	now := metav1.Now()
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "test-pipeline",
+			Namespace:         "test-namespace",
+			Finalizers:        []string{api.PipelineFinalizer},
+			DeletionTimestamp: &now,
+		},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{GitRef: "abc123", Branch: "main"},
+		},
+	}
+	activeErr := errors.New("list active boom")
+	trStub := &stubTriggerRunManager{
+		// First List (children check) returns one TR so we proceed past the empty-children branch.
+		listAll: []*v2pb.TriggerRun{
+			{ObjectMeta: metav1.ObjectMeta{Name: "tr-1", Namespace: "test-namespace"}},
+		},
+		listActiveErr: activeErr,
+	}
+	reconciler := setUpReconcilerWithStubTR(t, []client.Object{pipeline}, trStub)
+
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"},
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, err, activeErr)
+	require.Contains(t, err.Error(), "list active trigger runs for pipeline test-namespace/test-pipeline")
+}
+
+func TestCascadeDelete_KillTriggerRunError_LogsAndContinues(t *testing.T) {
+	// KillTriggerRun errors are logged but do not cause handleDeletion to fail;
+	// it still requeues so subsequent reconciles can retry.
+	now := metav1.Now()
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "test-pipeline",
+			Namespace:         "test-namespace",
+			Finalizers:        []string{api.PipelineFinalizer},
+			DeletionTimestamp: &now,
+		},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{GitRef: "abc123", Branch: "main"},
+		},
+	}
+	active := []*v2pb.TriggerRun{
+		{ObjectMeta: metav1.ObjectMeta{Name: "tr-bad", Namespace: "test-namespace"}},
+		{ObjectMeta: metav1.ObjectMeta{Name: "tr-good", Namespace: "test-namespace"}},
+	}
+	trStub := &stubTriggerRunManager{
+		listAll:       active,
+		listActive:    active,
+		killErrByName: map[string]error{"tr-bad": errors.New("kill boom")},
+	}
+	reconciler := setUpReconcilerWithStubTR(t, []client.Object{pipeline}, trStub)
 
 	result, err := reconciler.Reconcile(context.Background(), ctrl.Request{
 		NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"},
@@ -525,10 +651,8 @@ func TestCascadeDelete_WithChildrenRequeues(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, ctrl.Result{RequeueAfter: reconcileInterval}, result)
 
-	// Finalizer should NOT have been removed yet.
-	updated := &v2pb.Pipeline{}
-	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "test-pipeline", &metav1.GetOptions{}, updated))
-	require.True(t, controllerutil.ContainsFinalizer(updated, api.PipelineFinalizer))
+	// Both TRs were attempted despite the first failing.
+	require.ElementsMatch(t, []string{"tr-bad", "tr-good"}, trStub.killedNames)
 }
 
 func setUpReconciler(t *testing.T, initialObjects []client.Object, env env.Context) *Reconciler {
