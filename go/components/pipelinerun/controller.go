@@ -127,8 +127,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// Check if state changed to terminal state and emit metrics
-	originalIsTerminal := isTerminalState(originalPipelineRun.Status.State)
-	currentIsTerminal := isTerminalState(pipelineRun.Status.State)
+	originalIsTerminal := IsTerminalState(originalPipelineRun.Status.State)
+	currentIsTerminal := IsTerminalState(pipelineRun.Status.State)
 	if !originalIsTerminal && currentIsTerminal {
 		r.emitPipelineRunMetrics(pipelineRun)
 	}
@@ -187,11 +187,17 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// isTerminalState checks if a pipeline run state is terminal
-func isTerminalState(state v2pb.PipelineRunState) bool {
+// IsTerminalState checks if a pipeline run state is terminal.
+//
+// Terminal states (SUCCEEDED, FAILED, KILLED, SKIPPED) indicate the pipeline
+// run has reached a final state and will not transition further. SKIPPED is
+// included per the proto contract (proto/api/v2/pipeline_run.proto); omitting
+// it would cause cascade delete to treat SKIPPED runs as active forever.
+func IsTerminalState(state v2pb.PipelineRunState) bool {
 	return state == v2pb.PIPELINE_RUN_STATE_SUCCEEDED ||
 		state == v2pb.PIPELINE_RUN_STATE_FAILED ||
-		state == v2pb.PIPELINE_RUN_STATE_KILLED
+		state == v2pb.PIPELINE_RUN_STATE_KILLED ||
+		state == v2pb.PIPELINE_RUN_STATE_SKIPPED
 }
 
 // emitPipelineRunMetrics emits metrics for completed pipeline runs
