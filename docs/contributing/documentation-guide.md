@@ -264,4 +264,4 @@ Trigger a deploy manually: GitHub Actions → "Deploy Docs" → "Run workflow"
 ### Checking Status
 
 - **Build status**: Check the Actions tab in GitHub
-- **Live site**: https://michelangelo-ai.github.io/
+- **Live site**: https://michelangelo-ai.org/

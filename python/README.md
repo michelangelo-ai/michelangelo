@@ -2,7 +2,7 @@
 
 **An end-to-end ML platform for building, training, and registering machine learning models at scale.**
 
-[![Documentation](https://img.shields.io/badge/docs-michelangelo--ai.github.io-blue)](https://michelangelo-ai.github.io/michelangelo/docs)
+[![Documentation](https://img.shields.io/badge/docs-michelangelo--ai.org-blue)](https://michelangelo-ai.org/docs)
 [![GitHub](https://img.shields.io/badge/github-michelangelo--ai%2Fmichelangelo-lightgrey)](https://github.com/michelangelo-ai/michelangelo)
 
 Michelangelo gives ML engineers and data scientists a unified Python SDK for the entire model lifecycle — from data preparation and distributed training to model registration and production deployment. Define your ML workflows as Python functions using simple decorators, and Michelangelo handles orchestration, caching, and scaling across Ray and Spark clusters.
@@ -134,12 +134,12 @@ export MICHELANGELO_API_SERVER="localhost:12345"
 
 ## Documentation
 
-Full documentation is available at **[michelangelo-ai.github.io/michelangelo/docs](https://michelangelo-ai.github.io/michelangelo/docs)**.
+Full documentation is available at **[michelangelo-ai.org/docs](https://michelangelo-ai.org/docs)**.
 
-- [User Guides](https://michelangelo-ai.github.io/michelangelo/docs/user-guides) — Step-by-step guides for data preparation, training, and deployment
-- [ML Pipelines](https://michelangelo-ai.github.io/michelangelo/docs/user-guides/ml-pipelines) — Deep dive into the Uniflow pipeline framework
-- [Set Up Triggers](https://michelangelo-ai.github.io/michelangelo/docs/user-guides/set-up-triggers) — Automate pipeline execution with cron and backfill triggers
-- [CLI Reference](https://michelangelo-ai.github.io/michelangelo/docs/user-guides/cli) — Full command-line interface documentation
+- [User Guides](https://michelangelo-ai.org/docs/user-guides) — Step-by-step guides for data preparation, training, and deployment
+- [ML Pipelines](https://michelangelo-ai.org/docs/user-guides/ml-pipelines) — Deep dive into the Uniflow pipeline framework
+- [Set Up Triggers](https://michelangelo-ai.org/docs/user-guides/set-up-triggers) — Automate pipeline execution with cron and backfill triggers
+- [CLI Reference](https://michelangelo-ai.org/docs/user-guides/cli) — Full command-line interface documentation
 
 ## Contributing
 

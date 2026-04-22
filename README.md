@@ -32,7 +32,7 @@ We are **incrementally open-sourcing Michelangelo's core capabilities**, ensurin
 
 ## Installation
 
-Follow the [Sandbox Setup](https://michelangelo-ai.github.io/michelangelo/docs/getting-started/sandbox-setup/) guide to get a fully functional local environment running.
+Follow the [Sandbox Setup](https://michelangelo-ai.org/docs/getting-started/sandbox-setup/) guide to get a fully functional local environment running.
 
 ## Usage
 
@@ -67,15 +67,15 @@ def my_pipeline(learning_rate: float = 0.01):
     model = train(learning_rate=learning_rate)
 ```
 
-For a full walkthrough, see the [Getting Started with ML Pipelines](https://michelangelo-ai.github.io/michelangelo/docs/user-guides/ml-pipelines/getting-started/) guide.
+For a full walkthrough, see the [Getting Started with ML Pipelines](https://michelangelo-ai.org/docs/user-guides/ml-pipelines/getting-started/) guide.
 
 ## Build and Test
 
-See the [User Guides](https://michelangelo-ai.github.io/michelangelo/docs/user-guides/) in the documentation for instructions on running tests and working with the development environment.
+See the [User Guides](https://michelangelo-ai.org/docs/user-guides/) in the documentation for instructions on running tests and working with the development environment.
 
 ## Consuming and Using the Containers
 
-See the [Sandbox Setup](https://michelangelo-ai.github.io/michelangelo/docs/getting-started/sandbox-setup/) guide for instructions on running and importing container images into your local cluster.
+See the [Sandbox Setup](https://michelangelo-ai.org/docs/getting-started/sandbox-setup/) guide for instructions on running and importing container images into your local cluster.
 
 ## Contributing
 
