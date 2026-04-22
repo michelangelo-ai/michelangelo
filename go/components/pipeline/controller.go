@@ -26,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 const (
@@ -64,6 +65,26 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if err := r.Get(ctx, req.Namespace, req.Name, &metav1.GetOptions{}, pipeline); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+
+	// Manage finalizer lifecycle for cascade delete
+	if pipeline.GetDeletionTimestamp().IsZero() {
+		if !controllerutil.ContainsFinalizer(pipeline, api.PipelineFinalizer) {
+			controllerutil.AddFinalizer(pipeline, api.PipelineFinalizer)
+			if err := r.Update(ctx, pipeline, &metav1.UpdateOptions{}); err != nil {
+				return ctrl.Result{}, fmt.Errorf("add pipeline finalizer: %w", err)
+			}
+		}
+	} else {
+		// Pipeline is being deleted — remove finalizer to allow deletion
+		// Cascade delete logic will be added in a subsequent PR
+		logger.Info("Pipeline is being deleted, removing finalizer")
+		controllerutil.RemoveFinalizer(pipeline, api.PipelineFinalizer)
+		if err := r.Update(ctx, pipeline, &metav1.UpdateOptions{}); err != nil {
+			return ctrl.Result{}, fmt.Errorf("remove pipeline finalizer: %w", err)
+		}
+		return ctrl.Result{}, nil
+	}
+
 	originalPipeline := pipeline.DeepCopy()
 	state := pipeline.Status.State
 	logger.Info("Reconciling pipeline", zap.Any("PipelineStatusState", state.String()))

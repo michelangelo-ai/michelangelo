@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -10,7 +11,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
+	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -35,8 +38,9 @@ func TestReconcile(t *testing.T) {
 			initialObjects: []client.Object{
 				&v2pb.Pipeline{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-pipeline",
-						Namespace: "test-namespace",
+						Name:       "test-pipeline",
+						Namespace:  "test-namespace",
+						Finalizers: []string{api.PipelineFinalizer},
 					},
 					Spec: v2pb.PipelineSpec{
 						Commit: &v2pb.CommitInfo{
@@ -59,8 +63,9 @@ func TestReconcile(t *testing.T) {
 			initialObjects: []client.Object{
 				&v2pb.Pipeline{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-pipeline",
-						Namespace: "test-namespace",
+						Name:       "test-pipeline",
+						Namespace:  "test-namespace",
+						Finalizers: []string{api.PipelineFinalizer},
 					},
 					Spec: v2pb.PipelineSpec{
 						Commit: &v2pb.CommitInfo{
@@ -90,8 +95,9 @@ func TestReconcile(t *testing.T) {
 			initialObjects: []client.Object{
 				&v2pb.Pipeline{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-pipeline",
-						Namespace: "test-namespace",
+						Name:       "test-pipeline",
+						Namespace:  "test-namespace",
+						Finalizers: []string{api.PipelineFinalizer},
 					},
 					Spec: v2pb.PipelineSpec{
 						Commit: &v2pb.CommitInfo{
@@ -209,6 +215,126 @@ func TestFormatRevisionName(t *testing.T) {
 			require.Equal(t, tc.expectedResult, result)
 		})
 	}
+}
+
+func TestReconcile_AddsFinalizer(t *testing.T) {
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pipeline",
+			Namespace: "test-namespace",
+		},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{GitRef: "abc123", Branch: "main"},
+		},
+	}
+	reconciler := setUpReconciler(t, []client.Object{pipeline}, env.Context{})
+
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"},
+	})
+	require.NoError(t, err)
+
+	updated := &v2pb.Pipeline{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "test-pipeline", &metav1.GetOptions{}, updated))
+	require.True(t, controllerutil.ContainsFinalizer(updated, api.PipelineFinalizer))
+}
+
+func TestReconcile_RemovesFinalizerOnDelete(t *testing.T) {
+	now := metav1.Now()
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "test-pipeline",
+			Namespace:         "test-namespace",
+			Finalizers:        []string{api.PipelineFinalizer},
+			DeletionTimestamp: &now,
+		},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{GitRef: "abc123", Branch: "main"},
+		},
+	}
+	reconciler := setUpReconciler(t, []client.Object{pipeline}, env.Context{})
+
+	result, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, ctrl.Result{}, result)
+
+	// Verify finalizer was removed (object may or may not still exist depending on fake client behavior)
+	updated := &v2pb.Pipeline{}
+	err = reconciler.Get(context.Background(), "test-namespace", "test-pipeline", &metav1.GetOptions{}, updated)
+	if err == nil {
+		require.False(t, controllerutil.ContainsFinalizer(updated, api.PipelineFinalizer))
+	}
+}
+
+// updateErroringHandler wraps an api.Handler and returns a configured error
+// from Update. Used to exercise finalizer Update error branches.
+type updateErroringHandler struct {
+	api.Handler
+	updateErr error
+}
+
+func (u *updateErroringHandler) Update(ctx context.Context, obj client.Object, opts *metav1.UpdateOptions) error {
+	if u.updateErr != nil {
+		return u.updateErr
+	}
+	return u.Handler.Update(ctx, obj, opts)
+}
+
+func setUpReconcilerWithUpdateErr(t *testing.T, initialObjects []client.Object, updateErr error) *Reconciler {
+	scheme := runtime.NewScheme()
+	require.NoError(t, v2pb.AddToScheme(scheme))
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initialObjects...).WithStatusSubresource(initialObjects...).Build()
+	return &Reconciler{
+		Handler: &updateErroringHandler{Handler: apiHandler.NewFakeAPIHandler(k8sClient), updateErr: updateErr},
+		logger:  zaptest.NewLogger(t),
+	}
+}
+
+func TestReconcile_AddFinalizer_UpdateError(t *testing.T) {
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pipeline",
+			Namespace: "test-namespace",
+		},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{GitRef: "abc123", Branch: "main"},
+		},
+	}
+	updateErr := errors.New("update boom")
+	reconciler := setUpReconcilerWithUpdateErr(t, []client.Object{pipeline}, updateErr)
+
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"},
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, err, updateErr)
+	require.Contains(t, err.Error(), "add pipeline finalizer")
+}
+
+func TestReconcile_RemoveFinalizer_UpdateError(t *testing.T) {
+	now := metav1.Now()
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "test-pipeline",
+			Namespace:         "test-namespace",
+			Finalizers:        []string{api.PipelineFinalizer},
+			DeletionTimestamp: &now,
+		},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{GitRef: "abc123", Branch: "main"},
+		},
+	}
+	updateErr := errors.New("update boom")
+	reconciler := setUpReconcilerWithUpdateErr(t, []client.Object{pipeline}, updateErr)
+
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"},
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, err, updateErr)
+	require.Contains(t, err.Error(), "remove pipeline finalizer")
 }
 
 func setUpReconciler(t *testing.T, initialObjects []client.Object, env env.Context) *Reconciler {

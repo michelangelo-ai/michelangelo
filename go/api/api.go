@@ -17,6 +17,11 @@ const (
 	// all the pre-delete actions are completed before removing this finalizer.
 	IngesterFinalizer = "michelangelo/Ingester"
 
+	// PipelineFinalizer is used as the pre-delete hook for pipeline controller.
+	// The pipeline controller checks if all child resources (TriggerRuns, PipelineRuns)
+	// are terminated and cleaned up before removing this finalizer.
+	PipelineFinalizer = "michelangelo/Pipeline"
+
 	/////////////////////////// K8s Annotations ///////////////////////////
 
 	// DeletingAnnotation is used to mark a CRD object is pending on deletion.
