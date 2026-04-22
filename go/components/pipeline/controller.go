@@ -21,6 +21,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	"github.com/michelangelo-ai/michelangelo/go/base/revision"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun"
 	"github.com/michelangelo-ai/michelangelo/go/components/triggerrun"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -48,6 +49,7 @@ type Reconciler struct {
 	apiHandlerFactory  apiHandler.Factory
 	triggerRunManager  triggerrun.Manager
 	pipelineRunManager pipelinerun.Manager
+	revisionManager    revision.Manager
 }
 
 // Reconcile is the main reconciliation loop entry point for Pipeline resources.
@@ -224,11 +226,54 @@ func (r *Reconciler) handleDeletion(ctx context.Context, pipeline *v2pb.Pipeline
 		return ctrl.Result{RequeueAfter: reconcileInterval}, nil
 	}
 
-	// Delete steps will be added in subsequent PRs
-	logger.Info("Children found, requeueing for cascade delete",
+	// All children are terminal — delete them (fatal: error causes requeue)
+	logger.Info("All children terminal, deleting",
 		zap.Int("triggerRuns", len(triggerRuns)),
 		zap.Int("pipelineRuns", len(pipelineRuns)))
-	return ctrl.Result{RequeueAfter: reconcileInterval}, nil
+
+	if err := r.triggerRunManager.DeleteAllTriggerRuns(ctx, pipeline.Namespace, pipeline.Name); err != nil {
+		logger.Error("Failed to delete trigger runs during cascade delete",
+			zap.Error(err),
+			zap.String("operation", "delete_all_trigger_runs"),
+			zap.String("namespace", pipeline.Namespace),
+			zap.String("name", pipeline.Name))
+		return ctrl.Result{}, fmt.Errorf("delete trigger runs for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
+	}
+	if err := r.pipelineRunManager.DeleteAllPipelineRuns(ctx, pipeline.Namespace, pipeline.Name); err != nil {
+		logger.Error("Failed to delete pipeline runs during cascade delete",
+			zap.Error(err),
+			zap.String("operation", "delete_all_pipeline_runs"),
+			zap.String("namespace", pipeline.Namespace),
+			zap.String("name", pipeline.Name))
+		return ctrl.Result{}, fmt.Errorf("delete pipeline runs for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
+	}
+
+	// Best-effort revision cleanup. Revisions are a tracking concern; failing to
+	// clean them up should not block finalizer removal. The deployment controller
+	// follows the same pattern in go/components/deployment/controller.go.
+	if err := r.revisionManager.DeleteAllRevisions(ctx, pipeline.Namespace, pipeline.Name, "Pipeline"); err != nil {
+		// Best-effort: revision cleanup failure does not block finalizer removal.
+		// Logged at Info per the Michelangelo logging convention (Warn is not used;
+		// see docs/contributing/dev/go/code-style — Info covers expected transient
+		// failures, Error is reserved for actionable issues that block reconcile).
+		logger.Info("Failed to delete revisions during cascade delete (continuing)",
+			zap.Error(err),
+			zap.String("operation", "delete_all_revisions"),
+			zap.String("namespace", pipeline.Namespace),
+			zap.String("name", pipeline.Name))
+	}
+
+	logger.Info("All children deleted, removing finalizer")
+	controllerutil.RemoveFinalizer(pipeline, api.PipelineFinalizer)
+	if err := r.Update(ctx, pipeline, &metav1.UpdateOptions{}); err != nil {
+		logger.Error("Failed to remove finalizer after cascade delete",
+			zap.Error(err),
+			zap.String("operation", "remove_finalizer"),
+			zap.String("namespace", pipeline.Namespace),
+			zap.String("name", pipeline.Name))
+		return ctrl.Result{}, fmt.Errorf("remove finalizer on pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
+	}
+	return ctrl.Result{}, nil
 }
 
 // formatRevisionName generates a standardized revision name for a pipeline.
@@ -270,6 +315,9 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 	r.Handler = handler
 	r.triggerRunManager = triggerrun.NewManager(mgr.GetClient(), r.logger)
 	r.pipelineRunManager = pipelinerun.NewManager(mgr.GetClient(), r.logger)
+	if r.revisionManager == nil {
+		r.revisionManager = revision.NewNoOpManager()
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.Pipeline{}).
 		Complete(r)
