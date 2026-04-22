@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"go.uber.org/zap"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -16,6 +17,7 @@ type Manager interface {
 	ListTriggerRunsForPipeline(ctx context.Context, namespace, pipelineName string) ([]*v2pb.TriggerRun, error)
 	ListActiveTriggerRunsForPipeline(ctx context.Context, namespace, pipelineName string) ([]*v2pb.TriggerRun, error)
 	KillTriggerRun(ctx context.Context, tr *v2pb.TriggerRun) error
+	DeleteAllTriggerRuns(ctx context.Context, namespace, pipelineName string) error
 }
 
 type managerImpl struct {
@@ -81,6 +83,22 @@ func (m *managerImpl) KillTriggerRun(ctx context.Context, tr *v2pb.TriggerRun) e
 	tr.Spec.Kill = true
 	if err := m.k8sClient.Update(ctx, tr); err != nil {
 		return fmt.Errorf("kill trigger run %s/%s: %w", tr.Namespace, tr.Name, err)
+	}
+	return nil
+}
+
+func (m *managerImpl) DeleteAllTriggerRuns(ctx context.Context, namespace, pipelineName string) error {
+	triggerRuns, err := m.ListTriggerRunsForPipeline(ctx, namespace, pipelineName)
+	if err != nil {
+		return err
+	}
+	for _, tr := range triggerRuns {
+		if err := m.k8sClient.Delete(ctx, tr); err != nil {
+			if apiErrors.IsNotFound(err) {
+				continue
+			}
+			return fmt.Errorf("delete trigger run %s/%s: %w", tr.Namespace, tr.Name, err)
+		}
 	}
 	return nil
 }
