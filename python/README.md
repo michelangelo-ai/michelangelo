@@ -9,7 +9,7 @@ Michelangelo gives ML engineers and data scientists a unified Python SDK for the
 
 ## Key Features
 
-- **UniFlow Pipeline Framework** — Define ML workflows with `@task` and `@workflow` decorators. Write plain Python functions and Michelangelo handles distributed execution, data passing between tasks, and result caching.
+- **Uniflow Pipeline Framework** — Define ML workflows with `@task` and `@workflow` decorators. Write plain Python functions and Michelangelo handles distributed execution, data passing between tasks, and result caching.
 
 - **Distributed Execution** — Scale tasks across Ray or Spark clusters with a single config change. Specify CPU, memory, GPU, and worker resources per task — no changes to your business logic required.
 
@@ -137,7 +137,7 @@ export MICHELANGELO_API_SERVER="localhost:12345"
 Full documentation is available at **[michelangelo-ai.github.io/michelangelo/docs](https://michelangelo-ai.github.io/michelangelo/docs)**.
 
 - [User Guides](https://michelangelo-ai.github.io/michelangelo/docs/user-guides) — Step-by-step guides for data preparation, training, and deployment
-- [ML Pipelines](https://michelangelo-ai.github.io/michelangelo/docs/user-guides/ml-pipelines) — Deep dive into the UniFlow pipeline framework
+- [ML Pipelines](https://michelangelo-ai.github.io/michelangelo/docs/user-guides/ml-pipelines) — Deep dive into the Uniflow pipeline framework
 - [Set Up Triggers](https://michelangelo-ai.github.io/michelangelo/docs/user-guides/set-up-triggers) — Automate pipeline execution with cron and backfill triggers
 - [CLI Reference](https://michelangelo-ai.github.io/michelangelo/docs/user-guides/cli) — Full command-line interface documentation
 

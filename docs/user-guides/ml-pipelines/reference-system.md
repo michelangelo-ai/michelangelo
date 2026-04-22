@@ -1,8 +1,8 @@
-# Data Passing and References in UniFlow
+# Data Passing and References in Uniflow
 
 ## What you'll learn
 
-* How data flows between tasks in UniFlow
+* How data flows between tasks in Uniflow
 * What References are and why they're needed
 * How to work with task outputs and inputs
 * Automatic serialization and deserialization
@@ -12,7 +12,7 @@
 
 ## The Problem: Data Between Tasks
 
-When tasks run on distributed clusters, you can't just pass Python objects directly between them. UniFlow solves this with **References** - a smart system that handles data serialization, storage, and retrieval automatically.
+When tasks run on distributed clusters, you can't just pass Python objects directly between them. Uniflow solves this with **References** - a smart system that handles data serialization, storage, and retrieval automatically.
 
 ```python
 # What you write:
@@ -34,7 +34,7 @@ def my_pipeline(file_path: str):
     return result
 ```
 
-**Behind the scenes**, UniFlow:
+**Behind the scenes**, Uniflow:
 1. Serializes the DataFrame returned by `load_data`
 2. Stores it in your configured storage (S3, GCS, etc.)
 3. Passes a Reference (a URL + metadata) to `process_data`
@@ -45,7 +45,7 @@ def my_pipeline(file_path: str):
 
 ## Understanding References
 
-A **Reference** is UniFlow's internal representation of data that's been stored between tasks. It contains:
+A **Reference** is Uniflow's internal representation of data that's been stored between tasks. It contains:
 
 | Component | What It Is | Example |
 |-----------|-----------|---------|
@@ -69,7 +69,7 @@ from michelangelo.uniflow.plugins.ray import RayTask
 def load_data(file_path: str):
     """
     Returns: pandas DataFrame
-    UniFlow converts to: Reference pointing to stored DataFrame
+    Uniflow converts to: Reference pointing to stored DataFrame
     """
     import pandas as pd
     df = pd.read_csv(file_path)
@@ -80,7 +80,7 @@ def clean_data(data):
     """
     Receives: Reference (automatically deserialized to DataFrame)
     Returns: Cleaned DataFrame
-    UniFlow converts to: Reference pointing to stored cleaned data
+    Uniflow converts to: Reference pointing to stored cleaned data
     """
     # data is a real DataFrame, not a Reference object
     cleaned = data.dropna()
@@ -109,7 +109,7 @@ def training_pipeline(file_path: str):
     return model
 ```
 
-**Key insight:** Each task receives a Reference but works with the original Python object. UniFlow handles all serialization/deserialization.
+**Key insight:** Each task receives a Reference but works with the original Python object. Uniflow handles all serialization/deserialization.
 
 ---
 
@@ -125,7 +125,7 @@ from michelangelo.uniflow.plugins.ray import RayTask
 def split_data(data):
     """
     Returns: Tuple of (train_data, validation_data)
-    UniFlow creates: Reference for each element
+    Uniflow creates: Reference for each element
     """
     from sklearn.model_selection import train_test_split
     train, val = train_test_split(data)
@@ -158,7 +158,7 @@ def training_pipeline(data):
 
 ## Cross-Framework Data Passing (Ray to Spark)
 
-One of UniFlow's powerful features: **seamlessly pass data between Ray and Spark tasks**.
+One of Uniflow's powerful features: **seamlessly pass data between Ray and Spark tasks**.
 
 ```python
 from michelangelo.uniflow.core import task, workflow
@@ -170,7 +170,7 @@ def load_with_ray(file_path: str):
     """
     Task 1: Load with Ray
     Returns: Ray dataset
-    UniFlow creates: Reference
+    Uniflow creates: Reference
     """
     import ray.data
     dataset = ray.data.read_csv(file_path)
@@ -180,7 +180,7 @@ def load_with_ray(file_path: str):
 def process_with_spark(data):
     """
     Task 2: Receives Reference from Ray task
-    UniFlow automatically: Converts Ray dataset to Spark dataframe
+    Uniflow automatically: Converts Ray dataset to Spark dataframe
     Returns: Spark dataframe
     """
     # data is now a Spark DataFrame (automatic conversion!)
@@ -191,7 +191,7 @@ def process_with_spark(data):
 def analyze_with_ray(data):
     """
     Task 3: Receives Reference from Spark task
-    UniFlow automatically: Converts Spark dataframe to Ray dataset
+    Uniflow automatically: Converts Spark dataframe to Ray dataset
     """
     # data is now a Ray dataset (automatic conversion!)
     summary = data.groupby("category").mean()
@@ -215,7 +215,7 @@ def multi_framework_pipeline(file_path: str):
 
 ## Supported Data Types
 
-UniFlow's type system (covered in detail in [Type System Guide](./type-system.md)) supports automatic serialization for:
+Uniflow's type system (covered in detail in [Type System Guide](./type-system.md)) supports automatic serialization for:
 
 **Basic types:**
 - Integers, floats, strings, booleans
@@ -289,7 +289,7 @@ def process_data(data):
     result = some_computation(data)
     return json.dumps(result)  # Don't do this!
 
-# ✅ DO - Let UniFlow handle it
+# ✅ DO - Let Uniflow handle it
 @task(config=RayTask(...))
 def process_data(data):
     result = some_computation(data)
@@ -386,7 +386,7 @@ def expensive_task(input_data):
 
 ### Issue: "Data type not supported"
 
-**Cause:** You're trying to pass a type that isn't registered with UniFlow
+**Cause:** You're trying to pass a type that isn't registered with Uniflow
 
 **Solution:** See [Type System Guide](./type-system.md) for supported types and how to add custom types
 
