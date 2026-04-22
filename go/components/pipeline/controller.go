@@ -21,6 +21,8 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun"
+	"github.com/michelangelo-ai/michelangelo/go/components/triggerrun"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,9 +43,11 @@ const (
 // operations and maintains environment context and logging capabilities.
 type Reconciler struct {
 	api.Handler
-	env               env.Context
-	logger            *zap.Logger
-	apiHandlerFactory apiHandler.Factory
+	env                env.Context
+	logger             *zap.Logger
+	apiHandlerFactory  apiHandler.Factory
+	triggerRunManager  triggerrun.Manager
+	pipelineRunManager pipelinerun.Manager
 }
 
 // Reconcile is the main reconciliation loop entry point for Pipeline resources.
@@ -75,14 +79,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			}
 		}
 	} else {
-		// Pipeline is being deleted — remove finalizer to allow deletion
-		// Cascade delete logic will be added in a subsequent PR
-		logger.Info("Pipeline is being deleted, removing finalizer")
-		controllerutil.RemoveFinalizer(pipeline, api.PipelineFinalizer)
-		if err := r.Update(ctx, pipeline, &metav1.UpdateOptions{}); err != nil {
-			return ctrl.Result{}, fmt.Errorf("remove pipeline finalizer: %w", err)
-		}
-		return ctrl.Result{}, nil
+		return r.handleDeletion(ctx, pipeline, logger)
 	}
 
 	originalPipeline := pipeline.DeepCopy()
@@ -139,6 +136,55 @@ func (r *Reconciler) updatePipelineStatus(ctx context.Context, pipeline *v2pb.Pi
 	return result, nil
 }
 
+func (r *Reconciler) handleDeletion(ctx context.Context, pipeline *v2pb.Pipeline, logger *zap.Logger) (ctrl.Result, error) {
+	// If the finalizer is not present we don't own this deletion; nothing to cascade.
+	// Avoids wasted list/kill/delete work on pipelines that pre-date the finalizer rollout.
+	if !controllerutil.ContainsFinalizer(pipeline, api.PipelineFinalizer) {
+		return ctrl.Result{}, nil
+	}
+	logger.Info("Pipeline is being deleted, starting cascade delete")
+
+	triggerRuns, err := r.triggerRunManager.ListTriggerRunsForPipeline(ctx, pipeline.Namespace, pipeline.Name)
+	if err != nil {
+		logger.Error("Failed to list trigger runs for cascade delete",
+			zap.Error(err),
+			zap.String("operation", "list_trigger_runs"),
+			zap.String("namespace", pipeline.Namespace),
+			zap.String("name", pipeline.Name))
+		return ctrl.Result{}, fmt.Errorf("list trigger runs for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
+	}
+
+	pipelineRuns, err := r.pipelineRunManager.ListPipelineRunsForPipeline(ctx, pipeline.Namespace, pipeline.Name)
+	if err != nil {
+		logger.Error("Failed to list pipeline runs for cascade delete",
+			zap.Error(err),
+			zap.String("operation", "list_pipeline_runs"),
+			zap.String("namespace", pipeline.Namespace),
+			zap.String("name", pipeline.Name))
+		return ctrl.Result{}, fmt.Errorf("list pipeline runs for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
+	}
+
+	if len(triggerRuns) == 0 && len(pipelineRuns) == 0 {
+		logger.Info("No children found, removing finalizer")
+		controllerutil.RemoveFinalizer(pipeline, api.PipelineFinalizer)
+		if updateErr := r.Update(ctx, pipeline, &metav1.UpdateOptions{}); updateErr != nil {
+			logger.Error("Failed to remove finalizer after cascade delete",
+				zap.Error(updateErr),
+				zap.String("operation", "remove_finalizer"),
+				zap.String("namespace", pipeline.Namespace),
+				zap.String("name", pipeline.Name))
+			return ctrl.Result{}, fmt.Errorf("remove finalizer on pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, updateErr)
+		}
+		return ctrl.Result{}, nil
+	}
+
+	// Kill and delete steps will be added in subsequent PRs
+	logger.Info("Children found, requeueing for cascade delete",
+		zap.Int("triggerRuns", len(triggerRuns)),
+		zap.Int("pipelineRuns", len(pipelineRuns)))
+	return ctrl.Result{RequeueAfter: reconcileInterval}, nil
+}
+
 // formatRevisionName generates a standardized revision name for a pipeline.
 //
 // The name format is: "pipeline-{lowercase-pipeline-name}-{git-ref-prefix}"
@@ -176,6 +222,8 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 		return err
 	}
 	r.Handler = handler
+	r.triggerRunManager = triggerrun.NewManager(mgr.GetClient(), r.logger)
+	r.pipelineRunManager = pipelinerun.NewManager(mgr.GetClient(), r.logger)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.Pipeline{}).
 		Complete(r)
