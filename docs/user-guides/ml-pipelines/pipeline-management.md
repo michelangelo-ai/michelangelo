@@ -278,3 +278,31 @@ ma pipeline run -n <namespace> --revision <pipeline_revision_name>
 ```bash
 ma pipeline run -n my-project --revision pipeline-simple-custom-train-511e3b3be42f
 ```
+
+## Pipeline deletion
+
+Deleting a pipeline cascades to all of its child resources. The Michelangelo controller will:
+
+1. Kill any active `TriggerRun` resources for the pipeline (`Spec.Action = KILL`).
+2. Kill any active `PipelineRun` resources for the pipeline (`Spec.Kill = true`).
+3. Wait for those children to reach a terminal state (`SUCCEEDED`, `FAILED`, `KILLED`, or `SKIPPED`).
+4. Delete every `TriggerRun`, `PipelineRun`, and `Revision` belonging to the pipeline.
+5. Remove the pipeline finalizer so Kubernetes can finally delete the pipeline CR.
+
+Delete a pipeline:
+
+```bash
+ma pipeline delete --namespace=<namespace> --name=<pipeline_name>
+```
+
+:::warning
+Pipeline deletion is **destructive** and **cascades to all child resources**. All `TriggerRun`s, `PipelineRun`s, and `Revision`s belonging to the pipeline will be deleted. There is no undo.
+:::
+
+:::note
+Deletion is **asynchronous**. The `ma pipeline delete` command returns immediately, but the pipeline CR remains in `Terminating` state until the controller finishes the cascade. For pipelines with many children, this may take several minutes. If a child workflow is stuck and cannot be killed, the controller gives up after 30 minutes and forcefully deletes the child CRs anyway, so the pipeline CR will not stay in `Terminating` indefinitely.
+:::
+
+:::tip
+If you only want to remove the pipeline definition but keep its history (TriggerRuns, PipelineRuns, Revisions) for audit, this cascade behavior is not currently configurable. File a feature request if you need that mode.
+:::
