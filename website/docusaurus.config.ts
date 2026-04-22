@@ -12,9 +12,8 @@ const config: Config = {
     experimental_faster: true,
   },
 
-  // GitHub Pages project site config (revert to /michelangelo/ until custom domain is verified)
-  url: 'https://michelangelo-ai.github.io',
-  baseUrl: '/michelangelo/',
+  url: 'https://michelangelo-ai.org',
+  baseUrl: '/',
   organizationName: 'michelangelo-ai',
   projectName: 'michelangelo',
 
