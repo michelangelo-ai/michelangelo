@@ -160,6 +160,12 @@ ma sandbox demo inference   # sets up demo inference server
 
 ---
 
+## What's next?
+
+- **Run your first pipeline**: Follow the [Getting Started with ML Pipelines](../user-guides/ml-pipelines/getting-started.md) guide to define tasks, build a workflow, and run it on your sandbox
+- **Understand the concepts**: Read [Core Concepts and Key Terms](./core-concepts-and-key-terms.md) to learn how projects, workflows, and deployments fit together
+- **Explore the services**: See [Sandbox Ports and Endpoints](./ma-sandbox-ports-and-endpoints.md) for a full list of local URLs for the UI, Ray Dashboard, MinIO, and more
+
 ## Running your first workflow
 
 Once your sandbox is running, you can run Uniflow workflows locally or remotely.

@@ -2,6 +2,19 @@
 
 Build and run your first ML pipeline on Michelangelo in minutes. This guide walks you through a complete example -- from defining tasks and workflows to running locally and deploying remotely.
 
+## What you'll build
+
+By the end of this guide you'll have a working pipeline that looks like this:
+
+```
+dataset_id
+    └─▶ load_dataset()       # Ray task: splits data into train/val/test
+            └─▶ train()      # Ray task: trains a model on the splits
+                    └─▶ evaluate()   # Ray task: computes metrics, returns results
+```
+
+Each step runs as an isolated, containerized task. Michelangelo handles data passing between them, caches intermediate results, and retries on transient failures — your code stays plain Python.
+
 ## What you'll learn
 
 * How to define tasks with the `@task` decorator

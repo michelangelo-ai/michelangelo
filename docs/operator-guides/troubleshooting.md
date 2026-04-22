@@ -230,3 +230,9 @@ kubectl get configmap envoy-config -o yaml
 - The Envoy cluster's `socket_address.address` for `michelangelo-apiserver` is wrong — it must be the Kubernetes service name for the API server within the cluster
 - CORS allowed origins in the Envoy config do not include the origin from which users are accessing the UI
 - The Ingress resource for the UI or API server is misconfigured (wrong hostname, missing TLS secret)
+
+## What's next?
+
+- **Monitoring**: Set up proactive alerting so issues surface before users report them in the [Monitoring guide](./monitoring.md)
+- **Network & Ingress**: Resolve Ingress and CORS issues at the source with the [Network guide](./network.md)
+- **Authentication**: Fix RBAC and OIDC configuration issues with the [Authentication guide](./authentication.md)
