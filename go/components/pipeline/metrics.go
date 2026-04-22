@@ -32,6 +32,44 @@ var (
 		},
 		[]string{"namespace", "pipeline", "pipeline_type"},
 	)
+
+	// pipelineCascadeDeleteStarted tracks cascade delete initiations
+	pipelineCascadeDeleteStarted = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "pipeline_cascade_delete_started_total",
+			Help: "Total number of pipeline cascade deletes started (one per cascade, not per requeue)",
+		},
+		[]string{"namespace", "pipeline"},
+	)
+
+	// pipelineCascadeDeleteCompleted tracks successful cascade deletes
+	pipelineCascadeDeleteCompleted = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "pipeline_cascade_delete_completed_total",
+			Help: "Total number of pipeline cascade deletes completed",
+		},
+		[]string{"namespace", "pipeline"},
+	)
+
+	// pipelineCascadeDeleteError tracks cascade delete errors by reason
+	pipelineCascadeDeleteError = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "pipeline_cascade_delete_error_total",
+			Help: "Total number of pipeline cascade delete errors, tagged by reason (list_error, delete_error, update_error, kill_timeout)",
+		},
+		[]string{"namespace", "pipeline", "reason"},
+	)
+
+	// pipelineCascadeDeleteActiveChildren tracks active children during cascade delete.
+	// The `kind` label distinguishes between trigger_run and pipeline_run so dashboards
+	// can visualize each independently instead of a toggling single value.
+	pipelineCascadeDeleteActiveChildren = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "pipeline_cascade_delete_active_children",
+			Help: "Number of active children during pipeline cascade delete, broken down by kind",
+		},
+		[]string{"namespace", "pipeline", "kind"},
+	)
 )
 
 // RegisterPipelineMetrics registers all pipeline metrics with the controller-runtime metrics registry
@@ -40,6 +78,10 @@ func RegisterPipelineMetrics() {
 		pipelineReconcileErrors,
 		pipelineReconcileSuccess,
 		pipelineReady,
+		pipelineCascadeDeleteStarted,
+		pipelineCascadeDeleteCompleted,
+		pipelineCascadeDeleteError,
+		pipelineCascadeDeleteActiveChildren,
 	)
 }
 
@@ -58,4 +100,26 @@ func IncPipelineReconcileSuccess(namespace, pipeline string) {
 // IncPipelineReady increments the pipeline ready counter
 func IncPipelineReady(namespace, pipeline, pipelineType string) {
 	pipelineReady.WithLabelValues(namespace, pipeline, pipelineType).Inc()
+}
+
+// IncCascadeDeleteStarted increments the cascade delete started counter
+func IncCascadeDeleteStarted(namespace, pipeline string) {
+	pipelineCascadeDeleteStarted.WithLabelValues(namespace, pipeline).Inc()
+}
+
+// IncCascadeDeleteCompleted increments the cascade delete completed counter
+func IncCascadeDeleteCompleted(namespace, pipeline string) {
+	pipelineCascadeDeleteCompleted.WithLabelValues(namespace, pipeline).Inc()
+}
+
+// IncCascadeDeleteError increments the cascade delete error counter with a
+// reason label (list_error, delete_error, update_error, kill_timeout).
+func IncCascadeDeleteError(namespace, pipeline, reason string) {
+	pipelineCascadeDeleteError.WithLabelValues(namespace, pipeline, reason).Inc()
+}
+
+// SetCascadeDeleteActiveChildren sets the active children gauge for a specific
+// child kind (trigger_run or pipeline_run).
+func SetCascadeDeleteActiveChildren(namespace, pipeline, kind string, count int) {
+	pipelineCascadeDeleteActiveChildren.WithLabelValues(namespace, pipeline, kind).Set(float64(count))
 }
