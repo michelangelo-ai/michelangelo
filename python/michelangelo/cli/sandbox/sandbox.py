@@ -318,11 +318,10 @@ def _sync(ns: argparse.Namespace):
             check=False,
             capture_output=True,
         )
-    subprocess.run(
-        ["kubectl", "delete", "secret", "aws-credentials", "--ignore-not-found=true"],
-        check=False,
-        capture_output=True,
-    )
+    # minio-credentials Secret is intentionally NOT deleted here — it is
+    # managed by _ensure_credentials_secret() which creates it only when it
+    # does not already exist. This lets the GCP sandbox VM pre-configure its
+    # own credentials without sync overwriting them each run.
 
     print("Waiting for old app pods to fully terminate...")
     subprocess.run(
@@ -343,7 +342,6 @@ def _deploy_app_services(ns: argparse.Namespace):
     assert ns
     app_resources = [
         "michelangelo-config.yaml",
-        "aws-credentials.yaml",
     ]
     if "apiserver" not in ns.exclude:
         app_resources.append("michelangelo-apiserver.yaml")
@@ -353,6 +351,15 @@ def _deploy_app_services(ns: argparse.Namespace):
 
     for r in app_resources:
         _kube_apply(_dir / "resources" / r)
+
+    # Create credentials secrets only if they don't already exist, so a
+    # pre-configured sandbox VM keeps its own credentials across CI runs.
+    _ensure_credentials_secret()
+
+    # Patch michelangelo-config ConfigMap to match the live secret, so
+    # Ray pods (which consume the ConfigMap via envFrom) also get the
+    # correct credentials.
+    _sync_config_from_secret()
 
     if ns.workflow == "cadence":
         # Domain registration is a one-time setup done by _create.
@@ -385,7 +392,6 @@ def _deploy_services(ns: argparse.Namespace):
         "mysql.yaml",  # MySQL database
         "mysql-ingester.yaml",  # Auto-generated ingester schema from protobuf
         "michelangelo-config.yaml",
-        "aws-credentials.yaml",
     ]
     links = []
 
@@ -481,6 +487,11 @@ def _deploy_services(ns: argparse.Namespace):
     _create_bucket_setup(bucket_names)
     for r in resources:
         _kube_apply(_dir / "resources" / r)
+
+    # Create credentials secrets only if they don't already exist.
+    _ensure_credentials_secret()
+    # Patch michelangelo-config to match the live secret values.
+    _sync_config_from_secret()
 
     _assert_command(
         "helm", "Helm not found, please install it: https://helm.sh/docs/intro/install/"
@@ -1106,6 +1117,82 @@ def _stop(ns: argparse.Namespace):
 
 def _kube_create(path: Path):
     _exec("kubectl", "create", "-f", str(path))
+
+
+def _ensure_credentials_secret():
+    """Create minio-credentials and aws-credentials Secrets only if absent.
+
+    This is deliberately create-only: a sandbox VM that was pre-configured
+    with non-default credentials (e.g. the GCP CI runner) keeps its own
+    values across every ``ma sandbox sync`` run.  Local dev gets the
+    default minioadmin credentials from the YAML files on first create.
+    """
+    for secret_name, yaml_file in [
+        ("minio-credentials", "minio-credentials.yaml"),
+        ("aws-credentials", "aws-credentials.yaml"),
+    ]:
+        exists = (
+            subprocess.run(
+                ["kubectl", "get", "secret", secret_name],
+                capture_output=True,
+            ).returncode
+            == 0
+        )
+        if not exists:
+            print(f"Creating {secret_name} Secret from defaults...")
+            _kube_apply(_dir / "resources" / yaml_file)
+        else:
+            print(
+                f"Secret '{secret_name}' already exists — "
+                f"skipping (preserving VM credentials)."
+            )
+
+
+def _sync_config_from_secret():
+    """Patch michelangelo-config ConfigMap credentials from minio-credentials Secret.
+
+    Ray pods consume the michelangelo-config ConfigMap via envFrom. After the
+    ConfigMap is (re)applied from the YAML file (which contains minioadmin
+    defaults), this function overwrites the credential fields with whatever
+    is actually in the minio-credentials Secret, so all consumers see the
+    same credentials.
+    """
+    result = subprocess.run(
+        [
+            "kubectl",
+            "get",
+            "secret",
+            "minio-credentials",
+            "-o",
+            "jsonpath={.data.AWS_ACCESS_KEY_ID} {.data.AWS_SECRET_ACCESS_KEY}",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        # Secret will be created by _ensure_credentials_secret
+        return
+
+    import base64
+
+    parts = result.stdout.strip().split()
+    if len(parts) != 2:
+        return
+    access_key = base64.b64decode(parts[0]).decode()
+    secret_key = base64.b64decode(parts[1]).decode()
+
+    subprocess.run(
+        [
+            "kubectl",
+            "patch",
+            "configmap",
+            "michelangelo-config",
+            "--patch",
+            f'{{"data":{{"AWS_ACCESS_KEY_ID":"{access_key}","AWS_SECRET_ACCESS_KEY":"{secret_key}"}}}}',
+        ],
+        check=False,
+        capture_output=True,
+    )
 
 
 def _kube_apply(path: Path):
