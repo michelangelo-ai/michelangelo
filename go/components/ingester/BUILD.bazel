@@ -11,6 +11,7 @@ go_library(
     deps = [
         "//go/api:go_default_library",
         "//go/storage:go_default_library",
+        "//proto/api/v2:go_default_library",
         "@com_github_go_logr_logr//:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/runtime:go_default_library",
@@ -42,5 +43,19 @@ go_test(
         "@io_k8s_sigs_controller_runtime//:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/client/fake:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_integration_test",
+    srcs = ["ingester_integration_test.go"],
+    gotags = ["integration"],
+    tags = [
+        "local",
+        "manual",
+    ],
+    deps = [
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
     ],
 )
