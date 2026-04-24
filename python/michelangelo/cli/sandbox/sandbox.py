@@ -1142,8 +1142,10 @@ def _ensure_credentials_secret():
             print(f"Creating {secret_name} Secret from defaults...")
             _kube_apply(_dir / "resources" / yaml_file)
         else:
-            print(f"Secret '{secret_name}' already exists — "
-                  f"skipping (preserving VM credentials).")
+            print(
+                f"Secret '{secret_name}' already exists — "
+                f"skipping (preserving VM credentials)."
+            )
 
 
 def _sync_config_from_secret():
