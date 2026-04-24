@@ -1,12 +1,10 @@
 # Michelangelo API Framework
 
-Michelangelo is an end-to-end ML platform designed to democratize machine learning and make scaling AI accessible across organizations. It enables ML practitioners to seamlessly build, deploy, and operate machine learning solutions at scale. Michelangelo is designed to cover the end-to-end ML workflow: manage data, train, evaluate, and deploy models, make predictions, and monitor predictions.
+The Michelangelo API Framework abstracts Kubernetes CRDs through a gRPC API server. It is the control plane component that the `ma` CLI, UI, worker, and SDK all talk to. This guide covers the architecture of that component and how its parts fit together for operators deploying or maintaining Michelangelo.
 
-Michelangelo consists of a mix of open-source systems and components built in-house. We generally prefer to use mature open-source options where possible and will fork, customize, and contribute back as needed, though we sometimes build systems ourselves when open-source solutions are not ideal for a given use case.
+**Audience**: Platform operators and contributors who need to understand how the API layer is structured.
 
-An important piece of the system is Michelangelo API. This is the brain of the system. It consists of a management application that serves the web UI and network API. Currently, there is no industry-wide API standard for ML platforms and tooling, nor an end-to-end implementation reference available, and there’s no open-source initiative to tackle this problem. Teams and organizations tend to build their own APIs with no industry-wide agreed-upon standards, resulting in duplication of effort and incompatibility among ML products built by different teams.
-
-Michelangelo has been field tested with highly complex real-world ML use cases at scale. The Michelangelo API Framework can help close this gap. We’d like to share our years of learning and experience building a highly scalable and reliable end-to-end ML platform with the ML community.
+**Prerequisites**: Familiarity with Kubernetes CRDs, gRPC, and the Michelangelo control plane (see [Platform Setup](platform-setup.md)).
 
 <!--
 ## Getting Started
@@ -23,7 +21,7 @@ HTTP/JSON. Michelangelo will support three SDK bindings by default
 including Python, Golang and Java. Any other language bindings
 supported by gRPC should work as well.
 
-For detailed Michelangelo API definition, see the API Reference (coming soon).
+For detailed Michelangelo API definition, see the protobuf definitions in `proto/`.
 
 Figure below shows the high-level architecture of Michelangelo API
 framework that consists of the following components:

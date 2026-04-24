@@ -45,7 +45,7 @@ Users can use the no-code dev environment to perform standardized ML tasks witho
 
 #### Uniflow (Orchestration Framework)
 
-**Uniflow** is a structured, scalable orchestration framework designed to manage AI/ML pipelines at scale. It enables you to modularize your computation into **tasks**, chain them into **workflows**, and manage input/output artifacts efficiently.
+**Uniflow** is a Python orchestration framework for AI/ML pipelines. It enables you to modularize your computation into **tasks**, chain them into **workflows**, and manage input/output artifacts efficiently.
 
 ### Execution & Infrastructure
 
@@ -167,7 +167,7 @@ Collection of model metrics. Some examples are model performance report, feature
 
 ### Model Excellence Scores
 
-Model Excellent Scores (MES) provide visibility into the ML model quality throughout various stages of a model’s life cycle, such as feature quality, prediction performance, and model freshness.
+Model Excellence Scores (MES) provide visibility into the ML model quality throughout various stages of a model’s life cycle, such as feature quality, prediction performance, and model freshness.
 
 ### Deployment
 
@@ -209,22 +209,6 @@ Intermediate datasets are stored using Uniflow's abstract IO layer for:
 - Fault tolerance
 - Reuse across executions
 - Backend flexibility (S3, HDFS, Ray, etc.)
-
-#### Ray-based Implementation Example
-
-```python
-from michelangelo.uniflow.core.io_registry import IO
-from ray.data import Dataset
-
-class DatasetIO(IO[Dataset]):
-    def write(self, url: str, ds: Dataset):
-        fs, path = resolve_fs_path(url)
-        ds.write_parquet(path, filesystem=fs)
-
-    def read(self, url: str):
-        fs, path = resolve_fs_path(url)
-        return ray.data.read_parquet(path, filesystem=fs)
-```
 
 ---
 
@@ -273,7 +257,7 @@ def process_data(dataset_ref: Ref) -> Ref:
     return processed_ref
 ```
 
-See [Appendix: Data Type Examples](#appendix-uniflow-data-type-examples) for detailed examples of each type.
+See [Data Type Examples](../user-guides/ml-pipelines/type-system.md#appendix-uniflow-data-type-examples) for detailed examples of each type.
 
 ---
 
@@ -408,151 +392,6 @@ def training_pipeline(dataset_id: str):
 - Start with MA Studio UI for quick experiments, extend features with Uniflow for the custom needs
 - Use Model Families to organize related models solving one business problem
 - Always test deployments in sandbox before production
-
----
-
-## Appendix
-
-### Appendix: Uniflow Data Type Examples
-
-Detailed examples of supported data types in Uniflow tasks.
-
-#### 1. Scalars
-
-```python
-@uniflow.task()
-def add_numbers(a: int, b: int) -> int:
-    return a + b
-
-@uniflow.task()
-def format_name(first: str, last: str) -> str:
-    return f"{first} {last}"
-```
-
-#### 2. Dictionaries
-
-```python
-@uniflow.task()
-def create_data():
-    return {"feature_1": 10, "feature_2": 20}
-
-@uniflow.task()
-def process_data(data: dict):
-    data["feature_sum"] = data["feature_1"] + data["feature_2"]
-    return data
-```
-
-#### 3. Lists & Tuples
-
-```python
-@uniflow.task()
-def get_numbers():
-    return [1, 2, 3]
-
-@uniflow.task()
-def multiply_numbers(numbers: list):
-    return [x * 2 for x in numbers]
-
-@uniflow.task()
-def split_dataset(data):
-    return (train_data, val_data, test_data)  # tuple
-```
-
-#### 4. Dataclasses
-
-```python
-from dataclasses import dataclass
-
-@dataclass
-class ModelConfig:
-    learning_rate: float
-    batch_size: int
-    epochs: int = 10  # with default
-
-@uniflow.task()
-def get_config() -> ModelConfig:
-    return ModelConfig(learning_rate=0.01, batch_size=32)
-
-@uniflow.task()
-def train_with_config(config: ModelConfig):
-    # Access config.learning_rate, config.batch_size, etc.
-    pass
-```
-
-#### 5. Pydantic Models
-
-```python
-from pydantic import BaseModel, Field
-
-class ModelMetrics(BaseModel):
-    accuracy: float = Field(ge=0.0, le=1.0)  # with validation
-    loss: float
-    epoch: int
-
-@uniflow.task()
-def compute_metrics() -> ModelMetrics:
-    return ModelMetrics(accuracy=0.95, loss=0.05, epoch=10)
-
-@uniflow.task()
-def log_metrics(metrics: ModelMetrics):
-    print(f"Accuracy: {metrics.accuracy}")
-```
-
-#### 6. File & Path Support
-
-```python
-@uniflow.task()
-def read_file(file_path: str):
-    with open(file_path, "r") as f:
-        return f.read()
-
-@uniflow.task()
-def save_model(model, output_path: str):
-    # Supports s3://, hdfs://, file:// protocols
-    with open(output_path, "wb") as f:
-        pickle.dump(model, f)
-```
-
-**Supported protocols**:
-- `s3://bucket/path/to/file.parquet`
-- `hdfs://namenode/path/to/data`
-- `file:///local/path/to/file.csv`
-
-All handled via [fsspec](https://filesystem-spec.readthedocs.io/) for consistent API across storage backends.
-
-#### 7. Remote Object References (Ref)
-
-For large objects like datasets or model weights, use `Ref` to avoid serialization overhead:
-
-```python
-from michelangelo.uniflow.core.ref import Ref
-import ray.data
-
-@uniflow.task()
-def load_large_dataset() -> ray.data.Dataset:
-    # Returns a Ref automatically - Uniflow detects large objects
-    return ray.data.read_parquet("s3://bucket/huge_dataset.parquet")
-
-@uniflow.task()
-def process_dataset(dataset: ray.data.Dataset) -> ray.data.Dataset:
-    # Receives Ref, processes without copying
-    return dataset.map(lambda x: x * 2)
-```
-
-**Internal representation** (you don't create this manually):
-```json
-{
-  "url": "s3://default/1a52588fb9774306ab6b112485bdb71e",
-  "type": {"path": "ray.data.dataset.Dataset"},
-  "__class__": "michelangelo.uniflow.core.ref.Ref"
-}
-```
-
-**Benefits**:
-- Lightweight pointers to heavy artifacts
-- Avoids serialization/deserialization overhead
-- Enables distributed processing of large datasets
-- Automatic caching and reuse
 
 ---
 

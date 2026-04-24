@@ -14,7 +14,7 @@ Before you begin, make sure you have the following installed. Run each verificat
 | **kubectl** | `brew install kubectl` or [official guide](https://kubernetes.io/docs/tasks/tools/#kubectl) | `kubectl version --client` |
 | **k3d** | `brew install k3d` | `k3d --version` |
 | **Helm** | `brew install helm` or [official guide](https://helm.sh/docs/intro/install/) | `helm version` |
-| **Python 3.11+** | [python.org](https://www.python.org/downloads/) | `python3 --version` |
+| **Python 3.9+** | [python.org](https://www.python.org/downloads/) | `python3 --version` |
 | **Poetry** | `curl -sSL https://install.python-poetry.org \| python3 -` | `poetry --version` |
 
 ### Colima resource requirements
@@ -114,7 +114,7 @@ ma sandbox create [OPTIONS]
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--workflow cadence\|temporal` | Choose workflow engine | `cadence` |
-| `--exclude [services]` | Exclude services: `apiserver`, `controllermgr`, `ui`, `worker` | none |
+| `--exclude [services]` | Exclude services: `apiserver`, `controllermgr`, `ui`, `worker`, `prometheus`, `grafana` | none |
 | `--create-compute-cluster` | Create an additional Ray compute cluster for distributed jobs | disabled |
 | `--compute-cluster-name <name>` | Custom name for the compute cluster | auto-generated |
 | `--include-experimental [services]` | Include experimental services | none |
@@ -157,6 +157,8 @@ Create pre-configured demo resources for testing:
 ma sandbox demo pipeline    # registers and runs a sample pipeline
 ma sandbox demo inference   # sets up demo inference server
 ```
+
+---
 
 ---
 
