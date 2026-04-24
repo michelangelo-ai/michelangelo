@@ -12,16 +12,54 @@ data:
     -- ==============================================================================
     -- Michelangelo Ingester - Complete Database Schema
     -- ==============================================================================
-    -- This schema includes ALL 13 CRDs watched by the ingester
+    -- This schema includes ALL 14 CRDs watched by the ingester
     -- Safe for production and sandbox (idempotent with IF NOT EXISTS)
     -- Generated based on protobuf GetIndexedKeyValuePairs() methods
     -- ==============================================================================
-    
+
     CREATE DATABASE IF NOT EXISTS michelangelo;
     USE michelangelo;
-    
+
     -- ==============================================================================
-    -- 1. MODEL
+    -- 1. CACHED_OUTPUT (immutable)
+    -- ==============================================================================
+    CREATE TABLE IF NOT EXISTS `cachedoutput` (
+        `uid` VARCHAR(255) NOT NULL,
+        `group_ver` VARCHAR(255) NOT NULL,
+        `namespace` VARCHAR(255) NOT NULL,
+        `name` VARCHAR(255) NOT NULL,
+        `res_version` BIGINT UNSIGNED NOT NULL,
+        `create_time` DATETIME NOT NULL,
+        `update_time` DATETIME,
+        `delete_time` DATETIME,
+        `proto` MEDIUMBLOB,
+        `json` JSON,
+        PRIMARY KEY (`uid`),
+        KEY `cachedoutput_namespace_name` (`namespace`, `name`),
+        KEY `cachedoutput_create_time` (`create_time`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE IF NOT EXISTS `cachedoutput_labels` (
+        `id` BIGINT NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key` VARCHAR(255) NOT NULL,
+        `value` VARCHAR(63),
+        PRIMARY KEY (`id`),
+        KEY `cachedoutput_labels_uid` (`obj_uid`),
+        KEY `cachedoutput_labels_key_value` (`key`, `value`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE IF NOT EXISTS `cachedoutput_annotations` (
+        `id` BIGINT NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key` VARCHAR(255) NOT NULL,
+        `value` TEXT,
+        PRIMARY KEY (`id`),
+        KEY `cachedoutput_annotations_uid` (`obj_uid`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    -- ==============================================================================
+    -- 2. MODEL
     -- ==============================================================================
     CREATE TABLE IF NOT EXISTS `model` (
         `uid` VARCHAR(255) NOT NULL,
@@ -81,7 +119,7 @@ data:
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     -- ==============================================================================
-    -- 2. MODEL_FAMILY
+    -- 3. MODEL_FAMILY
     -- ==============================================================================
     CREATE TABLE IF NOT EXISTS `modelfamily` (
         `uid` VARCHAR(255) NOT NULL,
@@ -120,7 +158,7 @@ data:
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     -- ==============================================================================
-    -- 3. PIPELINE
+    -- 4. PIPELINE
     -- ==============================================================================
     CREATE TABLE IF NOT EXISTS `pipeline` (
         `uid` VARCHAR(255) NOT NULL,
@@ -161,7 +199,7 @@ data:
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     -- ==============================================================================
-    -- 4. PIPELINE_RUN
+    -- 5. PIPELINE_RUN
     -- ==============================================================================
     CREATE TABLE IF NOT EXISTS `pipelinerun` (
         `uid` VARCHAR(255) NOT NULL,
@@ -211,7 +249,7 @@ data:
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     -- ==============================================================================
-    -- 5. DEPLOYMENT
+    -- 6. DEPLOYMENT
     -- ==============================================================================
     CREATE TABLE IF NOT EXISTS `deployment` (
         `uid` VARCHAR(255) NOT NULL,
@@ -255,7 +293,7 @@ data:
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     -- ==============================================================================
-    -- 6. INFERENCE_SERVER
+    -- 7. INFERENCE_SERVER
     -- ==============================================================================
     CREATE TABLE IF NOT EXISTS `inferenceserver` (
         `uid` VARCHAR(255) NOT NULL,
@@ -295,7 +333,7 @@ data:
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     -- ==============================================================================
-    -- 7. PROJECT
+    -- 8. PROJECT
     -- ==============================================================================
     CREATE TABLE IF NOT EXISTS `project` (
         `uid` VARCHAR(255) NOT NULL,
@@ -334,7 +372,7 @@ data:
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     -- ==============================================================================
-    -- 8. REVISION
+    -- 9. REVISION
     -- ==============================================================================
     CREATE TABLE IF NOT EXISTS `revision` (
         `uid` VARCHAR(255) NOT NULL,
@@ -379,7 +417,7 @@ data:
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     -- ==============================================================================
-    -- 9. CLUSTER
+    -- 10. CLUSTER
     -- ==============================================================================
     CREATE TABLE IF NOT EXISTS `cluster` (
         `uid` VARCHAR(255) NOT NULL,
@@ -417,7 +455,7 @@ data:
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     -- ==============================================================================
-    -- 10. RAY_CLUSTER
+    -- 11. RAY_CLUSTER
     -- ==============================================================================
     CREATE TABLE IF NOT EXISTS `raycluster` (
         `uid` VARCHAR(255) NOT NULL,
@@ -455,7 +493,7 @@ data:
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     -- ==============================================================================
-    -- 11. RAY_JOB
+    -- 12. RAY_JOB
     -- ==============================================================================
     CREATE TABLE IF NOT EXISTS `rayjob` (
         `uid` VARCHAR(255) NOT NULL,
@@ -493,7 +531,7 @@ data:
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     -- ==============================================================================
-    -- 12. SPARK_JOB
+    -- 13. SPARK_JOB
     -- ==============================================================================
     CREATE TABLE IF NOT EXISTS `sparkjob` (
         `uid` VARCHAR(255) NOT NULL,
@@ -531,7 +569,7 @@ data:
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     -- ==============================================================================
-    -- 13. TRIGGER_RUN
+    -- 14. TRIGGER_RUN
     -- ==============================================================================
     CREATE TABLE IF NOT EXISTS `triggerrun` (
         `uid` VARCHAR(255) NOT NULL,
@@ -598,7 +636,7 @@ metadata:
   labels:
     component: schema-init
   annotations:
-    description: "Initializes MySQL schema for Michelangelo ingester - ALL 13 CRDs"
+    description: "Initializes MySQL schema for Michelangelo ingester - ALL 14 CRDs"
 spec:
   # Keep completed job for 24 hours for debugging
   ttlSecondsAfterFinished: 86400
@@ -656,7 +694,7 @@ spec:
             - |
               echo "========================================="
               echo "Ingester Schema Initialization"
-              echo "Initializing ALL 13 CRD tables"
+              echo "Initializing ALL 14 CRD tables"
               echo "========================================="
               echo ""
               echo "MySQL Host: ${MYSQL_HOST}"
@@ -683,15 +721,15 @@ spec:
                 mysql -h ${MYSQL_HOST} -P ${MYSQL_PORT} -u ${MYSQL_USER} -p${MYSQL_PASSWORD} ${MYSQL_DATABASE} \
                   -e "SHOW TABLES;" | grep -v "Tables_in\|_labels\|_annotations" | sed 's/^/  - /'
                 
-                if [ "$TABLE_COUNT" -eq "13" ]; then
+                if [ "$TABLE_COUNT" -eq "14" ]; then
                   echo ""
                   echo "========================================="
-                  echo "✓ All 13 CRD tables ready!"
+                  echo "✓ All 14 CRD tables ready!"
                   echo "========================================="
                   exit 0
                 else
                   echo ""
-                  echo "⚠ Warning: Expected 13 tables but found $TABLE_COUNT"
+                  echo "⚠ Warning: Expected 14 tables but found $TABLE_COUNT"
                   exit 0
                 fi
               else

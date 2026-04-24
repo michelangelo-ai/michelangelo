@@ -148,6 +148,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 // handleSync syncs the object to metadata storage
 func (r *Reconciler) handleSync(ctx context.Context, log logr.Logger, object client.Object) (ctrl.Result, error) {
+	// Add finalizer if not present to ensure MySQL sync happens before ETCD removal on deletion.
+	if !ctrlutil.ContainsFinalizer(object, api.IngesterFinalizer) {
+		log.Info("Adding ingester finalizer")
+		ctrlutil.AddFinalizer(object, api.IngesterFinalizer)
+		if err := r.Update(ctx, object); err != nil {
+			log.Error(err, "Failed to add finalizer")
+			return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
+		}
+		return ctrl.Result{}, nil
+	}
+
 	log.Info("Syncing object to metadata storage")
 
 	// Extract indexed fields if object implements IndexedObject interface
@@ -195,9 +206,13 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
 
-	// Remove our finalizer
+	// Remove our finalizer using Patch to avoid optimistic-concurrency conflicts.
+	base := object.DeepCopyObject().(client.Object)
 	ctrlutil.RemoveFinalizer(object, api.IngesterFinalizer)
-	if err := r.Update(ctx, object); err != nil {
+	if err := r.Patch(ctx, object, client.MergeFrom(base)); err != nil {
+		if client.IgnoreNotFound(err) == nil {
+			return ctrl.Result{}, nil
+		}
 		log.Error(err, "Failed to remove finalizer")
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
@@ -227,9 +242,13 @@ func (r *Reconciler) handleDeletionAnnotation(ctx context.Context, log logr.Logg
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
 
-	// Remove finalizer
+	// Remove finalizer using Patch to avoid optimistic-concurrency conflicts.
+	base := object.DeepCopyObject().(client.Object)
 	ctrlutil.RemoveFinalizer(object, api.IngesterFinalizer)
-	if err := r.Update(ctx, object); err != nil {
+	if err := r.Patch(ctx, object, client.MergeFrom(base)); err != nil {
+		if client.IgnoreNotFound(err) == nil {
+			return ctrl.Result{}, nil
+		}
 		log.Error(err, "Failed to remove finalizer")
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
@@ -259,15 +278,23 @@ func (r *Reconciler) handleImmutableObject(ctx context.Context, log logr.Logger,
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
 
-	// Remove finalizer
+	// Remove finalizer using Patch to avoid optimistic-concurrency conflicts on
+	// second reconcile when the object is already in a deletion transition.
+	base := object.DeepCopyObject().(client.Object)
 	ctrlutil.RemoveFinalizer(object, api.IngesterFinalizer)
-	if err := r.Update(ctx, object); err != nil {
+	if err := r.Patch(ctx, object, client.MergeFrom(base)); err != nil {
+		if client.IgnoreNotFound(err) == nil {
+			return ctrl.Result{}, nil
+		}
 		log.Error(err, "Failed to remove finalizer")
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
 
 	// Delete from K8s/ETCD (object now only exists in metadata storage)
 	if err := r.Delete(ctx, object); err != nil {
+		if client.IgnoreNotFound(err) == nil {
+			return ctrl.Result{}, nil
+		}
 		log.Error(err, "Failed to delete immutable object from K8s")
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
