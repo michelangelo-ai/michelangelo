@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"go.uber.org/zap"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -16,6 +17,7 @@ type Manager interface {
 	ListPipelineRunsForPipeline(ctx context.Context, namespace, pipelineName string) ([]*v2pb.PipelineRun, error)
 	ListActivePipelineRunsForPipeline(ctx context.Context, namespace, pipelineName string) ([]*v2pb.PipelineRun, error)
 	KillPipelineRun(ctx context.Context, pr *v2pb.PipelineRun) error
+	DeleteAllPipelineRuns(ctx context.Context, namespace, pipelineName string) error
 }
 
 type managerImpl struct {
@@ -76,6 +78,22 @@ func (m *managerImpl) KillPipelineRun(ctx context.Context, pr *v2pb.PipelineRun)
 	pr.Spec.Kill = true
 	if err := m.k8sClient.Update(ctx, pr); err != nil {
 		return fmt.Errorf("kill pipeline run %s/%s: %w", pr.Namespace, pr.Name, err)
+	}
+	return nil
+}
+
+func (m *managerImpl) DeleteAllPipelineRuns(ctx context.Context, namespace, pipelineName string) error {
+	pipelineRuns, err := m.ListPipelineRunsForPipeline(ctx, namespace, pipelineName)
+	if err != nil {
+		return err
+	}
+	for _, pr := range pipelineRuns {
+		if err := m.k8sClient.Delete(ctx, pr); err != nil {
+			if apiErrors.IsNotFound(err) {
+				continue
+			}
+			return fmt.Errorf("delete pipeline run %s/%s: %w", pr.Namespace, pr.Name, err)
+		}
 	}
 	return nil
 }
