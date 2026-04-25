@@ -23,6 +23,7 @@ type MySQLConfig struct {
 type IngesterConfig struct {
 	ConcurrentReconciles    int                      `yaml:"concurrentReconciles"`
 	RequeuePeriod           time.Duration            `yaml:"requeuePeriod"`
+	DeletionDelay           time.Duration            `yaml:"deletionDelay"`
 	ConcurrentReconcilesMap map[string]int           `yaml:"concurrentReconcilesMap"`
 	RequeuePeriodMap        map[string]time.Duration `yaml:"requeuePeriodMap"`
 }

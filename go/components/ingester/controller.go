@@ -27,6 +27,11 @@ type Config struct {
 	ConcurrentReconciles int `yaml:"concurrentReconciles"`
 	// RequeuePeriod is the global default period for requeuing reconciliations
 	RequeuePeriod time.Duration `yaml:"requeuePeriod"`
+	// DeletionDelay is the grace period between DeletionTimestamp and finalizer removal.
+	// The finalizer is not removed until DeletionTimestamp + DeletionDelay has passed,
+	// giving downstream consumers time to observe the deletion before the object leaves ETCD.
+	// Set to 0 to remove the finalizer immediately (default).
+	DeletionDelay time.Duration `yaml:"deletionDelay"`
 	// ConcurrentReconcilesMap allows per-kind concurrency overrides
 	ConcurrentReconcilesMap map[string]int `yaml:"concurrentReconcilesMap"`
 	// RequeuePeriodMap allows per-kind requeue period overrides
@@ -49,6 +54,7 @@ func (c Config) GetControllerConfig(kind string) Config {
 	return Config{
 		ConcurrentReconciles: concurrency,
 		RequeuePeriod:        requeuePeriod,
+		DeletionDelay:        c.DeletionDelay,
 	}
 }
 
@@ -185,6 +191,15 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
 	if !ctrlutil.ContainsFinalizer(object, api.IngesterFinalizer) {
 		log.Info("Finalizer not present, nothing to do")
 		return ctrl.Result{}, nil
+	}
+
+	// Enforce deletion grace period: wait until DeletionTimestamp + DeletionDelay has passed.
+	// The michelangelo/Deleting annotation bypasses the grace period entirely.
+	expectedDeletionTime := object.GetDeletionTimestamp().Time.Add(r.config.DeletionDelay)
+	delta := time.Until(expectedDeletionTime)
+	if !isDeletingAnnotationSet(object) && delta > 0 {
+		log.Info("Object in deletion grace period, requeueing", "after", delta)
+		return ctrl.Result{RequeueAfter: delta}, nil
 	}
 
 	log.Info("Deleting from metadata storage")

@@ -80,6 +80,7 @@ data:
       # Legacy global defaults (still supported for backwards compatibility)
       concurrentReconciles: 2
       requeuePeriod: 30s
+      deletionDelay: 15s
 
       # New per-controller configuration (recommended)
       # Controllers not listed here will use the global defaults above

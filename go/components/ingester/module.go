@@ -66,7 +66,8 @@ func register(p registerParams) error {
 
 		log.Info("Ingester controller registered successfully",
 			zap.Int("concurrentReconciles", controllerConfig.ConcurrentReconciles),
-			zap.Duration("requeuePeriod", controllerConfig.RequeuePeriod))
+			zap.Duration("requeuePeriod", controllerConfig.RequeuePeriod),
+			zap.Duration("deletionDelay", controllerConfig.DeletionDelay))
 	}
 
 	return nil
