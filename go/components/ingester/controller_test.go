@@ -542,14 +542,14 @@ func TestHelperFunctions(t *testing.T) {
 	})
 }
 
-// TestSchemeGVKResolution verifies that all CRD objects in AllCRDObjects resolve to
+// TestSchemeGVKResolution verifies that all CRD objects in CrdObjects resolve to
 // unique, non-empty kinds via the scheme.
 func TestSchemeGVKResolution(t *testing.T) {
 	scheme := runtime.NewScheme()
 	require.NoError(t, v2.AddToScheme(scheme))
 
 	seen := map[string]bool{}
-	for _, obj := range v2.AllCRDObjects {
+	for _, obj := range v2.CrdObjects {
 		gvks, _, err := scheme.ObjectKinds(obj)
 		require.NoError(t, err, "scheme.ObjectKinds failed for %T", obj)
 		require.NotEmpty(t, gvks, "no GVKs found for %T", obj)

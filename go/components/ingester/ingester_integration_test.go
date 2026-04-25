@@ -46,6 +46,10 @@ const (
 	finalizerName = "michelangelo/Ingester"
 	pollInterval  = 500 * time.Millisecond
 	timeout       = 20 * time.Second
+
+	// deletionDelay must match the deletionDelay configured in the running controllermgr.
+	// Set to 15s in /tmp/ma-local-config/base.yaml for integration test runs.
+	deletionDelay = 15 * time.Second
 )
 
 // kubectl runs kubectl with the given args and returns trimmed stdout.
@@ -311,4 +315,74 @@ metadata:
 		return rowInMySQL(t, "deployment", "name", name, testNamespace) == name
 	})
 	assert.Equal(t, "NULL", rowInMySQL(t, "deployment", "delete_time", name, testNamespace))
+}
+
+// TestIngester_DeletionDelay_ObjectStaysInETCDDuringGracePeriod creates a Pipeline,
+// deletes it, and verifies it remains in ETCD for the full DeletionDelay window before
+// the ingester removes the finalizer and lets Kubernetes clean it up.
+//
+// Requires the controllermgr to be running with deletionDelay=15s (deletionDelay const above).
+func TestIngester_DeletionDelay_ObjectStaysInETCDDuringGracePeriod(t *testing.T) {
+	name := uniqueName("it-deletion-delay")
+	t.Cleanup(func() { cleanup("pipeline", name, testNamespace) })
+
+	manifest := fmt.Sprintf(`
+apiVersion: michelangelo.api/v2
+kind: Pipeline
+metadata:
+  name: %s
+  namespace: %s
+spec:
+  description: "integration test - deletion delay grace period"
+`, name, testNamespace)
+
+	kubectlApply(t, manifest)
+
+	// Wait for the ingester finalizer to be set before deleting.
+	waitFor(t, "ingester finalizer present before delete", func() bool {
+		finalizers, _ := kubectlMayFail("get", "pipeline", name, "-n", testNamespace,
+			"-o", "jsonpath={.metadata.finalizers}")
+		return strings.Contains(finalizers, finalizerName)
+	})
+
+	deleteTime := time.Now()
+	kubectl(t, "delete", "pipeline", name, "-n", testNamespace, "--wait=false")
+
+	// Poll for up to (deletionDelay - 3s) and assert the object is still in ETCD the
+	// entire time. The 3s margin accounts for controller reconcile latency.
+	assertWindow := deletionDelay - 3*time.Second
+	deadline := time.Now().Add(assertWindow)
+	for time.Now().Before(deadline) {
+		assert.True(t, existsInK8s("pipeline", name, testNamespace),
+			"pipeline must remain in ETCD during deletion grace period (elapsed: %s)", time.Since(deleteTime))
+		time.Sleep(pollInterval)
+	}
+
+	// After DeletionDelay has elapsed, the object must leave ETCD.
+	waitForWithTimeout(t, "pipeline removed from ETCD after grace period", 30*time.Second, func() bool {
+		return !existsInK8s("pipeline", name, testNamespace)
+	})
+
+	// MySQL delete_time must be set.
+	waitFor(t, "pipeline delete_time set in MySQL", func() bool {
+		v := rowInMySQL(t, "pipeline", "delete_time IS NOT NULL", name, testNamespace)
+		return v == "1"
+	})
+}
+
+// waitForWithTimeout is like waitFor but with a caller-specified timeout.
+func waitForWithTimeout(t *testing.T, desc string, waitTimeout time.Duration, cond func() bool) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), waitTimeout)
+	defer cancel()
+	for {
+		if cond() {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for: %s", desc)
+		case <-time.After(pollInterval):
+		}
+	}
 }
