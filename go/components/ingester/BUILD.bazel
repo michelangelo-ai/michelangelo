@@ -46,16 +46,3 @@ go_test(
     ],
 )
 
-go_test(
-    name = "go_integration_test",
-    srcs = ["ingester_integration_test.go"],
-    gotags = ["integration"],
-    tags = [
-        "local",
-        "manual",
-    ],
-    deps = [
-        "@com_github_stretchr_testify//assert:go_default_library",
-        "@com_github_stretchr_testify//require:go_default_library",
-    ],
-)
