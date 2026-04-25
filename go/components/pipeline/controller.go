@@ -201,7 +201,30 @@ func (r *Reconciler) handleDeletion(ctx context.Context, pipeline *v2pb.Pipeline
 		return ctrl.Result{RequeueAfter: reconcileInterval}, nil
 	}
 
-	// Kill and delete steps for PipelineRuns will be added in subsequent PRs
+	// Kill active PipelineRuns (best-effort)
+	activePRs, err := r.pipelineRunManager.ListActivePipelineRunsForPipeline(ctx, pipeline.Namespace, pipeline.Name)
+	if err != nil {
+		logger.Error("Failed to list active pipeline runs for cascade delete",
+			zap.Error(err),
+			zap.String("operation", "list_active_pipeline_runs"),
+			zap.String("namespace", pipeline.Namespace),
+			zap.String("name", pipeline.Name))
+		return ctrl.Result{}, fmt.Errorf("list active pipeline runs for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
+	}
+	if len(activePRs) > 0 {
+		for _, pr := range activePRs {
+			if err := r.pipelineRunManager.KillPipelineRun(ctx, pr); err != nil {
+				logger.Error("Failed to kill pipeline run during cascade delete",
+					zap.Error(err),
+					zap.String("operation", "kill_pipeline_run"),
+					zap.String("namespace", pr.Namespace),
+					zap.String("name", pr.Name))
+			}
+		}
+		return ctrl.Result{RequeueAfter: reconcileInterval}, nil
+	}
+
+	// Delete steps will be added in subsequent PRs
 	logger.Info("Children found, requeueing for cascade delete",
 		zap.Int("triggerRuns", len(triggerRuns)),
 		zap.Int("pipelineRuns", len(pipelineRuns)))
