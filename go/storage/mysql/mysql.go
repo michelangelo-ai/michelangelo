@@ -87,7 +87,7 @@ func (m *mysqlMetadataStorage) Upsert(ctx context.Context, object runtime.Object
 		return err
 	}
 
-	tableName := getTableName(object)
+	tableName := m.getTableName(object)
 	if tableName == "" {
 		return fmt.Errorf("unable to determine table name for object type")
 	}
@@ -148,7 +148,7 @@ func (m *mysqlMetadataStorage) Upsert(ctx context.Context, object runtime.Object
 
 // GetByName retrieves an object by its namespace and name
 func (m *mysqlMetadataStorage) GetByName(ctx context.Context, namespace string, name string, object runtime.Object) error {
-	tableName := getTableName(object)
+	tableName := m.getTableName(object)
 	if tableName == "" {
 		return fmt.Errorf("unable to determine table name for object type")
 	}
@@ -183,7 +183,7 @@ func (m *mysqlMetadataStorage) GetByName(ctx context.Context, namespace string, 
 
 // GetByID retrieves an object by its UID
 func (m *mysqlMetadataStorage) GetByID(ctx context.Context, uid string, object runtime.Object) error {
-	tableName := getTableName(object)
+	tableName := m.getTableName(object)
 	if tableName == "" {
 		return fmt.Errorf("unable to determine table name for object type")
 	}
@@ -438,8 +438,17 @@ func getObjectMeta(object runtime.Object) (metav1.Object, error) {
 	return metaObj, nil
 }
 
-func getTableName(object runtime.Object) string {
+// getTableName returns the lowercased Kind for the object's table. When the
+// object's TypeMeta is empty (a known controller-runtime quirk —
+// https://github.com/kubernetes-sigs/controller-runtime/issues/1517), it falls
+// back to scheme.ObjectKinds, mirroring the pattern in groupVersionForObject.
+func (m *mysqlMetadataStorage) getTableName(object runtime.Object) string {
 	gvk := object.GetObjectKind().GroupVersionKind()
+	if gvk.Kind == "" && m.scheme != nil {
+		if gvks, _, err := m.scheme.ObjectKinds(object); err == nil && len(gvks) > 0 {
+			gvk = gvks[0]
+		}
+	}
 	return strings.ToLower(gvk.Kind)
 }
 
