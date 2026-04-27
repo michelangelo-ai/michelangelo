@@ -26,7 +26,7 @@ if (timezoneOffset !== 0) {
 
 /**
  * Mock ResizeObserver for components that use it (like sticky table columns)
- * JSDOM doesn't provide ResizeObserver, so we need to mock it globally
+ * We mock it to prevent real observation side effects in tests
  */
 global.ResizeObserver = vi.fn().mockImplementation(() => ({
   observe: vi.fn(),
