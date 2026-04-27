@@ -87,6 +87,11 @@ data:
         Pipeline: 3        # Medium concurrency
         Revision: 3        # Medium concurrency
 
+      # Optional: per-controller requeue periods
+      # requeuePeriodMap:
+      #   Deployment: 60s
+      #   Pipeline: 45s
+
       # deletionDelayMap:
       #   Model: 15s       # Hold Model in etcd for 15s after deletion
 
