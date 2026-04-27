@@ -257,7 +257,9 @@ describe('ActionsPopover', () => {
       await screen.findByText('Cannot delete');
       await user.hover(archiveOption);
       expect(await screen.findByText('Cannot archive')).toBeInTheDocument();
-      expect(screen.queryByText('Cannot delete')).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.queryByText('Cannot delete')).not.toBeInTheDocument();
+      });
     });
 
     it('does not show the tooltip from auto-highlight when the menu opens', async () => {

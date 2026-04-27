@@ -2,7 +2,7 @@
 
 ## What you'll learn
 
-* What types UniFlow supports natively
+* What types Uniflow supports natively
 * The 5 codec types and when to use each
 * How to serialize custom data types
 * Best practices for type safety in workflows
@@ -10,9 +10,9 @@
 
 ---
 
-## Overview: UniFlow's Type System
+## Overview: Uniflow's Type System
 
-When data flows between tasks, UniFlow automatically **serializes** your Python objects for storage and **deserializes** them when the next task runs. This is powered by a flexible type system supporting 5 built-in codecs.
+When data flows between tasks, Uniflow automatically **serializes** your Python objects for storage and **deserializes** them when the next task runs. This is powered by a flexible type system supporting 5 built-in codecs.
 
 ### The 5 Built-In Codecs
 
@@ -141,7 +141,7 @@ class ModelMetrics:
 def compute_metrics(predictions, ground_truth) -> ModelMetrics:
     """
     Computes metrics and returns dataclass instance
-    UniFlow automatically serializes the entire object
+    Uniflow automatically serializes the entire object
     """
     from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
@@ -342,7 +342,7 @@ import pickle
 def save_model_binary(model) -> bytes:
     """
     Serialize model to bytes using pickle
-    UniFlow stores and serializes the bytes
+    Uniflow stores and serializes the bytes
     """
     return pickle.dumps(model)
 
@@ -461,7 +461,7 @@ def compute_quality(data: pd.DataFrame) -> DataQualityMetrics:
 
 ### Issue: "Type not serializable"
 
-**Cause:** Trying to return a type UniFlow doesn't know about
+**Cause:** Trying to return a type Uniflow doesn't know about
 
 **Solution:** Use one of the 5 codecs:
 1. Wrap in dataclass
@@ -523,3 +523,148 @@ Need to return custom Python object?
 - [Reference System Guide](./reference-system.md) - Understand how data flows between tasks
 - [Getting Started](./getting-started.md) - See type system in action
 - [Caching Guide](./cache-and-pipelinerun-resume-form.md) - Types and caching interaction
+
+---
+
+## Appendix: Uniflow Data Type Examples
+
+Detailed examples of each supported data type in Uniflow tasks.
+
+> **Note**: All examples below assume `import michelangelo.uniflow.core as uniflow` and `from michelangelo.uniflow.plugins.ray import RayTask` where needed.
+
+### 1. Scalars
+
+```python
+@uniflow.task()
+def add_numbers(a: int, b: int) -> int:
+    return a + b
+
+@uniflow.task()
+def format_name(first: str, last: str) -> str:
+    return f"{first} {last}"
+```
+
+### 2. Dictionaries
+
+```python
+@uniflow.task()
+def create_data():
+    return {"feature_1": 10, "feature_2": 20}
+
+@uniflow.task()
+def process_data(data: dict):
+    data["feature_sum"] = data["feature_1"] + data["feature_2"]
+    return data
+```
+
+### 3. Lists & Tuples
+
+```python
+@uniflow.task()
+def get_numbers():
+    return [1, 2, 3]
+
+@uniflow.task()
+def multiply_numbers(numbers: list):
+    return [x * 2 for x in numbers]
+
+@uniflow.task()
+def split_dataset(data):
+    return (train_data, val_data, test_data)  # tuple
+```
+
+### 4. Dataclasses
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class ModelConfig:
+    learning_rate: float
+    batch_size: int
+    epochs: int = 10  # with default
+
+@uniflow.task()
+def get_config() -> ModelConfig:
+    return ModelConfig(learning_rate=0.01, batch_size=32)
+
+@uniflow.task()
+def train_with_config(config: ModelConfig):
+    # Access config.learning_rate, config.batch_size, etc.
+    pass
+```
+
+### 5. Pydantic Models
+
+```python
+from pydantic import BaseModel, Field
+
+class ModelMetrics(BaseModel):
+    accuracy: float = Field(ge=0.0, le=1.0)  # with validation
+    loss: float
+    epoch: int
+
+@uniflow.task()
+def compute_metrics() -> ModelMetrics:
+    return ModelMetrics(accuracy=0.95, loss=0.05, epoch=10)
+
+@uniflow.task()
+def log_metrics(metrics: ModelMetrics):
+    print(f"Accuracy: {metrics.accuracy}")
+```
+
+### 6. File & Path Support
+
+```python
+@uniflow.task()
+def read_file(file_path: str):
+    with open(file_path, "r") as f:
+        return f.read()
+
+@uniflow.task()
+def save_model(model, output_path: str):
+    # Supports s3://, hdfs://, file:// protocols
+    with open(output_path, "wb") as f:
+        pickle.dump(model, f)
+```
+
+**Supported protocols**:
+- `s3://bucket/path/to/file.parquet`
+- `hdfs://namenode/path/to/data`
+- `file:///local/path/to/file.csv`
+
+All handled via [fsspec](https://filesystem-spec.readthedocs.io/) for consistent API across storage backends.
+
+### 7. Remote Object References (Ref)
+
+For large objects like datasets or model weights, use `Ref` to avoid serialization overhead:
+
+```python
+from michelangelo.uniflow.core.ref import Ref
+import ray.data
+
+@uniflow.task()
+def load_large_dataset() -> ray.data.Dataset:
+    # Returns a Ref automatically - Uniflow detects large objects
+    return ray.data.read_parquet("s3://bucket/huge_dataset.parquet")
+
+@uniflow.task()
+def process_dataset(dataset: ray.data.Dataset) -> ray.data.Dataset:
+    # Receives Ref, processes without copying
+    return dataset.map(lambda x: x * 2)
+```
+
+**Internal representation** (you don't create this manually):
+```json
+{
+  "url": "s3://default/1a52588fb9774306ab6b112485bdb71e",
+  "type": {"path": "ray.data.dataset.Dataset"},
+  "__class__": "michelangelo.uniflow.core.ref.Ref"
+}
+```
+
+**Benefits**:
+- Lightweight pointers to heavy artifacts
+- Avoids serialization/deserialization overhead
+- Enables distributed processing of large datasets
+- Automatic caching and reuse
