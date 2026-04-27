@@ -95,10 +95,7 @@ A: Michelangelo provides:
 
 **Q: Can I roll back a model deployment?**
 
-A: Yes, instantly. Every deployment is versioned. Click "Rollback" in the UI or use the CLI:
-```bash
-ma deployment apply -f <deployment.yaml>
-```
+A: Every deployment is versioned (`current_revision` and `candidate_revision`). For automatic rollback on a failed rollout, set `with_rollback_trigger` on a `BlastUpdate` deployment strategy — the controller will revert to the last healthy revision if health gates fail. To roll back manually today, update the Deployment resource to point at a prior revision; there isn't a dedicated rollback CLI command yet.
 
 **Q: How do I debug predictions?**
 
