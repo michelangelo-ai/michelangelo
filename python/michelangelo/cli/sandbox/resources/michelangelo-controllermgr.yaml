@@ -77,8 +77,11 @@ data:
       database: michelangelo
 
     ingester:
+      # Legacy global defaults (still supported for backwards compatibility)
       concurrentReconciles: 2
       requeuePeriod: 30s
+      # New per-controller configuration (recommended)
+      # Controllers not listed here will use the global defaults above
       concurrentReconcilesMap:
         PipelineRun: 10    # High-throughput workload
         Deployment: 3      # Medium concurrency
