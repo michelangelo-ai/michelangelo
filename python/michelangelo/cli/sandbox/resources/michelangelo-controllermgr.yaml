@@ -86,6 +86,8 @@ data:
         Deployment: 3      # Medium concurrency
         Pipeline: 3        # Medium concurrency
         Revision: 3        # Medium concurrency
+        # Model: 5         # Example: uncomment to override Model concurrency
+        # InferenceServer: 2  # Example: uncomment to override InferenceServer
 
       # Optional: per-controller requeue periods
       # requeuePeriodMap:
