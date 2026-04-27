@@ -170,6 +170,7 @@ func TestReconcilerReconcile(t *testing.T) {
 	// Test cases
 	tests := []struct {
 		name             string
+		config           Config
 		setup            func() []client.Object
 		setupMocks       func(*clientmocks.MockFederatedClient, *mockClusterCache, *mockSchedulerQueue)
 		expectedState    v2pb.RayClusterState
@@ -920,6 +921,109 @@ func TestReconcilerReconcile(t *testing.T) {
 				assert.Equal(t, apipb.CONDITION_STATUS_TRUE, killedCond.Status)
 			},
 		},
+		{
+			name: "Cluster created with log persistence enabled - log_url set in status",
+			config: Config{
+				LogPersistence: LogPersistenceConfig{
+					Enabled:    true,
+					Bucket:     "ray-history",
+					PathPrefix: "clusters/",
+				},
+			},
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       rayClusterName,
+						Namespace:  testNamespace,
+						Generation: 1,
+					},
+					Spec: createRayClusterSpec(),
+					Status: v2pb.RayClusterStatus{
+						StatusConditions: []*apipb.Condition{
+							{
+								Type:   EnqueuedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   ScheduledCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+						},
+						Assignment: &v2pb.AssignmentInfo{
+							Cluster: assignedCluster,
+						},
+					},
+				}
+				objects = append(objects, cluster)
+				return objects
+			},
+			setupMocks: func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {
+				mcc.addCluster(assignedCluster, &v2pb.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: assignedCluster,
+					},
+				})
+				mfc.EXPECT().CreateJobCluster(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+			},
+			expectedState:   v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			expectedMessage: "",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, requeueAfter, res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
+				assert.Equal(t, "s3://ray-history/clusters/default/test-cluster/", cluster.Status.LogUrl)
+			},
+		},
+		{
+			name: "Cluster created without log persistence - log_url not set",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       rayClusterName,
+						Namespace:  testNamespace,
+						Generation: 1,
+					},
+					Spec: createRayClusterSpec(),
+					Status: v2pb.RayClusterStatus{
+						StatusConditions: []*apipb.Condition{
+							{
+								Type:   EnqueuedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   ScheduledCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+						},
+						Assignment: &v2pb.AssignmentInfo{
+							Cluster: assignedCluster,
+						},
+					},
+				}
+				objects = append(objects, cluster)
+				return objects
+			},
+			setupMocks: func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {
+				mcc.addCluster(assignedCluster, &v2pb.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: assignedCluster,
+					},
+				})
+				mfc.EXPECT().CreateJobCluster(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+			},
+			expectedState:   v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			expectedMessage: "",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, requeueAfter, res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
+				assert.Empty(t, cluster.Status.LogUrl)
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -940,6 +1044,7 @@ func TestReconcilerReconcile(t *testing.T) {
 
 			r := &Reconciler{
 				Handler:         apiHandler,
+				config:          tc.config,
 				federatedClient: mockFedClient,
 				clusterCache:    mockCache,
 				schedulerQueue:  mockQueue,

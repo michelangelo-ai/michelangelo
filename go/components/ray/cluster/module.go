@@ -29,6 +29,7 @@ func register(
 	clusterCache cluster.RegisteredClustersCache,
 ) error {
 	return NewReconciler(
+		conf,
 		logger,
 		apiHandlerFactory,
 		env,
