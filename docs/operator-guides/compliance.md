@@ -7,6 +7,14 @@ sidebar_label: "Compliance"
 
 Michelangelo supports compliance with SOC 2, GDPR, and HIPAA depending on how you deploy and configure the platform. Achieving compliance requires proper configuration of access controls, encryption, audit logging, and data handling practices described in this guide.
 
+**Audience**: Platform operators responsible for security and compliance configuration.
+
+**Prerequisites**:
+- Running Michelangelo control plane (see [Platform Setup](platform-setup.md))
+- Kubernetes RBAC familiarity
+- An identity provider (IdP) configured for OIDC/OAuth 2.0 (required for access control sections)
+- Cloud provider account with S3-compatible object storage
+
 :::warning
 Compliance is a shared responsibility. This guide covers Michelangelo-specific configuration. You are also responsible for ensuring your broader infrastructure, organizational processes, and legal agreements meet each framework's requirements.
 :::

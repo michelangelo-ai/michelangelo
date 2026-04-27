@@ -1,5 +1,9 @@
 # Authentication & Identity
 
+This guide is for platform operators and cluster administrators configuring authentication for a Michelangelo deployment.
+
+**Prerequisites**: A running Michelangelo control plane (see [Platform Setup](./platform-setup.md)) and `kubectl` access to the `ma-system` namespace.
+
 Authentication in Michelangelo operates at two levels:
 
 - **User authentication** — end users authenticate to the Michelangelo API and UI via an identity provider (IdP)
@@ -193,3 +197,9 @@ Do not allow users or services to directly access etcd or object storage (S3/Min
 - Set `useIam: true` in the controller manager ConfigMap — this uses IAM roles attached to pods via ServiceAccount annotations, not hardcoded credentials
 - Do not grant `s3:*` to individual users; use IAM policies scoped to specific buckets and prefixes
 - Audit S3 bucket policies regularly to ensure no public or cross-account access is inadvertently granted
+
+## What's next?
+
+- **Network configuration**: Set up Ingress, TLS, and Envoy CORS rules in the [Network & Ingress guide](./network.md)
+- **Compliance**: Configure audit logging and data-residency controls for SOC 2, GDPR, or HIPAA in the [Compliance guide](./compliance.md)
+- **Monitoring**: Set up Prometheus scraping and alerting for the control plane in the [Monitoring guide](./monitoring.md)

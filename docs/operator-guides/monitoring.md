@@ -1,5 +1,9 @@
 # Monitoring & Observability
 
+This guide is for platform operators setting up observability for a Michelangelo deployment.
+
+**Prerequisites**: A running Michelangelo control plane with the controller manager deployed. Familiarity with [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator) is helpful but not required.
+
 Michelangelo components expose Prometheus metrics that integrate with a standard Kubernetes observability stack. This guide covers scrape configuration, key metrics to monitor, alerting rules, and logging configuration.
 
 ## Prometheus Scrape Configuration
@@ -231,3 +235,9 @@ For production deployments use `encoding: json` so your log aggregation system (
 | `error` | Error message (present on error-level logs) |
 
 Indexing these fields allows you to efficiently query all events for a specific resource (`namespace` + `name`), filter by controller (`logger`), or find all failures across the control plane (`level: error`).
+
+## What's next?
+
+- **Troubleshooting**: Use the collected metrics and logs to diagnose issues with the [Troubleshooting guide](./troubleshooting.md)
+- **Authentication**: Secure access to your metrics endpoints with the [Authentication guide](./authentication.md)
+- **Compliance**: Set up audit log retention to meet SOC 2, GDPR, or HIPAA requirements in the [Compliance guide](./compliance.md)

@@ -65,6 +65,10 @@ All deletions are soft-deletes: `DELETE` sets `delete_time` rather than removing
 
 ## Configuration
 
+:::danger SparkJob incompatibility
+Do not enable the ingester if your deployment uses SparkJob. A pre-existing nil pointer panic in `go/components/spark/job/client/client.go:185` causes the controller manager to crash when syncing SparkJob objects, which prevents ALL MySQL sync. This blocks other CRD kinds too, not just SparkJob. See [Known Limitations](#known-limitations-and-issues) for details. This requires an upstream code fix before enabling.
+:::
+
 ### Prerequisites
 
 - Kubernetes cluster with Michelangelo API Server
@@ -141,6 +145,20 @@ The ingester is designed to be enabled without downtime. Existing objects in Kub
 Apply the schema init Job to create the 39 tables:
 
 ```bash
+kubectl apply -f scripts/ingester/ingester-schema-init-job.yaml
+kubectl wait --for=condition=complete job/ingester-schema-init --timeout=120s
+```
+
+If the Job fails:
+
+```bash
+# Inspect why it failed
+kubectl describe job/ingester-schema-init
+kubectl logs job/ingester-schema-init
+
+# Common causes: MySQL unreachable, wrong credentials, insufficient privileges
+# After fixing the root cause, delete the failed Job and reapply:
+kubectl delete job ingester-schema-init
 kubectl apply -f scripts/ingester/ingester-schema-init-job.yaml
 kubectl wait --for=condition=complete job/ingester-schema-init --timeout=120s
 ```
@@ -341,5 +359,8 @@ When the ingester is correctly enabled:
 
 ## Next Steps
 
-- Review [Ingester Internals](../contributing/ingester-internals.md) for developer documentation
-- Monitor logs and MySQL after enablement to verify steady-state operation
+Once the ingester is running, verify steady-state behavior: all 13 CRD kinds appear in MySQL, object counts match etcd, and `update_time` advances on changes. Then:
+
+- **Monitor**: Set up alerting on requeue errors — elevated `workqueue_retries_total` for ingester controllers indicates MySQL connectivity issues. See [Monitoring](monitoring.md).
+- **Restrict deletes**: Enforce all CRD deletes through the Michelangelo API Server (not raw `kubectl delete`) to prevent orphan rows from pre-existing objects.
+- **Review internals**: See [Ingester Internals](../contributing/ingester-internals.md) for developer documentation on extending the ingester or adding new CRD kinds.
