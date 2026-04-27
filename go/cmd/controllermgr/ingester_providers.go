@@ -33,6 +33,7 @@ func provideIngesterConfig(config baseconfig.IngesterConfig) ingester.Config {
 		DeletionDelay:           config.DeletionDelay,
 		ConcurrentReconcilesMap: config.ConcurrentReconcilesMap,
 		RequeuePeriodMap:        config.RequeuePeriodMap,
+		DeletionDelayMap:        config.DeletionDelayMap,
 	}
 }
 

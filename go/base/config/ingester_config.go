@@ -26,6 +26,7 @@ type IngesterConfig struct {
 	DeletionDelay           time.Duration            `yaml:"deletionDelay"`
 	ConcurrentReconcilesMap map[string]int           `yaml:"concurrentReconcilesMap"`
 	RequeuePeriodMap        map[string]time.Duration `yaml:"requeuePeriodMap"`
+	DeletionDelayMap        map[string]time.Duration `yaml:"deletionDelayMap"`
 }
 
 // ToMySQLConfig converts to mysql.Config
