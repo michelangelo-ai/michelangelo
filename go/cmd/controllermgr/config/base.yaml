@@ -22,7 +22,6 @@ metadataStorage:
 ingester:
   concurrentReconciles: 1
   requeuePeriod: 30s
-  deletionDelay: 0s
   # deletionDelayMap:
   #   Model: 15s
 

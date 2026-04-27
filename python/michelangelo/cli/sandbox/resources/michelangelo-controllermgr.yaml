@@ -79,8 +79,6 @@ data:
     ingester:
       concurrentReconciles: 2
       requeuePeriod: 30s
-      deletionDelay: 0s
-
       concurrentReconcilesMap:
         PipelineRun: 10    # High-throughput workload
         Deployment: 3      # Medium concurrency
