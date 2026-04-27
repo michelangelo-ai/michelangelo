@@ -29,7 +29,7 @@ _RUN_ID_SEARCH_RE = re.compile(
 @dataclass
 class RemoteRun:
     fn: Callable
-    image: str
+    image: Optional[str]
     storage_url: str
     metadata_storage_url: Optional[str] = None
     file_sync: Optional[bool] = False
@@ -58,7 +58,8 @@ class RemoteRun:
         workflow_id = f"{dot_path(self.fn)[-120:]}.{rand_str}"
 
         environ = self.environ.copy()
-        environ["UF_TASK_IMAGE"] = self.image
+        if self.image:
+            environ["UF_TASK_IMAGE"] = self.image
         environ["UF_STORAGE_URL"] = self.storage_url
         if self.metadata_storage_url:
             environ["UF_METADATA_STORAGE_URL"] = self.metadata_storage_url
@@ -174,7 +175,7 @@ class RemoteRun:
 @dataclass
 class RemoteRunTemporal:
     fn: Callable
-    image: str
+    image: Optional[str]
     storage_url: str
     metadata_storage_url: Optional[str] = None
     file_sync: Optional[bool] = False
@@ -203,7 +204,8 @@ class RemoteRunTemporal:
         workflow_id = f"{dot_path(self.fn)[-120:]}.{rand_str}"
 
         environ = self.environ.copy()
-        environ["UF_TASK_IMAGE"] = self.image
+        if self.image:
+            environ["UF_TASK_IMAGE"] = self.image
         environ["UF_STORAGE_URL"] = self.storage_url
         if self.metadata_storage_url:
             environ["UF_METADATA_STORAGE_URL"] = self.metadata_storage_url
