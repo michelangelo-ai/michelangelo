@@ -17,7 +17,7 @@ Pick the approach that matches your workflow and expertise:
 - Need to **prototype rapidly** before investing in custom code
 
 **Quick Start**:
-1. Navigate to MA Studio (available at your Michelangelo deployment URL, or `http://localhost:8080` in the [local sandbox](./sandbox-setup.md))
+1. Navigate to MA Studio (available at your Michelangelo deployment URL, or `http://localhost:8090` in the [local sandbox](./sandbox-setup.md))
 2. Create a new project and define your use case
 3. Prepare your dataset using the Data Prep interface
 4. Train a model using pre-built templates
