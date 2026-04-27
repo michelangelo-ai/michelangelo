@@ -121,7 +121,13 @@ A: Use Michelangelo's Ray integration for out-of-core processing. Data is stream
 
 **Q: How do multiple team members collaborate?**
 
-A: Via shared projects with role-based access control. Your operator configured this — see the [Authentication guide](../operator-guides/authentication.md).
+A: Michelangelo provides:
+- **Shared projects** with role-based access control (see [Project Management](../user-guides/project-management-for-ml-pipelines.md))
+- **Model lineage** tracking from training data through deployment
+- **Versioning** for models, pipelines, and pipeline runs
+- **Notifications** to keep teammates informed of pipeline events (see [Notifications](../user-guides/notifications.md))
+
+For operator-side RBAC and identity-provider setup, see the [Authentication guide](../operator-guides/authentication.md).
 
 **Q: Is my data secure?**
 
