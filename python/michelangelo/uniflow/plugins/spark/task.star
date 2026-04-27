@@ -200,25 +200,39 @@ def execute_spark_task(namespace, task_name, task_path, spark_job, start_time_fo
     # submit spark job
     print("spark | submit job. ns:", namespace, "task_name:", task_name)
 
-    # Enhanced: Call existing Go activity that now returns activity ID
     spark_job_response = spark.create_job(spark_job)
 
-    # Extract job info and activity ID from enhanced response
-    created_spark_job = spark_job_response["sparkJob"]  # This contains the actual job data
-    first_activity_id = spark_job_response["activityId"]  # NEW: Activity ID from Go
+    created_spark_job = spark_job_response["sparkJob"]
+    first_activity_id = spark_job_response["activityId"]
+
+    print("spark | first activity ID:", first_activity_id)
+
+    if created_spark_job == None:
+        end_time_seconds = time.time()
+        end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
+        report_progress(
+            task_path = task_path,
+            task_name = task_name,
+            task_log = "",
+            task_message = "Spark Job Creation Failed",
+            task_state = TASK_STATE_FAILED,
+            start_time = start_time_formatted_str,
+            end_time = end_time_formated_str,
+            output = "",
+            retry_attempt_id = retry_attempt_id,
+            first_activity_id = first_activity_id,
+        )
+        fail("spark | job creation failed, activityId=" + first_activity_id)
 
     print("spark | job created:", "ns=" + namespace, "task_name=" + task_name)
-    print("spark | first activity ID:", first_activity_id)  # NEW: Log the activity ID
 
     spark_job_name = ""
     if type(created_spark_job) == "dict":
         driver_log_url = created_spark_job.get("status", {}).get("jobUrl", "")
         spark_job_name = created_spark_job.get("metadata", {}).get("name", "")
 
-    # Generate log URL from job name
     generated_log_url = get_spark_log_url(spark_job_name)
 
-    # report task as pending
     report_progress(
         task_path = task_path,
         task_name = task_name,
@@ -229,7 +243,7 @@ def execute_spark_task(namespace, task_name, task_path, spark_job, start_time_fo
         end_time = "",
         output = "",
         retry_attempt_id = retry_attempt_id,
-        first_activity_id = first_activity_id,  # NEW: Store first activity ID for retry boundary
+        first_activity_id = first_activity_id,
     )
 
     # register the check_spark_job function to be called at the end of the workflow.

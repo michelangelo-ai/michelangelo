@@ -47,6 +47,12 @@ type CreateRayClusterActivityResponse struct {
 	ActivityID string `json:"activity_id"` // The actual activity ID from workflow engine
 }
 
+// CreateRayJobActivityResponse includes the activity ID for progress reporting
+type CreateRayJobActivityResponse struct {
+	RayJob     *v2pb.RayJob
+	ActivityID string `json:"activity_id"`
+}
+
 // CreateRayJob creates a new Ray job using the provided request parameters and returns activity ID.
 //
 // This method is executed as part of a Starlark worker activity.
@@ -57,9 +63,9 @@ type CreateRayClusterActivityResponse struct {
 //
 // Returns:
 // - *CreateRayJobActivityResponse: Response containing the created Ray job details and activity ID.
-// - *workflow.CustomError: Error information if the operation fails.
+// - error: nil on both success and logical failure so that the activity ID is always returned.
 func (r *activities) CreateRayJob(ctx context.Context, request v2pb.CreateRayJobRequest) (
-	*v2pb.CreateRayJobResponse, error) {
+	*CreateRayJobActivityResponse, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
 
@@ -70,13 +76,20 @@ func (r *activities) CreateRayJob(ctx context.Context, request v2pb.CreateRayJob
 
 	// Execute the original job creation logic
 	createRayJobResponse, err := r.rayJobService.CreateRayJob(ctx, &request)
-	if err != nil || createRayJobResponse == nil || createRayJobResponse.RayJob == nil ||
+	if err != nil {
+		logger.Error(err, "activity-error: failed to create ray job")
+		return &CreateRayJobActivityResponse{ActivityID: activityID}, nil
+	}
+	if createRayJobResponse == nil || createRayJobResponse.RayJob == nil ||
 		createRayJobResponse.RayJob.Name == "" {
-		logger.Error(err, "activity-error")
-		return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeUnavailable.String(), err.Error())
+		logger.Error(errors.New("empty or invalid response"), "activity-error: failed to create ray job")
+		return &CreateRayJobActivityResponse{ActivityID: activityID}, nil
 	}
 
-	return createRayJobResponse, nil
+	return &CreateRayJobActivityResponse{
+		RayJob:     createRayJobResponse.RayJob,
+		ActivityID: activityID,
+	}, nil
 }
 
 // CreateRayCluster creates a new Ray cluster and returns it with activity ID for retry tracking.
@@ -102,9 +115,14 @@ func (r *activities) CreateRayCluster(ctx context.Context, request v2pb.CreateRa
 
 	// Execute the original cluster creation logic
 	createRayClusterResponse, err := r.rayClusterService.CreateRayCluster(ctx, &request)
-	if err != nil || createRayClusterResponse == nil || createRayClusterResponse.RayCluster == nil ||
+	if err != nil {
+		logger.Error("activity-error: failed to create ray cluster", zap.Error(err))
+		return &CreateRayClusterActivityResponse{ActivityID: activityID}, nil
+	}
+	if createRayClusterResponse == nil || createRayClusterResponse.RayCluster == nil ||
 		createRayClusterResponse.RayCluster.Name == "" {
-		return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeUnavailable.String(), err.Error())
+		logger.Error("activity-error: empty or invalid response from CreateRayCluster")
+		return &CreateRayClusterActivityResponse{ActivityID: activityID}, nil
 	}
 
 	return &CreateRayClusterActivityResponse{

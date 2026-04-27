@@ -71,10 +71,14 @@ func (r *activities) CreateSparkJob(ctx context.Context, request v2pb.CreateSpar
 
 	// Execute the original job creation logic
 	createSparkJobResponse, err := r.sparkJobService.CreateSparkJob(ctx, &request)
-	if err != nil || createSparkJobResponse == nil || createSparkJobResponse.SparkJob == nil ||
+	if err != nil {
+		logger.Error("activity-error: failed to create spark job", zap.Error(err))
+		return &CreateSparkJobActivityResponse{ActivityID: activityID}, nil
+	}
+	if createSparkJobResponse == nil || createSparkJobResponse.SparkJob == nil ||
 		createSparkJobResponse.SparkJob.Name == "" {
-		logger.Error("activity-error", zap.Any("error", err.Error()))
-		return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeUnavailable.String(), err.Error())
+		logger.Error("activity-error: empty or invalid response from CreateSparkJob")
+		return &CreateSparkJobActivityResponse{ActivityID: activityID}, nil
 	}
 
 	return &CreateSparkJobActivityResponse{

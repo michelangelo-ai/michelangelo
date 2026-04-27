@@ -75,8 +75,19 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 		return nil, err
 	}
 
-	cluster = *response.RayCluster
 	activityID := response.ActivityID
+	if response.RayCluster == nil {
+		failureResponse := map[string]interface{}{
+			"rayCluster": nil,
+			"activityId": activityID,
+		}
+		var failRes starlark.Value
+		if err := utils.AsStar(failureResponse, &failRes); err != nil {
+			return nil, err
+		}
+		return failRes, nil
+	}
+	cluster = *response.RayCluster
 
 	srp := utils.DefaultSensorRetryPolicy
 	srp.ExpirationInterval = time.Second * time.Duration(timeout)
@@ -178,7 +189,7 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 			},
 		},
 	}
-	var createRes v2pb.CreateRayJobResponse
+	var createRes ray.CreateRayJobActivityResponse
 	if err := workflow.ExecuteActivity(ctx, ray.Activities.CreateRayJob, v2pb.CreateRayJobRequest{
 		RayJob: &rayJob,
 	}).Get(ctx, &createRes); err != nil {
@@ -186,6 +197,9 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 		return nil, err
 	}
 
+	if createRes.RayJob == nil {
+		return nil, fmt.Errorf("failed to create Ray job")
+	}
 	rayJob = *createRes.RayJob
 
 	var sensorRes ray.SensorRayJobResponse
