@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 from google.protobuf.struct_pb2 import Struct
 
 from michelangelo.cli.mactl.plugins.entity.pipeline.create import (
-    convert_crd_metadata_pipeline_create,
+    convert_crd_metadata_pipeline,
     get_pipeline_config_and_tar,
     handle_workflow_inputs_retrieval,
     populate_pipeline_spec_with_trigger_configs,
@@ -22,16 +22,14 @@ from michelangelo.cli.mactl.plugins.entity.pipeline.create import (
 class PipelineCreateTest(TestCase):
     """Tests for pipeline create plugin."""
 
-    def test_convert_crd_metadata_pipeline_create_invalid_input(self):
+    def test_convert_crd_metadata_pipeline_invalid_input(self):
         """Test that invalid input raises ValueError."""
         mock_crd_class = Mock()
         yaml_path = Path("/fake/path/pipeline.yaml")
 
         # Test with non-dict input
         with self.assertRaises(ValueError) as context:
-            convert_crd_metadata_pipeline_create(
-                "not a dict", mock_crd_class, yaml_path
-            )
+            convert_crd_metadata_pipeline("not a dict", mock_crd_class, yaml_path)
 
         self.assertIn("Expected a dictionary", str(context.exception))
 
@@ -42,10 +40,10 @@ class PipelineCreateTest(TestCase):
     @patch(
         "michelangelo.cli.mactl.plugins.entity.pipeline.create.populate_pipeline_spec_with_workflow_inputs"
     )
-    def test_convert_crd_metadata_pipeline_create_basic(
+    def test_convert_crd_metadata_pipeline_basic(
         self, mock_populate, mock_handle_workflow, mock_repo_class
     ):
-        """Test basic conversion of CRD metadata for pipeline create."""
+        """Test basic conversion of CRD metadata for pipeline create or update."""
         # Mock input
         yaml_dict = {
             "apiVersion": "michelangelo.api/v2",
@@ -83,9 +81,7 @@ class PipelineCreateTest(TestCase):
         expected_result = {"metadata": {}, "spec": {}}
         mock_populate.return_value = expected_result
 
-        result = convert_crd_metadata_pipeline_create(
-            yaml_dict, mock_crd_class, yaml_path
-        )
+        result = convert_crd_metadata_pipeline(yaml_dict, mock_crd_class, yaml_path)
 
         # Verify git repo was accessed
         mock_repo_class.assert_called_once_with(".", search_parent_directories=True)
