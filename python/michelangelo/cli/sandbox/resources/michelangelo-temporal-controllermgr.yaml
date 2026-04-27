@@ -55,6 +55,14 @@ data:
       rayCluster:
         k8sQps: 300
         k8sBurst: 600
+        logPersistence:
+          enabled: true
+          storageEndpoint: "k3d-michelangelo-sandbox-agent-0:30007"
+          bucket: ray-history
+          pathPrefix: clusters/
+          region: us-east-1
+          credentialsSecret: minio-credentials
+          collectorImage: kuberay-collector:v0.1.0
 
     minio:
       awsRegion: us-east-1
