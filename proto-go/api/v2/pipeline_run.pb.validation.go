@@ -375,6 +375,44 @@ func RegisterPipelineRunStatusValidateExt(f func(*PipelineRunStatus, string) err
 	pipelineRunStatusValidateExt = f
 }
 
+// attemptDetailsValidateExt is an extension hook for additional validation logic
+var attemptDetailsValidateExt func(*AttemptDetails, string) error
+
+func (this *AttemptDetails) Validate(prefix string) error {
+
+	{
+		v := this.GetStepInfo()
+		n := `step_info`
+		var i interface{}
+		if reflect.ValueOf(v).Kind() == reflect.Ptr {
+			i = reflect.ValueOf(v).Interface()
+			if reflect.ValueOf(v).IsNil() {
+				i = nil
+			}
+		} else {
+			i = reflect.ValueOf(&v).Interface()
+		}
+		validate, hasValidate := i.(interface{ Validate(string) error })
+		if hasValidate {
+			if err := validate.Validate(prefix + n + "."); err != nil {
+				return err
+			}
+		}
+	}
+	// Call extension validation if registered
+	if attemptDetailsValidateExt != nil {
+		if err := attemptDetailsValidateExt(this, prefix); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RegisterAttemptDetailsValidateExt registers an extension validation function
+func RegisterAttemptDetailsValidateExt(f func(*AttemptDetails, string) error) {
+	attemptDetailsValidateExt = f
+}
+
 // pipelineRunStepInfoValidateExt is an extension hook for additional validation logic
 var pipelineRunStepInfoValidateExt func(*PipelineRunStepInfo, string) error
 
@@ -501,6 +539,28 @@ func (this *PipelineRunStepInfo) Validate(prefix string) error {
 		v := this.GetResources()
 		for i, v := range v {
 			n := `resources[` + strconv.Itoa(i) + `]`
+
+			var i interface{}
+			if reflect.ValueOf(v).Kind() == reflect.Ptr {
+				i = reflect.ValueOf(v).Interface()
+				if reflect.ValueOf(v).IsNil() {
+					i = nil
+				}
+			} else {
+				i = reflect.ValueOf(&v).Interface()
+			}
+			validate, hasValidate := i.(interface{ Validate(string) error })
+			if hasValidate {
+				if err := validate.Validate(prefix + n + "."); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	{
+		v := this.GetAttemptDetails()
+		for i, v := range v {
+			n := `attempt_details[` + strconv.Itoa(i) + `]`
 
 			var i interface{}
 			if reflect.ValueOf(v).Kind() == reflect.Ptr {
