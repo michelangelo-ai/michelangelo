@@ -36,6 +36,8 @@ type Config struct {
 	ConcurrentReconcilesMap map[string]int `yaml:"concurrentReconcilesMap"`
 	// RequeuePeriodMap allows per-kind requeue period overrides
 	RequeuePeriodMap map[string]time.Duration `yaml:"requeuePeriodMap"`
+	// DeletionDelayMap allows per-kind deletion delay overrides
+	DeletionDelayMap map[string]time.Duration `yaml:"deletionDelayMap"`
 }
 
 // GetControllerConfig returns the resolved config for a specific CRD kind,
@@ -43,6 +45,7 @@ type Config struct {
 func (c Config) GetControllerConfig(kind string) Config {
 	concurrency := c.ConcurrentReconciles
 	requeuePeriod := c.RequeuePeriod
+	deletionDelay := c.DeletionDelay
 
 	if val, ok := c.ConcurrentReconcilesMap[kind]; ok {
 		concurrency = val
@@ -50,11 +53,14 @@ func (c Config) GetControllerConfig(kind string) Config {
 	if val, ok := c.RequeuePeriodMap[kind]; ok {
 		requeuePeriod = val
 	}
+	if val, ok := c.DeletionDelayMap[kind]; ok {
+		deletionDelay = val
+	}
 
 	return Config{
 		ConcurrentReconciles: concurrency,
 		RequeuePeriod:        requeuePeriod,
-		DeletionDelay:        c.DeletionDelay,
+		DeletionDelay:        deletionDelay,
 	}
 }
 
