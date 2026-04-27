@@ -110,6 +110,12 @@ const config: Config = {
       darkTheme: prismThemes.dracula,
       additionalLanguages: ['go', 'python', 'bash', 'yaml', 'json'],
     },
+    algolia: {
+      appId: 'VHQ78WWU1A',
+      apiKey: '29f48511d08dbcbe1c808676879f24eb',
+      indexName: 'docs-crawler',
+      contextualSearch: true,
+    },
   } satisfies Preset.ThemeConfig,
 };
 
