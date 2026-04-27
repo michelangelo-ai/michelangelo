@@ -160,8 +160,6 @@ ma sandbox demo inference   # sets up demo inference server
 
 ---
 
----
-
 ## Running your first workflow
 
 Once your sandbox is running, you can run Uniflow workflows locally or remotely.
