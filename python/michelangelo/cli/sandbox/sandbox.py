@@ -1922,7 +1922,10 @@ def _patch_deployment_status(
     """Patch the status subresource of a Deployment CR."""
     status: dict = {"state": state, "stage": stage}
     if current_revision_name:
-        status["currentRevision"] = {"name": current_revision_name, "namespace": namespace}
+        status["currentRevision"] = {
+            "name": current_revision_name,
+            "namespace": namespace,
+        }
     _exec(
         "kubectl",
         "patch",
@@ -1948,26 +1951,31 @@ def _create_deployment_demo_crs():
 
     namespace = "ma-dev-test"
     _patch_deployment_status(
-        "sentiment-online-deployment", namespace,
+        "sentiment-online-deployment",
+        namespace,
         state="DEPLOYMENT_STATE_HEALTHY",
         stage="DEPLOYMENT_STAGE_ROLLOUT_COMPLETE",
         current_revision_name="sentiment-model-v1",
     )
     _patch_deployment_status(
-        "sentiment-offline-deployment", namespace,
+        "sentiment-offline-deployment",
+        namespace,
         state="DEPLOYMENT_STATE_HEALTHY",
         stage="DEPLOYMENT_STAGE_ROLLOUT_COMPLETE",
         current_revision_name="sentiment-model-v1",
     )
     _patch_deployment_status(
-        "sentiment-mobile-deployment", namespace,
+        "sentiment-mobile-deployment",
+        namespace,
         state="DEPLOYMENT_STATE_INITIALIZING",
         stage="DEPLOYMENT_STAGE_PLACEMENT",
     )
 
     print("✅ Deployment demo resources created successfully")
     print("📋 What was set up:")
-    print("  • sentiment-online-deployment  (TARGET_TYPE_INFERENCE_SERVER, zonal rollout)")
+    print(
+        "  • sentiment-online-deployment  (TARGET_TYPE_INFERENCE_SERVER, zonal rollout)"
+    )
     print("  • sentiment-offline-deployment (TARGET_TYPE_OFFLINE, blast rollout)")
     print("  • sentiment-mobile-deployment  (TARGET_TYPE_MOBILE, rolling rollout)")
 
