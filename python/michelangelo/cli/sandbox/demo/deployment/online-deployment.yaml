@@ -19,8 +19,5 @@ spec:
   strategy:
     zonal:
       rolloutPeriodInSeconds: 120
-  modelFamily:
-    name: sentiment-model-family
-    namespace: ma-dev-test
   owner:
     name: craig.marker

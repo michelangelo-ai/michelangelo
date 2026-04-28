@@ -12,7 +12,7 @@ const DEPLOYMENT_COLUMNS: ColumnConfig<object>[] = [
   },
   {
     id: 'status.currentRevision.name',
-    label: 'Current revision',
+    label: 'Model',
     type: CellType.TEXT,
   },
   {
@@ -39,26 +39,6 @@ const DEPLOYMENT_COLUMNS: ColumnConfig<object>[] = [
       return null;
     },
   },
-  {
-    id: 'spec.modelFamily.name',
-    label: 'Model family',
-    type: CellType.TEXT,
-  },
-  {
-    id: 'metadata.labels.stage',
-    label: 'Traffic type',
-    type: CellType.TAG,
-    accessor: (data: unknown) => {
-      const stage = (data as { metadata?: { labels?: { stage?: string } } })?.metadata?.labels?.stage;
-      if (!stage || stage.length <= 1) return 'Unknown';
-      return stage.charAt(0).toUpperCase() + stage.slice(1);
-    },
-  },
-  {
-    id: 'spec.owner.name',
-    label: 'Owner',
-    type: CellType.TEXT,
-  },
   DEPLOYMENT_LAST_PREDICTION_CELL,
   {
     id: 'metadata.labels["michelangelo/SpecUpdateTimestamp"]',
@@ -69,6 +49,11 @@ const DEPLOYMENT_COLUMNS: ColumnConfig<object>[] = [
         ?.metadata?.labels?.['michelangelo/SpecUpdateTimestamp'];
       return ts ? Math.floor(Number(ts) / 1_000_000) : undefined;
     },
+  },
+  {
+    id: 'spec.owner.name',
+    label: 'Owner',
+    type: CellType.TEXT,
   },
   DEPLOYMENT_STATE_CELL,
 ];

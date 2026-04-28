@@ -19,8 +19,5 @@ spec:
   strategy:
     blast:
       withRollbackTrigger: false
-  modelFamily:
-    name: sentiment-model-family
-    namespace: ma-dev-test
   owner:
     name: craig.marker

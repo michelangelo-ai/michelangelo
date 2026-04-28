@@ -16,8 +16,5 @@ spec:
   strategy:
     rolling:
       incrementPercentage: 10
-  modelFamily:
-    name: sentiment-model-family
-    namespace: ma-dev-test
   owner:
     name: craig.marker
