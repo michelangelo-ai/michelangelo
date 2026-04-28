@@ -1,5 +1,7 @@
+import type { RuntimeConfig } from './types';
+
 // Fetches runtime configuration from /config.json.
-export async function getRuntimeConfig(): Promise<{ apiBaseUrl: string }> {
+export async function getRuntimeConfig(): Promise<RuntimeConfig> {
   let response: Response;
   try {
     response = await fetch('/config.json');
@@ -19,9 +21,9 @@ export async function getRuntimeConfig(): Promise<{ apiBaseUrl: string }> {
     throw createConfigError('Check that config.json is properly mounted.', { cause: response });
   }
 
-  let config: { apiBaseUrl: string };
+  let config: RuntimeConfig;
   try {
-    config = (await response.json()) as { apiBaseUrl: string };
+    config = (await response.json()) as RuntimeConfig;
   } catch (error) {
     console.error(
       `Config JSON parsing failed: ${error instanceof Error ? error.message : 'Invalid JSON'}`
