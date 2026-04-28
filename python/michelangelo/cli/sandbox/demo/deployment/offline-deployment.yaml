@@ -1,0 +1,26 @@
+apiVersion: michelangelo.api/v2
+kind: Deployment
+metadata:
+  name: sentiment-offline-deployment
+  namespace: ma-dev-test
+  annotations:
+    deployment.michelangelo/last-prediction-timestamp: "1745798400"
+  labels:
+    stage: staging
+spec:
+  desiredRevision:
+    name: sentiment-model-v1
+    namespace: ma-dev-test
+  inferenceServer:
+    name: inference-server-example
+    namespace: default
+  definition:
+    type: TARGET_TYPE_OFFLINE
+  strategy:
+    blast:
+      withRollbackTrigger: false
+  modelFamily:
+    name: sentiment-model-family
+    namespace: ma-dev-test
+  owner:
+    name: craig.marker

@@ -2,6 +2,7 @@
 
 import argparse
 import base64
+import json
 import shutil
 import subprocess
 import sys
@@ -146,6 +147,7 @@ def init_arguments(p: argparse.ArgumentParser):
     )
     _ = demo_sp.add_parser("pipeline", help="Create pipeline demo resources")
     _ = demo_sp.add_parser("inference", help="Create inference server demo resources")
+    _ = demo_sp.add_parser("deployment", help="Create deployment demo resources")
 
     delete_p = sp.add_parser("delete", help="Delete the cluster.")
     delete_p.add_argument(
@@ -1026,7 +1028,7 @@ def _create_cadence_domain(links):
 def _create_demo_crs(ns: argparse.Namespace):
     """Create demo Custom Resources (CRs) for the sandbox environment."""
     assert ns
-    if ns.demo_action != "pipeline" and ns.demo_action != "inference":
+    if ns.demo_action not in ("pipeline", "inference", "deployment"):
         raise ValueError(f"Unsupported demo action: {ns.demo_action}")
 
     # Check if cluster exists
@@ -1077,6 +1079,8 @@ def _create_demo_crs(ns: argparse.Namespace):
         _create_pipeline_demo_crs()
     elif ns.demo_action == "inference":
         _create_inference_demo_crs()
+    elif ns.demo_action == "deployment":
+        _create_deployment_demo_crs()
     else:
         raise ValueError(f"Unsupported demo action: {ns.demo_action}")
 
@@ -1906,6 +1910,66 @@ def _setup_istio_with_gateway_api():
     )
 
     print("✅ Istio with Gateway API setup complete")
+
+
+def _patch_deployment_status(
+    name: str,
+    namespace: str,
+    state: str,
+    stage: str,
+    current_revision_name: Optional[str] = None,
+):
+    """Patch the status subresource of a Deployment CR."""
+    status: dict = {"state": state, "stage": stage}
+    if current_revision_name:
+        status["currentRevision"] = {"name": current_revision_name, "namespace": namespace}
+    _exec(
+        "kubectl",
+        "patch",
+        f"deployments.michelangelo.api/{name}",
+        "-n",
+        namespace,
+        "--subresource=status",
+        "--type=merge",
+        "-p",
+        json.dumps({"status": status}),
+    )
+
+
+def _create_deployment_demo_crs():
+    """Create deployment demo CRs for the sandbox cluster.
+
+    Requires the inference demo to have been run first so that
+    inference-server-example exists.
+    """
+    deployment_demo_dir = _dir / "demo" / "deployment"
+    for yaml_file in deployment_demo_dir.glob("*.yaml"):
+        _kube_apply(yaml_file)
+
+    namespace = "ma-dev-test"
+    _patch_deployment_status(
+        "sentiment-online-deployment", namespace,
+        state="DEPLOYMENT_STATE_HEALTHY",
+        stage="DEPLOYMENT_STAGE_ROLLOUT_COMPLETE",
+        current_revision_name="sentiment-model-v1",
+    )
+    _patch_deployment_status(
+        "sentiment-offline-deployment", namespace,
+        state="DEPLOYMENT_STATE_HEALTHY",
+        stage="DEPLOYMENT_STAGE_ROLLOUT_COMPLETE",
+        current_revision_name="sentiment-model-v1",
+    )
+    _patch_deployment_status(
+        "sentiment-mobile-deployment", namespace,
+        state="DEPLOYMENT_STATE_INITIALIZING",
+        stage="DEPLOYMENT_STAGE_PLACEMENT",
+    )
+
+    print("✅ Deployment demo resources created successfully")
+    print("📋 What was set up:")
+    print("  • sentiment-online-deployment  (TARGET_TYPE_INFERENCE_SERVER, zonal rollout)")
+    print("  • sentiment-offline-deployment (TARGET_TYPE_OFFLINE, blast rollout)")
+    print("  • sentiment-mobile-deployment  (TARGET_TYPE_MOBILE, rolling rollout)")
 
 
 def _create_pipeline_demo_crs():
