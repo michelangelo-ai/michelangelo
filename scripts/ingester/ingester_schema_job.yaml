@@ -1,0 +1,139 @@
+---
+# Kubernetes Job to Initialize Ingester Database Schema
+# Uses: scripts/ingester_schema.sql (the canonical schema file)
+# Creates: 39 tables for all 13 CRDs watched by the ingester
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ingester-schema-init
+  namespace: default
+  labels:
+    app: michelangelo-ingester
+  annotations:
+    description: "Initializes MySQL schema for Michelangelo ingester - all 13 CRDs"
+    # Ensure this runs after MySQL is deployed
+    # If using Helm, add: "helm.sh/hook": post-install,post-upgrade
+    # If using Argo CD, add dependencies in Application manifest
+spec:
+  ttlSecondsAfterFinished: 86400  # Auto-delete after 24 hours
+  backoffLimit: 3                  # Retry up to 3 times if MySQL is temporarily unavailable
+  
+  template:
+    metadata:
+      labels:
+    spec:
+      restartPolicy: OnFailure
+      
+      # Wait for MySQL to be ready
+      initContainers:
+        - name: wait-for-mysql
+          image: mysql:8
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for MySQL pod to be ready..."
+              echo "Checking service endpoint availability..."
+              
+              MAX_ATTEMPTS=60  # Wait up to 2 minutes
+              ATTEMPT=0
+              
+              while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+                ATTEMPT=$((ATTEMPT + 1))
+                
+                # Check if MySQL service has endpoints (pod is running)
+                if nslookup mysql >/dev/null 2>&1; then
+                  echo "  ✓ DNS resolution working"
+                  
+                  # Check if MySQL is accepting connections
+                  if mysql -h mysql -u root -proot -e "SELECT 1" 2>/dev/null; then
+                    echo "  ✓ MySQL is ready and accepting connections!"
+                    
+                    # Verify database can be accessed
+                    if mysql -h mysql -u root -proot -e "SHOW DATABASES;" 2>/dev/null | grep -q mysql; then
+                      echo "  ✓ MySQL is fully operational!"
+                      exit 0
+                    fi
+                  fi
+                fi
+                
+                echo "  Attempt $ATTEMPT/$MAX_ATTEMPTS: MySQL not ready, waiting..."
+                sleep 2
+              done
+              
+              echo "✗ MySQL did not become ready after $MAX_ATTEMPTS attempts"
+              exit 1
+      
+      # Execute the schema SQL
+      containers:
+        - name: init-schema
+          image: mysql:8
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              echo "==========================================="
+              echo "Ingester Schema Initialization"
+              echo "==========================================="
+              echo "Creating tables for 13 CRDs (39 total tables)"
+              echo ""
+              
+              if mysql -h mysql -u root -proot < /schema/ingester_schema.sql; then
+                echo "✓ Schema created successfully!"
+                echo ""
+                mysql -h mysql -u root -proot michelangelo -e "
+                  SELECT COUNT(*) as total_tables 
+                  FROM information_schema.tables 
+                  WHERE table_schema='michelangelo';
+                "
+                echo ""
+                echo "Tables:"
+                mysql -h mysql -u root -proot michelangelo -e "SHOW TABLES;" | sed 's/^/  /'
+                exit 0
+              else
+                echo "✗ Schema initialization failed!"
+                exit 1
+              fi
+          volumeMounts:
+            - name: schema
+              mountPath: /schema
+              readOnly: true
+      
+      volumes:
+        - name: schema
+          configMap:
+            name: ingester-schema-sql
+
+---
+# ==============================================================================
+# DEPLOYMENT NOTES
+# ==============================================================================
+#
+# This Job waits for MySQL to be ready before executing schema initialization.
+#
+# Health Checks:
+# - Init container waits for MySQL to accept connections (up to 2 minutes)
+# - Tests DNS resolution, connection, and database accessibility
+# - Main container executes SQL only after init container succeeds
+#
+# Deployment Order:
+# 1. Deploy MySQL first: kubectl apply -f mysql.yaml
+# 2. Wait for MySQL to be ready: kubectl wait --for=condition=ready pod/mysql --timeout=5m
+# 3. Create ConfigMap: kubectl create configmap ingester-schema-sql --from-file=ingester_schema.sql=scripts/ingester_schema.sql
+# 4. Run this Job: kubectl apply -f scripts/ingester_schema_job.yaml
+#
+# For automated deployment (Helm/Kustomize):
+# - Use Helm hooks: Add "helm.sh/hook": post-install,post-upgrade to metadata.annotations
+# - Or use depends_on in docker-compose/ArgoCD
+# - Or use Job dependencies in Argo Workflows
+#
+# Verification:
+#    kubectl get job ingester-schema-init
+#    kubectl logs job/ingester-schema-init
+#    kubectl exec mysql -- mysql -u root -proot michelangelo -e "SHOW TABLES;"
+#    Expected: 39 tables
+#
+# ==============================================================================

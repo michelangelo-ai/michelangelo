@@ -1,5 +1,6 @@
 import { getServices } from './services';
-import { ExtractUnaryRpc } from './types';
+
+import type { ExtractUnaryRpc } from './types';
 
 let handlersPromise: Promise<Awaited<ReturnType<typeof createHandlers>>> | null = null;
 
@@ -12,6 +13,9 @@ async function createHandlers() {
     >,
     GetProject: services.ProjectService.getProject as ExtractUnaryRpc<
       typeof services.ProjectService.getProject
+    >,
+    GetPipeline: services.PipelineService.getPipeline as ExtractUnaryRpc<
+      typeof services.PipelineService.getPipeline
     >,
     ListPipeline: services.PipelineService.listPipeline as ExtractUnaryRpc<
       typeof services.PipelineService.listPipeline
@@ -28,8 +32,14 @@ async function createHandlers() {
     GetTriggerRun: services.TriggerRunService.getTriggerRun as ExtractUnaryRpc<
       typeof services.TriggerRunService.getTriggerRun
     >,
+    UpdateTriggerRun: services.TriggerRunService.updateTriggerRun as ExtractUnaryRpc<
+      typeof services.TriggerRunService.updateTriggerRun
+    >,
     CreatePipelineRun: services.PipelineRunService.createPipelineRun as ExtractUnaryRpc<
       typeof services.PipelineRunService.createPipelineRun
+    >,
+    UpdatePipelineRun: services.PipelineRunService.updatePipelineRun as ExtractUnaryRpc<
+      typeof services.PipelineRunService.updatePipelineRun
     >,
     ListModel: services.ModelService.listModel as ExtractUnaryRpc<
       typeof services.ModelService.listModel

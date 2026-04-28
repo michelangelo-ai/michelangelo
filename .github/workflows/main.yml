@@ -4,8 +4,16 @@ name: Bazel Test
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'website/**'
+      - 'javascript/**'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'website/**'
+      - 'javascript/**'
 
 jobs:
   bazel-build:
@@ -14,7 +22,7 @@ jobs:
     steps:
       # Checkout the repository
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # Cache Bazel outputs
       - name: Cache Bazel Outputs
@@ -22,13 +30,13 @@ jobs:
         with:
           path: |
             ~/.cache/bazel
-          key: bazel_cache_root
+          key: bazel-main-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
           restore-keys: |
-            bazel_cache_root
+            bazel-main-${{ runner.os }}-
 
       # Run Bazel tests
       - name: Run Bazel Test
-        run: ./tools/bazel test ...
+        run: ./tools/bazel test //go/... //proto/... --build_tests_only
 
   python-build:
     runs-on: ubuntu-latest
@@ -81,17 +89,17 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # Cache Bazel outputs to speed up Bazel commands
-      - name: Cache Bazel Outputs
-        uses: actions/cache@v4
+      # Restore-only: reuse the cache saved by bazel-build (no redundant save)
+      - name: Restore Bazel Cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             ~/.cache/bazel
-          key: bazel_cache_root
+          key: bazel-main-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
           restore-keys: |
-            bazel_cache_root
+            bazel-main-${{ runner.os }}-
 
       - name: Run Gazelle
         run: |

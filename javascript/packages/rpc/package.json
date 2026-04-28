@@ -1,8 +1,8 @@
 {
   "name": "@michelangelo/rpc",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "type": "module",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "scripts": {
     "build": "vite build",
     "test": "cd ../../ && yarn test:rpc"
@@ -14,7 +14,7 @@
   "dependencies": {
     "@connectrpc/connect": "^2.0.2",
     "@connectrpc/connect-web": "^2.0.2",
-    "@uber/michelangelo-core": "*"
+    "@michelangelo-ai/core": "*"
   },
   "exports": {
     ".": {

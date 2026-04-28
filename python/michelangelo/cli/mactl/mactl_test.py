@@ -1,24 +1,39 @@
 """Unit tests for mactl CLI functions."""
 
 import os
+import sys
 import tempfile
 from argparse import Namespace
 from importlib import reload
+from inspect import Parameter
 from pathlib import Path
 from unittest import TestCase
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import ANY, MagicMock, Mock, patch
 
 from michelangelo.cli.mactl import mactl
 from michelangelo.cli.mactl.crd import CRD
 from michelangelo.cli.mactl.mactl import (
     ADDRESS,
+    DEFAULT_DIR_PLUGINS,
+    _is_service_name,
+    add_plugin_dirs_to_syspath,
+    apply_command_plugins,
+    apply_entity_plugins,
+    apply_module_overrides,
     check_crd,
     create_serivce_classes,
+    discover_all_plugins,
     discover_crds,
     handle_crd_action_help,
     pre_parse_args,
     read_module_from_file,
+    read_plugin_command,
+    read_plugin_modules,
+    read_plugins,
 )
+
+PWD = Path(__file__).parent.resolve()
+PLUGIN_TEST_DIR = PWD / "test" / "plugin_test"
 
 
 class ServiceClassCreationTest(TestCase):
@@ -197,14 +212,14 @@ class TLSConnectionTest(TestCase):
             if should_use_tls:
                 credentials = mactl.ssl_channel_credentials()
                 with mactl.secure_channel(mactl.ADDRESS, credentials) as channel:
-                    mactl.main(channel)
+                    mactl.main(channel, {})
             else:
                 self.fail("TLS was expected to be enabled in this test.")
 
         # Verify TLS connection setup
         mock_ssl_creds.assert_called_once()
         mock_secure_channel.assert_called_once_with("test-server:443", mock_credentials)
-        mock_main.assert_called_once_with(mock_channel)
+        mock_main.assert_called_once_with(mock_channel, ANY)
 
     @patch("michelangelo.cli.mactl.mactl.main")
     @patch("michelangelo.cli.mactl.mactl.insecure_channel")
@@ -228,11 +243,11 @@ class TLSConnectionTest(TestCase):
                 self.fail("TLS was expected to be not enabled in this test.")
             else:
                 with mactl.insecure_channel(mactl.ADDRESS) as channel:
-                    mactl.main(channel)
+                    mactl.main(channel, {})
 
         # Verify insecure connection setup
         mock_insecure_channel.assert_called_once_with("localhost:5435")
-        mock_main.assert_called_once_with(mock_channel)
+        mock_main.assert_called_once_with(mock_channel, ANY)
 
     @patch("michelangelo.cli.mactl.mactl.main")
     @patch("michelangelo.cli.mactl.mactl.secure_channel")
@@ -261,12 +276,12 @@ class TLSConnectionTest(TestCase):
             if mactl.USE_TLS == "true":
                 credentials = mactl.ssl_channel_credentials()
                 with mactl.secure_channel(mactl.ADDRESS, credentials) as channel:
-                    mactl.main(channel)
+                    mactl.main(channel, {})
 
         # Verify context manager methods were called
         mock_secure_channel.return_value.__enter__.assert_called_once()
         mock_secure_channel.return_value.__exit__.assert_called_once()
-        mock_main.assert_called_once_with(mock_channel)
+        mock_main.assert_called_once_with(mock_channel, ANY)
 
         # Reset mocks
         mock_main.reset_mock()
@@ -286,12 +301,12 @@ class TLSConnectionTest(TestCase):
             # Test insecure channel usage
             if mactl.USE_TLS != "true":
                 with mactl.insecure_channel(mactl.ADDRESS) as channel:
-                    mactl.main(channel)
+                    mactl.main(channel, {})
 
         # Verify context manager methods were called
         mock_insecure_channel.return_value.__enter__.assert_called_once()
         mock_insecure_channel.return_value.__exit__.assert_called_once()
-        mock_main.assert_called_once_with(mock_channel)
+        mock_main.assert_called_once_with(mock_channel, ANY)
 
     def test_address_environment_variable_integration(self):
         """Test that MACTL_ADDRESS works with TLS configuration."""
@@ -345,11 +360,118 @@ class TLSErrorHandlingTest(TestCase):
             self.assertEqual(str(context.exception), "Failed to create SSL credentials")
 
 
+class ReadPluginsTest(TestCase):
+    """Tests for reading multiple plugins."""
+
+    def test_read_plugin_modules_read_multiple(self):
+        """Test read_plugins returns a list of loaded modules."""
+        res = read_plugin_modules(
+            "pipeline",
+            [
+                str(DEFAULT_DIR_PLUGINS),
+                str(PLUGIN_TEST_DIR / "plugins_1"),
+                str(PLUGIN_TEST_DIR / "plugins_2"),
+            ],
+        )
+
+        self.assertEqual(len(res), 3)
+        self.assertEqual(res[0].__name__, "plugin_pipeline_main_0")
+        self.assertEqual(
+            res[0].__file__,
+            str(DEFAULT_DIR_PLUGINS / "entity" / "pipeline" / "main.py"),
+        )
+        self.assertEqual(res[1].__name__, "plugin_pipeline_main_1")
+        self.assertEqual(
+            res[1].__file__,
+            str(PLUGIN_TEST_DIR / "plugins_1" / "entity" / "pipeline" / "main.py"),
+        )
+        self.assertEqual(res[2].__name__, "plugin_pipeline_main_2")
+        self.assertEqual(
+            res[2].__file__,
+            str(PLUGIN_TEST_DIR / "plugins_2" / "entity" / "pipeline" / "main.py"),
+        )
+
+    @patch.dict(
+        "michelangelo.cli.mactl.mactl._CONFIG",
+        {
+            "plugin": {
+                "dirs": [
+                    str(PLUGIN_TEST_DIR / "plugins_1"),
+                    str(PLUGIN_TEST_DIR / "plugins_2"),
+                ],
+            },
+        },
+        clear=False,
+    )
+    def test_read_plugin_multiple(self):
+        """Test for `read_plugin()` with multiple plugin directories."""
+        crd = CRD(
+            name="pipeline",
+            full_name="michelangelo.api.v2.PipelineService",
+            metadata=[],
+        )
+        mock_channel = MagicMock()
+
+        # Run function.
+        read_plugins(crd, mock_channel)
+
+        # Check new function signature
+        self.assertTrue("fly" in crd.func_signature)
+        self.assertEqual(
+            crd.func_signature["fly"],
+            {
+                "help": "Fly away all pipelines.",
+                "args": [
+                    {
+                        "args": ["-n", "--namespace"],
+                        "func_signature": Parameter(
+                            "namespace",
+                            Parameter.POSITIONAL_OR_KEYWORD,
+                        ),
+                        "kwargs": {
+                            "help": "Namespace of the resource",
+                            "required": True,
+                            "type": str,
+                        },
+                    }
+                ],
+            },
+        )
+
+    @patch.dict(
+        "michelangelo.cli.mactl.mactl._CONFIG",
+        {
+            "plugin": {
+                "dirs": [
+                    str(PLUGIN_TEST_DIR / "plugins_1"),
+                    str(PLUGIN_TEST_DIR / "plugins_2"),
+                ],
+            },
+        },
+        clear=False,
+    )
+    def test_read_plugin_command_multiple(self):
+        """Test for `read_plugin_command()` with multiple plugin directories."""
+        crd = CRD(
+            name="pipeline",
+            full_name="michelangelo.api.v2.PipelineService",
+            metadata=[],
+        )
+        mock_channel = MagicMock()
+
+        # Run function
+        read_plugin_command(crd, "apply", {"pipeline": crd}, mock_channel)
+        # Run overwritten function. mock args would be okay.
+        res = crd.func_crd_metadata_converter(Mock(), Mock(), Mock())
+
+        # Check result
+        self.assertEqual(res, {"test_spec": "plugin_1_test"})
+
+
 class ReadModuleFromFileTest(TestCase):
     """Tests for read_module_from_file function."""
 
-    @patch("michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS")
-    def test_successful_module_loading(self, mock_default_dir_plugins):
+    def test_successful_module_loading(self):
         """Test successful loading of a plugin module."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create plugin directory structure
@@ -360,89 +482,58 @@ class ReadModuleFromFileTest(TestCase):
             main_py = plugin_dir / "main.py"
             main_py.write_text("test_var = 'hello'")
 
-            # Mock DEFAULT_DIR_PLUGINS to point to our temp directory
-            mock_default_dir_plugins.__truediv__.return_value = Path(tmpdir) / "entity"
-
             # Execute
-            result = read_module_from_file("test_entity")
+            result = read_module_from_file("test_entity", Path(tmpdir))
 
             # Verify module was loaded and has the expected attribute
             self.assertIsNotNone(result)
             self.assertEqual(result.test_var, "hello")
 
-    @patch("michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS")
-    def test_plugin_directory_does_not_exist(self, mock_default_dir_plugins):
+    def test_plugin_directory_does_not_exist(self):
         """Test when plugin directory does not exist."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Mock DEFAULT_DIR_PLUGINS but don't create the directory
-            mock_default_dir_plugins.__truediv__.return_value = Path(tmpdir) / "entity"
-
-            # Execute
-            result = read_module_from_file("nonexistent_entity")
+            # Execute with non-existent entity
+            result = read_module_from_file("nonexistent_entity", Path(tmpdir))
 
             # Verify returns None
             self.assertIsNone(result)
 
-    @patch("michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS")
-    def test_main_py_does_not_exist(self, mock_default_dir_plugins):
+    def test_main_py_does_not_exist(self):
         """Test when main.py file does not exist in plugin directory."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create plugin directory but no main.py
             plugin_dir = Path(tmpdir) / "entity" / "test_entity"
             plugin_dir.mkdir(parents=True)
 
-            # Mock DEFAULT_DIR_PLUGINS
-            mock_default_dir_plugins.__truediv__.return_value = Path(tmpdir) / "entity"
-
             # Execute
-            result = read_module_from_file("test_entity")
+            result = read_module_from_file("test_entity", Path(tmpdir))
 
             # Verify returns None
             self.assertIsNone(result)
 
+    def test_plugin_base_directory_does_not_exist(self):
+        """Test when plugin base directory does not exist (line 84)."""
+        # Use a non-existent path
+        nonexistent_path = Path("/tmp/nonexistent_plugin_dir_12345")
 
-class ReadMinioConfigTest(TestCase):
-    """Tests for read_minio_config function."""
+        # Execute
+        result = read_module_from_file("test_entity", nonexistent_path)
 
-    @patch.object(mactl, "CONFIG_FILE", Path("/nonexistent/config.yaml"))
-    def test_config_file_not_exists(self):
-        """Test when config file doesn't exist."""
-        mactl.read_minio_config()  # Should not raise
+        # Verify returns None
+        self.assertIsNone(result)
 
-    @patch.object(mactl, "CONFIG_FILE")
-    @patch("michelangelo.cli.mactl.mactl.open")
-    @patch("michelangelo.cli.mactl.mactl.yaml_safe_load")
-    @patch("michelangelo.cli.mactl.mactl.getenv", return_value=None)
-    @patch.dict(os.environ, {}, clear=True)
-    def test_sets_env_vars(self, _, mock_yaml, __, mock_config):
-        """Test setting env vars from config."""
-        mock_config.exists.return_value = True
-        mock_yaml.return_value = {
-            "minio": {
-                "access_key_id": "key123",
-                "secret_access_key": "secret456",
-                "endpoint_url": "http://localhost:9000",
-            }
-        }
+    def test_plugin_base_directory_is_not_a_directory(self):
+        """Test when plugin base directory is a file, not a directory (line 84)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a file instead of directory
+            file_path = Path(tmpdir) / "plugin_file.txt"
+            file_path.write_text("not a directory")
 
-        mactl.read_minio_config()
+            # Execute
+            result = read_module_from_file("test_entity", file_path)
 
-        self.assertEqual(os.environ["AWS_ACCESS_KEY_ID"], "key123")
-        self.assertEqual(os.environ["AWS_SECRET_ACCESS_KEY"], "secret456")
-        self.assertEqual(os.environ["AWS_ENDPOINT_URL"], "http://localhost:9000")
-
-    @patch.object(mactl, "CONFIG_FILE")
-    @patch("michelangelo.cli.mactl.mactl.open")
-    @patch("michelangelo.cli.mactl.mactl.yaml_safe_load")
-    @patch.dict(os.environ, {"AWS_ACCESS_KEY_ID": "existing"}, clear=True)
-    def test_preserves_existing_env(self, mock_yaml, _, mock_config):
-        """Test not overwriting existing env vars."""
-        mock_config.exists.return_value = True
-        mock_yaml.return_value = {"minio": {"access_key_id": "new_key"}}
-
-        mactl.read_minio_config()
-
-        self.assertEqual(os.environ["AWS_ACCESS_KEY_ID"], "existing")
+            # Verify returns None
+            self.assertIsNone(result)
 
 
 class DiscoverCrdsTest(TestCase):
@@ -625,30 +716,33 @@ class MainFunctionTest(TestCase):
           replaced with proper integration tests that verify actual behavior.
     """
 
-    @patch("michelangelo.cli.mactl.mactl.read_minio_config")
+    @patch("michelangelo.cli.mactl.mactl.setup_minio_env")
     @patch("michelangelo.cli.mactl.mactl.discover_crds")
     @patch("michelangelo.cli.mactl.mactl.pre_parse_args")
-    @patch("michelangelo.cli.mactl.mactl.read_plugins")
+    @patch("michelangelo.cli.mactl.mactl.apply_entity_plugins")
     @patch("michelangelo.cli.mactl.mactl.handle_crd_action_help")
     @patch("michelangelo.cli.mactl.mactl.kebab_to_snake")
     @patch("michelangelo.cli.mactl.mactl.check_crd")
-    @patch("michelangelo.cli.mactl.mactl.read_plugin_command")
+    @patch("michelangelo.cli.mactl.mactl.apply_command_plugins")
     @patch("michelangelo.cli.mactl.mactl.ArgumentParser")
     def test_main_basic_execution_flow(
         self,
         mock_arg_parser_class,
-        mock_read_plugin_command,
+        mock_apply_command_plugins,
         mock_check_crd,
         mock_kebab_to_snake,
         mock_handle_crd_action_help,
-        mock_read_plugins,
+        mock_apply_entity_plugins,
         mock_pre_parse_args,
         mock_discover_crds,
-        mock_read_minio_config,
+        mock_setup_minio_env,
     ):
         """Test basic execution flow of main() function."""
         # Setup mock channel
         mock_channel = MagicMock()
+
+        # Setup mock plugin registry
+        mock_plugin_registry = {"project": [MagicMock()]}
 
         # Setup mock CRD
         mock_crd = MagicMock(spec=CRD)
@@ -669,18 +763,20 @@ class MainFunctionTest(TestCase):
         mock_parser_instance.parse_args.return_value = Namespace(name="test")
         mock_arg_parser_class.return_value = mock_parser_instance
 
-        # Execute main
-        mactl.main(mock_channel)
+        # Execute main with plugin_registry
+        mactl.main(mock_channel, mock_plugin_registry)
 
         # Verify Phase 1: Load config and discover CRDs
-        mock_read_minio_config.assert_called_once()
+        mock_setup_minio_env.assert_called_once()
         mock_discover_crds.assert_called_once_with(mock_channel)
 
         # Verify Phase 2: Pre-parse arguments
         mock_pre_parse_args.assert_called_once_with({"project": mock_crd})
 
-        # Verify Phase 2: Load plugins for target CRD
-        mock_read_plugins.assert_called_once_with(mock_crd, mock_channel)
+        # Verify Phase 2: Apply entity plugins from registry
+        mock_apply_entity_plugins.assert_called_once_with(
+            mock_crd, mock_channel, mock_plugin_registry
+        )
 
         # Verify Phase 2: Handle CRD-level help
         mock_handle_crd_action_help.assert_called_once_with(
@@ -689,11 +785,13 @@ class MainFunctionTest(TestCase):
 
         # Verify Phase 3: Generate method and configure argparse
         mock_kebab_to_snake.assert_called_once_with("create")
-        mock_check_crd.assert_called_once_with(
-            ["create", "--name", "test"], mock_crd, "create"
-        )
-        mock_read_plugin_command.assert_called_once_with(
-            mock_crd, "create", {"project": mock_crd}, mock_channel
+        mock_check_crd.assert_called_once_with(mock_crd, "create")
+        mock_apply_command_plugins.assert_called_once_with(
+            mock_crd,
+            "create",
+            {"project": mock_crd},
+            mock_channel,
+            mock_plugin_registry,
         )
 
         # Verify ArgumentParser was created and used
@@ -705,3 +803,335 @@ class MainFunctionTest(TestCase):
 
         # Verify Phase 5: Execute action
         mock_crd.create.assert_called_once_with(name="test")
+
+
+class ProxySupportTest(TestCase):
+    """Tests for proxy support functionality."""
+
+    def test_is_service_name_with_service_name(self):
+        """Test _is_service_name returns True for service names."""
+        self.assertTrue(_is_service_name("my-service"))
+        self.assertTrue(_is_service_name("apiserver"))
+        self.assertTrue(_is_service_name("backend-api"))
+
+    def test_is_service_name_with_host_port(self):
+        """Test _is_service_name returns False for host:port addresses."""
+        self.assertFalse(_is_service_name("localhost:8080"))
+        self.assertFalse(_is_service_name("api.example.com:443"))
+        self.assertFalse(_is_service_name("127.0.0.1:5000"))
+
+    def test_is_service_name_with_domain(self):
+        """Test _is_service_name returns False for domain names."""
+        self.assertFalse(_is_service_name("api.example.com"))
+        self.assertFalse(_is_service_name("sub.domain.example.org"))
+
+    @patch("michelangelo.cli.mactl.mactl.main")
+    @patch("michelangelo.cli.mactl.mactl.insecure_channel")
+    @patch("michelangelo.cli.mactl.mactl._CONFIG")
+    def test_run_with_proxy_for_service_name(
+        self, mock_config, mock_insecure_channel, mock_main
+    ):
+        """Test proxy usage when address is service name and proxy configured."""
+        mock_proxy_instance = MagicMock()
+        mock_proxy_instance.create_tunnel.return_value = "localhost:12345"
+        mock_proxy_instance.__enter__ = Mock(return_value=mock_proxy_instance)
+        mock_proxy_instance.__exit__ = Mock(return_value=None)
+
+        mock_proxy_class = MagicMock(return_value=mock_proxy_instance)
+
+        mock_proxy_module = MagicMock()
+        mock_proxy_module.CLIProxy = mock_proxy_class
+
+        mock_channel = MagicMock()
+        mock_insecure_channel.return_value.__enter__ = Mock(return_value=mock_channel)
+        mock_insecure_channel.return_value.__exit__ = Mock(return_value=None)
+
+        mock_config.__getitem__.return_value = {
+            "proxy": "my.proxy.module",
+        }
+
+        with (
+            patch("michelangelo.cli.mactl.mactl.ADDRESS", "my-service"),
+            patch("michelangelo.cli.mactl.mactl.USE_TLS", False),
+            patch("importlib.import_module", return_value=mock_proxy_module),
+        ):
+            from michelangelo.cli.mactl.mactl import run
+
+            run()
+
+        mock_proxy_instance.create_tunnel.assert_called_once_with("my-service")
+        mock_insecure_channel.assert_called_once_with("localhost:12345")
+        mock_main.assert_called_once_with(mock_channel, ANY)
+
+    @patch("michelangelo.cli.mactl.mactl.main")
+    @patch("michelangelo.cli.mactl.mactl.insecure_channel")
+    @patch("michelangelo.cli.mactl.mactl._CONFIG")
+    def test_run_without_proxy_for_host_port(
+        self, mock_config, mock_insecure_channel, mock_main
+    ):
+        """Test run() skips proxy when address is host:port."""
+        mock_channel = MagicMock()
+        mock_insecure_channel.return_value.__enter__ = Mock(return_value=mock_channel)
+        mock_insecure_channel.return_value.__exit__ = Mock(return_value=None)
+
+        mock_config.__getitem__.return_value = {
+            "proxy": "my.proxy.module",
+        }
+
+        with (
+            patch("michelangelo.cli.mactl.mactl.ADDRESS", "localhost:8080"),
+            patch("michelangelo.cli.mactl.mactl.USE_TLS", False),
+        ):
+            from michelangelo.cli.mactl.mactl import run
+
+            run()
+
+        mock_insecure_channel.assert_called_once_with("localhost:8080")
+        mock_main.assert_called_once_with(mock_channel, ANY)
+
+    @patch("michelangelo.cli.mactl.mactl.main")
+    @patch("michelangelo.cli.mactl.mactl.insecure_channel")
+    @patch("michelangelo.cli.mactl.mactl._CONFIG")
+    def test_run_without_proxy_when_not_configured(
+        self, mock_config, mock_insecure_channel, mock_main
+    ):
+        """Test run() skips proxy when proxy module is not configured."""
+        mock_channel = MagicMock()
+        mock_insecure_channel.return_value.__enter__ = Mock(return_value=mock_channel)
+        mock_insecure_channel.return_value.__exit__ = Mock(return_value=None)
+
+        mock_config.__getitem__.return_value = {
+            "proxy": "",
+        }
+
+        with (
+            patch("michelangelo.cli.mactl.mactl.ADDRESS", "my-service"),
+            patch("michelangelo.cli.mactl.mactl.USE_TLS", False),
+        ):
+            from michelangelo.cli.mactl.mactl import run
+
+            run()
+
+        mock_insecure_channel.assert_called_once_with("my-service")
+        mock_main.assert_called_once_with(mock_channel, ANY)
+
+
+PLUGIN_TEST_DIR_1 = PLUGIN_TEST_DIR / "plugins_1"
+PLUGIN_TEST_DIR_2 = PLUGIN_TEST_DIR / "plugins_2"
+
+
+class DiscoverAllPluginsTest(TestCase):
+    """Tests for discover_all_plugins function."""
+
+    @patch(
+        "michelangelo.cli.mactl.mactl._CONFIG",
+        {"plugin": {"dirs": [str(PLUGIN_TEST_DIR_1)]}},
+    )
+    def test_discovers_plugins_from_configured_dirs(self):
+        """Core: discovers entity plugins from configured plugin directories."""
+        with patch(
+            "michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS", Path("/nonexistent")
+        ):
+            registry = discover_all_plugins()
+
+        self.assertIn("pipeline", registry)
+        self.assertEqual(len(registry["pipeline"]), 1)
+        self.assertTrue(hasattr(registry["pipeline"][0], "apply_plugins"))
+        self.assertTrue(hasattr(registry["pipeline"][0], "apply_plugin_command"))
+
+    @patch("michelangelo.cli.mactl.mactl._CONFIG", {"plugin": {"dirs": []}})
+    def test_returns_empty_registry_when_no_entity_dir(self):
+        """Edge: returns empty registry when plugin dir has no entity/ subdirectory."""
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            patch("michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS", Path(tmpdir)),
+        ):
+            registry = discover_all_plugins()
+
+        self.assertEqual(registry, {})
+
+    @patch(
+        "michelangelo.cli.mactl.mactl._CONFIG",
+        {"plugin": {"dirs": [str(PLUGIN_TEST_DIR_1), str(PLUGIN_TEST_DIR_2)]}},
+    )
+    def test_accumulates_plugins_from_multiple_dirs(self):
+        """Edge: accumulates plugins from multiple configured directories."""
+        with patch(
+            "michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS", Path("/nonexistent")
+        ):
+            registry = discover_all_plugins()
+
+        self.assertIn("pipeline", registry)
+        self.assertEqual(len(registry["pipeline"]), 2)
+
+    @patch("michelangelo.cli.mactl.mactl._CONFIG", {})
+    def test_returns_empty_registry_when_plugin_config_missing(self):
+        """Edge: returns empty registry when plugin config key is absent."""
+        with patch(
+            "michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS", Path("/nonexistent")
+        ):
+            registry = discover_all_plugins()
+
+        self.assertEqual(registry, {})
+
+
+class ApplyEntityPluginsTest(TestCase):
+    """Tests for apply_entity_plugins function."""
+
+    def test_calls_apply_plugins_on_matching_entity(self):
+        """Core: calls apply_plugins() on plugin module matching the entity."""
+        mock_crd = MagicMock()
+        mock_crd.name = "pipeline"
+        mock_channel = MagicMock()
+        mock_plugin = MagicMock(spec=["apply_plugins"])
+
+        apply_entity_plugins(mock_crd, mock_channel, {"pipeline": [mock_plugin]})
+
+        mock_plugin.apply_plugins.assert_called_once_with(mock_crd, mock_channel)
+
+    def test_no_op_when_entity_not_in_registry(self):
+        """Edge: does nothing when entity has no plugins in registry."""
+        mock_crd = MagicMock()
+        mock_crd.name = "model"
+        mock_plugin = MagicMock(spec=["apply_plugins"])
+
+        apply_entity_plugins(mock_crd, MagicMock(), {"pipeline": [mock_plugin]})
+
+        mock_plugin.apply_plugins.assert_not_called()
+
+    def test_skips_plugin_without_apply_plugins_function(self):
+        """Edge: skips plugin module that has no apply_plugins attribute."""
+        mock_crd = MagicMock()
+        mock_crd.name = "pipeline"
+        mock_plugin = MagicMock(spec=[])  # no apply_plugins
+
+        apply_entity_plugins(mock_crd, MagicMock(), {"pipeline": [mock_plugin]})
+        # no exception raised, plugin silently skipped
+
+
+class ApplyCommandPluginsTest(TestCase):
+    """Tests for apply_command_plugins function."""
+
+    def test_calls_apply_plugin_command_on_matching_entity(self):
+        """Core: calls apply_plugin_command() on plugin module matching the entity."""
+        mock_crd = MagicMock()
+        mock_crd.name = "pipeline"
+        mock_channel = MagicMock()
+        mock_crds = {"pipeline": mock_crd}
+        mock_plugin = MagicMock(spec=["apply_plugin_command"])
+
+        apply_command_plugins(
+            mock_crd, "create", mock_crds, mock_channel, {"pipeline": [mock_plugin]}
+        )
+
+        mock_plugin.apply_plugin_command.assert_called_once_with(
+            mock_crd, "create", mock_crds, mock_channel
+        )
+
+    def test_no_op_when_entity_not_in_registry(self):
+        """Edge: does nothing when entity has no plugins in registry."""
+        mock_crd = MagicMock()
+        mock_crd.name = "model"
+        mock_plugin = MagicMock(spec=["apply_plugin_command"])
+
+        apply_command_plugins(
+            mock_crd, "create", {}, MagicMock(), {"pipeline": [mock_plugin]}
+        )
+
+        mock_plugin.apply_plugin_command.assert_not_called()
+
+    def test_skips_plugin_without_apply_plugin_command_function(self):
+        """Edge: skips plugin module that has no apply_plugin_command attribute."""
+        mock_crd = MagicMock()
+        mock_crd.name = "pipeline"
+        mock_plugin = MagicMock(spec=[])  # no apply_plugin_command
+
+        apply_command_plugins(
+            mock_crd, "create", {}, MagicMock(), {"pipeline": [mock_plugin]}
+        )
+        # no exception raised, plugin silently skipped
+
+
+class AddPluginDirsToSyspathTest(TestCase):
+    """Tests for add_plugin_dirs_to_syspath function."""
+
+    @patch(
+        "michelangelo.cli.mactl.mactl._CONFIG",
+        {"plugin": {"dirs": [str(PLUGIN_TEST_DIR_1)]}},
+    )
+    def test_adds_existing_dir_to_syspath(self):
+        """Core: adds an existing plugin dir to sys.path."""
+        resolved = str(PLUGIN_TEST_DIR_1.resolve())
+        original_path = [p for p in sys.path if p != resolved]
+
+        with patch("sys.path", list(original_path)):
+            add_plugin_dirs_to_syspath()
+            self.assertIn(resolved, sys.path)
+
+    @patch("michelangelo.cli.mactl.mactl._CONFIG", {"plugin": {"dirs": []}})
+    def test_no_op_when_dirs_empty(self):
+        """Edge: does nothing when plugin.dirs is empty."""
+        original_len = len(sys.path)
+        add_plugin_dirs_to_syspath()
+        self.assertEqual(len(sys.path), original_len)
+
+    @patch(
+        "michelangelo.cli.mactl.mactl._CONFIG",
+        {"plugin": {"dirs": ["/nonexistent/path"]}},
+    )
+    def test_warns_and_skips_missing_dir(self):
+        """Edge: skips and logs warning for non-existent directories."""
+        original_len = len(sys.path)
+        add_plugin_dirs_to_syspath()
+        self.assertEqual(len(sys.path), original_len)
+
+    @patch("michelangelo.cli.mactl.mactl._CONFIG", {})
+    def test_no_op_when_plugin_config_missing(self):
+        """Edge: does nothing when plugin config key is absent."""
+        original_len = len(sys.path)
+        add_plugin_dirs_to_syspath()
+        self.assertEqual(len(sys.path), original_len)
+
+
+class ApplyModuleOverridesTest(TestCase):
+    """Tests for apply_module_overrides function."""
+
+    def test_replaces_function_on_target_module(self):
+        """Core: replaces the target function via setattr on the original module."""
+        from michelangelo.cli.mactl import mactl as mactl_mod
+
+        original_func = mactl_mod._is_service_name
+
+        with patch(
+            "michelangelo.cli.mactl.mactl._CONFIG",
+            {
+                "plugin": {
+                    "modules": {
+                        "michelangelo.cli.mactl.mactl._is_service_name": (
+                            "michelangelo.cli.mactl.mactl.discover_all_plugins"
+                        )
+                    }
+                }
+            },
+        ):
+            apply_module_overrides()
+            self.assertIsNot(mactl_mod._is_service_name, original_func)
+
+        # restore to avoid affecting other tests
+        mactl_mod._is_service_name = original_func
+
+    @patch("michelangelo.cli.mactl.mactl._CONFIG", {"plugin": {}})
+    def test_no_op_when_modules_not_configured(self):
+        """Edge: does nothing when plugin.modules is absent."""
+        with patch("importlib.import_module") as mock_import:
+            apply_module_overrides()
+            mock_import.assert_not_called()
+
+    @patch(
+        "michelangelo.cli.mactl.mactl._CONFIG",
+        {"plugin": {"modules": {"nonexistent.module.func": "also.nonexistent.func"}}},
+    )
+    def test_non_fatal_on_import_error(self):
+        """Edge: logs error and continues when module import fails."""
+        # Should not raise even when the module doesn't exist
+        apply_module_overrides()  # no exception raised

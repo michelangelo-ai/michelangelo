@@ -1,0 +1,35 @@
+# MaCTL User Configuration (~/.ma/user_config.toml)
+#
+# Usage:
+#   mkdir -p ~/.ma
+#   cp .ma/user_config.toml.example ~/.ma/user_config.toml
+#   vim ~/.ma/user_config.toml  # Edit with your settings
+#
+# Only set values you want to override; everything else falls through to project defaults.
+
+address = "127.0.0.1:15566"
+use_tls = false
+
+# Advanced: Custom gRPC metadata
+# WARNING: Setting metadata COMPLETELY REPLACES all default headers
+# Only uncomment if you need custom headers
+# [metadata]
+# rpc-caller = "grpcurl"
+# rpc-service = "ma-apiserver"
+# rpc-encoding = "proto"
+
+# Minio/S3 configuration (for OSS deployments)
+[minio]
+access_key_id = "minioadmin"
+secret_access_key = "minioadmin"
+endpoint_url = "http://localhost:9091"
+
+[plugin]
+dirs = []
+modules = {}
+
+# Configuration priority (highest to lowest):
+# 1. Environment variables (MACTL_ADDRESS, MACTL_USE_TLS, AWS_*)
+# 2. This file (~/.ma/user_config.toml)
+# 3. ~/.ma/config.toml (project defaults)
+# 4. Built-in defaults

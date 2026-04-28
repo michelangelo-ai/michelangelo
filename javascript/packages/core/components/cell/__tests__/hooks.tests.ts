@@ -1,9 +1,10 @@
 import { renderHook } from '@testing-library/react';
-import { Theme } from 'baseui';
 
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { useCellStyles } from '../hooks';
+
+import type { Theme } from 'baseui';
 
 describe('useCellStyles', () => {
   it('should return an empty object if style is undefined', () => {

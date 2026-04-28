@@ -1,91 +1,88 @@
-"""Unit tests for pipeline apply plugin.
+"""Unit tests for pipeline apply plugin."""
 
-Tests the convert_crd_metadata_pipeline_apply function.
-"""
-
-from pathlib import Path
 from unittest import TestCase
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
+
+from grpc import RpcError, StatusCode
 
 from michelangelo.cli.mactl.plugins.entity.pipeline.apply import (
-    convert_crd_metadata_pipeline_apply,
+    pipeline_apply_func_impl,
 )
 
 
-class PipelineApplyTest(TestCase):
-    """Tests for pipeline apply plugin."""
+class _FakeRpcError(RpcError):
+    def __init__(self, code):
+        self._code = code
 
-    def test_convert_crd_metadata_pipeline_apply_basic(self):
-        """Test basic conversion of CRD metadata for pipeline apply."""
-        # Mock input
-        yaml_dict = {
-            "apiVersion": "michelangelo.api/v2",
-            "kind": "Pipeline",
-            "metadata": {"name": "test-pipeline", "namespace": "test-ns"},
-            "spec": {
-                "description": "Test pipeline",
-                "environment": "production",
-            },
-        }
-        mock_crd_class = Mock()
-        yaml_path = Path("/fake/path/pipeline.yaml")
+    def code(self):
+        return self._code
 
-        # Mock git repo
-        mock_repo = Mock()
-        mock_repo.active_branch.name = "main"
-        mock_repo.head.commit.hexsha = "abc123"
 
-        with patch(
-            "michelangelo.cli.mactl.plugins.entity.pipeline.apply.Repo"
-        ) as mock_repo_class:
-            mock_repo_class.return_value = mock_repo
+class PipelineApplyFuncImplTest(TestCase):
+    """Tests for pipeline_apply_func_impl."""
 
-            result = convert_crd_metadata_pipeline_apply(
-                yaml_dict, mock_crd_class, yaml_path
-            )
+    def _make_method_info(self):
+        from michelangelo.cli.mactl.crd import CrdMethodInfo
 
-        # Verify result structure
-        self.assertIn("spec", result)
-        self.assertEqual(result["spec"]["description"], "Test pipeline")
-        self.assertEqual(result["spec"]["environment"], "production")
+        return CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Get",
+            input_class=MagicMock(),
+            output_class=MagicMock(),
+        )
 
-        # Verify git repo was accessed
-        mock_repo_class.assert_called_once_with(".", search_parent_directories=True)
+    def _make_bound_args(self, crd, file="f.yaml"):
+        return Mock(arguments={"self": crd, "file": file})
 
-    def test_convert_crd_metadata_pipeline_apply_invalid_input(self):
-        """Test that invalid input raises ValueError."""
-        mock_crd_class = Mock()
-        yaml_path = Path("/fake/path/pipeline.yaml")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.crd_method_call")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.apply.read_yaml_to_crd_request"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.apply.get_crd_namespace_and_name_from_yaml"
+    )
+    def test_update_path(self, mock_ns, mock_read_yaml, mock_call):
+        """Existing pipeline triggers update path with resourceVersion copy."""
+        update_info = self._make_method_info()
+        mock_ns.return_value = ("ns", "pipe")
+        mock_existing = Mock()
+        mock_existing.pipeline.metadata.resourceVersion = "42"
+        mock_crd = Mock()
+        mock_crd.name = "pipeline"
+        mock_crd.get.return_value = mock_existing
+        mock_request = Mock()
+        mock_read_yaml.return_value = mock_request
 
-        # Test with non-dict input
-        with self.assertRaises(ValueError) as context:
-            convert_crd_metadata_pipeline_apply("not a dict", mock_crd_class, yaml_path)
+        pipeline_apply_func_impl(update_info, self._make_bound_args(mock_crd))
 
-        self.assertIn("Expected a dictionary", str(context.exception))
+        mock_read_yaml.assert_called_once()
+        mock_call.assert_called_once_with(update_info, mock_request)
 
-    def test_convert_crd_metadata_pipeline_apply_copies_spec(self):
-        """Test that spec is deep copied (not referenced)."""
-        yaml_dict = {
-            "spec": {"nested": {"value": "original"}},
-        }
-        mock_crd_class = Mock()
-        yaml_path = Path("/fake/path/pipeline.yaml")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.apply.get_crd_namespace_and_name_from_yaml"
+    )
+    def test_create_path_when_not_found(self, mock_ns):
+        """NOT_FOUND triggers create path."""
+        update_info = self._make_method_info()
+        mock_ns.return_value = ("ns", "pipe")
+        mock_crd = Mock()
+        mock_crd.get.side_effect = _FakeRpcError(StatusCode.NOT_FOUND)
 
-        mock_repo = Mock()
-        mock_repo.active_branch.name = "main"
-        mock_repo.head.commit.hexsha = "abc123"
+        pipeline_apply_func_impl(update_info, self._make_bound_args(mock_crd))
 
-        with patch(
-            "michelangelo.cli.mactl.plugins.entity.pipeline.apply.Repo"
-        ) as mock_repo_class:
-            mock_repo_class.return_value = mock_repo
+        mock_crd.generate_create.assert_called_once_with(update_info.channel)
+        mock_crd.create.assert_called_once_with("f.yaml")
 
-            result = convert_crd_metadata_pipeline_apply(
-                yaml_dict, mock_crd_class, yaml_path
-            )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.apply.get_crd_namespace_and_name_from_yaml"
+    )
+    def test_reraises_non_not_found_errors(self, mock_ns):
+        """Non-NOT_FOUND RpcErrors are re-raised."""
+        update_info = self._make_method_info()
+        mock_ns.return_value = ("ns", "pipe")
+        mock_crd = Mock()
+        mock_crd.get.side_effect = _FakeRpcError(StatusCode.UNAVAILABLE)
 
-        # Modify original
-        yaml_dict["spec"]["nested"]["value"] = "modified"
-
-        # Result should not be affected
-        self.assertEqual(result["spec"]["nested"]["value"], "original")
+        with self.assertRaises(RpcError):
+            pipeline_apply_func_impl(update_info, self._make_bound_args(mock_crd))

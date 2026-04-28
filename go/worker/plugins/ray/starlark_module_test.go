@@ -137,9 +137,10 @@ func (r *Test) TestCreateClusterSuccessfully() {
 		Run(func(args mock.Arguments) {
 			createClusterReq = args.Get(1).(v2pb.CreateRayClusterRequest) // Capture the request argument
 		}).
-		Return(func(ctx context.Context, req v2pb.CreateRayClusterRequest) (*v2pb.CreateRayClusterResponse, error) {
-			return &v2pb.CreateRayClusterResponse{
+		Return(func(ctx context.Context, req v2pb.CreateRayClusterRequest) (*ray.CreateRayClusterActivityResponse, error) {
+			return &ray.CreateRayClusterActivityResponse{
 				RayCluster: rayCluster,
+				ActivityID: "",
 			}, nil
 		})
 
@@ -174,9 +175,10 @@ func (r *Test) TestCreateClusterFailed() {
 
 	rayCluster := &v2pb.RayCluster{}
 	env.OnActivity(ray.Activities.CreateRayCluster, mock.Anything, mock.Anything).Once().
-		Return(func(ctx context.Context, req v2pb.CreateRayClusterRequest) (*v2pb.CreateRayClusterResponse, error) {
-			return &v2pb.CreateRayClusterResponse{
+		Return(func(ctx context.Context, req v2pb.CreateRayClusterRequest) (*ray.CreateRayClusterActivityResponse, error) {
+			return &ray.CreateRayClusterActivityResponse{
 				RayCluster: rayCluster,
+				ActivityID: "",
 			}, nil
 		})
 

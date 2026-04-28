@@ -1,105 +1,128 @@
 # CLI Reference
 
-The Michelangelo CLI interface provides a unified way to manage resources using standard Kubernetes-style commands. This guide covers all supported commands for managing Michelangelo API entities.
+The Michelangelo CLI (`ma`) provides a unified way to manage resources using standard Kubernetes-style commands. This guide covers all supported commands for managing Michelangelo API entities.
+
+## Command summary
+
+All resource types support `get`, `apply`, and `delete` (see [supported resource types](#supported-resource-types) below). Additional commands:
+
+| Command | Description |
+|---------|-------------|
+| `ma pipeline run` | Execute a registered pipeline |
+| `ma pipeline dev-run` | Run a pipeline without registering it |
+| `ma pipeline_run kill` | Terminate a running pipeline run |
+| `ma trigger_run kill` | Terminate a running trigger |
+| `ma sandbox create` | Set up a local development environment |
+| `ma sandbox delete` | Tear down the local environment |
+
+### Supported resource types
+
+| Resource Type | CLI Name | Description | Supported Operations |
+|---------------|----------|-------------|----------------------|
+| Project | `project` | Namespace and team ownership for ML resources | get, apply, delete |
+| Pipeline | `pipeline` | Registered workflow with configuration and scheduling | get, apply, delete, run, dev-run |
+| PipelineRun | `pipeline_run` | Single execution instance of a pipeline | get, apply, delete, kill |
+| TriggerRun | `trigger_run` | Scheduled or on-demand pipeline execution trigger | get, apply, delete, kill |
+| Model | `model` | Trained model artifact with versioning | get, apply, delete |
+| ModelFamily | `model_family` | Group of related model versions | get, apply, delete |
+| Deployment | `deployment` | Model serving deployment configuration | get, apply, delete |
+| InferenceServer | `inference_server` | Runtime server for model inference | get, apply, delete |
+| Revision | `revision` | Versioned snapshot of a resource | get, apply, delete |
+| Cluster | `cluster` | Kubernetes cluster configuration | get, apply, delete |
+| RayCluster | `ray_cluster` | Ray distributed compute cluster | get, apply, delete |
+| RayJob | `ray_job` | Job submitted to a Ray cluster | get, apply, delete |
+| SparkJob | `spark_job` | Job submitted to a Spark cluster | get, apply, delete |
+| CachedOutput | `cached_output` | Cached task output for pipeline resume | get, apply, delete |
+
+> **Note:** In Michelangelo, a *project* is the workspace where your pipelines, models, and triggers live. In YAML files and CLI flags, your project is identified by the `namespace` field — these refer to the same thing. See the [Project Management guide](./project-management-for-ml-pipelines.md) for details.
 
 ## Prerequisites
 
-Before using CLI, ensure:
+1. **Install [Python >= 3.9](https://www.python.org/downloads/)** and **[Poetry](https://python-poetry.org/docs/#installation)**.
 
-API Server is running:
+2. **Install dependencies:**
 
-```bash
-# Start the Michelangelo API server (from repository root)
-bazel run //go/cmd/apiserver:apiserver
-```
+   ```bash
+   cd python/
+   poetry install
+   ```
 
-Dependencies are installed:
+3. **Start the sandbox environment.** Follow the [Sandbox Setup Guide](../getting-started/sandbox-setup.md) to install the required software (Docker, kubectl, k3d) and create a local development environment:
 
-```bash
-# Set repo root and install dependencies
-export REPO_ROOT="/Users/{username}/michelangelo"
-cd $REPO_ROOT/python/
-poetry install -E mactl
-```
+   ```bash
+   ma sandbox create
+   ```
 
-Configure API server address (optional):
+   This starts all required services, including the API server (`localhost:15566`), database, workflow engine, and object storage. See [Sandbox commands](#sandbox-commands) for the full command reference.
 
-```bash
-# Override default API server address
-export MACTL_ADDRESS="127.0.0.1:14566"  # e.g., for Michelangelo Api Server
-```
+4. **(Optional) Configure a custom API server address:**
+
+   ```bash
+   export MACTL_ADDRESS="127.0.0.1:15566"
+   ```
+
+   The default address (`127.0.0.1:15566`) works automatically with the sandbox. Only set this if you are connecting to a different API server instance.
 
 ## Usage
 
 All Michelangelo API entities support the following standard operations -- GET, APPLY, and DELETE
 
-### How to run the command in michelangelo repository
-
-Usage:
+### General syntax
 
 ```bash
 cd $REPO_ROOT/python/
-ma <COMMAND> <RESOURCE_TYPE> [ARGS]
+ma <RESOURCE_TYPE> <COMMAND> [ARGS]
 ```
 
-We will abstract this part like `ma <COMMAND> <RESOURCE_TYPE>` in below.
+We will abstract this part like `ma <RESOURCE_TYPE> <COMMAND>` in below.
 
 ### GET - Retrieve resource
 
-Retrieve information about an existing resource by namespace and name. If you don't specify the `--name` field, it would list all resources under the specified namespace.
+Retrieve information about an existing resource by project and name. If you don't specify the `--name` field, it lists all resources under the specified project.
 
 Syntax:
 
 ```bash
 ma <RESOURCE_TYPE> get --namespace="<namespace>" [--name="<name>"]
+# Short form: -n for --namespace
+ma <RESOURCE_TYPE> get -n "<namespace>" [--name="<name>"]
 ```
 
 Examples:
 
 ```bash
 # List all projects
-ma project get --namespace="ma-dev-test"
+ma project get --namespace="my-project"
 
-# List all pipelines in a namespace
-ma pipeline get --namespace="ma-dev-test"
+# List all pipelines in a project
+ma pipeline get --namespace="my-project"
 
 # Get a specific pipeline
-ma pipeline get --namespace="ma-dev-test" --name="bert-cola-test"
+ma pipeline get --namespace="my-project" --name="bert-cola-test"
 
 # Get a specific project
-ma project get --namespace="ma-dev-test" --name="my-project"
+ma project get --namespace="my-project" --name="my-project"
 
 # Get a pipeline run
-ma pipeline_run get --namespace="ma-dev-test" --name="run-001"
+ma pipeline_run get --namespace="my-project" --name="run-001"
 ```
 
-#### Arguments (Not implemented yet)
+#### Arguments
 
-Some arguments are available only for list functions (get command without --name argument)
+The following argument is available for list operations (get command without `--name`):
 
-- `-o` - output in {list,json,yaml} format
-- `--limit [n]` - (list command only) limit of the list output (default 20)
-- `--page [n]` - (list command only) pagination of list
-
-##### Special arguments for specific entity type (Not implemented yet)
-
-GET command supports extra arguments for some entity types (e.g. revision entity). It helps users to filter out a list of entities by its attribute.
-
-- `--revision-deployment` - filter deployment revision entities only
-- `--revision-model` - filter model revision entities only
-- `--revision-owner` - filter owner revision entities only
-- `--revision-pipeline` - filter pipeline revision entities only
+- `--limit [n]` - maximum number of results to return (default: 100)
 
 ### APPLY - Create or update a resource from YAML
 
-Apply (create or update) a resource from a YAML configuration file. MA command automatically detects the resource type from the apiVersion and kind fields in the YAML.
-
-> **Note:** Currently, we support `create` command for creating a new resource. Creating a new resource with `apply` command may fail in some cases. This will be fixed soon.
+Apply (create or update) a resource from a YAML configuration file. The `apply` command works as an upsert: it creates the resource if it doesn't exist, or updates it if it does. The resource type is automatically detected from the `apiVersion` and `kind` fields in the YAML.
 
 Syntax:
 
 ```bash
 ma <RESOURCE_TYPE> apply --file="<YAML_FILE_PATH>"
+# Short form: -f for --file
+ma <RESOURCE_TYPE> apply -f "<YAML_FILE_PATH>"
 ```
 
 Examples:
@@ -114,53 +137,55 @@ ma project apply --file="./project.yaml"
 
 ### DELETE - Remove a resource
 
-Delete a specific resource by namespace and name.
+Delete a specific resource by project and name.
 
 Syntax:
 
 ```bash
 ma <RESOURCE_TYPE> delete --namespace="<namespace>" --name="<name>"
+# Short form: -n for --namespace
+ma <RESOURCE_TYPE> delete -n "<namespace>" --name="<name>"
 ```
 
 Examples:
 
 ```bash
 # Delete a pipeline
-ma pipeline delete --namespace="ma-dev-test" --name="bert-cola-test"
+ma pipeline delete --namespace="my-project" --name="bert-cola-test"
 
 # Delete a project
-ma project delete --namespace="ma-dev-test" --name="my-project"
+ma project delete --namespace="my-project" --name="my-project"
 
 # Delete a pipeline run
-ma pipeline_run delete --namespace="ma-dev-test" --name="run-001"
+ma pipeline_run delete --namespace="my-project" --name="run-001"
 ```
 
-## Type specific commands
+## Type-specific commands
 
-MA Command supports the default type-specific commands for users for specific Michelangelo API entities.
+Some resource types support additional commands beyond GET, APPLY, and DELETE.
 
 ### Pipeline
 
 #### RUN - Execute a pipeline
 
-The RUN command is specifically available for pipelines to create and execute pipeline runs. To run a pipeline, you need to register your pipeline by using `ma apply <pipeline_conf.yaml>` PATH command first.
+The RUN command is specifically available for pipelines to create and execute pipeline runs. To run a pipeline, you need to register your pipeline first using `ma pipeline apply -f <pipeline_conf.yaml>`.
 
 Syntax:
 
 ```bash
 ma pipeline run --namespace="<namespace>" --name="<pipeline_name>"
+# Short form: -n for --namespace
+ma pipeline run -n "<namespace>" --name="<pipeline_name>"
 ```
 
 Example:
 
 ```bash
 # Run a registered pipeline
-ma pipeline run --namespace="ma-dev-test" --name="bert-cola-test"
+ma pipeline run --namespace="my-project" --name="bert-cola-test"
 ```
 
 ##### Arguments
-
-Some arguments are available only for list functions (get command without --name argument)
 
 - `--resume_from` - create resumed pipeline run from specified pipeline run (specifying resume_from step is optional)
 
@@ -177,7 +202,7 @@ ma pipeline run --namespace="<namespace>" --name="<pipeline_name>" --resume_from
 Example:
 
 ```bash
-ma pipeline run --namespace="ma-dev-test" --name="bert-cola-test" --resume_from=run-1759873504-b93b7f612:train
+ma pipeline run --namespace="my-project" --name="bert-cola-test" --resume_from=run-1759873504-b93b7f612:train
 ```
 
 #### DEV RUN - Execute a pipeline in DEV mode
@@ -188,58 +213,63 @@ Syntax:
 
 ```bash
 ma pipeline dev-run --file=<YAML_FILE_PATH> --env=<ENV_VAR>=<ENV_VAL>
+# Short form: -f for --file
+ma pipeline dev-run -f <YAML_FILE_PATH> --env=<ENV_VAR>=<ENV_VAL>
 ```
+
+##### Arguments
+
+- `--file` / `-f` - path to the pipeline YAML configuration file (required)
+- `--env` - environment variable to inject (repeatable for multiple variables)
+- `--file-sync` - sync uncommitted local file changes to the remote container
+- `--storage-url` - custom storage URL for file-sync tarballs (e.g., `s3://bucket/path`)
+- `--resume_from` - resume from a previous pipeline run, optionally specifying a step (`<run_name>:<step_name>`)
 
 Example:
 
 ```bash
 # Run a pipeline in dev mode
-ma pipeline dev-run  --file="./examples/bert_cola/pipeline.yaml" --env=foo=bar
+ma pipeline dev-run -f "./examples/bert_cola/pipeline.yaml" --env=foo=bar
 
 # To pass in multiple environment variables:
-ma pipeline dev-run  --file="./examples/bert_cola/pipeline.yaml" --env=foo=bar --env=lorem=ipsum --env=key=val
+ma pipeline dev-run -f "./examples/bert_cola/pipeline.yaml" --env=foo=bar --env=lorem=ipsum --env=key=val
 ```
 
-##### Dev-run command with local file sync (Not implemented yet)
+##### Dev-run command with local file sync
 
-Example:
+Adding `--file-sync` to the dev-run command enables testing of uncommitted code changes without needing to commit or rebuild Docker images.
 
 ```bash
 # Run a pipeline in dev mode with file sync
-ma pipeline dev-run  --file="./examples/bert_cola/pipeline.yaml" --env=foo=bar --file-sync
+ma pipeline dev-run -f "./examples/bert_cola/pipeline.yaml" --env=foo=bar --file-sync
+
+# With custom storage URL
+ma pipeline dev-run -f "./examples/bert_cola/pipeline.yaml" --file-sync --storage-url=s3://my-bucket/workflows
 ```
 
-##### Differences between dev-run and remote-run in vanilla uniflow
+##### Differences between dev-run and remote-run
 
-**1. dev_run: Test Pipeline from Local File**
+**1. dev-run: Test Pipeline from Local File**
 
-`pipeline dev_run` command runs a pipeline directly from your committed git snapshot. Pipeline run will be controlled by Michelangelo API server and controller. This command creates a PipelineRun Entity but no Pipeline Entity. It means, users cannot see the pipeline entity information in MA studio, which was executed by dev-run command.
+`pipeline dev-run` command runs a pipeline directly from your committed git snapshot. Pipeline run will be controlled by Michelangelo API server and controller. This command creates a PipelineRun entity but no Pipeline entity, so you will not see the pipeline entity information in MA Studio.
 
-Technical details: This command reads your pipeline configuration from a local YAML file, creates a PipelineRun Michelangelo entity, which does not have the registered parent Pipeline entity. The key difference from `pipeline run` command is that it embeds the entire pipeline specification inline rather than referencing an existing registered Pipeline resource, allowing you to test changes before actually registering it. However, it only uses code that's committed to git. Any uncommitted changes in your working directory are ignored. This command goes through the full Michelangelo API and controller manager path: ma command → API Server → PipelineRun entity → Controller Manager → Cadence/Temporal.
+**remote-run** (invoked via `python my_workflow.py remote-run`, not an `ma` command) bypasses the Michelangelo API server and submits your workflow directly to Cadence/Temporal. No Michelangelo entities are created, and pipeline status is not visible in MA Studio.
 
-**2. dev_run --file-sync: Test Pipeline + Uncommitted Changes**
+**2. dev-run --file-sync: Test Pipeline + Uncommitted Changes**
 
-Adding `--file-sync` to the `pipeline dev_run` command enables testing of uncommitted code changes without needing to commit or rebuild Docker images.
+Adding `--file-sync` to the `pipeline dev-run` command enables testing of uncommitted code changes without needing to commit or rebuild Docker images.
 
-Technical details: It works by creating two tarballs: the workflow tarball (from committed code) and a file-sync tarball (containing only files changed via git diff). When the container starts, Python's sitecustomize.py automatically downloads the file-sync tarball and overlays those changed files on top of the base code, effectively "patching" the container with your local edits. This still goes through Michelangelo API server and controller managers (creates a PipelineRun) but injects an additional environment variable `UF_FILE_SYNC_TARBALL_URL` that implies the remote container where to find your local changes.
+**dev-run --file-sync**: Creates two tarballs: a workflow tarball (from committed code) and a file-sync tarball (containing only files changed via `git diff`). When the container starts, `sitecustomize.py` downloads the file-sync tarball and overlays changed files on top of the base code. The file-sync URL is passed via the `UF_FILE_SYNC_TARBALL_URL` environment variable.
 
-**3. remote-run: (non ma command) Direct Workflow Execution**
+**remote-run**: Creates a workflow tarball from committed code and sends it straight to the workflow engine without creating any Michelangelo entities.
 
-`remote-run` command (invoked via `python my_workflow.py remote-run`) bypasses Michelangelo API server and skips PipelineRun Entity entirely and directly submits your workflow to Cadence or Temporal using their CLI tools. Users cannot see the Pipeline and PipelineRun status in MA Studio UI.
-
-Technical details: It creates a workflow tarball from your committed code and sends it straight to the workflow engine without creating any Michelangelo entities like Pipeline or PipelineRun.
-
-**4. remote-run --file-sync: (non ma command) Direct Workflow Execution with uncommitted changes**
-
-Similar to the `--file-sync` option in `dev-run` command, it reflects the current uncommitted code changes in remote-run.
-
-Technical details: `remote-run --file-sync` creates two tarballs: a workflow tarball (from committed code) that is base64-encoded and embedded directly in the Cadence CLI command input, and a file-sync tarball (git diff changes) that is uploaded to S3. The S3 URL for the file-sync tarball is passed as an environment variable to the container, which downloads and overlays those changes at runtime. The trade-off is that no Michelangelo entities like PipelineRun is created, no MA UI visualization and resource management capabilities, monitoring is only through the Cadence/Temporal UI.
+**remote-run --file-sync**: Creates two tarballs: a workflow tarball (base64-encoded in the Cadence CLI input) and a file-sync tarball (uploaded to S3). The S3 URL is passed as an environment variable to the container.
 
 ### Pipeline_run
 
-#### Kill (not implemented yet)
+#### Kill - Terminate a pipeline run
 
-The KILL command is used to cleanly terminate a running pipeline in MA Studio. It would change the PipelineRun status as "killed", so actual pipeline execution in Cadence would be aborted. The command will prompt for confirmation unless the --yes flag is provided.
+The KILL command is used to cleanly terminate a running pipeline. It sets the PipelineRun status to "killed" and aborts the pipeline execution in Cadence/Temporal. The command will prompt for confirmation unless the `--yes` flag is provided.
 
 Syntax:
 
@@ -257,10 +287,10 @@ Example:
 
 ```bash
 # Kill a pipeline run with confirmation prompt
-ma pipeline_run kill --namespace=ma-dev-test --name=pipeline-run-20251118-194500-8cdb1538
+ma pipeline_run kill --namespace=my-project --name=pipeline-run-20251118-194500-8cdb1538
 
 # Kill a pipeline run without confirmation prompt
-ma pipeline_run kill --namespace=ma-dev-test --name=pipeline-run-20251118-194500-8cdb1538 --yes
+ma pipeline_run kill --namespace=my-project --name=pipeline-run-20251118-194500-8cdb1538 --yes
 ```
 
 ### Trigger_run
@@ -279,21 +309,37 @@ Example:
 
 ```bash
 # Kill a trigger run with confirmation prompt
-ma trigger_run kill --namespace=ma-dev-test --name=training-pipeline-cron-trigger
+ma trigger_run kill --namespace=my-project --name=training-pipeline-cron-trigger
 
 # Kill a trigger run without confirmation prompt
-ma trigger_run kill --namespace=ma-dev-test --name=training-pipeline-cron-trigger --yes
+ma trigger_run kill --namespace=my-project --name=training-pipeline-cron-trigger --yes
 ```
+
+## Sandbox commands
+
+The `ma sandbox` commands manage a local K3d development environment. For prerequisites, setup walkthrough, and detailed options, see the [Sandbox Setup Guide](../getting-started/sandbox-setup.md).
+
+| Command | Description |
+|---------|-------------|
+| `ma sandbox create` | Create a K3d cluster with all Michelangelo services |
+| `ma sandbox create --workflow temporal` | Create with Temporal instead of Cadence |
+| `ma sandbox create --exclude ui` | Create without specific services |
+| `ma sandbox create --create-compute-cluster` | Create with a Ray compute cluster |
+| `ma sandbox delete` | Tear down the cluster and all resources |
+| `ma sandbox start` | Start a stopped cluster |
+| `ma sandbox stop` | Stop the cluster (preserves state) |
+| `ma sandbox demo pipeline` | Create demo pipeline resources |
+| `ma sandbox demo inference` | Create demo inference server resources |
 
 ## YAML Resource Examples
 
 ### Pipeline YAML
 
 ```yaml
-apiVersion: michelangelo.uber.com/v2beta1
+apiVersion: michelangelo.api/v2
 kind: Pipeline
 metadata:
-  namespace: "ma-dev-test"
+  namespace: "my-project"  # Your project name
   name: "my-pipeline"
 spec:
   type: "PIPELINE_TYPE_TRAIN"
@@ -307,14 +353,13 @@ spec:
 apiVersion: michelangelo.api/v2
 kind: Project
 metadata:
-  name: ma-dev-test
-  namespace: ma-dev-test
+  name: my-project
+  namespace: my-project
 spec:
   description: My ML Project
   owner:
     owningTeam: "michelangelo"
-    owners:
-      - craig.marker
+    owners: "sample name"
   tier: 4
   gitRepo: https://github.com/uber/michelangelo
   rootDir: python/michelangelo/cli/sandbox/crds
@@ -327,91 +372,129 @@ apiVersion: michelangelo.api/v2
 kind: PipelineRun
 metadata:
   name: run-training-pipeline
-  namespace: ma-dev-test
+  namespace: my-project
 spec:
   pipeline:
     name: training-pipeline
-    namespace: ma-dev-test
+    namespace: my-project
 ```
 
 ## Configuration
 
-### Configuration RC file
+The `ma` CLI uses a layered configuration system. Settings are resolved in the following priority order (highest to lowest):
 
-MA command supports configuration through a configrc file located at ~/.ma/configrc (Not implemented yet)
+1. **Environment variables** (highest priority)
+2. **TOML config file** (`~/.ma/config.toml`)
+3. **Default values** (lowest priority)
 
-#### Example configuration (configrc file)
+### Configuration file
 
-```ini
+The configuration file is located at `~/.ma/config.toml` and uses TOML format.
+
+#### Example configuration
+
+```toml
+[ma]
+address = "127.0.0.1:15566"
+use_tls = false
+
 [minio]
-access_key_id= minioadmin
-secret_access_key= minioadmin
-endpoint_url= http://localhost:9091
+access_key_id = "minioadmin"
+secret_access_key = "minioadmin"
+endpoint_url = "http://localhost:9091"
 
 [metadata]
-rpc-caller = grpcurl
-rpc-service = ma-apiserver
-rpc-encoding = proto
+rpc-caller = "grpcurl"
+rpc-service = "ma-apiserver"
+rpc-encoding = "proto"
 
-[mactl]
-address = 127.0.0.1:14566
-use_tls = false
-namespace = "ma-dev-test"
+[plugin]
+dirs = []  # Add custom plugin directories here
 ```
 
-#### Configurable fields
+### Configurable fields
 
-##### MinIO credentials(Not implemented yet)
+#### API server
 
-MinIO credentials for object storage are placed under the [minio] section.
+API server configuration is placed under the `[ma]` section.
 
-Available configuration fields:
+- `address` - Address of the API server (default: `127.0.0.1:15566`)
+- `use_tls` - Whether the client uses TLS credentials (default: `false`)
 
-- `access_key_id` - MinIO user name (example: minioadmin)
-- `secret_access_key` - MinIO password (example: minioadmin)
-- `endpoint_url` - MinIO endpoint URL (example: http://localhost:9091)
+#### MinIO credentials
 
-##### API server endpoints
+MinIO credentials for object storage are placed under the `[minio]` section.
 
-(Currently supported at ~/.mactlrc / Will be configurable in the configrc file later.)
+- `access_key_id` - MinIO user name (example: `minioadmin`)
+- `secret_access_key` - MinIO password (example: `minioadmin`)
+- `endpoint_url` - MinIO endpoint URL (example: `http://localhost:9091`)
 
-API server related configuration would be placed under `[mactl]` group
+#### Custom gRPC metadata
 
-Available configuration fields:
+Custom gRPC metadata headers are placed under the `[metadata]` section.
 
-- `address` - Address of API server (example: 127.0.0.1:14566)
-- `use_tls` - Configuration whether the client uses the TLS credentials
+- `rpc-caller` - Identifies the calling client (example: `grpcurl`)
+- `rpc-service` - Target service name (example: `ma-apiserver`)
+- `rpc-encoding` - Protocol encoding format (example: `proto`)
 
-##### Custom Metadata
+#### Custom plugins
 
-(Currently supported at ~/.mactlrc / Will be configurable in the configrc file later.)
+The `ma` CLI supports custom plugins to extend entity-specific commands and behavior. Plugin configuration is placed under the `[plugin]` section.
 
-Custom gRPC metadata headers are placed under the [metadata] section.
+**Built-in plugins**: The CLI includes built-in plugins located at `python/michelangelo/cli/mactl/plugins/entity/` that provide core functionality for entities like `pipeline`, `pipeline_run`, and `trigger_run`.
 
-Available configuration fields:
+**Custom plugin directories**: You can add additional plugin directories by specifying them in the configuration file:
 
-- `rpc-caller` - Identifies the calling client (example: grpcurl)
-- `rpc-service` - Target service name (example: ma-apiserver)
-- `rpc-encoding` - Protocol encoding format (example: proto)
+```toml
+[plugin]
+dirs = [
+    "/path/to/your/custom/plugins",
+    "/another/plugin/directory"
+]
+```
 
-##### Default namespaces(Not implemented yet)
+**Plugin directory structure**: Each plugin directory should follow this structure:
 
-User can specify the default namespace by using `namespace` field in the ~/.ma/configrc file. This allows users to avoid repeatedly passing the --namespace flag for every command.
+```
+your-plugin-directory/
+└── entity/
+    └── {entity_type}/
+        └── main.py
+```
 
-Once configured, the default namespace will be applied to all ma commands unless explicitly overridden. For example, if user configured namespace = "ma-dev-test" in ~/.ma/configrc With this configuration, commands like ma pipeline run --name=my-pipeline will automatically use ma-dev-test as the namespace without requiring the --namespace argument.
+For example, to create a custom pipeline plugin:
 
-#### Namespace auto-recognition(Not implemented yet)
+```
+my-plugins/
+└── entity/
+    └── pipeline/
+        ├── __init__.py
+        └── main.py
+```
 
-Michelangelo command will travel the CRD yaml directories and try to find config/project.yaml file. If the `ma` command finds this directory structure and project.yaml is a valid michelangelo project CRD representation, it would implicitly use this project as default namespace. Users can overwrite this default namespace by using --namespace argument or configuration rc file.
+**Required plugin functions**: Plugin modules should implement one or both of these functions:
 
-The namespace has the priority by this order: command line argument, rc file, and directory search. If no method finds the namespace, the ma command would error out.
+- `apply_plugins(crd: CRD, channel: Channel)` - Adds custom command signatures to the entity
+- `apply_plugin_command(crd: CRD, target_command: str, crds: dict[str, CRD], channel: Channel)` - Applies logic for specific commands (e.g., `apply`, `create`)
+
+**Note**: Support for per-module plugin configuration via `plugin.modules` is coming soon.
+
+### Environment variables
+
+The following environment variables override config file settings:
+
+- `MACTL_ADDRESS` - Override the API server address
+- `MACTL_USE_TLS` - Override the TLS setting (accepts: `true`, `1`, `yes`, `y`)
+- `AWS_ACCESS_KEY_ID` - Override MinIO/S3 access key
+- `AWS_SECRET_ACCESS_KEY` - Override MinIO/S3 secret key
+- `AWS_ENDPOINT_URL` - Override MinIO/S3 endpoint URL
 
 ## Troubleshooting
 
 ### Common Issues
 
 1. Connection refused: Ensure the API server is running and accessible
-2. Resource not found: Verify namespace and resource name are correct
+2. Resource not found: Verify project name and resource name are correct
 3. YAML parsing errors: Check YAML syntax and required fields
 4. Permission denied: Ensure proper authentication/authorization setup
 

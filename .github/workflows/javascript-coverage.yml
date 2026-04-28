@@ -3,19 +3,13 @@ name: JavaScript Coverage
 on:
   pull_request:
     paths:
-      - '**/*.js'
-      - '**/*.mjs'
-      - '**/*.cjs'
-      - '**/package.json'
-      - '**/package-lock.json'
+      - 'javascript/**'
       - '.github/workflows/javascript-coverage.yml'
   push:
     branches:
       - main
     paths:
-      - '**/*.js'
-      - '**/*.mjs'
-      - '**/*.cjs'
+      - 'javascript/**'
 
 permissions:
   contents: read
@@ -35,7 +29,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22.11.0'
+          node-version: '24.14.1'
           cache: 'yarn'
           cache-dependency-path: 'javascript/yarn.lock'
 
@@ -95,16 +89,6 @@ jobs:
             echo "✅ Coverage $COVERAGE% meets baseline threshold (78.74%)"
             echo "📈 Goal: Maintain baseline and enforce 90% on new code"
           fi
-
-      # Codecov upload disabled - coverage is reported via PR comments and artifacts
-      # - name: Upload coverage to Codecov
-      #   uses: codecov/codecov-action@v4
-      #   with:
-      #     files: ./coverage/lcov.info,./coverage/coverage-final.json
-      #     flags: javascript
-      #     name: javascript-coverage
-      #     fail_ci_if_error: false
-      #     token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Coverage report PR comment
         uses: marocchino/sticky-pull-request-comment@v2
@@ -192,20 +176,3 @@ jobs:
           echo "- **Baseline (existing code):** ≥78.74% (current coverage)" >> $GITHUB_STEP_SUMMARY
           echo "- **New/changed code:** ≥90% ✅ **STRICTLY ENFORCED**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-
-  coverage-quality-gate:
-    name: Coverage Quality Gate
-    runs-on: ubuntu-latest
-    needs: test-coverage
-    if: github.event_name == 'pull_request'
-
-    steps:
-      - name: Check coverage meets requirements
-        run: |
-          echo "✅ JavaScript coverage checks completed"
-          echo "- Baseline coverage: ≥78.74% (current coverage)"
-          echo "- New code coverage: ≥90% ✅ STRICTLY ENFORCED"
-          echo ""
-          echo "📝 Coverage Policy:"
-          echo "- Existing code must maintain baseline (78.74%)"
-          echo "- New/changed code must meet 90% coverage"

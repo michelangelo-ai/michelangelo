@@ -9,6 +9,9 @@ spec:
   containers:
     - name: app
       image: ghcr.io/michelangelo-ai/worker:main
+      envFrom:
+        - secretRef:
+            name: minio-credentials
       volumeMounts:
         - name: worker-config-volume
           mountPath: /config
@@ -26,7 +29,7 @@ metadata:
 data:
   base.yaml: |
     worker:
-      address: michelangelo-apiserver:14566
+      address: michelangelo-apiserver:15566
       maApiServiceName: ma-apiserver
 
     logging:
@@ -56,6 +59,6 @@ data:
 
     minio:
       awsRegion: us-east-1
-      awsAccessKeyId: minioadmin
-      awsSecretAccessKey: minioadmin
+      awsAccessKeyId: ${AWS_ACCESS_KEY_ID::minioadmin}
+      awsSecretAccessKey: ${AWS_SECRET_ACCESS_KEY::minioadmin}
       awsEndpointUrl: minio:9091

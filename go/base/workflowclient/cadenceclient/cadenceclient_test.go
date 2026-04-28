@@ -404,3 +404,352 @@ func TestListOpenWorkflow(t *testing.T) {
 		})
 	}
 }
+
+func TestResetWorkflow(t *testing.T) {
+	workflowID := "testWorkflowID"
+	runID := "testRunID"
+	newRunID := "newTestRunID"
+	eventID := int64(123)
+	reason := "test reset reason"
+	requestID := "test-request-id"
+
+	testCases := []struct {
+		name     string
+		options  clientInterface.ResetWorkflowOptions
+		mockFunc func(mockClient *cadencemocks.Client)
+		errMsg   string
+	}{
+		{
+			name: "ResetWorkflow Succeeded",
+			options: clientInterface.ResetWorkflowOptions{
+				WorkflowID: workflowID,
+				RunID:      runID,
+				EventID:    eventID,
+				Reason:     reason,
+				RequestID:  requestID,
+			},
+			mockFunc: func(mockClient *cadencemocks.Client) {
+				mockClient.On("ResetWorkflow", mock.Anything, mock.MatchedBy(func(req *shared.ResetWorkflowExecutionRequest) bool {
+					return *req.Domain == "" &&
+						*req.WorkflowExecution.WorkflowId == workflowID &&
+						*req.WorkflowExecution.RunId == runID &&
+						*req.DecisionFinishEventId == eventID &&
+						*req.Reason == reason &&
+						*req.RequestId == requestID
+				})).Return(
+					&shared.ResetWorkflowExecutionResponse{
+						RunId: &newRunID,
+					}, nil)
+			},
+			errMsg: "",
+		},
+		{
+			name: "ResetWorkflow Succeeded without RequestID",
+			options: clientInterface.ResetWorkflowOptions{
+				WorkflowID: workflowID,
+				RunID:      runID,
+				EventID:    eventID,
+				Reason:     reason,
+				RequestID:  "", // Empty request ID
+			},
+			mockFunc: func(mockClient *cadencemocks.Client) {
+				mockClient.On("ResetWorkflow", mock.Anything, mock.MatchedBy(func(req *shared.ResetWorkflowExecutionRequest) bool {
+					return *req.Domain == "" &&
+						*req.WorkflowExecution.WorkflowId == workflowID &&
+						*req.WorkflowExecution.RunId == runID &&
+						*req.DecisionFinishEventId == eventID &&
+						*req.Reason == reason &&
+						req.RequestId == nil
+				})).Return(
+					&shared.ResetWorkflowExecutionResponse{
+						RunId: &newRunID,
+					}, nil)
+			},
+			errMsg: "",
+		},
+		{
+			name: "ResetWorkflow Failed",
+			options: clientInterface.ResetWorkflowOptions{
+				WorkflowID: workflowID,
+				RunID:      runID,
+				EventID:    eventID,
+				Reason:     reason,
+			},
+			mockFunc: func(mockClient *cadencemocks.Client) {
+				mockClient.On("ResetWorkflow", mock.Anything, mock.Anything).Return(
+					nil, fmt.Errorf("reset failed"))
+			},
+			errMsg: "failed to reset workflow: reset failed",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mockClient := &cadencemocks.Client{}
+			testCase.mockFunc(mockClient)
+			client := &CadenceClient{
+				Client: mockClient,
+				Domain: "",
+			}
+
+			execution, err := client.ResetWorkflow(context.Background(), testCase.options)
+
+			if testCase.errMsg != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), testCase.errMsg)
+				assert.Nil(t, execution)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, execution)
+				assert.Equal(t, workflowID, execution.ID)
+				assert.Equal(t, newRunID, execution.RunID)
+			}
+		})
+	}
+}
+
+func TestGetWorkflowExecutionHistory(t *testing.T) {
+	workflowID := "testWorkflowID"
+	runID := "testRunID"
+
+	// Mock history iterator
+	eventID1 := int64(1)
+	eventID2 := int64(2)
+	eventID3 := int64(3)
+	eventID4 := int64(4)
+	timestamp := time.Now().UnixNano()
+	workflowName := "test-workflow"
+	tasklistName := "test-tasklist"
+	identity := "test-identity"
+	activityID := "test-activity-1"
+	activityTypeName := "test-activity-type"
+	reason := "activity failed"
+
+	mockIterator := &mockHistoryIterator{
+		events: []*shared.HistoryEvent{
+			{
+				EventId:   &eventID1,
+				EventType: shared.EventTypeWorkflowExecutionStarted.Ptr(),
+				Timestamp: &timestamp,
+				WorkflowExecutionStartedEventAttributes: &shared.WorkflowExecutionStartedEventAttributes{
+					WorkflowType: &shared.WorkflowType{Name: &workflowName},
+					TaskList:     &shared.TaskList{Name: &tasklistName},
+				},
+			},
+			{
+				EventId:   &eventID2,
+				EventType: shared.EventTypeDecisionTaskCompleted.Ptr(),
+				Timestamp: &timestamp,
+				DecisionTaskCompletedEventAttributes: &shared.DecisionTaskCompletedEventAttributes{
+					Identity:         &identity,
+					ScheduledEventId: &eventID1,
+				},
+			},
+			{
+				EventId:   &eventID3,
+				EventType: shared.EventTypeActivityTaskScheduled.Ptr(),
+				Timestamp: &timestamp,
+				ActivityTaskScheduledEventAttributes: &shared.ActivityTaskScheduledEventAttributes{
+					ActivityId:   &activityID,
+					ActivityType: &shared.ActivityType{Name: &activityTypeName},
+				},
+			},
+			{
+				EventId:   &eventID4,
+				EventType: shared.EventTypeActivityTaskFailed.Ptr(),
+				Timestamp: &timestamp,
+				ActivityTaskFailedEventAttributes: &shared.ActivityTaskFailedEventAttributes{
+					Reason:   &reason,
+					Details:  []byte("failure details"),
+					Identity: &identity,
+				},
+			},
+		},
+		currentIndex: 0,
+	}
+
+	testCases := []struct {
+		name           string
+		pageSize       int32
+		mockFunc       func(mockClient *cadencemocks.Client)
+		expectedEvents int
+		errMsg         string
+	}{
+		{
+			name:     "GetWorkflowExecutionHistory Succeeded with no page limit",
+			pageSize: 0,
+			mockFunc: func(mockClient *cadencemocks.Client) {
+				// Reset iterator for each test
+				mockIterator.currentIndex = 0
+				mockClient.On("GetWorkflowHistory", mock.Anything, workflowID, runID, false, shared.HistoryEventFilterTypeAllEvent).Return(mockIterator)
+			},
+			expectedEvents: 4,
+			errMsg:         "",
+		},
+		{
+			name:     "GetWorkflowExecutionHistory Succeeded with page limit",
+			pageSize: 2,
+			mockFunc: func(mockClient *cadencemocks.Client) {
+				// Reset iterator for each test
+				mockIterator.currentIndex = 0
+				mockClient.On("GetWorkflowHistory", mock.Anything, workflowID, runID, false, shared.HistoryEventFilterTypeAllEvent).Return(mockIterator)
+			},
+			expectedEvents: 2,
+			errMsg:         "",
+		},
+		{
+			name:     "GetWorkflowExecutionHistory with error during iteration",
+			pageSize: 0,
+			mockFunc: func(mockClient *cadencemocks.Client) {
+				errorIterator := &mockHistoryIterator{
+					events:       []*shared.HistoryEvent{},
+					currentIndex: 0,
+					shouldError:  true,
+				}
+				mockClient.On("GetWorkflowHistory", mock.Anything, workflowID, runID, false, shared.HistoryEventFilterTypeAllEvent).Return(errorIterator)
+			},
+			expectedEvents: 0,
+			errMsg:         "failed to get next history event: iterator error",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mockClient := &cadencemocks.Client{}
+			testCase.mockFunc(mockClient)
+			client := &CadenceClient{
+				Client: mockClient,
+			}
+
+			history, err := client.GetWorkflowExecutionHistory(context.Background(), workflowID, runID, nil, testCase.pageSize)
+
+			if testCase.errMsg != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), testCase.errMsg)
+				assert.Nil(t, history)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, history)
+				assert.Equal(t, testCase.expectedEvents, len(history.Events))
+				assert.Nil(t, history.NextPageToken) // Iterator API doesn't provide page tokens
+
+				// Verify event details are populated correctly
+				if len(history.Events) > 0 {
+					firstEvent := history.Events[0]
+					assert.Equal(t, int64(1), firstEvent.EventID)
+					assert.Equal(t, "WorkflowExecutionStarted", firstEvent.EventType)
+					assert.Contains(t, firstEvent.Details, "workflow_type")
+					assert.Contains(t, firstEvent.Details, "task_list")
+				}
+
+				if len(history.Events) > 2 {
+					activityEvent := history.Events[2]
+					assert.Equal(t, int64(3), activityEvent.EventID)
+					assert.Equal(t, "ActivityTaskScheduled", activityEvent.EventType)
+					assert.Contains(t, activityEvent.Details, "activity_id")
+					assert.Contains(t, activityEvent.Details, "activity_type")
+				}
+			}
+		})
+	}
+}
+
+func TestDeleteTrigger(t *testing.T) {
+	workflowID := "testWorkflowID"
+	runID := "testRunID"
+
+	testCases := []struct {
+		name     string
+		runID    string
+		mockFunc func(mockClient *cadencemocks.Client)
+		errMsg   string
+	}{
+		{
+			name:  "DeleteTrigger Succeeded",
+			runID: runID,
+			mockFunc: func(mockClient *cadencemocks.Client) {
+				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, runID, "trigger killed", mock.Anything).Return(nil)
+			},
+			errMsg: "",
+		},
+		{
+			name:     "DeleteTrigger - no open execution, idempotent",
+			runID:    "",
+			mockFunc: func(mockClient *cadencemocks.Client) {},
+			errMsg:   "",
+		},
+		{
+			name:  "DeleteTrigger Failed",
+			runID: runID,
+			mockFunc: func(mockClient *cadencemocks.Client) {
+				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, runID, "trigger killed", mock.Anything).Return(fmt.Errorf("terminate error"))
+			},
+			errMsg: "terminate error",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mockClient := &cadencemocks.Client{}
+			testCase.mockFunc(mockClient)
+			client := &CadenceClient{
+				Client: mockClient,
+			}
+			err := client.DeleteTrigger(context.Background(), workflowID, testCase.runID)
+			if testCase.errMsg != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), testCase.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestPauseTrigger(t *testing.T) {
+	workflowID := "testWorkflowID"
+	client := &CadenceClient{
+		Client: &cadencemocks.Client{},
+	}
+	err := client.PauseTrigger(context.Background(), workflowID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not supported")
+}
+
+func TestUnpauseTrigger(t *testing.T) {
+	workflowID := "testWorkflowID"
+	client := &CadenceClient{
+		Client: &cadencemocks.Client{},
+	}
+	err := client.UnpauseTrigger(context.Background(), workflowID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not supported")
+}
+
+// Mock implementation of cadence history iterator
+type mockHistoryIterator struct {
+	events       []*shared.HistoryEvent
+	currentIndex int
+	shouldError  bool
+}
+
+func (m *mockHistoryIterator) HasNext() bool {
+	if m.shouldError && m.currentIndex == 0 {
+		return true // Return true to trigger the Next() call that will error
+	}
+	return m.currentIndex < len(m.events)
+}
+
+func (m *mockHistoryIterator) Next() (*shared.HistoryEvent, error) {
+	if m.shouldError {
+		return nil, fmt.Errorf("iterator error")
+	}
+
+	if m.currentIndex >= len(m.events) {
+		return nil, fmt.Errorf("no more events")
+	}
+
+	event := m.events[m.currentIndex]
+	m.currentIndex++
+	return event, nil
+}

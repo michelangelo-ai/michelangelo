@@ -1,54 +1,57 @@
 """Pipeline `apply` function plugin module."""
 
-from copy import deepcopy
 from logging import getLogger
-from pathlib import Path
 
-from git import Repo
 from google.protobuf.message import Message
+from grpc import RpcError, StatusCode
+
+from michelangelo.cli.mactl.crd import (
+    CRD,
+    CrdMethodInfo,
+    crd_method_call,
+    get_crd_namespace_and_name_from_yaml,
+    read_yaml_to_crd_request,
+)
 
 _LOG = getLogger(__name__)
 
 
-def convert_crd_metadata_pipeline_apply(
-    yaml_dict: dict, crd_class: type[Message], yaml_path: Path
-) -> dict:
-    """Convert CRD metadata for pipeline apply crd."""
-    _LOG.info("Convert CRD metadata for class %r", crd_class)
-    if not isinstance(yaml_dict, dict):
-        _LOG.error("Expected a dictionary, got: %r", type(yaml_dict))
-        raise ValueError("Expected a dictionary for CRD metadata")
+def pipeline_apply_func_impl(
+    update_method_info: CrdMethodInfo,
+    bound_args,
+) -> Message:
+    """Pipeline apply implementation.
 
-    repo = Repo(".", search_parent_directories=True)
-    _LOG.info("Current git repository info: %r", repo)
+    update_method_info is passed by generate_apply via the standard partial mechanism.
+    """
+    _self: CRD = bound_args.arguments["self"]
+    _file = bound_args.arguments["file"]
 
-    # TODO: update path retrieval logic
-    res = {"spec": deepcopy(yaml_dict["spec"])}
-    """
-    res["metadata"] = {
-        "generateName": "",
-        "generation": "0",
-        "name": yaml_dict["metadata"]["name"],
-        "namespace": yaml_dict["metadata"]["namespace"],
-        "resourceVersion": "0",
-        "uid": str(uuid4()),
-    }
-    res["spec"]["commit"] = {
-        "branch": repo.active_branch.name,
-        "git_ref": repo.head.commit.hexsha,
-    }
-    # assert yaml_path.resolve().is_relative_to(PWD)
-    # "path": str(yaml_path.relative_to(PWD)),
-    # TODO: retrieve path from Project.
-    res["spec"]["manifest"] = {
-        "path": (
-            "platforms/uberai/michelangelo/ma_integration_test/pipelines"
-            "/boston_housing/keras_workflow/pipeline.yaml"
-        ),
-        "revision_id": repo.head.commit.hexsha,
-        "type": "PIPELINE_MANIFEST_TYPE_YAML",
-    }
-    res["spec"]["owner"] = {"name": get_user_name()}
-    _LOG.debug("Converted CRD metadata: %r", res)
-    """
-    return res
+    _namespace, _name = get_crd_namespace_and_name_from_yaml(_file)
+
+    message_instance = None
+    try:
+        message_instance = _self.get(_namespace, _name)
+    except RpcError as err:
+        _LOG.debug("Pipeline %r / %r does not exist: %r", _namespace, _name, err)
+        if err.code() != StatusCode.NOT_FOUND:
+            raise
+
+    if message_instance is None:
+        _LOG.info("Create a new pipeline")
+        _self.generate_create(update_method_info.channel)
+        return _self.create(_file)
+
+    _LOG.info("Updating existing pipeline: %r", message_instance)
+    request_input = read_yaml_to_crd_request(
+        update_method_info.input_class,
+        _self.name,
+        _file,
+        _self.func_crd_metadata_converter,
+    )
+    existing = getattr(message_instance, _self.name)
+    inner = getattr(request_input, _self.name)
+    inner.metadata.resourceVersion = existing.metadata.resourceVersion
+    call_res = crd_method_call(update_method_info, request_input)
+    print(call_res)
+    return call_res

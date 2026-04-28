@@ -38,7 +38,7 @@ _kube_ports = [
     "3306:30001",  # MySQL
     "9091:30007",  # MinIO
     "9090:30008",  # MinIO Console
-    "14566:30009",  # Michelangelo API Server
+    "15566:30009",  # Michelangelo API Server
     "8081:30010",  # Envoy gRPC --> gRPC-web proxy
     "8090:30011",  # Michelangelo UI
     "3000:30012",  # Grafana
@@ -72,7 +72,8 @@ def init_arguments(p: argparse.ArgumentParser):
         "--exclude",
         help=(
             "Excludes specified services. "
-            "Available options: apiserver, controllermgr, ui, worker"
+            "Available options: apiserver, controllermgr, ui, worker, "
+            "prometheus, grafana"
         ),
         nargs="+",
         default=[],
@@ -82,6 +83,12 @@ def init_arguments(p: argparse.ArgumentParser):
         choices=["cadence", "temporal"],
         default="cadence",
         help="Choose workflow engine: cadence or temporal (default: cadence).",
+    )
+    create_p.add_argument(
+        "--wait-timeout",
+        type=int,
+        default=600,
+        help="Seconds to wait for pods to be ready (default: 600).",
     )
     create_p.add_argument(
         "--create-compute-cluster",
@@ -102,6 +109,43 @@ def init_arguments(p: argparse.ArgumentParser):
             f"--create-compute-cluster is used "
             f"(default: {_default_compute_kube_cluster_name})."
         ),
+    )
+
+    sync_p = sp.add_parser(
+        "sync",
+        help=(
+            "Redeploy services into an existing cluster, skipping cluster creation "
+            "and image import. Falls back to a full create if the cluster does not "
+            "exist."
+        ),
+    )
+    sync_p.add_argument(
+        "--exclude",
+        help=(
+            "Excludes specified services. "
+            "Available options: apiserver, controllermgr, ui, worker, "
+            "prometheus, grafana"
+        ),
+        nargs="+",
+        default=[],
+    )
+    sync_p.add_argument(
+        "--workflow",
+        choices=["cadence", "temporal"],
+        default="cadence",
+        help="Choose workflow engine: cadence or temporal (default: cadence).",
+    )
+    sync_p.add_argument(
+        "--wait-timeout",
+        type=int,
+        default=600,
+        help="Seconds to wait for pods to be ready (default: 600).",
+    )
+    sync_p.add_argument(
+        "--include-experimental",
+        help="Include experimental services.",
+        nargs="+",
+        default=[],
     )
 
     demo_p = sp.add_parser(
@@ -153,6 +197,8 @@ def run(ns: argparse.Namespace):
 
     if ns.action == "create":
         return _create(ns)
+    if ns.action == "sync":
+        return _sync(ns)
     if ns.action == "delete":
         return _delete(ns)
     if ns.action == "start":
@@ -182,61 +228,187 @@ def _create(ns: argparse.Namespace):
     for p in ports:
         args += ["-p", f"{p}@agent:0"]
 
-    # TODO: andrii: Remove the following block once Michelangelo is publicly accessible.
-    # BLOCK START ----------------------------------------------------------------------
-    # Handle the GitHub Container Registry authentication.
-    env_cr_pat = "CR_PAT"
-    cr_pat = os.environ.get(env_cr_pat)
-    if not cr_pat:
-        _err_exit(
-            """
-CR_PAT environment variable is not set. To pull Michelangelo's containers
-from the GitHub Container Registry, please create a GitHub personal access
-token (classic) with the "read:packages" scope. Then, save this token to the
-CR_PAT environment variable, e.g.: `export CR_PAT=ghp_...`.
-
-For a detailed guide, check:
-https://docs.github.com/en/packages/working-with-a-github-packages-registry/
-working-with-the-container-registry#authenticating-with-a-personal-access-token-classic.
-
-Be aware that CR_PAT environment variable is required while Michelangelo is NOT
-publicly accessible. Once we become public, the token will no longer be
-necessary, and this assertion will be removed.
-"""
-        )
-
-    # Create a temporary registry file with the GitHub Container Registry
-    # authentication.
-    registry = {
-        "mirrors": {
-            "ghcr.io": {
-                "endpoint": ["https://ghcr.io"],
-            },
-        },
-        "configs": {
-            "ghcr.io": {
-                "auth": {
-                    "username": "USERNAME",
-                    "password": cr_pat,
-                },
-            },
-        },
-    }
-
-    with tempfile.NamedTemporaryFile(mode="wt", delete=False) as registry_file:
-        json.dump(registry, registry_file)
-        registry_file.flush()
-        args += ["--registry-config", registry_file.name]
-
-    # BLOCK END ----------------------------------------------------------------------
-
     _exec(*args)
 
+    _deploy_services(ns)
+
+
+def _sync(ns: argparse.Namespace):
+    """Restart only Michelangelo app services in an existing cluster.
+
+    Infrastructure (MySQL, Cadence, MinIO, Grafana, Prometheus, kuberay,
+    spark-operator) is left running as-is.  Only the Michelangelo application
+    pods (apiserver, envoy, ui) are restarted so that a new image/config is
+    picked up quickly without touching the long-initializing infra.
+
+    If the cluster does not exist, falls back to a full ``create``.  When the
+    cluster already exists the k3d cluster creation and ``k3d image import``
+    steps are skipped — the examples image is already present in the k3s
+    containerd content store from the previous run.  All Kubernetes resources
+    are deleted and re-created so each CI run starts with a clean application
+    state.
+    """
+    assert ns
+
+    cluster_exists = (
+        subprocess.run(
+            ["k3d", "cluster", "get", _michelangelo_sandbox_kube_cluster_name],
+            capture_output=True,
+        ).returncode
+        == 0
+    )
+
+    if not cluster_exists:
+        print("No existing cluster found — performing a full create.")
+        return _create(ns)
+
+    print(
+        "Existing cluster found — restarting app services "
+        "(leaving infrastructure running)."
+    )
+
+    # Start the cluster in case it was stopped at the end of a previous run.
+    _exec("k3d", "cluster", "start", _michelangelo_sandbox_kube_cluster_name)
+
+    # Wait for the API server to become reachable after start.
+    _exec(
+        "kubectl",
+        "wait",
+        "--for=condition=ready",
+        "node",
+        "--all",
+        "--timeout=120s",
+    )
+
+    # Delete only the Michelangelo application pods/deployments.
+    # Infrastructure (mysql, cadence, minio, grafana, prometheus) is left running.
+    # Worker and controllermgr are Pods (not Deployments) so they must be deleted
+    # explicitly; kubectl apply on a Completed pod is a no-op.
+    app_pods = [
+        "michelangelo-apiserver",
+        "envoy",
+        "michelangelo-worker",
+        "michelangelo-controllermgr",
+    ]
+    app_deployments = ["michelangelo-ui"]
+    print("Restarting app pods:", ", ".join(app_pods + app_deployments))
+    for pod in app_pods:
+        subprocess.run(
+            [
+                "kubectl",
+                "delete",
+                "pod",
+                pod,
+                "--force",
+                "--grace-period=0",
+                "--ignore-not-found=true",
+            ],
+            check=False,
+            capture_output=True,
+        )
+    for dep in app_deployments:
+        subprocess.run(
+            [
+                "kubectl",
+                "delete",
+                "deployment",
+                dep,
+                "--force",
+                "--grace-period=0",
+                "--ignore-not-found=true",
+            ],
+            check=False,
+            capture_output=True,
+        )
+    # Delete and re-apply app configs/secrets so new values take effect.
+    app_configs = [
+        "michelangelo-config",
+        "michelangelo-apiserver-config",
+        "envoy-config",
+        "public-config",
+        "michelangelo-worker-config",
+        "michelangelo-controllermgr-config",
+    ]
+    for cm in app_configs:
+        subprocess.run(
+            ["kubectl", "delete", "configmap", cm, "--ignore-not-found=true"],
+            check=False,
+            capture_output=True,
+        )
+    # minio-credentials Secret is intentionally NOT deleted here — it is
+    # managed by _ensure_credentials_secret() which creates it only when it
+    # does not already exist. This lets the GCP sandbox VM pre-configure its
+    # own credentials without sync overwriting them each run.
+
+    print("Waiting for old app pods to fully terminate...")
+    subprocess.run(
+        ["kubectl", "wait", "pod", "--all", "--for=delete", "--timeout=60s"],
+        check=False,
+        capture_output=True,
+    )
+
+    _deploy_app_services(ns)
+
+
+def _deploy_app_services(ns: argparse.Namespace):
+    """Apply only Michelangelo application resources.
+
+    Applies: apiserver, envoy, ui, worker, controllermgr.
+    Called by ``_sync`` to do a fast redeploy without touching infrastructure.
+    """
+    assert ns
+    app_resources = [
+        "michelangelo-config.yaml",
+    ]
+    if "apiserver" not in ns.exclude:
+        app_resources.append("michelangelo-apiserver.yaml")
+    if "ui" not in ns.exclude:
+        app_resources.append("envoy.yaml")
+        app_resources.append("michelangelo-ui.yaml")
+
+    for r in app_resources:
+        _kube_apply(_dir / "resources" / r)
+
+    # Create credentials secrets only if they don't already exist, so a
+    # pre-configured sandbox VM keeps its own credentials across CI runs.
+    _ensure_credentials_secret()
+
+    # Patch michelangelo-config ConfigMap to match the live secret, so
+    # Ray pods (which consume the ConfigMap via envFrom) also get the
+    # correct credentials.
+    _sync_config_from_secret()
+
+    if ns.workflow == "cadence":
+        # Domain registration is a one-time setup done by _create.
+        # _sync keeps infrastructure (including Cadence) running between runs,
+        # so the domain is already registered — no need to re-register.
+        if "worker" not in ns.exclude:
+            _kube_apply(_dir / "resources/michelangelo-worker.yaml")
+        if "controllermgr" not in ns.exclude:
+            _kube_apply(_dir / "resources/michelangelo-controllermgr.yaml")
+
+    # Wait for all app pods to become ready (includes worker + controllermgr if
+    # deployed).
+    wait_timeout = getattr(ns, "wait_timeout", 600)
+    _exec(
+        "kubectl",
+        "wait",
+        "--for=condition=ready",
+        "pod",
+        "-l",
+        "app in (michelangelo-apiserver,envoy,michelangelo-ui,"
+        "michelangelo-worker,michelangelo-controllermgr)",
+        f"--timeout={wait_timeout}s",
+    )
+
+
+def _deploy_services(ns: argparse.Namespace):
+    assert ns
     resources = [
         "boot.yaml",
-        "mysql.yaml",
+        "mysql.yaml",  # MySQL database
+        "mysql-ingester.yaml",  # Auto-generated ingester schema from protobuf
         "michelangelo-config.yaml",
-        "aws-credentials.yaml",
     ]
     links = []
 
@@ -265,27 +437,27 @@ necessary, and this assertion will be removed.
 
     # Prometheus & Grafana
 
-    resources.append("prometheus.yaml")
-    resources.append("grafana.yaml")
-    links.append(
-        (
-            "Prometheus",
-            "http://localhost:9092",
-            "",
+    if "prometheus" not in ns.exclude:
+        resources.append("prometheus.yaml")
+        links.append(
+            (
+                "Prometheus",
+                "http://localhost:9092",
+                "",
+            )
         )
-    )
-    links.append(
-        (
-            "Grafana Dashboard",
-            "http://localhost:3000",
-            "[Username: admin; Password: admin]",
+    if "grafana" not in ns.exclude:
+        resources.append("grafana.yaml")
+        links.append(
+            (
+                "Grafana Dashboard",
+                "http://localhost:3000",
+                "[Username: admin; Password: admin]",
+            )
         )
-    )
 
     if "apiserver" not in ns.exclude:
         resources.append("michelangelo-apiserver.yaml")
-    if "controllermgr" not in ns.exclude:
-        resources.append("michelangelo-controllermgr.yaml")
     if "ui" not in ns.exclude:
         resources.append("envoy.yaml")
         resources.append("michelangelo-ui.yaml")
@@ -323,7 +495,7 @@ necessary, and this assertion will be removed.
         )
 
     # Determine buckets to create based on enabled services
-    bucket_names = ["logs", "default"]
+    bucket_names = ["logs", "default", "deploy-models"]
     if "mlflow" in ns.include_experimental:
         bucket_names.append("mlflow")
         print("🪣 Adding MLflow bucket to S3 setup")
@@ -331,7 +503,12 @@ necessary, and this assertion will be removed.
     # Create bucket setup with dynamic bucket list
     _create_bucket_setup(bucket_names)
     for r in resources:
-        _kube_create(_dir / "resources" / r)
+        _kube_apply(_dir / "resources" / r)
+
+    # Create credentials secrets only if they don't already exist.
+    _ensure_credentials_secret()
+    # Patch michelangelo-config to match the live secret values.
+    _sync_config_from_secret()
 
     _assert_command(
         "helm", "Helm not found, please install it: https://helm.sh/docs/intro/install/"
@@ -351,25 +528,33 @@ necessary, and this assertion will be removed.
     if "spark" not in ns.exclude:
         _create_spark_operator(helm_existing_repos)
 
-    _kube_wait()
+    _kube_wait(timeout=getattr(ns, "wait_timeout", 600))
 
     if ns.workflow == "temporal":
         _setup_temporal(links, helm_existing_repos)
         if "worker" not in ns.exclude:
-            _kube_create(_dir / "resources/michelangelo-temporal-worker.yaml")
+            _kube_apply(_dir / "resources/michelangelo-temporal-worker.yaml")
+        if "controllermgr" not in ns.exclude:
+            _kube_apply(_dir / "resources/michelangelo-temporal-controllermgr.yaml")
     elif ns.workflow == "cadence":
         _create_cadence_domain(links)
         if "worker" not in ns.exclude:
-            _kube_create(_dir / "resources/michelangelo-worker.yaml")
+            _kube_apply(_dir / "resources/michelangelo-worker.yaml")
+        if "controllermgr" not in ns.exclude:
+            _kube_apply(_dir / "resources/michelangelo-controllermgr.yaml")
     else:
         raise ValueError(f"Unsupported workflow engine: {ns.workflow}")
 
     # Create separate compute cluster if requested
-    if ns.create_compute_cluster:
-        _create_compute_cluster(ns.compute_cluster_name)
-        _create_compute_cluster_crd(ns.compute_cluster_name)
-        _apply_compute_cluster_rbac(ns.compute_cluster_name)
-        _create_compute_cluster_secrets(ns.compute_cluster_name)
+    create_compute_cluster = getattr(ns, "create_compute_cluster", False)
+    compute_cluster_name = getattr(
+        ns, "compute_cluster_name", _default_compute_kube_cluster_name
+    )
+    if create_compute_cluster:
+        _create_compute_cluster(compute_cluster_name)
+        _create_compute_cluster_crd(compute_cluster_name)
+        _apply_compute_cluster_rbac(compute_cluster_name)
+        _create_compute_cluster_secrets(compute_cluster_name)
     else:
         # Use the control plane cluster as the default compute cluster if a
         # dedicated compute cluster is not requested
@@ -401,7 +586,7 @@ def _create_bucket_setup(bucket_names):
 
     # Replace the hardcoded bucket names with our dynamic list
     modified_content = content.replace(
-        'value: "logs,default"', f'value: "{bucket_names_str}"'
+        'value: "logs,default,deploy-models"', f'value: "{bucket_names_str}"'
     )
 
     # Create temporary file with modified content
@@ -412,7 +597,7 @@ def _create_bucket_setup(bucket_names):
         temp_file.flush()
 
         # Apply the modified bucket setup
-        _exec("kubectl", "create", "-f", temp_file.name)
+        _exec("kubectl", "apply", "-f", temp_file.name)
 
     print(f"📦 Created bucket setup job with buckets: {bucket_names_str}")
 
@@ -430,7 +615,8 @@ def _create_spark_operator(helm_existing_repos):
 
     _exec(
         "helm",
-        "install",
+        "upgrade",
+        "--install",
         "spark-operator",
         "spark-operator/spark-operator",
         "--namespace",
@@ -461,7 +647,8 @@ def _create_kuberay_operator(helm_existing_repos):
 
     _exec(
         "helm",
-        "install",
+        "upgrade",
+        "--install",
         "kuberay-operator",
         "kuberay/kuberay-operator",
         "--version",
@@ -724,7 +911,6 @@ def _setup_temporal(links, helm_existing_repos):
 
     # Wait for admin tools to be fully ready and get specific pod name
     print("Waiting for admin tools to be ready for commands...")
-    time.sleep(10)  # Increased wait time
 
     # Get the specific admin tools pod name for more reliable exec
     admin_pod_result = subprocess.check_output(
@@ -739,6 +925,41 @@ def _setup_temporal(links, helm_existing_repos):
         ],
         text=True,
     ).strip()
+
+    # Test kubectl exec readiness with retries
+    max_retries = 12
+    retry_delay = 5
+    for attempt in range(max_retries):
+        try:
+            print(
+                f"Testing admin tools container readiness "
+                f"(attempt {attempt + 1}/{max_retries})..."
+            )
+            subprocess.check_call(
+                [
+                    "kubectl",
+                    "exec",
+                    admin_pod_result,
+                    "-c",
+                    "admin-tools",
+                    "--",
+                    "ls",
+                    "/",
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            print("Admin tools container is ready for commands!")
+            break
+        except subprocess.CalledProcessError:
+            if attempt == max_retries - 1:
+                timeout_seconds = (max_retries - 1) * retry_delay
+                _err_exit(
+                    f"Admin tools container failed to become ready for commands "
+                    f"after {timeout_seconds} seconds"
+                )
+            print(f"Admin tools not ready yet, waiting {retry_delay} seconds...")
+            time.sleep(retry_delay)
 
     # Register the default namespace in Temporal using specific pod name
     _exec(
@@ -772,22 +993,51 @@ def _setup_temporal(links, helm_existing_repos):
 
 
 def _create_cadence_domain(links):
-    _kube_run(
-        image="ubercadence/cli:v1.2.6",
-        command=[
-            "cadence",
-            "--domain",
-            _cadence_domain,
-            "domain",
-            "register",
-            "--rd",
-            "1",
-        ],
-        env={
-            "CADENCE_CLI_ADDRESS": "cadence:7933",
-        },
-        retry_attempts=3,
-    )
+    """Register the Cadence domain, treating 'already exists' as success.
+
+    On a fresh cluster the Cadence frontend takes 60-90 s to start, so we
+    retry up to 20 times.  When infrastructure is kept running between CI
+    runs the domain will already be registered; that is not an error.
+    """
+    pod_name = uuid.uuid4().hex
+    args = [
+        "kubectl",
+        "run",
+        pod_name,
+        "--restart=Never",
+        "--rm",
+        "--stdin",
+        "--image",
+        "ubercadence/cli:v1.2.6",
+        "--env=CADENCE_CLI_ADDRESS=cadence:7933",
+        "--command",
+        "--",
+        "cadence",
+        "--domain",
+        _cadence_domain,
+        "domain",
+        "register",
+        "--rd",
+        "1",
+    ]
+    for attempt in range(21):  # 0..20 inclusive = 21 tries
+        print("[+]", " ".join(args))
+        result = subprocess.run(args, capture_output=True, text=True)
+        combined = result.stdout + result.stderr
+        if result.returncode == 0:
+            return
+        if "Domain already exists" in combined or "already registered" in combined:
+            print(f"Cadence domain '{_cadence_domain}' already registered — skipping.")
+            return
+        if attempt < 20:
+            print(f"retrying after 5 seconds... (attempt {attempt + 1}/20)")
+            # Print captured output so the log is visible
+            if combined.strip():
+                print(combined.strip())
+            time.sleep(5)
+    # Last attempt failed — surface the error and exit
+    print(combined.strip())
+    sys.exit(result.returncode)
 
 
 def _create_demo_crs(ns: argparse.Namespace):
@@ -902,11 +1152,87 @@ def _kube_create(path: Path):
     _exec("kubectl", "create", "-f", str(path))
 
 
+def _ensure_credentials_secret():
+    """Create minio-credentials and aws-credentials Secrets only if absent.
+
+    This is deliberately create-only: a sandbox VM that was pre-configured
+    with non-default credentials (e.g. the GCP CI runner) keeps its own
+    values across every ``ma sandbox sync`` run.  Local dev gets the
+    default minioadmin credentials from the YAML files on first create.
+    """
+    for secret_name, yaml_file in [
+        ("minio-credentials", "minio-credentials.yaml"),
+        ("aws-credentials", "aws-credentials.yaml"),
+    ]:
+        exists = (
+            subprocess.run(
+                ["kubectl", "get", "secret", secret_name],
+                capture_output=True,
+            ).returncode
+            == 0
+        )
+        if not exists:
+            print(f"Creating {secret_name} Secret from defaults...")
+            _kube_apply(_dir / "resources" / yaml_file)
+        else:
+            print(
+                f"Secret '{secret_name}' already exists — "
+                f"skipping (preserving VM credentials)."
+            )
+
+
+def _sync_config_from_secret():
+    """Patch michelangelo-config ConfigMap credentials from minio-credentials Secret.
+
+    Ray pods consume the michelangelo-config ConfigMap via envFrom. After the
+    ConfigMap is (re)applied from the YAML file (which contains minioadmin
+    defaults), this function overwrites the credential fields with whatever
+    is actually in the minio-credentials Secret, so all consumers see the
+    same credentials.
+    """
+    result = subprocess.run(
+        [
+            "kubectl",
+            "get",
+            "secret",
+            "minio-credentials",
+            "-o",
+            "jsonpath={.data.AWS_ACCESS_KEY_ID} {.data.AWS_SECRET_ACCESS_KEY}",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        # Secret will be created by _ensure_credentials_secret
+        return
+
+    import base64
+
+    parts = result.stdout.strip().split()
+    if len(parts) != 2:
+        return
+    access_key = base64.b64decode(parts[0]).decode()
+    secret_key = base64.b64decode(parts[1]).decode()
+
+    subprocess.run(
+        [
+            "kubectl",
+            "patch",
+            "configmap",
+            "michelangelo-config",
+            "--patch",
+            f'{{"data":{{"AWS_ACCESS_KEY_ID":"{access_key}","AWS_SECRET_ACCESS_KEY":"{secret_key}"}}}}',
+        ],
+        check=False,
+        capture_output=True,
+    )
+
+
 def _kube_apply(path: Path):
     _exec("kubectl", "apply", "-f", str(path))
 
 
-def _kube_wait(pods: bool = True, jobs: bool = True):
+def _kube_wait(pods: bool = True, jobs: bool = True, timeout: int = 600):
     if pods:
         # Wait for all non-job pods to be ready
         _exec(
@@ -916,7 +1242,7 @@ def _kube_wait(pods: bool = True, jobs: bool = True):
             "pod",
             "-l",
             "app",
-            "--timeout=600s",
+            f"--timeout={timeout}s",
         )
     if jobs:
         _exec(
@@ -925,7 +1251,7 @@ def _kube_wait(pods: bool = True, jobs: bool = True):
             "--all",
             "jobs",
             "--for=condition=complete",
-            "--timeout=600s",
+            f"--timeout={timeout}s",
         )
 
 

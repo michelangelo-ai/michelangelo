@@ -22,6 +22,9 @@ enum DCType {
 
   // Cloud GCP
   DC_TYPE_CLOUD_GCP = 2;
+
+  // Cloud OCI
+  DC_TYPE_CLOUD_OCI = 3;
 }
 
 // Specification of the cluster where a ML job will be launched,
@@ -75,7 +78,9 @@ message ClusterStatus {
 
 // Cluster refers to a CRD resource for a cluster
 message Cluster {
-  option (michelangelo.api.resource) = {};
+  option (michelangelo.api.resource) = {
+    conversion: true,
+  };
 
   k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
   k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;

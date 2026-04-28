@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { getOverrides, mergeOverrides, Theme } from 'baseui';
+import { getOverrides, mergeOverrides } from 'baseui';
 import { Panel } from 'baseui/accordion';
 
 import { DescriptionText } from '#core/components/description-text';
 import { StyledBoxContainer, StyledBoxTitle } from './styled-components';
 
+import type { Theme } from 'baseui';
 import type { CollapsibleBoxProps } from './types';
 
 export const CollapsibleBox: React.FC<CollapsibleBoxProps> = ({

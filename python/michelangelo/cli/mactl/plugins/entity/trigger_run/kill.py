@@ -10,20 +10,14 @@ from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.message import Message
 from grpc import Channel
 
-from michelangelo.cli.mactl.crd import (
-    CRD,
-    METADATA_STUB,
-    bind_signature,
-    get_single_arg,
-    inject_func_signature,
-)
+import michelangelo.cli.mactl.crd as crd_module
 
 _LOG = getLogger(__name__)
 
 
-def add_function_signature(crd: CRD) -> None:
+def add_function_signature(crd: crd_module.CRD) -> None:
     """Add function signature for pipeline kill command."""
-    inject_func_signature(
+    crd_module.inject_func_signature(
         crd,
         "kill",
         {
@@ -73,7 +67,9 @@ def add_function_signature(crd: CRD) -> None:
     )
 
 
-def generate_kill(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = None):
+def generate_kill(
+    crd: crd_module.CRD, channel: Channel, parser: Optional[ArgumentParser] = None
+):
     """Generate kill function for pipeline_run CRD."""
     _LOG.info("Generating `pipeline_run kill` for: %s", crd)
 
@@ -86,13 +82,13 @@ def generate_kill(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] =
     crd.configure_parser("kill", parser)
     func_signature = crd._read_signatures("kill")
 
-    @bind_signature(func_signature)
+    @crd_module.bind_signature(func_signature)
     def kill_func(bound_args: Signature) -> Message:
         _LOG.info("Start kill_func for pipeline_run")
         _LOG.info("Bound arguments: %r", bound_args.arguments)
-        _self: CRD = bound_args.arguments["self"]
-        _name = get_single_arg(bound_args.arguments, "name")
-        _namespace = get_single_arg(bound_args.arguments, "namespace")
+        _self: crd_module.CRD = bound_args.arguments["self"]
+        _name = crd_module.get_single_arg(bound_args.arguments, "name")
+        _namespace = crd_module.get_single_arg(bound_args.arguments, "namespace")
         _yes = bound_args.arguments.get("yes", False)
 
         if not _yes:
@@ -134,7 +130,7 @@ def generate_kill(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] =
 
         response = stub_method(
             request_input,
-            metadata=METADATA_STUB,
+            metadata=crd_module.METADATA_STUB,
             timeout=30,
         )
 

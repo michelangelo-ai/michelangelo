@@ -44,6 +44,18 @@ func (m *MockRunner) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb
 	return args.Get(0).(v2pb.TriggerRunStatus), args.Error(1)
 }
 
+// Pause mocks base method.
+func (m *MockRunner) Pause(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
+	args := m.Called(ctx, triggerRun)
+	return args.Get(0).(v2pb.TriggerRunStatus), args.Error(1)
+}
+
+// Resume mocks base method.
+func (m *MockRunner) Resume(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
+	args := m.Called(ctx, triggerRun)
+	return args.Get(0).(v2pb.TriggerRunStatus), args.Error(1)
+}
+
 var (
 	_namespace  = "test-namespace"
 	_triggerRun = v2pb.TriggerRun{

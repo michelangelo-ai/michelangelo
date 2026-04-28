@@ -132,9 +132,9 @@ message TriggerRunSpec {
   // The user launches this trigger run.
   UserInfo actor = 4;
 
-  // True if this is a kill request. When set to true, this will terminate the trigger run
-  // and any associated pipeline runs that are currently executing.
-  bool kill = 5;
+  // DEPRECATED: Use 'action' field instead. True if this is a kill request.
+  // When set to true, this will terminate the trigger run and any associated pipeline runs.
+  bool kill = 5 [deprecated = true];
 
   // Start time for backfilling pipeline runs. When specified, triggers pipeline runs
   // starting from this timestamp. Used in conjunction with end_timestamp to define
@@ -168,6 +168,14 @@ message TriggerRunSpec {
   // - Notification channel (email, slack, webhook)
   // - Recipients and message template
   repeated Notification notifications = 10;
+
+  // Action to perform on this trigger run. Replaces the deprecated kill boolean field.
+  // - NO_ACTION: Normal execution (create/run pipeline)
+  // - KILL: Terminate the trigger run and associated pipeline runs
+  // - PAUSE: Pause recurring triggers (cron/interval) to prevent new executions
+  // - RESUME: Resume paused recurring triggers to allow new executions
+  // Note: PAUSE and RESUME are only applicable to cron and interval triggers.
+  TriggerRunAction action = 11;
 }
 
 // BatchRerun defines configuration for rerunning multiple failed pipeline runs.
@@ -202,6 +210,18 @@ message BatchRerun {
   repeated string resume_up_to = 3;
 }
 
+// Describes the action to be performed on a trigger run:
+// - NO_ACTION: No specific action requested (default for normal execution)
+// - KILL: Terminate the trigger run and any associated pipeline runs
+// - PAUSE: Pause recurring triggers (cron/interval) to prevent new executions
+// - RESUME: Resume paused recurring triggers to allow new executions
+enum TriggerRunAction {
+  TRIGGER_RUN_ACTION_NO_ACTION = 0;
+  TRIGGER_RUN_ACTION_KILL = 1;
+  TRIGGER_RUN_ACTION_PAUSE = 2;
+  TRIGGER_RUN_ACTION_RESUME = 3;
+}
+
 // Describes the state of a trigger run:
 // - INVALID: The trigger run state is invalid or unspecified
 // - RUNNING: The trigger run is currently executing
@@ -209,6 +229,7 @@ message BatchRerun {
 // - FAILED: The trigger run failed due to an error
 // - SUCCEEDED: The trigger run completed successfully
 // - PENDING_KILL: The trigger run is marked for termination but not yet killed
+// - PAUSED: The recurring trigger is paused and will not create new runs
 enum TriggerRunState {
   TRIGGER_RUN_STATE_INVALID = 0;
   TRIGGER_RUN_STATE_RUNNING = 1;
@@ -216,6 +237,7 @@ enum TriggerRunState {
   TRIGGER_RUN_STATE_FAILED = 3;
   TRIGGER_RUN_STATE_SUCCEEDED = 4;
   TRIGGER_RUN_STATE_PENDING_KILL = 5;
+  TRIGGER_RUN_STATE_PAUSED = 6;
 }
 
 // Describes the current status of a trigger run:

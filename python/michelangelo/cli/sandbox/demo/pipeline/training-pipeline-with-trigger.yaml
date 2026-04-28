@@ -1,0 +1,46 @@
+apiVersion: michelangelo.api/v2
+kind: Pipeline
+metadata:
+  name: training-pipeline-with-trigger
+  namespace: ma-dev-test
+  annotations:
+   michelangelo/uniflow-image: docker.io/library/examples:latest
+spec:
+  description: Training pipeline for my ML project
+  owner:
+    name: yangfan
+  type: PIPELINE_TYPE_TRAIN
+  manifest:
+    type: PIPELINE_MANIFEST_TYPE_UNIFLOW
+    filePath: examples.bert_cola.bert_cola
+    uniflowTar: s3://default/bert_local.tar
+    triggerMap:
+      training-trigger-cron-every-minute:
+        cronSchedule:
+          cron: "* * * * *"
+        batchPolicy:
+          batchSize: 1
+          wait: "60s"
+        parametersMap:
+          sst2-test:
+            kwArgs:
+              path: 'glue'
+              name: 'sst2'
+              tokenizer_max_length: 256
+          mrpc-test:
+            kwArgs:
+              path: 'glue'
+              name: 'mrpc'
+              tokenizer_max_length: 128
+          cola-test:
+            kwArgs:
+              path: 'glue'
+              name: 'cola'
+              tokenizer_max_length: 128
+      training-trigger-cron-daily-at-8am:
+        cronSchedule:
+          cron: "0 8 * * *"
+        maxConcurrency: 1
+  commit:
+    gitRef: "main"
+    branch: "main"

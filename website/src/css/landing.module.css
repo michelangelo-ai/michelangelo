@@ -336,8 +336,8 @@
 }
 
 .codeTabActive {
-  color: var(--landing-accent);
-  background: rgba(39, 110, 241, 0.1);
+  color: #ffffff;
+  background: rgba(39, 110, 241, 0.15);
   border-bottom: 2px solid var(--landing-accent);
 }
 
@@ -358,7 +358,7 @@
   display: inline-block;
   width: 2.5em;
   margin-right: 1em;
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.5);
   text-align: right;
   user-select: none;
 }

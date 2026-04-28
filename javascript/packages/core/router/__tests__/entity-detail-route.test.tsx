@@ -2,13 +2,11 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
+import { ActionHierarchy } from '#core/components/actions/types';
 import { CellType } from '#core/components/cell/constants';
 import { buildTableConfigFactory } from '#core/components/views/__fixtures__/table-config-factory';
-import {
-  CustomDetailPageConfig,
-  TableDetailPageConfig,
-} from '#core/components/views/detail-view/types/detail-view-schema-types';
 import { buildExecutionSchemaFactory } from '#core/components/views/execution/__fixtures__/execution-schema-factory';
+import { interpolate } from '#core/interpolation/interpolate';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
@@ -21,6 +19,12 @@ import {
   buildPhaseConfigFactory,
 } from '../__fixtures__/phase-config-factory';
 import { EntityDetailRoute } from '../entity-detail-route';
+
+import type { ActionComponentProps } from '#core/components/actions/types';
+import type {
+  CustomDetailPageConfig,
+  TableDetailPageConfig,
+} from '#core/components/views/detail-view/types/detail-view-schema-types';
 
 describe('EntityDetailRoute', () => {
   const buildEntity = buildEntityConfigFactory({
@@ -712,5 +716,123 @@ describe('EntityDetailRoute', () => {
       'href',
       '/myproject/train/runs/run-2?page=test-trigger-123'
     );
+  });
+
+  test('renders entity-level actions in the detail page header', async () => {
+    const user = userEvent.setup();
+    const RunDialog = ({ isOpen, onClose }: ActionComponentProps) =>
+      isOpen ? (
+        <div role="dialog">
+          Run form <button onClick={onClose}>Close</button>
+        </div>
+      ) : null;
+
+    const testPhases = {
+      train: buildPhase({
+        id: 'train',
+        entities: [
+          buildEntity({
+            actions: [
+              {
+                display: { label: 'Run', icon: 'playerPlay' },
+                component: RunDialog,
+                hierarchy: ActionHierarchy.PRIMARY,
+              },
+            ],
+            views: [
+              {
+                type: 'detail',
+                metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
+                pages: [
+                  {
+                    id: 'execution',
+                    label: 'Execution',
+                    ...buildExecutionSchema(),
+                  },
+                ],
+              },
+            ],
+          }),
+        ],
+      }),
+    };
+
+    const mockRequest = vi.fn().mockResolvedValue({
+      pipelineRun: {
+        metadata: { creationTimestamp: { seconds: 1640995200 } },
+        status: { state: 'SUCCESS', steps: [] },
+      },
+    });
+
+    render(
+      <EntityDetailRoute phases={testPhases} />,
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({ location: '/myproject/train/runs/run-123' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    const runButton = await screen.findByRole('button', { name: 'Run' });
+    expect(runButton).toBeInTheDocument();
+
+    await user.click(runButton);
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Run form');
+
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  test('resolves interpolated action hierarchy in the detail page header', async () => {
+    const StubDialog = ({ isOpen }: ActionComponentProps) =>
+      isOpen ? <div role="dialog">Stub</div> : null;
+
+    const testPhases = {
+      train: buildPhase({
+        id: 'train',
+        entities: [
+          buildEntity({
+            actions: [
+              {
+                display: { label: 'Resume' },
+                component: StubDialog,
+                hierarchy: interpolate(({ data }) => {
+                  const record = data as { status?: { state?: string } } | undefined;
+                  return record?.status?.state === 'PAUSED'
+                    ? ActionHierarchy.PRIMARY
+                    : ActionHierarchy.TERTIARY;
+                }),
+              },
+            ],
+            views: [
+              {
+                type: 'detail',
+                metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
+                pages: [{ id: 'execution', label: 'Execution', ...buildExecutionSchema() }],
+              },
+            ],
+          }),
+        ],
+      }),
+    };
+
+    const mockRequest = vi.fn().mockResolvedValue({
+      pipelineRun: {
+        metadata: { creationTimestamp: { seconds: 1640995200 } },
+        status: { state: 'PAUSED', steps: [] },
+      },
+    });
+
+    render(
+      <EntityDetailRoute phases={testPhases} />,
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({ location: '/myproject/train/runs/run-123' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    // Hierarchy resolves to PRIMARY → renders as a direct button, not in overflow menu
+    expect(await screen.findByRole('button', { name: 'Resume' })).toBeInTheDocument();
   });
 });

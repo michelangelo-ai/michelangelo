@@ -34,19 +34,20 @@ type CreateTriggerRequest struct {
 	TriggerRun *v2pb.TriggerRun // The TriggerRun resource containing execution parameters
 }
 
-// killWorkflow terminates a running workflow execution.
+// killWorkflow stops a workflow execution and removes the trigger.
 //
 // This shared utility function is used by all Runner implementations to stop
 // workflow execution. It performs the following operations:
-//  1. Generate workflow ID from TriggerRun namespace and name
-//  2. Query for open workflow execution using workflow client
-//  3. Call TerminateWorkflow if execution is running
-//  4. Return KILLED status regardless of whether workflow was running (idempotent)
+//  1. Look up the open run ID for the workflow
+//  2. Call DeleteTrigger with the workflow ID and run ID for engine-specific cleanup:
+//     - Temporal: deletes the associated schedule, then terminates the running execution
+//     - Cadence: terminates the workflow directly (schedule is embedded in the workflow)
 //
 // Returns State=KILLED on success. If no workflow is running, returns KILLED
 // without error (idempotent behavior).
-func killWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Logger, workflowClient clientInterface.WorkflowClient, domain string) (v2pb.TriggerRunStatus, error) {
+func killWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Logger, workflowClient clientInterface.WorkflowClient) (v2pb.TriggerRunStatus, error) {
 	wid := generateWorkflowID(triggerRun)
+	domain := workflowClient.GetDomain()
 	rid, err := getWorkflowOpenRunID(ctx, wid, workflowClient, domain)
 	if err != nil {
 		log.Error(err, "failed to get workflow execution info",
@@ -57,23 +58,18 @@ func killWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Log
 		return triggerRun.Status, fmt.Errorf("get workflow execution info for trigger %s/%s: %w",
 			triggerRun.Namespace, triggerRun.Name, err)
 	}
-	if rid == nil || *rid == "" {
-		log.Info("no open execution, scheduled run already killed")
-		triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_KILLED
-		return triggerRun.Status, nil
+	runID := ""
+	if rid != nil && *rid != "" {
+		runID = *rid
 	}
-	err = workflowClient.TerminateWorkflow(ctx, wid, *rid, "trigger killed")
-	if err != nil {
-		log.Error(err, "failed to terminate scheduled workflow",
-			"operation", "terminate_workflow",
+	if err = workflowClient.DeleteTrigger(ctx, wid, runID); err != nil {
+		log.Error(err, "failed to delete trigger",
+			"operation", "delete_trigger",
 			"namespace", triggerRun.Namespace,
 			"name", triggerRun.Name,
-			"workflowId", wid,
-			"runId", *rid)
-		return triggerRun.Status, fmt.Errorf("terminate workflow for trigger %s/%s: %w",
-			triggerRun.Namespace, triggerRun.Name, err)
+			"workflowId", wid)
+		return triggerRun.Status, fmt.Errorf("delete trigger for %s/%s: %w", triggerRun.Namespace, triggerRun.Name, err)
 	}
-	log.Info("scheduled workflow terminated")
 	triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_KILLED
 	return triggerRun.Status, nil
 }
@@ -368,4 +364,84 @@ func GetTriggerType(tr *v2pb.TriggerRun) string {
 		return TriggerTypeCron
 	}
 	return TriggerTypeUnknown
+}
+
+// pauseWorkflow pauses a recurring trigger workflow schedule.
+//
+// This function suspends workflow schedule execution for recurring triggers (cron/interval)
+// to prevent new executions from being scheduled. The workflow schedule remains alive but inactive.
+//
+// Returns State=PAUSED on success. If the trigger is not recurring or schedule is not found,
+// returns appropriate error state.
+func pauseWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Logger, workflowClient clientInterface.WorkflowClient, domain string) (v2pb.TriggerRunStatus, error) {
+	wid := generateWorkflowID(triggerRun)
+
+	// Only cron and interval triggers can be paused (they use schedules)
+	triggerType := GetTriggerType(triggerRun)
+	if triggerType != TriggerTypeCron && triggerType != TriggerTypeInterval {
+		log.Info("pause not supported for non-recurring trigger type", "triggerType", triggerType)
+		triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_FAILED
+		triggerRun.Status.ErrorMessage = fmt.Sprintf("pause operation not supported for trigger type: %s", triggerType)
+		return triggerRun.Status, fmt.Errorf("pause not supported for trigger type %s", triggerType)
+	}
+
+	log.Info("pausing trigger", "workflowID", wid, "triggerType", triggerType)
+
+	err := workflowClient.PauseTrigger(ctx, wid)
+	if err != nil {
+		log.Error(err, "failed to pause trigger",
+			"operation", "pause_trigger",
+			"namespace", triggerRun.Namespace,
+			"name", triggerRun.Name,
+			"workflowID", wid)
+		triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_FAILED
+		triggerRun.Status.ErrorMessage = err.Error()
+		return triggerRun.Status, fmt.Errorf("pause trigger %s/%s: %w",
+			triggerRun.Namespace, triggerRun.Name, err)
+	}
+
+	log.Info("trigger paused successfully", "workflowID", wid)
+	triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_PAUSED
+	triggerRun.Status.ErrorMessage = ""
+	return triggerRun.Status, nil
+}
+
+// resumeWorkflow resumes a paused recurring trigger workflow schedule.
+//
+// This function reactivates workflow schedule execution for previously paused recurring triggers,
+// allowing new executions to be scheduled again according to the original schedule.
+//
+// Returns State=RUNNING on success. If the trigger is not recurring or schedule is not found,
+// returns appropriate error state.
+func resumeWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Logger, workflowClient clientInterface.WorkflowClient, domain string) (v2pb.TriggerRunStatus, error) {
+	wid := generateWorkflowID(triggerRun)
+
+	// Only cron and interval triggers can be resumed (they use schedules)
+	triggerType := GetTriggerType(triggerRun)
+	if triggerType != TriggerTypeCron && triggerType != TriggerTypeInterval {
+		log.Info("resume not supported for non-recurring trigger type", "triggerType", triggerType)
+		triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_FAILED
+		triggerRun.Status.ErrorMessage = fmt.Sprintf("resume operation not supported for trigger type: %s", triggerType)
+		return triggerRun.Status, fmt.Errorf("resume not supported for trigger type %s", triggerType)
+	}
+
+	log.Info("resuming trigger", "workflowID", wid, "triggerType", triggerType)
+
+	err := workflowClient.UnpauseTrigger(ctx, wid)
+	if err != nil {
+		log.Error(err, "failed to resume trigger",
+			"operation", "resume_trigger",
+			"namespace", triggerRun.Namespace,
+			"name", triggerRun.Name,
+			"workflowID", wid)
+		triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_FAILED
+		triggerRun.Status.ErrorMessage = err.Error()
+		return triggerRun.Status, fmt.Errorf("resume trigger %s/%s: %w",
+			triggerRun.Namespace, triggerRun.Name, err)
+	}
+
+	log.Info("trigger resumed successfully", "workflowID", wid)
+	triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_RUNNING
+	triggerRun.Status.ErrorMessage = ""
+	return triggerRun.Status, nil
 }

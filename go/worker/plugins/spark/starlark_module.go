@@ -82,7 +82,7 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 		return nil, err
 	}
 	if timeout == 0 {
-		timeout = int64(utils.CadenceLongTimeout.Seconds())
+		timeout = int64(utils.LongTimeout.Seconds())
 	}
 
 	var sparkJob v2pb.SparkJob
@@ -91,12 +91,12 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 		return nil, err
 	}
 
-	srp := utils.CadenceDefaultRetryPolicy
+	srp := utils.DefaultRetryPolicy
 	srp.ExpirationInterval = time.Second * time.Duration(timeout)
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	createCtx := workflow.WithRetryPolicy(ctx, srp)
 
-	var createRes v2pb.CreateSparkJobResponse
+	var createRes spark.CreateSparkJobActivityResponse
 	if err := workflow.ExecuteActivity(createCtx, spark.Activities.CreateSparkJob, v2pb.CreateSparkJobRequest{
 		SparkJob: &sparkJob,
 	}).Get(ctx, &createRes); err != nil {
@@ -104,13 +104,17 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 		return nil, err
 	}
 
-	job := createRes.SparkJob
+	enhancedResponse := map[string]interface{}{
+		"sparkJob":   createRes.SparkJob,
+		"activityId": createRes.ActivityID,
+	}
 
 	var res starlark.Value
-	if err := utils.AsStar(job, &res); err != nil {
+	if err := utils.AsStar(enhancedResponse, &res); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
 		return nil, err
 	}
+
 	return res, nil
 }
 
@@ -128,7 +132,7 @@ func (r *module) sensorJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 	logger := workflow.GetLogger(ctx)
 
 	var _job *starlark.Dict
-	timeout := int64(utils.CadenceLongTimeout.Seconds())
+	timeout := int64(utils.LongTimeout.Seconds())
 	poll := defaultPollSeconds
 	var assertConditionType string = utils.SucceededCondition
 
@@ -145,7 +149,7 @@ func (r *module) sensorJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 		return nil, err
 	}
 
-	srp := utils.CadenceDefaultSensorRetryPolicy
+	srp := utils.DefaultSensorRetryPolicy
 	srp.ExpirationInterval = time.Second * time.Duration(timeout)
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	sensorCtx := workflow.WithRetryPolicy(ctx, srp)

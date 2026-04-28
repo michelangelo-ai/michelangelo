@@ -13,6 +13,7 @@ go_library(
         "//go/base/workflowclient/interface:go_default_library",
         "//go/worker/workflowfx:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//temporal:go_default_library",
+        "@io_temporal_go_api//common/v1:go_default_library",
         "@io_temporal_go_api//enums/v1:go_default_library",
         "@io_temporal_go_api//filter/v1:go_default_library",
         "@io_temporal_go_api//workflowservice/v1:go_default_library",
@@ -24,10 +25,15 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["temporalclient_test.go"],
+    srcs = [
+        "module_test.go",
+        "temporalclient_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
+        "//go/base/config:go_default_library",
         "//go/base/workflowclient/interface:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
         "@com_github_stretchr_testify//mock:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
         "@io_temporal_go_api//enums/v1:go_default_library",

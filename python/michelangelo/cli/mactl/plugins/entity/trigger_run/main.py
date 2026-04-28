@@ -11,7 +11,10 @@ from michelangelo.cli.mactl.plugins.entity.trigger_run.kill import (
     add_function_signature,
     generate_kill,
 )
-
+from michelangelo.cli.mactl.plugins.entity.trigger_run.create import (
+    add_function_signature as add_create_function_signature,
+    generate_create,
+)
 
 _LOG = getLogger(__name__)
 
@@ -26,5 +29,9 @@ def apply_plugins(crd: CRD, channel: Channel):
     add_function_signature(crd)
     crd.generate_kill = MethodType(
         lambda self, ch, parser: generate_kill(self, ch, parser), crd
+    )
+    add_create_function_signature(crd)
+    crd.generate_create = MethodType(
+        lambda self, ch, parser: generate_create(self, ch, parser), crd
     )
     _LOG.info("Plugin entities applied successfully to crd: %s", crd)

@@ -72,6 +72,11 @@ type Params struct {
 
 // Reconciler reconciles TriggerRun resources through a state machine.
 //
+// All fields are unexported. Exported struct fields become permanent public API surface —
+// external packages can depend on them directly, making future removal a breaking change.
+// All dependencies are injected via NewReconciler() or Register() instead.
+// This follows the same pattern used by controllers in kubernetes/kubernetes.
+//
 // The reconciler manages the complete lifecycle of trigger runs, from initial workflow
 // start through terminal states (SUCCEEDED, FAILED, or KILLED). It delegates execution
 // to the appropriate Runner based on the trigger type.
@@ -85,15 +90,15 @@ type Params struct {
 // based on the maximumConcurrentReconciles setting.
 type Reconciler struct {
 	api.Handler
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	log    logr.Logger
+	scheme *runtime.Scheme
 
 	apiHandlerFactory apiHandler.Factory
 
-	CronTrigger       Runner // Executes cron-scheduled workflows
-	IntervalTrigger   Runner // Executes interval-based workflows
-	BackfillTrigger   Runner // Executes backfill workflows
-	BatchRerunTrigger Runner // Executes batch rerun workflows
+	cronTrigger       Runner // Executes cron-scheduled workflows
+	intervalTrigger   Runner // Executes interval-based workflows
+	backfillTrigger   Runner // Executes backfill workflows
+	batchRerunTrigger Runner // Executes batch rerun workflows
 }
 
 // NewReconciler creates a new TriggerRun Reconciler with the provided dependencies.
@@ -103,10 +108,10 @@ type Reconciler struct {
 func NewReconciler(p Params) *Reconciler {
 	return &Reconciler{
 		apiHandlerFactory: p.APIHandlerFactory,
-		CronTrigger:       p.CronTrigger,
-		IntervalTrigger:   p.IntervalTrigger,
-		BackfillTrigger:   p.BackfillTrigger,
-		BatchRerunTrigger: p.BatchRerunTrigger,
+		cronTrigger:       p.CronTrigger,
+		intervalTrigger:   p.IntervalTrigger,
+		backfillTrigger:   p.BackfillTrigger,
+		batchRerunTrigger: p.BatchRerunTrigger,
 	}
 }
 
@@ -119,7 +124,7 @@ func NewReconciler(p Params) *Reconciler {
 // If the resource has been deleted, reconciliation completes without error. Other fetch
 // errors are returned to be retried by the controller framework.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := r.Log.WithValues("triggerRun", req.NamespacedName)
+	log := r.log.WithValues("triggerRun", req.NamespacedName)
 	triggerRun := &v2pb.TriggerRun{}
 	if err := r.Get(ctx, req.NamespacedName.Namespace, req.NamespacedName.Name, &metav1.GetOptions{},
 		triggerRun); err != nil {
@@ -198,8 +203,19 @@ StateMachine:
 		triggerRun.Status.ExecutionWorkflowId = status.ExecutionWorkflowId
 	case v2pb.TRIGGER_RUN_STATE_RUNNING:
 		log.Info("TRIGGER_RUN_STATE_RUNNING")
-		// disable the trigger
-		if triggerRun.Spec.Kill {
+
+		// Handle actions using the new action field (preferred) or deprecated boolean fields (backward compatibility)
+		actionToPerform := triggerRun.Spec.Action
+
+		// For backward compatibility, check deprecated boolean fields if no action is set
+		if actionToPerform == v2pb.TRIGGER_RUN_ACTION_NO_ACTION {
+			if triggerRun.Spec.Kill {
+				actionToPerform = v2pb.TRIGGER_RUN_ACTION_KILL
+			}
+		}
+
+		switch actionToPerform {
+		case v2pb.TRIGGER_RUN_ACTION_KILL:
 			status, err := runner.Kill(ctx, triggerRun)
 			if err != nil {
 				log.Error(err, "failed to kill scheduled workflow")
@@ -209,8 +225,26 @@ StateMachine:
 			}
 			log.Info("trigger run killed")
 			triggerRun.Status = status
+			// Clear action and deprecated fields after processing
+			triggerRun.Spec.Action = v2pb.TRIGGER_RUN_ACTION_NO_ACTION
+			triggerRun.Spec.Kill = false
+			break StateMachine
+
+		case v2pb.TRIGGER_RUN_ACTION_PAUSE:
+			status, err := runner.Pause(ctx, triggerRun)
+			if err != nil {
+				log.Error(err, "failed to pause scheduled workflow")
+				triggerRun.Status.ErrorMessage = err.Error()
+				triggerRun.Status.State = status.State
+				break StateMachine
+			}
+			log.Info("trigger run paused")
+			triggerRun.Status = status
+			// Clear action after processing
+			triggerRun.Spec.Action = v2pb.TRIGGER_RUN_ACTION_NO_ACTION
 			break StateMachine
 		}
+
 		status, err := runner.GetStatus(ctx, triggerRun)
 		if err != nil {
 			log.Error(err, "TriggerRun GetStatus failed")
@@ -219,6 +253,48 @@ StateMachine:
 			break StateMachine
 		}
 		triggerRun.Status.State = status.State
+
+	case v2pb.TRIGGER_RUN_STATE_PAUSED:
+		log.Info("TRIGGER_RUN_STATE_PAUSED")
+
+		// Handle actions using the new action field
+		actionToPerform := triggerRun.Spec.Action
+
+		// Backward compat: if Spec.Kill is set and no explicit action, treat as KILL
+		if actionToPerform == v2pb.TRIGGER_RUN_ACTION_NO_ACTION && triggerRun.Spec.Kill {
+			actionToPerform = v2pb.TRIGGER_RUN_ACTION_KILL
+		}
+
+		switch actionToPerform {
+		case v2pb.TRIGGER_RUN_ACTION_KILL:
+			status, err := runner.Kill(ctx, triggerRun)
+			if err != nil {
+				log.Error(err, "failed to kill paused workflow")
+				triggerRun.Status.ErrorMessage = err.Error()
+				triggerRun.Status.State = status.State
+				break StateMachine
+			}
+			log.Info("paused trigger run killed")
+			triggerRun.Status = status
+			// Clear action after processing
+			triggerRun.Spec.Action = v2pb.TRIGGER_RUN_ACTION_NO_ACTION
+			break StateMachine
+
+		case v2pb.TRIGGER_RUN_ACTION_RESUME:
+			status, err := runner.Resume(ctx, triggerRun)
+			if err != nil {
+				log.Error(err, "failed to resume scheduled workflow")
+				triggerRun.Status.ErrorMessage = err.Error()
+				triggerRun.Status.State = status.State
+				break StateMachine
+			}
+			log.Info("trigger run resumed")
+			triggerRun.Status = status
+			// Clear action after processing
+			triggerRun.Spec.Action = v2pb.TRIGGER_RUN_ACTION_NO_ACTION
+			break StateMachine
+		}
+		// Stay paused if no action requested (no status change needed)
 	}
 
 	if !reflect.DeepEqual(originalTriggerRun, triggerRun) {
@@ -241,13 +317,13 @@ StateMachine:
 //
 // Returns an error if API handler creation or controller registration fails.
 func (r *Reconciler) Register(mgr ctrl.Manager) error {
-	r.Scheme = mgr.GetScheme()
+	r.scheme = mgr.GetScheme()
 	handler, err := r.apiHandlerFactory.GetAPIHandler(mgr.GetClient())
 	if err != nil {
 		return err
 	}
 	r.Handler = handler
-	r.Log = mgr.GetLogger().
+	r.log = mgr.GetLogger().
 		WithName("triggerRun")
 
 	return ctrl.NewControllerManagedBy(mgr).
@@ -265,12 +341,12 @@ func (r *Reconciler) getRunner(tr *v2pb.TriggerRun) Runner {
 	triggerType := GetTriggerType(tr)
 	switch triggerType {
 	case TriggerTypeInterval:
-		return r.IntervalTrigger
+		return r.intervalTrigger
 	case TriggerTypeBackfill:
-		return r.BackfillTrigger
+		return r.backfillTrigger
 	case TriggerTypeBatchRerun:
-		return r.BatchRerunTrigger
+		return r.batchRerunTrigger
 	default:
-		return r.CronTrigger
+		return r.cronTrigger
 	}
 }

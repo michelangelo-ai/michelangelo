@@ -13,6 +13,9 @@ type (
 		AwsAccessKeyId     string `yaml:"awsAccessKeyId"`
 		AwsSecretAccessKey string `yaml:"awsSecretAccessKey"`
 		AwsEndpointUrl     string `yaml:"awsEndpointUrl"`
+		Secure             bool   `yaml:"secure"`
+		UseEnvAws          bool   `yaml:"useEnvAws"`
+		UseIAM             bool   `yaml:"useIam"`
 	}
 )
 

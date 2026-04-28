@@ -1,9 +1,9 @@
 package main
 
 import (
+	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	"go.uber.org/fx"
-	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -24,6 +24,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/endpointregistry"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	inferenceserverOSSPlugin "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss"
+	"github.com/michelangelo-ai/michelangelo/go/components/ingester"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/scheduler"
@@ -83,17 +84,23 @@ func options() fx.Option {
 	return fx.Options(
 		env.Module,
 		zapfx.Module,
+		fx.Provide(zapr.NewLogger),
 		baseconfig.Module,
 		fx.Provide(scheme),
 		fx.Provide(baseconfig.GetK8sConfig),
 		fx.Provide(baseconfig.GetMetadataStorageConfig),
+		fx.Provide(baseconfig.GetMySQLConfig),
+		fx.Provide(baseconfig.GetIngesterConfig),
 		fx.Provide(baseconfig.GetWorkflowClientConfig),
 		fx.Provide(getTallyScope),
+		fx.Provide(provideMetadataStorage),
+		fx.Provide(provideIngesterConfig),
 		apiHandler.CtrlMgrModule,
 		spark.Module,
 		ray.Module,
 		triggerrun.Module,
 		workflowclient.Module,
+		ingester.Module,
 		pipeline.Module,
 		pipelinerun.Module,
 		controllermgr.Module,
@@ -109,8 +116,8 @@ func options() fx.Option {
 		scheduler.Module,
 		cluster.Module,
 		client.Module,
-		fx.Invoke(func(logger *zap.Logger) {
-			ctrl.SetLogger(zapr.NewLogger(logger))
+		fx.Invoke(func(logger logr.Logger) {
+			ctrl.SetLogger(logger)
 		}),
 	)
 }

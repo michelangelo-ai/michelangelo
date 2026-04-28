@@ -1,7 +1,7 @@
 {
-  "name": "@uber/michelangelo-core",
-  "license": "UNLICENSED",
-  "version": "0.1.13",
+  "name": "@michelangelo-ai/core",
+  "license": "Apache-2.0",
+  "version": "0.2.0",
   "type": "module",
   "main": "./dist/michelangelo-core.js",
   "module": "./dist/michelangelo-core.js",
@@ -24,12 +24,15 @@
     "@uiw/react-codemirror": "^4.21.23",
     "baseui": "15.0.0",
     "final-form": "4.20.10",
+    "final-form-arrays": "^1.1.2",
+    "final-form-focus": "^1.1.2",
     "lodash": "^4.17.21",
     "markdown-to-jsx": "7.4.7",
     "pluralize": "^8.0.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-final-form": "6.5.9",
+    "react-final-form-arrays": "^3.1.4",
     "validator": "^13.15.15"
   },
   "devDependencies": {
@@ -38,6 +41,7 @@
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
     "@types/jest": "^29.5.14",
+    "@types/final-form-focus": "^1.1.7",
     "@types/lodash": "^4.17.17",
     "@types/react-router": "^5.1.20",
     "@types/validator": "^13.15.1",
@@ -52,6 +56,13 @@
     "react-router-dom-v5-compat": "^6.29.0",
     "styletron-engine-atomic": "^1.0.0",
     "styletron-react": "^6.1.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michelangelo-ai/michelangelo"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "exports": {
     ".": {

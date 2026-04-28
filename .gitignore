@@ -286,8 +286,9 @@ MODULE.bazel.lock
 .envrc.local
 
 # Claude specific
-**/.claude/settings.local.json
+**/.claude/settings.local.json*
 CLAUDE.local.md
+.mcp.json*
 
 # MaCTL user configuration
 # .mactlrc.example is committed as documentation/template
@@ -328,3 +329,6 @@ checkpoints/
 /tmp/
 */tmp/
 **/tmp/
+
+# Add pytest coverage file with lcov format
+coverage.lcov

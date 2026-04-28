@@ -9,6 +9,7 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/cachedoutput"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/model"
+	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/pipeline"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/ray"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/spark"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/storage"
@@ -39,6 +40,11 @@ func RegisterModelPlugin(registry map[string]service.IPlugin) {
 	registry[model.Plugin.ID()] = model.Plugin
 }
 
+// RegisterPipelinePlugin adds the pipeline plugin to the plugin registry.
+func RegisterPipelinePlugin(registry map[string]service.IPlugin) {
+	registry[pipeline.Plugin.ID()] = pipeline.Plugin
+}
+
 // CreateStarlarkService creates the starlark service with all registered plugins.
 func CreateStarlarkService(registry map[string]service.IPlugin, workers []worker.Worker, backend service.BackendType) error {
 	if len(workers) == 0 {
@@ -62,5 +68,6 @@ var Module = fx.Options(
 	fx.Invoke(RegisterRayPlugin),
 	fx.Invoke(RegisterSparkPlugin),
 	fx.Invoke(RegisterModelPlugin),
+	fx.Invoke(RegisterPipelinePlugin),
 	fx.Invoke(CreateStarlarkService),
 )

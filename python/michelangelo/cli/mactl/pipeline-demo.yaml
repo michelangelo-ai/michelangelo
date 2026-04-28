@@ -4,7 +4,7 @@ metadata:
   name: demo-pipeline
   namespace: default
   annotations:
-    michelangelo/uniflow-image: docker.io/library/examples:latest
+    michelangelo/uniflow-image: ghcr.io/michelangelo-ai/examples:main
 spec:
   type: "PIPELINE_TYPE_TRAIN"
   manifest:

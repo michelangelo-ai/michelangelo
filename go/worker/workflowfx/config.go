@@ -11,6 +11,7 @@ const (
 //	cadence:
 //	  host: 127.0.0.1:7833
 //	  transport: grpc
+//	  useTLS: false
 //	  workers:
 //	    - domain: default
 //	      taskList: default
@@ -22,6 +23,7 @@ type Config struct {
 	Workers   []WorkerConfig `yaml:"workers"`
 	Client    ClientConfig   `yaml:"client"`
 	Provider  string         `yaml:"provider"`
+	UseTLS    bool           `yaml:"useTLS"`
 }
 
 type WorkerConfig struct {

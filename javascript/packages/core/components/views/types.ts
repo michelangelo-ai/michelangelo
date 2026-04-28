@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { ActionConfigSchema } from '#core/components/actions/types';
 import type { Cell } from '#core/components/cell/types';
 import type { EmptyState } from '#core/components/table/components/table-empty-state/types';
 import type { PageSizeOption } from '#core/components/table/components/table-pagination/types';
@@ -9,7 +10,6 @@ import type { DetailPageConfig } from '#core/components/views/detail-view/types/
 
 export type MainViewContainerProps = {
   children: ReactNode;
-  hasBreadcrumb?: boolean;
 };
 
 export type ViewConfig<T extends object = object> = ListViewConfig<T> | DetailViewConfig<T>;
@@ -52,6 +52,6 @@ export interface TableConfig<T extends TableData = TableData> {
   /** Whether to enable sticky sides in the table */
   enableStickySides?: boolean;
 
-  /** Optional actions component for the table */
-  actions?: React.ComponentType<{ record: T }>;
+  /** Optional actions to render in each table row */
+  actions?: ActionConfigSchema<T>[];
 }

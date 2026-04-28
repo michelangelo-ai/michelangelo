@@ -1,9 +1,9 @@
 import { MULTI_COLUMN_DATA_JOIN_STRING } from '#core/components/table/constants';
-import { ColumnConfig } from '#core/components/table/types/column-types';
 import { resolveColumnForRow } from '#core/components/table/utils/column-resolution-utils';
 import { safeStringify } from '#core/utils/string-utils';
 
 import type { Row } from '@tanstack/react-table';
+import type { ColumnConfig } from '#core/components/table/types/column-types';
 import type { TableData } from '#core/components/table/types/data-types';
 import type { FilterableRow } from '../types';
 

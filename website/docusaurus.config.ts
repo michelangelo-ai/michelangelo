@@ -9,19 +9,24 @@ const config: Config = {
 
   future: {
     v4: true,
+    experimental_faster: true,
   },
 
-  // GitHub Pages deployment config
-  url: 'https://michelangelo-ai.github.io',
+  url: 'https://michelangelo-ai.org',
   baseUrl: '/',
   organizationName: 'michelangelo-ai',
   projectName: 'michelangelo',
 
-  onBrokenLinks: 'warn',
-  onBrokenMarkdownLinks: 'warn',
+  // In CI lint mode, use 'warn' so all broken links are reported at once
+  // rather than failing on the first one. The workflow fails the build after
+  // annotating every broken link.
+  onBrokenLinks: process.env.CI_LINT === 'true' ? 'warn' : 'throw',
 
   markdown: {
     format: 'md',
+    hooks: {
+      onBrokenMarkdownLinks: process.env.CI_LINT === 'true' ? 'warn' : 'throw',
+    },
   },
 
   i18n: {
@@ -71,6 +76,8 @@ const config: Config = {
           href: 'https://github.com/michelangelo-ai/michelangelo',
           label: 'GitHub',
           position: 'right',
+          className: 'header-github-link',
+          'aria-label': 'GitHub repository',
         },
       ],
     },
@@ -102,6 +109,12 @@ const config: Config = {
       theme: prismThemes.github,
       darkTheme: prismThemes.dracula,
       additionalLanguages: ['go', 'python', 'bash', 'yaml', 'json'],
+    },
+    algolia: {
+      appId: 'VHQ78WWU1A',
+      apiKey: '29f48511d08dbcbe1c808676879f24eb',
+      indexName: 'docs-crawler',
+      contextualSearch: true,
     },
   } satisfies Preset.ThemeConfig,
 };

@@ -20,12 +20,17 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["cadenceclient_test.go"],
+    srcs = [
+        "cadenceclient_test.go",
+        "module_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
+        "//go/base/config:go_default_library",
         "//go/base/workflowclient/interface:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
         "@com_github_stretchr_testify//mock:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
         "@org_uber_go_cadence//.gen/go/shared:go_default_library",
         "@org_uber_go_cadence//client:go_default_library",
         "@org_uber_go_cadence//encoded:go_default_library",

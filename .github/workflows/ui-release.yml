@@ -80,7 +80,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22.11.0
+          node-version: 24.14.1
           cache: 'yarn'
           cache-dependency-path: javascript/yarn.lock
 

@@ -21,5 +21,3 @@ export function useHover(ref: React.RefObject<HTMLElement | null>): boolean {
 
   return isHovered;
 }
-
-export default useHover;

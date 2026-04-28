@@ -1,13 +1,14 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { CellRendererProps } from '#core/components/cell/types';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
 import { CellTooltipContentRenderer } from '../cell-tooltip-content-renderer';
 import { cellTooltipHOC } from '../cell-tooltip-hoc';
 import { CellTooltipWrapper } from '../cell-tooltip-wrapper';
+
+import type { CellRendererProps } from '#core/components/cell/types';
 
 describe('Cell Tooltip Components', () => {
   describe('CellTooltipWrapper', () => {

@@ -1,10 +1,23 @@
-# File Sync User Guide
+# File sync
 
-## What is File Sync?
+## What you'll learn
+
+* How file sync lets you test local changes on remote infrastructure without rebuilding images
+* When to use (and not use) file sync
+* What files get synced and the typical development flow
+
+## Prerequisites
+
+- **A running sandbox** — File sync pushes code to a remote cluster. Follow the [Sandbox Setup](../../getting-started/sandbox-setup.md) guide first.
+- **A Docker image already built for your workflow** — File sync patches an existing image; it does not build one. See [Running Uniflow Pipelines](./running-uniflow.md) for image build steps.
+- **A Git repository** — File sync uses Git metadata to determine which files changed since the image was built.
+- **Cloud storage credentials** — S3/MinIO access is required to upload the sync tarball (see Troubleshooting below).
+
+## What is file sync?
 
 File Sync lets you test your local code changes on remote infrastructure **without rebuilding Docker images**. Instead of waiting 20+ minutes for image builds per task, you can sync your changes in 2-5 minutes.
 
-## When to Use File Sync
+## When to use file sync
 
 **Use file sync when:**
 
@@ -18,7 +31,7 @@ File Sync lets you test your local code changes on remote infrastructure **witho
 * You're ready to deploy to production  
 * You're working with sensitive data that shouldn't leave your machine (not applicable to cloud storage)
 
-## How to Use File Sync
+## How to use file sync
 
 remote run support: add `--file-sync` flag to your remote run command
 
@@ -29,20 +42,18 @@ python workflow.py remote-run \
     --file-sync
 ```
 
-ma pipeline dev\_run support: add `--file-sync` flag to your ma pipeline dev-run command
+`ma pipeline dev-run` support: add `--file-sync` flag to your ma pipeline dev-run command
 
 ```shell
-ma pipeline dev_run --file-sync --file <path_to_pipeline.yaml>
+ma pipeline dev-run --file-sync --file <path_to_pipeline.yaml>
 ```
-
-### 
 
 ### Requirements
 
-* Your code must be in a Git repository  
-* You have Authorization Access to cloud storage (S3/MinIO)
+* Your code must be in a Git repository
+* You have authorization access to cloud storage (S3/MinIO)
 
-## Important Things to Know
+## Important things to know
 
 **File sync assumes your local Git changes relate to the Docker image**
 
@@ -62,7 +73,7 @@ ma pipeline dev_run --file-sync --file <path_to_pipeline.yaml>
 * **With Git metadata:** Only sends files that actually changed since the image was built  
 * **Without Git metadata:** Sends all your uncommitted changes (may include extra files)
 
-## What Gets Synced
+## What gets synced
 
 **Files included:**
 
@@ -83,3 +94,34 @@ ma pipeline dev_run --file-sync --file <path_to_pipeline.yaml>
 2. **Run with file sync** \- your changes are tested remotely in 2-5 minutes  
 3. **Iterate quickly** \- repeat steps 1-2 until satisfied  
 4. **Commit and rebuild image** only when ready for production
+
+## Troubleshooting
+
+### Missing cloud storage credentials
+
+If the sync fails with:
+```
+Failed to upload tarball: Unable to locate credentials
+```
+
+Set credentials before running:
+
+```bash
+export AWS_ACCESS_KEY_ID=minioadmin
+export AWS_SECRET_ACCESS_KEY=minioadmin
+export AWS_ENDPOINT_URL=http://localhost:9091
+```
+
+### Unexpected files being synced
+
+If more files are synced than expected, your Docker image may not have Git metadata. In that case, file sync sends all uncommitted changes rather than just the diff since the image was built. Ensure the image is built from your current branch with Git history included.
+
+### File sync not picking up changes
+
+File sync only includes files tracked by Git. If you added new files, make sure they are staged (`git add`) so Git is aware of them.
+
+## Next Steps
+
+- **Cache results between runs** — See [Uniflow caching and pipeline run resume](./cache-and-pipelinerun-resume-form.md) to skip unchanged steps and resume failed runs
+- **Run on a schedule** — See [Set Up Triggers](../set-up-triggers.md) to automate pipeline execution with cron triggers
+- **Build and register your model** — Once your code is validated, follow the [Model Registry Guide](../model-registry-guide.md) to package and version your model

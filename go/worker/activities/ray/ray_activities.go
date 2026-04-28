@@ -41,7 +41,13 @@ type activities struct {
 	rayJobService     v2pb.RayJobServiceYARPCClient
 }
 
-// CreateRayJob creates a new Ray job using the provided request parameters.
+// CreateRayClusterActivityResponse includes the activity ID for progress reporting
+type CreateRayClusterActivityResponse struct {
+	RayCluster *v2pb.RayCluster
+	ActivityID string `json:"activity_id"` // The actual activity ID from workflow engine
+}
+
+// CreateRayJob creates a new Ray job using the provided request parameters and returns activity ID.
 //
 // This method is executed as part of a Starlark worker activity.
 //
@@ -50,24 +56,30 @@ type activities struct {
 // - request: The request containing details of the Ray job to create.
 //
 // Returns:
-// - *v2pb.CreateRayJobResponse: Response containing the created Ray job details.
+// - *CreateRayJobActivityResponse: Response containing the created Ray job details and activity ID.
 // - *workflow.CustomError: Error information if the operation fails.
 func (r *activities) CreateRayJob(ctx context.Context, request v2pb.CreateRayJobRequest) (
 	*v2pb.CreateRayJobResponse, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
+
+	// Get activity ID from Temporal or Cadence context
+	activityInfo := activity.GetInfo(ctx)
+	activityID := activityInfo.ActivityID
+	logger.Info("activity-id-extracted", zap.String("activityID", activityID))
+
+	// Execute the original job creation logic
 	createRayJobResponse, err := r.rayJobService.CreateRayJob(ctx, &request)
 	if err != nil || createRayJobResponse == nil || createRayJobResponse.RayJob == nil ||
 		createRayJobResponse.RayJob.Name == "" {
 		logger.Error(err, "activity-error")
 		return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeUnavailable.String(), err.Error())
 	}
-	return &v2pb.CreateRayJobResponse{
-		RayJob: createRayJobResponse.RayJob,
-	}, nil
+
+	return createRayJobResponse, nil
 }
 
-// CreateRayCluster creates a new Ray cluster.
+// CreateRayCluster creates a new Ray cluster and returns it with activity ID for retry tracking.
 //
 // This method is executed as part of a Starlark worker activity.
 //
@@ -76,18 +88,29 @@ func (r *activities) CreateRayJob(ctx context.Context, request v2pb.CreateRayJob
 // - request: The details of the Ray cluster to create.
 //
 // Returns:
-// - *v2pb.CreateRayClusterResponse: Response containing the created cluster details.
+// - *CreateRayClusterActivityResponse: Response containing the created cluster details and activity ID.
 // - *workflow.CustomError: Error information if the operation fails.
 func (r *activities) CreateRayCluster(ctx context.Context, request v2pb.CreateRayClusterRequest) (
-	*v2pb.CreateRayClusterResponse, error) {
+	*CreateRayClusterActivityResponse, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
+
+	// Get activity ID from Temporal or Cadence context
+	activityInfo := activity.GetInfo(ctx)
+	activityID := activityInfo.ActivityID
+	logger.Info("activity-id-extracted", zap.String("activityID", activityID))
+
+	// Execute the original cluster creation logic
 	createRayClusterResponse, err := r.rayClusterService.CreateRayCluster(ctx, &request)
 	if err != nil || createRayClusterResponse == nil || createRayClusterResponse.RayCluster == nil ||
 		createRayClusterResponse.RayCluster.Name == "" {
 		return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeUnavailable.String(), err.Error())
 	}
-	return createRayClusterResponse, nil
+
+	return &CreateRayClusterActivityResponse{
+		RayCluster: createRayClusterResponse.RayCluster,
+		ActivityID: activityID,
+	}, nil
 }
 
 // GetRayCluster retrieves details of a Ray cluster.

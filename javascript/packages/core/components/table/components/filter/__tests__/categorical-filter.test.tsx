@@ -181,6 +181,40 @@ describe('CategoricalFilter', () => {
       expect(mockSetFilterValue).toHaveBeenCalledWith(undefined);
       expect(mockClose).toHaveBeenCalled();
     });
+
+    it('should select all values when "Select all" is clicked', async () => {
+      const user = userEvent.setup();
+      mockGetFilterValue.mockReturnValue(['Engineering']);
+
+      render(
+        <CategoricalFilter {...defaultProps} />,
+        buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
+      );
+
+      await user.click(screen.getByRole('checkbox', { name: 'Select All' }));
+      await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+      expect(mockSetFilterValue).toHaveBeenCalledWith(
+        expect.arrayContaining(['Design', 'Engineering', 'Marketing', 'Sales'])
+      );
+      expect(mockClose).toHaveBeenCalled();
+    });
+
+    it('should clear all values when "Clear" is clicked', async () => {
+      const user = userEvent.setup();
+      mockGetFilterValue.mockReturnValue(['Engineering', 'Sales']);
+
+      render(
+        <CategoricalFilter {...defaultProps} />,
+        buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
+      );
+
+      await user.click(screen.getByRole('checkbox', { name: 'Clear' }));
+      await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+      expect(mockSetFilterValue).toHaveBeenCalledWith(undefined);
+      expect(mockClose).toHaveBeenCalled();
+    });
   });
 
   describe('data extraction', () => {

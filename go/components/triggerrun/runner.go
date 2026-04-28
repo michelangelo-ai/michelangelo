@@ -42,6 +42,24 @@ type Runner interface {
 	// terminated or not running, returns KILLED without error.
 	Kill(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error)
 
+	// Pause suspends an active recurring trigger run workflow.
+	//
+	// This method pauses workflow execution for recurring triggers (cron/interval) to prevent
+	// new executions from being scheduled. The workflow remains alive but inactive.
+	//
+	// Returns TriggerRunStatus with State=PAUSED on success. If the workflow is not running
+	// or not a recurring type, returns appropriate error state.
+	Pause(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error)
+
+	// Resume reactivates a paused recurring trigger run workflow.
+	//
+	// This method resumes workflow execution for previously paused recurring triggers,
+	// allowing new executions to be scheduled again according to the original schedule.
+	//
+	// Returns TriggerRunStatus with State=RUNNING on success. If the workflow is not paused
+	// or not a recurring type, returns appropriate error state.
+	Resume(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error)
+
 	// GetStatus retrieves the current execution status of a trigger run.
 	//
 	// This method queries the workflow engine for execution status and maps workflow

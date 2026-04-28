@@ -59,9 +59,10 @@ func (s *SparkModuleTestSuite) TestCreateJobSuccessfully() {
 		Run(func(args mock.Arguments) {
 			createJobReq = args.Get(1).(v2pb.CreateSparkJobRequest)
 		}).
-		Return(func(ctx context.Context, req v2pb.CreateSparkJobRequest) (*v2pb.CreateSparkJobResponse, error) {
-			return &v2pb.CreateSparkJobResponse{
-				SparkJob: sparkJob,
+		Return(func(ctx context.Context, req v2pb.CreateSparkJobRequest) (*spark.CreateSparkJobActivityResponse, error) {
+			return &spark.CreateSparkJobActivityResponse{
+				SparkJob:   sparkJob,
+				ActivityID: "",
 			}, nil
 		})
 

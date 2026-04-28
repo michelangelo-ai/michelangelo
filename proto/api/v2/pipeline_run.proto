@@ -123,7 +123,41 @@ message PipelineRunSpec {
   // Pipeline spec for pipeline dev run.
   // When specified, the pipeline run controller will use the following pipeline spec to run the pipeline.
   PipelineSpec pipeline_spec = 12;
+
+  // Retry configuration for manual retry operations.
+  // When specified with both task_name and workflow_id, the pipeline run controller will
+  // trigger a workflow reset to retry that specific task from the specified workflow run.
+  // This field is automatically cleared after successful processing to prevent repeated retries.
+  // The retry will bypass normal retry limits and restart from the beginning of the specified task.
+  RetryInfo retry_info = 13;
 }
+
+// RetryInfo specifies retry configuration for manual retry operations.
+// It defines which task to retry from which specific workflow execution.
+// The retry is triggered when workflow_run_id differs from the current pipeline run's status.workflow_run_id.
+message RetryInfo {
+  // Activity ID to retry from for precise targeting.
+  // Replaces task_name for exact workflow reset boundary identification.
+  // Corresponds to first_activity_id from workflow progress data.
+  // Enables precise retry control when multiple activities exist for the same task.
+  string activity_id = 1;
+
+  // Workflow ID of the specific execution to retry from (e.g., "run-1770071659-05ae7a3b").
+  // This ensures the retry happens from the exact workflow version intended,
+  // preventing confusion when multiple workflow runs exist for the same pipeline run.
+  string workflow_id = 2;
+
+  // Optional reason for the retry operation.
+  // Provides context about why the retry was requested, useful for audit trails.
+  string reason = 3;
+
+  // Workflow Run ID used as trigger condition for retry processing.
+  // The retry is only processed when this field is set and differs from
+  // pipelineRun.status.workflow_run_id, ensuring retries are triggered precisely
+  // and preventing duplicate processing of the same retry request.
+  string workflow_run_id = 4;
+}
+
 
 // PipelineRunState represents the current execution state of a pipeline run.
 // The state transitions follow this flow:
@@ -432,6 +466,12 @@ message PipelineRunStepInfo {
   // The attempt IDs provide a history of step retries and help track execution attempts.
   // For example, if a step fails and is retried twice, this would contain 3 attempt IDs.
   repeated string attempt_ids = 13;
+
+  // Activity ID associated with this step in the workflow execution.
+  // This corresponds to the first_activity_id from workflow progress data.
+  // Used for precise retry targeting when multiple activities exist for the same task.
+  // Enables surgical retry control by identifying exact workflow reset boundaries.
+  string activity_id = 14;
 }
 
 // PipelineRunStepCachedOutputs contains cached outputs from a pipeline step execution.

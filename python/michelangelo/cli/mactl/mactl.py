@@ -3,7 +3,7 @@
 A command line interface to interact with the Michelangelo API server via gRPC.
 """
 
-import configparser
+import importlib
 import logging
 import re
 import sys
@@ -11,7 +11,7 @@ from argparse import ArgumentParser, Namespace
 from collections import defaultdict
 from importlib.util import module_from_spec, spec_from_file_location
 from logging import WARNING, basicConfig, getLogger
-from os import environ, getenv
+from os import getenv
 from pathlib import Path
 from typing import Union
 
@@ -21,76 +21,18 @@ from grpc import (
     secure_channel,
     ssl_channel_credentials,
 )
-from yaml import safe_load as yaml_safe_load
 
+from michelangelo.cli.mactl.config import load_config, setup_minio_env
 from michelangelo.cli.mactl.crd import CRD, yaml_to_dict
 from michelangelo.cli.mactl.grpc_tools import list_services
 
+# Load configuration
+# Priority: env vars (highest) > RC file > defaults (lowest)
+_CONFIG = load_config()
 
-def _load_rc_config() -> dict:
-    """Load configuration from ~/.mactlrc file."""
-    config = configparser.ConfigParser()
-    rc_file = Path.home() / ".mactlrc"
-
-    if not rc_file.exists():
-        return {}
-
-    try:
-        config.read(rc_file)
-    except Exception:
-        return {}
-
-    rc_config = {}
-
-    if "mactl" in config:
-        if "address" in config["mactl"]:
-            rc_config["address"] = config["mactl"]["address"]
-        if "use_tls" in config["mactl"]:
-            rc_config["use_tls"] = config["mactl"]["use_tls"]
-
-    if "metadata" in config:
-        rc_config["metadata"] = dict(config["metadata"])
-
-    return rc_config
-
-
-### For Uber-internal server ###
-# $ cerberus -r michelangelo-apiserver-staging
-ADDRESS = "127.0.0.1:5435"
-METADATA = [
-    ("rpc-caller", "grpcurl"),
-    # ("rpc-service", "michelangelo-apiserver"),
-    ("rpc-service", "michelangelo-apiserver-staging"),
-    ("rpc-encoding", "proto"),
-]
-
-### For OSS server
-# $ (Run oss server)
-ADDRESS = "127.0.0.1:14566"
-# TODO: Change metadata as dict
-METADATA = [
-    ("rpc-caller", "grpcurl"),
-    ("rpc-service", "ma-apiserver"),
-    ("rpc-encoding", "proto"),
-]
-
-_rc_config = _load_rc_config()
-
-# Apply configuration priority: env vars (highest) > RC file > defaults (lowest)
-# Allow overriding the API server address via environment variable
-# This enables pointing the CLI to a k8s NodePort (e.g., 127.0.0.1:30009)
-ADDRESS = getenv("MACTL_ADDRESS", _rc_config.get("address", ADDRESS))
-# Allow overriding TLS usage via environment variable
-# Set to "true" to force TLS, "false" to force insecure,
-# or leave unset for auto-detection
-USE_TLS: bool = getenv("MACTL_USE_TLS", _rc_config.get("use_tls", "false")).lower() in (
-    "true",
-    "1",
-    "yes",
-    "y",
-)
-if "metadata" in _rc_config:
-    METADATA = list(_rc_config["metadata"].items())
+ADDRESS = _CONFIG["address"]
+USE_TLS: bool = _CONFIG["use_tls"]
+METADATA = list(_CONFIG["metadata"].items())
 
 METADATA_STUB = [*METADATA, ("ttl", "600")]
 
@@ -102,7 +44,6 @@ _LOG = getLogger(__name__)
 
 PWD = Path(__file__).parent.resolve()
 DEFAULT_DIR_PLUGINS = PWD / "plugins"
-CONFIG_FILE = PWD / "config.yaml"
 
 _LOG.info(f"Config: ADDRESS={ADDRESS}, USE_TLS={USE_TLS}, METADATA={METADATA}")
 
@@ -118,12 +59,40 @@ def kebab_to_snake(name: str) -> str:
     return name.replace("-", "_")
 
 
-def read_module_from_file(crd_name: str) -> Union[object, None]:
+def read_plugin_modules(crd_name: str, plugin_dirs: list[str]) -> list[object]:
+    """Read and load plugin modules from given directories.
+
+    Args:
+        crd_name (str): The name of the CRD.
+        plugin_dirs (list[str]): List of directories to search for plugins.
+            The later directories have higher priority.
+    """
+    _LOG.info("Read plugin modules from directories: %r", plugin_dirs)
+    plugin_modules = []
+    for i, plugin_dir in enumerate(plugin_dirs):
+        plugin_module = read_module_from_file(crd_name, Path(plugin_dir), i)
+        if plugin_module is not None:
+            plugin_modules.append(plugin_module)
+    _LOG.info("Total %d plugin modules are loaded.", len(plugin_modules))
+    return plugin_modules
+
+
+def read_module_from_file(
+    crd_name: str, plugin_dir: Path, num: int = 0
+) -> Union[object, None]:
     """Read and load a plugin module from a given file path."""
-    _LOG.info("Check Plugin directory: %r", DEFAULT_DIR_PLUGINS)
-    plugin_dir = DEFAULT_DIR_PLUGINS / "entity" / crd_name
-    if not plugin_dir.exists():
-        _LOG.info("Plugin directory does not exist: %r", plugin_dir)
+    _LOG.info("Check Plugin directory: %r", plugin_dir)
+    if not plugin_dir.exists() or not plugin_dir.is_dir():
+        _LOG.warning(
+            "Plugin base directory does not exist (or not a directory): %r", plugin_dir
+        )
+        return
+
+    plugin_dir = plugin_dir / "entity" / crd_name
+    if not plugin_dir.exists() or not plugin_dir.is_dir():
+        _LOG.info(
+            "Plugin directory does not exist (or not a directory): %r", plugin_dir
+        )
         return
 
     plugin_main = plugin_dir / "main.py"
@@ -139,7 +108,7 @@ def read_module_from_file(crd_name: str) -> Union[object, None]:
         sys.path.insert(0, str(plugin_parent_path))
 
     spec = spec_from_file_location(
-        f"plugin_{crd_name}_main", str(plugin_main.resolve())
+        f"plugin_{crd_name}_main_{num}", str(plugin_main.resolve())
     )
     if spec is None:
         _LOG.error("Failed to load plugin spec for %r", plugin_main)
@@ -156,11 +125,16 @@ def read_module_from_file(crd_name: str) -> Union[object, None]:
 def read_plugins(crd: CRD, channel: Channel) -> None:
     """Read and apply plugins for a given crd."""
     _LOG.info("Read plugins for crd: %r", crd)
-    plugin_module = read_module_from_file(crd.name)
-    if plugin_module is None:
-        return
+    plugin_modules = read_plugin_modules(
+        crd.name, [str(DEFAULT_DIR_PLUGINS), *_CONFIG["plugin"]["dirs"]]
+    )
 
-    plugin_module.apply_plugins(crd, channel)
+    for i, plugin in enumerate(plugin_modules):
+        _LOG.info("Applying plugin module #%d: %r", i, plugin)
+        if hasattr(plugin, "apply_plugins"):
+            plugin.apply_plugins(crd, channel)
+        else:
+            _LOG.debug("`apply_plugins` function not found in plugin module %r", plugin)
     _LOG.info("Apply plugin done for %r entity", crd.name)
     return
 
@@ -170,19 +144,20 @@ def read_plugin_command(
 ) -> None:
     """Read and apply plugins for a given crd."""
     _LOG.info("Read plugins for crd: %r", crd)
-    plugin_module = read_module_from_file(crd.name)
-    if plugin_module is None:
-        return
-
-    if hasattr(plugin_module, "apply_plugin_command"):
-        plugin_module.apply_plugin_command(crd, user_command_action, crds, channel)
-        _LOG.info("Apply plugin done for %r entity", crd.name)
-        return
-
-    _LOG.info(
-        "Plugin module %r does not have `apply_plugin_command` function",
-        plugin_module,
+    plugin_modules = read_plugin_modules(
+        crd.name, [str(DEFAULT_DIR_PLUGINS), *_CONFIG["plugin"]["dirs"]]
     )
+
+    for i, plugin in enumerate(plugin_modules):
+        _LOG.info("Applying plugin module #%d: %r", i, plugin)
+        if hasattr(plugin, "apply_plugin_command"):
+            plugin.apply_plugin_command(crd, user_command_action, crds, channel)
+        else:
+            _LOG.debug(
+                "`apply_plugin_command` function found in plugin module %r", plugin
+            )
+    _LOG.info("Apply plugin done for %r entity", crd.name)
+    return
 
 
 def get_crd_name_from_yaml(yaml_path_string: str) -> str:
@@ -204,7 +179,7 @@ def get_crd_name_from_yaml(yaml_path_string: str) -> str:
 def create_serivce_classes(services: list[str]) -> dict[str, CRD]:
     """Create service classes from a list of service names."""
     res = {}
-    # TODO: we don't have to create all CRD instances for all services
+    # TODO(#935): we don't have to create all CRD instances for all services
     for service in services:
         if service.endswith("Service") and not service.endswith("ExtService"):
             name = camel_to_snake(re.sub(r"Service$", "", service.split(".")[-1]))
@@ -280,22 +255,6 @@ def print_help_available_actions(actions: list[tuple[str, str]]) -> None:
             print(f"  {'':{help_position}}{help_text}")
 
 
-def read_minio_config():
-    """Read configuration for Minio environment variables."""
-    if not CONFIG_FILE.exists():
-        return
-
-    with open(CONFIG_FILE) as f:
-        config = yaml_safe_load(f) or {}
-    minio_config = config.get("minio", {})
-    if not getenv("AWS_ACCESS_KEY_ID"):
-        environ["AWS_ACCESS_KEY_ID"] = minio_config.get("access_key_id", "")
-    if not getenv("AWS_SECRET_ACCESS_KEY"):
-        environ["AWS_SECRET_ACCESS_KEY"] = minio_config.get("secret_access_key", "")
-    if not getenv("AWS_ENDPOINT_URL"):
-        environ["AWS_ENDPOINT_URL"] = minio_config.get("endpoint_url", "")
-
-
 def check_crd(crd: CRD, user_command_action: str) -> None:
     """Check CRD action validity."""
     # TODO: this will be handled by CRD automatically later with argparse
@@ -311,6 +270,193 @@ def check_crd(crd: CRD, user_command_action: str) -> None:
         )
         print(f"\nRun 'ma {crd.name} --help' for more information")
         sys.exit(1)
+
+
+def add_plugin_dirs_to_syspath() -> None:
+    """Add custom plugin directories to sys.path.
+
+    Enables plugin.modules overrides to reference functions defined inside
+    plugin.dirs — so users can co-locate directory plugins and module overrides
+    in the same custom directory without managing sys.path separately.
+    """
+    plugin_dirs = _CONFIG.get("plugin", {}).get("dirs", [])
+
+    for plugin_dir_path in plugin_dirs:
+        plugin_dir = Path(plugin_dir_path)
+        if not plugin_dir.exists():
+            _LOG.warning("Custom plugin dir not found: %r", plugin_dir_path)
+            continue
+
+        resolved = str(plugin_dir.resolve())
+        if resolved not in sys.path:
+            sys.path.insert(0, resolved)
+            _LOG.info("Added to sys.path: %s", resolved)
+
+
+def apply_module_overrides() -> None:
+    """Apply module-level function overrides (highest priority).
+
+    Reads plugin.modules from config and replaces functions via setattr.
+    Runs after sys.path setup and before plugin discovery, so overridden
+    functions are picked up when plugin modules are imported.
+
+    Failures are non-fatal: logged as errors and skipped.
+    """
+    module_overrides = _CONFIG.get("plugin", {}).get("modules", {})
+
+    if not module_overrides:
+        return
+
+    for original_path, replacement_path in module_overrides.items():
+        try:
+            original_module_name, original_func_name = original_path.rsplit(".", 1)
+            replacement_module_name, replacement_func_name = replacement_path.rsplit(
+                ".", 1
+            )
+
+            replacement_module = importlib.import_module(replacement_module_name)
+            replacement_func = getattr(replacement_module, replacement_func_name)
+
+            original_module = importlib.import_module(original_module_name)
+            setattr(original_module, original_func_name, replacement_func)
+
+            _LOG.info(
+                "Module override applied: %s → %s", original_path, replacement_path
+            )
+        except Exception as e:
+            _LOG.error(
+                "Module override failed: %s → %s: %s",
+                original_path,
+                replacement_path,
+                e,
+            )
+
+
+def discover_all_plugins() -> dict[str, list[object]]:
+    """Discover and import all entity plugins early.
+
+    Scans all plugin directories and imports all entity plugin modules,
+    but does NOT apply them yet (lazy application).
+
+    Returns:
+        dict[str, list[object]]: Plugin registry mapping entity names to modules
+        Example: {
+            'pipeline': [pipeline_plugin_module_0, pipeline_plugin_module_1],
+            'pipeline_run': [pipeline_run_plugin_module_0],
+        }
+    """
+    _LOG.info("Discovering all entity plugins...")
+
+    registry: dict[str, list[object]] = {}
+    plugin_dirs = [str(DEFAULT_DIR_PLUGINS), *_CONFIG.get("plugin", {}).get("dirs", [])]
+
+    for plugin_dir_path in plugin_dirs:
+        plugin_dir = Path(plugin_dir_path)
+        entity_base = plugin_dir / "entity"
+
+        if not entity_base.exists() or not entity_base.is_dir():
+            _LOG.debug("Plugin entity directory not found: %r", entity_base)
+            continue
+
+        _LOG.debug("Scanning plugin directory: %r", entity_base)
+
+        for entity_dir in entity_base.iterdir():
+            if not entity_dir.is_dir():
+                continue
+
+            entity_name = entity_dir.name
+
+            if entity_name.startswith("__"):
+                continue
+
+            _LOG.debug("Found entity plugin: %s", entity_name)
+
+            plugin_module = read_module_from_file(
+                entity_name, plugin_dir, len(registry.get(entity_name, []))
+            )
+
+            if plugin_module is not None:
+                if entity_name not in registry:
+                    registry[entity_name] = []
+                registry[entity_name].append(plugin_module)
+                _LOG.info("Registered plugin for entity '%s'", entity_name)
+
+    _LOG.info(
+        "Plugin discovery complete. Found plugins for %d entities: %s",
+        len(registry),
+        list(registry.keys()),
+    )
+
+    return registry
+
+
+def apply_entity_plugins(
+    crd: CRD, channel: Channel, plugin_registry: dict[str, list[object]]
+) -> None:
+    """Apply entity-level plugins from pre-loaded registry.
+
+    Args:
+        crd: CRD instance for the selected entity
+        channel: gRPC channel
+        plugin_registry: Pre-loaded plugin modules from discover_all_plugins()
+    """
+    plugins = plugin_registry.get(crd.name, [])
+
+    if not plugins:
+        _LOG.debug("No entity plugins found for '%s'", crd.name)
+        return
+
+    _LOG.info("Applying %d entity plugin(s) for '%s'", len(plugins), crd.name)
+
+    for i, plugin in enumerate(plugins):
+        _LOG.debug("Applying entity plugin #%d: %r", i, plugin)
+        if hasattr(plugin, "apply_plugins"):
+            plugin.apply_plugins(crd, channel)
+        else:
+            _LOG.debug(
+                "Plugin module %r has no 'apply_plugins' function (skipped)", plugin
+            )
+
+    _LOG.info("Entity plugins applied for '%s'", crd.name)
+
+
+def apply_command_plugins(
+    crd: CRD,
+    action: str,
+    crds: dict[str, CRD],
+    channel: Channel,
+    plugin_registry: dict[str, list[object]],
+) -> None:
+    """Apply command-level plugins from pre-loaded registry.
+
+    Args:
+        crd: CRD instance for the selected entity
+        action: User command action (e.g., "apply", "run")
+        crds: All CRD instances
+        channel: gRPC channel
+        plugin_registry: Pre-loaded plugin modules
+    """
+    plugins = plugin_registry.get(crd.name, [])
+
+    if not plugins:
+        _LOG.debug("No command plugins found for '%s'", crd.name)
+        return
+
+    _LOG.info(
+        "Applying %d command plugin(s) for '%s.%s'", len(plugins), crd.name, action
+    )
+
+    for i, plugin in enumerate(plugins):
+        _LOG.debug("Applying command plugin #%d: %r", i, plugin)
+        if hasattr(plugin, "apply_plugin_command"):
+            plugin.apply_plugin_command(crd, action, crds, channel)
+        else:
+            _LOG.debug(
+                "Plugin module %r has no 'apply_plugin_command' function (skipped)",
+                plugin,
+            )
+
+    _LOG.info("Command plugins applied for '%s.%s'", crd.name, action)
 
 
 def discover_crds(channel: Channel) -> dict[str, CRD]:
@@ -343,7 +489,7 @@ def pre_parse_args(crds: dict[str, CRD]) -> tuple[Namespace, list[str]]:
 
 def handle_crd_action_help(crd: CRD, remaining: list[str]) -> None:
     """Handle CRD-level help command."""
-    # TODO: this will be generated by CRD automatically later
+    # TODO(#937): this will be generated by CRD automatically later
     if len(remaining) < 1:
         print(f"Usage: ma {crd.name} <action> [options]")
         print_help_available_actions(
@@ -361,12 +507,17 @@ def handle_crd_action_help(crd: CRD, remaining: list[str]) -> None:
         sys.exit(0)
 
 
-def main(channel: Channel):
-    """Main function for mactl."""
+def main(channel: Channel, plugin_registry: dict[str, list[object]]):
+    """Main function for mactl.
+
+    Args:
+        channel: gRPC channel
+        plugin_registry: Pre-loaded plugin modules from discover_all_plugins()
+    """
     _LOG.debug("Starting mactl...")
 
     # Load config and set environment variables
-    read_minio_config()
+    setup_minio_env()
 
     # Phase 1: Discover CRDs and create resource subcommands
     crds = discover_crds(channel)
@@ -375,25 +526,19 @@ def main(channel: Channel):
     namespace, remaining = pre_parse_args(crds)
     user_command_crd = str(namespace.entity)
 
-    # Load plugins for target CRD
-    read_plugins(
-        crds[user_command_crd],
-        channel,
-    )
+    # Apply entity-level plugins from registry
+    apply_entity_plugins(crds[user_command_crd], channel, plugin_registry)
 
     # Handle CRD-level help (e.g., "ma project --help" or "ma project -h")
     handle_crd_action_help(crds[user_command_crd], remaining)
 
     # Phase 3: Generate method + configure argparse
     user_command_action = kebab_to_snake(remaining[0])
-    check_crd(remaining, crds[user_command_crd], user_command_action)
+    check_crd(crds[user_command_crd], user_command_action)
 
-    # Load target function plugin
-    read_plugin_command(
-        crds[user_command_crd],
-        user_command_action,
-        crds,
-        channel,
+    # Apply command-level plugins from registry
+    apply_command_plugins(
+        crds[user_command_crd], user_command_action, crds, channel, plugin_registry
     )
 
     _LOG.debug(
@@ -429,8 +574,34 @@ def main(channel: Channel):
     """
 
 
+def _is_service_name(address: str) -> bool:
+    """Check if address is a service name (not host:port)."""
+    return ":" not in address and "." not in address
+
+
 def run():
     """Entry point for mactl."""
+    # Phase 0: Add plugin dirs to sys.path (before module override)
+    add_plugin_dirs_to_syspath()
+
+    # Phase 1: Apply module-level overrides (highest priority, before plugin import)
+    apply_module_overrides()
+
+    # Phase 2: Discover all plugins early (before connection)
+    _LOG.info("Discovering all plugins...")
+    plugin_registry = discover_all_plugins()
+    _LOG.info("Plugin discovery complete")
+
+    proxy_module_path = _CONFIG["plugin"].get("proxy", "")
+
+    if _is_service_name(ADDRESS) and proxy_module_path:
+        proxy_mod = importlib.import_module(proxy_module_path)
+        cli_proxy_class = proxy_mod.CLIProxy
+        with cli_proxy_class() as proxy:
+            local_address = proxy.create_tunnel(ADDRESS)
+            with insecure_channel(local_address) as channel:
+                return main(channel, plugin_registry)
+
     if USE_TLS:
         _LOG.info(
             "Using TLS (forced via MACTL_USE_TLS=%r) to connect to %r",
@@ -439,17 +610,16 @@ def run():
         )
         # Use secure TLS connection
         with secure_channel(ADDRESS, ssl_channel_credentials()) as channel:
-            return main(channel)
+            return main(channel, plugin_registry)
 
     _LOG.info(
-        "Using TLS (forced via MACTL_USE_TLS=%r) to connect to %r",
+        "Using insecure connection (MACTL_USE_TLS=%r) to connect to %r",
         USE_TLS,
         ADDRESS,
     )
-    # Use secure TLS connection
     # Use insecure connection for local development
     with insecure_channel(ADDRESS) as channel:
-        return main(channel)
+        return main(channel, plugin_registry)
 
 
 if __name__ == "__main__":

@@ -232,7 +232,10 @@ message RayClusterStatus {
 
 // RayCluster refers to a Ray cluster.
 message RayCluster {
-  option (michelangelo.api.resource) = {};
+  // Annotation for Michelangelo resource identification
+  option (michelangelo.api.resource) = {
+    conversion: true  // Enable conversion for multi-version support
+  };
 
   // Type metadata for the Ray cluster
   k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;

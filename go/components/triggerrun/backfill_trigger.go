@@ -142,7 +142,6 @@ func (r *backfillTrigger) Kill(ctx context.Context, triggerRun *v2pb.TriggerRun)
 		Namespace: triggerRun.Namespace,
 		Name:      triggerRun.Name,
 	})
-	domain := r.WorkflowClient.GetDomain()
 	if triggerRun.Status.State != v2pb.TRIGGER_RUN_STATE_RUNNING {
 		err := fmt.Errorf("cannot kill backfill trigger run in state: %s", &triggerRun.Status.State)
 		log.Error(err, "kill backfill trigger run failed")
@@ -151,7 +150,7 @@ func (r *backfillTrigger) Kill(ctx context.Context, triggerRun *v2pb.TriggerRun)
 			ErrorMessage: err.Error(),
 		}, err
 	}
-	return killWorkflow(ctx, triggerRun, log, r.WorkflowClient, domain)
+	return killWorkflow(ctx, triggerRun, log, r.WorkflowClient)
 }
 
 // GetStatus retrieves the execution status of a backfill workflow.
@@ -177,4 +176,48 @@ func (r *backfillTrigger) GetStatus(
 	})
 	domain := r.WorkflowClient.GetDomain()
 	return getAdhocRunWorkflowStatus(ctx, triggerRun, log, r.WorkflowClient, domain)
+}
+
+// Pause is not supported for backfill triggers as they are one-time workflows.
+//
+// Backfill triggers execute a single workflow and then complete, so the concept
+// of pausing a schedule doesn't apply. This method returns an error indicating
+// that pause operations are not supported for backfill triggers.
+//
+// Returns TriggerRunStatus with State=FAILED and appropriate error message.
+func (b *backfillTrigger) Pause(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
+	log := b.Log.WithValues("triggerRun", k8stypes.NamespacedName{
+		Namespace: triggerRun.Namespace,
+		Name:      triggerRun.Name,
+	})
+
+	err := fmt.Errorf("pause operation not supported for backfill triggers")
+	log.Info("pause not supported for backfill trigger type")
+
+	return v2pb.TriggerRunStatus{
+		State:        v2pb.TRIGGER_RUN_STATE_FAILED,
+		ErrorMessage: err.Error(),
+	}, err
+}
+
+// Resume is not supported for backfill triggers as they are one-time workflows.
+//
+// Backfill triggers execute a single workflow and then complete, so the concept
+// of resuming a schedule doesn't apply. This method returns an error indicating
+// that resume operations are not supported for backfill triggers.
+//
+// Returns TriggerRunStatus with State=FAILED and appropriate error message.
+func (b *backfillTrigger) Resume(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
+	log := b.Log.WithValues("triggerRun", k8stypes.NamespacedName{
+		Namespace: triggerRun.Namespace,
+		Name:      triggerRun.Name,
+	})
+
+	err := fmt.Errorf("resume operation not supported for backfill triggers")
+	log.Info("resume not supported for backfill trigger type")
+
+	return v2pb.TriggerRunStatus{
+		State:        v2pb.TRIGGER_RUN_STATE_FAILED,
+		ErrorMessage: err.Error(),
+	}, err
 }

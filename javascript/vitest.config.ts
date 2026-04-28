@@ -8,6 +8,9 @@ export default defineConfig({
     env: {
       TZ: 'UTC',
     },
+    coverage: {
+      exclude: ['packages/core/components/views/sandbox/**'],
+    },
     projects: [
       {
         extends: true,
@@ -42,6 +45,15 @@ export default defineConfig({
           name: 'rpc',
           environment: 'node', // Node environment for RPC logic (no React components)
           include: ['packages/rpc/**/__tests__/**/*.{ts,tsx}'],
+        },
+      },
+      {
+        extends: true,
+
+        test: {
+          name: 'lint-rules',
+          environment: 'node', // Node environment for ESLint rule logic
+          include: ['eslint-local-rules/**/__tests__/**/*.{js,ts}'],
         },
       },
     ],

@@ -1,6 +1,8 @@
+import { InterpolatableActionsPopover } from '#core/components/actions/interpolatable-actions-popover';
+
+import type { ActionConfigSchema, Data } from '#core/components/actions/types';
 import type { TableActionBarConfig } from '#core/components/table/components/table-action-bar/types';
 import type { TableData } from '#core/components/table/types/data-types';
-import type { TableRow } from '#core/components/table/types/row-types';
 import type { TableProps } from '#core/components/table/types/table-types';
 import type { ApplicationError } from '#core/types/error-types';
 import type { TableConfig } from '../types';
@@ -32,10 +34,14 @@ export function adaptTableConfigToTableProps<T extends TableData = TableData>(
     emptyState: config.emptyState,
     actions:
       'actions' in config && config.actions
-        ? ({ row }: { row: TableRow<T> }) => {
-            const ActionsComponent = config.actions!;
-            return <ActionsComponent record={row.record} />;
-          }
+        ? ({ row }: { row: { record: T } }) => (
+            // Actions require Record<string, unknown> but TableData is `unknown` — cast at the
+            // table/actions boundary since entity records are always objects in practice.
+            <InterpolatableActionsPopover
+              actions={config.actions as ActionConfigSchema<Data>[]}
+              record={row.record as Data}
+            />
+          )
         : undefined,
     actionBarConfig,
     disablePagination: config.disablePagination,

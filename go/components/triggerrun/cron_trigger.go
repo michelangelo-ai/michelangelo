@@ -118,21 +118,18 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 	}, nil
 }
 
-// Kill terminates a running cron-scheduled workflow.
+// Kill stops the cron trigger by delegating to the shared killWorkflow utility.
 //
-// This method stops the recurring workflow execution, preventing future scheduled
-// runs from being spawned. The workflow termination is handled by the shared
-// killWorkflow utility function.
+// killWorkflow handles engine-specific cleanup via DeleteTrigger and then
+// terminates any open workflow execution.
 //
-// Returns State=KILLED on success. If no workflow is running, returns KILLED
-// without error (idempotent termination).
+// Returns State=KILLED on success.
 func (r *cronTrigger) Kill(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
 	log := r.Log.WithValues("triggerRun", k8stypes.NamespacedName{
 		Namespace: triggerRun.Namespace,
 		Name:      triggerRun.Name,
 	})
-	domain := r.WorkflowClient.GetDomain()
-	return killWorkflow(ctx, triggerRun, log, r.WorkflowClient, domain)
+	return killWorkflow(ctx, triggerRun, log, r.WorkflowClient)
 }
 
 // GetStatus retrieves the execution status of a cron-scheduled workflow.
@@ -157,4 +154,26 @@ func (r *cronTrigger) GetStatus(
 	})
 	domain := r.WorkflowClient.GetDomain()
 	return getRecurringRunWorkflowStatus(ctx, triggerRun, log, r.WorkflowClient, domain)
+}
+
+// Pause suspends the cron trigger schedule to prevent new executions.
+//
+// This method pauses the Temporal Schedule associated with the cron trigger,
+// preventing new workflow executions from being scheduled while keeping the
+// trigger run in a recoverable state.
+//
+// Returns TriggerRunStatus with State=PAUSED on success.
+func (c *cronTrigger) Pause(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
+	return pauseWorkflow(ctx, triggerRun, c.Log, c.WorkflowClient, c.WorkflowClient.GetDomain())
+}
+
+// Resume reactivates a paused cron trigger schedule.
+//
+// This method resumes the Temporal Schedule associated with the cron trigger,
+// allowing new workflow executions to be scheduled according to the original
+// cron expression.
+//
+// Returns TriggerRunStatus with State=RUNNING on success.
+func (c *cronTrigger) Resume(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
+	return resumeWorkflow(ctx, triggerRun, c.Log, c.WorkflowClient, c.WorkflowClient.GetDomain())
 }

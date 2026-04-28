@@ -1,5 +1,5 @@
-import { Phase } from '#core/types/common/studio-types';
-import { View } from '#core/types/common/view-types';
+import type { Phase } from '#core/types/common/studio-types';
+import type { StudioParamsView } from '#core/types/common/view-types';
 
 /**
  * Parameters that can be extracted from the route path. These parameters
@@ -87,22 +87,6 @@ export type StudioParamsFormDetail = Pick<
   Pick<StudioParamsDetail, Extract<keyof StudioParamsForm, keyof StudioParamsDetail>> &
   Partial<Omit<StudioParamsForm, Extract<keyof StudioParamsForm, keyof StudioParamsDetail>>> &
   Partial<Omit<StudioParamsDetail, Extract<keyof StudioParamsForm, keyof StudioParamsDetail>>>;
-
-/**
- * Union type of all possible view types in the studio.
- * Extends ViewTypeT with additional special view types.
- * @see ViewTypeT for the base view types ('form' | 'detail' | 'list')
- *
- * 'base' is a special view type that is used to represent the base parameters
- * for all views registered to the Schema Driven UI router.
- *
- * 'form-detail' is a special view type that is used to represent the parameters
- * for combined form-detail views.
- *
- * 'unregistered' is a special view type that is used to represent views that are not registered
- * to the Schema Driven UI router but are still part of the studio application.
- */
-export type StudioParamsView = View | 'base' | 'form-detail' | 'unregistered';
 
 /**
  * Maps a view type to its corresponding parameter type.

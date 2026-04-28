@@ -6,7 +6,6 @@ from copy import deepcopy
 from logging import getLogger
 from pathlib import Path
 from typing import Optional
-from uuid import uuid4
 
 from git import Repo
 from google.protobuf.any_pb2 import Any
@@ -22,7 +21,7 @@ from michelangelo.gen.api.typed_struct_pb2 import TypedStruct
 
 _LOG = getLogger(__name__)
 
-# TODO: Add end-to-end tests for get_pipeline_config_and_tar()
+# TODO(#939): Add end-to-end tests for get_pipeline_config_and_tar()
 # with real config files and subprocess execution
 
 # Constants for registration output files
@@ -37,6 +36,7 @@ def get_pipeline_config_and_tar(
     project: str,
     pipeline: str,
     yaml_dict: Optional[dict] = None,
+    storage_url: Optional[str] = None,
 ) -> tuple[Struct, str, str]:
     """Run pipeline registration via subprocess to get uniflow artifacts.
 
@@ -54,6 +54,7 @@ def get_pipeline_config_and_tar(
         project: Project name
         pipeline: Pipeline name
         yaml_dict: Optional YAML dictionary (unused)
+        storage_url: Optional storage URL for dev run functionality
 
     Returns:
         tuple: (workflow_inputs as Struct, uniflow_tar_path as string,
@@ -88,7 +89,7 @@ def get_pipeline_config_and_tar(
                 pipeline=pipeline,
                 config_file_path=str(config_file_path),
                 output_dir=str(tmp_path),
-                storage_url=None,  # Use default S3 path
+                storage_url=storage_url,  # Use provided storage URL or default
                 output_filename=None,  # Use default filename
                 environ=None,
                 args=None,
@@ -162,12 +163,14 @@ def get_pipeline_config_and_tar(
         return workflow_inputs, uniflow_tar_path, workflow_function_name
 
 
-def convert_crd_metadata_pipeline_create(
+def convert_crd_metadata_pipeline(
     yaml_dict: dict, crd_class: type[Message], yaml_path: Path
 ) -> dict:
-    """Convert CRD metadata for pipeline create crd.
+    """Convert CRD metadata for pipeline create or update.
 
     Integrates pipeline registration to get uniflow artifacts.
+    Returns user-defined metadata (name, namespace, annotations, labels) only;
+    server-managed fields (uid, resourceVersion, etc.) are intentionally omitted.
     """
     _LOG.info("Convert CRD metadata for class %r", crd_class)
     if not isinstance(yaml_dict, dict):
@@ -191,17 +194,13 @@ def convert_crd_metadata_pipeline_create(
         )
     )
 
-    res = {}
-
-    res["metadata"] = {
-        "annotations": yaml_dict["metadata"].get("annotations", {}),
-        "labels": yaml_dict["metadata"].get("labels", {}),
-        "generateName": "",
-        "generation": "0",
-        "name": pipeline,
-        "namespace": project,
-        "resourceVersion": "0",
-        "uid": str(uuid4()),
+    res = {
+        "metadata": {
+            "name": pipeline,
+            "namespace": project,
+            "annotations": yaml_dict["metadata"].get("annotations", {}),
+            "labels": yaml_dict["metadata"].get("labels", {}),
+        }
     }
 
     return populate_pipeline_spec_with_workflow_inputs(
@@ -218,7 +217,11 @@ def convert_crd_metadata_pipeline_create(
 
 
 def handle_workflow_inputs_retrieval(
-    repo_root: Path, config_file_relative_path: str, project: str, pipeline: str
+    repo_root: Path,
+    config_file_relative_path: str,
+    project: str,
+    pipeline: str,
+    storage_url: Optional[str] = None,
 ) -> tuple[dict, str, str]:
     """Handle workflow inputs retrieval from subprocess registration."""
     workflow_inputs = None
@@ -234,6 +237,7 @@ def handle_workflow_inputs_retrieval(
                 bazel_target="",  # Not used
                 project=project,
                 pipeline=pipeline,
+                storage_url=storage_url,
             )
         )
         _LOG.info("Successfully obtained pipeline config and tar")
@@ -267,6 +271,99 @@ def handle_workflow_inputs_retrieval(
     return workflow_inputs, uniflow_tar_path, workflow_function_name
 
 
+def populate_pipeline_spec_with_trigger_configs(trigger_map: dict) -> dict:
+    """Convert triggerMap from YAML to protobuf-compatible structure.
+
+    Processes trigger configurations including cron schedules, batch policies,
+    parameters, and concurrency settings for each trigger.
+
+    Args:
+        trigger_map: Dictionary mapping trigger names to trigger configurations
+            from YAML
+
+    Returns:
+        Dictionary containing processed trigger configurations ready for protobuf
+
+    Example YAML structure:
+        triggerMap:
+          training-trigger-cron-every-minute:
+            cronSchedule:
+              cron: "* * * * *"
+            batchPolicy:
+              batchSize: 1
+              wait: "60s"
+            parametersMap:
+              param-set-1:
+                kwArgs:
+                  key: value
+            maxConcurrency: 1
+    """
+    if not trigger_map:
+        _LOG.info("No triggers defined in pipeline spec")
+        return {}
+
+    converted_trigger_map = {}
+
+    for trigger_name, trigger_config in trigger_map.items():
+        _LOG.info(f"Processing trigger: {trigger_name}")
+
+        # Validate that at least one of batchPolicy or maxConcurrency is present
+        has_batch_policy = "batchPolicy" in trigger_config
+        has_max_concurrency = "maxConcurrency" in trigger_config
+
+        if not has_batch_policy and not has_max_concurrency:
+            raise ValueError(
+                f"Trigger '{trigger_name}' must specify at least one of "
+                "'batchPolicy' or 'maxConcurrency' to control execution"
+            )
+
+        converted_trigger = {}
+
+        # Process cron schedule
+        if "cronSchedule" in trigger_config:
+            converted_trigger["cronSchedule"] = {
+                "cron": trigger_config["cronSchedule"]["cron"]
+            }
+
+        # Process interval schedule
+        if "intervalSchedule" in trigger_config:
+            converted_trigger["intervalSchedule"] = {
+                "interval": trigger_config["intervalSchedule"]["interval"]
+            }
+
+        # Process batch policy
+        if has_batch_policy:
+            batch_policy = {}
+
+            # Validate that both batchSize and wait are present
+            if "batchSize" not in trigger_config["batchPolicy"]:
+                raise ValueError(
+                    f"Trigger '{trigger_name}': batchPolicy must include 'batchSize'"
+                )
+            if "wait" not in trigger_config["batchPolicy"]:
+                raise ValueError(
+                    f"Trigger '{trigger_name}': batchPolicy must include 'wait'"
+                )
+
+            batch_policy["batchSize"] = trigger_config["batchPolicy"]["batchSize"]
+            batch_policy["wait"] = trigger_config["batchPolicy"]["wait"]
+            converted_trigger["batchPolicy"] = batch_policy
+
+        # Process max concurrency
+        if has_max_concurrency:
+            converted_trigger["maxConcurrency"] = trigger_config["maxConcurrency"]
+
+        # Process parameters map
+        if "parametersMap" in trigger_config:
+            converted_trigger["parametersMap"] = trigger_config["parametersMap"]
+
+        converted_trigger_map[trigger_name] = converted_trigger
+        _LOG.info(f"Successfully processed trigger: {trigger_name}")
+
+    _LOG.info(f"Processed {len(trigger_map)} triggers for pipeline manifest")
+    return converted_trigger_map
+
+
 def populate_pipeline_spec_with_workflow_inputs(
     res: dict,
     yaml_dict: dict,
@@ -280,6 +377,13 @@ def populate_pipeline_spec_with_workflow_inputs(
 ) -> dict:
     """Populate pipeline spec with workflow inputs."""
     res["spec"] = deepcopy(yaml_dict["spec"])
+
+    trigger_map = None
+    if "manifest" in res["spec"] and "triggerMap" in res["spec"]["manifest"]:
+        trigger_map = populate_pipeline_spec_with_trigger_configs(
+            res["spec"]["manifest"]["triggerMap"]
+        )
+
     res["spec"]["commit"] = {
         "branch": repo.active_branch.name,
         "git_ref": repo.head.commit.hexsha,
@@ -292,6 +396,10 @@ def populate_pipeline_spec_with_workflow_inputs(
         "filePath": config_file_relative_path,
         "type": "PIPELINE_MANIFEST_TYPE_UNIFLOW",
     }
+
+    if trigger_map:
+        res["spec"]["manifest"]["triggerMap"] = trigger_map
+
     res["spec"]["owner"] = {"name": get_user_name()}
 
     # Add uniflow artifacts if registration succeeded

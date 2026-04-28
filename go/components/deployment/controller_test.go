@@ -70,8 +70,8 @@ func TestReconciler_Reconcile(t *testing.T) {
 
 	// Create reconciler with registrar
 	reconciler := NewReconciler(mockFactory, registrar)
-	reconciler.Log = logr.Discard()
-	reconciler.Recorder = &record.FakeRecorder{}
+	reconciler.log = logr.Discard()
+	reconciler.recorder = &record.FakeRecorder{}
 
 	// Set up with fake manager data
 	reconciler.Handler = mockFactory.handler

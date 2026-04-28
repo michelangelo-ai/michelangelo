@@ -1,6 +1,8 @@
 package temporalclient
 
 import (
+	"crypto/tls"
+
 	"github.com/cadence-workflow/starlark-worker/temporal"
 	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
@@ -8,6 +10,12 @@ import (
 	temporalClient "go.temporal.io/sdk/client"
 	"go.uber.org/fx"
 )
+
+type TemporalClientIn struct {
+	fx.In
+	Config    baseconfig.WorkflowClientConfig
+	TLSConfig *tls.Config `optional:"true"`
+}
 
 type TemporalClientOut struct {
 	fx.Out
@@ -19,13 +27,30 @@ var Module = fx.Options(
 )
 
 // NewTemporalClient creates a new TemporalClient
-func NewTemporalClient(config baseconfig.WorkflowClientConfig) (TemporalClientOut, error) {
+func NewTemporalClient(in TemporalClientIn) (TemporalClientOut, error) {
 	defaultTemporalClientFactory := workflowfx.DefaultTemporalClientFactory{}
-	client, err := defaultTemporalClientFactory.NewTemporalClient(temporalClient.Options{
-		HostPort:      config.Host,
-		Namespace:     config.Domain,
+	opts := temporalClient.Options{
+		HostPort:      in.Config.Host,
+		Namespace:     in.Config.Domain,
 		DataConverter: temporal.DataConverter{}, // using temporal.DataConverter{} from the starlark-worker package since it supports starlark types
-	})
+	}
+
+	// Add TLS connection options if UseTLS is enabled
+	if in.Config.UseTLS {
+		var tlsConfig *tls.Config
+		if in.TLSConfig != nil {
+			tlsConfig = in.TLSConfig
+		} else {
+			// Default to empty TLS configuration if none provided
+			tlsConfig = &tls.Config{}
+		}
+
+		opts.ConnectionOptions = temporalClient.ConnectionOptions{
+			TLS: tlsConfig,
+		}
+	}
+
+	client, err := defaultTemporalClientFactory.NewTemporalClient(opts)
 	if err != nil {
 		return TemporalClientOut{}, err
 	}
@@ -33,7 +58,7 @@ func NewTemporalClient(config baseconfig.WorkflowClientConfig) (TemporalClientOu
 		TemporalClient: &TemporalClient{
 			Client:   client,
 			Provider: "temporal",
-			Domain:   config.Domain,
+			Domain:   in.Config.Domain,
 		},
 	}, nil
 }

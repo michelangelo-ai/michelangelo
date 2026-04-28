@@ -206,7 +206,7 @@ clusters:
               port_value: 8081                # Your API server port
 ```
 
-**Reference Configuration:** See complete Envoy setup in the [Deploying Michelangelo UI](./deploying-michelangelo-ui) guide.
+**Reference Configuration:** See complete Envoy setup in the [Deploying Michelangelo UI](./deploying-michelangelo-ui.md) guide.
 
 ### Icon Configuration
 

@@ -87,6 +87,15 @@ describe('TablePagination', () => {
     ).toBeInTheDocument();
   });
 
+  test('disables previous page button when on first page', () => {
+    render(
+      <TablePagination {...buildPaginationProps({ state: { pageIndex: 0, pageSize: 10 } })} />,
+      buildWrapper([getBaseProviderWrapper()])
+    );
+
+    expect(screen.getByRole('button', { name: /previous/ })).toBeDisabled();
+  });
+
   test('renders page size selector with correct options', async () => {
     const user = userEvent.setup();
     render(

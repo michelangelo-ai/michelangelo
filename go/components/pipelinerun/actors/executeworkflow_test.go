@@ -2450,3 +2450,698 @@ func TestGetWorkflowInputsWithPythonSDKBasedPipeline(t *testing.T) {
 		})
 	}
 }
+
+func TestProcessManualRetrySpec(t *testing.T) {
+	testCases := []struct {
+		name            string
+		pipelineRun     *v2.PipelineRun
+		mockFunc        func(workflowClient *workflowclientMock.MockWorkflowClient)
+		expectedError   string
+		expectedRunning bool
+	}{
+		{
+			name: "No retry info - should not process",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					RetryInfo: nil,
+				},
+				Status: v2.PipelineRunStatus{
+					WorkflowRunId: "current-run-id",
+				},
+			},
+			mockFunc:        func(workflowClient *workflowclientMock.MockWorkflowClient) {},
+			expectedError:   "",
+			expectedRunning: false,
+		},
+		{
+			name: "Empty activity ID - should not process",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					RetryInfo: &v2.RetryInfo{
+						ActivityId: "",
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					WorkflowRunId: "current-run-id",
+				},
+			},
+			mockFunc:        func(workflowClient *workflowclientMock.MockWorkflowClient) {},
+			expectedError:   "",
+			expectedRunning: false,
+		},
+		{
+			name: "WorkflowRunId matches current - should process retry",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					RetryInfo: &v2.RetryInfo{
+						ActivityId:    "test-activity-1",
+						WorkflowId:    "test-workflow-id",
+						WorkflowRunId: "current-run-id",
+						Reason:        "Test retry",
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					WorkflowId:    "test-workflow-id",
+					WorkflowRunId: "current-run-id",
+					Steps: []*v2.PipelineRunStepInfo{
+						{
+							Name:  pipelinerunutils.ExecuteWorkflowStepName,
+							State: v2.PIPELINE_RUN_STEP_STATE_FAILED,
+						},
+					},
+				},
+			},
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				// Mock event type interface methods
+				workflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+				workflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+				workflowClient.EXPECT().GetDecisionTaskCompletedEventType().Return("DecisionTaskCompleted").AnyTimes()
+
+				// Mock GetWorkflowExecutionHistory
+				mockHistory := &clientInterfaces.WorkflowHistory{
+					Events: []clientInterfaces.HistoryEvent{
+						{
+							EventID:   1,
+							EventType: "ActivityTaskCompleted",
+						},
+						{
+							EventID:   2,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id": "test-activity-1",
+							},
+						},
+					},
+				}
+				workflowClient.EXPECT().GetWorkflowExecutionHistory(
+					gomock.Any(),
+					"test-workflow-id",
+					"current-run-id",
+					gomock.Any(),
+					int32(5000),
+				).Return(mockHistory, nil)
+
+				// Mock ResetWorkflow
+				workflowClient.EXPECT().ResetWorkflow(
+					gomock.Any(),
+					gomock.Any(),
+				).Return(&clientInterfaces.WorkflowExecution{
+					ID:    "test-workflow-id",
+					RunID: "new-run-id",
+				}, nil)
+			},
+			expectedError:   "",
+			expectedRunning: true,
+		},
+		{
+			name: "WorkflowRunId differs - should not process",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					RetryInfo: &v2.RetryInfo{
+						ActivityId:    "test-activity-1",
+						WorkflowRunId: "old-run-id",
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					WorkflowRunId: "new-run-id", // Different from retry
+				},
+			},
+			mockFunc:        func(workflowClient *workflowclientMock.MockWorkflowClient) {},
+			expectedError:   "",
+			expectedRunning: false,
+		},
+		{
+			name: "Reset workflow fails",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					RetryInfo: &v2.RetryInfo{
+						ActivityId:    "test-activity-1",
+						WorkflowId:    "test-workflow-id",
+						WorkflowRunId: "current-run-id", // Same as current to trigger processing
+						Reason:        "Manual retry",
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					WorkflowId:    "test-workflow-id",
+					WorkflowRunId: "current-run-id", // Same as retry to trigger processing
+				},
+			},
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				// Mock event type interface methods
+				workflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+				workflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+				workflowClient.EXPECT().GetDecisionTaskCompletedEventType().Return("DecisionTaskCompleted").AnyTimes()
+
+				// Mock GetWorkflowExecutionHistory
+				mockHistory := &clientInterfaces.WorkflowHistory{
+					Events: []clientInterfaces.HistoryEvent{
+						{
+							EventID:   1,
+							EventType: "ActivityTaskCompleted",
+						},
+						{
+							EventID:   2,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id": "test-activity-1",
+							},
+						},
+					},
+				}
+				workflowClient.EXPECT().GetWorkflowExecutionHistory(
+					gomock.Any(),
+					"test-workflow-id",
+					"current-run-id",
+					gomock.Any(),
+					int32(5000),
+				).Return(mockHistory, nil)
+
+				// Mock ResetWorkflow failure
+				workflowClient.EXPECT().ResetWorkflow(
+					gomock.Any(),
+					gomock.Any(),
+				).Return(nil, fmt.Errorf("reset failed"))
+			},
+			expectedError:   "workflow reset failed for activity test-activity-1: reset failed",
+			expectedRunning: false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockWorkflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+			mockBlobStore := blobstoreMock.NewMockBlobStoreClient(ctrl)
+
+			testCase.mockFunc(mockWorkflowClient)
+
+			scheme := runtime.NewScheme()
+			err := v2.AddToScheme(scheme)
+			require.NoError(t, err)
+			k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			apiHandlerInstance := apiHandler.NewFakeAPIHandler(k8sClient)
+
+			actor := setUpExecuteWorkflowActor(t, mockWorkflowClient, mockBlobStore, apiHandlerInstance)
+
+			retryErr := actor.processManualRetrySpec(context.Background(), testCase.pipelineRun)
+
+			if testCase.expectedError != "" {
+				require.Error(t, retryErr)
+				require.Contains(t, retryErr.Error(), testCase.expectedError)
+			} else {
+				require.NoError(t, retryErr)
+			}
+
+			if testCase.expectedRunning {
+				require.Equal(t, v2.PIPELINE_RUN_STATE_RUNNING, testCase.pipelineRun.Status.State)
+				executeStep := pipelinerunutils.GetStep(testCase.pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
+				if executeStep != nil {
+					require.Equal(t, v2.PIPELINE_RUN_STEP_STATE_RUNNING, executeStep.State)
+				}
+			}
+		})
+	}
+}
+
+func TestFindTaskResetEventIDByActivityID(t *testing.T) {
+	testCases := []struct {
+		name            string
+		workflowID      string
+		runID           string
+		firstActivityID string
+		mockFunc        func(workflowClient *workflowclientMock.MockWorkflowClient)
+		expectedEventID int64
+		expectedError   string
+	}{
+		{
+			name:            "Find reset event successfully",
+			workflowID:      "test-workflow-id",
+			runID:           "test-run-id",
+			firstActivityID: "test-activity-1",
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				// Mock event type interface methods
+				workflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+				workflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+				workflowClient.EXPECT().GetDecisionTaskCompletedEventType().Return("DecisionTaskCompleted").AnyTimes()
+
+				mockHistory := &clientInterfaces.WorkflowHistory{
+					Events: []clientInterfaces.HistoryEvent{
+						{
+							EventID:   1,
+							EventType: "WorkflowExecutionStarted",
+						},
+						{
+							EventID:   2,
+							EventType: "DecisionTaskCompleted",
+						},
+						{
+							EventID:   3,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id": "test-activity-1",
+							},
+						},
+						{
+							EventID:   4,
+							EventType: "ActivityTaskFailed",
+						},
+					},
+				}
+				workflowClient.EXPECT().GetWorkflowExecutionHistory(
+					gomock.Any(),
+					"test-workflow-id",
+					"test-run-id",
+					gomock.Any(),
+					int32(5000),
+				).Return(mockHistory, nil)
+			},
+			expectedEventID: 2,
+			expectedError:   "",
+		},
+		{
+			name:            "Activity not found",
+			workflowID:      "test-workflow-id",
+			runID:           "test-run-id",
+			firstActivityID: "missing-activity",
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				// Mock event type interface methods
+				workflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+				workflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+				workflowClient.EXPECT().GetDecisionTaskCompletedEventType().Return("DecisionTaskCompleted").AnyTimes()
+
+				mockHistory := &clientInterfaces.WorkflowHistory{
+					Events: []clientInterfaces.HistoryEvent{
+						{
+							EventID:   1,
+							EventType: "WorkflowExecutionStarted",
+						},
+						{
+							EventID:   2,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id": "different-activity",
+							},
+						},
+					},
+				}
+				workflowClient.EXPECT().GetWorkflowExecutionHistory(
+					gomock.Any(),
+					"test-workflow-id",
+					"test-run-id",
+					gomock.Any(),
+					int32(5000),
+				).Return(mockHistory, nil)
+			},
+			expectedEventID: 0,
+			expectedError:   "could not find scheduled event for first activity missing-activity",
+		},
+		{
+			name:            "History retrieval fails",
+			workflowID:      "test-workflow-id",
+			runID:           "test-run-id",
+			firstActivityID: "test-activity-1",
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				// Mock event type interface methods (even though they won't be called due to error)
+				workflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+				workflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+				workflowClient.EXPECT().GetDecisionTaskCompletedEventType().Return("DecisionTaskCompleted").AnyTimes()
+
+				workflowClient.EXPECT().GetWorkflowExecutionHistory(
+					gomock.Any(),
+					"test-workflow-id",
+					"test-run-id",
+					gomock.Any(),
+					int32(5000),
+				).Return(nil, fmt.Errorf("history error"))
+			},
+			expectedEventID: 0,
+			expectedError:   "failed to get workflow history: history error",
+		},
+		{
+			name:            "No safe reset boundary found",
+			workflowID:      "test-workflow-id",
+			runID:           "test-run-id",
+			firstActivityID: "test-activity-1",
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				// Mock event type interface methods
+				workflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+				workflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+				workflowClient.EXPECT().GetDecisionTaskCompletedEventType().Return("DecisionTaskCompleted").AnyTimes()
+
+				mockHistory := &clientInterfaces.WorkflowHistory{
+					Events: []clientInterfaces.HistoryEvent{
+						{
+							EventID:   1,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id": "test-activity-1",
+							},
+						},
+					},
+				}
+				workflowClient.EXPECT().GetWorkflowExecutionHistory(
+					gomock.Any(),
+					"test-workflow-id",
+					"test-run-id",
+					gomock.Any(),
+					int32(5000),
+				).Return(mockHistory, nil)
+			},
+			expectedEventID: 0,
+			expectedError:   "could not find safe reset boundary before first activity test-activity-1",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockWorkflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+			mockBlobStore := blobstoreMock.NewMockBlobStoreClient(ctrl)
+
+			testCase.mockFunc(mockWorkflowClient)
+
+			scheme := runtime.NewScheme()
+			err := v2.AddToScheme(scheme)
+			require.NoError(t, err)
+			k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			apiHandlerInstance := apiHandler.NewFakeAPIHandler(k8sClient)
+
+			actor := setUpExecuteWorkflowActor(t, mockWorkflowClient, mockBlobStore, apiHandlerInstance)
+
+			eventID, err := actor.findTaskResetEventIDByActivityID(
+				context.Background(),
+				testCase.workflowID,
+				testCase.runID,
+				testCase.firstActivityID,
+			)
+
+			if testCase.expectedError != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), testCase.expectedError)
+				require.Equal(t, int64(0), eventID)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, testCase.expectedEventID, eventID)
+			}
+		})
+	}
+}
+
+func TestGetWorkflowUrl(t *testing.T) {
+	testCases := []struct {
+		name        string
+		configSetup map[string]interface{}
+		inputName   string
+		expectedUrl string
+		expectError bool
+	}{
+		{
+			name: "Valid config with workflow URL template",
+			configSetup: map[string]interface{}{
+				"workflowClient": map[string]interface{}{
+					"taskList":           "default",
+					"executionUrlFormat": "http://cadence-web:8080/domain/{{.Domain}}/workflows/{{.ExecutionID}}",
+					"domain":             "michelangelo",
+				},
+			},
+			inputName:   "test-pipeline-run",
+			expectedUrl: "http://cadence-web:8080/domain/michelangelo/workflows/test-pipeline-run",
+			expectError: false,
+		},
+		{
+			name: "Config with different domain",
+			configSetup: map[string]interface{}{
+				"workflowClient": map[string]interface{}{
+					"taskList":           "custom-queue",
+					"executionUrlFormat": "https://temporal-ui.prod:7243/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}",
+					"domain":             "production",
+				},
+			},
+			inputName:   "prod-pipeline-execution",
+			expectedUrl: "https://temporal-ui.prod:7243/namespaces/production/workflows/prod-pipeline-execution",
+			expectError: false,
+		},
+		{
+			name: "Missing workflow config - should return empty string",
+			configSetup: map[string]interface{}{
+				"workflowClient": map[string]interface{}{
+					"taskList": "default",
+					// Missing workflowUrl and domain
+				},
+			},
+			inputName:   "test-pipeline",
+			expectedUrl: "",
+			expectError: false, // Method returns empty string on config error
+		},
+		{
+			name: "Empty pipeline name",
+			configSetup: map[string]interface{}{
+				"workflowClient": map[string]interface{}{
+					"taskList":           "default",
+					"executionUrlFormat": "http://localhost:8080/domain/{{.Domain}}/workflows/{{.ExecutionID}}",
+					"domain":             "default",
+				},
+			},
+			inputName:   "",
+			expectedUrl: "http://localhost:8080/domain/default/workflows/",
+			expectError: false,
+		},
+		{
+			name: "Complex pipeline name with special characters",
+			configSetup: map[string]interface{}{
+				"workflowClient": map[string]interface{}{
+					"taskList":           "default",
+					"executionUrlFormat": "http://cadence-web:8080/domain/{{.Domain}}/workflows/{{.ExecutionID}}",
+					"domain":             "test-domain",
+				},
+			},
+			inputName:   "my-pipeline-run-123_test",
+			expectedUrl: "http://cadence-web:8080/domain/test-domain/workflows/my-pipeline-run-123_test",
+			expectError: false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			workflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+			blobStoreClient := blobstoreMock.NewMockBlobStoreClient(ctrl)
+
+			// Create config provider with test case specific config
+			configProvider, err := uberconfig.NewYAML(uberconfig.Static(testCase.configSetup))
+			require.NoError(t, err)
+
+			// Create actor with test-specific config
+			logger := zaptest.NewLogger(t)
+			blobStore := blobstore.BlobStore{
+				Logger: logger,
+				Clients: map[string]blobstore.BlobStoreClient{
+					"mock": blobStoreClient,
+				},
+			}
+
+			scheme := runtime.NewScheme()
+			err = v2.AddToScheme(scheme)
+			require.NoError(t, err)
+			k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			apiHandlerInstance := apiHandler.NewFakeAPIHandler(k8sClient)
+
+			actor := NewExecuteWorkflowActor(logger, workflowClient, &blobStore, apiHandlerInstance, configProvider)
+
+			// Test the GetWorkflowUrl method
+			result := actor.GetWorkflowUrl(testCase.inputName)
+
+			if testCase.expectError {
+				require.Empty(t, result)
+			} else {
+				require.Equal(t, testCase.expectedUrl, result)
+			}
+		})
+	}
+}
+
+func TestGetStepInfoFromTaskProgressInput(t *testing.T) {
+	testCases := []struct {
+		name          string
+		taskProgress  TaskProgress
+		expectedInput *pbtypes.Struct
+	}{
+		{
+			name: "input with args and kwargs",
+			taskProgress: TaskProgress{
+				TaskName:  "train",
+				TaskPath:  "examples.train",
+				TaskState: "succeeded",
+				Input:     `{"args": ["a", "b"], "kwargs": {"lr": 0.01}}`,
+			},
+			expectedInput: &pbtypes.Struct{
+				Fields: map[string]*pbtypes.Value{
+					"args": {Kind: &pbtypes.Value_ListValue{ListValue: &pbtypes.ListValue{
+						Values: []*pbtypes.Value{
+							{Kind: &pbtypes.Value_StringValue{StringValue: "a"}},
+							{Kind: &pbtypes.Value_StringValue{StringValue: "b"}},
+						},
+					}}},
+					"kwargs": {Kind: &pbtypes.Value_StructValue{StructValue: &pbtypes.Struct{
+						Fields: map[string]*pbtypes.Value{
+							"lr": {Kind: &pbtypes.Value_NumberValue{NumberValue: 0.01}},
+						},
+					}}},
+				},
+			},
+		},
+		{
+			name: "empty input",
+			taskProgress: TaskProgress{
+				TaskName:  "train",
+				TaskPath:  "examples.train",
+				TaskState: "running",
+				Input:     "",
+			},
+			expectedInput: nil,
+		},
+		{
+			name: "invalid json input",
+			taskProgress: TaskProgress{
+				TaskName:  "train",
+				TaskPath:  "examples.train",
+				TaskState: "running",
+				Input:     "not-json",
+			},
+			expectedInput: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			stepInfo := getStepInfoFromTaskProgress(&tc.taskProgress, "test-ns")
+			require.Equal(t, tc.expectedInput, stepInfo.Input)
+		})
+	}
+}
+
+func TestEnrichStepOutput(t *testing.T) {
+	testCases := []struct {
+		name           string
+		taskProgress   TaskProgress
+		cachedOutput   *v2.CachedOutput
+		blobContent    string
+		expectOutput   bool
+		expectedFields []string
+	}{
+		{
+			name: "variable type with JSON object output",
+			taskProgress: TaskProgress{
+				Output: "uf-vars-abc",
+			},
+			cachedOutput: &v2.CachedOutput{
+				Spec: v2.CachedOutputSpec{
+					Type:       v2.CACHED_OUTPUT_TYPE_VARIABLE,
+					StorageUri: "mock://result.json",
+				},
+			},
+			blobContent:    `{"accuracy": 0.95, "loss": 0.05}`,
+			expectOutput:   true,
+			expectedFields: []string{"accuracy", "loss"},
+		},
+		{
+			name: "variable type with JSON array output wrapped in result",
+			taskProgress: TaskProgress{
+				Output: "uf-vars-arr",
+			},
+			cachedOutput: &v2.CachedOutput{
+				Spec: v2.CachedOutputSpec{
+					Type:       v2.CACHED_OUTPUT_TYPE_VARIABLE,
+					StorageUri: "mock://result.json",
+				},
+			},
+			blobContent:    `[1, 2, 3]`,
+			expectOutput:   true,
+			expectedFields: []string{"result"},
+		},
+		{
+			name: "checkpoint type is skipped",
+			taskProgress: TaskProgress{
+				Output: "uf-ckpt-abc",
+			},
+			cachedOutput: &v2.CachedOutput{
+				Spec: v2.CachedOutputSpec{
+					Type:       v2.CACHED_OUTPUT_TYPE_TRAINING_CKPT,
+					StorageUri: "mock://ckpt",
+				},
+			},
+			expectOutput: false,
+		},
+		{
+			name: "empty output name is skipped",
+			taskProgress: TaskProgress{
+				Output: "",
+			},
+			expectOutput: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			workflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+			blobStoreClient := blobstoreMock.NewMockBlobStoreClient(ctrl)
+
+			scheme := runtime.NewScheme()
+			require.NoError(t, v2.AddToScheme(scheme))
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			if tc.cachedOutput != nil {
+				tc.cachedOutput.Name = tc.taskProgress.Output
+				tc.cachedOutput.Namespace = "test-ns"
+				require.NoError(t, fakeClient.Create(context.Background(), tc.cachedOutput))
+			}
+			if tc.blobContent != "" {
+				blobStoreClient.EXPECT().Get(gomock.Any(), "mock://result.json").Return([]byte(tc.blobContent), nil)
+			}
+
+			apiHandlerInstance := apiHandler.NewFakeAPIHandler(fakeClient)
+			actor := setUpExecuteWorkflowActor(t, workflowClient, blobStoreClient, apiHandlerInstance)
+
+			stepInfo := &v2.PipelineRunStepInfo{}
+			actor.enrichStepOutput(context.Background(), "test-ns", &tc.taskProgress, stepInfo)
+
+			if !tc.expectOutput {
+				require.Nil(t, stepInfo.Output)
+			} else {
+				require.NotNil(t, stepInfo.Output)
+				for _, field := range tc.expectedFields {
+					_, ok := stepInfo.Output.Fields[field]
+					require.True(t, ok, "expected field %q in output", field)
+				}
+			}
+		})
+	}
+}

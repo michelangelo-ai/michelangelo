@@ -169,3 +169,128 @@ func (c *CadenceClient) ListOpenWorkflow(ctx context.Context, request clientInte
 func (c *CadenceClient) TerminateWorkflow(ctx context.Context, workflowID string, runID string, reason string) error {
 	return c.Client.TerminateWorkflow(ctx, workflowID, runID, reason, nil)
 }
+
+func (c *CadenceClient) ResetWorkflow(ctx context.Context, options clientInterface.ResetWorkflowOptions) (*clientInterface.WorkflowExecution, error) {
+	resetRequest := &shared.ResetWorkflowExecutionRequest{
+		Domain: &c.Domain,
+		WorkflowExecution: &shared.WorkflowExecution{
+			WorkflowId: &options.WorkflowID,
+			RunId:      &options.RunID,
+		},
+		Reason:                &options.Reason,
+		DecisionFinishEventId: &options.EventID,
+	}
+
+	if options.RequestID != "" {
+		resetRequest.RequestId = &options.RequestID
+	}
+
+	response, err := c.Client.ResetWorkflow(ctx, resetRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reset workflow: %w", err)
+	}
+
+	return &clientInterface.WorkflowExecution{
+		ID:    options.WorkflowID,
+		RunID: response.GetRunId(),
+	}, nil
+}
+
+func (c *CadenceClient) GetWorkflowExecutionHistory(ctx context.Context, workflowID string, runID string, pageToken []byte, pageSize int32) (*clientInterface.WorkflowHistory, error) {
+	// Use iterator-based API for getting history
+	iter := c.Client.GetWorkflowHistory(ctx, workflowID, runID, false, shared.HistoryEventFilterTypeAllEvent)
+
+	// Convert Cadence history events to our interface format
+	events := make([]clientInterface.HistoryEvent, 0)
+	var collectedEvents int32 = 0
+
+	for iter.HasNext() && (pageSize == 0 || collectedEvents < pageSize) {
+		event, err := iter.Next()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get next history event: %w", err)
+		}
+
+		historyEvent := clientInterface.HistoryEvent{
+			EventID:   event.GetEventId(),
+			EventType: event.GetEventType().String(),
+			EventTime: time.Unix(0, event.GetTimestamp()),
+			Details:   make(map[string]interface{}),
+		}
+
+		// Add relevant event details based on event type
+		// Currently handles: DecisionTaskCompleted, ActivityTaskScheduled,
+		// ActivityTaskCompleted, ActivityTaskFailed, WorkflowExecutionStarted
+		switch event.GetEventType() {
+		case shared.EventTypeDecisionTaskCompleted:
+			if attr := event.DecisionTaskCompletedEventAttributes; attr != nil {
+				historyEvent.Details["identity"] = attr.GetIdentity()
+				historyEvent.Details["scheduled_event_id"] = attr.GetScheduledEventId()
+			}
+		case shared.EventTypeActivityTaskScheduled:
+			if attr := event.ActivityTaskScheduledEventAttributes; attr != nil {
+				historyEvent.Details["activity_id"] = attr.GetActivityId()
+				historyEvent.Details["activity_type"] = attr.GetActivityType().GetName()
+			}
+		case shared.EventTypeActivityTaskCompleted:
+			if attr := event.ActivityTaskCompletedEventAttributes; attr != nil {
+				historyEvent.Details["identity"] = attr.GetIdentity()
+				historyEvent.Details["scheduled_event_id"] = attr.GetScheduledEventId()
+				// Note: Cadence ActivityTaskCompletedEventAttributes doesn't directly contain activity_id
+				// The activity_id is typically found in the corresponding ActivityTaskScheduled event
+			}
+		case shared.EventTypeActivityTaskFailed:
+			if attr := event.ActivityTaskFailedEventAttributes; attr != nil {
+				historyEvent.Details["reason"] = attr.GetReason()
+				historyEvent.Details["details"] = attr.GetDetails()
+				historyEvent.Details["identity"] = attr.GetIdentity()
+			}
+		case shared.EventTypeWorkflowExecutionStarted:
+			if attr := event.WorkflowExecutionStartedEventAttributes; attr != nil {
+				historyEvent.Details["workflow_type"] = attr.GetWorkflowType().GetName()
+				historyEvent.Details["task_list"] = attr.GetTaskList().GetName()
+			}
+		}
+
+		events = append(events, historyEvent)
+		collectedEvents++
+	}
+
+	// Note: Iterator-based API doesn't provide page tokens, so we return empty token
+	return &clientInterface.WorkflowHistory{
+		Events:        events,
+		NextPageToken: pageToken,
+	}, nil
+}
+
+// Event type abstraction methods for Cadence
+func (c *CadenceClient) GetActivityTaskScheduledEventType() string {
+	return shared.EventTypeActivityTaskScheduled.String()
+}
+
+func (c *CadenceClient) GetActivityTaskCompletedEventType() string {
+	return shared.EventTypeActivityTaskCompleted.String()
+}
+
+func (c *CadenceClient) GetDecisionTaskCompletedEventType() string {
+	return shared.EventTypeDecisionTaskCompleted.String()
+}
+
+// PauseTrigger is not supported by Cadence (schedules are a Temporal feature)
+func (c *CadenceClient) PauseTrigger(_ context.Context, workflowID string) error {
+	return fmt.Errorf("PauseTrigger not supported by Cadence provider (workflowID: %s)", workflowID)
+}
+
+// UnpauseTrigger is not supported by Cadence (schedules are a Temporal feature)
+func (c *CadenceClient) UnpauseTrigger(_ context.Context, workflowID string) error {
+	return fmt.Errorf("UnpauseTrigger not supported by Cadence provider (workflowID: %s)", workflowID)
+}
+
+// DeleteTrigger terminates the cron workflow for the given workflow ID and run ID.
+// In Cadence, recurring triggers are implemented as long-running cron workflows,
+// so terminating the workflow stops all future executions.
+func (c *CadenceClient) DeleteTrigger(ctx context.Context, workflowID string, runID string) error {
+	if runID == "" {
+		return nil
+	}
+	return c.Client.TerminateWorkflow(ctx, workflowID, runID, "trigger killed", nil)
+}

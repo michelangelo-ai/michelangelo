@@ -22,15 +22,13 @@ export function TableFilterMenu<T extends TableData = TableData>(props: TableFil
 
   return (
     <StatefulPopover
-      placement={PLACEMENT.bottomLeft}
+      placement={PLACEMENT.rightTop}
       onClose={handleMenuClose}
       onOpen={() => setIsMenuOpen(true)}
       overrides={{
         Body: {
           style: {
-            // For some reason, the popover is not being positioned correctly when using
-            // any combination of content prop that leverage filterableColumns.
-            top: '44px',
+            overflow: 'hidden',
           },
         },
       }}

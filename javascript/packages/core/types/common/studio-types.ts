@@ -1,3 +1,4 @@
+import type { ActionConfigSchema } from '#core/components/actions/types';
 import type { ViewConfig } from '#core/components/views/types';
 import type { QueryConfig } from '#core/types/query-types';
 
@@ -103,10 +104,10 @@ export interface PhaseEntityConfig<T extends object = object> {
   /** List of view configurations for this entity */
   views: ViewConfig<T>[];
   /**
-   * Optional actions component for this entity
-   * Rendered in table rows for list views and in detail view headers
+   * Optional actions to render for this entity.
+   * Rendered in table rows for list views.
    */
-  actions?: React.ComponentType<{ record: T }>;
+  actions?: ActionConfigSchema<T>[];
 }
 
 /**
@@ -133,6 +134,23 @@ export interface PhaseConfig {
   state: PhaseState;
   /** List of entities (like pipelines, models) that belong to this phase */
   entities: PhaseEntityConfig[];
+}
+
+/**
+ * Groups phases into a logical category for display and filtering purposes.
+ *
+ * @example
+ * ```ts
+ * const CATEGORIES: CategoryConfig[] = [
+ *   { id: 'core-ml', name: 'Core ML', phases: [DATA_PHASE, TRAIN_PHASE] },
+ *   { id: 'gen-ai', name: 'Gen AI', phases: [GENAI_LLM_PHASE, GENAI_DATA_PHASE] },
+ * ];
+ * ```
+ */
+export interface CategoryConfig {
+  id: string;
+  name: string;
+  phases: PhaseConfig[];
 }
 
 /**

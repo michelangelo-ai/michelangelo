@@ -1,7 +1,7 @@
 # envoy.yaml (mounted via ConfigMap)
 # - Listens on port 8081
 # - Accepts gRPC-Web requests from localhost (UI)
-# - Forwards to michelangelo-apiserver (gRPC backend) on port 14566
+# - Forwards to michelangelo-apiserver (gRPC backend) on port 15566
 
 apiVersion: v1
 kind: Pod
@@ -73,8 +73,8 @@ data:
                                 max_grpc_timeout: 0s
                           cors:
                             allow_origin_string_match:
-                              - exact: "http://localhost:5173"
-                              - exact: "http://localhost:8090"
+                              - safe_regex:
+                                  regex: "http://localhost:[0-9]+"
                             allow_methods: "GET, POST, OPTIONS"
                             allow_headers: "content-type,context-ttl-ms,grpc-timeout,rpc-caller,rpc-encoding,rpc-service,x-grpc-web,x-user-agent"
                             max_age: "1728000"
@@ -103,4 +103,4 @@ data:
                       address:
                         socket_address:
                           address: michelangelo-apiserver
-                          port_value: 14566
+                          port_value: 15566

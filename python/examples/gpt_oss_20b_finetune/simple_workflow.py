@@ -62,7 +62,7 @@ if __name__ == "__main__":
     ctx.environ["DATA_SIZE"] = "100"
     ctx.environ[UF_PLUGIN_RAY_USE_FSSPEC] = "0"
     ctx.environ["MA_NAMESPACE"] = "default"
-    ctx.environ["IMAGE_PULL_POLICY"] = "Never"
+    ctx.environ["IMAGE_PULL_POLICY"] = "IfNotPresent"
     ctx.environ["S3_ALLOW_BUCKET_CREATION"] = "True"
     ctx.environ["RAY_LOG_URL_PREFIX"] = "http://localhost:9091/logs"
     ctx.environ["SPARK_LOG_URL_PREFIX"] = "http://localhost:9091/logs"
@@ -76,7 +76,7 @@ if __name__ == "__main__":
             "mysql+pymysql://root:root@localhost:3306/mlflow"
         )
         ctx.environ["MLFLOW_S3_ENDPOINT_URL"] = "http://localhost:9091"
-        ctx.environ["MA_API_SERVER"] = "localhost:14566"
+        ctx.environ["MA_API_SERVER"] = "localhost:15566"
 
     else:
         # Cluster deployment - use MLflow proxy to bypass security middleware
@@ -85,7 +85,7 @@ if __name__ == "__main__":
             "mysql+pymysql://root:root@mysql:3306/mlflow"
         )
         ctx.environ["MLFLOW_S3_ENDPOINT_URL"] = "http://minio:9091"
-        ctx.environ["MA_API_SERVER"] = "michelangelo-apiserver:14566"
+        ctx.environ["MA_API_SERVER"] = "michelangelo-apiserver:15566"
 
     # These remain the same for both local and cluster
     ctx.environ["MLFLOW_DEFAULT_ARTIFACT_ROOT"] = "s3://mlflow"

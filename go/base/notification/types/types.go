@@ -17,6 +17,11 @@ const (
 	_defaultMaEmail                      = "michelangelo@uber.com"
 	_sourcePipelineTypeLabelName         = "michelangelo/SourcePipelineType"
 	_sourcePipelineManifestTypeLabelName = "pipeline.michelangelo/PipelineManifestType"
+
+	// _pipelineManifestTypeASL identifies ASL (Amazon States Language) pipelines.
+	// These use Cadence as the workflow engine, so the notification includes a
+	// Cadence Log URL that is not relevant for other pipeline types.
+	_pipelineManifestTypeASL = "PIPELINE_MANIFEST_TYPE_ASL"
 )
 
 // containsEventType checks if the given event types contain the pipeline run state.
@@ -50,14 +55,14 @@ func GenerateText(pipelineRun *v2pb.PipelineRun, textType string) string {
 	if textType == "slack" {
 		slackText := fmt.Sprintf("%s:\n- Name: %s\n- Project: %s\n- State: %s\n- Pipeline Type: %s\n- <%s|Michelangelo Studio URL>\n",
 			GenerateSubject(pipelineRun), pipelineRun.Name, pipelineRun.Namespace, state, pipelineTypeStr, maURL)
-		if pipelineManifestType == "PIPELINE_MANIFEST_TYPE_ASL" {
+		if pipelineManifestType == _pipelineManifestTypeASL {
 			slackText += fmt.Sprintf("- <%s|Cadence Log URL>\n", pipelineRun.Status.LogUrl)
 		}
 		return slackText
 	}
 	emailText := fmt.Sprintf("Your Michelangelo Studio Pipeline Run Has Status Update:\n- Name: %s\n- Project: %s\n- State: %s\n- Pipeline Type: %s\n- Michelangelo Studio URL: %s\n",
 		pipelineRun.Name, pipelineRun.Namespace, state, pipelineTypeStr, maURL)
-	if pipelineManifestType == "PIPELINE_MANIFEST_TYPE_ASL" {
+	if pipelineManifestType == _pipelineManifestTypeASL {
 		emailText += fmt.Sprintf("- Cadence Log URL: %s\n", pipelineRun.Status.LogUrl)
 	}
 	return emailText

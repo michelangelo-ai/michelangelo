@@ -45,15 +45,15 @@ bun run serve
 docs/
 ├── intro.md                    # Landing page (/)
 ├── images/                     # Shared images
-├── about/                      # Platform overview
+├── about/                      # License
 ├── contributing/               # Developer guides
-├── dev/                        # Development docs
-│   └── go/                     # Go development
+│   └── dev/                    # Development docs
+│       └── go/                 # Go development
+├── getting-started/            # Overview and setup
 ├── operator-guides/            # Platform operator docs
 │   ├── jobs/                   # Job system docs
 │   └── ui/                     # UI docs
 │       └── configuration/      # UI config reference
-├── setup-guide/                # Installation guides
 └── user-guides/                # End-user tutorials
     └── ml-pipelines/           # ML pipeline guides
 ```
@@ -156,7 +156,7 @@ Use relative paths with `.md` extension for internal links:
 
 ```markdown
 [See the CLI guide](./cli.md)
-[Back to setup](../setup-guide/installation.md)
+[Back to setup](../getting-started/sandbox-setup.md)
 ```
 
 - Always include the `.md` extension (Docusaurus converts them)
@@ -264,4 +264,4 @@ Trigger a deploy manually: GitHub Actions → "Deploy Docs" → "Run workflow"
 ### Checking Status
 
 - **Build status**: Check the Actions tab in GitHub
-- **Live site**: https://michelangelo-ai.github.io/
+- **Live site**: https://michelangelo-ai.org/

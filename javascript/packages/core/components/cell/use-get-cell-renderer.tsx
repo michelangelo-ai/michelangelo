@@ -2,10 +2,11 @@ import isURL from 'validator/lib/isURL';
 
 import { CELL_RENDERERS } from '#core/components/cell/constants';
 import { TextCell } from '#core/components/cell/renderers/text/text-cell';
-import { CellRenderer, CellRendererProps } from '#core/components/cell/types';
 import { Link } from '#core/components/link/link';
 import { useCellProvider } from '#core/providers/cell-provider/use-cell-provider';
 import { CellType } from './constants';
+
+import type { CellRenderer, CellRendererProps } from '#core/components/cell/types';
 
 /**
  * Returns a function that resolves the appropriate cell renderer based on column

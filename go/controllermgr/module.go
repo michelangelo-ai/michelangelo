@@ -3,6 +3,7 @@ package controllermgr
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -44,6 +45,7 @@ type (
 		Manager       manager.Manager   // Initialized Kubernetes controller manager.
 		Client        client.Client     // Kubernetes client for interacting with the cluster.
 		DynamicClient dynamic.Interface // Kubernetes dynamic client for working with unstructured resources.
+		HTTPClient    *http.Client      // HTTP client for interacting with the cluster.
 	}
 )
 
@@ -84,6 +86,7 @@ func create(p params) (result, error) {
 		Manager:       mgr,
 		Client:        mgr.GetClient(),
 		DynamicClient: dynamicClient,
+		HTTPClient:    mgr.GetHTTPClient(),
 	}, nil
 }
 

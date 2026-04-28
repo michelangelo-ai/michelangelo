@@ -22,7 +22,7 @@ This guide covers setting up a local development environment for contributing to
 ### Technologies
 - **Build Tool**: Vite 6.2+
 - **Package Manager**: Yarn (required for workspaces)
-- **Development**: Node.js 22.11.0
+- **Development**: Node.js 24.14.1
 - **Protobuf**: buf CLI for code generation
 - **Container**: Docker for sandbox environment
 
@@ -30,14 +30,14 @@ This guide covers setting up a local development environment for contributing to
 
 ### Prerequisites
 
-**Node.js 22.11.0:**
+**Node.js 24.14.1:**
 ```bash
 # Using nvm (recommended)
-nvm install 22.11.0
-nvm use 22.11.0
+nvm install 24.14.1
+nvm use 24.14.1
 
 # Verify installation
-node --version  # Should output v22.11.0
+node --version  # Should output v24.14.1
 ```
 
 **Yarn:**
@@ -46,7 +46,7 @@ npm install --global yarn
 yarn --version  # Verify installation
 ```
 
-**For full-stack development (optional):** following [Michelangelo Sandbox Getting Started](../../setup-guide/sandbox-setup).
+**For full-stack development (optional):** following [Michelangelo Sandbox Getting Started](../../getting-started/sandbox-setup.md).
 
 **Note:** The sandbox is optional for UI development. You can develop UI components and pages without a running API server by mocking responses or working with static data.
 
@@ -111,4 +111,4 @@ A: Yes, you can work with mock data or specifically on data-independent function
 - [Vite Documentation](https://vitejs.dev/)
 - [Yarn Workspaces Guide](https://classic.yarnpkg.com/en/docs/workspaces/)
 - [Node Version Manager (nvm)](https://github.com/nvm-sh/nvm)
-- [Michelangelo Sandbox Documentation](../../setup-guide/sandbox-setup)
+- [Michelangelo Sandbox Documentation](../../getting-started/sandbox-setup.md)

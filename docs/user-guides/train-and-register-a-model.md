@@ -6,10 +6,17 @@ The focus is simplicity: **you control your training logic**, Michelangelo provi
 
 ## What You'll Learn
 
-* How datasets are passed to training tasks  
-* How to load Ray, Pandas, or Spark datasets  
-* How to scale training with Ray workers  
+* How datasets are passed to training tasks
+* How to load Ray, Pandas, or Spark datasets
+* How to scale training with Ray workers
 * How to use the Lightning Trainer SDK for deep learning
+
+## Prerequisites
+
+- **A running sandbox** — Remote training runs require a local Kubernetes cluster. Follow the [Sandbox Setup](../getting-started/sandbox-setup.md) guide if you haven't done this yet.
+- **A prepared dataset** — Training tasks expect datasets passed as `DatasetVariable`. See [Data Preparation](./prepare-your-data.md) for how to produce them.
+- **Python 3.11+, Poetry, and the Michelangelo SDK installed** — Run `cd python && poetry install` from the repo root.
+- **For distributed training:** A Docker image with your workflow code. See [Running Uniflow Pipelines](./ml-pipelines/running-uniflow.md) for image build steps.
 
 ## Understanding Training Inputs
 
@@ -43,9 +50,10 @@ For basic (scikit-learn, lightweight PyTorch) training, load your dataset direct
 
 ```py
 import michelangelo.uniflow.core as uniflow
-from michelangelo.sdk.workflow.variables import DatasetVariable
+from michelangelo.workflow.variables import DatasetVariable
+from michelangelo.uniflow.plugins.ray import RayTask
 
-@uniflow.task()
+@uniflow.task(config=RayTask(head_cpu=2, head_memory="8Gi"))
 def train_model(train_dv: DatasetVariable, val_dv: DatasetVariable):
     """Simple training with scikit-learn"""
 
@@ -73,11 +81,10 @@ To scale training across CPUs/GPUs, wrap your training task using **RayTask**.
 ## Example: Distributed Deep Learning with Ray Workers
 
 ```py
-from michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer import (
-    LightningTrainer, LightningTrainerParam
+from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (
+    LightningTrainer, LightningTrainerParam, create_run_config, create_scaling_config
 )
 from michelangelo.uniflow.plugins.ray import RayTask
-from michelangelo.maf.ray.train import create_run_config, create_scaling_config
 from ray.train import CheckpointConfig
 
 @uniflow.task(
@@ -191,7 +198,7 @@ The SDK automates all distributed concerns.
 
 Your models are now ready to move forward:
 
-* Continue to [**Model Registry**](https://github.com/michelangelo-ai/michelangelo/wiki/Model-Registry-Guide) to save and version  
+* Continue to [**Model Registry**](./model-registry-guide.md) to save and version
 * Continue to **Model Deployment** _(Coming Soon)_ for inference
 
 ## Troubleshooting
