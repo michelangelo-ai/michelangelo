@@ -17,7 +17,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollback"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/steadystate"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -33,7 +33,7 @@ var _ plugins.Plugin = &Plugin{}
 // Plugin implements deployment lifecycle management for open-source deployments.
 type Plugin struct {
 	client        client.Client
-	proxyProvider proxy.ProxyProvider
+	routeProvider route.RouteProvider
 	blobstore     *blobstore.BlobStore
 	logger        *zap.Logger
 
@@ -49,7 +49,7 @@ type Params struct {
 
 	Registrar     pluginmanager.Registrar[plugins.Plugin]
 	Client        client.Client
-	ProxyProvider proxy.ProxyProvider
+	RouteProvider route.RouteProvider
 	BlobStore     *blobstore.BlobStore
 	Logger        *zap.Logger
 }
@@ -58,14 +58,14 @@ type Params struct {
 func NewPlugin(params Params) *Plugin {
 	return &Plugin{
 		client:        params.Client,
-		proxyProvider: params.ProxyProvider,
+		routeProvider: params.RouteProvider,
 		blobstore:     params.BlobStore,
 		logger:        params.Logger,
 		rollbackPlugin: rollback.NewRollbackPlugin(rollback.Params{
 			Logger: params.Logger,
 		}),
 		cleanupPlugin: cleanup.NewCleanupPlugin(cleanup.Params{
-			ProxyProvider: params.ProxyProvider,
+			RouteProvider: params.RouteProvider,
 			Logger:        params.Logger,
 		}),
 		steadyStatePlugin: steadystate.NewSteadyStatePlugin(steadystate.Params{
@@ -78,7 +78,7 @@ func NewPlugin(params Params) *Plugin {
 func (p *Plugin) GetRolloutPlugin(ctx context.Context, deployment *v2pb.Deployment) (conditionInterfaces.Plugin[*v2pb.Deployment], error) {
 	rolloutPlugin, err := rollout.NewRolloutPlugin(ctx, rollout.Params{
 		Client:        p.client,
-		ProxyProvider: p.proxyProvider,
+		RouteProvider: p.routeProvider,
 		Gateway:       p.gateway,
 		Logger:        p.logger,
 	}, deployment)

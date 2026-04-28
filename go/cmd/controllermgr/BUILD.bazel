@@ -14,6 +14,7 @@ go_library(
         "//go/base/zapfx:go_default_library",
         "//go/components/deployment:go_default_library",
         "//go/components/deployment/plugins/oss:go_default_library",
+        "//go/components/deployment/route:go_default_library",
         "//go/components/inferenceserver:go_default_library",
         "//go/components/inferenceserver/backends:go_default_library",
         "//go/components/inferenceserver/clientfactory:go_default_library",

@@ -14,7 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy/proxymocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route/routemocks"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -26,7 +26,7 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 		name            string
 		deployment      *v2pb.Deployment
 		condition       func() *apipb.Condition
-		setupMocks      func(*gatewaysmocks.MockGateway, *proxymocks.MockProxyProvider)
+		setupMocks      func(*gatewaysmocks.MockGateway, *routemocks.MockRouteProvider)
 		expectedStatus  apipb.ConditionStatus
 		expectedMessage string
 	}{
@@ -44,7 +44,7 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 				},
 			},
 			condition:       func() *apipb.Condition { return &apipb.Condition{} },
-			setupMocks:      func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {},
+			setupMocks:      func(gw *gatewaysmocks.MockGateway, pp *routemocks.MockRouteProvider) {},
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
 			expectedMessage: "CleanupNotStarted",
 		},
@@ -72,7 +72,8 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 				})
 				return cond
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *routemocks.MockRouteProvider) {
+				// todo: ghosharitra: interface broke, need to update
 				pp.EXPECT().DeploymentRouteExists(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(false, nil)
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
@@ -102,7 +103,8 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 				})
 				return cond
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *routemocks.MockRouteProvider) {
+				// todo: ghosharitra: interface broke, need to update
 				pp.EXPECT().DeploymentRouteExists(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(true, nil)
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
@@ -132,7 +134,7 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 				})
 				return cond
 			},
-			setupMocks:      func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {},
+			setupMocks:      func(gw *gatewaysmocks.MockGateway, pp *routemocks.MockRouteProvider) {},
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
 			expectedMessage: "DeletionCleanupPending",
 		},
@@ -160,7 +162,7 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 				})
 				return cond
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *routemocks.MockRouteProvider) {
 				gw.EXPECT().CheckModelExists(
 					gomock.Any(), gomock.Any(), "old-model", "test-server", "default", gomock.Any(), v2pb.BACKEND_TYPE_TRITON,
 				).Return(true, nil)
@@ -176,12 +178,12 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 			defer ctrl.Finish()
 
 			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
-			mockProxy := proxymocks.NewMockProxyProvider(ctrl)
+			mockProxy := routemocks.NewMockRouteProvider(ctrl)
 			tt.setupMocks(mockGateway, mockProxy)
 
 			actor := &CleanupActor{
 				gateway:       mockGateway,
-				proxyProvider: mockProxy,
+				routeProvider: mockProxy,
 				logger:        zap.NewNop(),
 			}
 
@@ -202,7 +204,7 @@ func TestCleanupActor_Run(t *testing.T) {
 		name            string
 		deployment      *v2pb.Deployment
 		condition       func() *apipb.Condition
-		setupMocks      func(*gatewaysmocks.MockGateway, *proxymocks.MockProxyProvider)
+		setupMocks      func(*gatewaysmocks.MockGateway, *routemocks.MockRouteProvider)
 		expectedStatus  apipb.ConditionStatus
 		expectedMessage string
 	}{
@@ -220,7 +222,7 @@ func TestCleanupActor_Run(t *testing.T) {
 				},
 			},
 			condition: func() *apipb.Condition { return &apipb.Condition{} },
-			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *routemocks.MockRouteProvider) {
 				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
 					Return(&gateways.DeploymentTargetInfo{
 						BackendType: v2pb.BACKEND_TYPE_TRITON,
@@ -256,7 +258,7 @@ func TestCleanupActor_Run(t *testing.T) {
 				})
 				return cond
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *routemocks.MockRouteProvider) {
 				gw.EXPECT().UnloadModel(
 					gomock.Any(), gomock.Any(), "old-model", "test-server", "default", gomock.Any(),
 				).Return(nil)
@@ -288,7 +290,7 @@ func TestCleanupActor_Run(t *testing.T) {
 				})
 				return cond
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *routemocks.MockRouteProvider) {
 				gw.EXPECT().UnloadModel(
 					gomock.Any(), gomock.Any(), "old-model", "test-server", "default", gomock.Any(),
 				).Return(errors.New("unload failed"))
@@ -320,7 +322,8 @@ func TestCleanupActor_Run(t *testing.T) {
 				})
 				return cond
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *routemocks.MockRouteProvider) {
+				// todo: ghosharitra: interface broke, need to update
 				pp.EXPECT().DeleteDeploymentRoute(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(nil)
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
@@ -350,7 +353,8 @@ func TestCleanupActor_Run(t *testing.T) {
 				})
 				return cond
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *routemocks.MockRouteProvider) {
+				// todo: ghosharitra: interface broke, need to update
 				pp.EXPECT().DeleteDeploymentRoute(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(errors.New("delete failed"))
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
@@ -380,8 +384,9 @@ func TestCleanupActor_Run(t *testing.T) {
 				})
 				return cond
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *routemocks.MockRouteProvider) {
 				notFoundErr := kerrors.NewNotFound(schema.GroupResource{Group: "gateway.networking.k8s.io", Resource: "httproutes"}, "test-deployment-httproute")
+				// todo: ghosharitra: interface broke, need to update
 				pp.EXPECT().DeleteDeploymentRoute(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(notFoundErr)
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
@@ -395,12 +400,12 @@ func TestCleanupActor_Run(t *testing.T) {
 			defer ctrl.Finish()
 
 			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
-			mockProxy := proxymocks.NewMockProxyProvider(ctrl)
+			mockProxy := routemocks.NewMockRouteProvider(ctrl)
 			tt.setupMocks(mockGateway, mockProxy)
 
 			actor := &CleanupActor{
 				gateway:       mockGateway,
-				proxyProvider: mockProxy,
+				routeProvider: mockProxy,
 				logger:        zap.NewNop(),
 			}
 

@@ -11,6 +11,8 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
+// TODO: ghosharitra: I don't like this method
+
 // GetControlPlaneClusterId returns the ID of the control plane cluster.
 func GetControlPlaneClusterId() string {
 	return "michelangelo/control-plane-cluster"

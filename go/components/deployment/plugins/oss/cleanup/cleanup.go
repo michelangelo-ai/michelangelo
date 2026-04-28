@@ -11,7 +11,7 @@ import (
 
 	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -22,7 +22,7 @@ import (
 type CleanupActor struct {
 	defaultClient       client.Client
 	clientFactory       clientfactory.ClientFactory
-	proxyProvider       proxy.ProxyProvider
+	routeProvider       route.RouteProvider
 	logger              *zap.Logger
 	modelConfigProvider modelconfig.ModelConfigProvider
 }
@@ -62,7 +62,8 @@ func (a *CleanupActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment
 		a.logger.Info("All clusters cleaned, checking HTTPRoute",
 			zap.Int("total_clusters", len(metadata.Clusters)))
 
-		exists, err := a.proxyProvider.DeploymentRouteExists(ctx, a.logger, deployment.Name, deployment.Namespace)
+		// todo: ghosharitra: interface broke, need to update
+		exists, err := a.routeProvider.DeploymentRouteExists(ctx, a.logger, deployment.Name, deployment.Namespace)
 		if err != nil {
 			return conditionUtils.GenerateFalseCondition(condition, "UnableToCheckHTTPRouteExists",
 				fmt.Sprintf("Unable to check if HTTPRoute %s exists: %v", fmt.Sprintf("%s-httproute", deployment.Name), err)), nil
@@ -235,7 +236,8 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 		a.logger.Info("All clusters cleaned, deleting HTTPRoute",
 			zap.String("deploymentRoute", fmt.Sprintf("%s-httproute", resource.Name)))
 
-		if err := a.proxyProvider.DeleteDeploymentRoute(ctx, a.logger, resource.Name, resource.Namespace); err != nil {
+		// todo: ghosharitra: interface broke, need to update
+		if err := a.routeProvider.DeleteDeploymentRoute(ctx, a.logger, resource.Name, resource.Namespace); err != nil {
 			if errors.IsNotFound(err) {
 				a.logger.Info("HTTPRoute not found, already deleted",
 					zap.String("httpRoute", fmt.Sprintf("%s-httproute", resource.Name)))

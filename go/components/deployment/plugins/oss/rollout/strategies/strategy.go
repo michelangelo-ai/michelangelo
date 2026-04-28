@@ -8,7 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
@@ -19,7 +19,7 @@ import (
 type Params struct {
 	Client              client.Client
 	HTTPClient          *http.Client
-	ProxyProvider       proxy.ProxyProvider
+	RouteProvider       route.RouteProvider
 	Logger              *zap.Logger
 	Registry            *backends.Registry
 	ClientFactory       clientfactory.ClientFactory

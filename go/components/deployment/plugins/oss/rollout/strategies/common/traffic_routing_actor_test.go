@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy/proxymocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route/routemocks"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
 	"github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -21,7 +21,7 @@ func TestTrafficRoutingRetrieve(t *testing.T) {
 	tests := []struct {
 		name                    string
 		deployment              *v2pb.Deployment
-		setupMocks              func(*proxymocks.MockProxyProvider, *gatewaysmocks.MockGateway)
+		setupMocks              func(*routemocks.MockRouteProvider, *gatewaysmocks.MockGateway)
 		expectedConditionStatus api.ConditionStatus
 		expectedConditionReason string
 	}{
@@ -36,8 +36,9 @@ func TestTrafficRoutingRetrieve(t *testing.T) {
 					},
 				},
 			},
-			setupMocks: func(pp *proxymocks.MockProxyProvider, gw *gatewaysmocks.MockGateway) {
+			setupMocks: func(pp *routemocks.MockRouteProvider, gw *gatewaysmocks.MockGateway) {
 				gw.EXPECT().GetControlPlaneServiceName(gomock.Any(), gomock.Any(), "test-server", "default").Return("test-server-svc", nil)
+				// todo: ghosharitra: interface broke, need to update
 				pp.EXPECT().CheckDeploymentRouteStatus(
 					gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1", "test-server-svc",
 				).Return(true, nil)
@@ -56,7 +57,7 @@ func TestTrafficRoutingRetrieve(t *testing.T) {
 					},
 				},
 			},
-			setupMocks: func(pp *proxymocks.MockProxyProvider, gw *gatewaysmocks.MockGateway) {
+			setupMocks: func(pp *routemocks.MockRouteProvider, gw *gatewaysmocks.MockGateway) {
 				gw.EXPECT().GetControlPlaneServiceName(gomock.Any(), gomock.Any(), "test-server", "default").Return("", nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
@@ -73,8 +74,9 @@ func TestTrafficRoutingRetrieve(t *testing.T) {
 					},
 				},
 			},
-			setupMocks: func(pp *proxymocks.MockProxyProvider, gw *gatewaysmocks.MockGateway) {
+			setupMocks: func(pp *routemocks.MockRouteProvider, gw *gatewaysmocks.MockGateway) {
 				gw.EXPECT().GetControlPlaneServiceName(gomock.Any(), gomock.Any(), "test-server", "default").Return("test-server-svc", nil)
+				// todo: ghosharitra: interface broke, need to update
 				pp.EXPECT().CheckDeploymentRouteStatus(
 					gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1", "test-server-svc",
 				).Return(false, nil)
@@ -93,8 +95,9 @@ func TestTrafficRoutingRetrieve(t *testing.T) {
 					},
 				},
 			},
-			setupMocks: func(pp *proxymocks.MockProxyProvider, gw *gatewaysmocks.MockGateway) {
+			setupMocks: func(pp *routemocks.MockRouteProvider, gw *gatewaysmocks.MockGateway) {
 				gw.EXPECT().GetControlPlaneServiceName(gomock.Any(), gomock.Any(), "test-server", "default").Return("test-server-svc", nil)
+				// todo: ghosharitra: interface broke, need to update
 				pp.EXPECT().CheckDeploymentRouteStatus(
 					gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1", "test-server-svc",
 				).Return(false, errors.New("api error"))
@@ -109,12 +112,12 @@ func TestTrafficRoutingRetrieve(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockProxy := proxymocks.NewMockProxyProvider(ctrl)
+			mockProxy := routemocks.NewMockRouteProvider(ctrl)
 			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
 			tt.setupMocks(mockProxy, mockGateway)
 
 			actor := &TrafficRoutingActor{
-				ProxyProvider: mockProxy,
+				RouteProvider: mockProxy,
 				Gateway:       mockGateway,
 				Logger:        zap.NewNop(),
 			}
@@ -134,7 +137,7 @@ func TestTrafficRoutingRun(t *testing.T) {
 		name                    string
 		deployment              *v2pb.Deployment
 		inputCondition          *api.Condition
-		setupMocks              func(*proxymocks.MockProxyProvider, *gatewaysmocks.MockGateway)
+		setupMocks              func(*routemocks.MockRouteProvider, *gatewaysmocks.MockGateway)
 		expectedConditionStatus api.ConditionStatus
 		expectedConditionReason string
 	}{
@@ -150,7 +153,8 @@ func TestTrafficRoutingRun(t *testing.T) {
 				},
 			},
 			inputCondition: createConditionWithServiceName("test-server-svc"),
-			setupMocks: func(pp *proxymocks.MockProxyProvider, gw *gatewaysmocks.MockGateway) {
+			setupMocks: func(pp *routemocks.MockRouteProvider, gw *gatewaysmocks.MockGateway) {
+				// todo: ghosharitra: interface broke, need to update
 				pp.EXPECT().EnsureDeploymentRoute(
 					gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1", "test-server-svc",
 				).Return(nil)
@@ -168,7 +172,7 @@ func TestTrafficRoutingRun(t *testing.T) {
 				},
 			},
 			inputCondition:          &api.Condition{},
-			setupMocks:              func(pp *proxymocks.MockProxyProvider, gw *gatewaysmocks.MockGateway) {},
+			setupMocks:              func(pp *routemocks.MockRouteProvider, gw *gatewaysmocks.MockGateway) {},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "inference server not specified for deployment test-deployment",
 		},
@@ -184,7 +188,7 @@ func TestTrafficRoutingRun(t *testing.T) {
 				},
 			},
 			inputCondition:          &api.Condition{}, // No metadata
-			setupMocks:              func(pp *proxymocks.MockProxyProvider, gw *gatewaysmocks.MockGateway) {},
+			setupMocks:              func(pp *routemocks.MockRouteProvider, gw *gatewaysmocks.MockGateway) {},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "control plane service name not found in metadata for inference server test-server",
 		},
@@ -200,7 +204,8 @@ func TestTrafficRoutingRun(t *testing.T) {
 				},
 			},
 			inputCondition: createConditionWithServiceName("test-server-svc"),
-			setupMocks: func(pp *proxymocks.MockProxyProvider, gw *gatewaysmocks.MockGateway) {
+			setupMocks: func(pp *routemocks.MockRouteProvider, gw *gatewaysmocks.MockGateway) {
+				// todo: ghosharitra: interface broke, need to update
 				pp.EXPECT().EnsureDeploymentRoute(
 					gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1", "test-server-svc",
 				).Return(errors.New("route creation failed"))
@@ -226,7 +231,8 @@ func TestTrafficRoutingRun(t *testing.T) {
 				},
 			},
 			inputCondition: createConditionWithServiceName("triton-server-svc"),
-			setupMocks: func(pp *proxymocks.MockProxyProvider, gw *gatewaysmocks.MockGateway) {
+			setupMocks: func(pp *routemocks.MockRouteProvider, gw *gatewaysmocks.MockGateway) {
+				// todo: ghosharitra: interface broke, need to update
 				pp.EXPECT().EnsureDeploymentRoute(
 					gomock.Any(), gomock.Any(), "complex-deployment", "production", "triton-server", "bert_cola", "triton-server-svc",
 				).Return(nil)
@@ -241,12 +247,12 @@ func TestTrafficRoutingRun(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockProxy := proxymocks.NewMockProxyProvider(ctrl)
+			mockProxy := routemocks.NewMockRouteProvider(ctrl)
 			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
 			tt.setupMocks(mockProxy, mockGateway)
 
 			actor := &TrafficRoutingActor{
-				ProxyProvider: mockProxy,
+				RouteProvider: mockProxy,
 				Gateway:       mockGateway,
 				Logger:        zap.NewNop(),
 			}

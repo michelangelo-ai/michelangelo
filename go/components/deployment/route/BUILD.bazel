@@ -7,7 +7,7 @@ go_library(
         "interface.go",
         "module.go",
     ],
-    importpath = "github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy",
+    importpath = "github.com/michelangelo-ai/michelangelo/go/components/deployment/route",
     visibility = ["//visibility:public"],
     deps = [
         "@io_k8s_apimachinery//pkg/api/errors:go_default_library",

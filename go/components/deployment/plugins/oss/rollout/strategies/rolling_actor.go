@@ -31,7 +31,7 @@ func getRollingActors(params Params, deployment *v2pb.Deployment) []conditionInt
 			clientFactory: params.ClientFactory,
 		},
 		&strategiesCommon.TrafficRoutingActor{
-			ProxyProvider: params.ProxyProvider,
+			RouteProvider: params.RouteProvider,
 			Gateway:       params.Gateway,
 			Logger:        params.Logger,
 		},

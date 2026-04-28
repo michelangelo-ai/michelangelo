@@ -1,4 +1,4 @@
-package proxy
+package route
 
 import (
 	"context"
@@ -18,8 +18,14 @@ const (
 	httpRouteResource = "httproutes"
 	gatewayKind       = "Gateway"
 
-	gatewayName         = "ma-gateway"
-	httpRouteNameSuffix = "httproute"
+	gatewayName            = "ma-gateway"
+	httpRouteNameSuffix    = "httproute"
+	inferenceServiceSuffix = "inference-service"
+
+	// filterTypeURLRewrite is the Gateway API HTTPRoute filter type string for URL
+	// path rewriting. Named constant prevents silent breakage if the string drifts
+	// from the Gateway API spec.
+	filterTypeURLRewrite = "URLRewrite"
 )
 
 var (
@@ -29,12 +35,12 @@ var (
 		Resource: httpRouteResource,
 	}
 
-	generateHTTPRouteName = func(deploymentName string) string {
-		return fmt.Sprintf("%s-%s", deploymentName, httpRouteNameSuffix)
+	addSuffixToString = func(str, suffix string) string {
+		return fmt.Sprintf("%s-%s", str, suffix)
 	}
 )
 
-var _ ProxyProvider = &httpRouteManager{}
+var _ RouteProvider = &httpRouteManager{} // Ensure httpRouteManager implements RouteProvider interface
 
 type httpRouteManager struct {
 	dynamicClient dynamic.Interface
@@ -49,8 +55,8 @@ func NewHTTPRouteManager(dynamicClient dynamic.Interface, logger *zap.Logger) *h
 }
 
 // CheckDeploymentRouteStatus checks if a deployment-specific HTTPRoute is properly configured
-func (h *httpRouteManager) CheckDeploymentRouteStatus(ctx context.Context, logger *zap.Logger, deploymentName string, namespace string, inferenceServerName string, modelName, backendServiceName string) (bool, error) {
-	httpRouteName := generateHTTPRouteName(deploymentName)
+func (h *httpRouteManager) CheckDeploymentRouteStatus(ctx context.Context, logger *zap.Logger, client dynamic.Interface, deploymentName string, namespace string, inferenceServerName string, modelName string) (bool, error) {
+	httpRouteName := addSuffixToString(deploymentName, httpRouteNameSuffix)
 	httpRoute, err := h.dynamicClient.Resource(httpRouteGVR).Namespace(namespace).Get(ctx, httpRouteName, metav1.GetOptions{})
 	if err != nil {
 		return false, fmt.Errorf("failed to get HTTPRoute %s: %v", httpRouteName, err)
@@ -70,7 +76,7 @@ func (h *httpRouteManager) CheckDeploymentRouteStatus(ctx context.Context, logge
 	// Verify the route matches the expected model and inference server configuration
 	expectedMatchPath := fmt.Sprintf("/%s/%s", inferenceServerName, deploymentName)
 	expectedRewritePath := fmt.Sprintf("/v2/models/%s", modelName)
-	expectedBackendService := backendServiceName
+	expectedBackendService := addSuffixToString(inferenceServerName, inferenceServiceSuffix)
 
 	// Check if the route configuration matches expectations
 	for _, rule := range rules {
@@ -124,7 +130,7 @@ func (h *httpRouteManager) CheckDeploymentRouteStatus(ctx context.Context, logge
 				}
 
 				filterType, _, _ := unstructured.NestedString(filterMap, "type")
-				if filterType == "URLRewrite" {
+				if filterType == filterTypeURLRewrite {
 					path, urlRewritePathFound, _ := unstructured.NestedMap(filterMap, "urlRewrite", "path")
 					if urlRewritePathFound {
 						rewriteValue, _, _ := unstructured.NestedString(path, "replacePrefixMatch")
@@ -147,8 +153,8 @@ func (h *httpRouteManager) CheckDeploymentRouteStatus(ctx context.Context, logge
 
 // EnsureDeploymentRoute ensures that a deployment-specific route is present.
 // In this case, we create a new HTTPRoute for the deployment.
-func (h *httpRouteManager) EnsureDeploymentRoute(ctx context.Context, logger *zap.Logger, deploymentName string, namespace string, inferenceServerName string, modelName, backendServiceName string) error {
-	deploymentRouteName := generateHTTPRouteName(deploymentName)
+func (h *httpRouteManager) EnsureDeploymentRoute(ctx context.Context, logger *zap.Logger, client dynamic.Interface, deploymentName string, namespace string, inferenceServerName string, modelName string) error {
+	deploymentRouteName := addSuffixToString(deploymentName, httpRouteNameSuffix)
 
 	labels := map[string]string{
 		"app.kubernetes.io/name":      "michelangelo-deployment",
@@ -170,7 +176,7 @@ func (h *httpRouteManager) EnsureDeploymentRoute(ctx context.Context, logger *za
 		labels,
 		annotations,
 		matchPath,
-		backendServiceName,
+		addSuffixToString(inferenceServerName, inferenceServiceSuffix),
 		nil,
 		rewritePath,
 	)
@@ -205,8 +211,8 @@ func (h *httpRouteManager) EnsureDeploymentRoute(ctx context.Context, logger *za
 }
 
 // DeploymentRouteExists checks if a deployment-specific route exists.
-func (h *httpRouteManager) DeploymentRouteExists(ctx context.Context, logger *zap.Logger, deploymentName string, namespace string) (bool, error) {
-	deploymentRouteName := generateHTTPRouteName(deploymentName)
+func (h *httpRouteManager) DeploymentRouteExists(ctx context.Context, logger *zap.Logger, client dynamic.Interface, deploymentName string, namespace string) (bool, error) {
+	deploymentRouteName := addSuffixToString(deploymentName, httpRouteNameSuffix)
 	route, err := h.dynamicClient.Resource(httpRouteGVR).Namespace(namespace).Get(ctx, deploymentRouteName, metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -220,11 +226,18 @@ func (h *httpRouteManager) DeploymentRouteExists(ctx context.Context, logger *za
 
 // DeleteDeploymentRoute deletes a deployment-specific route from the HTTPRoute.
 // In this case, since each deployment has its own HTTPRoute, we can just delete the HTTPRoute for the deployment.
-func (h *httpRouteManager) DeleteDeploymentRoute(ctx context.Context, logger *zap.Logger, deploymentName string, namespace string) error {
-	deploymentRouteName := generateHTTPRouteName(deploymentName)
-	if err := h.dynamicClient.Resource(httpRouteGVR).Namespace(namespace).Delete(ctx, deploymentRouteName, metav1.DeleteOptions{}); err != nil {
+func (h *httpRouteManager) DeleteDeploymentRoute(ctx context.Context, logger *zap.Logger, client dynamic.Interface, deploymentName string, namespace string) error {
+	deploymentRouteName := addSuffixToString(deploymentName, httpRouteNameSuffix)
+	if err := h.deleteHTTPRoute(ctx, logger, client, deploymentRouteName, namespace); err != nil {
+		return fmt.Errorf("failed to delete deployment HTTPRoute %s: %w", deploymentRouteName, err)
+	}
+	return nil
+}
+
+func (h *httpRouteManager) deleteHTTPRoute(ctx context.Context, logger *zap.Logger, client dynamic.Interface, routeName, namespace string) error {
+	if err := h.dynamicClient.Resource(httpRouteGVR).Namespace(namespace).Delete(ctx, routeName, metav1.DeleteOptions{}); err != nil {
 		if errors.IsNotFound(err) {
-			logger.Info("HTTPRoute not found, already deleted", zap.String("httpRoute", deploymentRouteName))
+			logger.Info("HTTPRoute not found, already deleted", zap.String("httpRoute", routeName))
 		} else {
 			return err
 		}
@@ -281,7 +294,7 @@ func buildHTTPRoute(name, namespace string, labels, annotations map[string]strin
 						"backendRefs": []interface{}{backendRef},
 						"filters": []interface{}{
 							map[string]interface{}{
-								"type": "URLRewrite",
+								"type": filterTypeURLRewrite,
 								"urlRewrite": map[string]interface{}{
 									"path": map[string]interface{}{
 										"type":               "ReplacePrefixMatch",

@@ -10,7 +10,7 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -22,7 +22,7 @@ var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &TrafficRoutingActo
 
 // TrafficRoutingActor manages HTTPRoute configuration to route deployment traffic to models.
 type TrafficRoutingActor struct {
-	ProxyProvider proxy.ProxyProvider
+	RouteProvider route.RouteProvider
 	Gateway       gateways.Gateway
 	Logger        *zap.Logger
 }
@@ -49,7 +49,8 @@ func (a *TrafficRoutingActor) Retrieve(ctx context.Context, deployment *v2pb.Dep
 		a.Logger.Error("failed to set traffic routing metadata", zap.Error(setterErr))
 	}
 
-	ok, err := a.ProxyProvider.CheckDeploymentRouteStatus(ctx, a.Logger,
+	// todo: ghosharitra: interface broke, need to update
+	ok, err := a.RouteProvider.CheckDeploymentRouteStatus(ctx, a.Logger,
 		deployment.Name, deployment.Namespace, deployment.Spec.GetInferenceServer().Name, deployment.Spec.DesiredRevision.Name, controlPlaneServiceName)
 	if err != nil {
 		a.Logger.Error("failed to check deployment route status",
@@ -78,7 +79,8 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, deployment *v2pb.Deployme
 	if controlPlaneServiceName == "" {
 		return conditionsutil.GenerateFalseCondition(condition, "MissingControlPlaneService", fmt.Sprintf("control plane service name not found in metadata for inference server %s", deployment.Spec.GetInferenceServer().Name)), nil
 	}
-	err := a.ProxyProvider.EnsureDeploymentRoute(ctx, a.Logger, deployment.Name, deployment.Namespace, deployment.Spec.GetInferenceServer().Name, deployment.Spec.DesiredRevision.Name, controlPlaneServiceName)
+	// todo: ghosharitra: interface broke, need to update
+	err := a.RouteProvider.EnsureDeploymentRoute(ctx, a.Logger, deployment.Name, deployment.Namespace, deployment.Spec.GetInferenceServer().Name, deployment.Spec.DesiredRevision.Name, controlPlaneServiceName)
 	if err != nil {
 		a.Logger.Error("failed to add deployment route",
 			zap.Error(err),
