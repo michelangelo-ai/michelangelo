@@ -22,12 +22,6 @@ export const DEPLOYMENT_STAGE_CELL: Cell = {
   },
 };
 
-export const DEPLOYMENT_LAST_PREDICTION_CELL: Cell = {
-  id: 'metadata.annotations["deployment.michelangelo/last-prediction-timestamp"]',
-  label: 'Last prediction',
-  type: CellType.DATE,
-};
-
 export const DEPLOYMENT_STATE_CELL: Cell = {
   id: 'status.state',
   label: 'State',

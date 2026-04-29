@@ -1,9 +1,5 @@
 import { CellType } from '#core/components/cell/constants';
-import {
-  DEPLOYMENT_LAST_PREDICTION_CELL,
-  DEPLOYMENT_STAGE_CELL,
-  DEPLOYMENT_STATE_CELL,
-} from './shared';
+import { DEPLOYMENT_STAGE_CELL, DEPLOYMENT_STATE_CELL } from './shared';
 
 import type { ColumnConfig } from '#core/components/table/types/column-types';
 import type { ListViewConfig } from '#core/components/views/types';
@@ -43,7 +39,6 @@ const DEPLOYMENT_COLUMNS: ColumnConfig<object>[] = [
       return null;
     },
   },
-  DEPLOYMENT_LAST_PREDICTION_CELL,
   {
     id: 'metadata.labels["michelangelo/SpecUpdateTimestamp"]',
     label: 'Last updated',

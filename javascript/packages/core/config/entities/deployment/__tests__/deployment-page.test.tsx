@@ -42,7 +42,6 @@ describe('Deployment list page', () => {
     expect(screen.getByRole('columnheader', { name: 'Stage' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Target' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Owner' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Last prediction' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Last updated' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'State' })).toBeInTheDocument();
   });
