@@ -5,29 +5,13 @@ const rule = {
     docs: {
       description: 'Require type/interface declarations to live in a types.ts file',
       recommended: true,
+      url: 'https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/eslint-local-rules/types-in-types-file.md',
     },
     messages: {
-      inlineType: [
-        "'{{ name }}' is a small, single-use type outside of a types.ts file.",
-        'If the name adds clarity, move it to a co-located types.ts.',
-        'Otherwise, consider inlining it at the call site.',
-        '',
-        '  // Inline',
-        '  function foo(arg: { ... }) { ... }',
-        '',
-        '  // Or move to types.ts',
-        "  import type { {{ name }} } from './types';",
-      ].join('\n'),
-      typesInTypesFile: [
-        "'{{ name }}' is a type declaration outside of a types.ts file.",
-        'Move it to a co-located types.ts and import from there.',
-        '',
-        '  // types.ts',
-        '  export interface {{ name }} { /* ... */ }',
-        '',
-        '  // component.tsx',
-        "  import type { {{ name }} } from './types';",
-      ].join('\n'),
+      inlineType:
+        "'{{ name }}' is a small, single-use type outside of a types.ts file. Inline it at the call site, or move it to a co-located types.ts.",
+      typesInTypesFile:
+        "'{{ name }}' is a type declaration outside of a types.ts file. Move it to a co-located types.ts and import from there.",
     },
     schema: [],
   },
