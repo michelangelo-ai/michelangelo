@@ -15,7 +15,9 @@ describe('Deployment list page', () => {
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/deploy/deployments' }),
-        getServiceProviderWrapper({ request: vi.fn().mockResolvedValue({ deploymentList: { items: [] } }) }),
+        getServiceProviderWrapper({
+          request: vi.fn().mockResolvedValue({ deploymentList: { items: [] } }),
+        }),
       ])
     );
 
@@ -28,7 +30,9 @@ describe('Deployment list page', () => {
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/deploy/deployments' }),
-        getServiceProviderWrapper({ request: vi.fn().mockResolvedValue({ deploymentList: { items: [] } }) }),
+        getServiceProviderWrapper({
+          request: vi.fn().mockResolvedValue({ deploymentList: { items: [] } }),
+        }),
       ])
     );
 
