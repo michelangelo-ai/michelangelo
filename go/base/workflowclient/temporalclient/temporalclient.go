@@ -399,3 +399,19 @@ func (c *TemporalClient) DeleteTrigger(ctx context.Context, workflowID string, r
 	}
 	return c.Client.TerminateWorkflow(ctx, workflowID, runID, "trigger killed")
 }
+
+// UpdateTrigger updates the cron schedule of a Temporal schedule.
+func (c *TemporalClient) UpdateTrigger(ctx context.Context, workflowID string, newCronSchedule string) error {
+	scheduleID := workflowID + "-schedule"
+	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
+
+	return handle.Update(ctx, temporalClient.ScheduleUpdateOptions{
+		DoUpdate: func(input temporalClient.ScheduleUpdateInput) (*temporalClient.ScheduleUpdate, error) {
+			// Update the cron expression in the schedule spec
+			input.Description.Schedule.Spec.CronExpressions = []string{newCronSchedule}
+			return &temporalClient.ScheduleUpdate{
+				Schedule: &input.Description.Schedule,
+			}, nil
+		},
+	})
+}

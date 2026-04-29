@@ -294,3 +294,9 @@ func (c *CadenceClient) DeleteTrigger(ctx context.Context, workflowID string, ru
 	}
 	return c.Client.TerminateWorkflow(ctx, workflowID, runID, "trigger killed", nil)
 }
+
+// UpdateTrigger is not supported by Cadence (schedule updates are a Temporal feature).
+// In Cadence, cron schedules are embedded in the workflow and cannot be updated in place.
+func (c *CadenceClient) UpdateTrigger(_ context.Context, workflowID string, _ string) error {
+	return fmt.Errorf("UpdateTrigger not supported by Cadence provider (workflowID: %s)", workflowID)
+}

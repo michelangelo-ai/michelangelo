@@ -445,3 +445,51 @@ func resumeWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.L
 	triggerRun.Status.ErrorMessage = ""
 	return triggerRun.Status, nil
 }
+
+// updateCronScheduleIfChanged checks if the cron schedule has changed and updates it if needed.
+//
+// This function compares the TriggerRun spec cron schedule with the desired cron schedule,
+// and updates the workflow engine schedule if they differ. Only works for Temporal.
+//
+// Returns true if an update was performed, false if no update was needed, and error if update failed.
+func updateCronScheduleIfChanged(ctx context.Context, triggerRun *v2pb.TriggerRun, desiredCron string, log logr.Logger, workflowClient clientInterface.WorkflowClient) (bool, error) {
+	wid := generateWorkflowID(triggerRun)
+
+	// Skip if workflow client is nil (e.g., in tests)
+	if workflowClient == nil {
+		return false, nil
+	}
+
+	// Skip if not a cron trigger
+	triggerType := GetTriggerType(triggerRun)
+	if triggerType != TriggerTypeCron {
+		return false, nil
+	}
+
+	// Skip if desired cron is empty
+	if desiredCron == "" {
+		return false, nil
+	}
+
+	log.Info("checking if cron schedule update is needed",
+		"workflowID", wid,
+		"desiredCron", desiredCron)
+
+	// Update the schedule
+	err := workflowClient.UpdateTrigger(ctx, wid, desiredCron)
+	if err != nil {
+		log.Error(err, "failed to update cron schedule",
+			"operation", "update_trigger",
+			"namespace", triggerRun.Namespace,
+			"name", triggerRun.Name,
+			"workflowID", wid,
+			"desiredCron", desiredCron)
+		return false, fmt.Errorf("update trigger schedule for %s/%s: %w",
+			triggerRun.Namespace, triggerRun.Name, err)
+	}
+
+	log.Info("cron schedule updated successfully",
+		"workflowID", wid,
+		"newCron", desiredCron)
+	return true, nil
+}

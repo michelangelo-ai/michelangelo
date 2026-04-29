@@ -94,6 +94,7 @@ type Reconciler struct {
 	scheme *runtime.Scheme
 
 	apiHandlerFactory apiHandler.Factory
+	workflowClient    clientInterface.WorkflowClient
 
 	cronTrigger       Runner // Executes cron-scheduled workflows
 	intervalTrigger   Runner // Executes interval-based workflows
@@ -108,6 +109,7 @@ type Reconciler struct {
 func NewReconciler(p Params) *Reconciler {
 	return &Reconciler{
 		apiHandlerFactory: p.APIHandlerFactory,
+		workflowClient:    p.WorkflowClient,
 		cronTrigger:       p.CronTrigger,
 		intervalTrigger:   p.IntervalTrigger,
 		backfillTrigger:   p.BackfillTrigger,
@@ -203,6 +205,18 @@ StateMachine:
 		triggerRun.Status.ExecutionWorkflowId = status.ExecutionWorkflowId
 	case v2pb.TRIGGER_RUN_STATE_RUNNING:
 		log.Info("TRIGGER_RUN_STATE_RUNNING")
+
+		// Check if cron schedule needs to be updated (for cron triggers only)
+		if triggerRun.Spec.Trigger.GetCronSchedule() != nil {
+			desiredCron := triggerRun.Spec.Trigger.GetCronSchedule().GetCron()
+			updated, err := updateCronScheduleIfChanged(ctx, triggerRun, desiredCron, log, r.workflowClient)
+			if err != nil {
+				log.Error(err, "failed to update cron schedule")
+				// Log the error but don't fail the reconciliation - continue with other operations
+			} else if updated {
+				log.Info("cron schedule updated", "newCron", desiredCron)
+			}
+		}
 
 		// Handle actions using the new action field (preferred) or deprecated boolean fields (backward compatibility)
 		actionToPerform := triggerRun.Spec.Action

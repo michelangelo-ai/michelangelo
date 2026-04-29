@@ -720,3 +720,50 @@ func TestDeleteTrigger(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateTrigger(t *testing.T) {
+	workflowID := "testWorkflowID"
+	scheduleID := workflowID + "-schedule"
+	newCronSchedule := "0 6 * * *"
+
+	testCases := []struct {
+		name     string
+		mockFunc func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle)
+		errMsg   string
+	}{
+		{
+			name: "success",
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
+				mockScheduleHandle.On("Update", mock.Anything, mock.Anything).Return(nil)
+			},
+		},
+		{
+			name: "error",
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
+				mockScheduleHandle.On("Update", mock.Anything, mock.Anything).Return(fmt.Errorf("update error"))
+			},
+			errMsg: "update error",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mockClient := temporalMocks.NewClient(t)
+			mockScheduleClient := temporalMocks.NewScheduleClient(t)
+			mockScheduleHandle := temporalMocks.NewScheduleHandle(t)
+			client := &TemporalClient{Client: mockClient}
+			testCase.mockFunc(mockClient, mockScheduleClient, mockScheduleHandle)
+			err := client.UpdateTrigger(context.Background(), workflowID, newCronSchedule)
+			if testCase.errMsg != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), testCase.errMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
