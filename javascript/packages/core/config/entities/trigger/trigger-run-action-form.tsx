@@ -16,14 +16,12 @@ const ACTION_CONFIG = {
   kill: { heading: 'Kill Trigger Run', submitLabel: 'Kill' },
 } as const;
 
-type Action = keyof typeof ACTION_CONFIG;
-
 function TriggerRunActionForm({
   record,
   isOpen,
   onClose,
   action,
-}: ActionComponentProps<TriggerRun> & { action: Action }) {
+}: ActionComponentProps<TriggerRun> & { action: keyof typeof ACTION_CONFIG }) {
   const queryClient = useQueryClient();
 
   const config = ACTION_CONFIG[action];
