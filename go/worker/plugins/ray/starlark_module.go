@@ -189,7 +189,7 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 			},
 		},
 	}
-	var createRes ray.CreateRayJobActivityResponse
+	var createRes v2pb.CreateRayJobResponse
 	if err := workflow.ExecuteActivity(ctx, ray.Activities.CreateRayJob, v2pb.CreateRayJobRequest{
 		RayJob: &rayJob,
 	}).Get(ctx, &createRes); err != nil {
@@ -197,9 +197,6 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 		return nil, err
 	}
 
-	if createRes.RayJob == nil {
-		return nil, fmt.Errorf("failed to create Ray job")
-	}
 	rayJob = *createRes.RayJob
 
 	var sensorRes ray.SensorRayJobResponse

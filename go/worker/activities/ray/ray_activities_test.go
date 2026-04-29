@@ -70,13 +70,11 @@ func (r *Suite) Test_CreateRayJob() {
 		RayJob: rayJob,
 	}, nil)
 	res, err := r.activitySuite.ExecuteActivity(Activities.CreateRayJob, *request)
-	var resp CreateRayJobActivityResponse
+	var resp v2pb.CreateRayJobResponse
 	res.Get(&resp)
 	assert.Nil(r.t, err)
 	assert.NotNil(r.t, resp)
-	assert.Equal(r.t, rayJob.Name, resp.RayJob.Name)
-	assert.Equal(r.t, rayJob.Namespace, resp.RayJob.Namespace)
-	assert.NotEmpty(r.t, resp.ActivityID)
+	assert.Equal(r.t, rayJob, resp.RayJob)
 }
 
 func (r *Suite) Test_CreateRayCluster() {
