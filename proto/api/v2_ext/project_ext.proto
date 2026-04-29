@@ -1,0 +1,76 @@
+// Extension proto for v2.Project with stricter validation rules.
+// These validation rules are applied in addition to the base v2.Project validation.
+// To enable ext validation, import the v2_ext package in your application.
+
+syntax = "proto3";
+
+package michelangelo.api.v2_ext;
+
+option go_package = "github.com/michelangelo-ai/michelangelo/proto/api/v2_ext";
+
+import "michelangelo/api/options.proto";
+
+// ProjectSpecExt defines stricter validation rules for ProjectSpec fields.
+// These rules are enforced when the v2_ext package is imported.
+message ProjectSpecExt {
+  // Description is required and has length constraints
+  string description = 1 [(michelangelo.api.validation) = {
+    required: true
+    min_length: "10"
+    max_length: "1000"
+    msg: "description is required and must be 10-1000 characters"
+  }];
+
+  // Owning team UUID is required
+  string owning_team = 2 [(michelangelo.api.validation) = {
+    required: true
+    uuid: true
+    msg: "owning team UUID is required and must be a valid UUID"
+  }];
+
+  // At least one owner is required
+  repeated string owners = 3 [(michelangelo.api.validation) = {
+    min_items: "1"
+    msg: "at least one owner is required"
+  }];
+
+  // Tier must be between 1 and 4
+  int32 tier = 4 [(michelangelo.api.validation) = {
+    min: "1"
+    max: "4"
+    msg: "tier must be between 1 and 4"
+  }];
+
+  // Git repo URL validation
+  string git_repo = 5 [(michelangelo.api.validation) = {
+    pattern: "^(https?://|git@).+$"
+    msg: "git repo must be a valid git URL"
+  }];
+}
+
+// OwnerInfoExt defines stricter validation rules for OwnerInfo fields.
+message OwnerInfoExt {
+  // Owning team is required and must be a valid UUID
+  string owning_team = 1 [(michelangelo.api.validation) = {
+    required: true
+    uuid: true
+    msg: "owning team is required and must be a valid UUID"
+  }];
+
+  // At least one owner or owner group is recommended
+  repeated string owners = 2;
+
+  // Owner groups for team-based access
+  repeated string owner_groups = 3;
+}
+
+// RetentionExt defines validation rules for retention settings.
+message RetentionExt {
+  // Retention must be positive and reasonable
+  int32 retention_in_days = 1 [(michelangelo.api.validation) = {
+    min: "1"
+    max: "365"
+    msg: "retention must be between 1 and 365 days"
+  }];
+}
+
