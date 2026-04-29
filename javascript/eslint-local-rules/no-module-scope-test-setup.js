@@ -14,46 +14,17 @@ const rule = {
       description:
         'Disallow module-level variable declarations for test setup (wrappers, props, options)',
       recommended: true,
+      url: 'https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/eslint-local-rules/no-module-scope-test-setup.md',
     },
     messages: {
-      noModuleScopeWrapper: [
-        'buildWrapper() must not be called at module scope.',
-        'Move it inside each test so every test is self-contained:',
-        '',
-        '  it("renders", () => {',
-        '    render(<Foo />, buildWrapper([getBaseProviderWrapper()]));',
-        '  });',
-        '',
-      ].join('\n'),
+      noModuleScopeWrapper:
+        'buildWrapper() must not be called at module scope. Move it inside each test so every test is self-contained.',
 
-      noModuleScopeWrapperHelper: [
-        "'{{ name }}' wraps buildWrapper() at module scope.",
-        'Move the buildWrapper() call inline into each test so every test is self-contained:',
-        '',
-        '  it("renders", () => {',
-        '    render(<Foo />, buildWrapper([getBaseProviderWrapper()]));',
-        '  });',
-        '',
-      ].join('\n'),
+      noModuleScopeWrapperHelper:
+        "'{{ name }}' wraps buildWrapper() at module scope. Move the buildWrapper() call inline into each test so every test is self-contained.",
 
-      noModuleScopeSetupConst: [
-        "'{{ name }}' is declared at module scope but looks like test setup (props, options, config).",
-        'Inline it inside each test so every test is self-contained:',
-        '',
-        '  it("renders", () => {',
-        '    render(<Foo options={[{ value: "a", label: "Option A" }]} />);',
-        '  });',
-        '',
-        'If tests share a precondition, group them in a nested describe:',
-        '',
-        '  describe("disabled state", () => {',
-        '    beforeEach(() => { render(<Foo disabled options={[{ value: "a" }]} />); });',
-        '    it("shows label", () => { screen.getByText("Disabled"); });',
-        '  });',
-        '',
-        'Alternatively, use a factory function with an overrides parameter inside the describe — see no-module-scope-test-setup.md.',
-        '',
-      ].join('\n'),
+      noModuleScopeSetupConst:
+        "'{{ name }}' is declared at module scope but looks like test setup (props, options, config). Inline it inside each test, or group shared setup in a nested describe with a factory function.",
     },
     schema: [],
   },
