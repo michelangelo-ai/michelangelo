@@ -211,13 +211,13 @@ func (m *RayWorkerSpec) GetRayStartParams() map[string]string {
 }
 
 type RayClusterSpec struct {
-	User        *UserInfo         `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
-	RayVersion  string            `protobuf:"bytes,2,opt,name=ray_version,json=rayVersion,proto3" json:"rayVersion,omitempty"`
-	Head        *RayHeadSpec      `protobuf:"bytes,3,opt,name=head,proto3" json:"head,omitempty"`
-	Workers     []*RayWorkerSpec  `protobuf:"bytes,4,rep,name=workers,proto3" json:"workers,omitempty"`
-	RayConf     map[string]string `protobuf:"bytes,5,rep,name=ray_conf,json=rayConf,proto3" json:"rayConf,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	Termination *TerminationSpec  `protobuf:"bytes,6,opt,name=termination,proto3" json:"termination,omitempty"`
-	Scheduling  *SchedulingSpec   `protobuf:"bytes,7,opt,name=scheduling,proto3" json:"scheduling,omitempty"`
+	User           *UserInfo           `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	RayVersion     string              `protobuf:"bytes,2,opt,name=ray_version,json=rayVersion,proto3" json:"rayVersion,omitempty"`
+	Head           *RayHeadSpec        `protobuf:"bytes,3,opt,name=head,proto3" json:"head,omitempty"`
+	Workers        []*RayWorkerSpec    `protobuf:"bytes,4,rep,name=workers,proto3" json:"workers,omitempty"`
+	RayConf        map[string]string   `protobuf:"bytes,5,rep,name=ray_conf,json=rayConf,proto3" json:"rayConf,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	Termination    *TerminationSpec    `protobuf:"bytes,6,opt,name=termination,proto3" json:"termination,omitempty"`
+	Scheduling     *SchedulingSpec     `protobuf:"bytes,7,opt,name=scheduling,proto3" json:"scheduling,omitempty"`
 }
 
 func (m *RayClusterSpec) Reset()      { *m = RayClusterSpec{} }
@@ -460,6 +460,7 @@ type RayClusterStatus struct {
 	StatusConditions []*api.Condition `protobuf:"bytes,7,rep,name=status_conditions,json=statusConditions,proto3" json:"statusConditions,omitempty"`
 	JobUrl           string           `protobuf:"bytes,8,opt,name=job_url,json=jobUrl,proto3" json:"jobUrl,omitempty"`
 	PodErrors        []*PodErrors     `protobuf:"bytes,9,rep,name=pod_errors,json=podErrors,proto3" json:"podErrors,omitempty"`
+	LogUrl           string           `protobuf:"bytes,10,opt,name=log_url,json=logUrl,proto3" json:"logUrl,omitempty"`
 }
 
 func (m *RayClusterStatus) Reset()      { *m = RayClusterStatus{} }
@@ -548,6 +549,13 @@ func (m *RayClusterStatus) GetPodErrors() []*PodErrors {
 		return m.PodErrors
 	}
 	return nil
+}
+
+func (m *RayClusterStatus) GetLogUrl() string {
+	if m != nil {
+		return m.LogUrl
+	}
+	return ""
 }
 
 func (m *RayCluster) Reset()      { *m = RayCluster{} }

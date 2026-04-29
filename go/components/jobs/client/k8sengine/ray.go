@@ -6,10 +6,24 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8sptr "k8s.io/utils/ptr"
 )
+
+// LogPersistenceConfig holds platform-level configuration for log persistence.
+// This is loaded from YAML config under controllers.rayCluster.logPersistence.
+// See: https://github.com/ray-project/kuberay/tree/master/historyserver/config
+type LogPersistenceConfig struct {
+	Enabled           bool   `yaml:"enabled"`
+	StorageEndpoint   string `yaml:"storageEndpoint"`   // S3-compatible endpoint (e.g. "minio:9091")
+	Bucket            string `yaml:"bucket"`             // S3 bucket name (e.g. "ray-history")
+	PathPrefix        string `yaml:"pathPrefix"`         // Key prefix under the bucket (e.g. "clusters/")
+	Region            string `yaml:"region"`             // S3 region (e.g. "us-east-1")
+	CredentialsSecret string `yaml:"credentialsSecret"`  // K8s Secret with AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY
+	CollectorImage    string `yaml:"collectorImage"`     // KubeRay collector sidecar image
+}
 
 func (m Mapper) mapRay(rayJob *v2pb.RayJob, jobClusterObject runtime.Object, cluster *v2pb.Cluster) (runtime.Object, error) {
 	if jobClusterObject == nil {
@@ -52,6 +66,14 @@ func (m Mapper) mapRay(rayJob *v2pb.RayJob, jobClusterObject runtime.Object, clu
 func (m Mapper) mapRayCluster(rayCluster *v2pb.RayCluster) (runtime.Object, error) {
 	workerGroupSpecs := getWorkerGroupSpecs(rayCluster.GetName(), rayCluster.GetSpec().Workers)
 	headGroupSpec := getHeadGroupSpec(rayCluster.GetSpec().Head)
+
+	if m.LogPersistence.Enabled {
+		injectCollectorSidecar(&headGroupSpec.Template, m.LogPersistence, rayCluster.GetName(), RayLocalNamespace, "Head")
+		for i := range workerGroupSpecs {
+			injectCollectorSidecar(&workerGroupSpecs[i].Template, m.LogPersistence, rayCluster.GetName(), RayLocalNamespace, "Worker")
+		}
+	}
+
 	rayV1Cluster := &rayv1.RayCluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       RayClusterKind,
@@ -92,6 +114,211 @@ func getWorkerGroupSpecs(clusterName string, workers []*v2pb.RayWorkerSpec) []ra
 		workerGroupSpecsJSON[i] = wg
 	}
 	return workerGroupSpecsJSON
+}
+
+const (
+	rayLogsVolumeName = "ray-logs"
+	rayLogsPath       = "/tmp/ray"
+	collectorPort     = 8084
+
+	// nodeIDScript is the PostStart lifecycle hook that extracts the raylet node ID.
+	// The collector watches /tmp/ray/raylet_node_id for node identification.
+	// This script polls until the raylet process starts, then extracts --node_id from its args.
+	// Copied from: https://github.com/ray-project/kuberay/blob/master/historyserver/config/raycluster.yaml
+	nodeIDScript = `GetNodeId(){
+  while true; do
+    nodeid=$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')
+    if [ -n "$nodeid" ]; then
+      echo "$(date) raylet started: ${nodeid}" >> /tmp/ray/init.log
+      echo $nodeid > /tmp/ray/raylet_node_id
+      break
+    else
+      echo "$(date) raylet not started" >> /tmp/ray/init.log
+      sleep 1
+    fi
+  done
+}
+GetNodeId`
+
+	// exposableEventTypes lists the Ray event types the collector should receive.
+	// Required for Ray 2.52.0+. In 2.53.0+ the env var name changes to
+	// RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES
+	exposableEventTypes = "TASK_DEFINITION_EVENT,TASK_LIFECYCLE_EVENT,ACTOR_TASK_DEFINITION_EVENT," +
+		"TASK_PROFILE_EVENT,DRIVER_JOB_DEFINITION_EVENT,DRIVER_JOB_LIFECYCLE_EVENT," +
+		"ACTOR_DEFINITION_EVENT,ACTOR_LIFECYCLE_EVENT,NODE_DEFINITION_EVENT,NODE_LIFECYCLE_EVENT"
+)
+
+// injectCollectorSidecar injects a KubeRay History Server collector sidecar container
+// into the pod template. Follows the official KubeRay config pattern:
+// https://github.com/ray-project/kuberay/blob/master/historyserver/config/raycluster.yaml
+//
+// It adds:
+// - Shared emptyDir volume for /tmp/ray
+// - Ray event export env vars on all existing containers
+// - PostStart lifecycle hook to extract raylet node ID
+// - Collector sidecar with S3 env vars and event port
+func injectCollectorSidecar(podTemplate *corev1.PodTemplateSpec, config LogPersistenceConfig, clusterName string, clusterNamespace string, role string) {
+	// 1. Determine the volume name for /tmp/ray.
+	// If a Ray container already mounts /tmp/ray, reuse that volume so
+	// the collector shares the same data. Otherwise, create a new emptyDir.
+	rayVolumeName := rayLogsVolumeName
+	for _, c := range podTemplate.Spec.Containers {
+		for _, vm := range c.VolumeMounts {
+			if vm.MountPath == rayLogsPath {
+				rayVolumeName = vm.Name
+				break
+			}
+		}
+		if rayVolumeName != rayLogsVolumeName {
+			break
+		}
+	}
+
+	// Only add a new volume if no existing volume is being reused
+	if rayVolumeName == rayLogsVolumeName {
+		hasVolume := false
+		for _, v := range podTemplate.Spec.Volumes {
+			if v.Name == rayLogsVolumeName {
+				hasVolume = true
+				break
+			}
+		}
+		if !hasVolume {
+			podTemplate.Spec.Volumes = append(podTemplate.Spec.Volumes, corev1.Volume{
+				Name: rayLogsVolumeName,
+				VolumeSource: corev1.VolumeSource{
+					EmptyDir: &corev1.EmptyDirVolumeSource{},
+				},
+			})
+		}
+	}
+
+	rayLogsVolumeMount := corev1.VolumeMount{
+		Name:      rayVolumeName,
+		MountPath: rayLogsPath,
+	}
+
+	// Ray event export env vars — tells Ray to forward events to the collector's HTTP endpoint
+	eventExportEnvVars := []corev1.EnvVar{
+		{
+			Name:  "RAY_enable_ray_event",
+			Value: "true",
+		},
+		{
+			Name:  "RAY_enable_core_worker_ray_event_to_aggregator",
+			Value: "true",
+		},
+		{
+			Name:  "RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR",
+			Value: fmt.Sprintf("http://localhost:%d/v1/events", collectorPort),
+		},
+		{
+			Name:  "RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES",
+			Value: exposableEventTypes,
+		},
+	}
+
+	// 2. Update all existing containers: add volume mount, env vars, and lifecycle hook
+	for i := range podTemplate.Spec.Containers {
+		c := &podTemplate.Spec.Containers[i]
+		// Only add volume mount if /tmp/ray is not already mounted
+		hasRayLogsMount := false
+		for _, vm := range c.VolumeMounts {
+			if vm.MountPath == rayLogsPath {
+				hasRayLogsMount = true
+				break
+			}
+		}
+		if !hasRayLogsMount {
+			c.VolumeMounts = append(c.VolumeMounts, rayLogsVolumeMount)
+		}
+		c.Env = append(c.Env, eventExportEnvVars...)
+
+		// Add PostStart lifecycle hook to extract raylet node ID.
+		// Preserves any existing PreStop hook.
+		if c.Lifecycle == nil {
+			c.Lifecycle = &corev1.Lifecycle{}
+		}
+		c.Lifecycle.PostStart = &corev1.LifecycleHandler{
+			Exec: &corev1.ExecAction{
+				Command: []string{"/bin/sh", "-lc", "--", nodeIDScript},
+			},
+		}
+	}
+
+	// 3. Build S3 env vars for collector — matches official kuberay config pattern
+	// (env vars, NOT --runtime-class-config-path)
+	collectorS3Env := []corev1.EnvVar{
+		{
+			Name: "AWS_ACCESS_KEY_ID",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: config.CredentialsSecret,
+					},
+					Key: "AWS_ACCESS_KEY_ID",
+				},
+			},
+		},
+		{
+			Name: "AWS_SECRET_ACCESS_KEY",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: config.CredentialsSecret,
+					},
+					Key: "AWS_SECRET_ACCESS_KEY",
+				},
+			},
+		},
+		{Name: "AWS_SESSION_TOKEN", Value: ""},
+		{Name: "S3_BUCKET", Value: config.Bucket},
+		{Name: "S3_ENDPOINT", Value: config.StorageEndpoint},
+		{Name: "S3_REGION", Value: config.Region},
+		{Name: "S3FORCE_PATH_STYLE", Value: "true"},
+		{Name: "S3DISABLE_SSL", Value: "true"},
+	}
+
+	// Head collector gets additional env vars for dashboard polling
+	if role == "Head" {
+		collectorS3Env = append(collectorS3Env,
+			corev1.EnvVar{Name: "RAY_DASHBOARD_ADDRESS", Value: "http://localhost:8265"},
+			corev1.EnvVar{Name: "RAY_COLLECTOR_ADDITIONAL_ENDPOINTS", Value: "/api/v0/placement_groups?detail=1&limit=10000"},
+			corev1.EnvVar{Name: "RAY_COLLECTOR_POLL_INTERVAL", Value: "30s"},
+		)
+	}
+
+	// 4. Build collector sidecar container using command (not args) per official config
+	collectorContainer := corev1.Container{
+		Name:            "collector",
+		Image:           config.CollectorImage,
+		ImagePullPolicy: corev1.PullIfNotPresent,
+		Command: []string{
+			"collector",
+			fmt.Sprintf("--role=%s", role),
+			"--runtime-class-name=s3",
+			fmt.Sprintf("--ray-cluster-name=%s", clusterName),
+			fmt.Sprintf("--ray-root-dir=%s", "log"),
+			fmt.Sprintf("--events-port=%d", collectorPort),
+		},
+		Env: collectorS3Env,
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          "events",
+				ContainerPort: int32(collectorPort),
+				Protocol:      corev1.ProtocolTCP,
+			},
+		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("100m"),
+				corev1.ResourceMemory: resource.MustParse("128Mi"),
+			},
+		},
+		VolumeMounts: []corev1.VolumeMount{rayLogsVolumeMount},
+	}
+
+	podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, collectorContainer)
 }
 
 // getRayClusterStateFromStatus maps KubeRay v1 cluster state to our internal v2pb.RayClusterState

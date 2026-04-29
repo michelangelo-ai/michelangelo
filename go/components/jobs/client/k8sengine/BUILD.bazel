@@ -15,16 +15,21 @@ go_library(
         "//proto/api/v2:go_default_library",
         "@com_github_ray_project_kuberay_ray_operator//apis/ray/v1:go_default_library",
         "@io_k8s_api//core/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/api/resource:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/runtime:go_default_library",
         "@io_k8s_utils//ptr:go_default_library",
+        "@org_uber_go_config//:go_default_library",
         "@org_uber_go_fx//:go_default_library",
     ],
 )
 
 go_test(
     name = "go_default_test",
-    srcs = ["mapper_test.go"],
+    srcs = [
+        "mapper_test.go",
+        "ray_collector_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
         "//proto/api/v2:go_default_library",
@@ -32,6 +37,7 @@ go_test(
         "@com_github_stretchr_testify//assert:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
         "@io_k8s_api//core/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/api/resource:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/runtime:go_default_library",
     ],
