@@ -385,6 +385,28 @@ enum PipelineRunStepState {
   PIPELINE_RUN_STEP_STATE_SKIPPED = 6;
 }
 
+// AttemptDetails captures the complete state of a pipeline step execution attempt.
+// This message preserves the full execution history when a step is retried,
+// allowing users to access logs, resources, and status from previous attempts.
+// Each retry creates a new AttemptDetails entry containing a snapshot of the
+// previous execution state before the step is reset for the new attempt.
+message AttemptDetails {
+  // 1-indexed sequential attempt number for this execution attempt.
+  // The first retry produces attempt_id "1", the second "2", etc.
+  // Used to distinguish between different retry attempts of the same step.
+  string attempt_id = 1;
+
+  // Complete snapshot of the PipelineRunStepInfo from this execution attempt.
+  // Contains all execution details including:
+  // - Execution state and timing information
+  // - Log URLs and error messages
+  // - Input parameters and output results
+  // - Resource links and cached outputs
+  // - Sub-step hierarchy
+  // This provides full historical context for debugging failed attempts.
+  PipelineRunStepInfo step_info = 2;
+}
+
 // PipelineRunStepInfo represents detailed information about a pipeline step execution.
 // It tracks:
 // - Step metadata like name and display name
@@ -472,6 +494,20 @@ message PipelineRunStepInfo {
   // Used for precise retry targeting when multiple activities exist for the same task.
   // Enables surgical retry control by identifying exact workflow reset boundaries.
   string activity_id = 14;
+
+  // Historical execution attempts for this pipeline step.
+  // Each entry contains a complete snapshot of the step's execution state from a previous attempt.
+  // When a step is retried, the current execution state is preserved as an AttemptDetails entry
+  // before the step is reset for the new attempt. This enables:
+  // - Complete audit trail of all retry attempts
+  // - Access to logs and resources from failed attempts
+  // - Debugging by comparing successful vs failed executions
+  // - Tracking retry progression and failure patterns
+  //
+  // Empty list indicates this is the first execution attempt (no retries yet).
+  // Non-empty list means the step has been retried, with attempt_details[0] = attempt 1 (first retry),
+  // attempt_details[1] = attempt 2 (second retry), etc. The current execution state represents the latest attempt.
+  repeated AttemptDetails attempt_details = 15;
 }
 
 // PipelineRunStepCachedOutputs contains cached outputs from a pipeline step execution.

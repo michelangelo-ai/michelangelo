@@ -3145,3 +3145,170 @@ func TestEnrichStepOutput(t *testing.T) {
 		})
 	}
 }
+
+// TestExecuteWorkflowStepRetryHistory tests that processManualRetrySpec preserves
+// the terminal step state in AttemptDetails before mutating the step to RUNNING.
+func TestExecuteWorkflowStepRetryHistory(t *testing.T) {
+	mockEventTypes := func(workflowClient *workflowclientMock.MockWorkflowClient) {
+		workflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+		workflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+		workflowClient.EXPECT().GetDecisionTaskCompletedEventType().Return("DecisionTaskCompleted").AnyTimes()
+	}
+
+	mockHistoryForRunID := func(workflowClient *workflowclientMock.MockWorkflowClient, runID string) {
+		workflowClient.EXPECT().GetWorkflowExecutionHistory(
+			gomock.Any(), "test-workflow-id", runID, gomock.Any(), int32(5000),
+		).Return(&clientInterfaces.WorkflowHistory{
+			Events: []clientInterfaces.HistoryEvent{
+				{EventID: 1, EventType: "ActivityTaskCompleted"},
+				{EventID: 2, EventType: "ActivityTaskScheduled", Details: map[string]interface{}{"activity_id": "test-activity-1"}},
+			},
+		}, nil)
+	}
+
+	mockReset := func(workflowClient *workflowclientMock.MockWorkflowClient, newRunID string) {
+		workflowClient.EXPECT().ResetWorkflow(gomock.Any(), gomock.Any()).Return(
+			&clientInterfaces.WorkflowExecution{ID: "test-workflow-id", RunID: newRunID}, nil,
+		)
+	}
+
+	buildPipelineRun := func() *v2.PipelineRun {
+		return &v2.PipelineRun{
+			ObjectMeta: v1.ObjectMeta{Name: "test-pipeline-run", Namespace: "default"},
+			Spec: v2.PipelineRunSpec{
+				RetryInfo: &v2.RetryInfo{
+					ActivityId:    "test-activity-1",
+					WorkflowId:    "test-workflow-id",
+					WorkflowRunId: "current-run-id",
+					Reason:        "Test retry",
+				},
+			},
+			Status: v2.PipelineRunStatus{
+				WorkflowId:    "test-workflow-id",
+				WorkflowRunId: "current-run-id",
+				Steps: []*v2.PipelineRunStepInfo{
+					{
+						Name:       pipelinerunutils.ExecuteWorkflowStepName,
+						State:      v2.PIPELINE_RUN_STEP_STATE_FAILED,
+						Message:    "activity failed: timeout",
+						ActivityId: "workflow-activity-123",
+						LogUrl:     "s3://logs/workflow-failed/",
+						StartTime:  &pbtypes.Timestamp{Seconds: 1000},
+						EndTime:    &pbtypes.Timestamp{Seconds: 2000},
+						SubSteps: []*v2.PipelineRunStepInfo{
+							{Name: "task1", State: v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED, LogUrl: "s3://logs/task1/"},
+							{Name: "task2", State: v2.PIPELINE_RUN_STEP_STATE_FAILED, LogUrl: "s3://logs/task2/"},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	t.Run("first retry preserves failed state in AttemptDetails", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockWorkflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+		mockBlobStore := blobstoreMock.NewMockBlobStoreClient(ctrl)
+		mockEventTypes(mockWorkflowClient)
+		mockHistoryForRunID(mockWorkflowClient, "current-run-id")
+		mockReset(mockWorkflowClient, "new-run-id")
+
+		scheme := runtime.NewScheme()
+		require.NoError(t, v2.AddToScheme(scheme))
+		k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+		actor := setUpExecuteWorkflowActor(t, mockWorkflowClient, mockBlobStore, apiHandler.NewFakeAPIHandler(k8sClient))
+
+		pipelineRun := buildPipelineRun()
+		require.NoError(t, actor.processManualRetrySpec(context.Background(), pipelineRun))
+
+		executeStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
+		require.NotNil(t, executeStep)
+
+		// The step itself should now be RUNNING
+		require.Equal(t, v2.PIPELINE_RUN_STEP_STATE_RUNNING, executeStep.State)
+
+		// Should have exactly one attempt detail entry
+		require.Len(t, executeStep.AttemptDetails, 1)
+		attempt := executeStep.AttemptDetails[0]
+
+		// Attempt ID should be "1"
+		require.Equal(t, "1", attempt.AttemptId)
+
+		// Snapshot should capture the pre-retry FAILED state, not RUNNING
+		require.Equal(t, v2.PIPELINE_RUN_STEP_STATE_FAILED, attempt.StepInfo.State)
+		require.Equal(t, "activity failed: timeout", attempt.StepInfo.Message)
+		require.Equal(t, "s3://logs/workflow-failed/", attempt.StepInfo.LogUrl)
+
+		// Snapshot should preserve sub-steps
+		require.Len(t, attempt.StepInfo.SubSteps, 2)
+		require.Equal(t, "task1", attempt.StepInfo.SubSteps[0].Name)
+		require.Equal(t, v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED, attempt.StepInfo.SubSteps[0].State)
+		require.Equal(t, "task2", attempt.StepInfo.SubSteps[1].Name)
+		require.Equal(t, v2.PIPELINE_RUN_STEP_STATE_FAILED, attempt.StepInfo.SubSteps[1].State)
+
+		// Nested AttemptDetails on the snapshot must be nil (flat structure guarantee)
+		require.Nil(t, attempt.StepInfo.AttemptDetails)
+	})
+
+	t.Run("second retry produces two entries with correct attempt IDs", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockWorkflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+		mockBlobStore := blobstoreMock.NewMockBlobStoreClient(ctrl)
+		mockEventTypes(mockWorkflowClient)
+		// Mocks for first retry
+		mockHistoryForRunID(mockWorkflowClient, "current-run-id")
+		mockReset(mockWorkflowClient, "new-run-id")
+
+		scheme := runtime.NewScheme()
+		require.NoError(t, v2.AddToScheme(scheme))
+		k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+		actor := setUpExecuteWorkflowActor(t, mockWorkflowClient, mockBlobStore, apiHandler.NewFakeAPIHandler(k8sClient))
+
+		pipelineRun := buildPipelineRun()
+
+		// First retry
+		require.NoError(t, actor.processManualRetrySpec(context.Background(), pipelineRun))
+
+		// Simulate the step failing again after the first retry
+		executeStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
+		executeStep.State = v2.PIPELINE_RUN_STEP_STATE_FAILED
+		executeStep.Message = "activity failed: OOM"
+		// Reset RetryInfo to trigger a second retry
+		pipelineRun.Status.WorkflowRunId = "new-run-id"
+		pipelineRun.Spec.RetryInfo = &v2.RetryInfo{
+			ActivityId:    "test-activity-1",
+			WorkflowId:    "test-workflow-id",
+			WorkflowRunId: "new-run-id",
+			Reason:        "Second retry",
+		}
+
+		// Mocks for second retry
+		mockHistoryForRunID(mockWorkflowClient, "new-run-id")
+		mockReset(mockWorkflowClient, "newer-run-id")
+
+		// Second retry
+		require.NoError(t, actor.processManualRetrySpec(context.Background(), pipelineRun))
+
+		executeStep = pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
+		require.Len(t, executeStep.AttemptDetails, 2)
+
+		// First attempt snapshot
+		require.Equal(t, "1", executeStep.AttemptDetails[0].AttemptId)
+		require.Equal(t, v2.PIPELINE_RUN_STEP_STATE_FAILED, executeStep.AttemptDetails[0].StepInfo.State)
+		require.Equal(t, "activity failed: timeout", executeStep.AttemptDetails[0].StepInfo.Message)
+		require.Nil(t, executeStep.AttemptDetails[0].StepInfo.AttemptDetails)
+
+		// Second attempt snapshot
+		require.Equal(t, "2", executeStep.AttemptDetails[1].AttemptId)
+		require.Equal(t, v2.PIPELINE_RUN_STEP_STATE_FAILED, executeStep.AttemptDetails[1].StepInfo.State)
+		require.Equal(t, "activity failed: OOM", executeStep.AttemptDetails[1].StepInfo.Message)
+		require.Nil(t, executeStep.AttemptDetails[1].StepInfo.AttemptDetails)
+
+		// The live step should be RUNNING
+		require.Equal(t, v2.PIPELINE_RUN_STEP_STATE_RUNNING, executeStep.State)
+	})
+}

@@ -1153,8 +1153,30 @@ func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipel
 	pipelineRun.Status.State = v2.PIPELINE_RUN_STATE_RUNNING
 	pipelineRun.Status.WorkflowRunId = newWorkflowRun.RunID
 
-	// Update execute workflow step state from FAILED/KILLED to RUNNING for retry
+	// Preserve retry history before mutating step state, so the snapshot
+	// captures the terminal state (FAILED/KILLED) the user wants to inspect.
 	executeWorkflowStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
+	if executeWorkflowStep != nil {
+		clonedStep := proto.Clone(executeWorkflowStep).(*v2.PipelineRunStepInfo)
+		// Clear nested attempt history to keep the structure flat.
+		// Without this, each snapshot would contain all previous snapshots,
+		// causing quadratic growth in the PipelineRun object size.
+		clonedStep.AttemptDetails = nil
+
+		attemptNumber := len(executeWorkflowStep.AttemptDetails) + 1
+		attemptSnapshot := &v2.AttemptDetails{
+			AttemptId: fmt.Sprintf("%d", attemptNumber),
+			StepInfo:  clonedStep,
+		}
+		executeWorkflowStep.AttemptDetails = append(executeWorkflowStep.AttemptDetails, attemptSnapshot)
+
+		logger.Info("preserved complete workflow execution as retry history",
+			zap.Int("attemptId", attemptNumber),
+			zap.Int("subStepCount", len(executeWorkflowStep.SubSteps)),
+			zap.Int("totalAttempts", len(executeWorkflowStep.AttemptDetails)))
+	}
+
+	// Update execute workflow step state from FAILED/KILLED to RUNNING for retry
 	if executeWorkflowStep != nil &&
 		(executeWorkflowStep.State == v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED ||
 			executeWorkflowStep.State == v2.PIPELINE_RUN_STEP_STATE_FAILED ||
