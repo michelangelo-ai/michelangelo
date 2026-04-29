@@ -9,3 +9,4 @@ data:
   AWS_ACCESS_KEY_ID: minioadmin
   AWS_SECRET_ACCESS_KEY: minioadmin
   AWS_ENDPOINT_URL: http://minio:9091
+  METRIC_BASE_URL: http://localhost:3000
