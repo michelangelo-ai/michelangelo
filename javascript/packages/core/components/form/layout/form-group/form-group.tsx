@@ -13,6 +13,8 @@ export const FormGroup: React.FC<FormGroupProps> = ({
   description,
   tooltip,
   collapsible = false,
+  expanded,
+  onToggle,
   endEnhancer,
   overrides = {},
   children,
@@ -53,7 +55,9 @@ export const FormGroup: React.FC<FormGroupProps> = ({
       <CollapsibleBox
         title={enhancedTitle}
         description={enhancedDescription}
+        expanded={expanded}
         defaultExpanded={false}
+        onToggle={onToggle}
         overrides={{
           Content: {
             style: {

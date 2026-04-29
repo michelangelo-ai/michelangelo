@@ -70,4 +70,38 @@ describe('FormGroup', () => {
     await user.click(header);
     expect(screen.getByText('Expandable content')).toBeInTheDocument();
   });
+
+  it('supports controlled expanded state', () => {
+    const { rerender } = render(
+      <FormGroup title="Controlled" collapsible expanded={false}>
+        <div>Content</div>
+      </FormGroup>,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+    );
+
+    expect(screen.queryByText('Content')).not.toBeInTheDocument();
+
+    rerender(
+      <FormGroup title="Controlled" collapsible expanded={true}>
+        <div>Content</div>
+      </FormGroup>
+    );
+
+    expect(screen.getByText('Content')).toBeInTheDocument();
+  });
+
+  it('invokes onToggle callback when toggled', async () => {
+    const user = userEvent.setup();
+    const onToggle = vi.fn();
+
+    render(
+      <FormGroup title="Toggle" collapsible expanded={false} onToggle={onToggle}>
+        <div>Content</div>
+      </FormGroup>,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+    );
+
+    await user.click(screen.getByRole('button'));
+    expect(onToggle).toHaveBeenCalledWith(true);
+  });
 });

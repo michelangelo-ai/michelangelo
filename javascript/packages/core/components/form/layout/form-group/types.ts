@@ -17,6 +17,12 @@ export interface FormGroupProps {
    */
   collapsible?: boolean;
 
+  /** Controlled expanded state — requires `onToggle` to respond to user interaction */
+  expanded?: boolean;
+
+  /** Called when the user toggles the collapsible group */
+  onToggle?: (expanded: boolean) => void;
+
   /** Additional content for the header (e.g., action buttons) */
   endEnhancer?: ReactNode;
 
