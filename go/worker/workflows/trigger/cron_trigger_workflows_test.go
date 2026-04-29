@@ -127,6 +127,9 @@ func TestGeneratePipelineRunRequest(t *testing.T) {
 				expectedLabel := tt.expectedGeneratePipelineRunRequest.PipelineRun.ObjectMeta.Labels[ParameterIDLabel]
 				actualLabel := result.PipelineRun.ObjectMeta.Labels[ParameterIDLabel]
 				assert.Equal(t, expectedLabel, actualLabel)
+
+				// Validate PipelineNameLabel
+				assert.Equal(t, tt.triggerRun.Spec.Pipeline.Name, result.PipelineRun.ObjectMeta.Labels[PipelineNameLabel])
 			}
 		})
 	}

@@ -59,6 +59,9 @@ var (
 	// PipelineManifestTypeLabel is to indicate the manifest type of this pipeline
 	PipelineManifestTypeLabel = "pipeline.michelangelo/PipelineManifestType"
 
+	// PipelineNameLabel stores the pipeline name for filtering pipeline runs
+	PipelineNameLabel = "pipelinerun.michelangelo/pipeline-name"
+
 	// activityOptionsDefault is the default activity options for the trigger workflow
 	activityOptionsDefault = workflow.ActivityOptions{
 		ScheduleToStartTimeout: time.Second * 30,
@@ -295,6 +298,7 @@ func generatePipelineRunRequest(
 		PipelineRunExecutionTimestampLabel: fmt.Sprintf("%d", ts.Unix()),
 		TriggerredByLabel:                  triggerRun.Name,
 		SourceTriggerLabel:                 triggerRun.Name,
+		PipelineNameLabel:                  triggerRun.Spec.Pipeline.Name,
 	}
 	if env, ok := triggerRun.ObjectMeta.Labels[EnvironmentLabel]; ok {
 		labels[EnvironmentLabel] = env
