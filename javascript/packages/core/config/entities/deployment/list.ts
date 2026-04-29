@@ -1,5 +1,9 @@
 import { CellType } from '#core/components/cell/constants';
-import { DEPLOYMENT_LAST_PREDICTION_CELL, DEPLOYMENT_STAGE_CELL, DEPLOYMENT_STATE_CELL } from './shared';
+import {
+  DEPLOYMENT_LAST_PREDICTION_CELL,
+  DEPLOYMENT_STAGE_CELL,
+  DEPLOYMENT_STATE_CELL,
+} from './shared';
 
 import type { ColumnConfig } from '#core/components/table/types/column-types';
 import type { ListViewConfig } from '#core/components/views/types';
@@ -45,8 +49,9 @@ const DEPLOYMENT_COLUMNS: ColumnConfig<object>[] = [
     label: 'Last updated',
     type: CellType.DATE,
     accessor: (data: unknown) => {
-      const ts = (data as { metadata?: { labels?: { 'michelangelo/SpecUpdateTimestamp'?: string } } })
-        ?.metadata?.labels?.['michelangelo/SpecUpdateTimestamp'];
+      const ts = (
+        data as { metadata?: { labels?: { 'michelangelo/SpecUpdateTimestamp'?: string } } }
+      )?.metadata?.labels?.['michelangelo/SpecUpdateTimestamp'];
       return ts ? Math.floor(Number(ts) / 1_000_000) : undefined;
     },
   },
