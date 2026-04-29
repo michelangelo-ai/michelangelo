@@ -9,6 +9,7 @@ import { TriggerRunService } from './gen/michelangelo/api/v2/trigger_run_svc_pb'
 import { getRuntimeConfig } from './runtime-config';
 
 import type { Interceptor } from '@connectrpc/connect';
+import type { Services } from './types';
 
 // This interceptor is used to set the headers for the RPC request to
 // be compatible with the Michelangelo API yarpc server.
@@ -20,14 +21,6 @@ const callerInterceptor: Interceptor = (next) => async (req) => {
   req.header.set('Rpc-Service', 'ma-apiserver');
 
   return await next(req);
-};
-
-type Services = {
-  ProjectService: ReturnType<typeof createClient<typeof ProjectService>>;
-  PipelineService: ReturnType<typeof createClient<typeof PipelineService>>;
-  PipelineRunService: ReturnType<typeof createClient<typeof PipelineRunService>>;
-  TriggerRunService: ReturnType<typeof createClient<typeof TriggerRunService>>;
-  ModelService: ReturnType<typeof createClient<typeof ModelService>>;
 };
 
 let servicesPromise: Promise<Services> | null = null;

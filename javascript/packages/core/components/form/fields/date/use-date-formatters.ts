@@ -1,11 +1,6 @@
 import { getDateFromEpochSeconds, getEpochSecondsFromDate } from '#core/utils/time-utils';
 import { DateFormat } from './types';
 
-type UseDateFormattersReturn = {
-  format: (value: string) => Date | null;
-  parse: (value: Date | null) => string;
-};
-
 /**
  * Returns `format` and `parse` functions that translate between date formats
  * (epoch seconds string or ISO string) and the Date objects expected by BaseUI's DatePicker.
@@ -18,9 +13,10 @@ type UseDateFormattersReturn = {
  *
  * @param dateFormat - Controls the persisted date format (epoch or ISO).
  */
-export function useDateFormatters(
-  dateFormat: DateFormat = DateFormat.ISO_DATE_STRING
-): UseDateFormattersReturn {
+export function useDateFormatters(dateFormat: DateFormat = DateFormat.ISO_DATE_STRING): {
+  format: (value: string) => Date | null;
+  parse: (value: Date | null) => string;
+} {
   const toDate =
     dateFormat === DateFormat.EPOCH_SECONDS
       ? (value: string) => (value ? getDateFromEpochSeconds(parseInt(value)) : null)

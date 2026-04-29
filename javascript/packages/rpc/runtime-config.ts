@@ -1,6 +1,4 @@
-interface RuntimeConfig {
-  apiBaseUrl: string;
-}
+import type { RuntimeConfig } from './types';
 
 // Fetches runtime configuration from /config.json.
 export async function getRuntimeConfig(): Promise<RuntimeConfig> {
