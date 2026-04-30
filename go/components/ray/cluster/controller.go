@@ -49,6 +49,7 @@ const (
 type Reconciler struct {
 	api.Handler // API client for managing API objects
 
+	config            Config                              // Controller configuration including log persistence
 	logger            logr.Logger                         // Logger for the controller
 	apiHandlerFactory apiHandler.Factory                  // Factory for creating API handlers
 	env               env.Context                         // Environment context for configuration
@@ -62,6 +63,7 @@ type Reconciler struct {
 // This provides a stable construction API for downstream users so they do not
 // need to rely on reflection to set unexported fields.
 func NewReconciler(
+	config Config,
 	logger logr.Logger,
 	apiHandlerFactory apiHandler.Factory,
 	env env.Context,
@@ -70,6 +72,7 @@ func NewReconciler(
 	clusterCache jobscluster.RegisteredClustersCache,
 ) *Reconciler {
 	return &Reconciler{
+		config:            config,
 		logger:            logger,
 		apiHandlerFactory: apiHandlerFactory,
 		env:               env,
@@ -174,6 +177,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			func(obj client.Object) {
 				cluster := obj.(*v2pb.RayCluster)
 				cluster.Status.State = v2pb.RAY_CLUSTER_STATE_PROVISIONING
+
+				// Set log_url when log persistence is enabled
+				if r.config.LogPersistence.Enabled {
+					cluster.Status.LogUrl = fmt.Sprintf("s3://%s/%s%s/%s/",
+						r.config.LogPersistence.Bucket,
+						r.config.LogPersistence.PathPrefix,
+						cluster.GetNamespace(),
+						cluster.GetName(),
+					)
+				}
+
 				launchedCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, LaunchedCondition, cluster.Generation)
 				jobsutils.UpdateCondition(launchedCond, jobsutils.ConditionUpdateParams{
 					Status:     apipb.CONDITION_STATUS_TRUE,
