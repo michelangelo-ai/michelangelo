@@ -1,0 +1,99 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: historyserver
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: raycluster-reader
+rules:
+- apiGroups: ["ray.io"]
+  resources: ["rayclusters"]
+  verbs: ["list", "get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: historyserver
+subjects:
+- kind: ServiceAccount
+  name: historyserver
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: raycluster-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: history-server
+  labels:
+    app: history-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: history-server
+  template:
+    metadata:
+      labels:
+        app: history-server
+    spec:
+      serviceAccountName: historyserver
+      containers:
+      - name: history-server
+        image: kuberay-historyserver:v0.1.0
+        imagePullPolicy: IfNotPresent
+        command:
+        - historyserver
+        - --runtime-class-name=s3
+        - --ray-root-dir=log
+        env:
+        - name: S3DISABLE_SSL
+          value: "true"
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: "minio-credentials"
+              key: "AWS_ACCESS_KEY_ID"
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: "minio-credentials"
+              key: "AWS_SECRET_ACCESS_KEY"
+        - name: AWS_SESSION_TOKEN
+          value: ""
+        - name: S3_BUCKET
+          value: "ray-history"
+        - name: S3_ENDPOINT
+          value: "minio:9091"
+        - name: S3_REGION
+          value: "us-east-1"
+        - name: S3FORCE_PATH_STYLE
+          value: "true"
+        ports:
+        - containerPort: 8080
+          name: http
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: history-server
+spec:
+  selector:
+    app: history-server
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    nodePort: 30016
+  type: NodePort
