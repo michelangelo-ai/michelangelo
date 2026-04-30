@@ -8,10 +8,9 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/creation"
@@ -28,22 +27,22 @@ type Plugin struct {
 	creationPlugin conditionInterfaces.Plugin[*v2pb.InferenceServer]
 	deletionPlugin conditionInterfaces.Plugin[*v2pb.InferenceServer]
 
-	registry *backends.Registry
-	client   client.Client
-	Recorder record.EventRecorder
-	logger   *zap.Logger
+	registry      *backends.Registry
+	clientFactory clientfactory.ClientFactory
+	Recorder      record.EventRecorder
+	logger        *zap.Logger
 }
 
 // NewPlugin creates a plugin with creation and deletion workflows.
-func NewOSSPlugin(client client.Client, registry *backends.Registry, modelConfigProvider modelconfig.ModelConfigProvider, recorder record.EventRecorder, logger *zap.Logger) plugins.Plugin {
+func NewOSSPlugin(clientFactory clientfactory.ClientFactory, registry *backends.Registry, modelConfigProvider modelconfig.ModelConfigProvider, recorder record.EventRecorder, logger *zap.Logger) plugins.Plugin {
 	return &Plugin{
-		creationPlugin: creation.NewCreationPlugin(client, registry, modelConfigProvider, logger),
-		deletionPlugin: deletion.NewDeletionPlugin(client, registry, modelConfigProvider, logger),
+		creationPlugin: creation.NewCreationPlugin(clientFactory, registry, modelConfigProvider, logger),
+		deletionPlugin: deletion.NewDeletionPlugin(clientFactory, registry, modelConfigProvider, logger),
 
-		client:   client,
-		registry: registry,
-		Recorder: recorder,
-		logger:   logger,
+		clientFactory: clientFactory,
+		registry:      registry,
+		Recorder:      recorder,
+		logger:        logger,
 	}
 }
 
@@ -122,28 +121,23 @@ func (p *Plugin) UpdateDetails(ctx context.Context, resource *v2pb.InferenceServ
 		return nil
 	}
 
-	// Get current status from backend
-	status, err := backend.GetServerStatus(ctx, p.logger, p.client, resource.Name, resource.Namespace)
-	if err != nil {
-		// Don't fail reconciliation for status check errors
-		p.logger.Error("Failed to get server status",
-			zap.Error(err),
-			zap.String("operation", "get_server_status"),
-			zap.String("namespace", resource.Namespace),
-			zap.String("inferenceServer", resource.Name))
+	// Get current status from backend, aggregated across cluster targets
+	aggregateState, ok := p.aggregateBackendState(ctx, backend, resource)
+	if !ok {
+		// No conclusive aggregate this reconcile — keep the existing state.
 		return nil
 	}
 
 	// Update status based on external state
-	if status.State != resource.Status.State {
+	if aggregateState != resource.Status.State {
 		p.logger.Info("External state change detected",
 			zap.String("currentState", resource.Status.State.String()),
-			zap.String("externalState", status.State.String()))
+			zap.String("externalState", aggregateState.String()))
 
-		resource.Status.State = status.State
+		resource.Status.State = aggregateState
 
 		// Record state transition events
-		switch status.State {
+		switch aggregateState {
 		case v2pb.INFERENCE_SERVER_STATE_SERVING:
 			p.Recorder.Event(resource, corev1.EventTypeNormal, "CreationCompleted", "InferenceServer creation completed successfully")
 		case v2pb.INFERENCE_SERVER_STATE_FAILED:
@@ -151,6 +145,56 @@ func (p *Plugin) UpdateDetails(ctx context.Context, resource *v2pb.InferenceServ
 		}
 	}
 	return nil
+}
+
+// aggregateBackendState polls the backend on every target cluster and reduces the
+// per-cluster states into a single InferenceServerState. The boolean return is false
+// when no conclusive aggregate exists (e.g., all status fetches errored).
+//
+// FAILED on any cluster wins; otherwise SERVING requires every reachable cluster to
+// be SERVING.
+func (p *Plugin) aggregateBackendState(ctx context.Context, backend backends.Backend, resource *v2pb.InferenceServer) (v2pb.InferenceServerState, bool) {
+	servingCount := 0
+	totalCount := 0
+	hasFailure := false
+
+	for _, target := range resource.Spec.ClusterTargets {
+		kubeClient, err := p.clientFactory.GetClient(ctx, target)
+		if err != nil {
+			p.logger.Error("Failed to resolve client",
+				zap.Error(err),
+				zap.String("operation", "resolve_client"),
+				zap.String("inferenceServer", resource.Name),
+				zap.String("cluster_id", target.GetClusterId()))
+			continue
+		}
+		totalCount++
+		status, err := backend.GetServerStatus(ctx, p.logger, kubeClient, resource.Name, resource.Namespace)
+		if err != nil {
+			// Don't fail reconciliation for status check errors
+			p.logger.Error("Failed to get server status",
+				zap.Error(err),
+				zap.String("operation", "get_server_status"),
+				zap.String("namespace", resource.Namespace),
+				zap.String("inferenceServer", resource.Name),
+				zap.String("cluster_id", target.GetClusterId()))
+			continue
+		}
+		switch status.State {
+		case v2pb.INFERENCE_SERVER_STATE_SERVING:
+			servingCount++
+		case v2pb.INFERENCE_SERVER_STATE_FAILED:
+			hasFailure = true
+		}
+	}
+
+	if hasFailure {
+		return v2pb.INFERENCE_SERVER_STATE_FAILED, true
+	}
+	if totalCount > 0 && servingCount == totalCount {
+		return v2pb.INFERENCE_SERVER_STATE_SERVING, true
+	}
+	return v2pb.INFERENCE_SERVER_STATE_INVALID, false
 }
 
 // UpdateConditions filters the resource conditions to only those relevant to the current plugin workflow.

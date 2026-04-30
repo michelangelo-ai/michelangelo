@@ -12,6 +12,7 @@ go_library(
         "//go/base/conditions/interfaces:go_default_library",
         "//go/base/conditions/utils:go_default_library",
         "//go/components/inferenceserver/backends:go_default_library",
+        "//go/components/inferenceserver/clientfactory:go_default_library",
         "//go/components/inferenceserver/modelconfig:go_default_library",
         "//go/components/inferenceserver/plugins/oss/common:go_default_library",
         "//proto/api:go_default_library",

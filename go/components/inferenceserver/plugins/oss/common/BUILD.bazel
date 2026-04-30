@@ -2,7 +2,17 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
-    srcs = ["constants.go"],
+    srcs = [
+        "constants.go",
+        "rollout.go",
+    ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common",
     visibility = ["//visibility:public"],
+    deps = [
+        "//go/base/conditions/utils:go_default_library",
+        "//go/components/inferenceserver/clientfactory:go_default_library",
+        "//proto/api:go_default_library",
+        "//proto/api/v2:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
+    ],
 )

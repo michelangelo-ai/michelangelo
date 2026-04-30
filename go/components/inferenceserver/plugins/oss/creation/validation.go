@@ -45,6 +45,16 @@ func (a *ValidationActor) Retrieve(ctx context.Context, resource *v2pb.Inference
 		return conditionUtils.GenerateFalseCondition(condition, "InvalidBackendType", fmt.Sprintf("unsupported backend type: %v", resource.Spec.BackendType)), nil
 	}
 
+	if len(resource.Spec.ClusterTargets) == 0 {
+		return conditionUtils.GenerateFalseCondition(condition, "NoClusterTargets", "spec.cluster_targets must declare at least one cluster"), nil
+	}
+
+	// Validate cluster rollout strategy annotation before operational actors attempt multi-cluster iteration.
+	if strategy := common.GetRolloutStrategy(resource); !common.IsKnownRolloutStrategy(strategy) {
+		return conditionUtils.GenerateFalseCondition(condition, "InvalidRolloutStrategy",
+			fmt.Sprintf("unknown cluster rollout strategy %q; supported: rolling", strategy)), nil
+	}
+
 	return conditionUtils.GenerateTrueCondition(condition), nil
 }
 

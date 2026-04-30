@@ -1647,6 +1647,71 @@ def _create_compute_cluster_secrets(cluster_name: str):
     print(f"\nCreated secrets for cluster '{cluster_name}' in the sandbox cluster")
 
 
+def _setup_inference_server_secrets():
+    """Create RBAC and credentials for inference server cluster access.
+
+    Applies an inference-server-manager ServiceAccount with permissions to
+    manage Deployments, Services, and ConfigMaps (required for Triton provisioning).
+    Stores a long-lived bearer token as a Secret so the clientfactory can build
+    a remote kube client for the sandbox cluster using kubernetes.default.svc:443.
+
+    The CA secret (cluster-michelangelo-sandbox-ca-data) is already created by
+    the sandbox create flow; we only need to provision the token here.
+    """
+    cluster_name = _michelangelo_sandbox_kube_cluster_name
+    token_secret_name = f"cluster-{cluster_name}-is-token"
+
+    # Check if the token secret already exists to make this idempotent.
+    exists = (
+        subprocess.run(
+            ["kubectl", "get", "secret", token_secret_name],
+            capture_output=True,
+        ).returncode
+        == 0
+    )
+    if exists:
+        print(
+            f"Secret '{token_secret_name}' already exists — "
+            "skipping inference server credential setup."
+        )
+        return
+
+    # Apply ServiceAccount + ClusterRole + ClusterRoleBinding.
+    _kube_apply(_dir / "resources" / "rbac-inferenceserver.yaml")
+
+    # Mint a long-lived token (same duration as ray-manager) so the sandbox
+    # does not require frequent re-creation.
+    token_decoded = (
+        subprocess.check_output(
+            [
+                "kubectl",
+                "create",
+                "token",
+                "inference-server-manager",
+                "-n",
+                "default",
+                "--duration=87600h",
+            ]
+        )
+        .decode()
+        .strip()
+    )
+
+    token_secret = {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {"name": token_secret_name, "namespace": "default"},
+        "stringData": {"token": token_decoded},
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        yaml.dump(token_secret, f)
+        f.flush()
+        _exec("kubectl", "apply", "-f", f.name)
+
+    print(f"Created inference server credentials for cluster '{cluster_name}'")
+
+
 def _create_inference_demo_crs():
     """Create an inference server for the sandbox cluster for demo purposes."""
     print("🚀 Setting up Michelangelo AI Inference Demo...")
@@ -1654,6 +1719,10 @@ def _create_inference_demo_crs():
     # Setup istio with Gateway API
     # This allows usage of HTTPRoutes to route traffic to the inference server.
     _setup_istio_with_gateway_api()
+
+    # Create the SA, RBAC, and token secret that the clientfactory uses to
+    # connect to the sandbox cluster as a ClusterTarget.
+    _setup_inference_server_secrets()
 
     inference_demo_dir = _dir / "demo" / "inference"
     # Create inference server CR

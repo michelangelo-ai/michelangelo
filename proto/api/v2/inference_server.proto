@@ -9,6 +9,7 @@ option go_package = "v2";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
 import "michelangelo/api/conditions.proto";
+import "michelangelo/api/v2/kubernetes.proto";
 import "michelangelo/api/v2/pod.proto";
 import "michelangelo/api/v2/project.proto";
 import "michelangelo/api/v2/user.proto";
@@ -79,6 +80,21 @@ enum BackendType {
   BACKEND_TYPE_TORCHSERVE = 4;
 }
 
+// ClusterTarget identifies a Kubernetes cluster where the InferenceServer's
+// workloads should be provisioned.
+message ClusterTarget {
+  // Stable, human-readable identifier for the cluster (e.g. "k3d-test-a",
+  // "gke-prod-us-west-1"). Must be unique across the InferenceServer's
+  // cluster_targets list.
+  string cluster_id = 1;
+
+  // How to connect to the cluster.
+  oneof connection {
+    option (michelangelo.api.required) = true;
+    ConnectionSpec kubernetes = 2;
+  }
+}
+
 // Inference Server spec.
 message InferenceServerSpec {
   // Tenancy type of this InferenceServer.
@@ -94,6 +110,10 @@ message InferenceServerSpec {
   UserInfo owner = 5;
   // Backend type for this InferenceServer (e.g. Triton, LLM-D, Dynamo).
   BackendType backend_type = 6;
+  // Clusters where this InferenceServer should be provisioned. One workload
+  // set per ClusterTarget.
+  // At least one ClusterTarget is required.
+  repeated ClusterTarget cluster_targets = 7;
 }
 
 // The state of the Inference Server.
@@ -107,6 +127,22 @@ enum InferenceServerState {
   INFERENCE_SERVER_STATE_CREATING = 6;
   INFERENCE_SERVER_STATE_DELETING = 7;
   INFERENCE_SERVER_STATE_DELETED = 8;
+}
+
+// ClusterTargetStatus reports the observed state of an InferenceServer on
+// a single ClusterTarget.
+message ClusterTargetStatus {
+  // Matches ClusterTarget.cluster_id in the spec.
+  string cluster_id = 1;
+
+  // Per-cluster lifecycle state.
+  InferenceServerState state = 2;
+
+  // Per-cluster conditions.
+  repeated Condition conditions = 3;
+
+  // Free-form message for human-readable detail (e.g., last error).
+  string message = 4;
 }
 
 // The status of the InferenceServer.
@@ -132,6 +168,8 @@ message InferenceServerStatus {
   // Available environments correspond to the list of environments that are available for
   // this InferenceServer resource.
   repeated string available_environments = 8;
+  // Per-cluster status, one entry per ClusterTarget in spec.cluster_targets.
+  repeated ClusterTargetStatus cluster_statuses = 9;
 }
 
 // Defines a managed InferenceServer service for model serving.

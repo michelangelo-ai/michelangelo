@@ -21,3 +21,10 @@ spec:
     decommission: false
   owner:
     name: "user-example"
+  clusterTargets:
+  - clusterId: michelangelo-sandbox
+    kubernetes:
+      host: https://kubernetes.default.svc
+      port: "443"
+      tokenTag: cluster-michelangelo-sandbox-is-token
+      caDataTag: cluster-michelangelo-sandbox-ca-data

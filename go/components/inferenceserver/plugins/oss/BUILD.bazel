@@ -11,6 +11,7 @@ go_library(
     deps = [
         "//go/base/conditions/interfaces:go_default_library",
         "//go/components/inferenceserver/backends:go_default_library",
+        "//go/components/inferenceserver/clientfactory:go_default_library",
         "//go/components/inferenceserver/modelconfig:go_default_library",
         "//go/components/inferenceserver/plugins:go_default_library",
         "//go/components/inferenceserver/plugins/oss/creation:go_default_library",
@@ -19,7 +20,6 @@ go_library(
         "//proto/api/v2:go_default_library",
         "@io_k8s_api//core/v1:go_default_library",
         "@io_k8s_client_go//tools/record:go_default_library",
-        "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
         "@org_uber_go_fx//:go_default_library",
         "@org_uber_go_zap//:go_default_library",
     ],

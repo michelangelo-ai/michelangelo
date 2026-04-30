@@ -4,10 +4,13 @@ import (
 	"go.uber.org/fx"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 )
 
 // Module provides the inference server controller with all dependencies
 var Module = fx.Options(
+	clientfactory.Module,
 	fx.Provide(newEventRecorder),
 	fx.Provide(NewReconciler),
 	fx.Invoke(register),

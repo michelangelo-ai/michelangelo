@@ -3,10 +3,9 @@ package creation
 import (
 	"go.uber.org/zap"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -14,16 +13,16 @@ import (
 
 // CreationPlugin orchestrates the condition actors for inference server creation.
 type CreationPlugin struct {
-	client              client.Client
+	clientFactory       clientfactory.ClientFactory
 	registry            *backends.Registry
 	modelConfigProvider modelconfig.ModelConfigProvider
 	logger              *zap.Logger
 }
 
 // NewCreationPlugin creates a plugin that manages validation, provisioning, health checks, and routing.
-func NewCreationPlugin(client client.Client, registry *backends.Registry, modelConfigProvider modelconfig.ModelConfigProvider, logger *zap.Logger) conditionInterfaces.Plugin[*v2pb.InferenceServer] {
+func NewCreationPlugin(clientFactory clientfactory.ClientFactory, registry *backends.Registry, modelConfigProvider modelconfig.ModelConfigProvider, logger *zap.Logger) conditionInterfaces.Plugin[*v2pb.InferenceServer] {
 	return &CreationPlugin{
-		client:              client,
+		clientFactory:       clientFactory,
 		registry:            registry,
 		modelConfigProvider: modelConfigProvider,
 		logger:              logger,
@@ -34,9 +33,9 @@ func NewCreationPlugin(client client.Client, registry *backends.Registry, modelC
 func (p *CreationPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return []conditionInterfaces.ConditionActor[*v2pb.InferenceServer]{
 		NewValidationActor(p.registry, p.logger),
-		NewBackendProvisionActor(p.client, p.registry, p.logger),
-		NewModelConfigProvisionActor(p.client, p.modelConfigProvider, p.logger),
-		NewHealthCheckActor(p.client, p.registry, p.logger),
+		NewBackendProvisionActor(p.clientFactory, p.registry, p.logger),
+		NewModelConfigProvisionActor(p.clientFactory, p.modelConfigProvider, p.logger),
+		NewHealthCheckActor(p.clientFactory, p.registry, p.logger),
 	}
 }
 

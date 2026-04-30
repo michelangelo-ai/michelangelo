@@ -3,10 +3,9 @@ package deletion
 import (
 	"go.uber.org/zap"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -14,16 +13,16 @@ import (
 
 // DeletionPlugin orchestrates the condition actors for inference server deletion.
 type DeletionPlugin struct {
-	client              client.Client
+	clientFactory       clientfactory.ClientFactory
 	registry            *backends.Registry
 	modelConfigProvider modelconfig.ModelConfigProvider
 	logger              *zap.Logger
 }
 
 // NewDeletionPlugin creates a plugin that manages cleanup of all inference server resources.
-func NewDeletionPlugin(client client.Client, registry *backends.Registry, modelConfigProvider modelconfig.ModelConfigProvider, logger *zap.Logger) conditionInterfaces.Plugin[*v2pb.InferenceServer] {
+func NewDeletionPlugin(clientFactory clientfactory.ClientFactory, registry *backends.Registry, modelConfigProvider modelconfig.ModelConfigProvider, logger *zap.Logger) conditionInterfaces.Plugin[*v2pb.InferenceServer] {
 	return &DeletionPlugin{
-		client:              client,
+		clientFactory:       clientFactory,
 		registry:            registry,
 		modelConfigProvider: modelConfigProvider,
 		logger:              logger,
@@ -33,7 +32,7 @@ func NewDeletionPlugin(client client.Client, registry *backends.Registry, modelC
 // GetActors returns the condition actors for deletion workflow.
 func (p *DeletionPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return []conditionInterfaces.ConditionActor[*v2pb.InferenceServer]{
-		NewCleanupActor(p.client, p.registry, p.modelConfigProvider, p.logger),
+		NewCleanupActor(p.clientFactory, p.registry, p.modelConfigProvider, p.logger),
 	}
 }
 
