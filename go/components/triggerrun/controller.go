@@ -94,7 +94,6 @@ type Reconciler struct {
 	scheme *runtime.Scheme
 
 	apiHandlerFactory apiHandler.Factory
-	workflowClient    clientInterface.WorkflowClient
 
 	cronTrigger       Runner // Executes cron-scheduled workflows
 	intervalTrigger   Runner // Executes interval-based workflows
@@ -109,7 +108,6 @@ type Reconciler struct {
 func NewReconciler(p Params) *Reconciler {
 	return &Reconciler{
 		apiHandlerFactory: p.APIHandlerFactory,
-		workflowClient:    p.WorkflowClient,
 		cronTrigger:       p.CronTrigger,
 		intervalTrigger:   p.IntervalTrigger,
 		backfillTrigger:   p.BackfillTrigger,
@@ -206,13 +204,10 @@ StateMachine:
 	case v2pb.TRIGGER_RUN_STATE_RUNNING:
 		log.Info("TRIGGER_RUN_STATE_RUNNING")
 
-		// Check if cron schedule needs to be updated in Temporal (for cron triggers only)
-		if triggerRun.Spec.Trigger.GetCronSchedule() != nil {
-			desiredCron := triggerRun.Spec.Trigger.GetCronSchedule().GetCron()
-			if err := syncCronScheduleToTemporal(ctx, triggerRun, desiredCron, log, r.workflowClient); err != nil {
-				log.Error(err, "failed to sync cron schedule to Temporal")
-				// Log the error but don't fail the reconciliation - continue with other operations
-			}
+		// Sync TriggerRun spec changes to workflow engine
+		if _, err := runner.Update(ctx, triggerRun); err != nil {
+			log.Error(err, "failed to update trigger")
+			// Log the error but don't fail the reconciliation - continue with other operations
 		}
 
 		// Handle actions using the new action field (preferred) or deprecated boolean fields (backward compatibility)
@@ -267,6 +262,12 @@ StateMachine:
 
 	case v2pb.TRIGGER_RUN_STATE_PAUSED:
 		log.Info("TRIGGER_RUN_STATE_PAUSED")
+
+		// Sync TriggerRun spec changes to workflow engine even when paused
+		if _, err := runner.Update(ctx, triggerRun); err != nil {
+			log.Error(err, "failed to update trigger")
+			// Log the error but don't fail the reconciliation - continue with other operations
+		}
 
 		// Handle actions using the new action field
 		actionToPerform := triggerRun.Spec.Action

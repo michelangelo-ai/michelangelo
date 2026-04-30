@@ -221,3 +221,13 @@ func (b *backfillTrigger) Resume(ctx context.Context, triggerRun *v2pb.TriggerRu
 		ErrorMessage: err.Error(),
 	}, err
 }
+
+// Update is a no-op for backfill triggers as they are one-time workflows.
+//
+// Backfill triggers execute a single workflow and then complete. They don't
+// have recurring schedules to update. This method always returns success.
+//
+// Returns current TriggerRunStatus (state unchanged).
+func (b *backfillTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
+	return v2pb.TriggerRunStatus{State: triggerRun.Status.State}, nil
+}
