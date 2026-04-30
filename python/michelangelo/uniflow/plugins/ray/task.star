@@ -33,7 +33,6 @@ IMAGE_PULL_POLICY = os.environ.get("IMAGE_PULL_POLICY", "Never")
 RAY_LOG_URL_PREFIX = os.environ.get("RAY_LOG_URL_PREFIX")
 
 KUEUE_QUEUE_NAME = os.environ.get("KUEUE_QUEUE_NAME", "user-queue")
-metric_base_url = os.environ.get("METRIC_BASE_URL", "")
 
 def get_ray_log_url(ray_job_name):
     """
@@ -285,11 +284,6 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
     print("ray | first activity ID:", first_activity_id)  # NEW: Log the activity ID
 
     # Enhanced: Progress report with activity ID - this establishes the first activity for this task
-    external_resources = []
-    if metric_base_url:
-        metrics_url = metric_base_url + "/d/cluster-jobs/cluster-jobs?var-job=" + cluster_name
-        external_resources = [{"name": "Job Metrics", "url": metrics_url}]
-
     report_progress(
         task_path = task_path,
         task_name = task_name,
@@ -301,7 +295,6 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
         output = "",
         retry_attempt_id = retry_attempt_id,
         first_activity_id = first_activity_id,  # NEW: Store first activity ID for retry boundary
-        external_resources = external_resources,
     )
 
     atexit.register(terminate_cluster, cluster_namespace, cluster_name)
