@@ -40,17 +40,6 @@ const DEPLOYMENT_COLUMNS: ColumnConfig<object>[] = [
     },
   },
   {
-    id: 'metadata.labels["michelangelo/SpecUpdateTimestamp"]',
-    label: 'Last updated',
-    type: CellType.DATE,
-    accessor: (data: unknown) => {
-      const ts = (
-        data as { metadata?: { labels?: { 'michelangelo/SpecUpdateTimestamp'?: string } } }
-      )?.metadata?.labels?.['michelangelo/SpecUpdateTimestamp'];
-      return ts ? Math.floor(Number(ts) / 1_000_000) : undefined;
-    },
-  },
-  {
     id: 'spec.owner.name',
     label: 'Owner',
     type: CellType.TEXT,
