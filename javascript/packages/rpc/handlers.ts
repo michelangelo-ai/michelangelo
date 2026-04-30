@@ -8,6 +8,9 @@ async function createHandlers() {
   const services = await getServices();
 
   return {
+    ListDeployment: services.DeploymentService.listDeployment as ExtractUnaryRpc<
+      typeof services.DeploymentService.listDeployment
+    >,
     ListProject: services.ProjectService.listProject as ExtractUnaryRpc<
       typeof services.ProjectService.listProject
     >,
