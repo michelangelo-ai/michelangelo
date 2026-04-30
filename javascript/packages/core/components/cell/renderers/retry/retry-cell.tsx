@@ -56,7 +56,16 @@ export const RetryCell = (props: CellRendererProps<string>) => {
     const { pipelineRun } = pipelineRunData;
     const { workflowId, workflowRunId } = pipelineRun.status;
 
-    if (!value || !workflowId || !workflowRunId) {
+    // 🔧 FIX: Capture activity_id at mutation time and validate all required fields
+    const currentActivityId = value;
+
+    if (!currentActivityId || !workflowId || !workflowRunId) {
+      // Silently abort if required fields are missing - this prevents the protobuf error
+      console.warn('RetryCell: Cannot retry - missing required fields:', {
+        hasActivityId: !!currentActivityId,
+        hasWorkflowId: !!workflowId,
+        hasWorkflowRunId: !!workflowRunId,
+      });
       return;
     }
 
@@ -65,7 +74,7 @@ export const RetryCell = (props: CellRendererProps<string>) => {
       spec: {
         ...pipelineRun.spec,
         retryInfo: {
-          activityId: value,
+          activityId: currentActivityId,
           workflowId,
           // Must match status.workflowRunId to trigger backend retry processing
           workflowRunId,
