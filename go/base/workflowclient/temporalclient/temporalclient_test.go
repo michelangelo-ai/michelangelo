@@ -8,11 +8,14 @@ import (
 	"time"
 
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	temporalEnumsV1 "go.temporal.io/api/enums/v1"
+	schedulepb "go.temporal.io/api/schedule/v1"
 	workflowV1 "go.temporal.io/api/workflow/v1"
 	workflowserviceV1 "go.temporal.io/api/workflowservice/v1"
+	workflowservicemock "go.temporal.io/api/workflowservicemock/v1"
 	temporalClient "go.temporal.io/sdk/client"
 	temporalConverter "go.temporal.io/sdk/converter"
 	temporalMocks "go.temporal.io/sdk/mocks"
@@ -723,28 +726,56 @@ func TestDeleteTrigger(t *testing.T) {
 
 func TestUpdateTrigger(t *testing.T) {
 	workflowID := "testWorkflowID"
-	scheduleID := workflowID + "-schedule"
 	newCronSchedule := "0 6 * * *"
 
 	testCases := []struct {
-		name     string
-		mockFunc func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle)
-		errMsg   string
+		name      string
+		setupMock func(t *testing.T, mockClient *temporalMocks.Client)
+		errMsg    string
 	}{
 		{
 			name: "success",
-			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
-				mockClient.On("ScheduleClient").Return(mockScheduleClient)
-				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
-				mockScheduleHandle.On("Update", mock.Anything, mock.Anything).Return(nil)
+			setupMock: func(t *testing.T, mockClient *temporalMocks.Client) {
+				ctrl := gomock.NewController(t)
+				mockWS := workflowservicemock.NewMockWorkflowServiceClient(ctrl)
+				mockClient.On("WorkflowService").Return(mockWS)
+				mockWS.EXPECT().DescribeSchedule(gomock.Any(), gomock.Any()).Return(
+					&workflowserviceV1.DescribeScheduleResponse{
+						Schedule: &schedulepb.Schedule{
+							Spec: &schedulepb.ScheduleSpec{
+								StructuredCalendar: []*schedulepb.StructuredCalendarSpec{{}},
+							},
+						},
+					}, nil)
+				mockWS.EXPECT().UpdateSchedule(gomock.Any(), gomock.Any()).Return(
+					&workflowserviceV1.UpdateScheduleResponse{}, nil)
 			},
 		},
 		{
-			name: "error",
-			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
-				mockClient.On("ScheduleClient").Return(mockScheduleClient)
-				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
-				mockScheduleHandle.On("Update", mock.Anything, mock.Anything).Return(fmt.Errorf("update error"))
+			name: "error - describe fails",
+			setupMock: func(t *testing.T, mockClient *temporalMocks.Client) {
+				ctrl := gomock.NewController(t)
+				mockWS := workflowservicemock.NewMockWorkflowServiceClient(ctrl)
+				mockClient.On("WorkflowService").Return(mockWS)
+				mockWS.EXPECT().DescribeSchedule(gomock.Any(), gomock.Any()).Return(
+					nil, fmt.Errorf("describe error"))
+			},
+			errMsg: "describe error",
+		},
+		{
+			name: "error - update fails",
+			setupMock: func(t *testing.T, mockClient *temporalMocks.Client) {
+				ctrl := gomock.NewController(t)
+				mockWS := workflowservicemock.NewMockWorkflowServiceClient(ctrl)
+				mockClient.On("WorkflowService").Return(mockWS)
+				mockWS.EXPECT().DescribeSchedule(gomock.Any(), gomock.Any()).Return(
+					&workflowserviceV1.DescribeScheduleResponse{
+						Schedule: &schedulepb.Schedule{
+							Spec: &schedulepb.ScheduleSpec{},
+						},
+					}, nil)
+				mockWS.EXPECT().UpdateSchedule(gomock.Any(), gomock.Any()).Return(
+					nil, fmt.Errorf("update error"))
 			},
 			errMsg: "update error",
 		},
@@ -753,10 +784,8 @@ func TestUpdateTrigger(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			mockClient := temporalMocks.NewClient(t)
-			mockScheduleClient := temporalMocks.NewScheduleClient(t)
-			mockScheduleHandle := temporalMocks.NewScheduleHandle(t)
 			client := &TemporalClient{Client: mockClient}
-			testCase.mockFunc(mockClient, mockScheduleClient, mockScheduleHandle)
+			testCase.setupMock(t, mockClient)
 			err := client.UpdateTrigger(context.Background(), workflowID, newCronSchedule)
 			if testCase.errMsg != "" {
 				require.Error(t, err)
@@ -770,51 +799,54 @@ func TestUpdateTrigger(t *testing.T) {
 
 func TestGetTriggerSchedule(t *testing.T) {
 	workflowID := "testWorkflowID"
-	scheduleID := workflowID + "-schedule"
 	cronExpression := "0 6 * * *"
 
 	testCases := []struct {
 		name         string
-		mockFunc     func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle)
+		setupMock    func(t *testing.T, mockClient *temporalMocks.Client)
 		expectedCron string
 		errMsg       string
 	}{
 		{
 			name: "success - returns cron expression",
-			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
-				mockClient.On("ScheduleClient").Return(mockScheduleClient)
-				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
-				mockScheduleHandle.On("Describe", mock.Anything).Return(&temporalClient.ScheduleDescription{
-					Schedule: temporalClient.Schedule{
-						Spec: &temporalClient.ScheduleSpec{
-							CronExpressions: []string{cronExpression},
+			setupMock: func(t *testing.T, mockClient *temporalMocks.Client) {
+				ctrl := gomock.NewController(t)
+				mockWS := workflowservicemock.NewMockWorkflowServiceClient(ctrl)
+				mockClient.On("WorkflowService").Return(mockWS)
+				mockWS.EXPECT().DescribeSchedule(gomock.Any(), gomock.Any()).Return(
+					&workflowserviceV1.DescribeScheduleResponse{
+						Schedule: &schedulepb.Schedule{
+							Spec: &schedulepb.ScheduleSpec{
+								CronString: []string{cronExpression},
+							},
 						},
-					},
-				}, nil)
+					}, nil)
 			},
 			expectedCron: cronExpression,
 		},
 		{
 			name: "success - no cron expressions",
-			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
-				mockClient.On("ScheduleClient").Return(mockScheduleClient)
-				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
-				mockScheduleHandle.On("Describe", mock.Anything).Return(&temporalClient.ScheduleDescription{
-					Schedule: temporalClient.Schedule{
-						Spec: &temporalClient.ScheduleSpec{
-							CronExpressions: []string{},
+			setupMock: func(t *testing.T, mockClient *temporalMocks.Client) {
+				ctrl := gomock.NewController(t)
+				mockWS := workflowservicemock.NewMockWorkflowServiceClient(ctrl)
+				mockClient.On("WorkflowService").Return(mockWS)
+				mockWS.EXPECT().DescribeSchedule(gomock.Any(), gomock.Any()).Return(
+					&workflowserviceV1.DescribeScheduleResponse{
+						Schedule: &schedulepb.Schedule{
+							Spec: &schedulepb.ScheduleSpec{},
 						},
-					},
-				}, nil)
+					}, nil)
 			},
 			expectedCron: "",
 		},
 		{
 			name: "error - describe fails",
-			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
-				mockClient.On("ScheduleClient").Return(mockScheduleClient)
-				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
-				mockScheduleHandle.On("Describe", mock.Anything).Return(nil, fmt.Errorf("describe error"))
+			setupMock: func(t *testing.T, mockClient *temporalMocks.Client) {
+				ctrl := gomock.NewController(t)
+				mockWS := workflowservicemock.NewMockWorkflowServiceClient(ctrl)
+				mockClient.On("WorkflowService").Return(mockWS)
+				mockWS.EXPECT().DescribeSchedule(gomock.Any(), gomock.Any()).Return(
+					nil, fmt.Errorf("describe error"))
 			},
 			expectedCron: "",
 			errMsg:       "failed to describe schedule",
@@ -824,10 +856,8 @@ func TestGetTriggerSchedule(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			mockClient := temporalMocks.NewClient(t)
-			mockScheduleClient := temporalMocks.NewScheduleClient(t)
-			mockScheduleHandle := temporalMocks.NewScheduleHandle(t)
 			client := &TemporalClient{Client: mockClient}
-			testCase.mockFunc(mockClient, mockScheduleClient, mockScheduleHandle)
+			testCase.setupMock(t, mockClient)
 			cron, err := client.GetTriggerSchedule(context.Background(), workflowID)
 			if testCase.errMsg != "" {
 				require.Error(t, err)

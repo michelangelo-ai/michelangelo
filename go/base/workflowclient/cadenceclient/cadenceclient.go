@@ -147,15 +147,19 @@ func (c *CadenceClient) ListOpenWorkflow(ctx context.Context, request clientInte
 		return nil, err
 	}
 
-	// Convert Temporal response to our interface format
+	// Convert response to our interface format
 	executionsInfo := make([]clientInterface.WorkflowExecutionInfo, 0, len(response.Executions))
 	for _, exec := range response.Executions {
+		var executionTime time.Time
+		if exec.ExecutionTime != nil {
+			executionTime = time.Unix(0, *exec.ExecutionTime)
+		}
 		executionsInfo = append(executionsInfo, clientInterface.WorkflowExecutionInfo{
 			Execution: &clientInterface.WorkflowExecution{
 				ID:    exec.Execution.GetWorkflowId(),
 				RunID: exec.Execution.GetRunId(),
 			},
-			ExecutionTime: time.Unix(0, *exec.ExecutionTime),
+			ExecutionTime: executionTime,
 			Status:        mapCadenceStatusToInterface(exec.CloseStatus),
 		})
 	}
