@@ -32,7 +32,7 @@ IMAGE_PULL_POLICY = os.environ.get("IMAGE_PULL_POLICY", "Never")
 
 RAY_LOG_URL_PREFIX = os.environ.get("RAY_LOG_URL_PREFIX")
 
-KUEUE_QUEUE_NAME = os.environ.get("KUEUE_QUEUE_NAME", "")
+KUEUE_QUEUE_NAME = os.environ.get("KUEUE_QUEUE_NAME", "user-queue")
 metric_base_url = os.environ.get("METRIC_BASE_URL", "")
 
 def get_ray_log_url(ray_job_name):

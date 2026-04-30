@@ -52,6 +52,7 @@ func (m Mapper) mapRay(rayJob *v2pb.RayJob, jobClusterObject runtime.Object, clu
 func (m Mapper) mapRayCluster(rayCluster *v2pb.RayCluster) (runtime.Object, error) {
 	workerGroupSpecs := getWorkerGroupSpecs(rayCluster.GetName(), rayCluster.GetSpec().Workers)
 	headGroupSpec := getHeadGroupSpec(rayCluster.GetSpec().Head)
+
 	rayV1Cluster := &rayv1.RayCluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       RayClusterKind,
@@ -60,6 +61,7 @@ func (m Mapper) mapRayCluster(rayCluster *v2pb.RayCluster) (runtime.Object, erro
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rayCluster.Name,
 			Namespace: RayLocalNamespace,
+			Labels:    rayCluster.GetLabels(),
 		},
 		Spec: rayv1.RayClusterSpec{
 			HeadGroupSpec:    headGroupSpec,
