@@ -1,6 +1,11 @@
 import { render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 
+import {
+  DEPLOYMENT_CONDITION_STATUS,
+  DEPLOYMENT_STAGE,
+  DEPLOYMENT_STATE,
+} from '#core/config/entities/deployment/shared';
 import { DEPLOY_PHASE } from '#core/config/phases/deploy';
 import { EntityDetailRoute } from '#core/router/entity-detail-route';
 import { PhaseListRoute } from '#core/router/phase-list-route';
@@ -71,7 +76,6 @@ describe('Deployment list page', () => {
 });
 
 describe('Deployment detail page', () => {
-
   const mockDeployment = {
     metadata: {
       name: 'sentiment-deployment',
@@ -81,17 +85,17 @@ describe('Deployment detail page', () => {
       },
     },
     status: {
-      state: 2, // Healthy
-      stage: 4, // Rollout complete
+      state: DEPLOYMENT_STATE.HEALTHY,
+      stage: DEPLOYMENT_STAGE.ROLLOUT_COMPLETE,
       conditions: [
         {
           type: 'Validation',
-          status: 1, // CONDITION_STATUS_TRUE → SUCCESS
+          status: DEPLOYMENT_CONDITION_STATUS.TRUE,
           lastUpdatedTimestamp: '1746000600000',
         },
         {
           type: 'Placement',
-          status: 0, // CONDITION_STATUS_UNKNOWN → RUNNING (focused)
+          status: DEPLOYMENT_CONDITION_STATUS.UNKNOWN,
           message: 'Placing on inference server.',
           reason: 'PlacementInProgress',
           lastUpdatedTimestamp: '1746002400000',

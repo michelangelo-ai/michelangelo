@@ -1,6 +1,6 @@
 import { CellType } from '#core/components/cell/constants';
 import { TASK_STATE } from '#core/components/views/execution/constants';
-import { DEPLOYMENT_STAGE_CELL, DEPLOYMENT_STATE_CELL } from './shared';
+import { DEPLOYMENT_CONDITION_STATUS, DEPLOYMENT_STAGE_CELL, DEPLOYMENT_STATE_CELL } from './shared';
 
 import type { DetailViewConfig } from '#core/components/views/types';
 
@@ -53,11 +53,11 @@ export const DEPLOYMENT_DETAIL_CONFIG: DetailViewConfig = {
         ],
         stateBuilder: (record: { status: number }) => {
           switch (record.status) {
-            case 1: // CONDITION_STATUS_TRUE
+            case DEPLOYMENT_CONDITION_STATUS.TRUE:
               return TASK_STATE.SUCCESS;
-            case 2: // CONDITION_STATUS_FALSE
+            case DEPLOYMENT_CONDITION_STATUS.FALSE:
               return TASK_STATE.ERROR;
-            case 0: // CONDITION_STATUS_UNKNOWN
+            case DEPLOYMENT_CONDITION_STATUS.UNKNOWN:
             default:
               return TASK_STATE.RUNNING;
           }
