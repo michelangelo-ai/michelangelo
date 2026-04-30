@@ -733,8 +733,7 @@ func TestUpdateTrigger(t *testing.T) {
 		Client: &cadencemocks.Client{},
 	}
 	err := client.UpdateTrigger(context.Background(), workflowID, newCronSchedule)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not supported")
+	assert.NoError(t, err)
 }
 
 func TestGetTriggerSchedule(t *testing.T) {

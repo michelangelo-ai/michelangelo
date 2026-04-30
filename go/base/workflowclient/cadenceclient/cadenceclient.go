@@ -295,14 +295,15 @@ func (c *CadenceClient) DeleteTrigger(ctx context.Context, workflowID string, ru
 	return c.Client.TerminateWorkflow(ctx, workflowID, runID, "trigger killed", nil)
 }
 
-// UpdateTrigger is not supported by Cadence (schedule updates are a Temporal feature).
+// UpdateTrigger is a no-op for Cadence (schedule updates are a Temporal feature).
 // In Cadence, cron schedules are embedded in the workflow and cannot be updated in place.
-func (c *CadenceClient) UpdateTrigger(_ context.Context, workflowID string, _ string) error {
-	return fmt.Errorf("UpdateTrigger not supported by Cadence provider (workflowID: %s)", workflowID)
+// Returns nil to indicate success - the operation is silently skipped.
+func (c *CadenceClient) UpdateTrigger(_ context.Context, _ string, _ string) error {
+	return nil
 }
 
 // GetTriggerSchedule is not supported by Cadence (schedules are a Temporal feature).
 // In Cadence, cron schedules are embedded in the workflow and cannot be queried separately.
-func (c *CadenceClient) GetTriggerSchedule(_ context.Context, workflowID string) (string, error) {
+func (c *CadenceClient) GetTriggerSchedule(_ context.Context, _ string) (string, error) {
 	return "", nil
 }
