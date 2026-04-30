@@ -184,12 +184,20 @@ func (c *cronTrigger) Resume(ctx context.Context, triggerRun *v2pb.TriggerRun) (
 // in the workflow engine and updates the engine if they differ. The TriggerRun spec
 // is the source of truth.
 //
+// For Cadence: This is a no-op since Cadence embeds cron schedules in workflows
+// and doesn't support in-place schedule updates.
+//
 // Returns current TriggerRunStatus (state unchanged). Updates are non-blocking.
 func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
 	log := c.Log.WithValues("triggerRun", k8stypes.NamespacedName{
 		Namespace: triggerRun.Namespace,
 		Name:      triggerRun.Name,
 	})
+
+	// Skip for Cadence - schedule updates are a Temporal-only feature
+	if c.WorkflowClient.GetProvider() != "temporal" {
+		return v2pb.TriggerRunStatus{State: triggerRun.Status.State}, nil
+	}
 
 	// Get desired cron from TriggerRun spec
 	desiredCron := triggerRun.Spec.Trigger.GetCronSchedule().GetCron()

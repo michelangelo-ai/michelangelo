@@ -368,6 +368,7 @@ func TestCronTrigger_Update(t *testing.T) {
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+				mockClient.EXPECT().GetProvider().Return("temporal")
 				mockClient.EXPECT().GetTriggerSchedule(gomock.Any(), "test-namespace.test-triggerrun").Return("0 6 * * *", nil)
 				// UpdateTrigger should NOT be called
 				return mockClient
@@ -395,8 +396,36 @@ func TestCronTrigger_Update(t *testing.T) {
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+				mockClient.EXPECT().GetProvider().Return("temporal")
 				mockClient.EXPECT().GetTriggerSchedule(gomock.Any(), "test-namespace.test-triggerrun").Return("0 6 * * *", nil)
 				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 0 * * *").Return(nil)
+				return mockClient
+			},
+			expectError: false,
+		},
+		{
+			name: "cadence provider - skip update",
+			triggerRun: &v2pb.TriggerRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test-namespace",
+					Name:      "test-triggerrun",
+				},
+				Spec: v2pb.TriggerRunSpec{
+					Trigger: &v2pb.Trigger{
+						TriggerType: &v2pb.Trigger_CronSchedule{
+							CronSchedule: &v2pb.CronSchedule{Cron: "0 0 * * *"},
+						},
+					},
+				},
+				Status: v2pb.TriggerRunStatus{
+					State: v2pb.TRIGGER_RUN_STATE_RUNNING,
+				},
+			},
+			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
+				ctrl := gomock.NewController(t)
+				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+				mockClient.EXPECT().GetProvider().Return("cadence")
+				// No GetTriggerSchedule or UpdateTrigger calls expected
 				return mockClient
 			},
 			expectError: false,
@@ -422,7 +451,8 @@ func TestCronTrigger_Update(t *testing.T) {
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-				// No calls expected
+				mockClient.EXPECT().GetProvider().Return("temporal")
+				// No calls expected after provider check
 				return mockClient
 			},
 			expectError: false,
@@ -448,6 +478,7 @@ func TestCronTrigger_Update(t *testing.T) {
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+				mockClient.EXPECT().GetProvider().Return("temporal")
 				mockClient.EXPECT().GetTriggerSchedule(gomock.Any(), "test-namespace.test-triggerrun").Return("", fmt.Errorf("get failed"))
 				return mockClient
 			},
@@ -474,6 +505,7 @@ func TestCronTrigger_Update(t *testing.T) {
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+				mockClient.EXPECT().GetProvider().Return("temporal")
 				mockClient.EXPECT().GetTriggerSchedule(gomock.Any(), "test-namespace.test-triggerrun").Return("0 6 * * *", nil)
 				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 0 * * *").Return(fmt.Errorf("update failed"))
 				return mockClient
