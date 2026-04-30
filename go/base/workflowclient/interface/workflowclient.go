@@ -118,4 +118,8 @@ type WorkflowClient interface {
 	// workflowID identifies the trigger; newCronSchedule is the new cron expression.
 	// Only supported for Temporal. Returns an error for Cadence.
 	UpdateTrigger(ctx context.Context, workflowID string, newCronSchedule string) error
+	// GetTriggerSchedule retrieves the current cron schedule of a recurring trigger.
+	// workflowID identifies the trigger. Returns the cron expression string.
+	// Only supported for Temporal. Returns empty string for Cadence.
+	GetTriggerSchedule(ctx context.Context, workflowID string) (string, error)
 }

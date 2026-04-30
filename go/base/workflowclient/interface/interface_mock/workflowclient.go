@@ -282,3 +282,18 @@ func (mr *MockWorkflowClientMockRecorder) UpdateTrigger(ctx, workflowID, newCron
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTrigger", reflect.TypeOf((*MockWorkflowClient)(nil).UpdateTrigger), ctx, workflowID, newCronSchedule)
 }
+
+// GetTriggerSchedule mocks base method.
+func (m *MockWorkflowClient) GetTriggerSchedule(ctx context.Context, workflowID string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTriggerSchedule", ctx, workflowID)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTriggerSchedule indicates an expected call of GetTriggerSchedule.
+func (mr *MockWorkflowClientMockRecorder) GetTriggerSchedule(ctx, workflowID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTriggerSchedule", reflect.TypeOf((*MockWorkflowClient)(nil).GetTriggerSchedule), ctx, workflowID)
+}

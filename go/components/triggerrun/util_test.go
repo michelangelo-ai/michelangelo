@@ -691,17 +691,38 @@ func TestGetAdhocRunWorkflowStatus(t *testing.T) {
 	}
 }
 
-func TestUpdateCronScheduleIfChanged(t *testing.T) {
+func TestSyncCronScheduleToTemporal(t *testing.T) {
 	tests := []struct {
-		name           string
-		triggerRun     *v2pb.TriggerRun
-		desiredCron    string
-		setupMock      func(mockClient *interfaceMock.MockWorkflowClient)
-		expectedUpdate bool
-		expectError    bool
+		name        string
+		triggerRun  *v2pb.TriggerRun
+		desiredCron string
+		setupMock   func(mockClient *interfaceMock.MockWorkflowClient)
+		expectError bool
 	}{
 		{
-			name: "successful update for cron trigger",
+			name: "no sync needed - schedules already match",
+			triggerRun: &v2pb.TriggerRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test-namespace",
+					Name:      "test-triggerrun",
+				},
+				Spec: v2pb.TriggerRunSpec{
+					Trigger: &v2pb.Trigger{
+						TriggerType: &v2pb.Trigger_CronSchedule{
+							CronSchedule: &v2pb.CronSchedule{Cron: "0 6 * * *"},
+						},
+					},
+				},
+			},
+			desiredCron: "0 6 * * *",
+			setupMock: func(mockClient *interfaceMock.MockWorkflowClient) {
+				mockClient.EXPECT().GetTriggerSchedule(gomock.Any(), "test-namespace.test-triggerrun").Return("0 6 * * *", nil)
+				// UpdateTrigger should NOT be called since schedules match
+			},
+			expectError: false,
+		},
+		{
+			name: "sync needed - schedules differ",
 			triggerRun: &v2pb.TriggerRun{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "test-namespace",
@@ -715,15 +736,15 @@ func TestUpdateCronScheduleIfChanged(t *testing.T) {
 					},
 				},
 			},
-			desiredCron: "0 6 * * *",
+			desiredCron: "0 0 * * *",
 			setupMock: func(mockClient *interfaceMock.MockWorkflowClient) {
-				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 6 * * *").Return(nil)
+				mockClient.EXPECT().GetTriggerSchedule(gomock.Any(), "test-namespace.test-triggerrun").Return("0 6 * * *", nil)
+				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 0 * * *").Return(nil)
 			},
-			expectedUpdate: true,
-			expectError:    false,
+			expectError: false,
 		},
 		{
-			name: "not a cron trigger - skip update",
+			name: "not a cron trigger - skip sync",
 			triggerRun: &v2pb.TriggerRun{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "test-namespace",
@@ -741,11 +762,10 @@ func TestUpdateCronScheduleIfChanged(t *testing.T) {
 			setupMock: func(mockClient *interfaceMock.MockWorkflowClient) {
 				// No calls expected
 			},
-			expectedUpdate: false,
-			expectError:    false,
+			expectError: false,
 		},
 		{
-			name: "empty desired cron - skip update",
+			name: "empty desired cron - skip sync",
 			triggerRun: &v2pb.TriggerRun{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "test-namespace",
@@ -763,8 +783,28 @@ func TestUpdateCronScheduleIfChanged(t *testing.T) {
 			setupMock: func(mockClient *interfaceMock.MockWorkflowClient) {
 				// No calls expected
 			},
-			expectedUpdate: false,
-			expectError:    false,
+			expectError: false,
+		},
+		{
+			name: "get trigger schedule fails",
+			triggerRun: &v2pb.TriggerRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test-namespace",
+					Name:      "test-triggerrun",
+				},
+				Spec: v2pb.TriggerRunSpec{
+					Trigger: &v2pb.Trigger{
+						TriggerType: &v2pb.Trigger_CronSchedule{
+							CronSchedule: &v2pb.CronSchedule{Cron: "0 6 * * *"},
+						},
+					},
+				},
+			},
+			desiredCron: "0 6 * * *",
+			setupMock: func(mockClient *interfaceMock.MockWorkflowClient) {
+				mockClient.EXPECT().GetTriggerSchedule(gomock.Any(), "test-namespace.test-triggerrun").Return("", fmt.Errorf("failed to get schedule"))
+			},
+			expectError: true,
 		},
 		{
 			name: "update trigger fails",
@@ -781,12 +821,34 @@ func TestUpdateCronScheduleIfChanged(t *testing.T) {
 					},
 				},
 			},
+			desiredCron: "0 0 * * *",
+			setupMock: func(mockClient *interfaceMock.MockWorkflowClient) {
+				mockClient.EXPECT().GetTriggerSchedule(gomock.Any(), "test-namespace.test-triggerrun").Return("0 6 * * *", nil)
+				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 0 * * *").Return(fmt.Errorf("update failed"))
+			},
+			expectError: true,
+		},
+		{
+			name: "Temporal returns empty string - triggers update",
+			triggerRun: &v2pb.TriggerRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test-namespace",
+					Name:      "test-triggerrun",
+				},
+				Spec: v2pb.TriggerRunSpec{
+					Trigger: &v2pb.Trigger{
+						TriggerType: &v2pb.Trigger_CronSchedule{
+							CronSchedule: &v2pb.CronSchedule{Cron: "0 6 * * *"},
+						},
+					},
+				},
+			},
 			desiredCron: "0 6 * * *",
 			setupMock: func(mockClient *interfaceMock.MockWorkflowClient) {
-				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 6 * * *").Return(fmt.Errorf("failed to update schedule"))
+				mockClient.EXPECT().GetTriggerSchedule(gomock.Any(), "test-namespace.test-triggerrun").Return("", nil)
+				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 6 * * *").Return(nil)
 			},
-			expectedUpdate: false,
-			expectError:    true,
+			expectError: false,
 		},
 	}
 
@@ -802,7 +864,7 @@ func TestUpdateCronScheduleIfChanged(t *testing.T) {
 			logger := zapr.NewLogger(zaptest.NewLogger(t))
 
 			// Execute the function
-			updated, err := updateCronScheduleIfChanged(context.Background(), tt.triggerRun, tt.desiredCron, logger, mockClient)
+			err := syncCronScheduleToTemporal(context.Background(), tt.triggerRun, tt.desiredCron, logger, mockClient)
 
 			// Verify results
 			if tt.expectError {
@@ -810,8 +872,6 @@ func TestUpdateCronScheduleIfChanged(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
-
-			assert.Equal(t, tt.expectedUpdate, updated)
 		})
 	}
 }

@@ -206,15 +206,12 @@ StateMachine:
 	case v2pb.TRIGGER_RUN_STATE_RUNNING:
 		log.Info("TRIGGER_RUN_STATE_RUNNING")
 
-		// Check if cron schedule needs to be updated (for cron triggers only)
+		// Check if cron schedule needs to be updated in Temporal (for cron triggers only)
 		if triggerRun.Spec.Trigger.GetCronSchedule() != nil {
 			desiredCron := triggerRun.Spec.Trigger.GetCronSchedule().GetCron()
-			updated, err := updateCronScheduleIfChanged(ctx, triggerRun, desiredCron, log, r.workflowClient)
-			if err != nil {
-				log.Error(err, "failed to update cron schedule")
+			if err := syncCronScheduleToTemporal(ctx, triggerRun, desiredCron, log, r.workflowClient); err != nil {
+				log.Error(err, "failed to sync cron schedule to Temporal")
 				// Log the error but don't fail the reconciliation - continue with other operations
-			} else if updated {
-				log.Info("cron schedule updated", "newCron", desiredCron)
 			}
 		}
 

@@ -415,3 +415,21 @@ func (c *TemporalClient) UpdateTrigger(ctx context.Context, workflowID string, n
 		},
 	})
 }
+
+// GetTriggerSchedule retrieves the current cron schedule of a Temporal schedule.
+func (c *TemporalClient) GetTriggerSchedule(ctx context.Context, workflowID string) (string, error) {
+	scheduleID := workflowID + "-schedule"
+	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
+
+	desc, err := handle.Describe(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to describe schedule: %w", err)
+	}
+
+	// Return the first cron expression if it exists
+	if len(desc.Schedule.Spec.CronExpressions) > 0 {
+		return desc.Schedule.Spec.CronExpressions[0], nil
+	}
+
+	return "", nil
+}

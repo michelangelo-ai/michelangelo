@@ -767,3 +767,75 @@ func TestUpdateTrigger(t *testing.T) {
 		})
 	}
 }
+
+func TestGetTriggerSchedule(t *testing.T) {
+	workflowID := "testWorkflowID"
+	scheduleID := workflowID + "-schedule"
+	cronExpression := "0 6 * * *"
+
+	testCases := []struct {
+		name         string
+		mockFunc     func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle)
+		expectedCron string
+		errMsg       string
+	}{
+		{
+			name: "success - returns cron expression",
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
+				mockScheduleHandle.On("Describe", mock.Anything).Return(&temporalClient.ScheduleDescription{
+					Schedule: temporalClient.Schedule{
+						Spec: &temporalClient.ScheduleSpec{
+							CronExpressions: []string{cronExpression},
+						},
+					},
+				}, nil)
+			},
+			expectedCron: cronExpression,
+		},
+		{
+			name: "success - no cron expressions",
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
+				mockScheduleHandle.On("Describe", mock.Anything).Return(&temporalClient.ScheduleDescription{
+					Schedule: temporalClient.Schedule{
+						Spec: &temporalClient.ScheduleSpec{
+							CronExpressions: []string{},
+						},
+					},
+				}, nil)
+			},
+			expectedCron: "",
+		},
+		{
+			name: "error - describe fails",
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
+				mockScheduleHandle.On("Describe", mock.Anything).Return(nil, fmt.Errorf("describe error"))
+			},
+			expectedCron: "",
+			errMsg:       "failed to describe schedule",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mockClient := temporalMocks.NewClient(t)
+			mockScheduleClient := temporalMocks.NewScheduleClient(t)
+			mockScheduleHandle := temporalMocks.NewScheduleHandle(t)
+			client := &TemporalClient{Client: mockClient}
+			testCase.mockFunc(mockClient, mockScheduleClient, mockScheduleHandle)
+			cron, err := client.GetTriggerSchedule(context.Background(), workflowID)
+			if testCase.errMsg != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), testCase.errMsg)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, testCase.expectedCron, cron)
+		})
+	}
+}

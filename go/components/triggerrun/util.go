@@ -446,50 +446,71 @@ func resumeWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.L
 	return triggerRun.Status, nil
 }
 
-// updateCronScheduleIfChanged checks if the cron schedule has changed and updates it if needed.
+// syncCronScheduleToTemporal ensures Temporal schedule matches TriggerRun spec.
 //
-// This function compares the TriggerRun spec cron schedule with the desired cron schedule,
-// and updates the workflow engine schedule if they differ. Only works for Temporal.
+// This function compares the TriggerRun spec cron schedule with the actual schedule in Temporal
+// and updates Temporal if they differ. TriggerRun CRD is the source of truth.
+// Only works for Temporal (Cadence returns empty string and no-op).
 //
-// Returns true if an update was performed, false if no update was needed, and error if update failed.
-func updateCronScheduleIfChanged(ctx context.Context, triggerRun *v2pb.TriggerRun, desiredCron string, log logr.Logger, workflowClient clientInterface.WorkflowClient) (bool, error) {
+// Returns error if there's a failure querying or updating the workflow engine.
+func syncCronScheduleToTemporal(ctx context.Context, triggerRun *v2pb.TriggerRun, desiredCron string, log logr.Logger, workflowClient clientInterface.WorkflowClient) error {
 	wid := generateWorkflowID(triggerRun)
 
 	// Skip if workflow client is nil (e.g., in tests)
 	if workflowClient == nil {
-		return false, nil
+		return nil
 	}
 
 	// Skip if not a cron trigger
 	triggerType := GetTriggerType(triggerRun)
 	if triggerType != TriggerTypeCron {
-		return false, nil
+		return nil
 	}
 
 	// Skip if desired cron is empty
 	if desiredCron == "" {
-		return false, nil
+		return nil
 	}
 
-	log.Info("checking if cron schedule update is needed",
-		"workflowID", wid,
-		"desiredCron", desiredCron)
-
-	// Update the schedule
-	err := workflowClient.UpdateTrigger(ctx, wid, desiredCron)
+	// Get actual cron from Temporal
+	actualCron, err := workflowClient.GetTriggerSchedule(ctx, wid)
 	if err != nil {
-		log.Error(err, "failed to update cron schedule",
+		log.Error(err, "failed to get trigger schedule from Temporal",
+			"operation", "get_trigger_schedule",
+			"namespace", triggerRun.Namespace,
+			"name", triggerRun.Name,
+			"workflowID", wid)
+		return fmt.Errorf("get trigger schedule for %s/%s: %w",
+			triggerRun.Namespace, triggerRun.Name, err)
+	}
+
+	// Skip if already in sync
+	if actualCron == desiredCron {
+		return nil
+	}
+
+	// Update Temporal to match TriggerRun spec
+	log.Info("syncing cron schedule to Temporal",
+		"namespace", triggerRun.Namespace,
+		"name", triggerRun.Name,
+		"workflowID", wid,
+		"currentTemporalCron", actualCron,
+		"desiredTriggerRunCron", desiredCron)
+
+	err = workflowClient.UpdateTrigger(ctx, wid, desiredCron)
+	if err != nil {
+		log.Error(err, "failed to update Temporal schedule",
 			"operation", "update_trigger",
 			"namespace", triggerRun.Namespace,
 			"name", triggerRun.Name,
 			"workflowID", wid,
 			"desiredCron", desiredCron)
-		return false, fmt.Errorf("update trigger schedule for %s/%s: %w",
+		return fmt.Errorf("update trigger schedule for %s/%s: %w",
 			triggerRun.Namespace, triggerRun.Name, err)
 	}
 
-	log.Info("cron schedule updated successfully",
+	log.Info("successfully synced cron schedule to Temporal",
 		"workflowID", wid,
 		"newCron", desiredCron)
-	return true, nil
+	return nil
 }

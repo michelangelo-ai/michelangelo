@@ -737,6 +737,16 @@ func TestUpdateTrigger(t *testing.T) {
 	assert.Contains(t, err.Error(), "not supported")
 }
 
+func TestGetTriggerSchedule(t *testing.T) {
+	workflowID := "testWorkflowID"
+	client := &CadenceClient{
+		Client: &cadencemocks.Client{},
+	}
+	cron, err := client.GetTriggerSchedule(context.Background(), workflowID)
+	assert.NoError(t, err)
+	assert.Equal(t, "", cron)
+}
+
 // Mock implementation of cadence history iterator
 type mockHistoryIterator struct {
 	events       []*shared.HistoryEvent
