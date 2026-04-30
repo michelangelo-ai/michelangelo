@@ -1,6 +1,10 @@
 import { CellType } from '#core/components/cell/constants';
 import { TASK_STATE } from '#core/components/views/execution/constants';
-import { DEPLOYMENT_CONDITION_STATUS, DEPLOYMENT_STAGE_CELL, DEPLOYMENT_STATE_CELL } from './shared';
+import {
+  DEPLOYMENT_CONDITION_STATUS,
+  DEPLOYMENT_STAGE_CELL,
+  DEPLOYMENT_STATE_CELL,
+} from './shared';
 
 import type { DetailViewConfig } from '#core/components/views/types';
 
