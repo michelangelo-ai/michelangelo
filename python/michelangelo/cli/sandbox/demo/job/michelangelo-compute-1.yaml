@@ -1,0 +1,14 @@
+# Michelangelo Cluster CR for michelangelo-compute-1.
+# Applied to the sandbox cluster when running: ma sandbox demo job
+# host and port are patched in at runtime from the k3d kubeconfig.
+apiVersion: michelangelo.api/v2
+kind: Cluster
+metadata:
+  name: michelangelo-compute-1
+  namespace: ma-system
+spec:
+  kubernetes:
+    rest:
+      tokenTag: cluster-michelangelo-compute-1-client-token
+      caDataTag: cluster-michelangelo-compute-1-ca-data
+    skus: []

@@ -32,6 +32,8 @@ IMAGE_PULL_POLICY = os.environ.get("IMAGE_PULL_POLICY", "Never")
 
 RAY_LOG_URL_PREFIX = os.environ.get("RAY_LOG_URL_PREFIX")
 
+KUEUE_QUEUE_NAME = os.environ.get("KUEUE_QUEUE_NAME", "user-queue")
+
 def get_ray_log_url(ray_job_name):
     """
     Generate a log URL for a Ray job based on the job name.
@@ -473,11 +475,16 @@ def ray_cluster_spec(
         # Add SYS_PTRACE capability for profiling.
         annotations["michelangelo/profiling-ptrace-enabled"] = "true"
 
+    labels = {}
+    if KUEUE_QUEUE_NAME:
+        labels["kueue.x-k8s.io/queue-name"] = KUEUE_QUEUE_NAME
+
     return {
         "metadata": {
             "generateName": "uf-ray-",
             "namespace": "default",
             "annotations": annotations,
+            "labels": labels,
         },
         "spec": {
             "user": {"name": USER_ID},
