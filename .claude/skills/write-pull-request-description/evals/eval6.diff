@@ -1,0 +1,27 @@
+Commit message: Cron Trigger Support with Dynamic Parameters (#371)
+
+Files changed (48 files, +4664/-76):
+ go/components/triggerrun/controller.go | 192 ++++++++
+ go/components/triggerrun/cron_trigger.go | 112 +++++
+ go/components/triggerrun/cron_trigger_test.go | 279 ++++++++++++
+ go/worker/activities/trigger/trigger_activities.go | 197 +++++++++
+ go/worker/workflows/trigger/cron_trigger_workflows.go | 428 ++++++++++++++++++
+ go/base/workflowclient/cadenceclient/cadenceclient.go | 122 ++++--
+ go/base/workflowclient/temporalclient/temporalclient.go | 133 ++++--
+ go/base/workflowclient/interface/workflowclient.go | 34 +-
+ ... and 40 more files
+
+Diff sample:
++// mapCadenceStatusToInterface maps Cadence workflow status to our interface status
++func mapCadenceStatusToInterface(closeStatus *shared.WorkflowExecutionCloseStatus) clientInterface.WorkflowExecutionStatus {
++	if closeStatus == nil {
++		return clientInterface.WorkflowExecutionStatusRunning
++	}
++	switch *closeStatus {
++	case shared.WorkflowExecutionCloseStatusCompleted:
++		return clientInterface.WorkflowExecutionStatusCompleted
++	...
++	}
++}
++
+		CronSchedule: options.CronSchedule,

@@ -1,0 +1,28 @@
+diff --git a/config/env.go b/config/env.go
+index abc1234..def5678 100644
+--- a/config/env.go
++++ b/config/env.go
+@@ -14,6 +14,9 @@ type Config struct {
+ 	DatabaseHost string `env:"DATABASE_HOST,required"`
+ 	DatabasePort int    `env:"DATABASE_PORT" envDefault:"5432"`
++	// MaxConnections caps the connection pool size shared across all ingester workers.
++	// Must be set before deploying; existing pods will not pick up the default until restarted.
++	MaxConnections int `env:"DATABASE_MAX_CONNECTIONS" envDefault:"25"`
+ }
+
+diff --git a/migrations/20240318_add_pipeline_audit_log.sql b/migrations/20240318_add_pipeline_audit_log.sql
+new file mode 100644
+--- /dev/null
++++ b/migrations/20240318_add_pipeline_audit_log.sql
+@@ -0,0 +1,14 @@
++-- NOT reversible without data loss.
++CREATE TABLE pipeline_audit_log (
++    id          BIGSERIAL PRIMARY KEY,
++    pipeline_id BIGINT NOT NULL REFERENCES pipelines(id) ON DELETE CASCADE,
++    actor_id    BIGINT NOT NULL,
++    action      VARCHAR(64) NOT NULL,
++    metadata    JSONB,
++    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
++);
++CREATE INDEX idx_pal_pipeline_id ON pipeline_audit_log(pipeline_id);
++CREATE INDEX idx_pal_created_at  ON pipeline_audit_log(created_at);
