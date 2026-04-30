@@ -23,6 +23,7 @@ const (
 	_workflowClientConfigKey  = "workflowClient"
 	_mysqlConfigKey           = "mysql"
 	_ingesterConfigKey        = "ingester"
+	_inferenceServerConfigKey = "inferenceServer"
 )
 
 // K8sConfig is the configuration for k8s REST client.
@@ -129,4 +130,28 @@ func GetIngesterConfig(provider config.Provider) (IngesterConfig, error) {
 	ingesterConfig := IngesterConfig{}
 	err := provider.Get(_ingesterConfigKey).Populate(&ingesterConfig)
 	return ingesterConfig, err
+}
+
+// InferenceServerConfig is the controller-side configuration for the inference
+// server controller.
+type InferenceServerConfig struct {
+	Gateway GatewayConfig `yaml:"gateway"`
+}
+
+// GatewayConfig describes how the inference server controller locates a
+// cluster's ingress Gateway Service. The Service is set up out-of-band (e.g.,
+// by `ma sandbox create` for sandbox); this config tells the EndpointSource
+// where to find it.
+type GatewayConfig struct {
+	ServiceName      string `yaml:"serviceName"`
+	ServiceNamespace string `yaml:"serviceNamespace"`
+	PortName         string `yaml:"portName"`
+}
+
+// GetInferenceServerConfig parses the configuration file and returns the
+// inference server controller configuration.
+func GetInferenceServerConfig(provider config.Provider) (InferenceServerConfig, error) {
+	inferenceServerConfig := InferenceServerConfig{}
+	err := provider.Get(_inferenceServerConfigKey).Populate(&inferenceServerConfig)
+	return inferenceServerConfig, err
 }

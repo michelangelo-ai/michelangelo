@@ -19,7 +19,7 @@ metadata:
   name: ma-gateway
   namespace: default
   annotations:
-    networking.istio.io/service-type: ClusterIP
+    networking.istio.io/service-type: NodePort
 spec:
   gatewayClassName: istio
   listeners:

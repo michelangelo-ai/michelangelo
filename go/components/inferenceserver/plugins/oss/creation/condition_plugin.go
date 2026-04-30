@@ -6,6 +6,7 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/endpoints"
 	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -16,15 +17,19 @@ type CreationPlugin struct {
 	clientFactory       clientfactory.ClientFactory
 	registry            *backends.Registry
 	modelConfigProvider modelconfig.ModelConfigProvider
+	endpointPublisher   endpoints.EndpointPublisher
+	endpointSource      endpoints.EndpointSource
 	logger              *zap.Logger
 }
 
 // NewCreationPlugin creates a plugin that manages validation, provisioning, health checks, and routing.
-func NewCreationPlugin(clientFactory clientfactory.ClientFactory, registry *backends.Registry, modelConfigProvider modelconfig.ModelConfigProvider, logger *zap.Logger) conditionInterfaces.Plugin[*v2pb.InferenceServer] {
+func NewCreationPlugin(clientFactory clientfactory.ClientFactory, registry *backends.Registry, modelConfigProvider modelconfig.ModelConfigProvider, endpointPublisher endpoints.EndpointPublisher, endpointSource endpoints.EndpointSource, logger *zap.Logger) conditionInterfaces.Plugin[*v2pb.InferenceServer] {
 	return &CreationPlugin{
 		clientFactory:       clientFactory,
 		registry:            registry,
 		modelConfigProvider: modelConfigProvider,
+		endpointPublisher:   endpointPublisher,
+		endpointSource:      endpointSource,
 		logger:              logger,
 	}
 }
@@ -34,6 +39,7 @@ func (p *CreationPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.
 	return []conditionInterfaces.ConditionActor[*v2pb.InferenceServer]{
 		NewValidationActor(p.registry, p.logger),
 		NewBackendProvisionActor(p.clientFactory, p.registry, p.logger),
+		NewEndpointPublishActor(p.endpointPublisher, p.endpointSource, p.logger),
 		NewModelConfigProvisionActor(p.clientFactory, p.modelConfigProvider, p.logger),
 		NewHealthCheckActor(p.clientFactory, p.registry, p.logger),
 	}

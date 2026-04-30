@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "backend_provision.go",
         "condition_plugin.go",
+        "endpoint_publish.go",
         "health_check.go",
         "model_config_provision.go",
         "validation.go",
@@ -16,6 +17,7 @@ go_library(
         "//go/base/conditions/utils:go_default_library",
         "//go/components/inferenceserver/backends:go_default_library",
         "//go/components/inferenceserver/clientfactory:go_default_library",
+        "//go/components/inferenceserver/endpoints:go_default_library",
         "//go/components/inferenceserver/modelconfig:go_default_library",
         "//go/components/inferenceserver/plugins/oss/common:go_default_library",
         "//proto/api:go_default_library",

@@ -11,6 +11,7 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/endpoints"
 	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/creation"
@@ -34,9 +35,9 @@ type Plugin struct {
 }
 
 // NewPlugin creates a plugin with creation and deletion workflows.
-func NewOSSPlugin(clientFactory clientfactory.ClientFactory, registry *backends.Registry, modelConfigProvider modelconfig.ModelConfigProvider, recorder record.EventRecorder, logger *zap.Logger) plugins.Plugin {
+func NewOSSPlugin(clientFactory clientfactory.ClientFactory, registry *backends.Registry, modelConfigProvider modelconfig.ModelConfigProvider, endpointPublisher endpoints.EndpointPublisher, endpointSource endpoints.EndpointSource, recorder record.EventRecorder, logger *zap.Logger) plugins.Plugin {
 	return &Plugin{
-		creationPlugin: creation.NewCreationPlugin(clientFactory, registry, modelConfigProvider, logger),
+		creationPlugin: creation.NewCreationPlugin(clientFactory, registry, modelConfigProvider, endpointPublisher, endpointSource, logger),
 		deletionPlugin: deletion.NewDeletionPlugin(clientFactory, registry, modelConfigProvider, logger),
 
 		clientFactory: clientFactory,

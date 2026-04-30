@@ -103,3 +103,13 @@ data:
       domain: default
       taskList: default
       executionUrlFormat: http://localhost:8088/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}
+
+    inferenceServer:
+      gateway:
+        # Istio's Gateway controller materializes a Service named '<gateway>-istio'
+        # for each Gateway resource. The IS controller's EndpointSource reads the
+        # NodePort + node InternalIP of this Service to publish per-cluster
+        # EndpointSlices in the control plane.
+        serviceName: ma-gateway-istio
+        serviceNamespace: default
+        portName: http

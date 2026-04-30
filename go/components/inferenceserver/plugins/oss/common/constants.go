@@ -6,4 +6,5 @@ const (
 	BackendProvisionConditionType     = "BackendProvision"
 	ModelConfigProvisionConditionType = "ModelConfigProvision"
 	ValidationConditionType           = "Validation"
+	EndpointPublishConditionType      = "EndpointPublish"
 )
