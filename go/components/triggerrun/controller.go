@@ -205,9 +205,11 @@ StateMachine:
 		log.Info("TRIGGER_RUN_STATE_RUNNING")
 
 		// Sync TriggerRun spec changes to workflow engine
-		if _, err := runner.Update(ctx, triggerRun); err != nil {
-			log.Error(err, "failed to update trigger")
-			// Log the error but don't fail the reconciliation - continue with other operations
+		if status, err := runner.Update(ctx, triggerRun); err != nil {
+			log.Error(err, "failed to sync trigger spec to workflow engine")
+			triggerRun.Status.ErrorMessage = err.Error()
+			triggerRun.Status.State = status.State
+			break StateMachine
 		}
 
 		// Handle actions using the new action field (preferred) or deprecated boolean fields (backward compatibility)
@@ -264,9 +266,11 @@ StateMachine:
 		log.Info("TRIGGER_RUN_STATE_PAUSED")
 
 		// Sync TriggerRun spec changes to workflow engine even when paused
-		if _, err := runner.Update(ctx, triggerRun); err != nil {
-			log.Error(err, "failed to update trigger")
-			// Log the error but don't fail the reconciliation - continue with other operations
+		if status, err := runner.Update(ctx, triggerRun); err != nil {
+			log.Error(err, "failed to sync trigger spec to workflow engine")
+			triggerRun.Status.ErrorMessage = err.Error()
+			triggerRun.Status.State = status.State
+			break StateMachine
 		}
 
 		// Handle actions using the new action field

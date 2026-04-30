@@ -320,7 +320,7 @@ func TestReconcile(t *testing.T) {
 			expectRequeue:  true,
 		},
 		{
-			name:    "running triggerrun Update fails but reconciliation continues",
+			name:    "running triggerrun Update fails and sets error status",
 			request: ctrl.Request{NamespacedName: types.NamespacedName{Namespace: _namespace, Name: _triggerRun.Name}},
 			initialObject: func() v2pb.TriggerRun {
 				tr := _triggerRun.DeepCopy()
@@ -331,14 +331,16 @@ func TestReconcile(t *testing.T) {
 				mockRunner := &MockRunner{}
 				mockRunner.On("Update", mock.Anything, mock.Anything).
 					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, fmt.Errorf("update failed"))
-				mockRunner.On("GetStatus", mock.Anything, mock.Anything).
-					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil)
+				// GetStatus should NOT be called - StateMachine breaks on Update error
 				return mockRunner
 			},
 			expectErr:      false,
 			expectedErrStr: "",
-			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
-			expectRequeue:  true,
+			expectedStatus: v2pb.TriggerRunStatus{
+				State:        v2pb.TRIGGER_RUN_STATE_RUNNING,
+				ErrorMessage: "update failed",
+			},
+			expectRequeue: true,
 		},
 		{
 			name:    "running triggerrun GetStatus - succeeded with succeeded status",
