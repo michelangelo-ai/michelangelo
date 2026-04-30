@@ -10,42 +10,33 @@ import { ActiveFilterTagList } from '../table-active-filter-tag-list';
 import type { FilterableColumn } from '#core/components/table/components/table-action-bar/types';
 
 describe('ActiveFilterTagList', () => {
-  const mockFilterableColumns: FilterableColumn[] = [
-    {
-      id: 'testCol1',
-      label: 'Option 1',
-      type: CellType.TEXT,
-      getFilterValue: () => ['opt1', 'opt2', 'opt3'],
-      setFilterValue: vi.fn(),
-    },
-    {
-      id: 'testCol2',
-      label: 'Option 2',
-      type: CellType.DATE,
-      getFilterValue: () => ({
-        range: ['dummy'],
-        selection: ['dummy'],
-        description: 'dateOption',
-      }),
-      setFilterValue: vi.fn(),
-    },
-    {
-      id: 'testCol3',
-      label: 'Option 3',
-      type: CellType.TEXT,
-      getFilterValue: () => undefined,
-      setFilterValue: vi.fn(),
-    },
-  ];
-
   test('renders nothing when no columns have active filters', () => {
-    const columnsWithoutFilters = mockFilterableColumns.map((col) => ({
-      ...col,
-      getFilterValue: () => undefined,
-    }));
+    const columns: FilterableColumn[] = [
+      {
+        id: 'testCol1',
+        label: 'Option 1',
+        type: CellType.TEXT,
+        getFilterValue: () => undefined,
+        setFilterValue: vi.fn(),
+      },
+      {
+        id: 'testCol2',
+        label: 'Option 2',
+        type: CellType.DATE,
+        getFilterValue: () => undefined,
+        setFilterValue: vi.fn(),
+      },
+      {
+        id: 'testCol3',
+        label: 'Option 3',
+        type: CellType.TEXT,
+        getFilterValue: () => undefined,
+        setFilterValue: vi.fn(),
+      },
+    ];
 
     render(
-      <ActiveFilterTagList filterableColumns={columnsWithoutFilters} preFilteredRows={[]} />,
+      <ActiveFilterTagList filterableColumns={columns} preFilteredRows={[]} />,
       buildWrapper([getBaseProviderWrapper()])
     );
 
@@ -55,8 +46,36 @@ describe('ActiveFilterTagList', () => {
   });
 
   test('renders active filter tags for columns with filter values', () => {
+    const columns: FilterableColumn[] = [
+      {
+        id: 'testCol1',
+        label: 'Option 1',
+        type: CellType.TEXT,
+        getFilterValue: () => ['opt1', 'opt2', 'opt3'],
+        setFilterValue: vi.fn(),
+      },
+      {
+        id: 'testCol2',
+        label: 'Option 2',
+        type: CellType.DATE,
+        getFilterValue: () => ({
+          range: ['dummy'],
+          selection: ['dummy'],
+          description: 'dateOption',
+        }),
+        setFilterValue: vi.fn(),
+      },
+      {
+        id: 'testCol3',
+        label: 'Option 3',
+        type: CellType.TEXT,
+        getFilterValue: () => undefined,
+        setFilterValue: vi.fn(),
+      },
+    ];
+
     render(
-      <ActiveFilterTagList filterableColumns={mockFilterableColumns} preFilteredRows={[]} />,
+      <ActiveFilterTagList filterableColumns={columns} preFilteredRows={[]} />,
       buildWrapper([getBaseProviderWrapper()])
     );
 
@@ -68,15 +87,20 @@ describe('ActiveFilterTagList', () => {
   test('clicking delete button calls setFilterValue with undefined', async () => {
     const user = userEvent.setup();
     const setFilterMock = vi.fn();
-    const columnsWithMock = [
-      {
-        ...mockFilterableColumns[0],
-        setFilterValue: setFilterMock,
-      },
-    ];
 
     render(
-      <ActiveFilterTagList filterableColumns={columnsWithMock} preFilteredRows={[]} />,
+      <ActiveFilterTagList
+        filterableColumns={[
+          {
+            id: 'testCol1',
+            label: 'Option 1',
+            type: CellType.TEXT,
+            getFilterValue: () => ['opt1', 'opt2', 'opt3'],
+            setFilterValue: setFilterMock,
+          },
+        ]}
+        preFilteredRows={[]}
+      />,
       buildWrapper([getBaseProviderWrapper()])
     );
 
@@ -90,7 +114,18 @@ describe('ActiveFilterTagList', () => {
     const user = userEvent.setup();
 
     render(
-      <ActiveFilterTagList filterableColumns={mockFilterableColumns} preFilteredRows={[]} />,
+      <ActiveFilterTagList
+        filterableColumns={[
+          {
+            id: 'testCol1',
+            label: 'Option 1',
+            type: CellType.TEXT,
+            getFilterValue: () => ['opt1', 'opt2', 'opt3'],
+            setFilterValue: vi.fn(),
+          },
+        ]}
+        preFilteredRows={[]}
+      />,
       buildWrapper([getBaseProviderWrapper()])
     );
 

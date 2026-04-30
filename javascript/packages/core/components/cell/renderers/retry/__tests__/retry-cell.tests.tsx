@@ -14,6 +14,7 @@ import {
 import type { ServiceContextType } from '#core/providers/service-provider/types';
 
 describe('RetryCell', () => {
+  // eslint-disable-next-line local/no-module-scope-test-setup
   const mockPipelineRunData = {
     pipelineRun: {
       spec: { existingKey: 'existingValue' },
@@ -21,12 +22,14 @@ describe('RetryCell', () => {
     },
   };
 
+  // eslint-disable-next-line local/no-module-scope-test-setup
   const defaultProps = {
     column: { id: 'retry' },
     record: {},
     value: 'activity-123',
   };
 
+  // eslint-disable-next-line local/no-module-scope-test-setup
   function renderRetryCell(
     mockRequest: ServiceContextType['request'],
     props: Partial<typeof defaultProps> = {}
