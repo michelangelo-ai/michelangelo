@@ -382,6 +382,29 @@ func TestReconcile(t *testing.T) {
 			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_FAILED},
 			expectRequeue:  true,
 		},
+		{
+			name:    "cadence trigger - running state reconcile success",
+			request: ctrl.Request{NamespacedName: types.NamespacedName{Namespace: _namespace, Name: _triggerRun.Name}},
+			initialObject: func() v2pb.TriggerRun {
+				tr := _triggerRun.DeepCopy()
+				return *tr
+			}(),
+			initialStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
+			cronRunnerProvider: func() Runner {
+				mockRunner := &MockRunner{}
+				// Update() skips for Cadence - returns success immediately
+				mockRunner.On("Update", mock.Anything, mock.Anything).
+					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil)
+				// GetStatus() succeeds
+				mockRunner.On("GetStatus", mock.Anything, mock.Anything).
+					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil)
+				return mockRunner
+			},
+			expectErr:      false,
+			expectedErrStr: "",
+			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
+			expectRequeue:  true,
+		},
 	}
 
 	for _, test := range tests {
