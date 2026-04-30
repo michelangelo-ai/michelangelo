@@ -227,6 +227,10 @@ message RayClusterStatus {
   // Each error entry provides detailed context, such as error type, associated pod name, and timestamps of occurrences.
   // This information aids in root cause analysis and accelerates resolution of cluster failures.
   repeated PodErrors pod_errors = 9;
+
+  // URL to the History Server UI for viewing persisted logs and cluster metadata.
+  // Populated when log persistence is enabled and the History Server is available.
+  string log_url = 10;
 }
 
 

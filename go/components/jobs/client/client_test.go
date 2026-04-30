@@ -188,7 +188,7 @@ func TestDeleteJob(t *testing.T) {
 			k8sc := Client{
 				factory: f,
 				helper:  NewHelper(),
-				mapper:  k8sengine.NewMapper().Mapper,
+				mapper:  k8sengine.NewMapper(k8sengine.LogPersistenceConfig{}).Mapper,
 			}
 
 			// test
@@ -255,7 +255,7 @@ func TestDeletePromConfigMap(t *testing.T) {
 			k8sc := Client{
 				factory: f,
 				helper:  NewHelper(),
-				mapper:  k8sengine.NewMapper().Mapper,
+				mapper:  k8sengine.NewMapper(k8sengine.LogPersistenceConfig{}).Mapper,
 			}
 
 			// test
@@ -322,7 +322,7 @@ func TestDeleteSecret(t *testing.T) {
 			k8sc := Client{
 				factory: f,
 				helper:  NewHelper(),
-				mapper:  k8sengine.NewMapper().Mapper,
+				mapper:  k8sengine.NewMapper(k8sengine.LogPersistenceConfig{}).Mapper,
 			}
 
 			// test
@@ -419,7 +419,7 @@ func TestCreatePromConfigMap(t *testing.T) {
 				return NewClient(Params{
 					Factory: f,
 					Logger:  zaptest.NewLogger(t),
-					Mapper:  k8sengine.NewMapper().Mapper,
+					Mapper:  k8sengine.NewMapper(k8sengine.LogPersistenceConfig{}).Mapper,
 					Helper:  NewHelper(),
 				})
 			},
@@ -440,7 +440,7 @@ func TestCreatePromConfigMap(t *testing.T) {
 					Factory: f,
 					Logger:  zaptest.NewLogger(t),
 					Helper:  NewHelper(),
-					Mapper:  k8sengine.NewMapper().Mapper,
+					Mapper:  k8sengine.NewMapper(k8sengine.LogPersistenceConfig{}).Mapper,
 				})
 			},
 			wantError: true,
@@ -476,7 +476,7 @@ func TestCreatePromConfigMap(t *testing.T) {
 					Factory: f,
 					Logger:  zaptest.NewLogger(t),
 					Helper:  NewHelper(),
-					Mapper:  k8sengine.NewMapper().Mapper,
+					Mapper:  k8sengine.NewMapper(k8sengine.LogPersistenceConfig{}).Mapper,
 				})
 			},
 			// file path will be created as temp file in test body
@@ -570,7 +570,7 @@ func TestCreateSecret(t *testing.T) {
 				factory:         f,
 				helper:          NewHelper(),
 				secretsProvider: provider,
-				mapper:          k8sengine.NewMapper().Mapper,
+				mapper:          k8sengine.NewMapper(k8sengine.LogPersistenceConfig{}).Mapper,
 			}
 
 			// test
@@ -639,7 +639,7 @@ func TestGetJobStatus(t *testing.T) {
 				gctrl := gomock.NewController(t)
 				defer gctrl.Finish()
 				f := computemocks.NewMockFactory(gctrl)
-				cl := &Client{factory: f, helper: NewHelper(), mapper: k8sengine.NewMapper().Mapper, logger: zaptest.NewLogger(t)}
+				cl := &Client{factory: f, helper: NewHelper(), mapper: k8sengine.NewMapper(k8sengine.LogPersistenceConfig{}).Mapper, logger: zaptest.NewLogger(t)}
 				if tt.setupFactory != nil {
 					tt.setupFactory(f)
 				}
@@ -661,7 +661,7 @@ func TestGetJobStatus(t *testing.T) {
 				return
 			}
 			// When not using GetJobStatus path, validate mapper-based conversion on local RayJob object
-			js, err := k8sengine.NewMapper().Mapper.MapLocalJobStatusToGlobal(tt.jobObject)
+			js, err := k8sengine.NewMapper(k8sengine.LogPersistenceConfig{}).Mapper.MapLocalJobStatusToGlobal(tt.jobObject)
 			require.NoError(t, err)
 			if js != nil && js.Ray != nil {
 				assert.Equal(t, tt.expectStatus, js.Ray.JobStatus)
@@ -753,7 +753,7 @@ func TestCreateJob(t *testing.T) {
 			k8sc := Client{
 				factory: f,
 				helper:  NewHelper(),
-				mapper:  k8sengine.NewMapper().Mapper,
+				mapper:  k8sengine.NewMapper(k8sengine.LogPersistenceConfig{}).Mapper,
 			}
 
 			// test
@@ -772,7 +772,7 @@ func TestCreateJob(t *testing.T) {
 func TestGetJobClusterStatus_ClientSetError(t *testing.T) {
 	g := gomock.NewController(t)
 	f := computemocks.NewMockFactory(g)
-	cl := &Client{factory: f, helper: NewHelper(), mapper: k8sengine.NewMapper().Mapper}
+	cl := &Client{factory: f, helper: NewHelper(), mapper: k8sengine.NewMapper(k8sengine.LogPersistenceConfig{}).Mapper}
 	jobCluster := &v2pb.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "rc1"}}
 	cluster := &v2pb.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "c1"}}
 

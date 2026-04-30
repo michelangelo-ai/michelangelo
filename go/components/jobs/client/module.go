@@ -11,6 +11,7 @@ import (
 // related operations
 var Module = fx.Options(
 	fx.Provide(NewClient),
+	fx.Provide(k8sengine.NewLogPersistenceConfig),
 	fx.Provide(k8sengine.NewMapper),
 	fx.Provide(NewHelper),
 	compute.Module,

@@ -6,12 +6,15 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"go.uber.org/config"
 	"go.uber.org/fx"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // Mapper helps to map global to local crds and vice versa
-type Mapper struct{}
+type Mapper struct {
+	LogPersistence LogPersistenceConfig
+}
 
 // MapperResult has Mapper result
 type MapperResult struct {
@@ -22,10 +25,23 @@ type MapperResult struct {
 
 const _mapperName = "k8sengineMapper"
 
+const logPersistenceConfigKey = "controllers.rayCluster.logPersistence"
+
+// NewLogPersistenceConfig loads LogPersistenceConfig from YAML config provider.
+func NewLogPersistenceConfig(provider config.Provider) (LogPersistenceConfig, error) {
+	conf := LogPersistenceConfig{}
+	err := provider.Get(logPersistenceConfigKey).Populate(&conf)
+	if err != nil {
+		// Config is optional — return zero-value (disabled) if not present
+		return LogPersistenceConfig{}, nil
+	}
+	return conf, nil
+}
+
 // NewMapper constructs the Mapper
-func NewMapper() MapperResult {
+func NewMapper(logPersistence LogPersistenceConfig) MapperResult {
 	return MapperResult{
-		Mapper: Mapper{},
+		Mapper: Mapper{LogPersistence: logPersistence},
 	}
 }
 
