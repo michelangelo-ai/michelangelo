@@ -9,6 +9,7 @@ const DEPLOYMENT_COLUMNS: ColumnConfig<object>[] = [
     id: 'metadata.name',
     label: 'Name',
     type: CellType.TEXT,
+    url: '/${studio.projectId}/${studio.phase}/deployments/${row.metadata.name}',
   },
   {
     id: 'status.currentRevision.name',

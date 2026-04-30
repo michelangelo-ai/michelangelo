@@ -11,6 +11,9 @@ async function createHandlers() {
     ListDeployment: services.DeploymentService.listDeployment as ExtractUnaryRpc<
       typeof services.DeploymentService.listDeployment
     >,
+    GetDeployment: services.DeploymentService.getDeployment as ExtractUnaryRpc<
+      typeof services.DeploymentService.getDeployment
+    >,
     ListProject: services.ProjectService.listProject as ExtractUnaryRpc<
       typeof services.ProjectService.listProject
     >,
