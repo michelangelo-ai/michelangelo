@@ -1,0 +1,116 @@
+diff --git a/javascript/packages/core/components/cell/constants.ts b/javascript/packages/core/components/cell/constants.ts
+index a02c90cb..dd39a906 100644
+--- a/javascript/packages/core/components/cell/constants.ts
++++ b/javascript/packages/core/components/cell/constants.ts
+@@ -3,6 +3,7 @@ import { DateCell } from './renderers/date/date-cell';
+ import { DescriptionCell } from './renderers/description/description-cell';
+ import { LinkCell } from './renderers/link/link-cell';
+ import { MultiCell } from './renderers/multi/multi-cell';
++import { RetryCell } from './renderers/retry/retry-cell';
+ import { StateCell } from './renderers/state/state-cell';
+ import { TagCell } from './renderers/tag/tag-cell';
+ import { TextCell } from './renderers/text/text-cell';
+@@ -82,6 +83,11 @@ export enum CellType {
+    * Sentence cased formatted with stripped type prefix or suffix
+    */
+   TYPE = 'TYPE',
++
++  /**
++   * @description Renders a **Retry Button** for failed tasks
++   */
++  RETRY = 'RETRY',
+ }
+
+ export const CELL_RENDERERS: Record<string, CellRenderer<unknown>> = {
+@@ -91,6 +97,7 @@ export const CELL_RENDERERS: Record<string, CellRenderer<unknown>> = {
+   [CellType.LINK]: LinkCell,
+   [CellType.MULTI]: MultiCell,
+   [CellType.REPEATED_ITEMS]: MultiCell,
++  [CellType.RETRY]: RetryCell as CellRenderer<string>,
+   [CellType.STATE]: StateCell as CellRenderer<string>,
+   [CellType.TAG]: TagCell,
+   [CellType.TYPE]: TypeCell,
+diff --git a/javascript/packages/core/components/cell/renderers/retry/retry-cell.tsx b/javascript/packages/core/components/cell/renderers/retry/retry-cell.tsx
+new file mode 100644
+--- /dev/null
++++ b/javascript/packages/core/components/cell/renderers/retry/retry-cell.tsx
+@@ -0,0 +1,159 @@
++import { useState } from 'react';
++import { useQueryClient } from '@tanstack/react-query';
++import { useStyletron } from 'baseui';
++import { Button, KIND, SIZE } from 'baseui/button';
++import { Textarea } from 'baseui/textarea';
++import { Dialog } from '#core/components/dialog/dialog';
++import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
++import { useStudioMutation } from '#core/hooks/use-studio-mutation';
++import { useStudioQuery } from '#core/hooks/use-studio-query';
++import type { CellRendererProps } from '#core/components/cell/types';
++import type { PipelineRunData } from './types';
++
++const TERMINATED_STATES = new Set([3, 4, 5, 6]);
++
++export const RetryCell = (props: CellRendererProps<string>) => {
++  const { value } = props;
++  const [css, theme] = useStyletron();
++  const [showRetryModal, setShowRetryModal] = useState(false);
++  const [retryReason, setRetryReason] = useState('Manual retry from UI');
++  const queryClient = useQueryClient();
++  const { projectId, entityId } = useStudioParams('detail');
++  const { data: pipelineRunData } = useStudioQuery<PipelineRunData>({
++    queryName: 'GetPipelineRun',
++    serviceOptions: { namespace: projectId, name: entityId },
++    clientOptions: { enabled: !!projectId && !!entityId },
++  });
++  const updatePipelineRunMutation = useStudioMutation<
++    { pipelineRun: Record<string, unknown> },
++    { pipelineRun: Record<string, unknown> }
++  >({ mutationName: 'UpdatePipelineRun' });
++  const hasActivityId = !!value;
++  const pipelineRunState = pipelineRunData?.pipelineRun?.status?.state;
++  const isPipelineRunTerminated = pipelineRunState !== undefined && TERMINATED_STATES.has(pipelineRunState);
++  if (!hasActivityId || !isPipelineRunTerminated) return null;
++  const submitRetry = async () => {
++    // ... builds retryInfo payload with activityId, workflowId, workflowRunId, reason
++    // calls UpdatePipelineRun mutation, invalidates query cache on success
++  };
++  return (
++    <>
++      <Button size={SIZE.mini} kind={KIND.secondary} onClick={() => setShowRetryModal(true)}>Retry</Button>
++      <Dialog isOpen={showRetryModal} onDismiss={() => setShowRetryModal(false)} heading="Retry Task"
++        buttonDock={{ primaryAction: <Button onClick={submitRetry}>Retry Task</Button>,
++                      dismissiveAction: <Button onClick={() => setShowRetryModal(false)}>Cancel</Button> }}>
++        {updatePipelineRunMutation.error && <div>{updatePipelineRunMutation.error.message}</div>}
++        <div>Are you sure you want to retry this task?</div>
++        <Textarea value={retryReason} onChange={(e) => setRetryReason(e.target.value)} />
++      </Dialog>
++    </>
++  );
++};
+diff --git a/javascript/packages/core/components/views/execution/components/task-details/types.ts b/javascript/packages/core/components/views/execution/components/task-details/types.ts
+index 04ba231e..95c6af3c 100644
+--- a/javascript/packages/core/components/views/execution/components/task-details/types.ts
++++ b/javascript/packages/core/components/views/execution/components/task-details/types.ts
+@@ -1,5 +1,5 @@
+-import type { Cell } from '#core/components/cell/types';
++import type { RowCell } from '#core/components/row/types';
+ // metadata fields changed from Cell[] to RowCell[] to support hideEmpty
+diff --git a/javascript/packages/core/config/entities/run/detail.ts b/javascript/packages/core/config/entities/run/detail.ts
+index d82c30e1..47b47f2b 100644
+--- a/javascript/packages/core/config/entities/run/detail.ts
++++ b/javascript/packages/core/config/entities/run/detail.ts
+@@ -77,6 +77,13 @@ export const RUN_DETAIL_CONFIG: DetailViewConfig = {
++            {
++              id: 'retry',
++              label: 'Actions',
++              type: CellType.RETRY,
++              accessor: 'activityId',
++              hideEmpty: true,
++            },
+diff --git a/javascript/packages/rpc/handlers.ts b/javascript/packages/rpc/handlers.ts
+index bb061c48..51e27528 100644
+--- a/javascript/packages/rpc/handlers.ts
++++ b/javascript/packages/rpc/handlers.ts
+@@ -31,6 +31,9 @@ async function createHandlers() {
++    UpdatePipelineRun: services.PipelineRunService.updatePipelineRun as ExtractUnaryRpc<
++      typeof services.PipelineRunService.updatePipelineRun
++    >,

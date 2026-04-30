@@ -1,0 +1,14 @@
+diff --git a/javascript/packages/core/src/components/RunDetail/ActionBar.tsx b/javascript/packages/core/src/components/RunDetail/ActionBar.tsx
+index 111aaaa..222bbbb 100644
+--- a/javascript/packages/core/src/components/RunDetail/ActionBar.tsx
++++ b/javascript/packages/core/src/components/RunDetail/ActionBar.tsx
+@@ -31,7 +31,7 @@ export function ActionBar({ run }: Props) {
+   return (
+     <div className="action-bar">
+       <Button variant="primary" onClick={handleSave}>
+-        Submit
++        Save changes
+       </Button>
+     </div>
+   );
+ }
