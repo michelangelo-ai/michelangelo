@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/michelangelo-ai/michelangelo/go/storage"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,24 +36,19 @@ func register(p registerParams) error {
 
 	p.Logger.Info("Setting up ingester controllers")
 
-	// List of CRD objects to watch
-	crdObjects := []runtime.Object{}
+	for _, obj := range v2pb.CrdObjects {
+		clientObj, ok := obj.(client.Object)
+		if !ok {
+			return fmt.Errorf("CrdObjects entry %T does not implement client.Object", obj)
+		}
 
-	for _, obj := range crdObjects {
-		gvks, _, err := p.Scheme.ObjectKinds(obj)
+		gvks, _, err := p.Scheme.ObjectKinds(clientObj)
 		if err != nil || len(gvks) == 0 {
-			return fmt.Errorf("failed to get GVK for %T: %w", obj, err)
+			return fmt.Errorf("failed to get GVK for %T: %w", clientObj, err)
 		}
 		gvk := gvks[0]
 		log := p.Logger.With(zap.String("kind", gvk.Kind))
 
-		// Cast runtime.Object to client.Object
-		clientObj, ok := obj.(client.Object)
-		if !ok {
-			return fmt.Errorf("object %s does not implement client.Object", gvk.Kind)
-		}
-
-		// Get controller-specific config (supports per-CRD configuration)
 		controllerConfig := p.Config.GetControllerConfig(gvk.Kind)
 
 		reconciler := NewReconciler(
@@ -70,7 +66,8 @@ func register(p registerParams) error {
 
 		log.Info("Ingester controller registered successfully",
 			zap.Int("concurrentReconciles", controllerConfig.ConcurrentReconciles),
-			zap.Duration("requeuePeriod", controllerConfig.RequeuePeriod))
+			zap.Duration("requeuePeriod", controllerConfig.RequeuePeriod),
+			zap.Duration("deletionDelay", controllerConfig.DeletionDelay))
 	}
 
 	return nil

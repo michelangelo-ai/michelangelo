@@ -80,7 +80,6 @@ data:
       # Legacy global defaults (still supported for backwards compatibility)
       concurrentReconciles: 2
       requeuePeriod: 30s
-
       # New per-controller configuration (recommended)
       # Controllers not listed here will use the global defaults above
       concurrentReconcilesMap:
@@ -95,6 +94,9 @@ data:
       # requeuePeriodMap:
       #   Deployment: 60s
       #   Pipeline: 45s
+
+      # deletionDelayMap:
+      #   Model: 15s       # Hold Model in etcd for 15s after deletion
 
     workflowClient:
       service: cadence-frontend

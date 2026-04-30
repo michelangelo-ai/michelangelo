@@ -19,6 +19,12 @@ k8s:
 metadataStorage:
   enableMetadataStorage: false
 
+ingester:
+  concurrentReconciles: 1
+  requeuePeriod: 30s
+  # deletionDelayMap:
+  #   Model: 15s
+
 controllers:
   rayCluster:
     k8sQps: 300

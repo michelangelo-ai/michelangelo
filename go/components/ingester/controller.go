@@ -27,10 +27,17 @@ type Config struct {
 	ConcurrentReconciles int `yaml:"concurrentReconciles"`
 	// RequeuePeriod is the global default period for requeuing reconciliations
 	RequeuePeriod time.Duration `yaml:"requeuePeriod"`
+	// DeletionDelay is the grace period between DeletionTimestamp and finalizer removal.
+	// The finalizer is not removed until DeletionTimestamp + DeletionDelay has passed,
+	// giving downstream consumers time to observe the deletion before the object leaves ETCD.
+	// Set to 0 to remove the finalizer immediately (default).
+	DeletionDelay time.Duration `yaml:"deletionDelay"`
 	// ConcurrentReconcilesMap allows per-kind concurrency overrides
 	ConcurrentReconcilesMap map[string]int `yaml:"concurrentReconcilesMap"`
 	// RequeuePeriodMap allows per-kind requeue period overrides
 	RequeuePeriodMap map[string]time.Duration `yaml:"requeuePeriodMap"`
+	// DeletionDelayMap allows per-kind deletion delay overrides
+	DeletionDelayMap map[string]time.Duration `yaml:"deletionDelayMap"`
 }
 
 // GetControllerConfig returns the resolved config for a specific CRD kind,
@@ -38,6 +45,7 @@ type Config struct {
 func (c Config) GetControllerConfig(kind string) Config {
 	concurrency := c.ConcurrentReconciles
 	requeuePeriod := c.RequeuePeriod
+	deletionDelay := c.DeletionDelay
 
 	if val, ok := c.ConcurrentReconcilesMap[kind]; ok {
 		concurrency = val
@@ -45,10 +53,14 @@ func (c Config) GetControllerConfig(kind string) Config {
 	if val, ok := c.RequeuePeriodMap[kind]; ok {
 		requeuePeriod = val
 	}
+	if val, ok := c.DeletionDelayMap[kind]; ok {
+		deletionDelay = val
+	}
 
 	return Config{
 		ConcurrentReconciles: concurrency,
 		RequeuePeriod:        requeuePeriod,
+		DeletionDelay:        deletionDelay,
 	}
 }
 
@@ -148,6 +160,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 // handleSync syncs the object to metadata storage
 func (r *Reconciler) handleSync(ctx context.Context, log logr.Logger, object client.Object) (ctrl.Result, error) {
+	// Add finalizer if not present to ensure MySQL sync happens before ETCD removal on deletion.
+	if !ctrlutil.ContainsFinalizer(object, api.IngesterFinalizer) {
+		log.Info("Adding ingester finalizer")
+		ctrlutil.AddFinalizer(object, api.IngesterFinalizer)
+		if err := r.Update(ctx, object); err != nil {
+			log.Error(err, "Failed to add finalizer")
+			return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
+		}
+		return ctrl.Result{}, nil
+	}
+
 	log.Info("Syncing object to metadata storage")
 
 	// Extract indexed fields if object implements IndexedObject interface
@@ -176,6 +199,15 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
 		return ctrl.Result{}, nil
 	}
 
+	// Enforce deletion grace period: wait until DeletionTimestamp + DeletionDelay has passed.
+	// The michelangelo/Deleting annotation bypasses the grace period entirely.
+	expectedDeletionTime := object.GetDeletionTimestamp().Time.Add(r.config.DeletionDelay)
+	delta := time.Until(expectedDeletionTime)
+	if !isDeletingAnnotationSet(object) && delta > 0 {
+		log.Info("Object in deletion grace period, requeueing", "after", delta)
+		return ctrl.Result{RequeueAfter: delta}, nil
+	}
+
 	log.Info("Deleting from metadata storage")
 
 	// Delete from metadata storage
@@ -195,9 +227,13 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
 
-	// Remove our finalizer
+	// Remove our finalizer using Patch to avoid optimistic-concurrency conflicts.
+	base := object.DeepCopyObject().(client.Object)
 	ctrlutil.RemoveFinalizer(object, api.IngesterFinalizer)
-	if err := r.Update(ctx, object); err != nil {
+	if err := r.Patch(ctx, object, client.MergeFrom(base)); err != nil {
+		if client.IgnoreNotFound(err) == nil {
+			return ctrl.Result{}, nil
+		}
 		log.Error(err, "Failed to remove finalizer")
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
@@ -227,9 +263,13 @@ func (r *Reconciler) handleDeletionAnnotation(ctx context.Context, log logr.Logg
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
 
-	// Remove finalizer
+	// Remove finalizer using Patch to avoid optimistic-concurrency conflicts.
+	base := object.DeepCopyObject().(client.Object)
 	ctrlutil.RemoveFinalizer(object, api.IngesterFinalizer)
-	if err := r.Update(ctx, object); err != nil {
+	if err := r.Patch(ctx, object, client.MergeFrom(base)); err != nil {
+		if client.IgnoreNotFound(err) == nil {
+			return ctrl.Result{}, nil
+		}
 		log.Error(err, "Failed to remove finalizer")
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
@@ -259,15 +299,23 @@ func (r *Reconciler) handleImmutableObject(ctx context.Context, log logr.Logger,
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
 
-	// Remove finalizer
+	// Remove finalizer using Patch to avoid optimistic-concurrency conflicts on
+	// second reconcile when the object is already in a deletion transition.
+	base := object.DeepCopyObject().(client.Object)
 	ctrlutil.RemoveFinalizer(object, api.IngesterFinalizer)
-	if err := r.Update(ctx, object); err != nil {
+	if err := r.Patch(ctx, object, client.MergeFrom(base)); err != nil {
+		if client.IgnoreNotFound(err) == nil {
+			return ctrl.Result{}, nil
+		}
 		log.Error(err, "Failed to remove finalizer")
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
 
 	// Delete from K8s/ETCD (object now only exists in metadata storage)
 	if err := r.Delete(ctx, object); err != nil {
+		if client.IgnoreNotFound(err) == nil {
+			return ctrl.Result{}, nil
+		}
 		log.Error(err, "Failed to delete immutable object from K8s")
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}

@@ -84,9 +84,10 @@ func TestReconciler_HandleSync(t *testing.T) {
 			Kind:       "Deployment",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-deployment",
-			Namespace: "default",
-			UID:       types.UID("test-uid"),
+			Name:       "test-deployment",
+			Namespace:  "default",
+			UID:        types.UID("test-uid"),
+			Finalizers: []string{api.IngesterFinalizer},
 		},
 	}
 
@@ -124,6 +125,56 @@ func TestReconciler_HandleSync(t *testing.T) {
 
 	// Verify that Upsert was called
 	mockStorage.AssertCalled(t, "Upsert", mock.Anything, mock.Anything, false, mock.Anything)
+}
+
+func TestReconciler_HandleSync_AddsFinalizer(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = v2.AddToScheme(scheme)
+
+	deployment := &v2.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "michelangelo.uber.com/v2",
+			Kind:       "Deployment",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-deployment",
+			Namespace: "default",
+			UID:       types.UID("test-uid"),
+			// No finalizer — handleSync should add it before upserting.
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(deployment).
+		Build()
+
+	mockStorage := new(MockMetadataStorage)
+
+	reconciler := NewReconciler(
+		fakeClient,
+		logr.Discard(),
+		scheme,
+		&v2.Deployment{},
+		mockStorage,
+		WithConfig(Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second}),
+	)
+
+	req := ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: "test-deployment", Namespace: "default"},
+	}
+
+	result, err := reconciler.Reconcile(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, ctrl.Result{}, result)
+
+	// Upsert must NOT be called on the first reconcile — the finalizer is added first.
+	mockStorage.AssertNotCalled(t, "Upsert")
+
+	// Verify the finalizer was written to K8s.
+	updated := &v2.Deployment{}
+	require.NoError(t, fakeClient.Get(context.Background(), types.NamespacedName{Name: "test-deployment", Namespace: "default"}, updated))
+	assert.Contains(t, updated.GetFinalizers(), api.IngesterFinalizer)
 }
 
 func TestReconciler_HandleDeletion(t *testing.T) {
@@ -491,14 +542,14 @@ func TestHelperFunctions(t *testing.T) {
 	})
 }
 
-// TestSchemeGVKResolution verifies that all CRD objects in AllCRDObjects resolve to
+// TestSchemeGVKResolution verifies that all CRD objects in CrdObjects resolve to
 // unique, non-empty kinds via the scheme.
 func TestSchemeGVKResolution(t *testing.T) {
 	scheme := runtime.NewScheme()
 	require.NoError(t, v2.AddToScheme(scheme))
 
 	seen := map[string]bool{}
-	for _, obj := range []runtime.Object{} {
+	for _, obj := range v2.CrdObjects {
 		gvks, _, err := scheme.ObjectKinds(obj)
 		require.NoError(t, err, "scheme.ObjectKinds failed for %T", obj)
 		require.NotEmpty(t, gvks, "no GVKs found for %T", obj)
