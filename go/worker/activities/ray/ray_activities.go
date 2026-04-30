@@ -102,9 +102,14 @@ func (r *activities) CreateRayCluster(ctx context.Context, request v2pb.CreateRa
 
 	// Execute the original cluster creation logic
 	createRayClusterResponse, err := r.rayClusterService.CreateRayCluster(ctx, &request)
-	if err != nil || createRayClusterResponse == nil || createRayClusterResponse.RayCluster == nil ||
+	if err != nil {
+		logger.Error("activity-error: failed to create ray cluster", zap.Error(err))
+		return &CreateRayClusterActivityResponse{ActivityID: activityID}, nil
+	}
+	if createRayClusterResponse == nil || createRayClusterResponse.RayCluster == nil ||
 		createRayClusterResponse.RayCluster.Name == "" {
-		return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeUnavailable.String(), err.Error())
+		logger.Error("activity-error: empty or invalid response from CreateRayCluster")
+		return &CreateRayClusterActivityResponse{ActivityID: activityID}, nil
 	}
 
 	return &CreateRayClusterActivityResponse{

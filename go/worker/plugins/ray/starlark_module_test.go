@@ -227,7 +227,7 @@ func (r *Test) TestCreateRayJobSuccessfully() {
 	var createdRayJob v2pb.CreateRayJobRequest
 	env.OnActivity(ray.Activities.CreateRayJob, mock.Anything, mock.Anything).Once().
 		Run(func(args mock.Arguments) {
-			createdRayJob = args.Get(1).(v2pb.CreateRayJobRequest) // Capture the request argument
+			createdRayJob = args.Get(1).(v2pb.CreateRayJobRequest)
 		}).
 		Return(func(ctx context.Context, req v2pb.CreateRayJobRequest) (*v2pb.CreateRayJobResponse, error) {
 			return &v2pb.CreateRayJobResponse{

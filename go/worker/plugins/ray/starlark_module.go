@@ -75,8 +75,19 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 		return nil, err
 	}
 
-	cluster = *response.RayCluster
 	activityID := response.ActivityID
+	if response.RayCluster == nil {
+		failureResponse := map[string]interface{}{
+			"rayCluster": nil,
+			"activityId": activityID,
+		}
+		var failRes starlark.Value
+		if err := utils.AsStar(failureResponse, &failRes); err != nil {
+			return nil, err
+		}
+		return failRes, nil
+	}
+	cluster = *response.RayCluster
 
 	srp := utils.DefaultSensorRetryPolicy
 	srp.ExpirationInterval = time.Second * time.Duration(timeout)

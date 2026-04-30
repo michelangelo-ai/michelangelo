@@ -267,21 +267,36 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
         retry_attempt_id = retry_attempt_id,
     )
 
-    # Enhanced: Call existing Go activity that now returns activity ID
     cluster_response = ray.create_cluster(cluster, timeout_seconds = DEFAULT_CREATE_CLUSTER_TIMEOUT_SECONDS)
 
-    # Extract cluster info and activity ID from enhanced response
-    cluster = cluster_response["rayCluster"]  # This contains the actual cluster data
-    first_activity_id = cluster_response["activityId"]  # NEW: Activity ID from Go
+    cluster = cluster_response["rayCluster"]
+    first_activity_id = cluster_response["activityId"]
+
+    print("ray | first activity ID:", first_activity_id)
+
+    if cluster == None:
+        end_time_seconds = time.time()
+        end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
+        report_progress(
+            task_path = task_path,
+            task_name = task_name,
+            task_log = "",
+            task_message = "Ray Cluster Creation Failed",
+            task_state = TASK_STATE_FAILED,
+            start_time = start_time_formated_str,
+            end_time = end_time_formated_str,
+            output = "",
+            retry_attempt_id = retry_attempt_id,
+            first_activity_id = first_activity_id,
+        )
+        fail("ray | cluster creation failed, activityId=" + first_activity_id)
 
     cluster_url = cluster["status"].get("jobUrl", "UAPI did not report RayJob URL")
     cluster_name = cluster["metadata"]["name"]
     cluster_namespace = cluster["metadata"]["namespace"]
 
     print("ray | cluster created:", "ns=" + cluster_namespace, "n=" + cluster_name, "url=" + cluster_url)
-    print("ray | first activity ID:", first_activity_id)  # NEW: Log the activity ID
 
-    # Enhanced: Progress report with activity ID - this establishes the first activity for this task
     report_progress(
         task_path = task_path,
         task_name = task_name,
@@ -292,7 +307,7 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
         end_time = "",
         output = "",
         retry_attempt_id = retry_attempt_id,
-        first_activity_id = first_activity_id,  # NEW: Store first activity ID for retry boundary
+        first_activity_id = first_activity_id,
     )
 
     atexit.register(terminate_cluster, cluster_namespace, cluster_name)
