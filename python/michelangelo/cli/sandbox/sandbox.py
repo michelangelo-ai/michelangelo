@@ -32,6 +32,7 @@ _kube_ports = [
     "8081:30010",  # Envoy gRPC --> gRPC-web proxy
     "8090:30011",  # Michelangelo UI
     "3000:30012",  # Grafana
+    "3001:30016",  # KubeRay History Server (observability port range)
     "9092:30015",  # Prometheus
     "5001:30013",  # MLflow Tracking Server
 ]
@@ -418,6 +419,16 @@ def _deploy_services(ns: argparse.Namespace):
         )
     )
 
+    # KubeRay History Server (core resource, deployed alongside MinIO)
+    resources.append("history-server.yaml")
+    links.append(
+        (
+            "Ray History Server",
+            "http://localhost:3001",
+            "",
+        )
+    )
+
     # Prometheus & Grafana
 
     if "prometheus" not in ns.exclude:
@@ -452,21 +463,6 @@ def _deploy_services(ns: argparse.Namespace):
             )
         )
 
-    if "fluent-bit" in ns.include_experimental:
-        # Provision a ServiceAccount for fluent-bit DaemonSet execution.
-        _exec(
-            "kubectl",
-            "create",
-            "serviceaccount",
-            "fluent-bit",
-        )
-        resources.extend(
-            [
-                "fluent-bit.yaml",
-                "fluent-bit-config.yaml",
-            ]
-        )
-
     if "mlflow" in ns.include_experimental:
         resources.append("mlflow.yaml")
         links.append(
@@ -478,7 +474,7 @@ def _deploy_services(ns: argparse.Namespace):
         )
 
     # Determine buckets to create based on enabled services
-    bucket_names = ["logs", "default", "deploy-models"]
+    bucket_names = ["logs", "default", "deploy-models", "ray-history"]
     if "mlflow" in ns.include_experimental:
         bucket_names.append("mlflow")
         print("🪣 Adding MLflow bucket to S3 setup")
