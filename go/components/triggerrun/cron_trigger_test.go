@@ -64,7 +64,7 @@ func TestRun(t *testing.T) {
 				mockClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&clientInterface.WorkflowExecution{ID: _workflowID, RunID: _runID}, nil)
 				return mockClient
 			},
-			expectedStatus: v2pb.TriggerRunStatus{LogUrl: _logURL, State: v2pb.TRIGGER_RUN_STATE_RUNNING},
+			expectedStatus: v2pb.TriggerRunStatus{LogUrl: _logURL, State: v2pb.TRIGGER_RUN_STATE_RUNNING, ActualCronSchedule: "0 0 * * *"},
 			expectError:    false,
 		},
 		{
@@ -83,7 +83,7 @@ func TestRun(t *testing.T) {
 				mockClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&clientInterface.WorkflowExecution{ID: _workflowID, RunID: _runID}, nil)
 				return mockClient
 			},
-			expectedStatus: v2pb.TriggerRunStatus{LogUrl: _logURL, State: v2pb.TRIGGER_RUN_STATE_RUNNING},
+			expectedStatus: v2pb.TriggerRunStatus{LogUrl: _logURL, State: v2pb.TRIGGER_RUN_STATE_RUNNING, ActualCronSchedule: "0 0 * * *"},
 			expectError:    false,
 		},
 		{
@@ -346,6 +346,7 @@ func TestCronTrigger_Update(t *testing.T) {
 		triggerRun             *v2pb.TriggerRun
 		workflowClientProvider func(t *testing.T) clientInterface.WorkflowClient
 		expectError            bool
+		expectedActualCron     string
 	}{
 		{
 			name: "no update needed - schedules match",
@@ -362,17 +363,18 @@ func TestCronTrigger_Update(t *testing.T) {
 					},
 				},
 				Status: v2pb.TriggerRunStatus{
-					State: v2pb.TRIGGER_RUN_STATE_RUNNING,
+					State:              v2pb.TRIGGER_RUN_STATE_RUNNING,
+					ActualCronSchedule: "0 6 * * *",
 				},
 			},
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-				mockClient.EXPECT().GetTriggerSchedule(gomock.Any(), "test-namespace.test-triggerrun").Return("0 6 * * *", nil)
-				// UpdateTrigger should NOT be called
+				// No calls expected when schedules match
 				return mockClient
 			},
-			expectError: false,
+			expectError:        false,
+			expectedActualCron: "0 6 * * *",
 		},
 		{
 			name: "update needed - schedules differ",
@@ -389,20 +391,21 @@ func TestCronTrigger_Update(t *testing.T) {
 					},
 				},
 				Status: v2pb.TriggerRunStatus{
-					State: v2pb.TRIGGER_RUN_STATE_RUNNING,
+					State:              v2pb.TRIGGER_RUN_STATE_RUNNING,
+					ActualCronSchedule: "0 6 * * *",
 				},
 			},
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-				mockClient.EXPECT().GetTriggerSchedule(gomock.Any(), "test-namespace.test-triggerrun").Return("0 6 * * *", nil)
 				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 0 * * *").Return(nil)
 				return mockClient
 			},
-			expectError: false,
+			expectError:        false,
+			expectedActualCron: "0 0 * * *",
 		},
 		{
-			name: "cadence provider - no-op update",
+			name: "schedule not found - recreate via StartWorkflow",
 			triggerRun: &v2pb.TriggerRun{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "test-namespace",
@@ -416,19 +419,21 @@ func TestCronTrigger_Update(t *testing.T) {
 					},
 				},
 				Status: v2pb.TriggerRunStatus{
-					State: v2pb.TRIGGER_RUN_STATE_RUNNING,
+					State:              v2pb.TRIGGER_RUN_STATE_RUNNING,
+					ActualCronSchedule: "0 6 * * *",
 				},
 			},
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-				// GetTriggerSchedule returns empty string (Cadence behavior)
-				mockClient.EXPECT().GetTriggerSchedule(gomock.Any(), "test-namespace.test-triggerrun").Return("", nil)
-				// UpdateTrigger is called but returns nil (no-op for Cadence)
-				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 0 * * *").Return(nil)
+				// UpdateTrigger fails with "not found"
+				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 0 * * *").Return(fmt.Errorf("schedule not found"))
+				// StartWorkflow should be called to recreate
+				mockClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), "trigger.CronTrigger", gomock.Any()).Return(&clientInterface.WorkflowExecution{ID: "test-namespace.test-triggerrun", RunID: "test-run-id"}, nil)
 				return mockClient
 			},
-			expectError: false,
+			expectError:        false,
+			expectedActualCron: "0 0 * * *",
 		},
 		{
 			name: "empty cron - skip update",
@@ -445,7 +450,8 @@ func TestCronTrigger_Update(t *testing.T) {
 					},
 				},
 				Status: v2pb.TriggerRunStatus{
-					State: v2pb.TRIGGER_RUN_STATE_RUNNING,
+					State:              v2pb.TRIGGER_RUN_STATE_RUNNING,
+					ActualCronSchedule: "",
 				},
 			},
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
@@ -454,36 +460,11 @@ func TestCronTrigger_Update(t *testing.T) {
 				// No calls expected for empty cron
 				return mockClient
 			},
-			expectError: false,
+			expectError:        false,
+			expectedActualCron: "",
 		},
 		{
-			name: "get schedule fails",
-			triggerRun: &v2pb.TriggerRun{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "test-namespace",
-					Name:      "test-triggerrun",
-				},
-				Spec: v2pb.TriggerRunSpec{
-					Trigger: &v2pb.Trigger{
-						TriggerType: &v2pb.Trigger_CronSchedule{
-							CronSchedule: &v2pb.CronSchedule{Cron: "0 6 * * *"},
-						},
-					},
-				},
-				Status: v2pb.TriggerRunStatus{
-					State: v2pb.TRIGGER_RUN_STATE_RUNNING,
-				},
-			},
-			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
-				ctrl := gomock.NewController(t)
-				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-				mockClient.EXPECT().GetTriggerSchedule(gomock.Any(), "test-namespace.test-triggerrun").Return("", fmt.Errorf("get failed"))
-				return mockClient
-			},
-			expectError: true,
-		},
-		{
-			name: "update trigger fails",
+			name: "update trigger fails with non-not-found error",
 			triggerRun: &v2pb.TriggerRun{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "test-namespace",
@@ -497,17 +478,49 @@ func TestCronTrigger_Update(t *testing.T) {
 					},
 				},
 				Status: v2pb.TriggerRunStatus{
-					State: v2pb.TRIGGER_RUN_STATE_RUNNING,
+					State:              v2pb.TRIGGER_RUN_STATE_RUNNING,
+					ActualCronSchedule: "0 6 * * *",
 				},
 			},
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-				mockClient.EXPECT().GetTriggerSchedule(gomock.Any(), "test-namespace.test-triggerrun").Return("0 6 * * *", nil)
 				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 0 * * *").Return(fmt.Errorf("update failed"))
 				return mockClient
 			},
-			expectError: true,
+			expectError:        true,
+			expectedActualCron: "", // Error case returns empty status
+		},
+		{
+			name: "recreate fails after not found",
+			triggerRun: &v2pb.TriggerRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test-namespace",
+					Name:      "test-triggerrun",
+				},
+				Spec: v2pb.TriggerRunSpec{
+					Trigger: &v2pb.Trigger{
+						TriggerType: &v2pb.Trigger_CronSchedule{
+							CronSchedule: &v2pb.CronSchedule{Cron: "0 0 * * *"},
+						},
+					},
+				},
+				Status: v2pb.TriggerRunStatus{
+					State:              v2pb.TRIGGER_RUN_STATE_RUNNING,
+					ActualCronSchedule: "0 6 * * *",
+				},
+			},
+			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
+				ctrl := gomock.NewController(t)
+				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+				// UpdateTrigger fails with "not found"
+				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 0 * * *").Return(fmt.Errorf("schedule not found"))
+				// StartWorkflow fails
+				mockClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), "trigger.CronTrigger", gomock.Any()).Return(nil, fmt.Errorf("recreate failed"))
+				return mockClient
+			},
+			expectError:        true,
+			expectedActualCron: "", // Error case returns empty status
 		},
 	}
 
@@ -525,6 +538,7 @@ func TestCronTrigger_Update(t *testing.T) {
 				assert.NoError(t, err)
 			}
 			assert.Equal(t, test.triggerRun.Status.State, status.State)
+			assert.Equal(t, test.expectedActualCron, status.ActualCronSchedule)
 		})
 	}
 }

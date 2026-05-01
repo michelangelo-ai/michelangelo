@@ -404,30 +404,19 @@ func (c *TemporalClient) DeleteTrigger(ctx context.Context, workflowID string, r
 	return c.Client.TerminateWorkflow(ctx, workflowID, runID, "trigger killed")
 }
 
-// UpdateTrigger updates the cron schedule of a Temporal schedule.
+// UpdateTrigger updates the cron schedule for a recurring trigger.
+// Returns an error if the schedule doesn't exist.
 func (c *TemporalClient) UpdateTrigger(ctx context.Context, workflowID string, newCronSchedule string) error {
 	scheduleID := scheduleIDForWorkflow(workflowID)
 	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
+
 	return handle.Update(ctx, temporalClient.ScheduleUpdateOptions{
 		DoUpdate: func(input temporalClient.ScheduleUpdateInput) (*temporalClient.ScheduleUpdate, error) {
-			input.Description.Schedule.Spec = &temporalClient.ScheduleSpec{
-				CronExpressions: []string{newCronSchedule},
-			}
-			return &temporalClient.ScheduleUpdate{Schedule: &input.Description.Schedule}, nil
+			// Update the cron expression in the schedule spec
+			input.Description.Schedule.Spec.CronExpressions = []string{newCronSchedule}
+			return &temporalClient.ScheduleUpdate{
+				Schedule: &input.Description.Schedule,
+			}, nil
 		},
 	})
-}
-
-// GetTriggerSchedule retrieves the current cron schedule of a Temporal schedule.
-func (c *TemporalClient) GetTriggerSchedule(ctx context.Context, workflowID string) (string, error) {
-	scheduleID := scheduleIDForWorkflow(workflowID)
-	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
-	desc, err := handle.Describe(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to describe schedule: %w", err)
-	}
-	if len(desc.Schedule.Spec.CronExpressions) > 0 {
-		return desc.Schedule.Spec.CronExpressions[0], nil
-	}
-	return "", nil
 }
