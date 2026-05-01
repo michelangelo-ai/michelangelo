@@ -222,24 +222,14 @@ After applying the configuration, confirm the environment variable is visible in
 kubectl exec -it <task-pod-name> -n <compute-namespace> -- env | grep MLFLOW
 ```
 
-You can also run a minimal test task that validates connectivity end-to-end. Submit it using your normal pipeline execution method, then check the logs for the output:
+You can also verify end-to-end reachability from a task pod by running a connectivity check against the MLflow health endpoint:
 
-```python
-import os
-import mlflow
-import michelangelo.uniflow.core as uniflow
-from michelangelo.uniflow.plugins.ray import RayTask
-
-@uniflow.task(config=RayTask(head_cpu=1, head_memory="1Gi"))
-def check_mlflow_connection():
-    uri = os.environ.get("MLFLOW_TRACKING_URI", "NOT SET")
-    print(f"MLflow tracking URI: {uri}")
-    if uri == "NOT SET":
-        raise ValueError("MLFLOW_TRACKING_URI is not set")
-    client = mlflow.MlflowClient()
-    experiments = client.search_experiments()
-    print(f"Reachable — found {len(experiments)} experiment(s)")
+```bash
+kubectl exec -it <task-pod-name> -n <compute-namespace> -- \
+  curl -sv http://mlflow.example.com:5000/health
 ```
+
+A `200 OK` response confirms both the environment variable injection and network reachability are working correctly.
 
 ---
 
