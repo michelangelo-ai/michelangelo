@@ -10,10 +10,12 @@ import (
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/pluginmanager"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
 )
 
 // Module FX
 var Module = fx.Options(
+	route.Module,
 	fx.Provide(newPluginRegistry),
 	fx.Invoke(register),
 )

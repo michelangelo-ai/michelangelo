@@ -10,6 +10,7 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -19,17 +20,19 @@ var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &HealthCheckAc
 
 // HealthCheckActor verifies inference server health by polling backend health endpoints.
 type HealthCheckActor struct {
-	registry *backends.Registry
-	logger   *zap.Logger
-	client   client.Client
+	logger        *zap.Logger
+	clientFactory clientfactory.ClientFactory
+	client        client.Client
+	registry      *backends.Registry
 }
 
 // NewHealthCheckActor creates a condition actor for inference server health verification.
-func NewHealthCheckActor(client client.Client, registry *backends.Registry, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
+func NewHealthCheckActor(logger *zap.Logger, client client.Client, clientFactory clientfactory.ClientFactory, registry *backends.Registry) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return &HealthCheckActor{
-		client:   client,
-		registry: registry,
-		logger:   logger,
+		logger:        logger,
+		client:        client,
+		clientFactory: clientFactory,
+		registry:      registry,
 	}
 }
 
@@ -42,29 +45,30 @@ func (a *HealthCheckActor) GetType() string {
 func (a *HealthCheckActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Retrieving inference server health condition")
 
+	// check if the server is healthy in all target clusters
+	targetClusterClients := common.GetClusterClients(ctx, a.logger, resource, a.clientFactory, a.client)
 	backend, err := a.registry.GetBackend(resource.Spec.BackendType)
 	if err != nil {
 		return conditionUtils.GenerateFalseCondition(condition, "BackendNotFound", fmt.Sprintf("Failed to get backend: %v", err)), nil
 	}
-
-	healthy, err := backend.IsHealthy(ctx, a.logger, a.client, resource.Name, resource.Namespace)
-	if err == nil && healthy {
-		return conditionUtils.GenerateTrueCondition(condition), nil
-	} else if err != nil {
-		a.logger.Error("Health check failed",
-			zap.Error(err),
-			zap.String("operation", "health_check"),
-			zap.String("namespace", resource.Namespace),
-			zap.String("inferenceServer", resource.Name))
-		return conditionUtils.GenerateFalseCondition(condition, "HealthCheckFailed", fmt.Sprintf("Health check error: %v", err)), nil
+	for clusterId, client := range targetClusterClients {
+		healthy, err := backend.IsHealthy(ctx, a.logger, client, resource.Name, resource.Namespace)
+		if err != nil {
+			a.logger.Error("Failed to check health",
+				zap.Error(err),
+				zap.String("operation", "health_check"),
+				zap.String("namespace", resource.Namespace),
+				zap.String("inferenceServer", resource.Name),
+				zap.String("cluster", clusterId))
+			return conditionUtils.GenerateFalseCondition(condition, "HealthCheckFailed", fmt.Sprintf("Health check error: %v", err)), nil
+		}
+		if !healthy {
+			return conditionUtils.GenerateFalseCondition(condition, "HealthCheckFailed", fmt.Sprintf("Server is not healthy in cluster %s", clusterId)), nil
+		}
 	}
-
-	return conditionUtils.GenerateFalseCondition(condition, "HealthCheckFailed", "Server is not healthy"), nil
+	return conditionUtils.GenerateTrueCondition(condition), nil
 }
 
-// Run returns a failed condition since health check failures cannot be automatically remediated.
 func (a *HealthCheckActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
-	// This method is only run when Retrieve() fails.
-	// If Retrieve() failed, then there's nothing we can do here, simply return the condition.
 	return condition, nil
 }

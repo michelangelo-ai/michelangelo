@@ -32,6 +32,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -47,10 +48,6 @@ import (
 
 // Reconciler reconciles InferenceServer custom resources and manages their lifecycle.
 //
-// All fields are unexported. Exported struct fields become permanent public API surface —
-// external packages can depend on them directly, making future removal a breaking change.
-// All dependencies are injected via NewReconciler() instead.
-//
 // The Reconciler handles:
 //   - Infrastructure provisioning (Kubernetes deployments, services, modelconfigs)
 //   - Health checking and status reporting
@@ -59,7 +56,7 @@ type Reconciler struct {
 	api.Handler
 
 	logger            *zap.Logger
-	recorder          record.EventRecorder
+	Recorder          record.EventRecorder
 	engine            conditionInterfaces.Engine[*v2pb.InferenceServer]
 	plugin            plugins.Plugin
 	apiHandlerFactory apiHandler.Factory
@@ -72,17 +69,18 @@ type Reconciler struct {
 //
 // Parameters:
 //   - mgr: The controller-runtime manager providing Kubernetes client access
-//   - plugin: Backend-specific plugin implementing the inference server lifecycle
+//   - scheme: Kubernetes runtime scheme with registered CRD types
+//   - pluginRegistry: Registry of backend-specific plugins
 //   - apiHandlerFactory: Factory for creating API handlers
 //   - logger: Structured logger for observability
 //
 // Returns:
 //   - *Reconciler: Configured reconciler ready to be registered with the manager
-func NewReconciler(mgr ctrl.Manager, plugin plugins.Plugin, apiHandlerFactory apiHandler.Factory, logger *zap.Logger) *Reconciler {
+func NewReconciler(mgr ctrl.Manager, scheme *runtime.Scheme, plugin plugins.Plugin, apiHandlerFactory apiHandler.Factory, logger *zap.Logger) *Reconciler {
 	logger = logger.With(zap.String("component", "inferenceserver"))
 	return &Reconciler{
 		engine:            defaultengine.NewDefaultEngine[*v2pb.InferenceServer](logger),
-		recorder:          mgr.GetEventRecorderFor(ControllerName),
+		Recorder:          mgr.GetEventRecorderFor(ControllerName),
 		plugin:            plugin,
 		apiHandlerFactory: apiHandlerFactory,
 		logger:            logger,
@@ -173,7 +171,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// Production pattern: never return errors, use events instead
 	if err != nil {
 		// Record event for user visibility
-		r.recorder.Event(&inferenceServer, corev1.EventTypeWarning, "ReconciliationError", err.Error())
+		r.Recorder.Event(&inferenceServer, corev1.EventTypeWarning, "ReconciliationError", err.Error())
 		// Return success to avoid exponential backoff
 		return result, nil
 	}

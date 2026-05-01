@@ -1,0 +1,24 @@
+# Wildcard DestinationRule for multi-cluster mTLS
+# This tells the control plane's sidecars to use mTLS when connecting
+# to ServiceEntry endpoints (east-west gateways in target clusters).
+#
+# Owned by: Sandbox (not the controller)
+# Applied to: Control plane cluster only
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: inference-endpoints-mtls
+  namespace: default
+  labels:
+    app.kubernetes.io/component: endpoint-registry
+    app.kubernetes.io/managed-by: michelangelo-sandbox
+spec:
+  # Wildcard to match all inference service ServiceEntry hosts
+  # The EndpointRegistry creates hosts like:
+  # <name>-inference-service.<namespace>.svc.cluster.local
+  host: "*.default.svc.cluster.local"
+  trafficPolicy:
+    tls:
+      # ISTIO_MUTUAL enables mTLS using Istio's shared CA certificates
+      mode: ISTIO_MUTUAL
+

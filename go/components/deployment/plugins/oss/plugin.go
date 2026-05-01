@@ -3,11 +3,9 @@ package oss
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"go.uber.org/fx"
 	"go.uber.org/zap"
-	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
@@ -20,8 +18,6 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/steadystate"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -36,14 +32,10 @@ var _ plugins.Plugin = &Plugin{}
 
 // Plugin implements deployment lifecycle management for open-source deployments.
 type Plugin struct {
-	client              client.Client
-	httpClient          *http.Client
-	dynamicClient       dynamic.Interface
-	routeProvider       route.RouteProvider
-	backendRegistry     *backends.Registry
-	modelConfigProvider modelconfig.ModelConfigProvider
-	blobstore           *blobstore.BlobStore
-	logger              *zap.Logger
+	client        client.Client
+	routeProvider route.RouteProvider
+	blobstore     *blobstore.BlobStore
+	logger        *zap.Logger
 
 	rolloutPlugin     conditionInterfaces.Plugin[*v2pb.Deployment]
 	rollbackPlugin    conditionInterfaces.Plugin[*v2pb.Deployment]
@@ -55,44 +47,29 @@ type Plugin struct {
 type Params struct {
 	fx.In
 
-	Registrar           pluginmanager.Registrar[plugins.Plugin]
-	Client              client.Client
-	HTTPClient          *http.Client
-	DynamicClient       dynamic.Interface
-	BackendRegistry     *backends.Registry
-	RouteProvider       route.RouteProvider
-	BlobStore           *blobstore.BlobStore
-	Logger              *zap.Logger
-	ModelConfigProvider modelconfig.ModelConfigProvider
+	Registrar     pluginmanager.Registrar[plugins.Plugin]
+	Client        client.Client
+	RouteProvider route.RouteProvider
+	BlobStore     *blobstore.BlobStore
+	Logger        *zap.Logger
 }
 
 // NewPlugin creates an OSS deployment plugin with rollback, cleanup, and steady state workflows.
 func NewPlugin(params Params) *Plugin {
 	return &Plugin{
-		client:              params.Client,
-		httpClient:          params.HTTPClient,
-		dynamicClient:       params.DynamicClient,
-		backendRegistry:     params.BackendRegistry,
-		routeProvider:       params.RouteProvider,
-		modelConfigProvider: params.ModelConfigProvider,
-		blobstore:           params.BlobStore,
-		logger:              params.Logger,
+		client:        params.Client,
+		routeProvider: params.RouteProvider,
+		blobstore:     params.BlobStore,
+		logger:        params.Logger,
 		rollbackPlugin: rollback.NewRollbackPlugin(rollback.Params{
-			Client:              params.Client,
-			ModelConfigProvider: params.ModelConfigProvider,
-			Logger:              params.Logger,
+			Logger: params.Logger,
 		}),
 		cleanupPlugin: cleanup.NewCleanupPlugin(cleanup.Params{
-			Client:              params.Client,
-			RouteProvider:       params.RouteProvider,
-			ModelConfigProvider: params.ModelConfigProvider,
-			Logger:              params.Logger,
+			RouteProvider: params.RouteProvider,
+			Logger:        params.Logger,
 		}),
 		steadyStatePlugin: steadystate.NewSteadyStatePlugin(steadystate.Params{
-			Client:          params.Client,
-			HTTPClient:      params.HTTPClient,
-			BackendRegistry: params.BackendRegistry,
-			Logger:          params.Logger,
+			Logger: params.Logger,
 		}),
 	}
 }
@@ -100,13 +77,10 @@ func NewPlugin(params Params) *Plugin {
 // GetRolloutPlugin creates a deployment-specific rollout plugin with the appropriate strategy.
 func (p *Plugin) GetRolloutPlugin(ctx context.Context, deployment *v2pb.Deployment) (conditionInterfaces.Plugin[*v2pb.Deployment], error) {
 	rolloutPlugin, err := rollout.NewRolloutPlugin(ctx, rollout.Params{
-		Client:              p.client,
-		HTTPClient:          p.httpClient,
-		DynamicClient:       p.dynamicClient,
-		RouteProvider:       p.routeProvider,
-		BackendRegistry:     p.backendRegistry,
-		ModelConfigProvider: p.modelConfigProvider,
-		Logger:              p.logger,
+		Client:        p.client,
+		RouteProvider: p.routeProvider,
+		Gateway:       p.gateway,
+		Logger:        p.logger,
 	}, deployment)
 	if err != nil {
 		p.logger.Error("failed to create rollout plugin",
@@ -213,27 +187,41 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 		return deployment.Status, nil
 	}
 	serverName := inferenceServer.GetName()
-	serverBackend, err := p.backendRegistry.GetBackend(v2pb.BACKEND_TYPE_TRITON)
+	// todo: ghosharitra: fix this, need to remove gateway dependency
+	deploymentTargetInfo, err := p.gateway.GetDeploymentTargetInfo(ctx, p.logger, serverName, deployment.Namespace)
 	if err != nil {
-		return deployment.Status, fmt.Errorf("get backend for inference server %s: %w", serverName, err)
+		return deployment.Status, fmt.Errorf("get deployment target info for deployment %s/%s: %w", deployment.Namespace, deployment.Name, err)
 	}
-	healthy, err := serverBackend.CheckModelStatus(ctx, p.logger, p.client, p.httpClient, serverName, deployment.Namespace, deployment.Spec.DesiredRevision.Name)
-	if err != nil {
-		p.logger.Error("failed to check model status",
-			zap.Error(err),
-			zap.String("operation", "check_model_status"),
-			zap.String("namespace", deployment.Namespace),
-			zap.String("deployment", deployment.Name),
-			zap.String("model", deployment.Spec.DesiredRevision.Name))
-		return deployment.Status, fmt.Errorf("check model status %s for deployment %s/%s: %w",
-			deployment.Spec.DesiredRevision.Name, deployment.Namespace, deployment.Name, err)
+	allHealthy := true
+	for _, clusterTarget := range deploymentTargetInfo.ClusterTargets {
+		healthy, err := p.gateway.CheckModelStatus(ctx, p.logger, currentRevision.Name, serverName, currentRevision.Namespace, clusterTarget, deploymentTargetInfo.BackendType)
+		if err != nil {
+			p.logger.Error("failed to check model status",
+				zap.Error(err),
+				zap.String("operation", "check_model_status"),
+				zap.String("namespace", deployment.Namespace),
+				zap.String("deployment", deployment.Name),
+				zap.String("model", currentRevision.Name))
+			return deployment.Status, fmt.Errorf("check model status %s for deployment %s/%s: %w",
+				currentRevision.Name, currentRevision.Namespace, deployment.Name, err)
+		}
+		if !healthy {
+			allHealthy = false
+			p.logger.Warn("model is not healthy in cluster",
+				zap.String("cluster_id", clusterTarget.ClusterId),
+				zap.String("model", currentRevision.Name),
+				zap.String("inference_server", serverName),
+				zap.String("namespace", deployment.Namespace))
+		}
 	}
-	if healthy {
+
+	// only log during state change
+	if allHealthy {
 		if deployment.Status.GetState() != v2pb.DEPLOYMENT_STATE_HEALTHY {
 			p.logger.Info("deployment status changed to healthy",
 				zap.String("deployment", deployment.Name),
 				zap.String("namespace", deployment.Namespace),
-				zap.String("model", deployment.Spec.DesiredRevision.Name),
+				zap.String("model", currentRevision.Name),
 				zap.String("previous_state", deployment.Status.GetState().String()),
 				zap.String("new_state", v2pb.DEPLOYMENT_STATE_HEALTHY.String()))
 			deployment.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
@@ -243,7 +231,7 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 			p.logger.Info("deployment status changed to unhealthy",
 				zap.String("deployment", deployment.Name),
 				zap.String("namespace", deployment.Namespace),
-				zap.String("model", deployment.Spec.DesiredRevision.Name),
+				zap.String("model", currentRevision.Name),
 				zap.String("previous_state", deployment.Status.GetState().String()),
 				zap.String("new_state", v2pb.DEPLOYMENT_STATE_UNHEALTHY.String()))
 			deployment.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
@@ -258,23 +246,38 @@ func (p *Plugin) HealthCheckGate(ctx context.Context, observability plugins.Obse
 	if deployment.Spec.GetInferenceServer() == nil {
 		return false, nil
 	}
-	// Check if the inference server is healthy
-	serverBackend, err := p.backendRegistry.GetBackend(v2pb.BACKEND_TYPE_TRITON)
+
+	// Check if the inference server is healthy for all target clusters
+	deploymentTargetInfo, err := p.gateway.GetDeploymentTargetInfo(ctx, p.logger, deployment.Spec.GetInferenceServer().Name, deployment.Namespace)
 	if err != nil {
-		return false, fmt.Errorf("get backend for inference server %s: %w", deployment.Spec.GetInferenceServer().Name, err)
+		return false, fmt.Errorf("get deployment target info for deployment %s/%s: %w", deployment.Namespace, deployment.Name, err)
 	}
-	healthy, err := serverBackend.IsHealthy(ctx, p.logger, p.client, deployment.Spec.GetInferenceServer().Name, deployment.Namespace)
-	if err != nil {
-		p.logger.Error("failed to check health of inference server",
-			zap.Error(err),
-			zap.String("operation", "health_check_gate"),
-			zap.String("namespace", deployment.Namespace),
-			zap.String("deployment", deployment.Name),
-			zap.String("inference_server", deployment.Spec.GetInferenceServer().Name))
-		return false, fmt.Errorf("check health of inference server %s for deployment %s/%s: %w",
-			deployment.Spec.GetInferenceServer().Name, deployment.Namespace, deployment.Name, err)
+	allHealthy := true
+	for _, clusterTarget := range deploymentTargetInfo.ClusterTargets {
+		healthy, err := p.gateway.InferenceServerIsHealthy(ctx, p.logger, deployment.Spec.GetInferenceServer().Name, deployment.Namespace, clusterTarget, deploymentTargetInfo.BackendType)
+		if err != nil {
+			p.logger.Error("failed to check health of inference server",
+				zap.Error(err),
+				zap.String("operation", "health_check_gate"),
+				zap.String("namespace", deployment.Namespace),
+				zap.String("deployment", deployment.Name),
+				zap.String("inference_server", deployment.Spec.GetInferenceServer().Name),
+				zap.String("cluster_id", clusterTarget.ClusterId))
+			return false, fmt.Errorf("check health of inference server %s for deployment %s/%s: %w",
+				deployment.Spec.GetInferenceServer().Name, deployment.Namespace, deployment.Name, err)
+		}
+		if !healthy {
+			allHealthy = false
+			p.logger.Warn("inference server is not healthy in cluster",
+				zap.String("cluster_id", clusterTarget.ClusterId),
+				zap.String("inference_server", deployment.Spec.GetInferenceServer().Name),
+				zap.String("namespace", deployment.Namespace))
+		}
 	}
-	return healthy, nil
+	if !allHealthy {
+		return false, nil
+	}
+	return true, nil
 }
 
 // PopulateDeploymentLogs adds error logs to deployment status (no-op for OSS).

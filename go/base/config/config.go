@@ -2,17 +2,18 @@ package config
 
 import (
 	"flag"
-
-	"github.com/michelangelo-ai/michelangelo/go/base/env"
-	"go.uber.org/config"
-
 	"os"
 	"strings"
 
-	"github.com/michelangelo-ai/michelangelo/go/storage"
+	"go.uber.org/config"
+
+	"github.com/michelangelo-ai/michelangelo/go/base/env"
+
 	"go.uber.org/fx"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	"github.com/michelangelo-ai/michelangelo/go/storage"
 )
 
 const (
@@ -21,6 +22,7 @@ const (
 	_k8sConfigKey             = "k8s"
 	_metadataStorageConfigKey = "metadataStorage"
 	_workflowClientConfigKey  = "workflowClient"
+	_inferenceServerConfigKey = "inferenceServer"
 	_mysqlConfigKey           = "mysql"
 	_ingesterConfigKey        = "ingester"
 )
@@ -40,6 +42,12 @@ type WorkflowClientConfig struct {
 	Provider           string `yaml:"provider"`
 	UseTLS             bool   `yaml:"useTLS"`
 	ExecutionUrlFormat string `yaml:"executionUrlFormat"`
+}
+
+// InferenceServerConfig is the configuration for inference server.
+type InferenceServerConfig struct {
+	// ControlPlaneClusterId is the cluster ID that represents the control plane cluster.
+	ControlPlaneClusterId string `yaml:"controlPlaneClusterId"`
 }
 
 // Params defines the dependencies of the config fx module.

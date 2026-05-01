@@ -8,7 +8,7 @@ metadata:
 spec:
   containers:
     - name: app
-      image: ghcr.io/michelangelo-ai/controllermgr:main
+      image: ghcr.io/michelangelo-ai/controllermgr:ghosharitra-multi-cluster-model-deployment-support
       imagePullPolicy: IfNotPresent
       envFrom:
         - secretRef:
@@ -103,3 +103,6 @@ data:
       domain: default
       taskList: default
       executionUrlFormat: http://localhost:8088/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}
+
+    inferenceServer:
+      controlPlaneClusterId: "k3d-michelangelo-sandbox"

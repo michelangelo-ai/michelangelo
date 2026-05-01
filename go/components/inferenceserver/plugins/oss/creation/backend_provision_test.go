@@ -17,99 +17,134 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-// createTestRegistry creates a registry with the mock backend registered for Triton.
-func createTestRegistry(mockBackend *backendsmocks.MockBackend) *backends.Registry {
-	registry := backends.NewRegistry()
-	registry.Register(v2pb.BACKEND_TYPE_TRITON, mockBackend)
-	return registry
-}
+func TestClusterWorkloadsActor_Retrieve(t *testing.T) {
+	testCluster := &v2pb.ClusterTarget{ClusterId: "test-cluster"}
 
-func TestBackendProvisioningActor_Retrieve(t *testing.T) {
 	tests := []struct {
-		name            string
-		setupMocks      func(*backendsmocks.MockBackend)
-		expectedStatus  apipb.ConditionStatus
-		expectedReason  string
-		expectedMessage string
-		expectedErr     bool
+		name                   string
+		resource               *v2pb.InferenceServer
+		setupMocks             func(*backendsmocks.MockBackend)
+		expectedStatus         apipb.ConditionStatus
+		expectedMessage        string
+		expectedReasonContains string
+		expectedErr            bool
 	}{
 		{
-			name: "Backend is ready and serving",
+			name: "all clusters ready",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
+				},
+			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
-					GetServerStatus(
-						gomock.Any(),
-						gomock.Any(),
-						gomock.Any(),
-						"test-server",
-						"test-namespace",
-					).
+					GetServerStatus(gomock.Any(), "test-server", "test-namespace", testCluster).
 					Return(&backends.ServerStatus{
-						State: v2pb.INFERENCE_SERVER_STATE_SERVING,
+						ClusterState: v2pb.CLUSTER_STATE_READY,
 					}, nil)
 			},
-			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
-			expectedReason:  "",
-			expectedMessage: "",
-			expectedErr:     false,
+			expectedStatus:         apipb.CONDITION_STATUS_TRUE,
+			expectedMessage:        "",
+			expectedReasonContains: "",
+			expectedErr:            false,
 		},
 		{
-			name: "server is creating",
+			name: "cluster not ready",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
+				},
+			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
-					GetServerStatus(
-						gomock.Any(),
-						gomock.Any(),
-						gomock.Any(),
-						"test-server",
-						"test-namespace",
-					).
+					GetServerStatus(gomock.Any(), "test-server", "test-namespace", testCluster).
 					Return(&backends.ServerStatus{
-						State: v2pb.INFERENCE_SERVER_STATE_CREATING,
+						ClusterState: v2pb.CLUSTER_STATE_CREATING,
 					}, nil)
 			},
-			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
-			expectedMessage: "BackendProvisioningFailed",
-			expectedReason:  "Backend state is not serving: INFERENCE_SERVER_STATE_CREATING",
-			expectedErr:     false,
+			expectedStatus:         apipb.CONDITION_STATUS_UNKNOWN,
+			expectedMessage:        "ClusterNotReady",
+			expectedReasonContains: "is in state",
+			expectedErr:            false,
 		},
 		{
 			name: "error checking server status",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
+				},
+			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
-					GetServerStatus(
-						gomock.Any(),
-						gomock.Any(),
-						gomock.Any(),
-						"test-server",
-						"test-namespace",
-					).
+					GetServerStatus(gomock.Any(), "test-server", "test-namespace", testCluster).
 					Return(nil, errors.New("API error"))
 			},
-			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
-			expectedMessage: "BackendProvisioningCheckFailed",
-			expectedReason:  "Failed to check backend status: API error",
-			expectedErr:     false,
+			expectedStatus:         apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:        "ClusterCheckFailed",
+			expectedReasonContains: "Failed to check cluster test-cluster status",
+			expectedErr:            false,
 		},
 		{
-			name: "server in other state",
+			name: "control plane cluster returns true when ready",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_ControlPlaneClusterDeployment{
+							ControlPlaneClusterDeployment: &v2pb.ControlPlaneClusterDeployment{},
+						},
+					},
+				},
+			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
+				// nil cluster target means control plane cluster
 				mockBackend.EXPECT().
-					GetServerStatus(
-						gomock.Any(),
-						gomock.Any(),
-						gomock.Any(),
-						"test-server",
-						"test-namespace",
-					).
+					GetServerStatus(gomock.Any(), "test-server", "test-namespace", nil).
 					Return(&backends.ServerStatus{
-						State: v2pb.INFERENCE_SERVER_STATE_FAILED,
+						ClusterState: v2pb.CLUSTER_STATE_READY,
 					}, nil)
 			},
-			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
-			expectedMessage: "BackendProvisioningFailed",
-			expectedReason:  "Backend state is not serving: INFERENCE_SERVER_STATE_FAILED",
-			expectedErr:     false,
+			expectedStatus:         apipb.CONDITION_STATUS_TRUE,
+			expectedMessage:        "",
+			expectedReasonContains: "",
+			expectedErr:            false,
 		},
 	}
 
@@ -119,76 +154,46 @@ func TestBackendProvisioningActor_Retrieve(t *testing.T) {
 			defer ctrl.Finish()
 
 			mockBackend := backendsmocks.NewMockBackend(ctrl)
-			registry := createTestRegistry(mockBackend)
-
 			tt.setupMocks(mockBackend)
 
-			actor := NewBackendProvisionActor(nil, registry, zap.NewNop())
-
-			resource := &v2pb.InferenceServer{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-server",
-					Namespace: "test-namespace",
-				},
-				Spec: v2pb.InferenceServerSpec{
-					BackendType: v2pb.BACKEND_TYPE_TRITON,
-				},
-			}
+			actor := NewClusterWorkloadsActor(mockBackend, zap.NewNop())
 
 			condition := &apipb.Condition{
-				Type: "TritonResourceCreation",
+				Type: "TritonClusterWorkloads",
 			}
 
-			result, err := actor.Retrieve(context.Background(), resource, condition)
+			result, err := actor.Retrieve(context.Background(), tt.resource, condition)
 
 			if tt.expectedErr {
 				assert.Error(t, err)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tt.expectedStatus, result.Status)
-				assert.Equal(t, tt.expectedReason, result.Reason)
-				assert.Equal(t, tt.expectedMessage, result.Message)
-				assert.Equal(t, "TritonResourceCreation", result.Type)
+				if tt.expectedMessage != "" {
+					assert.Equal(t, tt.expectedMessage, result.Message)
+				}
+				if tt.expectedReasonContains != "" {
+					assert.Contains(t, result.Reason, tt.expectedReasonContains)
+				}
 			}
 		})
 	}
 }
 
-func TestResourceCreationActor_Run(t *testing.T) {
+func TestClusterWorkloadsActor_Run(t *testing.T) {
+	testCluster := &v2pb.ClusterTarget{ClusterId: "test-cluster"}
+
 	tests := []struct {
-		name                    string
-		setupMocks              func(*testing.T, *backendsmocks.MockBackend)
-		resource                *v2pb.InferenceServer
-		expectedStatus          apipb.ConditionStatus
-		expectedReason          string
-		expectedMessageContains string
-		expectedErr             bool
+		name                   string
+		resource               *v2pb.InferenceServer
+		setupMocks             func(*backendsmocks.MockBackend)
+		expectedStatus         apipb.ConditionStatus
+		expectedMessage        string
+		expectedReasonContains string
+		expectedErr            bool
 	}{
 		{
 			name: "server creation succeeds",
-			setupMocks: func(t *testing.T, mockBackend *backendsmocks.MockBackend) {
-				mockBackend.EXPECT().
-					CreateServer(
-						gomock.Any(),
-						gomock.Any(),
-						gomock.Any(),
-						gomock.Any(),
-					).
-					DoAndReturn(func(ctx context.Context, logger *zap.Logger, kubeClient interface{}, inferenceServer *v2pb.InferenceServer) (*backends.ServerStatus, error) {
-						assert.Equal(t, "test-server", inferenceServer.Name)
-						assert.Equal(t, "test-namespace", inferenceServer.Namespace)
-						assert.Equal(t, v2pb.BACKEND_TYPE_TRITON, inferenceServer.Spec.BackendType)
-						assert.NotNil(t, inferenceServer.Spec.InitSpec)
-						assert.NotNil(t, inferenceServer.Spec.InitSpec.ResourceSpec)
-						assert.Equal(t, int32(4), inferenceServer.Spec.InitSpec.ResourceSpec.Cpu)
-						assert.Equal(t, "8Gi", inferenceServer.Spec.InitSpec.ResourceSpec.Memory)
-						assert.Equal(t, int32(2), inferenceServer.Spec.InitSpec.ResourceSpec.Gpu)
-						assert.Equal(t, int32(1), inferenceServer.Spec.InitSpec.NumInstances)
-						return &backends.ServerStatus{
-							State: v2pb.INFERENCE_SERVER_STATE_CREATING,
-						}, nil
-					})
-			},
 			resource: &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-server",
@@ -196,6 +201,13 @@ func TestResourceCreationActor_Run(t *testing.T) {
 				},
 				Spec: v2pb.InferenceServerSpec{
 					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
 					InitSpec: &v2pb.InitSpec{
 						ResourceSpec: &v2pb.ResourceSpec{
 							Cpu:    4,
@@ -206,23 +218,38 @@ func TestResourceCreationActor_Run(t *testing.T) {
 					},
 				},
 			},
-			expectedStatus:          apipb.CONDITION_STATUS_TRUE,
-			expectedReason:          "",
-			expectedMessageContains: "",
-			expectedErr:             false,
-		},
-		{
-			name: "server creation fails",
-			setupMocks: func(t *testing.T, mockBackend *backendsmocks.MockBackend) {
+			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
 					CreateServer(
 						gomock.Any(),
-						gomock.Any(),
-						gomock.Any(),
-						gomock.Any(),
+						"test-server",
+						"test-namespace",
+						backends.ResourceConstraints{
+							Cpu:      4,
+							Memory:   "8Gi",
+							Gpu:      2,
+							Replicas: 1,
+						},
+						testCluster,
 					).
-					Return(nil, errors.New("insufficient resources"))
+					DoAndReturn(func(ctx context.Context, name, namespace string, constraints backends.ResourceConstraints, cluster *v2pb.ClusterTarget) (*backends.ServerStatus, error) {
+						assert.Equal(t, "test-server", name)
+						assert.Equal(t, "test-namespace", namespace)
+						assert.Equal(t, int32(4), constraints.Cpu)
+						assert.Equal(t, "8Gi", constraints.Memory)
+						assert.Equal(t, int32(2), constraints.Gpu)
+						assert.Equal(t, int32(1), constraints.Replicas)
+						assert.Equal(t, testCluster, cluster)
+						return nil, nil
+					})
 			},
+			expectedStatus:         apipb.CONDITION_STATUS_UNKNOWN,
+			expectedMessage:        "ClusterCreationInitiated",
+			expectedReasonContains: "server creation initiated",
+			expectedErr:            false,
+		},
+		{
+			name: "server creation fails",
 			resource: &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-server",
@@ -230,19 +257,88 @@ func TestResourceCreationActor_Run(t *testing.T) {
 				},
 				Spec: v2pb.InferenceServerSpec{
 					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
 					InitSpec: &v2pb.InitSpec{
 						ResourceSpec: &v2pb.ResourceSpec{
 							Cpu:    4,
 							Memory: "8Gi",
 							Gpu:    2,
 						},
+						NumInstances: 1,
 					},
 				},
 			},
-			expectedStatus:          apipb.CONDITION_STATUS_FALSE,
-			expectedReason:          "Failed to provision backend: insufficient resources",
-			expectedMessageContains: "BackendProvisionFailed",
-			expectedErr:             true,
+			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
+				mockBackend.EXPECT().
+					CreateServer(
+						gomock.Any(),
+						"test-server",
+						"test-namespace",
+						backends.ResourceConstraints{
+							Cpu:      4,
+							Memory:   "8Gi",
+							Gpu:      2,
+							Replicas: 1,
+						},
+						testCluster,
+					).
+					Return(nil, errors.New("insufficient resources"))
+			},
+			expectedStatus:         apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:        "ClusterCreationFailed",
+			expectedReasonContains: "Failed to create server",
+			expectedErr:            false,
+		},
+		{
+			name: "control plane cluster creation succeeds",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_ControlPlaneClusterDeployment{
+							ControlPlaneClusterDeployment: &v2pb.ControlPlaneClusterDeployment{},
+						},
+					},
+					InitSpec: &v2pb.InitSpec{
+						ResourceSpec: &v2pb.ResourceSpec{
+							Cpu:    4,
+							Memory: "8Gi",
+							Gpu:    2,
+						},
+						NumInstances: 1,
+					},
+				},
+			},
+			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
+				mockBackend.EXPECT().
+					CreateServer(
+						gomock.Any(),
+						"test-server",
+						"test-namespace",
+						backends.ResourceConstraints{
+							Cpu:      4,
+							Memory:   "8Gi",
+							Gpu:      2,
+							Replicas: 1,
+						},
+						nil,
+					).
+					Return(nil, nil)
+			},
+			expectedStatus:         apipb.CONDITION_STATUS_UNKNOWN,
+			expectedMessage:        "ClusterCreationInitiated",
+			expectedReasonContains: "server creation initiated",
+			expectedErr:            false,
 		},
 	}
 
@@ -252,29 +348,27 @@ func TestResourceCreationActor_Run(t *testing.T) {
 			defer ctrl.Finish()
 
 			mockBackend := backendsmocks.NewMockBackend(ctrl)
-			registry := createTestRegistry(mockBackend)
+			tt.setupMocks(mockBackend)
 
-			tt.setupMocks(t, mockBackend)
-
-			actor := NewBackendProvisionActor(nil, registry, zap.NewNop())
+			actor := NewClusterWorkloadsActor(mockBackend, zap.NewNop())
 
 			condition := &apipb.Condition{
-				Type: "TritonResourceCreation",
+				Type: "TritonClusterWorkloads",
 			}
 
 			result, err := actor.Run(context.Background(), tt.resource, condition)
 
 			if tt.expectedErr {
 				assert.Error(t, err)
-				require.NotNil(t, result)
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, result)
+				assert.Equal(t, tt.expectedStatus, result.Status)
+				assert.Equal(t, tt.expectedMessage, result.Message)
+				if tt.expectedReasonContains != "" {
+					assert.Contains(t, result.Reason, tt.expectedReasonContains)
+				}
 			}
-
-			assert.Equal(t, tt.expectedStatus, result.Status)
-			assert.Equal(t, tt.expectedReason, result.Reason)
-			assert.Contains(t, result.Message, tt.expectedMessageContains)
 		})
 	}
 }

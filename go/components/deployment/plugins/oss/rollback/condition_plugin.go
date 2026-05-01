@@ -3,9 +3,8 @@ package rollback
 import (
 	"go.uber.org/zap"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -20,18 +19,18 @@ type conditionPlugin struct {
 
 // Params contains dependencies injected for rollback plugin initialization.
 type Params struct {
-	Client              client.Client
-	ModelConfigProvider modelconfig.ModelConfigProvider
 	Logger              *zap.Logger
+	ClientFactory       clientfactory.ClientFactory
+	ModelConfigProvider modelconfig.ModelConfigProvider
 }
 
 // NewRollbackPlugin creates a rollback workflow plugin.
 func NewRollbackPlugin(p Params) conditionInterfaces.Plugin[*v2pb.Deployment] {
 	return &conditionPlugin{actors: []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&RollbackActor{
-			client:              p.Client,
-			modelConfigProvider: p.ModelConfigProvider,
 			logger:              p.Logger,
+			clientFactory:       p.ClientFactory,
+			modelConfigProvider: p.ModelConfigProvider,
 		},
 	}}
 }

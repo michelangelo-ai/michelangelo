@@ -5,8 +5,10 @@ go_library(
     srcs = [
         "backend_provision.go",
         "condition_plugin.go",
+        "control_plane_discovery.go",
         "health_check.go",
         "model_config_provision.go",
+        "plugin.go",
         "validation.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/creation",
@@ -15,6 +17,8 @@ go_library(
         "//go/base/conditions/interfaces:go_default_library",
         "//go/base/conditions/utils:go_default_library",
         "//go/components/inferenceserver/backends:go_default_library",
+        "//go/components/inferenceserver/clientfactory:go_default_library",
+        "//go/components/inferenceserver/endpointregistry:go_default_library",
         "//go/components/inferenceserver/modelconfig:go_default_library",
         "//go/components/inferenceserver/plugins/oss/common:go_default_library",
         "//proto/api:go_default_library",
@@ -28,6 +32,7 @@ go_test(
     name = "go_default_test",
     srcs = [
         "backend_provision_test.go",
+        "control_plane_discovery_test.go",
         "health_check_test.go",
         "model_config_provision_test.go",
         "validation_test.go",
@@ -36,6 +41,8 @@ go_test(
     deps = [
         "//go/components/inferenceserver/backends:go_default_library",
         "//go/components/inferenceserver/backends/backendsmocks:go_default_library",
+        "//go/components/inferenceserver/endpointregistry:go_default_library",
+        "//go/components/inferenceserver/endpointregistry/endpointregistrymocks:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_golang_mock//gomock:go_default_library",

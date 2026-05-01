@@ -3,17 +3,13 @@ package rollout
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"go.uber.org/zap"
-	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
-	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -27,13 +23,9 @@ type conditionPlugin struct {
 
 // Params contains dependencies injected for rollout plugin initialization.
 type Params struct {
-	Client              client.Client
-	HTTPClient          *http.Client
-	DynamicClient       dynamic.Interface
-	RouteProvider       route.RouteProvider
-	BackendRegistry     *backends.Registry
-	ModelConfigProvider modelconfig.ModelConfigProvider
-	Logger              *zap.Logger
+	Client        client.Client
+	RouteProvider route.RouteProvider
+	Logger        *zap.Logger
 }
 
 // NewRolloutPlugin creates a rollout workflow plugin with deployment-specific strategy actors.
@@ -49,21 +41,17 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 			logger: logger,
 		},
 		&ResourceAcquisitionActor{
-			client:          p.Client,
-			backendRegistry: p.BackendRegistry,
-			logger:          logger,
+			gateway: p.Gateway,
+			logger:  logger,
 		},
 	}
 
 	// Placement strategy actors (rolling strategy for OSS)
 	placementActors, err := strategies.GetActorsForStrategy(ctx, strategies.Params{
-		Client:              p.Client,
-		HTTPClient:          p.HTTPClient,
-		DynamicClient:       p.DynamicClient,
-		RouteProvider:       p.RouteProvider,
-		BackendRegistry:     p.BackendRegistry,
-		ModelConfigProvider: p.ModelConfigProvider,
-		Logger:              p.Logger,
+		Client:        p.Client,
+		RouteProvider: p.RouteProvider,
+		Gateway:       p.Gateway,
+		Logger:        p.Logger,
 	}, deployment)
 	if err != nil {
 		return nil, err
@@ -72,8 +60,8 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 	// Post-placement actors
 	postPlacementActors := []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&RolloutCompletionActor{
-			backendRegistry: p.BackendRegistry,
-			logger:          p.Logger,
+			gateway: p.Gateway,
+			logger:  p.Logger,
 		},
 	}
 

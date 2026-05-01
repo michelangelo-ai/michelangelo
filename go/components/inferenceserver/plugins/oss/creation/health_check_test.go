@@ -11,81 +11,131 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	backendsmocks "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-// createHealthCheckTestRegistry creates a registry with the mock backend registered for Triton.
-func createHealthCheckTestRegistry(mockBackend *backendsmocks.MockBackend) *backends.Registry {
-	registry := backends.NewRegistry()
-	registry.Register(v2pb.BACKEND_TYPE_TRITON, mockBackend)
-	return registry
-}
-
 func TestHealthCheckActor_Retrieve(t *testing.T) {
+	testCluster := &v2pb.ClusterTarget{ClusterId: "test-cluster"}
 	tests := []struct {
-		name            string
-		setupMocks      func(*backendsmocks.MockBackend)
-		expectedStatus  apipb.ConditionStatus
-		expectedReason  string
-		expectedMessage string
-		expectedErr     bool
+		name                   string
+		resource               *v2pb.InferenceServer
+		setupMocks             func(*backendsmocks.MockBackend)
+		expectedStatus         apipb.ConditionStatus
+		expectedMessage        string
+		expectedReasonContains string
+		expectedErr            bool
 	}{
 		{
-			name: "server is healthy",
+			name: "server is healthy with remote cluster",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
+				},
+			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
-					IsHealthy(
-						gomock.Any(),
-						gomock.Any(),
-						gomock.Any(),
-						"test-server",
-						"test-namespace",
-					).
+					IsHealthy(gomock.Any(), "test-server", "test-namespace", testCluster).
 					Return(true, nil)
 			},
-			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
-			expectedReason:  "",
-			expectedMessage: "",
-			expectedErr:     false,
+			expectedStatus:         apipb.CONDITION_STATUS_TRUE,
+			expectedMessage:        "",
+			expectedReasonContains: "",
+			expectedErr:            false,
+		},
+		{
+			name: "server is healthy with control plane cluster",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_ControlPlaneClusterDeployment{
+							ControlPlaneClusterDeployment: &v2pb.ControlPlaneClusterDeployment{},
+						},
+					},
+				},
+			},
+			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
+				mockBackend.EXPECT().
+					IsHealthy(gomock.Any(), "test-server", "test-namespace", nil).
+					Return(true, nil)
+			},
+			expectedStatus:         apipb.CONDITION_STATUS_TRUE,
+			expectedMessage:        "",
+			expectedReasonContains: "",
+			expectedErr:            false,
 		},
 		{
 			name: "server is not healthy",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
+				},
+			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
-					IsHealthy(
-						gomock.Any(),
-						gomock.Any(),
-						gomock.Any(),
-						"test-server",
-						"test-namespace",
-					).
+					IsHealthy(gomock.Any(), "test-server", "test-namespace", testCluster).
 					Return(false, nil)
 			},
-			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
-			expectedMessage: "HealthCheckFailed",
-			expectedReason:  "Server is not healthy",
-			expectedErr:     false,
+			expectedStatus:         apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:        "HealthCheckFailed",
+			expectedReasonContains: "Server is not healthy in cluster",
+			expectedErr:            false,
 		},
 		{
 			name: "health check returns error",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					DeploymentStrategy: &v2pb.InferenceServerDeploymentStrategy{
+						Strategy: &v2pb.InferenceServerDeploymentStrategy_RemoteClusterDeployment{
+							RemoteClusterDeployment: &v2pb.RemoteClustersDeployment{
+								ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+							},
+						},
+					},
+				},
+			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
-					IsHealthy(
-						gomock.Any(),
-						gomock.Any(),
-						gomock.Any(),
-						"test-server",
-						"test-namespace",
-					).
+					IsHealthy(gomock.Any(), "test-server", "test-namespace", testCluster).
 					Return(false, errors.New("connection timeout"))
 			},
-			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
-			expectedMessage: "HealthCheckFailed",
-			expectedReason:  "Health check error: connection timeout",
-			expectedErr:     false,
+			expectedStatus:         apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:        "HealthCheckFailed",
+			expectedReasonContains: "Health check error: connection timeout",
+			expectedErr:            false,
 		},
 	}
 
@@ -95,51 +145,41 @@ func TestHealthCheckActor_Retrieve(t *testing.T) {
 			defer ctrl.Finish()
 
 			mockBackend := backendsmocks.NewMockBackend(ctrl)
-			registry := createHealthCheckTestRegistry(mockBackend)
-
 			tt.setupMocks(mockBackend)
 
-			actor := NewHealthCheckActor(nil, registry, zap.NewNop())
-
-			resource := &v2pb.InferenceServer{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-server",
-					Namespace: "test-namespace",
-				},
-				Spec: v2pb.InferenceServerSpec{
-					BackendType: v2pb.BACKEND_TYPE_TRITON,
-				},
-			}
+			actor := NewHealthCheckActor(mockBackend, zap.NewNop())
 
 			condition := &apipb.Condition{
 				Type: "TritonHealthCheck",
 			}
 
-			result, err := actor.Retrieve(context.Background(), resource, condition)
+			result, err := actor.Retrieve(context.Background(), tt.resource, condition)
 
 			if tt.expectedErr {
 				assert.Error(t, err)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tt.expectedStatus, result.Status)
-				assert.Equal(t, tt.expectedReason, result.Reason)
-				assert.Equal(t, tt.expectedMessage, result.Message)
-				assert.Equal(t, "TritonHealthCheck", result.Type)
+				if tt.expectedMessage != "" {
+					assert.Equal(t, tt.expectedMessage, result.Message)
+				}
+				if tt.expectedReasonContains != "" {
+					assert.Contains(t, result.Reason, tt.expectedReasonContains)
+				}
 			}
 		})
 	}
 }
 
 func TestHealthCheckActor_Run(t *testing.T) {
-	// Run() simply returns the input condition as-is (no changes).
+	// Run() returns the condition unchanged.
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockBackend := backendsmocks.NewMockBackend(ctrl)
-	registry := createHealthCheckTestRegistry(mockBackend)
 	// No expectations set, backend should not be called
 
-	actor := NewHealthCheckActor(nil, registry, zap.NewNop())
+	actor := NewHealthCheckActor(mockBackend, zap.NewNop())
 
 	resource := &v2pb.InferenceServer{
 		ObjectMeta: metav1.ObjectMeta{
@@ -151,21 +191,16 @@ func TestHealthCheckActor_Run(t *testing.T) {
 		},
 	}
 
-	// Provide an input condition with specific values
 	condition := &apipb.Condition{
-		Type:    "TritonHealthCheck",
-		Status:  apipb.CONDITION_STATUS_FALSE,
-		Reason:  "TestReason",
-		Message: "TestMessage",
+		Type:   "TritonHealthCheck",
+		Status: apipb.CONDITION_STATUS_UNKNOWN,
+		Reason: "TestReason",
 	}
 
 	result, err := actor.Run(context.Background(), resource, condition)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	// Run() returns the input condition as-is
-	assert.Equal(t, apipb.CONDITION_STATUS_FALSE, result.Status)
-	assert.Equal(t, "TestReason", result.Reason)
-	assert.Equal(t, "TestMessage", result.Message)
-	assert.Equal(t, "TritonHealthCheck", result.Type)
+	// Run returns the same condition unchanged
+	assert.Equal(t, condition, result)
 }

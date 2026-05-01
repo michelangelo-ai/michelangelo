@@ -5,80 +5,136 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/gogo/protobuf/types"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig/modelconfigmocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
 	"github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-func createTestRegistry(mockBackend *backendsmocks.MockBackend) *backends.Registry {
-	registry := backends.NewRegistry()
-	registry.Register(v2pb.BACKEND_TYPE_TRITON, mockBackend)
-	return registry
-}
-
 func TestRollingRolloutRetrieve(t *testing.T) {
-	// Condition with rolloutstarted = true metadata
-	rolloutStartedCondition := func() *api.Condition {
-		rolloutstarted := &types.BoolValue{Value: true}
-		metadata, _ := types.MarshalAny(rolloutstarted)
-		return &api.Condition{Metadata: metadata}
-	}
-
-	// Condition with rolloutstarted = false metadata
-	rolloutNotStartedCondition := func() *api.Condition {
-		return &api.Condition{}
-	}
-
 	tests := []struct {
 		name                    string
 		deployment              *v2pb.Deployment
-		condition               *api.Condition
-		setupMocks              func(*backendsmocks.MockBackend)
+		metadata                *common.ClusterMetadata
+		setupMocks              func(*gatewaysmocks.MockGateway)
 		expectedConditionStatus api.ConditionStatus
-		expectedConditionReason string
+		expectedReasonContains  string
 	}{
 		{
-			name: "rolling rollout not started when metadata not set",
-			deployment: &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
-				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: &api.ResourceIdentifier{Name: "model-v1"},
-					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
-					},
-				},
-			},
-			condition:               rolloutNotStartedCondition(),
-			setupMocks:              func(mb *backendsmocks.MockBackend) {},
+			name:                    "no metadata returns FALSE to trigger Run",
+			deployment:              createDeployment("test-deployment", "default", "model-v1", "test-server"),
+			metadata:                nil,
+			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "Rolling rollout has not started",
+			expectedReasonContains:  "Rolling rollout has not started",
 		},
 		{
-			name: "model sync completed when model is ready",
-			deployment: &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
-				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: &api.ResourceIdentifier{Name: "model-v1"},
-					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
-					},
+			name:       "all clusters deployed returns TRUE",
+			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
+			metadata: &common.ClusterMetadata{
+				BackendType:  "BACKEND_TYPE_TRITON",
+				CurrentIndex: 0,
+				Clusters: []common.ClusterEntry{
+					{ClusterId: "cluster-1", State: common.ClusterStateDeployed},
+					{ClusterId: "cluster-2", State: common.ClusterStateDeployed},
 				},
 			},
-			condition: rolloutStartedCondition(),
-			setupMocks: func(mb *backendsmocks.MockBackend) {
-				mb.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").Return(true, nil)
+			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
+			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
+			expectedReasonContains:  "",
+		},
+		{
+			name:       "cluster pending returns FALSE to trigger Run",
+			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
+			metadata: &common.ClusterMetadata{
+				BackendType:  "BACKEND_TYPE_TRITON",
+				CurrentIndex: 0,
+				Clusters: []common.ClusterEntry{
+					{ClusterId: "cluster-1", Host: "1.2.3.4", Port: "6443", State: common.ClusterStatePending},
+				},
+			},
+			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
+			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
+			expectedReasonContains:  "pending deployment",
+		},
+		{
+			name:       "cluster in progress and model ready marks as deployed",
+			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
+			metadata: &common.ClusterMetadata{
+				BackendType:  "BACKEND_TYPE_TRITON",
+				CurrentIndex: 0,
+				Clusters: []common.ClusterEntry{
+					{ClusterId: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: common.ClusterStateDeploymentInProgress},
+				},
+			},
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().CheckModelStatus(
+					gomock.Any(), gomock.Any(), "model-v1", "test-server", "default",
+					gomock.Any(), v2pb.BACKEND_TYPE_TRITON,
+				).Return(true, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
-			expectedConditionReason: "",
+			expectedReasonContains:  "",
+		},
+		{
+			name:       "cluster in progress and model not ready returns UNKNOWN",
+			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
+			metadata: &common.ClusterMetadata{
+				BackendType:  "BACKEND_TYPE_TRITON",
+				CurrentIndex: 0,
+				Clusters: []common.ClusterEntry{
+					{ClusterId: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: common.ClusterStateDeploymentInProgress},
+				},
+			},
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().CheckModelStatus(
+					gomock.Any(), gomock.Any(), "model-v1", "test-server", "default",
+					gomock.Any(), v2pb.BACKEND_TYPE_TRITON,
+				).Return(false, nil)
+			},
+			expectedConditionStatus: api.CONDITION_STATUS_UNKNOWN,
+			expectedReasonContains:  "loading",
+		},
+		{
+			name:       "cluster in progress with status check error returns UNKNOWN",
+			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
+			metadata: &common.ClusterMetadata{
+				BackendType:  "BACKEND_TYPE_TRITON",
+				CurrentIndex: 0,
+				Clusters: []common.ClusterEntry{
+					{ClusterId: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: common.ClusterStateDeploymentInProgress},
+				},
+			},
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().CheckModelStatus(
+					gomock.Any(), gomock.Any(), "model-v1", "test-server", "default",
+					gomock.Any(), v2pb.BACKEND_TYPE_TRITON,
+				).Return(false, errors.New("connection error"))
+			},
+			expectedConditionStatus: api.CONDITION_STATUS_UNKNOWN,
+			expectedReasonContains:  "Failed to check model status",
+		},
+		{
+			name:       "first cluster deployed moves to second cluster",
+			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
+			metadata: &common.ClusterMetadata{
+				BackendType:  "BACKEND_TYPE_TRITON",
+				CurrentIndex: 0,
+				Clusters: []common.ClusterEntry{
+					{ClusterId: "cluster-1", State: common.ClusterStateDeployed},
+					{ClusterId: "cluster-2", Host: "5.6.7.8", Port: "6443", State: common.ClusterStatePending},
+				},
+			},
+			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
+			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
+			expectedReasonContains:  "pending deployment",
 		},
 	}
 
@@ -87,20 +143,23 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockBackend := backendsmocks.NewMockBackend(ctrl)
-			tt.setupMocks(mockBackend)
+			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
+			tt.setupMocks(mockGateway)
 
 			actor := &RollingRolloutActor{
-				BackendRegistry: createTestRegistry(mockBackend),
-				Logger:          zap.NewNop(),
+				gateway: mockGateway,
+				logger:  zap.NewNop(),
 			}
 
-			condition, err := actor.Retrieve(context.Background(), tt.deployment, tt.condition)
+			condition := createConditionWithMetadata(t, tt.metadata)
+			result, err := actor.Retrieve(context.Background(), tt.deployment, condition)
 
 			assert.NoError(t, err)
-			assert.NotNil(t, condition)
-			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
-			assert.Equal(t, tt.expectedConditionReason, condition.Reason)
+			assert.NotNil(t, result)
+			assert.Equal(t, tt.expectedConditionStatus, result.Status)
+			if tt.expectedReasonContains != "" {
+				assert.Contains(t, result.Reason, tt.expectedReasonContains)
+			}
 		})
 	}
 }
@@ -109,46 +168,110 @@ func TestRollingRolloutRun(t *testing.T) {
 	tests := []struct {
 		name                    string
 		deployment              *v2pb.Deployment
-		setupMocks              func(*modelconfigmocks.MockModelConfigProvider)
+		metadata                *common.ClusterMetadata
+		setupMocks              func(*gatewaysmocks.MockGateway)
 		expectedConditionStatus api.ConditionStatus
-		expectedConditionReason string
+		expectedReasonContains  string
 	}{
 		{
-			name: "successful model sync via model config provider",
-			deployment: &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
-				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: &api.ResourceIdentifier{Name: "model-v1"},
-					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+			name:       "no metadata initializes from gateway and returns UNKNOWN",
+			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
+			metadata:   nil,
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().GetDeploymentTargetInfo(
+					gomock.Any(), gomock.Any(), "test-server", "default",
+				).Return(&gateways.DeploymentTargetInfo{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+					ClusterTargets: []*gateways.TargetClusterConnection{
+						createClusterTarget("cluster-1", "1.2.3.4", "6443", "token1", "ca1"),
+						createClusterTarget("cluster-2", "5.6.7.8", "6443", "token2", "ca2"),
 					},
-				},
-			},
-			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
-				mcp.EXPECT().AddModelToConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", modelconfig.ModelConfigEntry{Name: "model-v1", StoragePath: "s3://deploy-models/model-v1/"}).Return(nil)
+				}, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_UNKNOWN,
-			expectedConditionReason: "Rolling rollout is in progress",
+			expectedReasonContains:  "initialized",
 		},
 		{
-			name: "model loading fails",
-			deployment: &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
-				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: &api.ResourceIdentifier{Name: "model-v2"},
-					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
-					},
-				},
-			},
-			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
-				mcp.EXPECT().AddModelToConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", modelconfig.ModelConfigEntry{Name: "model-v2", StoragePath: "s3://deploy-models/model-v2/"}).Return(errors.New("model loading failed"))
+			name:       "no metadata with GetDeploymentTargetInfo error returns FALSE",
+			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
+			metadata:   nil,
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().GetDeploymentTargetInfo(
+					gomock.Any(), gomock.Any(), "test-server", "default",
+				).Return(nil, errors.New("failed to get target info"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "Failed to update deployment: model loading failed",
+			expectedReasonContains:  "Failed to get deployment target info",
 		},
 		{
-			name: "model sync without desired revision",
+			name:       "no metadata with no clusters returns FALSE",
+			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
+			metadata:   nil,
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().GetDeploymentTargetInfo(
+					gomock.Any(), gomock.Any(), "test-server", "default",
+				).Return(&gateways.DeploymentTargetInfo{
+					BackendType:    v2pb.BACKEND_TYPE_TRITON,
+					ClusterTargets: []*gateways.TargetClusterConnection{},
+				}, nil)
+			},
+			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
+			expectedReasonContains:  "No target clusters found",
+		},
+		{
+			name:       "pending cluster deploys model and returns UNKNOWN",
+			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
+			metadata: &common.ClusterMetadata{
+				BackendType:  "BACKEND_TYPE_TRITON",
+				CurrentIndex: 0,
+				Clusters: []common.ClusterEntry{
+					{ClusterId: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: common.ClusterStatePending},
+				},
+			},
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().LoadModel(
+					gomock.Any(), gomock.Any(), "model-v1", "s3://deploy-models/model-v1/",
+					"test-server", "default", gomock.Any(),
+				).Return(nil)
+			},
+			expectedConditionStatus: api.CONDITION_STATUS_UNKNOWN,
+			expectedReasonContains:  "deployment started",
+		},
+		{
+			name:       "in progress cluster returns UNKNOWN without deploying",
+			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
+			metadata: &common.ClusterMetadata{
+				BackendType:  "BACKEND_TYPE_TRITON",
+				CurrentIndex: 0,
+				Clusters: []common.ClusterEntry{
+					{ClusterId: "cluster-1", Host: "1.2.3.4", Port: "6443", State: common.ClusterStateDeploymentInProgress},
+				},
+			},
+			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
+			expectedConditionStatus: api.CONDITION_STATUS_UNKNOWN,
+			expectedReasonContains:  "in progress",
+		},
+		{
+			name:       "model loading fails returns FALSE",
+			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
+			metadata: &common.ClusterMetadata{
+				BackendType:  "BACKEND_TYPE_TRITON",
+				CurrentIndex: 0,
+				Clusters: []common.ClusterEntry{
+					{ClusterId: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: common.ClusterStatePending},
+				},
+			},
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().LoadModel(
+					gomock.Any(), gomock.Any(), "model-v1", "s3://deploy-models/model-v1/",
+					"test-server", "default", gomock.Any(),
+				).Return(errors.New("model loading failed"))
+			},
+			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
+			expectedReasonContains:  "Failed to load model",
+		},
+		{
+			name: "no desired revision returns FALSE",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
@@ -158,26 +281,25 @@ func TestRollingRolloutRun(t *testing.T) {
 					},
 				},
 			},
-			setupMocks:              func(mcp *modelconfigmocks.MockModelConfigProvider) {},
-			expectedConditionStatus: api.CONDITION_STATUS_UNKNOWN,
-			expectedConditionReason: "Rolling rollout is in progress",
+			metadata:                nil,
+			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
+			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
+			expectedReasonContains:  "No desired revision",
 		},
 		{
-			name: "successful model sync for bert_cola",
-			deployment: &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "bert-deployment", Namespace: "production"},
-				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: &api.ResourceIdentifier{Name: "bert_cola"},
-					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "triton-prod"},
-					},
+			name:       "all clusters deployed returns TRUE",
+			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
+			metadata: &common.ClusterMetadata{
+				BackendType:  "BACKEND_TYPE_TRITON",
+				CurrentIndex: 2, // Past the last index
+				Clusters: []common.ClusterEntry{
+					{ClusterId: "cluster-1", State: common.ClusterStateDeployed},
+					{ClusterId: "cluster-2", State: common.ClusterStateDeployed},
 				},
 			},
-			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
-				mcp.EXPECT().AddModelToConfig(gomock.Any(), gomock.Any(), gomock.Any(), "triton-prod", "production", modelconfig.ModelConfigEntry{Name: "bert_cola", StoragePath: "s3://deploy-models/bert_cola/"}).Return(nil)
-			},
-			expectedConditionStatus: api.CONDITION_STATUS_UNKNOWN,
-			expectedConditionReason: "Rolling rollout is in progress",
+			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
+			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
+			expectedReasonContains:  "",
 		},
 	}
 
@@ -186,20 +308,57 @@ func TestRollingRolloutRun(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockModelConfigProvider := modelconfigmocks.NewMockModelConfigProvider(ctrl)
-			tt.setupMocks(mockModelConfigProvider)
+			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
+			tt.setupMocks(mockGateway)
 
 			actor := &RollingRolloutActor{
-				ModelConfigProvider: mockModelConfigProvider,
-				Logger:              zap.NewNop(),
+				gateway: mockGateway,
+				logger:  zap.NewNop(),
 			}
 
-			condition, err := actor.Run(context.Background(), tt.deployment, &api.Condition{})
+			condition := createConditionWithMetadata(t, tt.metadata)
+			result, err := actor.Run(context.Background(), tt.deployment, condition)
 
 			assert.NoError(t, err)
-			assert.NotNil(t, condition)
-			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
-			assert.Equal(t, tt.expectedConditionReason, condition.Reason)
+			assert.NotNil(t, result)
+			assert.Equal(t, tt.expectedConditionStatus, result.Status)
+			if tt.expectedReasonContains != "" {
+				assert.Contains(t, result.Reason, tt.expectedReasonContains)
+			}
 		})
+	}
+}
+
+// Helper to create a condition with ClusterMetadata
+func createConditionWithMetadata(t *testing.T, metadata *common.ClusterMetadata) *api.Condition {
+	cond := &api.Condition{}
+	if metadata != nil {
+		err := common.SetClusterMetadata(cond, metadata)
+		require.NoError(t, err)
+	}
+	return cond
+}
+
+// Helper to create a basic deployment
+func createDeployment(name, namespace, modelName, serverName string) *v2pb.Deployment {
+	return &v2pb.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+		Spec: v2pb.DeploymentSpec{
+			DesiredRevision: &api.ResourceIdentifier{Name: modelName},
+			Target: &v2pb.DeploymentSpec_InferenceServer{
+				InferenceServer: &api.ResourceIdentifier{Name: serverName},
+			},
+		},
+	}
+}
+
+// Helper to create cluster targets
+func createClusterTarget(clusterID, host, port, tokenTag, caDataTag string) *gateways.TargetClusterConnection {
+	return &gateways.TargetClusterConnection{
+		ClusterId: clusterID,
+		Host:      host,
+		Port:      port,
+		TokenTag:  tokenTag,
+		CaDataTag: caDataTag,
 	}
 }

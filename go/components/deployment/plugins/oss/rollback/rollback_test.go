@@ -7,98 +7,181 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig/modelconfigmocks"
-	"github.com/michelangelo-ai/michelangelo/proto-go/api"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-func TestRetrieve(t *testing.T) {
+func TestRollbackActor_Retrieve(t *testing.T) {
 	tests := []struct {
-		name                    string
-		deployment              *v2pb.Deployment
-		setupMocks              func(*modelconfigmocks.MockModelConfigProvider)
-		expectedConditionStatus api.ConditionStatus
-		expectedConditionReason string
+		name            string
+		deployment      *v2pb.Deployment
+		condition       func() *apipb.Condition
+		setupMocks      func(*gatewaysmocks.MockGateway)
+		expectedStatus  apipb.ConditionStatus
+		expectedMessage string
 	}{
 		{
-			name: "rollback complete when candidate revision is empty",
+			name: "no candidate revision returns true",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &apipb.ResourceIdentifier{Name: "test-server"},
 					},
 				},
 				Status: v2pb.DeploymentStatus{
 					CandidateRevision: nil,
 				},
 			},
-			setupMocks:              func(mcp *modelconfigmocks.MockModelConfigProvider) {},
-			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
-			expectedConditionReason: "",
+			condition:       func() *apipb.Condition { return &apipb.Condition{} },
+			setupMocks:      func(gw *gatewaysmocks.MockGateway) {},
+			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
+			expectedMessage: "",
 		},
 		{
-			name: "rollback complete when candidate model no longer exists",
+			name: "no metadata returns RollbackNotStarted",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &apipb.ResourceIdentifier{Name: "test-server"},
 					},
 				},
 				Status: v2pb.DeploymentStatus{
-					CandidateRevision: &api.ResourceIdentifier{Name: "failed-model"},
+					CandidateRevision: &apipb.ResourceIdentifier{Name: "failed-model"},
 				},
 			},
-			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
-				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return([]modelconfig.ModelConfigEntry{}, nil)
-			},
-			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
-			expectedConditionReason: "",
+			condition:       func() *apipb.Condition { return &apipb.Condition{} },
+			setupMocks:      func(gw *gatewaysmocks.MockGateway) {},
+			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
+			expectedMessage: "RollbackNotStarted",
 		},
 		{
-			name: "rollback in progress when candidate model still exists",
+			name: "all clusters rolled back returns true",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &apipb.ResourceIdentifier{Name: "test-server"},
 					},
 				},
 				Status: v2pb.DeploymentStatus{
-					CandidateRevision: &api.ResourceIdentifier{Name: "failed-model"},
+					CandidateRevision: &apipb.ResourceIdentifier{Name: "failed-model"},
 				},
 			},
-			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
-				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return([]modelconfig.ModelConfigEntry{
-					{Name: "failed-model"},
-				}, nil)
+			condition: func() *apipb.Condition {
+				cond := &apipb.Condition{}
+				_ = common.SetClusterMetadata(cond, &common.ClusterMetadata{
+					BackendType: "BACKEND_TYPE_TRITON",
+					Clusters: []common.ClusterEntry{
+						{ClusterId: "cluster-1", State: common.ClusterStateRolledBack},
+					},
+					CurrentIndex: 1,
+				})
+				return cond
 			},
-			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "Candidate Model failed-model still exists in model config",
+			setupMocks:      func(gw *gatewaysmocks.MockGateway) {},
+			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
+			expectedMessage: "",
 		},
 		{
-			name: "unable to check model exists error",
+			name: "cluster pending triggers Run",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &apipb.ResourceIdentifier{Name: "test-server"},
 					},
 				},
 				Status: v2pb.DeploymentStatus{
-					CandidateRevision: &api.ResourceIdentifier{Name: "failed-model"},
+					CandidateRevision: &apipb.ResourceIdentifier{Name: "failed-model"},
 				},
 			},
-			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
-				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return(nil, errors.New("api error"))
+			condition: func() *apipb.Condition {
+				cond := &apipb.Condition{}
+				_ = common.SetClusterMetadata(cond, &common.ClusterMetadata{
+					BackendType: "BACKEND_TYPE_TRITON",
+					Clusters: []common.ClusterEntry{
+						{ClusterId: "cluster-1", State: common.ClusterStatePending},
+					},
+					CurrentIndex: 0,
+				})
+				return cond
 			},
-			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "Unable to check if model failed-model exists in model config: api error",
+			setupMocks:      func(gw *gatewaysmocks.MockGateway) {},
+			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
+			expectedMessage: "RollbackPending",
+		},
+		{
+			name: "rollback in progress and model still exists",
+			deployment: &v2pb.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				Spec: v2pb.DeploymentSpec{
+					Target: &v2pb.DeploymentSpec_InferenceServer{
+						InferenceServer: &apipb.ResourceIdentifier{Name: "test-server"},
+					},
+				},
+				Status: v2pb.DeploymentStatus{
+					CandidateRevision: &apipb.ResourceIdentifier{Name: "failed-model"},
+				},
+			},
+			condition: func() *apipb.Condition {
+				cond := &apipb.Condition{}
+				_ = common.SetClusterMetadata(cond, &common.ClusterMetadata{
+					BackendType: "BACKEND_TYPE_TRITON",
+					Clusters: []common.ClusterEntry{
+						{ClusterId: "cluster-1", Host: "host1", Port: "6443", State: common.ClusterStateRollbackInProgress},
+					},
+					CurrentIndex: 0,
+				})
+				return cond
+			},
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().CheckModelExists(
+					gomock.Any(), gomock.Any(), "failed-model", "test-server", "default", gomock.Any(), v2pb.BACKEND_TYPE_TRITON,
+				).Return(true, nil)
+			},
+			expectedStatus:  apipb.CONDITION_STATUS_UNKNOWN,
+			expectedMessage: "RollbackInProgress",
+		},
+		{
+			name: "rollback in progress check fails",
+			deployment: &v2pb.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				Spec: v2pb.DeploymentSpec{
+					Target: &v2pb.DeploymentSpec_InferenceServer{
+						InferenceServer: &apipb.ResourceIdentifier{Name: "test-server"},
+					},
+				},
+				Status: v2pb.DeploymentStatus{
+					CandidateRevision: &apipb.ResourceIdentifier{Name: "failed-model"},
+				},
+			},
+			condition: func() *apipb.Condition {
+				cond := &apipb.Condition{}
+				_ = common.SetClusterMetadata(cond, &common.ClusterMetadata{
+					BackendType: "BACKEND_TYPE_TRITON",
+					Clusters: []common.ClusterEntry{
+						{ClusterId: "cluster-1", Host: "host1", Port: "6443", State: common.ClusterStateRollbackInProgress},
+					},
+					CurrentIndex: 0,
+				})
+				return cond
+			},
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().CheckModelExists(
+					gomock.Any(), gomock.Any(), "failed-model", "test-server", "default", gomock.Any(), v2pb.BACKEND_TYPE_TRITON,
+				).Return(false, errors.New("api error"))
+			},
+			expectedStatus:  apipb.CONDITION_STATUS_UNKNOWN,
+			expectedMessage: "RollbackStatusCheckFailed",
 		},
 	}
 
@@ -107,69 +190,201 @@ func TestRetrieve(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockModelConfigProvider := modelconfigmocks.NewMockModelConfigProvider(ctrl)
-			tt.setupMocks(mockModelConfigProvider)
+			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
+			tt.setupMocks(mockGateway)
 
 			actor := &RollbackActor{
-				logger:              zap.NewNop(),
-				modelConfigProvider: mockModelConfigProvider,
+				logger:  zap.NewNop(),
+				gateway: mockGateway,
 			}
 
-			condition, err := actor.Retrieve(context.Background(), tt.deployment, &api.Condition{})
+			result, err := actor.Retrieve(context.Background(), tt.deployment, tt.condition())
 
-			assert.NoError(t, err)
-			assert.NotNil(t, condition)
-			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
-			assert.Contains(t, condition.Reason, tt.expectedConditionReason)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.Equal(t, tt.expectedStatus, result.Status)
+			if tt.expectedMessage != "" {
+				assert.Equal(t, tt.expectedMessage, result.Message)
+			}
 		})
 	}
 }
 
-func TestRun(t *testing.T) {
+func TestRollbackActor_Run(t *testing.T) {
 	tests := []struct {
-		name                    string
-		deployment              *v2pb.Deployment
-		setupMocks              func(*modelconfigmocks.MockModelConfigProvider)
-		expectedConditionStatus api.ConditionStatus
-		expectedConditionReason string
+		name            string
+		deployment      *v2pb.Deployment
+		condition       func() *apipb.Condition
+		setupMocks      func(*gatewaysmocks.MockGateway)
+		expectedStatus  apipb.ConditionStatus
+		expectedMessage string
 	}{
 		{
-			name: "successful rollback removes candidate model from config",
+			name: "initializes metadata from inference server",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &apipb.ResourceIdentifier{Name: "test-server"},
 					},
 				},
 				Status: v2pb.DeploymentStatus{
-					CandidateRevision: &api.ResourceIdentifier{Name: "failed-model"},
+					CandidateRevision: &apipb.ResourceIdentifier{Name: "failed-model"},
 				},
 			},
-			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
-				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "failed-model").Return(nil)
+			condition: func() *apipb.Condition { return &apipb.Condition{} },
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
+					Return(&gateways.DeploymentTargetInfo{
+						BackendType: v2pb.BACKEND_TYPE_TRITON,
+						ClusterTargets: []*gateways.TargetClusterConnection{
+							{ClusterId: "cluster-1", Host: "host1"},
+						},
+					}, nil)
 			},
-			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
-			expectedConditionReason: "",
+			expectedStatus:  apipb.CONDITION_STATUS_UNKNOWN,
+			expectedMessage: "MetadataInitialized",
 		},
 		{
-			name: "rollback fails when remove model fails",
+			name: "get target info fails",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &apipb.ResourceIdentifier{Name: "test-server"},
 					},
 				},
 				Status: v2pb.DeploymentStatus{
-					CandidateRevision: &api.ResourceIdentifier{Name: "failed-model"},
+					CandidateRevision: &apipb.ResourceIdentifier{Name: "failed-model"},
 				},
 			},
-			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
-				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "failed-model").Return(errors.New("removal failed"))
+			condition: func() *apipb.Condition { return &apipb.Condition{} },
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().GetDeploymentTargetInfo(gomock.Any(), gomock.Any(), "test-server", "default").
+					Return(nil, errors.New("not found"))
 			},
-			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "Failed to remove candidate model failed-model from model config: removal failed",
+			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
+			expectedMessage: "GetTargetInfoFailed",
+		},
+		{
+			name: "unloads model from pending cluster",
+			deployment: &v2pb.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				Spec: v2pb.DeploymentSpec{
+					Target: &v2pb.DeploymentSpec_InferenceServer{
+						InferenceServer: &apipb.ResourceIdentifier{Name: "test-server"},
+					},
+				},
+				Status: v2pb.DeploymentStatus{
+					CandidateRevision: &apipb.ResourceIdentifier{Name: "failed-model"},
+				},
+			},
+			condition: func() *apipb.Condition {
+				cond := &apipb.Condition{}
+				_ = common.SetClusterMetadata(cond, &common.ClusterMetadata{
+					BackendType: "BACKEND_TYPE_TRITON",
+					Clusters: []common.ClusterEntry{
+						{ClusterId: "cluster-1", Host: "host1", Port: "6443", State: common.ClusterStatePending},
+					},
+					CurrentIndex: 0,
+				})
+				return cond
+			},
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().UnloadModel(
+					gomock.Any(), gomock.Any(), "failed-model", "test-server", "default", gomock.Any(),
+				).Return(nil)
+			},
+			expectedStatus:  apipb.CONDITION_STATUS_UNKNOWN,
+			expectedMessage: "RollbackStarted",
+		},
+		{
+			name: "unload model fails",
+			deployment: &v2pb.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				Spec: v2pb.DeploymentSpec{
+					Target: &v2pb.DeploymentSpec_InferenceServer{
+						InferenceServer: &apipb.ResourceIdentifier{Name: "test-server"},
+					},
+				},
+				Status: v2pb.DeploymentStatus{
+					CandidateRevision: &apipb.ResourceIdentifier{Name: "failed-model"},
+				},
+			},
+			condition: func() *apipb.Condition {
+				cond := &apipb.Condition{}
+				_ = common.SetClusterMetadata(cond, &common.ClusterMetadata{
+					BackendType: "BACKEND_TYPE_TRITON",
+					Clusters: []common.ClusterEntry{
+						{ClusterId: "cluster-1", Host: "host1", Port: "6443", State: common.ClusterStatePending},
+					},
+					CurrentIndex: 0,
+				})
+				return cond
+			},
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().UnloadModel(
+					gomock.Any(), gomock.Any(), "failed-model", "test-server", "default", gomock.Any(),
+				).Return(errors.New("unload failed"))
+			},
+			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
+			expectedMessage: "RollbackFailed",
+		},
+		{
+			name: "all clusters rolled back returns true",
+			deployment: &v2pb.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				Spec: v2pb.DeploymentSpec{
+					Target: &v2pb.DeploymentSpec_InferenceServer{
+						InferenceServer: &apipb.ResourceIdentifier{Name: "test-server"},
+					},
+				},
+				Status: v2pb.DeploymentStatus{
+					CandidateRevision: &apipb.ResourceIdentifier{Name: "failed-model"},
+				},
+			},
+			condition: func() *apipb.Condition {
+				cond := &apipb.Condition{}
+				_ = common.SetClusterMetadata(cond, &common.ClusterMetadata{
+					BackendType: "BACKEND_TYPE_TRITON",
+					Clusters: []common.ClusterEntry{
+						{ClusterId: "cluster-1", State: common.ClusterStateRolledBack},
+					},
+					CurrentIndex: 1,
+				})
+				return cond
+			},
+			setupMocks:      func(gw *gatewaysmocks.MockGateway) {},
+			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
+			expectedMessage: "",
+		},
+		{
+			name: "rollback in progress returns unknown",
+			deployment: &v2pb.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				Spec: v2pb.DeploymentSpec{
+					Target: &v2pb.DeploymentSpec_InferenceServer{
+						InferenceServer: &apipb.ResourceIdentifier{Name: "test-server"},
+					},
+				},
+				Status: v2pb.DeploymentStatus{
+					CandidateRevision: &apipb.ResourceIdentifier{Name: "failed-model"},
+				},
+			},
+			condition: func() *apipb.Condition {
+				cond := &apipb.Condition{}
+				_ = common.SetClusterMetadata(cond, &common.ClusterMetadata{
+					BackendType: "BACKEND_TYPE_TRITON",
+					Clusters: []common.ClusterEntry{
+						{ClusterId: "cluster-1", State: common.ClusterStateRollbackInProgress},
+					},
+					CurrentIndex: 0,
+				})
+				return cond
+			},
+			setupMocks:      func(gw *gatewaysmocks.MockGateway) {},
+			expectedStatus:  apipb.CONDITION_STATUS_UNKNOWN,
+			expectedMessage: "RollbackInProgress",
 		},
 	}
 
@@ -178,20 +393,22 @@ func TestRun(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockModelConfigProvider := modelconfigmocks.NewMockModelConfigProvider(ctrl)
-			tt.setupMocks(mockModelConfigProvider)
+			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
+			tt.setupMocks(mockGateway)
 
 			actor := &RollbackActor{
-				logger:              zap.NewNop(),
-				modelConfigProvider: mockModelConfigProvider,
+				logger:  zap.NewNop(),
+				gateway: mockGateway,
 			}
 
-			condition, err := actor.Run(context.Background(), tt.deployment, &api.Condition{})
+			result, err := actor.Run(context.Background(), tt.deployment, tt.condition())
 
-			assert.NoError(t, err)
-			assert.NotNil(t, condition)
-			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
-			assert.Contains(t, condition.Reason, tt.expectedConditionReason)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.Equal(t, tt.expectedStatus, result.Status)
+			if tt.expectedMessage != "" {
+				assert.Equal(t, tt.expectedMessage, result.Message)
+			}
 		})
 	}
 }

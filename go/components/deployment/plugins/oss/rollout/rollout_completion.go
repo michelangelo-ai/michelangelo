@@ -10,7 +10,6 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -19,8 +18,7 @@ var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &RolloutCompletionA
 
 // RolloutCompletionActor finalizes deployment by updating CurrentRevision and cleaning up rollout metadata.
 type RolloutCompletionActor struct {
-	backendRegistry *backends.Registry
-	logger          *zap.Logger
+	logger *zap.Logger
 }
 
 // GetType returns the condition type identifier for rollout completion.
@@ -45,6 +43,7 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, deployment *v2pb.Deplo
 	// Clean up any temporary annotations or metadata
 	if deployment.Annotations != nil {
 		// Remove rollout-specific annotations
+		// todo: ghosharitra: here we need to remove the annotations for the cluster information
 		delete(deployment.Annotations, "rollout.michelangelo.ai/in-progress")
 		delete(deployment.Annotations, "rollout.michelangelo.ai/start-time")
 	}

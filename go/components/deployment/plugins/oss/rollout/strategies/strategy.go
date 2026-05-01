@@ -5,13 +5,13 @@ import (
 	"net/http"
 
 	"go.uber.org/zap"
-	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
-	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
@@ -19,11 +19,12 @@ import (
 type Params struct {
 	Client              client.Client
 	HTTPClient          *http.Client
-	DynamicClient       dynamic.Interface
 	RouteProvider       route.RouteProvider
-	BackendRegistry     *backends.Registry
-	ModelConfigProvider modelconfig.ModelConfigProvider
 	Logger              *zap.Logger
+	Registry            *backends.Registry
+	ClientFactory       clientfactory.ClientFactory
+	DefaultClient       client.Client
+	ModelConfigProvider modelconfig.ModelConfigProvider
 }
 
 // GetActorsForStrategy returns actors for the appropriate strategy
@@ -38,7 +39,7 @@ func GetActorsForStrategy(ctx context.Context, params Params, deployment *v2pb.D
 	case "rolling":
 		fallthrough
 	default:
-		return getRollingActors(params), nil
+		return getRollingActors(params, deployment), nil
 	}
 }
 

@@ -20,6 +20,8 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/endpointregistry"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	inferenceserverOSSPlugin "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss"
 	"github.com/michelangelo-ai/michelangelo/go/components/ingester"
@@ -106,7 +108,9 @@ func options() fx.Option {
 		deploymentOSSPlugin.Module,
 		deployment.Module,
 		backends.Module,
+		clientfactory.Module,
 		modelconfig.Module,
+		endpointregistry.Module,
 		inferenceserverOSSPlugin.Module,
 		inferenceserver.Module,
 		scheduler.Module,

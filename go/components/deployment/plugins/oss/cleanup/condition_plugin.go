@@ -2,7 +2,6 @@ package cleanup
 
 import (
 	"go.uber.org/zap"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
@@ -20,7 +19,6 @@ type conditionPlugin struct {
 
 // Params contains dependencies injected for cleanup plugin initialization.
 type Params struct {
-	Client              client.Client
 	RouteProvider       route.RouteProvider
 	ModelConfigProvider modelconfig.ModelConfigProvider
 	Logger              *zap.Logger
@@ -30,10 +28,9 @@ type Params struct {
 func NewCleanupPlugin(p Params) conditionInterfaces.Plugin[*v2pb.Deployment] {
 	return &conditionPlugin{actors: []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&CleanupActor{
-			Client:              p.Client,
-			RouteProvider:       p.RouteProvider,
-			ModelConfigProvider: p.ModelConfigProvider,
-			Logger:              p.Logger,
+			routeProvider:       p.RouteProvider,
+			modelConfigProvider: p.ModelConfigProvider,
+			logger:              p.Logger,
 		},
 	}}
 }

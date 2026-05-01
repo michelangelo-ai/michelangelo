@@ -21,3 +21,5 @@ spec:
     decommission: false
   owner:
     name: "user-example"
+  clusterTargets:
+    - clusterId: "k3d-michelangelo-sandbox"

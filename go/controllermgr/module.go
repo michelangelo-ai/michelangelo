@@ -44,7 +44,7 @@ type (
 		fx.Out
 		Manager       manager.Manager   // Initialized Kubernetes controller manager.
 		Client        client.Client     // Kubernetes client for interacting with the cluster.
-		DynamicClient dynamic.Interface // Kubernetes dynamic client for interacting with the cluster.
+		DynamicClient dynamic.Interface // Kubernetes dynamic client for working with unstructured resources.
 		HTTPClient    *http.Client      // HTTP client for interacting with the cluster.
 	}
 )
@@ -66,11 +66,6 @@ func create(p params) (result, error) {
 		return result{}, err
 	}
 
-	dynamicClient, err := dynamic.NewForConfig(restConf)
-	if err != nil {
-		panic(fmt.Errorf("failed to create dynamic client: %w", err))
-	}
-
 	mgr, err := ctrl.NewManager(restConf, ctrl.Options{
 		Scheme:                 p.Scheme,
 		Metrics:                server.Options{BindAddress: p.Config.MetricsBindAddress},
@@ -78,6 +73,11 @@ func create(p params) (result, error) {
 		LeaderElection:         p.Config.LeaderElection,
 		LeaderElectionID:       p.Config.LeaderElectionID,
 	})
+	if err != nil {
+		return result{}, err
+	}
+
+	dynamicClient, err := dynamic.NewForConfig(restConf)
 	if err != nil {
 		return result{}, err
 	}
