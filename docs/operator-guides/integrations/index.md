@@ -17,6 +17,7 @@ These guides cover connecting Michelangelo to systems your organization already 
 | Guide | Description |
 |-------|-------------|
 | [Experiment Tracking](experiment-tracking.md) | Expose an external experiment tracking server to task pods — network setup, URI injection, and operator/user boundary |
+| [MLflow](mlflow.md) | Connect a self-hosted or managed MLflow Tracking Server — ConfigMap injection, authentication, and registry comparison |
 
 ## Extending Built-in Components
 
