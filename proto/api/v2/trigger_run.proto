@@ -257,24 +257,29 @@ message TriggerRunStatus {
   // log_url for the trigger_run
   string log_url = 4;
 
-  // actual_cron_schedule stores the cron schedule that is currently active in the workflow engine.
-  // This field is used to detect drift between the desired schedule (spec.trigger.cron_schedule.cron)
-  // and the actual schedule running in the workflow engine.
+  // actual_trigger stores the trigger configuration that is currently active in the workflow engine.
+  // This field is used to detect drift between the desired trigger (spec.trigger) and the actual
+  // trigger running in the workflow engine.
   //
   // Why we need this field:
-  // - Some workflow engines convert cron expressions to internal structured formats for storage
-  //   (for example, Temporal converts "0 */6 * * *" to StructuredCalendar format)
-  // - When reading back the schedule, the engine may return the internal format instead of the original cron string
-  // - Client SDKs may not provide utilities to convert the internal format back to standard cron format
+  // - Some workflow engines convert trigger configurations to internal structured formats for storage
+  //   (for example, Temporal converts cron expressions like "0 */6 * * *" to StructuredCalendar format)
+  // - When reading back the schedule, the engine may return the internal format instead of the original
+  // - Client SDKs may not provide utilities to convert the internal format back to standard format
   // - To avoid implementing custom conversion logic (which should be maintained by the workflow engine vendor),
-  //   we store the cron string in status when we successfully create/update the schedule
-  // - This allows us to detect drift by simple string comparison: spec.trigger.cron_schedule.cron vs status.actual_cron_schedule
+  //   we store the trigger configuration in status when we successfully create/update the schedule
+  // - This allows us to detect drift by comparison: spec.trigger vs status.actual_trigger
   //
   // When this field is updated:
-  // - Set when a cron trigger is successfully created (Run operation)
+  // - Set when a recurring trigger (cron/interval) is successfully created (Run operation)
   // - Updated when the schedule is successfully modified (Update operation)
-  // - Empty for non-cron triggers (backfill, interval)
-  string actual_cron_schedule = 5;
+  // - Nil for non-recurring triggers (backfill)
+  //
+  // Supported trigger types for drift detection:
+  // - CronSchedule: Compare cron_schedule.cron strings
+  // - IntervalSchedule: Compare interval_schedule.interval durations
+  // - BatchRerun: Not applicable (one-time execution)
+  Trigger actual_trigger = 5;
 }
 
 // Defines a trigger run resource that represents an execution of a pipeline:

@@ -114,9 +114,13 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 		"execution_id", exec.ID,
 		"run_id", exec.RunID)
 	return v2pb.TriggerRunStatus{
-		State:              v2pb.TRIGGER_RUN_STATE_RUNNING,
-		LogUrl:             getWorkflowURL(wid, r.WorkflowClient.GetProvider()),
-		ActualCronSchedule: opt.CronSchedule,
+		State:  v2pb.TRIGGER_RUN_STATE_RUNNING,
+		LogUrl: getWorkflowURL(wid, r.WorkflowClient.GetProvider()),
+		ActualTrigger: &v2pb.Trigger{
+			TriggerType: &v2pb.Trigger_CronSchedule{
+				CronSchedule: &v2pb.CronSchedule{Cron: opt.CronSchedule},
+			},
+		},
 	}, nil
 }
 
@@ -208,7 +212,10 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun) (
 	}
 
 	// Get actual cron schedule from status
-	actualCron := triggerRun.Status.ActualCronSchedule
+	var actualCron string
+	if triggerRun.Status.ActualTrigger != nil && triggerRun.Status.ActualTrigger.GetCronSchedule() != nil {
+		actualCron = triggerRun.Status.ActualTrigger.GetCronSchedule().GetCron()
+	}
 
 	// Compare and update if different
 	if actualCron != desiredCron {
@@ -254,9 +261,13 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun) (
 					"execution_id", exec.ID,
 					"newCron", desiredCron)
 
-				// Update status with the new actual cron schedule
+				// Update status with the new actual trigger
 				newStatus := triggerRun.Status
-				newStatus.ActualCronSchedule = desiredCron
+				newStatus.ActualTrigger = &v2pb.Trigger{
+					TriggerType: &v2pb.Trigger_CronSchedule{
+						CronSchedule: &v2pb.CronSchedule{Cron: desiredCron},
+					},
+				}
 				return newStatus, nil
 			}
 
@@ -275,9 +286,13 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun) (
 			"workflowId", wid,
 			"newCron", desiredCron)
 
-		// Update status with the new actual cron schedule
+		// Update status with the new actual trigger
 		newStatus := triggerRun.Status
-		newStatus.ActualCronSchedule = desiredCron
+		newStatus.ActualTrigger = &v2pb.Trigger{
+			TriggerType: &v2pb.Trigger_CronSchedule{
+				CronSchedule: &v2pb.CronSchedule{Cron: desiredCron},
+			},
+		}
 		return newStatus, nil
 	}
 

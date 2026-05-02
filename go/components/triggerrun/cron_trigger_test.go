@@ -23,6 +23,14 @@ var (
 	_logURL           = "http://localhost:8088/domains/default/workflows/test-namespace.test-triggerrun-name"
 )
 
+// getCronFromActualTrigger extracts the cron expression from a Trigger, returns empty string if not a cron trigger
+func getCronFromActualTrigger(trigger *v2pb.Trigger) string {
+	if trigger == nil || trigger.GetCronSchedule() == nil {
+		return ""
+	}
+	return trigger.GetCronSchedule().GetCron()
+}
+
 func TestRun(t *testing.T) {
 	tests := []struct {
 		name                   string
@@ -64,7 +72,7 @@ func TestRun(t *testing.T) {
 				mockClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&clientInterface.WorkflowExecution{ID: _workflowID, RunID: _runID}, nil)
 				return mockClient
 			},
-			expectedStatus: v2pb.TriggerRunStatus{LogUrl: _logURL, State: v2pb.TRIGGER_RUN_STATE_RUNNING, ActualCronSchedule: "0 0 * * *"},
+			expectedStatus: v2pb.TriggerRunStatus{LogUrl: _logURL, State: v2pb.TRIGGER_RUN_STATE_RUNNING, ActualTrigger: &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 0 * * *"}}}},
 			expectError:    false,
 		},
 		{
@@ -83,7 +91,7 @@ func TestRun(t *testing.T) {
 				mockClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&clientInterface.WorkflowExecution{ID: _workflowID, RunID: _runID}, nil)
 				return mockClient
 			},
-			expectedStatus: v2pb.TriggerRunStatus{LogUrl: _logURL, State: v2pb.TRIGGER_RUN_STATE_RUNNING, ActualCronSchedule: "0 0 * * *"},
+			expectedStatus: v2pb.TriggerRunStatus{LogUrl: _logURL, State: v2pb.TRIGGER_RUN_STATE_RUNNING, ActualTrigger: &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 0 * * *"}}}},
 			expectError:    false,
 		},
 		{
@@ -364,7 +372,7 @@ func TestCronTrigger_Update(t *testing.T) {
 				},
 				Status: v2pb.TriggerRunStatus{
 					State:              v2pb.TRIGGER_RUN_STATE_RUNNING,
-					ActualCronSchedule: "0 6 * * *",
+					ActualTrigger: &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 6 * * *"}}},
 				},
 			},
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
@@ -392,7 +400,7 @@ func TestCronTrigger_Update(t *testing.T) {
 				},
 				Status: v2pb.TriggerRunStatus{
 					State:              v2pb.TRIGGER_RUN_STATE_RUNNING,
-					ActualCronSchedule: "0 6 * * *",
+					ActualTrigger: &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 6 * * *"}}},
 				},
 			},
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
@@ -420,7 +428,7 @@ func TestCronTrigger_Update(t *testing.T) {
 				},
 				Status: v2pb.TriggerRunStatus{
 					State:              v2pb.TRIGGER_RUN_STATE_RUNNING,
-					ActualCronSchedule: "0 6 * * *",
+					ActualTrigger: &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 6 * * *"}}},
 				},
 			},
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
@@ -451,7 +459,7 @@ func TestCronTrigger_Update(t *testing.T) {
 				},
 				Status: v2pb.TriggerRunStatus{
 					State:              v2pb.TRIGGER_RUN_STATE_RUNNING,
-					ActualCronSchedule: "",
+					ActualTrigger: nil,
 				},
 			},
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
@@ -479,7 +487,7 @@ func TestCronTrigger_Update(t *testing.T) {
 				},
 				Status: v2pb.TriggerRunStatus{
 					State:              v2pb.TRIGGER_RUN_STATE_RUNNING,
-					ActualCronSchedule: "0 6 * * *",
+					ActualTrigger: &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 6 * * *"}}},
 				},
 			},
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
@@ -507,7 +515,7 @@ func TestCronTrigger_Update(t *testing.T) {
 				},
 				Status: v2pb.TriggerRunStatus{
 					State:              v2pb.TRIGGER_RUN_STATE_RUNNING,
-					ActualCronSchedule: "0 6 * * *",
+					ActualTrigger: &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 6 * * *"}}},
 				},
 			},
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
@@ -538,7 +546,7 @@ func TestCronTrigger_Update(t *testing.T) {
 				assert.NoError(t, err)
 			}
 			assert.Equal(t, test.triggerRun.Status.State, status.State)
-			assert.Equal(t, test.expectedActualCron, status.ActualCronSchedule)
+			assert.Equal(t, test.expectedActualCron, getCronFromActualTrigger(status.ActualTrigger))
 		})
 	}
 }
