@@ -10,7 +10,7 @@ import (
 const (
 	ActorTypeValidation           = "Validated"
 	ActorTypeAssetPreparation     = "AssetsPrepared"
-	ActorTypeResourceAcquisition  = "ResourcesAcquired"
+	ActorTypePlacementPrep        = "PlacementPrepared"
 	ActorTypeRollingRollout       = "RollingRolloutComplete"
 	ActorTypeBlastRollout         = "BlastRolloutComplete"
 	ActorTypeZonalRollout         = "ZonalRolloutComplete"

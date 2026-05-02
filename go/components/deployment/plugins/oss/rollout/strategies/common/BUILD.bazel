@@ -2,7 +2,11 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["traffic_routing_actor.go"],
+    srcs = [
+        "model_cleanup_actor.go",
+        "rolling_rollout_actor.go",
+        "traffic_routing_actor.go",
+    ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies/common",
     visibility = ["//visibility:public"],
     deps = [
@@ -10,9 +14,13 @@ go_library(
         "//go/base/conditions/utils:go_default_library",
         "//go/components/deployment/plugins/oss/common:go_default_library",
         "//go/components/deployment/route:go_default_library",
+        "//go/components/inferenceserver/backends:go_default_library",
+        "//go/components/inferenceserver/clientfactory:go_default_library",
+        "//go/components/inferenceserver/modelconfig:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@io_k8s_client_go//dynamic:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
         "@org_uber_go_zap//:go_default_library",
     ],
 )

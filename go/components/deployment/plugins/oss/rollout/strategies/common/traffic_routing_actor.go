@@ -4,72 +4,68 @@ import (
 	"context"
 	"fmt"
 
-	"go.uber.org/zap"
-	"k8s.io/client-go/dynamic"
-
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
+	osscommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &TrafficRoutingActor{}
 
-// TrafficRoutingActor manages HTTPRoute configuration to route deployment traffic to models.
+// TrafficRoutingActor creates or updates the HTTPRoute in a single target cluster so that
+// traffic is directed to the desired model revision. One instance is created per cluster
+// at actor-chain construction time.
 type TrafficRoutingActor struct {
-	RouteProvider route.RouteProvider
-	DynamicClient dynamic.Interface
-	Logger        *zap.Logger
+	params Params
+	target *v2pb.ClusterTarget
 }
 
-// GetType returns the condition type identifier for traffic routing.
+// NewTrafficRoutingActor creates a TrafficRoutingActor for the given cluster.
+func NewTrafficRoutingActor(params Params, target *v2pb.ClusterTarget) *TrafficRoutingActor {
+	return &TrafficRoutingActor{params: params, target: target}
+}
+
+// GetType returns the condition type identifier, including the cluster ID so each
+// cluster gets its own condition entry in status.conditions.
 func (a *TrafficRoutingActor) GetType() string {
-	return common.ActorTypeTrafficRouting
+	return osscommon.ActorTypeTrafficRouting + "-" + a.target.GetClusterId()
 }
 
-// GetLogger returns the logger instance for this actor.
-func (a *TrafficRoutingActor) GetLogger() *zap.Logger {
-	return a.Logger
-}
-
-// Retrieve checks if the Gateway API HTTPRoute is correctly configured for the deployment.
-func (a *TrafficRoutingActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.Logger.Info("Retrieving traffic routing configuration for deployment", zap.String("deployment", deployment.Name))
-
-	ok, err := a.RouteProvider.CheckDeploymentRouteStatus(ctx, a.Logger,
-		a.DynamicClient, deployment.Name, deployment.Namespace, deployment.Spec.GetInferenceServer().Name, deployment.Spec.DesiredRevision.Name)
+// Run creates or updates the cluster's HTTPRoute to route traffic to the desired model.
+func (a *TrafficRoutingActor) Run(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	dynamicClient, err := a.params.ClientFactory.GetDynamicClient(ctx, a.target)
 	if err != nil {
-		a.Logger.Error("failed to check deployment route status",
-			zap.Error(err),
-			zap.String("operation", "check_deployment_route_status"),
-			zap.String("namespace", deployment.Namespace),
-			zap.String("deployment", deployment.Name))
-		return conditionsutil.GenerateFalseCondition(condition, "CheckDeploymentRouteStatusFailed", fmt.Sprintf("Failed to check deployment route status: %v", err)), nil
+		return conditionsutil.GenerateFalseCondition(condition, "DynamicClientUnavailable", err.Error()), nil
 	}
-	if !ok {
-		return conditionsutil.GenerateFalseCondition(condition, "DeploymentRouteNotConfigured", "Deployment route is not configured"), nil
+
+	inferenceServerName := deployment.Spec.GetInferenceServer().GetName()
+	modelName := deployment.Spec.GetDesiredRevision().GetName()
+
+	if err := a.params.RouteProvider.EnsureDeploymentRoute(ctx, a.params.Logger, dynamicClient, deployment.Name, deployment.Namespace, inferenceServerName, modelName); err != nil {
+		return conditionsutil.GenerateFalseCondition(condition, "RouteEnsureFailed", err.Error()), nil
 	}
+
 	return conditionsutil.GenerateTrueCondition(condition), nil
 }
 
-// Run creates or updates the HTTPRoute to enable traffic routing to the deployed model.
-func (a *TrafficRoutingActor) Run(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.Logger.Info("Running traffic routing configuration for deployment", zap.String("deployment", deployment.Name))
-
-	if deployment.Spec.GetInferenceServer() == nil {
-		return conditionsutil.GenerateFalseCondition(condition, "MissingInferenceServer", fmt.Sprintf("inference server not specified for deployment %s", deployment.Name)), nil
-	}
-
-	err := a.RouteProvider.EnsureDeploymentRoute(ctx, a.Logger, a.DynamicClient, deployment.Name, deployment.Namespace, deployment.Spec.GetInferenceServer().Name, deployment.Spec.DesiredRevision.Name)
+// Retrieve checks whether the cluster's HTTPRoute is correctly configured for the desired model.
+func (a *TrafficRoutingActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	dynamicClient, err := a.params.ClientFactory.GetDynamicClient(ctx, a.target)
 	if err != nil {
-		a.Logger.Error("failed to add deployment route",
-			zap.Error(err),
-			zap.String("operation", "ensure_deployment_route"),
-			zap.String("namespace", deployment.Namespace),
-			zap.String("deployment", deployment.Name))
-		return conditionsutil.GenerateFalseCondition(condition, "AddDeploymentRouteFailed", fmt.Sprintf("Failed to add deployment route: %v", err)), nil
+		return conditionsutil.GenerateFalseCondition(condition, "DynamicClientUnavailable", err.Error()), nil
 	}
+
+	inferenceServerName := deployment.Spec.GetInferenceServer().GetName()
+	modelName := deployment.Spec.GetDesiredRevision().GetName()
+
+	ok, err := a.params.RouteProvider.CheckDeploymentRouteStatus(ctx, a.params.Logger, dynamicClient, deployment.Name, deployment.Namespace, inferenceServerName, modelName)
+	if err != nil {
+		return conditionsutil.GenerateFalseCondition(condition, "RouteStatusCheckFailed", err.Error()), nil
+	}
+	if !ok {
+		return conditionsutil.GenerateFalseCondition(condition, "RouteNotReady", fmt.Sprintf("HTTPRoute in cluster %s not pointing at model %s", a.target.GetClusterId(), modelName)), nil
+	}
+
 	return conditionsutil.GenerateTrueCondition(condition), nil
 }

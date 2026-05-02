@@ -13,6 +13,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -30,6 +31,7 @@ type Params struct {
 	Client              client.Client
 	HTTPClient          *http.Client
 	DynamicClient       dynamic.Interface
+	ClientFactory       clientfactory.ClientFactory
 	RouteProvider       route.RouteProvider
 	BackendRegistry     *backends.Registry
 	ModelConfigProvider modelconfig.ModelConfigProvider
@@ -48,15 +50,15 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 		&AssetPreparationActor{
 			logger: logger,
 		},
-		&ResourceAcquisitionActor{
-			client:          p.Client,
-			backendRegistry: p.BackendRegistry,
-			logger:          logger,
+		&PlacementPrepActor{
+			kubeClient: p.Client,
+			logger:     logger,
 		},
 	}
 
 	// Placement strategy actors (rolling strategy for OSS)
 	placementActors, err := strategies.GetActorsForStrategy(ctx, strategies.Params{
+		ClientFactory:       p.ClientFactory,
 		Client:              p.Client,
 		HTTPClient:          p.HTTPClient,
 		DynamicClient:       p.DynamicClient,

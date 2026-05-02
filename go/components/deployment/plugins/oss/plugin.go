@@ -21,6 +21,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/steadystate"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -39,6 +40,7 @@ type Plugin struct {
 	client              client.Client
 	httpClient          *http.Client
 	dynamicClient       dynamic.Interface
+	clientFactory       clientfactory.ClientFactory
 	routeProvider       route.RouteProvider
 	backendRegistry     *backends.Registry
 	modelConfigProvider modelconfig.ModelConfigProvider
@@ -59,6 +61,7 @@ type Params struct {
 	Client              client.Client
 	HTTPClient          *http.Client
 	DynamicClient       dynamic.Interface
+	ClientFactory       clientfactory.ClientFactory
 	BackendRegistry     *backends.Registry
 	RouteProvider       route.RouteProvider
 	BlobStore           *blobstore.BlobStore
@@ -72,6 +75,7 @@ func NewPlugin(params Params) *Plugin {
 		client:              params.Client,
 		httpClient:          params.HTTPClient,
 		dynamicClient:       params.DynamicClient,
+		clientFactory:       params.ClientFactory,
 		backendRegistry:     params.BackendRegistry,
 		routeProvider:       params.RouteProvider,
 		modelConfigProvider: params.ModelConfigProvider,
@@ -103,6 +107,7 @@ func (p *Plugin) GetRolloutPlugin(ctx context.Context, deployment *v2pb.Deployme
 		Client:              p.client,
 		HTTPClient:          p.httpClient,
 		DynamicClient:       p.dynamicClient,
+		ClientFactory:       p.clientFactory,
 		RouteProvider:       p.routeProvider,
 		BackendRegistry:     p.backendRegistry,
 		ModelConfigProvider: p.modelConfigProvider,
@@ -164,8 +169,6 @@ func (p *Plugin) ParseStage(deployment *v2pb.Deployment) v2pb.DeploymentStage {
 			fallthrough
 		case common.ActorTypeAssetPreparation:
 			return v2pb.DEPLOYMENT_STAGE_VALIDATION
-		case common.ActorTypeResourceAcquisition:
-			return v2pb.DEPLOYMENT_STAGE_RESOURCE_ACQUISITION
 		case common.ActorTypeCleanup:
 			return v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS
 		case common.ActorTypeRollback:

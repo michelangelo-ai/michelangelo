@@ -11,6 +11,7 @@ import (
 
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
@@ -32,17 +33,17 @@ var _ ClientFactory = &remoteClientFactory{}
 
 // remoteClientFactory builds and caches Kubernetes clients for ClusterTargets.
 //
-// Both controller-runtime clients and HTTP clients are cached keyed by the connection
-// tuple (cluster_id + host + port) so a steady-state reconcile does not rebuild a TLS
-// transport on every actor invocation.
+// All three client types are cached keyed by the connection tuple (cluster_id + host + port)
+// so a steady-state reconcile does not rebuild a TLS transport on every actor invocation.
 type remoteClientFactory struct {
 	secretProvider secrets.SecretProvider
 	scheme         *runtime.Scheme
 	logger         *zap.Logger
 
-	kubeClients sync.Map // key string → client.Client
-	httpClients sync.Map // key string → *http.Client
-	mu          sync.Mutex
+	kubeClients    sync.Map // key string → client.Client
+	httpClients    sync.Map // key string → *http.Client
+	dynamicClients sync.Map // key string → dynamic.Interface
+	mu             sync.Mutex
 }
 
 // NewRemoteClientFactory constructs a ClientFactory.
@@ -150,6 +151,42 @@ func (f *remoteClientFactory) GetHTTPClient(ctx context.Context, cluster *v2pb.C
 		zap.String("cluster_id", cluster.GetClusterId()),
 		zap.String("host", cluster.GetKubernetes().GetHost()))
 	return httpClient, nil
+}
+
+// GetDynamicClient returns a dynamic.Interface for the given ClusterTarget. Use this for
+// resources addressed by GVR (e.g., Gateway API HTTPRoute).
+func (f *remoteClientFactory) GetDynamicClient(ctx context.Context, cluster *v2pb.ClusterTarget) (dynamic.Interface, error) {
+	if cluster.GetKubernetes() == nil {
+		return nil, fmt.Errorf("cluster %q has no kubernetes connection spec", cluster.GetClusterId())
+	}
+
+	key := cacheKey(cluster)
+	if cached, ok := f.dynamicClients.Load(key); ok {
+		return cached.(dynamic.Interface), nil
+	}
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if cached, ok := f.dynamicClients.Load(key); ok {
+		return cached.(dynamic.Interface), nil
+	}
+
+	cfg, err := f.buildRESTConfig(ctx, cluster)
+	if err != nil {
+		return nil, fmt.Errorf("build REST config for cluster %q: %w", cluster.GetClusterId(), err)
+	}
+
+	dynamicClient, err := dynamic.NewForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("create dynamic client for cluster %q: %w", cluster.GetClusterId(), err)
+	}
+
+	f.dynamicClients.Store(key, dynamicClient)
+	f.logger.Info("Built dynamic client for cluster",
+		zap.String("cluster_id", cluster.GetClusterId()),
+		zap.String("host", cluster.GetKubernetes().GetHost()))
+	return dynamicClient, nil
 }
 
 // buildRESTConfig assembles a *rest.Config for a cluster from the connection spec
