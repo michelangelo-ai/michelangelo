@@ -21,11 +21,6 @@ const (
 	gatewayName            = "ma-gateway"
 	httpRouteNameSuffix    = "httproute"
 	inferenceServiceSuffix = "inference-service"
-
-	// filterTypeURLRewrite is the Gateway API HTTPRoute filter type string for URL
-	// path rewriting. Named constant prevents silent breakage if the string drifts
-	// from the Gateway API spec.
-	filterTypeURLRewrite = "URLRewrite"
 )
 
 var (
@@ -42,22 +37,22 @@ var (
 
 var _ RouteProvider = &httpRouteManager{} // Ensure httpRouteManager implements RouteProvider interface
 
+// httpRouteManager is stateless. The Kubernetes API client to write through is supplied per
+// call by the caller, so the same manager can target any cluster the caller has credentials for.
 type httpRouteManager struct {
-	dynamicClient dynamic.Interface
-	logger        *zap.Logger
+	logger *zap.Logger
 }
 
-func NewHTTPRouteManager(dynamicClient dynamic.Interface, logger *zap.Logger) *httpRouteManager {
+func NewHTTPRouteManager(logger *zap.Logger) *httpRouteManager {
 	return &httpRouteManager{
-		dynamicClient: dynamicClient,
-		logger:        logger,
+		logger: logger,
 	}
 }
 
 // CheckDeploymentRouteStatus checks if a deployment-specific HTTPRoute is properly configured
 func (h *httpRouteManager) CheckDeploymentRouteStatus(ctx context.Context, logger *zap.Logger, client dynamic.Interface, deploymentName string, namespace string, inferenceServerName string, modelName string) (bool, error) {
 	httpRouteName := addSuffixToString(deploymentName, httpRouteNameSuffix)
-	httpRoute, err := h.dynamicClient.Resource(httpRouteGVR).Namespace(namespace).Get(ctx, httpRouteName, metav1.GetOptions{})
+	httpRoute, err := client.Resource(httpRouteGVR).Namespace(namespace).Get(ctx, httpRouteName, metav1.GetOptions{})
 	if err != nil {
 		return false, fmt.Errorf("failed to get HTTPRoute %s: %v", httpRouteName, err)
 	}
@@ -73,9 +68,9 @@ func (h *httpRouteManager) CheckDeploymentRouteStatus(ctx context.Context, logge
 		return false, fmt.Errorf("HTTPRoute has no routing rules configured: %v", err)
 	}
 
-	// Verify the route matches the expected model and inference server configuration
-	expectedMatchPath := fmt.Sprintf("/%s/%s", inferenceServerName, deploymentName)
-	expectedRewritePath := fmt.Sprintf("/v2/models/%s", modelName)
+	// The expected route matches the standard Triton model path and forwards directly to
+	// the deployment's inference-service without rewriting.
+	expectedMatchPath := fmt.Sprintf("/v2/models/%s", modelName)
 	expectedBackendService := addSuffixToString(inferenceServerName, inferenceServiceSuffix)
 
 	// Check if the route configuration matches expectations
@@ -119,28 +114,6 @@ func (h *httpRouteManager) CheckDeploymentRouteStatus(ctx context.Context, logge
 				}
 			}
 		}
-
-		// Check filters (path rewrite)
-		filters, filtersFound, _ := unstructured.NestedSlice(ruleMap, "filters")
-		if filtersFound && len(filters) > 0 {
-			for _, filter := range filters {
-				filterMap, ok := filter.(map[string]interface{})
-				if !ok {
-					continue
-				}
-
-				filterType, _, _ := unstructured.NestedString(filterMap, "type")
-				if filterType == filterTypeURLRewrite {
-					path, urlRewritePathFound, _ := unstructured.NestedMap(filterMap, "urlRewrite", "path")
-					if urlRewritePathFound {
-						rewriteValue, _, _ := unstructured.NestedString(path, "replacePrefixMatch")
-						if rewriteValue != expectedRewritePath {
-							return false, fmt.Errorf("HTTPRoute rewrite path mismatch: expected %s, got %s", expectedRewritePath, rewriteValue)
-						}
-					}
-				}
-			}
-		}
 	}
 
 	logger.Info("HTTPRoute is properly configured",
@@ -167,8 +140,10 @@ func (h *httpRouteManager) EnsureDeploymentRoute(ctx context.Context, logger *za
 		"michelangelo.ai/inference-server": inferenceServerName,
 	}
 
-	matchPath := fmt.Sprintf("/%s/%s", inferenceServerName, deploymentName)
-	rewritePath := fmt.Sprintf("/v2/models/%s", modelName)
+	// The route matches the standard Triton model path and forwards to the deployment's
+	// inference-service. No URL rewriting is needed: the path is already in the form Triton
+	// expects.
+	matchPath := fmt.Sprintf("/v2/models/%s", modelName)
 
 	httpRoute := buildHTTPRoute(
 		deploymentRouteName,
@@ -178,31 +153,28 @@ func (h *httpRouteManager) EnsureDeploymentRoute(ctx context.Context, logger *za
 		matchPath,
 		addSuffixToString(inferenceServerName, inferenceServiceSuffix),
 		nil,
-		rewritePath,
 	)
 
-	existingRoute, err := h.dynamicClient.Resource(httpRouteGVR).Namespace(namespace).Get(ctx, deploymentRouteName, metav1.GetOptions{})
+	existingRoute, err := client.Resource(httpRouteGVR).Namespace(namespace).Get(ctx, deploymentRouteName, metav1.GetOptions{})
 	if err != nil {
 		// Create new HTTPRoute
-		if _, err := h.dynamicClient.Resource(httpRouteGVR).Namespace(namespace).Create(ctx, httpRoute, metav1.CreateOptions{}); err != nil {
+		if _, err := client.Resource(httpRouteGVR).Namespace(namespace).Create(ctx, httpRoute, metav1.CreateOptions{}); err != nil {
 			return fmt.Errorf("failed to create HTTPRoute %s: %v", deploymentRouteName, err)
 		}
 		logger.Info("Created HTTPRoute for deployment",
 			zap.String("httproute", deploymentRouteName),
 			zap.String("deployment", deploymentName),
-			zap.String("path", matchPath),
-			zap.String("rewrite", rewritePath))
+			zap.String("path", matchPath))
 	} else {
 		// Update existing HTTPRoute spec
 		existingRoute.Object["spec"] = httpRoute.Object["spec"]
-		if _, err := h.dynamicClient.Resource(httpRouteGVR).Namespace(namespace).Update(ctx, existingRoute, metav1.UpdateOptions{}); err != nil {
+		if _, err := client.Resource(httpRouteGVR).Namespace(namespace).Update(ctx, existingRoute, metav1.UpdateOptions{}); err != nil {
 			return fmt.Errorf("failed to update HTTPRoute %s: %v", deploymentRouteName, err)
 		}
 		logger.Info("Updated HTTPRoute for deployment",
 			zap.String("httproute", deploymentRouteName),
 			zap.String("deployment", deploymentName),
-			zap.String("path", matchPath),
-			zap.String("rewrite", rewritePath))
+			zap.String("path", matchPath))
 	}
 	logger.Info("Deployment-specific route added successfully",
 		zap.String("deploymentPath", matchPath),
@@ -213,7 +185,7 @@ func (h *httpRouteManager) EnsureDeploymentRoute(ctx context.Context, logger *za
 // DeploymentRouteExists checks if a deployment-specific route exists.
 func (h *httpRouteManager) DeploymentRouteExists(ctx context.Context, logger *zap.Logger, client dynamic.Interface, deploymentName string, namespace string) (bool, error) {
 	deploymentRouteName := addSuffixToString(deploymentName, httpRouteNameSuffix)
-	route, err := h.dynamicClient.Resource(httpRouteGVR).Namespace(namespace).Get(ctx, deploymentRouteName, metav1.GetOptions{})
+	route, err := client.Resource(httpRouteGVR).Namespace(namespace).Get(ctx, deploymentRouteName, metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return false, nil
@@ -235,7 +207,7 @@ func (h *httpRouteManager) DeleteDeploymentRoute(ctx context.Context, logger *za
 }
 
 func (h *httpRouteManager) deleteHTTPRoute(ctx context.Context, logger *zap.Logger, client dynamic.Interface, routeName, namespace string) error {
-	if err := h.dynamicClient.Resource(httpRouteGVR).Namespace(namespace).Delete(ctx, routeName, metav1.DeleteOptions{}); err != nil {
+	if err := client.Resource(httpRouteGVR).Namespace(namespace).Delete(ctx, routeName, metav1.DeleteOptions{}); err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("HTTPRoute not found, already deleted", zap.String("httpRoute", routeName))
 		} else {
@@ -245,7 +217,7 @@ func (h *httpRouteManager) deleteHTTPRoute(ctx context.Context, logger *zap.Logg
 	return nil
 }
 
-func buildHTTPRoute(name, namespace string, labels, annotations map[string]string, pathValue, backendService string, backendWeight *int64, rewritePath string) *unstructured.Unstructured {
+func buildHTTPRoute(name, namespace string, labels, annotations map[string]string, pathValue, backendService string, backendWeight *int64) *unstructured.Unstructured {
 	metadata := map[string]interface{}{
 		"name":      name,
 		"namespace": namespace,
@@ -292,17 +264,6 @@ func buildHTTPRoute(name, namespace string, labels, annotations map[string]strin
 							},
 						},
 						"backendRefs": []interface{}{backendRef},
-						"filters": []interface{}{
-							map[string]interface{}{
-								"type": filterTypeURLRewrite,
-								"urlRewrite": map[string]interface{}{
-									"path": map[string]interface{}{
-										"type":               "ReplacePrefixMatch",
-										"replacePrefixMatch": rewritePath,
-									},
-								},
-							},
-						},
 					},
 				},
 			},

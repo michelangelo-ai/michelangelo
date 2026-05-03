@@ -31,5 +31,5 @@ type Backend interface {
 	// IsHealthy reports whether the inference server can accept requests.
 	IsHealthy(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName string, namespace string) (bool, error)
 	// CheckModelStatus reports whether a model is loaded and ready for inference.
-	CheckModelStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, httpClient *http.Client, inferenceServerName string, namespace string, modelName string) (bool, error)
+	CheckModelStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, httpClient *http.Client, apiServerURL string, inferenceServerName string, namespace string, modelName string) (bool, error)
 }

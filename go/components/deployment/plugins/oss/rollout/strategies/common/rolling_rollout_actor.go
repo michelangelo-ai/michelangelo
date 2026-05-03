@@ -12,6 +12,7 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	osscommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/discovery"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
@@ -22,11 +23,12 @@ import (
 
 // Params holds the shared dependencies for all per-cluster placement actors.
 type Params struct {
-	ClientFactory       clientfactory.ClientFactory
-	RouteProvider       route.RouteProvider
-	BackendRegistry     *backends.Registry
-	ModelConfigProvider modelconfig.ModelConfigProvider
-	Logger              *zap.Logger
+	ClientFactory          clientfactory.ClientFactory
+	RouteProvider          route.RouteProvider
+	ModelDiscoveryProvider discovery.ModelDiscoveryProvider
+	BackendRegistry        *backends.Registry
+	ModelConfigProvider    modelconfig.ModelConfigProvider
+	Logger                 *zap.Logger
 
 	// ControlPlaneDynamicClient is the dynamic client for the control-plane cluster. Kept here
 	// so future actors that operate on control-plane-only resources can access it without an
@@ -85,7 +87,8 @@ func (a *RollingRolloutActor) Retrieve(ctx context.Context, deployment *v2pb.Dep
 	modelName := deployment.Spec.GetDesiredRevision().GetName()
 	inferenceServerName := deployment.Spec.GetInferenceServer().GetName()
 
-	ready, err := backend.CheckModelStatus(ctx, a.params.Logger, kubeClient, httpClient, inferenceServerName, deployment.Namespace, modelName)
+	apiServerURL := osscommon.APIServerURLFromTarget(a.target)
+	ready, err := backend.CheckModelStatus(ctx, a.params.Logger, kubeClient, httpClient, apiServerURL, inferenceServerName, deployment.Namespace, modelName)
 	if err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "ModelStatusCheckFailed", err.Error()), nil
 	}

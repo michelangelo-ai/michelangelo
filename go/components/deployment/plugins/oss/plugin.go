@@ -13,6 +13,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/base/pluginmanager"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/discovery"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/cleanup"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
@@ -37,15 +38,16 @@ var _ plugins.Plugin = &Plugin{}
 
 // Plugin implements deployment lifecycle management for open-source deployments.
 type Plugin struct {
-	client              client.Client
-	httpClient          *http.Client
-	dynamicClient       dynamic.Interface
-	clientFactory       clientfactory.ClientFactory
-	routeProvider       route.RouteProvider
-	backendRegistry     *backends.Registry
-	modelConfigProvider modelconfig.ModelConfigProvider
-	blobstore           *blobstore.BlobStore
-	logger              *zap.Logger
+	client                 client.Client
+	httpClient             *http.Client
+	dynamicClient          dynamic.Interface
+	clientFactory          clientfactory.ClientFactory
+	routeProvider          route.RouteProvider
+	modelDiscoveryProvider discovery.ModelDiscoveryProvider
+	backendRegistry        *backends.Registry
+	modelConfigProvider    modelconfig.ModelConfigProvider
+	blobstore              *blobstore.BlobStore
+	logger                 *zap.Logger
 
 	rolloutPlugin     conditionInterfaces.Plugin[*v2pb.Deployment]
 	rollbackPlugin    conditionInterfaces.Plugin[*v2pb.Deployment]
@@ -57,46 +59,47 @@ type Plugin struct {
 type Params struct {
 	fx.In
 
-	Registrar           pluginmanager.Registrar[plugins.Plugin]
-	Client              client.Client
-	HTTPClient          *http.Client
-	DynamicClient       dynamic.Interface
-	ClientFactory       clientfactory.ClientFactory
-	BackendRegistry     *backends.Registry
-	RouteProvider       route.RouteProvider
-	BlobStore           *blobstore.BlobStore
-	Logger              *zap.Logger
-	ModelConfigProvider modelconfig.ModelConfigProvider
+	Registrar              pluginmanager.Registrar[plugins.Plugin]
+	Client                 client.Client
+	HTTPClient             *http.Client
+	DynamicClient          dynamic.Interface
+	ClientFactory          clientfactory.ClientFactory
+	BackendRegistry        *backends.Registry
+	RouteProvider          route.RouteProvider
+	ModelDiscoveryProvider discovery.ModelDiscoveryProvider
+	BlobStore              *blobstore.BlobStore
+	Logger                 *zap.Logger
+	ModelConfigProvider    modelconfig.ModelConfigProvider
 }
 
 // NewPlugin creates an OSS deployment plugin with rollback, cleanup, and steady state workflows.
 func NewPlugin(params Params) *Plugin {
 	return &Plugin{
-		client:              params.Client,
-		httpClient:          params.HTTPClient,
-		dynamicClient:       params.DynamicClient,
-		clientFactory:       params.ClientFactory,
-		backendRegistry:     params.BackendRegistry,
-		routeProvider:       params.RouteProvider,
-		modelConfigProvider: params.ModelConfigProvider,
-		blobstore:           params.BlobStore,
-		logger:              params.Logger,
+		client:                 params.Client,
+		httpClient:             params.HTTPClient,
+		dynamicClient:          params.DynamicClient,
+		clientFactory:          params.ClientFactory,
+		backendRegistry:        params.BackendRegistry,
+		routeProvider:          params.RouteProvider,
+		modelDiscoveryProvider: params.ModelDiscoveryProvider,
+		modelConfigProvider:    params.ModelConfigProvider,
+		blobstore:              params.BlobStore,
+		logger:                 params.Logger,
 		rollbackPlugin: rollback.NewRollbackPlugin(rollback.Params{
 			Client:              params.Client,
 			ModelConfigProvider: params.ModelConfigProvider,
 			Logger:              params.Logger,
 		}),
 		cleanupPlugin: cleanup.NewCleanupPlugin(cleanup.Params{
-			Client:              params.Client,
-			RouteProvider:       params.RouteProvider,
-			ModelConfigProvider: params.ModelConfigProvider,
-			Logger:              params.Logger,
+			Client:                 params.Client,
+			ClientFactory:          params.ClientFactory,
+			RouteProvider:          params.RouteProvider,
+			ModelDiscoveryProvider: params.ModelDiscoveryProvider,
+			ModelConfigProvider:    params.ModelConfigProvider,
+			Logger:                 params.Logger,
 		}),
 		steadyStatePlugin: steadystate.NewSteadyStatePlugin(steadystate.Params{
-			Client:          params.Client,
-			HTTPClient:      params.HTTPClient,
-			BackendRegistry: params.BackendRegistry,
-			Logger:          params.Logger,
+			Logger: params.Logger,
 		}),
 	}
 }
@@ -104,14 +107,15 @@ func NewPlugin(params Params) *Plugin {
 // GetRolloutPlugin creates a deployment-specific rollout plugin with the appropriate strategy.
 func (p *Plugin) GetRolloutPlugin(ctx context.Context, deployment *v2pb.Deployment) (conditionInterfaces.Plugin[*v2pb.Deployment], error) {
 	rolloutPlugin, err := rollout.NewRolloutPlugin(ctx, rollout.Params{
-		Client:              p.client,
-		HTTPClient:          p.httpClient,
-		DynamicClient:       p.dynamicClient,
-		ClientFactory:       p.clientFactory,
-		RouteProvider:       p.routeProvider,
-		BackendRegistry:     p.backendRegistry,
-		ModelConfigProvider: p.modelConfigProvider,
-		Logger:              p.logger,
+		Client:                 p.client,
+		HTTPClient:             p.httpClient,
+		DynamicClient:          p.dynamicClient,
+		ClientFactory:          p.clientFactory,
+		RouteProvider:          p.routeProvider,
+		ModelDiscoveryProvider: p.modelDiscoveryProvider,
+		BackendRegistry:        p.backendRegistry,
+		ModelConfigProvider:    p.modelConfigProvider,
+		Logger:                 p.logger,
 	}, deployment)
 	if err != nil {
 		p.logger.Error("failed to create rollout plugin",
@@ -220,7 +224,7 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 	if err != nil {
 		return deployment.Status, fmt.Errorf("get backend for inference server %s: %w", serverName, err)
 	}
-	healthy, err := serverBackend.CheckModelStatus(ctx, p.logger, p.client, p.httpClient, serverName, deployment.Namespace, deployment.Spec.DesiredRevision.Name)
+	healthy, summary, err := common.CheckModelStatusAllClusters(ctx, p.logger, deployment, p.clientFactory, serverBackend, serverName, deployment.Spec.DesiredRevision.Name)
 	if err != nil {
 		p.logger.Error("failed to check model status",
 			zap.Error(err),
@@ -248,7 +252,8 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 				zap.String("namespace", deployment.Namespace),
 				zap.String("model", deployment.Spec.DesiredRevision.Name),
 				zap.String("previous_state", deployment.Status.GetState().String()),
-				zap.String("new_state", v2pb.DEPLOYMENT_STATE_UNHEALTHY.String()))
+				zap.String("new_state", v2pb.DEPLOYMENT_STATE_UNHEALTHY.String()),
+				zap.String("summary", summary))
 			deployment.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
 		}
 	}

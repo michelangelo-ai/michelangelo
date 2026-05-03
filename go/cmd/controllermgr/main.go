@@ -16,6 +16,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/workflowclient"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/discovery"
 	deploymentOSSPlugin "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver"
@@ -103,6 +104,7 @@ func options() fx.Option {
 		pipelinerun.Module,
 		controllermgr.Module,
 		route.Module,
+		discovery.Module,
 		deploymentOSSPlugin.Module,
 		deployment.Module,
 		backends.Module,

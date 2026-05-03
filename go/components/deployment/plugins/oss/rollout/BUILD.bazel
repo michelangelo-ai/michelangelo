@@ -14,6 +14,7 @@ go_library(
     deps = [
         "//go/base/conditions/interfaces:go_default_library",
         "//go/base/conditions/utils:go_default_library",
+        "//go/components/deployment/discovery:go_default_library",
         "//go/components/deployment/plugins/oss/common:go_default_library",
         "//go/components/deployment/plugins/oss/rollout/strategies:go_default_library",
         "//go/components/deployment/route:go_default_library",

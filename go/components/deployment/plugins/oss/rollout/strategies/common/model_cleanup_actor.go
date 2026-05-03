@@ -67,7 +67,8 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, deployment *v2pb.Deplo
 	inferenceServerName := deployment.Spec.GetInferenceServer().GetName()
 	oldModel := deployment.Status.GetCurrentRevision().GetName()
 
-	stillLoaded, err := backend.CheckModelStatus(ctx, a.params.Logger, kubeClient, httpClient, inferenceServerName, deployment.Namespace, oldModel)
+	apiServerURL := osscommon.APIServerURLFromTarget(a.target)
+	stillLoaded, err := backend.CheckModelStatus(ctx, a.params.Logger, kubeClient, httpClient, apiServerURL, inferenceServerName, deployment.Namespace, oldModel)
 	if err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "ModelStatusCheckFailed", err.Error()), nil
 	}

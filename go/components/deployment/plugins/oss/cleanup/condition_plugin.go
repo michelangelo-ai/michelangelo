@@ -5,7 +5,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/discovery"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -20,20 +22,24 @@ type conditionPlugin struct {
 
 // Params contains dependencies injected for cleanup plugin initialization.
 type Params struct {
-	Client              client.Client
-	RouteProvider       route.RouteProvider
-	ModelConfigProvider modelconfig.ModelConfigProvider
-	Logger              *zap.Logger
+	Client                 client.Client
+	ClientFactory          clientfactory.ClientFactory
+	RouteProvider          route.RouteProvider
+	ModelDiscoveryProvider discovery.ModelDiscoveryProvider
+	ModelConfigProvider    modelconfig.ModelConfigProvider
+	Logger                 *zap.Logger
 }
 
 // NewCleanupPlugin creates a cleanup workflow plugin.
 func NewCleanupPlugin(p Params) conditionInterfaces.Plugin[*v2pb.Deployment] {
 	return &conditionPlugin{actors: []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&CleanupActor{
-			Client:              p.Client,
-			RouteProvider:       p.RouteProvider,
-			ModelConfigProvider: p.ModelConfigProvider,
-			Logger:              p.Logger,
+			Client:                 p.Client,
+			ClientFactory:          p.ClientFactory,
+			RouteProvider:          p.RouteProvider,
+			ModelDiscoveryProvider: p.ModelDiscoveryProvider,
+			ModelConfigProvider:    p.ModelConfigProvider,
+			Logger:                 p.Logger,
 		},
 	}}
 }

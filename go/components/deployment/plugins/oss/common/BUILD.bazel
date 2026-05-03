@@ -5,12 +5,15 @@ go_library(
     srcs = [
         "cluster.go",
         "constants.go",
+        "health.go",
         "metadata.go",
         "model_config.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/components/inferenceserver/backends:go_default_library",
+        "//go/components/inferenceserver/clientfactory:go_default_library",
         "//go/components/inferenceserver/modelconfig:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",

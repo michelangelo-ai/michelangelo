@@ -17,6 +17,7 @@ go_library(
         "//go/base/workflowclient:go_default_library",
         "//go/base/zapfx:go_default_library",
         "//go/components/deployment:go_default_library",
+        "//go/components/deployment/discovery:go_default_library",
         "//go/components/deployment/plugins/oss:go_default_library",
         "//go/components/deployment/route:go_default_library",
         "//go/components/inferenceserver:go_default_library",

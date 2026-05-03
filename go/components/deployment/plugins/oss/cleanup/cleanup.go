@@ -6,13 +6,14 @@ import (
 
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/client-go/dynamic"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/discovery"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -20,11 +21,12 @@ import (
 
 // CleanupActor removes models from ConfigMap and deletes deployment HTTPRoutes during deletion.
 type CleanupActor struct {
-	Client              client.Client
-	DynamicClient       dynamic.Interface
-	RouteProvider       route.RouteProvider
-	ModelConfigProvider modelconfig.ModelConfigProvider
-	Logger              *zap.Logger
+	Client                 client.Client
+	ClientFactory          clientfactory.ClientFactory
+	RouteProvider          route.RouteProvider
+	ModelDiscoveryProvider discovery.ModelDiscoveryProvider
+	ModelConfigProvider    modelconfig.ModelConfigProvider
+	Logger                 *zap.Logger
 }
 
 // GetType returns the condition type identifier for cleanup.
@@ -41,12 +43,25 @@ func (a *CleanupActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment
 		return conditionUtils.GenerateFalseCondition(condition, "ModelStillExistsInInferenceServer", fmt.Sprintf("Model %s still exists in Inference Server", deployment.Status.CurrentRevision.Name)), nil
 	}
 
-	exists, err := a.RouteProvider.DeploymentRouteExists(ctx, a.Logger, a.DynamicClient, deployment.Name, deployment.Namespace)
+	// Check the per-deployment HTTPRoute on every target cluster the rollout placed it in.
+	// Cleanup is only complete when every cluster has had its route removed.
+	targets, err := common.ReadTargetClustersAnnotation(deployment)
 	if err != nil {
-		// assume cleanup is required if we cannot check if the route exists
-		return conditionUtils.GenerateFalseCondition(condition, "UnableToCheckDeploymentRouteExists", fmt.Sprintf("Unable to check if DeploymentRoute exists for deployment %s: %v", deployment.Name, err)), nil
-	} else if exists {
-		return conditionUtils.GenerateFalseCondition(condition, "DeploymentRouteStillExists", fmt.Sprintf("Cleanup required: DeploymentRoute %s still exists", deployment.Name)), nil
+		return conditionUtils.GenerateFalseCondition(condition, "UnableToReadTargetClusters", fmt.Sprintf("Unable to read target-clusters annotation: %v", err)), nil
+	}
+	for _, target := range targets {
+		clusterID := target.GetClusterId()
+		dynClient, err := a.ClientFactory.GetDynamicClient(ctx, target)
+		if err != nil {
+			return conditionUtils.GenerateFalseCondition(condition, "UnableToCheckDeploymentRouteExists", fmt.Sprintf("Unable to get dynamic client for cluster %s: %v", clusterID, err)), nil
+		}
+		exists, err := a.RouteProvider.DeploymentRouteExists(ctx, a.Logger, dynClient, deployment.Name, deployment.Namespace)
+		if err != nil {
+			return conditionUtils.GenerateFalseCondition(condition, "UnableToCheckDeploymentRouteExists", fmt.Sprintf("Unable to check if DeploymentRoute exists for deployment %s in cluster %s: %v", deployment.Name, clusterID, err)), nil
+		}
+		if exists {
+			return conditionUtils.GenerateFalseCondition(condition, "DeploymentRouteStillExists", fmt.Sprintf("Cleanup required: DeploymentRoute %s still exists in cluster %s", deployment.Name, clusterID)), nil
+		}
 	}
 
 	return conditionUtils.GenerateTrueCondition(condition), nil
@@ -72,15 +87,32 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 		return conditionUtils.GenerateFalseCondition(condition, "ModelUnloadingFailed", fmt.Sprintf("Failed to unload old model %s from inference server: %v", currentModel, err)), nil
 	}
 
-	// Delete DeploymentRoute to ensure the model is no longer accessible
-	a.Logger.Info("Deleting DeploymentRoute", zap.String("deploymentRoute", fmt.Sprintf("%s-httproute", resource.Name)))
-	if err := a.RouteProvider.DeleteDeploymentRoute(ctx, a.Logger, a.DynamicClient, resource.Name, resource.Namespace); err != nil {
-		a.Logger.Error("Failed to delete HTTPRoute", zap.Error(err))
-		if errors.IsNotFound(err) {
-			a.Logger.Info("HTTPRoute not found, already deleted", zap.String("httpRoute", fmt.Sprintf("%s-httproute", resource.Name)))
-		} else {
-			return conditionUtils.GenerateFalseCondition(condition, "DeploymentRouteDeletionFailed", fmt.Sprintf("Failed to delete DeploymentRoute %s: %v", fmt.Sprintf("%s-httproute", resource.Name), err)), nil
+	// Delete the per-cluster DeploymentRoutes that the rollout placed.
+	targets, err := common.ReadTargetClustersAnnotation(resource)
+	if err != nil {
+		return conditionUtils.GenerateFalseCondition(condition, "UnableToReadTargetClusters", fmt.Sprintf("Unable to read target-clusters annotation: %v", err)), nil
+	}
+	for _, target := range targets {
+		clusterID := target.GetClusterId()
+		dynClient, err := a.ClientFactory.GetDynamicClient(ctx, target)
+		if err != nil {
+			return conditionUtils.GenerateFalseCondition(condition, "DeploymentRouteDeletionFailed", fmt.Sprintf("Failed to get dynamic client for cluster %s: %v", clusterID, err)), nil
 		}
+		a.Logger.Info("Deleting DeploymentRoute", zap.String("deploymentRoute", fmt.Sprintf("%s-httproute", resource.Name)), zap.String("cluster", clusterID))
+		if err := a.RouteProvider.DeleteDeploymentRoute(ctx, a.Logger, dynClient, resource.Name, resource.Namespace); err != nil {
+			if errors.IsNotFound(err) {
+				a.Logger.Info("HTTPRoute not found, already deleted", zap.String("httpRoute", fmt.Sprintf("%s-httproute", resource.Name)), zap.String("cluster", clusterID))
+				continue
+			}
+			a.Logger.Error("Failed to delete HTTPRoute", zap.Error(err), zap.String("cluster", clusterID))
+			return conditionUtils.GenerateFalseCondition(condition, "DeploymentRouteDeletionFailed", fmt.Sprintf("Failed to delete DeploymentRoute %s in cluster %s: %v", fmt.Sprintf("%s-httproute", resource.Name), clusterID, err)), nil
+		}
+	}
+
+	// Delete the control-plane discovery route.
+	if err := a.ModelDiscoveryProvider.DeleteDiscoveryRoute(ctx, resource.Name, resource.Namespace); err != nil {
+		a.Logger.Error("Failed to delete discovery HTTPRoute", zap.Error(err))
+		return conditionUtils.GenerateFalseCondition(condition, "DiscoveryRouteDeletionFailed", fmt.Sprintf("Failed to delete discovery route for deployment %s: %v", resource.Name, err)), nil
 	}
 
 	a.Logger.Info("Model cleanup completed successfully", zap.String("current_model", currentModel))

@@ -40,18 +40,18 @@ func (m *MockBackend) EXPECT() *MockBackendMockRecorder {
 }
 
 // CheckModelStatus mocks base method.
-func (m *MockBackend) CheckModelStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, httpClient *http.Client, inferenceServerName, namespace, modelName string) (bool, error) {
+func (m *MockBackend) CheckModelStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, httpClient *http.Client, apiServerURL, inferenceServerName, namespace, modelName string) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CheckModelStatus", ctx, logger, kubeClient, httpClient, inferenceServerName, namespace, modelName)
+	ret := m.ctrl.Call(m, "CheckModelStatus", ctx, logger, kubeClient, httpClient, apiServerURL, inferenceServerName, namespace, modelName)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CheckModelStatus indicates an expected call of CheckModelStatus.
-func (mr *MockBackendMockRecorder) CheckModelStatus(ctx, logger, kubeClient, httpClient, inferenceServerName, namespace, modelName interface{}) *gomock.Call {
+func (mr *MockBackendMockRecorder) CheckModelStatus(ctx, logger, kubeClient, httpClient, apiServerURL, inferenceServerName, namespace, modelName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckModelStatus", reflect.TypeOf((*MockBackend)(nil).CheckModelStatus), ctx, logger, kubeClient, httpClient, inferenceServerName, namespace, modelName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckModelStatus", reflect.TypeOf((*MockBackend)(nil).CheckModelStatus), ctx, logger, kubeClient, httpClient, apiServerURL, inferenceServerName, namespace, modelName)
 }
 
 // CreateServer mocks base method.

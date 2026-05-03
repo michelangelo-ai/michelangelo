@@ -14,6 +14,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory/clientfactorymocks"
 	"github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -22,6 +23,25 @@ func createTestRegistry(mockBackend *backendsmocks.MockBackend) *backends.Regist
 	registry := backends.NewRegistry()
 	registry.Register(v2pb.BACKEND_TYPE_TRITON, mockBackend)
 	return registry
+}
+
+// withSingleClusterAnnotation adds a target-clusters snapshot annotation to the deployment
+// so GetState's CheckModelStatusAllClusters helper has a cluster to iterate.
+func withSingleClusterAnnotation(t *testing.T, deployment *v2pb.Deployment, clusterID string) *v2pb.Deployment {
+	t.Helper()
+	target := &v2pb.ClusterTarget{
+		ClusterId: clusterID,
+		Connection: &v2pb.ClusterTarget_Kubernetes{
+			Kubernetes: &v2pb.ConnectionSpec{
+				Host: "https://kubernetes.default.svc",
+				Port: "443",
+			},
+		},
+	}
+	if err := common.WriteTargetClustersAnnotation(deployment, []*v2pb.ClusterTarget{target}); err != nil {
+		t.Fatalf("seed target-clusters annotation: %v", err)
+	}
+	return deployment
 }
 
 func TestParseStage(t *testing.T) {
@@ -102,11 +122,11 @@ func TestParseStage(t *testing.T) {
 					CandidateRevision: &api.ResourceIdentifier{Name: "model-v1"},
 					Stage:             v2pb.DEPLOYMENT_STAGE_VALIDATION,
 					Conditions: []*api.Condition{
-						{Type: common.ActorTypeResourceAcquisition, Status: api.CONDITION_STATUS_FALSE},
+						{Type: common.ActorTypePlacementPrep, Status: api.CONDITION_STATUS_FALSE},
 					},
 				},
 			},
-			expectedStage: v2pb.DEPLOYMENT_STAGE_RESOURCE_ACQUISITION,
+			expectedStage: v2pb.DEPLOYMENT_STAGE_PLACEMENT,
 		},
 		{
 			name: "rollout complete condition true, rollout complete stage",
@@ -256,12 +276,12 @@ func TestParseStage(t *testing.T) {
 					Stage:             v2pb.DEPLOYMENT_STAGE_VALIDATION,
 					Conditions: []*api.Condition{
 						{Type: common.ActorTypeValidation, Status: api.CONDITION_STATUS_TRUE},
-						{Type: common.ActorTypeResourceAcquisition, Status: api.CONDITION_STATUS_FALSE},
+						{Type: common.ActorTypePlacementPrep, Status: api.CONDITION_STATUS_FALSE},
 						{Type: common.ActorTypeRolloutComplete, Status: api.CONDITION_STATUS_TRUE},
 					},
 				},
 			},
-			expectedStage: v2pb.DEPLOYMENT_STAGE_RESOURCE_ACQUISITION,
+			expectedStage: v2pb.DEPLOYMENT_STAGE_PLACEMENT,
 		},
 	}
 
@@ -350,7 +370,7 @@ func TestGetState(t *testing.T) {
 		},
 		{
 			name: "returns healthy when model status check succeeds",
-			deployment: &v2pb.Deployment{
+			deployment: withSingleClusterAnnotation(t, &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
 					DesiredRevision: &api.ResourceIdentifier{Name: "model-v1"},
@@ -361,16 +381,16 @@ func TestGetState(t *testing.T) {
 				Status: v2pb.DeploymentStatus{
 					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
 				},
-			},
+			}, "test-cluster"),
 			setupMocks: func(mb *backendsmocks.MockBackend) {
-				mb.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").Return(true, nil)
+				mb.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").Return(true, nil)
 			},
 			expectedState: v2pb.DEPLOYMENT_STATE_HEALTHY,
 			expectError:   false,
 		},
 		{
 			name: "returns unhealthy when model status check returns not healthy",
-			deployment: &v2pb.Deployment{
+			deployment: withSingleClusterAnnotation(t, &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
 					DesiredRevision: &api.ResourceIdentifier{Name: "model-v1"},
@@ -381,16 +401,16 @@ func TestGetState(t *testing.T) {
 				Status: v2pb.DeploymentStatus{
 					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
 				},
-			},
+			}, "test-cluster"),
 			setupMocks: func(mb *backendsmocks.MockBackend) {
-				mb.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").Return(false, nil)
+				mb.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").Return(false, nil)
 			},
 			expectedState: v2pb.DEPLOYMENT_STATE_UNHEALTHY,
 			expectError:   false,
 		},
 		{
 			name: "returns error when model status check fails",
-			deployment: &v2pb.Deployment{
+			deployment: withSingleClusterAnnotation(t, &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
 					DesiredRevision: &api.ResourceIdentifier{Name: "model-v1"},
@@ -401,9 +421,9 @@ func TestGetState(t *testing.T) {
 				Status: v2pb.DeploymentStatus{
 					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
 				},
-			},
+			}, "test-cluster"),
 			setupMocks: func(mb *backendsmocks.MockBackend) {
-				mb.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").Return(false, errors.New("connection error"))
+				mb.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").Return(false, errors.New("connection error"))
 			},
 			expectedState: v2pb.DEPLOYMENT_STATE_INVALID,
 			expectError:   true,
@@ -418,8 +438,13 @@ func TestGetState(t *testing.T) {
 			mockBackend := backendsmocks.NewMockBackend(ctrl)
 			tt.setupMocks(mockBackend)
 
+			mockClientFactory := clientfactorymocks.NewMockClientFactory(ctrl)
+			mockClientFactory.EXPECT().GetClient(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+			mockClientFactory.EXPECT().GetHTTPClient(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
 			plugin := &Plugin{
 				backendRegistry: createTestRegistry(mockBackend),
+				clientFactory:   mockClientFactory,
 				logger:          zap.NewNop(),
 			}
 

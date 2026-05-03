@@ -7,6 +7,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/base/conditions/interfaces:go_default_library",
+        "//go/components/deployment/discovery:go_default_library",
         "//go/components/deployment/plugins/oss/common:go_default_library",
         "//go/components/deployment/plugins/oss/rollout/strategies/common:go_default_library",
         "//go/components/deployment/route:go_default_library",

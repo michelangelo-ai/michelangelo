@@ -28,9 +28,17 @@ type EndpointSource interface {
 }
 
 // EndpointPublisher maintains the published cluster ID to Endpoint map for one
-// InferenceServer. The interface defines the contract (Sync the desired map,
-// Get it back, Delete it) and is agnostic about how the map is stored and how
-// other components observe it.
+// InferenceServer. Implementations decide how the map is stored and how other
+// components observe it.
+//
+// Each InferenceServer is exposed at a single discovery endpoint backed by a
+// Service named "{inferenceServerName}-endpoints" in the InferenceServer's
+// namespace. Downstream consumers reach the InferenceServer through this
+// Service, so implementations must preserve both the name and the namespace.
+//
+// Sync is idempotent. Cluster IDs in the desired map are upserted, and cluster
+// IDs previously published but absent from the desired map are removed. After
+// Delete returns, the discovery Service for the server no longer exists.
 type EndpointPublisher interface {
 	// Sync reconciles the published map to match `endpoints`. Idempotent.
 	// Cluster IDs in `endpoints` are upserted. Cluster IDs previously published

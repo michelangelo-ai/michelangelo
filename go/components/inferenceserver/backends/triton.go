@@ -25,6 +25,10 @@ const (
 	// that signals a rolling update has stalled. Named constant prevents silent
 	// breakage if the comparison string drifts from the Kubernetes API.
 	k8sProgressDeadlineExceeded = "ProgressDeadlineExceeded"
+
+	// tritonServicePortName is the named port on the Triton inference Service that
+	// fronts Triton's HTTP API.
+	tritonServicePortName = "http"
 )
 
 // Triton Server Management
@@ -169,12 +173,18 @@ func (b *tritonBackend) IsHealthy(ctx context.Context, logger *zap.Logger, kubeC
 	return false, nil
 }
 
-func (b *tritonBackend) CheckModelStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, httpClient *http.Client, inferenceServerName string, namespace string, modelName string) (bool, error) {
+func (b *tritonBackend) CheckModelStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, httpClient *http.Client, apiServerURL string, inferenceServerName string, namespace string, modelName string) (bool, error) {
 	logger.Info("Checking Triton model status", zap.String("model", modelName), zap.String("server", inferenceServerName))
 
-	// Format: http://{service-name}.{namespace}.svc.cluster.local/v2/models/{model}/ready
+	// Dispatch the request through the Kubernetes API server's service proxy. This
+	// works whether or not the caller shares a network namespace with Triton, which
+	// is required for multi-cluster deployments where the controller talks to remote
+	// inference servers via their cluster's API server.
 	serviceName := generateK8sServiceName(inferenceServerName)
-	serviceURL := fmt.Sprintf("http://%s.%s.svc.cluster.local/v2/models/%s/ready", serviceName, namespace, modelName)
+	serviceURL := fmt.Sprintf(
+		"%s/api/v1/namespaces/%s/services/%s:%s/proxy/v2/models/%s/ready",
+		apiServerURL, namespace, serviceName, tritonServicePortName, modelName,
+	)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", serviceURL, nil)
 	if err != nil {
