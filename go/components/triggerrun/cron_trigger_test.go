@@ -371,7 +371,7 @@ func TestCronTrigger_Update(t *testing.T) {
 					},
 				},
 				Status: v2pb.TriggerRunStatus{
-					State:              v2pb.TRIGGER_RUN_STATE_RUNNING,
+					State:         v2pb.TRIGGER_RUN_STATE_RUNNING,
 					ActualTrigger: &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 6 * * *"}}},
 				},
 			},
@@ -399,7 +399,7 @@ func TestCronTrigger_Update(t *testing.T) {
 					},
 				},
 				Status: v2pb.TriggerRunStatus{
-					State:              v2pb.TRIGGER_RUN_STATE_RUNNING,
+					State:         v2pb.TRIGGER_RUN_STATE_RUNNING,
 					ActualTrigger: &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 6 * * *"}}},
 				},
 			},
@@ -427,7 +427,7 @@ func TestCronTrigger_Update(t *testing.T) {
 					},
 				},
 				Status: v2pb.TriggerRunStatus{
-					State:              v2pb.TRIGGER_RUN_STATE_RUNNING,
+					State:         v2pb.TRIGGER_RUN_STATE_RUNNING,
 					ActualTrigger: &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 6 * * *"}}},
 				},
 			},
@@ -458,7 +458,7 @@ func TestCronTrigger_Update(t *testing.T) {
 					},
 				},
 				Status: v2pb.TriggerRunStatus{
-					State:              v2pb.TRIGGER_RUN_STATE_RUNNING,
+					State:         v2pb.TRIGGER_RUN_STATE_RUNNING,
 					ActualTrigger: nil,
 				},
 			},
@@ -486,7 +486,7 @@ func TestCronTrigger_Update(t *testing.T) {
 					},
 				},
 				Status: v2pb.TriggerRunStatus{
-					State:              v2pb.TRIGGER_RUN_STATE_RUNNING,
+					State:         v2pb.TRIGGER_RUN_STATE_RUNNING,
 					ActualTrigger: &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 6 * * *"}}},
 				},
 			},
@@ -514,7 +514,7 @@ func TestCronTrigger_Update(t *testing.T) {
 					},
 				},
 				Status: v2pb.TriggerRunStatus{
-					State:              v2pb.TRIGGER_RUN_STATE_RUNNING,
+					State:         v2pb.TRIGGER_RUN_STATE_RUNNING,
 					ActualTrigger: &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 6 * * *"}}},
 				},
 			},
