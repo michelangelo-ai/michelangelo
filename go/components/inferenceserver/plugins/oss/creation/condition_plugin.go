@@ -2,12 +2,14 @@ package creation
 
 import (
 	"go.uber.org/zap"
+	"k8s.io/client-go/dynamic"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/endpoints"
 	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/routes"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -15,21 +17,25 @@ import (
 // CreationPlugin orchestrates the condition actors for inference server creation.
 type CreationPlugin struct {
 	clientFactory       clientfactory.ClientFactory
+	dynamicClient       dynamic.Interface
 	registry            *backends.Registry
 	modelConfigProvider modelconfig.ModelConfigProvider
 	endpointPublisher   endpoints.Publisher
 	endpointProvider    endpoints.Provider
+	routeProvider       routes.RouteProvider
 	logger              *zap.Logger
 }
 
 // NewCreationPlugin creates a plugin that manages validation, provisioning, health checks, and routing.
-func NewCreationPlugin(clientFactory clientfactory.ClientFactory, registry *backends.Registry, modelConfigProvider modelconfig.ModelConfigProvider, endpointPublisher endpoints.Publisher, endpointProvider endpoints.Provider, logger *zap.Logger) conditionInterfaces.Plugin[*v2pb.InferenceServer] {
+func NewCreationPlugin(clientFactory clientfactory.ClientFactory, dynamicClient dynamic.Interface, registry *backends.Registry, modelConfigProvider modelconfig.ModelConfigProvider, endpointPublisher endpoints.Publisher, endpointProvider endpoints.Provider, routeProvider routes.RouteProvider, logger *zap.Logger) conditionInterfaces.Plugin[*v2pb.InferenceServer] {
 	return &CreationPlugin{
 		clientFactory:       clientFactory,
+		dynamicClient:       dynamicClient,
 		registry:            registry,
 		modelConfigProvider: modelConfigProvider,
 		endpointPublisher:   endpointPublisher,
 		endpointProvider:    endpointProvider,
+		routeProvider:       routeProvider,
 		logger:              logger,
 	}
 }
@@ -40,6 +46,8 @@ func (p *CreationPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.
 		NewValidationActor(p.registry, p.logger),
 		NewBackendProvisionActor(p.clientFactory, p.registry, p.logger),
 		NewEndpointPublishActor(p.endpointPublisher, p.endpointProvider, p.logger),
+		NewDiscoveryRouteProvisionActor(p.dynamicClient, p.routeProvider, p.logger),
+		NewTrafficRouteProvisionActor(p.clientFactory, p.routeProvider, p.logger),
 		NewModelConfigProvisionActor(p.clientFactory, p.modelConfigProvider, p.logger),
 		NewHealthCheckActor(p.clientFactory, p.registry, p.logger),
 	}

@@ -145,7 +145,7 @@ func TestRollingRolloutActor_Retrieve(t *testing.T) {
 			name:            "CheckModelStatus errors",
 			registerBackend: true,
 			setupMocks: func(m *rolloutMocks) {
-				m.backend.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+				m.backend.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 					testISName, testNamespace, testModelName).Return(false, errors.New("api error"))
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
@@ -155,7 +155,7 @@ func TestRollingRolloutActor_Retrieve(t *testing.T) {
 			name:            "model not ready",
 			registerBackend: true,
 			setupMocks: func(m *rolloutMocks) {
-				m.backend.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+				m.backend.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 					testISName, testNamespace, testModelName).Return(false, nil)
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
@@ -165,7 +165,7 @@ func TestRollingRolloutActor_Retrieve(t *testing.T) {
 			name:            "model ready",
 			registerBackend: true,
 			setupMocks: func(m *rolloutMocks) {
-				m.backend.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+				m.backend.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 					testISName, testNamespace, testModelName).Return(true, nil)
 			},
 			expectedStatus: apipb.CONDITION_STATUS_TRUE,

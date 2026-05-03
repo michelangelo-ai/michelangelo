@@ -13,9 +13,11 @@ import (
 
 var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &TrafficRoutingActor{}
 
-// TrafficRoutingActor creates or updates the HTTPRoute in a single target cluster so that
-// traffic is directed to the desired model revision. One instance is created per cluster
-// at actor-chain construction time.
+// TrafficRoutingActor adds the deployment's rule to the per-cluster traffic
+// HTTPRoute that the InferenceServer controller owns. The rule routes
+// /{inferenceServerName}/{deploymentName} to the deployment's model on the
+// local inference Service. One instance is created per target cluster at
+// actor-chain construction time.
 type TrafficRoutingActor struct {
 	params Params
 	target *v2pb.ClusterTarget
@@ -32,24 +34,9 @@ func (a *TrafficRoutingActor) GetType() string {
 	return osscommon.ActorTypeTrafficRouting + "-" + a.target.GetClusterId()
 }
 
-// Run creates or updates the cluster's HTTPRoute to route traffic to the desired model.
-func (a *TrafficRoutingActor) Run(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	dynamicClient, err := a.params.ClientFactory.GetDynamicClient(ctx, a.target)
-	if err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, "DynamicClientUnavailable", err.Error()), nil
-	}
-
-	inferenceServerName := deployment.Spec.GetInferenceServer().GetName()
-	modelName := deployment.Spec.GetDesiredRevision().GetName()
-
-	if err := a.params.RouteProvider.EnsureDeploymentRoute(ctx, a.params.Logger, dynamicClient, deployment.Name, deployment.Namespace, inferenceServerName, modelName); err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, "RouteEnsureFailed", err.Error()), nil
-	}
-
-	return conditionsutil.GenerateTrueCondition(condition), nil
-}
-
-// Retrieve checks whether the cluster's HTTPRoute is correctly configured for the desired model.
+// Retrieve checks whether the deployment's rule is present on the cluster's
+// traffic HTTPRoute and routes to the deployment's currently desired model.
+// Returns FALSE on a desiredRevision change so Run reapplies the rule body.
 func (a *TrafficRoutingActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	dynamicClient, err := a.params.ClientFactory.GetDynamicClient(ctx, a.target)
 	if err != nil {
@@ -59,13 +46,28 @@ func (a *TrafficRoutingActor) Retrieve(ctx context.Context, deployment *v2pb.Dep
 	inferenceServerName := deployment.Spec.GetInferenceServer().GetName()
 	modelName := deployment.Spec.GetDesiredRevision().GetName()
 
-	ok, err := a.params.RouteProvider.CheckDeploymentRouteStatus(ctx, a.params.Logger, dynamicClient, deployment.Name, deployment.Namespace, inferenceServerName, modelName)
+	ok, err := a.params.RouteProvider.DeploymentTrafficRouteExists(ctx, dynamicClient, a.target.GetClusterId(), inferenceServerName, deployment.Namespace, deployment.Name, modelName)
 	if err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, "RouteStatusCheckFailed", err.Error()), nil
+		return conditionsutil.GenerateFalseCondition(condition, "TrafficRouteStatusCheckFailed", err.Error()), nil
 	}
 	if !ok {
-		return conditionsutil.GenerateFalseCondition(condition, "RouteNotReady", fmt.Sprintf("HTTPRoute in cluster %s not pointing at model %s", a.target.GetClusterId(), modelName)), nil
+		return conditionsutil.GenerateFalseCondition(condition, "TrafficRouteNotReady", fmt.Sprintf("traffic route for deployment %s is not configured for model %s in cluster %s", deployment.Name, modelName, a.target.GetClusterId())), nil
+	}
+	return conditionsutil.GenerateTrueCondition(condition), nil
+}
+
+// Run adds or updates the deployment's rule on the cluster's traffic HTTPRoute.
+func (a *TrafficRoutingActor) Run(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	dynamicClient, err := a.params.ClientFactory.GetDynamicClient(ctx, a.target)
+	if err != nil {
+		return conditionsutil.GenerateFalseCondition(condition, "DynamicClientUnavailable", err.Error()), nil
 	}
 
+	inferenceServerName := deployment.Spec.GetInferenceServer().GetName()
+	modelName := deployment.Spec.GetDesiredRevision().GetName()
+
+	if err := a.params.RouteProvider.UpsertTrafficRule(ctx, dynamicClient, a.target.GetClusterId(), inferenceServerName, deployment.Namespace, deployment.Name, modelName); err != nil {
+		return conditionsutil.GenerateFalseCondition(condition, "TrafficRouteUpsertFailed", err.Error()), nil
+	}
 	return conditionsutil.GenerateTrueCondition(condition), nil
 }

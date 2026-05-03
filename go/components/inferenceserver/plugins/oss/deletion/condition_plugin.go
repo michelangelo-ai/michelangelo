@@ -2,11 +2,13 @@ package deletion
 
 import (
 	"go.uber.org/zap"
+	"k8s.io/client-go/dynamic"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/routes"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -14,17 +16,21 @@ import (
 // DeletionPlugin orchestrates the condition actors for inference server deletion.
 type DeletionPlugin struct {
 	clientFactory       clientfactory.ClientFactory
+	dynamicClient       dynamic.Interface
 	registry            *backends.Registry
 	modelConfigProvider modelconfig.ModelConfigProvider
+	routeProvider       routes.RouteProvider
 	logger              *zap.Logger
 }
 
 // NewDeletionPlugin creates a plugin that manages cleanup of all inference server resources.
-func NewDeletionPlugin(clientFactory clientfactory.ClientFactory, registry *backends.Registry, modelConfigProvider modelconfig.ModelConfigProvider, logger *zap.Logger) conditionInterfaces.Plugin[*v2pb.InferenceServer] {
+func NewDeletionPlugin(clientFactory clientfactory.ClientFactory, dynamicClient dynamic.Interface, registry *backends.Registry, modelConfigProvider modelconfig.ModelConfigProvider, routeProvider routes.RouteProvider, logger *zap.Logger) conditionInterfaces.Plugin[*v2pb.InferenceServer] {
 	return &DeletionPlugin{
 		clientFactory:       clientFactory,
+		dynamicClient:       dynamicClient,
 		registry:            registry,
 		modelConfigProvider: modelConfigProvider,
+		routeProvider:       routeProvider,
 		logger:              logger,
 	}
 }
@@ -32,6 +38,7 @@ func NewDeletionPlugin(clientFactory clientfactory.ClientFactory, registry *back
 // GetActors returns the condition actors for deletion workflow.
 func (p *DeletionPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return []conditionInterfaces.ConditionActor[*v2pb.InferenceServer]{
+		NewRouteCleanupActor(p.dynamicClient, p.clientFactory, p.routeProvider, p.logger),
 		NewCleanupActor(p.clientFactory, p.registry, p.modelConfigProvider, p.logger),
 	}
 }

@@ -16,10 +16,21 @@ rules:
   resources: ["services", "configmaps"]
   verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
 - apiGroups: [""]
+  # Allows the controller to dispatch HTTP probes (e.g. Triton readiness checks)
+  # at in-cluster Services through the Kubernetes API server's service proxy. Required
+  # for cross-cluster HTTP from outside a target cluster's network namespace.
+  resources: ["services/proxy"]
+  verbs: ["get", "create"]
+- apiGroups: [""]
   resources: ["nodes"]
   verbs: ["get", "list", "watch"]
 - apiGroups: ["discovery.k8s.io"]
   resources: ["endpointslices"]
+  verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
+- apiGroups: ["gateway.networking.k8s.io"]
+  # Per-cluster TrafficRoutingActor writes one HTTPRoute per Deployment in every
+  # target cluster; CleanupActor deletes them on teardown.
+  resources: ["httproutes"]
   verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

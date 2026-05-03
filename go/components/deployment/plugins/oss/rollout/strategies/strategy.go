@@ -11,10 +11,10 @@ import (
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	osscommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/routes"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 
 	strategiesCommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies/common"
@@ -23,7 +23,7 @@ import (
 // Params contains dependencies for strategy actor construction.
 type Params struct {
 	ClientFactory       clientfactory.ClientFactory
-	RouteProvider       route.RouteProvider
+	RouteProvider       routes.RouteProvider
 	BackendRegistry     *backends.Registry
 	ModelConfigProvider modelconfig.ModelConfigProvider
 	Logger              *zap.Logger
@@ -40,10 +40,10 @@ type Params struct {
 }
 
 // GetActorsForStrategy returns the ordered actor chain for the deployment's rollout strategy.
-// Each cluster in the snapshot annotation gets its own [RollingRollout, TrafficRouting] pair,
-// interleaved so cluster N starts routing traffic as soon as its model is loaded, before cluster
-// N+1 begins loading. Cleanup actors follow at the end so old models are removed only after
-// every cluster has flipped to the new model.
+// Each cluster gets its own RollingRolloutActor; the model is exposed via a single
+// DiscoveryRoutingActor that adds the deployment's rule to the InferenceServer's discovery
+// route. Cleanup actors follow at the end so old models are removed only after every cluster
+// has flipped to the new model.
 func GetActorsForStrategy(ctx context.Context, params Params, deployment *v2pb.Deployment) ([]conditionInterfaces.ConditionActor[*v2pb.Deployment], error) {
 	strategy := getDeploymentStrategy(deployment)
 	params.Logger.Info("Selected rollout strategy", zap.String("strategy", strategy), zap.String("deployment", deployment.Name))
@@ -82,7 +82,11 @@ func getRollingActors(params Params, deployment *v2pb.Deployment) ([]conditionIn
 		ControlPlaneHTTPClient:    params.HTTPClient,
 	}
 
-	actors := make([]conditionInterfaces.ConditionActor[*v2pb.Deployment], 0, 3*len(targets))
+	// Per-cluster [RollingRollout, TrafficRouting] pairs come first, interleaved so cluster N
+	// starts routing traffic as soon as its model is loaded. A single DiscoveryRoutingActor then
+	// exposes the deployment via the control-plane discovery route. Per-cluster ModelCleanup
+	// actors run at the end so old models are removed only after every cluster has flipped.
+	actors := make([]conditionInterfaces.ConditionActor[*v2pb.Deployment], 0, 3*len(targets)+1)
 
 	for _, target := range targets {
 		actors = append(actors,
@@ -90,6 +94,8 @@ func getRollingActors(params Params, deployment *v2pb.Deployment) ([]conditionIn
 			strategiesCommon.NewTrafficRoutingActor(actorParams, target),
 		)
 	}
+
+	actors = append(actors, strategiesCommon.NewDiscoveryRoutingActor(actorParams))
 
 	for _, target := range targets {
 		actors = append(actors, strategiesCommon.NewModelCleanupActor(actorParams, target))

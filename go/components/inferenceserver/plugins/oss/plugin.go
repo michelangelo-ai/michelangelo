@@ -7,6 +7,7 @@ import (
 	"k8s.io/client-go/tools/record"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/dynamic"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
@@ -16,6 +17,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/creation"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/deletion"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/routes"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -35,10 +37,10 @@ type Plugin struct {
 }
 
 // NewPlugin creates a plugin with creation and deletion workflows.
-func NewOSSPlugin(clientFactory clientfactory.ClientFactory, registry *backends.Registry, modelConfigProvider modelconfig.ModelConfigProvider, endpointPublisher endpoints.Publisher, endpointProvider endpoints.Provider, recorder record.EventRecorder, logger *zap.Logger) plugins.Plugin {
+func NewOSSPlugin(clientFactory clientfactory.ClientFactory, dynamicClient dynamic.Interface, registry *backends.Registry, modelConfigProvider modelconfig.ModelConfigProvider, endpointPublisher endpoints.Publisher, endpointProvider endpoints.Provider, routeProvider routes.RouteProvider, recorder record.EventRecorder, logger *zap.Logger) plugins.Plugin {
 	return &Plugin{
-		creationPlugin: creation.NewCreationPlugin(clientFactory, registry, modelConfigProvider, endpointPublisher, endpointProvider, logger),
-		deletionPlugin: deletion.NewDeletionPlugin(clientFactory, registry, modelConfigProvider, logger),
+		creationPlugin: creation.NewCreationPlugin(clientFactory, dynamicClient, registry, modelConfigProvider, endpointPublisher, endpointProvider, routeProvider, logger),
+		deletionPlugin: deletion.NewDeletionPlugin(clientFactory, dynamicClient, registry, modelConfigProvider, routeProvider, logger),
 
 		clientFactory: clientFactory,
 		registry:      registry,

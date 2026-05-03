@@ -19,10 +19,10 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollback"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/steadystate"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/routes"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -41,7 +41,7 @@ type Plugin struct {
 	httpClient          *http.Client
 	dynamicClient       dynamic.Interface
 	clientFactory       clientfactory.ClientFactory
-	routeProvider       route.RouteProvider
+	routeProvider       routes.RouteProvider
 	backendRegistry     *backends.Registry
 	modelConfigProvider modelconfig.ModelConfigProvider
 	blobstore           *blobstore.BlobStore
@@ -63,7 +63,7 @@ type Params struct {
 	DynamicClient       dynamic.Interface
 	ClientFactory       clientfactory.ClientFactory
 	BackendRegistry     *backends.Registry
-	RouteProvider       route.RouteProvider
+	RouteProvider       routes.RouteProvider
 	BlobStore           *blobstore.BlobStore
 	Logger              *zap.Logger
 	ModelConfigProvider modelconfig.ModelConfigProvider
@@ -88,15 +88,14 @@ func NewPlugin(params Params) *Plugin {
 		}),
 		cleanupPlugin: cleanup.NewCleanupPlugin(cleanup.Params{
 			Client:              params.Client,
+			DynamicClient:       params.DynamicClient,
+			ClientFactory:       params.ClientFactory,
 			RouteProvider:       params.RouteProvider,
 			ModelConfigProvider: params.ModelConfigProvider,
 			Logger:              params.Logger,
 		}),
 		steadyStatePlugin: steadystate.NewSteadyStatePlugin(steadystate.Params{
-			Client:          params.Client,
-			HTTPClient:      params.HTTPClient,
-			BackendRegistry: params.BackendRegistry,
-			Logger:          params.Logger,
+			Logger: params.Logger,
 		}),
 	}
 }
@@ -220,7 +219,7 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 	if err != nil {
 		return deployment.Status, fmt.Errorf("get backend for inference server %s: %w", serverName, err)
 	}
-	healthy, err := serverBackend.CheckModelStatus(ctx, p.logger, p.client, p.httpClient, serverName, deployment.Namespace, deployment.Spec.DesiredRevision.Name)
+	healthy, summary, err := common.CheckModelStatusAllClusters(ctx, p.logger, deployment, p.clientFactory, serverBackend, serverName, deployment.Spec.DesiredRevision.Name)
 	if err != nil {
 		p.logger.Error("failed to check model status",
 			zap.Error(err),
@@ -248,7 +247,8 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 				zap.String("namespace", deployment.Namespace),
 				zap.String("model", deployment.Spec.DesiredRevision.Name),
 				zap.String("previous_state", deployment.Status.GetState().String()),
-				zap.String("new_state", v2pb.DEPLOYMENT_STATE_UNHEALTHY.String()))
+				zap.String("new_state", v2pb.DEPLOYMENT_STATE_UNHEALTHY.String()),
+				zap.String("summary", summary))
 			deployment.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
 		}
 	}

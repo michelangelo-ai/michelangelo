@@ -19,6 +19,7 @@ const (
 	ActorTypeShadowPromotion      = "ShadowPromotionComplete"
 	ActorTypeDisaggregatedRollout = "DisaggregatedRolloutComplete"
 	ActorTypeTrafficRouting       = "TrafficRoutingConfigured"
+	ActorTypeDiscoveryRouting     = "DiscoveryRoutingConfigured"
 	ActorTypeRolloutComplete      = "RolloutCompleted"
 	ActorTypeCleanup              = "CleanupComplete"
 	ActorTypeModelCleanup         = "ModelCleanupComplete"

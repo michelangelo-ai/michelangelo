@@ -7,4 +7,7 @@ const (
 	ModelConfigProvisionConditionType = "ModelConfigProvision"
 	ValidationConditionType           = "Validation"
 	EndpointPublishConditionType      = "EndpointPublish"
+	DiscoveryRouteProvisionType       = "DiscoveryRouteProvision"
+	TrafficRouteProvisionType         = "TrafficRouteProvision"
+	RouteCleanupConditionType         = "RouteCleanup"
 )
