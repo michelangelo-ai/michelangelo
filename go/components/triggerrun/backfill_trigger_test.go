@@ -12,6 +12,7 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestRunBackfill(t *testing.T) {
@@ -463,4 +464,28 @@ func setupBackfillTrigger(t *testing.T, workflowClient clientInterface.WorkflowC
 	).(*backfillTrigger)
 	assert.NotNil(t, trigger)
 	return trigger
+}
+
+func TestBackfillTrigger_Update(t *testing.T) {
+	triggerRun := &v2pb.TriggerRun{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "test-namespace",
+			Name:      "test-triggerrun",
+		},
+		Status: v2pb.TriggerRunStatus{
+			State: v2pb.TRIGGER_RUN_STATE_RUNNING,
+		},
+	}
+
+	logger := zapr.NewLogger(zap.NewNop())
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+	// No workflow client calls expected - backfill update is a no-op
+
+	backfillTrigger := NewBackfillTrigger(logger, mockClient)
+	status, err := backfillTrigger.Update(context.Background(), triggerRun)
+
+	assert.NoError(t, err)
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_RUNNING, status.State)
 }

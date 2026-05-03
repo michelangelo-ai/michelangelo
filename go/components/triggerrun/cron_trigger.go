@@ -3,6 +3,7 @@ package triggerrun
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -115,6 +116,11 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 	return v2pb.TriggerRunStatus{
 		State:  v2pb.TRIGGER_RUN_STATE_RUNNING,
 		LogUrl: getWorkflowURL(wid, r.WorkflowClient.GetProvider()),
+		ActualTrigger: &v2pb.Trigger{
+			TriggerType: &v2pb.Trigger_CronSchedule{
+				CronSchedule: &v2pb.CronSchedule{Cron: opt.CronSchedule},
+			},
+		},
 	}, nil
 }
 
@@ -176,4 +182,120 @@ func (c *cronTrigger) Pause(ctx context.Context, triggerRun *v2pb.TriggerRun) (v
 // Returns TriggerRunStatus with State=RUNNING on success.
 func (c *cronTrigger) Resume(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
 	return resumeWorkflow(ctx, triggerRun, c.Log, c.WorkflowClient, c.WorkflowClient.GetDomain())
+}
+
+// Update synchronizes cron schedule changes from the TriggerRun spec to the workflow engine.
+//
+// This method ensures that changes in TriggerRun.Spec.Trigger.CronSchedule.Cron are reflected
+// in the workflow engine's schedule. It performs the following operations:
+//  1. Get the desired cron schedule from the TriggerRun spec
+//  2. Query the actual cron schedule from the workflow engine
+//  3. Compare the desired and actual schedules
+//  4. If different, update the workflow engine schedule to match the spec
+//
+// For Temporal, this updates the schedule via ScheduleClient.Update. For Cadence, this is a no-op
+// since Cadence doesn't support external schedule updates.
+//
+// Returns the current TriggerRunStatus (preserving state) on success, or an error status if
+// the update fails.
+func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
+	log := c.Log.WithValues("triggerRun", k8stypes.NamespacedName{
+		Namespace: triggerRun.Namespace,
+		Name:      triggerRun.Name,
+	})
+
+	// Get desired cron schedule from spec
+	desiredCron := triggerRun.Spec.Trigger.GetCronSchedule().GetCron()
+	if desiredCron == "" {
+		log.Info("no cron schedule in spec, skipping update")
+		return triggerRun.Status, nil
+	}
+
+	// Get actual cron schedule from status
+	var actualCron string
+	if triggerRun.Status.ActualTrigger != nil && triggerRun.Status.ActualTrigger.GetCronSchedule() != nil {
+		actualCron = triggerRun.Status.ActualTrigger.GetCronSchedule().GetCron()
+	}
+
+	// Compare and update if different
+	if actualCron != desiredCron {
+		log.Info("cron schedule drift detected, updating workflow engine schedule",
+			"desiredCron", desiredCron,
+			"actualCron", actualCron)
+
+		// Get workflow ID
+		wid := generateWorkflowID(triggerRun)
+
+		// Try to update the schedule in workflow engine
+		err := c.WorkflowClient.UpdateTrigger(ctx, wid, desiredCron)
+		if err != nil {
+			// If schedule doesn't exist (e.g., manually deleted), recreate it
+			if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "NotFound") {
+				log.Info("schedule not found, recreating via StartWorkflow",
+					"workflowId", wid,
+					"desiredCron", desiredCron)
+
+				// Recreate the schedule by calling StartWorkflow (which uses createScheduleForCron)
+				opt := clientInterface.StartWorkflowOptions{
+					ID:                              wid,
+					TaskList:                        "trigger_run",
+					ExecutionStartToCloseTimeout:    time.Hour * 24 * 365, // 1 year
+					DecisionTaskStartToCloseTimeout: 30 * time.Second,
+					CronSchedule:                    desiredCron,
+				}
+				exec, createErr := c.WorkflowClient.StartWorkflow(
+					ctx, opt, "trigger.CronTrigger", CreateTriggerRequest{TriggerRun: triggerRun})
+				if createErr != nil {
+					log.Error(createErr, "failed to recreate schedule",
+						"workflowId", wid,
+						"desiredCron", desiredCron)
+					return v2pb.TriggerRunStatus{
+							ErrorMessage: createErr.Error(),
+							State:        triggerRun.Status.State,
+						}, fmt.Errorf("recreate schedule for %s/%s: %w",
+							triggerRun.Namespace, triggerRun.Name, createErr)
+				}
+
+				log.Info("successfully recreated schedule via StartWorkflow",
+					"workflowId", wid,
+					"execution_id", exec.ID,
+					"newCron", desiredCron)
+
+				// Update status with the new actual trigger
+				newStatus := triggerRun.Status
+				newStatus.ActualTrigger = &v2pb.Trigger{
+					TriggerType: &v2pb.Trigger_CronSchedule{
+						CronSchedule: &v2pb.CronSchedule{Cron: desiredCron},
+					},
+				}
+				return newStatus, nil
+			}
+
+			// Other errors - return as failure
+			log.Error(err, "failed to update trigger schedule in workflow engine",
+				"workflowId", wid,
+				"desiredCron", desiredCron)
+			return v2pb.TriggerRunStatus{
+					ErrorMessage: err.Error(),
+					State:        triggerRun.Status.State,
+				}, fmt.Errorf("update trigger schedule for %s/%s: %w",
+					triggerRun.Namespace, triggerRun.Name, err)
+		}
+
+		log.Info("successfully updated trigger schedule",
+			"workflowId", wid,
+			"newCron", desiredCron)
+
+		// Update status with the new actual trigger
+		newStatus := triggerRun.Status
+		newStatus.ActualTrigger = &v2pb.Trigger{
+			TriggerType: &v2pb.Trigger_CronSchedule{
+				CronSchedule: &v2pb.CronSchedule{Cron: desiredCron},
+			},
+		}
+		return newStatus, nil
+	}
+
+	// No drift, return current status unchanged
+	return triggerRun.Status, nil
 }

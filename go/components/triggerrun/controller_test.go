@@ -56,6 +56,12 @@ func (m *MockRunner) Resume(ctx context.Context, triggerRun *v2pb.TriggerRun) (v
 	return args.Get(0).(v2pb.TriggerRunStatus), args.Error(1)
 }
 
+// Update mocks base method.
+func (m *MockRunner) Update(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
+	args := m.Called(ctx, triggerRun)
+	return args.Get(0).(v2pb.TriggerRunStatus), args.Error(1)
+}
+
 var (
 	_namespace  = "test-namespace"
 	_triggerRun = v2pb.TriggerRun{
@@ -165,6 +171,8 @@ func TestReconcile(t *testing.T) {
 			initialStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
 			cronRunnerProvider: func() Runner {
 				mockRunner := &MockRunner{}
+				mockRunner.On("Update", mock.Anything, mock.Anything).
+					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil)
 				mockRunner.On("Kill", mock.Anything, mock.Anything).
 					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_KILLED}, nil)
 				return mockRunner
@@ -185,6 +193,8 @@ func TestReconcile(t *testing.T) {
 			initialStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
 			cronRunnerProvider: func() Runner {
 				mockRunner := &MockRunner{}
+				mockRunner.On("Update", mock.Anything, mock.Anything).
+					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil)
 				mockRunner.On("Kill", mock.Anything, mock.Anything).
 					Return(v2pb.TriggerRunStatus{}, fmt.Errorf("failed to cancel the cadence workflow"))
 				return mockRunner
@@ -205,6 +215,8 @@ func TestReconcile(t *testing.T) {
 			initialStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
 			cronRunnerProvider: func() Runner {
 				mockRunner := &MockRunner{}
+				mockRunner.On("Update", mock.Anything, mock.Anything).
+					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil)
 				mockRunner.On("Kill", mock.Anything, mock.Anything).
 					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil)
 				return mockRunner
@@ -225,6 +237,8 @@ func TestReconcile(t *testing.T) {
 			initialStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
 			cronRunnerProvider: func() Runner {
 				mockRunner := &MockRunner{}
+				mockRunner.On("Update", mock.Anything, mock.Anything).
+					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil)
 				mockRunner.On("Kill", mock.Anything, mock.Anything).
 					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_FAILED},
 						fmt.Errorf("execution workflow id is empty"))
@@ -273,6 +287,8 @@ func TestReconcile(t *testing.T) {
 			initialStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
 			cronRunnerProvider: func() Runner {
 				mockRunner := &MockRunner{}
+				mockRunner.On("Update", mock.Anything, mock.Anything).
+					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil)
 				mockRunner.On("GetStatus", mock.Anything, mock.Anything).
 					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, fmt.Errorf("failed to GetStatus"))
 				return mockRunner
@@ -292,6 +308,8 @@ func TestReconcile(t *testing.T) {
 			initialStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
 			cronRunnerProvider: func() Runner {
 				mockRunner := &MockRunner{}
+				mockRunner.On("Update", mock.Anything, mock.Anything).
+					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil)
 				mockRunner.On("GetStatus", mock.Anything, mock.Anything).
 					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil)
 				return mockRunner
@@ -300,6 +318,29 @@ func TestReconcile(t *testing.T) {
 			expectedErrStr: "",
 			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
 			expectRequeue:  true,
+		},
+		{
+			name:    "running triggerrun Update fails and sets error status",
+			request: ctrl.Request{NamespacedName: types.NamespacedName{Namespace: _namespace, Name: _triggerRun.Name}},
+			initialObject: func() v2pb.TriggerRun {
+				tr := _triggerRun.DeepCopy()
+				return *tr
+			}(),
+			initialStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
+			cronRunnerProvider: func() Runner {
+				mockRunner := &MockRunner{}
+				mockRunner.On("Update", mock.Anything, mock.Anything).
+					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, fmt.Errorf("update failed"))
+				// GetStatus should NOT be called - StateMachine breaks on Update error
+				return mockRunner
+			},
+			expectErr:      false,
+			expectedErrStr: "",
+			expectedStatus: v2pb.TriggerRunStatus{
+				State:        v2pb.TRIGGER_RUN_STATE_RUNNING,
+				ErrorMessage: "update failed",
+			},
+			expectRequeue: true,
 		},
 		{
 			name:    "running triggerrun GetStatus - succeeded with succeeded status",
@@ -311,6 +352,8 @@ func TestReconcile(t *testing.T) {
 			initialStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
 			cronRunnerProvider: func() Runner {
 				mockRunner := &MockRunner{}
+				mockRunner.On("Update", mock.Anything, mock.Anything).
+					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil)
 				mockRunner.On("GetStatus", mock.Anything, mock.Anything).
 					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_SUCCEEDED}, nil)
 				return mockRunner
@@ -330,6 +373,8 @@ func TestReconcile(t *testing.T) {
 			initialStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
 			cronRunnerProvider: func() Runner {
 				mockRunner := &MockRunner{}
+				mockRunner.On("Update", mock.Anything, mock.Anything).
+					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil)
 				mockRunner.On("GetStatus", mock.Anything, mock.Anything).
 					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_FAILED}, nil)
 				return mockRunner
@@ -337,6 +382,29 @@ func TestReconcile(t *testing.T) {
 			expectErr:      false,
 			expectedErrStr: "",
 			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_FAILED},
+			expectRequeue:  true,
+		},
+		{
+			name:    "cadence trigger - running state reconcile success",
+			request: ctrl.Request{NamespacedName: types.NamespacedName{Namespace: _namespace, Name: _triggerRun.Name}},
+			initialObject: func() v2pb.TriggerRun {
+				tr := _triggerRun.DeepCopy()
+				return *tr
+			}(),
+			initialStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
+			cronRunnerProvider: func() Runner {
+				mockRunner := &MockRunner{}
+				// Update() skips for Cadence - returns success immediately
+				mockRunner.On("Update", mock.Anything, mock.Anything).
+					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil)
+				// GetStatus() succeeds
+				mockRunner.On("GetStatus", mock.Anything, mock.Anything).
+					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil)
+				return mockRunner
+			},
+			expectErr:      false,
+			expectedErrStr: "",
+			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
 			expectRequeue:  true,
 		},
 	}

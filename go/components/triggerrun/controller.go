@@ -204,6 +204,14 @@ StateMachine:
 	case v2pb.TRIGGER_RUN_STATE_RUNNING:
 		log.Info("TRIGGER_RUN_STATE_RUNNING")
 
+		// Sync TriggerRun spec changes to workflow engine
+		if status, err := runner.Update(ctx, triggerRun); err != nil {
+			log.Error(err, "failed to sync trigger spec to workflow engine")
+			triggerRun.Status.ErrorMessage = err.Error()
+			triggerRun.Status.State = status.State
+			break StateMachine
+		}
+
 		// Handle actions using the new action field (preferred) or deprecated boolean fields (backward compatibility)
 		actionToPerform := triggerRun.Spec.Action
 
@@ -256,6 +264,14 @@ StateMachine:
 
 	case v2pb.TRIGGER_RUN_STATE_PAUSED:
 		log.Info("TRIGGER_RUN_STATE_PAUSED")
+
+		// Sync TriggerRun spec changes to workflow engine even when paused
+		if status, err := runner.Update(ctx, triggerRun); err != nil {
+			log.Error(err, "failed to sync trigger spec to workflow engine")
+			triggerRun.Status.ErrorMessage = err.Error()
+			triggerRun.Status.State = status.State
+			break StateMachine
+		}
 
 		// Handle actions using the new action field
 		actionToPerform := triggerRun.Spec.Action

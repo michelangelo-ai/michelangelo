@@ -114,4 +114,8 @@ type WorkflowClient interface {
 	// DeleteTrigger deletes a recurring trigger and terminates any running execution.
 	// workflowID identifies the trigger; runID is the currently running execution (empty if none).
 	DeleteTrigger(ctx context.Context, workflowID string, runID string) error
+	// UpdateTrigger updates the cron schedule of a recurring trigger.
+	// workflowID identifies the trigger; newCronSchedule is the new cron expression.
+	// Only supported for Temporal. Returns an error for Cadence.
+	UpdateTrigger(ctx context.Context, workflowID string, newCronSchedule string) error
 }

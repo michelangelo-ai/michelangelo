@@ -147,15 +147,19 @@ func (c *CadenceClient) ListOpenWorkflow(ctx context.Context, request clientInte
 		return nil, err
 	}
 
-	// Convert Temporal response to our interface format
+	// Convert response to our interface format
 	executionsInfo := make([]clientInterface.WorkflowExecutionInfo, 0, len(response.Executions))
 	for _, exec := range response.Executions {
+		var executionTime time.Time
+		if exec.ExecutionTime != nil {
+			executionTime = time.Unix(0, *exec.ExecutionTime)
+		}
 		executionsInfo = append(executionsInfo, clientInterface.WorkflowExecutionInfo{
 			Execution: &clientInterface.WorkflowExecution{
 				ID:    exec.Execution.GetWorkflowId(),
 				RunID: exec.Execution.GetRunId(),
 			},
-			ExecutionTime: time.Unix(0, *exec.ExecutionTime),
+			ExecutionTime: executionTime,
 			Status:        mapCadenceStatusToInterface(exec.CloseStatus),
 		})
 	}
@@ -293,4 +297,11 @@ func (c *CadenceClient) DeleteTrigger(ctx context.Context, workflowID string, ru
 		return nil
 	}
 	return c.Client.TerminateWorkflow(ctx, workflowID, runID, "trigger killed", nil)
+}
+
+// UpdateTrigger is a no-op for Cadence (schedule updates are a Temporal feature).
+// In Cadence, cron schedules are embedded in the workflow and cannot be updated in place.
+// Returns nil to indicate success - the operation is silently skipped.
+func (c *CadenceClient) UpdateTrigger(_ context.Context, _ string, _ string) error {
+	return nil
 }

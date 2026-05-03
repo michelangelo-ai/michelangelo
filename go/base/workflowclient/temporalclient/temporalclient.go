@@ -88,7 +88,7 @@ func (c *TemporalClient) StartWorkflow(ctx context.Context, options clientInterf
 // createScheduleForCron creates a Temporal Schedule when a cron expression is provided in StartWorkflow
 func (c *TemporalClient) createScheduleForCron(ctx context.Context, options clientInterface.StartWorkflowOptions, workflowName string, args ...interface{}) (*clientInterface.WorkflowExecution, error) {
 	// Generate a schedule ID based on the workflow ID
-	scheduleID := options.ID + "-schedule"
+	scheduleID := scheduleIDForWorkflow(options.ID)
 
 	// Schedule should always fire when cron time is met
 	// The trigger workflow itself will handle maxConcurrency logic for pipeline runs
@@ -369,9 +369,13 @@ func (c *TemporalClient) GetDecisionTaskCompletedEventType() string {
 	return temporalEnumsV1.EVENT_TYPE_WORKFLOW_TASK_COMPLETED.String()
 }
 
+func scheduleIDForWorkflow(workflowID string) string {
+	return workflowID + "-schedule"
+}
+
 // PauseTrigger pauses the Temporal schedule associated with the given workflow ID.
 func (c *TemporalClient) PauseTrigger(ctx context.Context, workflowID string) error {
-	scheduleID := workflowID + "-schedule"
+	scheduleID := scheduleIDForWorkflow(workflowID)
 	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
 	return handle.Pause(ctx, temporalClient.SchedulePauseOptions{
 		Note: "paused by michelangelo",
@@ -380,7 +384,7 @@ func (c *TemporalClient) PauseTrigger(ctx context.Context, workflowID string) er
 
 // UnpauseTrigger resumes the Temporal schedule associated with the given workflow ID.
 func (c *TemporalClient) UnpauseTrigger(ctx context.Context, workflowID string) error {
-	scheduleID := workflowID + "-schedule"
+	scheduleID := scheduleIDForWorkflow(workflowID)
 	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
 	return handle.Unpause(ctx, temporalClient.ScheduleUnpauseOptions{
 		Note: "unpaused by michelangelo",
@@ -389,7 +393,7 @@ func (c *TemporalClient) UnpauseTrigger(ctx context.Context, workflowID string) 
 
 // DeleteTrigger deletes the Temporal schedule and terminates any running workflow execution.
 func (c *TemporalClient) DeleteTrigger(ctx context.Context, workflowID string, runID string) error {
-	scheduleID := workflowID + "-schedule"
+	scheduleID := scheduleIDForWorkflow(workflowID)
 	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
 	if err := handle.Delete(ctx); err != nil {
 		return err
@@ -398,4 +402,21 @@ func (c *TemporalClient) DeleteTrigger(ctx context.Context, workflowID string, r
 		return nil
 	}
 	return c.Client.TerminateWorkflow(ctx, workflowID, runID, "trigger killed")
+}
+
+// UpdateTrigger updates the cron schedule for a recurring trigger.
+// Returns an error if the schedule doesn't exist.
+func (c *TemporalClient) UpdateTrigger(ctx context.Context, workflowID string, newCronSchedule string) error {
+	scheduleID := scheduleIDForWorkflow(workflowID)
+	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
+
+	return handle.Update(ctx, temporalClient.ScheduleUpdateOptions{
+		DoUpdate: func(input temporalClient.ScheduleUpdateInput) (*temporalClient.ScheduleUpdate, error) {
+			// Update the cron expression in the schedule spec
+			input.Description.Schedule.Spec.CronExpressions = []string{newCronSchedule}
+			return &temporalClient.ScheduleUpdate{
+				Schedule: &input.Description.Schedule,
+			}, nil
+		},
+	})
 }

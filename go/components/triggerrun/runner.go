@@ -72,4 +72,13 @@ type Runner interface {
 	// For recurring triggers, this checks if an open workflow execution exists.
 	// For one-time triggers, this describes the specific workflow execution.
 	GetStatus(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error)
+
+	// Update synchronizes TriggerRun spec changes to the workflow engine.
+	//
+	// This method compares the TriggerRun spec with the workflow engine state
+	// and updates the workflow engine if they differ. For recurring triggers (cron/interval),
+	// this updates the schedule. For one-time triggers (backfill/batch rerun), this is a no-op.
+	//
+	// Returns current TriggerRunStatus. Does not change the state.
+	Update(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error)
 }
