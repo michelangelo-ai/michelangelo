@@ -369,6 +369,7 @@ func (c *TemporalClient) GetDecisionTaskCompletedEventType() string {
 	return temporalEnumsV1.EVENT_TYPE_WORKFLOW_TASK_COMPLETED.String()
 }
 
+// scheduleIDForWorkflow generates a Temporal schedule ID from a workflow ID.
 func scheduleIDForWorkflow(workflowID string) string {
 	return workflowID + "-schedule"
 }
