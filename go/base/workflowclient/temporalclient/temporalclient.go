@@ -412,8 +412,13 @@ func (c *TemporalClient) UpdateTrigger(ctx context.Context, workflowID string, n
 
 	return handle.Update(ctx, temporalClient.ScheduleUpdateOptions{
 		DoUpdate: func(input temporalClient.ScheduleUpdateInput) (*temporalClient.ScheduleUpdate, error) {
-			// Update the cron expression in the schedule spec
 			input.Description.Schedule.Spec.CronExpressions = []string{newCronSchedule}
+			// Temporal's server converts CronExpressions into StructuredCalendar entries
+			// stored in Calendars. When we read back the schedule, Calendars contains the
+			// old server-generated entries. We must clear them so the new CronExpressions
+			// don't merge with stale Calendars, which would cause both old and new
+			// schedules to fire.
+			input.Description.Schedule.Spec.Calendars = nil
 			return &temporalClient.ScheduleUpdate{
 				Schedule: &input.Description.Schedule,
 			}, nil
