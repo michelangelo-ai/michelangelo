@@ -1,0 +1,223 @@
+import { renderHook } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+
+import { useSchemaMiddleware } from '#core/hooks/use-schema-middleware/use-schema-middleware';
+import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
+
+import type { StudioParamsBase } from '#core/hooks/routing/use-studio-params/types';
+
+const wrapper = getRouterWrapper({ location: '/test-project/train/model' });
+
+describe('useSchemaMiddleware', () => {
+  describe('when schema is absent', () => {
+    it('returns the original data unchanged when schema is null', () => {
+      const { result } = renderHook(() => useSchemaMiddleware(null), { wrapper });
+      const data = { metadata: { name: 'foo' } };
+      expect(result.current.applyMiddleware(data)).toEqual(data);
+    });
+
+    it('returns the original data unchanged when schema is undefined', () => {
+      const { result } = renderHook(() => useSchemaMiddleware(undefined), { wrapper });
+      const data = { metadata: { name: 'foo' } };
+      expect(result.current.applyMiddleware(data)).toEqual(data);
+    });
+
+    it('returns the original data unchanged when operations is empty', () => {
+      const { result } = renderHook(() => useSchemaMiddleware({ operations: [] }), { wrapper });
+      const data = { metadata: { name: 'foo' } };
+      expect(result.current.applyMiddleware(data)).toEqual(data);
+    });
+  });
+
+  describe('static default', () => {
+    it('sets destination to default value when source is absent', () => {
+      const { result } = renderHook(
+        () => useSchemaMiddleware({ operations: [{ destination: 'spec.action', default: 1 }] }),
+        { wrapper }
+      );
+      expect(result.current.applyMiddleware({ spec: {} })).toMatchObject({ spec: { action: 1 } });
+    });
+
+    it('sets destination to default value when source path resolves to nil', () => {
+      const { result } = renderHook(
+        () =>
+          useSchemaMiddleware({
+            operations: [
+              { source: 'spec.missing', destination: 'spec.action', default: 'fallback' },
+            ],
+          }),
+        { wrapper }
+      );
+      expect(result.current.applyMiddleware({ spec: {} })).toMatchObject({
+        spec: { action: 'fallback' },
+      });
+    });
+
+    it('does not write destination when source is nil and no default is defined', () => {
+      const { result } = renderHook(
+        () =>
+          useSchemaMiddleware({
+            operations: [{ source: 'spec.missing', destination: 'spec.action' }],
+          }),
+        { wrapper }
+      );
+      expect(result.current.applyMiddleware({ spec: {} })).toEqual({ spec: {} });
+    });
+  });
+
+  describe('transformation', () => {
+    it('applies transformation function to source value', () => {
+      const { result } = renderHook(
+        () =>
+          useSchemaMiddleware({
+            operations: [
+              {
+                source: 'metadata.name',
+                destination: 'metadata.displayName',
+                transformation: (name) => (name as string).toUpperCase(),
+              },
+            ],
+          }),
+        { wrapper }
+      );
+      expect(result.current.applyMiddleware({ metadata: { name: 'foo' } })).toMatchObject({
+        metadata: { name: 'foo', displayName: 'FOO' },
+      });
+    });
+
+    it('uses default instead of transformation when source is nil', () => {
+      const { result } = renderHook(
+        () =>
+          useSchemaMiddleware({
+            operations: [
+              {
+                source: 'metadata.missing',
+                destination: 'metadata.displayName',
+                default: 'unnamed',
+                transformation: (name) => (name as string).toUpperCase(),
+              },
+            ],
+          }),
+        { wrapper }
+      );
+      expect(result.current.applyMiddleware({ metadata: {} })).toMatchObject({
+        metadata: { displayName: 'unnamed' },
+      });
+    });
+
+    it('unsets destination path when transformation is "unset"', () => {
+      const { result } = renderHook(
+        () =>
+          useSchemaMiddleware({
+            operations: [{ destination: 'spec.deprecated', transformation: 'unset' }],
+          }),
+        { wrapper }
+      );
+      expect(
+        result.current.applyMiddleware({ spec: { deprecated: true, keep: 'yes' } })
+      ).toEqual({ spec: { keep: 'yes' } });
+    });
+
+    it('does not write destination when source is present but no transformation is defined', () => {
+      const { result } = renderHook(
+        () =>
+          useSchemaMiddleware({
+            operations: [{ source: 'spec.action', destination: 'spec.result' }],
+          }),
+        { wrapper }
+      );
+      expect(result.current.applyMiddleware({ spec: { action: 'run' } })).toEqual({
+        spec: { action: 'run' },
+      });
+    });
+  });
+
+  describe('falsy source value handling', () => {
+    const schema = {
+      operations: [
+        {
+          source: 'source',
+          destination: 'destination',
+          default: 'defaultValue',
+          transformation: (v: unknown) => v,
+        },
+      ],
+    };
+
+    it('uses default when source value is null', () => {
+      const { result } = renderHook(() => useSchemaMiddleware(schema), { wrapper });
+      expect(result.current.applyMiddleware({ source: null })).toEqual({
+        source: null,
+        destination: 'defaultValue',
+      });
+    });
+
+    it('copies source to destination when source value is false', () => {
+      const { result } = renderHook(() => useSchemaMiddleware(schema), { wrapper });
+      expect(result.current.applyMiddleware({ source: false })).toEqual({
+        source: false,
+        destination: false,
+      });
+    });
+
+    it('copies source to destination when source value is 0', () => {
+      const { result } = renderHook(() => useSchemaMiddleware(schema), { wrapper });
+      expect(result.current.applyMiddleware({ source: 0 })).toEqual({
+        source: 0,
+        destination: 0,
+      });
+    });
+  });
+
+  describe('context-computed default', () => {
+    it('calls default function with studio params when source is nil', () => {
+      const { result } = renderHook(
+        () =>
+          useSchemaMiddleware({
+            operations: [
+              {
+                destination: 'metadata.namespace',
+                default: ({ studio }: { studio: StudioParamsBase }) => studio.projectId,
+              },
+            ],
+          }),
+        { wrapper: getRouterWrapper({ location: '/my-project/train/model' }) }
+      );
+      expect(result.current.applyMiddleware({ metadata: {} })).toMatchObject({
+        metadata: { namespace: 'my-project' },
+      });
+    });
+  });
+
+  describe('multiple operations', () => {
+    it('applies all operations in order', () => {
+      const { result } = renderHook(
+        () =>
+          useSchemaMiddleware({
+            operations: [
+              { destination: 'spec.action', default: 1 },
+              { destination: 'spec.kill', default: true },
+              { destination: 'spec.deprecated', transformation: 'unset' },
+            ],
+          }),
+        { wrapper }
+      );
+      expect(result.current.applyMiddleware({ spec: { deprecated: true } })).toEqual({
+        spec: { action: 1, kill: true },
+      });
+    });
+  });
+
+  describe('immutability', () => {
+    it('does not mutate the original record', () => {
+      const { result } = renderHook(
+        () =>
+          useSchemaMiddleware({ operations: [{ destination: 'spec.action', default: 1 }] }),
+        { wrapper }
+      );
+      const original = { spec: {} };
+      result.current.applyMiddleware(original);
+      expect(original).toEqual({ spec: {} });
+    });
+  });
+});
