@@ -47,25 +47,29 @@ message RevisionSpec {
     }
   ];
 
-  // TODO(#930): deprecate this field
-  string git_ref = 6;
-
-  // TODO(#930): deprecate this field
-  string git_branch = 7;
-
-  // The URL to the code review tool such as Differential or Review
-  // Board for this revision.
-  string review_tool_url = 8;
-
   // revision id represents the id of this revision
   // each revision of the same parent object has a unique id
-  // e.g.
-  // Pipeline revision id is the corresponding git sha-1
-  // Model revision id is a sequential number
   string revision_id = 9;
 
-  // Git commit of the revision if applicable, e.g. for Pipeline
-  CommitInfo commit = 10;
+  // Source of this revision — what created it. Required.
+  //
+  // Once a source value is in use, its meaning MUST NOT change
+  // (treated as part of the API contract, like k8s Condition.type).
+  //
+  // Convention: PascalCase. Third-party controllers SHOULD namespace
+  // with a domain prefix (e.g. "acme.io/NightlyRetrain") to avoid
+  // collisions with future Michelangelo-defined sources.
+  //
+  // Well-known sources defined by Michelangelo:
+  //   "Git"            — created from a git commit (see git_commit)
+  //   "ResourceUpdate" — created when the base resource was updated
+  //   "Unknown"        — source could not be determined. Producers SHOULD
+  //                      provide a specific source when possible.
+  string source = 10 [(michelangelo.api.validation) = {required: true}];
+
+  // Git commit this revision was created from.
+  // Set when the source identifies a git-backed revision (typically source == "Git").
+  CommitInfo git_commit = 11;
 }
 
 
@@ -124,16 +128,6 @@ message Revision {
     key: "owner",
   };
 
-  option (michelangelo.api.index) = {
-    path: "spec.commit.branch",
-    key: "commit_branch",
-  };
-
-  option (michelangelo.api.index) = {
-    path: "spec.commit.git_ref",
-    key: "git_ref",
-  };
-
   k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
   k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
 
@@ -154,4 +148,3 @@ message RevisionList {
   // A list of revisions
   repeated Revision items = 3;
 }
-

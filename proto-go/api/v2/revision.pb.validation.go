@@ -132,8 +132,15 @@ func (this *RevisionSpec) Validate(prefix string) error {
 		}
 	}
 	{
-		v := this.GetCommit()
-		n := `commit`
+		v := this.Source
+		n := `source`
+		if len(v) == 0 {
+			return status.Error(codes.InvalidArgument, prefix+n+" "+"cannot be empty")
+		}
+	}
+	{
+		v := this.GetGitCommit()
+		n := `git_commit`
 		var i interface{}
 		if reflect.ValueOf(v).Kind() == reflect.Ptr {
 			i = reflect.ValueOf(v).Interface()
