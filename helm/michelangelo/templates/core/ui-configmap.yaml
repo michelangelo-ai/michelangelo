@@ -1,0 +1,14 @@
+{{- if .Values.ui.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "ui-config") }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "michelangelo.componentLabels" (dict "context" . "component" "ui") | nindent 4 }}
+data:
+  config.json: |
+    {
+      "apiBaseUrl": {{ required "ui.apiBaseUrl is required when ui.enabled=true — see helm/michelangelo/README.md#values-reference" .Values.ui.apiBaseUrl | quote }}
+    }
+{{- end }}

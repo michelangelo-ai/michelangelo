@@ -1,0 +1,71 @@
+{{- if .Values.controllermgr.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "controllermgr-config") }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "michelangelo.componentLabels" (dict "context" . "component" "controllermgr") | nindent 4 }}
+data:
+  base.yaml: |
+    controllermgr:
+      metricsBindAddress: ":{{ .Values.controllermgr.metricsPort }}"
+      healthProbeBindAddress: ":{{ .Values.controllermgr.healthPort }}"
+      leaderElection: {{ .Values.controllermgr.leaderElection }}
+      leaderElectionID: {{ .Values.controllermgr.leaderElectionID | quote }}
+
+    controllers:
+      rayCluster:
+        k8sQps: {{ .Values.controllermgr.controllers.rayCluster.qps }}
+        k8sBurst: {{ .Values.controllermgr.controllers.rayCluster.burst }}
+
+    minio:
+      awsRegion: {{ .Values.objectStorage.region | default "us-east-1" | quote }}
+      awsAccessKeyId: ${AWS_ACCESS_KEY_ID}
+      awsSecretAccessKey: ${AWS_SECRET_ACCESS_KEY}
+      awsEndpointUrl: {{ required "objectStorage.endpoint is required — see helm/michelangelo/README.md#values-reference" .Values.objectStorage.endpoint | quote }}
+      secure: {{ .Values.objectStorage.secure }}
+
+    metadataStorage:
+      enableMetadataStorage: {{ .Values.controllermgr.metadataStorage.enable }}
+      deletionDelay: {{ .Values.controllermgr.metadataStorage.deletionDelay | quote }}
+      enableResourceVersionCache: {{ .Values.controllermgr.metadataStorage.enableResourceVersionCache }}
+
+    mysql:
+      host: {{ required "metadataStorage.host is required — see helm/michelangelo/README.md#values-reference" .Values.metadataStorage.host | quote }}
+      port: {{ .Values.metadataStorage.port }}
+      user: {{ .Values.metadataStorage.user | default "root" | quote }}
+      password: ${MYSQL_PASSWORD}
+      database: {{ .Values.metadataStorage.database | quote }}
+
+    ingester:
+      concurrentReconciles: {{ .Values.controllermgr.ingester.concurrentReconciles }}
+      requeuePeriod: {{ .Values.controllermgr.ingester.requeuePeriod | quote }}
+      concurrentReconcilesMap:
+      {{- range $k, $v := .Values.controllermgr.ingester.concurrentReconcilesMap }}
+        {{ $k }}: {{ $v }}
+      {{- end }}
+
+    workflowClient:
+      {{- if eq .Values.workflow.engine "cadence" }}
+      service: cadence-frontend
+      host: {{ required "workflow.endpoint is required — see helm/michelangelo/README.md#values-reference" .Values.workflow.endpoint | quote }}
+      transport: grpc
+      domain: {{ .Values.workflow.domain | default "default" | quote }}
+      taskList: default
+      {{- with .Values.controllermgr.workflowClient.executionUrlFormat }}
+      executionUrlFormat: {{ . | quote }}
+      {{- end }}
+      {{- else if eq .Values.workflow.engine "temporal" }}
+      service: temporal-frontend
+      host: {{ required "workflow.endpoint is required — see helm/michelangelo/README.md#values-reference" .Values.workflow.endpoint | quote }}
+      transport: grpc
+      domain: {{ .Values.workflow.domain | default "default" | quote }}
+      provider: Temporal
+      {{- with .Values.controllermgr.workflowClient.executionUrlFormat }}
+      executionUrlFormat: {{ . | quote }}
+      {{- end }}
+      {{- else }}
+      {{- fail (printf "workflow.engine must be 'cadence' or 'temporal', got: %s" .Values.workflow.engine) }}
+      {{- end }}
+{{- end }}

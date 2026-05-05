@@ -1,0 +1,35 @@
+{{- if and .Values.serviceAccount.create (not .Values.controllermgr.watchNamespace) -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "michelangelo.fullname" . }}
+  labels:
+    {{- include "michelangelo.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "michelangelo.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "michelangelo.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- else if and .Values.serviceAccount.create .Values.controllermgr.watchNamespace }}
+{{- range $ns := .Values.controllermgr.watchNamespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "michelangelo.fullname" $ }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "michelangelo.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "michelangelo.fullname" $ }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "michelangelo.serviceAccountName" $ }}
+    namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- end }}

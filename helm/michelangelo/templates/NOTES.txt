@@ -1,0 +1,90 @@
+Michelangelo {{ .Chart.AppVersion }} is installing into namespace "{{ .Release.Namespace }}" as release "{{ .Release.Name }}".
+
+Services enabled in this release:
+{{- if .Values.apiserver.enabled }}
+  - apiserver       (gRPC on port {{ .Values.apiserver.port }})
+{{- end }}
+{{- if .Values.envoy.enabled }}
+  - envoy           (gRPC-Web proxy on port {{ .Values.envoy.port }})
+{{- end }}
+{{- if .Values.ui.enabled }}
+  - ui              (React frontend on port {{ .Values.ui.service.port }})
+{{- end }}
+{{- if .Values.worker.enabled }}
+  - worker          (workflow client → {{ .Values.workflow.engine }} at {{ .Values.workflow.endpoint }})
+{{- end }}
+{{- if .Values.controllermgr.enabled }}
+  - controllermgr   (Kubernetes controller manager)
+{{- end }}
+
+────────────────────────────────────────────────────────────────────────
+1. Verify the install
+────────────────────────────────────────────────────────────────────────
+
+  kubectl --namespace {{ .Release.Namespace }} get pods -l "app.kubernetes.io/instance={{ .Release.Name }}"
+
+All pods should reach the Running state within ~60 seconds. The apiserver
+Pod runs a `schema-init` init container that waits for {{ .Values.metadataStorage.driver }}
+at "{{ .Values.metadataStorage.host }}:{{ .Values.metadataStorage.port }}" before starting —
+if it stays in Init:0/1, your metadata storage is unreachable.
+
+────────────────────────────────────────────────────────────────────────
+2. Open the UI
+────────────────────────────────────────────────────────────────────────
+
+{{- if .Values.ui.enabled }}
+{{- if eq .Values.ui.service.type "NodePort" }}
+
+  This release exposes the UI on NodePort {{ .Values.ui.service.nodePort }}.
+  If your cluster publishes node ports to localhost (e.g. k3d with --port),
+  open:
+
+      http://localhost:{{ .Values.ui.service.nodePort }}
+
+{{- else if eq .Values.ui.service.type "LoadBalancer" }}
+
+  This release exposes the UI through a LoadBalancer Service. Get the URL with:
+
+      kubectl --namespace {{ .Release.Namespace }} get svc {{ include "michelangelo.fullname" . }}-ui \
+        -o jsonpath='{.status.loadBalancer.ingress[0].hostname}{.status.loadBalancer.ingress[0].ip}'
+
+  The address may take a minute to provision. If empty, fall back to port-forward.
+
+{{- else }}
+
+  This release uses a ClusterIP Service for the UI (production-safe — no external exposure).
+  Reach the UI from your workstation with port-forward:
+
+      kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "michelangelo.fullname" . }}-ui 8090:{{ .Values.ui.service.port }}
+
+  Then open http://localhost:8090
+
+{{- end }}
+{{- else }}
+
+  The UI is disabled in this release (ui.enabled=false). Re-enable with:
+
+      helm upgrade {{ .Release.Name }} michelangelo/michelangelo --reuse-values --set ui.enabled=true
+
+{{- end }}
+
+────────────────────────────────────────────────────────────────────────
+3. Run your first pipeline
+────────────────────────────────────────────────────────────────────────
+
+  pip install michelangelo
+  michelangelo project create my-first-project
+  michelangelo pipeline run examples/hello_world.py
+
+Or open the UI and click "New Pipeline" to start from a template.
+
+────────────────────────────────────────────────────────────────────────
+4. Documentation & support
+────────────────────────────────────────────────────────────────────────
+
+  Docs:     https://github.com/michelangelo-ai/michelangelo/tree/main/docs
+  Issues:   https://github.com/michelangelo-ai/michelangelo/issues
+  Chart:    https://github.com/michelangelo-ai/michelangelo/tree/main/helm/michelangelo
+
+To upgrade:    helm upgrade {{ .Release.Name }} michelangelo/michelangelo --reuse-values
+To uninstall:  helm uninstall {{ .Release.Name }} --namespace {{ .Release.Namespace }}

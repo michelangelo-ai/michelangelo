@@ -1,0 +1,20 @@
+{{- if .Values.envoy.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "envoy") }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "michelangelo.componentLabels" (dict "context" . "component" "envoy") | nindent 4 }}
+spec:
+  type: {{ .Values.envoy.service.type }}
+  selector:
+    {{- include "michelangelo.componentSelectorLabels" (dict "context" . "component" "envoy") | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.envoy.port }}
+      targetPort: http
+      {{- if eq .Values.envoy.service.type "NodePort" }}
+      nodePort: {{ required "envoy.service.nodePort is required when envoy.service.type=NodePort" .Values.envoy.service.nodePort }}
+      {{- end }}
+{{- end }}

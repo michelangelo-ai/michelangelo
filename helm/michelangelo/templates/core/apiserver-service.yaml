@@ -1,0 +1,20 @@
+{{- if .Values.apiserver.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "apiserver") }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "michelangelo.componentLabels" (dict "context" . "component" "apiserver") | nindent 4 }}
+spec:
+  type: {{ .Values.apiserver.service.type }}
+  selector:
+    {{- include "michelangelo.componentSelectorLabels" (dict "context" . "component" "apiserver") | nindent 4 }}
+  ports:
+    - name: grpc
+      port: {{ .Values.apiserver.port }}
+      targetPort: grpc
+      {{- if eq .Values.apiserver.service.type "NodePort" }}
+      nodePort: {{ required "apiserver.service.nodePort is required when apiserver.service.type=NodePort" .Values.apiserver.service.nodePort }}
+      {{- end }}
+{{- end }}

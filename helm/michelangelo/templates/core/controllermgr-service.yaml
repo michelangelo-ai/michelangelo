@@ -1,0 +1,20 @@
+{{- if .Values.controllermgr.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "controllermgr") }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "michelangelo.componentLabels" (dict "context" . "component" "controllermgr") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "michelangelo.componentSelectorLabels" (dict "context" . "component" "controllermgr") | nindent 4 }}
+  ports:
+    - name: metrics
+      port: {{ .Values.controllermgr.metricsPort }}
+      targetPort: metrics
+    - name: health
+      port: {{ .Values.controllermgr.healthPort }}
+      targetPort: health
+{{- end }}

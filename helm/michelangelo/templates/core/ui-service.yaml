@@ -1,0 +1,20 @@
+{{- if .Values.ui.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "ui") }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "michelangelo.componentLabels" (dict "context" . "component" "ui") | nindent 4 }}
+spec:
+  type: {{ .Values.ui.service.type }}
+  selector:
+    {{- include "michelangelo.componentSelectorLabels" (dict "context" . "component" "ui") | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.ui.service.port }}
+      targetPort: http
+      {{- if eq .Values.ui.service.type "NodePort" }}
+      nodePort: {{ required "ui.service.nodePort is required when ui.service.type=NodePort" .Values.ui.service.nodePort }}
+      {{- end }}
+{{- end }}

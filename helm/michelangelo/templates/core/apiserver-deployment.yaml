@@ -1,0 +1,145 @@
+{{- if .Values.apiserver.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "apiserver") }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "michelangelo.componentLabels" (dict "context" . "component" "apiserver") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "michelangelo.componentSelectorLabels" (dict "context" . "component" "apiserver") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "michelangelo.componentSelectorLabels" (dict "context" . "component" "apiserver") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "michelangelo.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: wait-for-metadata-storage
+          image: {{ if eq .Values.metadataStorage.driver "postgres" }}postgres:16{{ else }}mysql:8.0{{ end }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              MAX_ATTEMPTS=60
+              ATTEMPT=0
+              while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+              {{- if eq .Values.metadataStorage.driver "postgres" }}
+                if PGPASSWORD="$METADATA_PASSWORD" psql -h "$METADATA_HOST" -p "$METADATA_PORT" -U "$METADATA_USER" -c "SELECT 1" >/dev/null 2>&1; then
+              {{- else }}
+                if mysqladmin ping -h "$METADATA_HOST" -P "$METADATA_PORT" -u "$METADATA_USER" -p"$METADATA_PASSWORD" --silent; then
+              {{- end }}
+                  echo "metadata storage is ready"
+                  exit 0
+                fi
+                ATTEMPT=$((ATTEMPT+1))
+                echo "waiting for metadata storage ($ATTEMPT/$MAX_ATTEMPTS)..."
+                sleep 2
+              done
+              echo "metadata storage did not become ready"
+              exit 1
+          env:
+            - name: METADATA_HOST
+              value: {{ required "metadataStorage.host is required — see helm/michelangelo/README.md#values-reference" .Values.metadataStorage.host | quote }}
+            - name: METADATA_PORT
+              value: {{ .Values.metadataStorage.port | quote }}
+            - name: METADATA_USER
+              value: {{ .Values.metadataStorage.user | default "root" | quote }}
+            - name: METADATA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.metadataStorage.existingSecret | default (printf "%s-metadata-storage" (include "michelangelo.fullname" .)) }}
+                  key: password
+        - name: schema-init
+          image: {{ if eq .Values.metadataStorage.driver "postgres" }}postgres:16{{ else }}mysql:8.0{{ end }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "applying ingester schema to $METADATA_DATABASE on $METADATA_HOST..."
+              {{- if eq .Values.metadataStorage.driver "postgres" }}
+              PGPASSWORD="$METADATA_PASSWORD" psql -h "$METADATA_HOST" -p "$METADATA_PORT" -U "$METADATA_USER" -d "$METADATA_DATABASE" -f /schema/init-schema.sql
+              {{- else }}
+              mysql -h "$METADATA_HOST" -P "$METADATA_PORT" -u "$METADATA_USER" -p"$METADATA_PASSWORD" < /schema/init-schema.sql
+              {{- end }}
+              echo "schema applied successfully"
+          env:
+            - name: METADATA_HOST
+              value: {{ .Values.metadataStorage.host | quote }}
+            - name: METADATA_PORT
+              value: {{ .Values.metadataStorage.port | quote }}
+            - name: METADATA_USER
+              value: {{ .Values.metadataStorage.user | default "root" | quote }}
+            - name: METADATA_DATABASE
+              value: {{ .Values.metadataStorage.database | quote }}
+            - name: METADATA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.metadataStorage.existingSecret | default (printf "%s-metadata-storage" (include "michelangelo.fullname" .)) }}
+                  key: password
+          volumeMounts:
+            - name: schema
+              mountPath: /schema
+              readOnly: true
+      containers:
+        - name: apiserver
+          image: {{ .Values.images.apiserver }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.apiserver.port }}
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /config
+          {{- with (or .Values.apiserver.resources .Values.resources) }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "apiserver-config") }}
+        - name: schema
+          configMap:
+            name: {{ include "michelangelo.schemaInitConfigMapName" . }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

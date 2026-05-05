@@ -1,0 +1,60 @@
+apiVersion: v2
+name: michelangelo
+description: |
+  Michelangelo is an open-source ML platform for orchestrating data, training,
+  and serving pipelines on Kubernetes. This chart installs the control plane —
+  apiserver, gRPC-Web proxy, UI, workflow worker, controller manager, CRDs,
+  and RBAC — into any Kubernetes cluster. Bring your own metadata storage,
+  object storage, and workflow engine (Cadence or Temporal).
+type: application
+version: 0.1.0
+appVersion: "0.2.1"
+kubeVersion: ">=1.27.0-0"
+
+home: https://github.com/michelangelo-ai/michelangelo
+icon: https://raw.githubusercontent.com/michelangelo-ai/michelangelo/main/docs/assets/logo.png
+
+sources:
+  - https://github.com/michelangelo-ai/michelangelo
+  - https://github.com/michelangelo-ai/michelangelo/tree/main/helm/michelangelo
+
+keywords:
+  - machine-learning
+  - mlops
+  - pipelines
+  - workflow
+  - kubernetes-operator
+  - ray
+  - spark
+
+maintainers:
+  - name: Michelangelo Maintainers
+    email: maintainers@michelangelo-ai.org
+    url: https://github.com/michelangelo-ai/michelangelo
+
+annotations:
+  artifacthub.io/category: machine-learning
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/prerelease: "true"
+  artifacthub.io/changes: |
+    - kind: added
+      description: Initial release of the michelangelo Helm chart
+    - kind: added
+      description: Per-service enabled toggles (apiserver, envoy, ui, worker, controllermgr)
+    - kind: added
+      description: Schema-init container ensures metadata storage is ready before apiserver starts
+    - kind: added
+      description: Cadence and Temporal workflow engines selectable via workflow.engine
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://github.com/michelangelo-ai/michelangelo/tree/main/docs
+    - name: Source
+      url: https://github.com/michelangelo-ai/michelangelo
+    - name: Issues
+      url: https://github.com/michelangelo-ai/michelangelo/issues
+  artifacthub.io/maintainers: |
+    - name: Michelangelo Maintainers
+      email: maintainers@michelangelo-ai.org
+  artifacthub.io/signKey: |
+    fingerprint: 0000000000000000000000000000000000000000
+    url: https://github.com/michelangelo-ai/michelangelo/releases

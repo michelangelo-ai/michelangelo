@@ -1,0 +1,44 @@
+{{- if .Values.worker.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "worker-config") }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "michelangelo.componentLabels" (dict "context" . "component" "worker") | nindent 4 }}
+data:
+  base.yaml: |
+    worker:
+      address: {{ include "michelangelo.componentFullname" (dict "context" . "component" "apiserver") }}:{{ .Values.apiserver.port }}
+      maApiServiceName: ma-apiserver
+
+    logging:
+      level: {{ .Values.worker.logging.level | default "info" }}
+      development: {{ .Values.worker.logging.development | default false }}
+      encoding: {{ .Values.worker.logging.encoding | default "console" }}
+
+    workflow-engine:
+      host: {{ required "workflow.endpoint is required — see helm/michelangelo/README.md#values-reference" .Values.workflow.endpoint | quote }}
+      transport: grpc
+      {{- if eq .Values.workflow.engine "cadence" }}
+      provider: cadence
+      {{- else if eq .Values.workflow.engine "temporal" }}
+      provider: temporal
+      {{- else }}
+      {{- fail (printf "workflow.engine must be 'cadence' or 'temporal', got: %s" .Values.workflow.engine) }}
+      {{- end }}
+      workers:
+      {{- range $tl := .Values.workflow.taskLists }}
+        - domain: {{ $.Values.workflow.domain | default "default" | quote }}
+          taskList: {{ $tl | quote }}
+      {{- end }}
+      client:
+        domain: {{ .Values.workflow.domain | default "default" | quote }}
+
+    minio:
+      awsRegion: {{ .Values.objectStorage.region | default "us-east-1" | quote }}
+      awsAccessKeyId: ${AWS_ACCESS_KEY_ID}
+      awsSecretAccessKey: ${AWS_SECRET_ACCESS_KEY}
+      awsEndpointUrl: {{ required "objectStorage.endpoint is required — see helm/michelangelo/README.md#values-reference" .Values.objectStorage.endpoint | quote }}
+      secure: {{ .Values.objectStorage.secure }}
+{{- end }}

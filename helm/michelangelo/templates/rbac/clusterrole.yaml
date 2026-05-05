@@ -1,0 +1,171 @@
+{{- if and .Values.serviceAccount.create (not .Values.controllermgr.watchNamespace) -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "michelangelo.fullname" . }}
+  labels:
+    {{- include "michelangelo.labels" . | nindent 4 }}
+rules:
+  # CRD lifecycle — apiserver crdSync registers/updates CRDs at startup
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+
+  # Michelangelo CRs — full reconcile lifecycle
+  - apiGroups: ["michelangelo.api"]
+    resources:
+      - projects
+      - models
+      - modelfamilies
+      - pipelines
+      - pipelineruns
+      - revisions
+      - inferenceservers
+      - clusters
+      - rayclusters
+      - rayjobs
+      - sparkjobs
+      - triggerruns
+      - deployments
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Michelangelo CR status subresource updates (controller pattern)
+  - apiGroups: ["michelangelo.api"]
+    resources:
+      - projects/status
+      - models/status
+      - modelfamilies/status
+      - pipelines/status
+      - pipelineruns/status
+      - revisions/status
+      - inferenceservers/status
+      - clusters/status
+      - rayclusters/status
+      - rayjobs/status
+      - sparkjobs/status
+      - triggerruns/status
+      - deployments/status
+    verbs: ["get", "update", "patch"]
+
+  # KubeRay CRs — controllermgr creates/manages RayCluster + RayJob
+  - apiGroups: ["ray.io"]
+    resources: ["rayclusters", "rayjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Spark Operator CRs — controllermgr creates SparkApplication
+  - apiGroups: ["sparkoperator.k8s.io"]
+    resources: ["sparkapplications"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Inference deployments use core workloads + networking
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+
+  # ConfigMaps + Secrets — controllers materialize per-job configs and read
+  # cluster credentials (compute-cluster Secrets created by sandbox.py)
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Namespaces — controllers list namespaces to scope reconcilers
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch"]
+
+  # Events — controllers emit events on CR objects
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+
+  # Leader election (controllermgr.leaderElection: false today, but enabling
+  # it later requires lease access — keep in least-privilege baseline)
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Inference demo uses Gateway API HTTPRoutes
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["httproutes"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+{{- else if and .Values.serviceAccount.create .Values.controllermgr.watchNamespace }}
+{{- range $ns := .Values.controllermgr.watchNamespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "michelangelo.fullname" $ }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "michelangelo.labels" $ | nindent 4 }}
+rules:
+  - apiGroups: ["michelangelo.api"]
+    resources:
+      - projects
+      - models
+      - modelfamilies
+      - pipelines
+      - pipelineruns
+      - revisions
+      - inferenceservers
+      - clusters
+      - rayclusters
+      - rayjobs
+      - sparkjobs
+      - triggerruns
+      - deployments
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["michelangelo.api"]
+    resources:
+      - projects/status
+      - models/status
+      - modelfamilies/status
+      - pipelines/status
+      - pipelineruns/status
+      - revisions/status
+      - inferenceservers/status
+      - clusters/status
+      - rayclusters/status
+      - rayjobs/status
+      - sparkjobs/status
+      - triggerruns/status
+      - deployments/status
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["ray.io"]
+    resources: ["rayclusters", "rayjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["sparkoperator.k8s.io"]
+    resources: ["sparkapplications"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["services", "configmaps", "secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["httproutes"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+{{- end }}
+{{- end }}

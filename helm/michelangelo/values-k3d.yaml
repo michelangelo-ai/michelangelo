@@ -1,0 +1,69 @@
+# -----------------------------------------------------------------------------
+# Local k3d overrides for the michelangelo chart.
+#
+# Used by `michelangelo sandbox up`, which provisions MySQL, MinIO, and Cadence
+# in the same cluster, then runs:
+#
+#     helm install michelangelo ./helm/michelangelo -f values-k3d.yaml
+#
+# The NodePort values below must match the `--port` flags k3d was created with.
+# -----------------------------------------------------------------------------
+
+metadataStorage:
+  driver: mysql
+  host: mysql
+  port: 3306
+  database: michelangelo
+  rootPassword: root
+
+objectStorage:
+  endpoint: minio:9000
+  secure: false
+  region: us-east-1
+  bucket: michelangelo
+  accessKeyId: minioadmin
+  secretAccessKey: minioadmin
+
+workflow:
+  engine: cadence
+  # Cadence gRPC frontend. Source: michelangelo-worker.yaml:42 and
+  # michelangelo-controllermgr.yaml:101 both use port 7833. Port 7933 is the
+  # TChannel endpoint used by the Cadence CLI, not by the worker.
+  endpoint: cadence:7833
+  domain: default
+
+images:
+  pullPolicy: IfNotPresent
+
+apiserver:
+  service:
+    type: NodePort
+    nodePort: 30009
+
+envoy:
+  corsOrigins: "http://localhost:[0-9]+"
+  service:
+    type: NodePort
+    nodePort: 30010
+
+ui:
+  apiBaseUrl: "http://localhost:8081"
+  service:
+    type: NodePort
+    nodePort: 30011
+
+# Sandbox is single-node; no scheduling constraints.
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Looser security context for sandbox — ingester writes to /tmp and some
+# debug images need privilege escalation. Production keeps the chart defaults.
+podSecurityContext:
+  runAsNonRoot: false
+  runAsUser: 0
+securityContext:
+  allowPrivilegeEscalation: true
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop: []

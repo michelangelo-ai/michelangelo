@@ -1,0 +1,22 @@
+{{- if .Values.apiserver.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "apiserver-config") }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "michelangelo.componentLabels" (dict "context" . "component" "apiserver") | nindent 4 }}
+data:
+  base.yaml: |
+    apiserver:
+      yarpc:
+        host: 0.0.0.0
+        port: {{ .Values.apiserver.port }}
+      k8s:
+        qps: {{ .Values.apiserver.k8s.qps }}
+        burst: {{ .Values.apiserver.k8s.burst }}
+      metadataStorage:
+        enableMetadataStorage: {{ .Values.apiserver.metadataStorage.enable }}
+      crdSync:
+        enableCRDUpdate: {{ .Values.apiserver.crdSync.enableUpdate }}
+{{- end }}
