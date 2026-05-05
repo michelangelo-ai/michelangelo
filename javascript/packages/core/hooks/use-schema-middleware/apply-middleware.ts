@@ -1,6 +1,7 @@
 import { cloneDeep, get, isNil, set, unset } from 'lodash';
 
 import type { StudioParamsBase } from '#core/hooks/routing/use-studio-params/types';
+import { applyScaffold } from './apply-scaffold';
 import type { MiddlewareOptions, MiddlewareSchema } from './types';
 
 export function applyMiddleware<T extends object>(
@@ -9,13 +10,17 @@ export function applyMiddleware<T extends object>(
   context?: StudioParamsBase,
   options?: MiddlewareOptions
 ): T {
-  const clone = cloneDeep(record);
+  const clone = applyScaffold(cloneDeep(record), schema);
 
   if (!schema.operations) return clone;
 
   const sourceObject = options?.sourceFromObject ?? clone;
 
   for (const op of schema.operations) {
+    if (op.subTypes && !op.subTypes.includes(get(clone, schema.subTypePath!) as string)) {
+      continue;
+    }
+
     if (op.transformation === 'unset') {
       unset(clone, op.destination);
       continue;

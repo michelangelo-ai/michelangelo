@@ -261,6 +261,132 @@ describe('useSchemaMiddleware', () => {
     ).toMatchObject({ spec: { action: 'fallback' } });
   });
 
+  it('merges scaffold YAML into the record before operations run', () => {
+    const { result } = renderHook(
+      () =>
+        useSchemaMiddleware({
+          scaffold: 'spec:\n  proto_module: default-module',
+        }),
+      { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
+    );
+    expect(result.current.applyMiddleware({ spec: {} })).toMatchObject({
+      spec: { proto_module: 'default-module' },
+    });
+  });
+
+  it('data values win over scaffold defaults', () => {
+    const { result } = renderHook(
+      () =>
+        useSchemaMiddleware({
+          scaffold: 'spec:\n  proto_module: scaffold-value',
+        }),
+      { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
+    );
+    expect(
+      result.current.applyMiddleware({ spec: { proto_module: 'existing-value' } })
+    ).toMatchObject({ spec: { proto_module: 'existing-value' } });
+  });
+
+  it('applies the matching subType scaffold from scaffoldBySubType', () => {
+    const { result } = renderHook(
+      () =>
+        useSchemaMiddleware({
+          subTypePath: 'spec.subType',
+          scaffoldBySubType: {
+            regression: 'spec:\n  scaffoldedId: regression-scaffold',
+            classification: 'spec:\n  scaffoldedId: classification-scaffold',
+          },
+        }),
+      { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
+    );
+    expect(result.current.applyMiddleware({ spec: { subType: 'regression' } })).toMatchObject({
+      spec: { scaffoldedId: 'regression-scaffold' },
+    });
+    expect(result.current.applyMiddleware({ spec: { subType: 'classification' } })).toMatchObject({
+      spec: { scaffoldedId: 'classification-scaffold' },
+    });
+  });
+
+  it('operations can source values set by scaffold', () => {
+    const { result } = renderHook(
+      () =>
+        useSchemaMiddleware({
+          scaffold: 'spec:\n  scaffoldedProp: scaffoldedValue',
+          operations: [
+            {
+              source: 'spec.scaffoldedProp',
+              destination: 'spec.transformed',
+              transformation: (v) => `${v as string}-transformed`,
+            },
+          ],
+        }),
+      { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
+    );
+    expect(result.current.applyMiddleware({ spec: {} })).toMatchObject({
+      spec: { scaffoldedProp: 'scaffoldedValue', transformed: 'scaffoldedValue-transformed' },
+    });
+  });
+
+  it('throws a descriptive error for invalid YAML', () => {
+    const { result } = renderHook(
+      () => useSchemaMiddleware({ scaffold: 'key: [unclosed' }),
+      { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
+    );
+    expect(() => result.current.applyMiddleware({})).toThrow(
+      'Request requires scaffolding, but found invalid YAML scaffold'
+    );
+  });
+
+  describe('subTypes filtering', () => {
+    const subTypePath = 'spec.subType';
+
+    it('runs an operation only for its declared subTypes', () => {
+      const { result } = renderHook(
+        () =>
+          useSchemaMiddleware({
+            subTypePath,
+            operations: [
+              {
+                subTypes: ['regression'],
+                destination: 'spec.regressionOnly',
+                default: 'regression-default',
+              },
+            ],
+          }),
+        { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
+      );
+      expect(result.current.applyMiddleware({ spec: { subType: 'regression' } })).toMatchObject({
+        spec: { regressionOnly: 'regression-default' },
+      });
+      expect(result.current.applyMiddleware({ spec: { subType: 'classification' } })).toEqual({
+        spec: { subType: 'classification' },
+      });
+    });
+
+    it('runs an operation for all listed subTypes', () => {
+      const { result } = renderHook(
+        () =>
+          useSchemaMiddleware({
+            subTypePath,
+            operations: [
+              {
+                subTypes: ['classification', 'regression'],
+                destination: 'spec.shared',
+                default: 'shared-default',
+              },
+            ],
+          }),
+        { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
+      );
+      expect(result.current.applyMiddleware({ spec: { subType: 'classification' } })).toMatchObject(
+        { spec: { shared: 'shared-default' } }
+      );
+      expect(result.current.applyMiddleware({ spec: { subType: 'regression' } })).toMatchObject({
+        spec: { shared: 'shared-default' },
+      });
+    });
+  });
+
   it('does not mutate the original record', () => {
     const { result } = renderHook(
       () => useSchemaMiddleware({ operations: [{ destination: 'spec.action', default: 1 }] }),
