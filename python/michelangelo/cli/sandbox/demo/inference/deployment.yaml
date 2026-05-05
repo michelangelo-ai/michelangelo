@@ -1,0 +1,12 @@
+apiVersion: michelangelo.api/v2
+kind: Deployment
+metadata:
+  name: deployment-example
+  namespace: default
+spec:
+  desiredRevision:
+    name: bert-cola-37
+  inferenceServer:
+    name: inference-server-example
+  strategy:
+    rolling: {}
