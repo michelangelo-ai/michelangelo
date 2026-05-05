@@ -208,6 +208,65 @@ describe('useSchemaMiddleware', () => {
     });
   });
 
+  describe('sourceFromObject', () => {
+    it('reads operation source from sourceFromObject instead of data', () => {
+      const { result } = renderHook(
+        () =>
+          useSchemaMiddleware({
+            operations: [
+              {
+                source: 'spec.name',
+                destination: 'spec.displayName',
+                transformation: (v) => (v as string).toUpperCase(),
+              },
+            ],
+          }),
+        { wrapper }
+      );
+      const data = { spec: { name: 'from-data' } };
+      const sourceFromObject = { spec: { name: 'from-source' } };
+      expect(result.current.applyMiddleware(data, { sourceFromObject })).toMatchObject({
+        spec: { displayName: 'FROM-SOURCE' },
+      });
+    });
+
+    it('writes the result to data, not sourceFromObject', () => {
+      const { result } = renderHook(
+        () =>
+          useSchemaMiddleware({
+            operations: [
+              {
+                source: 'value',
+                destination: 'derived',
+                transformation: (v) => v,
+              },
+            ],
+          }),
+        { wrapper }
+      );
+      const data = { existing: true };
+      const sourceFromObject = { value: 'hello' };
+      const output = result.current.applyMiddleware(data, { sourceFromObject });
+      expect(output).toMatchObject({ existing: true, derived: 'hello' });
+      expect(output).not.toHaveProperty('value');
+    });
+
+    it('falls back to default when source path is absent in sourceFromObject', () => {
+      const { result } = renderHook(
+        () =>
+          useSchemaMiddleware({
+            operations: [
+              { source: 'spec.missing', destination: 'spec.action', default: 'fallback' },
+            ],
+          }),
+        { wrapper }
+      );
+      expect(
+        result.current.applyMiddleware({ spec: {} }, { sourceFromObject: { spec: {} } })
+      ).toMatchObject({ spec: { action: 'fallback' } });
+    });
+  });
+
   describe('immutability', () => {
     it('does not mutate the original record', () => {
       const { result } = renderHook(

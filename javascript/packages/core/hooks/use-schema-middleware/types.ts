@@ -8,3 +8,7 @@ export type MiddlewareOperation = {
 export type MiddlewareSchema = {
   operations?: MiddlewareOperation[];
 };
+
+export type MiddlewareOptions = {
+  sourceFromObject?: object;
+};

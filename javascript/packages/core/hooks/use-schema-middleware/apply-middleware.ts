@@ -1,16 +1,19 @@
 import { cloneDeep, get, isNil, set, unset } from 'lodash';
 
 import type { StudioParamsBase } from '#core/hooks/routing/use-studio-params/types';
-import type { MiddlewareSchema } from './types';
+import type { MiddlewareOptions, MiddlewareSchema } from './types';
 
 export function applyMiddleware<T extends object>(
   record: T,
   schema: MiddlewareSchema,
-  context?: StudioParamsBase
+  context?: StudioParamsBase,
+  options?: MiddlewareOptions
 ): T {
   const clone = cloneDeep(record);
 
   if (!schema.operations) return clone;
+
+  const sourceObject = options?.sourceFromObject ?? clone;
 
   for (const op of schema.operations) {
     if (op.transformation === 'unset') {
@@ -18,7 +21,7 @@ export function applyMiddleware<T extends object>(
       continue;
     }
 
-    const sourceValue: unknown = op.source !== undefined ? get(clone, op.source) : undefined;
+    const sourceValue: unknown = op.source !== undefined ? get(sourceObject, op.source) : undefined;
 
     if (!isNil(sourceValue) && typeof op.transformation === 'function') {
       set(clone, op.destination, op.transformation(sourceValue));
