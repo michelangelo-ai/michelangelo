@@ -90,7 +90,6 @@ type Reconciler struct {
 	recorder          record.EventRecorder
 	registrar         pluginmanager.Registrar[plugins.Plugin]
 	engine            conditionInterfaces.Engine[*v2pb.Deployment]
-	revisionManager   revision.Manager
 	scope             tally.Scope
 	apiHandlerFactory apiHandler.Factory
 	auditLogEmitter   logging.AuditLog
@@ -102,7 +101,6 @@ func NewReconciler(apiHandlerFactory apiHandler.Factory, registrar pluginmanager
 		apiHandlerFactory: apiHandlerFactory,
 		registrar:         registrar,
 		engine:            defaultengine.NewDefaultEngine[*v2pb.Deployment](createEngineLogger()),
-		revisionManager:   revision.NewNoOpManager(),
 		scope:             tally.NoopScope,
 		auditLogEmitter:   &logging.DummyAuditLog{},
 	}
@@ -321,7 +319,13 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 
 		// We only want to delete all revisions when the deployment is marked for deletion.
 		if !deployment.GetDeletionTimestamp().IsZero() {
-			err = r.revisionManager.DeleteAllRevisions(ctx, deployment.GetNamespace(), deployment.GetName(), "Deployment")
+			err = r.DeleteCollection(
+				ctx,
+				&v2pb.Revision{},
+				deployment.GetNamespace(),
+				nil,
+				&metav1.ListOptions{LabelSelector: revision.LabelSelectorFor(deployment.GetNamespace(), deployment.GetName(), "Deployment")},
+			)
 			if err != nil {
 				log.Error(err, "Failed to delete all revisions for deployment. This is not critical. "+
 					"Note that if a revision with the same name is recreated, the deployment history may be inaccurate.")

@@ -254,8 +254,9 @@ func setUpReconciler(t *testing.T, initialObjects []client.Object, env env.Conte
 	require.NoError(t, err)
 	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initialObjects...).WithStatusSubresource(initialObjects...).Build()
 	reconciler := &Reconciler{
-		Handler: apiHandler.NewFakeAPIHandler(k8sClient),
-		logger:  zaptest.NewLogger(t),
+		Handler:    apiHandler.NewFakeAPIHandler(k8sClient),
+		logger:     zaptest.NewLogger(t),
+		revisioner: NewNoOpRevisioner(),
 	}
 	return reconciler
 }

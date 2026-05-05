@@ -12,9 +12,7 @@ import (
 var (
 	// Module is the Uber FX module for the Pipeline controller.
 	//
-	// It provides dependency injection for the controller by invoking the
-	// register function, which sets up the Pipeline reconciler with the
-	// controller-runtime manager.
+	// Provides the default Revisioner; consumers can swap it via fx.Decorate.
 	//
 	// To use this module, include it in your FX application options:
 	//   fx.New(
@@ -22,6 +20,7 @@ var (
 	//       // other modules...
 	//   )
 	Module = fx.Options(
+		fx.Provide(NewDefaultRevisioner),
 		fx.Invoke(registerMetrics),
 		fx.Invoke(register),
 	)
@@ -35,15 +34,12 @@ func registerMetrics() {
 
 // register initializes and registers the Pipeline controller with the manager.
 //
-// This function is automatically invoked by the FX framework when the Module
-// is loaded. It creates a new Reconciler with the provided dependencies and
-// registers it with the controller-runtime manager to watch Pipeline resources.
-//
 // Dependencies are injected by FX:
 //   - mgr: The controller-runtime manager for registering the controller
 //   - env: Environment context for runtime configuration
 //   - apiHandlerFactory: Factory for creating API handlers
 //   - logger: Structured logger for the controller
+//   - revisioner: Per-pipeline Revisioner (default or fx.Decorate'd replacement)
 //
 // Returns an error if controller registration fails.
 func register(
@@ -51,10 +47,12 @@ func register(
 	env env.Context,
 	apiHandlerFactory apiHandler.Factory,
 	logger *zap.Logger,
+	revisioner Revisioner,
 ) error {
 	return (&Reconciler{
 		env:               env,
 		apiHandlerFactory: apiHandlerFactory,
 		logger:            logger,
+		revisioner:        revisioner,
 	}).Register(mgr)
 }

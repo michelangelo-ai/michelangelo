@@ -43,6 +43,7 @@ type Reconciler struct {
 	env               env.Context
 	logger            *zap.Logger
 	apiHandlerFactory apiHandler.Factory
+	revisioner        Revisioner
 }
 
 // Reconcile is the main reconciliation loop entry point for Pipeline resources.
@@ -99,6 +100,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		IncPipelineReconcileError(pipeline.Namespace, pipeline.Name)
 	} else if pipeline.Status.State == v2pb.PIPELINE_STATE_READY {
 		IncPipelineReconcileSuccess(pipeline.Namespace, pipeline.Name)
+	}
+
+	// Snapshot the pipeline as a Revision for every READY reconcile. The default
+	// Revisioner deduplicates by identity (AlreadyExists is treated as a no-op),
+	// so this is safe to call repeatedly. Status is already persisted above, so
+	// returning an error here requeues only for the snapshot retry without
+	// affecting the pipeline's READY state.
+	if err == nil && pipeline.Status.State == v2pb.PIPELINE_STATE_READY {
+		if snapshotErr := r.revisioner.Snapshot(ctx, pipeline); snapshotErr != nil {
+			logger.Error("failed to snapshot pipeline revision", zap.Error(snapshotErr))
+			return result, snapshotErr
+		}
 	}
 
 	return result, err
