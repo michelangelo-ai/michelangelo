@@ -39,6 +39,8 @@ func opts() fx.Option {
 		fx.Provide(baseconfig.GetK8sConfig),
 		fx.Provide(getYARPCConfig),
 		fx.Provide(baseconfig.GetMetadataStorageConfig),
+		fx.Provide(baseconfig.GetMySQLConfig),
+		fx.Provide(provideMetadataStorage),
 		fx.Provide(provideDispatcher),
 		fx.Provide(getScheme),
 		fx.Invoke(projectapihook.RegisterProjectAPIHook),
