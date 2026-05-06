@@ -67,3 +67,16 @@ securityContext:
   readOnlyRootFilesystem: false
   capabilities:
     drop: []
+
+# -----------------------------------------------------------------------------
+# Cadence subchart — explicitly disabled for the sandbox.
+#
+# The local sandbox provisions its own Cadence outside the chart (via
+# `sandbox.py` -> `helm install` of the upstream cadence chart), and points
+# `workflow.endpoint` at the in-cluster `cadence:7833` Service it created.
+#
+# Setting cadence.enabled=true here would install a SECOND Cadence cluster
+# inside the same k3d node and rapidly exhaust memory. Keep it false.
+# -----------------------------------------------------------------------------
+cadence:
+  enabled: false

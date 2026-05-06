@@ -314,3 +314,69 @@ affinity: {}
 # Extra labels and annotations applied to every chart-managed object.
 commonLabels: {}
 commonAnnotations: {}
+
+# -----------------------------------------------------------------------------
+# Cadence — optional bundled workflow engine.
+#
+# When enabled, the official Cadence Helm chart (cadence-workflow/cadence
+# v1.1.0) is installed as a subchart of this release. Disabled by default —
+# bring your own Cadence or Temporal in production.
+#
+# Prerequisite: run `helm dependency update ./helm/michelangelo` once before
+# the first install with cadence.enabled=true. Helm will not auto-download
+# the dependency.
+#
+# When enabled, set `workflow.endpoint` to "<release>-cadence-frontend:7833"
+# so the Michelangelo worker connects to the bundled Cadence instance.
+# -----------------------------------------------------------------------------
+cadence:
+  # Toggle bundled Cadence. Default off — set true for self-contained installs.
+  enabled: false
+
+  # ---------------------------------------------------------------------------
+  # Persistence — Cadence stores workflow state in MySQL.
+  # Cadence creates TWO databases on the given host: `cadence` (workflow
+  # history) and `cadence_visibility` (search/list queries). The MySQL user
+  # needs CREATE DATABASE privilege, or you must pre-create both databases.
+  # ---------------------------------------------------------------------------
+  config:
+    persistence:
+      database:
+        # "mysql" or "cassandra". This chart documents the MySQL path.
+        driver: "mysql"
+
+        sql:
+          # Hostname of the MySQL server Cadence connects to. Can be the
+          # same as `metadataStorage.host` (shared MySQL) or a separate instance.
+          hosts: ""
+
+          # MySQL port.
+          port: 3306
+
+          # Workflow history database. Auto-created by the cadence-schema job.
+          dbname: cadence
+
+          # Visibility (list/search) database. Also auto-created. Required —
+          # Cadence will not start without it.
+          visibilityDbname: cadence_visibility
+
+          # MySQL user. Override to use a dedicated Cadence user.
+          user: root
+
+          # MySQL password. Typically the same as `metadataStorage.rootPassword`.
+          # Pass via --set from a secrets manager — never commit.
+          password: ""
+
+  # Disable unused database backends to avoid pulling Cassandra/PostgreSQL pods.
+  cassandra:
+    enabled: false
+  mysql:
+    enabled: false
+  postgresql:
+    enabled: false
+  elasticsearch:
+    enabled: false
+
+  # Cadence web UI. Useful for inspecting workflows. Disable to save a pod.
+  web:
+    enabled: true

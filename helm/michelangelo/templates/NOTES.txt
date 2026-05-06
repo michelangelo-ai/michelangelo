@@ -17,6 +17,50 @@ Services enabled in this release:
   - controllermgr   (Kubernetes controller manager)
 {{- end }}
 
+{{- if .Values.cadence.enabled }}
+{{- if eq .Values.workflow.engine "temporal" }}
+
+────────────────────────────────────────────────────────────────────────
+WARNING: Mismatched workflow configuration
+────────────────────────────────────────────────────────────────────────
+
+You set `cadence.enabled=true` AND `workflow.engine=temporal`.
+
+The Cadence subchart will install, but the Michelangelo worker is
+configured for Temporal and will ignore it. Pick one:
+
+  • To use the bundled Cadence:
+        --set workflow.engine=cadence
+        --set workflow.endpoint={{ .Release.Name }}-cadence-frontend:7833
+  • To use Temporal:
+        --set cadence.enabled=false
+        --set workflow.endpoint=<your-temporal-frontend>:7233
+
+{{- else }}
+
+────────────────────────────────────────────────────────────────────────
+Bundled Cadence installed alongside the control plane
+────────────────────────────────────────────────────────────────────────
+
+  Frontend:  {{ .Release.Name }}-cadence-frontend (gRPC :7833)
+  Schema job: {{ .Release.Name }}-cadence-schema (runs once, ~30s)
+  Databases:  cadence + cadence_visibility (in {{ .Values.cadence.config.persistence.database.sql.hosts | default "your MySQL host" }})
+
+Wait for the schema job before running pipelines:
+
+    kubectl --namespace {{ .Release.Namespace }} wait --for=condition=complete \
+      job -l app.kubernetes.io/name=cadence,app.kubernetes.io/component=schema \
+      --timeout=5m
+
+Open the Cadence Web UI:
+
+    kubectl --namespace {{ .Release.Namespace }} port-forward \
+      svc/{{ .Release.Name }}-cadence-web 8088:8088
+    open http://localhost:8088
+
+{{- end }}
+{{- end }}
+
 ────────────────────────────────────────────────────────────────────────
 1. Verify the install
 ────────────────────────────────────────────────────────────────────────

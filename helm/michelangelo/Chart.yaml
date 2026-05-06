@@ -11,6 +11,12 @@ version: 0.1.0
 appVersion: "0.2.1"
 kubeVersion: ">=1.27.0-0"
 
+dependencies:
+  - name: cadence
+    version: "1.1.0"
+    repository: https://cadence-workflow.github.io/cadence-charts
+    condition: cadence.enabled
+
 home: https://github.com/michelangelo-ai/michelangelo
 icon: https://raw.githubusercontent.com/michelangelo-ai/michelangelo/main/docs/assets/logo.png
 

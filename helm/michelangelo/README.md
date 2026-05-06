@@ -14,7 +14,8 @@ The chart owns only the **control plane**. Infrastructure (metadata storage, obj
 | Helm | 3.12+ | Required for the `lookup` and `required` template functions used by the chart. |
 | Metadata storage | MySQL 8.0 or PostgreSQL 14+ | The chart provisions schema via an init container; you provide a reachable host and root credentials. |
 | Object storage | S3-compatible | S3, GCS (HMAC), MinIO, or any S3-API endpoint. The chart consumes `endpoint`, access key, and secret key. |
-| Workflow engine | Cadence or Temporal | Reachable at a host:port from inside the cluster. |
+| Workflow engine | Cadence or Temporal | Bring your own (any reachable host:port), or set `cadence.enabled=true` to install the official Cadence chart as a subchart. See [Bundled Cadence](#bundled-cadence-optional-subchart). |
+| Helm dependencies | – | Run `helm dependency update ./helm/michelangelo` once before the first install if you enable any subchart (`cadence.enabled=true`). |
 | Optional: cluster operators | KubeRay, Spark Operator | Required only if your pipelines use Ray or Spark tasks. Install separately from their upstream charts. |
 
 ## Quick Install
@@ -49,6 +50,84 @@ helm install michelangelo ./helm/michelangelo \
 ```
 
 For repeatable installs, write a `values-prod.yaml` and pass it with `-f` instead of long `--set` chains. Never put credentials in a file you commit to git — use `--set` from a secrets manager, or pre-create the `object-storage-credentials` Secret in the release namespace and let Helm leave it alone (the chart marks it `helm.sh/resource-policy: keep`).
+
+## Bundled Cadence (optional subchart)
+
+If you do not have a Cadence or Temporal service, you can install the official [Cadence Helm chart](https://github.com/cadence-workflow/cadence-charts) (`cadence-workflow/cadence` v1.1.0) as part of this release by setting `cadence.enabled=true`. Users with an existing managed Cadence or Temporal service should leave it disabled (default) and point `workflow.endpoint` at their own service.
+
+The bundled subchart is **not** used by `michelangelo sandbox up`. The local sandbox provisions its own Cadence outside the chart.
+
+### When to use it
+
+| You have… | Setting |
+|---|---|
+| A managed Cadence cluster | `cadence.enabled=false` (default) |
+| A managed Temporal cluster | `cadence.enabled=false` + `workflow.engine=temporal` |
+| Nothing — fully self-contained install | `cadence.enabled=true` |
+
+### Prerequisite: download the subchart
+
+```bash
+helm dependency update ./helm/michelangelo
+```
+
+Skipping this step produces: `Error: found in Chart.yaml, but missing in charts/ directory: cadence`
+
+### Install command
+
+Step 1 — fetch the subchart:
+
+```bash
+helm dependency update ./helm/michelangelo
+```
+
+Step 2 — install:
+
+```bash
+helm install michelangelo ./helm/michelangelo \
+  --namespace michelangelo --create-namespace \
+  --set cadence.enabled=true \
+  --set workflow.engine=cadence \
+  --set workflow.endpoint=michelangelo-cadence-frontend:7833 \
+  --set metadataStorage.host=my-mysql.example.com \
+  --set metadataStorage.rootPassword=$METADATA_ROOT_PASSWORD \
+  --set cadence.config.persistence.database.sql.hosts=my-mysql.example.com \
+  --set cadence.config.persistence.database.sql.password=$METADATA_ROOT_PASSWORD \
+  --set objectStorage.endpoint=s3.amazonaws.com \
+  --set objectStorage.accessKeyId=$AWS_ACCESS_KEY_ID \
+  --set objectStorage.secretAccessKey=$AWS_SECRET_ACCESS_KEY \
+  --set ui.apiBaseUrl=https://michelangelo.example.com/api
+```
+
+`workflow.endpoint` uses the form `<release>-cadence-frontend:7833`. Verify the actual Service name with:
+
+```bash
+kubectl --namespace michelangelo get svc -l app.kubernetes.io/name=cadence,app.kubernetes.io/component=frontend
+```
+
+### MySQL setup
+
+Cadence creates and writes to **two** databases:
+
+| Database | Purpose |
+|---|---|
+| `cadence` | Workflow history, task lists, domains |
+| `cadence_visibility` | Workflow list/search queries |
+
+The MySQL user needs `CREATE DATABASE` privilege for both. To pre-create them manually:
+
+```sql
+CREATE DATABASE cadence;
+CREATE DATABASE cadence_visibility;
+GRANT ALL PRIVILEGES ON cadence.* TO 'your_user'@'%';
+GRANT ALL PRIVILEGES ON cadence_visibility.* TO 'your_user'@'%';
+```
+
+The Michelangelo control plane uses the `michelangelo` database — there is no conflict. You can share a single MySQL instance by setting both `metadataStorage.host` and `cadence.config.persistence.database.sql.hosts` to the same hostname.
+
+### Mutual exclusivity with Temporal
+
+`cadence.enabled=true` with `workflow.engine=temporal` is a misconfiguration — the Cadence pods install but the worker ignores them. The chart prints a warning in `NOTES.txt` if both are set.
 
 ## Values Reference
 
@@ -172,6 +251,50 @@ If using Temporal, confirm `workflow.engine=temporal` (the worker renders differ
 **Multiple installs collide on resource names.**
 
 Set distinct release names. All resources are prefixed with `{{ include "michelangelo.fullname" . }}` which incorporates `.Release.Name` — installs in different namespaces with the same release name will not collide on namespaced resources, but will collide on cluster-scoped ones (CRDs, ClusterRoles).
+
+**`helm install` fails with `found in Chart.yaml, but missing in charts/ directory: cadence`.**
+
+Run `helm dependency update ./helm/michelangelo` first. Re-run it whenever the Cadence version in `Chart.yaml` changes.
+
+**`<release>-cadence-schema` Job fails with `Access denied ... CREATE DATABASE`.**
+
+The MySQL user lacks `CREATE DATABASE` privilege. Either grant it or pre-create both `cadence` and `cadence_visibility` databases manually (see [MySQL setup](#mysql-setup)). Then delete the failed job and re-upgrade:
+
+```bash
+kubectl delete job -l app.kubernetes.io/name=cadence,app.kubernetes.io/component=schema -n michelangelo
+helm upgrade michelangelo ./helm/michelangelo --reuse-values
+```
+
+**`helm upgrade` fails with `Job already exists` on the cadence-schema job.**
+
+Helm cannot mutate Jobs. Delete the old job before upgrading:
+
+```bash
+kubectl delete job -l app.kubernetes.io/name=cadence -n michelangelo
+helm upgrade michelangelo ./helm/michelangelo --reuse-values
+```
+
+The schema job is idempotent — it skips versions already applied.
+
+**Cadence frontend pod crashes with `database "cadence_visibility" does not exist`.**
+
+Create the missing database and re-run the schema job (delete + upgrade, see above):
+
+```sql
+CREATE DATABASE cadence_visibility;
+GRANT ALL PRIVILEGES ON cadence_visibility.* TO 'root'@'%';
+```
+
+**Worker logs `connection refused` to `<release>-cadence-frontend:7833` after install.**
+
+Cadence needs ~30-60s to initialize. Wait for readiness:
+
+```bash
+kubectl --namespace michelangelo wait --for=condition=ready pod \
+  -l app.kubernetes.io/name=cadence --timeout=5m
+```
+
+If pods never become ready, check the schema job logs first.
 
 ## Contributing
 
