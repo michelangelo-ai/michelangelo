@@ -22,11 +22,22 @@ export const TopLevelNavLink = styled(Link, ({ $theme }) => ({
   ':hover': { backgroundColor: $theme.colors.menuFillHover },
 }));
 
-export const BreadcrumbContainer = styled('div', ({ $theme }) => ({
-  boxShadow: `inset 0px -1px 0px ${$theme.colors.borderOpaque}`,
-  paddingTop: $theme.sizing.scale650,
-  paddingBottom: $theme.sizing.scale650,
-}));
+export const BreadcrumbContainer = styled<'div', { $scrolled: boolean }>(
+  'div',
+  ({ $theme, $scrolled }) => ({
+    position: 'sticky',
+    top: '0',
+    backgroundColor: $theme.colors.backgroundPrimary,
+    boxShadow: $scrolled
+      ? $theme.lighting.shadow400
+      : `inset 0px -1px 0px ${$theme.colors.borderOpaque}`,
+    transitionProperty: 'box-shadow',
+    transitionDuration: $theme.animation.timing100,
+    transitionTimingFunction: $theme.animation.easeOutCurve,
+    paddingTop: $theme.sizing.scale650,
+    paddingBottom: $theme.sizing.scale650,
+  })
+);
 
 export const PhaseHeader = styled<'li', { $disabled?: boolean }>('li', (props) => {
   return {

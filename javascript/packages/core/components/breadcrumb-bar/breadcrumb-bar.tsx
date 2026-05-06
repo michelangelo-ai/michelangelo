@@ -6,6 +6,7 @@ import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studi
 import { Phase } from '#core/types/common/studio-types';
 import { MenuDrawer } from './menu-drawer';
 import { BreadcrumbContainer, PlainLink } from './styled-components';
+import { useScrollingNavbarShadow } from './use-scrolling-navbar-shadow';
 
 import type { CategoryConfig } from '#core/types/common/studio-types';
 import type { NavLink } from './types';
@@ -42,9 +43,10 @@ export function BreadcrumbBar({
   const { projectId, phase, entityId } = useStudioParams('base');
   const isProjectPage = phase === Phase.Project;
   const allPhases = categories.flatMap((c) => c.phases);
+  const { isScrolled } = useScrollingNavbarShadow();
 
   return (
-    <BreadcrumbContainer>
+    <BreadcrumbContainer $scrolled={isScrolled}>
       <Grid gridColumns={1} gridGutters={0} gridGaps={0}>
         <Cell>
           <div
