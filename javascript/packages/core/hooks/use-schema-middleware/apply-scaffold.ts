@@ -1,6 +1,6 @@
+import { get, merge } from 'lodash';
 import YAML from 'yaml';
 import { YAMLError } from 'yaml/util';
-import { get, merge } from 'lodash';
 
 import type { MiddlewareSchema } from './types';
 

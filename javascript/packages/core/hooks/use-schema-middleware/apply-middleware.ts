@@ -1,7 +1,8 @@
 import { cloneDeep, get, isNil, set, unset } from 'lodash';
 
-import type { StudioParamsBase } from '#core/hooks/routing/use-studio-params/types';
 import { applyScaffold } from './apply-scaffold';
+
+import type { StudioParamsBase } from '#core/hooks/routing/use-studio-params/types';
 import type { MiddlewareOptions, MiddlewareSchema } from './types';
 
 export function applyMiddleware<T extends object>(
