@@ -7,8 +7,6 @@ sidebar_label: "Helm Chart"
 
 This page describes the Helm chart for the Michelangelo control plane — converting the existing `sandbox.py`-based deployment into a first-class Helm chart installable against any Kubernetes cluster.
 
-![Michelangelo Helm Chart Plan](./images/helm-chart-plan.png)
-
 ---
 
 ## Overview
