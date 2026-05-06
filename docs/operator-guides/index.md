@@ -15,6 +15,7 @@ For a fresh deployment, follow this recommended reading order:
 
 | Guide | Description |
 |-------|-------------|
+| [Helm Chart](helm-chart.md) | Install the Michelangelo control plane with Helm — chart layout, values reference, and migration phases |
 | [Platform Setup](setup/platform-setup.md) | ConfigMaps and key fields for API server, controller manager, worker, and UI/Envoy |
 | [Network & Ingress](setup/network.md) | Envoy proxy, Ingress setup, TLS with cert-manager, and multi-cluster connectivity |
 | [Authentication](setup/authentication.md) | OIDC identity provider setup, RBAC, session configuration, multi-tenant isolation |
