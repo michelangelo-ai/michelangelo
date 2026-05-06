@@ -1,4 +1,5 @@
 import { AppNavBar } from 'baseui/app-nav-bar';
+import { LayersManager } from 'baseui/layer';
 
 import { Link } from '#core/components/link/link';
 import { ErrorProvider } from '#core/providers/error-provider/error-provider';
@@ -25,23 +26,25 @@ type Props = {
 export function CoreApp({ dependencies }: Props) {
   return (
     <ThemeProvider icons={dependencies.theme.icons}>
-      <ServiceProvider {...dependencies.service}>
-        <ErrorProvider {...dependencies.error}>
-          <IconProvider icons={dependencies.theme.icons}>
-            <AppNavBar
-              title={
-                <Link
-                  href="/"
-                  overrides={{ Link: { style: { ':hover': { textDecoration: 'unset' } } } }}
-                >
-                  Michelangelo Studio
-                </Link>
-              }
-            />
-            <Router />
-          </IconProvider>
-        </ErrorProvider>
-      </ServiceProvider>
+      <LayersManager zIndex={200}>
+        <ServiceProvider {...dependencies.service}>
+          <ErrorProvider {...dependencies.error}>
+            <IconProvider icons={dependencies.theme.icons}>
+              <AppNavBar
+                title={
+                  <Link
+                    href="/"
+                    overrides={{ Link: { style: { ':hover': { textDecoration: 'unset' } } } }}
+                  >
+                    Michelangelo Studio
+                  </Link>
+                }
+              />
+              <Router />
+            </IconProvider>
+          </ErrorProvider>
+        </ServiceProvider>
+      </LayersManager>
     </ThemeProvider>
   );
 }

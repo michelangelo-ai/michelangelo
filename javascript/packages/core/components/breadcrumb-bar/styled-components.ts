@@ -27,6 +27,7 @@ export const BreadcrumbContainer = styled<'div', { $scrolled: boolean }>(
   ({ $theme, $scrolled }) => ({
     position: 'sticky',
     top: '0',
+    zIndex: 1,
     backgroundColor: $theme.colors.backgroundPrimary,
     boxShadow: $scrolled
       ? $theme.lighting.shadow400
