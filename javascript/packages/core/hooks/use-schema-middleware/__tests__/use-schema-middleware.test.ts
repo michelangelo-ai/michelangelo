@@ -113,9 +113,9 @@ describe('useSchemaMiddleware', () => {
           }),
         { wrapper }
       );
-      expect(
-        result.current.applyMiddleware({ spec: { deprecated: true, keep: 'yes' } })
-      ).toEqual({ spec: { keep: 'yes' } });
+      expect(result.current.applyMiddleware({ spec: { deprecated: true, keep: 'yes' } })).toEqual({
+        spec: { keep: 'yes' },
+      });
     });
 
     it('does not write destination when source is present but no transformation is defined', () => {
@@ -270,8 +270,7 @@ describe('useSchemaMiddleware', () => {
   describe('immutability', () => {
     it('does not mutate the original record', () => {
       const { result } = renderHook(
-        () =>
-          useSchemaMiddleware({ operations: [{ destination: 'spec.action', default: 1 }] }),
+        () => useSchemaMiddleware({ operations: [{ destination: 'spec.action', default: 1 }] }),
         { wrapper }
       );
       const original = { spec: {} };
