@@ -77,7 +77,18 @@ if it stays in Init:0/1, your metadata storage is unreachable.
 ────────────────────────────────────────────────────────────────────────
 
 {{- if .Values.ui.enabled }}
-{{- if eq .Values.ui.service.type "NodePort" }}
+{{- if .Values.ui.ingress.enabled }}
+
+  This release exposes the UI through an Ingress at:
+
+      {{ if .Values.ui.ingress.tls }}https{{ else }}http{{ end }}://{{ .Values.ui.ingress.hostname }}/
+
+  DNS for "{{ .Values.ui.ingress.hostname }}" must point at your Ingress
+  controller's external address. Verify with:
+
+      kubectl --namespace {{ .Release.Namespace }} get ingress {{ include "michelangelo.fullname" . }}-ui
+
+{{- else if eq .Values.ui.service.type "NodePort" }}
 
   This release exposes the UI on NodePort {{ .Values.ui.service.nodePort }}.
   If your cluster publishes node ports to localhost (e.g. k3d with --port),
@@ -103,12 +114,50 @@ if it stays in Init:0/1, your metadata storage is unreachable.
 
   Then open http://localhost:8090
 
+  To expose the UI externally, enable Ingress:
+
+      --set ui.ingress.enabled=true \
+      --set ui.ingress.hostname=michelangelo.example.com \
+      --set envoy.ingress.enabled=true \
+      --set envoy.ingress.hostname=michelangelo.example.com
+
 {{- end }}
 {{- else }}
 
   The UI is disabled in this release (ui.enabled=false). Re-enable with:
 
       helm upgrade {{ .Release.Name }} michelangelo/michelangelo --reuse-values --set ui.enabled=true
+
+{{- end }}
+
+{{- if .Values.envoy.ingress.enabled }}
+
+  The browser UI calls the apiserver through envoy at:
+
+      {{ if .Values.envoy.ingress.tls }}https{{ else }}http{{ end }}://{{ .Values.envoy.ingress.hostname }}{{ .Values.envoy.ingress.path | default "/" | trimSuffix "/" }}
+
+  {{- if not .Values.ui.apiBaseUrl }}
+  (Auto-derived into ui.apiBaseUrl from envoy.ingress — no explicit value needed.)
+  {{- end }}
+
+  Confirm the envoy Ingress is admitted:
+
+      kubectl --namespace {{ .Release.Namespace }} get ingress {{ include "michelangelo.fullname" . }}-envoy
+
+{{- end }}
+
+{{- if .Values.apiserver.ingress.enabled }}
+
+  The apiserver gRPC endpoint is exposed at:
+
+      {{ .Values.apiserver.ingress.hostname }}:443   (mode: {{ .Values.apiserver.ingress.mode }})
+
+  Use this from external gRPC clients (CLI, SDK, CI). The hostname must be
+  DIFFERENT from ui.ingress.hostname and envoy.ingress.hostname.
+
+  Test with grpcurl:
+
+      grpcurl {{ .Values.apiserver.ingress.hostname }}:443 list
 
 {{- end }}
 

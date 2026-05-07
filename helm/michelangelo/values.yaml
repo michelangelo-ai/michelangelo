@@ -149,17 +149,78 @@ apiserver:
     # Required when type=NodePort. Ignored otherwise.
     nodePort: null
 
+  # ---------------------------------------------------------------------------
+  # TLS for the apiserver gRPC port. Independent of Ingress — turn this on if
+  # you want pod-level TLS (e.g. mesh mTLS, or apiserver.ingress.mode=passthrough
+  # which terminates TLS at the pod, not the controller).
+  # ---------------------------------------------------------------------------
   tls:
+    # Toggle TLS on the gRPC listener. When true, the Service exposes a
+    # `grpcs` port and the apiserver loads `tls.crt` + `tls.key` from
+    # `secretName` mounted at `mountPath`.
     enabled: false
+
+    # REQUIRED when tls.enabled=true. Name of a kubernetes.io/tls Secret in
+    # the release namespace containing `tls.crt` and `tls.key`. Create with:
+    #   kubectl create secret tls apiserver-tls --cert=server.crt --key=server.key
     secretName: ""
+
+    # Where the Secret is mounted inside the apiserver container. The
+    # apiserver looks for tls.crt and tls.key under this path.
     mountPath: /tls
 
+  # ---------------------------------------------------------------------------
+  # Ingress for the apiserver gRPC port. Use this only when an external
+  # gRPC client (CLI, SDK, CI runner) outside the cluster needs to reach the
+  # apiserver directly. The browser UI does NOT use this path — it goes
+  # through envoy (gRPC-Web). Most users can leave this disabled.
+  # ---------------------------------------------------------------------------
   ingress:
+    # Toggle the apiserver Ingress. Default off.
     enabled: false
-    mode: passthrough
+
+    # How the Ingress controller forwards gRPC to the apiserver Pod:
+    #
+    #   "grpc"        — Controller terminates TLS, then re-originates an
+    #                   HTTP/2 (h2c) connection to the Pod. Requires a
+    #                   controller that supports the GRPC backend protocol
+    #                   (nginx, Contour, Emissary). The apiserver Pod can
+    #                   stay plaintext (apiserver.tls.enabled=false). This
+    #                   is the simpler, recommended path for nginx users.
+    #
+    #   "passthrough" — Controller forwards the raw TLS bytes to the Pod
+    #                   without decrypting. The apiserver Pod MUST terminate
+    #                   TLS itself (apiserver.tls.enabled=true required, or
+    #                   `helm install` fails fast). Use this when you need
+    #                   end-to-end TLS, mTLS, or your controller cannot
+    #                   re-originate gRPC.
+    mode: grpc
+
+    # IngressClass name. Leave empty to use the cluster default. Set to
+    # "nginx", "contour", "traefik", etc. to target a specific controller.
     ingressClassName: ""
+
+    # REQUIRED when ingress.enabled=true. Hostname clients connect to.
+    # Must be DIFFERENT from ui.ingress.hostname and envoy.ingress.hostname
+    # — gRPC and HTTP/1.1 cannot share a host on most controllers, and
+    # passthrough mode hijacks the TLS SNI for the entire host.
+    # Example: "grpc.michelangelo.example.com"
     hostname: ""
+
+    # Extra controller-specific annotations. The chart auto-injects the
+    # mode annotation:
+    #   mode=passthrough → nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+    #   mode=grpc        → nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+    # Override or add others here, e.g.:
+    #   cert-manager.io/cluster-issuer: letsencrypt-prod
     annotations: {}
+
+    # TLS block, copied verbatim into spec.tls. Required for "grpc" mode
+    # (the controller terminates TLS) and ignored for "passthrough" mode
+    # (TLS terminates at the pod). Example:
+    #   tls:
+    #     - hosts: ["grpc.michelangelo.example.com"]
+    #       secretName: apiserver-ingress-tls
     tls: []
 
 # -----------------------------------------------------------------------------
@@ -171,9 +232,18 @@ envoy:
   # gRPC-Web port. The UI's `apiBaseUrl` should point here.
   port: 8081
 
-  # CORS origin regex. The UI must be served from an origin that matches.
-  # Local dev: "http://localhost:[0-9]+"
-  # Production: "https://michelangelo\\.example\\.com"
+  # CORS origin regex. Required whenever the UI runs on a different origin
+  # than envoy — which means EVERY Ingress install. The browser refuses to
+  # call envoy if its Access-Control-Allow-Origin header doesn't match the
+  # UI's origin. Symptom: UI loads, every API call fails with a CORS error.
+  #
+  # The value is a Go regex — escape literal dots as `\.`:
+  # Local dev:      "http://localhost:[0-9]+"
+  # Single host:    "https://michelangelo\\.example\\.com"
+  # Multiple:       "https://(michelangelo|staging)\\.example\\.com"
+  #
+  # When envoy.ingress.enabled=true, this MUST match the scheme + host
+  # of ui.ingress.hostname.
   corsOrigins: ""
 
   resources: {}
@@ -182,13 +252,48 @@ envoy:
     type: ClusterIP
     nodePort: null
 
+  # ---------------------------------------------------------------------------
+  # Ingress for the envoy gRPC-Web proxy. This is the path the browser UI
+  # uses to talk to the apiserver, so enable this whenever the UI is exposed
+  # outside the cluster. Pairs with ui.ingress (UI + envoy on one hostname)
+  # or stands alone on its own subdomain.
+  # ---------------------------------------------------------------------------
   ingress:
+    # Toggle the envoy Ingress. Default off.
     enabled: false
+
+    # IngressClass. Leave empty for cluster default.
     ingressClassName: ""
+
+    # REQUIRED when ingress.enabled=true. Hostname the UI's apiBaseUrl
+    # resolves to. May be shared with ui.ingress.hostname (same host, split
+    # by path — see annotations) or set to a dedicated subdomain like
+    # "api.michelangelo.example.com".
     hostname: ""
+
+    # Path prefix for envoy. Use "/" for a dedicated hostname, or "/api(/|$)(.*)"
+    # when sharing a hostname with ui.ingress (requires nginx rewrite
+    # annotation, see below).
     path: "/"
+
+    # PathType — Prefix (default), Exact, or ImplementationSpecific.
     pathType: Prefix
+
+    # Controller-specific annotations. Common patterns:
+    #   # nginx — strip the /api prefix when shared with the UI
+    #   nginx.ingress.kubernetes.io/rewrite-target: /$2
+    #   nginx.ingress.kubernetes.io/use-regex: "true"
+    #   nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    #   nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    #   # cert-manager — auto-issue TLS
+    #   cert-manager.io/cluster-issuer: letsencrypt-prod
     annotations: {}
+
+    # spec.tls block. When the envoy ingress has TLS, the chart auto-derives
+    # ui.apiBaseUrl as https://<hostname><path>. Example:
+    #   tls:
+    #     - hosts: ["michelangelo.example.com"]
+    #       secretName: michelangelo-tls
     tls: []
 
 # -----------------------------------------------------------------------------
@@ -218,11 +323,34 @@ ui:
     port: 80
     nodePort: null
 
+  # ---------------------------------------------------------------------------
+  # Ingress for the UI. Standard HTTP/1.1 traffic, served at the root of
+  # the hostname. Pair with envoy.ingress on the same hostname (path-split)
+  # or on a dedicated subdomain.
+  # ---------------------------------------------------------------------------
   ingress:
+    # Toggle the UI Ingress. Default off — fall back to NodePort/LoadBalancer
+    # via ui.service.type, or port-forward.
     enabled: false
+
+    # IngressClass. Leave empty for cluster default.
     ingressClassName: ""
+
+    # REQUIRED when ingress.enabled=true. Hostname users open in the browser.
+    # Example: "michelangelo.example.com"
     hostname: ""
+
+    # Controller-specific annotations. Common patterns:
+    #   # nginx — needed when sharing a host with envoy.ingress at /api
+    #   nginx.ingress.kubernetes.io/use-regex: "true"
+    #   # cert-manager — auto-issue TLS
+    #   cert-manager.io/cluster-issuer: letsencrypt-prod
     annotations: {}
+
+    # spec.tls block. Example:
+    #   tls:
+    #     - hosts: ["michelangelo.example.com"]
+    #       secretName: michelangelo-tls
     tls: []
 
 # -----------------------------------------------------------------------------

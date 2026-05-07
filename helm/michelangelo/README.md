@@ -15,7 +15,7 @@ The chart owns only the **control plane**. Infrastructure (metadata storage, obj
 | Metadata storage | MySQL 8.0 or PostgreSQL 14+ | The chart provisions schema via an init container; you provide a reachable host and root credentials. |
 | Object storage | S3-compatible | S3, GCS (HMAC), MinIO, or any S3-API endpoint. The chart consumes `endpoint`, access key, and secret key. |
 | Workflow engine | Cadence or Temporal | Bring your own (any reachable host:port), or set `cadence.enabled=true` to install the official Cadence chart as a subchart. See [Bundled Cadence](#bundled-cadence-optional-subchart). |
-| Helm dependencies | – | Run `helm dependency update ./helm/michelangelo` once before the first install if you enable any subchart (`cadence.enabled=true`). |
+| Helm dependencies | – | Run `helm dependency build ./helm/michelangelo` once before the first install if you enable any subchart (`cadence.enabled=true`). |
 | Optional: cluster operators | KubeRay, Spark Operator | Required only if your pipelines use Ray or Spark tasks. Install separately from their upstream charts. |
 
 ## Quick Install
@@ -68,8 +68,10 @@ The bundled subchart is **not** used by `michelangelo sandbox up`. The local san
 ### Prerequisite: download the subchart
 
 ```bash
-helm dependency update ./helm/michelangelo
+helm dependency build ./helm/michelangelo
 ```
+
+`Chart.lock` is committed, so `build` fetches the locked Cadence version exactly. Use `helm dependency update` only when you intentionally want to re-resolve and rewrite the lock (e.g., bumping the subchart version in `Chart.yaml`).
 
 Skipping this step produces: `Error: found in Chart.yaml, but missing in charts/ directory: cadence`
 
@@ -78,7 +80,7 @@ Skipping this step produces: `Error: found in Chart.yaml, but missing in charts/
 Step 1 — fetch the subchart:
 
 ```bash
-helm dependency update ./helm/michelangelo
+helm dependency build ./helm/michelangelo
 ```
 
 Step 2 — install:
@@ -184,6 +186,125 @@ Top-level keys. See [`values.yaml`](./values.yaml) for the full annotated schema
 | `tolerations` | list | `[]` | no | |
 | `affinity` | object | `{}` | no | |
 
+## Ingress
+
+Use Ingress when you want the UI and API reachable on a real hostname. For one-off access to a ClusterIP install, prefer `kubectl port-forward`. NodePort and LoadBalancer Services still work, but Ingress gives you TLS termination, hostname-based routing, and a single load balancer across many releases.
+
+The chart ships three independent Ingress objects — all disabled by default: `ui.ingress` (HTTP/1.1, the React app), `envoy.ingress` (gRPC-Web, the browser API path), and `apiserver.ingress` (gRPC, for external CLI/SDK clients). Most users need only the first two.
+
+> **Heads up: set `envoy.corsOrigins` whenever you enable Ingress.**
+> Without it, the UI loads but every API call fails with a CORS error.
+> The value is a regex — escape literal dots:
+>   --set 'envoy.corsOrigins=https://michelangelo\.example\.com'
+
+### Phase A — UI + Envoy on one hostname (nginx, path-split)
+
+```bash
+helm upgrade --install michelangelo ./helm/michelangelo \
+  --namespace michelangelo --create-namespace \
+  -f values-prod.yaml \
+  --set ui.ingress.enabled=true \
+  --set ui.ingress.hostname=michelangelo.example.com \
+  --set ui.ingress.ingressClassName=nginx \
+  --set 'ui.ingress.tls[0].hosts[0]=michelangelo.example.com' \
+  --set 'ui.ingress.tls[0].secretName=michelangelo-tls' \
+  --set envoy.ingress.enabled=true \
+  --set envoy.ingress.hostname=michelangelo.example.com \
+  --set 'envoy.ingress.path=/api(/|$)(.*)' \
+  --set envoy.ingress.ingressClassName=nginx \
+  --set 'envoy.ingress.annotations.nginx\.ingress\.kubernetes\.io/rewrite-target=/$2' \
+  --set 'envoy.ingress.annotations.nginx\.ingress\.kubernetes\.io/use-regex=true' \
+  --set 'envoy.ingress.annotations.nginx\.ingress\.kubernetes\.io/proxy-read-timeout=600' \
+  --set 'envoy.ingress.tls[0].hosts[0]=michelangelo.example.com' \
+  --set 'envoy.ingress.tls[0].secretName=michelangelo-tls' \
+  --set 'envoy.corsOrigins=https://michelangelo\.example\.com'
+```
+
+`ui.apiBaseUrl` is auto-derived from `envoy.ingress` — leave it empty.
+
+### Phase A — Envoy on a dedicated subdomain
+
+```bash
+helm upgrade --install michelangelo ./helm/michelangelo \
+  --namespace michelangelo --create-namespace \
+  -f values-prod.yaml \
+  --set ui.ingress.enabled=true \
+  --set ui.ingress.hostname=michelangelo.example.com \
+  --set envoy.ingress.enabled=true \
+  --set envoy.ingress.hostname=api.michelangelo.example.com \
+  --set 'envoy.corsOrigins=https://michelangelo\.example\.com'
+```
+
+### Phase A on other controllers
+
+| Controller | Path strip pattern |
+|---|---|
+| nginx | `path: /api(/|$)(.*)` + `rewrite-target: /$2` + `use-regex: "true"` |
+| Traefik | Requires a `Middleware` CRD with `stripPrefix` — define out-of-band and reference via `traefik.ingress.kubernetes.io/router.middlewares`. See Traefik StripPrefix docs. |
+| Contour | `HTTPProxy` resource with `pathRewritePolicy.replacePrefix` instead of Ingress. |
+| Emissary | `Mapping` resource with `prefix` and `rewrite` instead of Ingress. |
+
+The dedicated-subdomain pattern (envoy on its own hostname) avoids all path stripping — use it for controller-agnostic installs.
+
+### Phase B — apiserver gRPC (recommended: mode: grpc)
+
+Expose the raw gRPC apiserver to external CLI/SDK clients. `mode: grpc` lets the controller terminate TLS — the Pod stays plaintext, no pod TLS Secret needed:
+
+```bash
+helm upgrade michelangelo ./helm/michelangelo --reuse-values \
+  --set apiserver.ingress.enabled=true \
+  --set apiserver.ingress.mode=grpc \
+  --set apiserver.ingress.hostname=grpc.michelangelo.example.com \
+  --set apiserver.ingress.ingressClassName=nginx \
+  --set 'apiserver.ingress.tls[0].hosts[0]=grpc.michelangelo.example.com' \
+  --set 'apiserver.ingress.tls[0].secretName=apiserver-grpc-tls'
+```
+
+The chart auto-injects `nginx.ingress.kubernetes.io/backend-protocol: GRPC`.
+
+### Phase B — apiserver gRPC (end-to-end TLS: mode: passthrough)
+
+Use when you need TLS to terminate inside the Pod (mTLS, compliance).
+
+Two preconditions:
+1. `apiserver.tls.enabled=true` (pod must terminate TLS)
+2. The nginx-ingress controller must be started with `--enable-ssl-passthrough` at the cluster level (NOT a chart annotation — a controller startup flag). Without it, the annotation is silently ignored.
+
+Verify:
+
+```bash
+kubectl -n ingress-nginx get deploy ingress-nginx-controller \
+  -o jsonpath='{.spec.template.spec.containers[0].args}' | tr ',' '\n' | grep ssl-passthrough
+```
+
+```bash
+kubectl create secret tls apiserver-tls --cert=server.crt --key=server.key -n michelangelo
+helm upgrade michelangelo ./helm/michelangelo --reuse-values \
+  --set apiserver.tls.enabled=true \
+  --set apiserver.tls.secretName=apiserver-tls \
+  --set apiserver.ingress.enabled=true \
+  --set apiserver.ingress.mode=passthrough \
+  --set apiserver.ingress.hostname=grpc.michelangelo.example.com
+```
+
+The apiserver hostname must be **different** from the UI/envoy hostname.
+
+### apiBaseUrl auto-derive
+
+Leave `ui.apiBaseUrl` empty when `envoy.ingress.enabled=true` and `envoy.ingress.hostname` is set — the chart derives it as `<scheme>://<hostname><path>` (https when `envoy.ingress.tls` is non-empty).
+
+| hostname | path | tls | derived apiBaseUrl |
+|---|---|---|---|
+| `michelangelo.example.com` | `/` | `[]` | `http://michelangelo.example.com` |
+| `michelangelo.example.com` | `/api` | non-empty | `https://michelangelo.example.com/api` |
+| `api.michelangelo.example.com` | `/` | non-empty | `https://api.michelangelo.example.com` |
+
+Set `ui.apiBaseUrl` explicitly when envoy is on NodePort/LoadBalancer, or when scheme/path differs.
+
+Auto-derive does NOT activate when `ui.ingress` is enabled but `envoy.ingress` is disabled — a UI Ingress alone gives the browser nowhere to send gRPC-Web traffic. Set `ui.apiBaseUrl` explicitly to point at wherever envoy is exposed.
+
+See [`values.yaml`](./values.yaml) for the full annotated schema.
+
 ## Upgrade
 
 ```bash
@@ -254,7 +375,7 @@ Set distinct release names. All resources are prefixed with `{{ include "michela
 
 **`helm install` fails with `found in Chart.yaml, but missing in charts/ directory: cadence`.**
 
-Run `helm dependency update ./helm/michelangelo` first. Re-run it whenever the Cadence version in `Chart.yaml` changes.
+Run `helm dependency build ./helm/michelangelo` first. `Chart.lock` is committed, so `build` fetches the locked Cadence version. Use `helm dependency update` only when you intentionally want to re-resolve and rewrite the lock (e.g., bumping the subchart version in `Chart.yaml`).
 
 **`<release>-cadence-schema` Job fails with `Access denied ... CREATE DATABASE`.**
 
@@ -295,6 +416,48 @@ kubectl --namespace michelangelo wait --for=condition=ready pod \
 ```
 
 If pods never become ready, check the schema job logs first.
+
+**UI loads through Ingress but the browser console shows "Failed to fetch" or CORS errors.**
+
+`envoy.corsOrigins` does not match the browser's `Origin` header. The value is a regex — escape dots and include the full scheme. For `https://michelangelo.example.com`:
+
+```bash
+--set 'envoy.corsOrigins=https://michelangelo\.example\.com'
+```
+
+Confirm by checking the browser's network tab for a 403 from envoy with `Access-Control-Allow-Origin: null`.
+
+**`helm install` fails with `ui.ingress.hostname is required when ui.ingress.enabled=true`.**
+
+Set `--set ui.ingress.hostname=<your-hostname>`. Same applies to `envoy.ingress.hostname` and `apiserver.ingress.hostname`.
+
+**`helm install` fails with `apiserver.tls.enabled must be true when apiserver.ingress.mode=passthrough`.**
+
+Switch to `mode: grpc` (simpler, no pod TLS needed) or enable pod TLS:
+
+```bash
+kubectl create secret tls apiserver-tls --cert=server.crt --key=server.key -n michelangelo
+helm upgrade ... --set apiserver.tls.enabled=true --set apiserver.tls.secretName=apiserver-tls
+```
+
+**`apiserver.ingress.mode=grpc` returns 502 or the controller never speaks HTTP/2 to the Pod.**
+
+Your controller does not support `nginx.ingress.kubernetes.io/backend-protocol: GRPC`. For non-nginx controllers, add the equivalent in `apiserver.ingress.annotations` (Contour: `projectcontour.io/upstream-protocol.h2c`; Emissary: `getambassador.io/config` with `grpc: true`). As a last resort, use `mode: passthrough`.
+
+**`ui.apiBaseUrl` is empty and install fails with `ui.apiBaseUrl is required`.**
+
+Auto-derive activates only when `envoy.ingress.enabled=true` AND `envoy.ingress.hostname` is set. If envoy is on NodePort/LoadBalancer (no Ingress), or if `ui.ingress` is enabled but `envoy.ingress` is disabled, set `ui.apiBaseUrl` explicitly to point at wherever envoy is exposed.
+
+**Ingress created but every request returns 404.**
+
+No controller is reconciling the Ingress. Verify:
+
+```bash
+kubectl get ingressclass
+kubectl describe ingress <release>-ui -n <namespace>
+```
+
+If `ADDRESS` is empty, set `ingressClassName` to a class that exists or install an Ingress controller (`helm install ingress-nginx ingress-nginx/ingress-nginx`).
 
 ## Contributing
 
