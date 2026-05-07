@@ -43,9 +43,7 @@ describe('useSchemaMiddleware', () => {
     const { result } = renderHook(
       () =>
         useSchemaMiddleware({
-          operations: [
-            { source: 'spec.missing', destination: 'spec.action', default: 'fallback' },
-          ],
+          operations: [{ source: 'spec.missing', destination: 'spec.action', default: 'fallback' }],
         }),
       { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
     );
@@ -254,9 +252,7 @@ describe('useSchemaMiddleware', () => {
     const { result } = renderHook(
       () =>
         useSchemaMiddleware({
-          operations: [
-            { source: 'spec.missing', destination: 'spec.action', default: 'fallback' },
-          ],
+          operations: [{ source: 'spec.missing', destination: 'spec.action', default: 'fallback' }],
         }),
       { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
     );
