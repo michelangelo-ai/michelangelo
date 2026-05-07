@@ -328,10 +328,9 @@ describe('useSchemaMiddleware', () => {
   });
 
   it('throws a descriptive error for invalid YAML', () => {
-    const { result } = renderHook(
-      () => useSchemaMiddleware({ scaffold: 'key: [unclosed' }),
-      { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
-    );
+    const { result } = renderHook(() => useSchemaMiddleware({ scaffold: 'key: [unclosed' }), {
+      wrapper: getRouterWrapper({ location: '/test-project/train/model' }),
+    });
     expect(() => result.current.applyMiddleware({})).toThrow(
       'Request requires scaffolding, but found invalid YAML scaffold'
     );
