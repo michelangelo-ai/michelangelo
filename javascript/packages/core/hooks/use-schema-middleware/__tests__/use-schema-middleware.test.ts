@@ -6,24 +6,28 @@ import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 
 import type { StudioParamsBase } from '#core/hooks/routing/use-studio-params/types';
 
-const wrapper = getRouterWrapper({ location: '/test-project/train/model' });
-
 describe('useSchemaMiddleware', () => {
   describe('when schema is absent', () => {
     it('returns the original data unchanged when schema is null', () => {
-      const { result } = renderHook(() => useSchemaMiddleware(null), { wrapper });
+      const { result } = renderHook(() => useSchemaMiddleware(null), {
+        wrapper: getRouterWrapper({ location: '/test-project/train/model' }),
+      });
       const data = { metadata: { name: 'foo' } };
       expect(result.current.applyMiddleware(data)).toEqual(data);
     });
 
     it('returns the original data unchanged when schema is undefined', () => {
-      const { result } = renderHook(() => useSchemaMiddleware(undefined), { wrapper });
+      const { result } = renderHook(() => useSchemaMiddleware(undefined), {
+        wrapper: getRouterWrapper({ location: '/test-project/train/model' }),
+      });
       const data = { metadata: { name: 'foo' } };
       expect(result.current.applyMiddleware(data)).toEqual(data);
     });
 
     it('returns the original data unchanged when operations is empty', () => {
-      const { result } = renderHook(() => useSchemaMiddleware({ operations: [] }), { wrapper });
+      const { result } = renderHook(() => useSchemaMiddleware({ operations: [] }), {
+        wrapper: getRouterWrapper({ location: '/test-project/train/model' }),
+      });
       const data = { metadata: { name: 'foo' } };
       expect(result.current.applyMiddleware(data)).toEqual(data);
     });
@@ -33,7 +37,7 @@ describe('useSchemaMiddleware', () => {
     it('sets destination to default value when source is absent', () => {
       const { result } = renderHook(
         () => useSchemaMiddleware({ operations: [{ destination: 'spec.action', default: 1 }] }),
-        { wrapper }
+        { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
       );
       expect(result.current.applyMiddleware({ spec: {} })).toMatchObject({ spec: { action: 1 } });
     });
@@ -46,7 +50,7 @@ describe('useSchemaMiddleware', () => {
               { source: 'spec.missing', destination: 'spec.action', default: 'fallback' },
             ],
           }),
-        { wrapper }
+        { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
       );
       expect(result.current.applyMiddleware({ spec: {} })).toMatchObject({
         spec: { action: 'fallback' },
@@ -59,7 +63,7 @@ describe('useSchemaMiddleware', () => {
           useSchemaMiddleware({
             operations: [{ source: 'spec.missing', destination: 'spec.action' }],
           }),
-        { wrapper }
+        { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
       );
       expect(result.current.applyMiddleware({ spec: {} })).toEqual({ spec: {} });
     });
@@ -78,7 +82,7 @@ describe('useSchemaMiddleware', () => {
               },
             ],
           }),
-        { wrapper }
+        { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
       );
       expect(result.current.applyMiddleware({ metadata: { name: 'foo' } })).toMatchObject({
         metadata: { name: 'foo', displayName: 'FOO' },
@@ -98,7 +102,7 @@ describe('useSchemaMiddleware', () => {
               },
             ],
           }),
-        { wrapper }
+        { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
       );
       expect(result.current.applyMiddleware({ metadata: {} })).toMatchObject({
         metadata: { displayName: 'unnamed' },
@@ -111,7 +115,7 @@ describe('useSchemaMiddleware', () => {
           useSchemaMiddleware({
             operations: [{ destination: 'spec.deprecated', transformation: 'unset' }],
           }),
-        { wrapper }
+        { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
       );
       expect(result.current.applyMiddleware({ spec: { deprecated: true, keep: 'yes' } })).toEqual({
         spec: { keep: 'yes' },
@@ -124,7 +128,7 @@ describe('useSchemaMiddleware', () => {
           useSchemaMiddleware({
             operations: [{ source: 'spec.action', destination: 'spec.result' }],
           }),
-        { wrapper }
+        { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
       );
       expect(result.current.applyMiddleware({ spec: { action: 'run' } })).toEqual({
         spec: { action: 'run' },
@@ -145,7 +149,9 @@ describe('useSchemaMiddleware', () => {
     };
 
     it('uses default when source value is null', () => {
-      const { result } = renderHook(() => useSchemaMiddleware(schema), { wrapper });
+      const { result } = renderHook(() => useSchemaMiddleware(schema), {
+        wrapper: getRouterWrapper({ location: '/test-project/train/model' }),
+      });
       expect(result.current.applyMiddleware({ source: null })).toEqual({
         source: null,
         destination: 'defaultValue',
@@ -153,7 +159,9 @@ describe('useSchemaMiddleware', () => {
     });
 
     it('copies source to destination when source value is false', () => {
-      const { result } = renderHook(() => useSchemaMiddleware(schema), { wrapper });
+      const { result } = renderHook(() => useSchemaMiddleware(schema), {
+        wrapper: getRouterWrapper({ location: '/test-project/train/model' }),
+      });
       expect(result.current.applyMiddleware({ source: false })).toEqual({
         source: false,
         destination: false,
@@ -161,7 +169,9 @@ describe('useSchemaMiddleware', () => {
     });
 
     it('copies source to destination when source value is 0', () => {
-      const { result } = renderHook(() => useSchemaMiddleware(schema), { wrapper });
+      const { result } = renderHook(() => useSchemaMiddleware(schema), {
+        wrapper: getRouterWrapper({ location: '/test-project/train/model' }),
+      });
       expect(result.current.applyMiddleware({ source: 0 })).toEqual({
         source: 0,
         destination: 0,
@@ -200,7 +210,7 @@ describe('useSchemaMiddleware', () => {
               { destination: 'spec.deprecated', transformation: 'unset' },
             ],
           }),
-        { wrapper }
+        { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
       );
       expect(result.current.applyMiddleware({ spec: { deprecated: true } })).toEqual({
         spec: { action: 1, kill: true },
@@ -221,7 +231,7 @@ describe('useSchemaMiddleware', () => {
               },
             ],
           }),
-        { wrapper }
+        { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
       );
       const data = { spec: { name: 'from-data' } };
       const sourceFromObject = { spec: { name: 'from-source' } };
@@ -242,7 +252,7 @@ describe('useSchemaMiddleware', () => {
               },
             ],
           }),
-        { wrapper }
+        { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
       );
       const data = { existing: true };
       const sourceFromObject = { value: 'hello' };
@@ -259,7 +269,7 @@ describe('useSchemaMiddleware', () => {
               { source: 'spec.missing', destination: 'spec.action', default: 'fallback' },
             ],
           }),
-        { wrapper }
+        { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
       );
       expect(
         result.current.applyMiddleware({ spec: {} }, { sourceFromObject: { spec: {} } })
@@ -271,7 +281,7 @@ describe('useSchemaMiddleware', () => {
     it('does not mutate the original record', () => {
       const { result } = renderHook(
         () => useSchemaMiddleware({ operations: [{ destination: 'spec.action', default: 1 }] }),
-        { wrapper }
+        { wrapper: getRouterWrapper({ location: '/test-project/train/model' }) }
       );
       const original = { spec: {} };
       result.current.applyMiddleware(original);
