@@ -2,6 +2,7 @@ import { createClient } from '@connectrpc/connect';
 import { createGrpcWebTransport } from '@connectrpc/connect-web';
 
 import { DeploymentService } from './gen/michelangelo/api/v2/deployment_svc_pb';
+import { InferenceServerService } from './gen/michelangelo/api/v2/inference_server_svc_pb';
 import { ModelService } from './gen/michelangelo/api/v2/model_svc_pb';
 import { PipelineRunService } from './gen/michelangelo/api/v2/pipeline_run_svc_pb';
 import { PipelineService } from './gen/michelangelo/api/v2/pipeline_svc_pb';
@@ -39,6 +40,7 @@ async function createServices(): Promise<Services> {
 
   return {
     DeploymentService: createClient(DeploymentService, transport),
+    InferenceServerService: createClient(InferenceServerService, transport),
     ProjectService: createClient(ProjectService, transport),
     PipelineService: createClient(PipelineService, transport),
     PipelineRunService: createClient(PipelineRunService, transport),

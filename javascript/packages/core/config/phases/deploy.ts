@@ -1,4 +1,5 @@
 import { DEPLOYMENT_ENTITY_CONFIG } from '#core/config/entities/deployment/deployment';
+import { TARGET_ENTITY_CONFIG } from '#core/config/entities/target/target';
 
 import type { PhaseConfig } from '#core/types/common/studio-types';
 
@@ -9,5 +10,5 @@ export const DEPLOY_PHASE: PhaseConfig = {
   description: 'Deploy your models and predict new data',
   docUrl: 'https://example.com/docs/deploy',
   state: 'comingSoon' as const,
-  entities: [DEPLOYMENT_ENTITY_CONFIG],
+  entities: [TARGET_ENTITY_CONFIG, DEPLOYMENT_ENTITY_CONFIG],
 };

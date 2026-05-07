@@ -45,6 +45,7 @@ func opts() fx.Option {
 		v2pb.CachedOutputSvcModule,
 		v2pb.ClusterSvcModule,
 		v2pb.DeploymentSvcModule,
+		v2pb.InferenceServerSvcModule,
 		v2pb.ModelFamilySvcModule,
 		v2pb.ModelSvcModule,
 		v2pb.PipelineRunSvcModule,

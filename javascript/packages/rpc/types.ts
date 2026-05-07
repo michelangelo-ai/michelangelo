@@ -1,6 +1,7 @@
 import type { Message } from '@bufbuild/protobuf';
 import type { createClient } from '@connectrpc/connect';
 import type { DeploymentService } from './gen/michelangelo/api/v2/deployment_svc_pb';
+import type { InferenceServerService } from './gen/michelangelo/api/v2/inference_server_svc_pb';
 import type { ModelService } from './gen/michelangelo/api/v2/model_svc_pb';
 import type { PipelineRunService } from './gen/michelangelo/api/v2/pipeline_run_svc_pb';
 import type { PipelineService } from './gen/michelangelo/api/v2/pipeline_svc_pb';
@@ -14,6 +15,7 @@ export interface RuntimeConfig {
 
 export type Services = {
   DeploymentService: ReturnType<typeof createClient<typeof DeploymentService>>;
+  InferenceServerService: ReturnType<typeof createClient<typeof InferenceServerService>>;
   ProjectService: ReturnType<typeof createClient<typeof ProjectService>>;
   PipelineService: ReturnType<typeof createClient<typeof PipelineService>>;
   PipelineRunService: ReturnType<typeof createClient<typeof PipelineRunService>>;
