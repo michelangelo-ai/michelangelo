@@ -1,4 +1,16 @@
 {{- if .Values.ui.enabled }}
+{{- $apiBaseUrl := .Values.ui.apiBaseUrl -}}
+{{- if and (not $apiBaseUrl) .Values.envoy.ingress.enabled .Values.envoy.ingress.hostname -}}
+  {{- $scheme := "http" -}}
+  {{- if .Values.envoy.ingress.tls -}}
+    {{- $scheme = "https" -}}
+  {{- end -}}
+  {{- $path := .Values.envoy.ingress.path | default "/" | trimSuffix "/" -}}
+  {{- $apiBaseUrl = printf "%s://%s%s" $scheme .Values.envoy.ingress.hostname $path -}}
+{{- end -}}
+{{- if not $apiBaseUrl -}}
+  {{- fail "ui.apiBaseUrl is required when ui.enabled=true — set ui.apiBaseUrl explicitly or enable envoy.ingress with envoy.ingress.hostname" -}}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -9,6 +21,6 @@ metadata:
 data:
   config.json: |
     {
-      "apiBaseUrl": {{ required "ui.apiBaseUrl is required when ui.enabled=true — see helm/michelangelo/README.md#values-reference" .Values.ui.apiBaseUrl | quote }}
+      "apiBaseUrl": {{ $apiBaseUrl | quote }}
     }
 {{- end }}

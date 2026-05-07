@@ -113,12 +113,17 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           ports:
-            - name: grpc
+            - name: {{ if .Values.apiserver.tls.enabled }}grpcs{{ else }}grpc{{ end }}
               containerPort: {{ .Values.apiserver.port }}
               protocol: TCP
           volumeMounts:
             - name: config
               mountPath: /config
+            {{- if .Values.apiserver.tls.enabled }}
+            - name: tls
+              mountPath: {{ .Values.apiserver.tls.mountPath | default "/tls" }}
+              readOnly: true
+            {{- end }}
           {{- with (or .Values.apiserver.resources .Values.resources) }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -130,6 +135,11 @@ spec:
         - name: schema
           configMap:
             name: {{ include "michelangelo.schemaInitConfigMapName" . }}
+        {{- if .Values.apiserver.tls.enabled }}
+        - name: tls
+          secret:
+            secretName: {{ required "apiserver.tls.secretName is required when apiserver.tls.enabled=true" .Values.apiserver.tls.secretName }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

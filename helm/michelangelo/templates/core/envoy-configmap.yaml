@@ -54,6 +54,15 @@ data:
           connect_timeout: 1s
           type: LOGICAL_DNS
           http2_protocol_options: {}
+          {{- if .Values.apiserver.tls.enabled }}
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+              common_tls_context:
+                validation_context:
+                  trust_chain_verification: ACCEPT_UNTRUSTED
+          {{- end }}
           lb_policy: ROUND_ROBIN
           load_assignment:
             cluster_name: michelangelo-apiserver

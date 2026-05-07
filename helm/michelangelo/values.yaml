@@ -149,6 +149,19 @@ apiserver:
     # Required when type=NodePort. Ignored otherwise.
     nodePort: null
 
+  tls:
+    enabled: false
+    secretName: ""
+    mountPath: /tls
+
+  ingress:
+    enabled: false
+    mode: passthrough
+    ingressClassName: ""
+    hostname: ""
+    annotations: {}
+    tls: []
+
 # -----------------------------------------------------------------------------
 # envoy — gRPC-Web proxy. Required for the browser UI.
 # -----------------------------------------------------------------------------
@@ -168,6 +181,15 @@ envoy:
   service:
     type: ClusterIP
     nodePort: null
+
+  ingress:
+    enabled: false
+    ingressClassName: ""
+    hostname: ""
+    path: "/"
+    pathType: Prefix
+    annotations: {}
+    tls: []
 
 # -----------------------------------------------------------------------------
 # ui — React frontend served by nginx.
@@ -195,6 +217,13 @@ ui:
     type: ClusterIP
     port: 80
     nodePort: null
+
+  ingress:
+    enabled: false
+    ingressClassName: ""
+    hostname: ""
+    annotations: {}
+    tls: []
 
 # -----------------------------------------------------------------------------
 # worker — Cadence/Temporal workflow client. Executes pipeline runs.

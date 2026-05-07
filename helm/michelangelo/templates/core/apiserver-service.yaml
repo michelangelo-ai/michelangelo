@@ -11,9 +11,9 @@ spec:
   selector:
     {{- include "michelangelo.componentSelectorLabels" (dict "context" . "component" "apiserver") | nindent 4 }}
   ports:
-    - name: grpc
+    - name: {{ if .Values.apiserver.tls.enabled }}grpcs{{ else }}grpc{{ end }}
       port: {{ .Values.apiserver.port }}
-      targetPort: grpc
+      targetPort: {{ if .Values.apiserver.tls.enabled }}grpcs{{ else }}grpc{{ end }}
       {{- if eq .Values.apiserver.service.type "NodePort" }}
       nodePort: {{ required "apiserver.service.nodePort is required when apiserver.service.type=NodePort" .Values.apiserver.service.nodePort }}
       {{- end }}

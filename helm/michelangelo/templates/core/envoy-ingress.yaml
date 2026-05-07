@@ -1,0 +1,32 @@
+{{- if and .Values.envoy.enabled .Values.envoy.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "envoy") }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "michelangelo.componentLabels" (dict "context" . "component" "envoy") | nindent 4 }}
+  {{- with merge (.Values.envoy.ingress.annotations | default dict) .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.envoy.ingress.ingressClassName }}
+  ingressClassName: {{ .Values.envoy.ingress.ingressClassName | quote }}
+  {{- end }}
+  {{- if .Values.envoy.ingress.tls }}
+  tls:
+    {{- toYaml .Values.envoy.ingress.tls | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ required "envoy.ingress.hostname is required when envoy.ingress.enabled=true" .Values.envoy.ingress.hostname | quote }}
+      http:
+        paths:
+          - path: {{ .Values.envoy.ingress.path | default "/" | quote }}
+            pathType: {{ .Values.envoy.ingress.pathType | default "Prefix" }}
+            backend:
+              service:
+                name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "envoy") }}
+                port:
+                  name: http
+{{- end }}

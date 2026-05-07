@@ -1,0 +1,46 @@
+{{- if and .Values.apiserver.enabled .Values.apiserver.ingress.enabled }}
+{{- if eq .Values.apiserver.ingress.mode "passthrough" }}
+  {{- if not .Values.apiserver.tls.enabled }}
+    {{- fail "apiserver.tls.enabled must be true when apiserver.ingress.mode=passthrough" }}
+  {{- end }}
+{{- end }}
+{{- $hostname := required "apiserver.ingress.hostname is required when apiserver.ingress.enabled=true" .Values.apiserver.ingress.hostname }}
+{{- $mode := .Values.apiserver.ingress.mode | default "passthrough" }}
+{{- $modeAnnotations := dict }}
+{{- if eq $mode "passthrough" }}
+  {{- $_ := set $modeAnnotations "nginx.ingress.kubernetes.io/ssl-passthrough" "true" }}
+{{- else if eq $mode "grpc" }}
+  {{- $_ := set $modeAnnotations "nginx.ingress.kubernetes.io/backend-protocol" "GRPC" }}
+{{- end }}
+{{- $allAnnotations := merge $modeAnnotations (.Values.apiserver.ingress.annotations | default dict) .Values.commonAnnotations }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "apiserver") }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "michelangelo.componentLabels" (dict "context" . "component" "apiserver") | nindent 4 }}
+  {{- with $allAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.apiserver.ingress.ingressClassName }}
+  ingressClassName: {{ .Values.apiserver.ingress.ingressClassName | quote }}
+  {{- end }}
+  {{- if .Values.apiserver.ingress.tls }}
+  tls:
+    {{- toYaml .Values.apiserver.ingress.tls | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ $hostname | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "apiserver") }}
+                port:
+                  name: {{ if .Values.apiserver.tls.enabled }}grpcs{{ else }}grpc{{ end }}
+{{- end }}

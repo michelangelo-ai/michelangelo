@@ -1,0 +1,6 @@
+dependencies:
+- name: cadence
+  repository: https://cadence-workflow.github.io/cadence-charts
+  version: 1.1.0
+digest: sha256:2217bb01dcdd9d9869aed7434e6b141ee600f022ff5eb8e98d39535621be0fff
+generated: "2026-05-06T20:22:02.517193-07:00"
