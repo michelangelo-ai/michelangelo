@@ -363,11 +363,11 @@ func processFieldName(fieldName string) (string, error) {
 // fieldName must already be the bare column name (CRD prefix stripped).
 //
 // Output format matches the internal storage/pkg/mysql/lineage_util.go exactly:
-// - All fragments start with " " (a leading space) so they can be concatenated
-//   with " AND" / " OR" suffixes via the suffix-trim pattern in buildCriterionSQL.
-// - IS NULL / IS NOT NULL fragments end with a trailing space (legacy from the
-//   internal map values "IS NULL "/"IS NOT NULL ").
-// - IN / NOT IN list has no spaces between placeholders (e.g. "(?,?,?)").
+//   - All fragments start with " " (a leading space) so they can be concatenated
+//     with " AND" / " OR" suffixes via the suffix-trim pattern in buildCriterionSQL.
+//   - IS NULL / IS NOT NULL fragments end with a trailing space (legacy from the
+//     internal map values "IS NULL "/"IS NOT NULL ").
+//   - IN / NOT IN list has no spaces between placeholders (e.g. "(?,?,?)").
 func convertCriterionOperator(fieldName string, op apipb.CriterionOperator, value string) (string, []interface{}, error) {
 	qf := " `" + fieldName + "` "
 	switch op {
