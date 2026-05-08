@@ -90,15 +90,16 @@ ma sandbox create --include-experimental fluent-bit mlflow
 
 ## Local Service URLs
 
-| Service | URL |
-|---|---|
-| Michelangelo UI | http://localhost:8090 |
-| Envoy (gRPC-Web) | http://localhost:8081 |
-| Apiserver (gRPC) | localhost:15566 |
-| Cadence Web | http://localhost:8088 |
-| MinIO Console | http://localhost:9090 |
-| Grafana | http://localhost:3000 |
-| Prometheus | http://localhost:9092 |
+| Service | URL | Notes |
+|---|---|---|
+| Michelangelo UI | http://localhost:8090 | |
+| Envoy (gRPC-Web) | http://localhost:8081 | |
+| Apiserver (gRPC) | localhost:15566 | |
+| Cadence Web | http://localhost:8088 | Only when `--workflow cadence` (default) |
+| Temporal Web | http://localhost:8080 | Only when `--workflow temporal` — requires `kubectl port-forward svc/temporaltest-temporal-web 8080:8080` |
+| MinIO Console | http://localhost:9090 | |
+| Grafana | http://localhost:3000 | |
+| Prometheus | http://localhost:9092 | |
 
 ## Monitoring and Logging
 
