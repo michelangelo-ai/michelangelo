@@ -702,7 +702,7 @@ def _setup_temporal(links, helm_existing_repos):
             "repo",
             "add",
             "temporal",
-            "https://temporalio.github.io/helm-charts",
+            "https://go.temporal.io/helm-charts",
         )
         _exec("helm", "repo", "update")
 
@@ -739,9 +739,7 @@ def _setup_temporal(links, helm_existing_repos):
         "helm",
         "install",
         "temporaltest",
-        "temporal",
-        "--repo",
-        "https://go.temporal.io/helm-charts",
+        "temporal/temporal",
         "-f",
         str(values_file),
         "--set",
