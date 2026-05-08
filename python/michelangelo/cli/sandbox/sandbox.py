@@ -356,30 +356,30 @@ def _helm_wait(ns: argparse.Namespace):
     """Wait for the Michelangelo Helm release pods to become ready.
 
     Uses a two-stage wait:
-    1. Wait for the apiserver pod first — it runs a schema-init container that
-       may take 30–60s. Everything else depends on it being up.
-    2. Wait for the remaining Helm-managed pods with the full wait_timeout.
-       The worker and controllermgr may take longer because they wait for the
-       workflow engine (Cadence/Temporal) to be reachable.
+    1. Wait for the apiserver Deployment to become Available — waits on the
+       Deployment object (created immediately by Helm) so there is no
+       'no matching resources found' race. The apiserver runs a schema-init
+       container so it takes 30–60s longer than the other services.
+    2. Wait for all remaining Helm-managed Deployments to become Available.
     """
     timeout = getattr(ns, "wait_timeout", 600)
     instance_selector = "app.kubernetes.io/instance=michelangelo"
 
-    # Stage 1: apiserver (schema-init can take 30-60s)
-    print("Waiting for apiserver schema-init to complete...")
+    # Stage 1: apiserver Deployment (schema-init can take 30-60s)
+    print("Waiting for apiserver to become available (schema-init runs first)...")
     _exec(
-        "kubectl", "wait",
-        "--for=condition=ready", "pod",
+        "kubectl", "wait", "deployment",
         "-l", f"{instance_selector},app.kubernetes.io/component=apiserver",
+        "--for=condition=available",
         "--timeout=180s",
     )
 
-    # Stage 2: remaining Helm-managed pods
-    print("Waiting for remaining control plane pods...")
+    # Stage 2: remaining Helm-managed Deployments
+    print("Waiting for remaining control plane services...")
     _exec(
-        "kubectl", "wait",
-        "--for=condition=ready", "pod",
+        "kubectl", "wait", "deployment",
         "-l", instance_selector,
+        "--for=condition=available",
         f"--timeout={timeout}s",
     )
 
