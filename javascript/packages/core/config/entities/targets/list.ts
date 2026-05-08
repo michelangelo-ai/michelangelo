@@ -18,7 +18,7 @@ export const INFERENCE_SERVER_STATE = {
 const TARGET_COLUMNS: ColumnConfig<object>[] = [
   {
     id: 'metadata.name',
-    label: 'Name',
+    label: 'Target name',
     type: CellType.TEXT,
   },
   {

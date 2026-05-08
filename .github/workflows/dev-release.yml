@@ -3,7 +3,7 @@ name: Dev Release
 on:
   workflow_dispatch:
   push:
-    branches: [ donovanlopez/add-target-list-page ]
+    branches: [ main ]
     paths-ignore:
       - 'docs/**'
       - 'website/**'

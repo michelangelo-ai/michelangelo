@@ -36,7 +36,7 @@ describe('Target list page', () => {
       ])
     );
 
-    expect(await screen.findByRole('columnheader', { name: 'Name' })).toBeInTheDocument();
+    expect(await screen.findByRole('columnheader', { name: 'Target name' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Last updated' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Type' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'State' })).toBeInTheDocument();
