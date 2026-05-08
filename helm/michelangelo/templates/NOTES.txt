@@ -61,6 +61,63 @@ Open the Cadence Web UI:
 {{- end }}
 {{- end }}
 
+{{- if .Values.temporal.enabled }}
+{{- if eq .Values.workflow.engine "cadence" }}
+
+────────────────────────────────────────────────────────────────────────
+WARNING: Mismatched workflow configuration
+────────────────────────────────────────────────────────────────────────
+
+You set `temporal.enabled=true` AND `workflow.engine=cadence`.
+
+The Temporal subchart will install, but the Michelangelo worker is
+configured for Cadence and will ignore it. Pick one:
+
+  • To use the bundled Temporal:
+        --set workflow.engine=temporal
+        --set workflow.endpoint={{ .Release.Name }}-temporal-frontend:7233
+  • To use Cadence:
+        --set temporal.enabled=false
+        --set workflow.endpoint=<your-cadence-frontend>:7833
+
+{{- else }}
+
+────────────────────────────────────────────────────────────────────────
+Bundled Temporal installed alongside the control plane
+────────────────────────────────────────────────────────────────────────
+
+  Frontend:  {{ .Release.Name }}-temporal-frontend (gRPC :7233)
+  Databases: temporal + temporal_visibility (in {{ .Values.temporal.server.config.persistence.default.sql.host | default "your MySQL host" }})
+  MySQL driver: mysql8 (NOT "mysql" — Temporal uses a different driver string than Cadence)
+
+Wait for the schema job before running pipelines:
+
+    kubectl --namespace {{ .Release.Namespace }} wait --for=condition=complete \
+      job -l app.kubernetes.io/name=temporal,app.kubernetes.io/component=schema \
+      --timeout=5m
+
+Open the Temporal Web UI:
+
+    kubectl --namespace {{ .Release.Namespace }} port-forward \
+      svc/{{ .Release.Name }}-temporal-web 8080:8080
+    open http://localhost:8080
+
+{{- end }}
+{{- end }}
+
+{{- if and .Values.temporal.enabled .Values.cadence.enabled }}
+
+────────────────────────────────────────────────────────────────────────
+WARNING: Both cadence.enabled and temporal.enabled are true
+────────────────────────────────────────────────────────────────────────
+
+Both workflow engine subcharts are enabled simultaneously. Pick one:
+
+  • Cadence:  --set temporal.enabled=false --set workflow.engine=cadence
+  • Temporal: --set cadence.enabled=false  --set workflow.engine=temporal
+
+{{- end }}
+
 ────────────────────────────────────────────────────────────────────────
 1. Verify the install
 ────────────────────────────────────────────────────────────────────────

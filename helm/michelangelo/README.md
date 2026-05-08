@@ -131,6 +131,107 @@ The Michelangelo control plane uses the `michelangelo` database — there is no 
 
 `cadence.enabled=true` with `workflow.engine=temporal` is a misconfiguration — the Cadence pods install but the worker ignores them. The chart prints a warning in `NOTES.txt` if both are set.
 
+## Bundled Temporal (optional subchart)
+
+If you prefer Temporal over Cadence, you can install the official [Temporal Helm chart](https://github.com/temporalio/helm-charts) (`temporalio/temporal` v0.44.0) as part of this release by setting `temporal.enabled=true`. Users with an existing managed Temporal service should leave it disabled (default) and point `workflow.endpoint` at their own service.
+
+The bundled subchart is **not** used by `michelangelo sandbox up`. The local sandbox provisions its own Temporal outside the chart.
+
+**Do not enable both `cadence.enabled=true` and `temporal.enabled=true`** — pick one workflow engine per release.
+
+### When to use it
+
+| You have… | Setting |
+|---|---|
+| A managed Temporal cluster | `temporal.enabled=false` (default) |
+| A managed Cadence cluster | `temporal.enabled=false`, set `workflow.engine=cadence` |
+| Nothing — fully self-contained install | `temporal.enabled=true` |
+
+### Prerequisite: download the subchart
+
+```bash
+helm dependency build ./helm/michelangelo
+```
+
+Skipping produces: `Error: found in Chart.yaml, but missing in charts/ directory: temporal`
+
+### Install command
+
+Step 1 — fetch the subchart:
+
+```bash
+helm dependency build ./helm/michelangelo
+```
+
+Step 2 — install:
+
+```bash
+helm install michelangelo ./helm/michelangelo \
+  --namespace michelangelo --create-namespace \
+  --set temporal.enabled=true \
+  --set workflow.engine=temporal \
+  --set workflow.endpoint=michelangelo-temporal-frontend:7233 \
+  --set metadataStorage.host=my-mysql.example.com \
+  --set metadataStorage.rootPassword=$METADATA_ROOT_PASSWORD \
+  --set temporal.server.config.persistence.default.sql.host=my-mysql.example.com \
+  --set temporal.server.config.persistence.default.sql.password=$METADATA_ROOT_PASSWORD \
+  --set temporal.server.config.persistence.visibility.sql.host=my-mysql.example.com \
+  --set temporal.server.config.persistence.visibility.sql.password=$METADATA_ROOT_PASSWORD \
+  --set objectStorage.endpoint=s3.amazonaws.com \
+  --set objectStorage.accessKeyId=$AWS_ACCESS_KEY_ID \
+  --set objectStorage.secretAccessKey=$AWS_SECRET_ACCESS_KEY \
+  --set ui.apiBaseUrl=https://michelangelo.example.com/api
+```
+
+### Key differences from the Cadence subchart
+
+| | Cadence | Temporal |
+|---|---|---|
+| MySQL driver | `"mysql"` | **`"mysql8"`** (different string — do not use `"mysql"`) |
+| Frontend port | `7833` | `7233` |
+| Frontend Service | `<release>-cadence-frontend` | `<release>-temporal-frontend` |
+| Main database | `cadence` | `temporal` |
+| Visibility database | `cadence_visibility` | `temporal_visibility` |
+| Persistence key path | `config.persistence.database.sql.*` | `server.config.persistence.default.sql.*` |
+
+### MySQL setup
+
+Temporal creates two databases — same privilege requirements as Cadence:
+
+| Database | Purpose |
+|---|---|
+| `temporal` | Workflow history, task queues, namespaces |
+| `temporal_visibility` | Workflow list/search queries |
+
+Pre-create if your MySQL user lacks `CREATE DATABASE`:
+
+```sql
+CREATE DATABASE temporal;
+CREATE DATABASE temporal_visibility;
+GRANT ALL PRIVILEGES ON temporal.* TO 'your_user'@'%';
+GRANT ALL PRIVILEGES ON temporal_visibility.* TO 'your_user'@'%';
+```
+
+### Troubleshooting
+
+**Schema job fails with `Access denied ... CREATE DATABASE`.**
+
+Grant `CREATE DATABASE` or pre-create both databases (see above). Then delete the failed job and re-upgrade:
+
+```bash
+kubectl delete job -l app.kubernetes.io/name=temporal -n michelangelo
+helm upgrade michelangelo ./helm/michelangelo --reuse-values
+```
+
+**Worker logs `connection refused` to `<release>-temporal-frontend:7233`.**
+
+Wait for Temporal to finish initializing (~60s):
+
+```bash
+kubectl --namespace michelangelo wait --for=condition=ready pod \
+  -l app.kubernetes.io/name=temporal --timeout=5m
+```
+
 ## Values Reference
 
 Top-level keys. See [`values.yaml`](./values.yaml) for the full annotated schema.

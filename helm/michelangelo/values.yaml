@@ -537,3 +537,104 @@ cadence:
   # Cadence web UI. Useful for inspecting workflows. Disable to save a pod.
   web:
     enabled: true
+
+# -----------------------------------------------------------------------------
+# Temporal — optional bundled workflow engine.
+#
+# When enabled, the official Temporal Helm chart (temporalio/temporal v0.44.0)
+# is installed as a subchart of this release. Disabled by default — bring
+# your own Cadence or Temporal in production.
+#
+# Prerequisite: run `helm dependency build ./helm/michelangelo` once before
+# the first install with temporal.enabled=true.
+#
+# When enabled, set workflow.engine=temporal and
+# workflow.endpoint=<release>-temporal-frontend:7233
+#
+# IMPORTANT: temporal.enabled=true and cadence.enabled=true must not be
+# set together — pick one workflow engine per release.
+# -----------------------------------------------------------------------------
+temporal:
+  # Toggle bundled Temporal. Default off — set true for self-contained installs.
+  enabled: false
+
+  # IMPORTANT: temporal.enabled=true and cadence.enabled=true are mutually
+  # exclusive. Setting both installs both subcharts but the worker only
+  # talks to whichever workflow.engine names — the other sits idle and
+  # wastes cluster resources. The chart fails fast if both are set.
+
+  server:
+    config:
+      persistence:
+        # ---------------------------------------------------------------------------
+        # Point Temporal at the same MySQL instance the control plane uses.
+        # Temporal creates TWO databases: `temporal` (workflow history) and
+        # `temporal_visibility` (search/list queries). The MySQL user needs
+        # CREATE DATABASE privilege, or pre-create both databases manually.
+        #
+        # IMPORTANT: Use driver "mysql8" (not "mysql") — the Temporal chart uses
+        # a different driver string than the Cadence chart. Using "mysql" will
+        # cause the schema tool to use a deprecated code path.
+        # ---------------------------------------------------------------------------
+        default:
+          driver: sql
+          sql:
+            # "mysql8" for MySQL 8.x. Do NOT use "mysql" — that is the legacy driver.
+            driver: mysql8
+
+            # Hostname of the MySQL server. Can be the same as metadataStorage.host.
+            host: ""
+
+            # MySQL port.
+            port: 3306
+
+            # Workflow history database. Auto-created by the Temporal schema job.
+            database: temporal
+
+            # MySQL user. Needs CREATE DATABASE privilege (or pre-create the DB).
+            user: root
+
+            # MySQL password. Same as metadataStorage.rootPassword if sharing MySQL.
+            # Pass via --set — never commit.
+            password: ""
+
+        visibility:
+          driver: sql
+          sql:
+            # Same driver as default — must match. Use "mysql8", NOT "mysql".
+            driver: mysql8
+
+            # Same host as default. Mismatched hosts across default/visibility
+            # cause half-broken installs (history works, list/search fails).
+            host: ""
+
+            port: 3306
+
+            # Visibility (list/search) database. Auto-created by the schema job.
+            # Required — Temporal will not start without it.
+            database: temporal_visibility
+
+            # MySQL user. Same as default.sql.user when sharing one MySQL.
+            user: root
+
+            # Same password as default.sql.password when sharing one MySQL.
+            # Pass via --set — never commit.
+            password: ""
+
+  # Disable embedded Cassandra, PostgreSQL, and other backends —
+  # we bring our own MySQL.
+  cassandra:
+    enabled: false
+
+  mysql:
+    enabled: false
+
+  postgresql:
+    enabled: false
+
+  elasticsearch:
+    enabled: false
+
+  # Temporal web UI. Useful for inspecting workflow runs. Disable to save a pod.
+  web:
+    enabled: true
