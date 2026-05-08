@@ -1,5 +1,5 @@
 import { DEPLOYMENT_ENTITY_CONFIG } from '#core/config/entities/deployment/deployment';
-import { TARGET_ENTITY_CONFIG } from '#core/config/entities/target/target';
+import { TARGET_ENTITY_CONFIG } from '#core/config/entities/targets/target';
 
 import type { PhaseConfig } from '#core/types/common/studio-types';
 
