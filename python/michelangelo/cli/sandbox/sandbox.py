@@ -53,6 +53,9 @@ _ray_ports = [
 _cadence_domain = "default"
 _default_compute_kube_cluster_name = "michelangelo-compute-0"
 
+# Path to the Michelangelo Helm chart (relative to this file)
+_chart_dir = Path(__file__).parent.parent.parent.parent.parent / "helm" / "michelangelo"
+
 
 def init_arguments(p: argparse.ArgumentParser):
     """Initialize command-line arguments for the sandbox CLI."""
@@ -264,82 +267,31 @@ def _sync(ns: argparse.Namespace):
         "--timeout=120s",
     )
 
-    # Delete only the Michelangelo application pods/deployments.
+    # Upgrade or install the control plane via Helm.
     # Infrastructure (mysql, cadence, minio, grafana, prometheus) is left running.
-    # Worker and controllermgr are Pods (not Deployments) so they must be deleted
-    # explicitly; kubectl apply on a Completed pod is a no-op.
-    app_pods = [
-        "michelangelo-apiserver",
-        "envoy",
-        "michelangelo-worker",
-        "michelangelo-controllermgr",
-    ]
-    app_deployments = ["michelangelo-ui"]
-    print("Restarting app pods:", ", ".join(app_pods + app_deployments))
-    for pod in app_pods:
+    release_exists = (
         subprocess.run(
-            [
-                "kubectl",
-                "delete",
-                "pod",
-                pod,
-                "--force",
-                "--grace-period=0",
-                "--ignore-not-found=true",
-            ],
-            check=False,
+            ["helm", "status", "michelangelo"],
             capture_output=True,
-        )
-    for dep in app_deployments:
-        subprocess.run(
-            [
-                "kubectl",
-                "delete",
-                "deployment",
-                dep,
-                "--force",
-                "--grace-period=0",
-                "--ignore-not-found=true",
-            ],
-            check=False,
-            capture_output=True,
-        )
-    # Delete and re-apply app configs/secrets so new values take effect.
-    app_configs = [
-        "michelangelo-config",
-        "michelangelo-apiserver-config",
-        "envoy-config",
-        "public-config",
-        "michelangelo-worker-config",
-        "michelangelo-controllermgr-config",
-    ]
-    for cm in app_configs:
-        subprocess.run(
-            ["kubectl", "delete", "configmap", cm, "--ignore-not-found=true"],
-            check=False,
-            capture_output=True,
-        )
-    # minio-credentials Secret is intentionally NOT deleted here — it is
-    # managed by _ensure_credentials_secret() which creates it only when it
-    # does not already exist. This lets the GCP sandbox VM pre-configure its
-    # own credentials without sync overwriting them each run.
-
-    print("Waiting for old app pods to fully terminate...")
-    subprocess.run(
-        ["kubectl", "wait", "pod", "--all", "--for=delete", "--timeout=60s"],
-        check=False,
-        capture_output=True,
+        ).returncode == 0
     )
 
-    # Wipe + re-create the michelangelo MySQL database. We do this AFTER the
-    # app pods have been killed (so they aren't mid-write while we drop) and
-    # BEFORE redeploying the apps (so they come up against a fresh schema).
-    # Picks up any schema changes since the previous sync (e.g. table renames)
-    # and removes stale rows that would otherwise interfere with the next CI
-    # run. The MySQL pod itself is left running.
     _refresh_mysql_schema()
 
-    _deploy_app_services(ns)
+    if release_exists:
+        _ensure_credentials_secret()
+        helm_args = _build_helm_set_args(ns)
+        _exec(
+            "helm", "upgrade", "michelangelo",
+            str(_chart_dir),
+            "-f", str(_chart_dir / "values-k3d.yaml"),
+            "--reuse-values",
+            *helm_args,
+            "--wait",
+            "--timeout", "300s",
+        )
+    else:
+        _deploy_app_services(ns)
 
 
 def _refresh_mysql_schema():
@@ -389,55 +341,46 @@ def _refresh_mysql_schema():
 
 
 def _deploy_app_services(ns: argparse.Namespace):
-    """Apply only Michelangelo application resources.
-
-    Applies: apiserver, envoy, ui, worker, controllermgr.
-    Called by ``_sync`` to do a fast redeploy without touching infrastructure.
-    """
-    assert ns
-    app_resources = [
-        "michelangelo-config.yaml",
-    ]
-    if "apiserver" not in ns.exclude:
-        app_resources.append("michelangelo-apiserver.yaml")
-    if "ui" not in ns.exclude:
-        app_resources.append("envoy.yaml")
-        app_resources.append("michelangelo-ui.yaml")
-
-    for r in app_resources:
-        _kube_apply(_dir / "resources" / r)
-
-    # Create credentials secrets only if they don't already exist, so a
-    # pre-configured sandbox VM keeps its own credentials across CI runs.
+    """Install the Michelangelo control plane via Helm."""
     _ensure_credentials_secret()
-
-    # Patch michelangelo-config ConfigMap to match the live secret, so
-    # Ray pods (which consume the ConfigMap via envFrom) also get the
-    # correct credentials.
-    _sync_config_from_secret()
-
-    if ns.workflow == "cadence":
-        # Domain registration is a one-time setup done by _create.
-        # _sync keeps infrastructure (including Cadence) running between runs,
-        # so the domain is already registered — no need to re-register.
-        if "worker" not in ns.exclude:
-            _kube_apply(_dir / "resources/michelangelo-worker.yaml")
-        if "controllermgr" not in ns.exclude:
-            _kube_apply(_dir / "resources/michelangelo-controllermgr.yaml")
-
-    # Wait for all app pods to become ready (includes worker + controllermgr if
-    # deployed).
-    wait_timeout = getattr(ns, "wait_timeout", 600)
+    helm_args = _build_helm_set_args(ns)
     _exec(
-        "kubectl",
-        "wait",
-        "--for=condition=ready",
-        "pod",
-        "-l",
-        "app in (michelangelo-apiserver,envoy,michelangelo-ui,"
-        "michelangelo-worker,michelangelo-controllermgr)",
-        f"--timeout={wait_timeout}s",
+        "helm", "install", "michelangelo",
+        str(_chart_dir),
+        "-f", str(_chart_dir / "values-k3d.yaml"),
+        *helm_args,
+        "--wait",
+        "--timeout", "300s",
     )
+
+
+def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
+    """Convert sandbox CLI flags to Helm --set arguments for the control plane."""
+    args = []
+
+    # Workflow engine — cadence is the default in values-k3d.yaml
+    if ns.workflow == "temporal":
+        args += [
+            "--set", "workflow.engine=temporal",
+            "--set", "workflow.endpoint=temporaltest-frontend:7233",
+        ]
+
+    # Service exclusions → enabled=false toggles
+    exclude_map = {
+        "apiserver":     "apiserver.enabled=false",
+        "ui":            "ui.enabled=false",
+        "worker":        "worker.enabled=false",
+        "controllermgr": "controllermgr.enabled=false",
+    }
+    for svc, helm_arg in exclude_map.items():
+        if svc in getattr(ns, "exclude", []):
+            args += ["--set", helm_arg]
+
+    # envoy is paired with ui — disable both together
+    if "ui" in getattr(ns, "exclude", []):
+        args += ["--set", "envoy.enabled=false"]
+
+    return args
 
 
 def _deploy_services(ns: argparse.Namespace):
@@ -505,10 +448,10 @@ def _deploy_services(ns: argparse.Namespace):
         )
 
     if "apiserver" not in ns.exclude:
-        resources.append("michelangelo-apiserver.yaml")
+        # Installed via Helm by _deploy_app_services() below.
+        pass
     if "ui" not in ns.exclude:
-        resources.append("envoy.yaml")
-        resources.append("michelangelo-ui.yaml")
+        # Installed via Helm by _deploy_app_services() below.
         links.append(
             (
                 "Michelangelo UI",
@@ -565,18 +508,14 @@ def _deploy_services(ns: argparse.Namespace):
 
     if ns.workflow == "temporal":
         _setup_temporal(links, helm_existing_repos)
-        if "worker" not in ns.exclude:
-            _kube_apply(_dir / "resources/michelangelo-temporal-worker.yaml")
-        if "controllermgr" not in ns.exclude:
-            _kube_apply(_dir / "resources/michelangelo-temporal-controllermgr.yaml")
     elif ns.workflow == "cadence":
         _create_cadence_domain(links)
-        if "worker" not in ns.exclude:
-            _kube_apply(_dir / "resources/michelangelo-worker.yaml")
-        if "controllermgr" not in ns.exclude:
-            _kube_apply(_dir / "resources/michelangelo-controllermgr.yaml")
     else:
         raise ValueError(f"Unsupported workflow engine: {ns.workflow}")
+
+    # Install the Michelangelo control plane (apiserver, envoy, ui, worker,
+    # controllermgr) via Helm.
+    _deploy_app_services(ns)
 
     # Create separate compute cluster if requested
     create_compute_cluster = getattr(ns, "create_compute_cluster", False)
@@ -1133,6 +1072,14 @@ def _create_demo_crs(ns: argparse.Namespace):
 
 def _delete(ns: argparse.Namespace):
     assert ns
+    # Uninstall the michelangelo Helm release if present.
+    # Credential Secrets have resource-policy: keep so they survive uninstall.
+    subprocess.run(
+        ["helm", "uninstall", "michelangelo"],
+        capture_output=True,
+        check=False,
+    )
+
     # Determine which compute cluster to check for
     compute_cluster = (
         ns.compute_cluster_name
@@ -1170,7 +1117,7 @@ def _kube_create(path: Path):
 
 
 def _ensure_credentials_secret():
-    """Create minio-credentials and aws-credentials Secrets only if absent.
+    """Create object-storage-credentials and aws-credentials Secrets only if absent.
 
     This is deliberately create-only: a sandbox VM that was pre-configured
     with non-default credentials (e.g. the GCP CI runner) keeps its own
@@ -1178,7 +1125,7 @@ def _ensure_credentials_secret():
     default minioadmin credentials from the YAML files on first create.
     """
     for secret_name, yaml_file in [
-        ("minio-credentials", "minio-credentials.yaml"),
+        ("object-storage-credentials", "object-storage-credentials.yaml"),
         ("aws-credentials", "aws-credentials.yaml"),
     ]:
         exists = (
@@ -1199,20 +1146,20 @@ def _ensure_credentials_secret():
 
 
 def _sync_config_from_secret():
-    """Patch michelangelo-config ConfigMap credentials from minio-credentials Secret.
+    """Patch michelangelo-config ConfigMap credentials from object-storage-credentials.
 
     Ray pods consume the michelangelo-config ConfigMap via envFrom. After the
     ConfigMap is (re)applied from the YAML file (which contains minioadmin
     defaults), this function overwrites the credential fields with whatever
-    is actually in the minio-credentials Secret, so all consumers see the
-    same credentials.
+    is actually in the object-storage-credentials Secret, so all consumers see
+    the same credentials.
     """
     result = subprocess.run(
         [
             "kubectl",
             "get",
             "secret",
-            "minio-credentials",
+            "object-storage-credentials",
             "-o",
             "jsonpath={.data.AWS_ACCESS_KEY_ID} {.data.AWS_SECRET_ACCESS_KEY}",
         ],
