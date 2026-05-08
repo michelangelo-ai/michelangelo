@@ -273,7 +273,8 @@ def _sync(ns: argparse.Namespace):
         subprocess.run(
             ["helm", "status", "michelangelo"],
             capture_output=True,
-        ).returncode == 0
+        ).returncode
+        == 0
     )
 
     _refresh_mysql_schema()
@@ -282,9 +283,12 @@ def _sync(ns: argparse.Namespace):
         _ensure_credentials_secret()
         helm_args = _build_helm_set_args(ns)
         _exec(
-            "helm", "upgrade", "michelangelo",
+            "helm",
+            "upgrade",
+            "michelangelo",
             str(_chart_dir),
-            "-f", str(_chart_dir / "values-k3d.yaml"),
+            "-f",
+            str(_chart_dir / "values-k3d.yaml"),
             "--reuse-values",
             *helm_args,
         )
@@ -344,9 +348,12 @@ def _deploy_app_services(ns: argparse.Namespace):
     _ensure_credentials_secret()
     helm_args = _build_helm_set_args(ns)
     _exec(
-        "helm", "install", "michelangelo",
+        "helm",
+        "install",
+        "michelangelo",
         str(_chart_dir),
-        "-f", str(_chart_dir / "values-k3d.yaml"),
+        "-f",
+        str(_chart_dir / "values-k3d.yaml"),
         *helm_args,
     )
     _helm_wait(ns)
@@ -368,8 +375,11 @@ def _helm_wait(ns: argparse.Namespace):
     # Stage 1: apiserver Deployment (schema-init can take 30-60s)
     print("Waiting for apiserver to become available (schema-init runs first)...")
     _exec(
-        "kubectl", "wait", "deployment",
-        "-l", f"{instance_selector},app.kubernetes.io/component=apiserver",
+        "kubectl",
+        "wait",
+        "deployment",
+        "-l",
+        f"{instance_selector},app.kubernetes.io/component=apiserver",
         "--for=condition=available",
         "--timeout=180s",
     )
@@ -377,8 +387,11 @@ def _helm_wait(ns: argparse.Namespace):
     # Stage 2: remaining Helm-managed Deployments
     print("Waiting for remaining control plane services...")
     _exec(
-        "kubectl", "wait", "deployment",
-        "-l", instance_selector,
+        "kubectl",
+        "wait",
+        "deployment",
+        "-l",
+        instance_selector,
         "--for=condition=available",
         f"--timeout={timeout}s",
     )
@@ -393,22 +406,28 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
     # runs (e.g. cadence → temporal) overrides any --reuse-values residue.
     if ns.workflow == "temporal":
         args += [
-            "--set", "workflow.engine=temporal",
-            "--set", "workflow.endpoint=temporaltest-frontend:7233",
-            "--set", "cadence.enabled=false",   # ensure cadence subchart is off
+            "--set",
+            "workflow.engine=temporal",
+            "--set",
+            "workflow.endpoint=temporaltest-frontend:7233",
+            "--set",
+            "cadence.enabled=false",  # ensure cadence subchart is off
         ]
     else:
         args += [
-            "--set", "workflow.engine=cadence",
-            "--set", "workflow.endpoint=cadence:7833",
-            "--set", "temporal.enabled=false",  # ensure temporal subchart is off
+            "--set",
+            "workflow.engine=cadence",
+            "--set",
+            "workflow.endpoint=cadence:7833",
+            "--set",
+            "temporal.enabled=false",  # ensure temporal subchart is off
         ]
 
     # Service exclusions → enabled=false toggles
     exclude_map = {
-        "apiserver":     "apiserver.enabled=false",
-        "ui":            "ui.enabled=false",
-        "worker":        "worker.enabled=false",
+        "apiserver": "apiserver.enabled=false",
+        "ui": "ui.enabled=false",
+        "worker": "worker.enabled=false",
         "controllermgr": "controllermgr.enabled=false",
     }
     for svc, helm_arg in exclude_map.items():
@@ -454,14 +473,20 @@ def _deploy_services(ns: argparse.Namespace):
     elif ns.workflow == "temporal":
         # If switching from a previous cadence install, remove cadence pods.
         subprocess.run(
-            ["kubectl", "delete", "pod", "cadence", "cadence-web",
-             "--ignore-not-found=true", "--grace-period=0"],
+            [
+                "kubectl",
+                "delete",
+                "pod",
+                "cadence",
+                "cadence-web",
+                "--ignore-not-found=true",
+                "--grace-period=0",
+            ],
             capture_output=True,
             check=False,
         )
         subprocess.run(
-            ["kubectl", "delete", "svc", "cadence",
-             "--ignore-not-found=true"],
+            ["kubectl", "delete", "svc", "cadence", "--ignore-not-found=true"],
             capture_output=True,
             check=False,
         )
