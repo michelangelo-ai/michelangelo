@@ -1,7 +1,7 @@
 Sandbox is a lightweight version of the Michelangelo cluster, designed specifically for development and testing. It also serves as an excellent tool for users to quickly explore the platform and familiarize themselves with its interface.
 
 > **Note:** The Sandbox deployment is intended for development and testing purposes only and is not suitable for production environments.
-> For guidance on creating a production-ready Michelangelo deployment, please refer to the Deployment Guide.
+> For guidance on creating a production-ready Michelangelo deployment, please refer to the `helm/michelangelo/` chart and its README.
 
 ## User Guide
 
@@ -14,6 +14,7 @@ Please install the following software before proceeding:
 - [Docker](https://docs.docker.com/get-started/get-docker)
 - [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl)
 - [k3d](https://k3d.io)
+- [Helm 3.12+](https://helm.sh/docs/intro/install/)
 
 ### Install Michelangelo CLI
 
@@ -22,56 +23,93 @@ pip install michelangelo
 ma sandbox --help
 ```
 
+## Commands
+
+| Command | Description |
+|---|---|
+| `ma sandbox create` | Create a new k3d cluster, deploy all infrastructure and the control plane |
+| `ma sandbox sync` | Fast redeploy — upgrades only the control plane (leaves infrastructure running) |
+| `ma sandbox delete` | Uninstall the control plane and delete the k3d cluster |
+| `ma sandbox start` | Start a previously stopped k3d cluster |
+| `ma sandbox stop` | Stop the k3d cluster (preserves data) |
+| `ma sandbox demo` | Run demo pipelines against a running sandbox |
+
+## Architecture
+
+The sandbox is split into two tiers managed by different tools:
+
+| Tier | Tool | What it owns |
+|---|---|---|
+| **Infrastructure** | `sandbox.py` (`ma sandbox`) | MySQL, MinIO, Cadence/Temporal, Prometheus, Grafana, MLflow, Fluent Bit, KubeRay, Spark Operator, k3d cluster lifecycle |
+| **Control plane** | Helm (`helm/michelangelo`) | apiserver, envoy, UI, worker, controllermgr, CRDs, RBAC |
+
+After `ma sandbox create`, the control plane is managed as a Helm release named `michelangelo`:
+
+```bash
+helm list                  # shows the michelangelo release
+helm status michelangelo   # current state and NOTES
+helm test michelangelo     # smoke test (apiserver healthz)
+```
+
 ## Workflow Engine Options
 
-You can choose the workflow engine when creating a Michelangelo sandbox:
+You can choose the workflow engine when creating a sandbox:
 
-- To create a sandbox using **Temporal**, use:
-
-```bash
-ma sandbox --workflow temporal
-```
-
-- To create a sandbox using **Cadence**, use either of the following commands:
+- **Cadence** (default):
 
 ```bash
-ma sandbox
-# or explicitly
-ma sandbox --workflow cadence
+ma sandbox create
+# or explicitly:
+ma sandbox create --workflow cadence
 ```
 
-For detailed instructions and additional setup options, please follow the [Temporal Development Environment Guide](https://learn.temporal.io/getting_started/typescript/dev_environment/).
+- **Temporal**:
+
+```bash
+ma sandbox create --workflow temporal
+```
+
+The workflow engine can be switched by deleting and recreating the sandbox. `ma sandbox sync` keeps the same engine as the original create.
+
+## Excluding Services
+
+Use `--exclude` to skip specific control plane services:
+
+```bash
+ma sandbox create --exclude worker controllermgr
+ma sandbox sync --exclude ui
+```
+
+Available services: `apiserver`, `ui`, `worker`, `controllermgr`.
+
+## Experimental Services
+
+```bash
+ma sandbox create --include-experimental fluent-bit mlflow
+```
+
+## Local Service URLs
+
+| Service | URL |
+|---|---|
+| Michelangelo UI | http://localhost:8090 |
+| Envoy (gRPC-Web) | http://localhost:8081 |
+| Apiserver (gRPC) | localhost:15566 |
+| Cadence Web | http://localhost:8088 |
+| MinIO Console | http://localhost:9090 |
+| Grafana | http://localhost:3000 |
+| Prometheus | http://localhost:9092 |
 
 ## Monitoring and Logging
 
-The sandbox includes monitoring and logging capabilities to observe the controller manager and collect Ray job logs.
+Prometheus and Grafana are deployed automatically during `ma sandbox create`. No manual steps required.
 
-### Metrics Collection with Prometheus
+### Access Prometheus
 
-1. **Deploy Prometheus:**
-   ```bash
-   kubectl apply -f resources/prometheus.yaml
-   ```
-
-2. **Wait for deployment to be ready:**
-   ```bash
-   kubectl wait --for=condition=available deployment/prometheus --timeout=60s
-   ```
-
-3. **Access Prometheus:**
-   ```bash
-   # Forward Prometheus (runs in background)  
-   kubectl port-forward svc/prometheus 9090:9090 &
-   ```
-   - **Prometheus UI**: http://localhost:9090
-
-### Log Collection with Fluent Bit
-
-The sandbox includes Fluent Bit for collecting Ray job logs and storing them in MinIO:
-
-1. **Components are deployed automatically** - Fluent Bit DaemonSet and MinIO are included in the sandbox setup
-2. **Log collection** - Fluent Bit tails Ray job logs from `/tmp/ray/session_*/logs/job-*.log`
-3. **Storage** - Logs are stored in MinIO S3-compatible storage in JSON format
+```bash
+kubectl port-forward svc/prometheus 9090:9090
+```
+Open http://localhost:9090
 
 ### Available Metrics
 
@@ -99,14 +137,12 @@ Use these queries in the Prometheus UI:
 - **Active workers per controller**: `controller_runtime_active_workers`
 - **Memory usage**: `go_gc_heap_objects_bytes`
 
-### Architecture
+### Log Collection with Fluent Bit
 
-The sandbox monitoring and logging architecture:
+Enable Fluent Bit with `--include-experimental fluent-bit`:
 
-1. **Controller Manager** - Runs as a pod in k3d, exposes metrics at `:8090/metrics`
-2. **Prometheus** - Scrapes controller manager metrics via Kubernetes service discovery
-3. **Fluent Bit** - DaemonSet collects Ray logs and sends them to MinIO
-4. **MinIO** - S3-compatible storage for logs and artifacts
+```bash
+ma sandbox create --include-experimental fluent-bit
+```
 
-All components run inside the k3d cluster with proper Kubernetes service networking.
-
+Fluent Bit tails Ray job logs from `/tmp/ray/session_*/logs/job-*.log` and stores them in MinIO S3-compatible storage in JSON format.
