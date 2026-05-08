@@ -37,15 +37,6 @@ server:
           maxIdleConns: 20
           maxConnLifetime: "1h"
 
-cassandra:
-  enabled: false
-
-mysql:
-  enabled: true
-
-postgresql:
-  enabled: false
-
 # Disable automatic schema setup due to Helm chart env var bugs
 # Schema will be created via admin tools container in sandbox.py
 schema:
