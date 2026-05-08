@@ -359,7 +359,7 @@ def _helm_wait(ns: argparse.Namespace):
     1. Wait for the apiserver Deployment to become Available — waits on the
        Deployment object (created immediately by Helm) so there is no
        'no matching resources found' race. The apiserver runs a schema-init
-       container so it takes 30–60s longer than the other services.
+       container so it takes 30-60s longer than the other services.
     2. Wait for all remaining Helm-managed Deployments to become Available.
     """
     timeout = getattr(ns, "wait_timeout", 600)
