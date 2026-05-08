@@ -287,9 +287,8 @@ def _sync(ns: argparse.Namespace):
             "-f", str(_chart_dir / "values-k3d.yaml"),
             "--reuse-values",
             *helm_args,
-            "--wait",
-            "--timeout", "300s",
         )
+        _helm_wait(ns)
     else:
         _deploy_app_services(ns)
 
@@ -349,8 +348,39 @@ def _deploy_app_services(ns: argparse.Namespace):
         str(_chart_dir),
         "-f", str(_chart_dir / "values-k3d.yaml"),
         *helm_args,
-        "--wait",
-        "--timeout", "300s",
+    )
+    _helm_wait(ns)
+
+
+def _helm_wait(ns: argparse.Namespace):
+    """Wait for the Michelangelo Helm release pods to become ready.
+
+    Uses a two-stage wait:
+    1. Wait for the apiserver pod first — it runs a schema-init container that
+       may take 30–60s. Everything else depends on it being up.
+    2. Wait for the remaining Helm-managed pods with the full wait_timeout.
+       The worker and controllermgr may take longer because they wait for the
+       workflow engine (Cadence/Temporal) to be reachable.
+    """
+    timeout = getattr(ns, "wait_timeout", 600)
+    instance_selector = "app.kubernetes.io/instance=michelangelo"
+
+    # Stage 1: apiserver (schema-init can take 30-60s)
+    print("Waiting for apiserver schema-init to complete...")
+    _exec(
+        "kubectl", "wait",
+        "--for=condition=ready", "pod",
+        "-l", f"{instance_selector},app.kubernetes.io/component=apiserver",
+        "--timeout=180s",
+    )
+
+    # Stage 2: remaining Helm-managed pods
+    print("Waiting for remaining control plane pods...")
+    _exec(
+        "kubectl", "wait",
+        "--for=condition=ready", "pod",
+        "-l", instance_selector,
+        f"--timeout={timeout}s",
     )
 
 
@@ -358,11 +388,20 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
     """Convert sandbox CLI flags to Helm --set arguments for the control plane."""
     args = []
 
-    # Workflow engine — cadence is the default in values-k3d.yaml
+    # Workflow engine — cadence is the default in values-k3d.yaml.
+    # Always set the engine explicitly so that switching --workflow between
+    # runs (e.g. cadence → temporal) overrides any --reuse-values residue.
     if ns.workflow == "temporal":
         args += [
             "--set", "workflow.engine=temporal",
             "--set", "workflow.endpoint=temporaltest-frontend:7233",
+            "--set", "cadence.enabled=false",   # ensure cadence subchart is off
+        ]
+    else:
+        args += [
+            "--set", "workflow.engine=cadence",
+            "--set", "workflow.endpoint=cadence:7833",
+            "--set", "temporal.enabled=false",  # ensure temporal subchart is off
         ]
 
     # Service exclusions → enabled=false toggles
