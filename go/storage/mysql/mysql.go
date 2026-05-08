@@ -10,6 +10,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	proto "github.com/gogo/protobuf/proto"
+	gogotypes "github.com/gogo/protobuf/types"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -236,6 +237,18 @@ func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMe
 		// Label selector filtering not yet implemented
 	}
 
+	// Apply ListOptionsExt criteria
+	if listOptionsExt != nil && listOptionsExt.Operation != nil {
+		criterionSQL, criterionArgs, err := buildCriterionSQL(listOptionsExt.Operation)
+		if err != nil {
+			return fmt.Errorf("failed to build criterion SQL: %w", err)
+		}
+		if criterionSQL != "" {
+			query += " AND (" + criterionSQL + ")"
+			args = append(args, criterionArgs...)
+		}
+	}
+
 	// Add ordering
 	query += " ORDER BY create_time DESC"
 
@@ -277,6 +290,104 @@ func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMe
 	}
 
 	return rows.Err()
+}
+
+// buildCriterionSQL recursively converts a CriterionOperation into a SQL WHERE fragment.
+// Field names are used directly as column names — callers are responsible for ensuring
+// they correspond to indexed columns in the table schema.
+func buildCriterionSQL(op *apipb.CriterionOperation) (string, []interface{}, error) {
+	if op == nil {
+		return "", nil, nil
+	}
+
+	parts := []string{}
+	args := []interface{}{}
+
+	for _, c := range op.Criterion {
+		part, cArgs, err := buildSingleCriterionSQL(c)
+		if err != nil {
+			return "", nil, err
+		}
+		if part != "" {
+			parts = append(parts, part)
+			args = append(args, cArgs...)
+		}
+	}
+
+	for _, sub := range op.SubOperations {
+		subSQL, subArgs, err := buildCriterionSQL(sub)
+		if err != nil {
+			return "", nil, err
+		}
+		if subSQL != "" {
+			parts = append(parts, "("+subSQL+")")
+			args = append(args, subArgs...)
+		}
+	}
+
+	if len(parts) == 0 {
+		return "", nil, nil
+	}
+
+	logicalOp := "AND"
+	if op.LogicalOperator == apipb.LOGICAL_OPERATOR_OR {
+		logicalOp = "OR"
+	}
+
+	return strings.Join(parts, " "+logicalOp+" "), args, nil
+}
+
+func buildSingleCriterionSQL(c *apipb.Criterion) (string, []interface{}, error) {
+	col := c.FieldName
+	if col == "" {
+		return "", nil, nil
+	}
+
+	switch c.Operator {
+	case apipb.CRITERION_OPERATOR_IS_NULL:
+		return fmt.Sprintf("%s IS NULL", col), nil, nil
+	case apipb.CRITERION_OPERATOR_IS_NOT_NULL:
+		return fmt.Sprintf("%s IS NOT NULL", col), nil, nil
+	}
+
+	// All remaining operators need a match value
+	val, err := extractMatchValue(c.MatchValue)
+	if err != nil {
+		return "", nil, fmt.Errorf("field %q: %w", col, err)
+	}
+
+	switch c.Operator {
+	case apipb.CRITERION_OPERATOR_EQUAL:
+		return fmt.Sprintf("%s = ?", col), []interface{}{val}, nil
+	case apipb.CRITERION_OPERATOR_NOT_EQUAL:
+		return fmt.Sprintf("%s != ?", col), []interface{}{val}, nil
+	case apipb.CRITERION_OPERATOR_GREATER_THAN:
+		return fmt.Sprintf("%s > ?", col), []interface{}{val}, nil
+	case apipb.CRITERION_OPERATOR_GREATER_THAN_OR_EQUAL_TO:
+		return fmt.Sprintf("%s >= ?", col), []interface{}{val}, nil
+	case apipb.CRITERION_OPERATOR_LESS_THAN:
+		return fmt.Sprintf("%s < ?", col), []interface{}{val}, nil
+	case apipb.CRITERION_OPERATOR_LESS_THAN_OR_EQUAL_TO:
+		return fmt.Sprintf("%s <= ?", col), []interface{}{val}, nil
+	case apipb.CRITERION_OPERATOR_LIKE:
+		return fmt.Sprintf("%s LIKE ?", col), []interface{}{val}, nil
+	default:
+		return "", nil, fmt.Errorf("unsupported criterion operator: %v", c.Operator)
+	}
+}
+
+// extractMatchValue unpacks a gogo-protobuf types.Any match value into a string.
+// Supports StringValue wrapper; falls back to the raw value bytes as a string.
+func extractMatchValue(anyVal *gogotypes.Any) (string, error) {
+	if anyVal == nil {
+		return "", fmt.Errorf("match_value is nil")
+	}
+	var sv gogotypes.StringValue
+	if err := gogotypes.UnmarshalAny(anyVal, &sv); err == nil {
+		return sv.Value, nil
+	}
+	// Fallback: use the raw value bytes as a string
+	return string(anyVal.Value), nil
 }
 
 // Delete an object

@@ -10,6 +10,7 @@ go_library(
         "//proto/api:go_default_library",
         "@com_github_go_sql_driver_mysql//:go_default_library",
         "@com_github_gogo_protobuf//proto:go_default_library",
+        "@com_github_gogo_protobuf//types:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/runtime:go_default_library",
         "@io_k8s_apimachinery//pkg/runtime/schema:go_default_library",
