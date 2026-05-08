@@ -1,0 +1,95 @@
+name: Helm lint
+
+on:
+  pull_request:
+    paths:
+      - 'helm/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'helm/**'
+
+jobs:
+  lint:
+    name: Lint and template check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: '3.17.0'
+
+      - name: Add Helm repos (for dependency build)
+        run: |
+          helm repo add cadence-workflow https://cadence-workflow.github.io/cadence-charts
+          helm repo add temporal https://go.temporal.io/helm-charts
+          helm repo update
+
+      - name: Build chart dependencies
+        run: helm dependency build helm/michelangelo
+
+      - name: Lint
+        run: helm lint helm/michelangelo
+
+      - name: Template — k3d profile (Cadence, all Ingress disabled)
+        run: |
+          helm template michelangelo helm/michelangelo \
+            -f helm/michelangelo/values-k3d.yaml \
+            --debug \
+            > /dev/null
+
+      - name: Template — production profile (Temporal engine)
+        run: |
+          helm template michelangelo helm/michelangelo \
+            --set metadataStorage.host=rds.example.com \
+            --set metadataStorage.rootPassword=secret \
+            --set objectStorage.endpoint=s3.amazonaws.com \
+            --set objectStorage.accessKeyId=AKID \
+            --set objectStorage.secretAccessKey=SECRET \
+            --set workflow.engine=temporal \
+            --set workflow.endpoint=temporal-frontend:7233 \
+            --set ui.apiBaseUrl=https://michelangelo.example.com/api \
+            --debug \
+            > /dev/null
+
+      - name: Template — Cadence subchart enabled
+        run: |
+          helm template michelangelo helm/michelangelo \
+            -f helm/michelangelo/values-k3d.yaml \
+            --set cadence.enabled=true \
+            --set cadence.config.persistence.database.sql.hosts=mysql \
+            --set cadence.config.persistence.database.sql.password=root \
+            --debug \
+            > /dev/null
+
+      - name: Template — Temporal subchart enabled
+        run: |
+          helm template michelangelo helm/michelangelo \
+            -f helm/michelangelo/values-k3d.yaml \
+            --set temporal.enabled=true \
+            --set temporal.server.config.persistence.default.sql.host=mysql \
+            --set temporal.server.config.persistence.default.sql.password=root \
+            --set temporal.server.config.persistence.visibility.sql.host=mysql \
+            --set temporal.server.config.persistence.visibility.sql.password=root \
+            --set workflow.engine=temporal \
+            --set workflow.endpoint=michelangelo-temporal-frontend:7233 \
+            --debug \
+            > /dev/null
+
+      - name: Validate fail-fast guard (both subcharts enabled must fail)
+        run: |
+          ! helm template michelangelo helm/michelangelo \
+            -f helm/michelangelo/values-k3d.yaml \
+            --set cadence.enabled=true \
+            --set temporal.enabled=true \
+            --set cadence.config.persistence.database.sql.hosts=mysql \
+            --set cadence.config.persistence.database.sql.password=root \
+            --set temporal.server.config.persistence.default.sql.host=mysql \
+            --set temporal.server.config.persistence.default.sql.password=root \
+            --set temporal.server.config.persistence.visibility.sql.host=mysql \
+            --set temporal.server.config.persistence.visibility.sql.password=root \
+            2>/dev/null
