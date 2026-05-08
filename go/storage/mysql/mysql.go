@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -224,38 +225,45 @@ func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMe
 		return fmt.Errorf("unable to determine table name for type: %s", typeMeta.Kind)
 	}
 
-	query := fmt.Sprintf("SELECT proto FROM %s WHERE delete_time IS NULL", tableName)
+	query := fmt.Sprintf("SELECT `proto` FROM `%s` WHERE `delete_time` IS NULL", tableName)
 	args := []interface{}{}
 
 	if namespace != "" {
-		query += " AND namespace = ?"
+		query += " AND `namespace` = ?"
 		args = append(args, namespace)
 	}
 
-	// Add label selector if provided
-	if listOptions != nil && listOptions.LabelSelector != "" {
-		// Label selector filtering not yet implemented
-	}
-
-	// Apply ListOptionsExt criteria
 	if listOptionsExt != nil && listOptionsExt.Operation != nil {
-		criterionSQL, criterionArgs, err := buildCriterionSQL(listOptionsExt.Operation)
+		criterionSQL, criterionArgs, err := buildQueryFromListOptExtV2(listOptionsExt.Operation, tableName)
 		if err != nil {
 			return fmt.Errorf("failed to build criterion SQL: %w", err)
 		}
 		if criterionSQL != "" {
-			query += " AND (" + criterionSQL + ")"
+			query += " AND (" + criterionSQL + " )"
 			args = append(args, criterionArgs...)
 		}
 	}
 
-	// Add ordering
-	query += " ORDER BY create_time DESC"
+	if listOptionsExt != nil && len(listOptionsExt.OrderBy) > 0 {
+		query += buildOrderBySQL(listOptionsExt.OrderBy)
+	} else {
+		query += " ORDER BY `create_time` DESC"
+	}
 
-	// Add limit if specified
-	if listOptions != nil && listOptions.Limit > 0 {
+	var limit, offset int64
+	if listOptionsExt != nil && listOptionsExt.Pagination != nil {
+		limit = int64(listOptionsExt.Pagination.Limit)
+		offset = int64(listOptionsExt.Pagination.Offset)
+	} else if listOptions != nil && listOptions.Limit > 0 {
+		limit = listOptions.Limit
+	}
+	if limit > 0 {
 		query += " LIMIT ?"
-		args = append(args, listOptions.Limit)
+		args = append(args, limit)
+		if offset > 0 {
+			query += " OFFSET ?"
+			args = append(args, offset)
+		}
 	}
 
 	rows, err := m.db.QueryContext(ctx, query, args...)
@@ -292,112 +300,259 @@ func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMe
 	return rows.Err()
 }
 
-// buildCriterionSQL recursively converts a CriterionOperation into a SQL WHERE fragment.
-// Field names are used directly as column names — callers are responsible for ensuring
-// they correspond to indexed columns in the table schema.
-func buildCriterionSQL(op *apipb.CriterionOperation) (string, []interface{}, error) {
-	if op == nil {
-		return "", nil, nil
+var (
+	logicalOperatorMap = map[string]string{
+		"LOGICAL_OPERATOR_AND": "AND",
+		"LOGICAL_OPERATOR_OR":  "OR",
 	}
 
-	parts := []string{}
-	args := []interface{}{}
-
-	for _, c := range op.Criterion {
-		part, cArgs, err := buildSingleCriterionSQL(c)
-		if err != nil {
-			return "", nil, err
-		}
-		if part != "" {
-			parts = append(parts, part)
-			args = append(args, cArgs...)
-		}
+	// baseOrderByFields maps base proto field paths to MySQL column names.
+	baseOrderByFields = map[string]string{
+		"metadata.creation_timestamp": "create_time",
+		"metadata.update_timestamp":   "update_time",
 	}
 
-	for _, sub := range op.SubOperations {
-		subSQL, subArgs, err := buildCriterionSQL(sub)
-		if err != nil {
-			return "", nil, err
-		}
-		if subSQL != "" {
-			parts = append(parts, "("+subSQL+")")
-			args = append(args, subArgs...)
-		}
-	}
+	// sanitizeRe strips characters that are unsafe in raw Any fallback values.
+	sanitizeRe = regexp.MustCompile(`[^a-zA-Z0-9\-_. ,]+`)
+)
 
-	if len(parts) == 0 {
-		return "", nil, nil
-	}
-
-	logicalOp := "AND"
-	if op.LogicalOperator == apipb.LOGICAL_OPERATOR_OR {
-		logicalOp = "OR"
-	}
-
-	return strings.Join(parts, " "+logicalOp+" "), args, nil
+// isLabelField reports whether fieldName is in "<crd>.label.<key>" format.
+func isLabelField(fieldName string) bool {
+	parts := strings.Split(fieldName, ".")
+	return len(parts) > 2 && strings.TrimSpace(parts[1]) == "label"
 }
 
-func buildSingleCriterionSQL(c *apipb.Criterion) (string, []interface{}, error) {
-	col := c.FieldName
-	if col == "" {
-		return "", nil, nil
-	}
-	quotedCol := fmt.Sprintf("`%s`", col)
+// isLabelFieldInMetadata reports whether fieldName is in "<crd>.metadata.labels.<key>" format.
+func isLabelFieldInMetadata(fieldName string) bool {
+	parts := strings.Split(fieldName, ".")
+	return len(parts) > 3 && strings.TrimSpace(parts[1]) == "metadata" && strings.TrimSpace(parts[2]) == "labels"
+}
 
-	switch c.Operator {
+// processFieldName strips the CRD prefix from a field name.
+// "pipeline_run.state" → "state"
+// "pipeline_run.label.michelangelo/Foo" → "michelangelo/Foo"
+// "pipeline_run.metadata.labels.michelangelo/Foo" → "michelangelo/Foo"
+func processFieldName(fieldName string) (string, error) {
+	if strings.IndexByte(fieldName, '.') < 0 {
+		return "", fmt.Errorf("field name %q invalid: at least <crd>.<field> is required", fieldName)
+	}
+	if isLabelField(fieldName) {
+		return strings.SplitN(fieldName, ".", 3)[2], nil
+	}
+	if isLabelFieldInMetadata(fieldName) {
+		return strings.SplitN(fieldName, ".", 4)[3], nil
+	}
+	return strings.SplitN(fieldName, ".", 2)[1], nil
+}
+
+// convertCriterionOperator builds a SQL fragment for a single field criterion.
+// fieldName must already be the bare column name (CRD prefix stripped).
+func convertCriterionOperator(fieldName string, op apipb.CriterionOperator, value string) (string, []interface{}, error) {
+	qf := "`" + fieldName + "`"
+	switch op {
 	case apipb.CRITERION_OPERATOR_IS_NULL:
-		return fmt.Sprintf("%s IS NULL", quotedCol), nil, nil
+		return qf + " IS NULL", nil, nil
 	case apipb.CRITERION_OPERATOR_IS_NOT_NULL:
-		return fmt.Sprintf("%s IS NOT NULL", quotedCol), nil, nil
-	}
-
-	// All remaining operators need a match value
-	val, err := extractMatchValue(c.MatchValue)
-	if err != nil {
-		return "", nil, fmt.Errorf("field %q: %w", col, err)
-	}
-
-	switch c.Operator {
+		return qf + " IS NOT NULL", nil, nil
 	case apipb.CRITERION_OPERATOR_EQUAL:
-		return fmt.Sprintf("%s = ?", quotedCol), []interface{}{val}, nil
+		return qf + " = ?", []interface{}{value}, nil
 	case apipb.CRITERION_OPERATOR_NOT_EQUAL:
-		return fmt.Sprintf("%s != ?", quotedCol), []interface{}{val}, nil
+		return qf + " != ?", []interface{}{value}, nil
 	case apipb.CRITERION_OPERATOR_GREATER_THAN:
-		return fmt.Sprintf("%s > ?", quotedCol), []interface{}{val}, nil
+		return qf + " > ?", []interface{}{value}, nil
 	case apipb.CRITERION_OPERATOR_GREATER_THAN_OR_EQUAL_TO:
-		return fmt.Sprintf("%s >= ?", quotedCol), []interface{}{val}, nil
+		return qf + " >= ?", []interface{}{value}, nil
 	case apipb.CRITERION_OPERATOR_LESS_THAN:
-		return fmt.Sprintf("%s < ?", quotedCol), []interface{}{val}, nil
+		return qf + " < ?", []interface{}{value}, nil
 	case apipb.CRITERION_OPERATOR_LESS_THAN_OR_EQUAL_TO:
-		return fmt.Sprintf("%s <= ?", quotedCol), []interface{}{val}, nil
+		return qf + " <= ?", []interface{}{value}, nil
 	case apipb.CRITERION_OPERATOR_LIKE:
-		return fmt.Sprintf("%s LIKE ?", quotedCol), []interface{}{"%" + val + "%"}, nil
+		return qf + " LIKE ?", []interface{}{"%" + value + "%"}, nil
 	case apipb.CRITERION_OPERATOR_IN, apipb.CRITERION_OPERATOR_NOT_IN:
-		items := strings.Split(strings.Trim(val, " [](){}"), ",")
+		items := strings.Split(strings.Trim(value, " [](){}"), ",")
 		placeholders := make([]string, 0, len(items))
 		args := make([]interface{}, 0, len(items))
 		for _, item := range items {
-			trimmed := strings.TrimSpace(item)
-			if trimmed != "" {
+			if trimmed := strings.TrimSpace(item); trimmed != "" {
 				placeholders = append(placeholders, "?")
 				args = append(args, trimmed)
 			}
 		}
 		if len(placeholders) == 0 {
-			return "", nil, fmt.Errorf("field %q: IN/NOT_IN requires at least one value", col)
+			return "", nil, fmt.Errorf("field %q: IN/NOT_IN requires at least one value", fieldName)
 		}
-		op := "IN"
-		if c.Operator == apipb.CRITERION_OPERATOR_NOT_IN {
-			op = "NOT IN"
+		sqlOp := "IN"
+		if op == apipb.CRITERION_OPERATOR_NOT_IN {
+			sqlOp = "NOT IN"
 		}
-		return fmt.Sprintf("%s %s (%s)", quotedCol, op, strings.Join(placeholders, ", ")), args, nil
+		return fmt.Sprintf("%s %s (%s)", qf, sqlOp, strings.Join(placeholders, ", ")), args, nil
 	default:
-		return "", nil, fmt.Errorf("unsupported criterion operator: %v", c.Operator)
+		return "", nil, fmt.Errorf("unsupported criterion operator: %v", op)
 	}
 }
 
+// processListOptExtLabelV2 converts label criteria into uid-IN-subquery SQL fragments.
+// Each fragment: `uid` IN (SELECT `obj_uid` FROM {table}_labels WHERE `key`=? AND `value`=?)
+func processListOptExtLabelV2(op *apipb.CriterionOperation, tableName string) ([]string, []interface{}, error) {
+	var queryStrs []string
+	var params []interface{}
+	labelTable := tableName + "_labels"
+
+	for _, item := range op.GetCriterion() {
+		if !isLabelField(item.GetFieldName()) && !isLabelFieldInMetadata(item.GetFieldName()) {
+			continue
+		}
+		labelKey, err := processFieldName(item.GetFieldName())
+		if err != nil {
+			return nil, nil, fmt.Errorf("label field name invalid: %w", err)
+		}
+
+		criterionOp := item.GetOperator()
+		var valueStr string
+		if criterionOp != apipb.CRITERION_OPERATOR_IS_NULL && criterionOp != apipb.CRITERION_OPERATOR_IS_NOT_NULL {
+			valueStr, err = extractMatchValue(item.GetMatchValue())
+			if err != nil {
+				return nil, nil, fmt.Errorf("label field value invalid: %w", err)
+			}
+		}
+
+		valueSQL, valueParams, err := convertCriterionOperator("value", criterionOp, valueStr)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error converting label value: %w", err)
+		}
+
+		queryStr := fmt.Sprintf(" `uid` IN (SELECT `obj_uid` FROM `%s` WHERE `key`= ? AND%s)", labelTable, valueSQL)
+		queryStrs = append(queryStrs, queryStr)
+		params = append(params, labelKey)
+		params = append(params, valueParams...)
+	}
+
+	return queryStrs, params, nil
+}
+
+// processListOptExtFieldV2 converts non-label criteria into SQL fragments.
+func processListOptExtFieldV2(op *apipb.CriterionOperation) ([]string, []interface{}, error) {
+	var queryStrs []string
+	var params []interface{}
+
+	for _, item := range op.GetCriterion() {
+		if isLabelField(item.GetFieldName()) || isLabelFieldInMetadata(item.GetFieldName()) {
+			continue
+		}
+		fieldName, err := processFieldName(item.GetFieldName())
+		if err != nil {
+			return nil, nil, fmt.Errorf("field name invalid: %w", err)
+		}
+
+		// Map base metadata fields to column names.
+		if col, ok := baseOrderByFields[fieldName]; ok {
+			fieldName = col
+		}
+
+		criterionOp := item.GetOperator()
+		var valueStr string
+		if criterionOp != apipb.CRITERION_OPERATOR_IS_NULL && criterionOp != apipb.CRITERION_OPERATOR_IS_NOT_NULL {
+			valueStr, err = extractMatchValue(item.GetMatchValue())
+			if err != nil {
+				return nil, nil, fmt.Errorf("field value invalid: %w", err)
+			}
+		}
+
+		queryStr, valueParams, err := convertCriterionOperator(fieldName, criterionOp, valueStr)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error converting field criterion: %w", err)
+		}
+
+		queryStrs = append(queryStrs, queryStr)
+		params = append(params, valueParams...)
+	}
+
+	return queryStrs, params, nil
+}
+
+// buildQueryFromListOptExtV2 recursively converts a CriterionOperation into a SQL WHERE fragment.
+// Mirrors the internal buildQueryFromListOptExtV2: separates label vs field criteria,
+// appends the logical operator after each fragment, then trims the trailing one.
+func buildQueryFromListOptExtV2(op *apipb.CriterionOperation, tableName string) (string, []interface{}, error) {
+	if op == nil {
+		return "", nil, nil
+	}
+
+	logicalOp, ok := logicalOperatorMap[op.GetLogicalOperator().String()]
+	if !ok {
+		return "", nil, fmt.Errorf("logical operator %v not supported", op.GetLogicalOperator())
+	}
+	logicalOpStr := " " + logicalOp
+
+	fieldQueryStrs, fieldParams, err := processListOptExtFieldV2(op)
+	if err != nil {
+		return "", nil, err
+	}
+
+	labelQueryStrs, labelParams, err := processListOptExtLabelV2(op, tableName)
+	if err != nil {
+		return "", nil, err
+	}
+
+	queryStr := ""
+	var queryParams []interface{}
+
+	for _, q := range fieldQueryStrs {
+		queryStr += q + logicalOpStr
+	}
+	queryParams = append(queryParams, fieldParams...)
+
+	for _, q := range labelQueryStrs {
+		queryStr += q + logicalOpStr
+	}
+	queryParams = append(queryParams, labelParams...)
+
+	for _, sub := range op.SubOperations {
+		subSQL, subParams, err := buildQueryFromListOptExtV2(sub, tableName)
+		if err != nil {
+			return "", nil, err
+		}
+		if subSQL != "" {
+			queryStr += " (" + subSQL + ")" + logicalOpStr
+			queryParams = append(queryParams, subParams...)
+		}
+	}
+
+	if queryStr != "" {
+		queryStr = strings.TrimSuffix(queryStr, logicalOpStr)
+	}
+
+	return queryStr, queryParams, nil
+}
+
+// buildOrderBySQL builds the ORDER BY clause from a list of OrderBy specs.
+func buildOrderBySQL(orderBy []*apipb.OrderBy) string {
+	if len(orderBy) == 0 {
+		return ""
+	}
+	var clauses []string
+	for _, order := range orderBy {
+		colName := order.Field
+		if col, ok := baseOrderByFields[colName]; ok {
+			colName = col
+		} else if idx := strings.IndexByte(colName, '.'); idx >= 0 {
+			remainder := colName[idx+1:]
+			if col, ok := baseOrderByFields[remainder]; ok {
+				colName = col
+			} else {
+				colName = remainder
+			}
+		}
+		dir := "ASC"
+		if order.Dir == apipb.SORT_ORDER_DESC {
+			dir = "DESC"
+		}
+		clauses = append(clauses, fmt.Sprintf("`%s` %s", colName, dir))
+	}
+	return " ORDER BY " + strings.Join(clauses, ", ")
+}
+
 // extractMatchValue unpacks a gogo-protobuf types.Any match value into a string.
-// Supports StringValue wrapper; falls back to the raw value bytes as a string.
 func extractMatchValue(anyVal *gogotypes.Any) (string, error) {
 	if anyVal == nil {
 		return "", fmt.Errorf("match_value is nil")
@@ -406,8 +561,8 @@ func extractMatchValue(anyVal *gogotypes.Any) (string, error) {
 	if err := gogotypes.UnmarshalAny(anyVal, &sv); err == nil {
 		return sv.Value, nil
 	}
-	// Fallback: use the raw value bytes as a string
-	return string(anyVal.Value), nil
+	// Fallback: sanitize raw bytes to remove unsafe characters.
+	return sanitizeRe.ReplaceAllString(string(anyVal.Value), ""), nil
 }
 
 // Delete an object
