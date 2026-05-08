@@ -239,7 +239,7 @@ func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMe
 			return fmt.Errorf("failed to build criterion SQL: %w", err)
 		}
 		if criterionSQL != "" {
-			query += " AND (" + criterionSQL + ")"
+			query += " AND (" + criterionSQL + " )"
 			args = append(args, criterionArgs...)
 		}
 	}
@@ -347,52 +347,66 @@ func processFieldName(fieldName string) (string, error) {
 
 // convertCriterionOperator builds a SQL fragment for a single field criterion.
 // fieldName must already be the bare column name (CRD prefix stripped).
+//
+// Output format matches the internal storage/pkg/mysql/lineage_util.go exactly:
+// - All fragments start with " " (a leading space) so they can be concatenated
+//   with " AND" / " OR" suffixes via the suffix-trim pattern in buildCriterionSQL.
+// - IS NULL / IS NOT NULL fragments end with a trailing space (legacy from the
+//   internal map values "IS NULL "/"IS NOT NULL ").
+// - IN / NOT IN list has no spaces between placeholders (e.g. "(?,?,?)").
 func convertCriterionOperator(fieldName string, op apipb.CriterionOperator, value string) (string, []interface{}, error) {
-	qf := "`" + fieldName + "`"
+	qf := " `" + fieldName + "` "
 	switch op {
 	case apipb.CRITERION_OPERATOR_IS_NULL:
-		return qf + " IS NULL", nil, nil
+		return qf + "IS NULL ", nil, nil
 	case apipb.CRITERION_OPERATOR_IS_NOT_NULL:
-		return qf + " IS NOT NULL", nil, nil
+		return qf + "IS NOT NULL ", nil, nil
 	case apipb.CRITERION_OPERATOR_EQUAL:
-		return qf + " = ?", []interface{}{value}, nil
+		return qf + "= ?", []interface{}{value}, nil
 	case apipb.CRITERION_OPERATOR_NOT_EQUAL:
-		return qf + " != ?", []interface{}{value}, nil
+		return qf + "!= ?", []interface{}{value}, nil
 	case apipb.CRITERION_OPERATOR_GREATER_THAN:
-		return qf + " > ?", []interface{}{value}, nil
+		return qf + "> ?", []interface{}{value}, nil
 	case apipb.CRITERION_OPERATOR_GREATER_THAN_OR_EQUAL_TO:
-		return qf + " >= ?", []interface{}{value}, nil
+		return qf + ">= ?", []interface{}{value}, nil
 	case apipb.CRITERION_OPERATOR_LESS_THAN:
-		return qf + " < ?", []interface{}{value}, nil
+		return qf + "< ?", []interface{}{value}, nil
 	case apipb.CRITERION_OPERATOR_LESS_THAN_OR_EQUAL_TO:
-		return qf + " <= ?", []interface{}{value}, nil
+		return qf + "<= ?", []interface{}{value}, nil
 	case apipb.CRITERION_OPERATOR_LIKE:
-		return qf + " LIKE ?", []interface{}{"%" + value + "%"}, nil
+		return qf + "LIKE ?", []interface{}{"%" + value + "%"}, nil
 	case apipb.CRITERION_OPERATOR_IN, apipb.CRITERION_OPERATOR_NOT_IN:
-		items := strings.Split(strings.Trim(value, " [](){}"), ",")
-		placeholders := make([]string, 0, len(items))
-		args := make([]interface{}, 0, len(items))
-		for _, item := range items {
-			if trimmed := strings.TrimSpace(item); trimmed != "" {
-				placeholders = append(placeholders, "?")
-				args = append(args, trimmed)
-			}
-		}
-		if len(placeholders) == 0 {
-			return "", nil, fmt.Errorf("field %q: IN/NOT_IN requires at least one value", fieldName)
-		}
 		sqlOp := "IN"
 		if op == apipb.CRITERION_OPERATOR_NOT_IN {
 			sqlOp = "NOT IN"
 		}
-		return fmt.Sprintf("%s %s (%s)", qf, sqlOp, strings.Join(placeholders, ", ")), args, nil
+		valueList := strings.Split(strings.Trim(value, " [](){}"), ",")
+		var sb strings.Builder
+		sb.WriteString(qf)
+		sb.WriteString(sqlOp)
+		sb.WriteString(" (")
+		args := make([]interface{}, 0, len(valueList))
+		for i, v := range valueList {
+			if i != 0 {
+				sb.WriteByte(',')
+			}
+			sb.WriteByte('?')
+			args = append(args, strings.Trim(v, " "))
+		}
+		sb.WriteByte(')')
+		return sb.String(), args, nil
 	default:
-		return "", nil, fmt.Errorf("unsupported criterion operator: %v", op)
+		return "", nil, fmt.Errorf("operator %v currently not supported", op)
 	}
 }
 
 // buildLabelCriterionSQL converts label criteria into uid-IN-subquery SQL fragments.
-// Each fragment: `uid` IN (SELECT `obj_uid` FROM {table}_labels WHERE `key`=? AND `value`=?)
+//
+// Each fragment matches the internal output exactly:
+//
+//	" `uid` in (SELECT `obj_uid` FROM <labelTable> WHERE `key`= ? AND `value` = ? )"
+//
+// Note: lowercase `in`, no backticks around <labelTable>, trailing " )".
 func buildLabelCriterionSQL(op *apipb.CriterionOperation, tableName string) ([]string, []interface{}, error) {
 	var queryStrs []string
 	var params []interface{}
@@ -409,7 +423,7 @@ func buildLabelCriterionSQL(op *apipb.CriterionOperation, tableName string) ([]s
 
 		criterionOp := item.GetOperator()
 		var valueStr string
-		if criterionOp != apipb.CRITERION_OPERATOR_IS_NULL && criterionOp != apipb.CRITERION_OPERATOR_IS_NOT_NULL {
+		if !isNoParamOp(criterionOp) {
 			valueStr, err = extractMatchValue(item.GetMatchValue())
 			if err != nil {
 				return nil, nil, fmt.Errorf("label field value invalid: %w", err)
@@ -421,7 +435,9 @@ func buildLabelCriterionSQL(op *apipb.CriterionOperation, tableName string) ([]s
 			return nil, nil, fmt.Errorf("error converting label value: %w", err)
 		}
 
-		queryStr := fmt.Sprintf("`uid` IN (SELECT `obj_uid` FROM `%s` WHERE `key`= ? AND %s)", labelTable, valueSQL)
+		// valueSQL already begins with a leading space (from convertCriterionOperator),
+		// so concatenating " AND" + valueSQL yields " AND `value` = ?".
+		queryStr := " `uid` in (SELECT `obj_uid` FROM " + labelTable + " WHERE `key`= ? AND" + valueSQL + " )"
 		queryStrs = append(queryStrs, queryStr)
 		params = append(params, labelKey)
 		params = append(params, valueParams...)
@@ -431,6 +447,7 @@ func buildLabelCriterionSQL(op *apipb.CriterionOperation, tableName string) ([]s
 }
 
 // buildFieldCriterionSQL converts non-label criteria into SQL fragments.
+// Each fragment begins with a leading space (see convertCriterionOperator).
 func buildFieldCriterionSQL(op *apipb.CriterionOperation) ([]string, []interface{}, error) {
 	var queryStrs []string
 	var params []interface{}
@@ -451,7 +468,7 @@ func buildFieldCriterionSQL(op *apipb.CriterionOperation) ([]string, []interface
 
 		criterionOp := item.GetOperator()
 		var valueStr string
-		if criterionOp != apipb.CRITERION_OPERATOR_IS_NULL && criterionOp != apipb.CRITERION_OPERATOR_IS_NOT_NULL {
+		if !isNoParamOp(criterionOp) {
 			valueStr, err = extractMatchValue(item.GetMatchValue())
 			if err != nil {
 				return nil, nil, fmt.Errorf("field value invalid: %w", err)
@@ -471,7 +488,13 @@ func buildFieldCriterionSQL(op *apipb.CriterionOperation) ([]string, []interface
 }
 
 // buildCriterionSQL recursively converts a CriterionOperation into a SQL WHERE fragment.
-// Separates label vs field criteria, then joins fragments with the logical operator.
+// Output is byte-equivalent to the internal buildQueryFromListOptExtV2:
+// - Each fragment is suffixed with the logical operator (" AND" or " OR")
+// - The trailing logical-operator suffix is then trimmed
+// - Sub-operations are wrapped as " (<sub>)" before being suffixed
+//
+// All fragments produced by buildFieldCriterionSQL / buildLabelCriterionSQL begin
+// with a leading space, so concatenation produces correct spacing.
 func buildCriterionSQL(op *apipb.CriterionOperation, tableName string) (string, []interface{}, error) {
 	if op == nil {
 		return "", nil, nil
@@ -479,23 +502,32 @@ func buildCriterionSQL(op *apipb.CriterionOperation, tableName string) (string, 
 
 	logicalOp, ok := logicalOperatorMap[op.GetLogicalOperator().String()]
 	if !ok {
-		return "", nil, fmt.Errorf("logical operator %v not supported", op.GetLogicalOperator())
+		return "", nil, fmt.Errorf("logical operator %v currently not supported", op.GetLogicalOperator())
 	}
+	logicalOpStr := " " + logicalOp
 
 	fieldQueryStrs, fieldParams, err := buildFieldCriterionSQL(op)
 	if err != nil {
 		return "", nil, err
 	}
-
 	labelQueryStrs, labelParams, err := buildLabelCriterionSQL(op, tableName)
 	if err != nil {
 		return "", nil, err
 	}
 
-	parts := append([]string{}, fieldQueryStrs...)
-	parts = append(parts, labelQueryStrs...)
+	var queryStr strings.Builder
+	queryParams := make([]interface{}, 0, len(fieldParams)+len(labelParams))
 
-	queryParams := append([]interface{}{}, fieldParams...)
+	for _, q := range fieldQueryStrs {
+		queryStr.WriteString(q)
+		queryStr.WriteString(logicalOpStr)
+	}
+	queryParams = append(queryParams, fieldParams...)
+
+	for _, q := range labelQueryStrs {
+		queryStr.WriteString(q)
+		queryStr.WriteString(logicalOpStr)
+	}
 	queryParams = append(queryParams, labelParams...)
 
 	for _, sub := range op.SubOperations {
@@ -503,13 +535,22 @@ func buildCriterionSQL(op *apipb.CriterionOperation, tableName string) (string, 
 		if err != nil {
 			return "", nil, err
 		}
-		if subSQL != "" {
-			parts = append(parts, "("+subSQL+")")
-			queryParams = append(queryParams, subParams...)
+		if subSQL == "" {
+			continue
 		}
+		queryStr.WriteString(" (")
+		queryStr.WriteString(subSQL)
+		queryStr.WriteString(")")
+		queryStr.WriteString(logicalOpStr)
+		queryParams = append(queryParams, subParams...)
 	}
 
-	return strings.Join(parts, " "+logicalOp+" "), queryParams, nil
+	return strings.TrimSuffix(queryStr.String(), logicalOpStr), queryParams, nil
+}
+
+// isNoParamOp reports whether op needs no match value (IS NULL / IS NOT NULL).
+func isNoParamOp(op apipb.CriterionOperator) bool {
+	return op == apipb.CRITERION_OPERATOR_IS_NULL || op == apipb.CRITERION_OPERATOR_IS_NOT_NULL
 }
 
 // buildOrderBySQL builds the ORDER BY clause from a list of OrderBy specs.
@@ -540,12 +581,15 @@ func buildOrderBySQL(orderBy []*apipb.OrderBy) string {
 }
 
 // extractMatchValue unpacks a gogo-protobuf types.Any match value into a string.
+// Mirrors the internal UnmarshalStringValueFromAny: if the wrapper succeeds AND
+// the unwrapped value is non-empty, return it; otherwise fall through to the
+// raw bytes (with regex sanitization).
 func extractMatchValue(anyVal *gogotypes.Any) (string, error) {
 	if anyVal == nil {
-		return "", fmt.Errorf("match_value is nil")
+		return "", fmt.Errorf("field value is nil")
 	}
 	var sv gogotypes.StringValue
-	if err := gogotypes.UnmarshalAny(anyVal, &sv); err == nil {
+	if err := gogotypes.UnmarshalAny(anyVal, &sv); err == nil && sv.Value != "" {
 		return sv.Value, nil
 	}
 	// Fallback: sanitize raw bytes to remove unsafe characters.

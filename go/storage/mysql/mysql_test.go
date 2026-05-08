@@ -94,6 +94,9 @@ func TestProcessFieldName(t *testing.T) {
 }
 
 func TestConvertCriterionOperator(t *testing.T) {
+	// SQL fragments are byte-equivalent to the internal storage/pkg/mysql/lineage_util.go
+	// convertCriterionOperator: leading space, trailing space on IS NULL/IS NOT NULL,
+	// no spaces between placeholders in IN/NOT IN.
 	cases := []struct {
 		name       string
 		op         apipb.CriterionOperator
@@ -102,18 +105,17 @@ func TestConvertCriterionOperator(t *testing.T) {
 		wantParams []interface{}
 		wantErr    bool
 	}{
-		{"equal", apipb.CRITERION_OPERATOR_EQUAL, "alice", "`name` = ?", []interface{}{"alice"}, false},
-		{"not_equal", apipb.CRITERION_OPERATOR_NOT_EQUAL, "alice", "`name` != ?", []interface{}{"alice"}, false},
-		{"greater_than", apipb.CRITERION_OPERATOR_GREATER_THAN, "5", "`name` > ?", []interface{}{"5"}, false},
-		{"gte", apipb.CRITERION_OPERATOR_GREATER_THAN_OR_EQUAL_TO, "5", "`name` >= ?", []interface{}{"5"}, false},
-		{"less_than", apipb.CRITERION_OPERATOR_LESS_THAN, "5", "`name` < ?", []interface{}{"5"}, false},
-		{"lte", apipb.CRITERION_OPERATOR_LESS_THAN_OR_EQUAL_TO, "5", "`name` <= ?", []interface{}{"5"}, false},
-		{"is_null", apipb.CRITERION_OPERATOR_IS_NULL, "", "`name` IS NULL", nil, false},
-		{"is_not_null", apipb.CRITERION_OPERATOR_IS_NOT_NULL, "", "`name` IS NOT NULL", nil, false},
-		{"like_wraps_wildcard", apipb.CRITERION_OPERATOR_LIKE, "ali", "`name` LIKE ?", []interface{}{"%ali%"}, false},
-		{"in_splits_csv", apipb.CRITERION_OPERATOR_IN, "a, b ,c", "`name` IN (?, ?, ?)", []interface{}{"a", "b", "c"}, false},
-		{"not_in_strips_brackets", apipb.CRITERION_OPERATOR_NOT_IN, "[a,b]", "`name` NOT IN (?, ?)", []interface{}{"a", "b"}, false},
-		{"in_empty_errors", apipb.CRITERION_OPERATOR_IN, "  ", "", nil, true},
+		{"equal", apipb.CRITERION_OPERATOR_EQUAL, "alice", " `name` = ?", []interface{}{"alice"}, false},
+		{"not_equal", apipb.CRITERION_OPERATOR_NOT_EQUAL, "alice", " `name` != ?", []interface{}{"alice"}, false},
+		{"greater_than", apipb.CRITERION_OPERATOR_GREATER_THAN, "5", " `name` > ?", []interface{}{"5"}, false},
+		{"gte", apipb.CRITERION_OPERATOR_GREATER_THAN_OR_EQUAL_TO, "5", " `name` >= ?", []interface{}{"5"}, false},
+		{"less_than", apipb.CRITERION_OPERATOR_LESS_THAN, "5", " `name` < ?", []interface{}{"5"}, false},
+		{"lte", apipb.CRITERION_OPERATOR_LESS_THAN_OR_EQUAL_TO, "5", " `name` <= ?", []interface{}{"5"}, false},
+		{"is_null", apipb.CRITERION_OPERATOR_IS_NULL, "", " `name` IS NULL ", nil, false},
+		{"is_not_null", apipb.CRITERION_OPERATOR_IS_NOT_NULL, "", " `name` IS NOT NULL ", nil, false},
+		{"like_wraps_wildcard", apipb.CRITERION_OPERATOR_LIKE, "ali", " `name` LIKE ?", []interface{}{"%ali%"}, false},
+		{"in_splits_csv", apipb.CRITERION_OPERATOR_IN, "a, b ,c", " `name` IN (?,?,?)", []interface{}{"a", "b", "c"}, false},
+		{"not_in_strips_brackets", apipb.CRITERION_OPERATOR_NOT_IN, "[a,b]", " `name` NOT IN (?,?)", []interface{}{"a", "b"}, false},
 		{"unsupported_op", apipb.CriterionOperator(999), "x", "", nil, true},
 	}
 	for _, c := range cases {
@@ -143,7 +145,10 @@ func TestBuildLabelCriterionSQL(t *testing.T) {
 	queryStrs, params, err := buildLabelCriterionSQL(op, "pipelinerun")
 	require.NoError(t, err)
 	require.Len(t, queryStrs, 1)
-	require.Equal(t, "`uid` IN (SELECT `obj_uid` FROM `pipelinerun_labels` WHERE `key`= ? AND `value` = ?)", queryStrs[0])
+	require.Equal(t,
+		" `uid` in (SELECT `obj_uid` FROM pipelinerun_labels WHERE `key`= ? AND `value` = ? )",
+		queryStrs[0],
+	)
 	require.Equal(t, []interface{}{"env", "prod"}, params)
 }
 
@@ -175,7 +180,7 @@ func TestBuildFieldCriterionSQL_MapsBaseField(t *testing.T) {
 	}
 	queryStrs, params, err := buildFieldCriterionSQL(op)
 	require.NoError(t, err)
-	require.Equal(t, []string{"`create_time` > ?"}, queryStrs)
+	require.Equal(t, []string{" `create_time` > ?"}, queryStrs)
 	require.Equal(t, []interface{}{"2026-01-01"}, params)
 }
 
@@ -213,9 +218,9 @@ func TestBuildCriterionSQL_AndCombination(t *testing.T) {
 	}
 	sql, params, err := buildCriterionSQL(op, "pipelinerun")
 	require.NoError(t, err)
-	// Field criteria come first, then label criteria, joined by " AND".
+	// Field criteria come first, then label criteria, joined by " AND" (suffix-trim pattern).
 	require.Equal(t,
-		"`state` = ? AND `uid` IN (SELECT `obj_uid` FROM `pipelinerun_labels` WHERE `key`= ? AND `value` = ?)",
+		" `state` = ? AND `uid` in (SELECT `obj_uid` FROM pipelinerun_labels WHERE `key`= ? AND `value` = ? )",
 		sql,
 	)
 	require.Equal(t, []interface{}{"RUNNING", "env", "prod"}, params)
@@ -239,7 +244,7 @@ func TestBuildCriterionSQL_OrCombination(t *testing.T) {
 	}
 	sql, _, err := buildCriterionSQL(op, "pipelinerun")
 	require.NoError(t, err)
-	require.Equal(t, "`name` = ? OR `name` = ?", sql)
+	require.Equal(t, " `name` = ? OR `name` = ?", sql)
 }
 
 func TestBuildCriterionSQL_SubOperations(t *testing.T) {
@@ -272,7 +277,8 @@ func TestBuildCriterionSQL_SubOperations(t *testing.T) {
 	}
 	sql, params, err := buildCriterionSQL(op, "pipelinerun")
 	require.NoError(t, err)
-	require.Equal(t, "`state` = ? AND (`name` = ? OR `name` = ?)", sql)
+	// Sub-operation is wrapped as " (<sub>)" where <sub> has its own leading space.
+	require.Equal(t, " `state` = ? AND ( `name` = ? OR `name` = ?)", sql)
 	require.Equal(t, []interface{}{"RUNNING", "alice", "bob"}, params)
 }
 
@@ -342,4 +348,14 @@ func TestExtractMatchValue_RawBytesFallback_Sanitized(t *testing.T) {
 	v, err := extractMatchValue(any)
 	require.NoError(t, err)
 	require.Equal(t, "aliceDROP TABLE", v)
+}
+
+func TestExtractMatchValue_EmptyStringWrapperFallsThrough(t *testing.T) {
+	// Matches internal UnmarshalStringValueFromAny: when StringValue unwraps to
+	// an empty string, we fall through to the raw-bytes path. The raw bytes of
+	// an empty StringValue are also empty, so the result is "".
+	any := stringMatchValue(t, "")
+	v, err := extractMatchValue(any)
+	require.NoError(t, err)
+	require.Equal(t, "", v)
 }
