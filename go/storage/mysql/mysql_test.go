@@ -3,10 +3,12 @@ package mysql
 import (
 	"testing"
 
+	gogotypes "github.com/gogo/protobuf/types"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
@@ -45,4 +47,299 @@ func TestGetTableName_GVKEmpty_UnknownToScheme(t *testing.T) {
 	m := &mysqlMetadataStorage{scheme: runtime.NewScheme()}
 	obj := &v2pb.TriggerRun{}
 	require.Equal(t, "", m.getTableName(obj))
+}
+
+// stringMatchValue wraps a string into a gogotypes.Any (StringValue).
+func stringMatchValue(t *testing.T, s string) *gogotypes.Any {
+	t.Helper()
+	any, err := gogotypes.MarshalAny(&gogotypes.StringValue{Value: s})
+	require.NoError(t, err)
+	return any
+}
+
+func TestIsLabelField(t *testing.T) {
+	require.True(t, isLabelField("pipelinerun.label.michelangelo/Foo"))
+	require.False(t, isLabelField("pipelinerun.metadata.labels.michelangelo/Foo"))
+	require.False(t, isLabelField("pipelinerun.state"))
+	require.False(t, isLabelField("label"))
+}
+
+func TestIsLabelFieldInMetadata(t *testing.T) {
+	require.True(t, isLabelFieldInMetadata("pipelinerun.metadata.labels.michelangelo/Foo"))
+	require.False(t, isLabelFieldInMetadata("pipelinerun.label.michelangelo/Foo"))
+	require.False(t, isLabelFieldInMetadata("pipelinerun.metadata.name"))
+}
+
+func TestProcessFieldName(t *testing.T) {
+	cases := []struct {
+		in      string
+		want    string
+		wantErr bool
+	}{
+		{"pipelinerun.state", "state", false},
+		{"pipelinerun.spec.foo", "spec.foo", false},
+		{"pipelinerun.label.michelangelo/Foo", "michelangelo/Foo", false},
+		{"pipelinerun.metadata.labels.michelangelo/Foo", "michelangelo/Foo", false},
+		{"name", "", true}, // missing CRD prefix
+	}
+	for _, c := range cases {
+		got, err := processFieldName(c.in)
+		if c.wantErr {
+			require.Error(t, err, "input %q", c.in)
+			continue
+		}
+		require.NoError(t, err, "input %q", c.in)
+		require.Equal(t, c.want, got, "input %q", c.in)
+	}
+}
+
+func TestConvertCriterionOperator(t *testing.T) {
+	cases := []struct {
+		name       string
+		op         apipb.CriterionOperator
+		value      string
+		wantSQL    string
+		wantParams []interface{}
+		wantErr    bool
+	}{
+		{"equal", apipb.CRITERION_OPERATOR_EQUAL, "alice", "`name` = ?", []interface{}{"alice"}, false},
+		{"not_equal", apipb.CRITERION_OPERATOR_NOT_EQUAL, "alice", "`name` != ?", []interface{}{"alice"}, false},
+		{"greater_than", apipb.CRITERION_OPERATOR_GREATER_THAN, "5", "`name` > ?", []interface{}{"5"}, false},
+		{"gte", apipb.CRITERION_OPERATOR_GREATER_THAN_OR_EQUAL_TO, "5", "`name` >= ?", []interface{}{"5"}, false},
+		{"less_than", apipb.CRITERION_OPERATOR_LESS_THAN, "5", "`name` < ?", []interface{}{"5"}, false},
+		{"lte", apipb.CRITERION_OPERATOR_LESS_THAN_OR_EQUAL_TO, "5", "`name` <= ?", []interface{}{"5"}, false},
+		{"is_null", apipb.CRITERION_OPERATOR_IS_NULL, "", "`name` IS NULL", nil, false},
+		{"is_not_null", apipb.CRITERION_OPERATOR_IS_NOT_NULL, "", "`name` IS NOT NULL", nil, false},
+		{"like_wraps_wildcard", apipb.CRITERION_OPERATOR_LIKE, "ali", "`name` LIKE ?", []interface{}{"%ali%"}, false},
+		{"in_splits_csv", apipb.CRITERION_OPERATOR_IN, "a, b ,c", "`name` IN (?, ?, ?)", []interface{}{"a", "b", "c"}, false},
+		{"not_in_strips_brackets", apipb.CRITERION_OPERATOR_NOT_IN, "[a,b]", "`name` NOT IN (?, ?)", []interface{}{"a", "b"}, false},
+		{"in_empty_errors", apipb.CRITERION_OPERATOR_IN, "  ", "", nil, true},
+		{"unsupported_op", apipb.CriterionOperator(999), "x", "", nil, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			sql, params, err := convertCriterionOperator("name", c.op, c.value)
+			if c.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, c.wantSQL, sql)
+			require.Equal(t, c.wantParams, params)
+		})
+	}
+}
+
+func TestBuildLabelCriterionSQL(t *testing.T) {
+	op := &apipb.CriterionOperation{
+		Criterion: []*apipb.Criterion{
+			{
+				FieldName:  "pipelinerun.metadata.labels.env",
+				Operator:   apipb.CRITERION_OPERATOR_EQUAL,
+				MatchValue: stringMatchValue(t, "prod"),
+			},
+		},
+	}
+	queryStrs, params, err := buildLabelCriterionSQL(op, "pipelinerun")
+	require.NoError(t, err)
+	require.Len(t, queryStrs, 1)
+	require.Equal(t, "`uid` IN (SELECT `obj_uid` FROM `pipelinerun_labels` WHERE `key`= ? AND `value` = ?)", queryStrs[0])
+	require.Equal(t, []interface{}{"env", "prod"}, params)
+}
+
+func TestBuildLabelCriterionSQL_SkipsNonLabel(t *testing.T) {
+	op := &apipb.CriterionOperation{
+		Criterion: []*apipb.Criterion{
+			{
+				FieldName:  "pipelinerun.state",
+				Operator:   apipb.CRITERION_OPERATOR_EQUAL,
+				MatchValue: stringMatchValue(t, "RUNNING"),
+			},
+		},
+	}
+	queryStrs, params, err := buildLabelCriterionSQL(op, "pipelinerun")
+	require.NoError(t, err)
+	require.Empty(t, queryStrs)
+	require.Empty(t, params)
+}
+
+func TestBuildFieldCriterionSQL_MapsBaseField(t *testing.T) {
+	op := &apipb.CriterionOperation{
+		Criterion: []*apipb.Criterion{
+			{
+				FieldName:  "pipelinerun.metadata.creation_timestamp",
+				Operator:   apipb.CRITERION_OPERATOR_GREATER_THAN,
+				MatchValue: stringMatchValue(t, "2026-01-01"),
+			},
+		},
+	}
+	queryStrs, params, err := buildFieldCriterionSQL(op)
+	require.NoError(t, err)
+	require.Equal(t, []string{"`create_time` > ?"}, queryStrs)
+	require.Equal(t, []interface{}{"2026-01-01"}, params)
+}
+
+func TestBuildFieldCriterionSQL_SkipsLabel(t *testing.T) {
+	op := &apipb.CriterionOperation{
+		Criterion: []*apipb.Criterion{
+			{
+				FieldName:  "pipelinerun.metadata.labels.env",
+				Operator:   apipb.CRITERION_OPERATOR_EQUAL,
+				MatchValue: stringMatchValue(t, "prod"),
+			},
+		},
+	}
+	queryStrs, params, err := buildFieldCriterionSQL(op)
+	require.NoError(t, err)
+	require.Empty(t, queryStrs)
+	require.Empty(t, params)
+}
+
+func TestBuildCriterionSQL_AndCombination(t *testing.T) {
+	op := &apipb.CriterionOperation{
+		LogicalOperator: apipb.LOGICAL_OPERATOR_AND,
+		Criterion: []*apipb.Criterion{
+			{
+				FieldName:  "pipelinerun.state",
+				Operator:   apipb.CRITERION_OPERATOR_EQUAL,
+				MatchValue: stringMatchValue(t, "RUNNING"),
+			},
+			{
+				FieldName:  "pipelinerun.metadata.labels.env",
+				Operator:   apipb.CRITERION_OPERATOR_EQUAL,
+				MatchValue: stringMatchValue(t, "prod"),
+			},
+		},
+	}
+	sql, params, err := buildCriterionSQL(op, "pipelinerun")
+	require.NoError(t, err)
+	// Field criteria come first, then label criteria, joined by " AND".
+	require.Equal(t,
+		"`state` = ? AND `uid` IN (SELECT `obj_uid` FROM `pipelinerun_labels` WHERE `key`= ? AND `value` = ?)",
+		sql,
+	)
+	require.Equal(t, []interface{}{"RUNNING", "env", "prod"}, params)
+}
+
+func TestBuildCriterionSQL_OrCombination(t *testing.T) {
+	op := &apipb.CriterionOperation{
+		LogicalOperator: apipb.LOGICAL_OPERATOR_OR,
+		Criterion: []*apipb.Criterion{
+			{
+				FieldName:  "pipelinerun.name",
+				Operator:   apipb.CRITERION_OPERATOR_EQUAL,
+				MatchValue: stringMatchValue(t, "alice"),
+			},
+			{
+				FieldName:  "pipelinerun.name",
+				Operator:   apipb.CRITERION_OPERATOR_EQUAL,
+				MatchValue: stringMatchValue(t, "bob"),
+			},
+		},
+	}
+	sql, _, err := buildCriterionSQL(op, "pipelinerun")
+	require.NoError(t, err)
+	require.Equal(t, "`name` = ? OR `name` = ?", sql)
+}
+
+func TestBuildCriterionSQL_SubOperations(t *testing.T) {
+	op := &apipb.CriterionOperation{
+		LogicalOperator: apipb.LOGICAL_OPERATOR_AND,
+		Criterion: []*apipb.Criterion{
+			{
+				FieldName:  "pipelinerun.state",
+				Operator:   apipb.CRITERION_OPERATOR_EQUAL,
+				MatchValue: stringMatchValue(t, "RUNNING"),
+			},
+		},
+		SubOperations: []*apipb.CriterionOperation{
+			{
+				LogicalOperator: apipb.LOGICAL_OPERATOR_OR,
+				Criterion: []*apipb.Criterion{
+					{
+						FieldName:  "pipelinerun.name",
+						Operator:   apipb.CRITERION_OPERATOR_EQUAL,
+						MatchValue: stringMatchValue(t, "alice"),
+					},
+					{
+						FieldName:  "pipelinerun.name",
+						Operator:   apipb.CRITERION_OPERATOR_EQUAL,
+						MatchValue: stringMatchValue(t, "bob"),
+					},
+				},
+			},
+		},
+	}
+	sql, params, err := buildCriterionSQL(op, "pipelinerun")
+	require.NoError(t, err)
+	require.Equal(t, "`state` = ? AND (`name` = ? OR `name` = ?)", sql)
+	require.Equal(t, []interface{}{"RUNNING", "alice", "bob"}, params)
+}
+
+func TestBuildCriterionSQL_NilOperation(t *testing.T) {
+	sql, params, err := buildCriterionSQL(nil, "pipelinerun")
+	require.NoError(t, err)
+	require.Empty(t, sql)
+	require.Empty(t, params)
+}
+
+func TestBuildOrderBySQL(t *testing.T) {
+	cases := []struct {
+		name string
+		in   []*apipb.OrderBy
+		want string
+	}{
+		{
+			name: "empty",
+			in:   nil,
+			want: "",
+		},
+		{
+			name: "base_field_with_crd_prefix",
+			in: []*apipb.OrderBy{
+				{Field: "pipelinerun.metadata.creation_timestamp", Dir: apipb.SORT_ORDER_DESC},
+			},
+			want: " ORDER BY `create_time` DESC",
+		},
+		{
+			name: "regular_column_asc",
+			in: []*apipb.OrderBy{
+				{Field: "pipelinerun.name", Dir: apipb.SORT_ORDER_ASC},
+			},
+			want: " ORDER BY `name` ASC",
+		},
+		{
+			name: "multi_clause",
+			in: []*apipb.OrderBy{
+				{Field: "pipelinerun.metadata.creation_timestamp", Dir: apipb.SORT_ORDER_DESC},
+				{Field: "pipelinerun.name", Dir: apipb.SORT_ORDER_ASC},
+			},
+			want: " ORDER BY `create_time` DESC, `name` ASC",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			require.Equal(t, c.want, buildOrderBySQL(c.in))
+		})
+	}
+}
+
+func TestExtractMatchValue_StringValueWrapper(t *testing.T) {
+	v, err := extractMatchValue(stringMatchValue(t, "alice"))
+	require.NoError(t, err)
+	require.Equal(t, "alice", v)
+}
+
+func TestExtractMatchValue_Nil(t *testing.T) {
+	_, err := extractMatchValue(nil)
+	require.Error(t, err)
+}
+
+func TestExtractMatchValue_RawBytesFallback_Sanitized(t *testing.T) {
+	// Raw bytes that aren't a StringValue: sanitizeRe strips characters
+	// outside [a-zA-Z0-9\-_. ,].
+	any := &gogotypes.Any{Value: []byte("alice;DROP TABLE")}
+	v, err := extractMatchValue(any)
+	require.NoError(t, err)
+	require.Equal(t, "aliceDROP TABLE", v)
 }

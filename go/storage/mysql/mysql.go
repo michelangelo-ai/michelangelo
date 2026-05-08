@@ -239,7 +239,7 @@ func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMe
 			return fmt.Errorf("failed to build criterion SQL: %w", err)
 		}
 		if criterionSQL != "" {
-			query += " AND (" + criterionSQL + " )"
+			query += " AND (" + criterionSQL + ")"
 			args = append(args, criterionArgs...)
 		}
 	}
@@ -421,7 +421,7 @@ func buildLabelCriterionSQL(op *apipb.CriterionOperation, tableName string) ([]s
 			return nil, nil, fmt.Errorf("error converting label value: %w", err)
 		}
 
-		queryStr := fmt.Sprintf(" `uid` IN (SELECT `obj_uid` FROM `%s` WHERE `key`= ? AND%s)", labelTable, valueSQL)
+		queryStr := fmt.Sprintf("`uid` IN (SELECT `obj_uid` FROM `%s` WHERE `key`= ? AND %s)", labelTable, valueSQL)
 		queryStrs = append(queryStrs, queryStr)
 		params = append(params, labelKey)
 		params = append(params, valueParams...)
@@ -471,8 +471,7 @@ func buildFieldCriterionSQL(op *apipb.CriterionOperation) ([]string, []interface
 }
 
 // buildCriterionSQL recursively converts a CriterionOperation into a SQL WHERE fragment.
-// Separates label vs field criteria, appends the logical operator after each fragment,
-// then trims the trailing one.
+// Separates label vs field criteria, then joins fragments with the logical operator.
 func buildCriterionSQL(op *apipb.CriterionOperation, tableName string) (string, []interface{}, error) {
 	if op == nil {
 		return "", nil, nil
@@ -482,7 +481,6 @@ func buildCriterionSQL(op *apipb.CriterionOperation, tableName string) (string, 
 	if !ok {
 		return "", nil, fmt.Errorf("logical operator %v not supported", op.GetLogicalOperator())
 	}
-	logicalOpStr := " " + logicalOp
 
 	fieldQueryStrs, fieldParams, err := buildFieldCriterionSQL(op)
 	if err != nil {
@@ -494,17 +492,10 @@ func buildCriterionSQL(op *apipb.CriterionOperation, tableName string) (string, 
 		return "", nil, err
 	}
 
-	queryStr := ""
-	var queryParams []interface{}
+	parts := append([]string{}, fieldQueryStrs...)
+	parts = append(parts, labelQueryStrs...)
 
-	for _, q := range fieldQueryStrs {
-		queryStr += q + logicalOpStr
-	}
-	queryParams = append(queryParams, fieldParams...)
-
-	for _, q := range labelQueryStrs {
-		queryStr += q + logicalOpStr
-	}
+	queryParams := append([]interface{}{}, fieldParams...)
 	queryParams = append(queryParams, labelParams...)
 
 	for _, sub := range op.SubOperations {
@@ -513,16 +504,12 @@ func buildCriterionSQL(op *apipb.CriterionOperation, tableName string) (string, 
 			return "", nil, err
 		}
 		if subSQL != "" {
-			queryStr += " (" + subSQL + ")" + logicalOpStr
+			parts = append(parts, "("+subSQL+")")
 			queryParams = append(queryParams, subParams...)
 		}
 	}
 
-	if queryStr != "" {
-		queryStr = strings.TrimSuffix(queryStr, logicalOpStr)
-	}
-
-	return queryStr, queryParams, nil
+	return strings.Join(parts, " "+logicalOp+" "), queryParams, nil
 }
 
 // buildOrderBySQL builds the ORDER BY clause from a list of OrderBy specs.
