@@ -32,7 +32,8 @@ ma sandbox --help
 | `ma sandbox delete` | Uninstall the control plane and delete the k3d cluster |
 | `ma sandbox start` | Start a previously stopped k3d cluster |
 | `ma sandbox stop` | Stop the k3d cluster (preserves data) |
-| `ma sandbox demo` | Run demo pipelines against a running sandbox |
+| `ma sandbox demo pipeline` | Run the pipeline demo against a running sandbox |
+| `ma sandbox demo inference` | Run the inference demo against a running sandbox |
 
 ## Architecture
 
@@ -73,14 +74,16 @@ The workflow engine can be switched by deleting and recreating the sandbox. `ma 
 
 ## Excluding Services
 
-Use `--exclude` to skip specific control plane services:
+Use `--exclude` to skip specific services:
 
 ```bash
 ma sandbox create --exclude worker controllermgr
 ma sandbox sync --exclude ui
 ```
 
-Available services: `apiserver`, `ui`, `worker`, `controllermgr`.
+**Control plane services** (Helm-managed): `apiserver`, `ui`, `worker`, `controllermgr`
+
+**Infrastructure services**: `prometheus`, `grafana`, `ray`, `spark`
 
 ## Experimental Services
 
@@ -96,7 +99,7 @@ ma sandbox create --include-experimental fluent-bit mlflow
 | Envoy (gRPC-Web) | http://localhost:8081 | |
 | Apiserver (gRPC) | localhost:15566 | |
 | Cadence Web | http://localhost:8088 | Only when `--workflow cadence` (default) |
-| Temporal Web | http://localhost:8080 | Only when `--workflow temporal` — requires `kubectl port-forward svc/temporaltest-temporal-web 8080:8080` |
+| Temporal Web | http://localhost:8080 | Only when `--workflow temporal` — port-forwarded automatically by sandbox |
 | MinIO Console | http://localhost:9090 | |
 | Grafana | http://localhost:3000 | |
 | Prometheus | http://localhost:9092 | |
@@ -107,10 +110,7 @@ Prometheus and Grafana are deployed automatically during `ma sandbox create`. No
 
 ### Access Prometheus
 
-```bash
-kubectl port-forward svc/prometheus 9090:9090
-```
-Open http://localhost:9090
+Prometheus is directly accessible at http://localhost:9092 — no port-forward needed.
 
 ### Available Metrics
 
