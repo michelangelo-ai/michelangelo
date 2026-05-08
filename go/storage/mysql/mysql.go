@@ -234,7 +234,7 @@ func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMe
 	}
 
 	if listOptionsExt != nil && listOptionsExt.Operation != nil {
-		criterionSQL, criterionArgs, err := buildQueryFromListOptExtV2(listOptionsExt.Operation, tableName)
+		criterionSQL, criterionArgs, err := buildCriterionSQL(listOptionsExt.Operation, tableName)
 		if err != nil {
 			return fmt.Errorf("failed to build criterion SQL: %w", err)
 		}
@@ -391,9 +391,9 @@ func convertCriterionOperator(fieldName string, op apipb.CriterionOperator, valu
 	}
 }
 
-// processListOptExtLabelV2 converts label criteria into uid-IN-subquery SQL fragments.
+// buildLabelCriterionSQL converts label criteria into uid-IN-subquery SQL fragments.
 // Each fragment: `uid` IN (SELECT `obj_uid` FROM {table}_labels WHERE `key`=? AND `value`=?)
-func processListOptExtLabelV2(op *apipb.CriterionOperation, tableName string) ([]string, []interface{}, error) {
+func buildLabelCriterionSQL(op *apipb.CriterionOperation, tableName string) ([]string, []interface{}, error) {
 	var queryStrs []string
 	var params []interface{}
 	labelTable := tableName + "_labels"
@@ -430,8 +430,8 @@ func processListOptExtLabelV2(op *apipb.CriterionOperation, tableName string) ([
 	return queryStrs, params, nil
 }
 
-// processListOptExtFieldV2 converts non-label criteria into SQL fragments.
-func processListOptExtFieldV2(op *apipb.CriterionOperation) ([]string, []interface{}, error) {
+// buildFieldCriterionSQL converts non-label criteria into SQL fragments.
+func buildFieldCriterionSQL(op *apipb.CriterionOperation) ([]string, []interface{}, error) {
 	var queryStrs []string
 	var params []interface{}
 
@@ -470,10 +470,10 @@ func processListOptExtFieldV2(op *apipb.CriterionOperation) ([]string, []interfa
 	return queryStrs, params, nil
 }
 
-// buildQueryFromListOptExtV2 recursively converts a CriterionOperation into a SQL WHERE fragment.
-// Mirrors the internal buildQueryFromListOptExtV2: separates label vs field criteria,
-// appends the logical operator after each fragment, then trims the trailing one.
-func buildQueryFromListOptExtV2(op *apipb.CriterionOperation, tableName string) (string, []interface{}, error) {
+// buildCriterionSQL recursively converts a CriterionOperation into a SQL WHERE fragment.
+// Separates label vs field criteria, appends the logical operator after each fragment,
+// then trims the trailing one.
+func buildCriterionSQL(op *apipb.CriterionOperation, tableName string) (string, []interface{}, error) {
 	if op == nil {
 		return "", nil, nil
 	}
@@ -484,12 +484,12 @@ func buildQueryFromListOptExtV2(op *apipb.CriterionOperation, tableName string) 
 	}
 	logicalOpStr := " " + logicalOp
 
-	fieldQueryStrs, fieldParams, err := processListOptExtFieldV2(op)
+	fieldQueryStrs, fieldParams, err := buildFieldCriterionSQL(op)
 	if err != nil {
 		return "", nil, err
 	}
 
-	labelQueryStrs, labelParams, err := processListOptExtLabelV2(op, tableName)
+	labelQueryStrs, labelParams, err := buildLabelCriterionSQL(op, tableName)
 	if err != nil {
 		return "", nil, err
 	}
@@ -508,7 +508,7 @@ func buildQueryFromListOptExtV2(op *apipb.CriterionOperation, tableName string) 
 	queryParams = append(queryParams, labelParams...)
 
 	for _, sub := range op.SubOperations {
-		subSQL, subParams, err := buildQueryFromListOptExtV2(sub, tableName)
+		subSQL, subParams, err := buildCriterionSQL(sub, tableName)
 		if err != nil {
 			return "", nil, err
 		}
