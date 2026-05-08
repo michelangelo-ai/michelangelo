@@ -11,40 +11,16 @@ rules:
     resources: ["customresourcedefinitions"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
 
-  # Michelangelo CRs — full reconcile lifecycle
+  # Michelangelo CRs — full reconcile lifecycle.
+  # Using wildcard so dynamically-registered CRDs (e.g. cachedoutputs)
+  # are automatically covered without requiring chart updates.
   - apiGroups: ["michelangelo.api"]
-    resources:
-      - projects
-      - models
-      - modelfamilies
-      - pipelines
-      - pipelineruns
-      - revisions
-      - inferenceservers
-      - clusters
-      - rayclusters
-      - rayjobs
-      - sparkjobs
-      - triggerruns
-      - deployments
+    resources: ["*"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
   # Michelangelo CR status subresource updates (controller pattern)
   - apiGroups: ["michelangelo.api"]
-    resources:
-      - projects/status
-      - models/status
-      - modelfamilies/status
-      - pipelines/status
-      - pipelineruns/status
-      - revisions/status
-      - inferenceservers/status
-      - clusters/status
-      - rayclusters/status
-      - rayjobs/status
-      - sparkjobs/status
-      - triggerruns/status
-      - deployments/status
+    resources: ["*/status"]
     verbs: ["get", "update", "patch"]
 
   # KubeRay CRs — controllermgr creates/manages RayCluster + RayJob
