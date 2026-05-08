@@ -332,6 +332,20 @@ func isLabelFieldInMetadata(fieldName string) bool {
 // "pipeline_run.state" → "state"
 // "pipeline_run.label.michelangelo/Foo" → "michelangelo/Foo"
 // "pipeline_run.metadata.labels.michelangelo/Foo" → "michelangelo/Foo"
+//
+// TODO: validate the CRD prefix against a registry of known + searchable CRDs.
+// Two reasons to add this:
+//  1. Catch typos at the API boundary. Today an unknown CRD prefix silently
+//     becomes a column lookup against the wrong table; the user sees a cryptic
+//     MySQL error rather than a clean "unknown CRD" rejection.
+//  2. Gate which CRDs are exposed to ad-hoc search. Some kinds (e.g. very large
+//     event tables) are too expensive to query by arbitrary fields and should
+//     be opt-in. A whitelist makes that boundary explicit and avoids accidental
+//     full-table scans from unscoped queries.
+//
+// Implementing this requires plumbing a registry from the object/scheme layer
+// (or the storage constructor) down into this function — not done here to keep
+// the change scoped to mysql.go.
 func processFieldName(fieldName string) (string, error) {
 	if strings.IndexByte(fieldName, '.') < 0 {
 		return "", fmt.Errorf("field name %q invalid: at least <crd>.<field> is required", fieldName)
