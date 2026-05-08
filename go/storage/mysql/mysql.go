@@ -342,12 +342,13 @@ func buildSingleCriterionSQL(c *apipb.Criterion) (string, []interface{}, error) 
 	if col == "" {
 		return "", nil, nil
 	}
+	quotedCol := fmt.Sprintf("`%s`", col)
 
 	switch c.Operator {
 	case apipb.CRITERION_OPERATOR_IS_NULL:
-		return fmt.Sprintf("%s IS NULL", col), nil, nil
+		return fmt.Sprintf("%s IS NULL", quotedCol), nil, nil
 	case apipb.CRITERION_OPERATOR_IS_NOT_NULL:
-		return fmt.Sprintf("%s IS NOT NULL", col), nil, nil
+		return fmt.Sprintf("%s IS NOT NULL", quotedCol), nil, nil
 	}
 
 	// All remaining operators need a match value
@@ -358,19 +359,38 @@ func buildSingleCriterionSQL(c *apipb.Criterion) (string, []interface{}, error) 
 
 	switch c.Operator {
 	case apipb.CRITERION_OPERATOR_EQUAL:
-		return fmt.Sprintf("%s = ?", col), []interface{}{val}, nil
+		return fmt.Sprintf("%s = ?", quotedCol), []interface{}{val}, nil
 	case apipb.CRITERION_OPERATOR_NOT_EQUAL:
-		return fmt.Sprintf("%s != ?", col), []interface{}{val}, nil
+		return fmt.Sprintf("%s != ?", quotedCol), []interface{}{val}, nil
 	case apipb.CRITERION_OPERATOR_GREATER_THAN:
-		return fmt.Sprintf("%s > ?", col), []interface{}{val}, nil
+		return fmt.Sprintf("%s > ?", quotedCol), []interface{}{val}, nil
 	case apipb.CRITERION_OPERATOR_GREATER_THAN_OR_EQUAL_TO:
-		return fmt.Sprintf("%s >= ?", col), []interface{}{val}, nil
+		return fmt.Sprintf("%s >= ?", quotedCol), []interface{}{val}, nil
 	case apipb.CRITERION_OPERATOR_LESS_THAN:
-		return fmt.Sprintf("%s < ?", col), []interface{}{val}, nil
+		return fmt.Sprintf("%s < ?", quotedCol), []interface{}{val}, nil
 	case apipb.CRITERION_OPERATOR_LESS_THAN_OR_EQUAL_TO:
-		return fmt.Sprintf("%s <= ?", col), []interface{}{val}, nil
+		return fmt.Sprintf("%s <= ?", quotedCol), []interface{}{val}, nil
 	case apipb.CRITERION_OPERATOR_LIKE:
-		return fmt.Sprintf("%s LIKE ?", col), []interface{}{val}, nil
+		return fmt.Sprintf("%s LIKE ?", quotedCol), []interface{}{"%" + val + "%"}, nil
+	case apipb.CRITERION_OPERATOR_IN, apipb.CRITERION_OPERATOR_NOT_IN:
+		items := strings.Split(strings.Trim(val, " [](){}"), ",")
+		placeholders := make([]string, 0, len(items))
+		args := make([]interface{}, 0, len(items))
+		for _, item := range items {
+			trimmed := strings.TrimSpace(item)
+			if trimmed != "" {
+				placeholders = append(placeholders, "?")
+				args = append(args, trimmed)
+			}
+		}
+		if len(placeholders) == 0 {
+			return "", nil, fmt.Errorf("field %q: IN/NOT_IN requires at least one value", col)
+		}
+		op := "IN"
+		if c.Operator == apipb.CRITERION_OPERATOR_NOT_IN {
+			op = "NOT IN"
+		}
+		return fmt.Sprintf("%s %s (%s)", quotedCol, op, strings.Join(placeholders, ", ")), args, nil
 	default:
 		return "", nil, fmt.Errorf("unsupported criterion operator: %v", c.Operator)
 	}
