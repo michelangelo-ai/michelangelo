@@ -434,6 +434,14 @@ def _deploy_services(ns: argparse.Namespace):
 
     # Cadence
 
+    # If switching from a previous temporal install, uninstall temporal first.
+    if ns.workflow == "cadence":
+        subprocess.run(
+            ["helm", "uninstall", "temporaltest"],
+            capture_output=True,
+            check=False,
+        )
+
     if ns.workflow == "cadence":
         resources.append("cadence.yaml")
         links.append(
@@ -442,6 +450,20 @@ def _deploy_services(ns: argparse.Namespace):
                 "http://localhost:8088/domains/default/workflows",
                 "",
             )
+        )
+    elif ns.workflow == "temporal":
+        # If switching from a previous cadence install, remove cadence pods.
+        subprocess.run(
+            ["kubectl", "delete", "pod", "cadence", "cadence-web",
+             "--ignore-not-found=true", "--grace-period=0"],
+            capture_output=True,
+            check=False,
+        )
+        subprocess.run(
+            ["kubectl", "delete", "svc", "cadence",
+             "--ignore-not-found=true"],
+            capture_output=True,
+            check=False,
         )
 
     # MinIO
