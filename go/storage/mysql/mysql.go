@@ -6,14 +6,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	proto "github.com/gogo/protobuf/proto"
 	gogotypes "github.com/gogo/protobuf/types"
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -39,16 +43,29 @@ type mysqlMetadataStorage struct {
 	db     *sql.DB
 	config Config
 	scheme *runtime.Scheme
+	// indexPathToKeyMaps optionally constrains which proto field paths can appear
+	// in ListOptionsExt criteria, per GVK. The outer key is the GVK; the inner
+	// map is path → MySQL column name (e.g. "spec.framework" → "framework").
+	//
+	// When nil OR no entry exists for a given GVK, the storage is "permissive":
+	// any field name passes through to the SQL layer (matches the OSS default).
+	// When an entry exists, criteria referencing unknown paths are rejected with
+	// codes.InvalidArgument (matches the internal indexPathToKeyMap behavior).
+	indexPathToKeyMaps map[schema.GroupVersionKind]map[string]string
 }
 
-// NewMetadataStorage creates a new MySQL metadata storage
-func NewMetadataStorage(config Config, scheme *runtime.Scheme) (storage.MetadataStorage, error) {
+// NewMetadataStorage creates a new MySQL metadata storage.
+//
+// indexPathToKeyMaps may be nil (permissive — accept any field name in
+// ListOptionsExt). When provided, it constrains the field names allowed per
+// GVK. See mysqlMetadataStorage.indexPathToKeyMaps for details.
+func NewMetadataStorage(config Config, scheme *runtime.Scheme, indexPathToKeyMaps map[schema.GroupVersionKind]map[string]string) (storage.MetadataStorage, error) {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&loc=UTC",
 		config.User, config.Password, config.Host, config.Port, config.Database)
 
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open database connection: %w", err)
+		return nil, status.Errorf(codes.Internal, "failed to open database connection: %v", err)
 	}
 
 	// Set connection pool settings
@@ -72,13 +89,14 @@ func NewMetadataStorage(config Config, scheme *runtime.Scheme) (storage.Metadata
 
 	// Test the connection
 	if err := db.PingContext(context.Background()); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
+		return nil, status.Errorf(codes.Internal, "failed to ping database: %v", err)
 	}
 
 	return &mysqlMetadataStorage{
-		db:     db,
-		config: config,
-		scheme: scheme,
+		db:                 db,
+		config:             config,
+		scheme:             scheme,
+		indexPathToKeyMaps: indexPathToKeyMaps,
 	}, nil
 }
 
@@ -91,7 +109,7 @@ func (m *mysqlMetadataStorage) Upsert(ctx context.Context, object runtime.Object
 
 	tableName := m.getTableName(object)
 	if tableName == "" {
-		return fmt.Errorf("unable to determine table name for object type")
+		return status.Errorf(codes.InvalidArgument, "unable to determine table name for object type")
 	}
 
 	groupVer, err := m.groupVersionForObject(object)
@@ -102,22 +120,22 @@ func (m *mysqlMetadataStorage) Upsert(ctx context.Context, object runtime.Object
 	// Serialize object to protobuf
 	protoMsg, ok := object.(proto.Message)
 	if !ok {
-		return fmt.Errorf("object does not implement proto.Message")
+		return status.Errorf(codes.InvalidArgument, "object does not implement proto.Message")
 	}
 	protoBytes, err := proto.Marshal(protoMsg)
 	if err != nil {
-		return fmt.Errorf("failed to marshal object to proto: %w", err)
+		return status.Errorf(codes.Internal, "failed to marshal object to proto: %v", err)
 	}
 
 	// Serialize object to JSON
 	jsonBytes, err := json.Marshal(object)
 	if err != nil {
-		return fmt.Errorf("failed to marshal object to JSON: %w", err)
+		return status.Errorf(codes.Internal, "failed to marshal object to JSON: %v", err)
 	}
 
 	tx, err := m.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		return status.Errorf(codes.Internal, "failed to begin transaction: %v", err)
 	}
 	defer tx.Rollback()
 
@@ -152,7 +170,7 @@ func (m *mysqlMetadataStorage) Upsert(ctx context.Context, object runtime.Object
 func (m *mysqlMetadataStorage) GetByName(ctx context.Context, namespace string, name string, object runtime.Object) error {
 	tableName := m.getTableName(object)
 	if tableName == "" {
-		return fmt.Errorf("unable to determine table name for object type")
+		return status.Errorf(codes.InvalidArgument, "unable to determine table name for object type")
 	}
 
 	query := fmt.Sprintf(`
@@ -165,19 +183,19 @@ func (m *mysqlMetadataStorage) GetByName(ctx context.Context, namespace string, 
 	var protoBytes []byte
 	err := m.db.QueryRowContext(ctx, query, namespace, name).Scan(&protoBytes)
 	if err == sql.ErrNoRows {
-		return fmt.Errorf("object not found: %s/%s", namespace, name)
+		return status.Errorf(codes.NotFound, "object not found: %s/%s", namespace, name)
 	}
 	if err != nil {
-		return fmt.Errorf("failed to query object: %w", err)
+		return status.Errorf(codes.Internal, "failed to query object: %v", err)
 	}
 
 	// Deserialize protobuf
 	protoMsg, ok := object.(proto.Message)
 	if !ok {
-		return fmt.Errorf("object does not implement proto.Message")
+		return status.Errorf(codes.InvalidArgument, "object does not implement proto.Message")
 	}
 	if err := proto.Unmarshal(protoBytes, protoMsg); err != nil {
-		return fmt.Errorf("failed to unmarshal proto: %w", err)
+		return status.Errorf(codes.Internal, "failed to unmarshal proto: %v", err)
 	}
 
 	return nil
@@ -187,7 +205,7 @@ func (m *mysqlMetadataStorage) GetByName(ctx context.Context, namespace string, 
 func (m *mysqlMetadataStorage) GetByID(ctx context.Context, uid string, object runtime.Object) error {
 	tableName := m.getTableName(object)
 	if tableName == "" {
-		return fmt.Errorf("unable to determine table name for object type")
+		return status.Errorf(codes.InvalidArgument, "unable to determine table name for object type")
 	}
 
 	query := fmt.Sprintf(`
@@ -200,43 +218,53 @@ func (m *mysqlMetadataStorage) GetByID(ctx context.Context, uid string, object r
 	var protoBytes []byte
 	err := m.db.QueryRowContext(ctx, query, uid).Scan(&protoBytes)
 	if err == sql.ErrNoRows {
-		return fmt.Errorf("object not found with uid: %s", uid)
+		return status.Errorf(codes.NotFound, "object not found with uid: %s", uid)
 	}
 	if err != nil {
-		return fmt.Errorf("failed to query object: %w", err)
+		return status.Errorf(codes.Internal, "failed to query object: %v", err)
 	}
 
 	// Deserialize protobuf
 	protoMsg, ok := object.(proto.Message)
 	if !ok {
-		return fmt.Errorf("object does not implement proto.Message")
+		return status.Errorf(codes.InvalidArgument, "object does not implement proto.Message")
 	}
 	if err := proto.Unmarshal(protoBytes, protoMsg); err != nil {
-		return fmt.Errorf("failed to unmarshal proto: %w", err)
+		return status.Errorf(codes.Internal, "failed to unmarshal proto: %v", err)
 	}
 
 	return nil
 }
 
-// List objects
+// List objects.
+//
+// SQL output is byte-equivalent to the internal storage/pkg/mysql/mysql.go List:
+//   SELECT `uid`, `group_ver`, `namespace`, `name`, `res_version`,
+//          `create_time`, `update_time`, `proto`
+//   FROM `<table>` WHERE `namespace`=? AND `delete_time` IS NULL
+//                  [AND (<criterion> )]
+//                  [ORDER BY ...]
+//                  [LIMIT ? [OFFSET ?]]
 func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMeta, namespace string, listOptions *metav1.ListOptions, listOptionsExt *apipb.ListOptionsExt, listResponse *storage.ListResponse) error {
 	tableName := getTableNameFromTypeMeta(typeMeta)
 	if tableName == "" {
-		return fmt.Errorf("unable to determine table name for type: %s", typeMeta.Kind)
+		return status.Errorf(codes.InvalidArgument, "unable to determine table name for type: %s", typeMeta.Kind)
 	}
 
-	query := fmt.Sprintf("SELECT `proto` FROM `%s` WHERE `delete_time` IS NULL", tableName)
+	query := "SELECT `uid`, `group_ver`, `namespace`, `name`, `res_version`, " +
+		"`create_time`, `update_time`, `proto` FROM `" + tableName + "` WHERE "
 	args := []interface{}{}
-
 	if namespace != "" {
-		query += " AND `namespace` = ?"
+		query += "`namespace`=? AND `delete_time` IS NULL"
 		args = append(args, namespace)
+	} else {
+		query += "`delete_time` IS NULL"
 	}
 
 	if listOptionsExt != nil && listOptionsExt.Operation != nil {
-		criterionSQL, criterionArgs, err := buildCriterionSQL(listOptionsExt.Operation, tableName)
+		criterionSQL, criterionArgs, err := buildCriterionSQL(listOptionsExt.Operation, tableName, m.indexPathToKeyMap(typeMeta))
 		if err != nil {
-			return fmt.Errorf("failed to build criterion SQL: %w", err)
+			return status.Errorf(codes.Internal, "failed to build criterion SQL: %v", err)
 		}
 		if criterionSQL != "" {
 			query += " AND (" + criterionSQL + " )"
@@ -246,8 +274,6 @@ func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMe
 
 	if listOptionsExt != nil && len(listOptionsExt.OrderBy) > 0 {
 		query += buildOrderBySQL(listOptionsExt.OrderBy)
-	} else {
-		query += " ORDER BY `create_time` DESC"
 	}
 
 	var limit, offset int64
@@ -266,38 +292,62 @@ func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMe
 		}
 	}
 
+	return m.executeListQueryAndProcessResult(ctx, query, args, limit, offset, typeMeta, listResponse)
+}
+
+// executeListQueryAndProcessResult runs a SELECT query against the main table,
+// unmarshals each row's `proto` column into a runtime.Object, and appends to
+// listResp.Items. When limit > 0 and the page is full, sets listResp.Continue
+// so callers can fetch the next page (matches internal cursor behavior).
+//
+// For now, the columns other than `proto` (uid, group_ver, namespace, name,
+// res_version, create_time, update_time) are scanned but discarded — the proto
+// blob already carries all metadata via the embedded ObjectMeta. The internal
+// implementation overwrites these fields from the columns to handle the case
+// where the column values are more recent than the serialized proto; that
+// merge is not yet implemented in OSS. TODO: merge column-side res_version /
+// update_time onto the runtime object.
+func (m *mysqlMetadataStorage) executeListQueryAndProcessResult(ctx context.Context, query string, args []interface{}, limit, offset int64, typeMeta *metav1.TypeMeta, listResp *storage.ListResponse) error {
 	rows, err := m.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return fmt.Errorf("failed to query objects: %w", err)
+		return status.Errorf(codes.Internal, "failed to query objects: %v", err)
 	}
 	defer rows.Close()
 
-	listResponse.Items = []runtime.Object{}
+	listResp.Items = []runtime.Object{}
 	for rows.Next() {
-		var protoBytes []byte
-		if err := rows.Scan(&protoBytes); err != nil {
-			return fmt.Errorf("failed to scan row: %w", err)
+		var (
+			uid, groupVer, ns, name string
+			resVersion              string
+			createTime, updateTime  time.Time
+			protoBytes              []byte
+		)
+		if err := rows.Scan(&uid, &groupVer, &ns, &name, &resVersion, &createTime, &updateTime, &protoBytes); err != nil {
+			return status.Errorf(codes.Internal, "failed to scan row: %v", err)
 		}
 
-		// Create new object instance based on type
 		obj, err := m.createObjectFromTypeMeta(typeMeta)
 		if err != nil {
 			return err
 		}
-
 		protoMsg, ok := obj.(proto.Message)
 		if !ok {
-			return fmt.Errorf("object does not implement proto.Message")
+			return status.Errorf(codes.InvalidArgument, "object does not implement proto.Message")
 		}
-
 		if err := proto.Unmarshal(protoBytes, protoMsg); err != nil {
-			return fmt.Errorf("failed to unmarshal proto: %w", err)
+			return status.Errorf(codes.Internal, "failed to unmarshal proto: %v", err)
 		}
 
-		listResponse.Items = append(listResponse.Items, obj)
+		listResp.Items = append(listResp.Items, obj)
+	}
+	if err := rows.Err(); err != nil {
+		return err
 	}
 
-	return rows.Err()
+	if limit > 0 && int64(len(listResp.Items)) >= limit {
+		listResp.Continue = strconv.FormatInt(offset+limit, 10)
+	}
+	return nil
 }
 
 var (
@@ -348,7 +398,7 @@ func isLabelFieldInMetadata(fieldName string) bool {
 // the change scoped to mysql.go.
 func processFieldName(fieldName string) (string, error) {
 	if strings.IndexByte(fieldName, '.') < 0 {
-		return "", fmt.Errorf("field name %q invalid: at least <crd>.<field> is required", fieldName)
+		return "", status.Errorf(codes.InvalidArgument, "field name %q invalid: at least <crd>.<field> is required", fieldName)
 	}
 	if isLabelField(fieldName) {
 		return strings.SplitN(fieldName, ".", 3)[2], nil
@@ -410,7 +460,7 @@ func convertCriterionOperator(fieldName string, op apipb.CriterionOperator, valu
 		sb.WriteByte(')')
 		return sb.String(), args, nil
 	default:
-		return "", nil, fmt.Errorf("operator %v currently not supported", op)
+		return "", nil, status.Errorf(codes.InvalidArgument, "operator %v currently not supported", op)
 	}
 }
 
@@ -432,7 +482,7 @@ func buildLabelCriterionSQL(op *apipb.CriterionOperation, tableName string) ([]s
 		}
 		labelKey, err := processFieldName(item.GetFieldName())
 		if err != nil {
-			return nil, nil, fmt.Errorf("label field name invalid: %w", err)
+			return nil, nil, status.Errorf(codes.InvalidArgument, "label field name invalid: %v", err)
 		}
 
 		criterionOp := item.GetOperator()
@@ -440,13 +490,13 @@ func buildLabelCriterionSQL(op *apipb.CriterionOperation, tableName string) ([]s
 		if !isNoParamOp(criterionOp) {
 			valueStr, err = extractMatchValue(item.GetMatchValue())
 			if err != nil {
-				return nil, nil, fmt.Errorf("label field value invalid: %w", err)
+				return nil, nil, status.Errorf(codes.InvalidArgument, "label field value invalid: %v", err)
 			}
 		}
 
 		valueSQL, valueParams, err := convertCriterionOperator("value", criterionOp, valueStr)
 		if err != nil {
-			return nil, nil, fmt.Errorf("error converting label value: %w", err)
+			return nil, nil, status.Errorf(codes.InvalidArgument, "error converting label value: %v", err)
 		}
 
 		// valueSQL already begins with a leading space (from convertCriterionOperator),
@@ -462,7 +512,12 @@ func buildLabelCriterionSQL(op *apipb.CriterionOperation, tableName string) ([]s
 
 // buildFieldCriterionSQL converts non-label criteria into SQL fragments.
 // Each fragment begins with a leading space (see convertCriterionOperator).
-func buildFieldCriterionSQL(op *apipb.CriterionOperation) ([]string, []interface{}, error) {
+//
+// indexPathToKeyMap (when non-nil) maps proto field paths to MySQL column
+// names; criteria referencing paths not in the map are rejected. When nil,
+// field names are passed through unchanged after the bare baseOrderByFields
+// rewrite (permissive mode).
+func buildFieldCriterionSQL(op *apipb.CriterionOperation, indexPathToKeyMap map[string]string) ([]string, []interface{}, error) {
 	var queryStrs []string
 	var params []interface{}
 
@@ -472,12 +527,18 @@ func buildFieldCriterionSQL(op *apipb.CriterionOperation) ([]string, []interface
 		}
 		fieldName, err := processFieldName(item.GetFieldName())
 		if err != nil {
-			return nil, nil, fmt.Errorf("field name invalid: %w", err)
+			return nil, nil, status.Errorf(codes.InvalidArgument, "field name invalid: %v", err)
 		}
 
-		// Map base metadata fields to column names.
-		if col, ok := baseOrderByFields[fieldName]; ok {
+		// Resolve to a column name. Order: per-CRD indexPathToKeyMap, then
+		// baseOrderByFields, then permissive passthrough (only when no map).
+		if col, ok := indexPathToKeyMap[fieldName]; ok {
 			fieldName = col
+		} else if col, ok := baseOrderByFields[fieldName]; ok {
+			fieldName = col
+		} else if indexPathToKeyMap != nil {
+			return nil, nil, status.Errorf(codes.InvalidArgument,
+				"invalid field selector, unsupported field. field: %v", fieldName)
 		}
 
 		criterionOp := item.GetOperator()
@@ -485,13 +546,13 @@ func buildFieldCriterionSQL(op *apipb.CriterionOperation) ([]string, []interface
 		if !isNoParamOp(criterionOp) {
 			valueStr, err = extractMatchValue(item.GetMatchValue())
 			if err != nil {
-				return nil, nil, fmt.Errorf("field value invalid: %w", err)
+				return nil, nil, status.Errorf(codes.InvalidArgument, "field value invalid: %v", err)
 			}
 		}
 
 		queryStr, valueParams, err := convertCriterionOperator(fieldName, criterionOp, valueStr)
 		if err != nil {
-			return nil, nil, fmt.Errorf("error converting field criterion: %w", err)
+			return nil, nil, status.Errorf(codes.InvalidArgument, "error converting field criterion: %v", err)
 		}
 
 		queryStrs = append(queryStrs, queryStr)
@@ -509,18 +570,21 @@ func buildFieldCriterionSQL(op *apipb.CriterionOperation) ([]string, []interface
 //
 // All fragments produced by buildFieldCriterionSQL / buildLabelCriterionSQL begin
 // with a leading space, so concatenation produces correct spacing.
-func buildCriterionSQL(op *apipb.CriterionOperation, tableName string) (string, []interface{}, error) {
+//
+// indexPathToKeyMap is forwarded to buildFieldCriterionSQL — see that function
+// for the validation contract.
+func buildCriterionSQL(op *apipb.CriterionOperation, tableName string, indexPathToKeyMap map[string]string) (string, []interface{}, error) {
 	if op == nil {
 		return "", nil, nil
 	}
 
 	logicalOp, ok := logicalOperatorMap[op.GetLogicalOperator().String()]
 	if !ok {
-		return "", nil, fmt.Errorf("logical operator %v currently not supported", op.GetLogicalOperator())
+		return "", nil, status.Errorf(codes.InvalidArgument, "logical operator %v currently not supported", op.GetLogicalOperator())
 	}
 	logicalOpStr := " " + logicalOp
 
-	fieldQueryStrs, fieldParams, err := buildFieldCriterionSQL(op)
+	fieldQueryStrs, fieldParams, err := buildFieldCriterionSQL(op, indexPathToKeyMap)
 	if err != nil {
 		return "", nil, err
 	}
@@ -545,7 +609,7 @@ func buildCriterionSQL(op *apipb.CriterionOperation, tableName string) (string, 
 	queryParams = append(queryParams, labelParams...)
 
 	for _, sub := range op.SubOperations {
-		subSQL, subParams, err := buildCriterionSQL(sub, tableName)
+		subSQL, subParams, err := buildCriterionSQL(sub, tableName, indexPathToKeyMap)
 		if err != nil {
 			return "", nil, err
 		}
@@ -600,7 +664,7 @@ func buildOrderBySQL(orderBy []*apipb.OrderBy) string {
 // raw bytes (with regex sanitization).
 func extractMatchValue(anyVal *gogotypes.Any) (string, error) {
 	if anyVal == nil {
-		return "", fmt.Errorf("field value is nil")
+		return "", status.Errorf(codes.InvalidArgument, "field value is nil")
 	}
 	var sv gogotypes.StringValue
 	if err := gogotypes.UnmarshalAny(anyVal, &sv); err == nil && sv.Value != "" {
@@ -614,7 +678,7 @@ func extractMatchValue(anyVal *gogotypes.Any) (string, error) {
 func (m *mysqlMetadataStorage) Delete(ctx context.Context, typeMeta *metav1.TypeMeta, namespace string, name string) error {
 	tableName := getTableNameFromTypeMeta(typeMeta)
 	if tableName == "" {
-		return fmt.Errorf("unable to determine table name for type: %s", typeMeta.Kind)
+		return status.Errorf(codes.InvalidArgument, "unable to determine table name for type: %s", typeMeta.Kind)
 	}
 
 	// Soft delete: set delete_time
@@ -626,16 +690,16 @@ func (m *mysqlMetadataStorage) Delete(ctx context.Context, typeMeta *metav1.Type
 
 	result, err := m.db.ExecContext(ctx, query, time.Now().UTC(), namespace, name)
 	if err != nil {
-		return fmt.Errorf("failed to delete object: %w", err)
+		return status.Errorf(codes.Internal, "failed to delete object: %v", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
+		return status.Errorf(codes.Internal, "failed to get rows affected: %v", err)
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("object not found or already deleted: %s/%s", namespace, name)
+		return status.Errorf(codes.NotFound, "object not found or already deleted: %s/%s", namespace, name)
 	}
 
 	return nil
@@ -643,17 +707,17 @@ func (m *mysqlMetadataStorage) Delete(ctx context.Context, typeMeta *metav1.Type
 
 // DeleteCollection deletes a collection of objects
 func (m *mysqlMetadataStorage) DeleteCollection(ctx context.Context, namespace string, deleteOptions *metav1.DeleteOptions, listOptions *metav1.ListOptions) error {
-	return fmt.Errorf("DeleteCollection not yet implemented")
+	return status.Errorf(codes.Unimplemented, "DeleteCollection not yet implemented")
 }
 
 // QueryByTemplateID queries objects with a predefined query template
 func (m *mysqlMetadataStorage) QueryByTemplateID(ctx context.Context, typeMeta *metav1.TypeMeta, templateID string, listOptionsExt *apipb.ListOptionsExt, listResponse *storage.ListResponse) error {
-	return fmt.Errorf("QueryByTemplateID not yet implemented")
+	return status.Errorf(codes.Unimplemented, "QueryByTemplateID not yet implemented")
 }
 
 // Backfill performs backfill operation
 func (m *mysqlMetadataStorage) Backfill(ctx context.Context, createFn storage.PrepareBackfillParams, opts storage.BackfillOptions) (endTime *time.Time, err error) {
-	return nil, fmt.Errorf("Backfill not yet implemented")
+	return nil, status.Errorf(codes.Unimplemented, "Backfill not yet implemented")
 }
 
 // Close DB connection
@@ -711,21 +775,21 @@ func (m *mysqlMetadataStorage) fullUpsert(ctx context.Context, tx *sql.Tx, table
 
 	_, err := tx.ExecContext(ctx, query, values...)
 	if err != nil {
-		return fmt.Errorf("failed to upsert object: %w", err)
+		return status.Errorf(codes.Internal, "failed to upsert object: %v", err)
 	}
 
 	return nil
 }
 
 func (m *mysqlMetadataStorage) directUpdate(ctx context.Context, tx *sql.Tx, tableName string, metaObj metav1.Object, object runtime.Object) error {
-	return fmt.Errorf("direct update not yet implemented")
+	return status.Errorf(codes.Unimplemented, "direct update not yet implemented")
 }
 
 func (m *mysqlMetadataStorage) upsertLabels(ctx context.Context, tx *sql.Tx, tableName string, uid string, labels map[string]string) error {
 	// Delete existing labels
 	deleteQuery := fmt.Sprintf("DELETE FROM %s_labels WHERE obj_uid = ?", tableName)
 	if _, err := tx.ExecContext(ctx, deleteQuery, uid); err != nil {
-		return fmt.Errorf("failed to delete old labels: %w", err)
+		return status.Errorf(codes.Internal, "failed to delete old labels: %v", err)
 	}
 
 	// Insert new labels
@@ -733,7 +797,7 @@ func (m *mysqlMetadataStorage) upsertLabels(ctx context.Context, tx *sql.Tx, tab
 		insertQuery := fmt.Sprintf("INSERT INTO %s_labels (obj_uid, `key`, `value`) VALUES (?, ?, ?)", tableName)
 		for key, value := range labels {
 			if _, err := tx.ExecContext(ctx, insertQuery, uid, key, value); err != nil {
-				return fmt.Errorf("failed to insert label %s=%s: %w", key, value, err)
+				return status.Errorf(codes.Internal, "failed to insert label %s=%s: %v", key, value, err)
 			}
 		}
 	}
@@ -745,7 +809,7 @@ func (m *mysqlMetadataStorage) upsertAnnotations(ctx context.Context, tx *sql.Tx
 	// Delete existing annotations
 	deleteQuery := fmt.Sprintf("DELETE FROM %s_annotations WHERE obj_uid = ?", tableName)
 	if _, err := tx.ExecContext(ctx, deleteQuery, uid); err != nil {
-		return fmt.Errorf("failed to delete old annotations: %w", err)
+		return status.Errorf(codes.Internal, "failed to delete old annotations: %v", err)
 	}
 
 	// Insert new annotations
@@ -753,7 +817,7 @@ func (m *mysqlMetadataStorage) upsertAnnotations(ctx context.Context, tx *sql.Tx
 		insertQuery := fmt.Sprintf("INSERT INTO %s_annotations (obj_uid, `key`, `value`) VALUES (?, ?, ?)", tableName)
 		for key, value := range annotations {
 			if _, err := tx.ExecContext(ctx, insertQuery, uid, key, value); err != nil {
-				return fmt.Errorf("failed to insert annotation %s=%s: %w", key, value, err)
+				return status.Errorf(codes.Internal, "failed to insert annotation %s=%s: %v", key, value, err)
 			}
 		}
 	}
@@ -764,13 +828,13 @@ func (m *mysqlMetadataStorage) upsertAnnotations(ctx context.Context, tx *sql.Tx
 func getObjectMeta(object runtime.Object) (metav1.Object, error) {
 	metaObj, ok := object.(metav1.Object)
 	if !ok {
-		return nil, fmt.Errorf("object does not implement metav1.Object")
+		return nil, status.Errorf(codes.InvalidArgument, "object does not implement metav1.Object")
 	}
 	return metaObj, nil
 }
 
-// getTableName returns the lowercased Kind for the object's table. When the
-// object's TypeMeta is empty (a known controller-runtime quirk —
+// getTableName returns the snake_case table name for the object's Kind. When
+// the object's TypeMeta is empty (a known controller-runtime quirk —
 // https://github.com/kubernetes-sigs/controller-runtime/issues/1517), it falls
 // back to scheme.ObjectKinds, mirroring the pattern in groupVersionForObject.
 func (m *mysqlMetadataStorage) getTableName(object runtime.Object) string {
@@ -780,27 +844,47 @@ func (m *mysqlMetadataStorage) getTableName(object runtime.Object) string {
 			gvk = gvks[0]
 		}
 	}
-	return strings.ToLower(gvk.Kind)
+	if gvk.Kind == "" {
+		return ""
+	}
+	return utils.ToSnakeCase(gvk.Kind)
+}
+
+// indexPathToKeyMap returns the per-GVK field-path → column map used for
+// criterion validation, or nil when no map is registered for this typeMeta
+// (callers must treat nil as "permissive — accept any field").
+func (m *mysqlMetadataStorage) indexPathToKeyMap(typeMeta *metav1.TypeMeta) map[string]string {
+	if m.indexPathToKeyMaps == nil || typeMeta == nil {
+		return nil
+	}
+	gv, err := schema.ParseGroupVersion(typeMeta.APIVersion)
+	if err != nil {
+		return nil
+	}
+	return m.indexPathToKeyMaps[gv.WithKind(typeMeta.Kind)]
 }
 
 func getTableNameFromTypeMeta(typeMeta *metav1.TypeMeta) string {
-	return strings.ToLower(typeMeta.Kind)
+	if typeMeta == nil || typeMeta.Kind == "" {
+		return ""
+	}
+	return utils.ToSnakeCase(typeMeta.Kind)
 }
 
 func (m *mysqlMetadataStorage) createObjectFromTypeMeta(typeMeta *metav1.TypeMeta) (runtime.Object, error) {
 	if m.scheme == nil {
-		return nil, fmt.Errorf("scheme is not configured")
+		return nil, status.Errorf(codes.InvalidArgument, "scheme is not configured")
 	}
 
 	gv, err := schema.ParseGroupVersion(typeMeta.APIVersion)
 	if err != nil {
-		return nil, fmt.Errorf("invalid apiVersion %q: %w", typeMeta.APIVersion, err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid apiVersion %q: %v", typeMeta.APIVersion, err)
 	}
 	gvk := gv.WithKind(typeMeta.Kind)
 
 	obj, err := m.scheme.New(gvk)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create object for %s: %w", gvk.String(), err)
+		return nil, status.Errorf(codes.InvalidArgument, "failed to create object for %s: %v", gvk.String(), err)
 	}
 
 	return obj, nil
@@ -810,11 +894,11 @@ func (m *mysqlMetadataStorage) groupVersionForObject(object runtime.Object) (str
 	gvk := object.GetObjectKind().GroupVersionKind()
 	if gvk.Empty() {
 		if m.scheme == nil {
-			return "", fmt.Errorf("scheme is not configured to resolve GVK")
+			return "", status.Errorf(codes.InvalidArgument, "scheme is not configured to resolve GVK")
 		}
 		gvks, _, err := m.scheme.ObjectKinds(object)
 		if err != nil || len(gvks) == 0 {
-			return "", fmt.Errorf("unable to determine GVK for object: %w", err)
+			return "", status.Errorf(codes.Internal, "unable to determine GVK for object: %v", err)
 		}
 		gvk = gvks[0]
 	}

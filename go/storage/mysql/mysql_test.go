@@ -24,7 +24,7 @@ func TestGetTableName_GVKPopulated(t *testing.T) {
 	obj := &v2pb.TriggerRun{
 		TypeMeta: metav1.TypeMeta{Kind: "TriggerRun", APIVersion: "michelangelo.api/v2"},
 	}
-	require.Equal(t, "triggerrun", m.getTableName(obj))
+	require.Equal(t, "trigger_run", m.getTableName(obj))
 }
 
 func TestGetTableName_GVKEmpty_SchemeFallback(t *testing.T) {
@@ -32,7 +32,7 @@ func TestGetTableName_GVKEmpty_SchemeFallback(t *testing.T) {
 	// the scheme fallback must resolve the Kind from the registered type.
 	m := &mysqlMetadataStorage{scheme: newSchemeWithV2(t)}
 	obj := &v2pb.TriggerRun{}
-	require.Equal(t, "triggerrun", m.getTableName(obj))
+	require.Equal(t, "trigger_run", m.getTableName(obj))
 }
 
 func TestGetTableName_GVKEmpty_NilScheme(t *testing.T) {
@@ -58,16 +58,16 @@ func stringMatchValue(t *testing.T, s string) *gogotypes.Any {
 }
 
 func TestIsLabelField(t *testing.T) {
-	require.True(t, isLabelField("pipelinerun.label.michelangelo/Foo"))
-	require.False(t, isLabelField("pipelinerun.metadata.labels.michelangelo/Foo"))
-	require.False(t, isLabelField("pipelinerun.state"))
+	require.True(t, isLabelField("pipeline_run.label.michelangelo/Foo"))
+	require.False(t, isLabelField("pipeline_run.metadata.labels.michelangelo/Foo"))
+	require.False(t, isLabelField("pipeline_run.state"))
 	require.False(t, isLabelField("label"))
 }
 
 func TestIsLabelFieldInMetadata(t *testing.T) {
-	require.True(t, isLabelFieldInMetadata("pipelinerun.metadata.labels.michelangelo/Foo"))
-	require.False(t, isLabelFieldInMetadata("pipelinerun.label.michelangelo/Foo"))
-	require.False(t, isLabelFieldInMetadata("pipelinerun.metadata.name"))
+	require.True(t, isLabelFieldInMetadata("pipeline_run.metadata.labels.michelangelo/Foo"))
+	require.False(t, isLabelFieldInMetadata("pipeline_run.label.michelangelo/Foo"))
+	require.False(t, isLabelFieldInMetadata("pipeline_run.metadata.name"))
 }
 
 func TestProcessFieldName(t *testing.T) {
@@ -76,10 +76,10 @@ func TestProcessFieldName(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{"pipelinerun.state", "state", false},
-		{"pipelinerun.spec.foo", "spec.foo", false},
-		{"pipelinerun.label.michelangelo/Foo", "michelangelo/Foo", false},
-		{"pipelinerun.metadata.labels.michelangelo/Foo", "michelangelo/Foo", false},
+		{"pipeline_run.state", "state", false},
+		{"pipeline_run.spec.foo", "spec.foo", false},
+		{"pipeline_run.label.michelangelo/Foo", "michelangelo/Foo", false},
+		{"pipeline_run.metadata.labels.michelangelo/Foo", "michelangelo/Foo", false},
 		{"name", "", true}, // missing CRD prefix
 	}
 	for _, c := range cases {
@@ -136,17 +136,17 @@ func TestBuildLabelCriterionSQL(t *testing.T) {
 	op := &apipb.CriterionOperation{
 		Criterion: []*apipb.Criterion{
 			{
-				FieldName:  "pipelinerun.metadata.labels.env",
+				FieldName:  "pipeline_run.metadata.labels.env",
 				Operator:   apipb.CRITERION_OPERATOR_EQUAL,
 				MatchValue: stringMatchValue(t, "prod"),
 			},
 		},
 	}
-	queryStrs, params, err := buildLabelCriterionSQL(op, "pipelinerun")
+	queryStrs, params, err := buildLabelCriterionSQL(op, "pipeline_run")
 	require.NoError(t, err)
 	require.Len(t, queryStrs, 1)
 	require.Equal(t,
-		" `uid` in (SELECT `obj_uid` FROM pipelinerun_labels WHERE `key`= ? AND `value` = ? )",
+		" `uid` in (SELECT `obj_uid` FROM pipeline_run_labels WHERE `key`= ? AND `value` = ? )",
 		queryStrs[0],
 	)
 	require.Equal(t, []interface{}{"env", "prod"}, params)
@@ -156,13 +156,13 @@ func TestBuildLabelCriterionSQL_SkipsNonLabel(t *testing.T) {
 	op := &apipb.CriterionOperation{
 		Criterion: []*apipb.Criterion{
 			{
-				FieldName:  "pipelinerun.state",
+				FieldName:  "pipeline_run.state",
 				Operator:   apipb.CRITERION_OPERATOR_EQUAL,
 				MatchValue: stringMatchValue(t, "RUNNING"),
 			},
 		},
 	}
-	queryStrs, params, err := buildLabelCriterionSQL(op, "pipelinerun")
+	queryStrs, params, err := buildLabelCriterionSQL(op, "pipeline_run")
 	require.NoError(t, err)
 	require.Empty(t, queryStrs)
 	require.Empty(t, params)
@@ -172,13 +172,13 @@ func TestBuildFieldCriterionSQL_MapsBaseField(t *testing.T) {
 	op := &apipb.CriterionOperation{
 		Criterion: []*apipb.Criterion{
 			{
-				FieldName:  "pipelinerun.metadata.creation_timestamp",
+				FieldName:  "pipeline_run.metadata.creation_timestamp",
 				Operator:   apipb.CRITERION_OPERATOR_GREATER_THAN,
 				MatchValue: stringMatchValue(t, "2026-01-01"),
 			},
 		},
 	}
-	queryStrs, params, err := buildFieldCriterionSQL(op)
+	queryStrs, params, err := buildFieldCriterionSQL(op, nil)
 	require.NoError(t, err)
 	require.Equal(t, []string{" `create_time` > ?"}, queryStrs)
 	require.Equal(t, []interface{}{"2026-01-01"}, params)
@@ -188,16 +188,70 @@ func TestBuildFieldCriterionSQL_SkipsLabel(t *testing.T) {
 	op := &apipb.CriterionOperation{
 		Criterion: []*apipb.Criterion{
 			{
-				FieldName:  "pipelinerun.metadata.labels.env",
+				FieldName:  "pipeline_run.metadata.labels.env",
 				Operator:   apipb.CRITERION_OPERATOR_EQUAL,
 				MatchValue: stringMatchValue(t, "prod"),
 			},
 		},
 	}
-	queryStrs, params, err := buildFieldCriterionSQL(op)
+	queryStrs, params, err := buildFieldCriterionSQL(op, nil)
 	require.NoError(t, err)
 	require.Empty(t, queryStrs)
 	require.Empty(t, params)
+}
+
+func TestBuildFieldCriterionSQL_IndexPathMapValidation(t *testing.T) {
+	// When indexPathToKeyMap is non-nil, fields must appear in it (or in
+	// baseOrderByFields). The map also rewrites the SQL column name.
+	indexPathToKeyMap := map[string]string{
+		"spec.framework": "framework_col",
+	}
+
+	t.Run("known_field_is_rewritten", func(t *testing.T) {
+		op := &apipb.CriterionOperation{
+			Criterion: []*apipb.Criterion{
+				{
+					FieldName:  "model.spec.framework",
+					Operator:   apipb.CRITERION_OPERATOR_EQUAL,
+					MatchValue: stringMatchValue(t, "tensorflow"),
+				},
+			},
+		}
+		queryStrs, _, err := buildFieldCriterionSQL(op, indexPathToKeyMap)
+		require.NoError(t, err)
+		require.Equal(t, []string{" `framework_col` = ?"}, queryStrs)
+	})
+
+	t.Run("unknown_field_is_rejected", func(t *testing.T) {
+		op := &apipb.CriterionOperation{
+			Criterion: []*apipb.Criterion{
+				{
+					FieldName:  "model.spec.unknown_field",
+					Operator:   apipb.CRITERION_OPERATOR_EQUAL,
+					MatchValue: stringMatchValue(t, "x"),
+				},
+			},
+		}
+		_, _, err := buildFieldCriterionSQL(op, indexPathToKeyMap)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "unsupported field")
+	})
+
+	t.Run("base_order_by_fields_still_resolve", func(t *testing.T) {
+		// Base fields (creation_timestamp, update_timestamp) are always allowed.
+		op := &apipb.CriterionOperation{
+			Criterion: []*apipb.Criterion{
+				{
+					FieldName:  "model.metadata.creation_timestamp",
+					Operator:   apipb.CRITERION_OPERATOR_GREATER_THAN,
+					MatchValue: stringMatchValue(t, "2026-01-01"),
+				},
+			},
+		}
+		queryStrs, _, err := buildFieldCriterionSQL(op, indexPathToKeyMap)
+		require.NoError(t, err)
+		require.Equal(t, []string{" `create_time` > ?"}, queryStrs)
+	})
 }
 
 func TestBuildCriterionSQL_AndCombination(t *testing.T) {
@@ -205,22 +259,22 @@ func TestBuildCriterionSQL_AndCombination(t *testing.T) {
 		LogicalOperator: apipb.LOGICAL_OPERATOR_AND,
 		Criterion: []*apipb.Criterion{
 			{
-				FieldName:  "pipelinerun.state",
+				FieldName:  "pipeline_run.state",
 				Operator:   apipb.CRITERION_OPERATOR_EQUAL,
 				MatchValue: stringMatchValue(t, "RUNNING"),
 			},
 			{
-				FieldName:  "pipelinerun.metadata.labels.env",
+				FieldName:  "pipeline_run.metadata.labels.env",
 				Operator:   apipb.CRITERION_OPERATOR_EQUAL,
 				MatchValue: stringMatchValue(t, "prod"),
 			},
 		},
 	}
-	sql, params, err := buildCriterionSQL(op, "pipelinerun")
+	sql, params, err := buildCriterionSQL(op, "pipeline_run", nil)
 	require.NoError(t, err)
 	// Field criteria come first, then label criteria, joined by " AND" (suffix-trim pattern).
 	require.Equal(t,
-		" `state` = ? AND `uid` in (SELECT `obj_uid` FROM pipelinerun_labels WHERE `key`= ? AND `value` = ? )",
+		" `state` = ? AND `uid` in (SELECT `obj_uid` FROM pipeline_run_labels WHERE `key`= ? AND `value` = ? )",
 		sql,
 	)
 	require.Equal(t, []interface{}{"RUNNING", "env", "prod"}, params)
@@ -231,18 +285,18 @@ func TestBuildCriterionSQL_OrCombination(t *testing.T) {
 		LogicalOperator: apipb.LOGICAL_OPERATOR_OR,
 		Criterion: []*apipb.Criterion{
 			{
-				FieldName:  "pipelinerun.name",
+				FieldName:  "pipeline_run.name",
 				Operator:   apipb.CRITERION_OPERATOR_EQUAL,
 				MatchValue: stringMatchValue(t, "alice"),
 			},
 			{
-				FieldName:  "pipelinerun.name",
+				FieldName:  "pipeline_run.name",
 				Operator:   apipb.CRITERION_OPERATOR_EQUAL,
 				MatchValue: stringMatchValue(t, "bob"),
 			},
 		},
 	}
-	sql, _, err := buildCriterionSQL(op, "pipelinerun")
+	sql, _, err := buildCriterionSQL(op, "pipeline_run", nil)
 	require.NoError(t, err)
 	require.Equal(t, " `name` = ? OR `name` = ?", sql)
 }
@@ -252,7 +306,7 @@ func TestBuildCriterionSQL_SubOperations(t *testing.T) {
 		LogicalOperator: apipb.LOGICAL_OPERATOR_AND,
 		Criterion: []*apipb.Criterion{
 			{
-				FieldName:  "pipelinerun.state",
+				FieldName:  "pipeline_run.state",
 				Operator:   apipb.CRITERION_OPERATOR_EQUAL,
 				MatchValue: stringMatchValue(t, "RUNNING"),
 			},
@@ -262,12 +316,12 @@ func TestBuildCriterionSQL_SubOperations(t *testing.T) {
 				LogicalOperator: apipb.LOGICAL_OPERATOR_OR,
 				Criterion: []*apipb.Criterion{
 					{
-						FieldName:  "pipelinerun.name",
+						FieldName:  "pipeline_run.name",
 						Operator:   apipb.CRITERION_OPERATOR_EQUAL,
 						MatchValue: stringMatchValue(t, "alice"),
 					},
 					{
-						FieldName:  "pipelinerun.name",
+						FieldName:  "pipeline_run.name",
 						Operator:   apipb.CRITERION_OPERATOR_EQUAL,
 						MatchValue: stringMatchValue(t, "bob"),
 					},
@@ -275,7 +329,7 @@ func TestBuildCriterionSQL_SubOperations(t *testing.T) {
 			},
 		},
 	}
-	sql, params, err := buildCriterionSQL(op, "pipelinerun")
+	sql, params, err := buildCriterionSQL(op, "pipeline_run", nil)
 	require.NoError(t, err)
 	// Sub-operation is wrapped as " (<sub>)" where <sub> has its own leading space.
 	require.Equal(t, " `state` = ? AND ( `name` = ? OR `name` = ?)", sql)
@@ -283,7 +337,7 @@ func TestBuildCriterionSQL_SubOperations(t *testing.T) {
 }
 
 func TestBuildCriterionSQL_NilOperation(t *testing.T) {
-	sql, params, err := buildCriterionSQL(nil, "pipelinerun")
+	sql, params, err := buildCriterionSQL(nil, "pipeline_run", nil)
 	require.NoError(t, err)
 	require.Empty(t, sql)
 	require.Empty(t, params)
@@ -303,22 +357,22 @@ func TestBuildOrderBySQL(t *testing.T) {
 		{
 			name: "base_field_with_crd_prefix",
 			in: []*apipb.OrderBy{
-				{Field: "pipelinerun.metadata.creation_timestamp", Dir: apipb.SORT_ORDER_DESC},
+				{Field: "pipeline_run.metadata.creation_timestamp", Dir: apipb.SORT_ORDER_DESC},
 			},
 			want: " ORDER BY `create_time` DESC",
 		},
 		{
 			name: "regular_column_asc",
 			in: []*apipb.OrderBy{
-				{Field: "pipelinerun.name", Dir: apipb.SORT_ORDER_ASC},
+				{Field: "pipeline_run.name", Dir: apipb.SORT_ORDER_ASC},
 			},
 			want: " ORDER BY `name` ASC",
 		},
 		{
 			name: "multi_clause",
 			in: []*apipb.OrderBy{
-				{Field: "pipelinerun.metadata.creation_timestamp", Dir: apipb.SORT_ORDER_DESC},
-				{Field: "pipelinerun.name", Dir: apipb.SORT_ORDER_ASC},
+				{Field: "pipeline_run.metadata.creation_timestamp", Dir: apipb.SORT_ORDER_DESC},
+				{Field: "pipeline_run.name", Dir: apipb.SORT_ORDER_ASC},
 			},
 			want: " ORDER BY `create_time` DESC, `name` ASC",
 		},

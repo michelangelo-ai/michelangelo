@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS `model_annotations` (
 -- ==============================================================================
 -- 2. MODEL_FAMILY
 -- ==============================================================================
-CREATE TABLE IF NOT EXISTS `modelfamily` (
+CREATE TABLE IF NOT EXISTS `model_family` (
     `uid` VARCHAR(255) NOT NULL,
     `group_ver` VARCHAR(255) NOT NULL,
     `namespace` VARCHAR(255) NOT NULL,
@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS `modelfamily` (
     KEY `modelfamily_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `modelfamily_labels` (
+CREATE TABLE IF NOT EXISTS `model_family_labels` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `obj_uid` VARCHAR(255) NOT NULL,
     `key` VARCHAR(255) NOT NULL,
@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS `modelfamily_labels` (
     KEY `modelfamily_labels_key_value` (`key`, `value`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `modelfamily_annotations` (
+CREATE TABLE IF NOT EXISTS `model_family_annotations` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `obj_uid` VARCHAR(255) NOT NULL,
     `key` VARCHAR(255) NOT NULL,
@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS `pipeline_annotations` (
 -- ==============================================================================
 -- 4. PIPELINE_RUN
 -- ==============================================================================
-CREATE TABLE IF NOT EXISTS `pipelinerun` (
+CREATE TABLE IF NOT EXISTS `pipeline_run` (
     `uid` VARCHAR(255) NOT NULL,
     `group_ver` VARCHAR(255) NOT NULL,
     `namespace` VARCHAR(255) NOT NULL,
@@ -180,7 +180,7 @@ CREATE TABLE IF NOT EXISTS `pipelinerun` (
     KEY `pipelinerun_state` (`state`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `pipelinerun_labels` (
+CREATE TABLE IF NOT EXISTS `pipeline_run_labels` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `obj_uid` VARCHAR(255) NOT NULL,
     `key` VARCHAR(255) NOT NULL,
@@ -190,7 +190,7 @@ CREATE TABLE IF NOT EXISTS `pipelinerun_labels` (
     KEY `pipelinerun_labels_key_value` (`key`, `value`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `pipelinerun_annotations` (
+CREATE TABLE IF NOT EXISTS `pipeline_run_annotations` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `obj_uid` VARCHAR(255) NOT NULL,
     `key` VARCHAR(255) NOT NULL,
@@ -246,7 +246,7 @@ CREATE TABLE IF NOT EXISTS `deployment_annotations` (
 -- ==============================================================================
 -- 6. INFERENCE_SERVER
 -- ==============================================================================
-CREATE TABLE IF NOT EXISTS `inferenceserver` (
+CREATE TABLE IF NOT EXISTS `inference_server` (
     `uid` VARCHAR(255) NOT NULL,
     `group_ver` VARCHAR(255) NOT NULL,
     `namespace` VARCHAR(255) NOT NULL,
@@ -264,7 +264,7 @@ CREATE TABLE IF NOT EXISTS `inferenceserver` (
     KEY `inferenceserver_state` (`state`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `inferenceserver_labels` (
+CREATE TABLE IF NOT EXISTS `inference_server_labels` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `obj_uid` VARCHAR(255) NOT NULL,
     `key` VARCHAR(255) NOT NULL,
@@ -274,7 +274,7 @@ CREATE TABLE IF NOT EXISTS `inferenceserver_labels` (
     KEY `inferenceserver_labels_key_value` (`key`, `value`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `inferenceserver_annotations` (
+CREATE TABLE IF NOT EXISTS `inference_server_annotations` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `obj_uid` VARCHAR(255) NOT NULL,
     `key` VARCHAR(255) NOT NULL,
@@ -408,7 +408,7 @@ CREATE TABLE IF NOT EXISTS `cluster_annotations` (
 -- ==============================================================================
 -- 10. RAY_CLUSTER
 -- ==============================================================================
-CREATE TABLE IF NOT EXISTS `raycluster` (
+CREATE TABLE IF NOT EXISTS `ray_cluster` (
     `uid` VARCHAR(255) NOT NULL,
     `group_ver` VARCHAR(255) NOT NULL,
     `namespace` VARCHAR(255) NOT NULL,
@@ -424,7 +424,7 @@ CREATE TABLE IF NOT EXISTS `raycluster` (
     KEY `raycluster_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `raycluster_labels` (
+CREATE TABLE IF NOT EXISTS `ray_cluster_labels` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `obj_uid` VARCHAR(255) NOT NULL,
     `key` VARCHAR(255) NOT NULL,
@@ -434,7 +434,7 @@ CREATE TABLE IF NOT EXISTS `raycluster_labels` (
     KEY `raycluster_labels_key_value` (`key`, `value`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `raycluster_annotations` (
+CREATE TABLE IF NOT EXISTS `ray_cluster_annotations` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `obj_uid` VARCHAR(255) NOT NULL,
     `key` VARCHAR(255) NOT NULL,
@@ -446,7 +446,7 @@ CREATE TABLE IF NOT EXISTS `raycluster_annotations` (
 -- ==============================================================================
 -- 11. RAY_JOB
 -- ==============================================================================
-CREATE TABLE IF NOT EXISTS `rayjob` (
+CREATE TABLE IF NOT EXISTS `ray_job` (
     `uid` VARCHAR(255) NOT NULL,
     `group_ver` VARCHAR(255) NOT NULL,
     `namespace` VARCHAR(255) NOT NULL,
@@ -462,7 +462,7 @@ CREATE TABLE IF NOT EXISTS `rayjob` (
     KEY `rayjob_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `rayjob_labels` (
+CREATE TABLE IF NOT EXISTS `ray_job_labels` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `obj_uid` VARCHAR(255) NOT NULL,
     `key` VARCHAR(255) NOT NULL,
@@ -472,7 +472,7 @@ CREATE TABLE IF NOT EXISTS `rayjob_labels` (
     KEY `rayjob_labels_key_value` (`key`, `value`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `rayjob_annotations` (
+CREATE TABLE IF NOT EXISTS `ray_job_annotations` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `obj_uid` VARCHAR(255) NOT NULL,
     `key` VARCHAR(255) NOT NULL,
@@ -484,7 +484,7 @@ CREATE TABLE IF NOT EXISTS `rayjob_annotations` (
 -- ==============================================================================
 -- 12. SPARK_JOB
 -- ==============================================================================
-CREATE TABLE IF NOT EXISTS `sparkjob` (
+CREATE TABLE IF NOT EXISTS `spark_job` (
     `uid` VARCHAR(255) NOT NULL,
     `group_ver` VARCHAR(255) NOT NULL,
     `namespace` VARCHAR(255) NOT NULL,
@@ -500,7 +500,7 @@ CREATE TABLE IF NOT EXISTS `sparkjob` (
     KEY `sparkjob_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `sparkjob_labels` (
+CREATE TABLE IF NOT EXISTS `spark_job_labels` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `obj_uid` VARCHAR(255) NOT NULL,
     `key` VARCHAR(255) NOT NULL,
@@ -510,7 +510,7 @@ CREATE TABLE IF NOT EXISTS `sparkjob_labels` (
     KEY `sparkjob_labels_key_value` (`key`, `value`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `sparkjob_annotations` (
+CREATE TABLE IF NOT EXISTS `spark_job_annotations` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `obj_uid` VARCHAR(255) NOT NULL,
     `key` VARCHAR(255) NOT NULL,
@@ -522,7 +522,7 @@ CREATE TABLE IF NOT EXISTS `sparkjob_annotations` (
 -- ==============================================================================
 -- 13. TRIGGER_RUN
 -- ==============================================================================
-CREATE TABLE IF NOT EXISTS `triggerrun` (
+CREATE TABLE IF NOT EXISTS `trigger_run` (
     `uid` VARCHAR(255) NOT NULL,
     `group_ver` VARCHAR(255) NOT NULL,
     `namespace` VARCHAR(255) NOT NULL,
@@ -546,7 +546,7 @@ CREATE TABLE IF NOT EXISTS `triggerrun` (
     KEY `triggerrun_state` (`state`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `triggerrun_labels` (
+CREATE TABLE IF NOT EXISTS `trigger_run_labels` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `obj_uid` VARCHAR(255) NOT NULL,
     `key` VARCHAR(255) NOT NULL,
@@ -556,7 +556,7 @@ CREATE TABLE IF NOT EXISTS `triggerrun_labels` (
     KEY `triggerrun_labels_key_value` (`key`, `value`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `triggerrun_annotations` (
+CREATE TABLE IF NOT EXISTS `trigger_run_annotations` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `obj_uid` VARCHAR(255) NOT NULL,
     `key` VARCHAR(255) NOT NULL,
