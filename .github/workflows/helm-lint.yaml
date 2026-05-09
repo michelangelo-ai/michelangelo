@@ -31,7 +31,9 @@ jobs:
           helm repo update
 
       - name: Build chart dependencies
-        run: helm dependency build helm/michelangelo
+        run: |
+          helm dependency update helm/michelangelo
+          ls helm/michelangelo/charts/
 
       - name: Lint
         run: helm lint helm/michelangelo
