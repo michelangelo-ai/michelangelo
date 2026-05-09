@@ -1,0 +1,112 @@
+diff --git a/.ma/config.toml.example b/.ma/user_config.toml.example
+similarity index 59%
+rename from .ma/config.toml.example
+rename to .ma/user_config.toml.example
+index 29812466..8712a3ec 100644
+--- a/.ma/config.toml.example
++++ b/.ma/user_config.toml.example
+@@ -1,10 +1,11 @@
+-# MaCTL Configuration File (TOML format)
+-# Copy this file to ~/.ma/config.toml and customize for your environment
++# MaCTL User Configuration (~/.ma/user_config.toml)
+ #
+ # Usage:
+ #   mkdir -p ~/.ma
+-#   cp .ma/config.toml.example ~/.ma/config.toml
+-#   vim ~/.ma/config.toml  # Edit with your settings
++#   cp .ma/user_config.toml.example ~/.ma/user_config.toml
++#   vim ~/.ma/user_config.toml  # Edit with your settings
++#
++# Only set values you want to override; everything else falls through to project defaults.
+
+ address = "127.0.0.1:15566"
+ use_tls = false
+@@ -23,7 +24,12 @@ access_key_id = "minioadmin"
+ secret_access_key = "minioadmin"
+ endpoint_url = "http://localhost:9091"
+
++[plugin]
++dirs = []
++modules = {}
++
+ # Configuration priority (highest to lowest):
+ # 1. Environment variables (MACTL_ADDRESS, MACTL_USE_TLS, AWS_*)
+-# 2. This file (~/.ma/config.toml)
+-# 3. Built-in defaults
++# 2. This file (~/.ma/user_config.toml)
++# 3. ~/.ma/config.toml (project defaults)
++# 4. Built-in defaults
+diff --git a/python/michelangelo/cli/mactl/config.py b/python/michelangelo/cli/mactl/config.py
+index d611fd7e..7c451cd3 100644
+--- a/python/michelangelo/cli/mactl/config.py
++++ b/python/michelangelo/cli/mactl/config.py
+@@ -13,6 +13,10 @@ else:
+
+ _LOG = getLogger(__name__)
+
++_MA_DIR = Path.home() / ".ma"
++PACKAGE_CONFIG_FILE = _MA_DIR / "config.toml"
++USER_CONFIG_FILE = _MA_DIR / "user_config.toml"
++
+ DEFAULT_CONFIG = {
+     "address": "127.0.0.1:15566",
+     "use_tls": False,
+@@ -33,16 +37,13 @@ DEFAULT_CONFIG = {
+ }
+
+
+-def _load_toml_config() -> dict:
+-    """Load configuration from ~/.ma/config.toml file."""
+-    config_dir = Path.home() / ".ma"
+-    config_file = config_dir / "config.toml"
+-
+-    if not config_file.exists():
++def _load_toml_file(path: Path) -> dict:
++    """Load TOML config from a file, returning an empty dict on any failure."""
++    if not path.exists():
+         return {}
+
+     try:
+-        with open(config_file, "rb") as f:
++        with open(path, "rb") as f:
+             return tomllib.load(f)
+     except Exception:
+         return {}
+@@ -88,22 +89,28 @@ def load_config() -> dict:
+     """Load complete configuration as dictionary with layered merging.
+
+     Priority (highest to lowest):
+-    1. Environment variables (MACTL_ADDRESS, MACTL_USE_TLS)
+-    2. TOML config file (~/.ma/config.toml)
+-    3. Default configuration
++    1. Environment variables (MACTL_ADDRESS, MACTL_USE_TLS, AWS_*)
++    2. ~/.ma/user_config.toml (user overrides)
++    3. ~/.ma/config.toml (project defaults)
++    4. Built-in DEFAULT_CONFIG
+
+     Returns:
+         dict: Complete configuration dictionary
+     """
+-    # Start with defaults
++    # Start with built-in defaults
+     config = deepcopy(DEFAULT_CONFIG)
+
+-    # Layer 1: TOML config file
+-    toml_config = _load_toml_config()
+-    if toml_config:
+-        config = _deep_merge(config, toml_config)
++    # Layer 1: package config (~/.ma/config.toml)
++    package_config = _load_toml_file(PACKAGE_CONFIG_FILE)
++    if package_config:
++        config = _deep_merge(config, package_config)
++
++    # Layer 2: user config (~/.ma/user_config.toml)
++    user_config = _load_toml_file(USER_CONFIG_FILE)
++    if user_config:
++        config = _deep_merge(config, user_config)
+
+-    # Layer 2: Environment variables
++    # Layer 3: environment variables
+     config = _apply_env_overrides(config)
+
+     return config

@@ -1,0 +1,134 @@
+{
+  "skill_name": "write-pull-request-description",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Write a PR description for the git diff in eval1.diff",
+      "files": ["eval1.diff"],
+      "expected_output": "A concise PR description with a short imperative subject line about bumping the core package version, a brief summary explaining the release context, and a minimal test plan.",
+      "expectations": [
+        "Subject line uses imperative mood (e.g. 'Bump' not 'Bumped' or 'Bumps')",
+        "Subject line mentions the version bump or release, not implementation details like 'Edit package.json'",
+        "Summary section is brief (1-3 sentences) appropriate for a trivial version bump",
+        "Summary does NOT list individual files changed (e.g. should not say 'modified package.json')",
+        "A Test plan section is present",
+        "Output does not include line numbers or diff syntax",
+        "Output does NOT include a Potential risks section"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Write a PR description for the git diff in eval2.diff",
+      "files": ["eval2.diff"],
+      "expected_output": "A bug-fix PR description explaining that GetObjectKind() returns empty GVK after controller-runtime deserialization, and the fix switches to scheme.ObjectKinds() for reliable resolution.",
+      "expectations": [
+        "Subject line uses imperative mood (e.g. 'Fix' not 'Fixed') and is under 72 characters",
+        "Summary explains the root cause: GetObjectKind().GroupVersionKind() returns empty GVK after controller-runtime deserializes objects",
+        "Summary mentions the fix approach: using scheme.ObjectKinds() instead of GetObjectKind() to reliably resolve GVK",
+        "Summary mentions the user-visible symptom (CrashLoopBackOff in controllermgr or similar operational failure)",
+        "Summary does NOT list individual files changed or narrate line-by-line diffs",
+        "Test plan includes running the new unit tests to verify scheme-based GVK resolution"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Write a PR description for the git diff in eval3.diff",
+      "files": ["eval3.diff"],
+      "expected_output": "A feature PR description explaining the motivation for splitting mactl config into project defaults and user overrides with layered merging.",
+      "expectations": [
+        "Subject line uses imperative mood (e.g. 'Add' or 'Split') and is under 72 characters",
+        "Summary explains WHY a separate user config is needed (user-specific overrides should not conflict with project defaults)",
+        "Summary describes the new 4-layer config priority: env vars > user_config.toml > config.toml > built-in defaults",
+        "Summary does NOT list every file changed or enumerate individual function renames",
+        "Test plan mentions verifying the layered merge priority (user config overrides package config)",
+        "Test plan mentions verifying backward compatibility (existing config.toml still works as project defaults)"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Write a PR description for the git diff in eval4.diff",
+      "files": ["eval4.diff"],
+      "expected_output": "A feature PR description explaining the user need for retrying failed pipeline tasks from the UI, with a new RetryCell component and confirmation dialog.",
+      "expectations": [
+        "Subject line uses imperative mood (e.g. 'Add retry support') and is under 72 characters",
+        "Summary explains the user need: operators need to retry failed pipeline tasks directly from the run detail page without using CLI or API",
+        "Summary mentions key behavior: retry button only appears for terminated pipeline runs, with a confirmation dialog and custom reason field",
+        "Summary does NOT narrate individual file changes or list every import added",
+        "Test plan includes verifying the retry button appears only for terminated runs and is hidden for running/pending states",
+        "Test plan includes verifying the retry confirmation dialog submits the correct retryInfo payload",
+        "Test plan includes reference to include screenshot"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Write a PR description for the change described in eval5.diff",
+      "files": ["eval5.diff"],
+      "expected_output": "A summary explaining the Gateway abstraction that decouples deployment from inference server, why the prior tight coupling was problematic, and what the new architecture enables.",
+      "expectations": [
+        "Subject line is in imperative mood, around 50 characters, and mentions decoupling or Gateway abstraction",
+        "Summary explains WHY the deployment and inference server components needed decoupling (e.g., tight coupling, dependency direction, testability)",
+        "Summary describes the new Gateway abstraction as the architectural approach, not a file-by-file listing",
+        "Summary groups changes by subsystem (deployment proxy, inference server backends, gateway interface, plugin restructuring) rather than listing individual files",
+        "Summary explains what the new architecture enables (e.g., independent evolution of components, pluggable backends, cleaner dependency graph)",
+        "A test plan section exists"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Write a PR description for the change described in eval6.diff",
+      "files": ["eval6.diff"],
+      "expected_output": "A summary explaining that this adds cron-based trigger support so users can schedule recurring pipeline runs with dynamic parameters, covering the controller, workflow, and workflow client changes.",
+      "expectations": [
+        "Subject line is in imperative mood, around 50 characters, and mentions cron triggers or scheduled triggers",
+        "Summary explains the user need: users need to schedule recurring pipeline runs with dynamically computed parameters",
+        "Summary groups changes into subsystems (trigger controller, workflow client extensions, worker activities/workflows, proto/config) rather than listing 48 files",
+        "Summary does NOT include step-by-step implementation details like 'added mapCadenceStatusToInterface function'",
+        "Summary mentions that both Cadence and Temporal workflow clients were extended to support cron scheduling",
+        "A test plan section exists"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Write a PR description for the git diff in eval7.diff",
+      "files": ["eval7.diff"],
+      "expected_output": "A PR description explaining why pipeline audit logging is being added, that it includes an irreversible migration and a new required env var, with a Potential risks section covering both.",
+      "expectations": [
+        "Subject line uses imperative mood and mentions audit logging or audit trail",
+        "Summary explains the user need for pipeline audit logging (e.g. compliance, debugging, operator visibility)",
+        "Summary does NOT enumerate individual columns or index names",
+        "A Potential risks section is present",
+        "Potential risks mentions that the migration is not reversible without data loss",
+        "Potential risks mentions that DATABASE_MAX_CONNECTIONS must be configured before or during deploy",
+        "Test plan mentions verifying the migration runs cleanly against the target database"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Write a PR description for the git diff in eval8.diff",
+      "files": ["eval8.diff"],
+      "expected_output": "A brief PR description with an imperative subject line about renaming the button label, a one-sentence summary, a minimal test plan, and no Potential risks section.",
+      "expectations": [
+        "Subject line uses imperative mood (e.g. Rename or Update) and describes the label change, not the file",
+        "Summary is one sentence — no more than two",
+        "Summary does NOT list the file path or component name as the primary subject",
+        "A Test plan section is present",
+        "Output does NOT include a Potential risks section"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Write a PR description for the git diff in eval9.diff",
+      "files": ["eval9.diff"],
+      "expected_output": "Batch-fetch feature data to reduce pipeline execute latency\n\n## Summary\nFeature data was fetched one entity at a time inside Execute, making N\nround-trips to the store per task. At 100 entities this produced p99\nlatencies of ~420 ms, blocking downstream model inference.\n\nThis replaces the per-entity loop with a single GetFeaturesBatch call.\nA connection-pool approach was considered but rejected because the store\nalready supports batch reads natively; batching at the call site is\nsimpler and avoids pool management overhead.\n\n## Test plan\n- Added TestRunner_Execute_BatchFetch — asserts GetFeaturesBatch is\n  called exactly once regardless of entity count.\n- BenchmarkRunner_Execute shows p99 dropping from 420 ms to 38 ms at\n  100 entities.",
+      "expectations": [
+        "Subject line uses imperative mood and describes the performance outcome (e.g. reduce latency, improve throughput), not the mechanism (e.g. 'Replace loop with batch call')",
+        "Subject line is around 50 characters",
+        "Summary explains the performance problem before the fix (N round-trips, high p99 latency) with a concrete symptom",
+        "Summary explains why this solution was chosen over alternatives (e.g. connection pool considered and rejected)",
+        "Summary does NOT enumerate individual files changed or narrate line-by-line code changes",
+        "Test plan references the benchmark results as evidence (e.g. p99 before/after numbers)",
+        "Output does NOT include a Potential risks section"
+      ]
+    }
+  ]
+}

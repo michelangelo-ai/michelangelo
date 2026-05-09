@@ -1,0 +1,13 @@
+diff --git a/javascript/packages/core/package.json b/javascript/packages/core/package.json
+index db737d42..03ccbc0a 100644
+--- a/javascript/packages/core/package.json
++++ b/javascript/packages/core/package.json
+@@ -1,7 +1,7 @@
+ {
+   "name": "@michelangelo-ai/core",
+   "license": "Apache-2.0",
+-  "version": "0.1.15",
++  "version": "0.1.16",
+   "type": "module",
+   "main": "./dist/michelangelo-core.js",
+   "module": "./dist/michelangelo-core.js",

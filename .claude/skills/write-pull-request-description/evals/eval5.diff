@@ -1,0 +1,27 @@
+Commit message: refactor(deployment+inference): decouple inference server and deployment components via Gateway abstraction (#706)
+
+Files changed (79 files, +2094/-4361):
+ go/components/deployment/proxy/httproute.go | 263 +-----
+ go/components/deployment/proxy/httproute_test.go | 368 ++++++++
+ go/components/deployment/proxy/interface.go | 22 +
+ go/components/deployment/proxy/module.go | 33 +
+ go/components/inferenceserver/backends/interface.go | 34 +
+ go/components/inferenceserver/backends/triton.go | 492 +++++++++++
+ go/components/inferenceserver/configmap/interface.go | 53 +-
+ go/components/inferenceserver/configmap/provider.go | 92 +-
+ go/components/inferenceserver/gateways/gateway.go | 184 ++--
+ go/components/inferenceserver/gateways/interface.go | 158 +---
+ go/components/inferenceserver/module.go | 94 +-
+ go/components/inferenceserver/proxy/httproute_test.go | 776 ----------------
+ go/components/inferenceserver/proxy/interface.go | 101 ---
+ ... and 66 more files
+
+Diff sample:
+diff --git a/go/cmd/controllermgr/main.go b/go/cmd/controllermgr/main.go
+--- a/go/cmd/controllermgr/main.go
++++ b/go/cmd/controllermgr/main.go
+@@ -16,7 +16,9 @@ import (
+ 	"github.com/michelangelo-ai/michelangelo/go/components/deployment"
++	deploymentOSSPlugin "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss"
+ 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver"
++	inferenceserverOSSPlugin "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss"
