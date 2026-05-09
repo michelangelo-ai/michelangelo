@@ -24,37 +24,71 @@ This tool helps you create and manage a sandbox cluster directly on your machine
 _dir = Path(__file__).parent
 
 _michelangelo_sandbox_kube_cluster_name = "michelangelo-sandbox"
-_kube_ports = [
-    "3306:30001",  # MySQL
-    "9091:30007",  # MinIO
-    "9090:30008",  # MinIO Console
-    "15566:30009",  # Michelangelo API Server
-    "8081:30010",  # Envoy gRPC --> gRPC-web proxy
-    "8090:30011",  # Michelangelo UI
-    "3000:30012",  # Grafana
-    "3001:30016",  # KubeRay History Server (observability port range)
-    "9092:30015",  # Prometheus
-    "5001:30013",  # MLflow Tracking Server
-]
-
-# Workflow engine ports
-_cadence_ports = [
-    "7833:30002",  # Cadence gRPC
-    "7933:30003",  # Cadence TChannel
-    "8088:30004",  # Cadence Web
-]
-
-# Ray framework ports
-_ray_ports = [
-    "10001:10001",  # Ray client port
-    "8265:8265",  # Ray dashboard
-]
 
 _cadence_domain = "default"
 _default_compute_kube_cluster_name = "michelangelo-compute-0"
 
 # Path to the Michelangelo Helm chart (relative to this file)
 _chart_dir = Path(__file__).parent.parent.parent.parent.parent / "helm" / "michelangelo"
+
+# Path to values-k3d.yaml — used to read Helm-managed NodePorts dynamically
+_values_k3d_path = _chart_dir / "values-k3d.yaml"
+
+# Hardcoded infra ports — services NOT installed by the michelangelo Helm chart.
+# These are raw YAML resources deployed by _deploy_services() directly.
+_infra_ports = [
+    "3306:30001",  # MySQL
+    "9091:30007",  # MinIO
+    "9090:30008",  # MinIO Console
+    "3000:30012",  # Grafana
+    "9092:30015",  # Prometheus
+    "5001:30013",  # MLflow Tracking Server
+]
+
+# Ray framework ports (not in Helm chart)
+_ray_ports = [
+    "10001:10001",  # Ray client port
+    "8265:8265",  # Ray dashboard
+]
+
+# Maps host-side port → dotted path in values-k3d.yaml where NodePort is defined.
+# Read at cluster-create time so a chart change propagates without editing this file.
+_helm_nodeport_map = [
+    ("15566", ("apiserver", "service", "nodePort")),  # Michelangelo API Server
+    ("8081", ("envoy", "service", "nodePort")),  # Envoy gRPC-Web proxy
+    ("8090", ("ui", "service", "nodePort")),  # Michelangelo UI
+    ("8088", ("cadence", "web", "service", "nodePort")),  # Cadence Web
+]
+
+
+def _helm_chart_ports(workflow: str) -> list[str]:
+    """Read control plane NodePorts from values-k3d.yaml.
+
+    Returns host:nodeport strings for k3d's -p flag. NodePorts come from
+    values-k3d.yaml (single source of truth). Host ports are sandbox
+    conventions for localhost access.
+
+    Cadence Web is included only when workflow=cadence; the subchart is
+    disabled for Temporal runs.
+    """
+    with open(_values_k3d_path) as f:
+        values = yaml.safe_load(f) or {}
+
+    ports: list[str] = []
+    for host_port, path in _helm_nodeport_map:
+        if path[0] == "cadence" and workflow != "cadence":
+            continue
+        node = values
+        for key in path:
+            node = (node or {}).get(key)
+        if node is None:
+            raise ValueError(
+                f"values-k3d.yaml is missing NodePort at "
+                f"{'.'.join(str(k) for k in path)} "
+                f"(needed for host port {host_port})"
+            )
+        ports.append(f"{host_port}:{node}")
+    return ports
 
 
 def init_arguments(p: argparse.ArgumentParser):
@@ -200,7 +234,7 @@ def run(ns: argparse.Namespace):
 
 def _create(ns: argparse.Namespace):
     assert ns
-    ports = _kube_ports + ([] if ns.workflow == "temporal" else _cadence_ports)
+    ports = _infra_ports + _helm_chart_ports(ns.workflow)
     args = [
         "k3d",
         "cluster",
@@ -418,9 +452,11 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
             "--set",
             "workflow.engine=cadence",
             "--set",
-            "workflow.endpoint=cadence:7833",
+            "workflow.endpoint=michelangelo-cadence-frontend:7833",
             "--set",
             "temporal.enabled=false",  # ensure temporal subchart is off
+            "--set",
+            "cadence.enabled=true",
         ]
 
     # Service exclusions → enabled=false toggles
@@ -462,11 +498,13 @@ def _deploy_services(ns: argparse.Namespace):
         )
 
     if ns.workflow == "cadence":
-        resources.append("cadence.yaml")
+        # Cadence is now installed as a Helm subchart (cadence.enabled=true in
+        # values-k3d.yaml) — no longer deployed as a bare Pod via cadence.yaml.
+        # The Web UI link is printed in helm install NOTES.txt.
         links.append(
             (
                 "Cadence Web UI",
-                "http://localhost:8088/domains/default/workflows",
+                "http://localhost:8088",
                 "",
             )
         )
@@ -602,6 +640,21 @@ def _deploy_services(ns: argparse.Namespace):
     # Install the Michelangelo control plane (apiserver, envoy, ui, worker,
     # controllermgr) via Helm.
     _deploy_app_services(ns)
+
+    if ns.workflow == "cadence":
+        # Forward Cadence frontend ports to localhost so host-side cadence CLI
+        # can reach the in-cluster Service (ClusterIP, not NodePort in chart).
+        subprocess.Popen(
+            [
+                "kubectl",
+                "port-forward",
+                "svc/michelangelo-cadence-frontend",
+                "7833:7833",
+                "7933:7933",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
     # Create separate compute cluster if requested
     create_compute_cluster = getattr(ns, "create_compute_cluster", False)
@@ -1055,6 +1108,15 @@ def _create_cadence_domain(links):
     retry up to 20 times.  When infrastructure is kept running between CI
     runs the domain will already be registered; that is not an error.
     """
+    # Wait for Cadence frontend to be ready before registering domain.
+    print("Waiting for Cadence frontend to be ready...")
+    _exec(
+        "kubectl", "wait",
+        "--for=condition=available",
+        "deployment", "-l",
+        "app.kubernetes.io/name=cadence,app.kubernetes.io/component=frontend",
+        "--timeout=300s",
+    )
     pod_name = uuid.uuid4().hex
     args = [
         "kubectl",
@@ -1065,7 +1127,7 @@ def _create_cadence_domain(links):
         "--stdin",
         "--image",
         "ubercadence/cli:v1.2.6",
-        "--env=CADENCE_CLI_ADDRESS=cadence:7933",
+        "--env=CADENCE_CLI_ADDRESS=michelangelo-cadence-frontend:7933",
         "--command",
         "--",
         "cadence",

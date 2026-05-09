@@ -29,7 +29,7 @@ workflow:
   # Cadence gRPC frontend. Source: michelangelo-worker.yaml:42 and
   # michelangelo-controllermgr.yaml:101 both use port 7833. Port 7933 is the
   # TChannel endpoint used by the Cadence CLI, not by the worker.
-  endpoint: cadence:7833
+  endpoint: michelangelo-cadence-frontend:7833
   domain: default
 
 images:
@@ -69,14 +69,44 @@ securityContext:
     drop: []
 
 # -----------------------------------------------------------------------------
-# Cadence subchart — explicitly disabled for the sandbox.
+# Cadence subchart — bundled workflow engine for the local sandbox.
 #
-# The local sandbox provisions its own Cadence outside the chart (via
-# `sandbox.py` -> `helm install` of the upstream cadence chart), and points
-# `workflow.endpoint` at the in-cluster `cadence:7833` Service it created.
+# The sandbox installs Cadence as a subchart of the michelangelo release so
+# everything comes up under one helm install. Backed by the sandbox MySQL pod
+# (mysql:3306, root/root). The cadence and cadence_visibility databases are
+# auto-created by the schema-server Job.
 #
-# Setting cadence.enabled=true here would install a SECOND Cadence cluster
-# inside the same k3d node and rapidly exhaust memory. Keep it false.
+# The frontend Service stays ClusterIP (upstream chart hardcodes it).
+# In-cluster consumers use michelangelo-cadence-frontend:7833.
+# Host access for the cadence CLI uses kubectl port-forward in sandbox.py.
 # -----------------------------------------------------------------------------
 cadence:
-  enabled: false
+  enabled: true
+
+  config:
+    persistence:
+      database:
+        driver: mysql
+        sql:
+          hosts: mysql
+          port: 3306
+          user: root
+          password: root
+          dbname: cadence
+          visibilityDbname: cadence_visibility
+
+  # Disable backends we are not using — the upstream chart defaults
+  # cassandra.enabled=true which would pull in a Bitnami pod.
+  cassandra:
+    enabled: false
+  mysql:
+    enabled: false
+  postgresql:
+    enabled: false
+
+  # Cadence Web UI exposed via NodePort 30004 → host port 8088.
+  web:
+    enabled: true
+    service:
+      type: NodePort
+      nodePort: 30004
