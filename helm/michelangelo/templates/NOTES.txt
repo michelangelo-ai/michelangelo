@@ -137,11 +137,13 @@ if it stays in Init:0/1, your metadata storage is unreachable.
 {{- if .Values.ui.ingress.enabled }}
 
   This release exposes the UI through an Ingress at:
+{{- if .Values.ui.ingress.hosts }}
 
-      {{ if .Values.ui.ingress.tls }}https{{ else }}http{{ end }}://{{ .Values.ui.ingress.hostname }}/
+      {{ if .Values.ui.ingress.tls }}https{{ else }}http{{ end }}://{{ (index .Values.ui.ingress.hosts 0).host }}/
 
-  DNS for "{{ .Values.ui.ingress.hostname }}" must point at your Ingress
+  DNS for "{{ (index .Values.ui.ingress.hosts 0).host }}" must point at your Ingress
   controller's external address. Verify with:
+{{- end }}
 
       kubectl --namespace {{ .Release.Namespace }} get ingress {{ include "michelangelo.fullname" . }}-ui
 
@@ -174,9 +176,11 @@ if it stays in Init:0/1, your metadata storage is unreachable.
   To expose the UI externally, enable Ingress:
 
       --set ui.ingress.enabled=true \
-      --set ui.ingress.hostname=michelangelo.example.com \
+      --set 'ui.ingress.hosts[0].host=michelangelo.example.com' \
+      --set 'ui.ingress.hosts[0].paths[0].path=/' \
       --set envoy.ingress.enabled=true \
-      --set envoy.ingress.hostname=michelangelo.example.com
+      --set 'envoy.ingress.hosts[0].host=michelangelo.example.com' \
+      --set 'envoy.ingress.hosts[0].paths[0].path=/'
 
 {{- end }}
 {{- else }}
@@ -188,10 +192,19 @@ if it stays in Init:0/1, your metadata storage is unreachable.
 {{- end }}
 
 {{- if .Values.envoy.ingress.enabled }}
+{{- $envoyPath := "/" -}}
+{{- if and .Values.envoy.ingress.hosts (gt (len .Values.envoy.ingress.hosts) 0) }}
+  {{- $h := index .Values.envoy.ingress.hosts 0 }}
+  {{- if and $h.paths (gt (len $h.paths) 0) }}
+    {{- $envoyPath = (index $h.paths 0).path | default "/" | trimSuffix "/" }}
+  {{- end }}
+{{- end }}
 
   The browser UI calls the apiserver through envoy at:
+{{- if .Values.envoy.ingress.hosts }}
 
-      {{ if .Values.envoy.ingress.tls }}https{{ else }}http{{ end }}://{{ .Values.envoy.ingress.hostname }}{{ .Values.envoy.ingress.path | default "/" | trimSuffix "/" }}
+      {{ if .Values.envoy.ingress.tls }}https{{ else }}http{{ end }}://{{ (index .Values.envoy.ingress.hosts 0).host }}{{ $envoyPath }}
+{{- end }}
 
   {{- if not .Values.ui.apiBaseUrl }}
   (Auto-derived into ui.apiBaseUrl from envoy.ingress — no explicit value needed.)
@@ -204,18 +217,20 @@ if it stays in Init:0/1, your metadata storage is unreachable.
 {{- end }}
 
 {{- if .Values.apiserver.ingress.enabled }}
+{{- if .Values.apiserver.ingress.hosts }}
 
   The apiserver gRPC endpoint is exposed at:
 
-      {{ .Values.apiserver.ingress.hostname }}:443   (mode: {{ .Values.apiserver.ingress.mode }})
+      {{ (index .Values.apiserver.ingress.hosts 0).host }}:443   (mode: {{ .Values.apiserver.ingress.mode }})
 
   Use this from external gRPC clients (CLI, SDK, CI). The hostname must be
-  DIFFERENT from ui.ingress.hostname and envoy.ingress.hostname.
+  DIFFERENT from ui.ingress and envoy.ingress hosts.
 
   Test with grpcurl:
 
-      grpcurl {{ .Values.apiserver.ingress.hostname }}:443 list
+      grpcurl {{ (index .Values.apiserver.ingress.hosts 0).host }}:443 list
 
+{{- end }}
 {{- end }}
 
 ────────────────────────────────────────────────────────────────────────

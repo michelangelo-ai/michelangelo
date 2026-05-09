@@ -305,14 +305,16 @@ helm upgrade --install michelangelo ./helm/michelangelo \
   --namespace michelangelo --create-namespace \
   -f values-prod.yaml \
   --set ui.ingress.enabled=true \
-  --set ui.ingress.hostname=michelangelo.example.com \
-  --set ui.ingress.ingressClassName=nginx \
+  --set 'ui.ingress.hosts[0].host=michelangelo.example.com' \
+  --set 'ui.ingress.hosts[0].paths[0].path=/' \
+  --set ui.ingress.className=nginx \
   --set 'ui.ingress.tls[0].hosts[0]=michelangelo.example.com' \
   --set 'ui.ingress.tls[0].secretName=michelangelo-tls' \
   --set envoy.ingress.enabled=true \
-  --set envoy.ingress.hostname=michelangelo.example.com \
-  --set 'envoy.ingress.path=/api(/|$)(.*)' \
-  --set envoy.ingress.ingressClassName=nginx \
+  --set 'envoy.ingress.hosts[0].host=michelangelo.example.com' \
+  --set 'envoy.ingress.hosts[0].paths[0].path=/api(/|$)(.*)' \
+  --set 'envoy.ingress.hosts[0].paths[0].pathType=ImplementationSpecific' \
+  --set envoy.ingress.className=nginx \
   --set 'envoy.ingress.annotations.nginx\.ingress\.kubernetes\.io/rewrite-target=/$2' \
   --set 'envoy.ingress.annotations.nginx\.ingress\.kubernetes\.io/use-regex=true' \
   --set 'envoy.ingress.annotations.nginx\.ingress\.kubernetes\.io/proxy-read-timeout=600' \
@@ -323,6 +325,8 @@ helm upgrade --install michelangelo ./helm/michelangelo \
 
 `ui.apiBaseUrl` is auto-derived from `envoy.ingress` — leave it empty.
 
+The envoy path uses `pathType: ImplementationSpecific`. The nginx regex pattern `/api(/|$)(.*)` is not a valid `Prefix` path under the Kubernetes Ingress spec — the API server rejects the resource if you leave `pathType` at the chart's `Prefix` default. `ImplementationSpecific` tells Kubernetes to defer path matching to the controller, which is what nginx needs for its regex/rewrite extensions.
+
 ### Phase A — Envoy on a dedicated subdomain
 
 ```bash
@@ -330,9 +334,13 @@ helm upgrade --install michelangelo ./helm/michelangelo \
   --namespace michelangelo --create-namespace \
   -f values-prod.yaml \
   --set ui.ingress.enabled=true \
-  --set ui.ingress.hostname=michelangelo.example.com \
+  --set 'ui.ingress.hosts[0].host=michelangelo.example.com' \
+  --set 'ui.ingress.hosts[0].paths[0].path=/' \
+  --set 'ui.ingress.hosts[0].paths[0].pathType=Prefix' \
   --set envoy.ingress.enabled=true \
-  --set envoy.ingress.hostname=api.michelangelo.example.com \
+  --set 'envoy.ingress.hosts[0].host=api.michelangelo.example.com' \
+  --set 'envoy.ingress.hosts[0].paths[0].path=/' \
+  --set 'envoy.ingress.hosts[0].paths[0].pathType=Prefix' \
   --set 'envoy.corsOrigins=https://michelangelo\.example\.com'
 ```
 
@@ -340,7 +348,7 @@ helm upgrade --install michelangelo ./helm/michelangelo \
 
 | Controller | Path strip pattern |
 |---|---|
-| nginx | `path: /api(/|$)(.*)` + `rewrite-target: /$2` + `use-regex: "true"` |
+| nginx | `path: /api(/|$)(.*)` + `pathType: ImplementationSpecific` + `rewrite-target: /$2` + `use-regex: "true"` |
 | Traefik | Requires a `Middleware` CRD with `stripPrefix` — define out-of-band and reference via `traefik.ingress.kubernetes.io/router.middlewares`. See Traefik StripPrefix docs. |
 | Contour | `HTTPProxy` resource with `pathRewritePolicy.replacePrefix` instead of Ingress. |
 | Emissary | `Mapping` resource with `prefix` and `rewrite` instead of Ingress. |
@@ -355,8 +363,9 @@ Expose the raw gRPC apiserver to external CLI/SDK clients. `mode: grpc` lets the
 helm upgrade michelangelo ./helm/michelangelo --reuse-values \
   --set apiserver.ingress.enabled=true \
   --set apiserver.ingress.mode=grpc \
-  --set apiserver.ingress.hostname=grpc.michelangelo.example.com \
-  --set apiserver.ingress.ingressClassName=nginx \
+  --set 'apiserver.ingress.hosts[0].host=grpc.michelangelo.example.com' \
+  --set 'apiserver.ingress.hosts[0].paths[0].path=/' \
+  --set apiserver.ingress.className=nginx \
   --set 'apiserver.ingress.tls[0].hosts[0]=grpc.michelangelo.example.com' \
   --set 'apiserver.ingress.tls[0].secretName=apiserver-grpc-tls'
 ```
@@ -385,16 +394,17 @@ helm upgrade michelangelo ./helm/michelangelo --reuse-values \
   --set apiserver.tls.secretName=apiserver-tls \
   --set apiserver.ingress.enabled=true \
   --set apiserver.ingress.mode=passthrough \
-  --set apiserver.ingress.hostname=grpc.michelangelo.example.com
+  --set 'apiserver.ingress.hosts[0].host=grpc.michelangelo.example.com' \
+  --set 'apiserver.ingress.hosts[0].paths[0].path=/'
 ```
 
 The apiserver hostname must be **different** from the UI/envoy hostname.
 
 ### apiBaseUrl auto-derive
 
-Leave `ui.apiBaseUrl` empty when `envoy.ingress.enabled=true` and `envoy.ingress.hostname` is set — the chart derives it as `<scheme>://<hostname><path>` (https when `envoy.ingress.tls` is non-empty).
+Leave `ui.apiBaseUrl` empty when `envoy.ingress.enabled=true` and `envoy.ingress.hosts` has at least one entry — the chart derives it from `envoy.ingress.hosts[0].host` and `envoy.ingress.hosts[0].paths[0].path` as `<scheme>://<host><path>` (https when `envoy.ingress.tls` is non-empty).
 
-| hostname | path | tls | derived apiBaseUrl |
+| `hosts[0].host` | `hosts[0].paths[0].path` | `tls` | derived `apiBaseUrl` |
 |---|---|---|---|
 | `michelangelo.example.com` | `/` | `[]` | `http://michelangelo.example.com` |
 | `michelangelo.example.com` | `/api` | non-empty | `https://michelangelo.example.com/api` |
@@ -528,9 +538,16 @@ If pods never become ready, check the schema job logs first.
 
 Confirm by checking the browser's network tab for a 403 from envoy with `Access-Control-Allow-Origin: null`.
 
-**`helm install` fails with `ui.ingress.hostname is required when ui.ingress.enabled=true`.**
+**Ingress is admitted but every request returns 404, and `kubectl describe ingress` shows `Rules: <none>`.**
 
-Set `--set ui.ingress.hostname=<your-hostname>`. Same applies to `envoy.ingress.hostname` and `apiserver.ingress.hostname`.
+`*.ingress.enabled=true` but `*.ingress.hosts: []` — an empty `hosts` list renders an Ingress with no rules. Add at least one host:
+
+```bash
+--set 'ui.ingress.hosts[0].host=<your-hostname>' \
+--set 'ui.ingress.hosts[0].paths[0].path=/'
+```
+
+Same applies to `envoy.ingress.hosts` and `apiserver.ingress.hosts` when those Ingresses are enabled.
 
 **`helm install` fails with `apiserver.tls.enabled must be true when apiserver.ingress.mode=passthrough`.**
 
@@ -547,7 +564,7 @@ Your controller does not support `nginx.ingress.kubernetes.io/backend-protocol: 
 
 **`ui.apiBaseUrl` is empty and install fails with `ui.apiBaseUrl is required`.**
 
-Auto-derive activates only when `envoy.ingress.enabled=true` AND `envoy.ingress.hostname` is set. If envoy is on NodePort/LoadBalancer (no Ingress), or if `ui.ingress` is enabled but `envoy.ingress` is disabled, set `ui.apiBaseUrl` explicitly to point at wherever envoy is exposed.
+Auto-derive activates only when `envoy.ingress.enabled=true` AND at least one entry exists in `envoy.ingress.hosts`. If envoy is on NodePort/LoadBalancer (no Ingress), or if `ui.ingress` is enabled but `envoy.ingress` is disabled, set `ui.apiBaseUrl` explicitly to point at wherever envoy is exposed.
 
 **Ingress created but every request returns 404.**
 
@@ -558,7 +575,7 @@ kubectl get ingressclass
 kubectl describe ingress <release>-ui -n <namespace>
 ```
 
-If `ADDRESS` is empty, set `ingressClassName` to a class that exists or install an Ingress controller (`helm install ingress-nginx ingress-nginx/ingress-nginx`).
+If `ADDRESS` is empty, set `className` to a class that exists or install an Ingress controller (`helm install ingress-nginx ingress-nginx/ingress-nginx`).
 
 ## Contributing
 

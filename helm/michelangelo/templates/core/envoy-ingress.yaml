@@ -11,22 +11,32 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  {{- if .Values.envoy.ingress.ingressClassName }}
-  ingressClassName: {{ .Values.envoy.ingress.ingressClassName | quote }}
+  {{- with .Values.envoy.ingress.className }}
+  ingressClassName: {{ . | quote }}
   {{- end }}
   {{- if .Values.envoy.ingress.tls }}
   tls:
-    {{- toYaml .Values.envoy.ingress.tls | nindent 4 }}
+    {{- range .Values.envoy.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
   {{- end }}
   rules:
-    - host: {{ required "envoy.ingress.hostname is required when envoy.ingress.enabled=true" .Values.envoy.ingress.hostname | quote }}
+    {{- range .Values.envoy.ingress.hosts }}
+    - host: {{ .host | quote }}
       http:
         paths:
-          - path: {{ .Values.envoy.ingress.path | default "/" | quote }}
-            pathType: {{ .Values.envoy.ingress.pathType | default "Prefix" }}
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType | default "Prefix" }}
             backend:
               service:
-                name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "envoy") }}
+                name: {{ include "michelangelo.componentFullname" (dict "context" $ "component" "envoy") }}
                 port:
                   name: http
+          {{- end }}
+    {{- end }}
 {{- end }}
