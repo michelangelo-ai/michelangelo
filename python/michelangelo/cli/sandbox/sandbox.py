@@ -632,14 +632,15 @@ def _deploy_services(ns: argparse.Namespace):
 
     if ns.workflow == "temporal":
         _setup_temporal(links, helm_existing_repos)
-    elif ns.workflow == "cadence":
-        _create_cadence_domain(links)
-    else:
-        raise ValueError(f"Unsupported workflow engine: {ns.workflow}")
 
     # Install the Michelangelo control plane (apiserver, envoy, ui, worker,
-    # controllermgr) via Helm.
+    # controllermgr, and Cadence subchart when workflow=cadence) via Helm.
+    # Must happen BEFORE domain registration — Cadence frontend only exists
+    # after helm install.
     _deploy_app_services(ns)
+
+    if ns.workflow == "cadence":
+        _create_cadence_domain(links)
 
     if ns.workflow == "cadence":
         # Forward Cadence frontend ports to localhost so host-side cadence CLI
