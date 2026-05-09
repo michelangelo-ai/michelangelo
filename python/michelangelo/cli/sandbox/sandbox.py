@@ -58,6 +58,7 @@ _helm_nodeport_map = [
     ("8081", ("envoy", "service", "nodePort")),  # Envoy gRPC-Web proxy
     ("8090", ("ui", "service", "nodePort")),  # Michelangelo UI
     ("8088", ("cadence", "web", "service", "nodePort")),  # Cadence Web
+    ("8080", ("temporal", "web", "service", "nodePort")),  # Temporal Web
 ]
 
 
@@ -68,15 +69,18 @@ def _helm_chart_ports(workflow: str) -> list[str]:
     values-k3d.yaml (single source of truth). Host ports are sandbox
     conventions for localhost access.
 
-    Cadence Web is included only when workflow=cadence; the subchart is
-    disabled for Temporal runs.
+    Cadence Web is included only when workflow=cadence; Temporal Web only
+    when workflow=temporal.
     """
     with open(_values_k3d_path) as f:
         values = yaml.safe_load(f) or {}
 
     ports: list[str] = []
     for host_port, path in _helm_nodeport_map:
+        # Skip engine-specific Web UIs based on active workflow
         if path[0] == "cadence" and workflow != "cadence":
+            continue
+        if path[0] == "temporal" and workflow != "temporal":
             continue
         node = values
         for key in path:
@@ -443,9 +447,11 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
             "--set",
             "workflow.engine=temporal",
             "--set",
-            "workflow.endpoint=temporaltest-frontend:7233",
+            "workflow.endpoint=michelangelo-temporal-frontend:7233",
             "--set",
             "cadence.enabled=false",  # ensure cadence subchart is off
+            "--set",
+            "temporal.enabled=true",  # enable temporal subchart
         ]
     else:
         args += [
@@ -487,15 +493,9 @@ def _deploy_services(ns: argparse.Namespace):
     ]
     links = []
 
-    # Cadence
-
-    # If switching from a previous temporal install, uninstall temporal first.
-    if ns.workflow == "cadence":
-        subprocess.run(
-            ["helm", "uninstall", "temporaltest"],
-            capture_output=True,
-            check=False,
-        )
+    # Both Cadence and Temporal are now Helm subcharts — engine switching
+    # is handled by cadence.enabled/temporal.enabled --set flags in
+    # _build_helm_set_args(). No separate helm uninstall needed.
 
     if ns.workflow == "cadence":
         # Cadence is now installed as a Helm subchart (cadence.enabled=true in
@@ -630,11 +630,8 @@ def _deploy_services(ns: argparse.Namespace):
 
     _kube_wait(timeout=getattr(ns, "wait_timeout", 600))
 
-    if ns.workflow == "temporal":
-        _setup_temporal(links, helm_existing_repos)
-
     # Install the Michelangelo control plane (apiserver, envoy, ui, worker,
-    # controllermgr, and Cadence subchart when workflow=cadence) via Helm.
+    # controllermgr, and Cadence or Temporal subchart) via Helm.
     # Must happen BEFORE domain registration — Cadence frontend only exists
     # after helm install.
     _deploy_app_services(ns)

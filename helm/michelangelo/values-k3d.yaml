@@ -110,3 +110,55 @@ cadence:
     service:
       type: NodePort
       nodePort: 30004
+
+# -----------------------------------------------------------------------------
+# Temporal subchart — bundled workflow engine for --workflow temporal.
+#
+# Disabled by default; enabled dynamically by sandbox.py when
+# --workflow temporal is passed. The schema-server Job creates both
+# `temporal` and `temporal_visibility` databases automatically.
+#
+# IMPORTANT: driver must be "mysql8" (not "mysql") — Temporal uses a
+# different driver string from Cadence.
+# -----------------------------------------------------------------------------
+temporal:
+  enabled: false
+
+  server:
+    config:
+      persistence:
+        default:
+          driver: sql
+          sql:
+            driver: mysql8
+            host: mysql
+            port: 3306
+            database: temporal
+            user: root
+            password: root
+        visibility:
+          driver: sql
+          sql:
+            driver: mysql8
+            host: mysql
+            port: 3306
+            database: temporal_visibility
+            user: root
+            password: root
+
+  # Disable unused backends.
+  cassandra:
+    enabled: false
+  mysql:
+    enabled: false
+  postgresql:
+    enabled: false
+  elasticsearch:
+    enabled: false
+
+  # Temporal Web UI exposed via NodePort 30005 → host port 8080.
+  web:
+    enabled: true
+    service:
+      type: NodePort
+      nodePort: 30005
