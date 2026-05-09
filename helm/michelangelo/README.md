@@ -22,7 +22,7 @@ The chart owns only the **control plane**. Infrastructure (metadata storage, obj
 
 ### Local development (k3d)
 
-The Michelangelo CLI provisions a local k3d cluster, MySQL, MinIO, and Cadence, then installs this chart with `values-k3d.yaml`:
+The Michelangelo CLI provisions a local k3d cluster, MySQL, and MinIO, then installs this chart with `values-k3d.yaml` (which enables the bundled Cadence or Temporal subchart based on `--workflow`):
 
 ```bash
 pip install michelangelo
@@ -55,7 +55,7 @@ For repeatable installs, write a `values-prod.yaml` and pass it with `-f` instea
 
 If you do not have a Cadence or Temporal service, you can install the official [Cadence Helm chart](https://github.com/cadence-workflow/cadence-charts) (`cadence-workflow/cadence` v1.1.0) as part of this release by setting `cadence.enabled=true`. Users with an existing managed Cadence or Temporal service should leave it disabled (default) and point `workflow.endpoint` at their own service.
 
-The bundled subchart is **not** used by `michelangelo sandbox up`. The local sandbox provisions its own Cadence outside the chart.
+The local sandbox uses this subchart by default — `ma sandbox create` sets `cadence.enabled=true` and points `workflow.endpoint` at `michelangelo-cadence-frontend:7833`.
 
 ### When to use it
 
@@ -135,7 +135,7 @@ The Michelangelo control plane uses the `michelangelo` database — there is no 
 
 If you prefer Temporal over Cadence, you can install the official [Temporal Helm chart](https://github.com/temporalio/helm-charts) (`temporalio/temporal` v0.44.0) as part of this release by setting `temporal.enabled=true`. Users with an existing managed Temporal service should leave it disabled (default) and point `workflow.endpoint` at their own service.
 
-The bundled subchart is **not** used by `michelangelo sandbox up`. The local sandbox provisions its own Temporal outside the chart.
+The local sandbox uses this subchart when invoked with `ma sandbox create --workflow temporal` — it sets `temporal.enabled=true` and points `workflow.endpoint` at `michelangelo-temporal-frontend:7233`. Temporal Web is accessible at `http://localhost:8080` (NodePort 30005) without a port-forward.
 
 **Do not enable both `cadence.enabled=true` and `temporal.enabled=true`** — pick one workflow engine per release.
 
@@ -468,7 +468,7 @@ You did not provide `--set metadataStorage.host=...` or `-f values-k3d.yaml`. Th
 
 **`helm install` fails with `workflow.endpoint is required`.**
 
-Same as above for the workflow engine. If installing against k3d, pass `-f helm/michelangelo/values-k3d.yaml` which sets `workflow.endpoint=cadence:7933`.
+Same as above for the workflow engine. If installing against k3d, pass `-f helm/michelangelo/values-k3d.yaml` which sets `workflow.endpoint=michelangelo-cadence-frontend:7833` (or `michelangelo-temporal-frontend:7233` when `--workflow temporal`).
 
 **Worker logs `connection refused` to the workflow engine.**
 
