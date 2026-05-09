@@ -1,15 +1,21 @@
 {{- if .Values.ui.enabled }}
 {{- $apiBaseUrl := .Values.ui.apiBaseUrl -}}
-{{- if and (not $apiBaseUrl) .Values.envoy.ingress.enabled .Values.envoy.ingress.hostname -}}
+{{- if and (not $apiBaseUrl) .Values.envoy.ingress.enabled (gt (len (.Values.envoy.ingress.hosts | default list)) 0) -}}
+  {{- $firstHost := index .Values.envoy.ingress.hosts 0 -}}
+  {{- $hostname := required "envoy.ingress.hosts[0].host is required when envoy.ingress.enabled=true" $firstHost.host -}}
   {{- $scheme := "http" -}}
   {{- if .Values.envoy.ingress.tls -}}
     {{- $scheme = "https" -}}
   {{- end -}}
-  {{- $path := .Values.envoy.ingress.path | default "/" | trimSuffix "/" -}}
-  {{- $apiBaseUrl = printf "%s://%s%s" $scheme .Values.envoy.ingress.hostname $path -}}
+  {{- $firstPath := "/" -}}
+  {{- if and $firstHost.paths (gt (len $firstHost.paths) 0) -}}
+    {{- $firstPath = (index $firstHost.paths 0).path | default "/" -}}
+  {{- end -}}
+  {{- $firstPath = $firstPath | trimSuffix "/" -}}
+  {{- $apiBaseUrl = printf "%s://%s%s" $scheme $hostname $firstPath -}}
 {{- end -}}
 {{- if not $apiBaseUrl -}}
-  {{- fail "ui.apiBaseUrl is required when ui.enabled=true — set ui.apiBaseUrl explicitly or enable envoy.ingress with envoy.ingress.hostname" -}}
+  {{- fail "ui.apiBaseUrl is required when ui.enabled=true — set ui.apiBaseUrl explicitly or enable envoy.ingress with at least one host in envoy.ingress.hosts" -}}
 {{- end }}
 apiVersion: v1
 kind: ConfigMap

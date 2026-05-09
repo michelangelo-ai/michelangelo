@@ -170,57 +170,27 @@ apiserver:
     mountPath: /tls
 
   # ---------------------------------------------------------------------------
-  # Ingress for the apiserver gRPC port. Use this only when an external
-  # gRPC client (CLI, SDK, CI runner) outside the cluster needs to reach the
-  # apiserver directly. The browser UI does NOT use this path — it goes
-  # through envoy (gRPC-Web). Most users can leave this disabled.
+  # Ingress for the apiserver gRPC port. Use only when external gRPC clients
+  # (CLI, SDK) need direct access. Browser UI goes through envoy, not here.
   # ---------------------------------------------------------------------------
   ingress:
-    # Toggle the apiserver Ingress. Default off.
     enabled: false
-
-    # How the Ingress controller forwards gRPC to the apiserver Pod:
-    #
-    #   "grpc"        — Controller terminates TLS, then re-originates an
-    #                   HTTP/2 (h2c) connection to the Pod. Requires a
-    #                   controller that supports the GRPC backend protocol
-    #                   (nginx, Contour, Emissary). The apiserver Pod can
-    #                   stay plaintext (apiserver.tls.enabled=false). This
-    #                   is the simpler, recommended path for nginx users.
-    #
-    #   "passthrough" — Controller forwards the raw TLS bytes to the Pod
-    #                   without decrypting. The apiserver Pod MUST terminate
-    #                   TLS itself (apiserver.tls.enabled=true required, or
-    #                   `helm install` fails fast). Use this when you need
-    #                   end-to-end TLS, mTLS, or your controller cannot
-    #                   re-originate gRPC.
+    # "grpc" (recommended) — controller terminates TLS, proxies h2c to pod.
+    # "passthrough" — raw TLS forwarded; pod must terminate (apiserver.tls.enabled=true required).
     mode: grpc
-
-    # IngressClass name. Leave empty to use the cluster default. Set to
-    # "nginx", "contour", "traefik", etc. to target a specific controller.
-    ingressClassName: ""
-
-    # REQUIRED when ingress.enabled=true. Hostname clients connect to.
-    # Must be DIFFERENT from ui.ingress.hostname and envoy.ingress.hostname
-    # — gRPC and HTTP/1.1 cannot share a host on most controllers, and
-    # passthrough mode hijacks the TLS SNI for the entire host.
-    # Example: "grpc.michelangelo.example.com"
-    hostname: ""
-
-    # Extra controller-specific annotations. The chart auto-injects the
-    # mode annotation:
-    #   mode=passthrough → nginx.ingress.kubernetes.io/ssl-passthrough: "true"
-    #   mode=grpc        → nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
-    # Override or add others here, e.g.:
-    #   cert-manager.io/cluster-issuer: letsencrypt-prod
+    className: ""
+    # The chart auto-injects the mode annotation:
+    #   grpc:        nginx.ingress.kubernetes.io/backend-protocol: GRPC
+    #   passthrough: nginx.ingress.kubernetes.io/ssl-passthrough: "true"
     annotations: {}
-
-    # TLS block, copied verbatim into spec.tls. Required for "grpc" mode
-    # (the controller terminates TLS) and ignored for "passthrough" mode
-    # (TLS terminates at the pod). Example:
-    #   tls:
-    #     - hosts: ["grpc.michelangelo.example.com"]
-    #       secretName: apiserver-ingress-tls
+    # Hostname MUST differ from ui.ingress and envoy.ingress hosts.
+    hosts: []
+    # Example:
+    #   hosts:
+    #     - host: grpc.michelangelo.example.com
+    #       paths:
+    #         - path: /
+    #           pathType: Prefix
     tls: []
 
 # -----------------------------------------------------------------------------
@@ -243,7 +213,7 @@ envoy:
   # Multiple:       "https://(michelangelo|staging)\\.example\\.com"
   #
   # When envoy.ingress.enabled=true, this MUST match the scheme + host
-  # of ui.ingress.hostname.
+  # of ui.ingress.hosts[0].host.
   corsOrigins: ""
 
   resources: {}
@@ -253,47 +223,27 @@ envoy:
     nodePort: null
 
   # ---------------------------------------------------------------------------
-  # Ingress for the envoy gRPC-Web proxy. This is the path the browser UI
-  # uses to talk to the apiserver, so enable this whenever the UI is exposed
-  # outside the cluster. Pairs with ui.ingress (UI + envoy on one hostname)
-  # or stands alone on its own subdomain.
+  # Ingress for the Envoy gRPC-Web proxy. The browser UI calls the apiserver
+  # through this path — enable alongside ui.ingress.
+  # The first host's first path is used to auto-derive ui.apiBaseUrl when
+  # ui.apiBaseUrl is empty.
   # ---------------------------------------------------------------------------
   ingress:
-    # Toggle the envoy Ingress. Default off.
     enabled: false
-
-    # IngressClass. Leave empty for cluster default.
-    ingressClassName: ""
-
-    # REQUIRED when ingress.enabled=true. Hostname the UI's apiBaseUrl
-    # resolves to. May be shared with ui.ingress.hostname (same host, split
-    # by path — see annotations) or set to a dedicated subdomain like
-    # "api.michelangelo.example.com".
-    hostname: ""
-
-    # Path prefix for envoy. Use "/" for a dedicated hostname, or "/api(/|$)(.*)"
-    # when sharing a hostname with ui.ingress (requires nginx rewrite
-    # annotation, see below).
-    path: "/"
-
-    # PathType — Prefix (default), Exact, or ImplementationSpecific.
-    pathType: Prefix
-
+    className: ""
     # Controller-specific annotations. Common patterns:
-    #   # nginx — strip the /api prefix when shared with the UI
     #   nginx.ingress.kubernetes.io/rewrite-target: /$2
     #   nginx.ingress.kubernetes.io/use-regex: "true"
     #   nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
-    #   nginx.ingress.kubernetes.io/proxy-body-size: "100m"
-    #   # cert-manager — auto-issue TLS
     #   cert-manager.io/cluster-issuer: letsencrypt-prod
     annotations: {}
-
-    # spec.tls block. When the envoy ingress has TLS, the chart auto-derives
-    # ui.apiBaseUrl as https://<hostname><path>. Example:
-    #   tls:
-    #     - hosts: ["michelangelo.example.com"]
-    #       secretName: michelangelo-tls
+    hosts: []
+    # Example:
+    #   hosts:
+    #     - host: api.michelangelo.example.com
+    #       paths:
+    #         - path: /
+    #           pathType: Prefix
     tls: []
 
 # -----------------------------------------------------------------------------
@@ -324,34 +274,27 @@ ui:
     nodePort: null
 
   # ---------------------------------------------------------------------------
-  # Ingress for the UI. Standard HTTP/1.1 traffic, served at the root of
-  # the hostname. Pair with envoy.ingress on the same hostname (path-split)
-  # or on a dedicated subdomain.
+  # Ingress for the UI. Standard HTTP/1.1, served at the root of each host.
   # ---------------------------------------------------------------------------
   ingress:
-    # Toggle the UI Ingress. Default off — fall back to NodePort/LoadBalancer
-    # via ui.service.type, or port-forward.
     enabled: false
-
-    # IngressClass. Leave empty for cluster default.
-    ingressClassName: ""
-
-    # REQUIRED when ingress.enabled=true. Hostname users open in the browser.
-    # Example: "michelangelo.example.com"
-    hostname: ""
-
-    # Controller-specific annotations. Common patterns:
-    #   # nginx — needed when sharing a host with envoy.ingress at /api
-    #   nginx.ingress.kubernetes.io/use-regex: "true"
-    #   # cert-manager — auto-issue TLS
-    #   cert-manager.io/cluster-issuer: letsencrypt-prod
+    className: ""
     annotations: {}
-
-    # spec.tls block. Example:
-    #   tls:
-    #     - hosts: ["michelangelo.example.com"]
-    #       secretName: michelangelo-tls
+    # Host rules. Each entry creates one rule in spec.rules[].
+    # Required when ingress.enabled=true — an empty list produces no rules.
+    hosts: []
+    # Example:
+    #   hosts:
+    #     - host: michelangelo.example.com
+    #       paths:
+    #         - path: /
+    #           pathType: Prefix
     tls: []
+    # Example:
+    #   tls:
+    #     - secretName: michelangelo-tls
+    #       hosts:
+    #         - michelangelo.example.com
 
 # -----------------------------------------------------------------------------
 # worker — Cadence/Temporal workflow client. Executes pipeline runs.
