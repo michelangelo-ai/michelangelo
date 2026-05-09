@@ -100,8 +100,8 @@ def init_arguments(p: argparse.ArgumentParser):
         "--exclude",
         help=(
             "Excludes specified services. "
-            "Available options: apiserver, controllermgr, ui, worker, "
-            "prometheus, grafana"
+            "Control plane (Helm): apiserver, controllermgr, ui, worker. "
+            "Infrastructure: prometheus, grafana, ray, spark."
         ),
         nargs="+",
         default=[],
@@ -151,8 +151,8 @@ def init_arguments(p: argparse.ArgumentParser):
         "--exclude",
         help=(
             "Excludes specified services. "
-            "Available options: apiserver, controllermgr, ui, worker, "
-            "prometheus, grafana"
+            "Control plane (Helm): apiserver, controllermgr, ui, worker. "
+            "Infrastructure: prometheus, grafana, ray, spark."
         ),
         nargs="+",
         default=[],
@@ -1111,9 +1111,11 @@ def _create_cadence_domain(links):
     # Wait for Cadence frontend to be ready before registering domain.
     print("Waiting for Cadence frontend to be ready...")
     _exec(
-        "kubectl", "wait",
+        "kubectl",
+        "wait",
         "--for=condition=available",
-        "deployment", "-l",
+        "deployment",
+        "-l",
         "app.kubernetes.io/name=cadence,app.kubernetes.io/component=frontend",
         "--timeout=300s",
     )

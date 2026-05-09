@@ -41,8 +41,8 @@ The sandbox is split into two tiers managed by different tools:
 
 | Tier | Tool | What it owns |
 |---|---|---|
-| **Infrastructure** | `sandbox.py` (`ma sandbox`) | MySQL, MinIO, Cadence/Temporal, Prometheus, Grafana, MLflow, Fluent Bit, KubeRay, Spark Operator, k3d cluster lifecycle |
-| **Control plane** | Helm (`helm/michelangelo`) | apiserver, envoy, UI, worker, controllermgr, CRDs, RBAC |
+| **Infrastructure** | `sandbox.py` (`ma sandbox`) | MySQL, MinIO, Temporal (when `--workflow temporal`), Prometheus, Grafana, MLflow, Fluent Bit, KubeRay, Spark Operator, k3d cluster lifecycle |
+| **Control plane + Cadence** | Helm (`helm/michelangelo`) | apiserver, envoy, UI, worker, controllermgr, Cadence subchart (when `--workflow cadence`), CRDs, RBAC |
 
 After `ma sandbox create`, the control plane is managed as a Helm release named `michelangelo`:
 
@@ -70,7 +70,11 @@ ma sandbox create --workflow cadence
 ma sandbox create --workflow temporal
 ```
 
-The workflow engine can be switched by deleting and recreating the sandbox. `ma sandbox sync` keeps the same engine as the original create.
+**How the engines are deployed:**
+- `--workflow cadence` (default): Cadence is installed as a subchart of the `michelangelo` Helm release (`cadence.enabled=true` in `values-k3d.yaml`). The Cadence frontend Service is `michelangelo-cadence-frontend`.
+- `--workflow temporal`: Temporal is installed via a separate Helm release (`temporaltest`) outside the michelangelo release. The frontend Service is `temporaltest-frontend`.
+
+Switching engines: `ma sandbox sync --workflow temporal` (or vice versa) automatically uninstalls the previous engine before deploying the new one.
 
 ## Excluding Services
 
@@ -79,11 +83,14 @@ Use `--exclude` to skip specific services:
 ```bash
 ma sandbox create --exclude worker controllermgr
 ma sandbox sync --exclude ui
+ma sandbox create --exclude prometheus grafana ray spark
 ```
 
-**Control plane services** (Helm-managed): `apiserver`, `ui`, `worker`, `controllermgr`
+**Control plane services** (Helm-managed, toggled via `enabled=false`): `apiserver`, `ui`, `worker`, `controllermgr`. Excluding `ui` also disables `envoy`.
 
-**Infrastructure services**: `prometheus`, `grafana`, `ray`, `spark`
+**Infrastructure services** (raw kubectl apply, skipped when listed): `prometheus`, `grafana`, `ray`, `spark`.
+
+To skip Cadence, use `--workflow temporal` instead — Cadence is bundled with the Helm release and cannot be excluded individually.
 
 ## Experimental Services
 
@@ -98,10 +105,12 @@ ma sandbox create --include-experimental fluent-bit mlflow
 | Michelangelo UI | http://localhost:8090 | |
 | Envoy (gRPC-Web) | http://localhost:8081 | |
 | Apiserver (gRPC) | localhost:15566 | |
-| Cadence Web | http://localhost:8088 | Only when `--workflow cadence` (default) |
-| Temporal Web | http://localhost:8080 | Only when `--workflow temporal` — port-forwarded automatically by sandbox |
-| MinIO Console | http://localhost:9090 | |
-| Grafana | http://localhost:3000 | |
+| Cadence Web | http://localhost:8088 | Only when `--workflow cadence` (default) — NodePort 30004 |
+| Cadence gRPC frontend | localhost:7833 | Only when `--workflow cadence` — port-forwarded automatically (`svc/michelangelo-cadence-frontend`) |
+| Cadence TChannel (CLI) | localhost:7933 | Only when `--workflow cadence` — port-forwarded automatically; used by the `cadence` CLI |
+| Temporal Web | http://localhost:8080 | Only when `--workflow temporal` — port-forwarded automatically (`svc/temporaltest-web`) |
+| MinIO Console | http://localhost:9090 | minioadmin / minioadmin |
+| Grafana | http://localhost:3000 | admin / admin |
 | Prometheus | http://localhost:9092 | |
 
 ## Monitoring and Logging
