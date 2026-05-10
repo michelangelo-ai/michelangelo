@@ -281,14 +281,27 @@ def main():
     items = list_with()
     check("no list_options_ext: count", len(items), 3)
 
-    print("\n[18] OrderBy by label value (NOT YET IMPLEMENTED — should error)")
-    expect_grpc_code(
-        "OrderBy by label value errors (gap = Task #4 WITH/JOIN hack not yet ported)",
-        lambda: list_with(order_by=[
-            OrderBy(field="pipeline_run.metadata.labels.env", dir=SORT_ORDER_ASC),
-        ]),
-        {grpc.StatusCode.INVALID_ARGUMENT, grpc.StatusCode.INTERNAL},
-    )
+    print("\n[18] OrderBy by label value (now implemented via WITH/JOIN hack)")
+    # Re-seed with a SpecUpdateTimestamp label so we can exercise this path.
+    conn = pymysql.connect(host="127.0.0.1", port=3306, user="root", password="root", database="michelangelo")
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT uid FROM pipeline_run WHERE namespace = %s ORDER BY name", (NAMESPACE,))
+            uids = [row[0] for row in cur.fetchall()]
+            for i, uid in enumerate(uids):
+                # alice → 100, bob → 200, charlie → 300 (so DESC = charlie, bob, alice)
+                cur.execute(
+                    "INSERT INTO pipeline_run_labels (obj_uid, `key`, `value`) "
+                    "VALUES (%s, 'michelangelo/SpecUpdateTimestamp', %s)",
+                    (uid, str(100 * (i + 1))),
+                )
+        conn.commit()
+    finally:
+        conn.close()
+    items = list_with(order_by=[
+        OrderBy(field="pipeline_run.metadata.labels.michelangelo/SpecUpdateTimestamp", dir=SORT_ORDER_DESC),
+    ])
+    check("order by SpecUpdateTimestamp DESC", [i.metadata.name for i in items], ["charlie", "bob", "alice"])
 
     print("\n[19] Continue cursor: limit=2 returns Continue token")
     items_full_list = APIClient.PipelineRunService._stub.ListPipelineRun(
@@ -305,6 +318,65 @@ def main():
         timeout=60,
     )
     check("no continue cursor when page not full", getattr(items_partial.pipeline_run_list.metadata, "continue"), "")
+
+    print("\n[21] V1 fallback: metav1.ListOptions.LabelSelector 'env=prod'")
+    # No list_options_ext.Operation → fall back to listOptions.LabelSelector parsing.
+    from michelangelo.gen.api.v2.pipeline_run_svc_pb2 import ListPipelineRunRequest
+    from michelangelo.gen.k8s.io.apimachinery.pkg.apis.meta.v1.generated_pb2 import ListOptions
+    req = ListPipelineRunRequest(namespace=NAMESPACE)
+    req.list_options.CopyFrom(ListOptions(labelSelector="env=prod"))
+    resp = APIClient.PipelineRunService._stub.ListPipelineRun(
+        req, metadata=APIClient.PipelineRunService._get_metadata(None), timeout=60,
+    )
+    check("V1 LabelSelector env=prod", names(resp.pipeline_run_list.items), ["alice", "charlie"])
+
+    print("\n[22] V1 fallback: LabelSelector 'env in (prod,dev)'")
+    req = ListPipelineRunRequest(namespace=NAMESPACE)
+    req.list_options.CopyFrom(ListOptions(labelSelector="env in (prod,dev)"))
+    resp = APIClient.PipelineRunService._stub.ListPipelineRun(
+        req, metadata=APIClient.PipelineRunService._get_metadata(None), timeout=60,
+    )
+    check("V1 LabelSelector env in (prod,dev)", names(resp.pipeline_run_list.items), ["alice", "bob", "charlie"])
+
+    print("\n[23] V1 fallback: LabelSelector '!env' (DoesNotExist) → empty (all rows have env)")
+    req = ListPipelineRunRequest(namespace=NAMESPACE)
+    req.list_options.CopyFrom(ListOptions(labelSelector="!nonexistent"))
+    resp = APIClient.PipelineRunService._stub.ListPipelineRun(
+        req, metadata=APIClient.PipelineRunService._get_metadata(None), timeout=60,
+    )
+    check("V1 LabelSelector !nonexistent", len(resp.pipeline_run_list.items), 3)
+
+    print("\n[24] V1 fallback: LabelSelector 'env notin (prod)' → bob only")
+    req = ListPipelineRunRequest(namespace=NAMESPACE)
+    req.list_options.CopyFrom(ListOptions(labelSelector="env notin (prod)"))
+    resp = APIClient.PipelineRunService._stub.ListPipelineRun(
+        req, metadata=APIClient.PipelineRunService._get_metadata(None), timeout=60,
+    )
+    check("V1 LabelSelector env notin (prod)", names(resp.pipeline_run_list.items), ["bob"])
+
+    print("\n[25] V1 fallback: combined LabelSelector 'env=prod,region=us-east'")
+    req = ListPipelineRunRequest(namespace=NAMESPACE)
+    req.list_options.CopyFrom(ListOptions(labelSelector="env=prod,region=us-east"))
+    resp = APIClient.PipelineRunService._stub.ListPipelineRun(
+        req, metadata=APIClient.PipelineRunService._get_metadata(None), timeout=60,
+    )
+    check("V1 LabelSelector env=prod AND region=us-east", names(resp.pipeline_run_list.items), ["charlie"])
+
+    print("\n[26] V1 fallback: ListOptions.Limit + Continue cursor")
+    req = ListPipelineRunRequest(namespace=NAMESPACE)
+    req.list_options.CopyFrom(ListOptions(limit=2))
+    resp1 = APIClient.PipelineRunService._stub.ListPipelineRun(
+        req, metadata=APIClient.PipelineRunService._get_metadata(None), timeout=60,
+    )
+    cursor = getattr(resp1.pipeline_run_list.metadata, "continue")
+    check("V1 first page returns Continue cursor", cursor, "2")
+    req2 = ListPipelineRunRequest(namespace=NAMESPACE)
+    req2.list_options.CopyFrom(ListOptions(limit=2))
+    setattr(req2.list_options, "continue", cursor)
+    resp2 = APIClient.PipelineRunService._stub.ListPipelineRun(
+        req2, metadata=APIClient.PipelineRunService._get_metadata(None), timeout=60,
+    )
+    check("V1 second page returns 1 row", len(resp2.pipeline_run_list.items), 1)
 
     print(f"\n=== {PASS} passed, {FAIL} failed ===")
     sys.exit(0 if FAIL == 0 else 1)

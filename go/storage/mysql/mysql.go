@@ -19,8 +19,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/selection"
 )
 
 // Config holds MySQL configuration
@@ -239,42 +241,114 @@ func (m *mysqlMetadataStorage) GetByID(ctx context.Context, uid string, object r
 // List objects.
 //
 // SQL output is byte-equivalent to the internal storage/pkg/mysql/mysql.go List:
-//   SELECT `uid`, `group_ver`, `namespace`, `name`, `res_version`,
-//          `create_time`, `update_time`, `proto`
-//   FROM `<table>` WHERE `namespace`=? AND `delete_time` IS NULL
-//                  [AND (<criterion> )]
-//                  [ORDER BY ...]
-//                  [LIMIT ? [OFFSET ?]]
+//
+//	[WITH <label-selector aliases>, [SpecUpdateTimeStampTable AS (...)] ]
+//	SELECT `uid`, `group_ver`, `namespace`, `name`, `res_version`,
+//	       `create_time`, `update_time`, `proto`
+//	FROM `<table>` [<label-selector INNER JOINs>] [INNER JOIN SpecUpdateTimeStampTable ON ...]
+//	WHERE `namespace`=? AND `delete_time` IS NULL
+//	      [AND (<criterion> )]
+//	      [<field-selector AND-clauses>]
+//	      [<label-selector NOT EXISTS clauses>]
+//	      [ORDER BY ...]
+//	      [LIMIT ? [OFFSET ?]]
+//
+// Behavior matches internal:
+//   - When listOptionsExt.Operation is set, criterion-based filtering applies.
+//   - When listOptionsExt.Operation is nil and listOptions has selector strings,
+//     falls back to K8s-style LabelSelector / FieldSelector parsing.
+//   - The optional WITH + INNER JOIN for SpecUpdateTimeStampTable are emitted
+//     when an OrderBy references the special label-value field.
 func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMeta, namespace string, listOptions *metav1.ListOptions, listOptionsExt *apipb.ListOptionsExt, listResponse *storage.ListResponse) error {
 	tableName := getTableNameFromTypeMeta(typeMeta)
 	if tableName == "" {
 		return status.Errorf(codes.InvalidArgument, "unable to determine table name for type: %s", typeMeta.Kind)
 	}
+	indexPathToKeyMap := m.indexPathToKeyMap(typeMeta)
 
-	query := "SELECT `uid`, `group_ver`, `namespace`, `name`, `res_version`, " +
-		"`create_time`, `update_time`, `proto` FROM `" + tableName + "` WHERE "
+	// Build the ORDER BY first so we can detect the label-value hack.
+	orderBySQL := ""
+	if listOptionsExt != nil && len(listOptionsExt.OrderBy) > 0 {
+		orderBySQL = buildOrderBySQL(listOptionsExt.OrderBy)
+	}
+
+	// V1 fallback: parse metav1.ListOptions selector strings when the V2
+	// criterion path is not used.
+	var labelPieces labelSelectorPieces
+	var fieldSelectorWhere string
+	var fieldSelectorParams []interface{}
+	useV1Selectors := (listOptionsExt == nil || listOptionsExt.Operation == nil) && listOptions != nil
+	if useV1Selectors {
+		var err error
+		labelPieces, err = buildLabelSelectorSQL(listOptions.LabelSelector, tableName)
+		if err != nil {
+			return err
+		}
+		fieldSelectorWhere, fieldSelectorParams, err = buildFieldSelectorSQL(listOptions.FieldSelector, indexPathToKeyMap)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Detect ORDER BY by label value. If present, register the
+	// SpecUpdateTimeStampTable CTE alongside any V1 label-selector aliases.
+	if strings.Contains(orderBySQL, orderByLabelColumn) {
+		labelPieces.withAliases = append(labelPieces.withAliases,
+			"SpecUpdateTimeStampTable AS (SELECT `obj_uid`, `value` FROM `"+tableName+"_labels` WHERE `key` = ?)")
+		labelPieces.joinClauses = append(labelPieces.joinClauses,
+			" INNER JOIN SpecUpdateTimeStampTable ON (`uid` = SpecUpdateTimeStampTable.`obj_uid`)")
+		labelPieces.withParams = append(labelPieces.withParams, orderByLabelKey)
+	}
+
+	// Assemble query. WITH clause first if we have any CTEs.
+	var query strings.Builder
+	if len(labelPieces.withAliases) > 0 {
+		query.WriteString("WITH ")
+		query.WriteString(strings.Join(labelPieces.withAliases, ", "))
+		query.WriteByte(' ')
+	}
+	query.WriteString("SELECT `uid`, `group_ver`, `namespace`, `name`, `res_version`, ")
+	query.WriteString("`create_time`, `update_time`, `proto` FROM `")
+	query.WriteString(tableName)
+	query.WriteByte('`')
+	for _, j := range labelPieces.joinClauses {
+		query.WriteString(j)
+	}
+	query.WriteString(" WHERE ")
+
 	args := []interface{}{}
 	if namespace != "" {
-		query += "`namespace`=? AND `delete_time` IS NULL"
+		query.WriteString("`namespace`=? AND `delete_time` IS NULL")
 		args = append(args, namespace)
 	} else {
-		query += "`delete_time` IS NULL"
+		query.WriteString("`delete_time` IS NULL")
 	}
 
 	if listOptionsExt != nil && listOptionsExt.Operation != nil {
-		criterionSQL, criterionArgs, err := buildCriterionSQL(listOptionsExt.Operation, tableName, m.indexPathToKeyMap(typeMeta))
+		criterionSQL, criterionArgs, err := buildCriterionSQL(listOptionsExt.Operation, tableName, indexPathToKeyMap)
 		if err != nil {
 			return status.Errorf(codes.Internal, "failed to build criterion SQL: %v", err)
 		}
 		if criterionSQL != "" {
-			query += " AND (" + criterionSQL + " )"
+			query.WriteString(" AND (")
+			query.WriteString(criterionSQL)
+			query.WriteString(" )")
 			args = append(args, criterionArgs...)
 		}
 	}
 
-	if listOptionsExt != nil && len(listOptionsExt.OrderBy) > 0 {
-		query += buildOrderBySQL(listOptionsExt.OrderBy)
+	// V1 fallback: append field selector WHERE clauses + label-selector
+	// NOT EXISTS clauses.
+	if fieldSelectorWhere != "" {
+		query.WriteString(fieldSelectorWhere)
+		args = append(args, fieldSelectorParams...)
 	}
+	for _, w := range labelPieces.whereClauses {
+		query.WriteString(w)
+	}
+	args = append(args, labelPieces.whereParams...)
+
+	query.WriteString(orderBySQL)
 
 	var limit, offset int64
 	if listOptionsExt != nil && listOptionsExt.Pagination != nil {
@@ -282,17 +356,31 @@ func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMe
 		offset = int64(listOptionsExt.Pagination.Offset)
 	} else if listOptions != nil && listOptions.Limit > 0 {
 		limit = listOptions.Limit
+		// V1 cursor: opts.Continue carries a stringified offset (matches internal).
+		if listOptions.Continue != "" {
+			parsed, err := strconv.ParseInt(listOptions.Continue, 10, 64)
+			if err != nil || parsed < 0 {
+				return status.Errorf(codes.InvalidArgument,
+					"invalid Continue field in ListOpts. Continue = %v", listOptions.Continue)
+			}
+			offset = parsed
+		}
 	}
 	if limit > 0 {
-		query += " LIMIT ?"
+		query.WriteString(" LIMIT ?")
 		args = append(args, limit)
 		if offset > 0 {
-			query += " OFFSET ?"
+			query.WriteString(" OFFSET ?")
 			args = append(args, offset)
 		}
 	}
 
-	return m.executeListQueryAndProcessResult(ctx, query, args, limit, offset, typeMeta, listResponse)
+	// Prepend WITH params so the CTE placeholders bind to the first args.
+	if len(labelPieces.withParams) > 0 {
+		args = append(labelPieces.withParams, args...)
+	}
+
+	return m.executeListQueryAndProcessResult(ctx, query.String(), args, limit, offset, typeMeta, listResponse)
 }
 
 // executeListQueryAndProcessResult runs a SELECT query against the main table,
@@ -361,6 +449,14 @@ var (
 		"metadata.creation_timestamp": "create_time",
 		"metadata.update_timestamp":   "update_time",
 	}
+
+	// orderByLabelField is the (post-CRD-prefix-strip) field path that triggers
+	// the ORDER-BY-by-label-value WITH/JOIN hack. Mirrors the internal
+	// implementation: only this exact label key is supported, used by MA Studio
+	// to sort by spec-update timestamps stored in the labels table.
+	orderByLabelField  = "metadata.labels.michelangelo/SpecUpdateTimestamp"
+	orderByLabelKey    = "michelangelo/SpecUpdateTimestamp"
+	orderByLabelColumn = "SpecUpdateTimeStampTable.`value`"
 
 	// sanitizeRe strips characters that are unsafe in raw Any fallback values.
 	sanitizeRe = regexp.MustCompile(`[^a-zA-Z0-9\-_. ,]+`)
@@ -631,7 +727,223 @@ func isNoParamOp(op apipb.CriterionOperator) bool {
 	return op == apipb.CRITERION_OPERATOR_IS_NULL || op == apipb.CRITERION_OPERATOR_IS_NOT_NULL
 }
 
+// labelSelectorPieces holds the SQL fragments produced from a single
+// metav1.ListOptions.LabelSelector string. WITH-clause aliases (and their
+// matching JOINs) are emitted for positive-match operators (=, ==, in, exists);
+// NOT-EXISTS subqueries in `whereClauses` are emitted for negative-match
+// operators (!key, key notin (...)). The two are accumulated separately so
+// the caller can intersperse with other CTEs (e.g. orderByLabel hack).
+type labelSelectorPieces struct {
+	withAliases  []string // each: "<alias> AS (SELECT `obj_uid` FROM `<t>_labels` WHERE ...)"
+	joinClauses  []string // each: " INNER JOIN <alias> ON (`uid`=<alias>.`obj_uid`)"
+	whereClauses []string // each: " AND NOT EXISTS (...)"
+	withParams   []interface{}
+	whereParams  []interface{}
+}
+
+// parseSelector parses a Kubernetes-style selector string into requirements
+// and validates each requirement uses an operator we support.
+//
+// selectorType ∈ {"label", "field"}:
+//   - "label" supports: =, ==, in, exists, !key, notin
+//   - "field" supports: =, ==, in (subset — k8s field selectors are stricter)
+func parseSelector(selectorStr, selectorType string) (labels.Requirements, bool, error) {
+	if selectorType != "label" && selectorType != "field" {
+		return nil, false, status.Errorf(codes.Unimplemented,
+			"unsupported selector type. selector: %v, type: %v", selectorStr, selectorType)
+	}
+	selector, err := labels.Parse(selectorStr)
+	if err != nil {
+		return nil, false, status.Errorf(codes.InvalidArgument,
+			"failed to parse selector. selector: %v, type: %v, err: %v", selectorStr, selectorType, err)
+	}
+	requirements, selectable := selector.Requirements()
+	for _, req := range requirements {
+		op := req.Operator()
+		if selectorType == "label" {
+			switch op {
+			case selection.Equals, selection.DoubleEquals, selection.Exists,
+				selection.In, selection.DoesNotExist, selection.NotIn:
+				continue
+			}
+		} else { // field
+			switch op {
+			case selection.Equals, selection.DoubleEquals, selection.In:
+				continue
+			}
+		}
+		return nil, false, status.Errorf(codes.Unimplemented,
+			"unsupported selector operator %v. selector: %v, type: %v",
+			req.Operator(), selectorStr, selectorType)
+	}
+	if len(requirements) > 26 {
+		return nil, false, status.Errorf(codes.InvalidArgument,
+			"too many selector operators, the max number supported is 26. selector: %v", selectorStr)
+	}
+	return requirements, selectable, nil
+}
+
+// labelAliasName returns the SQL alias for the i-th positive-match label
+// requirement (1-indexed). Maps 1→A, 2→B, … 26→Z. Capped by parseSelector's
+// 26-requirement limit.
+func labelAliasName(i int) string {
+	return string(rune('A' + i - 1))
+}
+
+// buildLabelSelectorSQL converts a metav1.ListOptions.LabelSelector string
+// into label-table CTEs / NOT-EXISTS clauses. Mirrors the internal
+// buildLabelSelectorQuery output:
+//
+//	positive (=, ==, in, exists):
+//	    WITH <alias> AS (SELECT `obj_uid` FROM `<t>_labels` WHERE `key`=? [AND `value`...])
+//	    + INNER JOIN <alias> ON (`uid`=<alias>.`obj_uid`)
+//	negative (!key, key notin (...)):
+//	    AND NOT EXISTS (SELECT 1 FROM `<t>_labels` WHERE `obj_uid` = `uid` AND `key` = ? [AND ...])
+func buildLabelSelectorSQL(labelSelectorStr, tableName string) (labelSelectorPieces, error) {
+	pieces := labelSelectorPieces{}
+	if labelSelectorStr == "" {
+		return pieces, nil
+	}
+	requirements, selectable, err := parseSelector(labelSelectorStr, "label")
+	if err != nil || !selectable || len(requirements) == 0 {
+		return pieces, err
+	}
+	labelTable := tableName + "_labels"
+	posIdx := 0
+
+	for _, req := range requirements {
+		switch req.Operator() {
+		case selection.DoesNotExist:
+			pieces.whereClauses = append(pieces.whereClauses,
+				" AND NOT EXISTS (SELECT 1 FROM `"+labelTable+"` WHERE `obj_uid` = `uid` AND `key` = ?)")
+			pieces.whereParams = append(pieces.whereParams, req.Key())
+			continue
+		case selection.NotIn:
+			values := req.Values().List()
+			if len(values) == 0 {
+				continue
+			}
+			var sb strings.Builder
+			sb.WriteString(" AND NOT EXISTS (SELECT 1 FROM `")
+			sb.WriteString(labelTable)
+			sb.WriteString("` WHERE `obj_uid` = `uid` AND `key` = ? AND `value` IN (")
+			pieces.whereParams = append(pieces.whereParams, req.Key())
+			for i, v := range values {
+				if i != 0 {
+					sb.WriteByte(',')
+				}
+				sb.WriteByte('?')
+				pieces.whereParams = append(pieces.whereParams, v)
+			}
+			sb.WriteString("))")
+			pieces.whereClauses = append(pieces.whereClauses, sb.String())
+			continue
+		}
+
+		// Positive-match operators share a WITH/JOIN scaffold.
+		posIdx++
+		alias := labelAliasName(posIdx)
+		var sb strings.Builder
+		sb.WriteString(alias)
+		sb.WriteString(" AS (SELECT `obj_uid` FROM `")
+		sb.WriteString(labelTable)
+		sb.WriteString("` WHERE ")
+		switch req.Operator() {
+		case selection.Equals, selection.DoubleEquals:
+			sb.WriteString("`key`=? AND `value`=?)")
+			pieces.withParams = append(pieces.withParams, req.Key(), req.Values().List()[0])
+		case selection.Exists:
+			sb.WriteString("`key`=?)")
+			pieces.withParams = append(pieces.withParams, req.Key())
+		case selection.In:
+			sb.WriteString("`key`=? AND `value` IN (")
+			pieces.withParams = append(pieces.withParams, req.Key())
+			values := req.Values().List()
+			for i, v := range values {
+				if i != 0 {
+					sb.WriteByte(',')
+				}
+				sb.WriteByte('?')
+				pieces.withParams = append(pieces.withParams, v)
+			}
+			sb.WriteString("))")
+		}
+		pieces.withAliases = append(pieces.withAliases, sb.String())
+		pieces.joinClauses = append(pieces.joinClauses,
+			" INNER JOIN "+alias+" ON (`uid`="+alias+".`obj_uid`)")
+	}
+	return pieces, nil
+}
+
+// buildFieldSelectorSQL converts a metav1.ListOptions.FieldSelector string
+// into AND-prefixed WHERE fragments. Returns the concatenated WHERE fragment
+// (including leading " AND" for each clause) and the bind params.
+//
+// Each requirement's key is looked up in indexPathToKeyMap (the proto path →
+// MySQL column map); fields not in the map are rejected with InvalidArgument.
+// When indexPathToKeyMap is nil, the path is used as the column name as-is
+// (permissive — matches our criterion-builder convention).
+func buildFieldSelectorSQL(fieldSelectorStr string, indexPathToKeyMap map[string]string) (string, []interface{}, error) {
+	if fieldSelectorStr == "" {
+		return "", nil, nil
+	}
+	requirements, selectable, err := parseSelector(fieldSelectorStr, "field")
+	if err != nil || !selectable || len(requirements) == 0 {
+		return "", nil, err
+	}
+	var queryStr strings.Builder
+	var params []interface{}
+	for _, req := range requirements {
+		col := req.Key()
+		if mapped, ok := indexPathToKeyMap[col]; ok {
+			col = mapped
+		} else if indexPathToKeyMap != nil {
+			return "", nil, status.Errorf(codes.InvalidArgument,
+				"invalid field selector, unsupported field. field: %v", req.Key())
+		}
+		switch req.Operator() {
+		case selection.Equals, selection.DoubleEquals:
+			val := req.Values().List()[0]
+			if val == "" {
+				queryStr.WriteString(" AND (`")
+				queryStr.WriteString(col)
+				queryStr.WriteString("` IS NULL OR `")
+				queryStr.WriteString(col)
+				queryStr.WriteString("`='')")
+			} else {
+				queryStr.WriteString(" AND `")
+				queryStr.WriteString(col)
+				queryStr.WriteString("`=?")
+				params = append(params, val)
+			}
+		case selection.In:
+			queryStr.WriteString(" AND `")
+			queryStr.WriteString(col)
+			queryStr.WriteString("` IN (")
+			values := req.Values().List()
+			for i, v := range values {
+				if i != 0 {
+					queryStr.WriteByte(',')
+				}
+				queryStr.WriteByte('?')
+				params = append(params, v)
+			}
+			queryStr.WriteByte(')')
+		}
+	}
+	return queryStr.String(), params, nil
+}
+
 // buildOrderBySQL builds the ORDER BY clause from a list of OrderBy specs.
+//
+// Each OrderBy.Field is resolved as follows (matches internal buildOrderByQuery):
+//  1. If the bare path matches baseOrderByFields → use the mapped column.
+//  2. Else strip the CRD prefix (everything before the first '.'); if the
+//     remainder matches baseOrderByFields → use the mapped column.
+//  3. Else if the (CRD-stripped) remainder equals orderByLabelField → emit
+//     orderByLabelColumn (which is a CTE column reference; the caller is
+//     responsible for prepending the matching WITH clause).
+//  4. Otherwise the remainder is used as the bare column name.
 func buildOrderBySQL(orderBy []*apipb.OrderBy) string {
 	if len(orderBy) == 0 {
 		return ""
@@ -639,12 +951,16 @@ func buildOrderBySQL(orderBy []*apipb.OrderBy) string {
 	var clauses []string
 	for _, order := range orderBy {
 		colName := order.Field
+		isLabelValueColumn := false
 		if col, ok := baseOrderByFields[colName]; ok {
 			colName = col
 		} else if idx := strings.IndexByte(colName, '.'); idx >= 0 {
 			remainder := colName[idx+1:]
 			if col, ok := baseOrderByFields[remainder]; ok {
 				colName = col
+			} else if remainder == orderByLabelField {
+				colName = orderByLabelColumn
+				isLabelValueColumn = true
 			} else {
 				colName = remainder
 			}
@@ -653,7 +969,12 @@ func buildOrderBySQL(orderBy []*apipb.OrderBy) string {
 		if order.Dir == apipb.SORT_ORDER_DESC {
 			dir = "DESC"
 		}
-		clauses = append(clauses, fmt.Sprintf("`%s` %s", colName, dir))
+		if isLabelValueColumn {
+			// orderByLabelColumn already includes its own backticks.
+			clauses = append(clauses, colName+" "+dir)
+		} else {
+			clauses = append(clauses, fmt.Sprintf("`%s` %s", colName, dir))
+		}
 	}
 	return " ORDER BY " + strings.Join(clauses, ", ")
 }
