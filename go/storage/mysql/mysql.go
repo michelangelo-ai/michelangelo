@@ -420,7 +420,7 @@ func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMe
 // blob already carries all metadata via the embedded ObjectMeta. The internal
 // implementation overwrites these fields from the columns to handle the case
 // where the column values are more recent than the serialized proto; that
-// merge is not yet implemented in OSS. TODO: merge column-side res_version /
+// merge is not yet implemented in OSS. TODO(#1173): merge column-side res_version /
 // update_time onto the runtime object.
 func (m *mysqlMetadataStorage) executeListQueryAndProcessResult(ctx context.Context, query string, args []interface{}, limit, offset int64, typeMeta *metav1.TypeMeta, listResp *storage.ListResponse) error {
 	rows, err := m.db.QueryContext(ctx, query, args...)
