@@ -10,9 +10,12 @@ Use this page when you need to understand the schema files, table naming, query 
 |---------|----------|---------|
 | Helm schema | `helm/michelangelo/files/schema/mysql-init-schema.sql` | Schema bundled into the Helm chart and mounted into the API server schema-init container |
 | Standalone ingester schema | `scripts/ingester/ingester_schema.sql` | Schema used by ingester setup scripts and jobs |
+| Complete ingester schema | `scripts/ingester/complete_ingester_schema.sql` | Duplicate copy of the schema kept alongside the standalone setup scripts |
 | Schema init Job | `scripts/ingester/ingester_schema_job.yaml` | Kubernetes Job that waits for MySQL and creates the ingester tables |
 | Local init script | `scripts/ingester/init_ingester_db.sh` | Shell helper for initializing a reachable MySQL instance |
 | Runtime SQL code | `go/storage/mysql/mysql.go` | MySQL implementation for upserts, reads, list queries, labels, annotations, and soft deletes |
+
+The three `.sql` files above are byte-identical copies of the same schema. No automation enforces this — when you change one, update the other two by hand to keep them in sync.
 
 ## Core Terms
 
@@ -22,7 +25,8 @@ Use this page when you need to understand the schema files, table naming, query 
 | Ingester | Controller that watches Michelangelo CRDs and writes their metadata to MySQL |
 | CRD table | Main table for one Kubernetes custom resource kind, such as `model` or `pipelinerun` |
 | Side table | Per-kind table for labels or annotations, such as `model_labels` or `model_annotations` |
-| Indexed field | A CRD field copied into a dedicated SQL column for efficient lookup |
+| Extracted column | A CRD field copied into a dedicated SQL column so callers can read it without parsing the `json` payload. Extracted columns are not necessarily indexed — see [Extracted Columns and SQL Indexes](#extracted-columns-and-sql-indexes) |
+| SQL index | An explicit `KEY` declared on a column (or column tuple) in the schema, which lets MySQL satisfy filters on those columns without a full table scan |
 | Soft delete | Delete behavior that sets `delete_time` instead of removing the row |
 | Resource version | Kubernetes `metadata.resourceVersion`, stored as `res_version` for reconciliation ordering |
 | Proto column | Serialized protobuf representation of the object, stored in `proto` |
@@ -34,7 +38,7 @@ Each supported CRD kind has three tables:
 
 | Table | Example | Stores |
 |-------|---------|--------|
-| Main table | `model` | Object identity, timestamps, serialized payloads, and indexed fields |
+| Main table | `model` | Object identity, timestamps, serialized payloads, and extracted columns |
 | Labels table | `model_labels` | Kubernetes labels for each object UID |
 | Annotations table | `model_annotations` | Kubernetes annotations for each object UID |
 
@@ -97,6 +101,8 @@ Cross-resource relationships are stored as denormalized namespace/name columns i
 
 The schema does not define SQL foreign key constraints. Consistency is maintained by Kubernetes reconciliation and ingester writes.
 
+In the side tables, label `value` columns are typed `VARCHAR(63)` while annotation `value` columns are typed `TEXT`. Label values longer than 63 bytes will be truncated when written to MySQL even though Kubernetes itself accepts the longer value, so queries that filter on a long label may not match.
+
 ## Main Table Columns
 
 Every main table shares a common base shape:
@@ -108,32 +114,58 @@ Every main table shares a common base shape:
 | `namespace` | Kubernetes namespace |
 | `name` | Kubernetes object name |
 | `res_version` | Kubernetes resource version |
-| `create_time` | Object creation timestamp |
-| `update_time` | Last observed update timestamp |
+| `create_time` | Object creation timestamp, sourced from the Kubernetes resource |
+| `update_time` | Wall-clock time of the last ingester upsert (`time.Now().UTC()` at write time), not a field copied from the Kubernetes resource |
 | `delete_time` | Soft-delete timestamp, or `NULL` for active rows |
 | `proto` | Serialized protobuf object |
 | `json` | Full JSON object |
 
-Main tables also include CRD-specific indexed columns. Examples include `model.algorithm`, `model.owner`, `pipeline.owner`, `pipelinerun.state`, `deployment.state`, and `inferenceserver.state`.
+Main tables also include CRD-specific extracted columns. Examples include `model.algorithm`, `model.description`, `model.owner`, `pipeline.owner`, `pipelinerun.state`, `deployment.state`, and `inferenceserver.state`. Whether a given extracted column also has a SQL index depends on the table — see [Extracted Columns and SQL Indexes](#extracted-columns-and-sql-indexes).
 
-## Indexed Fields
+## Extracted Columns and SQL Indexes
 
-Indexed fields are duplicated from CRD payloads into SQL columns so callers do not need to scan or extract from the `json` column. The generated CRD code exposes these fields through `GetIndexedKeyValuePairs()`, and the ingester passes them to the MySQL storage layer during upsert.
+The schema treats two related ideas as separate concerns. Knowing which is which decides whether a query is cheap or scans the whole table.
 
-Common indexed fields:
+**Extracted columns** are CRD fields the ingester copies from the protobuf payload into dedicated SQL columns at upsert time. The generated CRD code exposes these fields through `GetIndexedKeyValuePairs()`, and the ingester passes them to the MySQL storage layer. With an extracted column you can read or filter on the field directly in SQL without parsing the `json` column — but the filter is not necessarily fast.
 
-| Main Table | Indexed Fields |
-|------------|----------------|
-| `model` | `algorithm`, `training_framework`, `owner`, `source`, `model_kind`, `package_type`, revision and report references |
+**SQL indexes** are explicit `KEY` declarations on a column or column tuple. Filters on indexed columns can use the index; filters on non-indexed columns require a full table scan even when the column is extracted.
+
+Every main table has a `PRIMARY KEY` on `uid`. Beyond that, only the columns listed below have a SQL index today.
+
+| Main Table | Indexes (besides the primary key on `uid`) |
+|------------|---------------------------------------------|
+| `model` | `(namespace, name)`, `create_time`, `algorithm`, `owner` |
+| `modelfamily` | `(namespace, name)`, `create_time` |
+| `pipeline` | `(namespace, name)`, `create_time`, `owner` |
+| `pipelinerun` | `(namespace, name)`, `create_time`, `(pipeline_namespace, pipeline_name)`, `state` |
+| `deployment` | `(namespace, name)`, `create_time`, `state` |
+| `inferenceserver` | `(namespace, name)`, `create_time`, `state` |
+| `project` | `(namespace, name)`, `create_time` |
+| `revision` | `(namespace, name)`, `create_time`, `(base_resource_namespace, base_resource_name)` |
+| `cluster` | `(namespace, name)`, `create_time` |
+| `raycluster` | `(namespace, name)`, `create_time` |
+| `rayjob` | `(namespace, name)`, `create_time` |
+| `sparkjob` | `(namespace, name)`, `create_time` |
+| `triggerrun` | `(namespace, name)`, `create_time`, `(pipeline_namespace, pipeline_name)`, `state` |
+
+Side tables (`<kind>_labels`, `<kind>_annotations`) have a `PRIMARY KEY` on `id` and indexes on `obj_uid`. Label tables additionally index `(key, value)`; annotation tables do not (the `value` is `TEXT`).
+
+Many extracted columns are not indexed. For example, `pipelinerun` extracts `actor`, `end_time`, `exception_type`, and several namespace/name reference pairs in addition to the indexed `state` column — filtering by any of these is supported but requires a table scan. Common extracted columns by table:
+
+| Main Table | Extracted Columns Beyond the Common Base |
+|------------|------------------------------------------|
+| `model` | `algorithm`, `training_framework`, `owner`, `source`, `description`, `model_kind`, `package_type`, plus revision and report references |
+| `modelfamily` | `model_family_name` |
 | `pipeline` | `owner`, `pipeline_type` |
-| `pipelinerun` | pipeline reference, revision reference, resume reference, `state`, `actor`, `end_time`, `exception_type` |
-| `deployment` | `state`, `target_definition_type`, current revision reference, `deletion_requested_timestamp` |
+| `pipelinerun` | `pipeline_namespace`/`pipeline_name`, `revision_namespace`/`revision_name`, `resume_pipeline_run_namespace`/`resume_pipeline_run_name`, `state`, `actor`, `end_time`, `exception_type` |
+| `deployment` | `state`, `target_definition_type`, `current_revision_namespace`/`current_revision_name`, `deletion_requested_timestamp` |
 | `inferenceserver` | `state` |
 | `project` | `tier` |
-| `revision` | base resource reference, `base_type`, `commit_branch`, `git_ref`, `owner` |
-| `triggerrun` | pipeline reference, revision reference, `state`, `auto_flip` |
+| `revision` | `base_resource_namespace`/`base_resource_name`, `base_type`, `commit_branch`, `git_ref`, `owner` |
+| `triggerrun` | `pipeline_namespace`/`pipeline_name`, `revision_namespace`/`revision_name`, `state`, `auto_flip` |
+| `cluster`, `raycluster`, `rayjob`, `sparkjob` | None beyond the common base columns |
 
-Use indexed columns for filters that appear in normal API or operations paths. Use the `json` column only when no indexed column exists and the query is diagnostic or low-volume.
+When you write a query, prefer filters on indexed columns. Filters on extracted-but-unindexed columns still work, but expect linear scan cost. Filters that have to dig into the `json` column should be reserved for one-off diagnostic queries.
 
 ## Query Patterns
 
@@ -186,6 +218,18 @@ The storage layer uses `INSERT ... ON DUPLICATE KEY UPDATE` for main table write
 
 Deletes are soft deletes. The row remains in the main table with `delete_time` set, which preserves metadata for audits and delayed cleanup workflows.
 
+## Current Storage-Layer Limitations
+
+Several `MetadataStorage` operations are stubbed in `go/storage/mysql/mysql.go` and either return an error or silently ignore part of the request. Operators relying on these paths should know what does and does not work today:
+
+| Operation | Behavior |
+|-----------|----------|
+| `Upsert` with `direct = true` | Returns the error `direct update not yet implemented`. The full upsert path (`direct = false`) works as documented. |
+| `DeleteCollection` | Returns `DeleteCollection not yet implemented`. Use `Delete` per object instead. |
+| `QueryByTemplateID` | Returns `QueryByTemplateID not yet implemented`. |
+| `Backfill` | Returns `Backfill not yet implemented`. |
+| `List` with a `LabelSelector` | Returns rows from the main table without applying the selector. The label selector value is silently ignored, so callers receive an unfiltered result set rather than an error. Filter by joining the side label table (see [Join Labels for Filtering](#join-labels-for-filtering)) until selector support lands. |
+
 ## SQL File Conventions
 
 - Main table names are lowercase CRD kind names, for example `ModelFamily` becomes `modelfamily`.
@@ -193,7 +237,7 @@ Deletes are soft deletes. The row remains in the main table with `delete_time` s
 - Column names use snake case.
 - Identifier names are quoted with backticks in schema files.
 - Schema files should be idempotent and use `CREATE TABLE IF NOT EXISTS`.
-- New queryable CRD fields should be added as indexed fields in the protobuf options and generated SQL, not only queried from the `json` column.
+- New queryable CRD fields should be added as extracted columns in the protobuf options and generated SQL, not only queried from the `json` column. Add a SQL `KEY` index on the new column whenever it will be filtered on in normal request paths.
 
 ## Related Docs
 
