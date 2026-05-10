@@ -18,6 +18,7 @@ For a fresh deployment, follow this recommended reading order:
 | [Platform Setup](platform-setup.md) | ConfigMaps and key fields for API server, controller manager, worker, and UI/Envoy |
 | [Network & Ingress](network.md) | Envoy proxy, Ingress setup, TLS with cert-manager, and multi-cluster connectivity |
 | [API Framework](api-framework.md) | Architecture overview of the Michelangelo API and control plane |
+| [SQL Key Concepts and Terms](sql-key-concepts-and-terms.md) | Metadata schema, table naming, indexed fields, and SQL query patterns |
 
 ## Jobs & Compute
 
@@ -63,4 +64,3 @@ Michelangelo is designed to be adopted alongside existing ML infrastructure. The
 | [Monitoring & Observability](monitoring.md) | Prometheus scrape config, key metrics, alerting rules, Grafana dashboards, structured logging |
 | [Compliance](compliance.md) | SOC 2, GDPR, and HIPAA configuration |
 | [Troubleshooting](troubleshooting.md) | Common failure modes and `kubectl` diagnostic commands |
-

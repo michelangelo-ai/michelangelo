@@ -23,6 +23,8 @@ The ingester maintains consistency between Kubernetes and MySQL:
 
 Every CRD object created through the API Server is automatically synced to MySQL. When deleted, the ingester ensures MySQL is updated before the object is removed from Kubernetes.
 
+For schema terminology, table naming, indexed fields, and common query patterns, see [SQL Key Concepts and Terms](sql-key-concepts-and-terms.md).
+
 ## MySQL Storage
 
 ### Schema Layout
