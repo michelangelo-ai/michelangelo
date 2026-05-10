@@ -238,27 +238,42 @@ func (m *mysqlMetadataStorage) GetByID(ctx context.Context, uid string, object r
 	return nil
 }
 
-// List objects.
+// List queries the CRD's main table and returns matching objects.
 //
-// SQL output is byte-equivalent to the internal storage/pkg/mysql/mysql.go List:
+// There are two ways callers can express filters:
 //
-//	[WITH <label-selector aliases>, [SpecUpdateTimeStampTable AS (...)] ]
+//  1. Structured proto path — listOptionsExt.Operation is a CriterionOperation
+//     tree (field/operator/value plus AND/OR composition). This is what the
+//     UI / search service / Python client emit. Rich operator set: =, !=, >,
+//     >=, <, <=, LIKE, IN, NOT_IN, IS_NULL, IS_NOT_NULL, plus arbitrarily
+//     nested sub-operations.
+//
+//  2. Kubernetes selector strings — listOptions.LabelSelector and
+//     listOptions.FieldSelector are the standard k8s.io/apimachinery format
+//     ("env=prod,region=us-east", "status.state=RUNNING"). This is what
+//     kubectl, controller-runtime, and any K8s client emit. Limited operator
+//     set: =, ==, in, exists, !key, notin (labels); =, ==, in (fields).
+//
+// Both paths are checked: if the proto path is empty we parse the selector
+// strings. They are not combined — callers use one or the other.
+//
+// In addition, OrderBy may reference the special label-value field
+// "<crd>.metadata.labels.michelangelo/SpecUpdateTimestamp". When it does, the
+// query needs a CTE that exposes that one label's values as a virtual column
+// for ORDER BY to bind against. See orderByLabel{Field,Key,Column}.
+//
+// Generated SQL shape:
+//
+//	[WITH <label CTEs>[, SpecUpdateTimeStampTable AS (...)] ]
 //	SELECT `uid`, `group_ver`, `namespace`, `name`, `res_version`,
 //	       `create_time`, `update_time`, `proto`
-//	FROM `<table>` [<label-selector INNER JOINs>] [INNER JOIN SpecUpdateTimeStampTable ON ...]
+//	FROM `<table>` [<label-table INNER JOINs>]
 //	WHERE `namespace`=? AND `delete_time` IS NULL
-//	      [AND (<criterion> )]
-//	      [<field-selector AND-clauses>]
+//	      [AND (<criterion proto fragment> )]
+//	      [<field-selector AND clauses>]
 //	      [<label-selector NOT EXISTS clauses>]
 //	      [ORDER BY ...]
 //	      [LIMIT ? [OFFSET ?]]
-//
-// Behavior matches internal:
-//   - When listOptionsExt.Operation is set, criterion-based filtering applies.
-//   - When listOptionsExt.Operation is nil and listOptions has selector strings,
-//     falls back to K8s-style LabelSelector / FieldSelector parsing.
-//   - The optional WITH + INNER JOIN for SpecUpdateTimeStampTable are emitted
-//     when an OrderBy references the special label-value field.
 func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMeta, namespace string, listOptions *metav1.ListOptions, listOptionsExt *apipb.ListOptionsExt, listResponse *storage.ListResponse) error {
 	tableName := getTableNameFromTypeMeta(typeMeta)
 	if tableName == "" {
@@ -266,19 +281,24 @@ func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMe
 	}
 	indexPathToKeyMap := m.indexPathToKeyMap(typeMeta)
 
-	// Build the ORDER BY first so we can detect the label-value hack.
+	// Build ORDER BY first because the SpecUpdateTimestamp label-ordering case
+	// requires us to add a CTE + JOIN before SELECT — we need to know whether
+	// that case applies before we start writing the query.
 	orderBySQL := ""
 	if listOptionsExt != nil && len(listOptionsExt.OrderBy) > 0 {
 		orderBySQL = buildOrderBySQL(listOptionsExt.OrderBy)
 	}
 
-	// V1 fallback: parse metav1.ListOptions selector strings when the V2
-	// criterion path is not used.
+	// Selector-string path: when the structured proto path isn't being used,
+	// parse the K8s LabelSelector / FieldSelector strings into SQL fragments.
+	// labelSelectorPieces accumulates label CTEs/joins (positive matches like
+	// env=prod, env in (a,b), exists) and NOT EXISTS clauses (negative
+	// matches like !env, env notin (a,b)).
 	var labelPieces labelSelectorPieces
 	var fieldSelectorWhere string
 	var fieldSelectorParams []interface{}
-	useV1Selectors := (listOptionsExt == nil || listOptionsExt.Operation == nil) && listOptions != nil
-	if useV1Selectors {
+	useSelectorStrings := (listOptionsExt == nil || listOptionsExt.Operation == nil) && listOptions != nil
+	if useSelectorStrings {
 		var err error
 		labelPieces, err = buildLabelSelectorSQL(listOptions.LabelSelector, tableName)
 		if err != nil {
@@ -290,8 +310,10 @@ func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMe
 		}
 	}
 
-	// Detect ORDER BY by label value. If present, register the
-	// SpecUpdateTimeStampTable CTE alongside any V1 label-selector aliases.
+	// SpecUpdateTimestamp ordering: register the CTE + INNER JOIN that
+	// projects the label's `value` column into scope so ORDER BY can bind to
+	// SpecUpdateTimeStampTable.`value`. Reuses labelPieces because it lives
+	// in the same WITH clause as any selector-string label CTEs.
 	if strings.Contains(orderBySQL, orderByLabelColumn) {
 		labelPieces.withAliases = append(labelPieces.withAliases,
 			"SpecUpdateTimeStampTable AS (SELECT `obj_uid`, `value` FROM `"+tableName+"_labels` WHERE `key` = ?)")
@@ -300,7 +322,8 @@ func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMe
 		labelPieces.withParams = append(labelPieces.withParams, orderByLabelKey)
 	}
 
-	// Assemble query. WITH clause first if we have any CTEs.
+	// Assemble the query. The CTEs (if any) come first as a single
+	// comma-separated WITH clause, then SELECT/FROM/JOINs, then WHERE.
 	var query strings.Builder
 	if len(labelPieces.withAliases) > 0 {
 		query.WriteString("WITH ")
@@ -324,6 +347,7 @@ func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMe
 		query.WriteString("`delete_time` IS NULL")
 	}
 
+	// Structured proto path: append the rendered criterion tree.
 	if listOptionsExt != nil && listOptionsExt.Operation != nil {
 		criterionSQL, criterionArgs, err := buildCriterionSQL(listOptionsExt.Operation, tableName, indexPathToKeyMap)
 		if err != nil {
@@ -337,8 +361,9 @@ func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMe
 		}
 	}
 
-	// V1 fallback: append field selector WHERE clauses + label-selector
-	// NOT EXISTS clauses.
+	// Selector-string path (continued): field-selector AND clauses, then
+	// label-selector NOT EXISTS clauses for the negative-match operators
+	// (!key, notin) which can't be expressed via the CTE/JOIN scaffold.
 	if fieldSelectorWhere != "" {
 		query.WriteString(fieldSelectorWhere)
 		args = append(args, fieldSelectorParams...)
@@ -350,13 +375,15 @@ func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMe
 
 	query.WriteString(orderBySQL)
 
+	// Pagination: prefer the structured Pagination field; otherwise fall back
+	// to ListOptions.Limit + ListOptions.Continue (where Continue is the
+	// stringified offset returned by the previous page's listResponse.Continue).
 	var limit, offset int64
 	if listOptionsExt != nil && listOptionsExt.Pagination != nil {
 		limit = int64(listOptionsExt.Pagination.Limit)
 		offset = int64(listOptionsExt.Pagination.Offset)
 	} else if listOptions != nil && listOptions.Limit > 0 {
 		limit = listOptions.Limit
-		// V1 cursor: opts.Continue carries a stringified offset (matches internal).
 		if listOptions.Continue != "" {
 			parsed, err := strconv.ParseInt(listOptions.Continue, 10, 64)
 			if err != nil || parsed < 0 {
@@ -375,7 +402,7 @@ func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMe
 		}
 	}
 
-	// Prepend WITH params so the CTE placeholders bind to the first args.
+	// CTE placeholders bind first — prepend WITH params before the rest.
 	if len(labelPieces.withParams) > 0 {
 		args = append(labelPieces.withParams, args...)
 	}
