@@ -1,3 +1,7 @@
+---
+sidebar_position: 4
+---
+
 # Set Up Your Python IDE
 
 Get your editor configured for building ML pipelines with the Michelangelo SDK. This takes about 5 minutes if you've already run `poetry install`.

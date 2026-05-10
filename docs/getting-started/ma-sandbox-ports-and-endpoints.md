@@ -1,3 +1,7 @@
+---
+sidebar_position: 6
+---
+
 # MA Sandbox Ports and Endpoints
 
 Use this reference when connecting to services in your local Michelangelo sandbox. The sandbox maps ports from the K3d cluster to localhost so you can access all services directly from your browser or CLI.

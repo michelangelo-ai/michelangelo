@@ -1,3 +1,7 @@
+---
+sidebar_position: 3
+---
+
 # Sandbox Setup
 
 Set up a local Michelangelo environment on your machine. This gives you a fully functional cluster with the API server, controller manager, workflow engine, object storage, and all supporting services.
