@@ -541,6 +541,26 @@ func processFieldName(fieldName string) (string, error) {
 //   - IS NULL / IS NOT NULL fragments end with a trailing space (legacy from the
 //     internal map values "IS NULL "/"IS NOT NULL ").
 //   - IN / NOT IN list has no spaces between placeholders (e.g. "(?,?,?)").
+//
+// TODO: validate fieldName before splicing it into SQL.
+//
+// Trust model — both this function and the matching internal one assume the
+// caller has already vetted fieldName against an allowlist (internal does so
+// in processListOptExtFieldV2 via the per-CRD indexPathToKeyMap). When that
+// upstream check is bypassed — and in OSS that's the default whenever the
+// constructor is called with a nil indexPathToKeyMaps — fieldName is taken
+// straight from the caller-supplied CriterionOperation and embedded between
+// backticks here. A caller controlling field_name can break out of the
+// backtick-quoted identifier and inject SQL (e.g. field_name="x.` UNION
+// SELECT … --" survives processFieldName and lands here as `+ "`" + ` UNION
+// SELECT … --` `+ "`" + `).
+//
+// The right long-term fix is for the OSS constructor to require an
+// indexPathToKeyMaps and remove the permissive mode. As a defence-in-depth
+// stop-gap, we could reject any fieldName containing characters outside
+// [a-zA-Z0-9_] right here (cheap, no schema cost). Neither is done yet to
+// keep the public surface compatible with the existing caller sites that
+// pass nil today.
 func convertCriterionOperator(fieldName string, op apipb.CriterionOperator, value string) (string, []interface{}, error) {
 	qf := " `" + fieldName + "` "
 	switch op {
