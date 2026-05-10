@@ -330,7 +330,61 @@ def _sync(ns: argparse.Namespace):
         capture_output=True,
     )
 
+    # Wipe + re-create the michelangelo MySQL database. We do this AFTER the
+    # app pods have been killed (so they aren't mid-write while we drop) and
+    # BEFORE redeploying the apps (so they come up against a fresh schema).
+    # Picks up any schema changes since the previous sync (e.g. table renames)
+    # and removes stale rows that would otherwise interfere with the next CI
+    # run. The MySQL pod itself is left running.
+    _refresh_mysql_schema()
+
     _deploy_app_services(ns)
+
+
+def _refresh_mysql_schema():
+    """Drop and recreate the michelangelo database from the current schema.
+
+    The schema lives in mysql-ingester.yaml as a ConfigMap that an init Job
+    applies via `mysql < init-schema.sql`. The schema uses CREATE TABLE IF
+    NOT EXISTS, so re-running the Job against an existing database is a
+    no-op and won't pick up renames or column changes. To get a clean
+    application of the current schema we drop the database first, then
+    re-apply the init Job.
+    """
+    print("Refreshing MySQL schema (drop + recreate michelangelo database)...")
+    subprocess.run(
+        [
+            "kubectl",
+            "exec",
+            "mysql",
+            "--",
+            "mysql",
+            "-uroot",
+            "-proot",
+            "-e",
+            "DROP DATABASE IF EXISTS michelangelo;",
+        ],
+        check=True,
+    )
+    # The init Job from the previous sync is already in Completed state;
+    # kubectl apply on a Completed Job is a no-op (Job spec is immutable),
+    # so we have to delete it before re-apply.
+    subprocess.run(
+        ["kubectl", "delete", "job", "ingester-schema-init", "--ignore-not-found=true"],
+        check=False,
+    )
+    _kube_apply(_dir / "resources" / "mysql-ingester.yaml")
+    print("Waiting for ingester-schema-init Job to complete...")
+    subprocess.run(
+        [
+            "kubectl",
+            "wait",
+            "--for=condition=complete",
+            "job/ingester-schema-init",
+            "--timeout=120s",
+        ],
+        check=True,
+    )
 
 
 def _deploy_app_services(ns: argparse.Namespace):

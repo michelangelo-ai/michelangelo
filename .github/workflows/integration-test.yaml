@@ -62,6 +62,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: michelangelo-ai/integration-test
+          ref: add-mysql-list-tests
           token: ${{ secrets.CR_PAT }}
           path: integration-test
 
@@ -73,6 +74,17 @@ jobs:
           $GITHUB_WORKSPACE/python/.venv/bin/pytest \
             functional/api/test_api_crud.py \
             -v -m "api and crud"
+        working-directory: ${{ github.workspace }}/integration-test
+        env:
+          MA_API_SERVER: localhost:15566
+          GIT_REF: main
+          PYTHONPATH: ${{ github.workspace }}/integration-test
+
+      - name: Run API MySQL backend tests
+        run: |
+          $GITHUB_WORKSPACE/python/.venv/bin/pytest \
+            functional/api/test_api_mysql.py \
+            -v -m "api and ci"
         working-directory: ${{ github.workspace }}/integration-test
         env:
           MA_API_SERVER: localhost:15566
