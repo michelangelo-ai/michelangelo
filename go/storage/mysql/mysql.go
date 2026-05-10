@@ -506,7 +506,7 @@ func isLabelFieldInMetadata(fieldName string) bool {
 // "pipeline_run.label.michelangelo/Foo" → "michelangelo/Foo"
 // "pipeline_run.metadata.labels.michelangelo/Foo" → "michelangelo/Foo"
 //
-// TODO: validate the CRD prefix against a registry of known + searchable CRDs.
+// TODO(#1172): validate the CRD prefix against a registry of known + searchable CRDs.
 // Two reasons to add this:
 //  1. Catch typos at the API boundary. Today an unknown CRD prefix silently
 //     becomes a column lookup against the wrong table; the user sees a cryptic
@@ -542,7 +542,7 @@ func processFieldName(fieldName string) (string, error) {
 //     internal map values "IS NULL "/"IS NOT NULL ").
 //   - IN / NOT IN list has no spaces between placeholders (e.g. "(?,?,?)").
 //
-// TODO: validate fieldName before splicing it into SQL.
+// TODO(#1171): validate fieldName before splicing it into SQL.
 //
 // Trust model — both this function and the matching internal one assume the
 // caller has already vetted fieldName against an allowlist (internal does so
