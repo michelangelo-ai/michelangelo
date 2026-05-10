@@ -1,16 +1,24 @@
 # SQL Key Concepts and Terms
 
-Michelangelo uses SQL for platform metadata, not for storing training datasets or feature values. The ingester syncs Kubernetes custom resources into MySQL so API and operations workflows can query metadata without depending only on etcd.
+This page is the SQL reference for operators querying Michelangelo's metadata database — schema layout, indexed columns, safe query patterns, and known storage limitations. Michelangelo uses SQL for platform metadata, not for storing training datasets or feature values. The ingester syncs Kubernetes custom resources into MySQL so API and operations workflows can query metadata without depending only on etcd.
 
-Use this page when you need to understand the schema files, table naming, query patterns, and storage terms used by Michelangelo's SQL-backed metadata layer.
+**Audience:** Platform operators running Michelangelo's ingester and metadata DB in production.
+
+**Prerequisites:** The ingester must be deployed and connected to MySQL. See [Ingester Controller: Configuration and Operations](./ingester-configuration.md) if you haven't done this yet.
+
+**You'll reach for this page when:**
+- Writing a diagnostic SQL query to investigate a stuck `pipelinerun` or missing model
+- Deciding which columns are indexed before adding a filter to an ad-hoc query
+- Debugging a label filter that returns unexpected results
+- Reading the schema files to understand what the ingester writes
 
 ## SQL Surfaces
 
 | Surface | Location | Purpose |
 |---------|----------|---------|
 | Helm schema | `helm/michelangelo/files/schema/mysql-init-schema.sql` | Schema bundled into the Helm chart and mounted into the API server schema-init container |
-| Standalone ingester schema | `scripts/ingester/ingester_schema.sql` | Schema used by ingester setup scripts and jobs |
-| Complete ingester schema | `scripts/ingester/complete_ingester_schema.sql` | Duplicate copy of the schema kept alongside the standalone setup scripts |
+| Standalone ingester schema | `scripts/ingester/ingester_schema.sql` | The file actually referenced by `ingester_schema_job.yaml` and `init_ingester_db.sh` at runtime. This is the authoritative copy for ingester setup. |
+| Complete ingester schema | `scripts/ingester/complete_ingester_schema.sql` | A convenience copy kept in sync with `ingester_schema.sql` by hand. No automation references this file directly. |
 | Schema init Job | `scripts/ingester/ingester_schema_job.yaml` | Kubernetes Job that waits for MySQL and creates the ingester tables |
 | Local init script | `scripts/ingester/init_ingester_db.sh` | Shell helper for initializing a reachable MySQL instance |
 | Runtime SQL code | `go/storage/mysql/mysql.go` | MySQL implementation for upserts, reads, list queries, labels, annotations, and soft deletes |
@@ -42,23 +50,7 @@ Each supported CRD kind has three tables:
 | Labels table | `model_labels` | Kubernetes labels for each object UID |
 | Annotations table | `model_annotations` | Kubernetes annotations for each object UID |
 
-The schema currently covers these 13 resource kinds:
-
-| CRD Kind | Main Table |
-|----------|------------|
-| Project | `project` |
-| ModelFamily | `modelfamily` |
-| Model | `model` |
-| Pipeline | `pipeline` |
-| PipelineRun | `pipelinerun` |
-| InferenceServer | `inferenceserver` |
-| Revision | `revision` |
-| Cluster | `cluster` |
-| RayCluster | `raycluster` |
-| RayJob | `rayjob` |
-| TriggerRun | `triggerrun` |
-| Deployment | `deployment` |
-| SparkJob | `sparkjob` |
+The schema currently covers 13 resource kinds: Project, ModelFamily, Model, Pipeline, PipelineRun, InferenceServer, Revision, Cluster, RayCluster, RayJob, TriggerRun, Deployment, and SparkJob. See [Extracted Columns and SQL Indexes](#extracted-columns-and-sql-indexes) for the per-kind column detail.
 
 That produces 39 tables total: 13 main tables, 13 label tables, and 13 annotation tables.
 
@@ -101,7 +93,9 @@ Cross-resource relationships are stored as denormalized namespace/name columns i
 
 The schema does not define SQL foreign key constraints. Consistency is maintained by Kubernetes reconciliation and ingester writes.
 
+:::caution Label value truncation
 In the side tables, label `value` columns are typed `VARCHAR(63)` while annotation `value` columns are typed `TEXT`. Label values longer than 63 bytes will be truncated when written to MySQL even though Kubernetes itself accepts the longer value, so queries that filter on a long label may not match.
+:::
 
 ## Main Table Columns
 
@@ -126,7 +120,7 @@ Main tables also include CRD-specific extracted columns. Examples include `model
 
 The schema treats two related ideas as separate concerns. Knowing which is which decides whether a query is cheap or scans the whole table.
 
-**Extracted columns** are CRD fields the ingester copies from the protobuf payload into dedicated SQL columns at upsert time. The generated CRD code exposes these fields through `GetIndexedKeyValuePairs()`, and the ingester passes them to the MySQL storage layer. With an extracted column you can read or filter on the field directly in SQL without parsing the `json` column — but the filter is not necessarily fast.
+**Extracted columns** are CRD fields the ingester copies from the protobuf payload into dedicated SQL columns at upsert time. With an extracted column you can read or filter on the field directly in SQL without parsing the `json` column — but the filter is not necessarily fast.
 
 **SQL indexes** are explicit `KEY` declarations on a column or column tuple. Filters on indexed columns can use the index; filters on non-indexed columns require a full table scan even when the column is extracted.
 
@@ -154,7 +148,7 @@ Many extracted columns are not indexed. For example, `pipelinerun` extracts `act
 
 | Main Table | Extracted Columns Beyond the Common Base |
 |------------|------------------------------------------|
-| `model` | `algorithm`, `training_framework`, `owner`, `source`, `description`, `model_kind`, `package_type`, plus revision and report references |
+| `model` | `algorithm`, `training_framework`, `owner`, `source`, `description`, `model_kind`, `package_type`, `revision_id`, `src_pipeline_run_namespace`/`src_pipeline_run_name`, `model_family_namespace`/`model_family_name`, plus four eval-report namespace/name pairs (`feature_eval_report`, `performance_eval_report`, `feature_quality_report`, `explainability_report`) |
 | `modelfamily` | `model_family_name` |
 | `pipeline` | `owner`, `pipeline_type` |
 | `pipelinerun` | `pipeline_namespace`/`pipeline_name`, `revision_namespace`/`revision_name`, `resume_pipeline_run_namespace`/`resume_pipeline_run_name`, `state`, `actor`, `end_time`, `exception_type` |
@@ -166,6 +160,18 @@ Many extracted columns are not indexed. For example, `pipelinerun` extracts `act
 | `cluster`, `raycluster`, `rayjob`, `sparkjob` | None beyond the common base columns |
 
 When you write a query, prefer filters on indexed columns. Filters on extracted-but-unindexed columns still work, but expect linear scan cost. Filters that have to dig into the `json` column should be reserved for one-off diagnostic queries.
+
+## Current Storage-Layer Limitations
+
+Several `MetadataStorage` operations are stubbed in `go/storage/mysql/mysql.go` and either return an error or silently ignore part of the request. Operators relying on these paths should know what does and does not work today:
+
+| Operation | Behavior |
+|-----------|----------|
+| `Upsert` with `direct = true` | Returns the error `direct update not yet implemented`. The full upsert path (`direct = false`) works as documented. |
+| `DeleteCollection` | Returns `DeleteCollection not yet implemented`. Use `Delete` per object instead. |
+| `QueryByTemplateID` | Returns `QueryByTemplateID not yet implemented`. |
+| `Backfill` | Returns `Backfill not yet implemented`. |
+| `List` with a `LabelSelector` | Returns rows from the main table without applying the selector. The label selector value is silently ignored, so callers receive an unfiltered result set rather than an error. Filter by joining the side label table (see [Join Labels for Filtering](#join-labels-for-filtering)) until selector support lands. |
 
 ## Query Patterns
 
@@ -201,6 +207,8 @@ WHERE l.`key` = 'team'
   AND m.delete_time IS NULL;
 ```
 
+Note: the storage layer's `List` API silently ignores `LabelSelector` (see [Current Storage-Layer Limitations](#current-storage-layer-limitations)). Always join the label table directly when filtering by label.
+
 ### Inspect a Soft-Deleted Object
 
 ```sql
@@ -212,32 +220,20 @@ ORDER BY delete_time DESC;
 
 ## Write Patterns
 
+:::warning
 The ingester owns writes to these tables. Application code should use the Michelangelo API or Kubernetes CRDs rather than writing SQL directly.
+:::
 
-The storage layer uses `INSERT ... ON DUPLICATE KEY UPDATE` for main table writes. Labels and annotations are replaced on each upsert by deleting existing side-table rows for the object UID and inserting the current key/value pairs.
+Each ingester upsert overwrites the row's payload, timestamps, and indexed columns; labels and annotations are replaced wholesale.
 
 Deletes are soft deletes. The row remains in the main table with `delete_time` set, which preserves metadata for audits and delayed cleanup workflows.
-
-## Current Storage-Layer Limitations
-
-Several `MetadataStorage` operations are stubbed in `go/storage/mysql/mysql.go` and either return an error or silently ignore part of the request. Operators relying on these paths should know what does and does not work today:
-
-| Operation | Behavior |
-|-----------|----------|
-| `Upsert` with `direct = true` | Returns the error `direct update not yet implemented`. The full upsert path (`direct = false`) works as documented. |
-| `DeleteCollection` | Returns `DeleteCollection not yet implemented`. Use `Delete` per object instead. |
-| `QueryByTemplateID` | Returns `QueryByTemplateID not yet implemented`. |
-| `Backfill` | Returns `Backfill not yet implemented`. |
-| `List` with a `LabelSelector` | Returns rows from the main table without applying the selector. The label selector value is silently ignored, so callers receive an unfiltered result set rather than an error. Filter by joining the side label table (see [Join Labels for Filtering](#join-labels-for-filtering)) until selector support lands. |
 
 ## SQL File Conventions
 
 - Main table names are lowercase CRD kind names, for example `ModelFamily` becomes `modelfamily`.
 - Side tables use `<main_table>_labels` and `<main_table>_annotations`.
 - Column names use snake case.
-- Identifier names are quoted with backticks in schema files.
-- Schema files should be idempotent and use `CREATE TABLE IF NOT EXISTS`.
-- New queryable CRD fields should be added as extracted columns in the protobuf options and generated SQL, not only queried from the `json` column. Add a SQL `KEY` index on the new column whenever it will be filtered on in normal request paths.
+- Identifiers are quoted with backticks in schema files.
 
 ## Related Docs
 
