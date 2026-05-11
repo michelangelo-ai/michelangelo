@@ -50,14 +50,15 @@ data:
       k8s:
         qps: 300
         burst: 600
-      metadataStorage:
-        enableMetadataStorage: true
-
-      mysql:
-        host: mysql
-        port: 3306
-        user: root
-        password: root
-        database: michelangelo
       crdSync:
         enableCRDUpdate: true
+
+    metadataStorage:
+      enableMetadataStorage: true
+
+    mysql:
+      host: mysql
+      port: 3306
+      user: root
+      password: root
+      database: michelangelo
