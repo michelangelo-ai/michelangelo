@@ -7,7 +7,7 @@ metadata:
 spec:
   containers:
     - name: michelangelo-apiserver
-      image: ghcr.io/michelangelo-ai/apiserver:fix-apiserver-metadata-storage
+      image: ghcr.io/michelangelo-ai/apiserver:main
       imagePullPolicy: Always
       ports:
         - containerPort: 15566
