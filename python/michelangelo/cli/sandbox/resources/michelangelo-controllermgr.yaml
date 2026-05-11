@@ -10,6 +10,15 @@ spec:
     - name: app
       image: ghcr.io/michelangelo-ai/controllermgr:fix-apiserver-metadata-storage
       imagePullPolicy: IfNotPresent
+      env:
+        # Without CONFIG_DIR the controllermgr falls back to the relative
+        # default "config" directory, which inside the Docker image is the
+        # build-time embedded config (enableMetadataStorage: false). That
+        # silently disables the k8s → MySQL ingester. Pointing at /config
+        # makes it load the mounted ConfigMap (which has metadataStorage
+        # enabled and the mysql connection block).
+        - name: CONFIG_DIR
+          value: /config
       envFrom:
         - secretRef:
             name: minio-credentials

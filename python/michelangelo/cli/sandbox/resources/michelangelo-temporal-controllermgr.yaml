@@ -9,6 +9,9 @@ spec:
   containers:
     - name: app
       image: ghcr.io/michelangelo-ai/controllermgr:fix-apiserver-metadata-storage
+      env:
+        - name: CONFIG_DIR
+          value: /config
       envFrom:
         - secretRef:
             name: minio-credentials
