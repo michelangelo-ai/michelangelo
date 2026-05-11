@@ -12,10 +12,6 @@ spec:
       ports:
         - containerPort: 15566
       env:
-        # Without CONFIG_DIR the apiserver falls back to the relative
-        # default "config" directory, which inside the Docker image is the
-        # build-time embedded config (enableMetadataStorage: false). Pointing
-        # at /config makes it load the mounted ConfigMap.
         - name: CONFIG_DIR
           value: /config
       volumeMounts:
