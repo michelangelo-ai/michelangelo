@@ -69,33 +69,6 @@ jobs:
       - name: Install integration test dependencies
         run: .venv/bin/pip install retrying pyyaml pymysql -q
 
-      # Diagnostic: confirm what's actually running in the cluster before
-      # the MySQL tests, since their failure mode (V2 ext.operation
-      # silently ignored) is indistinguishable from "wrong binary loaded",
-      # "config not loaded", or "metadataStorage flag not set".
-      - name: Diagnose apiserver runtime
-        run: |
-          set -x
-          # Image actually loaded by k3d
-          kubectl get pod michelangelo-apiserver -o jsonpath='{.spec.containers[0].image}' && echo
-          kubectl get pod michelangelo-apiserver -o jsonpath='{.status.containerStatuses[0].imageID}' && echo
-          # Env vars on the running container
-          kubectl exec michelangelo-apiserver -- env | grep -E '^(CONFIG_DIR|RUNTIME_ENVIRONMENT)=' || true
-          # Config files the apiserver can actually see
-          kubectl exec michelangelo-apiserver -- ls -la /config || true
-          kubectl exec michelangelo-apiserver -- cat /config/base.yaml || true
-          # First lines of the apiserver log — the "Configuration" line
-          # printed at startup tells us the loaded config struct.
-          kubectl logs michelangelo-apiserver --tail=120 || true
-          # Controllermgr: env from pod spec (works on distroless) + logs
-          kubectl get pod michelangelo-controllermgr -o jsonpath='{.spec.containers[0].image}' && echo
-          kubectl get pod michelangelo-controllermgr -o jsonpath='{.spec.containers[0].env}' && echo
-          kubectl get pod michelangelo-controllermgr -o jsonpath='restarts={.status.containerStatuses[0].restartCount}' && echo
-          kubectl logs michelangelo-controllermgr --tail=60 || true
-          kubectl logs michelangelo-controllermgr --previous --tail=60 || true
-          # Is the controllermgr writing data to MySQL?
-          kubectl exec mysql -- mysql -uroot -proot michelangelo -e "SHOW TABLES; SELECT COUNT(*) AS pipeline_rows FROM pipeline;" || true
-
       - name: Run API CRUD tests
         run: |
           $GITHUB_WORKSPACE/python/.venv/bin/pytest \

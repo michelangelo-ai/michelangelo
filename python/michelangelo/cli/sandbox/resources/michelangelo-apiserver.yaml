@@ -8,12 +8,9 @@ spec:
   containers:
     - name: michelangelo-apiserver
       image: ghcr.io/michelangelo-ai/apiserver:main
-      imagePullPolicy: Always
+      imagePullPolicy: IfNotPresent
       ports:
         - containerPort: 15566
-      env:
-        - name: CONFIG_DIR
-          value: /config
       volumeMounts:
         - name: config-volume
           mountPath: /config
@@ -53,15 +50,7 @@ data:
       k8s:
         qps: 300
         burst: 600
+      metadataStorage:
+        enableMetadataStorage: false
       crdSync:
         enableCRDUpdate: true
-
-    metadataStorage:
-      enableMetadataStorage: true
-
-    mysql:
-      host: mysql
-      port: 3306
-      user: root
-      password: root
-      database: michelangelo
