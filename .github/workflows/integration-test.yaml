@@ -87,6 +87,10 @@ jobs:
           # First lines of the apiserver log — the "Configuration" line
           # printed at startup tells us the loaded config struct.
           kubectl logs michelangelo-apiserver --tail=120 || true
+          # Controllermgr: env from pod spec (works on distroless) + logs
+          kubectl get pod michelangelo-controllermgr -o jsonpath='{.spec.containers[0].image}' && echo
+          kubectl get pod michelangelo-controllermgr -o jsonpath='{.spec.containers[0].env}' && echo
+          kubectl logs michelangelo-controllermgr --tail=60 || true
           # Is the controllermgr writing data to MySQL?
           kubectl exec mysql -- mysql -uroot -proot michelangelo -e "SHOW TABLES; SELECT COUNT(*) AS pipeline_rows FROM pipeline;" || true
 
