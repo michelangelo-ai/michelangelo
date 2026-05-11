@@ -9,7 +9,7 @@ spec:
   containers:
     - name: app
       image: ghcr.io/michelangelo-ai/controllermgr:fix-apiserver-metadata-storage
-      imagePullPolicy: IfNotPresent
+      imagePullPolicy: Always
       env:
         # Without CONFIG_DIR the controllermgr falls back to the relative
         # default "config" directory, which inside the Docker image is the

@@ -9,6 +9,7 @@ spec:
   containers:
     - name: app
       image: ghcr.io/michelangelo-ai/worker:fix-apiserver-metadata-storage
+      imagePullPolicy: Always
       env:
         - name: CONFIG_DIR
           value: /config
