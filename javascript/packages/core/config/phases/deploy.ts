@@ -7,7 +7,6 @@ export const DEPLOY_PHASE: PhaseConfig = {
   icon: 'deploy',
   name: 'Deploy & Predict',
   description: 'Deploy your models and predict new data',
-  docUrl: 'https://example.com/docs/deploy',
   state: 'comingSoon' as const,
   entities: [DEPLOYMENT_ENTITY_CONFIG],
 };

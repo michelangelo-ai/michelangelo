@@ -10,7 +10,7 @@ export const TRAIN_PHASE: PhaseConfig = {
   icon: 'chartLine',
   name: 'Train & Evaluate',
   description: 'Train machine learning models and evaluate their performance',
-  docUrl: 'https://example.com/docs/train',
+  docUrl: 'https://michelangelo-ai.org/docs/user-guides/train-and-register-a-model/',
   state: 'active' as const,
   entities: [
     PIPELINE_ENTITY_CONFIG,
