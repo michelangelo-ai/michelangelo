@@ -8,7 +8,7 @@ metadata:
 spec:
   containers:
     - name: app
-      image: ghcr.io/michelangelo-ai/worker:main
+      image: ghcr.io/michelangelo-ai/worker:fix-apiserver-metadata-storage
       envFrom:
         - secretRef:
             name: minio-credentials
