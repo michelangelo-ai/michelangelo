@@ -17,7 +17,7 @@ k8s:
   qps: 300
   burst: 600
 metadataStorage:
-  enableMetadataStorage: true
+  enableMetadataStorage: false
 
 controllers:
   rayCluster:
