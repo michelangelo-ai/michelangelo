@@ -68,4 +68,24 @@ data:
       {{- else }}
       {{- fail (printf "workflow.engine must be 'cadence' or 'temporal', got: %s" .Values.workflow.engine) }}
       {{- end }}
+
+    {{- with .Values.controllermgr.logPersistence }}
+    {{- if .enabled }}
+    jobs:
+      k8sengine:
+        mapper:
+          logPersistence:
+            enabled: true
+            storageEndpoint: {{ .storageEndpoint | default $.Values.objectStorage.endpoint | quote }}
+            bucket: {{ .bucket | quote }}
+            pathPrefix: {{ .pathPrefix | quote }}
+            region: {{ .region | default ($.Values.objectStorage.region | default "us-east-1") | quote }}
+            credentialsSecret: {{ .credentialsSecret | default (include "michelangelo.objectStorageSecretName" $) | quote }}
+            collectorImage: {{ .collectorImage | quote }}
+            s3DisableSSL: {{ .s3DisableSSL }}
+            {{- with .logURLFormat }}
+            logURLFormat: {{ . | quote }}
+            {{- end }}
+    {{- end }}
+    {{- end }}
 {{- end }}

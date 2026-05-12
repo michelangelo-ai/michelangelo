@@ -57,6 +57,22 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 
+# Ray cluster log persistence — enabled for sandbox to wire up the KubeRay
+# History Server. The collector sidecar uses the in-cluster MinIO endpoint
+# (minio:9091) and the chart-managed object-storage-credentials Secret.
+# Build the collector image first: scripts/kuberay/build-kuberay-images.sh
+controllermgr:
+  logPersistence:
+    enabled: true
+    # storageEndpoint defaults to objectStorage.endpoint (minio:9091) — no override needed
+    bucket: ray-history
+    pathPrefix: log
+    collectorImage: kuberay-collector:v0.1.0
+    s3DisableSSL: true
+    logURLFormat: "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/{{.ClusterName}}_{{.RayLocalNamespace}}/"
+
+
+
 # Looser security context for sandbox — ingester writes to /tmp and some
 # debug images need privilege escalation. Production keeps the chart defaults.
 podSecurityContext:
