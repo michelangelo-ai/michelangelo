@@ -39,6 +39,12 @@ export function toFlatDotPathMap(
   return result;
 }
 
+/**
+ * Reads a value from an object using either a function accessor or a lodash-style path.
+ *
+ * Returns the provided default when the accessor resolves to nullish, and returns
+ * undefined when the accessor is not callable or path-like.
+ */
 export function getObjectValue<K>(
   obj: unknown,
   accessor: Accessor<K>,
@@ -55,6 +61,12 @@ export function getObjectValue<K>(
   return undefined;
 }
 
+/**
+ * Copies an object's symbol-keyed properties into a plain symbol record.
+ *
+ * React and third-party libraries sometimes attach metadata by symbol; this
+ * helper preserves those values when object data is transformed.
+ */
 export function getObjectSymbols(obj: unknown): Record<symbol, unknown> {
   if (typeof obj !== 'object' || obj === null) {
     return {};
