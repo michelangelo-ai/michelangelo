@@ -1,3 +1,7 @@
+---
+sidebar_position: 4
+---
+
 # Model Registry Guide
 
 Save, version, and manage trained models using Michelangelo's model packaging system.
@@ -441,8 +445,52 @@ Your model class must:
 * Extend `michelangelo.lib.model_manager.interface.custom_model.Model`
 * Implement all three abstract methods: `save`, `load`, and `predict`
 
+## Register a Revision
+
+A `Revision` is a versioned snapshot of a `Model` resource. One `Model` can have many `Revision`s — each one represents a distinct training run or artifact version. When you deploy a model, you target a specific `Revision`, not the `Model` directly. This lets you roll out new versions and roll back independently of the model definition itself.
+
+### Create a revision.yaml
+
+```yaml
+apiVersion: michelangelo.api/v2
+kind: Revision
+metadata:
+  name: my-model-v1
+  namespace: my-project
+spec:
+  baseType:
+    kind: Model
+    apiVersion: michelangelo.api/v2
+  baseResource:
+    name: my-model
+    namespace: my-project
+  owner:
+    name: <your-username>
+```
+
+The `baseResource.name` and `baseResource.namespace` must match an existing `Model` resource in your project. `owner.name` is the username configured by your platform operator.
+
+### Apply and verify
+
+Apply the revision to the control plane:
+
+```bash
+ma revision apply -f revision.yaml
+```
+
+List revisions in your namespace to confirm it was registered:
+
+```bash
+ma revision get -n my-project
+```
+
+### When to create a new Revision vs. update
+
+Create a new `Revision` whenever you have a new training run or a new artifact — each Revision should correspond to a distinct, reproducible artifact. Update an existing Revision only to fix metadata (such as the owner field); changing the underlying artifact warrants a new Revision so your deployment history stays traceable.
+
 ## Next Steps
 
 * See working examples in [`python/examples/model_manager/`](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/model_manager)
 * Learn about [model training](./train-and-register-a-model.md) to prepare models for packaging
 * Learn about [data preparation](./prepare-your-data.md) for your training pipeline
+* Continue to [Deploy a Model](./deploy-a-model.md) to put your registered model into serving
