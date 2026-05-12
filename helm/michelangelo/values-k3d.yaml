@@ -62,14 +62,17 @@ affinity: {}
 # (minio:9091) and the chart-managed object-storage-credentials Secret.
 # Build the collector image first: scripts/kuberay/build-kuberay-images.sh
 controllermgr:
-  logPersistence:
-    enabled: true
-    # storageEndpoint defaults to objectStorage.endpoint (minio:9091) — no override needed
-    bucket: ray-history
-    pathPrefix: log
-    collectorImage: kuberay-collector:v0.1.0
-    s3DisableSSL: true
-    logURLFormat: "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/{{.ClusterName}}_{{.RayLocalNamespace}}/"
+  jobs:
+    k8sengine:
+      mapper:
+        logPersistence:
+          enabled: true
+          # storageEndpoint defaults to objectStorage.endpoint (minio:9091) — no override needed
+          bucket: ray-history
+          pathPrefix: log
+          collectorImage: kuberay-collector:v0.1.0
+          s3DisableSSL: true
+          logURLFormat: "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/{{.ClusterName}}_{{.RayLocalNamespace}}/"
 
 
 

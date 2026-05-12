@@ -362,43 +362,47 @@ controllermgr:
     executionUrlFormat: ""
 
   # Ray cluster log persistence via the KubeRay collector sidecar.
+  # Mirrors the Go config path: jobs.k8sengine.mapper.logPersistence
   # When enabled, the controllermgr injects a kuberay-collector container into
   # every RayCluster head + worker pod to stream logs into S3-compatible storage.
   # The History Server can then replay the Ray Dashboard for torn-down clusters.
   # Ref: https://github.com/ray-project/kuberay/tree/master/historyserver
-  logPersistence:
-    enabled: false
+  jobs:
+    k8sengine:
+      mapper:
+        logPersistence:
+          enabled: false
 
-    # S3-compatible endpoint reachable from inside the cluster.
-    # Defaults to objectStorage.endpoint when empty.
-    storageEndpoint: ""
+          # S3-compatible endpoint reachable from inside the cluster.
+          # Defaults to objectStorage.endpoint when empty.
+          storageEndpoint: ""
 
-    # Bucket to store Ray logs (must exist before pipelines run).
-    bucket: ray-history
+          # Bucket to store Ray logs (must exist before pipelines run).
+          bucket: ray-history
 
-    # Key prefix under the bucket (e.g. "log" → s3://ray-history/log/<cluster>/).
-    pathPrefix: log
+          # Key prefix under the bucket (e.g. "log" → s3://ray-history/log/<cluster>/).
+          pathPrefix: log
 
-    # S3 region — required by the AWS SDK for SigV4 signing even with custom
-    # endpoints. Defaults to objectStorage.region when empty.
-    region: ""
+          # S3 region — required by the AWS SDK for SigV4 signing even with custom
+          # endpoints. Defaults to objectStorage.region when empty.
+          region: ""
 
-    # Name of the Kubernetes Secret containing AWS_ACCESS_KEY_ID and
-    # AWS_SECRET_ACCESS_KEY. Defaults to the chart's object-storage-credentials
-    # Secret (michelangelo.objectStorageSecretName) when empty.
-    credentialsSecret: ""
+          # Name of the Kubernetes Secret containing AWS_ACCESS_KEY_ID and
+          # AWS_SECRET_ACCESS_KEY. Defaults to the chart's object-storage-credentials
+          # Secret (michelangelo.objectStorageSecretName) when empty.
+          credentialsSecret: ""
 
-    # KubeRay collector sidecar image. Build with scripts/kuberay/build-kuberay-images.sh.
-    collectorImage: kuberay-collector:v0.1.0
+          # KubeRay collector sidecar image. Build with scripts/kuberay/build-kuberay-images.sh.
+          collectorImage: kuberay-collector:v0.1.0
 
-    # Set S3DISABLE_SSL=true on the collector. Enable for in-cluster MinIO; disable for OCI/S3.
-    s3DisableSSL: true
+          # Set S3DISABLE_SSL=true on the collector. Enable for in-cluster MinIO; disable for OCI/S3.
+          s3DisableSSL: true
 
-    # Go text/template for the human-browsable log URL written to RayClusterStatus.LogUrl.
-    # Available vars: {{.Bucket}}, {{.PathPrefix}}, {{.ClusterName}}, {{.RayLocalNamespace}}.
-    # Empty string disables log_url emission.
-    # Example (sandbox MinIO console): "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/{{.ClusterName}}_{{.RayLocalNamespace}}/"
-    logURLFormat: ""
+          # Go text/template for the human-browsable log URL written to RayClusterStatus.LogUrl.
+          # Available vars: {{.Bucket}}, {{.PathPrefix}}, {{.ClusterName}}, {{.RayLocalNamespace}}.
+          # Empty string disables log_url emission.
+          # Example (sandbox MinIO console): "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/{{.ClusterName}}_{{.RayLocalNamespace}}/"
+          logURLFormat: ""
 
   resources: {}
 

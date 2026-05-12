@@ -69,7 +69,7 @@ data:
       {{- fail (printf "workflow.engine must be 'cadence' or 'temporal', got: %s" .Values.workflow.engine) }}
       {{- end }}
 
-    {{- with .Values.controllermgr.logPersistence }}
+    {{- with .Values.controllermgr.jobs.k8sengine.mapper.logPersistence }}
     {{- if .enabled }}
     jobs:
       k8sengine:
