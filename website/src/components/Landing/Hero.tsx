@@ -1,12 +1,20 @@
 import React from 'react';
 import Link from '@docusaurus/Link';
+import useBaseUrl from '@docusaurus/useBaseUrl';
 import AnimatedText from './AnimatedText';
 import styles from '../../css/landing.module.css';
 
 export default function Hero(): React.ReactElement {
+  const logoSrc = useBaseUrl('/img/michelangelo-logo-color.svg');
+
   return (
     <section className={styles.hero}>
       <div className={styles.heroContent}>
+        <img
+          className={styles.heroLogo}
+          src={logoSrc}
+          alt="Michelangelo logo"
+        />
         <h1 className={styles.heroTitle}>
           ML at Scale.
           <br />
