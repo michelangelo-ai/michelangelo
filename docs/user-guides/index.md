@@ -25,7 +25,7 @@ Version and organize trained models:
 
 ### **5. Deploy Your Model**
 Serve predictions in production:
-* [**Deploy Models**](../operator-guides/serving/index.md) - Deploy models for real-time inference and batch scoring
+* [**Deploy a Model**](./deploy-a-model.md) - Bind a registered model to an inference server and validate predictions
 
 ---
 
@@ -45,7 +45,7 @@ Serve predictions in production:
 * [Prepare your data](./prepare-your-data.md)
 * [Train a model](./train-and-register-a-model.md)
 * [Manage your models](./model-registry-guide.md)
-* [Deploy models](../operator-guides/serving/index.md)
+* [Deploy a model](./deploy-a-model.md)
 
 ### **Advanced Topics**
 
@@ -86,3 +86,4 @@ Choose a tutorial based on your ML domain:
 - **New to ML Pipelines?** Start with the [ML Pipelines Overview](./ml-pipelines/index.md), then follow [Getting Started with Pipelines](./ml-pipelines/getting-started.md)
 - **Have your pipeline running?** Learn about [Pipeline Running Modes](./ml-pipelines/pipeline-running-modes.md) and [Caching and Resume](./ml-pipelines/cache-and-pipelinerun-resume-form.md)
 - **Ready for production?** Set up [Pipeline Triggers](./set-up-triggers.md) for automated scheduling
+- **Ready to serve predictions?** Deploy your registered model — see [Deploy a Model](./deploy-a-model.md)

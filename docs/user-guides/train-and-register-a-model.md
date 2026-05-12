@@ -199,7 +199,7 @@ The SDK automates all distributed concerns.
 Your models are now ready to move forward:
 
 * Continue to [**Model Registry**](./model-registry-guide.md) to save and version
-* Continue to **Model Deployment** _(Coming Soon)_ for inference
+* Continue to [**Deploy a Model**](./deploy-a-model.md) for inference
 
 ## Troubleshooting
 
