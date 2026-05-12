@@ -103,3 +103,37 @@ jobs:
             --set temporal.server.config.persistence.visibility.sql.host=mysql \
             --set temporal.server.config.persistence.visibility.sql.password=root \
             2>/dev/null
+
+      - name: Template — Ingress enabled (UI + Envoy, hosts[] syntax)
+        run: |
+          helm template michelangelo helm/michelangelo \
+            -f helm/michelangelo/values-k3d.yaml \
+            --set ui.ingress.enabled=true \
+            --set 'ui.ingress.hosts[0].host=michelangelo.example.com' \
+            --set 'ui.ingress.hosts[0].paths[0].path=/' \
+            --set envoy.ingress.enabled=true \
+            --set 'envoy.ingress.hosts[0].host=michelangelo.example.com' \
+            --set 'envoy.ingress.hosts[0].paths[0].path=/api' \
+            --debug \
+            > /dev/null
+
+      - name: Template — apiserver Ingress grpc mode
+        run: |
+          helm template michelangelo helm/michelangelo \
+            -f helm/michelangelo/values-k3d.yaml \
+            --set apiserver.ingress.enabled=true \
+            --set apiserver.ingress.mode=grpc \
+            --set 'apiserver.ingress.hosts[0].host=grpc.michelangelo.example.com' \
+            --set 'apiserver.ingress.hosts[0].paths[0].path=/' \
+            --debug \
+            | grep 'backend-protocol'
+
+      - name: Validate apiserver passthrough without TLS must fail
+        run: |
+          ! helm template michelangelo helm/michelangelo \
+            -f helm/michelangelo/values-k3d.yaml \
+            --set apiserver.ingress.enabled=true \
+            --set apiserver.ingress.mode=passthrough \
+            --set 'apiserver.ingress.hosts[0].host=grpc.michelangelo.example.com' \
+            --set 'apiserver.ingress.hosts[0].paths[0].path=/' \
+            2>/dev/null
