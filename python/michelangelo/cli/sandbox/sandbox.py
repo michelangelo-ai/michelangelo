@@ -1016,14 +1016,16 @@ def _kube_apply(path: Path):
 
 def _kube_wait(pods: bool = True, jobs: bool = True, timeout: int = 600):
     if pods:
-        # Wait for all non-job pods to be ready
+        # Wait for all non-job pods to be ready, excluding history-server which
+        # requires a custom-built image (kuberay-historyserver) not available on
+        # Docker Hub. Build it with scripts/kuberay/build-kuberay-images.sh first.
         _exec(
             "kubectl",
             "wait",
             "--for=condition=ready",
             "pod",
             "-l",
-            "app",
+            "app,app!=history-server",
             f"--timeout={timeout}s",
         )
     if jobs:

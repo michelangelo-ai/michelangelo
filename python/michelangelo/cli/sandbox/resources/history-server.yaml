@@ -60,12 +60,12 @@ spec:
         - name: AWS_S3ID
           valueFrom:
             secretKeyRef:
-              name: "minio-credentials"
+              name: "object-storage-credentials"
               key: "AWS_ACCESS_KEY_ID"
         - name: AWS_S3SECRET
           valueFrom:
             secretKeyRef:
-              name: "minio-credentials"
+              name: "object-storage-credentials"
               key: "AWS_SECRET_ACCESS_KEY"
         - name: AWS_S3TOKEN
           value: ""
