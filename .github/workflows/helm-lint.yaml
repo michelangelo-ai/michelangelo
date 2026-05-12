@@ -97,10 +97,13 @@ jobs:
             --set cadence.enabled=true \
             --set temporal.enabled=true \
             --set cadence.config.persistence.database.sql.hosts=mysql \
+            --set cadence.config.persistence.database.sql.user=root \
             --set cadence.config.persistence.database.sql.password=root \
             --set temporal.server.config.persistence.default.sql.host=mysql \
+            --set temporal.server.config.persistence.default.sql.user=root \
             --set temporal.server.config.persistence.default.sql.password=root \
             --set temporal.server.config.persistence.visibility.sql.host=mysql \
+            --set temporal.server.config.persistence.visibility.sql.user=root \
             --set temporal.server.config.persistence.visibility.sql.password=root \
             2>/dev/null
 
