@@ -78,6 +78,7 @@ jobs:
         run: |
           helm template michelangelo helm/michelangelo \
             -f helm/michelangelo/values-k3d.yaml \
+            --set cadence.enabled=false \
             --set temporal.enabled=true \
             --set temporal.server.config.persistence.default.sql.host=mysql \
             --set temporal.server.config.persistence.default.sql.user=root \
