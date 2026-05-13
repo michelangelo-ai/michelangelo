@@ -81,6 +81,16 @@ For changes to the API server, controller manager, worker, or shared components.
 → **[Managing Go Dependencies](manage-go-dependencies.md)** — `go mod tidy` + `bazel mod tidy`
 → **[Using Go Mocks in Tests](use-go-mocks-in-unit-test.md)** — gomock patterns
 
+### Developer Reference
+
+Language and tooling reference for contributors.
+
+→ **[Protocol Buffers](dev/protobuf.md)** — proto module structure, code generation, service patterns
+→ **[Bazel Build System](dev/bazel.md)** — BUILD files, Gazelle, common commands
+→ **[Python Utilities](dev/python-utilities.md)** — Poetry setup, linting, testing Python code
+→ **[Shell Scripts](dev/shell-scripts.md)** — tools/ script reference
+→ **[YAML Configuration](dev/yaml-configuration.md)** — linting, CI, Kubernetes manifests, Helm values
+
 ### Python SDK changes
 For changes to the Uniflow decorators, task types, or the `ma` CLI.
 
