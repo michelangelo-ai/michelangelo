@@ -66,7 +66,7 @@ controllermgr:
     k8sengine:
       mapper:
         logPersistence:
-          enabled: false
+          enabled: true
           # storageEndpoint defaults to objectStorage.endpoint (minio:9091) — no override needed
           bucket: ray-history
           pathPrefix: log
