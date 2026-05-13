@@ -121,7 +121,7 @@ export default function CodeExample(): React.ReactElement {
       <div className={styles.codeExampleContainer}>
         <h2 className={styles.codeExampleTitle}>Simple, powerful API</h2>
         <p className={styles.codeExampleSubtitle}>
-          From training to production in minutes, not months
+          From training to production in minutes
         </p>
 
         <div className={styles.codeBlock}>
