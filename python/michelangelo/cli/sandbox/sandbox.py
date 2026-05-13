@@ -480,6 +480,15 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
     if "ui" in getattr(ns, "exclude", []):
         args += ["--set", "envoy.enabled=false"]
 
+    # Enable Ray log persistence when a compute cluster is created.
+    # Requires kuberay-collector:v0.1.0 to be built and imported first:
+    #   scripts/kuberay/build-kuberay-images.sh
+    if getattr(ns, "create_compute_cluster", False):
+        args += [
+            "--set",
+            "controllermgr.jobs.k8sengine.mapper.logPersistence.enabled=true",
+        ]
+
     return args
 
 
