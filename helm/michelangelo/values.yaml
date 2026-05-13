@@ -392,8 +392,8 @@ controllermgr:
           # Secret (michelangelo.objectStorageSecretName) when empty.
           credentialsSecret: ""
 
-          # KubeRay collector sidecar image. Build with scripts/kuberay/build-kuberay-images.sh.
-          collectorImage: kuberay-collector:v0.1.0
+          # KubeRay collector sidecar image. Published to GHCR alongside the main images.
+          collectorImage: ghcr.io/michelangelo-ai/kuberay-collector:main
 
           # Set S3DISABLE_SSL=true on the collector. Enable for in-cluster MinIO; disable for OCI/S3.
           s3DisableSSL: true
