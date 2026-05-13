@@ -372,7 +372,7 @@ controllermgr:
     k8sengine:
       mapper:
         logPersistence:
-          enabled: false
+          enabled: true
 
           # S3-compatible endpoint reachable from inside the cluster.
           # Defaults to objectStorage.endpoint when empty.
