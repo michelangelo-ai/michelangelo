@@ -70,12 +70,11 @@ data:
       {{- end }}
 
     {{- with .Values.controllermgr.jobs.k8sengine.mapper.logPersistence }}
-    {{- if .enabled }}
     jobs:
       k8sengine:
         mapper:
           logPersistence:
-            enabled: true
+            enabled: {{ .enabled }}
             storageEndpoint: {{ .storageEndpoint | default $.Values.objectStorage.endpoint | quote }}
             bucket: {{ .bucket | quote }}
             pathPrefix: {{ .pathPrefix | quote }}
@@ -86,6 +85,5 @@ data:
             {{- with .logURLFormat }}
             logURLFormat: {{ . | quote }}
             {{- end }}
-    {{- end }}
     {{- end }}
 {{- end }}
