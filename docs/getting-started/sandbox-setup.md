@@ -20,6 +20,8 @@ Before you begin, make sure you have the following installed. Run each verificat
 | **Helm** | `brew install helm` or [official guide](https://helm.sh/docs/intro/install/) | `helm version` |
 | **Python 3.9+** | [python.org](https://www.python.org/downloads/) | `python3 --version` |
 | **Poetry** | `curl -sSL https://install.python-poetry.org \| python3 -` | `poetry --version` |
+| **cadence** *(Cadence only)* | `brew install cadence-workflow` | `cadence --version` |
+| **temporal** *(Temporal only)* | `brew install temporal` | `temporal --version` |
 
 ### Colima resource requirements
 
@@ -202,13 +204,35 @@ Remote execution deploys workflows to your sandbox's Kubernetes cluster, with fu
    - Log in with username `minioadmin` and password `minioadmin` (these are default sandbox credentials, not for production use)
    - Click "Create Bucket" and create a bucket named `default`
 
-4. Set up the Cadence workflow domain (if using Cadence):
+4. Set up the workflow engine namespace/domain:
+
+   **Cadence** (default):
    ```bash
    brew install cadence-workflow
    cadence --do default d re
    ```
 
+   **Temporal** (if you created the sandbox with `--workflow temporal`):
+
+   First, port-forward the Temporal frontend so the local CLI can reach it:
+   ```bash
+   kubectl port-forward svc/michelangelo-temporal-frontend 7233:7233 &
+   ```
+
+   Then register the `default` namespace:
+   ```bash
+   brew install temporal
+   temporal operator namespace create default
+   ```
+
+   Finally, restart the worker to pick up the registered namespace:
+   ```bash
+   kubectl rollout restart deployment/michelangelo-worker
+   ```
+
 5. Run your workflow:
+
+   **Cadence** (default):
    ```bash
    PYTHONPATH=. poetry run python ./examples/bert_cola/bert_cola.py \
      remote-run \
@@ -217,13 +241,28 @@ Remote execution deploys workflows to your sandbox's Kubernetes cluster, with fu
      --yes
    ```
 
+   **Temporal**:
+   ```bash
+   # Ensure the port-forward from step 4 is still running, then:
+   TEMPORAL_ADDRESS=localhost:7233 \
+   PYTHONPATH=. poetry run python ./examples/bert_cola/bert_cola.py \
+     remote-run \
+     --workflow temporal \
+     --image docker.io/library/examples:latest \
+     --storage-url s3://default \
+     --yes
+   ```
+
+   > **Note**: The `--workflow` flag here must match the engine used when you ran `ma sandbox create --workflow <engine>`.
+
 **Monitoring your workflow:**
 
-| Service | URL | What to check |
-|---------|-----|---------------|
-| Cadence Web UI | http://localhost:8088/domains/default/workflows | Workflow status and history |
-| MinIO Console | http://localhost:9090/browser/default | Stored artifacts and data |
-| Ray Dashboard | http://localhost:8265 | Ray task execution (requires port-forward, see below) |
+| Service | URL | Sandbox engine |
+|---------|-----|----------------|
+| Cadence Web UI | http://localhost:8088/domains/default/workflows | Cadence |
+| Temporal Web UI | http://localhost:8080/namespaces/default/workflows | Temporal |
+| MinIO Console | http://localhost:9090/browser/default | Both |
+| Ray Dashboard | http://localhost:8265 | Both (requires port-forward, see below) |
 
 To access the Ray Dashboard for tasks running in the cluster:
 
@@ -263,6 +302,21 @@ kubectl describe pod <pod-name> | grep -A 5 "Events"
 Common causes:
 - **Network issues**: Ensure Docker can reach `ghcr.io` (try `docker pull ghcr.io/michelangelo-ai/worker:latest`)
 - **Image doesn't exist**: Verify the image tag matches what's available in the registry
+
+### Worker crashes with `Namespace default is not found` (Temporal only)
+
+The Temporal `default` namespace must be registered after the sandbox starts. If the worker is in `CrashLoopBackOff`:
+
+```bash
+# Port-forward the Temporal frontend
+kubectl port-forward svc/michelangelo-temporal-frontend 7233:7233 &
+
+# Register the default namespace
+temporal operator namespace create default
+
+# Restart the worker to pick it up
+kubectl rollout restart deployment/michelangelo-worker
+```
 
 ### Pods stuck in `CrashLoopBackOff`
 
