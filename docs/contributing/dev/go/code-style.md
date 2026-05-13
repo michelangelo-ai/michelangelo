@@ -287,6 +287,7 @@ func TestValidateModelName(t *testing.T) {
 
 ## Related
 
+- [Go Key Concepts & Terms](key-concepts-and-terms.md) — package structure, key types, patterns, and terminology
 - [Error Handling](error-handling.md) — error wrapping, logging strategy, PR review checklist
 - [Using Go Mocks in Unit Tests](../../use-go-mocks-in-unit-test.md) — mock generation and usage
 - [Managing Go Dependencies](../../manage-go-dependencies.md) — `go mod tidy`, `bazel mod tidy`

@@ -77,6 +77,7 @@ Adding a new ML resource type requires proto definitions, a gRPC service, and a 
 ### Go backend changes
 For changes to the API server, controller manager, worker, or shared components.
 
+→ **[Go Key Concepts & Terms](dev/go/key-concepts-and-terms.md)** — package map, key types, patterns, and terminology
 → **[Error Handling](dev/go/error-handling.md)** — required patterns for controllers and services
 → **[Managing Go Dependencies](manage-go-dependencies.md)** — `go mod tidy` + `bazel mod tidy`
 → **[Using Go Mocks in Tests](use-go-mocks-in-unit-test.md)** — gomock patterns

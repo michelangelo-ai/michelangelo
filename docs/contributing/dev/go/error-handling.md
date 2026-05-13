@@ -448,3 +448,8 @@ func validateInput(input string) error {
 }
 ```
 
+## Related
+
+- [Go Key Concepts & Terms](key-concepts-and-terms.md) — package structure, key types, patterns, and Starlark execution model
+- [Code Style Guide](code-style.md) — package naming, interface design, logging conventions, test organization
+- [Uniflow Plugin Guide](../../uniflow-plugin-guide.md) — how to build a new Go worker plugin
