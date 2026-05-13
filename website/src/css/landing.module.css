@@ -62,11 +62,27 @@
 /* Stats Bar */
 .statsBar {
   display: flex;
-  justify-content: center;
-  gap: 0;
+  flex-direction: column;
+  align-items: center;
   background: #0f0f0f;
   padding: 48px 24px;
+}
+
+.statsHeadline {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+  margin: 0 0 36px;
+}
+
+.statsRow {
+  display: flex;
+  justify-content: center;
   flex-wrap: wrap;
+  gap: 0;
+  width: 100%;
 }
 
 .statItem {
@@ -330,11 +346,32 @@
   color: #ffffff;
 }
 
+.featureTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
 .featureTitle {
   font-size: 1.25rem;
   font-weight: 600;
-  margin-bottom: 0.75rem;
+  margin: 0;
   color: var(--ifm-font-color-base);
+}
+
+.comingSoonBadge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ifm-color-primary);
+  border: 1px solid var(--ifm-color-primary);
+  border-radius: 4px;
+  padding: 2px 6px;
+  white-space: nowrap;
+  opacity: 0.8;
 }
 
 .featureDescription {

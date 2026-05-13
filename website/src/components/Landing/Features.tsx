@@ -5,6 +5,7 @@ interface Feature {
   title: string;
   description: string;
   icon: React.ReactNode;
+  comingSoon?: boolean;
 }
 
 const features: Feature[] = [
@@ -13,6 +14,7 @@ const features: Feature[] = [
     description:
       'Centralized feature store with versioning, lineage tracking, and real-time serving for consistent ML features across training and inference.',
     icon: <DatabaseIcon />,
+    comingSoon: true,
   },
   {
     title: 'Model Training',
@@ -25,6 +27,7 @@ const features: Feature[] = [
     description:
       'Comprehensive model evaluation with automated metrics, A/B testing, and performance benchmarking across datasets.',
     icon: <ChartIcon />,
+    comingSoon: true,
   },
   {
     title: 'Deployment',
@@ -35,7 +38,7 @@ const features: Feature[] = [
   {
     title: 'Monitoring',
     description:
-      'Real-time model monitoring with drift detection, alerting, and observability for production ML systems.',
+      'Model observability with Prometheus metrics, alerting rules, Grafana dashboards, and structured logging for production ML systems.',
     icon: <EyeIcon />,
   },
 ];
@@ -101,7 +104,12 @@ function FeatureCard({
       style={{transitionDelay: `${index * 100}ms`}}
     >
       <div className={styles.featureIcon}>{feature.icon}</div>
-      <h3 className={styles.featureTitle}>{feature.title}</h3>
+      <div className={styles.featureTitleRow}>
+        <h3 className={styles.featureTitle}>{feature.title}</h3>
+        {feature.comingSoon && (
+          <span className={styles.comingSoonBadge}>Coming Soon</span>
+        )}
+      </div>
       <p className={styles.featureDescription}>{feature.description}</p>
     </div>
   );

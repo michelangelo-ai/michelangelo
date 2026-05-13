@@ -5,7 +5,7 @@ const phrases = [
   'Python-First: Native developer experience.',
   'Rapid Development: Near-zero learning curve and instant iteration.',
   '3rd-party Integrations: Pluggable architecture for the modern ML stack.',
-  'Battle tested.',
+  'Battle Tested: A decade in production at Uber.',
 ];
 
 export default function AnimatedText(): React.ReactElement {

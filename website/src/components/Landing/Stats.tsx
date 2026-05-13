@@ -11,12 +11,15 @@ const stats = [
 export default function Stats(): React.ReactElement {
   return (
     <section className={styles.statsBar}>
-      {stats.map(({value, label}) => (
-        <div key={label} className={styles.statItem}>
-          <span className={styles.statValue}>{value}</span>
-          <span className={styles.statLabel}>{label}</span>
-        </div>
-      ))}
+      <p className={styles.statsHeadline}>Proven at Uber Scale</p>
+      <div className={styles.statsRow}>
+        {stats.map(({value, label}) => (
+          <div key={label} className={styles.statItem}>
+            <span className={styles.statValue}>{value}</span>
+            <span className={styles.statLabel}>{label}</span>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
