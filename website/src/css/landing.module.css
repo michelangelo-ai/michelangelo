@@ -59,6 +59,61 @@
   }
 }
 
+/* Stats Bar */
+.statsBar {
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  background: #0f0f0f;
+  padding: 48px 24px;
+  flex-wrap: wrap;
+}
+
+.statItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 48px;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.statItem:last-child {
+  border-right: none;
+}
+
+.statValue {
+  font-size: 2.75rem;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.statLabel {
+  margin-top: 8px;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.55);
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+
+@media (max-width: 768px) {
+  .statItem {
+    padding: 20px 24px;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    width: 50%;
+  }
+
+  .statItem:nth-child(odd) {
+    border-right: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .statItem:last-child {
+    border-bottom: none;
+  }
+}
+
 /* Hero Section */
 .hero {
   min-height: calc(100vh - 60px);

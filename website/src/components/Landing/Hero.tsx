@@ -16,16 +16,12 @@ export default function Hero(): React.ReactElement {
           alt="Michelangelo logo"
         />
         <h1 className={styles.heroTitle}>
-          ML at Scale.
-          <br />
-          <span className={styles.heroTitleAccent}>Open Source.</span>
+          The ML Platform Behind Uber&apos;s AI.
         </h1>
         <p className={styles.heroSubtitle}>
-          The end-to-end platform for building, deploying, and monitoring ML
-          models
+          Open source and production-ready.
         </p>
         <div className={styles.heroTagline}>
-          <span className={styles.heroTaglinePrefix}>Built for</span>{' '}
           <AnimatedText />
         </div>
         <div className={styles.heroCtas}>
