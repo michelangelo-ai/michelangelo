@@ -232,7 +232,8 @@ A `200 OK` response confirms task pods in that namespace can reach the MLflow se
 
 ## Next Steps
 
-- [Model Registry](../model-registry.md) — Michelangelo's built-in model registry: storage configuration, RBAC, and serving integration
-- [Register a Compute Cluster](../jobs/register-a-compute-cluster-to-michelangelo-control-plane.md) — how to add a Kubernetes cluster so Michelangelo can dispatch jobs to it
-- [Platform Setup](../platform-setup.md) — full ConfigMap reference for all Michelangelo components
+- [Experiment Tracking Setup](../experiment-tracking.md) — platform-level setup guide: network reachability, ConfigMap injection, and auth patterns for any tracking server
+- [Model Registry](../components/model-registry.md) — Michelangelo's built-in model registry: storage configuration, RBAC, and serving integration
+- [Register a Compute Cluster](../setup/register-a-compute-cluster-to-michelangelo-control-plane.md) — how to add a Kubernetes cluster so Michelangelo can dispatch jobs to it
+- [Platform Setup](../setup/platform-setup.md) — full ConfigMap reference for all Michelangelo components
 - [MLflow Documentation](https://mlflow.org/docs/latest/) — official MLflow docs for tracking, model registry, and deployment

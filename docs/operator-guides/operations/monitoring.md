@@ -239,5 +239,5 @@ Indexing these fields allows you to efficiently query all events for a specific 
 ## What's next?
 
 - **Troubleshooting**: Use the collected metrics and logs to diagnose issues with the [Troubleshooting guide](./troubleshooting.md)
-- **Authentication**: Secure access to your metrics endpoints with the [Authentication guide](./authentication.md)
+- **Authentication**: Secure access to your metrics endpoints with the [Authentication guide](../setup/authentication.md)
 - **Compliance**: Set up audit log retention to meet SOC 2, GDPR, or HIPAA requirements in the [Compliance guide](./compliance.md)

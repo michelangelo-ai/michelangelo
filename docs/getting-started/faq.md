@@ -127,7 +127,7 @@ A: Michelangelo provides:
 - **Versioning** for models, pipelines, and pipeline runs
 - **Notifications** to keep teammates informed of pipeline events (see [Notifications](../user-guides/notifications.md))
 
-For operator-side RBAC and identity-provider setup, see the [Authentication guide](../operator-guides/authentication.md).
+For operator-side RBAC and identity-provider setup, see the [Authentication guide](../operator-guides/setup/authentication.md).
 
 **Q: Is my data secure?**
 
@@ -137,7 +137,7 @@ A: Yes. Michelangelo enforces:
 - Audit logs for all operations
 - Audit logging and controls to support SOC 2, GDPR, and HIPAA compliance
 
-See the [Compliance Guide](../operator-guides/compliance.md) for configuration steps specific to each framework.
+See the [Compliance Guide](../operator-guides/operations/compliance.md) for configuration steps specific to each framework.
 
 **Q: Can I use Michelangelo for regulated industries (healthcare, finance)?**
 

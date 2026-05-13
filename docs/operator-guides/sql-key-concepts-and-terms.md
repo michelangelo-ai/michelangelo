@@ -4,7 +4,7 @@ This page is the SQL reference for operators querying Michelangelo's metadata da
 
 **Audience:** Platform operators running Michelangelo's ingester and metadata DB in production.
 
-**Prerequisites:** The ingester must be deployed and connected to MySQL. See [Ingester Controller: Configuration and Operations](./ingester-configuration.md) if you haven't done this yet.
+**Prerequisites:** The ingester must be deployed and connected to MySQL. See [Ingester Controller: Configuration and Operations](./components/ingester-configuration.md) if you haven't done this yet.
 
 **You'll reach for this page when:**
 - Writing a diagnostic SQL query to investigate a stuck `pipelinerun` or missing model
@@ -237,5 +237,5 @@ Deletes are soft deletes. The row remains in the main table with `delete_time` s
 
 ## Related Docs
 
-- [Ingester Controller: Configuration and Operations](./ingester-configuration.md)
+- [Ingester Controller: Configuration and Operations](./components/ingester-configuration.md)
 - [Ingester Controller: Architecture and Implementation](../contributing/ingester-internals.md)

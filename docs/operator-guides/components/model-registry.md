@@ -38,7 +38,7 @@ The registry is backed by a single Kubernetes Custom Resource: `Model` (CRD name
 
 Before working through this guide, ensure you have completed:
 
-- **[Platform Setup](platform-setup.md#object-store-configuration)** — the Controller Manager's `minio.*` fields must point to a reachable S3-compatible object store.
+- **[Platform Setup](../setup/platform-setup.md#object-store-configuration)** — the Controller Manager's `minio.*` fields must point to a reachable S3-compatible object store.
 - **Compute cluster registration** — at least one compute cluster registered with the Michelangelo control plane, so Uniflow tasks have somewhere to run.
 - Sufficient cluster permissions to create Roles and RoleBindings, and to inspect Custom Resource Definitions.
 
@@ -52,7 +52,7 @@ Confirm the `Model` CRD is present in the cluster before expecting any registrat
 kubectl get crd models.michelangelo.api
 ```
 
-If the CRD is missing, re-run the Michelangelo CRD installation step described in [Platform Setup](platform-setup.md).
+If the CRD is missing, re-run the Michelangelo CRD installation step described in [Platform Setup](../setup/platform-setup.md).
 
 You can also spot-check a namespace for any existing models:
 
@@ -136,7 +136,7 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 ```
 
-For cluster-wide patterns and multi-tenant isolation, see [Authentication and RBAC](authentication.md).
+For cluster-wide patterns and multi-tenant isolation, see [Authentication and RBAC](../setup/authentication.md).
 
 ---
 
@@ -388,7 +388,7 @@ Model artifacts in S3 are not automatically removed when a `Model` resource is d
 
 | Symptom | Likely cause | Resolution |
 |---|---|---|
-| `error: the server doesn't have a resource type "models"` | CRD not installed | Re-run the Michelangelo CRD installation step (see [Platform Setup](platform-setup.md)) |
+| `error: the server doesn't have a resource type "models"` | CRD not installed | Re-run the Michelangelo CRD installation step (see [Platform Setup](../setup/platform-setup.md)) |
 | `kubectl get models` returns `No resources found` but CRD is present | No models registered yet, or wrong namespace | Confirm a registration task has run; check the namespace |
 | `spec.model_artifact_uri` empty after registration | Controller Manager lacks S3 write permissions, or the registration task failed | Check Controller Manager logs; verify IAM policy on the bucket |
 | `spec.deployable_artifact_uri` empty | Packaging step did not run or failed | Inspect the pipeline run logs for the registration task |
@@ -396,13 +396,13 @@ Model artifacts in S3 are not automatically removed when a `Model` resource is d
 | `kubectl wait --for=condition=Ready` hangs on a Model | Model has no status conditions | Don't gate on Model conditions; use `spec.deployable_artifact_uri[0]` non-empty as the readiness signal, or wait on a downstream `InferenceServer` |
 | `InferenceServer` does not start serving | `backendType` set to lowercase string `"triton"` instead of enum value | Use `backendType: BACKEND_TYPE_TRITON` |
 
-For deeper diagnostic trees, see the [Troubleshooting Guide](troubleshooting.md).
+For deeper diagnostic trees, see the [Troubleshooting Guide](../operations/troubleshooting.md).
 
 ---
 
 ## Next Steps
 
-- [Integrate a Custom Backend](serving/integrate-custom-backend.md) — configure Triton, vLLM, TensorRT-LLM, or a custom inference framework to serve registered models.
-- [Authentication and RBAC](authentication.md) — cluster-wide RBAC patterns and identity-provider setup.
+- [Integrate a Custom Backend](../serving/integrate-custom-backend.md) — configure Triton, vLLM, TensorRT-LLM, or a custom inference framework to serve registered models.
+- [Authentication and RBAC](../setup/authentication.md) — cluster-wide RBAC patterns and identity-provider setup.
 - [Experiment Tracking Setup](experiment-tracking.md) — connect an external experiment tracking server to link training runs to the models they produce.
-- [Object Store Configuration](platform-setup.md#object-store-configuration) — review the full `minio.*` configuration reference.
+- [Object Store Configuration](../setup/platform-setup.md#object-store-configuration) — review the full `minio.*` configuration reference.

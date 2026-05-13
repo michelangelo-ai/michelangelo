@@ -10,6 +10,6 @@ Before configuring any tool below, complete [Experiment Tracking Setup](../exper
 
 ## Next Steps
 
-- [Network & Ingress](../network.md) — configure egress rules, Envoy proxy, ingress, TLS, and multi-cluster networking
-- [Authentication](../authentication.md) — manage secrets, workload identity, and RBAC for credential handling
-- [Troubleshooting](../troubleshooting.md) — diagnose common failure modes with `kubectl` diagnostic commands
+- [Network & Ingress](../setup/network.md) — configure egress rules, Envoy proxy, ingress, TLS, and multi-cluster networking
+- [Authentication](../setup/authentication.md) — manage secrets, workload identity, and RBAC for credential handling
+- [Troubleshooting](../operations/troubleshooting.md) — diagnose common failure modes with `kubectl` diagnostic commands

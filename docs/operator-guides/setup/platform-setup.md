@@ -24,7 +24,7 @@ This document explains:
 
 The following diagram shows the relationship between each of the services in Michelangelo eco-system.
 
-![Michelangelo Service Architecture](./images/ma-service-architecture.png)
+![Michelangelo Service Architecture](../images/ma-service-architecture.png)
 
 ## Server Configuration
 

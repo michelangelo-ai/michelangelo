@@ -41,7 +41,7 @@ Experiment tracking in Michelangelo follows a clear separation of concerns:
 
 ## Step 1: Verify Network Reachability
 
-Task pods run inside the compute cluster namespace registered with Michelangelo (see [Register a Compute Cluster](jobs/register-a-compute-cluster-to-michelangelo-control-plane.md)). Confirm that pods in that namespace can reach your tracking server.
+Task pods run inside the compute cluster namespace registered with Michelangelo (see [Register a Compute Cluster](setup/register-a-compute-cluster-to-michelangelo-control-plane.md)). Confirm that pods in that namespace can reach your tracking server.
 
 ```bash
 # Run a connectivity test from a pod in the compute namespace
@@ -94,7 +94,7 @@ spec:
 
 Michelangelo injects environment variables into every task pod (Ray head, Ray workers, Spark drivers, and Spark executors) via the `michelangelo-config` ConfigMap. This ConfigMap is mounted as an `envFrom` source, so every key in it becomes an environment variable in the pod.
 
-You created this ConfigMap when you [registered the compute cluster](jobs/register-a-compute-cluster-to-michelangelo-control-plane.md). Add the tracking server URI as a new key:
+You created this ConfigMap when you [registered the compute cluster](setup/register-a-compute-cluster-to-michelangelo-control-plane.md). Add the tracking server URI as a new key:
 
 ```bash
 kubectl patch configmap michelangelo-config \
@@ -222,6 +222,6 @@ def check_tracking_config():
 
 ## Next Steps
 
-- [Register a Compute Cluster](jobs/register-a-compute-cluster-to-michelangelo-control-plane.md) — register the compute namespace where this tracking config will be injected.
-- [Worker Configuration](platform-setup.md#worker-configuration) — review environment variable injection and pod configuration options.
-- [Model Registry](model-registry.md) — store and serve models produced by tracked runs.
+- [Register a Compute Cluster](setup/register-a-compute-cluster-to-michelangelo-control-plane.md) — register the compute namespace where this tracking config will be injected.
+- [Worker Configuration](setup/platform-setup.md#worker-configuration) — review environment variable injection and pod configuration options.
+- [Model Registry](components/model-registry.md) — store and serve models produced by tracked runs.

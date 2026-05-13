@@ -6,17 +6,26 @@ These guides cover deploying, configuring, and integrating Michelangelo in a Kub
 
 For a fresh deployment, follow this recommended reading order:
 
-1. **[Platform Setup](platform-setup.md)** — configure each component (API server, controller manager, worker, UI/Envoy) via ConfigMaps and Kustomize overlays
-2. **[Register a Compute Cluster](jobs/register-a-compute-cluster-to-michelangelo-control-plane.md)** — connect an existing Kubernetes cluster so Michelangelo can dispatch Ray and Spark jobs to it
+1. **[Platform Setup](setup/platform-setup.md)** — configure each component (API server, controller manager, worker, UI/Envoy) via ConfigMaps and Kustomize overlays
+2. **[Register a Compute Cluster](setup/register-a-compute-cluster-to-michelangelo-control-plane.md)** — connect an existing Kubernetes cluster so Michelangelo can dispatch Ray and Spark jobs to it
 3. **[Cluster Setup for Serving](serving/cluster-setup.md)** — enable model inference on a local or remote cluster
-4. **[Authentication](authentication.md)** — connect an identity provider and configure RBAC before opening to users
+4. **[Authentication](setup/authentication.md)** — connect an identity provider and configure RBAC before opening to users
 
-## Platform Configuration
+## Setup & Configuration
 
 | Guide | Description |
 |-------|-------------|
-| [Platform Setup](platform-setup.md) | ConfigMaps and key fields for API server, controller manager, worker, and UI/Envoy |
-| [Network & Ingress](network.md) | Envoy proxy, Ingress setup, TLS with cert-manager, and multi-cluster connectivity |
+| [Platform Setup](setup/platform-setup.md) | ConfigMaps and key fields for API server, controller manager, worker, and UI/Envoy |
+| [Network & Ingress](setup/network.md) | Envoy proxy, Ingress setup, TLS with cert-manager, and multi-cluster connectivity |
+| [Authentication](setup/authentication.md) | OIDC identity provider setup, RBAC, session configuration, multi-tenant isolation |
+| [Register a Compute Cluster](setup/register-a-compute-cluster-to-michelangelo-control-plane.md) | Connect an existing Kubernetes cluster to the Michelangelo control plane |
+
+## Platform Components
+
+| Guide | Description |
+|-------|-------------|
+| [Model Registry](components/model-registry.md) | Operate Michelangelo's built-in model registry, configure storage and RBAC, and integrate with serving and CI/CD |
+| [Ingester Controller](components/ingester-configuration.md) | Deploy, configure, and operate the ingester that syncs CRDs into MySQL |
 | [API Framework](api-framework.md) | Architecture overview of the Michelangelo API and control plane |
 | [SQL Key Concepts and Terms](sql-key-concepts-and-terms.md) | Metadata schema, table naming, indexed fields, and SQL query patterns |
 
@@ -25,7 +34,6 @@ For a fresh deployment, follow this recommended reading order:
 | Guide | Description |
 |-------|-------------|
 | [Jobs Overview](jobs/index.md) | Ray and Spark job lifecycle, compute selection, and observability |
-| [Register a Compute Cluster](jobs/register-a-compute-cluster-to-michelangelo-control-plane.md) | Connect an existing Kubernetes cluster to the Michelangelo control plane |
 | [Run a Pipeline on a Compute Cluster](jobs/run-uniflow-pipeline-on-compute-cluster.md) | Submit and monitor a Uniflow pipeline on a registered cluster |
 | [Extend the Job Scheduler](jobs/extend-michelangelo-batch-job-scheduler-system.md) | Custom scheduling backends (Kueue, Volcano) and assignment strategies |
 
@@ -44,24 +52,17 @@ For a fresh deployment, follow this recommended reading order:
 | [Deploying the UI](ui/deploying-michelangelo-ui.md) | Deploy the Michelangelo web UI to Kubernetes |
 | [Local UI Development](ui/local-development-setup.md) | Run the UI locally for development |
 
-## Integrating with Your ML Stack
-
-Michelangelo is designed to be adopted alongside existing ML infrastructure. These guides cover how to connect Michelangelo to the systems your teams already use.
+## Third-Party Integrations
 
 | Guide | Description |
 |-------|-------------|
-| [Model Registry](model-registry.md) | Operate Michelangelo's built-in model registry, configure storage and RBAC, and integrate with serving and CI/CD |
 | [Experiment Tracking Setup](experiment-tracking.md) | Make an experiment tracking server reachable from task pods — network, ConfigMap injection, auth, and operator/user boundary |
 | [Third-Party Integrations](integrations/index.md) | Connect external tools (MLflow, and more) to Michelangelo workloads |
-| [Custom Serving Backend](serving/integrate-custom-backend.md) | Add support for any inference framework — Triton, vLLM, TensorRT-LLM, or your own |
-| [Custom Job Scheduler](jobs/extend-michelangelo-batch-job-scheduler-system.md) | Replace or extend the job scheduler — integrate Kueue, Volcano, or a custom assignment strategy |
-| [Register a Compute Cluster](jobs/register-a-compute-cluster-to-michelangelo-control-plane.md) | Connect an existing Kubernetes cluster so Michelangelo can dispatch jobs to it |
 
 ## Operations
 
 | Guide | Description |
 |-------|-------------|
-| [Authentication](authentication.md) | OIDC identity provider setup, RBAC, session configuration, multi-tenant isolation |
-| [Monitoring & Observability](monitoring.md) | Prometheus scrape config, key metrics, alerting rules, Grafana dashboards, structured logging |
-| [Compliance](compliance.md) | SOC 2, GDPR, and HIPAA configuration |
-| [Troubleshooting](troubleshooting.md) | Common failure modes and `kubectl` diagnostic commands |
+| [Monitoring & Observability](operations/monitoring.md) | Prometheus scrape config, key metrics, alerting rules, Grafana dashboards, structured logging |
+| [Compliance](operations/compliance.md) | SOC 2, GDPR, and HIPAA configuration |
+| [Troubleshooting](operations/troubleshooting.md) | Common failure modes and `kubectl` diagnostic commands |

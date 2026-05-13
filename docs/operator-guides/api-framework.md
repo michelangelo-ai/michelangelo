@@ -4,7 +4,7 @@ The Michelangelo API Framework abstracts Kubernetes CRDs through a gRPC API serv
 
 **Audience**: Platform operators and contributors who need to understand how the API layer is structured.
 
-**Prerequisites**: Familiarity with Kubernetes CRDs, gRPC, and the Michelangelo control plane (see [Platform Setup](platform-setup.md)).
+**Prerequisites**: Familiarity with Kubernetes CRDs, gRPC, and the Michelangelo control plane (see [Platform Setup](setup/platform-setup.md)).
 
 <!--
 ## Getting Started
