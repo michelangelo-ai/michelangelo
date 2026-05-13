@@ -1,4 +1,4 @@
-# Experiment Tracking Integration
+# Experiment Tracking Setup
 
 This guide explains how platform operators can make an experiment tracking server available to Michelangelo workloads. It covers network setup, configuration injection, and the boundary between what operators configure and what users do in their `@uniflow.task()` code.
 
@@ -41,7 +41,7 @@ Experiment tracking in Michelangelo follows a clear separation of concerns:
 
 ## Step 1: Verify Network Reachability
 
-Task pods run inside the compute cluster namespace registered with Michelangelo (see [Register a Compute Cluster](../jobs/register-a-compute-cluster-to-michelangelo-control-plane.md)). Confirm that pods in that namespace can reach your tracking server.
+Task pods run inside the compute cluster namespace registered with Michelangelo (see [Register a Compute Cluster](jobs/register-a-compute-cluster-to-michelangelo-control-plane.md)). Confirm that pods in that namespace can reach your tracking server.
 
 ```bash
 # Run a connectivity test from a pod in the compute namespace
@@ -94,7 +94,7 @@ spec:
 
 Michelangelo injects environment variables into every task pod (Ray head, Ray workers, Spark drivers, and Spark executors) via the `michelangelo-config` ConfigMap. This ConfigMap is mounted as an `envFrom` source, so every key in it becomes an environment variable in the pod.
 
-You created this ConfigMap when you [registered the compute cluster](../jobs/register-a-compute-cluster-to-michelangelo-control-plane.md). Add the tracking server URI as a new key:
+You created this ConfigMap when you [registered the compute cluster](jobs/register-a-compute-cluster-to-michelangelo-control-plane.md). Add the tracking server URI as a new key:
 
 ```bash
 kubectl patch configmap michelangelo-config \
@@ -222,5 +222,5 @@ def check_tracking_config():
 
 ## Related
 
-- [Register a Compute Cluster](../jobs/register-a-compute-cluster-to-michelangelo-control-plane.md)
-- [Worker Configuration](../platform-setup.md#worker-configuration)
+- [Register a Compute Cluster](jobs/register-a-compute-cluster-to-michelangelo-control-plane.md)
+- [Worker Configuration](platform-setup.md#worker-configuration)

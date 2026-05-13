@@ -1,4 +1,4 @@
-# Model Registry Integration
+# Model Registry
 
 Unlike experiment tracking — where operators connect an external server — Michelangelo includes a built-in model registry. This guide explains how operators verify the registry is healthy, configure storage and access, and integrate registered models with downstream serving and CI/CD systems.
 
@@ -38,7 +38,7 @@ The registry is backed by a single Kubernetes Custom Resource: `Model` (CRD name
 
 Before working through this guide, ensure you have completed:
 
-- **[Platform Setup](../platform-setup.md#object-store-configuration)** — the Controller Manager's `minio.*` fields must point to a reachable S3-compatible object store.
+- **[Platform Setup](platform-setup.md#object-store-configuration)** — the Controller Manager's `minio.*` fields must point to a reachable S3-compatible object store.
 - **Compute cluster registration** — at least one compute cluster registered with the Michelangelo control plane, so Uniflow tasks have somewhere to run.
 - Sufficient cluster permissions to create Roles and RoleBindings, and to inspect Custom Resource Definitions.
 
@@ -52,7 +52,7 @@ Confirm the `Model` CRD is present in the cluster before expecting any registrat
 kubectl get crd models.michelangelo.api
 ```
 
-If the CRD is missing, re-run the Michelangelo CRD installation step described in [Platform Setup](../platform-setup.md).
+If the CRD is missing, re-run the Michelangelo CRD installation step described in [Platform Setup](platform-setup.md).
 
 You can also spot-check a namespace for any existing models:
 
@@ -136,7 +136,7 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 ```
 
-For cluster-wide patterns and multi-tenant isolation, see [Authentication and RBAC](../authentication.md).
+For cluster-wide patterns and multi-tenant isolation, see [Authentication and RBAC](authentication.md).
 
 ---
 
@@ -396,13 +396,13 @@ Model artifacts in S3 are not automatically removed when a `Model` resource is d
 | `kubectl wait --for=condition=Ready` hangs on a Model | Model has no status conditions | Don't gate on Model conditions; use `spec.deployable_artifact_uri[0]` non-empty as the readiness signal, or wait on a downstream `InferenceServer` |
 | `InferenceServer` does not start serving | `backendType` set to lowercase string `"triton"` instead of enum value | Use `backendType: BACKEND_TYPE_TRITON` |
 
-For deeper diagnostic trees, see the [Troubleshooting Guide](../troubleshooting.md).
+For deeper diagnostic trees, see the [Troubleshooting Guide](troubleshooting.md).
 
 ---
 
 ## What's Next
 
-- [Integrate a Custom Backend](../serving/integrate-custom-backend.md) — configure Triton, vLLM, TensorRT-LLM, or a custom inference framework to serve registered models.
-- [Authentication and RBAC](../authentication.md) — cluster-wide RBAC patterns and identity-provider setup.
-- [Experiment Tracking Integration](experiment-tracking.md) — connect an external experiment tracking server to link training runs to the models they produce.
-- [Object Store Configuration](../platform-setup.md#object-store-configuration) — review the full `minio.*` configuration reference.
+- [Integrate a Custom Backend](serving/integrate-custom-backend.md) — configure Triton, vLLM, TensorRT-LLM, or a custom inference framework to serve registered models.
+- [Authentication and RBAC](authentication.md) — cluster-wide RBAC patterns and identity-provider setup.
+- [Experiment Tracking Setup](experiment-tracking.md) — connect an external experiment tracking server to link training runs to the models they produce.
+- [Object Store Configuration](platform-setup.md#object-store-configuration) — review the full `minio.*` configuration reference.

@@ -50,8 +50,9 @@ Michelangelo is designed to be adopted alongside existing ML infrastructure. The
 
 | Guide | Description |
 |-------|-------------|
-| [Model Registry](integrations/model-registry.md) | Operate Michelangelo's built-in model registry, configure storage and RBAC, and integrate with serving and CI/CD |
-| [Experiment Tracking](integrations/experiment-tracking.md) | Connect an external experiment tracking server to Michelangelo task pods |
+| [Model Registry](model-registry.md) | Operate Michelangelo's built-in model registry, configure storage and RBAC, and integrate with serving and CI/CD |
+| [Experiment Tracking Setup](experiment-tracking.md) | Make an experiment tracking server reachable from task pods — network, ConfigMap injection, auth, and operator/user boundary |
+| [Third-Party Integrations](integrations/index.md) | Connect external tools (MLflow, and more) to Michelangelo workloads |
 | [Custom Serving Backend](serving/integrate-custom-backend.md) | Add support for any inference framework — Triton, vLLM, TensorRT-LLM, or your own |
 | [Custom Job Scheduler](jobs/extend-michelangelo-batch-job-scheduler-system.md) | Replace or extend the job scheduler — integrate Kueue, Volcano, or a custom assignment strategy |
 | [Register a Compute Cluster](jobs/register-a-compute-cluster-to-michelangelo-control-plane.md) | Connect an existing Kubernetes cluster so Michelangelo can dispatch jobs to it |
