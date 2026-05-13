@@ -70,7 +70,6 @@ controllermgr:
           # storageEndpoint defaults to objectStorage.endpoint (minio:9091) — no override needed
           bucket: ray-history
           pathPrefix: log
-          collectorImage: ghcr.io/michelangelo-ai/kuberay-collector:main
           s3DisableSSL: true
           logURLFormat: "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/{{.ClusterName}}_{{.RayLocalNamespace}}/"
 

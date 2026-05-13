@@ -81,7 +81,7 @@ data:
             pathPrefix: {{ .pathPrefix | quote }}
             region: {{ .region | default ($.Values.objectStorage.region | default "us-east-1") | quote }}
             credentialsSecret: {{ .credentialsSecret | default (include "michelangelo.objectStorageSecretName" $) | quote }}
-            collectorImage: {{ .collectorImage | quote }}
+            collectorImage: {{ $.Values.images.kuberayCollector | quote }}
             s3DisableSSL: {{ .s3DisableSSL }}
             {{- with .logURLFormat }}
             logURLFormat: {{ . | quote }}
