@@ -38,7 +38,7 @@ const features: Feature[] = [
   {
     title: 'Monitoring',
     description:
-      'Model observability with Prometheus metrics, alerting rules, Grafana dashboards, and structured logging for production ML systems.',
+      'Real-time model monitoring with drift detection, alerting, and observability for production ML systems.',
     icon: <EyeIcon />,
   },
 ];
