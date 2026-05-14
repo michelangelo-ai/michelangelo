@@ -185,4 +185,26 @@ describe('Target detail page', () => {
     expect(screen.getByText('Details')).toBeInTheDocument();
     expect(screen.getByText('ServerNotReady')).toBeInTheDocument();
   });
+
+  it('renders the empty state when no stages are reported', async () => {
+    render(
+      <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({
+          location: '/myproject/deploy/targets/sentiment-target/stages',
+        }),
+        getServiceProviderWrapper({
+          request: createQueryMockRouter({
+            GetInferenceServer: { inferenceServer: buildTarget() },
+          }),
+        }),
+      ])
+    );
+
+    expect(await screen.findByText('No stages reported')).toBeInTheDocument();
+    expect(
+      screen.getByText('Stages will appear here once the inference server is initialized')
+    ).toBeInTheDocument();
+  });
 });
