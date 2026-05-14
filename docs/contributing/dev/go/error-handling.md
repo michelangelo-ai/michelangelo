@@ -1,3 +1,7 @@
+---
+sidebar_position: 3
+---
+
 # Golang Error Handling Code Review Checklist
 
 ## Core Principles
@@ -450,6 +454,6 @@ func validateInput(input string) error {
 
 ## Related
 
-- [Go Key Concepts & Terms](key-concepts-and-terms.md) — package structure, key types, patterns, and Starlark execution model
+- [Go Key Concepts and Terms](key-concepts-and-terms.md) — package map, key types, patterns, and terminology
 - [Code Style Guide](code-style.md) — package naming, interface design, logging conventions, test organization
 - [Uniflow Plugin Guide](../../uniflow-plugin-guide.md) — how to build a new Go worker plugin

@@ -45,8 +45,9 @@ Understanding which directory owns which subsystem helps you find the right code
 
 1. **Fork and clone** the repository
 2. **Read [TERMINOLOGY.md](TERMINOLOGY.md)** — understand the vocabulary (Task, Workflow, Pipeline, PipelineRun, etc.) before reading code
-3. **Build from source** — follow [Building from Source](building-michelangelo-ai-from-source.md) to ensure your environment is working
-4. **Set up the sandbox** — `poetry run ma sandbox create` gives you a local Kubernetes cluster with all Michelangelo components running. Most integration tests and manual testing use this.
+3. **Go backend contributors**: read [Go Key Concepts and Terms](dev/go/key-concepts-and-terms.md) for the package map, key types, and patterns before making changes
+4. **Build from source** — follow [Building from Source](building-michelangelo-ai-from-source.md) to ensure your environment is working
+5. **Set up the sandbox** — `poetry run ma sandbox create` gives you a local Kubernetes cluster with all Michelangelo components running. Most integration tests and manual testing use this.
 
 ## Finding Work
 
@@ -77,7 +78,7 @@ Adding a new ML resource type requires proto definitions, a gRPC service, and a 
 ### Go backend changes
 For changes to the API server, controller manager, worker, or shared components.
 
-→ **[Go Key Concepts & Terms](dev/go/key-concepts-and-terms.md)** — package map, key types, patterns, and terminology
+→ **[Go Key Concepts and Terms](dev/go/key-concepts-and-terms.md)** — package map, key types, patterns, and terminology
 → **[Error Handling](dev/go/error-handling.md)** — required patterns for controllers and services
 → **[Managing Go Dependencies](manage-go-dependencies.md)** — `go mod tidy` + `bazel mod tidy`
 → **[Using Go Mocks in Tests](use-go-mocks-in-unit-test.md)** — gomock patterns
