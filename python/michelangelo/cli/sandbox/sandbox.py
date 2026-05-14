@@ -386,12 +386,11 @@ def _helm_ensure_repos():
 
 
 def _helm_adopt_orphaned_resources(helm_args: list[str]):
-    """Stamp Helm ownership annotations onto any pre-existing cluster resources.
+    """Delete pre-existing cluster resources that would block helm upgrade --install.
 
-    Helm 3 refuses to manage resources that exist without its ownership labels.
-    This is common after a partial install leaves resources behind without a
-    tracked Helm release. We render the chart manifests and annotate/label each
-    resource so that helm upgrade --install can proceed.
+    Helm 3 refuses to manage resources missing its ownership annotations, and
+    conflicts like NodePort re-allocation block fresh installs. For the sandbox
+    we simply delete whatever the chart would create so the install starts clean.
     """
     result = subprocess.run(
         ["helm", "template", "michelangelo", str(_chart_dir),
@@ -400,26 +399,10 @@ def _helm_adopt_orphaned_resources(helm_args: list[str]):
     )
     if result.returncode != 0:
         return
-    for doc in yaml.safe_load_all(result.stdout):
-        if not doc:
-            continue
-        kind = doc.get("kind", "")
-        name = (doc.get("metadata") or {}).get("name", "")
-        namespace = (doc.get("metadata") or {}).get("namespace", "default")
-        if not kind or not name:
-            continue
-        ref = f"{kind.lower()}/{name}"
-        subprocess.run(
-            ["kubectl", "annotate", "--overwrite", ref, "-n", namespace,
-             "meta.helm.sh/release-name=michelangelo",
-             "meta.helm.sh/release-namespace=default"],
-            capture_output=True,
-        )
-        subprocess.run(
-            ["kubectl", "label", "--overwrite", ref, "-n", namespace,
-             "app.kubernetes.io/managed-by=Helm"],
-            capture_output=True,
-        )
+    subprocess.run(
+        ["kubectl", "delete", "--ignore-not-found=true", "-f", "-"],
+        input=result.stdout, text=True, capture_output=True,
+    )
 
 
 def _deploy_app_services(ns: argparse.Namespace):
