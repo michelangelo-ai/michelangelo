@@ -313,6 +313,7 @@ def _sync(ns: argparse.Namespace):
     _ensure_credentials_secret()
     _helm_ensure_repos()
     helm_args = _build_helm_set_args(ns)
+    _helm_adopt_orphaned_resources(helm_args)
     _exec(
         "helm",
         "upgrade",
@@ -384,11 +385,49 @@ def _helm_ensure_repos():
         _exec("helm", "repo", "add", "temporal", "https://go.temporal.io/helm-charts")
 
 
+def _helm_adopt_orphaned_resources(helm_args: list[str]):
+    """Stamp Helm ownership annotations onto any pre-existing cluster resources.
+
+    Helm 3 refuses to manage resources that exist without its ownership labels.
+    This is common after a partial install leaves resources behind without a
+    tracked Helm release. We render the chart manifests and annotate/label each
+    resource so that helm upgrade --install can proceed.
+    """
+    result = subprocess.run(
+        ["helm", "template", "michelangelo", str(_chart_dir),
+         "-f", str(_chart_dir / "values-k3d.yaml"), *helm_args],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        return
+    for doc in yaml.safe_load_all(result.stdout):
+        if not doc:
+            continue
+        kind = doc.get("kind", "")
+        name = (doc.get("metadata") or {}).get("name", "")
+        namespace = (doc.get("metadata") or {}).get("namespace", "default")
+        if not kind or not name:
+            continue
+        ref = f"{kind.lower()}/{name}"
+        subprocess.run(
+            ["kubectl", "annotate", "--overwrite", ref, "-n", namespace,
+             "meta.helm.sh/release-name=michelangelo",
+             "meta.helm.sh/release-namespace=default"],
+            capture_output=True,
+        )
+        subprocess.run(
+            ["kubectl", "label", "--overwrite", ref, "-n", namespace,
+             "app.kubernetes.io/managed-by=Helm"],
+            capture_output=True,
+        )
+
+
 def _deploy_app_services(ns: argparse.Namespace):
     """Install the Michelangelo control plane via Helm."""
     _ensure_credentials_secret()
     _helm_ensure_repos()
     helm_args = _build_helm_set_args(ns)
+    _helm_adopt_orphaned_resources(helm_args)
     _exec(
         "helm",
         "upgrade",
