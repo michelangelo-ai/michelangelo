@@ -386,11 +386,13 @@ def _helm_ensure_repos():
 
 
 def _helm_adopt_orphaned_resources(helm_args: list[str]):
-    """Delete pre-existing cluster resources that would block helm upgrade --install.
+    """Clean up resources that would block helm upgrade --install.
 
-    Helm 3 refuses to manage resources missing its ownership annotations, and
-    conflicts like NodePort re-allocation block fresh installs. For the sandbox
-    we simply delete whatever the chart would create so the install starts clean.
+    Helm 3 refuses to manage resources missing its ownership annotations.
+    We render the chart manifests and for each resource that exists in the
+    cluster WITHOUT Helm ownership labels, we delete it so the install can
+    recreate it cleanly. Resources already managed by Helm (correct labels)
+    are left untouched.
     """
     result = subprocess.run(
         ["helm", "template", "michelangelo", str(_chart_dir),
@@ -399,10 +401,30 @@ def _helm_adopt_orphaned_resources(helm_args: list[str]):
     )
     if result.returncode != 0:
         return
-    subprocess.run(
-        ["kubectl", "delete", "--ignore-not-found=true", "-f", "-"],
-        input=result.stdout, text=True, capture_output=True,
-    )
+    for doc in yaml.safe_load_all(result.stdout):
+        if not doc:
+            continue
+        kind = doc.get("kind", "")
+        name = (doc.get("metadata") or {}).get("name", "")
+        namespace = (doc.get("metadata") or {}).get("namespace", "default")
+        if not kind or not name:
+            continue
+        # Check if this resource exists and lacks Helm ownership annotations.
+        get_result = subprocess.run(
+            ["kubectl", "get", f"{kind.lower()}/{name}", "-n", namespace,
+             "-o", "jsonpath={.metadata.annotations.meta\\.helm\\.sh/release-name}"],
+            capture_output=True, text=True,
+        )
+        if get_result.returncode != 0:
+            continue  # resource doesn't exist — no action needed
+        if get_result.stdout.strip() == "michelangelo":
+            continue  # already owned by this release — leave it
+        # Resource exists but is not owned by Helm — delete it so Helm can recreate.
+        subprocess.run(
+            ["kubectl", "delete", f"{kind.lower()}/{name}", "-n", namespace,
+             "--ignore-not-found=true"],
+            capture_output=True,
+        )
 
 
 def _deploy_app_services(ns: argparse.Namespace):
