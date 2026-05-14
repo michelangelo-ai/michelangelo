@@ -385,6 +385,8 @@ def _helm_ensure_repos():
         _exec("helm", "repo", "add", "temporal", "https://go.temporal.io/helm-charts")
     _exec("helm", "repo", "update")
     _exec("helm", "dependency", "update", str(_chart_dir))
+    charts_dir = _chart_dir / "charts"
+    print(f"[debug] charts/ contents after dependency update: {list(charts_dir.iterdir()) if charts_dir.exists() else 'MISSING'}")
 
 
 def _helm_adopt_resources(helm_args: list[str]):
