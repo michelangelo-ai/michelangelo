@@ -307,34 +307,25 @@ def _sync(ns: argparse.Namespace):
 
     # Upgrade or install the control plane via Helm.
     # Infrastructure (mysql, cadence, minio, grafana, prometheus) is left running.
-    release_exists = (
-        subprocess.run(
-            ["helm", "status", "michelangelo"],
-            capture_output=True,
-        ).returncode
-        == 0
-    )
 
     _refresh_mysql_schema()
 
-    if release_exists:
-        _ensure_credentials_secret()
-        _helm_ensure_repos()
-        helm_args = _build_helm_set_args(ns)
-        _exec(
-            "helm",
-            "upgrade",
-            "michelangelo",
-            str(_chart_dir),
-            "-f",
-            str(_chart_dir / "values-k3d.yaml"),
-            "--reuse-values",
-            "--dependency-update",
-            *helm_args,
-        )
-        _helm_wait(ns)
-    else:
-        _deploy_app_services(ns)
+    _ensure_credentials_secret()
+    _helm_ensure_repos()
+    helm_args = _build_helm_set_args(ns)
+    _exec(
+        "helm",
+        "upgrade",
+        "--install",
+        "--force",
+        "michelangelo",
+        str(_chart_dir),
+        "-f",
+        str(_chart_dir / "values-k3d.yaml"),
+        "--dependency-update",
+        *helm_args,
+    )
+    _helm_wait(ns)
 
 
 def _refresh_mysql_schema():
@@ -403,7 +394,9 @@ def _deploy_app_services(ns: argparse.Namespace):
     helm_args = _build_helm_set_args(ns)
     _exec(
         "helm",
-        "install",
+        "upgrade",
+        "--install",
+        "--force",
         "michelangelo",
         str(_chart_dir),
         "-f",
