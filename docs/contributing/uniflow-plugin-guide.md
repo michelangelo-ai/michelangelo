@@ -216,3 +216,4 @@ When creating a new plugin, you'll touch these files:
 - [Starlark Worker README](https://github.com/michelangelo-ai/michelangelo/blob/main/go/worker/starlark/README.md) — running and testing Starlark workflows locally
 - [Pipeline Plugin README](https://github.com/michelangelo-ai/michelangelo/blob/main/python/michelangelo/uniflow/plugins/pipeline/README.md) — detailed API reference for the pipeline plugin
 - [Starlark Language Spec](https://github.com/google/starlark-go/blob/master/doc/spec.md) — Starlark language reference
+- [Go Key Concepts and Terms](dev/go/key-concepts-and-terms.md) — package map, key types, and patterns for the broader Go backend

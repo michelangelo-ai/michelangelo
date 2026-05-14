@@ -544,3 +544,4 @@ With 13 CRDs and `concurrentReconciles: 1`, there are 13 independent work queues
 - Review [Ingester Configuration and Operations](../operator-guides/ingester-configuration.md) for operational documentation
 - Reference test CRs in `scripts/ingester-test-crs/` for integration testing examples
 - See the code at `go/components/ingester/` for the full implementation
+- [Go Key Concepts and Terms](dev/go/key-concepts-and-terms.md) — package map, key types, and patterns for the broader Go backend

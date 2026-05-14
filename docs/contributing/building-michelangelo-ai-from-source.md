@@ -195,5 +195,9 @@ $ poetry run ruff format $PYTHON_FILE_NAME
 
 For IDE configuration (VS Code, Cursor, GoLand), see the [IDE and Bazel Setup Guide](./dev-environment.md).
 
+## Related
+
+- [Go Key Concepts and Terms](dev/go/key-concepts-and-terms.md) — package map, key types, and patterns for the Go backend
+
 
 

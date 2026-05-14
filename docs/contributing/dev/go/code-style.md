@@ -1,3 +1,7 @@
+---
+sidebar_position: 2
+---
+
 # Go Code Style Guide
 
 This guide covers Go code conventions used across the Michelangelo codebase. It complements the [error handling guide](error-handling.md) with broader patterns: package structure, interface design, logging, and test organization.
@@ -287,7 +291,7 @@ func TestValidateModelName(t *testing.T) {
 
 ## Related
 
-- [Go Key Concepts & Terms](key-concepts-and-terms.md) — package structure, key types, patterns, and terminology
+- [Go Key Concepts and Terms](key-concepts-and-terms.md) — package map, key types, patterns, and terminology
 - [Error Handling](error-handling.md) — error wrapping, logging strategy, PR review checklist
 - [Using Go Mocks in Unit Tests](../../use-go-mocks-in-unit-test.md) — mock generation and usage
 - [Managing Go Dependencies](../../manage-go-dependencies.md) — `go mod tidy`, `bazel mod tidy`
