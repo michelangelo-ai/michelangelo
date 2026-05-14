@@ -837,7 +837,7 @@ describe('EntityDetailRoute', () => {
     expect(await screen.findByRole('button', { name: 'Resume' })).toBeInTheDocument();
   });
 
-  describe('back navigation', () => {
+  describe('page navigation', () => {
     const detailPhases = {
       train: buildPhase({
         id: 'train',
@@ -887,7 +887,7 @@ describe('EntityDetailRoute', () => {
       );
     }
 
-    test('pressing back from the detail page returns to the list, not to the intermediate tab-less URL', async () => {
+    test('pressing back from the detail page returns to the list', async () => {
       const user = userEvent.setup();
       const mockRequest = vi.fn().mockResolvedValue({
         pipelineRun: {

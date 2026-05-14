@@ -68,7 +68,6 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
     const firstTabId = validTabIds[0];
 
     if (!entityTab) {
-      // replace so the no-tab URL doesn't block back navigation to the list
       navigateToTab(firstTabId, { replace: true });
     } else if (!validTabIds.includes(entityTab)) {
       navigateToTab(firstTabId, { replace: true });
