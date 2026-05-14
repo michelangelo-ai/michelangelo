@@ -1,6 +1,6 @@
 # Model Registry
 
-Unlike experiment tracking — where operators connect an external server — Michelangelo includes a built-in model registry. This guide explains how operators verify the registry is healthy, configure storage and access, and integrate registered models with downstream serving and CI/CD systems.
+Michelangelo ships a built-in model registry — no external server required. This guide explains how operators verify the registry is healthy, configure storage and access, and integrate registered models with downstream serving and CI/CD systems.
 
 ---
 
@@ -8,7 +8,7 @@ Unlike experiment tracking — where operators connect an external server — Mi
 
 The registry separates operator and user responsibilities cleanly:
 
-```
+```text
 ┌──────────────────────────────────────────────────────────┐
 │ Operator Responsibility                                  │
 │ ├─ Provision the object store bucket and IAM policy      │
@@ -388,7 +388,7 @@ Model artifacts in S3 are not automatically removed when a `Model` resource is d
 
 | Symptom | Likely cause | Resolution |
 |---|---|---|
-| `error: the server doesn't have a resource type "models"` | CRD not installed | Re-run the Michelangelo CRD installation step (see [Platform Setup](../platform-setup.md)) |
+| `error: the server doesn't have a resource type "models"` | CRD not installed | Re-run the Michelangelo CRD installation step (see [Platform Setup](platform-setup.md)) |
 | `kubectl get models` returns `No resources found` but CRD is present | No models registered yet, or wrong namespace | Confirm a registration task has run; check the namespace |
 | `spec.model_artifact_uri` empty after registration | Controller Manager lacks S3 write permissions, or the registration task failed | Check Controller Manager logs; verify IAM policy on the bucket |
 | `spec.deployable_artifact_uri` empty | Packaging step did not run or failed | Inspect the pipeline run logs for the registration task |
@@ -400,7 +400,7 @@ For deeper diagnostic trees, see the [Troubleshooting Guide](troubleshooting.md)
 
 ---
 
-## What's Next
+## Next Steps
 
 - [Integrate a Custom Backend](serving/integrate-custom-backend.md) — configure Triton, vLLM, TensorRT-LLM, or a custom inference framework to serve registered models.
 - [Authentication and RBAC](authentication.md) — cluster-wide RBAC patterns and identity-provider setup.

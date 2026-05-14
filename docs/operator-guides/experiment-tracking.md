@@ -1,8 +1,8 @@
 # Experiment Tracking Setup
 
-This guide explains how platform operators can make an experiment tracking server available to Michelangelo workloads. It covers network setup, configuration injection, and the boundary between what operators configure and what users do in their `@uniflow.task()` code.
+Michelangelo does not bundle an experiment tracking server — it connects to one you already run. This guide shows platform operators how to expose that server to task pods running inside Michelangelo's compute clusters.
 
-Michelangelo does not bundle an experiment tracking server. If your organization runs one — such as a self-hosted tracking server or a managed SaaS endpoint — this guide explains how to expose it to task pods running inside Michelangelo's compute clusters.
+It covers network setup, ConfigMap injection, credential handling, and the boundary between what operators configure and what users do in their `@uniflow.task()` code.
 
 ---
 
@@ -13,7 +13,7 @@ Experiment tracking in Michelangelo follows a clear separation of concerns:
 - **Operators** configure network access and make the tracking server URI available to task pods via environment variables or ConfigMaps.
 - **Users** call their tracking server's client library inside `@uniflow.task()` functions. Michelangelo does not intercept or wrap these calls.
 
-```
+```text
 ┌─────────────────────────────────────────────┐
 │ Operator Responsibility                     │
 │ ├─ Deploy or configure tracking server      │
@@ -220,7 +220,8 @@ def check_tracking_config():
 
 ---
 
-## Related
+## Next Steps
 
-- [Register a Compute Cluster](jobs/register-a-compute-cluster-to-michelangelo-control-plane.md)
-- [Worker Configuration](platform-setup.md#worker-configuration)
+- [Register a Compute Cluster](jobs/register-a-compute-cluster-to-michelangelo-control-plane.md) — register the compute namespace where this tracking config will be injected.
+- [Worker Configuration](platform-setup.md#worker-configuration) — review environment variable injection and pod configuration options.
+- [Model Registry](model-registry.md) — store and serve models produced by tracked runs.

@@ -1,14 +1,16 @@
-# MLflow Integration
+# MLflow
 
 This guide explains how platform operators can connect an [MLflow Tracking Server](https://mlflow.org/docs/latest/tracking.html) to Michelangelo workloads. MLflow overlaps with two Michelangelo capabilities — experiment tracking and the model registry — so this guide covers both, along with the boundary between what operators configure and what users do in their `@uniflow.task()` code.
 
 Michelangelo does not bundle an MLflow server. This guide assumes you are running a self-hosted MLflow Tracking Server or a managed endpoint (such as Databricks Managed MLflow).
 
+> **Before you begin:** Complete [Experiment Tracking Setup](../experiment-tracking.md) — the platform-level guide for network reachability, ConfigMap injection, and auth. This MLflow guide builds on those foundations.
+
 ---
 
 ## How MLflow Works with Michelangelo
 
-```
+```text
 ┌─────────────────────────────────────────────┐
 │ Operator Responsibility                     │
 │ ├─ Deploy or point to an MLflow server      │
@@ -230,7 +232,6 @@ A `200 OK` response confirms task pods in that namespace can reach the MLflow se
 
 ## Next Steps
 
-- [Experiment Tracking Setup](../experiment-tracking.md) — platform-level setup guide: network reachability, ConfigMap injection, and auth patterns for any tracking server
 - [Model Registry](../model-registry.md) — Michelangelo's built-in model registry: storage configuration, RBAC, and serving integration
 - [Register a Compute Cluster](../jobs/register-a-compute-cluster-to-michelangelo-control-plane.md) — how to add a Kubernetes cluster so Michelangelo can dispatch jobs to it
 - [Platform Setup](../platform-setup.md) — full ConfigMap reference for all Michelangelo components
