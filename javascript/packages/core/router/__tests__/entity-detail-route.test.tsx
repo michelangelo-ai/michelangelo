@@ -951,7 +951,7 @@ describe('EntityDetailRoute', () => {
       ).toBeInTheDocument();
     });
 
-    test('pressing forward after back returns to the detail page, not to the tab-less URL', async () => {
+    test('pressing forward after back returns to the detail page', async () => {
       const user = userEvent.setup();
       const mockRequest = vi.fn().mockResolvedValue({
         pipelineRun: {
