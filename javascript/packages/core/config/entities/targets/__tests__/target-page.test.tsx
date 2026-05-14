@@ -148,7 +148,7 @@ describe('Target detail page', () => {
     await screen.findAllByText('ServerReady');
   });
 
-  it('renders the Message and Reason fields within a target stage', async () => {
+  it('renders the Information and Details fields within a target stage', async () => {
     render(
       <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
       buildWrapper([
