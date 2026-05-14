@@ -26,8 +26,6 @@ For a fresh deployment, follow this recommended reading order:
 |-------|-------------|
 | [Model Registry](components/model-registry.md) | Operate Michelangelo's built-in model registry, configure storage and RBAC, and integrate with serving and CI/CD |
 | [Ingester Controller](components/ingester-configuration.md) | Deploy, configure, and operate the ingester that syncs CRDs into MySQL |
-| [API Framework](api-framework.md) | Architecture overview of the Michelangelo API and control plane |
-| [SQL Key Concepts and Terms](sql-key-concepts-and-terms.md) | Metadata schema, table naming, indexed fields, and SQL query patterns |
 
 ## Jobs & Compute
 
@@ -54,10 +52,12 @@ For a fresh deployment, follow this recommended reading order:
 
 ## Third-Party Integrations
 
+Michelangelo is designed to run alongside existing ML infrastructure. The guides below cover making external tools reachable from Michelangelo workloads.
+
 | Guide | Description |
 |-------|-------------|
 | [Experiment Tracking Setup](experiment-tracking.md) | Make an experiment tracking server reachable from task pods — network, ConfigMap injection, auth, and operator/user boundary |
-| [Third-Party Integrations](integrations/index.md) | Connect external tools (MLflow, and more) to Michelangelo workloads |
+| [Browse all integrations](integrations/index.md) | MLflow and other third-party integration guides |
 
 ## Operations
 
@@ -66,3 +66,10 @@ For a fresh deployment, follow this recommended reading order:
 | [Monitoring & Observability](operations/monitoring.md) | Prometheus scrape config, key metrics, alerting rules, Grafana dashboards, structured logging |
 | [Compliance](operations/compliance.md) | SOC 2, GDPR, and HIPAA configuration |
 | [Troubleshooting](operations/troubleshooting.md) | Common failure modes and `kubectl` diagnostic commands |
+
+## Architecture & Reference
+
+| Guide | Description |
+|-------|-------------|
+| [API Framework](api-framework.md) | Architecture overview of the Michelangelo API and control plane |
+| [SQL Key Concepts and Terms](sql-key-concepts-and-terms.md) | Metadata schema, table naming, indexed fields, and SQL query patterns |

@@ -275,7 +275,7 @@ spec:
 When Michelangelo's control plane dispatches jobs to registered compute clusters, the following connectivity is required:
 
 :::warning No automatic failover
-Michelangelo does not automatically fail over if the control plane API server becomes unreachable. Task pods in compute clusters cannot report results, and new jobs cannot be dispatched. Configure alerting on the controller manager's health endpoint (`:8083/healthz`) so on-call is paged before users are impacted — see [Monitoring](monitoring.md).
+Michelangelo does not automatically fail over if the control plane API server becomes unreachable. Task pods in compute clusters cannot report results, and new jobs cannot be dispatched. Configure alerting on the controller manager's health endpoint (`:8083/healthz`) so on-call is paged before users are impacted — see [Monitoring](../operations/monitoring.md).
 :::
 
 ```
@@ -366,5 +366,5 @@ Use this checklist when deploying Michelangelo to a new environment:
 
 - [Platform Setup — Environment Overrides](platform-setup.md#environment-overrides--domain-settings)
 - [Authentication](authentication.md)
-- [Register a Compute Cluster](jobs/register-a-compute-cluster-to-michelangelo-control-plane.md)
-- [Troubleshooting](troubleshooting.md)
+- [Register a Compute Cluster](register-a-compute-cluster-to-michelangelo-control-plane.md)
+- [Troubleshooting](../operations/troubleshooting.md)

@@ -1,5 +1,5 @@
 ---
-sidebar_position: 10
+sidebar_position: 2
 sidebar_label: "Compliance"
 ---
 
@@ -10,7 +10,7 @@ Michelangelo supports compliance with SOC 2, GDPR, and HIPAA depending on how yo
 **Audience**: Platform operators responsible for security and compliance configuration.
 
 **Prerequisites**:
-- Running Michelangelo control plane (see [Platform Setup](platform-setup.md))
+- Running Michelangelo control plane (see [Platform Setup](../setup/platform-setup.md))
 - Kubernetes RBAC familiarity
 - An identity provider (IdP) configured for OIDC/OAuth 2.0 (required for access control sections)
 - Cloud provider account with S3-compatible object storage
@@ -55,7 +55,7 @@ apiserver:
 - Enable leader election for the Controller Manager (`leaderElection: true`) to prevent split-brain in HA deployments
 - Run multiple replicas of the API Server and Controller Manager
 - Configure liveness and readiness probes on all components
-- Set up alerting on component health endpoints (`healthProbeBindAddress: 8081`)
+- Set up alerting on component health endpoints (`healthProbeBindAddress: 8083`)
 
 ### Audit Logging
 

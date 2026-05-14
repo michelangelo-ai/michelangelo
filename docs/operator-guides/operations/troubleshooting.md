@@ -1,3 +1,7 @@
+---
+sidebar_position: 3
+---
+
 # Troubleshooting
 
 This guide is for platform operators diagnosing issues with a Michelangelo deployment. All `kubectl` commands assume access to the control plane cluster.
@@ -21,7 +25,7 @@ kubectl -n ma-system describe cluster <cluster-name>
 ```
 
 **Likely causes**:
-- No compute clusters are registered — complete the [cluster registration steps](jobs/register-a-compute-cluster-to-michelangelo-control-plane.md)
+- No compute clusters are registered — complete the [cluster registration steps](../setup/register-a-compute-cluster-to-michelangelo-control-plane.md)
 - The Cluster CRD has the wrong `host` or `port` — the control plane cannot reach the compute cluster's API server
 - The `ray-manager` token Secret in the control plane is missing or has expired
 - The job requested resources (GPU, CPU) that no registered cluster can satisfy
@@ -231,7 +235,7 @@ kubectl get configmap envoy-config -o yaml
 - CORS allowed origins in the Envoy config do not include the origin from which users are accessing the UI
 - The Ingress resource for the UI or API server is misconfigured (wrong hostname, missing TLS secret)
 
-## What's next?
+## What's Next
 
 - **Monitoring**: Set up proactive alerting so issues surface before users report them in the [Monitoring guide](./monitoring.md)
 - **Network & Ingress**: Resolve Ingress and CORS issues at the source with the [Network guide](../setup/network.md)

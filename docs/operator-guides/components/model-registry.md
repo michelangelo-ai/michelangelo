@@ -404,5 +404,5 @@ For deeper diagnostic trees, see the [Troubleshooting Guide](../operations/troub
 
 - [Integrate a Custom Backend](../serving/integrate-custom-backend.md) — configure Triton, vLLM, TensorRT-LLM, or a custom inference framework to serve registered models.
 - [Authentication and RBAC](../setup/authentication.md) — cluster-wide RBAC patterns and identity-provider setup.
-- [Experiment Tracking Setup](experiment-tracking.md) — connect an external experiment tracking server to link training runs to the models they produce.
+- [Experiment Tracking Setup](../experiment-tracking.md) — connect an external experiment tracking server to link training runs to the models they produce.
 - [Object Store Configuration](../setup/platform-setup.md#object-store-configuration) — review the full `minio.*` configuration reference.

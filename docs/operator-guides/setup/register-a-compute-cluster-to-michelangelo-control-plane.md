@@ -54,9 +54,8 @@ kubectl --context "${COMPUTE_CONTEXT}" create secret generic aws-credentials \
 ```
 
 ### 2) Apply RBAC for Ray management in the compute cluster
-```bash
-kubectl --context "${COMPUTE_CONTEXT}" apply -f docs/batchjobs/Resources/rbac-ray.yaml
-```
+
+Apply the manifest from the Appendix below using your preferred method (e.g., `kubectl --context "${COMPUTE_CONTEXT}" apply -f -` with the manifest piped from a heredoc, or save it to a file first).
 
 This creates `ServiceAccount ray-manager` and grants permissions on `rayclusters` and `rayjobs`.
 
@@ -168,7 +167,7 @@ EOF
   - `kubectl --context ${COMPUTE_CONTEXT} get secret aws-credentials`
 - Cluster registered in control plane:
   - `kubectl --context ${CONTROL_PLANE_CONTEXT} -n ma-system get clusters`
-- Optional: Run a pipeline as in `docs/batchjobs/Run Uniflow Pipeline on Compute Cluster.md`.
+- Optional: Run a pipeline as in [Run a Pipeline on a Compute Cluster](../jobs/run-uniflow-pipeline-on-compute-cluster.md).
 
 ### Troubleshooting
 - **context mismatch**: Ensure you target `${COMPUTE_CONTEXT}` vs `${CONTROL_PLANE_CONTEXT}` correctly.
@@ -181,7 +180,7 @@ EOF
 
 #### Ray RBAC Manifest
 
-The RBAC manifest (`docs/batchjobs/Resources/rbac-ray.yaml`) should contain:
+The RBAC manifest below should be applied to the compute cluster:
 
 ```yaml
 apiVersion: v1

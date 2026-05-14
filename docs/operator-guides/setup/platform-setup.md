@@ -160,7 +160,7 @@ static_resources:
 
 **ConfigMap:**
 
-```json
+```yaml
 config.json: |
   {
     "apiBaseUrl": "https://michelangelo-envoy.<your-domain>"
@@ -264,6 +264,6 @@ workflow-engine:
 ## Related
 
 - [Network & Ingress Configuration](network.md)
-- [Monitoring & Observability](monitoring.md)
+- [Monitoring & Observability](../operations/monitoring.md)
 - [Authentication](authentication.md)
-- [Register a Compute Cluster](jobs/register-a-compute-cluster-to-michelangelo-control-plane.md)
+- [Register a Compute Cluster](register-a-compute-cluster-to-michelangelo-control-plane.md)

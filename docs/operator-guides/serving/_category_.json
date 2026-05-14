@@ -1,0 +1,9 @@
+{
+  "label": "Model Serving",
+  "position": 5,
+  "collapsed": true,
+  "link": {
+    "type": "doc",
+    "id": "operator-guides/serving/index"
+  }
+}

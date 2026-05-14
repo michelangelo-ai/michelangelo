@@ -1,5 +1,9 @@
 {
   "label": "Setup & Configuration",
   "position": 1,
-  "collapsed": false
+  "collapsed": false,
+  "link": {
+    "type": "doc",
+    "id": "operator-guides/setup/platform-setup"
+  }
 }

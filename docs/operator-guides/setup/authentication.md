@@ -188,7 +188,7 @@ worker:
   useTLS: true
 ```
 
-**Controller manager → compute cluster**: Uses the `ray-manager` service account token stored as a Secret in the control plane namespace. See [Register a Compute Cluster](jobs/register-a-compute-cluster-to-michelangelo-control-plane.md) for the full setup including token rotation guidance.
+**Controller manager → compute cluster**: Uses the `ray-manager` service account token stored as a Secret in the control plane namespace. See [Register a Compute Cluster](register-a-compute-cluster-to-michelangelo-control-plane.md) for the full setup including token rotation guidance.
 
 ## Disabling Direct Storage Access
 
@@ -198,7 +198,7 @@ Do not allow users or services to directly access etcd or object storage (S3/Min
 - Do not grant `s3:*` to individual users; use IAM policies scoped to specific buckets and prefixes
 - Audit S3 bucket policies regularly to ensure no public or cross-account access is inadvertently granted
 
-## What's next?
+## What's Next
 
 - **Network configuration**: Set up Ingress, TLS, and Envoy CORS rules in the [Network & Ingress guide](./network.md)
 - **Compliance**: Configure audit logging and data-residency controls for SOC 2, GDPR, or HIPAA in the [Compliance guide](../operations/compliance.md)

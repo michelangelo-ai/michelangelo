@@ -1,5 +1,9 @@
 {
   "label": "Operations",
-  "position": 8,
-  "collapsed": true
+  "position": 7,
+  "collapsed": true,
+  "link": {
+    "type": "doc",
+    "id": "operator-guides/operations/troubleshooting"
+  }
 }

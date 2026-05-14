@@ -1,3 +1,7 @@
+---
+sidebar_position: 1
+---
+
 # Monitoring & Observability
 
 This guide is for platform operators setting up observability for a Michelangelo deployment.
@@ -236,7 +240,7 @@ For production deployments use `encoding: json` so your log aggregation system (
 
 Indexing these fields allows you to efficiently query all events for a specific resource (`namespace` + `name`), filter by controller (`logger`), or find all failures across the control plane (`level: error`).
 
-## What's next?
+## What's Next
 
 - **Troubleshooting**: Use the collected metrics and logs to diagnose issues with the [Troubleshooting guide](./troubleshooting.md)
 - **Authentication**: Secure access to your metrics endpoints with the [Authentication guide](../setup/authentication.md)

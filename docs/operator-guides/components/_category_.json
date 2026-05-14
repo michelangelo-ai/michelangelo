@@ -1,5 +1,9 @@
 {
   "label": "Platform Components",
-  "position": 3,
-  "collapsed": true
+  "position": 2,
+  "collapsed": true,
+  "link": {
+    "type": "doc",
+    "id": "operator-guides/components/model-registry"
+  }
 }
