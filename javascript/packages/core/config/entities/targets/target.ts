@@ -1,3 +1,4 @@
+import { TARGET_DETAIL_CONFIG } from './detail';
 import { TARGET_LIST_CONFIG } from './list';
 
 import type { PhaseEntityConfig } from '#core/types/common/studio-types';
@@ -7,5 +8,5 @@ export const TARGET_ENTITY_CONFIG: PhaseEntityConfig = {
   name: 'Targets',
   service: 'inferenceServer',
   state: 'active',
-  views: [TARGET_LIST_CONFIG],
+  views: [TARGET_LIST_CONFIG, TARGET_DETAIL_CONFIG],
 };

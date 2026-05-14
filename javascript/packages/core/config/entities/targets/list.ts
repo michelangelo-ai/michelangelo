@@ -20,6 +20,7 @@ const TARGET_COLUMNS: ColumnConfig<object>[] = [
     id: 'metadata.name',
     label: 'Target name',
     type: CellType.TEXT,
+    url: '/${studio.projectId}/${studio.phase}/targets/${row.metadata.name}',
   },
   {
     id: 'status.updateTime',
