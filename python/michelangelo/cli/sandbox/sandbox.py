@@ -440,6 +440,8 @@ def _helm_delete_services(helm_args: list[str]):
         capture_output=True, text=True,
     )
     for entry in all_svcs.stdout.split():
+        if ":" not in entry:
+            continue
         ns_name, ports_str = entry.split(":", 1)
         namespace, name = ns_name.split("/", 1)
         for p in ports_str.split():
