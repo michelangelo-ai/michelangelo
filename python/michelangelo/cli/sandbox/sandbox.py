@@ -409,29 +409,51 @@ def _helm_ensure_repos():
 
 
 def _helm_delete_services(helm_args: list[str]):
-    """Delete all Services rendered by the chart to free their NodePorts.
+    """Delete Services that would conflict with the chart's NodePorts.
 
-    Called after helm uninstall to ensure NodePorts are fully released
-    before a fresh helm install attempts to reallocate them.
+    After helm uninstall, old Services (possibly with different names from
+    a previous install structure) can still hold NodePorts. We scan all
+    Services in the cluster for conflicting NodePorts and delete them.
     """
+    # Collect the NodePorts the chart wants to allocate.
     result = subprocess.run(
         ["helm", "template", "michelangelo", str(_chart_dir),
          "-f", str(_chart_dir / "values-k3d.yaml"), *helm_args],
         capture_output=True, text=True,
     )
-    if result.returncode != 0:
+    wanted_ports: set[int] = set()
+    if result.returncode == 0:
+        for doc in yaml.safe_load_all(result.stdout):
+            if not doc or doc.get("kind") != "Service":
+                continue
+            for port in (doc.get("spec") or {}).get("ports") or []:
+                if np := port.get("nodePort"):
+                    wanted_ports.add(int(np))
+
+    if not wanted_ports:
         return
-    for doc in yaml.safe_load_all(result.stdout):
-        if not doc or doc.get("kind") != "Service":
-            continue
-        name = (doc.get("metadata") or {}).get("name", "")
-        namespace = (doc.get("metadata") or {}).get("namespace", "default")
-        if name:
-            subprocess.run(
-                ["kubectl", "delete", "service", name, "-n", namespace,
-                 "--ignore-not-found=true"],
-                capture_output=True,
-            )
+
+    # Find any Services in the cluster using those NodePorts and delete them.
+    all_svcs = subprocess.run(
+        ["kubectl", "get", "service", "--all-namespaces",
+         "-o", "jsonpath={range .items[*]}{.metadata.namespace}/{.metadata.name}:{.spec.ports[*].nodePort} {end}"],
+        capture_output=True, text=True,
+    )
+    for entry in all_svcs.stdout.split():
+        ns_name, ports_str = entry.split(":", 1)
+        namespace, name = ns_name.split("/", 1)
+        for p in ports_str.split():
+            try:
+                if int(p) in wanted_ports:
+                    print(f"[sandbox] deleting conflicting service {namespace}/{name} (NodePort {p})")
+                    subprocess.run(
+                        ["kubectl", "delete", "service", name, "-n", namespace,
+                         "--ignore-not-found=true"],
+                        capture_output=True,
+                    )
+                    break
+            except ValueError:
+                pass
 
 
 def _helm_adopt_orphaned_resources(helm_args: list[str]):
