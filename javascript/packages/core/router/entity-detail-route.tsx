@@ -45,8 +45,8 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
   });
 
   const navigateToTab = React.useCallback(
-    (tabId: string) => {
-      navigate(`/${projectId}/${phase}/${entity}/${entityId}/${tabId}`);
+    (tabId: string, options?: { replace?: boolean }) => {
+      navigate(`/${projectId}/${phase}/${entity}/${entityId}/${tabId}`, options);
     },
     [navigate, projectId, phase, entity, entityId]
   );
@@ -68,11 +68,10 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
     const firstTabId = validTabIds[0];
 
     if (!entityTab) {
-      // No tab specified - redirect to first tab
-      navigateToTab(firstTabId);
+      // replace so the no-tab URL doesn't block back navigation to the list
+      navigateToTab(firstTabId, { replace: true });
     } else if (!validTabIds.includes(entityTab)) {
-      // Invalid tab - redirect to first tab
-      navigateToTab(firstTabId);
+      navigateToTab(firstTabId, { replace: true });
     }
   }, [entityTab, detailViewConfig, isLoading, error, navigateToTab]);
 

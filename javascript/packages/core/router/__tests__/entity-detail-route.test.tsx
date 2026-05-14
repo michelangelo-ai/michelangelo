@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom-v5-compat';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
@@ -834,5 +835,194 @@ describe('EntityDetailRoute', () => {
 
     // Hierarchy resolves to PRIMARY → renders as a direct button, not in overflow menu
     expect(await screen.findByRole('button', { name: 'Resume' })).toBeInTheDocument();
+  });
+
+  describe('back navigation', () => {
+    const detailPhases = {
+      train: buildPhase({
+        id: 'train',
+        entities: [
+          buildEntity({
+            views: [
+              {
+                type: 'detail',
+                metadata: [],
+                pages: [
+                  {
+                    id: 'overview',
+                    label: 'Overview',
+                    type: 'custom',
+                    component: () => <div>Overview content</div>,
+                  } as CustomDetailPageConfig,
+                  {
+                    id: 'logs',
+                    label: 'Logs',
+                    type: 'custom',
+                    component: () => <div>Logs content</div>,
+                  } as CustomDetailPageConfig,
+                ],
+              },
+            ],
+          }),
+        ],
+      }),
+    };
+
+    function TestApp({ phases }: { phases: typeof detailPhases }) {
+      const location = useLocation();
+      const navigate = useNavigate();
+      return (
+        <>
+          <span>Current pathname: {location.pathname}</span>
+          <button onClick={() => navigate(-1)}>Browser back</button>
+          <button onClick={() => navigate(1)}>Browser forward</button>
+          <Routes>
+            <Route
+              path=":projectId/:phase/:entity/:entityId/:entityTab?"
+              element={<EntityDetailRoute phases={phases} />}
+            />
+            <Route path=":projectId/:phase/:entity" element={<div>List page</div>} />
+          </Routes>
+        </>
+      );
+    }
+
+    test('pressing back from the detail page returns to the list, not to the intermediate tab-less URL', async () => {
+      const user = userEvent.setup();
+      const mockRequest = vi.fn().mockResolvedValue({
+        pipelineRun: {
+          metadata: { creationTimestamp: { seconds: 1640995200 } },
+          status: { state: 'SUCCESS' },
+        },
+      });
+
+      render(
+        <MemoryRouter
+          initialEntries={['/myproject/train/runs', '/myproject/train/runs/run-123']}
+          initialIndex={1}
+        >
+          <TestApp phases={detailPhases} />
+        </MemoryRouter>,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getServiceProviderWrapper({ request: mockRequest }),
+        ])
+      );
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('Current pathname: /myproject/train/runs/run-123/overview')
+        ).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Browser back' }));
+
+      expect(screen.getByText('Current pathname: /myproject/train/runs')).toBeInTheDocument();
+      expect(screen.getByText('List page')).toBeInTheDocument();
+    });
+
+    test('switching tabs adds history entries so back navigates between tabs', async () => {
+      const user = userEvent.setup();
+      const mockRequest = vi.fn().mockResolvedValue({
+        pipelineRun: {
+          metadata: { creationTimestamp: { seconds: 1640995200 } },
+          status: { state: 'SUCCESS' },
+        },
+      });
+
+      render(
+        <MemoryRouter initialEntries={['/myproject/train/runs/run-123/overview']} initialIndex={0}>
+          <TestApp phases={detailPhases} />
+        </MemoryRouter>,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getServiceProviderWrapper({ request: mockRequest }),
+        ])
+      );
+
+      await user.click(await screen.findByText('Logs'));
+      expect(
+        screen.getByText('Current pathname: /myproject/train/runs/run-123/logs')
+      ).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Browser back' }));
+      expect(
+        screen.getByText('Current pathname: /myproject/train/runs/run-123/overview')
+      ).toBeInTheDocument();
+    });
+
+    test('pressing forward after back returns to the detail page, not to the tab-less URL', async () => {
+      const user = userEvent.setup();
+      const mockRequest = vi.fn().mockResolvedValue({
+        pipelineRun: {
+          metadata: { creationTimestamp: { seconds: 1640995200 } },
+          status: { state: 'SUCCESS' },
+        },
+      });
+
+      render(
+        <MemoryRouter
+          initialEntries={['/myproject/train/runs', '/myproject/train/runs/run-123']}
+          initialIndex={1}
+        >
+          <TestApp phases={detailPhases} />
+        </MemoryRouter>,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getServiceProviderWrapper({ request: mockRequest }),
+        ])
+      );
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('Current pathname: /myproject/train/runs/run-123/overview')
+        ).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Browser back' }));
+      expect(screen.getByText('Current pathname: /myproject/train/runs')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Browser forward' }));
+
+      expect(
+        screen.getByText('Current pathname: /myproject/train/runs/run-123/overview')
+      ).toBeInTheDocument();
+      expect(screen.getByText('Overview content')).toBeInTheDocument();
+    });
+
+    test('pressing forward after tab back navigates between tabs', async () => {
+      const user = userEvent.setup();
+      const mockRequest = vi.fn().mockResolvedValue({
+        pipelineRun: {
+          metadata: { creationTimestamp: { seconds: 1640995200 } },
+          status: { state: 'SUCCESS' },
+        },
+      });
+
+      render(
+        <MemoryRouter initialEntries={['/myproject/train/runs/run-123/overview']} initialIndex={0}>
+          <TestApp phases={detailPhases} />
+        </MemoryRouter>,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getServiceProviderWrapper({ request: mockRequest }),
+        ])
+      );
+
+      await user.click(await screen.findByText('Logs'));
+      expect(
+        screen.getByText('Current pathname: /myproject/train/runs/run-123/logs')
+      ).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Browser back' }));
+      expect(
+        screen.getByText('Current pathname: /myproject/train/runs/run-123/overview')
+      ).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Browser forward' }));
+      expect(
+        screen.getByText('Current pathname: /myproject/train/runs/run-123/logs')
+      ).toBeInTheDocument();
+    });
   });
 });
