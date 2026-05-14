@@ -5,7 +5,7 @@ sidebar_label: "Bazel Build System"
 
 # Bazel Build System
 
-## Why Bazel
+## Overview
 
 Michelangelo uses Bazel (version 7.4.1, see `.bazelversion`) for building all Go binaries, generating proto bindings, and running tests. Bazel's hermetic, reproducible builds mean that `bazel build` produces the same output regardless of what is installed on your machine — no implicit toolchain dependencies.
 
@@ -42,8 +42,8 @@ bazel run //go/cmd/apiserver
 # Build all proto targets
 bazel build //proto/...
 
-# Run all Go tests
-bazel test //go/...
+# Run all Go and proto tests (matches CI)
+bazel test //go/... //proto/... --build_tests_only
 
 # Update Bazel module dependencies
 bazel mod tidy

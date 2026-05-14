@@ -5,7 +5,7 @@ sidebar_label: "Python Utilities"
 
 # Python Utilities and Scripts
 
-## Scope
+## Overview
 
 This page covers Python code in the repo that supports development workflows — tooling, linting, testing infrastructure. For the user-facing Uniflow SDK and `ma` CLI, see [Python Coding Guidelines](python/mactl/coding_guidelines.md).
 
@@ -28,18 +28,16 @@ poetry install -E dev
 
 ## Pre-commit Hooks
 
-Pre-commit hooks are configured in `.pre-commit-config.yaml`. Hooks run ruff linting and formatting, trailing whitespace checks, and YAML validation. To run hooks manually before committing:
+Pre-commit hooks are configured in `.pre-commit-config.yaml`. Three hooks run automatically on `git commit`: `ruff-lint` (Python linting), `ruff-format` (Python formatting), and `prettier` (formatting for JS/TS/JSON/CSS/YAML/Markdown). To run hooks manually before committing:
 
 ```bash
-cd python
-poetry run pre-commit
+cd python && poetry run pre-commit run --all-files
 ```
 
 To install the hooks so they run automatically on `git commit`:
 
 ```bash
-pip install pre-commit
-pre-commit install
+cd python && poetry run pre-commit install
 ```
 
 ## Linting and Formatting
@@ -56,14 +54,8 @@ Ruff configuration lives in `python/pyproject.toml`.
 
 ```bash
 cd python
-poetry run pytest path/to/test_file.py
-```
-
-For running all tests:
-
-```bash
-cd python
-poetry run pytest
+poetry run pytest                        # all tests
+poetry run pytest path/to/test_file.py   # single file
 ```
 
 ## Dependencies

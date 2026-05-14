@@ -81,7 +81,7 @@ For changes to the API server, controller manager, worker, or shared components.
 → **[Managing Go Dependencies](manage-go-dependencies.md)** — `go mod tidy` + `bazel mod tidy`
 → **[Using Go Mocks in Tests](use-go-mocks-in-unit-test.md)** — gomock patterns
 
-### Developer Reference
+### Build and tooling reference
 
 Language and tooling reference for contributors.
 

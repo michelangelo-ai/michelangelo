@@ -3,9 +3,9 @@ sidebar_position: 1
 sidebar_label: "Protocol Buffers"
 ---
 
-# Protocol Buffers in Michelangelo
+# Protocol Buffers
 
-## Role
+## Overview
 
 All Michelangelo API resources are defined in `.proto` files. The gRPC API, message types, and service contracts all live here. Proto files are the source of truth for what resources exist, what fields they have, and what operations the API server supports.
 
@@ -21,13 +21,11 @@ The `proto-go/` directory is checked into the repo for convenience (so Go tools 
 
 After editing any `.proto` file, regenerate the Go bindings:
 
-1. Edit `.proto` files in `proto/api/v2/`
+1. If creating a new service: scaffold the proto file with `tools/grpc-svc-gen.sh [Entity]`, then edit the generated file. Otherwise, edit the existing `.proto` file in `proto/api/v2/` directly.
 2. Run `tools/gazelle` to update BUILD targets
 3. Run `bazel build //proto/...` to compile
-4. Run `tools/gen-proto-go.sh` to regenerate `proto-go/` and keep it in sync
+4. Run `tools/gen-proto-go.sh` to regenerate alias `BUILD.bazel` files under `proto-go/`, sync dependency versions from `go/go.mod` into `proto-go/go.mod`, and run `go mod tidy` in `proto-go/`
 5. Check in both the `.proto` changes and the generated `proto-go/` changes
-
-Both the proto source and the generated output must be committed together so that the repo is always in a consistent state.
 
 ## Service Pattern
 
