@@ -337,6 +337,9 @@ def _sync(ns: argparse.Namespace):
             ["helm", "uninstall", "michelangelo", "--ignore-not-found", "--wait"],
             capture_output=False,
         )
+        # After uninstall, force-delete any remaining Services from the chart
+        # to free their NodePorts before reinstalling.
+        _helm_delete_services(helm_args)
         _helm_adopt_orphaned_resources(helm_args)
         _exec(
             "helm", "install", "michelangelo", str(_chart_dir),
@@ -403,6 +406,32 @@ def _helm_ensure_repos():
         _exec("helm", "repo", "add", "cadence-workflow", "https://cadence-workflow.github.io/cadence-charts")
     if "temporal" not in helm_existing_repos:
         _exec("helm", "repo", "add", "temporal", "https://go.temporal.io/helm-charts")
+
+
+def _helm_delete_services(helm_args: list[str]):
+    """Delete all Services rendered by the chart to free their NodePorts.
+
+    Called after helm uninstall to ensure NodePorts are fully released
+    before a fresh helm install attempts to reallocate them.
+    """
+    result = subprocess.run(
+        ["helm", "template", "michelangelo", str(_chart_dir),
+         "-f", str(_chart_dir / "values-k3d.yaml"), *helm_args],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        return
+    for doc in yaml.safe_load_all(result.stdout):
+        if not doc or doc.get("kind") != "Service":
+            continue
+        name = (doc.get("metadata") or {}).get("name", "")
+        namespace = (doc.get("metadata") or {}).get("namespace", "default")
+        if name:
+            subprocess.run(
+                ["kubectl", "delete", "service", name, "-n", namespace,
+                 "--ignore-not-found=true"],
+                capture_output=True,
+            )
 
 
 def _helm_adopt_orphaned_resources(helm_args: list[str]):
