@@ -1,0 +1,4 @@
+# Allow vendored chart dependency tarballs to be committed.
+# The global .gitignore excludes *.tgz, but we want to track these
+# so CI does not need to download them at runtime.
+!charts/*.tgz
