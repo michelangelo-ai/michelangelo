@@ -1,0 +1,26 @@
+{{- range $serviceName := (list "frontend" "history" "matching" "worker" "web") }}
+{{- $service := index $.Values $serviceName -}}
+{{- if and $service.podDisruptionBudget $service.podDisruptionBudget.enabled }}
+{{- if and $service.podDisruptionBudget.minAvailable $service.podDisruptionBudget.maxUnavailable }}
+{{- fail "Only one of minAvailable or maxUnavailable should be set" }}
+{{- end}}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "cadence.fullname" $ }}-{{ $serviceName }}-pdb
+  labels:
+    {{- include "cadence.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  {{- if $service.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ $service.podDisruptionBudget.minAvailable }}
+  {{- end }}
+  {{- if $service.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ $service.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "cadence.serviceLabels" (dict "serviceName" $serviceName "Values" $.Values "Chart" $.Chart "Release" $.Release) | indent 6 }}
+{{- end }}
+{{- end }}

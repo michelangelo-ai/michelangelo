@@ -1,0 +1,128 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cadence.fullname" . }}-web
+  labels:
+    {{- include "cadence.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  replicas: {{ .Values.web.replicas }}
+  {{- with .Values.web.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "cadence.serviceLabels" (dict "serviceName" "web" "Values" .Values "Chart" .Chart "Release" .Release) | indent 6 }}
+  template:
+    metadata:
+      {{- $webPodAnnotations := .Values.web.podAnnotations | default dict }}
+      {{- if $webPodAnnotations }}
+      annotations:
+        {{- toYaml $webPodAnnotations | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "cadence.labels" . | nindent 8 }}
+        {{- with .Values.web.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        app.kubernetes.io/component: web
+    spec:
+      {{- if $.Values.serviceAccount.create }}
+      serviceAccountName: {{ include "cadence.serviceAccountName" $ }}
+      {{- end }}
+      {{- $globalImagePullSecrets := .Values.global.imagePullSecrets | default list }}
+      {{- $serviceImagePullSecrets := .Values.web.image.imagePullSecrets | default list }}
+      {{- $mergedImagePullSecrets := concat $globalImagePullSecrets $serviceImagePullSecrets }}
+      {{- if $mergedImagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml $mergedImagePullSecrets | nindent 8 }}
+      {{- end }}
+      {{- $globalPriorityClassName := .Values.global.priorityClassName | default "" }}
+      {{- $servicePriorityClassName := .Values.web.priorityClassName | default $globalPriorityClassName }}
+      {{- if $servicePriorityClassName }}
+      priorityClassName: {{ $servicePriorityClassName }}
+      {{- end }}
+      {{- $globalPodSecurityContext := .Values.global.podSecurityContext | default dict }}
+      {{- $servicePodSecurityContext := .Values.web.podSecurityContext | default $globalPodSecurityContext }}
+      {{- if $servicePodSecurityContext }}
+      securityContext:
+        {{- toYaml $servicePodSecurityContext | nindent 8 }}
+      {{- end }}
+      {{- $globalNodeSelector := .Values.global.nodeSelector | default dict }}
+      {{- $serviceNodeSelector := .Values.web.nodeSelector | default $globalNodeSelector }}
+      {{- if $serviceNodeSelector }}
+      nodeSelector:
+        {{- toYaml $serviceNodeSelector | nindent 8 }}
+      {{- end }}
+      {{- $globalAffinity := .Values.global.affinity | default dict }}
+      {{- $serviceAffinity := .Values.web.affinity | default $globalAffinity }}
+      {{- if $serviceAffinity }}
+      affinity:
+        {{- toYaml $serviceAffinity | nindent 8 }}
+      {{- end }}
+      {{- $globalTolerations := .Values.global.tolerations | default list }}
+      {{- $serviceTolerations := .Values.web.tolerations | default $globalTolerations }}
+      {{- if $serviceTolerations }}
+      tolerations:
+        {{- toYaml $serviceTolerations | nindent 8 }}
+      {{- end }}
+      {{- $globalTopologySpreadConstraints := .Values.global.topologySpreadConstraints | default list }}
+      {{- $serviceTopologySpreadConstraints := .Values.web.topologySpreadConstraints | default $globalTopologySpreadConstraints }}
+      {{- if $serviceTopologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml $serviceTopologySpreadConstraints | nindent 8 }}
+      {{- end }}
+      {{- if $.Values.web.busybox.enabled }}
+      initContainers:
+      - name: wait-frontend
+        {{- $globalPodSecurityContext := .Values.global.podSecurityContext | default dict }}
+        {{- $servicePodSecurityContext := .Values.web.podSecurityContext | default $globalPodSecurityContext }}
+        {{- if $servicePodSecurityContext }}
+        securityContext:
+          {{- toYaml $servicePodSecurityContext | nindent 8 }}
+        {{- end }}
+        image: "{{ .Values.web.busybox.image.repository }}:{{ .Values.web.busybox.image.tag }}"
+        imagePullPolicy: {{ .Values.web.busybox.image.pullPolicy }}
+        command: ['sh', '-c']
+        args:
+        - |
+          HOST=$(echo "{{ include "cadence.grpcPeers" . }}" | cut -d: -f1)
+          PORT=$(echo "{{ include "cadence.grpcPeers" . }}" | cut -d: -f2)
+          until nc -z $HOST $PORT; do 
+            echo "waiting for frontend at $HOST:$PORT..."
+            sleep 2
+          done
+          echo "frontend is ready!"
+      {{- end }}
+      containers:
+      - name: cadence-web
+        image: {{ .Values.web.image.repository }}:{{ .Values.web.image.tag }}
+        imagePullPolicy: {{ .Values.web.image.pullPolicy }}
+        {{- $globalContainerSecurityContext := .Values.global.containerSecurityContext | default dict }}
+        {{- $serviceContainerSecurityContext := .Values.web.containerSecurityContext | default $globalContainerSecurityContext }}
+        {{- if $serviceContainerSecurityContext }}
+        securityContext:
+          {{- toYaml $serviceContainerSecurityContext | nindent 10 }}
+        {{- end }}
+        ports:
+        - name: http
+          containerPort: 8088
+          protocol: TCP
+        env:
+        - name: CADENCE_GRPC_PEERS
+          value: {{ include "cadence.grpcPeers" . }}
+        {{- $webEnv := .Values.web.env | default list -}}
+        {{- if $webEnv }}
+        {{- toYaml $webEnv | nindent 8 }}
+        {{- end }}
+        {{- $webSecrets := .Values.web.secretEnv | default list -}}
+        {{- if $webSecrets }}
+        envFrom:
+        - secretRef:
+            name: {{ include "cadence.fullname" . }}-web-secrets
+        {{- end }}
+        {{- with .Values.web.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}

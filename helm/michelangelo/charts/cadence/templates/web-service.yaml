@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cadence.fullname" . }}-web
+  labels:
+    {{- include "cadence.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+  {{- with .Values.web.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.web.service.type | default "ClusterIP" }}
+  {{- if and (eq (.Values.web.service.type | default "ClusterIP") "LoadBalancer") .Values.web.service.loadBalancerIP }}
+  loadBalancerIP: {{ .Values.web.service.loadBalancerIP }}
+  {{- end }}
+  {{- if and (eq (.Values.web.service.type | default "ClusterIP") "LoadBalancer") .Values.web.service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml .Values.web.service.loadBalancerSourceRanges | nindent 4 }}
+  {{- end }}
+  {{- if and (eq (.Values.web.service.type | default "ClusterIP") "NodePort") .Values.web.service.nodePort }}
+  {{- end }}
+  ports:
+    - port: {{ .Values.web.service.port | default 8088 }}
+      targetPort: http
+      protocol: TCP
+      name: http
+      {{- if and (eq (.Values.web.service.type | default "ClusterIP") "NodePort") .Values.web.service.nodePort }}
+      nodePort: {{ .Values.web.service.nodePort }}
+      {{- end }}
+  selector:
+    {{- include "cadence.serviceLabels" (dict "serviceName" "web" "Values" .Values "Chart" .Chart "Release" .Release) | indent 4 }}

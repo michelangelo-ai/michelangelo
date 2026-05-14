@@ -1,0 +1,203 @@
+# Namespace note: install into namespace: cadence-postgres-es7
+
+# Allow Bitnami charts to use legacy repository images
+global:
+  image:
+    tag: "v1.3.6"  # Default version 
+  security:
+    allowInsecureImages: true
+
+# Force Cadence to use PostgreSQL for main DB
+config:
+  persistence:
+    # Name of the default datastore (PostgreSQL)
+    defaultStore: "default"
+    # Disable basic SQL visibility (we're using ES-only via Kafka)
+    visibilityStore: ""
+    # Name of the advanced visibility datastore (Elasticsearch)
+    # Note: This defines the datastore, but dynamic config controls how it's used
+    advancedVisibilityStore: "es-visibility"
+    database:
+      driver: "postgres"
+      sql:
+        hosts: "cadence-release-postgresql.cadence-postgres-es7.svc.cluster.local"
+        port: 5432
+        dbname: "cadence"
+        user: "cadence"
+        password: "changeme-strong"
+        tls:
+          enabled: false
+          sslMode: ""
+    elasticsearch:
+      enabled: true
+      version: "v7"
+      user: ""
+      password: ""
+      protocol: "http"
+      hosts: "cadence-release-elasticsearch.cadence-postgres-es7.svc.cluster.local"
+      port: 9200
+      visibilityIndex: "cadence-visibility-es7"
+      tls:
+        enabled: false
+  kafka: # needed by elasticsearch integration
+    enabled: true
+    brokers: "cadence-release-kafka.cadence-postgres-es7.svc.cluster.local"
+
+# Enable Cadence schema jobs
+schema:
+  serverJob:
+    enabled: true
+  elasticSearchJob:
+    enabled: true
+
+# Ensure Cadence uses Elasticsearch for advanced visibility
+# Note: "es" is a special keyword for advanced visibility, not the datastore name
+dynamicConfig:
+  values:
+    system.writeVisibilityStoreName:
+      - value: "es"
+    system.readVisibilityStoreName:
+      - value: "es"
+
+### subcharts values which can be omited if user has their own deployment
+
+# Deploy Postgres within the same release (Bitnami subchart)
+postgresql:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/postgresql
+    tag: "16.4.0"
+    pullPolicy: IfNotPresent
+  auth:
+    username: cadence
+    password: "changeme-strong"
+    database: cadence
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
+
+# Deploy Elasticsearch with single node mode
+elasticsearch:
+  enabled: true
+  master:
+    masterOnly: false
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 1
+        memory: 1024Mi
+      limits:
+        cpu: 2
+        memory: 2048Mi
+  data:
+    replicaCount: 0
+  coordinating:
+    replicaCount: 0
+  ingest:
+    replicaCount: 0
+  sysctlImage:
+    enabled: false
+  image:
+    tag: 7.17.23
+    repository: bitnamilegacy/elasticsearch
+
+kafka:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/kafka
+    tag: "3.8.0"
+    pullPolicy: IfNotPresent
+  # KRaft mode configuration (Kafka without ZooKeeper)
+  kraft:
+    enabled: true
+  # Disable ZooKeeper since we're using KRaft
+  zookeeper:
+    enabled: false
+  # Controller and broker configuration for KRaft
+  controller:
+    replicaCount: 1
+    persistence:
+      enabled: true
+      size: 8Gi
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 1
+        memory: 2Gi
+    # GKE Autopilot compatibility
+    podSecurityContext:
+      fsGroup: 1001
+      runAsUser: 1001
+    containerSecurityContext:
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+  broker:
+    replicaCount: 1
+    persistence:
+      enabled: true
+      size: 8Gi
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 1
+        memory: 2Gi
+    # GKE Autopilot compatibility
+    podSecurityContext:
+      fsGroup: 1001
+      runAsUser: 1001
+    containerSecurityContext:
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+  # GKE Autopilot compatibility: disable privileged init container
+  sysctlImage:
+    enabled: false
+  # Kafka topic configuration for Cadence visibility
+  autoCreateTopicsEnable: true
+  numPartitions: 4
+  defaultReplicationFactor: 1
+  # Configure replication factors for internal topics (demo/single-node setup)
+  offsetsTopicReplicationFactor: 1
+  transactionStateLogReplicationFactor: 1
+  transactionStateLogMinIsr: 1
+  # Provision topics at startup to avoid race conditions
+  provisioning:
+    enabled: true
+    topics:
+      - name: __consumer_offsets
+        partitions: 50
+        replicationFactor: 1
+        config:
+          cleanup.policy: compact
+          compression.type: producer
+      - name: cadence-visibility
+        partitions: 4
+        replicationFactor: 1
+      - name: cadence-visibility-dlq
+        partitions: 4
+        replicationFactor: 1
+  # Listener configuration
+  listeners:
+    client:
+      protocol: PLAINTEXT
+    controller:
+      protocol: PLAINTEXT
+    interbroker:
+      protocol: PLAINTEXT
+  # Service configuration
+  service:
+    type: ClusterIP
+    ports:
+      client: 9092
+
+# Do NOT deploy Cassandra or MySQL
+cassandra:
+  enabled: false
+mysql:
+  enabled: false

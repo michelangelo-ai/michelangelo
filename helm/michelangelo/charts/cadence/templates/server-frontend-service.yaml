@@ -1,0 +1,21 @@
+{{- $service := .Values.frontend -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cadence.fullname" . }}-frontend
+  labels:
+    {{- include "cadence.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "cadence.serviceLabels" (dict "serviceName" "frontend" "Values" .Values "Chart" .Chart "Release" .Release) | indent 4 }}
+  ports:
+    - name: rpc
+      protocol: TCP
+      port: {{ $service.port }}
+      targetPort: rpc
+    - name: grpc
+      protocol: TCP
+      port: {{ $service.grpcPort }}
+      targetPort: grpc

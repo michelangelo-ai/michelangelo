@@ -1,0 +1,32 @@
+1. Get the Cadence Web UI URL by running these commands:
+{{- if .Values.web.ingress.enabled }}
+  {{- range .Values.web.ingress.hosts }}
+  http{{ if $.Values.web.ingress.tls }}s{{ end }}://{{ .host }}{{ if .paths }}{{ (index .paths 0).path }}{{ end }}
+  {{- end }}
+{{- else if contains "NodePort" .Values.web.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "cadence.fullname" . }}-web)
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+{{- else if contains "LoadBalancer" .Values.web.service.type }}
+     NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+           You can watch the status by running 'kubectl get svc -w {{ include "cadence.fullname" . }}-web'
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "cadence.fullname" . }}-web -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+  echo http://$SERVICE_IP:{{ .Values.web.service.port }}
+{{- else if contains "ClusterIP" .Values.web.service.type }}
+  echo "Visit http://127.0.0.1:8088 to use Cadence Web UI"
+  kubectl port-forward service/{{ include "cadence.fullname" . }}-web 8088:{{ .Values.web.service.port }} --namespace {{ .Release.Namespace }}
+{{- end }}
+
+2. Default credentials and configuration:
+   - Cadence Web UI will be available at the URL shown above
+   - The web interface connects to the Cadence server automatically
+   - No default authentication is configured
+
+3. To check the status of your Cadence deployment:
+   kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/instance={{ .Release.Name }}"
+
+4. To view logs from the Cadence Web UI:
+   kubectl logs --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/component=web"
+
+5. For more information about Cadence, visit:
+   https://cadenceworkflow.io/docs/get-started

@@ -1,0 +1,878 @@
+{{- range $serviceName := (list "frontend" "history" "matching" "worker") }}
+{{- $service := index $.Values $serviceName }}
+{{- $dbDriver := $.Values.config.persistence.database.driver }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cadence.fullname" $ }}-{{ $serviceName }}
+  labels:
+    {{- include "cadence.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  replicas: {{ $service.replicas }}
+  {{- with $service.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "cadence.serviceLabels" (dict "serviceName" $serviceName "Values" $.Values "Chart" $.Chart "Release" $.Release) | indent 6 }}
+  template:
+    metadata:
+      {{- $servicePodAnnotations := $service.podAnnotations | default dict }}
+      {{- if $servicePodAnnotations }}
+      annotations:
+        {{- toYaml $servicePodAnnotations | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "cadence.labels" $ | nindent 8 }}
+        {{- with $service.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        app.kubernetes.io/component: {{ $serviceName }}
+    spec:
+      {{- if $.Values.serviceAccount.create }}
+      serviceAccountName: {{ include "cadence.serviceAccountName" $ }}
+      {{- end }}
+      {{- $globalImagePullSecrets := $.Values.global.imagePullSecrets | default list }}
+      {{- $serviceImagePullSecrets := $service.image.imagePullSecrets | default list }}
+      {{- $mergedImagePullSecrets := concat $globalImagePullSecrets $serviceImagePullSecrets }}
+      {{- if $mergedImagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml $mergedImagePullSecrets | nindent 8 }}
+      {{- end }}
+      {{- $globalPriorityClassName := $.Values.global.priorityClassName | default "" }}
+      {{- $servicePriorityClassName := $service.priorityClassName | default $globalPriorityClassName }}
+      {{- if $servicePriorityClassName }}
+      priorityClassName: {{ $servicePriorityClassName }}
+      {{- end }}
+      {{- $globalPodSecurityContext := $.Values.global.podSecurityContext | default dict }}
+      {{- $servicePodSecurityContext := $service.podSecurityContext | default $globalPodSecurityContext }}
+      {{- if $servicePodSecurityContext }}
+      securityContext:
+        {{- toYaml $servicePodSecurityContext | nindent 8 }}
+      {{- end }}
+      {{- $globalNodeSelector := $.Values.global.nodeSelector | default dict }}
+      {{- $serviceNodeSelector := $service.nodeSelector | default $globalNodeSelector }}
+      {{- if $serviceNodeSelector }}
+      nodeSelector:
+        {{- toYaml $serviceNodeSelector | nindent 8 }}
+      {{- end }}
+      {{- $globalAffinity := $.Values.global.affinity | default dict }}
+      {{- $serviceAffinity := $service.affinity | default $globalAffinity }}
+      {{- if $serviceAffinity }}
+      affinity:
+        {{- toYaml $serviceAffinity | nindent 8 }}
+      {{- end }}
+      {{- $globalTolerations := $.Values.global.tolerations | default list }}
+      {{- $serviceTolerations := $service.tolerations | default $globalTolerations }}
+      {{- if $serviceTolerations }}
+      tolerations:
+        {{- toYaml $serviceTolerations | nindent 8 }}
+      {{- end }}
+      {{- $globalTopologySpreadConstraints := $.Values.global.topologySpreadConstraints | default list }}
+      {{- $serviceTopologySpreadConstraints := $service.topologySpreadConstraints | default $globalTopologySpreadConstraints }}
+      {{- if $serviceTopologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml $serviceTopologySpreadConstraints | nindent 8 }}
+      {{- end }}
+      initContainers:
+      - name: extract-schema-versions
+        {{- $globalImage := $.Values.global.image | default dict }}
+        {{- $serviceImage := $service.image | default dict }}
+        {{- $repository := $serviceImage.repository | default $globalImage.repository }}
+        {{- $tag := $serviceImage.tag | default $globalImage.tag }}
+        image: {{ $repository }}:{{ $tag }}
+        {{- $pullPolicy := $serviceImage.pullPolicy | default $globalImage.pullPolicy | default "IfNotPresent" }}
+        imagePullPolicy: {{ $pullPolicy }}
+        {{- $globalContainerSecurityContext := $.Values.global.containerSecurityContext | default dict }}
+        {{- $serviceContainerSecurityContext := $service.containerSecurityContext | default $globalContainerSecurityContext }}
+        {{- if $serviceContainerSecurityContext }}
+        securityContext:
+          {{- toYaml $serviceContainerSecurityContext | nindent 10 }}
+        {{- end }}
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - |
+            if [ -f "$VERSION_FILE" ]; then
+              default_version=$(grep 'const Version' "$VERSION_FILE" | awk -F'"' '{print $2}')
+              visibility_version=$(grep 'const VisibilityVersion' "$VERSION_FILE" | awk -F'"' '{print $2}')
+              
+              echo "DEFAULT_VERSION=$default_version" > /shared/schema-versions.env
+              echo "VISIBILITY_VERSION=$visibility_version" >> /shared/schema-versions.env
+              
+              echo "Extracted versions:"
+              echo "  DEFAULT_VERSION=$default_version"
+              echo "  VISIBILITY_VERSION=$visibility_version"
+            else
+              echo "Error: version.go file not found at $VERSION_FILE"
+              exit 1
+            fi
+        env:
+        {{- if eq $dbDriver "cassandra" }}
+        - name: VERSION_FILE
+          value: "/etc/cadence/schema/cassandra/version.go"
+        {{- else if eq $dbDriver "postgres" }}
+        - name: VERSION_FILE
+          value: "/etc/cadence/schema/postgres/version.go"
+        {{- else if eq $dbDriver "mysql" }}
+        - name: VERSION_FILE
+          value: "/etc/cadence/schema/mysql/version.go"
+        {{- end }}
+        volumeMounts:
+        - name: versions-data
+          mountPath: /shared
+      - name: wait-for-schema
+        {{- if eq $dbDriver "cassandra" }}
+        image: {{ $.Values.schema.checkSchema.cassandra.image.repository }}:{{ $.Values.schema.checkSchema.cassandra.image.tag }}
+        imagePullPolicy: {{ $.Values.schema.checkSchema.cassandra.image.pullPolicy }}
+        command:
+          - sh
+          - -c
+          - |
+            # Waiting for versions file
+            while [ ! -f /shared/schema-versions.env ]; do
+              echo "Waiting for schema versions file..."
+              sleep 2
+            done
+
+            # Load extracted versions
+            export $(cat /shared/schema-versions.env | xargs)
+            echo "Using extracted versions:"
+            echo "  DEFAULT_VERSION=$DEFAULT_VERSION"
+            echo "  VISIBILITY_VERSION=$VISIBILITY_VERSION"
+
+            # Create .cassandra directory for cqlshrc if it doesn't exist
+            mkdir -p ~/.cassandra
+
+            # Build cqlshrc configuration file
+            cat > ~/.cassandra/cqlshrc << EOF
+            [connection]
+            hostname = $DB_HOST
+            port = $DB_PORT
+
+            EOF
+
+            # Add authentication section if user is provided
+            if [ -n "$DB_USER" ] && [ "$DB_USER" != "" ]; then
+              cat >> ~/.cassandra/cqlshrc << EOF
+            [authentication]
+            username = $DB_USER
+            EOF
+              # Add password if provided
+              if [ -n "$CASSANDRA_PASSWORD" ] && [ "$CASSANDRA_PASSWORD" != "" ]; then
+                cat >> ~/.cassandra/cqlshrc << EOF
+            password = $CASSANDRA_PASSWORD
+            EOF
+                  fi
+                fi
+
+            # Add SSL configuration if enabled
+            if [ "$TLS_ENABLED" = "true" ]; then
+              cat >> ~/.cassandra/cqlshrc << EOF
+
+            [ssl]
+            EOF
+              # Add certificate file if specified (CA certificate)
+              if [ -n "$SSL_CERTFILE" ] && [ "$SSL_CERTFILE" != "" ]; then
+                cat >> ~/.cassandra/cqlshrc << EOF
+            certfile = $SSL_CERTFILE
+            EOF
+              fi
+              
+              # Add client certificate for mutual TLS
+              if [ -n "$SSL_CLIENT_CERT" ] && [ "$SSL_CLIENT_CERT" != "" ]; then
+                cat >> ~/.cassandra/cqlshrc << EOF
+            usercert = $SSL_CLIENT_CERT
+            EOF
+              fi
+              
+              # Add client private key for mutual TLS
+              if [ -n "$SSL_CLIENT_KEY" ] && [ "$SSL_CLIENT_KEY" != "" ]; then
+                cat >> ~/.cassandra/cqlshrc << EOF
+            userkey = $SSL_CLIENT_KEY
+            EOF
+              fi
+              
+              # Add validate setting
+              if [ -n "$SSL_VALIDATE" ] && [ "$SSL_VALIDATE" != "" ]; then
+                cat >> ~/.cassandra/cqlshrc << EOF
+            validate = $SSL_VALIDATE
+            EOF
+              else
+                cat >> ~/.cassandra/cqlshrc << EOF
+            validate = true
+            EOF
+              fi
+            fi
+
+            # Debug: Show generated cqlshrc (remove in production)
+            echo "Generated cqlshrc:"
+            cat ~/.cassandra/cqlshrc
+            echo "---"
+
+            # Build cqlsh command
+            build_cqlsh_cmd() {
+              local cmd="cqlsh"
+              
+              # Add SSL option if enabled
+              if [ "$TLS_ENABLED" = "true" ]; then
+                cmd="$cmd --ssl"
+              fi
+              
+              echo "$cmd"
+            }
+
+            # Compare database version with cadence schema version
+            until $(build_cqlsh_cmd) -e "
+              USE $DB_NAME;
+              SELECT curr_version FROM schema_version WHERE keyspace_name = '$DB_NAME';" | grep -q "$DEFAULT_VERSION" &&
+              {
+                if [ "$ES_ENABLED" = "false" ]; then
+                  $(build_cqlsh_cmd) -e "
+                    USE $DB_VISIBILITY_NAME;  
+                    SELECT curr_version FROM schema_version WHERE keyspace_name = '$DB_VISIBILITY_NAME';" | grep -q "$VISIBILITY_VERSION"
+                else
+                  true
+                fi
+              }
+            do
+              echo 'Waiting for Cassandra schema to be ready...'
+              sleep 10
+            done
+        env:
+        - name: ES_ENABLED
+          value: {{ $.Values.config.persistence.elasticsearch.enabled | quote }}
+        # Basic connection parameters
+        - name: DB_HOST
+          value: {{ $.Values.config.persistence.database.cassandra.hosts | quote }}
+        - name: DB_PORT
+          value: {{ $.Values.config.persistence.database.cassandra.port | quote }}
+        - name: DB_NAME
+          value: {{ $.Values.config.persistence.database.cassandra.keyspace | quote }}
+        - name: DB_VISIBILITY_NAME
+          value: {{ $.Values.config.persistence.database.cassandra.visibilityKeyspace | quote }}
+        # Authentication parameters (conditional)
+        {{- if $.Values.config.persistence.database.cassandra.user }}
+        - name: DB_USER
+          value: {{ $.Values.config.persistence.database.cassandra.user | quote }}
+        {{- end }}
+        {{- if $.Values.config.persistence.database.cassandra.password }}
+        - name: CASSANDRA_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "cadence.fullname" $ }}-{{ $serviceName }}-secrets
+              key: CASSANDRA_PASSWORD
+        {{- end }}
+        # TLS Configuration
+        - name: TLS_ENABLED
+          value: {{ $.Values.config.persistence.database.cassandra.tls.enabled | quote }}
+        {{- if $.Values.config.persistence.database.cassandra.tls.enabled }}
+        # SSL_CERTFILE environment variable (CA certificate)
+        {{- if $.Values.config.persistence.database.cassandra.tls.caFile }}
+        - name: SSL_CERTFILE
+          value: {{ $.Values.config.persistence.database.cassandra.tls.caFile | quote }}
+        {{- else if $.Values.config.persistence.database.cassandra.tls.caFiles }}
+        - name: SSL_CERTFILE
+          value: {{ index $.Values.config.persistence.database.cassandra.tls.caFiles 0 | quote }}
+        {{- end }}
+        # Client certificate for mutual TLS
+        {{- if $.Values.config.persistence.database.cassandra.tls.certFile }}
+        - name: SSL_CLIENT_CERT
+          value: {{ $.Values.config.persistence.database.cassandra.tls.certFile | quote }}
+        {{- end }}
+        # Client private key for mutual TLS
+        {{- if $.Values.config.persistence.database.cassandra.tls.keyFile }}
+        - name: SSL_CLIENT_KEY
+          value: {{ $.Values.config.persistence.database.cassandra.tls.keyFile | quote }}
+        {{- end }}
+        # SSL_VALIDATE environment variable
+        - name: SSL_VALIDATE
+          value: {{ $.Values.config.persistence.database.cassandra.tls.enableHostVerification | quote }}
+        {{- end }}
+        {{- else if eq $dbDriver "postgres" }}
+        image: {{ $.Values.schema.checkSchema.postgres.image.repository }}:{{ $.Values.schema.checkSchema.postgres.image.tag }}
+        imagePullPolicy: {{ $.Values.schema.checkSchema.postgres.image.pullPolicy }}
+        command:
+          - sh
+          - -c
+          - |
+            # Waiting for versions file
+            while [ ! -f /shared/schema-versions.env ]; do
+              echo "Waiting for schema versions file..."
+              sleep 2
+            done
+            
+            # Load extracted versions
+            export $(cat /shared/schema-versions.env | xargs)
+            echo "Using extracted versions:"
+            echo "  DEFAULT_VERSION=$DEFAULT_VERSION"
+            echo "  VISIBILITY_VERSION=$VISIBILITY_VERSION"
+
+            # Build connection string based on TLS configuration
+            build_psql_cmd() {
+              local cmd="psql -h $DB_HOST -p $DB_PORT -U $DB_USER"
+              
+              # Add SSL mode if TLS is enabled
+              if [ "$TLS_ENABLED" = "true" ] && [ -n "$SSL_MODE" ]; then
+                cmd="$cmd --set=sslmode=$SSL_MODE"
+                
+                # Add SSL certificate parameters if provided
+                if [ -n "$SSL_CERTFILE" ]; then
+                  cmd="$cmd --set=sslrootcert=$SSL_CERTFILE"
+                fi
+                
+                if [ -n "$SSL_CLIENT_CERT" ]; then
+                  cmd="$cmd --set=sslcert=$SSL_CLIENT_CERT"
+                fi
+                
+                if [ -n "$SSL_CLIENT_KEY" ]; then
+                  cmd="$cmd --set=sslkey=$SSL_CLIENT_KEY"
+                fi
+              fi
+              
+              echo "$cmd"
+            }
+
+            # Wait for PostgreSQL to be ready
+            echo "Waiting for PostgreSQL to be ready..."
+            until pg_isready -h $DB_HOST -p $DB_PORT -U $DB_USER; do
+              echo 'PostgreSQL is not ready yet...'
+              sleep 5
+            done
+            echo "PostgreSQL is ready!"
+
+            # Check schema versions in both databases
+            echo "Checking schema versions..."
+            until 
+              # Check main database schema version
+              PGPASSWORD=$POSTGRES_PWD $(build_psql_cmd) -d $DB_NAME -t -c "
+                SELECT curr_version FROM schema_version WHERE db_name = '$DB_NAME';" | grep -q "$DEFAULT_VERSION" &&
+              
+              # Check visibility database schema version (only if ES is not enabled)
+              {
+                if [ "$ES_ENABLED" = "false" ]; then
+                  PGPASSWORD=$POSTGRES_PWD $(build_psql_cmd) -d $DB_VISIBILITY_NAME -t -c "
+                    SELECT curr_version FROM schema_version WHERE db_name = '$DB_VISIBILITY_NAME';" | grep -q "$VISIBILITY_VERSION"
+                else
+                  true
+                fi
+              }
+            do
+              echo 'Waiting for PostgreSQL schema to be ready...'
+              sleep 10
+            done
+            
+            echo "PostgreSQL schema is ready!"
+        env:
+        - name: ES_ENABLED
+          value: {{ $.Values.config.persistence.elasticsearch.enabled | quote }}
+        # Basic connection parameters
+        - name: DB_HOST
+          value: {{ $.Values.config.persistence.database.sql.hosts | quote }}
+        - name: DB_PORT
+          value: {{ $.Values.config.persistence.database.postgres.port | default $.Values.config.persistence.database.sql.port | default 5432 | quote }}
+        - name: DB_NAME
+          value: {{ $.Values.config.persistence.database.sql.dbname | quote }}
+        - name: DB_VISIBILITY_NAME
+          value: {{ $.Values.config.persistence.database.sql.visibilityDbname | quote }}
+        - name: DB_USER
+          value: {{ $.Values.config.persistence.database.sql.user | quote }}
+        # Authentication parameters
+        - name: POSTGRES_PWD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "cadence.fullname" $ }}-{{ $serviceName }}-secrets
+              key: POSTGRES_PWD
+        # TLS Configuration
+        - name: TLS_ENABLED
+          value: {{ $.Values.config.persistence.database.sql.tls.enabled | quote }}
+        {{- if $.Values.config.persistence.database.sql.tls.enabled }}
+        # SSL Mode
+        - name: SSL_MODE
+          value: {{ $.Values.config.persistence.database.sql.tls.sslMode | default "require" | quote }}
+        # SSL_CERTFILE environment variable (CA certificate)
+        {{- if $.Values.config.persistence.database.sql.tls.caFile }}
+        - name: SSL_CERTFILE
+          value: {{ $.Values.config.persistence.database.sql.tls.caFile | quote }}
+        {{- else if $.Values.config.persistence.database.sql.tls.caFiles }}
+        - name: SSL_CERTFILE
+          value: {{ index $.Values.config.persistence.database.sql.tls.caFiles 0 | quote }}
+        {{- end }}
+        # Client certificate for mutual TLS
+        {{- if $.Values.config.persistence.database.sql.tls.certFile }}
+        - name: SSL_CLIENT_CERT
+          value: {{ $.Values.config.persistence.database.sql.tls.certFile | quote }}
+        {{- end }}
+        # Client private key for mutual TLS
+        {{- if $.Values.config.persistence.database.sql.tls.keyFile }}
+        - name: SSL_CLIENT_KEY
+          value: {{ $.Values.config.persistence.database.sql.tls.keyFile | quote }}
+        {{- end }}
+        {{- end }}
+        {{- else if eq $dbDriver "mysql" }}
+        image: {{ $.Values.schema.checkSchema.mysql.image.repository }}:{{ $.Values.schema.checkSchema.mysql.image.tag }}
+        imagePullPolicy: {{ $.Values.schema.checkSchema.mysql.image.pullPolicy }}
+        command:
+          - sh
+          - -c
+          - |
+            # Waiting for versions file
+            while [ ! -f /shared/schema-versions.env ]; do
+              echo "Waiting for schema versions file..."
+              sleep 2
+            done
+            
+            # Load extracted versions
+            export $(cat /shared/schema-versions.env | xargs)
+            echo "Using extracted versions:"
+            echo "  DEFAULT_VERSION=$DEFAULT_VERSION"
+            echo "  VISIBILITY_VERSION=$VISIBILITY_VERSION"
+
+            # Build connection string based on TLS configuration
+            build_mysql_cmd() {
+              local cmd="mariadb -h $DB_HOST -P $DB_PORT -u $DB_USER"
+              
+              # Add SSL parameters if TLS is enabled
+              if [ "$TLS_ENABLED" = "true" ]; then
+                case "$SSL_MODE" in
+                  "disable"|"false")
+                    cmd="$cmd --skip-ssl"
+                    ;;
+                  "preferred")
+                    ;;
+                  "required"|"true"|"skip-verify")
+                    cmd="$cmd --ssl --ssl-verify-server-cert=false"
+                    ;;
+                  "verify-ca")
+                    cmd="$cmd --ssl --ssl-verify-server-cert"
+                    ;;
+                  "verify-identity")
+                    cmd="$cmd --ssl --ssl-verify-server-cert"
+                    ;;
+                  *)
+                    cmd="$cmd --ssl"
+                    ;;
+                esac
+                
+                # Add SSL certificate parameters if provided
+                if [ -n "$SSL_CERTFILE" ]; then
+                  cmd="$cmd --ssl-ca=$SSL_CERTFILE"
+                fi
+                
+                if [ -n "$SSL_CLIENT_CERT" ]; then
+                  cmd="$cmd --ssl-cert=$SSL_CLIENT_CERT"
+                fi
+                
+                if [ -n "$SSL_CLIENT_KEY" ]; then
+                  cmd="$cmd --ssl-key=$SSL_CLIENT_KEY"
+                fi
+              fi
+              
+              echo "$cmd"
+            }
+
+            # Wait for MySQL to be ready
+            echo "Waiting for MySQL to be ready..."
+            until mariadb-admin ping -h $DB_HOST -P $DB_PORT -u $DB_USER --password=$MYSQL_PWD --skip-ssl --silent; do
+              echo 'MySQL is not ready yet...'
+              sleep 5
+            done
+            echo "MySQL is ready!"
+
+            # Check schema versions in both databases
+            echo "Checking schema versions..."
+            until 
+              # Check main database schema version
+              $(build_mysql_cmd) -D $DB_NAME -e "
+                SELECT curr_version FROM schema_version WHERE db_name = '$DB_NAME';" | grep -q "$DEFAULT_VERSION" &&
+              
+              # Check visibility database schema version (only if ES is not enabled)
+              {
+                if [ "$ES_ENABLED" = "false" ]; then
+                  $(build_mysql_cmd) -D $DB_VISIBILITY_NAME -e "
+                    SELECT curr_version FROM schema_version WHERE db_name = '$DB_VISIBILITY_NAME';" | grep -q "$VISIBILITY_VERSION"
+                else
+                  true
+                fi
+              }
+            do
+              echo 'Waiting for MySQL schema to be ready...'
+              sleep 10
+            done
+            
+            echo "MySQL schema is ready!"
+        env:
+        - name: ES_ENABLED
+          value: {{ $.Values.config.persistence.elasticsearch.enabled | quote }}
+        # Basic connection parameters
+        - name: DB_HOST
+          value: {{ $.Values.config.persistence.database.sql.hosts | quote }}
+        - name: DB_PORT
+          value: {{ $.Values.config.persistence.database.mysql.port | default $.Values.config.persistence.database.sql.port | default 3306 | quote }}
+        - name: DB_NAME
+          value: {{ $.Values.config.persistence.database.sql.dbname | quote }}
+        - name: DB_VISIBILITY_NAME
+          value: {{ $.Values.config.persistence.database.sql.visibilityDbname | quote }}
+        - name: DB_USER
+          value: {{ $.Values.config.persistence.database.sql.user | quote }}
+        # Authentication parameters
+        - name: MYSQL_PWD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "cadence.fullname" $ }}-{{ $serviceName }}-secrets
+              key: MYSQL_PWD
+        # TLS Configuration
+        - name: TLS_ENABLED
+          value: {{ $.Values.config.persistence.database.sql.tls.enabled | quote }}
+        {{- if $.Values.config.persistence.database.sql.tls.enabled }}
+        # SSL Mode
+        - name: SSL_MODE
+          value: {{ $.Values.config.persistence.database.sql.tls.sslMode | default "require" | quote }}
+        # SSL_CERTFILE environment variable (CA certificate)
+        {{- if $.Values.config.persistence.database.sql.tls.caFile }}
+        - name: SSL_CERTFILE
+          value: {{ $.Values.config.persistence.database.sql.tls.caFile | quote }}
+        {{- else if $.Values.config.persistence.database.sql.tls.caFiles }}
+        - name: SSL_CERTFILE
+          value: {{ index $.Values.config.persistence.database.sql.tls.caFiles 0 | quote }}
+        {{- end }}
+        # Client certificate for mutual TLS
+        {{- if $.Values.config.persistence.database.sql.tls.certFile }}
+        - name: SSL_CLIENT_CERT
+          value: {{ $.Values.config.persistence.database.sql.tls.certFile | quote }}
+        {{- end }}
+        # Client private key for mutual TLS
+        {{- if $.Values.config.persistence.database.sql.tls.keyFile }}
+        - name: SSL_CLIENT_KEY
+          value: {{ $.Values.config.persistence.database.sql.tls.keyFile | quote }}
+        {{- end }}
+        {{- end }}
+        {{- end }}
+        volumeMounts:
+        - name: versions-data
+          mountPath: /shared
+        {{- if $.Values.config.persistence.elasticsearch.enabled }}
+      # ElasticSearch Schema Validation Init Container
+      - name: check-elasticsearch-schema
+        image: {{ $.Values.schema.checkSchema.elasticsearch.image.repository | default "alpine/curl" }}:{{ $.Values.schema.checkSchema.elasticsearch.image.tag | default "latest" }}
+        imagePullPolicy: {{ $.Values.schema.checkSchema.elasticsearch.image.pullPolicy | default "IfNotPresent" }}
+        command:
+          - sh
+          - -c
+          - |
+            # Elasticsearch Schema Validation Script
+            # This script validates Elasticsearch connectivity and schema readiness
+
+            echo "Starting Elasticsearch schema validation..."
+
+            # Build Elasticsearch connection parameters
+            build_es_connection() {
+                # Determine protocol - allow override from values or default based on TLS
+                if [ -n "$ES_PROTOCOL" ]; then
+                    PROTOCOL="$ES_PROTOCOL"
+                elif [ "$TLS_ENABLED" = "true" ]; then
+                    PROTOCOL="https"
+                else
+                    PROTOCOL="http"
+                fi
+                
+                # Build curl options for TLS
+                CURL_OPTS=""
+                if [ "$TLS_ENABLED" = "true" ]; then
+                    # Configure SSL verification based on host verification setting
+                    if [ "$ENABLE_HOST_VERIFICATION" = "false" ]; then
+                        CURL_OPTS="$CURL_OPTS -k"
+                    fi
+                    
+                    # Add CA certificate if provided
+                    if [ -n "$SSL_CA_FILE" ]; then
+                        CURL_OPTS="$CURL_OPTS --cacert $SSL_CA_FILE"
+                    fi
+                    
+                    # Add client certificate for mutual TLS if provided
+                    if [ -n "$SSL_CLIENT_CERT" ] && [ -n "$SSL_CLIENT_KEY" ]; then
+                        CURL_OPTS="$CURL_OPTS --cert $SSL_CLIENT_CERT --key $SSL_CLIENT_KEY"
+                    fi
+                    
+                    # Override server name if specified
+                    if [ -n "$SSL_SERVER_NAME" ]; then
+                        CURL_OPTS="$CURL_OPTS --resolve $SSL_SERVER_NAME:$ES_PORT:$ES_HOST"
+                    fi
+                    
+                    # Additional TLS options
+                    if [ "$REQUIRE_CLIENT_AUTH" = "true" ]; then
+                        # Client auth is required, ensure we have client cert
+                        if [ -z "$SSL_CLIENT_CERT" ] || [ -z "$SSL_CLIENT_KEY" ]; then
+                            echo "Error: Client authentication required but client certificate/key not provided"
+                            exit 1
+                        fi
+                    fi
+                fi
+                
+                # Add authentication if user/password provided
+                if [ -n "$ES_USER" ] && [ -n "$ES_PWD" ]; then
+                    CURL_OPTS="$CURL_OPTS -u $ES_USER:$ES_PWD"
+                fi
+                
+                # Set global variables
+                BASE_URL="$PROTOCOL://$ES_HOST:$ES_PORT"
+                
+                echo "Connecting to Elasticsearch at: $BASE_URL"
+                echo "TLS Enabled: $TLS_ENABLED"
+                if [ "$TLS_ENABLED" = "true" ]; then
+                    echo "Host Verification: $ENABLE_HOST_VERIFICATION"
+                    echo "Client Auth Required: $REQUIRE_CLIENT_AUTH"
+                fi
+            }
+
+            # Wait for Elasticsearch to be ready
+            echo "Waiting for Elasticsearch to be ready..."
+            build_es_connection
+
+            # Check Elasticsearch health
+            until curl $CURL_OPTS -s -f "$BASE_URL/_cluster/health?wait_for_status=yellow&timeout=5s" > /dev/null; do
+                echo "Elasticsearch is not ready yet..."
+                sleep 10
+            done
+
+            echo "Elasticsearch is ready!"
+
+            # Get cluster info for debugging
+            echo "Elasticsearch cluster information:"
+            CLUSTER_INFO=$(curl $CURL_OPTS -s "$BASE_URL/")
+            if [ $? -eq 0 ]; then
+                echo "$CLUSTER_INFO" | grep -E '"cluster_name"|"version"|"number"' || echo "Could not parse cluster info"
+            else
+                echo "Warning: Could not retrieve cluster information"
+            fi
+
+            # Check if template exists and validate schema
+            echo "Checking Elasticsearch schema template..."
+            TEMPLATE_URL="$BASE_URL/_template/cadence-visibility-template"
+
+            # Wait for template to exist
+            until curl $CURL_OPTS -s -f "$TEMPLATE_URL" > /dev/null; do
+                echo "Waiting for Cadence visibility template to be ready..."
+                sleep 10
+            done
+            echo "✓ Cadence visibility template exists"
+
+            # Validate template structure
+            TEMPLATE_RESPONSE=$(curl $CURL_OPTS -s "$TEMPLATE_URL")
+            if echo "$TEMPLATE_RESPONSE" | grep -q "cadence-visibility-template"; then
+                echo "✓ Template structure is valid"
+            else
+                echo "⚠ Warning: Template structure may be invalid"
+            fi
+
+            # Check if visibility index exists
+            echo "Checking visibility index..."
+            INDEX_URL="$BASE_URL/$VISIBILITY_INDEX"
+
+            # Wait for index to exist
+            until curl $CURL_OPTS -s -f "$INDEX_URL" > /dev/null; do
+                echo "Waiting for visibility index '$VISIBILITY_INDEX' to be ready..."
+                sleep 10
+            done
+            echo "✓ Visibility index '$VISIBILITY_INDEX' exists"
+
+            # Wait for index to be healthy
+            until curl $CURL_OPTS -s -f "$INDEX_URL/_stats" > /dev/null; do
+                echo "Waiting for visibility index to be healthy..."
+                sleep 5
+            done
+
+            INDEX_STATS=$(curl $CURL_OPTS -s "$INDEX_URL/_stats")
+            echo "✓ Visibility index is accessible and healthy"
+            # Extract basic stats
+            DOC_COUNT=$(echo "$INDEX_STATS" | grep -o '"count":[0-9]*' | head -1 | cut -d':' -f2)
+            if [ -n "$DOC_COUNT" ]; then
+                echo "  - Document count: $DOC_COUNT"
+            fi
+
+            # Additional checks for different ES versions
+            echo "Performing version-specific checks for ES $ES_VERSION..."
+            case "$ES_VERSION" in
+                "v6")
+                    # Wait for _doc type mapping (ES6 compatibility)
+                    TYPE_URL="$BASE_URL/$VISIBILITY_INDEX/_mapping/_doc"
+                    until curl $CURL_OPTS -s -f "$TYPE_URL" > /dev/null; do
+                        echo "Waiting for ES6 document type mapping..."
+                        sleep 5
+                    done
+                    echo "✓ ES6 document type mapping exists"
+                    ;;
+                "v7"|"v8")
+                    # Wait for mapping without type (ES7/8 style)
+                    MAPPING_URL="$BASE_URL/$VISIBILITY_INDEX/_mapping"
+                    until curl $CURL_OPTS -s -f "$MAPPING_URL" > /dev/null; do
+                        echo "Waiting for ES7/8 index mapping..."
+                        sleep 5
+                    done
+                    echo "✓ ES7/8 index mapping exists"
+                    ;;
+                *)
+                    echo "⚠ Warning: Unknown ES version: $ES_VERSION"
+                    ;;
+            esac
+
+            # Final validation summary
+            echo ""
+            echo "=== Elasticsearch Schema Validation Summary ==="
+            echo "Cluster: Ready ✓"
+            echo "Template: Ready ✓"
+            echo "Index: Ready ✓"
+            echo "Mapping: Ready ✓"
+            echo "Version: $ES_VERSION"
+            echo "==============================================="
+
+            echo "Elasticsearch schema validation completed successfully!"
+            exit 0
+        env:
+        # Basic Elasticsearch connection parameters
+        - name: ES_HOST
+          value: {{ $.Values.config.persistence.elasticsearch.hosts | quote }}
+        - name: ES_PORT
+          value: {{ $.Values.config.persistence.elasticsearch.port | default 9200 | quote }}
+        - name: ES_PROTOCOL
+          value: {{ $.Values.config.persistence.elasticsearch.protocol | default "" | quote }}
+        - name: VISIBILITY_INDEX
+          value: {{ $.Values.config.persistence.elasticsearch.visibilityIndex | quote }}
+        - name: ES_VERSION
+          value: {{ $.Values.config.persistence.elasticsearch.version | quote }}
+        # Authentication parameters
+        {{- if $.Values.config.persistence.elasticsearch.user }}
+        - name: ES_USER
+          value: {{ $.Values.config.persistence.elasticsearch.user | quote }}
+        {{- end }}
+        {{- if $.Values.config.persistence.elasticsearch.password }}
+        - name: ES_PWD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "cadence.fullname" $ }}-{{ $serviceName }}-secrets
+              key: ES_PWD
+        {{- end }}
+        # TLS Configuration
+        - name: TLS_ENABLED
+          value: {{ $.Values.config.persistence.elasticsearch.tls.enabled | quote }}
+        {{- if $.Values.config.persistence.elasticsearch.tls.enabled }}
+        - name: ENABLE_HOST_VERIFICATION
+          value: {{ $.Values.config.persistence.elasticsearch.tls.enableHostVerification | quote }}
+        - name: REQUIRE_CLIENT_AUTH
+          value: {{ $.Values.config.persistence.elasticsearch.tls.requireClientAuth | quote }}
+        # CA certificate file
+        {{- if $.Values.config.persistence.elasticsearch.tls.caFile }}
+        - name: SSL_CA_FILE
+          value: {{ $.Values.config.persistence.elasticsearch.tls.caFile | quote }}
+        {{- else if $.Values.config.persistence.elasticsearch.tls.caFiles }}
+        - name: SSL_CA_FILE
+          value: {{ index $.Values.config.persistence.elasticsearch.tls.caFiles 0 | quote }}
+        {{- end }}
+        # Client certificate for mutual TLS
+        {{- if $.Values.config.persistence.elasticsearch.tls.certFile }}
+        - name: SSL_CLIENT_CERT
+          value: {{ $.Values.config.persistence.elasticsearch.tls.certFile | quote }}
+        {{- end }}
+        # Client private key for mutual TLS
+        {{- if $.Values.config.persistence.elasticsearch.tls.keyFile }}
+        - name: SSL_CLIENT_KEY
+          value: {{ $.Values.config.persistence.elasticsearch.tls.keyFile | quote }}
+        {{- end }}
+        # Server name override
+        {{- if $.Values.config.persistence.elasticsearch.tls.serverName }}
+        - name: SSL_SERVER_NAME
+          value: {{ $.Values.config.persistence.elasticsearch.tls.serverName | quote }}
+        {{- end }}
+        {{- end }}
+        {{- end }}
+        {{- with $.Values.global.tls.volumeMounts }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      containers:
+      - name: cadence-{{ $serviceName }}
+        {{- $globalImage := $.Values.global.image | default dict }}
+        {{- $serviceImage := $service.image | default dict }}
+        {{- $repository := $serviceImage.repository | default $globalImage.repository }}
+        {{- $tag := $serviceImage.tag | default $globalImage.tag }}
+        image: {{ $repository }}:{{ $tag }}
+        {{- $pullPolicy := $serviceImage.pullPolicy | default $globalImage.pullPolicy | default "IfNotPresent" }}
+        imagePullPolicy: {{ $pullPolicy }}
+        {{- $globalContainerSecurityContext := $.Values.global.containerSecurityContext | default dict }}
+        {{- $serviceContainerSecurityContext := $service.containerSecurityContext | default $globalContainerSecurityContext }}
+        {{- if $serviceContainerSecurityContext }}
+        securityContext:
+          {{- toYaml $serviceContainerSecurityContext | nindent 10 }}
+        {{- end }}
+        ports:
+        - name: rpc
+          containerPort: {{ $service.port }}
+          protocol: TCP
+        {{- if ne $serviceName "worker" }}
+        - name: grpc
+          containerPort: {{ $service.grpcPort }}
+          protocol: TCP
+        {{- end }}
+        {{- if $.Values.metrics.enabled }}
+        - name: {{ $.Values.metrics.portName | default "metrics" }}
+          containerPort: {{ $.Values.metrics.port | default 9090 }}
+          protocol: TCP
+        {{- end }}
+        volumeMounts:
+        - name: config
+          mountPath: /etc/cadence/config/config_template.yaml
+          subPath: config_template.yaml
+        - name: config
+          mountPath: {{ $.Values.config.dynamicConfig.filebased.filepath | default "/etc/cadence/config/dynamicconfig/config.yaml" }}
+          subPath: dynamic_config.yaml
+        {{- with $.Values.global.tls.volumeMounts }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        env:
+        - name: SERVICES
+          value: {{ $serviceName }}
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        {{- if $.Values.config.log.useEnvVars }}
+        {{- $globalLog := $.Values.global.log | default dict }}
+        {{- $serviceLog := $service.log | default $globalLog }}
+        - name: LOG_LEVEL
+          value: {{ $serviceLog.level | default "info" | quote }}
+        - name: LOG_STDOUT
+          value: {{ $serviceLog.stdout | default true | quote }}
+        {{- end }}
+        {{- $globalEnv := $.Values.global.env | default list }}
+        {{- $serviceEnv := $service.env | default list }}
+        {{- $mergedEnv := concat $globalEnv $serviceEnv }}
+        {{- if $mergedEnv }}
+        {{- toYaml $mergedEnv | nindent 8 }}
+        {{- end }}
+        {{- $globalSecrets := $.Values.global.secretEnv | default list }}
+        {{- $serviceSecrets := $service.secretEnv | default list }}
+        {{- $userSecrets := concat $globalSecrets $serviceSecrets -}}
+        {{- include "cadence.databaseSecrets" $ -}}
+        {{- $databaseSecrets := $.databaseSecrets | default list -}}
+        {{- $mergedSecrets := concat $userSecrets $databaseSecrets -}}
+        {{- if $mergedSecrets }}
+        envFrom:
+        - secretRef:
+            name: {{ include "cadence.fullname" $ }}-{{ $serviceName }}-secrets
+        {{- end }}
+        {{- with $service.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "cadence.fullname" $ }}-configmap
+      - name: versions-data
+        emptyDir: {}
+      {{- with $.Values.global.tls.volumes }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+{{- end }}

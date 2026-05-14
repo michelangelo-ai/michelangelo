@@ -1,0 +1,52 @@
+# Allow Bitnami charts to use legacy repository images
+global:
+  security:
+    allowInsecureImages: true
+
+# Force Cadence to use PostgreSQL for main DB
+config:
+  persistence:
+    database:
+      driver: "postgres"
+      sql:
+        hosts: "cadence-release-postgresql.cadence-postgres.svc.cluster.local"
+        port: 5432
+        dbname: "cadence"
+        visibilityDbname: "cadence_visibility"
+        user: "cadence"
+        password: "changeme-strong"
+        tls:
+          enabled: false
+          sslMode: ""
+
+# Enable Cadence schema jobs
+schema:
+  serverJob:
+    enabled: true
+
+# Deploy Postgres within the same release (Bitnami subchart)
+postgresql:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/postgresql
+    tag: "16.4.0"
+    pullPolicy: IfNotPresent
+  auth:
+    username: cadence
+    password: "changeme-strong"
+    database: cadence
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
+
+# Do NOT deploy ES, Kafka, Cassandra or MySQL
+elasticsearch:
+  enabled: false
+kafka:
+  enabled: false
+cassandra:
+  enabled: false
+mysql:
+  enabled: false

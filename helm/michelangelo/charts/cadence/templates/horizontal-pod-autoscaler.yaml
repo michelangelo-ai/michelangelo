@@ -1,0 +1,42 @@
+{{- range $serviceName := (list "frontend" "history" "matching" "worker") }}
+{{- $hpaEnabled := include "cadence.isHpaEnabled" (dict "serviceName" $serviceName "Values" $.Values) }}
+{{- if eq $hpaEnabled "true" }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "cadence.hpaName" (dict "serviceName" $serviceName "Values" $.Values "Chart" $.Chart "Release" $.Release) }}
+  labels:
+    {{- include "cadence.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "cadence.fullname" $ }}-{{ $serviceName }}
+  {{- $hpaConfig := index $.Values.autoscaling $serviceName }}
+  minReplicas: {{ $hpaConfig.minReplicas | default 1 }}
+  maxReplicas: {{ $hpaConfig.maxReplicas | default 10 }}
+  metrics:
+  {{- if $hpaConfig.targetCPUUtilizationPercentage }}
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: {{ $hpaConfig.targetCPUUtilizationPercentage }}
+  {{- end }}
+  {{- if $hpaConfig.targetMemoryUtilizationPercentage }}
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: {{ $hpaConfig.targetMemoryUtilizationPercentage }}
+  {{- end }}
+  {{- if $hpaConfig.behavior }}
+  behavior:
+    {{- toYaml $hpaConfig.behavior | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end }}

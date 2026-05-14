@@ -1,0 +1,18 @@
+dependencies:
+- name: cassandra
+  repository: oci://registry-1.docker.io/bitnamicharts
+  version: 11.4.2
+- name: postgresql
+  repository: oci://registry-1.docker.io/bitnamicharts
+  version: 16.7.27
+- name: mysql
+  repository: oci://registry-1.docker.io/bitnamicharts
+  version: 12.3.5
+- name: elasticsearch
+  repository: oci://registry-1.docker.io/bitnamicharts
+  version: 21.6.3
+- name: kafka
+  repository: oci://registry-1.docker.io/bitnamicharts
+  version: 30.1.8
+digest: sha256:794d39e9345acfb117730c963e7818fa388613b2cbb2becef8c3ce43d1e15206
+generated: "2025-11-03T14:00:44.205655-08:00"
