@@ -40,6 +40,7 @@ const features: Feature[] = [
     description:
       'Real-time model monitoring with drift detection, alerting, and observability for production ML systems.',
     icon: <EyeIcon />,
+    comingSoon: true,
   },
 ];
 
