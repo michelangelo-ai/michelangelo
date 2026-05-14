@@ -319,6 +319,7 @@ def _sync(ns: argparse.Namespace):
 
     if release_exists:
         _ensure_credentials_secret()
+        _helm_dependency_build()
         helm_args = _build_helm_set_args(ns)
         _exec(
             "helm",
@@ -381,9 +382,24 @@ def _refresh_mysql_schema():
     )
 
 
+def _helm_dependency_build():
+    """Add required Helm repos and build chart dependencies."""
+    try:
+        helm_existing_repos = subprocess.check_output(["helm", "repo", "list"]).decode()
+    except subprocess.CalledProcessError:
+        helm_existing_repos = ""
+    if "cadence-workflow" not in helm_existing_repos:
+        _exec("helm", "repo", "add", "cadence-workflow", "https://cadence-workflow.github.io/cadence-charts")
+    if "temporal" not in helm_existing_repos:
+        _exec("helm", "repo", "add", "temporal", "https://go.temporal.io/helm-charts")
+    _exec("helm", "repo", "update")
+    _exec("helm", "dependency", "build", str(_chart_dir))
+
+
 def _deploy_app_services(ns: argparse.Namespace):
     """Install the Michelangelo control plane via Helm."""
     _ensure_credentials_secret()
+    _helm_dependency_build()
     helm_args = _build_helm_set_args(ns)
     _exec(
         "helm",
