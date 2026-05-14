@@ -74,9 +74,7 @@ it.each([
       expect(mockRequest).toHaveBeenCalledWith(
         'UpdateTriggerRun',
         expect.objectContaining({
-          triggerRun: expect.objectContaining({
-            spec: expect.objectContaining({ action }) as Record<string, unknown>,
-          }) as Record<string, unknown>,
+          spec: expect.objectContaining({ action }) as Record<string, unknown>,
         })
       );
     });

@@ -1,5 +1,7 @@
 import { getServices } from './services';
 
+import type { PipelineRun } from './gen/michelangelo/api/v2/pipeline_run_pb';
+import type { TriggerRun } from './gen/michelangelo/api/v2/trigger_run_pb';
 import type { ExtractUnaryRpc } from './types';
 
 let handlersPromise: Promise<Awaited<ReturnType<typeof createHandlers>>> | null = null;
@@ -44,15 +46,12 @@ async function createHandlers() {
     GetTriggerRun: services.TriggerRunService.getTriggerRun as ExtractUnaryRpc<
       typeof services.TriggerRunService.getTriggerRun
     >,
-    UpdateTriggerRun: services.TriggerRunService.updateTriggerRun as ExtractUnaryRpc<
-      typeof services.TriggerRunService.updateTriggerRun
-    >,
-    CreatePipelineRun: services.PipelineRunService.createPipelineRun as ExtractUnaryRpc<
-      typeof services.PipelineRunService.createPipelineRun
-    >,
-    UpdatePipelineRun: services.PipelineRunService.updatePipelineRun as ExtractUnaryRpc<
-      typeof services.PipelineRunService.updatePipelineRun
-    >,
+    UpdateTriggerRun: (record: TriggerRun) =>
+      services.TriggerRunService.updateTriggerRun({ triggerRun: record }),
+    CreatePipelineRun: (record: PipelineRun) =>
+      services.PipelineRunService.createPipelineRun({ pipelineRun: record }),
+    UpdatePipelineRun: (record: PipelineRun) =>
+      services.PipelineRunService.updatePipelineRun({ pipelineRun: record }),
     ListModel: services.ModelService.listModel as ExtractUnaryRpc<
       typeof services.ModelService.listModel
     >,

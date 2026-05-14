@@ -30,12 +30,10 @@ describe('useStudioMutation', () => {
       ])
     );
 
-    result.current.mutate({ pipelineRun: { name: 'test-run' } });
+    result.current.mutate({ name: 'test-run' });
 
     await waitFor(() => {
-      expect(mockRequest).toHaveBeenCalledWith('CreatePipelineRun', {
-        pipelineRun: { name: 'test-run' },
-      });
+      expect(mockRequest).toHaveBeenCalledWith('CreatePipelineRun', { name: 'test-run' });
     });
   });
 
@@ -54,7 +52,7 @@ describe('useStudioMutation', () => {
       ])
     );
 
-    result.current.mutate({ pipelineRun: { name: 'test-run' } });
+    result.current.mutate({ name: 'test-run' });
 
     await waitFor(() => {
       expect(result.current.data).toEqual(mockResponse);
@@ -62,7 +60,7 @@ describe('useStudioMutation', () => {
     });
   });
 
-  test('passes onSuccess callback with correct parameters', async () => {
+  test('passes onSuccess callback with response data', async () => {
     const mockResponse = { id: 'test-id' };
     const onSuccess = vi.fn();
     const mockRequest = createQueryMockRouter({
@@ -82,11 +80,11 @@ describe('useStudioMutation', () => {
       ])
     );
 
-    const testVariables = { pipelineRun: { name: 'test-run' } };
-    result.current.mutate(testVariables);
+    result.current.mutate({ name: 'test-run' });
 
     await waitFor(() => {
-      expect(onSuccess).toHaveBeenCalledWith(mockResponse, testVariables, undefined);
+      expect(onSuccess).toHaveBeenCalled();
+      expect(onSuccess.mock.calls[0][0]).toEqual(mockResponse);
     });
   });
 
@@ -110,11 +108,11 @@ describe('useStudioMutation', () => {
       ])
     );
 
-    const testVariables = { pipelineRun: { name: 'test-run' } };
-    result.current.mutate(testVariables);
+    result.current.mutate({ name: 'test-run' });
 
     await waitFor(() => {
-      expect(onError).toHaveBeenCalledWith(expect.any(ApplicationError), testVariables, undefined);
+      expect(onError).toHaveBeenCalled();
+      expect(onError.mock.calls[0][0]).toBeInstanceOf(ApplicationError);
     });
   });
 
@@ -148,7 +146,7 @@ describe('useStudioMutation', () => {
       ])
     );
 
-    result.current.mutate({ pipelineRun: { name: 'test-run' } });
+    result.current.mutate({ name: 'test-run' });
 
     await waitFor(() => {
       expect(result.current.error).not.toBeNull();

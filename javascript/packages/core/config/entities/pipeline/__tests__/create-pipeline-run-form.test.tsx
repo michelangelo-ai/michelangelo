@@ -50,8 +50,9 @@ describe('CreatePipelineRunForm', () => {
     await user.click(submitButton);
 
     await waitFor(() => {
-      expect(mockRequest).toHaveBeenCalledWith('CreatePipelineRun', {
-        pipelineRun: expect.objectContaining({
+      expect(mockRequest).toHaveBeenCalledWith(
+        'CreatePipelineRun',
+        expect.objectContaining({
           metadata: expect.objectContaining({
             name: expect.stringMatching(/^run-\d{8}-\d{6}-.+$/) as string,
             namespace: 'ma-dev-test',
@@ -65,8 +66,8 @@ describe('CreatePipelineRunForm', () => {
               namespace: 'ma-dev-test',
             },
           }) as Record<string, unknown>,
-        }) as Record<string, unknown>,
-      });
+        })
+      );
     });
 
     await waitFor(() => {

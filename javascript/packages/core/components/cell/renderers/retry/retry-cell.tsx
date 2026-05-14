@@ -35,8 +35,8 @@ export const RetryCell = (props: CellRendererProps<string>) => {
   });
 
   const updatePipelineRunMutation = useStudioMutation<
-    { pipelineRun: Record<string, unknown> },
-    { pipelineRun: Record<string, unknown> }
+    Record<string, unknown>,
+    Record<string, unknown>
   >({ mutationName: 'UpdatePipelineRun' });
 
   const hasActivityId = !!value;
@@ -75,7 +75,7 @@ export const RetryCell = (props: CellRendererProps<string>) => {
     };
 
     try {
-      await updatePipelineRunMutation.mutateAsync({ pipelineRun: updatedPipelineRun });
+      await updatePipelineRunMutation.mutateAsync(updatedPipelineRun);
       setShowRetryModal(false);
       setRetryReason('Manual retry from UI');
 

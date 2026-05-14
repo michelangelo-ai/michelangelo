@@ -26,7 +26,7 @@ function TriggerRunActionForm({
 
   const config = ACTION_CONFIG[action];
 
-  const mutation = useStudioMutation<{ triggerRun: TriggerRun }, { triggerRun: TriggerRun }>({
+  const mutation = useStudioMutation<TriggerRun, TriggerRun>({
     mutationName: 'UpdateTriggerRun',
   });
 
@@ -36,7 +36,7 @@ function TriggerRunActionForm({
   };
 
   const handleSubmit = async (values: TriggerRun) => {
-    await mutation.mutateAsync({ triggerRun: values });
+    await mutation.mutateAsync(values);
 
     // We wait a few seconds before invalidating the queries so that the action can be processed
     setTimeout(() => {

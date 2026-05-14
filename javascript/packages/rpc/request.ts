@@ -24,7 +24,10 @@ export async function request<RpcId extends keyof RpcHandlerType>(
   args: OmitTypeName<Parameters<RpcHandlerType[RpcId]>[0]>
 ): Promise<OmitTypeName<Awaited<ReturnType<RpcHandlerType[RpcId]>>>> {
   const handlers = await getRpcHandlers();
-  const response = (await handlers[rpcId](args)) as Awaited<ReturnType<RpcHandlerType[RpcId]>>;
+  // Handlers have heterogeneous input types; calling through the union requires
+  // a loose cast here. The public `request` signature still narrows args by RpcId.
+  const handler = handlers[rpcId] as (a: unknown) => Promise<unknown>;
+  const response = (await handler(args)) as Awaited<ReturnType<RpcHandlerType[RpcId]>>;
   return toPlainObject(response) as OmitTypeName<Awaited<ReturnType<RpcHandlerType[RpcId]>>>;
 }
 

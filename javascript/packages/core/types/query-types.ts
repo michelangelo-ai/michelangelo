@@ -1,3 +1,4 @@
+import { useStudioMutation as _useStudioMutation } from '#core/hooks/use-studio-mutation';
 import { useStudioQuery as _useStudioQuery } from '#core/hooks/use-studio-query';
 
 import type { ApplicationError } from '#core/types/error-types';
@@ -28,9 +29,26 @@ export type QueryOptions = {
 };
 
 /**
- * Options that can be passed to mutation hooks.
+ * Configuration for a mutation that can be used by {@link _useStudioMutation}.
  */
-export type MutationOptions<TData = unknown, TVariables = unknown> = {
-  onSuccess?: (data: TData, variables: TVariables, context?: unknown) => void;
-  onError?: (error: ApplicationError, variables: TVariables, context?: unknown) => void;
+export interface MutationConfig {
+  /** Name of the RPC mutation handler to call, e.g. 'CreatePipelineRun' */
+  mutationName: string;
+
+  /** Options to pass to the mutation, e.g. 'onSuccess', 'onError' */
+  clientOptions?: MutationOptions;
+}
+
+/**
+ * Options that can be passed to mutation hooks.
+ *
+ * Callbacks expose simplified signatures — callers don't see React Query's
+ * full `(data, variables, context?)` shape.
+ */
+export type MutationOptions = {
+  /** Called with the mutation response when the request succeeds */
+  onSuccess?: (data: unknown) => void;
+
+  /** Called with the normalized error when the request fails */
+  onError?: (error: ApplicationError) => void;
 };

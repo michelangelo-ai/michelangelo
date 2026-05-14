@@ -15,17 +15,16 @@ export const CreatePipelineRunForm = ({
 }: ActionComponentProps<Pipeline>) => {
   const { projectId } = useStudioParams('base');
 
-  const createPipelineRunMutation = useStudioMutation<
-    { pipelineRun: PipelineRun },
-    { pipelineRun: PipelineRun }
-  >({ mutationName: 'CreatePipelineRun' });
+  const createPipelineRunMutation = useStudioMutation<PipelineRun, PipelineRun>({
+    mutationName: 'CreatePipelineRun',
+  });
 
   const handleRunSubmit = async (values: PipelineRun) => {
     if (createPipelineRunMutation.isPending) {
       return;
     }
 
-    await createPipelineRunMutation.mutateAsync({ pipelineRun: values });
+    await createPipelineRunMutation.mutateAsync(values);
   };
 
   const initialValues = {

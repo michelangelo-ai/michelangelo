@@ -120,8 +120,9 @@ describe('RetryCell', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Retry Task' }));
 
     await waitFor(() => {
-      expect(mockRequest).toHaveBeenCalledWith('UpdatePipelineRun', {
-        pipelineRun: expect.objectContaining({
+      expect(mockRequest).toHaveBeenCalledWith(
+        'UpdatePipelineRun',
+        expect.objectContaining({
           spec: expect.objectContaining({
             existingKey: 'existingValue',
             retryInfo: {
@@ -131,8 +132,8 @@ describe('RetryCell', () => {
               reason: 'Manual retry from UI',
             },
           }) as Record<string, unknown>,
-        }) as Record<string, unknown>,
-      });
+        })
+      );
     });
 
     await waitFor(() => {
@@ -176,15 +177,16 @@ describe('RetryCell', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Retry Task' }));
 
     await waitFor(() => {
-      expect(mockRequest).toHaveBeenCalledWith('UpdatePipelineRun', {
-        pipelineRun: expect.objectContaining({
+      expect(mockRequest).toHaveBeenCalledWith(
+        'UpdatePipelineRun',
+        expect.objectContaining({
           spec: expect.objectContaining({
             retryInfo: expect.objectContaining({
               reason: 'Pipeline failed due to OOM',
             }) as Record<string, unknown>,
           }) as Record<string, unknown>,
-        }) as Record<string, unknown>,
-      });
+        })
+      );
     });
   });
 
