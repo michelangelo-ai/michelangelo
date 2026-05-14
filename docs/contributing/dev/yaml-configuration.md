@@ -63,11 +63,11 @@ The Michelangelo Helm chart lives in `helm/michelangelo/`. Key files:
 | `helm/michelangelo/values.yaml` | Production defaults |
 | `helm/michelangelo/values-k3d.yaml` | Local k3d overrides for development |
 
-See the [Platform Setup guide](../../operator-guides/platform-setup.md) for Helm configuration details.
+See the [Platform Setup guide](../../operator-guides/setup/platform-setup.md) for Helm configuration details.
 
 ## Related
 
 - [Building from Source](../building-michelangelo-ai-from-source.md)
 - [Bazel Build System](bazel.md)
 - [Python Utilities](python-utilities.md)
-- [Platform Setup](../../operator-guides/platform-setup.md)
+- [Platform Setup](../../operator-guides/setup/platform-setup.md)

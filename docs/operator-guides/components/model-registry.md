@@ -312,7 +312,7 @@ Key fields:
 
 The `InferenceServer` controller emits these conditions: `Cleanup`, `HealthCheck`, `BackendProvision`, `ModelConfigProvision`, `Validation`. There is no `Ready` condition; gate readiness on `BackendProvision` and `ModelConfigProvision` instead.
 
-For backend selection and configuration, see [Integrate a Custom Backend](serving/integrate-custom-backend.md).
+For backend selection and configuration, see [Integrate a Custom Backend](../serving/integrate-custom-backend.md).
 
 ---
 
