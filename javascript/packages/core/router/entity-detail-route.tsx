@@ -68,8 +68,10 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
     const firstTabId = validTabIds[0];
 
     if (!entityTab) {
+      // No tab specified - redirect to first tab
       navigateToTab(firstTabId, { replace: true });
     } else if (!validTabIds.includes(entityTab)) {
+      // Invalid tab - redirect to first tab
       navigateToTab(firstTabId, { replace: true });
     }
   }, [entityTab, detailViewConfig, isLoading, error, navigateToTab]);
