@@ -313,17 +313,37 @@ def _sync(ns: argparse.Namespace):
     _ensure_credentials_secret()
     _helm_ensure_repos()
     helm_args = _build_helm_set_args(ns)
-    _helm_adopt_orphaned_resources(helm_args)
-    _exec(
-        "helm",
-        "upgrade",
-        "--install",
-        "michelangelo",
-        str(_chart_dir),
-        "-f",
-        str(_chart_dir / "values-k3d.yaml"),
-        *helm_args,
+
+    # Check if there is a healthy deployed release we can upgrade.
+    status_result = subprocess.run(
+        ["helm", "status", "michelangelo", "-o", "json"],
+        capture_output=True, text=True,
     )
+    release_healthy = (
+        status_result.returncode == 0
+        and '"status":"deployed"' in status_result.stdout
+    )
+
+    if release_healthy:
+        # Healthy release: upgrade in-place, keeping infra (Cadence, Kafka, etc.) running.
+        _exec(
+            "helm", "upgrade", "michelangelo", str(_chart_dir),
+            "-f", str(_chart_dir / "values-k3d.yaml"),
+            "--reuse-values", *helm_args,
+        )
+    else:
+        # Missing or broken release: uninstall cleanly, then reinstall from scratch.
+        subprocess.run(
+            ["helm", "uninstall", "michelangelo", "--ignore-not-found", "--wait"],
+            capture_output=False,
+        )
+        _helm_adopt_orphaned_resources(helm_args)
+        _exec(
+            "helm", "install", "michelangelo", str(_chart_dir),
+            "-f", str(_chart_dir / "values-k3d.yaml"),
+            *helm_args,
+        )
+
     _helm_wait(ns)
 
 
