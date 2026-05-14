@@ -1,14 +1,8 @@
 import { CellType } from '#core/components/cell/constants';
 import { TASK_STATE } from '#core/components/views/execution/constants';
-import { INFERENCE_SERVER_STATE } from './list';
+import { CONDITION_STATUS, INFERENCE_SERVER_STATE_CELL } from './shared';
 
 import type { DetailViewConfig } from '#core/components/views/types';
-
-export const CONDITION_STATUS = {
-  UNKNOWN: 0,
-  TRUE: 1,
-  FALSE: 2,
-} as const;
 
 export const TARGET_DETAIL_CONFIG: DetailViewConfig = {
   type: 'detail',
@@ -27,33 +21,7 @@ export const TARGET_DETAIL_CONFIG: DetailViewConfig = {
       label: 'Owner',
       type: CellType.TEXT,
     },
-    {
-      id: 'status.state',
-      label: 'State',
-      type: CellType.STATE,
-      stateTextMap: {
-        [INFERENCE_SERVER_STATE.INVALID]: 'Invalid',
-        [INFERENCE_SERVER_STATE.INITIALIZED]: 'Initialized',
-        [INFERENCE_SERVER_STATE.CREATE_PENDING]: 'Create pending',
-        [INFERENCE_SERVER_STATE.SERVING]: 'Serving',
-        [INFERENCE_SERVER_STATE.FAILED]: 'Failed',
-        [INFERENCE_SERVER_STATE.DELETE_PENDING]: 'Delete pending',
-        [INFERENCE_SERVER_STATE.CREATING]: 'Creating',
-        [INFERENCE_SERVER_STATE.DELETING]: 'Deleting',
-        [INFERENCE_SERVER_STATE.DELETED]: 'Deleted',
-      },
-      stateColorMap: {
-        [INFERENCE_SERVER_STATE.INVALID]: 'gray',
-        [INFERENCE_SERVER_STATE.INITIALIZED]: 'blue',
-        [INFERENCE_SERVER_STATE.CREATE_PENDING]: 'blue',
-        [INFERENCE_SERVER_STATE.SERVING]: 'green',
-        [INFERENCE_SERVER_STATE.FAILED]: 'red',
-        [INFERENCE_SERVER_STATE.DELETE_PENDING]: 'blue',
-        [INFERENCE_SERVER_STATE.CREATING]: 'blue',
-        [INFERENCE_SERVER_STATE.DELETING]: 'blue',
-        [INFERENCE_SERVER_STATE.DELETED]: 'gray',
-      },
-    },
+    INFERENCE_SERVER_STATE_CELL,
   ],
   pages: [
     {

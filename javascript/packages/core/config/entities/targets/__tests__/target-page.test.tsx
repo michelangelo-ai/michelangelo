@@ -1,8 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 
-import { CONDITION_STATUS } from '#core/config/entities/targets/detail';
-import { INFERENCE_SERVER_STATE } from '#core/config/entities/targets/list';
+import { CONDITION_STATUS, INFERENCE_SERVER_STATE } from '#core/config/entities/targets/shared';
 import { DEPLOY_PHASE } from '#core/config/phases/deploy';
 import { EntityDetailRoute } from '#core/router/entity-detail-route';
 import { PhaseListRoute } from '#core/router/phase-list-route';
