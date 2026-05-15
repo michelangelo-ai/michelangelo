@@ -65,10 +65,7 @@ jobs:
           done
 
       - name: Sync sandbox
-        run: |
-          $HOME/.local/bin/poetry run ma sandbox sync --workflow cadence \
-            --set apiserver.metadataStorage.enable=true \
-            --set controllermgr.metadataStorage.enable=true
+        run: $HOME/.local/bin/poetry run ma sandbox sync --workflow cadence
 
       - name: Check out integration-test repo
         uses: actions/checkout@v4
