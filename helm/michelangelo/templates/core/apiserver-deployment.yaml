@@ -13,6 +13,8 @@ spec:
       {{- include "michelangelo.componentSelectorLabels" (dict "context" . "component" "apiserver") | nindent 6 }}
   template:
     metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/core/apiserver-configmap.yaml") . | sha256sum }}
       labels:
         {{- include "michelangelo.componentSelectorLabels" (dict "context" . "component" "apiserver") | nindent 8 }}
     spec:

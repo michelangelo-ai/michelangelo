@@ -723,7 +723,10 @@ func buildCriterionSQL(op *apipb.CriterionOperation, tableName string, indexPath
 
 	logicalOp, ok := logicalOperatorMap[op.GetLogicalOperator().String()]
 	if !ok {
-		return "", nil, status.Errorf(codes.InvalidArgument, "logical operator %v currently not supported", op.GetLogicalOperator())
+		// LOGICAL_OPERATOR_INVALID (proto default 0) is treated as AND.
+		// This is the correct default when only one criterion is provided and
+		// the caller omits the logical_operator field.
+		logicalOp = "AND"
 	}
 	logicalOpStr := " " + logicalOp
 
