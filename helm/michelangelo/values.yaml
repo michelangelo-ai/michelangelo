@@ -342,7 +342,7 @@ controllermgr:
 
   # Metadata storage knobs (ingester). Defaults match the source sandbox YAML.
   metadataStorage:
-    enable: true
+    enable: false
     deletionDelay: 10s
     enableResourceVersionCache: false
 

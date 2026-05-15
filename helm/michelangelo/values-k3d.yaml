@@ -64,6 +64,8 @@ affinity: {}
 # (minio:9091) and the chart-managed object-storage-credentials Secret.
 # The collector image is pulled from GHCR automatically (no local build needed).
 controllermgr:
+  metadataStorage:
+    enable: true
   jobs:
     k8sengine:
       mapper:

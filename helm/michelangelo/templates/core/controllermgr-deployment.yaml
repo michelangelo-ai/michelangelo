@@ -13,6 +13,8 @@ spec:
       {{- include "michelangelo.componentSelectorLabels" (dict "context" . "component" "controllermgr") | nindent 6 }}
   template:
     metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/core/controllermgr-configmap.yaml") . | sha256sum }}
       labels:
         {{- include "michelangelo.componentSelectorLabels" (dict "context" . "component" "controllermgr") | nindent 8 }}
     spec:
