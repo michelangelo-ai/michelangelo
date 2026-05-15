@@ -339,6 +339,15 @@ def _sync(ns: argparse.Namespace):
             "-f", str(_chart_dir / "values-k3d.yaml"),
             "--reuse-values", *helm_args,
         )
+        # Force-restart app deployments so they always pick up the latest
+        # configmap values (helm upgrade only restarts pods when the pod
+        # template spec changes, but values-only changes may not alter it).
+        for deploy in ("michelangelo-apiserver", "michelangelo-controllermgr",
+                       "michelangelo-worker"):
+            subprocess.run(
+                ["kubectl", "rollout", "restart", f"deployment/{deploy}", "-n", "default"],
+                capture_output=True,
+            )
     else:
         # Missing or broken release: uninstall cleanly, then reinstall from scratch.
         subprocess.run(
