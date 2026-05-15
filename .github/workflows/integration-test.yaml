@@ -56,7 +56,10 @@ jobs:
       # controllermgr). Infrastructure (MySQL, Cadence, MinIO, Grafana, Prometheus)
       # is kept running between runs — no re-init overhead.
       - name: Sync sandbox
-        run: $HOME/.local/bin/poetry run ma sandbox sync --workflow cadence
+        run: |
+          $HOME/.local/bin/poetry run ma sandbox sync --workflow cadence \
+            --set apiserver.metadataStorage.enable=true \
+            --set controllermgr.metadataStorage.enable=true
 
       - name: Check out integration-test repo
         uses: actions/checkout@v4

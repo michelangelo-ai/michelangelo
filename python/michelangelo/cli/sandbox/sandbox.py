@@ -179,6 +179,14 @@ def init_arguments(p: argparse.ArgumentParser):
         nargs="+",
         default=[],
     )
+    sync_p.add_argument(
+        "--set",
+        dest="helm_set",
+        metavar="KEY=VALUE",
+        action="append",
+        default=[],
+        help="Pass arbitrary --set KEY=VALUE flags through to helm upgrade/install.",
+    )
 
     demo_p = sp.add_parser(
         "demo", help="Create demo project and pipelines in the sandbox cluster."
@@ -601,6 +609,10 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
     # envoy is paired with ui — disable both together
     if "ui" in getattr(ns, "exclude", []):
         args += ["--set", "envoy.enabled=false"]
+
+    # Arbitrary --set passthrough from the caller (e.g. CI workflow)
+    for kv in getattr(ns, "helm_set", []):
+        args += ["--set", kv]
 
     return args
 
