@@ -423,6 +423,7 @@ def _helm_ensure_repos():
         _exec("helm", "repo", "add", "cadence-workflow", "https://cadence-workflow.github.io/cadence-charts")
     if "temporal" not in helm_existing_repos:
         _exec("helm", "repo", "add", "temporal", "https://go.temporal.io/helm-charts")
+    _exec("helm", "dependency", "update", str(_chart_dir))
 
 
 def _helm_delete_services(helm_args: list[str]):
