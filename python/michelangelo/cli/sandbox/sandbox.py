@@ -364,6 +364,24 @@ def _sync(ns: argparse.Namespace):
                 ],
                 capture_output=True,
             )
+        # Wait for the restarted rollouts to complete before proceeding.
+        for deploy in (
+            "michelangelo-apiserver",
+            "michelangelo-controllermgr",
+            "michelangelo-worker",
+        ):
+            subprocess.run(
+                [
+                    "kubectl",
+                    "rollout",
+                    "status",
+                    f"deployment/{deploy}",
+                    "-n",
+                    "default",
+                    "--timeout=300s",
+                ],
+                capture_output=False,
+            )
     else:
         # Missing or broken release: uninstall cleanly, then reinstall from scratch.
         subprocess.run(

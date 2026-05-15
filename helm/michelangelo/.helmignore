@@ -1,5 +1,2 @@
 # Exclude downloaded dependency tarballs from packaged chart
 charts/*.tgz
-# Exclude unpacked dependency directories (downloaded by helm dependency update)
-charts/cadence/
-charts/temporal/
