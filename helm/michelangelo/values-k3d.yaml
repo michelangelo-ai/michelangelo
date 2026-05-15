@@ -21,8 +21,7 @@ objectStorage:
   secure: false
   region: us-east-1
   bucket: michelangelo
-  accessKeyId: minioadmin
-  secretAccessKey: minioadmin
+  existingSecret: minio-credentials
 
 workflow:
   engine: cadence
