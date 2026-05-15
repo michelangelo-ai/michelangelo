@@ -4,28 +4,44 @@ sidebar_position: 3
 
 # Sandbox Setup
 
-Set up a local Michelangelo environment on your machine. This gives you a fully functional cluster with the API server, controller manager, workflow engine, object storage, and all supporting services.
+This guide walks you through setting up a local Michelangelo environment on your laptop. The sandbox runs a fully functional cluster — API server, controller manager, workflow engine, object storage, and supporting services — entirely on your machine, so you can explore Michelangelo or develop against it without any cloud infrastructure.
 
-**Time estimate**: ~20 minutes (assuming prerequisites are installed).
+**Who this is for:** ML engineers, platform engineers, and contributors who want to try Michelangelo locally or develop new features against it.
+
+**What you'll have at the end:** a running sandbox cluster and a successful demo pipeline run, ready for you to build your own workflows on top of.
+
+**Time estimate:** ~20 minutes (assuming prerequisites are installed; first-time pulls of container images can add 5–10 minutes).
+
+**Supported platforms:** macOS (Apple Silicon and Intel) and Linux. Windows is not officially supported, but WSL2 with Docker Desktop should work for most steps.
+
+## Get the code
+
+Clone the Michelangelo repository to your machine:
+
+```bash
+git clone https://github.com/michelangelo-ai/michelangelo.git
+cd michelangelo
+```
+
+Throughout this guide, `<repo-root>` refers to the directory you just cloned (for example, `~/michelangelo`).
 
 ## Prerequisites
 
-Before you begin, make sure you have the following installed. Run each verification command to confirm:
+Before you begin, make sure you have the following installed. Install commands below show macOS (Homebrew) and Linux options where they differ; on Linux, follow the linked official guide if you don't see a direct command. Run each verification command to confirm:
 
-| Tool | Install | Verify |
-|------|---------|--------|
-| **Docker** | [Get Docker](https://docs.docker.com/get-started/get-docker) or [Colima](https://github.com/abiosoft/colima) | `docker --version` |
-| **kubectl** | `brew install kubectl` or [official guide](https://kubernetes.io/docs/tasks/tools/#kubectl) | `kubectl version --client` |
-| **k3d** | `brew install k3d` | `k3d --version` |
-| **Helm** | `brew install helm` or [official guide](https://helm.sh/docs/intro/install/) | `helm version` |
-| **Python 3.9+** | [python.org](https://www.python.org/downloads/) | `python3 --version` |
-| **Poetry** | `curl -sSL https://install.python-poetry.org \| python3 -` | `poetry --version` |
-| **cadence** *(Cadence only)* | `brew install cadence-workflow` | `cadence --version` |
-| **temporal** *(Temporal only)* | `brew install temporal` | `temporal --version` |
+| Tool | Install (macOS) | Install (Linux) | Verify |
+|------|-----------------|-----------------|--------|
+| **Docker** | [Docker Desktop](https://docs.docker.com/get-started/get-docker) or [Colima](https://github.com/abiosoft/colima) | [Docker Engine](https://docs.docker.com/engine/install/) | `docker --version` |
+| **kubectl** | `brew install kubectl` | [official guide](https://kubernetes.io/docs/tasks/tools/#kubectl) | `kubectl version --client` |
+| **k3d** | `brew install k3d` | [official guide](https://k3d.io/#installation) | `k3d --version` |
+| **Helm** | `brew install helm` | [official guide](https://helm.sh/docs/intro/install/) | `helm version` |
+| **Python 3.9+** | [python.org](https://www.python.org/downloads/) or `brew install python@3.11` | distro package manager (e.g., `apt install python3`) | `python3 --version` |
+| **Poetry** | `curl -sSL https://install.python-poetry.org \| python3 -` | same as macOS | `poetry --version` |
+| **temporal** *(Temporal only)* | `brew install temporal` | [official guide](https://docs.temporal.io/cli#install) | `temporal --version` |
 
-### Colima resource requirements
+### Colima resource requirements (macOS only)
 
-If you are using Colima as your Docker runtime, the default VM resources are too limited for the sandbox. Start Colima with at least:
+If you are on macOS and using Colima as your Docker runtime, the default VM resources are too limited for the sandbox. Start Colima with at least:
 
 ```bash
 colima start --cpu 4 --memory 8 --disk 60
@@ -59,41 +75,47 @@ Docker containers need to communicate with services on your host machine. Verify
 
 ### Install Python dependencies
 
-From the repository root, install the Michelangelo Python packages:
+From the repository you cloned, install the Michelangelo Python packages:
 
 ```bash
 cd <repo-root>/python
 poetry install
 ```
 
-> **Tip**: Replace `<repo-root>` with the path where you cloned the Michelangelo repository (e.g., `~/michelangelo`).
-
 ---
 
 ## Quick start
 
-The fastest way to get a working Michelangelo environment:
+Once prerequisites and Python dependencies are installed, the sandbox is three commands away:
 
 ```bash
-# 1. Install dependencies (from the repository root)
-cd <repo-root>/python
-poetry install
+# 1. Activate the Poetry virtual environment (from <repo-root>/python)
 source .venv/bin/activate
 
-# 2. Create the sandbox (~10-15 min on first run)
+# 2. Create the sandbox (~10–15 min on first run)
 ma sandbox create
 
 # 3. Verify everything works by running the demo pipeline
 ma sandbox demo pipeline
 ```
 
-When `ma sandbox create` completes successfully, you should see all Michelangelo services starting up in your K3d cluster. You can verify with:
+> **Tip:** If you prefer not to activate the venv, you can prefix each command with `poetry run` (e.g., `poetry run ma sandbox create`).
+
+### Choosing a workflow engine
+
+`ma sandbox create` defaults to **Cadence**, which is the recommended choice for most users — it's the most-tested path and matches the examples in this guide. Pass `--workflow temporal` only if you specifically want to develop or test against Temporal (for example, if your team is migrating to it). The two engines are interchangeable from a workflow-author perspective; the choice mainly affects which web UI and CLI you use.
+
+### Verifying success
+
+When `ma sandbox create` completes, all Michelangelo services start in your k3d cluster. Verify with:
 
 ```bash
 kubectl get pods
 ```
 
-All pods should show `Running` status. See [Sandbox Ports and Endpoints](./ma-sandbox-ports-and-endpoints.md) for the full list of services and their URLs.
+You should see roughly 10–15 pods (the exact count depends on which engine you chose and any `--exclude` flags). All pods should reach `Running` status within 2–3 minutes; some pods may briefly show `ContainerCreating` or `Init` while images pull.
+
+Then open the **Michelangelo UI at [http://localhost:8090](http://localhost:8090)** — if the dashboard loads, your sandbox is healthy. See [Sandbox Ports and Endpoints](./ma-sandbox-ports-and-endpoints.md) for the full list of services and their URLs.
 
 ---
 
@@ -166,13 +188,9 @@ ma sandbox demo inference   # sets up demo inference server
 
 ---
 
-## Running your first workflow
+## Smoke test: run the BERT CoLA example
 
-Once your sandbox is running, you can run Uniflow workflows locally or remotely.
-
-### Local execution
-
-Local execution runs workflows directly in your Python environment -- great for rapid development and debugging.
+After `ma sandbox demo pipeline` succeeds, you've already proven the sandbox works end to end. If you'd like to run a real example workflow against it before moving on, the BERT CoLA text-classification example is a quick way to confirm local execution works:
 
 ```bash
 cd <repo-root>/python
@@ -180,96 +198,14 @@ poetry install --extras example
 PYTHONPATH=. poetry run python ./examples/bert_cola/bert_cola.py
 ```
 
-> **Note**: Local execution doesn't support caching, retries, or resource constraints. Use remote execution for production-like behavior.
+You should see workflow logs in your terminal and, when it finishes, a trained model artifact written to local storage.
 
-### Remote execution
+For the full story on local vs. remote execution, building Docker images, configuring storage, and using either workflow engine end to end, see:
 
-Remote execution deploys workflows to your sandbox's Kubernetes cluster, with full caching, retries, and resource management.
+- [Pipeline Running Modes](../user-guides/ml-pipelines/pipeline-running-modes.md) — the four execution modes Michelangelo supports
+- [Getting Started with ML Pipelines](../user-guides/ml-pipelines/getting-started.md) — write and run your own workflow
 
-**Setup:**
-
-1. Build a Docker image with your workflow code:
-   ```bash
-   cd <repo-root>/python
-   docker build -t examples:latest -f ./examples/Dockerfile .
-   ```
-
-2. Import the image into your K3d cluster:
-   ```bash
-   k3d image import examples:latest -c michelangelo-sandbox
-   ```
-
-3. Set up MinIO storage (object storage for workflow artifacts):
-   - Open the MinIO Console at http://localhost:9090
-   - Log in with username `minioadmin` and password `minioadmin` (these are default sandbox credentials, not for production use)
-   - Click "Create Bucket" and create a bucket named `default`
-
-4. Set up the workflow engine namespace/domain:
-
-   **Cadence** (default):
-   ```bash
-   brew install cadence-workflow
-   cadence --do default d re
-   ```
-
-   **Temporal** (if you created the sandbox with `--workflow temporal`):
-
-   First, port-forward the Temporal frontend so the local CLI can reach it:
-   ```bash
-   kubectl port-forward svc/michelangelo-temporal-frontend 7233:7233 &
-   ```
-
-   Then register the `default` namespace:
-   ```bash
-   brew install temporal
-   temporal operator namespace create default
-   ```
-
-   Finally, restart the worker to pick up the registered namespace:
-   ```bash
-   kubectl rollout restart deployment/michelangelo-worker
-   ```
-
-5. Run your workflow:
-
-   **Cadence** (default):
-   ```bash
-   PYTHONPATH=. poetry run python ./examples/bert_cola/bert_cola.py \
-     remote-run \
-     --image docker.io/library/examples:latest \
-     --storage-url s3://default \
-     --yes
-   ```
-
-   **Temporal**:
-   ```bash
-   # Ensure the port-forward from step 4 is still running, then:
-   TEMPORAL_ADDRESS=localhost:7233 \
-   PYTHONPATH=. poetry run python ./examples/bert_cola/bert_cola.py \
-     remote-run \
-     --workflow temporal \
-     --image docker.io/library/examples:latest \
-     --storage-url s3://default \
-     --yes
-   ```
-
-   > **Note**: The `--workflow` flag here must match the engine used when you ran `ma sandbox create --workflow <engine>`.
-
-**Monitoring your workflow:**
-
-| Service | URL | Sandbox engine |
-|---------|-----|----------------|
-| Cadence Web UI | http://localhost:8088/domains/default/workflows | Cadence |
-| Temporal Web UI | http://localhost:8080/namespaces/default/workflows | Temporal |
-| MinIO Console | http://localhost:9090/browser/default | Both |
-| Ray Dashboard | http://localhost:8265 | Both (requires port-forward, see below) |
-
-To access the Ray Dashboard for tasks running in the cluster:
-
-1. Find the Ray head service: `kubectl get svc | grep ray`
-2. Port-forward it: `kubectl port-forward svc/<ray-head-svc-name> 8265:8265 -n default`
-
-For more details on execution modes, see [Pipeline Running Modes](../user-guides/ml-pipelines/pipeline-running-modes.md).
+> **Note:** Local execution doesn't support caching, retries, or resource constraints. Use remote execution (covered in the ML Pipelines guides) for production-like behavior.
 
 ---
 
@@ -326,11 +262,17 @@ A service is starting but immediately crashing. Check its logs:
 kubectl logs <pod-name>
 ```
 
-To restart a single service (e.g., MinIO):
+If a single service is wedged, the simplest recovery is to delete the pod and let Kubernetes recreate it:
 
 ```bash
-kubectl delete pod minio
-kubectl apply -f <repo-root>/python/michelangelo/cli/sandbox/resources/minio.yaml
+kubectl delete pod <pod-name>
+```
+
+If that doesn't help, recreate the sandbox cleanly:
+
+```bash
+ma sandbox delete
+ma sandbox create
 ```
 
 ### Port already in use
