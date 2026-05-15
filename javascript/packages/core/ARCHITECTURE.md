@@ -23,7 +23,7 @@ When this document refers to "an entity," it means one of these resources. When 
 
 The two are **complementary**. Configuration is the natural fit for most **entities** — resources whose lifecycle follows a declarative CRUD pattern (list, view one, create, update, act). One runtime renders them all from configs rather than each being implemented by hand. Components handle the rest: bespoke UI, app-wide or cross-project resources that don't fit the project hierarchy, and entities that need enough custom logic that bending them to the engine would be costlier than just writing them.
 
-The configuration engine is deliberately kept lightweight. When a use case doesn't fit, the answer is an escape hatch (§ Customization escape hatches), not more complexity in the engine.
+The configuration engine is deliberately kept lightweight. When a use case doesn't fit, the answer is an escape hatch ([§ Customization escape hatches](#customization-escape-hatches)), not more complexity in the engine.
 
 ### Configurations live in consumer packages
 
@@ -76,12 +76,12 @@ Two interpolation flavors are supported:
 - **String** — `${path.to.value}` template strings. Best for simple field references.
 - **Function** — `({ data, studio, ... }) => value`. Best for computed values or branching.
 
-The interpolation engine is pure — it knows nothing about Uber, ML, or any specific domain. All context is injected through providers, keeping the engine reusable and the domain knowledge with the consumer. The context commonly available to expressions:
+The interpolation engine is pure — it knows nothing about ML or any specific domain. All context is injected through providers, keeping the engine reusable and the domain knowledge with the consumer. The context commonly available to expressions:
 
 - **`data`** — the current row (list) or page entity (detail/form), with `row ?? page` as the convenience reference.
 - **`studio`** — URL params from `useStudioParams` (`projectId`, `phase`, `entity`, …).
 - **`repeatedLayoutContext`** — index and root field path inside repeated form sections (`<RepeatedLayoutProvider>`).
-- Consumer extensions registered via `<InterpolationProvider value={…}>` and typed via `InterpolationContextExtensions` (see § Customization via providers).
+- Consumer extensions registered via `<InterpolationProvider value={…}>` and typed via `InterpolationContextExtensions` (see [§ Customization via providers](#4-customization-via-providers)).
 
 `useInterpolationResolver` resolves a config object on demand, walking the structure recursively so any leaf can be interpolatable. Higher-level wrappers like `InterpolatableActionsPopover` apply it per-row before delegating to the rendering component, so most call sites don't touch the resolver directly.
 
@@ -133,7 +133,7 @@ For specific styling conventions — when to use `useStyletron()` inline, when t
 
 ## 6. Routing
 
-Studio's URL structure mirrors the domain model from § 1:
+Studio's URL structure mirrors the domain model from [§ 1](#1-domain-model):
 
 ```
 /                                              project list
