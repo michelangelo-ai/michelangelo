@@ -333,3 +333,8 @@ checkpoints/
 # Add pytest coverage file with lcov format
 coverage.lcov
 bin/
+
+# Local debug/test scripts that may contain credentials
+python/check_artifacts.py
+python/check_test_run.py
+python/test_mlflow_model_loading.py
