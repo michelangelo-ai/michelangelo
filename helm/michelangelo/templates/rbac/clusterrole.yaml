@@ -53,10 +53,10 @@ rules:
     resources: ["configmaps", "secrets"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
-  # Namespaces — controllers list namespaces to scope reconcilers
+  # Namespaces — apiserver creates a namespace per project; controllers scope reconcilers
   - apiGroups: [""]
     resources: ["namespaces"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
   # Events — controllers emit events on CR objects
   - apiGroups: [""]
