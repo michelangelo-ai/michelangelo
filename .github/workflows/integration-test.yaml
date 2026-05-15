@@ -55,6 +55,15 @@ jobs:
       # Sync restarts only Michelangelo app services (apiserver, envoy, ui, worker,
       # controllermgr). Infrastructure (MySQL, Cadence, MinIO, Grafana, Prometheus)
       # is kept running between runs — no re-init overhead.
+      - name: Pull latest service images into k3d
+        run: |
+          for image in ghcr.io/michelangelo-ai/apiserver:main \
+                       ghcr.io/michelangelo-ai/worker:main \
+                       ghcr.io/michelangelo-ai/controllermgr:main; do
+            docker pull $image
+            k3d image import $image -c michelangelo-sandbox
+          done
+
       - name: Sync sandbox
         run: |
           $HOME/.local/bin/poetry run ma sandbox sync --workflow cadence \
