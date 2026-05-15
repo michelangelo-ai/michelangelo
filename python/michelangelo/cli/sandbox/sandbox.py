@@ -337,6 +337,7 @@ def _sync(ns: argparse.Namespace):
         _exec(
             "helm", "upgrade", "michelangelo", str(_chart_dir),
             "-f", str(_chart_dir / "values-k3d.yaml"),
+            "--dependency-update",
             "--reuse-values", *helm_args,
         )
         # Force-restart app deployments so they always pick up the latest
@@ -361,6 +362,7 @@ def _sync(ns: argparse.Namespace):
         _exec(
             "helm", "install", "michelangelo", str(_chart_dir),
             "-f", str(_chart_dir / "values-k3d.yaml"),
+            "--dependency-update",
             *helm_args,
         )
 
@@ -423,7 +425,6 @@ def _helm_ensure_repos():
         _exec("helm", "repo", "add", "cadence-workflow", "https://cadence-workflow.github.io/cadence-charts")
     if "temporal" not in helm_existing_repos:
         _exec("helm", "repo", "add", "temporal", "https://go.temporal.io/helm-charts")
-    _exec("helm", "dependency", "update", str(_chart_dir))
 
 
 def _helm_delete_services(helm_args: list[str]):
@@ -532,6 +533,7 @@ def _deploy_app_services(ns: argparse.Namespace):
         str(_chart_dir),
         "-f",
         str(_chart_dir / "values-k3d.yaml"),
+        "--dependency-update",
         *helm_args,
     )
     _helm_wait(ns)
