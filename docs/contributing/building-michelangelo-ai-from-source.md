@@ -197,7 +197,7 @@ For IDE configuration (VS Code, Cursor, GoLand), see the [IDE and Bazel Setup Gu
 
 ## Related
 
-- [Go Key Concepts and Terms](dev/go/key-concepts-and-terms.md) — package map, key types, and patterns for the Go backend
+- [Go Key Concepts and Terms](./dev/go/key-concepts-and-terms.md) — package map, key types, and patterns for the Go backend
 
 
 
