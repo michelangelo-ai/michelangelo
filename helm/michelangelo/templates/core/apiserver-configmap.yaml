@@ -15,8 +15,8 @@ data:
       k8s:
         qps: {{ .Values.apiserver.k8s.qps }}
         burst: {{ .Values.apiserver.k8s.burst }}
-      metadataStorage:
-        enableMetadataStorage: {{ .Values.apiserver.metadataStorage.enable }}
       crdSync:
         enableCRDUpdate: {{ .Values.apiserver.crdSync.enableUpdate }}
+    metadataStorage:
+      enableMetadataStorage: {{ .Values.apiserver.metadataStorage.enable }}
 {{- end }}
