@@ -69,6 +69,12 @@ export type InvalidateOperation = {
   type: 'invalidate';
   /** Each target invalidates queries by name only (broad) or by name+args (specific). */
   targets: InvalidationTarget[];
+  /**
+   * Wait this many milliseconds before invalidating. Useful when the backend
+   * processes the mutation asynchronously after responding (e.g. CRD spec
+   * changes that a controller reconciles into status). Set only when needed.
+   */
+  delayMs?: number;
 };
 
 export type InvalidationTarget = string | { name: string; serviceOptions: Record<string, unknown> };

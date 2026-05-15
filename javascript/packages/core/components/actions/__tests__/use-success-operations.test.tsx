@@ -160,6 +160,40 @@ describe('useSuccessOperations', () => {
       });
       expect(await screen.findByText('Pipeline updated')).toBeInTheDocument();
     });
+
+    it('delayMs defers the invalidate by the given number of ms', () => {
+      vi.useFakeTimers();
+      try {
+        const operations: SuccessOperation[] = [
+          { type: 'invalidate', targets: ['ListPipelineRun'], delayMs: 2000 },
+        ];
+        const { result } = renderHook(
+          () => ({
+            run: useSuccessOperations(operations),
+            queryClient: useQueryClient(),
+          }),
+          buildWrapper([
+            getBaseProviderWrapper(),
+            getRouterWrapper(),
+            getServiceProviderWrapper({ request: vi.fn() }),
+            getSnackbarProviderWrapper(),
+            getIconProviderWrapper(),
+          ])
+        );
+        const spy = vi.spyOn(result.current.queryClient, 'invalidateQueries');
+
+        result.current.run({});
+        expect(spy).not.toHaveBeenCalled();
+
+        vi.advanceTimersByTime(1999);
+        expect(spy).not.toHaveBeenCalled();
+
+        vi.advanceTimersByTime(1);
+        expect(spy).toHaveBeenCalledWith({ queryKey: ['ListPipelineRun'] });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe('toast', () => {

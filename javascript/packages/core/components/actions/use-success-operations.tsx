@@ -28,10 +28,17 @@ export function useSuccessOperations(operations?: SuccessOperation[]) {
       const resolved = resolver(operations, { response });
       for (const op of resolved) {
         if (op.type === 'invalidate') {
-          for (const target of op.targets) {
-            const queryKey =
-              typeof target === 'string' ? [target] : [target.name, target.serviceOptions];
-            void queryClient.invalidateQueries({ queryKey });
+          const fire = () => {
+            for (const target of op.targets) {
+              const queryKey =
+                typeof target === 'string' ? [target] : [target.name, target.serviceOptions];
+              void queryClient.invalidateQueries({ queryKey });
+            }
+          };
+          if (op.delayMs) {
+            setTimeout(fire, op.delayMs);
+          } else {
+            fire();
           }
         } else if (op.type === 'toast') {
           enqueue(buildToastPayload(op, navigate, dequeue));
