@@ -36,6 +36,8 @@ images:
   pullPolicy: IfNotPresent
 
 apiserver:
+  metadataStorage:
+    enable: true
   service:
     type: NodePort
     nodePort: 30009
