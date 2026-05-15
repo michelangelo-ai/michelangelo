@@ -7,6 +7,7 @@ import (
 
 	"github.com/r3labs/diff/v3"
 	"github.com/stretchr/testify/assert"
+	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/conversion"
 
 	v1pb "github.com/michelangelo-ai/michelangelo/proto-go/test/kubeproto/conversion/v1"
@@ -20,6 +21,46 @@ func TestGen(t *testing.T) {
 	data2 := v2pb.GetProtocReqData()
 	resp2 := Generate(data2)
 	assert.NotNil(t, resp2)
+}
+
+// TestSchemeConvertToVersion verifies that AddToScheme registers the generated conversion
+// functions so that scheme.ConvertToVersion can convert between spoke and hub versions.
+func TestSchemeConvertToVersion(t *testing.T) {
+	s := k8sruntime.NewScheme()
+	assert.NoError(t, v1pb.AddToScheme(s))
+	assert.NoError(t, v2pb.AddToScheme(s))
+
+	v1obj := &v1pb.TestObject{
+		Spec: v1pb.TestObjectSpec{
+			F1: 42,
+			F2: []string{"hello", "world"},
+			F3: &v1pb.M1{
+				F1: []v1pb.E1{v1pb.E1_2, v1pb.E1_3},
+				F2: map[string]string{"k": "v"},
+			},
+		},
+		Status: v1pb.TestObjectStatus{F1: v1pb.E1_2},
+	}
+
+	// spoke → hub
+	out, err := s.ConvertToVersion(v1obj, v2pb.GroupVersion)
+	assert.NoError(t, err)
+	v2obj, ok := out.(*v2pb.TestObject)
+	assert.True(t, ok)
+	assert.Equal(t, int32(42), v2obj.Spec.F1)
+	assert.Equal(t, []string{"hello", "world"}, v2obj.Spec.F2)
+	assert.Equal(t, []v2pb.E1{v2pb.E1_2, v2pb.E1_3}, v2obj.Spec.F3.F1)
+	assert.Equal(t, v2pb.E1_2, v2obj.Status.F1)
+
+	// hub → spoke
+	out2, err := s.ConvertToVersion(v2obj, v1pb.GroupVersion)
+	assert.NoError(t, err)
+	v1objres, ok := out2.(*v1pb.TestObject)
+	assert.True(t, ok)
+	assert.Equal(t, int32(42), v1objres.Spec.F1)
+	assert.Equal(t, []string{"hello", "world"}, v1objres.Spec.F2)
+	assert.Equal(t, []v1pb.E1{v1pb.E1_2, v1pb.E1_3}, v1objres.Spec.F3.F1)
+	assert.Equal(t, v1pb.E1_2, v1objres.Status.F1)
 }
 
 func TestConvert(t *testing.T) {

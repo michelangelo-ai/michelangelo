@@ -27,6 +27,7 @@ go_test(
         "//proto/test/kubeproto/conversion/v2:go_default_library",
         "@com_github_r3labs_diff_v3//:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/conversion:go_default_library",
     ],
 )

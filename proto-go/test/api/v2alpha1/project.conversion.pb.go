@@ -5,6 +5,8 @@ import (
 	proto "github.com/gogo/protobuf/proto"
 	types "github.com/gogo/protobuf/types"
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	conversion1 "k8s.io/apimachinery/pkg/conversion"
+	runtime "k8s.io/apimachinery/pkg/runtime"
 	conversion "sigs.k8s.io/controller-runtime/pkg/conversion"
 )
 
@@ -101,6 +103,19 @@ func (dst *Project) ConvertFrom(srcRaw conversion.Hub) error {
 		return customProjectConvertor.ConvertFromHub(src, dst)
 	}
 	return nil
+}
+
+func init() {
+	SchemeBuilder.SchemeBuilder.Register(func(s *runtime.Scheme) error {
+		if err := s.AddGeneratedConversionFunc((*Project)(nil), (*v2.Project)(nil), func(a, b interface{}, _ conversion1.Scope) error {
+			return a.(*Project).ConvertTo(b.(conversion.Hub))
+		}); err != nil {
+			return err
+		}
+		return s.AddGeneratedConversionFunc((*v2.Project)(nil), (*Project)(nil), func(a, b interface{}, _ conversion1.Scope) error {
+			return b.(*Project).ConvertFrom(a.(conversion.Hub))
+		})
+	})
 }
 
 func ConvertProjectSpecToHub(in *ProjectSpec, out *v2.ProjectSpec) error {

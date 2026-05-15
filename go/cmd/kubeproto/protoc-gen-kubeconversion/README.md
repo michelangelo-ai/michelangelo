@@ -16,12 +16,66 @@ The goal is to **avoid hand-written converters** and ensure mappings are
   - The conversion logic can be customized with protobuf options below.
   - Developers can write custom conversion logic by implementing the generated convertor interfaces.
 
+- **Automatic scheme registration**:
+  - For each top-level CRD type in a spoke version, the generated code registers the conversion functions into the package-level `SchemeBuilder` via an `init()` function.
+  - No changes are needed in application code: the existing `AddToScheme` call automatically applies the registered conversion functions to the scheme.
+  - This enables scheme-based conversion via `scheme.ConvertToVersion()`, in addition to the direct `ConvertTo`/`ConvertFrom` interface used by the controller-runtime webhook server.
+  - Hub versions do not emit any scheme registration.
+
 - **Hub & Spoke versions**:
   - The generated code follows the Hub & Spoke model in version conversion ([Conversion concepts](https://book.kubebuilder.io/multiversion-tutorial/conversion-concepts)).
   - For spoke versions (where `version != hub_version`), the generated code implements [controller-runtime](https://github.com/kubernetes-sigs/controller-runtime)'s conversion.Convertible interface.
   - For hub versions (where `version == hub_version`), the generated code implements [controller-runtime](https://github.com/kubernetes-sigs/controller-runtime)'s conversion.Hub interface.
 
-- **Conversion rules**:
+---
+
+## Scheme Registration
+
+For each top-level CRD type in a spoke version, the generator emits an `init()` function that appends a conversion-registration callback to the package-level `SchemeBuilder`.
+
+### Generated code (spoke version)
+
+```go
+func init() {
+    SchemeBuilder.SchemeBuilder.Register(func(s *runtime.Scheme) error {
+        if err := s.AddGeneratedConversionFunc((*v1.Project)(nil), (*v2.Project)(nil),
+            func(a, b interface{}, _ conversion.Scope) error {
+                return a.(*v1.Project).ConvertTo(b.(crconversion.Hub))
+            }); err != nil {
+            return err
+        }
+        return s.AddGeneratedConversionFunc((*v2.Project)(nil), (*v1.Project)(nil),
+            func(a, b interface{}, _ conversion.Scope) error {
+                return b.(*v1.Project).ConvertFrom(a.(crconversion.Hub))
+            })
+    })
+}
+```
+
+`SchemeBuilder` is the package-level `*scheme.Builder` generated from `groupversion_info.proto`. Because `scheme.Builder` embeds `runtime.SchemeBuilder`, the callback is automatically invoked when `AddToScheme` is called — no extra wiring is needed in application code.
+
+### Usage
+
+```go
+scheme := runtime.NewScheme()
+// Registers CRD types AND conversion functions for all spoke CRDs.
+if err := v1.AddToScheme(scheme); err != nil { ... }
+if err := v2.AddToScheme(scheme); err != nil { ... }
+
+// Scheme-based conversion now works in both directions.
+out, err := scheme.ConvertToVersion(v1obj, v2.GroupVersion)
+```
+
+:::note
+This registration only covers top-level CRD types (those marked `resource.conversion = true`). Sub-messages do not get scheme registration because their conversion is handled internally by the top-level `ConvertTo`/`ConvertFrom` methods.
+
+Hub versions emit no registration at all.
+:::
+
+---
+
+## Conversion Rules
+
   - Fields with the same name and compatible type are auto-mapped.
   - Renamed or moved fields can be mapped via Protobuf options.
   - Unmapped fields must be explicitly ignored; otherwise a build error is raised.

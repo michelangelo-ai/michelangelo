@@ -711,6 +711,22 @@ func generateFileSpoke(gen *protogen.Plugin, targets map[string]*protogen.Messag
 			g.P("return nil")
 			g.P("}")
 			g.P()
+
+			k8sRuntimeSchemeIdent := protogen.GoIdent{GoImportPath: "k8s.io/apimachinery/pkg/runtime", GoName: "Scheme"}
+			k8sConversionScopeIdent := protogen.GoIdent{GoImportPath: "k8s.io/apimachinery/pkg/conversion", GoName: "Scope"}
+			g.P("func init() {")
+			g.P("SchemeBuilder.SchemeBuilder.Register(func(s *", k8sRuntimeSchemeIdent, ") error {")
+			g.P("if err := s.AddGeneratedConversionFunc((*", g.QualifiedGoIdent(spokeMsg.GoIdent), ")(nil), (*", g.QualifiedGoIdent(hubMsg.GoIdent), ")(nil), func(a, b interface{}, _ ", g.QualifiedGoIdent(k8sConversionScopeIdent), ") error {")
+			g.P("return a.(*", g.QualifiedGoIdent(spokeMsg.GoIdent), ").ConvertTo(b.(", g.QualifiedGoIdent(hubTypeIndet), "))")
+			g.P("}); err != nil {")
+			g.P("return err")
+			g.P("}")
+			g.P("return s.AddGeneratedConversionFunc((*", g.QualifiedGoIdent(hubMsg.GoIdent), ")(nil), (*", g.QualifiedGoIdent(spokeMsg.GoIdent), ")(nil), func(a, b interface{}, _ ", g.QualifiedGoIdent(k8sConversionScopeIdent), ") error {")
+			g.P("return b.(*", g.QualifiedGoIdent(spokeMsg.GoIdent), ").ConvertFrom(a.(", g.QualifiedGoIdent(hubTypeIndet), "))")
+			g.P("})")
+			g.P("})")
+			g.P("}")
+			g.P()
 		} else {
 			// Forward
 			g.P("func Convert", name, "ToHub", "(in *", name, ", out *", g.QualifiedGoIdent(hubMsg.GoIdent), ") error {")

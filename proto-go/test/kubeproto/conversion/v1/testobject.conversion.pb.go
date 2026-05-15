@@ -3,6 +3,8 @@ package v1
 
 import (
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/test/kubeproto/conversion/v2"
+	conversion1 "k8s.io/apimachinery/pkg/conversion"
+	runtime "k8s.io/apimachinery/pkg/runtime"
 	conversion "sigs.k8s.io/controller-runtime/pkg/conversion"
 )
 
@@ -185,6 +187,19 @@ func (dst *TestObject) ConvertFrom(srcRaw conversion.Hub) error {
 		return customTestObjectConvertor.ConvertFromHub(src, dst)
 	}
 	return nil
+}
+
+func init() {
+	SchemeBuilder.SchemeBuilder.Register(func(s *runtime.Scheme) error {
+		if err := s.AddGeneratedConversionFunc((*TestObject)(nil), (*v2.TestObject)(nil), func(a, b interface{}, _ conversion1.Scope) error {
+			return a.(*TestObject).ConvertTo(b.(conversion.Hub))
+		}); err != nil {
+			return err
+		}
+		return s.AddGeneratedConversionFunc((*v2.TestObject)(nil), (*TestObject)(nil), func(a, b interface{}, _ conversion1.Scope) error {
+			return b.(*TestObject).ConvertFrom(a.(conversion.Hub))
+		})
+	})
 }
 
 func ConvertTestObjectSpecToHub(in *TestObjectSpec, out *v2.TestObjectSpec) error {
