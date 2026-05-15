@@ -156,15 +156,13 @@ func (r *Reconciler) handleSync(ctx context.Context, log logr.Logger, object cli
 		indexedFields = indexedObj.GetIndexedKeyValuePairs()
 	}
 
-	if r.metadataStorage != nil {
-		// Upsert to metadata storage (includes all fields - no blob separation)
-		if err := r.metadataStorage.Upsert(ctx, object, false, indexedFields); err != nil {
-			log.Error(err, "Failed to upsert object to metadata storage")
-			return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
-		}
-		log.Info("Successfully synced object to metadata storage")
+	// Upsert to metadata storage (includes all fields - no blob separation)
+	if err := r.metadataStorage.Upsert(ctx, object, false, indexedFields); err != nil {
+		log.Error(err, "Failed to upsert object to metadata storage")
+		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
 
+	log.Info("Successfully synced object to metadata storage")
 	return ctrl.Result{}, nil
 }
 
@@ -178,25 +176,23 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
 		return ctrl.Result{}, nil
 	}
 
-	if r.metadataStorage != nil {
-		log.Info("Deleting from metadata storage")
+	log.Info("Deleting from metadata storage")
 
-		// Delete from metadata storage
-		gvks, _, err := r.scheme.ObjectKinds(object)
-		if err != nil || len(gvks) == 0 {
-			return ctrl.Result{}, fmt.Errorf("failed to get GVK for %T: %w", object, err)
-		}
-		// TODO(#943): gvks[0] may be non-deterministic when a type is registered under multiple
-		// versions. See issue for planned multi-GVK selection strategy.
-		typeMeta := &metav1.TypeMeta{
-			Kind:       gvks[0].Kind,
-			APIVersion: gvks[0].GroupVersion().String(),
-		}
+	// Delete from metadata storage
+	gvks, _, err := r.scheme.ObjectKinds(object)
+	if err != nil || len(gvks) == 0 {
+		return ctrl.Result{}, fmt.Errorf("failed to get GVK for %T: %w", object, err)
+	}
+	// TODO(#943): gvks[0] may be non-deterministic when a type is registered under multiple
+	// versions. See issue for planned multi-GVK selection strategy.
+	typeMeta := &metav1.TypeMeta{
+		Kind:       gvks[0].Kind,
+		APIVersion: gvks[0].GroupVersion().String(),
+	}
 
-		if err := r.metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil {
-			log.Error(err, "Failed to delete from metadata storage")
-			return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
-		}
+	if err := r.metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil {
+		log.Error(err, "Failed to delete from metadata storage")
+		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
 
 	// Remove our finalizer
@@ -214,23 +210,21 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
 func (r *Reconciler) handleDeletionAnnotation(ctx context.Context, log logr.Logger, object client.Object) (ctrl.Result, error) {
 	log.Info("Object marked for deletion via annotation")
 
-	if r.metadataStorage != nil {
-		// Delete from metadata storage first
-		gvks, _, err := r.scheme.ObjectKinds(object)
-		if err != nil || len(gvks) == 0 {
-			return ctrl.Result{}, fmt.Errorf("failed to get GVK for %T: %w", object, err)
-		}
-		// TODO(#943): gvks[0] may be non-deterministic when a type is registered under multiple
-		// versions. See issue for planned multi-GVK selection strategy.
-		typeMeta := &metav1.TypeMeta{
-			Kind:       gvks[0].Kind,
-			APIVersion: gvks[0].GroupVersion().String(),
-		}
+	// Delete from metadata storage first
+	gvks, _, err := r.scheme.ObjectKinds(object)
+	if err != nil || len(gvks) == 0 {
+		return ctrl.Result{}, fmt.Errorf("failed to get GVK for %T: %w", object, err)
+	}
+	// TODO(#943): gvks[0] may be non-deterministic when a type is registered under multiple
+	// versions. See issue for planned multi-GVK selection strategy.
+	typeMeta := &metav1.TypeMeta{
+		Kind:       gvks[0].Kind,
+		APIVersion: gvks[0].GroupVersion().String(),
+	}
 
-		if err := r.metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil {
-			log.Error(err, "Failed to delete from metadata storage")
-			return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
-		}
+	if err := r.metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil {
+		log.Error(err, "Failed to delete from metadata storage")
+		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
 
 	// Remove finalizer
@@ -260,11 +254,9 @@ func (r *Reconciler) handleImmutableObject(ctx context.Context, log logr.Logger,
 		indexedFields = indexedObj.GetIndexedKeyValuePairs()
 	}
 
-	if r.metadataStorage != nil {
-		if err := r.metadataStorage.Upsert(ctx, object, false, indexedFields); err != nil {
-			log.Error(err, "Failed to ensure object is in metadata storage")
-			return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
-		}
+	if err := r.metadataStorage.Upsert(ctx, object, false, indexedFields); err != nil {
+		log.Error(err, "Failed to ensure object is in metadata storage")
+		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
 
 	// Remove finalizer
