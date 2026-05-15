@@ -19,4 +19,10 @@ data:
         enableCRDUpdate: {{ .Values.apiserver.crdSync.enableUpdate }}
     metadataStorage:
       enableMetadataStorage: {{ .Values.apiserver.metadataStorage.enable }}
+    mysql:
+      host: {{ .Values.metadataStorage.host | default "" | quote }}
+      port: {{ .Values.metadataStorage.port | default 3306 }}
+      user: {{ .Values.metadataStorage.user | default "root" | quote }}
+      password: ${MYSQL_PASSWORD}
+      database: {{ .Values.metadataStorage.database | default "" | quote }}
 {{- end }}

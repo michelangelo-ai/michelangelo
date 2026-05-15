@@ -114,6 +114,12 @@ spec:
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          env:
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.metadataStorage.existingSecret | default (printf "%s-metadata-storage" (include "michelangelo.fullname" .)) }}
+                  key: password
           ports:
             - name: {{ if .Values.apiserver.tls.enabled }}grpcs{{ else }}grpc{{ end }}
               containerPort: {{ .Values.apiserver.port }}
