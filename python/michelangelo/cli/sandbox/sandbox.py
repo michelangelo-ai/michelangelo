@@ -325,28 +325,43 @@ def _sync(ns: argparse.Namespace):
     # Check if there is a healthy deployed release we can upgrade.
     status_result = subprocess.run(
         ["helm", "status", "michelangelo", "-o", "json"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     release_healthy = (
-        status_result.returncode == 0
-        and '"status":"deployed"' in status_result.stdout
+        status_result.returncode == 0 and '"status":"deployed"' in status_result.stdout
     )
 
     if release_healthy:
-        # Healthy release: upgrade in-place, keeping infra (Cadence, Kafka, etc.) running.
+        # Healthy release: upgrade in-place, keeping infra running.
         _exec(
-            "helm", "upgrade", "michelangelo", str(_chart_dir),
-            "-f", str(_chart_dir / "values-k3d.yaml"),
+            "helm",
+            "upgrade",
+            "michelangelo",
+            str(_chart_dir),
+            "-f",
+            str(_chart_dir / "values-k3d.yaml"),
             "--dependency-update",
-            "--reuse-values", *helm_args,
+            "--reuse-values",
+            *helm_args,
         )
         # Force-restart app deployments so they always pick up the latest
         # configmap values (helm upgrade only restarts pods when the pod
         # template spec changes, but values-only changes may not alter it).
-        for deploy in ("michelangelo-apiserver", "michelangelo-controllermgr",
-                       "michelangelo-worker"):
+        for deploy in (
+            "michelangelo-apiserver",
+            "michelangelo-controllermgr",
+            "michelangelo-worker",
+        ):
             subprocess.run(
-                ["kubectl", "rollout", "restart", f"deployment/{deploy}", "-n", "default"],
+                [
+                    "kubectl",
+                    "rollout",
+                    "restart",
+                    f"deployment/{deploy}",
+                    "-n",
+                    "default",
+                ],
                 capture_output=True,
             )
     else:
@@ -360,8 +375,12 @@ def _sync(ns: argparse.Namespace):
         _helm_delete_services(helm_args)
         _helm_adopt_orphaned_resources(helm_args)
         _exec(
-            "helm", "install", "michelangelo", str(_chart_dir),
-            "-f", str(_chart_dir / "values-k3d.yaml"),
+            "helm",
+            "install",
+            "michelangelo",
+            str(_chart_dir),
+            "-f",
+            str(_chart_dir / "values-k3d.yaml"),
             "--dependency-update",
             *helm_args,
         )
@@ -422,7 +441,13 @@ def _helm_ensure_repos():
     except subprocess.CalledProcessError:
         helm_existing_repos = ""
     if "cadence-workflow" not in helm_existing_repos:
-        _exec("helm", "repo", "add", "cadence-workflow", "https://cadence-workflow.github.io/cadence-charts")
+        _exec(
+            "helm",
+            "repo",
+            "add",
+            "cadence-workflow",
+            "https://cadence-workflow.github.io/cadence-charts",
+        )
     if "temporal" not in helm_existing_repos:
         _exec("helm", "repo", "add", "temporal", "https://go.temporal.io/helm-charts")
 
@@ -436,9 +461,17 @@ def _helm_delete_services(helm_args: list[str]):
     """
     # Collect the NodePorts the chart wants to allocate.
     result = subprocess.run(
-        ["helm", "template", "michelangelo", str(_chart_dir),
-         "-f", str(_chart_dir / "values-k3d.yaml"), *helm_args],
-        capture_output=True, text=True,
+        [
+            "helm",
+            "template",
+            "michelangelo",
+            str(_chart_dir),
+            "-f",
+            str(_chart_dir / "values-k3d.yaml"),
+            *helm_args,
+        ],
+        capture_output=True,
+        text=True,
     )
     wanted_ports: set[int] = set()
     if result.returncode == 0:
@@ -453,10 +486,22 @@ def _helm_delete_services(helm_args: list[str]):
         return
 
     # Find any Services in the cluster using those NodePorts and delete them.
+    _jsonpath = (
+        "{range .items[*]}"
+        "{.metadata.namespace}/{.metadata.name}"
+        ":{.spec.ports[*].nodePort} {end}"
+    )
     all_svcs = subprocess.run(
-        ["kubectl", "get", "service", "--all-namespaces",
-         "-o", "jsonpath={range .items[*]}{.metadata.namespace}/{.metadata.name}:{.spec.ports[*].nodePort} {end}"],
-        capture_output=True, text=True,
+        [
+            "kubectl",
+            "get",
+            "service",
+            "--all-namespaces",
+            "-o",
+            f"jsonpath={_jsonpath}",
+        ],
+        capture_output=True,
+        text=True,
     )
     for entry in all_svcs.stdout.split():
         if ":" not in entry:
@@ -466,10 +511,20 @@ def _helm_delete_services(helm_args: list[str]):
         for p in ports_str.split():
             try:
                 if int(p) in wanted_ports:
-                    print(f"[sandbox] deleting conflicting service {namespace}/{name} (NodePort {p})")
+                    print(
+                        f"[sandbox] deleting conflicting service"
+                        f" {namespace}/{name} (NodePort {p})"
+                    )
                     subprocess.run(
-                        ["kubectl", "delete", "service", name, "-n", namespace,
-                         "--ignore-not-found=true"],
+                        [
+                            "kubectl",
+                            "delete",
+                            "service",
+                            name,
+                            "-n",
+                            namespace,
+                            "--ignore-not-found=true",
+                        ],
                         capture_output=True,
                     )
                     break
@@ -487,9 +542,17 @@ def _helm_adopt_orphaned_resources(helm_args: list[str]):
     are left untouched.
     """
     result = subprocess.run(
-        ["helm", "template", "michelangelo", str(_chart_dir),
-         "-f", str(_chart_dir / "values-k3d.yaml"), *helm_args],
-        capture_output=True, text=True,
+        [
+            "helm",
+            "template",
+            "michelangelo",
+            str(_chart_dir),
+            "-f",
+            str(_chart_dir / "values-k3d.yaml"),
+            *helm_args,
+        ],
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0:
         return
@@ -503,9 +566,17 @@ def _helm_adopt_orphaned_resources(helm_args: list[str]):
             continue
         # Check if this resource exists and lacks Helm ownership annotations.
         get_result = subprocess.run(
-            ["kubectl", "get", f"{kind.lower()}/{name}", "-n", namespace,
-             "-o", "jsonpath={.metadata.annotations.meta\\.helm\\.sh/release-name}"],
-            capture_output=True, text=True,
+            [
+                "kubectl",
+                "get",
+                f"{kind.lower()}/{name}",
+                "-n",
+                namespace,
+                "-o",
+                "jsonpath={.metadata.annotations.meta\\.helm\\.sh/release-name}",
+            ],
+            capture_output=True,
+            text=True,
         )
         if get_result.returncode != 0:
             continue  # resource doesn't exist — no action needed
@@ -513,8 +584,14 @@ def _helm_adopt_orphaned_resources(helm_args: list[str]):
             continue  # already owned by this release — leave it
         # Resource exists but is not owned by Helm — delete it so Helm can recreate.
         subprocess.run(
-            ["kubectl", "delete", f"{kind.lower()}/{name}", "-n", namespace,
-             "--ignore-not-found=true"],
+            [
+                "kubectl",
+                "delete",
+                f"{kind.lower()}/{name}",
+                "-n",
+                namespace,
+                "--ignore-not-found=true",
+            ],
             capture_output=True,
         )
 
