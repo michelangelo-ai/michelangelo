@@ -49,6 +49,12 @@ Configurations are not a flat catalog. They compose:
 - **`QueryConfig` and `MutationConfig`** are parallel descriptors for backend calls — `QueryConfig` for reads (consumed by `useStudioQuery`), `MutationConfig` for writes (consumed by `useStudioMutation`). Anything that loads or mutates data references one of these: a `TableConfig`'s row source uses a `QueryConfig`; an `ActionConfig`'s mutation and a `FormConfig`'s submission use a `MutationConfig`.
 - **`FormConfig` embeds inside other configs.** An `ActionConfig` can embed a `FormConfig` to render a form when the action is triggered (e.g. "Create Pipeline"); a `ViewConfig` for a form view wraps it directly; a detail view can embed one as a tab.
 
+### Studio conventions encoded in the runtime
+
+A few studio-wide naming conventions are encoded in the runtime so configs don't have to repeat them. Each one is a deliberate trade-off against "core is business-logic agnostic" — listed here to keep the surface explicit.
+
+**Cache invalidation by mutation name.** When a mutation completes, `useStudioMutation` auto-invalidates `Get{Entity}` and `List{Entity}` query keys, derived by stripping the verb prefix from `mutationName` (`CreatePipelineRun` → entity `PipelineRun` → invalidates `GetPipelineRun`, `ListPipelineRun`). Recognized verbs: `Create`, `Update`, `Delete`, `DeleteCollection` — the standard Kubernetes CRUD set. Mutations whose names don't follow `{Verb}{Entity}` skip auto-invalidation. Configs can declare additional invalidations via `MutationActionConfig.successOperations`.
+
 ### Customization escape hatches
 
 The configuration runtime is the path of least resistance. Most customization happens by adjusting configuration — registering custom column renderers, choosing different field types, supplying disabled rules. Specific escape hatches let consumers ship React components when an interaction doesn't fit configuration:

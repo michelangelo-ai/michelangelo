@@ -37,7 +37,9 @@ function TriggerRunActionForm({
   const handleSubmit = async (values: TriggerRun) => {
     await mutation.mutateAsync(values);
 
-    // We wait a few seconds before invalidating the queries so that the action can be processed
+    // useStudioMutation auto-invalidates GetTriggerRun + ListTriggerRun on settle.
+    // Re-invalidate after a delay so the refetch happens once the backend has had
+    // time to process the kill action — auto-invalidation alone refetches stale state.
     setTimeout(() => {
       void queryClient.invalidateQueries({
         queryKey: [

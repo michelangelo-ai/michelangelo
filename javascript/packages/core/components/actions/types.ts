@@ -53,6 +53,39 @@ export type MutationActionConfig = {
   type: 'mutation';
   mutation: MutationConfig;
   middleware?: MiddlewareSchema;
+  /** Side-effects to run after the mutation succeeds (in order). */
+  successOperations?: SuccessOperation[];
+};
+
+/**
+ * Side-effect to run after a mutation succeeds.
+ *
+ * `useStudioMutation` already auto-invalidates `Get{Entity}` and `List{Entity}`
+ * by parsing `mutationName` (see ARCHITECTURE.md § 3 "Studio conventions
+ * encoded in the runtime"). Use `invalidate` for any additional invalidations
+ * the convention does not cover (cross-service queries, custom names).
+ */
+export type SuccessOperation = InvalidateOperation | ToastOperation;
+
+export type InvalidateOperation = {
+  type: 'invalidate';
+  /** Each target invalidates queries by name only (broad) or by name+args (specific). */
+  targets: InvalidationTarget[];
+};
+
+export type InvalidationTarget = string | { name: string; serviceOptions: Record<string, unknown> };
+
+export type ToastOperation = {
+  type: 'toast';
+  message: string;
+  /** Icon registered in the IconProvider. Defaults to 'checkCircle'. */
+  icon?: string;
+  /** Optional action button rendered inside the toast. */
+  action?: {
+    label: string;
+    /** If set, clicking the action navigates to this route; otherwise it dismisses the toast. */
+    route?: string;
+  };
 };
 
 export type RouteActionConfig = {
