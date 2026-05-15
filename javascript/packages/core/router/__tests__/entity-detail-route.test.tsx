@@ -1,4 +1,3 @@
-import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom-v5-compat';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
@@ -868,25 +867,6 @@ describe('EntityDetailRoute', () => {
       }),
     };
 
-    function TestApp({ phases }: { phases: typeof detailPhases }) {
-      const location = useLocation();
-      const navigate = useNavigate();
-      return (
-        <>
-          <span>Current pathname: {location.pathname}</span>
-          <button onClick={() => navigate(-1)}>Browser back</button>
-          <button onClick={() => navigate(1)}>Browser forward</button>
-          <Routes>
-            <Route
-              path=":projectId/:phase/:entity/:entityId/:entityTab?"
-              element={<EntityDetailRoute phases={phases} />}
-            />
-            <Route path=":projectId/:phase/:entity" element={<div>List page</div>} />
-          </Routes>
-        </>
-      );
-    }
-
     test('pressing back from the detail page returns to the list', async () => {
       const user = userEvent.setup();
       const mockRequest = vi.fn().mockResolvedValue({
@@ -897,14 +877,14 @@ describe('EntityDetailRoute', () => {
       });
 
       render(
-        <MemoryRouter
-          initialEntries={['/myproject/train/runs', '/myproject/train/runs/run-123']}
-          initialIndex={1}
-        >
-          <TestApp phases={detailPhases} />
-        </MemoryRouter>,
+        <EntityDetailRoute phases={detailPhases} />,
         buildWrapper([
           getErrorProviderWrapper(),
+          getRouterWrapper({
+            initialEntries: ['/myproject/train/runs', '/myproject/train/runs/run-123'],
+            initialIndex: 1,
+            showNavButtons: true,
+          }),
           getServiceProviderWrapper({ request: mockRequest }),
         ])
       );
@@ -918,7 +898,6 @@ describe('EntityDetailRoute', () => {
       await user.click(screen.getByRole('button', { name: 'Browser back' }));
 
       expect(screen.getByText('Current pathname: /myproject/train/runs')).toBeInTheDocument();
-      expect(screen.getByText('List page')).toBeInTheDocument();
     });
 
     test('switching tabs adds history entries so back navigates between tabs', async () => {
@@ -931,11 +910,13 @@ describe('EntityDetailRoute', () => {
       });
 
       render(
-        <MemoryRouter initialEntries={['/myproject/train/runs/run-123/overview']} initialIndex={0}>
-          <TestApp phases={detailPhases} />
-        </MemoryRouter>,
+        <EntityDetailRoute phases={detailPhases} />,
         buildWrapper([
           getErrorProviderWrapper(),
+          getRouterWrapper({
+            initialEntries: ['/myproject/train/runs/run-123/overview'],
+            showNavButtons: true,
+          }),
           getServiceProviderWrapper({ request: mockRequest }),
         ])
       );
@@ -961,14 +942,14 @@ describe('EntityDetailRoute', () => {
       });
 
       render(
-        <MemoryRouter
-          initialEntries={['/myproject/train/runs', '/myproject/train/runs/run-123']}
-          initialIndex={1}
-        >
-          <TestApp phases={detailPhases} />
-        </MemoryRouter>,
+        <EntityDetailRoute phases={detailPhases} />,
         buildWrapper([
           getErrorProviderWrapper(),
+          getRouterWrapper({
+            initialEntries: ['/myproject/train/runs', '/myproject/train/runs/run-123'],
+            initialIndex: 1,
+            showNavButtons: true,
+          }),
           getServiceProviderWrapper({ request: mockRequest }),
         ])
       );
@@ -1000,11 +981,13 @@ describe('EntityDetailRoute', () => {
       });
 
       render(
-        <MemoryRouter initialEntries={['/myproject/train/runs/run-123/overview']} initialIndex={0}>
-          <TestApp phases={detailPhases} />
-        </MemoryRouter>,
+        <EntityDetailRoute phases={detailPhases} />,
         buildWrapper([
           getErrorProviderWrapper(),
+          getRouterWrapper({
+            initialEntries: ['/myproject/train/runs/run-123/overview'],
+            showNavButtons: true,
+          }),
           getServiceProviderWrapper({ request: mockRequest }),
         ])
       );

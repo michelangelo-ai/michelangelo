@@ -62,7 +62,7 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
   React.useEffect(() => {
     if (error || isLoading) return;
 
-    if (!detailViewConfig?.pages?.length) return;
+    if (!entityId || !detailViewConfig?.pages?.length) return;
 
     const validTabIds = detailViewConfig.pages.map((page) => page.id);
     const firstTabId = validTabIds[0];
