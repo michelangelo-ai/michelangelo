@@ -1,8 +1,7 @@
-import { FORM_ERROR } from 'final-form';
+import { FORM_ERROR, getIn } from 'final-form';
 
 import { useFormContext } from '#core/components/form/form-context';
 import { useFormState } from '#core/components/form/hooks/use-form-state';
-import { toFlatDotPathMap } from '#core/utils/object-utils';
 
 import type { ErrorEntry } from './types';
 
@@ -27,9 +26,11 @@ export function useFormErrorList(): ErrorEntry[] {
 
   const fieldEntries: ErrorEntry[] = [];
 
-  for (const [fieldPath, errorMessage] of Object.entries(toFlatDotPathMap(errors))) {
+  for (const [fieldPath, isTouched] of Object.entries(touched ?? {})) {
+    if (!isTouched) continue;
+
+    const errorMessage = getIn(errors, fieldPath);
     if (typeof errorMessage !== 'string') continue;
-    if (!touched?.[fieldPath]) continue;
 
     fieldEntries.push({
       fieldPath,

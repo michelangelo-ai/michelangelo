@@ -822,6 +822,24 @@ describe('Form', () => {
       expect(within(errorDisplay).getByText('This field is required.')).toBeInTheDocument();
       expect(within(errorDisplay).queryByRole('button')).not.toBeInTheDocument();
     });
+
+    it('shows error in banner for a field with a bracket-notation slash key', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Form onSubmit={vi.fn()}>
+          <StringField name="labels[some/key]" label="Label" required />
+          <FormErrorBanner />
+          <button type="submit">Submit</button>
+        </Form>,
+        wrapper
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+      const banner = await screen.findByRole('complementary');
+      expect(within(banner).getByText('This field is required.')).toBeInTheDocument();
+    });
   });
 
   describe('FormDialog', () => {
