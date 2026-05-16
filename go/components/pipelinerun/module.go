@@ -6,7 +6,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
-	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/notification"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/plugin"
 	"go.uber.org/zap"
@@ -34,7 +33,6 @@ func registerMetrics() {
 
 func register(
 	mgr manager.Manager,
-	_ env.Context,
 	apiHandlerFactory apiHandler.Factory,
 	logger *zap.Logger,
 	p *plugin.Plugin,
