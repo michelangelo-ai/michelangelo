@@ -59,7 +59,8 @@ jobs:
         run: |
           $HOME/.local/bin/poetry run ma sandbox sync --workflow cadence \
             --set apiserver.metadataStorage.enable=true \
-            --set controllermgr.metadataStorage.enable=true
+            --set controllermgr.metadataStorage.enable=true \
+            --set controllermgr.jobs.k8sengine.mapper.logPersistence.enabled=false
 
       - name: Check out integration-test repo
         uses: actions/checkout@v4
