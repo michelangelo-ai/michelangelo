@@ -36,6 +36,9 @@ spec:
           envFrom:
             - secretRef:
                 name: {{ .Values.objectStorage.existingSecret | default (include "michelangelo.objectStorageSecretName" .) }}
+          env:
+            - name: CONFIG_DIR
+              value: /config
           volumeMounts:
             - name: worker-config
               mountPath: /config
