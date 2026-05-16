@@ -12,16 +12,54 @@ data:
     -- ==============================================================================
     -- Michelangelo Ingester - Complete Database Schema
     -- ==============================================================================
-    -- This schema includes ALL 13 CRDs watched by the ingester
+    -- This schema includes ALL 14 CRDs watched by the ingester
     -- Safe for production and sandbox (idempotent with IF NOT EXISTS)
     -- Generated based on protobuf GetIndexedKeyValuePairs() methods
     -- ==============================================================================
-    
+
     CREATE DATABASE IF NOT EXISTS michelangelo;
     USE michelangelo;
-    
+
     -- ==============================================================================
-    -- 1. MODEL
+    -- 1. CACHED_OUTPUT
+    -- ==============================================================================
+    CREATE TABLE IF NOT EXISTS `cachedoutput` (
+        `uid` VARCHAR(255) NOT NULL,
+        `group_ver` VARCHAR(255) NOT NULL,
+        `namespace` VARCHAR(255) NOT NULL,
+        `name` VARCHAR(255) NOT NULL,
+        `res_version` BIGINT UNSIGNED NOT NULL,
+        `create_time` DATETIME NOT NULL,
+        `update_time` DATETIME,
+        `delete_time` DATETIME,
+        `proto` MEDIUMBLOB,
+        `json` JSON,
+        PRIMARY KEY (`uid`),
+        KEY `cachedoutput_namespace_name` (`namespace`, `name`),
+        KEY `cachedoutput_create_time` (`create_time`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE IF NOT EXISTS `cachedoutput_labels` (
+        `id` BIGINT NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key` VARCHAR(255) NOT NULL,
+        `value` VARCHAR(63),
+        PRIMARY KEY (`id`),
+        KEY `cachedoutput_labels_uid` (`obj_uid`),
+        KEY `cachedoutput_labels_key_value` (`key`, `value`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE IF NOT EXISTS `cachedoutput_annotations` (
+        `id` BIGINT NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key` VARCHAR(255) NOT NULL,
+        `value` TEXT,
+        PRIMARY KEY (`id`),
+        KEY `cachedoutput_annotations_uid` (`obj_uid`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    -- ==============================================================================
+    -- 2. MODEL
     -- ==============================================================================
     CREATE TABLE IF NOT EXISTS `model` (
         `uid` VARCHAR(255) NOT NULL,
