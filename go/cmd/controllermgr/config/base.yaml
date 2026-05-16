@@ -25,6 +25,9 @@ ingester:
   # deletionDelayMap:
   #   Model: 15s
 
+pipelineRun:
+  # ttlDays: 0  # 0 disables TTL eviction; set e.g. 30 to evict runs older than 30 days
+
 controllers:
   rayCluster:
     k8sQps: 300

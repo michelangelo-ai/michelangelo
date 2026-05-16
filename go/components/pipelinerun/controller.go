@@ -29,6 +29,14 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
+// Config holds configuration for the PipelineRun controller.
+type Config struct {
+	// TTLDays is how long after last update a terminal PipelineRun is kept in
+	// ETCD before being marked immutable and evicted to MySQL-only storage.
+	// Zero means TTL eviction is disabled.
+	TTLDays int `yaml:"ttlDays"`
+}
+
 // Reconciler implements the controller-runtime Reconciler interface for PipelineRun resources.
 //
 // It manages the execution lifecycle of pipeline runs through a condition-based engine,
@@ -38,6 +46,7 @@ import (
 type Reconciler struct {
 	api.Handler
 	logger            *zap.Logger
+	config            Config
 	plugin            *plugin.Plugin
 	engine            *defaultEngine.DefaultEngine[*v2pb.PipelineRun]
 	apiHandlerFactory apiHandler.Factory
@@ -62,11 +71,13 @@ func NewReconciler(
 	logger *zap.Logger,
 	apiHandlerFactory apiHandler.Factory,
 	notifier *notification.PipelineRunNotifier,
+	config Config,
 ) *Reconciler {
 	logger = logger.With(zap.String("component", "pipelinerun"))
 	return &Reconciler{
 		plugin:            plugin,
 		logger:            logger,
+		config:            config,
 		engine:            defaultEngine.NewDefaultEngine[*v2pb.PipelineRun](logger),
 		apiHandlerFactory: apiHandlerFactory,
 		notifier:          notifier,
@@ -150,7 +161,60 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		IncPipelineRunReconcileSuccess(req.Namespace, req.Name)
 	}
 
+	// For terminal runs, check if TTL has elapsed and mark immutable if so.
+	// This evicts the run from ETCD once it's old enough, keeping ETCD lean.
+	if returnErr == nil && currentIsTerminal {
+		if requeueAt, done := r.markImmutableIfExpired(ctx, logger, pipelineRun); !done {
+			return ctrl.Result{RequeueAfter: requeueAt}, nil
+		}
+	}
+
 	return result, returnErr
+}
+
+// markImmutableIfExpired checks whether a terminal PipelineRun has been idle
+// longer than the configured TTL. If so, it sets the michelangelo/Immutable
+// annotation so the ingester will evict it from ETCD to MySQL-only storage.
+//
+// Returns (requeueAfter, done):
+//   - done=true: TTL has elapsed; annotation was set (or was already set).
+//   - done=false: TTL has not elapsed yet; caller should requeue after requeueAfter.
+func (r *Reconciler) markImmutableIfExpired(ctx context.Context, logger *zap.Logger, pipelineRun *v2pb.PipelineRun) (time.Duration, bool) {
+	var lastUpdate time.Time
+	if endTime := pipelineRun.Status.GetEndTime(); endTime != nil {
+		lastUpdate = time.Unix(endTime.Seconds, int64(endTime.Nanos))
+	} else {
+		// EndTime not set yet — fall back to creation timestamp.
+		lastUpdate = pipelineRun.GetCreationTimestamp().Time
+	}
+	if lastUpdate.IsZero() {
+		return 0, true
+	}
+
+	expireAt := lastUpdate.Add(time.Duration(r.config.TTLDays) * 24 * time.Hour)
+	remaining := time.Until(expireAt)
+
+	if remaining > 0 {
+		logger.Info("PipelineRun TTL not yet elapsed, requeueing",
+			zap.String("name", pipelineRun.Name),
+			zap.Duration("requeueAfter", remaining))
+		return remaining, false
+	}
+
+	// TTL elapsed — set immutable annotation if not already set.
+	annotations := pipelineRun.GetAnnotations()
+	if annotations[api.ImmutableAnnotation] == "true" {
+		return 0, true
+	}
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+	annotations[api.ImmutableAnnotation] = "true"
+	pipelineRun.SetAnnotations(annotations)
+	if err := r.Update(ctx, pipelineRun, &metav1.UpdateOptions{}); err != nil {
+		logger.Error("Failed to mark PipelineRun immutable", zap.Error(err))
+	}
+	return 0, true
 }
 
 // updatePipelineRunStatus persists PipelineRun status changes to Kubernetes.
