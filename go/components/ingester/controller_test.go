@@ -127,20 +127,22 @@ func TestReconciler_HandleSync(t *testing.T) {
 	mockStorage.AssertCalled(t, "Upsert", mock.Anything, mock.Anything, false, mock.Anything)
 }
 
-func TestReconciler_HandleSync_AddsFinalizer(t *testing.T) {
+func TestReconciler_HandleSync_UpsertsWithFinalizer(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = v2.AddToScheme(scheme)
 
+	// Objects always arrive with the finalizer already set — the API handler
+	// adds it synchronously during Create() before writing to ETCD.
 	deployment := &v2.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "michelangelo.uber.com/v2",
 			Kind:       "Deployment",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-deployment",
-			Namespace: "default",
-			UID:       types.UID("test-uid"),
-			// No finalizer — handleSync should add it before upserting.
+			Name:       "test-deployment",
+			Namespace:  "default",
+			UID:        types.UID("test-uid"),
+			Finalizers: []string{api.IngesterFinalizer},
 		},
 	}
 
@@ -150,6 +152,7 @@ func TestReconciler_HandleSync_AddsFinalizer(t *testing.T) {
 		Build()
 
 	mockStorage := new(MockMetadataStorage)
+	mockStorage.On("Upsert", mock.Anything, mock.Anything, false, mock.Anything).Return(nil)
 
 	reconciler := NewReconciler(
 		fakeClient,
@@ -168,13 +171,8 @@ func TestReconciler_HandleSync_AddsFinalizer(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, ctrl.Result{}, result)
 
-	// Upsert must NOT be called on the first reconcile — the finalizer is added first.
-	mockStorage.AssertNotCalled(t, "Upsert")
-
-	// Verify the finalizer was written to K8s.
-	updated := &v2.Deployment{}
-	require.NoError(t, fakeClient.Get(context.Background(), types.NamespacedName{Name: "test-deployment", Namespace: "default"}, updated))
-	assert.Contains(t, updated.GetFinalizers(), api.IngesterFinalizer)
+	// Upsert is called immediately — no separate "add finalizer" round trip.
+	mockStorage.AssertCalled(t, "Upsert", mock.Anything, mock.Anything, false, mock.Anything)
 }
 
 func TestReconciler_HandleDeletion(t *testing.T) {

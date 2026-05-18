@@ -148,17 +148,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 // handleSync syncs the object to metadata storage
 func (r *Reconciler) handleSync(ctx context.Context, log logr.Logger, object client.Object) (ctrl.Result, error) {
-	// Add finalizer if not present to ensure MySQL sync happens before ETCD removal on deletion.
-	if !ctrlutil.ContainsFinalizer(object, api.IngesterFinalizer) {
-		log.Info("Adding ingester finalizer")
-		ctrlutil.AddFinalizer(object, api.IngesterFinalizer)
-		if err := r.Update(ctx, object); err != nil {
-			log.Error(err, "Failed to add finalizer")
-			return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
-		}
-		return ctrl.Result{}, nil
-	}
-
 	log.Info("Syncing object to metadata storage")
 
 	// Extract indexed fields if object implements IndexedObject interface
