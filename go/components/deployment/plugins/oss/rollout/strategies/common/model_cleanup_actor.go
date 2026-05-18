@@ -4,9 +4,14 @@ import (
 	"context"
 	"fmt"
 
+	"go.uber.org/zap"
+
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	osscommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
+	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -17,13 +22,28 @@ var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &ModelCleanupActor{
 // server ConfigMap after all traffic has been routed to the new revision. One instance is
 // created per cluster at actor-chain construction time.
 type ModelCleanupActor struct {
-	params Params
-	target *v2pb.ClusterTarget
+	clientFactory       clientfactory.ClientFactory
+	backendRegistry     *backends.Registry
+	modelConfigProvider modelconfig.ModelConfigProvider
+	logger              *zap.Logger
+	target              *v2pb.ClusterTarget
 }
 
 // NewModelCleanupActor creates a ModelCleanupActor for the given cluster.
-func NewModelCleanupActor(params Params, target *v2pb.ClusterTarget) *ModelCleanupActor {
-	return &ModelCleanupActor{params: params, target: target}
+func NewModelCleanupActor(
+	clientFactory clientfactory.ClientFactory,
+	backendRegistry *backends.Registry,
+	modelConfigProvider modelconfig.ModelConfigProvider,
+	logger *zap.Logger,
+	target *v2pb.ClusterTarget,
+) *ModelCleanupActor {
+	return &ModelCleanupActor{
+		clientFactory:       clientFactory,
+		backendRegistry:     backendRegistry,
+		modelConfigProvider: modelConfigProvider,
+		logger:              logger,
+		target:              target,
+	}
 }
 
 // GetType returns the condition type identifier, including the cluster ID so each
@@ -49,17 +69,17 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, deployment *v2pb.Deplo
 		return conditionsutil.GenerateTrueCondition(condition), nil
 	}
 
-	kubeClient, err := a.params.ClientFactory.GetClient(ctx, a.target)
+	kubeClient, err := a.clientFactory.GetClient(ctx, a.target)
 	if err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "ClientUnavailable", err.Error()), nil
 	}
 
-	httpClient, err := a.params.ClientFactory.GetHTTPClient(ctx, a.target)
+	httpClient, err := a.clientFactory.GetHTTPClient(ctx, a.target)
 	if err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "HTTPClientUnavailable", err.Error()), nil
 	}
 
-	backend, err := a.params.BackendRegistry.GetBackend(v2pb.BACKEND_TYPE_TRITON)
+	backend, err := a.backendRegistry.GetBackend(v2pb.BACKEND_TYPE_TRITON)
 	if err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "BackendUnavailable", err.Error()), nil
 	}
@@ -68,7 +88,7 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, deployment *v2pb.Deplo
 	oldModel := deployment.Status.GetCurrentRevision().GetName()
 
 	apiServerURL := osscommon.APIServerURLFromTarget(a.target)
-	stillLoaded, err := backend.CheckModelStatus(ctx, a.params.Logger, kubeClient, httpClient, apiServerURL, inferenceServerName, deployment.Namespace, oldModel)
+	stillLoaded, err := backend.CheckModelStatus(ctx, a.logger, kubeClient, httpClient, apiServerURL, inferenceServerName, deployment.Namespace, oldModel)
 	if err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "ModelStatusCheckFailed", err.Error()), nil
 	}
@@ -87,7 +107,7 @@ func (a *ModelCleanupActor) Run(ctx context.Context, deployment *v2pb.Deployment
 		return conditionsutil.GenerateTrueCondition(condition), nil
 	}
 
-	kubeClient, err := a.params.ClientFactory.GetClient(ctx, a.target)
+	kubeClient, err := a.clientFactory.GetClient(ctx, a.target)
 	if err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "ClientUnavailable", err.Error()), nil
 	}
@@ -95,7 +115,7 @@ func (a *ModelCleanupActor) Run(ctx context.Context, deployment *v2pb.Deployment
 	inferenceServerName := deployment.Spec.GetInferenceServer().GetName()
 	oldModel := deployment.Status.GetCurrentRevision().GetName()
 
-	if err := a.params.ModelConfigProvider.RemoveModelFromConfig(ctx, a.params.Logger, kubeClient, inferenceServerName, deployment.Namespace, oldModel); err != nil {
+	if err := a.modelConfigProvider.RemoveModelFromConfig(ctx, a.logger, kubeClient, inferenceServerName, deployment.Namespace, oldModel); err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "RemoveModelFromConfigFailed", err.Error()), nil
 	}
 

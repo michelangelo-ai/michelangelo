@@ -13,6 +13,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/base/pluginmanager"
+	"github.com/michelangelo-ai/michelangelo/go/components/common/routing"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/cleanup"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
@@ -22,7 +23,6 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/routes"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -41,7 +41,7 @@ type Plugin struct {
 	httpClient          *http.Client
 	dynamicClient       dynamic.Interface
 	clientFactory       clientfactory.ClientFactory
-	routeProvider       routes.RouteProvider
+	routeManager        routing.Manager
 	backendRegistry     *backends.Registry
 	modelConfigProvider modelconfig.ModelConfigProvider
 	blobstore           *blobstore.BlobStore
@@ -63,7 +63,7 @@ type Params struct {
 	DynamicClient       dynamic.Interface
 	ClientFactory       clientfactory.ClientFactory
 	BackendRegistry     *backends.Registry
-	RouteProvider       routes.RouteProvider
+	RouteManager        routing.Manager
 	BlobStore           *blobstore.BlobStore
 	Logger              *zap.Logger
 	ModelConfigProvider modelconfig.ModelConfigProvider
@@ -77,7 +77,7 @@ func NewPlugin(params Params) *Plugin {
 		dynamicClient:       params.DynamicClient,
 		clientFactory:       params.ClientFactory,
 		backendRegistry:     params.BackendRegistry,
-		routeProvider:       params.RouteProvider,
+		routeManager:        params.RouteManager,
 		modelConfigProvider: params.ModelConfigProvider,
 		blobstore:           params.BlobStore,
 		logger:              params.Logger,
@@ -90,7 +90,7 @@ func NewPlugin(params Params) *Plugin {
 			Client:              params.Client,
 			DynamicClient:       params.DynamicClient,
 			ClientFactory:       params.ClientFactory,
-			RouteProvider:       params.RouteProvider,
+			RouteManager:        params.RouteManager,
 			ModelConfigProvider: params.ModelConfigProvider,
 			Logger:              params.Logger,
 		}),
@@ -107,7 +107,7 @@ func (p *Plugin) GetRolloutPlugin(ctx context.Context, deployment *v2pb.Deployme
 		HTTPClient:          p.httpClient,
 		DynamicClient:       p.dynamicClient,
 		ClientFactory:       p.clientFactory,
-		RouteProvider:       p.routeProvider,
+		RouteManager:        p.routeManager,
 		BackendRegistry:     p.backendRegistry,
 		ModelConfigProvider: p.modelConfigProvider,
 		Logger:              p.logger,

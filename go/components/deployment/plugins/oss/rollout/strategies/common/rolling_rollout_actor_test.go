@@ -42,15 +42,16 @@ type rolloutMocks struct {
 	factory             *clientfactorymocks.MockClientFactory
 	backend             *backendsmocks.MockBackend
 	modelConfigProvider *modelconfigmocks.MockModelConfigProvider
+	backendRegistry     *backends.Registry
 }
 
-// newRolloutFixture builds a Params + target wired to the supplied mocks. clientErrs lets a
-// test inject GetClient / GetHTTPClient failures without re-mocking the factory each time;
+// newRolloutFixture builds a target wired to the supplied mocks. clientErrs lets a test
+// inject GetClient / GetHTTPClient failures without re-mocking the factory each time;
 // when both are nil the factory returns nil, nil for both methods.
 //
 // registerBackend controls whether the BackendRegistry has a backend registered for Triton;
 // when false, GetBackend returns an error so the actor's BackendUnavailable branch fires.
-func newRolloutFixture(t *testing.T, clientErrs clientErrors, registerBackend bool) (Params, *v2pb.ClusterTarget, *rolloutMocks) {
+func newRolloutFixture(t *testing.T, clientErrs clientErrors, registerBackend bool) (*rolloutMocks, *v2pb.ClusterTarget) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
@@ -66,19 +67,13 @@ func newRolloutFixture(t *testing.T, clientErrs clientErrors, registerBackend bo
 	mocks.factory.EXPECT().GetHTTPClient(gomock.Any(), gomock.Any()).
 		Return((*http.Client)(nil), clientErrs.getHTTPClient).AnyTimes()
 
-	registry := backends.NewRegistry()
+	mocks.backendRegistry = backends.NewRegistry()
 	if registerBackend {
-		registry.Register(v2pb.BACKEND_TYPE_TRITON, mocks.backend)
+		mocks.backendRegistry.Register(v2pb.BACKEND_TYPE_TRITON, mocks.backend)
 	}
 
-	params := Params{
-		ClientFactory:       mocks.factory,
-		BackendRegistry:     registry,
-		ModelConfigProvider: mocks.modelConfigProvider,
-		Logger:              zap.NewNop(),
-	}
 	target := &v2pb.ClusterTarget{ClusterId: testCluster}
-	return params, target, mocks
+	return mocks, target
 }
 
 // rolloutDeployment builds a Deployment with the canonical IS reference + desired revision.
@@ -174,7 +169,7 @@ func TestRollingRolloutActor_Retrieve(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			params, target, mocks := newRolloutFixture(t, tt.clientErrs, tt.registerBackend)
+			mocks, target := newRolloutFixture(t, tt.clientErrs, tt.registerBackend)
 			tt.setupMocks(mocks)
 
 			condition := &apipb.Condition{}
@@ -182,7 +177,7 @@ func TestRollingRolloutActor_Retrieve(t *testing.T) {
 				require.NoError(t, osscommon.WriteModelLoadedFlag(condition))
 			}
 
-			actor := NewRollingRolloutActor(params, target)
+			actor := NewRollingRolloutActor(mocks.factory, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
 			got, err := actor.Retrieve(context.Background(), rolloutDeployment(""), condition)
 
 			require.NoError(t, err)
@@ -246,10 +241,10 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			params, target, mocks := newRolloutFixture(t, tt.clientErrs, true)
+			mocks, target := newRolloutFixture(t, tt.clientErrs, true)
 			tt.setupMocks(mocks)
 
-			actor := NewRollingRolloutActor(params, target)
+			actor := NewRollingRolloutActor(mocks.factory, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
 			got, err := actor.Run(context.Background(), rolloutDeployment(""), &apipb.Condition{})
 
 			require.NoError(t, err)
@@ -262,7 +257,7 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 }
 
 func TestRollingRolloutActor_GetType(t *testing.T) {
-	params, target, _ := newRolloutFixture(t, clientErrors{}, true)
-	actor := NewRollingRolloutActor(params, target)
+	mocks, target := newRolloutFixture(t, clientErrors{}, true)
+	actor := NewRollingRolloutActor(mocks.factory, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
 	assert.Equal(t, "RollingRolloutComplete-"+testCluster, actor.GetType())
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 )
@@ -103,10 +104,10 @@ func TestModelCleanupActor_Retrieve(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			params, target, mocks := newRolloutFixture(t, tt.clientErrs, tt.registerBackend)
+			mocks, target := newRolloutFixture(t, tt.clientErrs, tt.registerBackend)
 			tt.setupMocks(mocks)
 
-			actor := NewModelCleanupActor(params, target)
+			actor := NewModelCleanupActor(mocks.factory, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
 			got, err := actor.Retrieve(context.Background(), rolloutDeployment(tt.currentRevision), &apipb.Condition{})
 
 			require.NoError(t, err)
@@ -165,10 +166,10 @@ func TestModelCleanupActor_Run(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			params, target, mocks := newRolloutFixture(t, tt.clientErrs, true)
+			mocks, target := newRolloutFixture(t, tt.clientErrs, true)
 			tt.setupMocks(mocks)
 
-			actor := NewModelCleanupActor(params, target)
+			actor := NewModelCleanupActor(mocks.factory, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
 			got, err := actor.Run(context.Background(), rolloutDeployment(tt.currentRevision), &apipb.Condition{})
 
 			require.NoError(t, err)
@@ -181,7 +182,7 @@ func TestModelCleanupActor_Run(t *testing.T) {
 }
 
 func TestModelCleanupActor_GetType(t *testing.T) {
-	params, target, _ := newRolloutFixture(t, clientErrors{}, true)
-	actor := NewModelCleanupActor(params, target)
+	mocks, target := newRolloutFixture(t, clientErrors{}, true)
+	actor := NewModelCleanupActor(mocks.factory, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
 	assert.Equal(t, "ModelCleanupComplete-"+testCluster, actor.GetType())
 }

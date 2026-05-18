@@ -10,11 +10,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	"github.com/michelangelo-ai/michelangelo/go/components/common/routing"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/routes"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -32,7 +32,7 @@ type Params struct {
 	HTTPClient          *http.Client
 	DynamicClient       dynamic.Interface
 	ClientFactory       clientfactory.ClientFactory
-	RouteProvider       routes.RouteProvider
+	RouteManager        routing.Manager
 	BackendRegistry     *backends.Registry
 	ModelConfigProvider modelconfig.ModelConfigProvider
 	Logger              *zap.Logger
@@ -62,7 +62,7 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 		Client:              p.Client,
 		HTTPClient:          p.HTTPClient,
 		DynamicClient:       p.DynamicClient,
-		RouteProvider:       p.RouteProvider,
+		RouteManager:        p.RouteManager,
 		BackendRegistry:     p.BackendRegistry,
 		ModelConfigProvider: p.ModelConfigProvider,
 		Logger:              p.Logger,

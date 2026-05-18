@@ -12,9 +12,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/common/routing/routingmocks"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory/clientfactorymocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/common/routenames"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/routes/routesmocks"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -51,18 +52,21 @@ func newRouteCleanupIS() *v2pb.InferenceServer {
 }
 
 func TestRouteCleanupActor_Retrieve(t *testing.T) {
+	discoveryName := routenames.DiscoveryRouteName("test-server")
+	trafficName := routenames.TrafficRouteName("test-server")
+
 	tests := []struct {
 		name                string
 		clientFactoryErrors map[string]error
-		setupMocks          func(*routesmocks.MockRouteProvider)
+		setupMocks          func(rm *routingmocks.MockManager)
 		expectedStatus      apipb.ConditionStatus
 		expectedMessage     string
 		expectedReasonSub   string
 	}{
 		{
-			name: "DiscoveryRouteExists errors",
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().DiscoveryRouteExists(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
+			name: "routeManager.Exists errors for discovery",
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Exists(gomock.Any(), gomock.Any(), discoveryName, "test-namespace").
 					Return(false, errors.New("api error"))
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
@@ -71,8 +75,8 @@ func TestRouteCleanupActor_Retrieve(t *testing.T) {
 		},
 		{
 			name: "discovery route still exists",
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().DiscoveryRouteExists(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Exists(gomock.Any(), gomock.Any(), discoveryName, "test-namespace").
 					Return(true, nil)
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
@@ -80,10 +84,10 @@ func TestRouteCleanupActor_Retrieve(t *testing.T) {
 		},
 		{
 			name: "traffic route still exists in one cluster",
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().DiscoveryRouteExists(gomock.Any(), gomock.Any(), "test-server", "test-namespace").Return(false, nil)
-				rp.EXPECT().TrafficRouteExists(gomock.Any(), gomock.Any(), "c-1", "test-server", "test-namespace").Return(false, nil)
-				rp.EXPECT().TrafficRouteExists(gomock.Any(), gomock.Any(), "c-2", "test-server", "test-namespace").Return(true, nil)
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Exists(gomock.Any(), gomock.Any(), discoveryName, "test-namespace").Return(false, nil)
+				rm.EXPECT().Exists(gomock.Any(), gomock.Any(), trafficName, "test-namespace").Return(false, nil)
+				rm.EXPECT().Exists(gomock.Any(), gomock.Any(), trafficName, "test-namespace").Return(true, nil)
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
 			expectedMessage:   "TrafficRouteStillExists",
@@ -91,10 +95,10 @@ func TestRouteCleanupActor_Retrieve(t *testing.T) {
 		},
 		{
 			name: "traffic route still exists in multiple clusters - sorted",
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().DiscoveryRouteExists(gomock.Any(), gomock.Any(), "test-server", "test-namespace").Return(false, nil)
-				rp.EXPECT().TrafficRouteExists(gomock.Any(), gomock.Any(), "c-1", "test-server", "test-namespace").Return(true, nil)
-				rp.EXPECT().TrafficRouteExists(gomock.Any(), gomock.Any(), "c-2", "test-server", "test-namespace").Return(true, nil)
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Exists(gomock.Any(), gomock.Any(), discoveryName, "test-namespace").Return(false, nil)
+				rm.EXPECT().Exists(gomock.Any(), gomock.Any(), trafficName, "test-namespace").Return(true, nil)
+				rm.EXPECT().Exists(gomock.Any(), gomock.Any(), trafficName, "test-namespace").Return(true, nil)
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
 			expectedMessage:   "TrafficRouteStillExists",
@@ -103,8 +107,8 @@ func TestRouteCleanupActor_Retrieve(t *testing.T) {
 		{
 			name:                "GetDynamicClient errors for one cluster",
 			clientFactoryErrors: map[string]error{"c-1": errors.New("auth refused")},
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().DiscoveryRouteExists(gomock.Any(), gomock.Any(), "test-server", "test-namespace").Return(false, nil)
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Exists(gomock.Any(), gomock.Any(), discoveryName, "test-namespace").Return(false, nil)
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
 			expectedMessage:   "GetFailed",
@@ -112,10 +116,9 @@ func TestRouteCleanupActor_Retrieve(t *testing.T) {
 		},
 		{
 			name: "all routes gone",
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().DiscoveryRouteExists(gomock.Any(), gomock.Any(), "test-server", "test-namespace").Return(false, nil)
-				rp.EXPECT().TrafficRouteExists(gomock.Any(), gomock.Any(), "c-1", "test-server", "test-namespace").Return(false, nil)
-				rp.EXPECT().TrafficRouteExists(gomock.Any(), gomock.Any(), "c-2", "test-server", "test-namespace").Return(false, nil)
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Exists(gomock.Any(), gomock.Any(), discoveryName, "test-namespace").Return(false, nil)
+				rm.EXPECT().Exists(gomock.Any(), gomock.Any(), trafficName, "test-namespace").Return(false, nil).Times(2)
 			},
 			expectedStatus: apipb.CONDITION_STATUS_TRUE,
 		},
@@ -126,11 +129,11 @@ func TestRouteCleanupActor_Retrieve(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			rp := routesmocks.NewMockRouteProvider(ctrl)
-			tt.setupMocks(rp)
+			rm := routingmocks.NewMockManager(ctrl)
+			tt.setupMocks(rm)
 			factory := newClientFactoryDispatchingDynamic(ctrl, tt.clientFactoryErrors)
 
-			actor := NewRouteCleanupActor(nil, factory, rp, zap.NewNop())
+			actor := NewRouteCleanupActor(nil, factory, rm, zap.NewNop())
 			got, err := actor.Retrieve(context.Background(), newRouteCleanupIS(), &apipb.Condition{})
 
 			require.NoError(t, err)
@@ -146,32 +149,34 @@ func TestRouteCleanupActor_Retrieve(t *testing.T) {
 }
 
 func TestRouteCleanupActor_Run(t *testing.T) {
+	discoveryName := routenames.DiscoveryRouteName("test-server")
+	trafficName := routenames.TrafficRouteName("test-server")
+
 	tests := []struct {
 		name                string
 		clientFactoryErrors map[string]error
-		setupMocks          func(*routesmocks.MockRouteProvider)
+		setupMocks          func(rm *routingmocks.MockManager)
 		expectedStatus      apipb.ConditionStatus
 		expectedMessage     string
 		expectedReasonSub   string
 	}{
 		{
-			name: "DeleteDiscoveryRoute fails",
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().DeleteDiscoveryRoute(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
+			name: "routeManager.Delete fails for discovery",
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Delete(gomock.Any(), gomock.Any(), discoveryName, "test-namespace").
 					Return(errors.New("api error"))
-				rp.EXPECT().DeleteTrafficRoute(gomock.Any(), gomock.Any(), "c-1", "test-server", "test-namespace").Return(nil)
-				rp.EXPECT().DeleteTrafficRoute(gomock.Any(), gomock.Any(), "c-2", "test-server", "test-namespace").Return(nil)
+				rm.EXPECT().Delete(gomock.Any(), gomock.Any(), trafficName, "test-namespace").Return(nil).Times(2)
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
 			expectedMessage:   "DeleteFailed",
 			expectedReasonSub: "discovery:",
 		},
 		{
-			name: "DeleteTrafficRoute fails for one cluster",
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().DeleteDiscoveryRoute(gomock.Any(), gomock.Any(), "test-server", "test-namespace").Return(nil)
-				rp.EXPECT().DeleteTrafficRoute(gomock.Any(), gomock.Any(), "c-1", "test-server", "test-namespace").Return(nil)
-				rp.EXPECT().DeleteTrafficRoute(gomock.Any(), gomock.Any(), "c-2", "test-server", "test-namespace").Return(errors.New("delete failed"))
+			name: "routeManager.Delete fails for one cluster traffic",
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Delete(gomock.Any(), gomock.Any(), discoveryName, "test-namespace").Return(nil)
+				rm.EXPECT().Delete(gomock.Any(), gomock.Any(), trafficName, "test-namespace").Return(nil)
+				rm.EXPECT().Delete(gomock.Any(), gomock.Any(), trafficName, "test-namespace").Return(errors.New("delete failed"))
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
 			expectedMessage:   "DeleteFailed",
@@ -180,9 +185,9 @@ func TestRouteCleanupActor_Run(t *testing.T) {
 		{
 			name:                "GetDynamicClient fails for one cluster",
 			clientFactoryErrors: map[string]error{"c-1": errors.New("no token")},
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().DeleteDiscoveryRoute(gomock.Any(), gomock.Any(), "test-server", "test-namespace").Return(nil)
-				rp.EXPECT().DeleteTrafficRoute(gomock.Any(), gomock.Any(), "c-2", "test-server", "test-namespace").Return(nil)
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Delete(gomock.Any(), gomock.Any(), discoveryName, "test-namespace").Return(nil)
+				rm.EXPECT().Delete(gomock.Any(), gomock.Any(), trafficName, "test-namespace").Return(nil)
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
 			expectedMessage:   "DeleteFailed",
@@ -190,12 +195,12 @@ func TestRouteCleanupActor_Run(t *testing.T) {
 		},
 		{
 			name: "multiple deletes fail - sorted",
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().DeleteDiscoveryRoute(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Delete(gomock.Any(), gomock.Any(), discoveryName, "test-namespace").
 					Return(errors.New("a-err"))
-				rp.EXPECT().DeleteTrafficRoute(gomock.Any(), gomock.Any(), "c-1", "test-server", "test-namespace").
+				rm.EXPECT().Delete(gomock.Any(), gomock.Any(), trafficName, "test-namespace").
 					Return(errors.New("b-err"))
-				rp.EXPECT().DeleteTrafficRoute(gomock.Any(), gomock.Any(), "c-2", "test-server", "test-namespace").Return(nil)
+				rm.EXPECT().Delete(gomock.Any(), gomock.Any(), trafficName, "test-namespace").Return(nil)
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
 			expectedMessage:   "DeleteFailed",
@@ -203,10 +208,9 @@ func TestRouteCleanupActor_Run(t *testing.T) {
 		},
 		{
 			name: "all deletes succeed",
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().DeleteDiscoveryRoute(gomock.Any(), gomock.Any(), "test-server", "test-namespace").Return(nil)
-				rp.EXPECT().DeleteTrafficRoute(gomock.Any(), gomock.Any(), "c-1", "test-server", "test-namespace").Return(nil)
-				rp.EXPECT().DeleteTrafficRoute(gomock.Any(), gomock.Any(), "c-2", "test-server", "test-namespace").Return(nil)
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Delete(gomock.Any(), gomock.Any(), discoveryName, "test-namespace").Return(nil)
+				rm.EXPECT().Delete(gomock.Any(), gomock.Any(), trafficName, "test-namespace").Return(nil).Times(2)
 			},
 			expectedStatus: apipb.CONDITION_STATUS_TRUE,
 		},
@@ -217,11 +221,11 @@ func TestRouteCleanupActor_Run(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			rp := routesmocks.NewMockRouteProvider(ctrl)
-			tt.setupMocks(rp)
+			rm := routingmocks.NewMockManager(ctrl)
+			tt.setupMocks(rm)
 			factory := newClientFactoryDispatchingDynamic(ctrl, tt.clientFactoryErrors)
 
-			actor := NewRouteCleanupActor(nil, factory, rp, zap.NewNop())
+			actor := NewRouteCleanupActor(nil, factory, rm, zap.NewNop())
 			got, err := actor.Run(context.Background(), newRouteCleanupIS(), &apipb.Condition{})
 
 			require.NoError(t, err)
@@ -243,7 +247,7 @@ func TestRouteCleanupActor_GetType(t *testing.T) {
 	actor := NewRouteCleanupActor(
 		nil,
 		newClientFactoryDispatchingDynamic(ctrl, nil),
-		routesmocks.NewMockRouteProvider(ctrl),
+		routingmocks.NewMockManager(ctrl),
 		zap.NewNop(),
 	)
 	assert.Equal(t, common.RouteCleanupConditionType, actor.GetType())

@@ -10,11 +10,13 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/common/routing"
+	"github.com/michelangelo-ai/michelangelo/go/components/common/routing/routingmocks"
 	osscommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory/clientfactorymocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/common/routenames"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig/modelconfigmocks"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/routes/routesmocks"
 	"github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -39,29 +41,41 @@ func withSingleClusterAnnotation(t *testing.T, deployment *v2pb.Deployment, clus
 }
 
 func TestRetrieve(t *testing.T) {
+	isName := "test-server"
+	deploymentName := "test-deployment"
+	namespace := "default"
+	clusterID := "test-cluster"
+	currentModel := "old-model"
+
+	trafficRouteName := routenames.TrafficRouteName(isName)
+	discoveryRouteName := routenames.DiscoveryRouteName(isName)
+	trafficMatchPath := routenames.TrafficMatchPath(isName, deploymentName)
+	trafficRewritePath := routenames.TrafficRewritePath(currentModel)
+	discoveryMatchPath := routenames.DiscoveryMatchPath(isName, deploymentName)
+
 	tests := []struct {
 		name                    string
 		deployment              *v2pb.Deployment
-		setupMocks              func(*modelconfigmocks.MockModelConfigProvider, *routesmocks.MockRouteProvider)
+		setupMocks              func(*modelconfigmocks.MockModelConfigProvider, *routingmocks.MockManager)
 		expectedConditionStatus api.ConditionStatus
 		expectedConditionReason string
 	}{
 		{
 			name: "model still exists in inference server, cleanup required",
 			deployment: withSingleClusterAnnotation(t, &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "default"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &api.ResourceIdentifier{Name: isName},
 					},
 				},
 				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "old-model"},
+					CurrentRevision: &api.ResourceIdentifier{Name: currentModel},
 				},
-			}, "test-cluster"),
-			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rp *routesmocks.MockRouteProvider) {
-				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return([]modelconfig.ModelConfigEntry{
-					{Name: "old-model", StoragePath: "gs://bucket/old-model"},
+			}, clusterID),
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rm *routingmocks.MockManager) {
+				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace).Return([]modelconfig.ModelConfigEntry{
+					{Name: currentModel, StoragePath: "gs://bucket/old-model"},
 				}, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
@@ -70,18 +84,18 @@ func TestRetrieve(t *testing.T) {
 		{
 			name: "unable to check model in inference server",
 			deployment: withSingleClusterAnnotation(t, &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "default"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &api.ResourceIdentifier{Name: isName},
 					},
 				},
 				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "old-model"},
+					CurrentRevision: &api.ResourceIdentifier{Name: currentModel},
 				},
-			}, "test-cluster"),
-			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rp *routesmocks.MockRouteProvider) {
-				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return(nil, errors.New("connection error"))
+			}, clusterID),
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rm *routingmocks.MockManager) {
+				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace).Return(nil, errors.New("connection error"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Unable to check if model old-model exists in Inference Server: connection error",
@@ -89,20 +103,20 @@ func TestRetrieve(t *testing.T) {
 		{
 			name: "TrafficRoute still exists, cleanup required",
 			deployment: withSingleClusterAnnotation(t, &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				ObjectMeta: metav1.ObjectMeta{Name: deploymentName, Namespace: namespace},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &api.ResourceIdentifier{Name: isName},
 					},
 				},
 				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "old-model"},
+					CurrentRevision: &api.ResourceIdentifier{Name: currentModel},
 				},
-			}, "test-cluster"),
-			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rp *routesmocks.MockRouteProvider) {
-				// Model doesn't exist but route still exists
-				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return([]modelconfig.ModelConfigEntry{}, nil)
-				rp.EXPECT().DeploymentTrafficRouteExists(gomock.Any(), gomock.Any(), "test-cluster", "test-server", "default", "test-deployment", "old-model").Return(true, nil)
+			}, clusterID),
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rm *routingmocks.MockManager) {
+				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace).Return([]modelconfig.ModelConfigEntry{}, nil)
+				rm.EXPECT().RuleExists(gomock.Any(), gomock.Any(), trafficRouteName, namespace,
+					routing.Rule{MatchPath: trafficMatchPath, RewritePath: trafficRewritePath}).Return(true, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Cleanup required: TrafficRoute for deployment test-deployment still exists in cluster test-cluster",
@@ -110,19 +124,20 @@ func TestRetrieve(t *testing.T) {
 		{
 			name: "unable to check TrafficRoute exists",
 			deployment: withSingleClusterAnnotation(t, &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				ObjectMeta: metav1.ObjectMeta{Name: deploymentName, Namespace: namespace},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &api.ResourceIdentifier{Name: isName},
 					},
 				},
 				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "old-model"},
+					CurrentRevision: &api.ResourceIdentifier{Name: currentModel},
 				},
-			}, "test-cluster"),
-			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rp *routesmocks.MockRouteProvider) {
-				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return([]modelconfig.ModelConfigEntry{}, nil)
-				rp.EXPECT().DeploymentTrafficRouteExists(gomock.Any(), gomock.Any(), "test-cluster", "test-server", "default", "test-deployment", "old-model").Return(false, errors.New("api error"))
+			}, clusterID),
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rm *routingmocks.MockManager) {
+				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace).Return([]modelconfig.ModelConfigEntry{}, nil)
+				rm.EXPECT().RuleExists(gomock.Any(), gomock.Any(), trafficRouteName, namespace,
+					routing.Rule{MatchPath: trafficMatchPath, RewritePath: trafficRewritePath}).Return(false, errors.New("api error"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Unable to check if TrafficRoute exists for deployment test-deployment in cluster test-cluster: api error",
@@ -130,20 +145,22 @@ func TestRetrieve(t *testing.T) {
 		{
 			name: "DiscoveryRoute still exists, cleanup required",
 			deployment: withSingleClusterAnnotation(t, &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				ObjectMeta: metav1.ObjectMeta{Name: deploymentName, Namespace: namespace},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &api.ResourceIdentifier{Name: isName},
 					},
 				},
 				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "old-model"},
+					CurrentRevision: &api.ResourceIdentifier{Name: currentModel},
 				},
-			}, "test-cluster"),
-			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rp *routesmocks.MockRouteProvider) {
-				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return([]modelconfig.ModelConfigEntry{}, nil)
-				rp.EXPECT().DeploymentTrafficRouteExists(gomock.Any(), gomock.Any(), "test-cluster", "test-server", "default", "test-deployment", "old-model").Return(false, nil)
-				rp.EXPECT().DeploymentDiscoveryRouteExists(gomock.Any(), gomock.Any(), "test-server", "default", "test-deployment").Return(true, nil)
+			}, clusterID),
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rm *routingmocks.MockManager) {
+				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace).Return([]modelconfig.ModelConfigEntry{}, nil)
+				rm.EXPECT().RuleExists(gomock.Any(), gomock.Any(), trafficRouteName, namespace,
+					routing.Rule{MatchPath: trafficMatchPath, RewritePath: trafficRewritePath}).Return(false, nil)
+				rm.EXPECT().RuleExists(gomock.Any(), gomock.Any(), discoveryRouteName, namespace,
+					routing.Rule{MatchPath: discoveryMatchPath}).Return(true, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Cleanup required: DiscoveryRoute for deployment test-deployment still exists",
@@ -151,20 +168,22 @@ func TestRetrieve(t *testing.T) {
 		{
 			name: "cleanup completed, all resources cleaned up",
 			deployment: withSingleClusterAnnotation(t, &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				ObjectMeta: metav1.ObjectMeta{Name: deploymentName, Namespace: namespace},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &api.ResourceIdentifier{Name: isName},
 					},
 				},
 				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "old-model"},
+					CurrentRevision: &api.ResourceIdentifier{Name: currentModel},
 				},
-			}, "test-cluster"),
-			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rp *routesmocks.MockRouteProvider) {
-				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return([]modelconfig.ModelConfigEntry{}, nil)
-				rp.EXPECT().DeploymentTrafficRouteExists(gomock.Any(), gomock.Any(), "test-cluster", "test-server", "default", "test-deployment", "old-model").Return(false, nil)
-				rp.EXPECT().DeploymentDiscoveryRouteExists(gomock.Any(), gomock.Any(), "test-server", "default", "test-deployment").Return(false, nil)
+			}, clusterID),
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rm *routingmocks.MockManager) {
+				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace).Return([]modelconfig.ModelConfigEntry{}, nil)
+				rm.EXPECT().RuleExists(gomock.Any(), gomock.Any(), trafficRouteName, namespace,
+					routing.Rule{MatchPath: trafficMatchPath, RewritePath: trafficRewritePath}).Return(false, nil)
+				rm.EXPECT().RuleExists(gomock.Any(), gomock.Any(), discoveryRouteName, namespace,
+					routing.Rule{MatchPath: discoveryMatchPath}).Return(false, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
 			expectedConditionReason: "",
@@ -177,15 +196,15 @@ func TestRetrieve(t *testing.T) {
 			defer ctrl.Finish()
 
 			mockModelConfigProvider := modelconfigmocks.NewMockModelConfigProvider(ctrl)
-			mockRouteProvider := routesmocks.NewMockRouteProvider(ctrl)
+			rm := routingmocks.NewMockManager(ctrl)
 			mockClientFactory := clientfactorymocks.NewMockClientFactory(ctrl)
 			mockClientFactory.EXPECT().GetDynamicClient(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
-			tt.setupMocks(mockModelConfigProvider, mockRouteProvider)
+			tt.setupMocks(mockModelConfigProvider, rm)
 
 			actor := &CleanupActor{
 				ModelConfigProvider: mockModelConfigProvider,
-				RouteProvider:       mockRouteProvider,
+				RouteManager:        rm,
 				ClientFactory:       mockClientFactory,
 				Logger:              zap.NewNop(),
 			}
@@ -201,31 +220,42 @@ func TestRetrieve(t *testing.T) {
 }
 
 func TestRun(t *testing.T) {
+	isName := "test-server"
+	deploymentName := "test-deployment"
+	namespace := "default"
+	clusterID := "test-cluster"
+	currentModel := "old-model"
+
+	trafficRouteName := routenames.TrafficRouteName(isName)
+	discoveryRouteName := routenames.DiscoveryRouteName(isName)
+	trafficMatchPath := routenames.TrafficMatchPath(isName, deploymentName)
+	discoveryMatchPath := routenames.DiscoveryMatchPath(isName, deploymentName)
+
 	tests := []struct {
 		name                    string
 		deployment              *v2pb.Deployment
-		setupMocks              func(*modelconfigmocks.MockModelConfigProvider, *routesmocks.MockRouteProvider)
+		setupMocks              func(*modelconfigmocks.MockModelConfigProvider, *routingmocks.MockManager)
 		expectedConditionStatus api.ConditionStatus
 		expectedConditionReason string
 	}{
 		{
 			name: "successful cleanup, all operations complete",
 			deployment: withSingleClusterAnnotation(t, &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				ObjectMeta: metav1.ObjectMeta{Name: deploymentName, Namespace: namespace},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &api.ResourceIdentifier{Name: isName},
 					},
 				},
 				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "old-model"},
+					CurrentRevision: &api.ResourceIdentifier{Name: currentModel},
 					Stage:           v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
 				},
-			}, "test-cluster"),
-			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rp *routesmocks.MockRouteProvider) {
-				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "old-model").Return(nil)
-				rp.EXPECT().RemoveTrafficRule(gomock.Any(), gomock.Any(), "test-cluster", "test-server", "default", "test-deployment").Return(nil)
-				rp.EXPECT().RemoveDiscoveryRule(gomock.Any(), gomock.Any(), "test-server", "default", "test-deployment").Return(nil)
+			}, clusterID),
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rm *routingmocks.MockManager) {
+				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, currentModel).Return(nil)
+				rm.EXPECT().RemoveRules(gomock.Any(), gomock.Any(), trafficRouteName, namespace, trafficMatchPath).Return(nil)
+				rm.EXPECT().RemoveRules(gomock.Any(), gomock.Any(), discoveryRouteName, namespace, discoveryMatchPath).Return(nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
 			expectedConditionReason: "",
@@ -233,19 +263,19 @@ func TestRun(t *testing.T) {
 		{
 			name: "model removal fails",
 			deployment: withSingleClusterAnnotation(t, &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				ObjectMeta: metav1.ObjectMeta{Name: deploymentName, Namespace: namespace},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &api.ResourceIdentifier{Name: isName},
 					},
 				},
 				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "old-model"},
+					CurrentRevision: &api.ResourceIdentifier{Name: currentModel},
 					Stage:           v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
 				},
-			}, "test-cluster"),
-			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rp *routesmocks.MockRouteProvider) {
-				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "old-model").Return(errors.New("removal failed"))
+			}, clusterID),
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rm *routingmocks.MockManager) {
+				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, currentModel).Return(errors.New("removal failed"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Failed to unload old model old-model from inference server: removal failed",
@@ -253,20 +283,20 @@ func TestRun(t *testing.T) {
 		{
 			name: "TrafficRoute removal fails",
 			deployment: withSingleClusterAnnotation(t, &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				ObjectMeta: metav1.ObjectMeta{Name: deploymentName, Namespace: namespace},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &api.ResourceIdentifier{Name: isName},
 					},
 				},
 				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "old-model"},
+					CurrentRevision: &api.ResourceIdentifier{Name: currentModel},
 					Stage:           v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
 				},
-			}, "test-cluster"),
-			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rp *routesmocks.MockRouteProvider) {
-				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "old-model").Return(nil)
-				rp.EXPECT().RemoveTrafficRule(gomock.Any(), gomock.Any(), "test-cluster", "test-server", "default", "test-deployment").Return(errors.New("removal failed"))
+			}, clusterID),
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rm *routingmocks.MockManager) {
+				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, currentModel).Return(nil)
+				rm.EXPECT().RemoveRules(gomock.Any(), gomock.Any(), trafficRouteName, namespace, trafficMatchPath).Return(errors.New("removal failed"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Failed to remove TrafficRoute",
@@ -274,21 +304,21 @@ func TestRun(t *testing.T) {
 		{
 			name: "DiscoveryRoute removal fails",
 			deployment: withSingleClusterAnnotation(t, &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				ObjectMeta: metav1.ObjectMeta{Name: deploymentName, Namespace: namespace},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+						InferenceServer: &api.ResourceIdentifier{Name: isName},
 					},
 				},
 				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "old-model"},
+					CurrentRevision: &api.ResourceIdentifier{Name: currentModel},
 					Stage:           v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
 				},
-			}, "test-cluster"),
-			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rp *routesmocks.MockRouteProvider) {
-				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "old-model").Return(nil)
-				rp.EXPECT().RemoveTrafficRule(gomock.Any(), gomock.Any(), "test-cluster", "test-server", "default", "test-deployment").Return(nil)
-				rp.EXPECT().RemoveDiscoveryRule(gomock.Any(), gomock.Any(), "test-server", "default", "test-deployment").Return(errors.New("apply failed"))
+			}, clusterID),
+			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rm *routingmocks.MockManager) {
+				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, currentModel).Return(nil)
+				rm.EXPECT().RemoveRules(gomock.Any(), gomock.Any(), trafficRouteName, namespace, trafficMatchPath).Return(nil)
+				rm.EXPECT().RemoveRules(gomock.Any(), gomock.Any(), discoveryRouteName, namespace, discoveryMatchPath).Return(errors.New("apply failed"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Failed to remove DiscoveryRoute for deployment test-deployment",
@@ -301,15 +331,15 @@ func TestRun(t *testing.T) {
 			defer ctrl.Finish()
 
 			mockModelConfigProvider := modelconfigmocks.NewMockModelConfigProvider(ctrl)
-			mockRouteProvider := routesmocks.NewMockRouteProvider(ctrl)
+			rm := routingmocks.NewMockManager(ctrl)
 			mockClientFactory := clientfactorymocks.NewMockClientFactory(ctrl)
 			mockClientFactory.EXPECT().GetDynamicClient(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
-			tt.setupMocks(mockModelConfigProvider, mockRouteProvider)
+			tt.setupMocks(mockModelConfigProvider, rm)
 
 			actor := &CleanupActor{
 				ModelConfigProvider: mockModelConfigProvider,
-				RouteProvider:       mockRouteProvider,
+				RouteManager:        rm,
 				ClientFactory:       mockClientFactory,
 				Logger:              zap.NewNop(),
 			}

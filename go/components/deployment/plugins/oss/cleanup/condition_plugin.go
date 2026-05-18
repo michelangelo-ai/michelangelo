@@ -6,9 +6,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	"github.com/michelangelo-ai/michelangelo/go/components/common/routing"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/routes"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -25,7 +25,7 @@ type Params struct {
 	Client              client.Client
 	DynamicClient       dynamic.Interface
 	ClientFactory       clientfactory.ClientFactory
-	RouteProvider       routes.RouteProvider
+	RouteManager        routing.Manager
 	ModelConfigProvider modelconfig.ModelConfigProvider
 	Logger              *zap.Logger
 }
@@ -37,7 +37,7 @@ func NewCleanupPlugin(p Params) conditionInterfaces.Plugin[*v2pb.Deployment] {
 			Client:              p.Client,
 			DynamicClient:       p.DynamicClient,
 			ClientFactory:       p.ClientFactory,
-			RouteProvider:       p.RouteProvider,
+			RouteManager:        p.RouteManager,
 			ModelConfigProvider: p.ModelConfigProvider,
 			Logger:              p.Logger,
 		},

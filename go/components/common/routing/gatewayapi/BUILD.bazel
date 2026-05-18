@@ -3,15 +3,15 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
-        "interface.go",
+        "helpers.go",
         "manager.go",
         "module.go",
     ],
-    importpath = "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/routes",
+    importpath = "github.com/michelangelo-ai/michelangelo/go/components/common/routing/gatewayapi",
     visibility = ["//visibility:public"],
     deps = [
-        "//go/components/inferenceserver/common/keyedmutex:go_default_library",
-        "//proto/api/v2:go_default_library",
+        "//go/components/common/keyedmutex:go_default_library",
+        "//go/components/common/routing:go_default_library",
         "@io_k8s_apimachinery//pkg/api/errors:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1/unstructured:go_default_library",
@@ -27,12 +27,13 @@ go_test(
     srcs = ["manager_test.go"],
     embed = [":go_default_library"],
     deps = [
-        "//proto/api/v2:go_default_library",
+        "//go/components/common/routing:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1/unstructured:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
         "@io_k8s_client_go//dynamic/fake:go_default_library",
-        "@io_k8s_client_go//kubernetes/scheme:go_default_library",
+        "@io_k8s_client_go//testing:go_default_library",
     ],
 )

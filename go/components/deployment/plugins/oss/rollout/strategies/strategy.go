@@ -10,11 +10,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	"github.com/michelangelo-ai/michelangelo/go/components/common/routing"
 	osscommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/routes"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 
 	strategiesCommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies/common"
@@ -23,7 +23,7 @@ import (
 // Params contains dependencies for strategy actor construction.
 type Params struct {
 	ClientFactory       clientfactory.ClientFactory
-	RouteProvider       routes.RouteProvider
+	RouteManager        routing.Manager
 	BackendRegistry     *backends.Registry
 	ModelConfigProvider modelconfig.ModelConfigProvider
 	Logger              *zap.Logger
@@ -71,17 +71,6 @@ func getRollingActors(params Params, deployment *v2pb.Deployment) ([]conditionIn
 		return nil, nil
 	}
 
-	actorParams := strategiesCommon.Params{
-		ClientFactory:             params.ClientFactory,
-		RouteProvider:             params.RouteProvider,
-		BackendRegistry:           params.BackendRegistry,
-		ModelConfigProvider:       params.ModelConfigProvider,
-		Logger:                    params.Logger,
-		ControlPlaneDynamicClient: params.DynamicClient,
-		ControlPlaneKubeClient:    params.Client,
-		ControlPlaneHTTPClient:    params.HTTPClient,
-	}
-
 	// Per-cluster [RollingRollout, TrafficRouting] pairs come first, interleaved so cluster N
 	// starts routing traffic as soon as its model is loaded. A single DiscoveryRoutingActor then
 	// exposes the deployment via the control-plane discovery route. Per-cluster ModelCleanup
@@ -90,15 +79,13 @@ func getRollingActors(params Params, deployment *v2pb.Deployment) ([]conditionIn
 
 	for _, target := range targets {
 		actors = append(actors,
-			strategiesCommon.NewRollingRolloutActor(actorParams, target),
-			strategiesCommon.NewTrafficRoutingActor(actorParams, target),
+			strategiesCommon.NewRollingRolloutActor(params.ClientFactory, params.BackendRegistry, params.ModelConfigProvider, params.Logger, target),
+			strategiesCommon.NewTrafficRoutingActor(params.ClientFactory, params.RouteManager, target),
 		)
 	}
-
-	actors = append(actors, strategiesCommon.NewDiscoveryRoutingActor(actorParams))
-
+	actors = append(actors, strategiesCommon.NewDiscoveryRoutingActor(params.DynamicClient, params.RouteManager))
 	for _, target := range targets {
-		actors = append(actors, strategiesCommon.NewModelCleanupActor(actorParams, target))
+		actors = append(actors, strategiesCommon.NewModelCleanupActor(params.ClientFactory, params.BackendRegistry, params.ModelConfigProvider, params.Logger, target))
 	}
 
 	return actors, nil

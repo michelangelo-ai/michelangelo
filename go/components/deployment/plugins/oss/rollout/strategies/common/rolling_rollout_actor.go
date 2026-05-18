@@ -3,11 +3,8 @@ package common
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"go.uber.org/zap"
-	"k8s.io/client-go/dynamic"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
@@ -15,43 +12,37 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/routes"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
-
-// Params holds the shared dependencies for all per-cluster placement actors.
-type Params struct {
-	ClientFactory       clientfactory.ClientFactory
-	RouteProvider       routes.RouteProvider
-	BackendRegistry     *backends.Registry
-	ModelConfigProvider modelconfig.ModelConfigProvider
-	Logger              *zap.Logger
-
-	// ControlPlaneDynamicClient is the dynamic client for the control-plane cluster. Kept here
-	// so future actors that operate on control-plane-only resources can access it without an
-	// extra ClientFactory call.
-	ControlPlaneDynamicClient dynamic.Interface
-
-	// ControlPlaneKubeClient is the controller-runtime client for the control-plane cluster.
-	ControlPlaneKubeClient client.Client
-
-	// ControlPlaneHTTPClient is the HTTP client for the control-plane cluster.
-	ControlPlaneHTTPClient *http.Client
-}
 
 var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &RollingRolloutActor{}
 
 // RollingRolloutActor loads a model into a single target cluster's inference server. One
 // instance is created per cluster at actor-chain construction time.
 type RollingRolloutActor struct {
-	params Params
-	target *v2pb.ClusterTarget
+	clientFactory       clientfactory.ClientFactory
+	backendRegistry     *backends.Registry
+	modelConfigProvider modelconfig.ModelConfigProvider
+	logger              *zap.Logger
+	target              *v2pb.ClusterTarget
 }
 
 // NewRollingRolloutActor creates a RollingRolloutActor for the given cluster.
-func NewRollingRolloutActor(params Params, target *v2pb.ClusterTarget) *RollingRolloutActor {
-	return &RollingRolloutActor{params: params, target: target}
+func NewRollingRolloutActor(
+	clientFactory clientfactory.ClientFactory,
+	backendRegistry *backends.Registry,
+	modelConfigProvider modelconfig.ModelConfigProvider,
+	logger *zap.Logger,
+	target *v2pb.ClusterTarget,
+) *RollingRolloutActor {
+	return &RollingRolloutActor{
+		clientFactory:       clientFactory,
+		backendRegistry:     backendRegistry,
+		modelConfigProvider: modelConfigProvider,
+		logger:              logger,
+		target:              target,
+	}
 }
 
 // GetType returns the condition type identifier, including the cluster ID so each
@@ -67,17 +58,17 @@ func (a *RollingRolloutActor) Retrieve(ctx context.Context, deployment *v2pb.Dep
 		return conditionsutil.GenerateTrueCondition(condition), nil
 	}
 
-	kubeClient, err := a.params.ClientFactory.GetClient(ctx, a.target)
+	kubeClient, err := a.clientFactory.GetClient(ctx, a.target)
 	if err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "ClientUnavailable", err.Error()), nil
 	}
 
-	httpClient, err := a.params.ClientFactory.GetHTTPClient(ctx, a.target)
+	httpClient, err := a.clientFactory.GetHTTPClient(ctx, a.target)
 	if err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "HTTPClientUnavailable", err.Error()), nil
 	}
 
-	backend, err := a.params.BackendRegistry.GetBackend(v2pb.BACKEND_TYPE_TRITON)
+	backend, err := a.backendRegistry.GetBackend(v2pb.BACKEND_TYPE_TRITON)
 	if err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "BackendUnavailable", err.Error()), nil
 	}
@@ -86,7 +77,7 @@ func (a *RollingRolloutActor) Retrieve(ctx context.Context, deployment *v2pb.Dep
 	inferenceServerName := deployment.Spec.GetInferenceServer().GetName()
 
 	apiServerURL := osscommon.APIServerURLFromTarget(a.target)
-	ready, err := backend.CheckModelStatus(ctx, a.params.Logger, kubeClient, httpClient, apiServerURL, inferenceServerName, deployment.Namespace, modelName)
+	ready, err := backend.CheckModelStatus(ctx, a.logger, kubeClient, httpClient, apiServerURL, inferenceServerName, deployment.Namespace, modelName)
 	if err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "ModelStatusCheckFailed", err.Error()), nil
 	}
@@ -103,7 +94,7 @@ func (a *RollingRolloutActor) Retrieve(ctx context.Context, deployment *v2pb.Dep
 // Run registers the desired model in the cluster's inference server ConfigMap, triggering the
 // server to begin loading it. Returns UNKNOWN so the engine continues polling via Retrieve.
 func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	kubeClient, err := a.params.ClientFactory.GetClient(ctx, a.target)
+	kubeClient, err := a.clientFactory.GetClient(ctx, a.target)
 	if err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "ClientUnavailable", err.Error()), nil
 	}
@@ -113,7 +104,7 @@ func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployme
 
 	// TODO(#696): make the storage path configurable w.r.t. storage client and location.
 	storagePath := fmt.Sprintf("s3://deploy-models/%s/", modelName)
-	if err := a.params.ModelConfigProvider.AddModelToConfig(ctx, a.params.Logger, kubeClient, inferenceServerName, deployment.Namespace, modelconfig.ModelConfigEntry{
+	if err := a.modelConfigProvider.AddModelToConfig(ctx, a.logger, kubeClient, inferenceServerName, deployment.Namespace, modelconfig.ModelConfigEntry{
 		Name:        modelName,
 		StoragePath: storagePath,
 	}); err != nil {

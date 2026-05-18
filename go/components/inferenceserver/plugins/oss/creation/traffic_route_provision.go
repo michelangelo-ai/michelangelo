@@ -10,9 +10,10 @@ import (
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
+	"github.com/michelangelo-ai/michelangelo/go/components/common/routing"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/common/routenames"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/routes"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -25,16 +26,18 @@ var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &TrafficRouteP
 // failures are aggregated into a single condition.
 type TrafficRouteProvisionActor struct {
 	clientFactory clientfactory.ClientFactory
-	routeProvider routes.RouteProvider
+	routeManager  routing.Manager
+	gatewayName   string
 	logger        *zap.Logger
 }
 
 // NewTrafficRouteProvisionActor creates the condition actor that maintains
 // the per-cluster traffic HTTPRoute for an InferenceServer.
-func NewTrafficRouteProvisionActor(clientFactory clientfactory.ClientFactory, routeProvider routes.RouteProvider, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
+func NewTrafficRouteProvisionActor(clientFactory clientfactory.ClientFactory, routeManager routing.Manager, gatewayName string, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return &TrafficRouteProvisionActor{
 		clientFactory: clientFactory,
-		routeProvider: routeProvider,
+		routeManager:  routeManager,
+		gatewayName:   gatewayName,
 		logger:        logger,
 	}
 }
@@ -47,6 +50,7 @@ func (a *TrafficRouteProvisionActor) GetType() string {
 // Retrieve checks every target cluster has its traffic HTTPRoute provisioned.
 // Reports the missing or unreachable clusters in the condition.
 func (a *TrafficRouteProvisionActor) Retrieve(ctx context.Context, server *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
+	routeName := routenames.TrafficRouteName(server.Name)
 	var missing []string
 	for _, target := range server.Spec.ClusterTargets {
 		clusterID := target.GetClusterId()
@@ -55,7 +59,7 @@ func (a *TrafficRouteProvisionActor) Retrieve(ctx context.Context, server *v2pb.
 			missing = append(missing, fmt.Sprintf("%s: %v", clusterID, err))
 			continue
 		}
-		provisioned, err := a.routeProvider.TrafficRouteExists(ctx, dynamicClient, clusterID, server.Name, server.Namespace)
+		provisioned, err := a.routeManager.Exists(ctx, dynamicClient, routeName, server.Namespace)
 		if err != nil {
 			missing = append(missing, fmt.Sprintf("%s: %v", clusterID, err))
 			continue
@@ -74,6 +78,14 @@ func (a *TrafficRouteProvisionActor) Retrieve(ctx context.Context, server *v2pb.
 // Run ensures the traffic HTTPRoute exists in every target cluster. Per-cluster
 // failures keep the condition FALSE without aborting other clusters.
 func (a *TrafficRouteProvisionActor) Run(ctx context.Context, server *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
+	routeName := routenames.TrafficRouteName(server.Name)
+	config := routing.RouteConfig{
+		GatewayName:      a.gatewayName,
+		GatewayNamespace: server.Namespace,
+		Rules:            []routing.Rule{trafficDefaultRule(server.Name)},
+	}
+	defaultRule := trafficDefaultRule(server.Name)
+
 	var failures []string
 	for _, target := range server.Spec.ClusterTargets {
 		clusterID := target.GetClusterId()
@@ -82,7 +94,11 @@ func (a *TrafficRouteProvisionActor) Run(ctx context.Context, server *v2pb.Infer
 			failures = append(failures, fmt.Sprintf("%s: %v", clusterID, err))
 			continue
 		}
-		if err := a.routeProvider.EnsureTrafficRoute(ctx, dynamicClient, clusterID, server.Name, server.Namespace); err != nil {
+		if err := a.routeManager.Create(ctx, dynamicClient, routeName, server.Namespace, config); err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v", clusterID, err))
+			continue
+		}
+		if err := a.routeManager.AddRules(ctx, dynamicClient, routeName, server.Namespace, defaultRule); err != nil {
 			failures = append(failures, fmt.Sprintf("%s: %v", clusterID, err))
 		}
 	}
@@ -91,4 +107,15 @@ func (a *TrafficRouteProvisionActor) Run(ctx context.Context, server *v2pb.Infer
 		return conditionsutil.GenerateFalseCondition(condition, "EnsureFailed", strings.Join(failures, "; ")), nil
 	}
 	return conditionsutil.GenerateTrueCondition(condition), nil
+}
+
+// trafficDefaultRule is the IS-level default rule on the per-cluster traffic HTTPRoute.
+func trafficDefaultRule(isName string) routing.Rule {
+	return routing.Rule{
+		MatchPath:   "/cluster/" + isName,
+		MatchType:   routing.PathMatchExact,
+		RewritePath: "/v2",
+		RewriteType: routing.RewriteFullPath,
+		BackendName: isName + "-inference-service",
+	}
 }

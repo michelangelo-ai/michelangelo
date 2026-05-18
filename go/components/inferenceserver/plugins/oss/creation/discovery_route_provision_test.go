@@ -11,8 +11,9 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/common/routing/routingmocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/common/routenames"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/routes/routesmocks"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -27,16 +28,18 @@ func newDiscoveryRouteIS() *v2pb.InferenceServer {
 }
 
 func TestDiscoveryRouteProvisionActor_Retrieve(t *testing.T) {
+	routeName := routenames.DiscoveryRouteName("test-server")
+
 	tests := []struct {
 		name            string
-		setupMocks      func(*routesmocks.MockRouteProvider)
+		setupMocks      func(*routingmocks.MockManager)
 		expectedStatus  apipb.ConditionStatus
 		expectedMessage string
 	}{
 		{
-			name: "DiscoveryRouteExists errors",
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().DiscoveryRouteExists(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
+			name: "Exists errors",
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Exists(gomock.Any(), gomock.Any(), routeName, "test-namespace").
 					Return(false, errors.New("api error"))
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
@@ -44,8 +47,8 @@ func TestDiscoveryRouteProvisionActor_Retrieve(t *testing.T) {
 		},
 		{
 			name: "route not provisioned",
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().DiscoveryRouteExists(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Exists(gomock.Any(), gomock.Any(), routeName, "test-namespace").
 					Return(false, nil)
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
@@ -53,8 +56,8 @@ func TestDiscoveryRouteProvisionActor_Retrieve(t *testing.T) {
 		},
 		{
 			name: "route provisioned",
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().DiscoveryRouteExists(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Exists(gomock.Any(), gomock.Any(), routeName, "test-namespace").
 					Return(true, nil)
 			},
 			expectedStatus: apipb.CONDITION_STATUS_TRUE,
@@ -66,10 +69,10 @@ func TestDiscoveryRouteProvisionActor_Retrieve(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			rp := routesmocks.NewMockRouteProvider(ctrl)
-			tt.setupMocks(rp)
+			rm := routingmocks.NewMockManager(ctrl)
+			tt.setupMocks(rm)
 
-			actor := NewDiscoveryRouteProvisionActor(nil, rp, zap.NewNop())
+			actor := NewDiscoveryRouteProvisionActor(nil, rm, "test-gateway", zap.NewNop())
 			got, err := actor.Retrieve(context.Background(), newDiscoveryRouteIS(), &apipb.Condition{})
 
 			require.NoError(t, err)
@@ -82,25 +85,40 @@ func TestDiscoveryRouteProvisionActor_Retrieve(t *testing.T) {
 }
 
 func TestDiscoveryRouteProvisionActor_Run(t *testing.T) {
+	routeName := routenames.DiscoveryRouteName("test-server")
+
 	tests := []struct {
 		name            string
-		setupMocks      func(*routesmocks.MockRouteProvider)
+		setupMocks      func(*routingmocks.MockManager)
 		expectedStatus  apipb.ConditionStatus
 		expectedMessage string
 	}{
 		{
-			name: "EnsureDiscoveryRoute errors",
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().EnsureDiscoveryRoute(gomock.Any(), gomock.Any(), gomock.Any()).
+			name: "Create errors",
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Create(gomock.Any(), gomock.Any(), routeName, "test-namespace", gomock.Any()).
 					Return(errors.New("apply failed"))
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
 			expectedMessage: "EnsureFailed",
 		},
 		{
+			name: "AddRules errors",
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Create(gomock.Any(), gomock.Any(), routeName, "test-namespace", gomock.Any()).
+					Return(nil)
+				rm.EXPECT().AddRules(gomock.Any(), gomock.Any(), routeName, "test-namespace", gomock.Any()).
+					Return(errors.New("rules failed"))
+			},
+			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
+			expectedMessage: "EnsureFailed",
+		},
+		{
 			name: "happy path",
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().EnsureDiscoveryRoute(gomock.Any(), gomock.Any(), gomock.Any()).
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Create(gomock.Any(), gomock.Any(), routeName, "test-namespace", gomock.Any()).
+					Return(nil)
+				rm.EXPECT().AddRules(gomock.Any(), gomock.Any(), routeName, "test-namespace", gomock.Any()).
 					Return(nil)
 			},
 			expectedStatus: apipb.CONDITION_STATUS_TRUE,
@@ -112,10 +130,10 @@ func TestDiscoveryRouteProvisionActor_Run(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			rp := routesmocks.NewMockRouteProvider(ctrl)
-			tt.setupMocks(rp)
+			rm := routingmocks.NewMockManager(ctrl)
+			tt.setupMocks(rm)
 
-			actor := NewDiscoveryRouteProvisionActor(nil, rp, zap.NewNop())
+			actor := NewDiscoveryRouteProvisionActor(nil, rm, "test-gateway", zap.NewNop())
 			got, err := actor.Run(context.Background(), newDiscoveryRouteIS(), &apipb.Condition{})
 
 			require.NoError(t, err)
@@ -131,6 +149,6 @@ func TestDiscoveryRouteProvisionActor_GetType(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	actor := NewDiscoveryRouteProvisionActor(nil, routesmocks.NewMockRouteProvider(ctrl), zap.NewNop())
+	actor := NewDiscoveryRouteProvisionActor(nil, routingmocks.NewMockManager(ctrl), "test-gateway", zap.NewNop())
 	assert.Equal(t, common.DiscoveryRouteProvisionType, actor.GetType())
 }

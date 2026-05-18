@@ -8,37 +8,33 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/routes/routesmocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/common/routing"
+	"github.com/michelangelo-ai/michelangelo/go/components/common/routing/routingmocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/common/routenames"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 )
 
 // discoveryMocks groups the mocks used by the DiscoveryRoutingActor tests.
-// The actor uses the control-plane dynamic client directly from Params, so no
-// ClientFactory is required.
 type discoveryMocks struct {
-	routeProvider *routesmocks.MockRouteProvider
+	routeManager *routingmocks.MockManager
 }
 
-// newDiscoveryFixture builds a Params + mocks for the DiscoveryRoutingActor.
-func newDiscoveryFixture(t *testing.T) (Params, *discoveryMocks) {
+// newDiscoveryFixture builds the mocks for the DiscoveryRoutingActor.
+func newDiscoveryFixture(t *testing.T) *discoveryMocks {
 	t.Helper()
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	mocks := &discoveryMocks{
-		routeProvider: routesmocks.NewMockRouteProvider(ctrl),
+	return &discoveryMocks{
+		routeManager: routingmocks.NewMockManager(ctrl),
 	}
-
-	params := Params{
-		RouteProvider: mocks.routeProvider,
-		Logger:        zap.NewNop(),
-	}
-	return params, mocks
 }
 
 func TestDiscoveryRoutingActor_Retrieve(t *testing.T) {
+	routeName := routenames.DiscoveryRouteName(testISName)
+	matchPath := routenames.DiscoveryMatchPath(testISName, testDeploymentName)
+
 	tests := []struct {
 		name              string
 		setupMocks        func(*discoveryMocks)
@@ -46,10 +42,10 @@ func TestDiscoveryRoutingActor_Retrieve(t *testing.T) {
 		expectedReasonSub string
 	}{
 		{
-			name: "DeploymentDiscoveryRouteExists errors",
+			name: "RuleExists errors",
 			setupMocks: func(m *discoveryMocks) {
-				m.routeProvider.EXPECT().DeploymentDiscoveryRouteExists(gomock.Any(), gomock.Any(),
-					testISName, testNamespace, testDeploymentName).
+				m.routeManager.EXPECT().RuleExists(gomock.Any(), gomock.Any(), routeName, testNamespace,
+					routing.Rule{MatchPath: matchPath}).
 					Return(false, errors.New("api error"))
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
@@ -58,8 +54,8 @@ func TestDiscoveryRoutingActor_Retrieve(t *testing.T) {
 		{
 			name: "rule not present",
 			setupMocks: func(m *discoveryMocks) {
-				m.routeProvider.EXPECT().DeploymentDiscoveryRouteExists(gomock.Any(), gomock.Any(),
-					testISName, testNamespace, testDeploymentName).
+				m.routeManager.EXPECT().RuleExists(gomock.Any(), gomock.Any(), routeName, testNamespace,
+					routing.Rule{MatchPath: matchPath}).
 					Return(false, nil)
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
@@ -68,8 +64,8 @@ func TestDiscoveryRoutingActor_Retrieve(t *testing.T) {
 		{
 			name: "rule present",
 			setupMocks: func(m *discoveryMocks) {
-				m.routeProvider.EXPECT().DeploymentDiscoveryRouteExists(gomock.Any(), gomock.Any(),
-					testISName, testNamespace, testDeploymentName).
+				m.routeManager.EXPECT().RuleExists(gomock.Any(), gomock.Any(), routeName, testNamespace,
+					routing.Rule{MatchPath: matchPath}).
 					Return(true, nil)
 			},
 			expectedStatus: apipb.CONDITION_STATUS_TRUE,
@@ -78,10 +74,10 @@ func TestDiscoveryRoutingActor_Retrieve(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			params, mocks := newDiscoveryFixture(t)
+			mocks := newDiscoveryFixture(t)
 			tt.setupMocks(mocks)
 
-			actor := NewDiscoveryRoutingActor(params)
+			actor := NewDiscoveryRoutingActor(nil, mocks.routeManager)
 			got, err := actor.Retrieve(context.Background(), rolloutDeployment(""), &apipb.Condition{})
 
 			require.NoError(t, err)
@@ -94,6 +90,8 @@ func TestDiscoveryRoutingActor_Retrieve(t *testing.T) {
 }
 
 func TestDiscoveryRoutingActor_Run(t *testing.T) {
+	routeName := routenames.DiscoveryRouteName(testISName)
+
 	tests := []struct {
 		name              string
 		setupMocks        func(*discoveryMocks)
@@ -101,10 +99,9 @@ func TestDiscoveryRoutingActor_Run(t *testing.T) {
 		expectedReasonSub string
 	}{
 		{
-			name: "UpsertDiscoveryRule errors",
+			name: "AddRules errors",
 			setupMocks: func(m *discoveryMocks) {
-				m.routeProvider.EXPECT().UpsertDiscoveryRule(gomock.Any(), gomock.Any(),
-					testISName, testNamespace, testDeploymentName, testModelName).
+				m.routeManager.EXPECT().AddRules(gomock.Any(), gomock.Any(), routeName, testNamespace, gomock.Any()).
 					Return(errors.New("update failed"))
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
@@ -113,8 +110,7 @@ func TestDiscoveryRoutingActor_Run(t *testing.T) {
 		{
 			name: "happy path",
 			setupMocks: func(m *discoveryMocks) {
-				m.routeProvider.EXPECT().UpsertDiscoveryRule(gomock.Any(), gomock.Any(),
-					testISName, testNamespace, testDeploymentName, testModelName).
+				m.routeManager.EXPECT().AddRules(gomock.Any(), gomock.Any(), routeName, testNamespace, gomock.Any()).
 					Return(nil)
 			},
 			expectedStatus: apipb.CONDITION_STATUS_TRUE,
@@ -123,10 +119,10 @@ func TestDiscoveryRoutingActor_Run(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			params, mocks := newDiscoveryFixture(t)
+			mocks := newDiscoveryFixture(t)
 			tt.setupMocks(mocks)
 
-			actor := NewDiscoveryRoutingActor(params)
+			actor := NewDiscoveryRoutingActor(nil, mocks.routeManager)
 			got, err := actor.Run(context.Background(), rolloutDeployment(""), &apipb.Condition{})
 
 			require.NoError(t, err)
@@ -139,7 +135,7 @@ func TestDiscoveryRoutingActor_Run(t *testing.T) {
 }
 
 func TestDiscoveryRoutingActor_GetType(t *testing.T) {
-	params, _ := newDiscoveryFixture(t)
-	actor := NewDiscoveryRoutingActor(params)
+	mocks := newDiscoveryFixture(t)
+	actor := NewDiscoveryRoutingActor(nil, mocks.routeManager)
 	assert.Equal(t, "DiscoveryRoutingConfigured", actor.GetType())
 }

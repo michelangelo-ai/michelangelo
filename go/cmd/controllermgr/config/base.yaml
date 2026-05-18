@@ -32,6 +32,8 @@ minio:
 
 inferenceServer:
   gateway:
+    # Name is the k8s Gateway resource that HTTPRoutes attach to via parentRefs.
+    name: ma-gateway
     # Istio's Gateway controller materializes a Service named '<gateway>-istio'
     # for each Gateway resource. The IS controller's EndpointSource reads the
     # NodePort + node InternalIP of this Service to publish per-cluster

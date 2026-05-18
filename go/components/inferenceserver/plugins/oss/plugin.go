@@ -3,6 +3,7 @@ package oss
 import (
 	"context"
 
+	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"k8s.io/client-go/tools/record"
 
@@ -10,6 +11,8 @@ import (
 	"k8s.io/client-go/dynamic"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
+	"github.com/michelangelo-ai/michelangelo/go/components/common/routing"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/endpoints"
@@ -17,7 +20,6 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/creation"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/deletion"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/routes"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -36,16 +38,32 @@ type Plugin struct {
 	logger        *zap.Logger
 }
 
-// NewPlugin creates a plugin with creation and deletion workflows.
-func NewOSSPlugin(clientFactory clientfactory.ClientFactory, dynamicClient dynamic.Interface, registry *backends.Registry, modelConfigProvider modelconfig.ModelConfigProvider, endpointPublisher endpoints.Publisher, endpointProvider endpoints.Provider, routeProvider routes.RouteProvider, recorder record.EventRecorder, logger *zap.Logger) plugins.Plugin {
-	return &Plugin{
-		creationPlugin: creation.NewCreationPlugin(clientFactory, dynamicClient, registry, modelConfigProvider, endpointPublisher, endpointProvider, routeProvider, logger),
-		deletionPlugin: deletion.NewDeletionPlugin(clientFactory, dynamicClient, registry, modelConfigProvider, routeProvider, logger),
+// OSSPluginParams contains dependencies injected via Fx for OSS plugin initialization.
+type OSSPluginParams struct {
+	fx.In
 
-		clientFactory: clientFactory,
-		registry:      registry,
-		Recorder:      recorder,
-		logger:        logger,
+	ClientFactory       clientfactory.ClientFactory
+	DynamicClient       dynamic.Interface
+	Registry            *backends.Registry
+	ModelConfigProvider modelconfig.ModelConfigProvider
+	EndpointPublisher   endpoints.Publisher
+	EndpointProvider    endpoints.Provider
+	RouteManager        routing.Manager
+	ISConfig            maconfig.InferenceServerConfig
+	Recorder            record.EventRecorder
+	Logger              *zap.Logger
+}
+
+// NewPlugin creates a plugin with creation and deletion workflows.
+func NewOSSPlugin(p OSSPluginParams) plugins.Plugin {
+	return &Plugin{
+		creationPlugin: creation.NewCreationPlugin(p.ClientFactory, p.DynamicClient, p.Registry, p.ModelConfigProvider, p.EndpointPublisher, p.EndpointProvider, p.RouteManager, p.ISConfig.Gateway.Name, p.Logger),
+		deletionPlugin: deletion.NewDeletionPlugin(p.ClientFactory, p.DynamicClient, p.Registry, p.ModelConfigProvider, p.RouteManager, p.Logger),
+
+		clientFactory: p.ClientFactory,
+		registry:      p.Registry,
+		Recorder:      p.Recorder,
+		logger:        p.Logger,
 	}
 }
 

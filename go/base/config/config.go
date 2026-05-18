@@ -138,11 +138,13 @@ type InferenceServerConfig struct {
 	Gateway GatewayConfig `yaml:"gateway"`
 }
 
-// GatewayConfig describes how the inference server controller locates a
-// cluster's ingress Gateway Service. The Service is set up out-of-band (e.g.,
-// by `ma sandbox create` for sandbox); this config tells the EndpointSource
-// where to find it.
+// GatewayConfig describes the k8s Gateway resource and its Istio-generated
+// backing Service. Both are provisioned out-of-band (e.g., by `ma sandbox
+// create`). Name is the Gateway CRD resource name, referenced in HTTPRoute
+// parentRefs. ServiceName is the Istio-generated Service used by EndpointSource
+// to discover the gateway's node IP and port.
 type GatewayConfig struct {
+	Name             string `yaml:"name"`
 	ServiceName      string `yaml:"serviceName"`
 	ServiceNamespace string `yaml:"serviceNamespace"`
 	PortName         string `yaml:"portName"`

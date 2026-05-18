@@ -12,9 +12,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/common/routing/routingmocks"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory/clientfactorymocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/common/routenames"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/routes/routesmocks"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -52,27 +53,28 @@ func newTrafficRouteIS() *v2pb.InferenceServer {
 }
 
 func TestTrafficRouteProvisionActor_Retrieve(t *testing.T) {
+	routeName := routenames.TrafficRouteName("test-server")
+
 	tests := []struct {
 		name                string
 		clientFactoryErrors map[string]error
-		setupMocks          func(*routesmocks.MockRouteProvider)
+		setupMocks          func(*routingmocks.MockManager)
 		expectedStatus      apipb.ConditionStatus
 		expectedMessage     string
 		expectedReasonSub   string
 	}{
 		{
 			name: "all clusters provisioned",
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().TrafficRouteExists(gomock.Any(), gomock.Any(), "c-1", "test-server", "test-namespace").Return(true, nil)
-				rp.EXPECT().TrafficRouteExists(gomock.Any(), gomock.Any(), "c-2", "test-server", "test-namespace").Return(true, nil)
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Exists(gomock.Any(), gomock.Any(), routeName, "test-namespace").Return(true, nil).Times(2)
 			},
 			expectedStatus: apipb.CONDITION_STATUS_TRUE,
 		},
 		{
 			name: "one cluster missing the route",
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().TrafficRouteExists(gomock.Any(), gomock.Any(), "c-1", "test-server", "test-namespace").Return(true, nil)
-				rp.EXPECT().TrafficRouteExists(gomock.Any(), gomock.Any(), "c-2", "test-server", "test-namespace").Return(false, nil)
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Exists(gomock.Any(), gomock.Any(), routeName, "test-namespace").Return(true, nil)
+				rm.EXPECT().Exists(gomock.Any(), gomock.Any(), routeName, "test-namespace").Return(false, nil)
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
 			expectedMessage:   "TrafficRouteMissing",
@@ -81,18 +83,18 @@ func TestTrafficRouteProvisionActor_Retrieve(t *testing.T) {
 		{
 			name:                "GetDynamicClient fails for one cluster",
 			clientFactoryErrors: map[string]error{"c-2": errors.New("auth refused")},
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().TrafficRouteExists(gomock.Any(), gomock.Any(), "c-1", "test-server", "test-namespace").Return(true, nil)
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Exists(gomock.Any(), gomock.Any(), routeName, "test-namespace").Return(true, nil)
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
 			expectedMessage:   "TrafficRouteMissing",
 			expectedReasonSub: "c-2: auth refused",
 		},
 		{
-			name: "TrafficRouteExists errors for one cluster",
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().TrafficRouteExists(gomock.Any(), gomock.Any(), "c-1", "test-server", "test-namespace").Return(true, nil)
-				rp.EXPECT().TrafficRouteExists(gomock.Any(), gomock.Any(), "c-2", "test-server", "test-namespace").Return(false, errors.New("api timeout"))
+			name: "Exists errors for one cluster",
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Exists(gomock.Any(), gomock.Any(), routeName, "test-namespace").Return(true, nil)
+				rm.EXPECT().Exists(gomock.Any(), gomock.Any(), routeName, "test-namespace").Return(false, errors.New("api timeout"))
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
 			expectedMessage:   "TrafficRouteMissing",
@@ -105,11 +107,11 @@ func TestTrafficRouteProvisionActor_Retrieve(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			rp := routesmocks.NewMockRouteProvider(ctrl)
-			tt.setupMocks(rp)
+			rm := routingmocks.NewMockManager(ctrl)
+			tt.setupMocks(rm)
 			factory := newClientFactoryDispatchingDynamic(ctrl, tt.clientFactoryErrors)
 
-			actor := NewTrafficRouteProvisionActor(factory, rp, zap.NewNop())
+			actor := NewTrafficRouteProvisionActor(factory, rm, "test-gateway", zap.NewNop())
 			got, err := actor.Retrieve(context.Background(), newTrafficRouteIS(), &apipb.Condition{})
 
 			require.NoError(t, err)
@@ -125,27 +127,30 @@ func TestTrafficRouteProvisionActor_Retrieve(t *testing.T) {
 }
 
 func TestTrafficRouteProvisionActor_Run(t *testing.T) {
+	routeName := routenames.TrafficRouteName("test-server")
+
 	tests := []struct {
 		name                string
 		clientFactoryErrors map[string]error
-		setupMocks          func(*routesmocks.MockRouteProvider)
+		setupMocks          func(*routingmocks.MockManager)
 		expectedStatus      apipb.ConditionStatus
 		expectedMessage     string
 		expectedReasonSub   string
 	}{
 		{
 			name: "all ensures succeed",
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().EnsureTrafficRoute(gomock.Any(), gomock.Any(), "c-1", "test-server", "test-namespace").Return(nil)
-				rp.EXPECT().EnsureTrafficRoute(gomock.Any(), gomock.Any(), "c-2", "test-server", "test-namespace").Return(nil)
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Create(gomock.Any(), gomock.Any(), routeName, "test-namespace", gomock.Any()).Return(nil).Times(2)
+				rm.EXPECT().AddRules(gomock.Any(), gomock.Any(), routeName, "test-namespace", gomock.Any()).Return(nil).Times(2)
 			},
 			expectedStatus: apipb.CONDITION_STATUS_TRUE,
 		},
 		{
-			name: "one EnsureTrafficRoute fails",
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().EnsureTrafficRoute(gomock.Any(), gomock.Any(), "c-1", "test-server", "test-namespace").Return(nil)
-				rp.EXPECT().EnsureTrafficRoute(gomock.Any(), gomock.Any(), "c-2", "test-server", "test-namespace").Return(errors.New("apply failed"))
+			name: "one Create fails",
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Create(gomock.Any(), gomock.Any(), routeName, "test-namespace", gomock.Any()).Return(nil)
+				rm.EXPECT().AddRules(gomock.Any(), gomock.Any(), routeName, "test-namespace", gomock.Any()).Return(nil)
+				rm.EXPECT().Create(gomock.Any(), gomock.Any(), routeName, "test-namespace", gomock.Any()).Return(errors.New("apply failed"))
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
 			expectedMessage:   "EnsureFailed",
@@ -154,8 +159,9 @@ func TestTrafficRouteProvisionActor_Run(t *testing.T) {
 		{
 			name:                "GetDynamicClient fails for one cluster",
 			clientFactoryErrors: map[string]error{"c-1": errors.New("no token")},
-			setupMocks: func(rp *routesmocks.MockRouteProvider) {
-				rp.EXPECT().EnsureTrafficRoute(gomock.Any(), gomock.Any(), "c-2", "test-server", "test-namespace").Return(nil)
+			setupMocks: func(rm *routingmocks.MockManager) {
+				rm.EXPECT().Create(gomock.Any(), gomock.Any(), routeName, "test-namespace", gomock.Any()).Return(nil)
+				rm.EXPECT().AddRules(gomock.Any(), gomock.Any(), routeName, "test-namespace", gomock.Any()).Return(nil)
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
 			expectedMessage:   "EnsureFailed",
@@ -168,11 +174,11 @@ func TestTrafficRouteProvisionActor_Run(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			rp := routesmocks.NewMockRouteProvider(ctrl)
-			tt.setupMocks(rp)
+			rm := routingmocks.NewMockManager(ctrl)
+			tt.setupMocks(rm)
 			factory := newClientFactoryDispatchingDynamic(ctrl, tt.clientFactoryErrors)
 
-			actor := NewTrafficRouteProvisionActor(factory, rp, zap.NewNop())
+			actor := NewTrafficRouteProvisionActor(factory, rm, "test-gateway", zap.NewNop())
 			got, err := actor.Run(context.Background(), newTrafficRouteIS(), &apipb.Condition{})
 
 			require.NoError(t, err)
@@ -193,7 +199,8 @@ func TestTrafficRouteProvisionActor_GetType(t *testing.T) {
 
 	actor := NewTrafficRouteProvisionActor(
 		newClientFactoryDispatchingDynamic(ctrl, nil),
-		routesmocks.NewMockRouteProvider(ctrl),
+		routingmocks.NewMockManager(ctrl),
+		"test-gateway",
 		zap.NewNop(),
 	)
 	assert.Equal(t, common.TrafficRouteProvisionType, actor.GetType())

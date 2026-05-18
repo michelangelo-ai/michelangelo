@@ -8,49 +8,48 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/common/routing"
+	"github.com/michelangelo-ai/michelangelo/go/components/common/routing/routingmocks"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory/clientfactorymocks"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/routes/routesmocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/common/routenames"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // trafficMocks groups the mocks used by traffic-routing tests. Distinct from
-// rolloutMocks because this actor uses GetDynamicClient and the route provider
+// rolloutMocks because this actor uses GetDynamicClient and the route manager
 // rather than the typed kube client and the backend / model config providers.
 type trafficMocks struct {
-	factory       *clientfactorymocks.MockClientFactory
-	routeProvider *routesmocks.MockRouteProvider
+	factory      *clientfactorymocks.MockClientFactory
+	routeManager *routingmocks.MockManager
 }
 
-// newTrafficFixture builds a Params + target wired to the supplied mocks.
-// dynamicClientErr lets a test inject a GetDynamicClient failure without
-// re-mocking the factory each time.
-func newTrafficFixture(t *testing.T, dynamicClientErr error) (Params, *v2pb.ClusterTarget, *trafficMocks) {
+// newTrafficFixture builds a target wired to the supplied mocks. dynamicClientErr lets a
+// test inject a GetDynamicClient failure without re-mocking the factory each time.
+func newTrafficFixture(t *testing.T, dynamicClientErr error) (*trafficMocks, *v2pb.ClusterTarget) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
 	mocks := &trafficMocks{
-		factory:       clientfactorymocks.NewMockClientFactory(ctrl),
-		routeProvider: routesmocks.NewMockRouteProvider(ctrl),
+		factory:      clientfactorymocks.NewMockClientFactory(ctrl),
+		routeManager: routingmocks.NewMockManager(ctrl),
 	}
 
 	mocks.factory.EXPECT().GetDynamicClient(gomock.Any(), gomock.Any()).
 		Return(dynamic.Interface(nil), dynamicClientErr).AnyTimes()
 
-	params := Params{
-		ClientFactory: mocks.factory,
-		RouteProvider: mocks.routeProvider,
-		Logger:        zap.NewNop(),
-	}
 	target := &v2pb.ClusterTarget{ClusterId: testCluster}
-	return params, target, mocks
+	return mocks, target
 }
 
 func TestTrafficRoutingActor_Retrieve(t *testing.T) {
+	routeName := routenames.TrafficRouteName(testISName)
+	matchPath := routenames.TrafficMatchPath(testISName, testDeploymentName)
+	rewritePath := routenames.TrafficRewritePath(testModelName)
+
 	tests := []struct {
 		name              string
 		dynamicClientErr  error
@@ -66,10 +65,10 @@ func TestTrafficRoutingActor_Retrieve(t *testing.T) {
 			expectedReasonSub: "dial timeout",
 		},
 		{
-			name: "DeploymentTrafficRouteExists errors",
+			name: "RuleExists errors",
 			setupMocks: func(m *trafficMocks) {
-				m.routeProvider.EXPECT().DeploymentTrafficRouteExists(gomock.Any(), gomock.Any(),
-					testCluster, testISName, testNamespace, testDeploymentName, testModelName).
+				m.routeManager.EXPECT().RuleExists(gomock.Any(), gomock.Any(), routeName, testNamespace,
+					routing.Rule{MatchPath: matchPath, RewritePath: rewritePath}).
 					Return(false, errors.New("api error"))
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
@@ -78,8 +77,8 @@ func TestTrafficRoutingActor_Retrieve(t *testing.T) {
 		{
 			name: "rule not present or model differs",
 			setupMocks: func(m *trafficMocks) {
-				m.routeProvider.EXPECT().DeploymentTrafficRouteExists(gomock.Any(), gomock.Any(),
-					testCluster, testISName, testNamespace, testDeploymentName, testModelName).
+				m.routeManager.EXPECT().RuleExists(gomock.Any(), gomock.Any(), routeName, testNamespace,
+					routing.Rule{MatchPath: matchPath, RewritePath: rewritePath}).
 					Return(false, nil)
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
@@ -88,8 +87,8 @@ func TestTrafficRoutingActor_Retrieve(t *testing.T) {
 		{
 			name: "rule present and model matches",
 			setupMocks: func(m *trafficMocks) {
-				m.routeProvider.EXPECT().DeploymentTrafficRouteExists(gomock.Any(), gomock.Any(),
-					testCluster, testISName, testNamespace, testDeploymentName, testModelName).
+				m.routeManager.EXPECT().RuleExists(gomock.Any(), gomock.Any(), routeName, testNamespace,
+					routing.Rule{MatchPath: matchPath, RewritePath: rewritePath}).
 					Return(true, nil)
 			},
 			expectedStatus: apipb.CONDITION_STATUS_TRUE,
@@ -98,10 +97,10 @@ func TestTrafficRoutingActor_Retrieve(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			params, target, mocks := newTrafficFixture(t, tt.dynamicClientErr)
+			mocks, target := newTrafficFixture(t, tt.dynamicClientErr)
 			tt.setupMocks(mocks)
 
-			actor := NewTrafficRoutingActor(params, target)
+			actor := NewTrafficRoutingActor(mocks.factory, mocks.routeManager, target)
 			got, err := actor.Retrieve(context.Background(), rolloutDeployment(""), &apipb.Condition{})
 
 			require.NoError(t, err)
@@ -114,6 +113,8 @@ func TestTrafficRoutingActor_Retrieve(t *testing.T) {
 }
 
 func TestTrafficRoutingActor_Run(t *testing.T) {
+	routeName := routenames.TrafficRouteName(testISName)
+
 	tests := []struct {
 		name              string
 		dynamicClientErr  error
@@ -129,10 +130,9 @@ func TestTrafficRoutingActor_Run(t *testing.T) {
 			expectedReasonSub: "dial timeout",
 		},
 		{
-			name: "UpsertTrafficRule errors",
+			name: "AddRules errors",
 			setupMocks: func(m *trafficMocks) {
-				m.routeProvider.EXPECT().UpsertTrafficRule(gomock.Any(), gomock.Any(),
-					testCluster, testISName, testNamespace, testDeploymentName, testModelName).
+				m.routeManager.EXPECT().AddRules(gomock.Any(), gomock.Any(), routeName, testNamespace, gomock.Any()).
 					Return(errors.New("update failed"))
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
@@ -141,8 +141,7 @@ func TestTrafficRoutingActor_Run(t *testing.T) {
 		{
 			name: "happy path",
 			setupMocks: func(m *trafficMocks) {
-				m.routeProvider.EXPECT().UpsertTrafficRule(gomock.Any(), gomock.Any(),
-					testCluster, testISName, testNamespace, testDeploymentName, testModelName).
+				m.routeManager.EXPECT().AddRules(gomock.Any(), gomock.Any(), routeName, testNamespace, gomock.Any()).
 					Return(nil)
 			},
 			expectedStatus: apipb.CONDITION_STATUS_TRUE,
@@ -151,10 +150,10 @@ func TestTrafficRoutingActor_Run(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			params, target, mocks := newTrafficFixture(t, tt.dynamicClientErr)
+			mocks, target := newTrafficFixture(t, tt.dynamicClientErr)
 			tt.setupMocks(mocks)
 
-			actor := NewTrafficRoutingActor(params, target)
+			actor := NewTrafficRoutingActor(mocks.factory, mocks.routeManager, target)
 			got, err := actor.Run(context.Background(), rolloutDeployment(""), &apipb.Condition{})
 
 			require.NoError(t, err)
@@ -167,7 +166,7 @@ func TestTrafficRoutingActor_Run(t *testing.T) {
 }
 
 func TestTrafficRoutingActor_GetType(t *testing.T) {
-	params, target, _ := newTrafficFixture(t, nil)
-	actor := NewTrafficRoutingActor(params, target)
+	mocks, target := newTrafficFixture(t, nil)
+	actor := NewTrafficRoutingActor(mocks.factory, mocks.routeManager, target)
 	assert.Equal(t, "TrafficRoutingConfigured-"+testCluster, actor.GetType())
 }

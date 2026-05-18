@@ -11,9 +11,10 @@ import (
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
+	"github.com/michelangelo-ai/michelangelo/go/components/common/routing"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/common/routenames"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/routes"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -26,17 +27,17 @@ var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &RouteCleanupA
 type RouteCleanupActor struct {
 	dynamicClient dynamic.Interface
 	clientFactory clientfactory.ClientFactory
-	routeProvider routes.RouteProvider
+	routeManager  routing.Manager
 	logger        *zap.Logger
 }
 
 // NewRouteCleanupActor creates the condition actor that tears down both
 // HTTPRoutes when an InferenceServer is being deleted.
-func NewRouteCleanupActor(dynamicClient dynamic.Interface, clientFactory clientfactory.ClientFactory, routeProvider routes.RouteProvider, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
+func NewRouteCleanupActor(dynamicClient dynamic.Interface, clientFactory clientfactory.ClientFactory, routeManager routing.Manager, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return &RouteCleanupActor{
 		dynamicClient: dynamicClient,
 		clientFactory: clientFactory,
-		routeProvider: routeProvider,
+		routeManager:  routeManager,
 		logger:        logger,
 	}
 }
@@ -50,7 +51,7 @@ func (a *RouteCleanupActor) GetType() string {
 // gone in every relevant cluster, so the engine fires Run while any of them
 // still exist.
 func (a *RouteCleanupActor) Retrieve(ctx context.Context, server *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
-	exists, err := a.routeProvider.DiscoveryRouteExists(ctx, a.dynamicClient, server.Name, server.Namespace)
+	exists, err := a.routeManager.Exists(ctx, a.dynamicClient, routenames.DiscoveryRouteName(server.Name), server.Namespace)
 	if err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "GetFailed", fmt.Sprintf("discovery: %v", err)), nil
 	}
@@ -64,7 +65,7 @@ func (a *RouteCleanupActor) Retrieve(ctx context.Context, server *v2pb.Inference
 		if err != nil {
 			return conditionsutil.GenerateFalseCondition(condition, "GetFailed", fmt.Sprintf("%s: %v", clusterID, err)), nil
 		}
-		exists, err := a.routeProvider.TrafficRouteExists(ctx, dynamicClient, clusterID, server.Name, server.Namespace)
+		exists, err := a.routeManager.Exists(ctx, dynamicClient, routenames.TrafficRouteName(server.Name), server.Namespace)
 		if err != nil {
 			return conditionsutil.GenerateFalseCondition(condition, "GetFailed", fmt.Sprintf("%s: %v", clusterID, err)), nil
 		}
@@ -83,7 +84,7 @@ func (a *RouteCleanupActor) Retrieve(ctx context.Context, server *v2pb.Inference
 // in every target cluster.
 func (a *RouteCleanupActor) Run(ctx context.Context, server *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	var failures []string
-	if err := a.routeProvider.DeleteDiscoveryRoute(ctx, a.dynamicClient, server.Name, server.Namespace); err != nil {
+	if err := a.routeManager.Delete(ctx, a.dynamicClient, routenames.DiscoveryRouteName(server.Name), server.Namespace); err != nil {
 		failures = append(failures, fmt.Sprintf("discovery: %v", err))
 	}
 	for _, target := range server.Spec.ClusterTargets {
@@ -93,7 +94,7 @@ func (a *RouteCleanupActor) Run(ctx context.Context, server *v2pb.InferenceServe
 			failures = append(failures, fmt.Sprintf("%s: %v", clusterID, err))
 			continue
 		}
-		if err := a.routeProvider.DeleteTrafficRoute(ctx, dynamicClient, clusterID, server.Name, server.Namespace); err != nil {
+		if err := a.routeManager.Delete(ctx, dynamicClient, routenames.TrafficRouteName(server.Name), server.Namespace); err != nil {
 			failures = append(failures, fmt.Sprintf("%s: %v", clusterID, err))
 		}
 	}
