@@ -45,6 +45,14 @@ _infra_ports = [
     "5001:30013",  # MLflow Tracking Server
 ]
 
+# Infra ports owned by optionally-excluded services. When the user passes
+# --exclude {svc}, the corresponding host port is dropped from k3d's port
+# forwards so it doesn't conflict with other processes on the host.
+_infra_port_owner = {
+    "3000:30012": "grafana",
+    "9092:30015": "prometheus",
+}
+
 # Ray framework ports (not in Helm chart)
 _ray_ports = [
     "10001:10001",  # Ray client port
@@ -238,7 +246,8 @@ def run(ns: argparse.Namespace):
 
 def _create(ns: argparse.Namespace):
     assert ns
-    ports = _infra_ports + _helm_chart_ports(ns.workflow)
+    infra_ports = [p for p in _infra_ports if _infra_port_owner.get(p) not in ns.exclude]
+    ports = infra_ports + _helm_chart_ports(ns.workflow)
     args = [
         "k3d",
         "cluster",
