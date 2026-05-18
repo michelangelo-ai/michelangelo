@@ -246,7 +246,9 @@ def run(ns: argparse.Namespace):
 
 def _create(ns: argparse.Namespace):
     assert ns
-    infra_ports = [p for p in _infra_ports if _infra_port_owner.get(p) not in ns.exclude]
+    infra_ports = [
+        p for p in _infra_ports if _infra_port_owner.get(p) not in ns.exclude
+    ]
     ports = infra_ports + _helm_chart_ports(ns.workflow)
     args = [
         "k3d",
