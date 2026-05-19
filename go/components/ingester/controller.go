@@ -14,6 +14,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -191,8 +193,12 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
 	}
 
 	if err := r.metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil {
-		log.Error(err, "Failed to delete from metadata storage")
-		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
+		if status.Code(err) == codes.NotFound {
+			log.Info("Object already absent from metadata storage, skipping delete")
+		} else {
+			log.Error(err, "Failed to delete from metadata storage")
+			return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
+		}
 	}
 
 	// Remove our finalizer
@@ -223,8 +229,12 @@ func (r *Reconciler) handleDeletionAnnotation(ctx context.Context, log logr.Logg
 	}
 
 	if err := r.metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil {
-		log.Error(err, "Failed to delete from metadata storage")
-		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
+		if status.Code(err) == codes.NotFound {
+			log.Info("Object already absent from metadata storage, skipping delete")
+		} else {
+			log.Error(err, "Failed to delete from metadata storage")
+			return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
+		}
 	}
 
 	// Remove finalizer
