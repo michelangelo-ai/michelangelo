@@ -217,5 +217,5 @@ Contact your platform administrator if notifications are configured correctly bu
 
 ## What's Next
 
-- [Pipeline Running Modes](./ml-pipelines/pipeline-running-modes.md) — learn about the different ways to execute your pipelines
-- [ML Pipelines Overview](./ml-pipelines/index.md) — understand the broader pipeline framework
+- [Pipeline Running Modes](./pipeline-running-modes.md) — learn about the different ways to execute your pipelines
+- [ML Pipelines Overview](./index.md) — understand the broader pipeline framework

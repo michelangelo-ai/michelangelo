@@ -12,7 +12,7 @@ This guide covers how to run Uniflow pipelines locally and remotely.
 
 - **A running sandbox environment** — Remote execution requires a local Kubernetes cluster. Follow the [Sandbox Setup](../../getting-started/sandbox-setup.md) guide if you haven't done this yet.
 - **Python 3.11+ and Poetry installed** — See the [Sandbox Setup prerequisites](../../getting-started/sandbox-setup.md#prerequisites).
-- **A Uniflow workflow defined** — See [Getting Started with ML Pipelines](./getting-started.md) for a walkthrough of defining tasks and workflows.
+- **A Uniflow workflow defined** — See [Getting Started with ML Pipelines](../getting-started/getting-started.md) for a walkthrough of defining tasks and workflows.
 - **Docker** — Required for building images used in remote execution.
 
 ## Environment setup

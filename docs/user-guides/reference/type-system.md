@@ -521,8 +521,8 @@ Need to return custom Python object?
 ## Next Steps
 
 - [Reference System Guide](./reference-system.md) - Understand how data flows between tasks
-- [Getting Started](./getting-started.md) - See type system in action
-- [Caching Guide](./cache-and-pipelinerun-resume-form.md) - Types and caching interaction
+- [Getting Started](../getting-started/getting-started.md) - See type system in action
+- [Caching Guide](../ml-pipelines/cache-and-pipelinerun-resume-form.md) - Types and caching interaction
 
 ---
 

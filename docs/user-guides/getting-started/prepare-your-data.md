@@ -158,7 +158,7 @@ result = trainer.train(run_config, scaling_config)
 
 ## Next Steps
 
-* Continue to [Model Training guide](./train-and-register-a-model.md)
+* Continue to [Model Training guide](../train-and-deploy-models/train-and-register-a-model.md)
 * Check troubleshooting section
 
 ## Common Issues

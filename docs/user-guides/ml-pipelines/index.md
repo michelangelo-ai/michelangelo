@@ -108,13 +108,13 @@ This separation means you can update workflow logic (task ordering, parameters, 
 
 ## Next steps
 
-Start with the [Getting started](./getting-started.md) guide to build and run your first pipeline, then explore the guides below for specific topics.
+Start with the [Getting started](../getting-started/getting-started.md) guide to build and run your first pipeline, then explore the guides below for specific topics.
 
 ## Guides
 
 | Guide | Description |
 | --- | --- |
-| [**Getting Started**](./getting-started.md) | Build and run your first pipeline end-to-end |
+| [**Getting Started**](../getting-started/getting-started.md) | Build and run your first pipeline end-to-end |
 | [**Pipeline Running Modes**](./pipeline-running-modes.md) | Understand Local, Remote, Dev, and Pipeline run modes |
 | [**Pipeline Management**](./pipeline-management.md) | Create and manage standard and custom pipelines |
 | [**Running Uniflow Pipelines**](./running-uniflow.md) | Environment setup, execution, and debugging |

@@ -12,9 +12,9 @@
 
 Before you get started, make sure you have the following in place:
 
-- **Michelangelo CLI (`ma`) installed** — You'll use the CLI to register and manage your triggers. If you haven't set it up yet, see the [CLI guide](./cli.md) for installation instructions.
+- **Michelangelo CLI (`ma`) installed** — You'll use the CLI to register and manage your triggers. If you haven't set it up yet, see the [CLI guide](../reference/cli.md) for installation instructions.
 - **A running sandbox environment with a project configured** — Triggers run inside a project (set via the `namespace` field in your YAML), so you'll need your sandbox environment up and running. Check out the [Sandbox Setup Guide](../../getting-started/sandbox-setup.md) if you need help with this.
-- **A registered pipeline with at least one revision** — Triggers are linked to a specific pipeline revision, so make sure your pipeline is registered before continuing. See [Train and Register a Model](./train-and-register-a-model.md) for a walkthrough.
+- **A registered pipeline with at least one revision** — Triggers are linked to a specific pipeline revision, so make sure your pipeline is registered before continuing. See [Train and Register a Model](../train-and-deploy-models/train-and-register-a-model.md) for a walkthrough.
 - **Access to MA Studio UI** *(optional)* — The Studio UI is handy for monitoring your triggers and pipeline runs, but it's not required to complete the setup.
 
 Once you have these ready, you're all set to create your first trigger!
@@ -106,7 +106,7 @@ A few things to keep in mind:
 - **`kill` vs `delete`:** Use `kill` to stop a running trigger (it sets a kill flag and cleanly terminates the workflow). Use `delete` to remove the trigger resource entirely.
 - **`kill` will ask for confirmation** before proceeding. Add `--yes` to skip the prompt (useful in scripts).
 
-For the full list of CLI options and flags, see the [CLI reference guide](./cli.md).
+For the full list of CLI options and flags, see the [CLI reference guide](../reference/cli.md).
 
 ### 4\. Monitor Your Trigger
 
@@ -378,7 +378,7 @@ These features are defined in the system but not yet fully available. Stay tuned
 
 Now that your triggers are set up, here are some useful next steps:
 
-- Dive deeper into [ML Pipelines](./ml-pipelines/index.md) to learn about the pipeline framework your triggers are running
-- Learn about different [Pipeline Running Modes](./ml-pipelines/pipeline-running-modes.md) to understand how your pipelines execute
-- Explore [Caching and Pipeline Resume](./ml-pipelines/cache-and-pipelinerun-resume-form.md) to speed up repeated runs
-- Check out the full [CLI Reference](./cli.md) for additional trigger management commands
+- Dive deeper into [ML Pipelines](./index.md) to learn about the pipeline framework your triggers are running
+- Learn about different [Pipeline Running Modes](./pipeline-running-modes.md) to understand how your pipelines execute
+- Explore [Caching and Pipeline Resume](./cache-and-pipelinerun-resume-form.md) to speed up repeated runs
+- Check out the full [CLI Reference](../reference/cli.md) for additional trigger management commands

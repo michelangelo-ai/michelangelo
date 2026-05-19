@@ -34,7 +34,7 @@ All resource types support `get`, `apply`, and `delete` (see [supported resource
 | SparkJob | `spark_job` | Job submitted to a Spark cluster | get, apply, delete |
 | CachedOutput | `cached_output` | Cached task output for pipeline resume | get, apply, delete |
 
-> **Note:** In Michelangelo, a *project* is the workspace where your pipelines, models, and triggers live. In YAML files and CLI flags, your project is identified by the `namespace` field — these refer to the same thing. See the [Project Management guide](./project-management-for-ml-pipelines.md) for details.
+> **Note:** In Michelangelo, a *project* is the workspace where your pipelines, models, and triggers live. In YAML files and CLI flags, your project is identified by the `namespace` field — these refer to the same thing. See the [Project Management guide](../project-management-for-ml-pipelines.md) for details.
 
 ## Prerequisites
 

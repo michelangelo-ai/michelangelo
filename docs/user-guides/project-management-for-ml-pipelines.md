@@ -145,7 +145,7 @@ The CLI detects that the project already exists and performs an update.
 ma project delete --namespace="my-ml-project" --name="my-ml-project"
 ```
 
-See the [CLI Reference](./cli.md) for the full list of supported commands and flags.
+See the [CLI Reference](./reference/cli.md) for the full list of supported commands and flags.
 
 ## Project-pipeline relationship
 
@@ -216,6 +216,6 @@ The API enforces the following constraints when creating or updating projects:
 
 - [Pipeline Management](./ml-pipelines/pipeline-management.md) -- Create and manage pipelines within your project
 - [Pipeline Running Modes](./ml-pipelines/pipeline-running-modes.md) -- Understand local, remote, dev, and production run modes
-- [CLI Reference](./cli.md) -- Full command reference for the `ma` CLI
-- [Set Up Triggers](./set-up-triggers.md) -- Schedule and automate pipeline execution
+- [CLI Reference](./reference/cli.md) -- Full command reference for the `ma` CLI
+- [Set Up Triggers](./ml-pipelines/set-up-triggers.md) -- Schedule and automate pipeline execution
 - [ML Pipelines Overview](./ml-pipelines/index.md) -- End-to-end guide to building ML workflows

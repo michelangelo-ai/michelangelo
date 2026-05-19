@@ -421,5 +421,5 @@ def process(data: pd.DataFrame) -> pd.DataFrame:  # Expect DataFrame
 ## Next Steps
 
 - [Type System Guide](./type-system.md) - Learn about codecs and data serialization
-- [Caching Guide](./cache-and-pipelinerun-resume-form.md) - Use References with caching
-- [Getting Started](./getting-started.md) - See References in action with complete example
+- [Caching Guide](../ml-pipelines/cache-and-pipelinerun-resume-form.md) - Use References with caching
+- [Getting Started](../getting-started/getting-started.md) - See References in action with complete example

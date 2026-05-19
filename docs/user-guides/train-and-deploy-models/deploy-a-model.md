@@ -29,7 +29,7 @@ Before deploying, you need:
 - **A packaged model.** Your trained model must be packaged as a Triton-compatible artifact and uploaded to model storage (the `deploy-models` bucket on the sandbox, or your platform's configured object store). See the [Model Registry Guide](./model-registry-guide.md) for how to produce a deployable package.
 - **A registered model revision.** Deployments target a specific `Revision` of a `Model`. See [Register a Revision](./model-registry-guide.md#register-a-revision) for how to create one. To list available revisions in your namespace, run `ma revision get -n <your-namespace>`.
 - **Access to a cluster with serving installed.** Either a local sandbox (covered below) or a remote cluster set up by your platform operator.
-- **The `ma` CLI on your PATH.** Clone the repository, then from the `python/` directory run `poetry install && source .venv/bin/activate`. Once the virtualenv is active, `ma` works from any directory. See the [CLI Reference](./cli.md) for details.
+- **The `ma` CLI on your PATH.** Clone the repository, then from the `python/` directory run `poetry install && source .venv/bin/activate`. Once the virtualenv is active, `ma` works from any directory. See the [CLI Reference](../reference/cli.md) for details.
 
 ## The Two Resources You Need
 
@@ -231,4 +231,4 @@ This guide covers the end-user workflow assuming serving infrastructure is alrea
 - **[Michelangelo Serving overview](../../operator-guides/serving/index.md)** — architecture, controller lifecycles, and core concepts
 - **[Model Registry Guide](./model-registry-guide.md)** — package and register a model before deploying
 - **[Integrate with a Custom Backend](../../operator-guides/serving/integrate-custom-backend.md)** — add support for new serving frameworks
-- **[CLI Reference](./cli.md)** — every `ma` command, including the full list of supported flags
+- **[CLI Reference](../reference/cli.md)** — every `ma` command, including the full list of supported flags
