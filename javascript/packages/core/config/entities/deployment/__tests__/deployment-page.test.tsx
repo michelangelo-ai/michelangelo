@@ -208,13 +208,7 @@ describe('Deployment detail page', () => {
                 status: {
                   state: DEPLOYMENT_STATE.UNHEALTHY,
                   stage: DEPLOYMENT_STAGE.ROLLOUT_FAILED,
-                  conditions: [
-                    {
-                      type: 'CurrentCondition',
-                      status: DEPLOYMENT_CONDITION_STATUS.UNKNOWN,
-                      lastUpdatedTimestamp: '1746002400000',
-                    },
-                  ],
+                  conditions: [],
                   conditionsSnapshot: [
                     {
                       type: 'SnapshotValidation',
@@ -239,6 +233,6 @@ describe('Deployment detail page', () => {
 
     await screen.findAllByText('SnapshotValidation');
     await screen.findAllByText('SnapshotPlacement');
-    expect(screen.queryByText('CurrentCondition')).not.toBeInTheDocument();
+    await screen.findByText('NoCapacity')
   });
 });
