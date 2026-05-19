@@ -192,4 +192,53 @@ describe('Deployment detail page', () => {
     expect(screen.getByText('Details')).toBeInTheDocument();
     expect(screen.getByText('PlacementInProgress')).toBeInTheDocument();
   });
+
+  it('renders stages when rollout has failed', async () => {
+    render(
+      <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({
+          location: '/myproject/deploy/deployments/sentiment-deployment/stages',
+        }),
+        getServiceProviderWrapper({
+          request: createQueryMockRouter({
+            GetDeployment: {
+              deployment: buildDeployment({
+                status: {
+                  state: DEPLOYMENT_STATE.UNHEALTHY,
+                  stage: DEPLOYMENT_STAGE.ROLLOUT_FAILED,
+                  conditions: [
+                    {
+                      type: 'CurrentCondition',
+                      status: DEPLOYMENT_CONDITION_STATUS.UNKNOWN,
+                      lastUpdatedTimestamp: '1746002400000',
+                    },
+                  ],
+                  conditionsSnapshot: [
+                    {
+                      type: 'SnapshotValidation',
+                      status: DEPLOYMENT_CONDITION_STATUS.TRUE,
+                      lastUpdatedTimestamp: '1746000600000',
+                    },
+                    {
+                      type: 'SnapshotPlacement',
+                      status: DEPLOYMENT_CONDITION_STATUS.FALSE,
+                      message: 'Failed to place on inference server.',
+                      reason: 'NoCapacity',
+                      lastUpdatedTimestamp: '1746001200000',
+                    },
+                  ],
+                },
+              }),
+            },
+          }),
+        }),
+      ])
+    );
+
+    await screen.findAllByText('SnapshotValidation');
+    await screen.findAllByText('SnapshotPlacement');
+    expect(screen.queryByText('CurrentCondition')).not.toBeInTheDocument();
+  });
 });
