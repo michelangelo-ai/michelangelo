@@ -233,6 +233,6 @@ describe('Deployment detail page', () => {
 
     await screen.findAllByText('SnapshotValidation');
     await screen.findAllByText('SnapshotPlacement');
-    await screen.findByText('NoCapacity')
+    await screen.findByText('NoCapacity');
   });
 });
