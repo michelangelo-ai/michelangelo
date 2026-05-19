@@ -14,8 +14,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -168,7 +166,9 @@ func (r *Reconciler) handleSync(ctx context.Context, log logr.Logger, object cli
 	return ctrl.Result{}, nil
 }
 
-// handleDeletion handles object deletion
+// handleDeletion handles object deletion triggered by a K8s DeletionTimestamp.
+// MySQL deletion is handled upstream via the DeletingAnnotation path; this function
+// only removes the ingester finalizer so K8s can finish garbage-collecting the object.
 func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object client.Object) (ctrl.Result, error) {
 	log.Info("Object is being deleted")
 
@@ -178,30 +178,7 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
 		return ctrl.Result{}, nil
 	}
 
-	log.Info("Deleting from metadata storage")
-
-	// Delete from metadata storage
-	gvks, _, err := r.scheme.ObjectKinds(object)
-	if err != nil || len(gvks) == 0 {
-		return ctrl.Result{}, fmt.Errorf("failed to get GVK for %T: %w", object, err)
-	}
-	// TODO(#943): gvks[0] may be non-deterministic when a type is registered under multiple
-	// versions. See issue for planned multi-GVK selection strategy.
-	typeMeta := &metav1.TypeMeta{
-		Kind:       gvks[0].Kind,
-		APIVersion: gvks[0].GroupVersion().String(),
-	}
-
-	if err := r.metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil {
-		if status.Code(err) == codes.NotFound {
-			log.Info("Object already absent from metadata storage, skipping delete")
-		} else {
-			log.Error(err, "Failed to delete from metadata storage")
-			return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
-		}
-	}
-
-	// Remove our finalizer
+	// Remove our finalizer so K8s can finish deleting the object.
 	ctrlutil.RemoveFinalizer(object, api.IngesterFinalizer)
 	if err := r.Update(ctx, object); err != nil {
 		log.Error(err, "Failed to remove finalizer")
@@ -212,7 +189,11 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
 	return ctrl.Result{}, nil
 }
 
-// handleDeletionAnnotation handles objects marked with DeletingAnnotation
+// handleDeletionAnnotation handles objects marked with DeletingAnnotation.
+// It deletes the object from metadata storage and from K8s. Because the ingester
+// finalizer is still present when r.Delete is called, K8s sets a DeletionTimestamp
+// rather than removing the object immediately; the subsequent handleDeletion reconcile
+// then removes the finalizer. This single-pass design avoids double-deletes from MySQL.
 func (r *Reconciler) handleDeletionAnnotation(ctx context.Context, log logr.Logger, object client.Object) (ctrl.Result, error) {
 	log.Info("Object marked for deletion via annotation")
 
@@ -229,22 +210,13 @@ func (r *Reconciler) handleDeletionAnnotation(ctx context.Context, log logr.Logg
 	}
 
 	if err := r.metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil {
-		if status.Code(err) == codes.NotFound {
-			log.Info("Object already absent from metadata storage, skipping delete")
-		} else {
-			log.Error(err, "Failed to delete from metadata storage")
-			return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
-		}
-	}
-
-	// Remove finalizer
-	ctrlutil.RemoveFinalizer(object, api.IngesterFinalizer)
-	if err := r.Update(ctx, object); err != nil {
-		log.Error(err, "Failed to remove finalizer")
+		log.Error(err, "Failed to delete from metadata storage")
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
 
-	// Delete from K8s/ETCD
+	// Delete from K8s/ETCD. The finalizer is intentionally left in place so that
+	// K8s sets a DeletionTimestamp instead of removing the object immediately;
+	// handleDeletion will remove the finalizer on the next reconcile.
 	if err := r.Delete(ctx, object); err != nil {
 		log.Error(err, "Failed to delete from K8s")
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err

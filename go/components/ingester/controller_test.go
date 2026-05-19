@@ -207,9 +207,8 @@ func TestReconciler_HandleDeletion(t *testing.T) {
 		WithObjects(model).
 		Build()
 
-	// Create mock storage
+	// Create mock storage (not called — MySQL deletion is handled via annotation path)
 	mockStorage := new(MockMetadataStorage)
-	mockStorage.On("Delete", mock.Anything, mock.Anything, "default", "test-model").Return(nil)
 
 	// Create reconciler
 	reconciler := NewReconciler(
@@ -233,11 +232,11 @@ func TestReconciler_HandleDeletion(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, ctrl.Result{}, result)
 
-	// Verify that Delete was called
-	mockStorage.AssertCalled(t, "Delete", mock.Anything, mock.Anything, "default", "test-model")
+	// Verify that storage was NOT called — the DeletionTimestamp path only removes
+	// the finalizer; MySQL deletion happens upstream via the DeletingAnnotation path.
+	mockStorage.AssertNotCalled(t, "Delete")
 
-	// Note: The object is deleted from K8s after finalizer removal, so we can't check the finalizer state
-	// The fact that reconciliation succeeded means the finalizer was removed and K8s deletion proceeded
+	// The finalizer is removed so K8s can garbage-collect the object.
 }
 
 func TestReconciler_HandleDeletionAnnotation(t *testing.T) {
@@ -559,10 +558,10 @@ func TestSchemeGVKResolution(t *testing.T) {
 	}
 }
 
-// TestHandleDeletion_CorrectTypeMeta verifies that handleDeletion passes the correct
-// Kind and APIVersion (resolved from scheme) to storage.Delete, not an empty TypeMeta
-// from GetObjectKind() which returns empty after controller-runtime deserialization.
-func TestHandleDeletion_CorrectTypeMeta(t *testing.T) {
+// TestHandleDeletion_OnlyRemovesFinalizer verifies that handleDeletion does NOT call
+// storage.Delete — MySQL deletion is owned by the annotation path. The DeletionTimestamp
+// path only removes the ingester finalizer so K8s can garbage-collect the object.
+func TestHandleDeletion_OnlyRemovesFinalizer(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = v2.AddToScheme(scheme)
 
@@ -582,12 +581,7 @@ func TestHandleDeletion_CorrectTypeMeta(t *testing.T) {
 
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(model).Build()
 
-	var capturedTypeMeta *metav1.TypeMeta
 	mockStorage := new(MockMetadataStorage)
-	mockStorage.On("Delete", mock.Anything, mock.MatchedBy(func(tm *metav1.TypeMeta) bool {
-		capturedTypeMeta = tm
-		return true
-	}), "default", "test-model").Return(nil)
 
 	reconciler := NewReconciler(
 		fakeClient,
@@ -603,9 +597,8 @@ func TestHandleDeletion_CorrectTypeMeta(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.NotNil(t, capturedTypeMeta)
-	assert.Equal(t, "Model", capturedTypeMeta.Kind, "Kind must come from scheme, not empty GetObjectKind()")
-	assert.NotEmpty(t, capturedTypeMeta.APIVersion, "APIVersion must come from scheme")
+	// Storage must not be touched — no MySQL delete on the DeletionTimestamp path.
+	mockStorage.AssertNotCalled(t, "Delete")
 }
 
 // TestHandleDeletionAnnotation_CorrectTypeMeta verifies the same scheme-based GVK
