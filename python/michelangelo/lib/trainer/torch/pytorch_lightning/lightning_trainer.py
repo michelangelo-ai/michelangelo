@@ -1,245 +1,184 @@
-"""Lightning trainer - compatible with internal SDK API."""
-
+# ruff: noqa: I001
 import logging
-from dataclasses import dataclass
-from typing import Any, Callable, Optional
+import os
+import ray
+import torch
+import uuid
 
-import pytorch_lightning as pl
-from ray.data import Dataset
-from ray.train import CheckpointConfig, RunConfig, ScalingConfig
-from ray.train.lightning import RayDDPStrategy, RayLightningEnvironment
+from dataclasses import (
+    asdict,
+    dataclass,
+    field,
+)
 from ray.train.torch import TorchTrainer
+from typing import Callable, Optional
 
-log = logging.getLogger(__name__)
+from michelangelo.lib.trainer.torch.pytorch_lightning.schema import (
+    IncrementalTrainingSpec,
+    TransferLearningSpec,
+)
+from michelangelo.lib.trainer.torch.pytorch_lightning._private.util import (
+    _train_loop_per_worker,
+)
+from pytorch_lightning.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
+from contextlib import contextmanager
+
+_logger = logging.getLogger(__name__)
+CHECKPOINT_NAME = ray.train.lightning.RayTrainReportCallback.CHECKPOINT_NAME
+CHECKPOINT_PATH_KEY = "checkpoint_path"
+_UNSET = object()
+
+
+@dataclass
+class CometParam:
+    api_key: str
+    project_name: str
+    experiment_name: str
+    workspace: str
+    tags: list[str] = None
 
 
 @dataclass
 class LightningTrainerParam:
-    """Parameters for LightningTrainer - matches internal API exactly."""
+    create_model_fn: Callable
+    create_model_fn_kwargs: dict
+    train_data: ray.data.Dataset
+    val_data: ray.data.Dataset
+    batch_size: int = 8
+    num_shuffle_batches: int = 10  # By default we reserve 10 batches in ray data shuffle buffer.
+    num_epochs: Optional[int] = field(default=_UNSET)  # type: ignore[assignment]  # sentinel replaced in __post_init__
+    data_collate_fn: Callable = None
+    comet_param: CometParam = None
+    lightning_trainer_kwargs: dict = field(default_factory=dict)
 
-    create_model: Callable[..., pl.LightningModule]
-    model_kwargs: dict[str, Any]
-    train_data: Dataset
-    validation_data: Dataset
-    batch_size: int
-    num_epochs: int
-    lightning_trainer_kwargs: Optional[dict[str, Any]] = None
+    transfer_learning_spec: Optional[TransferLearningSpec] = None
+    incremental_training_spec: Optional[IncrementalTrainingSpec] = None
+    initial_weights_path: Optional[str] = None
 
+    # Raise warning if the deprecated num_epochs field is set. We default to 1 epoch for backwards compatibility.
     def __post_init__(self):
-        """Initialize lightning_trainer_kwargs if not provided."""
-        if self.lightning_trainer_kwargs is None:
-            self.lightning_trainer_kwargs = {}
-
-
-class LightningTrainer:
-    """Lightning trainer that wraps Ray Train.
-
-    Compatible with internal
-    uber.ai.michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer.LightningTrainer.
-    """
-
-    def __init__(self, param: LightningTrainerParam):
-        """Initialize the Lightning trainer with parameters."""
-        self.param = param
-        self._setup_trainer()
-
-    def _setup_trainer(self):
-        """Setup the Ray TorchTrainer with Lightning."""
-
-        def train_loop_per_worker(config):
-            """Training loop that runs on each worker."""
-            import os
-
-            import torch
-            from ray import train
-            from ray.train import get_context
-
-            # Get Ray Train context
-            get_context()
-
-            # Setup Lightning environment
-            RayLightningEnvironment()
-
-            # Create model
-            model = self.param.create_model(**self.param.model_kwargs)
-
-            # Get distributed datasets
-            train_dataset = train.get_dataset_shard("train")
-            val_dataset = train.get_dataset_shard("validation")
-
-            # Convert to PyTorch datasets
-            def ray_dataset_to_torch(ray_ds, batch_size):
-                """Convert Ray dataset to PyTorch DataLoader."""
-                from torch.utils.data import DataLoader
-                from torch.utils.data import Dataset as TorchDataset
-
-                class RayTorchDataset(TorchDataset):
-                    def __init__(self, ray_dataset_iter):
-                        # Convert the iterator to list for indexing
-                        self.data = []
-                        for batch in ray_dataset_iter.iter_batches():
-                            # batch is already a dict with lists
-                            if isinstance(batch, dict):
-                                # Convert columnar format to row format
-                                num_rows = len(next(iter(batch.values())))
-                                for i in range(num_rows):
-                                    item = {k: v[i] for k, v in batch.items()}
-                                    self.data.append(item)
-                            else:
-                                # If not dict, try pandas conversion
-                                for item in batch.to_pandas().to_dict("records"):
-                                    self.data.append(item)
-
-                    def __len__(self):
-                        return len(self.data)
-
-                    def __getitem__(self, idx):
-                        item = self.data[idx]
-                        return {
-                            k: (
-                                torch.tensor(v, dtype=torch.long)
-                                if isinstance(v, list)
-                                else v
-                            )
-                            for k, v in item.items()
-                        }
-
-                torch_dataset = RayTorchDataset(ray_ds)
-                return DataLoader(
-                    torch_dataset,
-                    batch_size=batch_size,
-                    shuffle=True,
-                    num_workers=0,  # Ray handles the parallelism
-                )
-
-            train_dataloader = ray_dataset_to_torch(
-                train_dataset, self.param.batch_size
-            )
-            val_dataloader = ray_dataset_to_torch(val_dataset, self.param.batch_size)
-
-            # Setup trainer kwargs - let Ray handle MLflow logging
-            trainer_kwargs = {
-                "max_epochs": self.param.num_epochs,
-                "enable_checkpointing": True,
-                "logger": False,  # Ray MLflow callback will handle logging
-                **self.param.lightning_trainer_kwargs,
-            }
-
-            # Use Ray strategy if specified
-            if "strategy" in trainer_kwargs:
-                # Keep the strategy as-is (e.g., RayFSDPStrategy)
-                pass
-            else:
-                # Default to Ray DDP strategy
-                trainer_kwargs["strategy"] = RayDDPStrategy()
-
-            # Create Lightning trainer
-            trainer = pl.Trainer(**trainer_kwargs)
-
-            # Train the model
-            trainer.fit(
-                model,
-                train_dataloaders=train_dataloader,
-                val_dataloaders=val_dataloader,
+        if self.num_epochs is _UNSET:
+            self.num_epochs = 1
+        else:
+            _logger.warning(
+                "LightningTrainerParam.num_epochs is deprecated. Use LightningTrainerParam.lightning_trainer_kwargs={'max_epochs': N} instead."
             )
 
-            # Save model checkpoint for Ray to capture
-            import tempfile
 
-            from ray import train as ray_train
+class LightningTrainer(TorchTrainer):
+    def __init__(
+        self,
+        trainer_param: LightningTrainerParam,
+        run_config: Optional[ray.train.RunConfig] = None,
+        scaling_config: Optional[ray.train.ScalingConfig] = None,
+    ):
+        self.trainer_param = trainer_param
+        _logger.info("LightningTrainer initialized with trainer_param: %r", trainer_param)
+        train_loop_config = asdict(trainer_param)
+        # Unique run id for Comet experiment
+        train_loop_config["run_id"] = str(uuid.uuid4())
+        # Pop out train and val data since we have to pass them into datasets parameter of TorchTrainer.
+        train_data = train_loop_config.pop("train_data")
+        val_data = train_loop_config.pop("val_data")
 
-            # Create checkpoint in temporary directory for Ray to capture
-            checkpoint_dir = tempfile.mkdtemp()
-
-            checkpoint_path = os.path.join(checkpoint_dir, "model_checkpoint.ckpt")
-            trainer.save_checkpoint(checkpoint_path)
-
-            # Also save the model state directly
-            model_path = os.path.join(checkpoint_dir, "model_state.pt")
-            torch.save(model.state_dict(), model_path)
-
-            # Report final metrics to Ray for MLflow logging
-            final_metrics = {}
-            if hasattr(trainer, "logged_metrics") and trainer.logged_metrics:
-                for key, value in trainer.logged_metrics.items():
-                    if isinstance(value, torch.Tensor):
-                        final_metrics[key] = value.item()
-                    else:
-                        final_metrics[key] = value
-
-            # Report checkpoint and metrics to Ray Train
-            # (this gets picked up by MLflow callback)
-            ray_train.report(
-                final_metrics,
-                checkpoint=ray_train.Checkpoint.from_directory(checkpoint_dir),
-            )
-
-            return {"metrics": final_metrics}
-
-        # Store the train loop function for later initialization
-        self._train_loop_per_worker = train_loop_per_worker
-
-    def train(self, run_config: RunConfig, scaling_config: ScalingConfig):
-        """Train the model using Ray.
-
-        Returns Ray Result object compatible with internal API.
-        """
-        log.info("Starting distributed Lightning training...")
-        log.info(f"Using storage path: {run_config.storage_path}")
-
-        # Create TorchTrainer with proper RunConfig and ScalingConfig
-        torch_trainer = TorchTrainer(
-            train_loop_per_worker=self._train_loop_per_worker,
-            datasets={
-                "train": self.param.train_data,
-                "validation": self.param.validation_data,
-            },
+        super().__init__(
+            train_loop_per_worker=_train_loop_per_worker,
+            train_loop_config=train_loop_config,
             scaling_config=scaling_config,
             run_config=run_config,
-            train_loop_config={},
+            datasets={"train": train_data, "val": val_data},
         )
 
-        # Train and return result
-        result = torch_trainer.fit()
+    def train(
+        self,
+        run_config: Optional[ray.train.RunConfig] = None,
+        scaling_config: Optional[ray.train.ScalingConfig] = None,
+    ) -> dict:
+        if scaling_config is not None:
+            self.scaling_config = scaling_config
+        if run_config is not None:
+            self.run_config = run_config
 
-        log.info("Distributed Lightning training completed")
-        return result
+        result = self.fit()
+        if result.error:
+            raise result.error
+
+        # User-specified LightningModule is saved in config field and cannot be serialized on uniflow for now.
+        # We take the config out.
+        result.metrics.pop("config", None)
+        # Keep the checkpoint object for subclasses that need it (e.g., LightningTrainerWithStateDict)
+        self.checkpoint = result.checkpoint
+        return {
+            CHECKPOINT_PATH_KEY: result.checkpoint.path,
+            "path": result.path,
+            "metrics": result.metrics,
+        }
 
 
-def create_run_config(
-    name: Optional[str] = None,
-    storage_path: Optional[str] = None,
-    checkpoint_config: CheckpointConfig = None,
-    stop: Optional[dict] = None,  # Keep for compatibility but don't use
-    verbose: int = 1,  # Keep parameter for compatibility but don't use it
-) -> RunConfig:
-    """Create Ray RunConfig for distributed training."""
-    return RunConfig(
-        name=name,
-        storage_path=storage_path,
-        checkpoint_config=checkpoint_config,
-    )
+class LightningTrainerWithStateDict(LightningTrainer):
+    """
+    LightningTrainer that provides functions to update model state dict from checkpoint.
+    """
+
+    def _is_deepspeed_strategy(self) -> bool:
+        """Check if DeepSpeed was used in the training configuration."""
+        strategy = self.trainer_param.lightning_trainer_kwargs.get("strategy")
+        if strategy is None:
+            return False
+
+        # DeepSpeed was used if the strategy is "deepspeed" or a RayDeepSpeedStrategy instance
+        if isinstance(strategy, str):
+            return strategy.lower() == "deepspeed"
+
+        try:
+            from ray.train.lightning import RayDeepSpeedStrategy  # noqa: PLC0415
+
+            return isinstance(strategy, RayDeepSpeedStrategy)
+        except ImportError:
+            return False
+
+    def update_model_state_dict(self, torch_model: torch.nn.Module):
+        """
+        Update the model state dict with the local checkpoint.
+        """
+        if not hasattr(self, "checkpoint") or self.checkpoint is None:
+            raise ValueError("No checkpoint available. Please call train() first to generate a checkpoint.")
+        used_deepspeed = self._is_deepspeed_strategy()
+        # use the ray checkpoint as_directory() to get the local temp checkpoint directory
+        with self.checkpoint.as_directory() as d:
+            _logger.info(f"Saving Ray Checkpoint to local temp Checkpoint directory: {d}")
+            data_dir_contents = os.listdir(d)
+            _logger.info(f"Data directory contents: {data_dir_contents}")
+            lightning_ckpt_path = os.path.join(d, CHECKPOINT_NAME)
+            if used_deepspeed:
+                local_model_path = os.path.join(lightning_ckpt_path, "model.pt")
+                # PyTorch 2.6+ defaults weights_only=True, which rejects arbitrary Python classes
+                # (LossScaler, DynamicLossScaler, optimizer states, etc.) embedded in DeepSpeed ZeRO
+                # checkpoints. The env var reverts the default for any torch.load call that doesn't
+                # explicitly pass weights_only, covering both pytorch_lightning and deepspeed internals.
+                # TODO: Remove this once we upgrade to Lightning 2.6+ https://github.com/Lightning-AI/pytorch-lightning/pull/21194
+                with _torch_weights_only_disabled():
+                    model_state_dict = convert_zero_checkpoint_to_fp32_state_dict(lightning_ckpt_path, local_model_path)
+                _logger.info(f"Loaded DeepSpeed checkpoint from {lightning_ckpt_path} to {local_model_path}")
+            else:
+                # DDP checkpoint
+                checkpoint = torch.load(lightning_ckpt_path, map_location="cpu")
+                model_state_dict = checkpoint["state_dict"]
+                _logger.info(f"Loaded DDP checkpoint from {lightning_ckpt_path}")
+            torch_model.load_state_dict(model_state_dict, strict=False)
+            _logger.info("Updated the state dict of the torch model in the ModelVariable")
 
 
-def create_scaling_config(
-    trainer_cpu: int = 2,
-    cpu_per_worker: int = 4,
-    num_workers: Optional[int] = None,
-    use_gpu: bool = True,
-    resources_per_worker: Optional[dict] = None,
-) -> ScalingConfig:
-    """Create Ray ScalingConfig for distributed training."""
-    if num_workers is None:
-        # Infer from runtime or default
-        num_workers = 4
-
-    if resources_per_worker is None:
-        resources_per_worker = {"CPU": cpu_per_worker}
-        if use_gpu:
-            resources_per_worker["GPU"] = 1
-
-    return ScalingConfig(
-        num_workers=num_workers,
-        use_gpu=use_gpu,
-        resources_per_worker=resources_per_worker,
-    )
+@contextmanager
+def _torch_weights_only_disabled():
+    """Force torch.load() to use weights_only=False for call sites that don't pass it explicitly."""
+    key = "TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD"
+    old = os.environ.pop(key, None)
+    os.environ[key] = "1"
+    try:
+        yield
+    finally:
+        if old is not None:
+            os.environ[key] = old
+        else:
+            os.environ.pop(key, None)
