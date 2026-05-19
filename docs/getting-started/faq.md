@@ -81,7 +81,7 @@ A: Yes. Deploy multiple model versions to the same endpoint with traffic splitti
 A: Uniflow automatically:
 - Retries transient failures (network issues, spot instance preemption)
 - Preserves logs and intermediate outputs for debugging
-- Sends notifications (email, Slack) on terminal state — see [Pipeline Notifications](../user-guides/notifications.md)
+- Sends notifications (email, Slack) on terminal state — see [Pipeline Notifications](../user-guides/ml-pipelines/notifications.md)
 
 ## Monitoring & Operations
 
@@ -125,7 +125,7 @@ A: Michelangelo provides:
 - **Shared projects** with role-based access control (see [Project Management](../user-guides/project-management-for-ml-pipelines.md))
 - **Model lineage** tracking from training data through deployment
 - **Versioning** for models, pipelines, and pipeline runs
-- **Notifications** to keep teammates informed of pipeline events (see [Notifications](../user-guides/notifications.md))
+- **Notifications** to keep teammates informed of pipeline events (see [Notifications](../user-guides/ml-pipelines/notifications.md))
 
 For operator-side RBAC and identity-provider setup, see the [Authentication guide](../operator-guides/setup/authentication.md).
 

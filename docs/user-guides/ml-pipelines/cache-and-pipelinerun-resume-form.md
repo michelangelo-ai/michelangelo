@@ -63,6 +63,6 @@ ma pipeline run -n <namespace> --revision <pipeline-revision-name> --resume_from
 
 ## Next Steps
 
-- **Run pipelines on a schedule** — See [Set Up Triggers](../set-up-triggers.md) to automate pipeline execution with cron triggers
+- **Run pipelines on a schedule** — See [Set Up Triggers](./set-up-triggers.md) to automate pipeline execution with cron triggers
 - **Test changes without rebuilding** — Use [file sync](./file-sync-testing-flow-runbook.md) to iterate faster during development
 - **Monitor pipeline runs** — Open MA Studio at `http://localhost:8090/<your-project>` to view run history, step status, and cached results

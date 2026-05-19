@@ -16,7 +16,7 @@ Start here if you're evaluating the platform or want to learn the key concepts b
 Ready to get hands-on? Follow these guides in order. You'll have a working local environment in about 20 minutes.
 
 1. **[Sandbox Setup](./sandbox-setup.md)** — Set up a local Michelangelo cluster with all services running (~20 min)
-2. **[Getting Started with Pipelines](../user-guides/ml-pipelines/getting-started.md)** — Build and run your first ML pipeline (~30 min)
+2. **[Getting Started with Pipelines](../user-guides/getting-started/getting-started.md)** — Build and run your first ML pipeline (~30 min)
 
 ### Reference
 

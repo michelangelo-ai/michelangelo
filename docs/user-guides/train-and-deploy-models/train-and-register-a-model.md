@@ -13,7 +13,7 @@ The focus is simplicity: **you control your training logic**, Michelangelo provi
 
 ## Prerequisites
 
-- **A running sandbox** — Remote training runs require a local Kubernetes cluster. Follow the [Sandbox Setup](../getting-started/sandbox-setup.md) guide if you haven't done this yet.
+- **A running sandbox** — Remote training runs require a local Kubernetes cluster. Follow the [Sandbox Setup](../../getting-started/sandbox-setup.md) guide if you haven't done this yet.
 - **A prepared dataset** — Training tasks expect datasets passed as `DatasetVariable`. See [Data Preparation](./prepare-your-data.md) for how to produce them.
 - **Python 3.11+, Poetry, and the Michelangelo SDK installed** — Run `cd python && poetry install` from the repo root.
 - **For distributed training:** A Docker image with your workflow code. See [Running Uniflow Pipelines](./ml-pipelines/running-uniflow.md) for image build steps.

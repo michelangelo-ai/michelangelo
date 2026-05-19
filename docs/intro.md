@@ -22,7 +22,7 @@ Understand what the platform does, how it compares to your current stack, and wh
 Get a local environment running and build an end-to-end ML pipeline.
 
 - **[Sandbox Setup](./getting-started/sandbox-setup.md)** — Set up a local Michelangelo cluster (~20 min)
-- **[Getting Started with Pipelines](./user-guides/ml-pipelines/getting-started.md)** — Build your first pipeline from scratch (~30 min)
+- **[Getting Started with Pipelines](./user-guides/getting-started/getting-started.md)** — Build your first pipeline from scratch (~30 min)
 - **[Example Projects](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples)** — Boston Housing, BERT text classification, GPT fine-tuning, and more
 
 ### I'm deploying or operating the platform
@@ -57,5 +57,5 @@ Understanding scope helps you decide if Michelangelo is the right tool.
 ## Quick links
 
 - [GitHub Repository](https://github.com/michelangelo-ai/michelangelo)
-- [CLI Reference](./user-guides/cli.md)
+- [CLI Reference](./user-guides/reference/cli.md)
 - [ML Pipelines Overview](./user-guides/ml-pipelines/index.md)

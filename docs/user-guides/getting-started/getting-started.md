@@ -311,8 +311,8 @@ See the full Boston Housing XGBoost example at [`python/examples/boston_housing_
 * [Pipeline Running Modes](./pipeline-running-modes.md) -- Understand when to use Local, Remote, Dev, and Pipeline runs
 * [Pipeline Management](./pipeline-management.md) -- Learn about standard vs custom workflows
 * [Caching and Resume](./cache-and-pipelinerun-resume-form.md) -- Resume failed pipeline runs from a specific step
-* [Data Preparation](../prepare-your-data.md) -- Deep dive into data preprocessing patterns
-* [Model Training](../train-and-register-a-model.md) -- Advanced distributed training with Lightning Trainer SDK
+* [Data Preparation](./prepare-your-data.md) -- Deep dive into data preprocessing patterns
+* [Model Training](../train-and-deploy-models/train-and-register-a-model.md) -- Advanced distributed training with Lightning Trainer SDK
 
 ## Troubleshooting
 

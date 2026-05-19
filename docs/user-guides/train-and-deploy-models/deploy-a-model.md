@@ -64,7 +64,7 @@ If you're using the sandbox, `ma sandbox demo inference` already created an `Inf
 Create `inferenceserver.yaml`:
 
 :::note
-If you set up Michelangelo on your own cluster, you are also the operator. The `clusterId`, `tokenTag`, and `caDataTag` values are the identifiers you assigned when registering the cluster with the control plane — see [the cluster setup guide](../operator-guides/serving/cluster-setup.md) for details.
+If you set up Michelangelo on your own cluster, you are also the operator. The `clusterId`, `tokenTag`, and `caDataTag` values are the identifiers you assigned when registering the cluster with the control plane — see [the cluster setup guide](../../operator-guides/serving/cluster-setup.md) for details.
 :::
 
 ```yaml
@@ -99,7 +99,7 @@ Key fields:
 - **`initSpec.resourceSpec`** — CPU and memory per replica. A lightweight model typically needs 2 CPU / 4 Gi; a large deep learning model may need a GPU node — check with your platform operator if you're unsure.
 - **`initSpec.numInstances`** — how many replicas to run for availability and throughput.
 - **`owner.name`** — your username as configured by your platform operator, used for audit purposes. For multi-tenant deployments, your platform operator will configure `ownerSpec` (team identifiers, groups, and tier) separately — ask them if you need to set ownership for capacity attribution.
-- **`clusterTargets`** — required. Specifies which cluster(s) the server is provisioned on. The `clusterId` and secret tags come from your platform operator. See the [Michelangelo Serving overview](../operator-guides/serving/index.md) for how operators configure cluster targets.
+- **`clusterTargets`** — required. Specifies which cluster(s) the server is provisioned on. The `clusterId` and secret tags come from your platform operator. See the [Michelangelo Serving overview](../../operator-guides/serving/index.md) for how operators configure cluster targets.
 
 ## Step 2: Define a Deployment
 
@@ -126,7 +126,7 @@ Key fields:
 
 - **`inferenceServer`** — the `InferenceServer` to load the model on. Must already exist.
 - **`desiredRevision`** — the model `Revision` you want to serve. Update this field and re-apply to roll out a new model version.
-- **`strategy`** — required. Controls how the rollout proceeds across server instances. `blast: {}` loads the new model on all instances simultaneously (simplest option). Other strategies — `zonal`, `rolling`, and `red_black` — let you stage rollouts progressively. See the [`Deployment` reference in the operator serving guide](../operator-guides/serving/index.md) for strategy details.
+- **`strategy`** — required. Controls how the rollout proceeds across server instances. `blast: {}` loads the new model on all instances simultaneously (simplest option). Other strategies — `zonal`, `rolling`, and `red_black` — let you stage rollouts progressively. See the [`Deployment` reference in the operator serving guide](../../operator-guides/serving/index.md) for strategy details.
 
 :::tip
 `ma apply` sends resources to the Michelangelo API server, which manages the deployment lifecycle. This is different from `kubectl apply`, which writes directly to Kubernetes.
@@ -152,7 +152,7 @@ A healthy deployment progresses through these stages:
 
 `Validation → Placement → Resource Acquisition → Rollout Complete`
 
-The [Deployment Lifecycle section in the serving overview](../operator-guides/serving/index.md#deployment-lifecycle) explains each stage.
+The [Deployment Lifecycle section in the serving overview](../../operator-guides/serving/index.md#deployment-lifecycle) explains each stage.
 
 ## Step 4: Send a Prediction Request
 
@@ -228,7 +228,7 @@ Delete all `Deployment` resources that reference an `InferenceServer` before del
 
 This guide covers the end-user workflow assuming serving infrastructure is already in place. For platform-level concerns:
 
-- **[Michelangelo Serving overview](../operator-guides/serving/index.md)** — architecture, controller lifecycles, and core concepts
+- **[Michelangelo Serving overview](../../operator-guides/serving/index.md)** — architecture, controller lifecycles, and core concepts
 - **[Model Registry Guide](./model-registry-guide.md)** — package and register a model before deploying
-- **[Integrate with a Custom Backend](../operator-guides/serving/integrate-custom-backend.md)** — add support for new serving frameworks
+- **[Integrate with a Custom Backend](../../operator-guides/serving/integrate-custom-backend.md)** — add support for new serving frameworks
 - **[CLI Reference](./cli.md)** — every `ma` command, including the full list of supported flags

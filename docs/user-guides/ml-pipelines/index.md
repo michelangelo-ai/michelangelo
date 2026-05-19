@@ -93,7 +93,7 @@ Michelangelo provides four running modes for different stages of development:
 * **Task Retry** -- Automatically retry failed tasks with fresh cluster isolation.
 * **Pipeline Resume** -- Resume a failed pipeline run from a specific step instead of starting over.
 * **File Sync** -- Test local code changes on remote infrastructure without rebuilding Docker images. See [File Sync](./file-sync-testing-flow-runbook.md).
-* **Triggers and Scheduling** -- Run pipelines on cron schedules or fixed intervals. See [Set Up Triggers](../set-up-triggers.md).
+* **Triggers and Scheduling** -- Run pipelines on cron schedules or fixed intervals. See [Set Up Triggers](./set-up-triggers.md).
 * **Notifications** -- Get notified via email or Slack when pipeline runs succeed, fail, or complete.
 
 ## Architecture overview
@@ -120,6 +120,6 @@ Start with the [Getting started](./getting-started.md) guide to build and run yo
 | [**Running Uniflow Pipelines**](./running-uniflow.md) | Environment setup, execution, and debugging |
 | [**Caching and Resume**](./cache-and-pipelinerun-resume-form.md) | Cache task results and resume failed runs |
 | [**File Sync**](./file-sync-testing-flow-runbook.md) | Sync local code changes to remote runs |
-| [**Set Up Triggers**](../set-up-triggers.md) | Schedule and automate pipeline execution |
-| [**CLI Reference**](../cli.md) | Command-line tools for pipeline and project management |
+| [**Set Up Triggers**](./set-up-triggers.md) | Schedule and automate pipeline execution |
+| [**CLI Reference**](../reference/cli.md) | Command-line tools for pipeline and project management |
 | [**Project Management**](../project-management-for-ml-pipelines.md) | Create and configure MA Studio projects |

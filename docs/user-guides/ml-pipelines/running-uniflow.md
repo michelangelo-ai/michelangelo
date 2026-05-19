@@ -173,5 +173,5 @@ docker exec -it k3d-michelangelo-sandbox-server-0 crictl images
 
 - **Speed up iteration** — Use [file sync](./file-sync-testing-flow-runbook.md) to test local code changes on remote infrastructure without rebuilding Docker images
 - **Cache task results** — Learn how [Uniflow caching and pipeline run resume](./cache-and-pipelinerun-resume-form.md) can speed up repeated runs
-- **Run on a schedule** — See [Set Up Triggers](../set-up-triggers.md) to run your pipeline automatically on a cron schedule
-- **Register your model** — After a successful training run, follow the [Model Registry Guide](../model-registry-guide.md) to package and version your model
+- **Run on a schedule** — See [Set Up Triggers](./set-up-triggers.md) to run your pipeline automatically on a cron schedule
+- **Register your model** — After a successful training run, follow the [Model Registry Guide](../train-and-deploy-models/model-registry-guide.md) to package and version your model
