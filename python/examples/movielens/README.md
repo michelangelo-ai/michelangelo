@@ -25,6 +25,24 @@ Checkpoints land in `/tmp/movielens_runs/ncf_movielens100k/`.
 - Default Ray Data → torch tensor collation (no custom `data_collate_fn`).
 - Resolving the default `RayDDPStrategy` even when running with a single worker.
 
+## Optional: log to Comet
+
+Comet logging is opt-in. By default the demo uses Lightning's local logger.
+To stream metrics to Comet, set:
+
+```bash
+export COMET_API_KEY=...                          # required
+export COMET_WORKSPACE=<your-workspace>           # required
+export COMET_PROJECT_NAME=michelangelo-demo       # optional, default michelangelo-movielens-demo
+export COMET_EXPERIMENT_NAME=movielens-run-1      # optional, default ncf-movielens100k
+export COMET_TAGS=demo,movielens,smoke            # optional, comma-separated
+python -m examples.movielens.train
+```
+
+`train.py` reads these and builds a `CometParam`, which `LightningTrainer`
+forwards through to `_get_comet_logger`. With Comet enabled you'll see a
+"Comet experiment URL: ..." line in the worker logs.
+
 ## Files
 
 - `data.py` — downloads MovieLens-100k, builds dense user/item index, returns Ray datasets.
