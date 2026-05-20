@@ -1,4 +1,4 @@
-# Pipeline management
+# Pipeline Management
 
 In general, there are two categories of Michelangelo pipelines: those that leverage the **standard workflows** and those that depend on user-created **custom workflows**.
 

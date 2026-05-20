@@ -1,4 +1,4 @@
-# Running Uniflow pipelines
+# Running Uniflow Pipelines
 
 This guide covers how to run Uniflow pipelines locally and remotely.
 

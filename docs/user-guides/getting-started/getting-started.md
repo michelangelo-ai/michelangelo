@@ -1,4 +1,4 @@
-# Getting started with ML pipelines
+# Getting Started with ML Pipelines
 
 Build and run your first ML pipeline on Michelangelo in minutes. This guide walks you through a complete example -- from defining tasks and workflows to running locally and deploying remotely.
 

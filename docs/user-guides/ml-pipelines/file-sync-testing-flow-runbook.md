@@ -1,4 +1,4 @@
-# File sync
+# File Sync
 
 ## What you'll learn
 

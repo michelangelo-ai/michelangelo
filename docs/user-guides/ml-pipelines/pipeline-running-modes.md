@@ -1,4 +1,4 @@
-# Pipeline running modes
+# Pipeline Running Modes
 
 Michelangelo AI provides four running modes that correspond to different stages of the machine learning development lifecycle. Each mode solves specific problems developers face when moving from initial experimentation to production deployment.
 
