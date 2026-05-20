@@ -49,14 +49,14 @@
   --custom-border-color: #e8e8e8;
   --uber-light-gray: #f3f3f3;
 
-  /* Landing page variables - Light mode */
-  --landing-bg: #fafafa;
-  --landing-gradient-1: rgba(37, 99, 235, 0.5);
-  --landing-gradient-2: rgba(124, 58, 237, 0.5);
-  --landing-gradient-3: rgba(219, 39, 119, 0.4);
+  /* Landing page variables - Light mode (fallbacks; landing page forces dark) */
+  --landing-bg: #000000;
+  --landing-gradient-1: rgba(39, 110, 241, 0.35);
+  --landing-gradient-2: rgba(39, 110, 241, 0.15);
+  --landing-gradient-3: rgba(39, 110, 241, 0.08);
   --landing-accent: #276ef1;
   --landing-gradient-text-1: #276ef1;
-  --landing-gradient-text-2: #7c3aed;
+  --landing-gradient-text-2: #60a5fa;
 }
 
 [data-theme='dark'] {
@@ -84,12 +84,22 @@
 
   /* Landing page variables - Dark mode */
   --landing-bg: #000000;
-  --landing-gradient-1: rgba(74, 135, 243, 0.4);
-  --landing-gradient-2: rgba(124, 58, 237, 0.4);
-  --landing-gradient-3: rgba(236, 72, 153, 0.3);
-  --landing-accent: #4a87f3;
-  --landing-gradient-text-1: #4a87f3;
-  --landing-gradient-text-2: #a78bfa;
+  --landing-gradient-1: rgba(39, 110, 241, 0.3);
+  --landing-gradient-2: rgba(39, 110, 241, 0.12);
+  --landing-gradient-3: rgba(39, 110, 241, 0.06);
+  --landing-accent: #276ef1;
+  --landing-gradient-text-1: #276ef1;
+  --landing-gradient-text-2: #60a5fa;
+}
+
+[data-landing-page='true'] {
+  --landing-bg: #000000;
+  --landing-gradient-1: rgba(39, 110, 241, 0.3);
+  --landing-gradient-2: rgba(39, 110, 241, 0.12);
+  --landing-gradient-3: rgba(39, 110, 241, 0.06);
+  --landing-accent: #276ef1;
+  --landing-gradient-text-1: #276ef1;
+  --landing-gradient-text-2: #60a5fa;
 }
 
 /* ============================================
