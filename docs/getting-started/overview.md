@@ -119,4 +119,4 @@ Have questions? See the [full FAQ](./faq.md) — covering getting started, data 
 
 - **Ready to build?** [Set up your local sandbox](./sandbox-setup.md) and follow the [Getting Started with Pipelines](../user-guides/getting-started/getting-started.md) guide (~30 min)
 - **Want to understand the concepts first?** Read [Core Concepts and Key Terms](./core-concepts-and-key-terms.md)
-- **Looking for examples?** Browse [end-to-end tutorials](../user-guides/index.md#learning-by-examples) covering XGBoost, BERT, GPT fine-tuning, and recommendation systems
+- **Looking for examples?** Browse [end-to-end tutorials](../user-guides/index.md#examples) covering XGBoost, BERT, GPT fine-tuning, and recommendation systems
