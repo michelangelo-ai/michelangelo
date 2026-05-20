@@ -30,10 +30,11 @@ export const DEPLOYMENT_DETAIL_CONFIG: DetailViewConfig = {
         accessor: (data: {
           status?: { stage?: number; conditions?: object[]; conditionsSnapshot?: object[] };
         }) => {
-          if (data?.status?.stage === DEPLOYMENT_STAGE.ROLLOUT_FAILED) {
-            return data?.status?.conditionsSnapshot ?? [];
-          }
-          return data?.status?.conditions ?? [];
+          const conditions =
+            data?.status?.stage === DEPLOYMENT_STAGE.ROLLOUT_FAILED
+              ? data?.status?.conditionsSnapshot
+              : data?.status?.conditions;
+          return conditions ?? [];
         },
         header: {
           heading: 'type',
