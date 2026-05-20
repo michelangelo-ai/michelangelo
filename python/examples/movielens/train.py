@@ -8,10 +8,15 @@ Trains a tiny NCF on CPU with a single Ray Train worker. Designed as the
 smallest viable smoke test for
 :class:`michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer.LightningTrainer`.
 
-Comet logging is optional. To enable it, set ``COMET_API_KEY`` and
-``COMET_WORKSPACE`` in the environment (and optionally ``COMET_PROJECT_NAME``,
-``COMET_EXPERIMENT_NAME``, ``COMET_TAGS``). When unset, the trainer falls back
-to Lightning's default local logger.
+Experiment tracking is optional and picks at most one backend per run:
+
+* Comet — set ``COMET_API_KEY`` and ``COMET_WORKSPACE`` (and optionally
+  ``COMET_PROJECT_NAME`` / ``COMET_EXPERIMENT_NAME`` / ``COMET_TAGS``).
+* MLflow — set ``MLFLOW_TRACKING_URI`` (and optionally
+  ``MLFLOW_EXPERIMENT_NAME`` / ``MLFLOW_RUN_NAME`` / ``MLFLOW_TAGS``).
+
+Comet wins when both env-sets are present. With neither set, the trainer
+falls back to Lightning's default local logger.
 """
 
 from __future__ import annotations
@@ -36,6 +41,7 @@ log = logging.getLogger("examples.movielens.train")
 _STORAGE_DIR = "/tmp/movielens_runs"
 _DEFAULT_COMET_PROJECT = "michelangelo-movielens-demo"
 _DEFAULT_COMET_EXPERIMENT = "ncf-movielens100k"
+_DEFAULT_MLFLOW_EXPERIMENT = "ncf-movielens100k"
 
 
 def _build_comet_param() -> Optional[CometParam]:
@@ -59,19 +65,79 @@ def _build_comet_param() -> Optional[CometParam]:
     )
 
 
+def _parse_mlflow_tags(tags_env: str) -> Optional[dict]:
+    """Parse ``key1=val1,key2=val2`` into a dict; return None if empty/malformed."""
+    if not tags_env.strip():
+        return None
+    parsed = {}
+    for kv in tags_env.split(","):
+        if "=" not in kv:
+            continue
+        k, v = kv.split("=", 1)
+        k, v = k.strip(), v.strip()
+        if k:
+            parsed[k] = v
+    return parsed or None
+
+
+def _build_mlflow_logger():
+    """Build an MLFlowLogger from env vars, or return None to skip MLflow logging.
+
+    MLFLOW_TRACKING_URI must be set to enable MLflow. The logger is constructed
+    here (not inside the trainer's worker) and forwarded via
+    ``lightning_trainer_kwargs["logger"]`` — ``_resolve_logger`` accepts any
+    pytorch_lightning ``Logger`` instance.
+    """
+    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
+    if not tracking_uri:
+        return None
+    # Import lazily so an unused MLflow path doesn't force the dependency.
+    from pytorch_lightning.loggers import MLFlowLogger  # noqa: PLC0415
+
+    return MLFlowLogger(
+        experiment_name=os.environ.get("MLFLOW_EXPERIMENT_NAME", _DEFAULT_MLFLOW_EXPERIMENT),
+        tracking_uri=tracking_uri,
+        run_name=os.environ.get("MLFLOW_RUN_NAME"),
+        tags=_parse_mlflow_tags(os.environ.get("MLFLOW_TAGS", "")),
+    )
+
+
 def main() -> dict:
     splits = load_movielens_100k()
 
+    # Pick at most one tracking backend. Comet wins if both env-sets are present.
     comet_param = _build_comet_param()
-    if comet_param is None:
-        log.info("Comet logging disabled (COMET_API_KEY / COMET_WORKSPACE not set)")
-    else:
+    mlflow_logger = None
+    if comet_param is not None:
         log.info(
             "Comet logging enabled (workspace=%s project=%s experiment=%s)",
             comet_param.workspace,
             comet_param.project_name,
             comet_param.experiment_name,
         )
+        if os.environ.get("MLFLOW_TRACKING_URI"):
+            log.info("MLFLOW_TRACKING_URI is also set but Comet takes precedence; MLflow logging skipped.")
+    else:
+        mlflow_logger = _build_mlflow_logger()
+        if mlflow_logger is not None:
+            log.info(
+                "MLflow logging enabled (tracking_uri=%s experiment=%s)",
+                mlflow_logger._tracking_uri,
+                mlflow_logger.experiment_id,
+            )
+        else:
+            log.info("Experiment tracking disabled (no COMET_* or MLFLOW_TRACKING_URI env vars set)")
+
+    lightning_trainer_kwargs = {
+        # Don't pass accelerator/devices here: ray.train.lightning.prepare_trainer
+        # overrides them based on the worker's resource assignment from ScalingConfig.
+        "max_epochs": 3,
+        "log_every_n_steps": 20,
+    }
+    if mlflow_logger is not None:
+        # _resolve_logger accepts a pre-built Logger instance and forwards it
+        # to the Lightning Trainer unchanged.
+        lightning_trainer_kwargs["logger"] = mlflow_logger
 
     trainer_param = LightningTrainerParam(
         create_model_fn=create_ncf_model,
@@ -87,12 +153,7 @@ def main() -> dict:
         batch_size=256,
         num_shuffle_batches=10,
         comet_param=comet_param,
-        lightning_trainer_kwargs={
-            # Don't pass accelerator/devices here: ray.train.lightning.prepare_trainer
-            # overrides them based on the worker's resource assignment from ScalingConfig.
-            "max_epochs": 3,
-            "log_every_n_steps": 20,
-        },
+        lightning_trainer_kwargs=lightning_trainer_kwargs,
     )
 
     os.makedirs(_STORAGE_DIR, exist_ok=True)

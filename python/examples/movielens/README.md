@@ -25,10 +25,12 @@ Checkpoints land in `/tmp/movielens_runs/ncf_movielens100k/`.
 - Default Ray Data → torch tensor collation (no custom `data_collate_fn`).
 - Resolving the default `RayDDPStrategy` even when running with a single worker.
 
-## Optional: log to Comet
+## Optional: log to Comet or MLflow
 
-Comet logging is opt-in. By default the demo uses Lightning's local logger.
-To stream metrics to Comet, set:
+Experiment tracking is opt-in. By default the demo uses Lightning's local logger.
+At most one backend is active per run; **Comet wins if both env-sets are set**.
+
+### Comet
 
 ```bash
 export COMET_API_KEY=...                          # required
@@ -42,6 +44,21 @@ python -m examples.movielens.train
 `train.py` reads these and builds a `CometParam`, which `LightningTrainer`
 forwards through to `_get_comet_logger`. With Comet enabled you'll see a
 "Comet experiment URL: ..." line in the worker logs.
+
+### MLflow
+
+```bash
+export MLFLOW_TRACKING_URI=file:///tmp/mlflow_movielens        # required (or http://...)
+export MLFLOW_EXPERIMENT_NAME=ncf-movielens                    # optional, default ncf-movielens100k
+export MLFLOW_RUN_NAME=run-001                                 # optional
+export MLFLOW_TAGS=team=ml-platform,owner=dkurra                # optional, comma-separated key=value
+python -m examples.movielens.train
+```
+
+`train.py` constructs a `pytorch_lightning.loggers.MLFlowLogger` and passes it
+through `lightning_trainer_kwargs["logger"]`. The trainer's `_resolve_logger`
+forwards a pre-built Logger instance unchanged. View runs by pointing the
+MLflow UI at the same tracking URI (`mlflow ui --backend-store-uri file:///tmp/mlflow_movielens`).
 
 ## Files
 
