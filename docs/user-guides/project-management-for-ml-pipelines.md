@@ -15,7 +15,7 @@ A project must be created before you can register or run pipelines. See [Pipelin
 
 Before creating a project, complete the initial setup:
 
-1. **Set up the Michelangelo CLI and sandbox environment.** See the [CLI Reference - Prerequisites](./cli.md#prerequisites) for installation and setup instructions.
+1. **Set up the Michelangelo CLI and sandbox environment.** See the [CLI Reference - Prerequisites](./reference/cli.md#prerequisites) for installation and setup instructions.
 
 2. **Verify the environment is ready:**
 
