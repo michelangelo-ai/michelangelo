@@ -1,3 +1,7 @@
+---
+sidebar_position: 1
+---
+
 # Model Training Guide
 
 This guide explains **how to retrieve datasets for training** inside Michelangelo workflows and how to optionally scale training using **RayTask** and the **Lightning Trainer SDK**.

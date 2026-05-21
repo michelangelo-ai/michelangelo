@@ -138,8 +138,8 @@ Full documentation is available at **[michelangelo-ai.org/docs](https://michelan
 
 - [User Guides](https://michelangelo-ai.org/docs/user-guides) — Step-by-step guides for data preparation, training, and deployment
 - [ML Pipelines](https://michelangelo-ai.org/docs/user-guides/ml-pipelines) — Deep dive into the Uniflow pipeline framework
-- [Set Up Triggers](https://michelangelo-ai.org/docs/user-guides/set-up-triggers) — Automate pipeline execution with cron and backfill triggers
-- [CLI Reference](https://michelangelo-ai.org/docs/user-guides/cli) — Full command-line interface documentation
+- [Set Up Triggers](https://michelangelo-ai.org/docs/user-guides/ml-pipelines/set-up-triggers) — Automate pipeline execution with cron and backfill triggers
+- [CLI Reference](https://michelangelo-ai.org/docs/user-guides/reference/cli) — Full command-line interface documentation
 
 ## Contributing
 

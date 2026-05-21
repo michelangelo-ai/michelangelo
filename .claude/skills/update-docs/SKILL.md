@@ -215,7 +215,7 @@ When asked to document code or verify docs match code:
 | Component | Code Location | Docs Location |
 |-----------|---------------|---------------|
 | Python SDK | `python/` | `docs/user-guides/` |
-| CLI tools | `python/` | `docs/user-guides/cli.md` |
+| CLI tools | `python/` | `docs/user-guides/reference/cli.md` |
 | Go API server | `go/` | `docs/operator-guides/` |
 | UI components | `javascript/` | `docs/operator-guides/ui/` |
 

@@ -67,7 +67,7 @@ def my_pipeline(learning_rate: float = 0.01):
     model = train(learning_rate=learning_rate)
 ```
 
-For a full walkthrough, see the [Getting Started with ML Pipelines](https://michelangelo-ai.org/docs/user-guides/ml-pipelines/getting-started/) guide.
+For a full walkthrough, see the [Getting Started with ML Pipelines](https://michelangelo-ai.org/docs/user-guides/getting-started/getting-started) guide.
 
 ## Build and Test
 
