@@ -50,8 +50,6 @@ class AssembledModel:
             offline validation and reproducibility.
         deployable_model: Serving-ready bundle (e.g. Triton config + weights)
             intended for deployment to a model server.
-        feature_package_path: Optional local path to a feature transformation
-            package. Upload is the provider layer's responsibility.
 
     Example:
         >>> artifact = ModelArtifact(path="/tmp/model.ubj")
@@ -59,13 +57,11 @@ class AssembledModel:
         ...     raw_model=artifact,
         ...     deployable_model=artifact,
         ... )
-        >>> assembled.feature_package_path is None
         True
     """
 
     raw_model: ModelArtifact
     deployable_model: ModelArtifact
-    feature_package_path: str | None = None
 
 
 @dataclass
