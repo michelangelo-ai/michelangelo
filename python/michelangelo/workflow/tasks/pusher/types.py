@@ -1,101 +1,13 @@
-"""Core data types for the pusher module."""
+"""Re-exports of pusher-related types from michelangelo.workflow.variables.
+
+Canonical location: michelangelo.workflow.variables.types
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
-
-
-@dataclass
-class ModelArtifact:
-    """A packaged model artifact ready for upload.
-
-    Both the raw model package and the serving-ready deployable artifact are
-    represented as ``ModelArtifact`` instances. Packaging must be complete
-    before passing to the pusher — packaging is an assembler-time concern
-    (e.g. a Ray worker with GPU access).
-
-    Attributes:
-        path: Absolute local filesystem path to the packaged artifact file or
-            directory.
-        metadata: Key-value pairs forwarded to the model registry at
-            registration time. Common keys: ``model_class``,
-            ``training_framework``, ``schema_version``.
-
-    Example:
-        >>> artifact = ModelArtifact(
-        ...     path="/tmp/model",
-        ...     metadata={"framework": "xgboost", "task": "regression"},
-        ... )
-        >>> artifact.path
-        '/tmp/model'
-        >>> artifact.metadata["framework"]
-        'xgboost'
-    """
-
-    path: str
-    metadata: dict[str, str] = field(default_factory=dict)
-
-
-@dataclass
-class AssembledModel:
-    """A trained model with its deployable and raw artifacts, ready for pushing.
-
-    Both artifacts must be fully packaged before passing to the pusher.
-    Packaging is the assembler's responsibility. The pusher only uploads and
-    registers pre-packaged artifacts.
-
-    Attributes:
-        raw_model: Raw model package (weights + sample data) intended for
-            offline validation and reproducibility.
-        deployable_model: Serving-ready bundle (e.g. Triton config + weights)
-            intended for deployment to a model server.
-        feature_package_path: Optional local path to a feature transformation
-            package. Upload is the provider layer's responsibility.
-
-    Example:
-        >>> artifact = ModelArtifact(path="/tmp/model.ubj")
-        >>> assembled = AssembledModel(
-        ...     raw_model=artifact,
-        ...     deployable_model=artifact,
-        ... )
-        >>> assembled.feature_package_path is None
-        True
-    """
-
-    raw_model: ModelArtifact
-    deployable_model: ModelArtifact
-    feature_package_path: str | None = None
-
-
-@dataclass
-class PusherResult:
-    """The outcome of a single plugin execution.
-
-    Attributes:
-        name: Artifact name from ``PusherPluginConfig.name``.
-        plugin: Plugin name that was invoked (e.g. ``"model_plugin"``).
-        success: ``True`` if the plugin completed without error.
-        value: Plugin-specific return data. Empty dict when ``success`` is
-            ``False``.
-        error: Human-readable error description when ``success`` is ``False``.
-            ``None`` when ``success`` is ``True``.
-
-    Example:
-        >>> result = PusherResult(
-        ...     name="model",
-        ...     plugin="model_plugin",
-        ...     success=True,
-        ...     value={"model_name": "clf-v1", "version": "1"},
-        ... )
-        >>> result.success
-        True
-        >>> result.error is None
-        True
-    """
-
-    name: str
-    plugin: str
-    success: bool
-    value: dict[str, Any] = field(default_factory=dict)
-    error: str | None = None
+# flake8: noqa:F401
+from michelangelo.workflow.variables.types import (
+    AssembledModel,
+    ModelArtifact,
+    PusherResult,
+)

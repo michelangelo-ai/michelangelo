@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest import TestCase
 
-from michelangelo.workflow.tasks.pusher.types import (
+from michelangelo.workflow.variables.types import (
     AssembledModel,
     ModelArtifact,
     PusherResult,
