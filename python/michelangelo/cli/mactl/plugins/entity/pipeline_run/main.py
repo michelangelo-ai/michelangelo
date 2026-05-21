@@ -14,7 +14,7 @@ from michelangelo.cli.mactl.plugins.entity.pipeline.kill import generate_kill
 _LOG = getLogger(__name__)
 
 
-def apply_plugins(crd: CRD, channel: Channel):
+def apply_plugins(crd: CRD, channel: Channel, *_, **__):
     """Apply plugin entity function signatures to the CRD.
 
     This adds the kill function signature for pipeline_run entity.

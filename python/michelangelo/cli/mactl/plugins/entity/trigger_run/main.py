@@ -19,7 +19,7 @@ from michelangelo.cli.mactl.plugins.entity.trigger_run.create import (
 _LOG = getLogger(__name__)
 
 
-def apply_plugins(crd: CRD, channel: Channel):
+def apply_plugins(crd: CRD, channel: Channel, *_, **__):
     """Apply plugin entity function signatures to the CRD.
 
     It adds the necessary function signatures and methods for user commands

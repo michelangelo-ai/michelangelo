@@ -474,8 +474,10 @@ my-plugins/
 
 **Required plugin functions**: Plugin modules should implement one or both of these functions:
 
-- `apply_plugins(crd: CRD, channel: Channel)` - Adds custom command signatures to the entity
-- `apply_plugin_command(crd: CRD, target_command: str, crds: dict[str, CRD], channel: Channel)` - Applies logic for specific commands (e.g., `apply`, `create`)
+- `apply_plugins(crd: CRD, channel: Channel, *args, **kwargs)` - Adds custom command signatures to the entity
+- `apply_plugin_command(crd: CRD, target_command: str, crds: dict[str, CRD], channel: Channel, *args, **kwargs)` - Applies logic for specific commands (e.g., `apply`, `create`)
+
+> **Note**: Always include `*args, **kwargs` in your plugin function signatures. This ensures your plugin remains compatible with future mactl versions that may pass additional context. If it's not used, you may use `*_, **__` as a convention to indicate unused parameters.
 
 **Note**: Support for per-module plugin configuration via `plugin.modules` is coming soon.
 
