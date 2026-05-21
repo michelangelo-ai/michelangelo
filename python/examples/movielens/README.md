@@ -8,8 +8,14 @@ Trains a tiny Neural Collaborative Filtering model on MovieLens-100k on CPU with
 From the `python/` directory:
 
 ```bash
-# One-time install. `trainer` covers ray + torch + pytorch_lightning + transformers +
-# numpy + comet_ml + deepspeed. `example` adds pandas (used by data.py for the TSV load).
+# Install the trainer + the umbrella `example` extra (provides pandas/mlflow/etc.
+# for the demos). The trainer extras are split so users only install what they
+# need:
+#   - `trainer`            — ray, torch, pytorch_lightning, transformers, numpy
+#   - `trainer-comet`      — adds comet_ml (optional Comet tracking)
+#   - `trainer-deepspeed`  — adds deepspeed (only needed for DeepSpeed training)
+# This demo uses MLflow tracking (already in the `example` extra) and CPU DDP,
+# so plain `trainer` is enough.
 poetry install --extras "trainer example"
 python -m examples.movielens.train
 ```
@@ -33,6 +39,9 @@ At most one backend is active per run; **Comet wins if both env-sets are set**.
 ### Comet
 
 ```bash
+# Comet requires the optional comet_ml dependency:
+poetry install --extras "trainer trainer-comet example"
+
 export COMET_API_KEY=...                          # required
 export COMET_WORKSPACE=<your-workspace>           # required
 export COMET_PROJECT_NAME=michelangelo-demo       # optional, default michelangelo-movielens-demo
