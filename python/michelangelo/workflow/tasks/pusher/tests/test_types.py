@@ -51,23 +51,6 @@ class TestAssembledModel(TestCase):
         self.assertEqual(model.raw_model.path, "/tmp/raw")
         self.assertEqual(model.deployable_model.path, "/tmp/deployable")
 
-    def test_feature_package_path_defaults_to_none(self):
-        """It defaults feature_package_path to None."""
-        model = AssembledModel(
-            raw_model=self._make_artifact(),
-            deployable_model=self._make_artifact(),
-        )
-        self.assertIsNone(model.feature_package_path)
-
-    def test_feature_package_path_can_be_provided(self):
-        """It stores an optional feature_package_path."""
-        model = AssembledModel(
-            raw_model=self._make_artifact(),
-            deployable_model=self._make_artifact(),
-            feature_package_path="/tmp/features",
-        )
-        self.assertEqual(model.feature_package_path, "/tmp/features")
-
 
 class TestPusherResult(TestCase):
     """Tests for PusherResult."""

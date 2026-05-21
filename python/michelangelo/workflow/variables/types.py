@@ -39,7 +39,7 @@ class ModelArtifact:
 
 @dataclass
 class AssembledModel:
-    """A trained model with its deployable and raw artifacts, meant to be transmitted in between workflow tasks
+    """A trained model transmitted between workflow tasks.
 
     Both artifacts must be fully packaged before passing to the pusher.
     Packaging is the assembler's responsibility. The pusher only uploads and
