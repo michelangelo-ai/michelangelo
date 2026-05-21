@@ -20,7 +20,7 @@ Each interface is designed to be idempotent—implementations should handle repe
 
 The `Backend` interface abstracts inference server provisioning for different frameworks (Triton, vLLM, TensorRT-LLM, etc.).
 
-**Interface:** [`go/components/inferenceserver/backends/interface.go`](../../../go/components/inferenceserver/backends/interface.go)
+**Interface:** [`go/components/inferenceserver/backends/interface.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/inferenceserver/backends/interface.go)
 
 ```go
 type Backend interface {
@@ -32,9 +32,9 @@ type Backend interface {
 }
 ```
 
-**Reference Implementation:** [`go/components/inferenceserver/backends/triton.go`](../../../go/components/inferenceserver/backends/triton.go)
+**Reference Implementation:** [`go/components/inferenceserver/backends/triton.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/inferenceserver/backends/triton.go)
 
-**Registry:** [`go/components/inferenceserver/backends/registry.go`](../../../go/components/inferenceserver/backends/registry.go)
+**Registry:** [`go/components/inferenceserver/backends/registry.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/inferenceserver/backends/registry.go)
 
 ### To add a new backend:
 
@@ -47,7 +47,7 @@ type Backend interface {
 
 The `ModelConfigProvider` manages model configurations for inference servers. This enables a sidecar pattern where a sidecar container watches the config and loads/unloads models accordingly.
 
-**Interface:** [`go/components/inferenceserver/modelconfig/interface.go`](../../../go/components/inferenceserver/modelconfig/interface.go)
+**Interface:** [`go/components/inferenceserver/modelconfig/interface.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/inferenceserver/modelconfig/interface.go)
 
 ```go
 type ModelConfigProvider interface {
@@ -60,7 +60,7 @@ type ModelConfigProvider interface {
 }
 ```
 
-**Reference Implementation:** [`go/components/inferenceserver/modelconfig/provider.go`](../../../go/components/inferenceserver/modelconfig/provider.go)
+**Reference Implementation:** [`go/components/inferenceserver/modelconfig/provider.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/inferenceserver/modelconfig/provider.go)
 
 ### How It Works
 
@@ -75,7 +75,7 @@ The InferenceServer controller creates/deletes the model config, while the Deplo
 
 The `RouteProvider` manages traffic routing to deployed models.
 
-**Interface:** [`go/components/deployment/route/interface.go`](../../../go/components/deployment/route/interface.go)
+**Interface:** [`go/components/deployment/route/interface.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/deployment/route/interface.go)
 
 ```go
 type RouteProvider interface {
@@ -86,7 +86,7 @@ type RouteProvider interface {
 }
 ```
 
-**Reference Implementation:** [`go/components/deployment/route/httproute.go`](../../../go/components/deployment/route/httproute.go)
+**Reference Implementation:** [`go/components/deployment/route/httproute.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/deployment/route/httproute.go)
 
 ### Default Behavior
 
