@@ -140,9 +140,7 @@ class TestLocalStorageBackendDirectoryUpload(TestCase):
             self._backend.upload(src_dir, "models/v1")
 
         # No stray .__tmp_ directories should remain under base_dir
-        leftovers = [
-            name for name in os.listdir(self._store_dir) if ".__tmp_" in name
-        ]
+        leftovers = [name for name in os.listdir(self._store_dir) if ".__tmp_" in name]
         self.assertEqual(leftovers, [])
 
 
