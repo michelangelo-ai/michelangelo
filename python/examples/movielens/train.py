@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
 
 import ray
 
@@ -35,7 +34,10 @@ from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (
     LightningTrainerParam,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 log = logging.getLogger("examples.movielens.train")
 
 _STORAGE_DIR = "/tmp/movielens_runs"
@@ -44,7 +46,7 @@ _DEFAULT_COMET_EXPERIMENT = "ncf-movielens100k"
 _DEFAULT_MLFLOW_EXPERIMENT = "ncf-movielens100k"
 
 
-def _build_comet_param() -> Optional[CometParam]:
+def _build_comet_param() -> CometParam | None:
     """Build a CometParam from env vars, or return None to skip Comet logging.
 
     Both COMET_API_KEY and COMET_WORKSPACE must be set to enable Comet. The
@@ -60,12 +62,14 @@ def _build_comet_param() -> Optional[CometParam]:
         api_key=api_key,
         workspace=workspace,
         project_name=os.environ.get("COMET_PROJECT_NAME", _DEFAULT_COMET_PROJECT),
-        experiment_name=os.environ.get("COMET_EXPERIMENT_NAME", _DEFAULT_COMET_EXPERIMENT),
+        experiment_name=os.environ.get(
+            "COMET_EXPERIMENT_NAME", _DEFAULT_COMET_EXPERIMENT
+        ),
         tags=tags,
     )
 
 
-def _parse_mlflow_tags(tags_env: str) -> Optional[dict]:
+def _parse_mlflow_tags(tags_env: str) -> dict | None:
     """Parse ``key1=val1,key2=val2`` into a dict; return None if empty/malformed."""
     if not tags_env.strip():
         return None
@@ -92,10 +96,12 @@ def _build_mlflow_logger():
     if not tracking_uri:
         return None
     # Import lazily so an unused MLflow path doesn't force the dependency.
-    from pytorch_lightning.loggers import MLFlowLogger  # noqa: PLC0415
+    from pytorch_lightning.loggers import MLFlowLogger
 
     return MLFlowLogger(
-        experiment_name=os.environ.get("MLFLOW_EXPERIMENT_NAME", _DEFAULT_MLFLOW_EXPERIMENT),
+        experiment_name=os.environ.get(
+            "MLFLOW_EXPERIMENT_NAME", _DEFAULT_MLFLOW_EXPERIMENT
+        ),
         tracking_uri=tracking_uri,
         run_name=os.environ.get("MLFLOW_RUN_NAME"),
         tags=_parse_mlflow_tags(os.environ.get("MLFLOW_TAGS", "")),
@@ -103,6 +109,7 @@ def _build_mlflow_logger():
 
 
 def main() -> dict:
+    """Run the MovieLens-100k NCF training and return the summary dict."""
     splits = load_movielens_100k()
 
     # Pick at most one tracking backend. Comet wins if both env-sets are present.
@@ -116,7 +123,10 @@ def main() -> dict:
             comet_param.experiment_name,
         )
         if os.environ.get("MLFLOW_TRACKING_URI"):
-            log.info("MLFLOW_TRACKING_URI is also set but Comet takes precedence; MLflow logging skipped.")
+            log.info(
+                "MLFLOW_TRACKING_URI is also set but Comet takes precedence; "
+                "MLflow logging skipped."
+            )
     else:
         mlflow_logger = _build_mlflow_logger()
         if mlflow_logger is not None:
@@ -126,7 +136,10 @@ def main() -> dict:
                 mlflow_logger.experiment_id,
             )
         else:
-            log.info("Experiment tracking disabled (no COMET_* or MLFLOW_TRACKING_URI env vars set)")
+            log.info(
+                "Experiment tracking disabled "
+                "(no COMET_* or MLFLOW_TRACKING_URI env vars set)"
+            )
 
     lightning_trainer_kwargs = {
         # Don't pass accelerator/devices here: ray.train.lightning.prepare_trainer

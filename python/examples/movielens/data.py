@@ -23,7 +23,9 @@ import ray
 # Canonical source. Some sandboxed environments can't reach files.grouplens.org;
 # fall back to a github mirror of the same u.data when the canonical URL fails.
 _DATA_URL = "https://files.grouplens.org/datasets/movielens/ml-100k.zip"
-_UDATA_MIRROR_URL = "https://raw.githubusercontent.com/vinjn/MLStudy/master/data/movielens-100k/u.data"
+_UDATA_MIRROR_URL = (
+    "https://raw.githubusercontent.com/vinjn/MLStudy/master/data/movielens-100k/u.data"
+)
 _DEFAULT_CACHE_DIR = "/tmp/movielens_data"
 _NETWORK_TIMEOUT_SECONDS = 30
 
@@ -55,17 +57,23 @@ def _download_and_extract(cache_dir: str) -> str:
 
     try:
         _logger.info("Downloading MovieLens-100k from %s", _DATA_URL)
-        with urllib.request.urlopen(_DATA_URL, timeout=_NETWORK_TIMEOUT_SECONDS) as resp:
+        with urllib.request.urlopen(
+            _DATA_URL, timeout=_NETWORK_TIMEOUT_SECONDS
+        ) as resp:
             data = resp.read()
         with zipfile.ZipFile(io.BytesIO(data)) as z:
             z.extractall(cache_dir)
         _logger.info("Extracted MovieLens-100k to %s", cache_dir)
         return udata_path
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        _logger.warning("Canonical URL failed (%s); falling back to %s", exc, _UDATA_MIRROR_URL)
+        _logger.warning(
+            "Canonical URL failed (%s); falling back to %s", exc, _UDATA_MIRROR_URL
+        )
 
     os.makedirs(extracted_dir, exist_ok=True)
-    with urllib.request.urlopen(_UDATA_MIRROR_URL, timeout=_NETWORK_TIMEOUT_SECONDS) as resp:
+    with urllib.request.urlopen(
+        _UDATA_MIRROR_URL, timeout=_NETWORK_TIMEOUT_SECONDS
+    ) as resp:
         udata_bytes = resp.read()
     with open(udata_path, "wb") as f:
         f.write(udata_bytes)
@@ -91,15 +99,26 @@ def load_movielens_100k(
         sep="\t",
         header=None,
         names=["user_id", "item_id", "rating", "timestamp"],
-        dtype={"user_id": np.int64, "item_id": np.int64, "rating": np.int64, "timestamp": np.int64},
+        dtype={
+            "user_id": np.int64,
+            "item_id": np.int64,
+            "rating": np.int64,
+            "timestamp": np.int64,
+        },
     )
     _logger.info("Loaded %d ratings", len(df))
 
-    user_id_to_idx = {uid: idx for idx, uid in enumerate(sorted(df["user_id"].unique()))}
-    item_id_to_idx = {iid: idx for idx, iid in enumerate(sorted(df["item_id"].unique()))}
+    user_id_to_idx = {
+        uid: idx for idx, uid in enumerate(sorted(df["user_id"].unique()))
+    }
+    item_id_to_idx = {
+        iid: idx for idx, iid in enumerate(sorted(df["item_id"].unique()))
+    }
     df["user_idx"] = df["user_id"].map(user_id_to_idx).astype(np.int64)
     df["item_idx"] = df["item_id"].map(item_id_to_idx).astype(np.int64)
-    df["rating_norm"] = ((df["rating"].astype(np.float32) - 1.0) / 4.0).astype(np.float32)
+    df["rating_norm"] = ((df["rating"].astype(np.float32) - 1.0) / 4.0).astype(
+        np.float32
+    )
 
     num_users = len(user_id_to_idx)
     num_items = len(item_id_to_idx)

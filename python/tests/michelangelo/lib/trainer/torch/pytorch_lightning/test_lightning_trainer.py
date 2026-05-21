@@ -351,6 +351,68 @@ class TestLightningTrainerWithStateDict:
         trainer = self._build(lightning_trainer_kwargs={"strategy": MagicMock()})
         assert trainer._is_deepspeed_strategy() is False
 
+    def test_update_state_dict_ddp_path(self, tmp_path):
+        """DDP path: ``torch.load`` is called and its ``state_dict`` is loaded into the model."""
+        trainer = self._build()  # no strategy → DDP path
+
+        # Build a fake checkpoint directory containing a CHECKPOINT_NAME file.
+        from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (  # noqa: PLC0415
+            CHECKPOINT_NAME,
+        )
+
+        ckpt_dir = tmp_path
+        (ckpt_dir / CHECKPOINT_NAME).write_bytes(b"fake")
+
+        fake_state = {"layer.weight": "tensor"}
+        torch_model = MagicMock(name="torch_model")
+
+        ray_ckpt = MagicMock()
+        ray_ckpt.as_directory.return_value.__enter__ = lambda _: str(ckpt_dir)
+        ray_ckpt.as_directory.return_value.__exit__ = lambda *_: None
+        trainer.checkpoint = ray_ckpt
+
+        with patch(
+            "michelangelo.lib.trainer.torch.pytorch_lightning."
+            "lightning_trainer.torch.load",
+            return_value={"state_dict": fake_state},
+        ) as mock_load:
+            trainer.update_model_state_dict(torch_model)
+
+        mock_load.assert_called_once()
+        torch_model.load_state_dict.assert_called_once_with(fake_state, strict=False)
+
+    def test_update_state_dict_deepspeed_path(self, tmp_path):
+        """DeepSpeed path: ZeRO-conversion helper is called inside the env-var context."""
+        trainer = self._build(lightning_trainer_kwargs={"strategy": "deepspeed"})
+
+        from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (  # noqa: PLC0415
+            CHECKPOINT_NAME,
+        )
+
+        ckpt_dir = tmp_path
+        ds_dir = ckpt_dir / CHECKPOINT_NAME
+        ds_dir.mkdir()  # DeepSpeed ckpt path is a directory, not a file.
+
+        fake_state = {"layer.weight": "tensor"}
+        torch_model = MagicMock(name="torch_model")
+
+        ray_ckpt = MagicMock()
+        ray_ckpt.as_directory.return_value.__enter__ = lambda _: str(ckpt_dir)
+        ray_ckpt.as_directory.return_value.__exit__ = lambda *_: None
+        trainer.checkpoint = ray_ckpt
+
+        with patch(
+            "michelangelo.lib.trainer.torch.pytorch_lightning."
+            "lightning_trainer.convert_zero_checkpoint_to_fp32_state_dict",
+            return_value=fake_state,
+        ) as mock_convert:
+            trainer.update_model_state_dict(torch_model)
+
+        mock_convert.assert_called_once()
+        torch_model.load_state_dict.assert_called_once_with(fake_state, strict=False)
+        # The env var the context manager sets must be torn down on exit.
+        assert "TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD" not in os.environ
+
 
 # -----------------------------------------------------------------------------
 # _torch_weights_only_disabled

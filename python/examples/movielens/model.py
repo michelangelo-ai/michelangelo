@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytorch_lightning as pl
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as functional
+from torch import nn
 
 
 class NCFLightningModule(pl.LightningModule):
@@ -24,6 +24,15 @@ class NCFLightningModule(pl.LightningModule):
         hidden_dim: int = 64,
         learning_rate: float = 1e-3,
     ) -> None:
+        """Initialize the user/item embeddings and the rating-head MLP.
+
+        Args:
+            num_users: Number of unique users in the training data.
+            num_items: Number of unique items in the training data.
+            embedding_dim: Width of the user/item embedding vectors.
+            hidden_dim: Width of the two hidden layers in the rating-head MLP.
+            learning_rate: Adam learning rate.
+        """
         super().__init__()
         self.save_hyperparameters()
         self.user_emb = nn.Embedding(num_users, embedding_dim)
@@ -39,6 +48,7 @@ class NCFLightningModule(pl.LightningModule):
         nn.init.normal_(self.item_emb.weight, std=0.01)
 
     def forward(self, user_idx: torch.Tensor, item_idx: torch.Tensor) -> torch.Tensor:
+        """Predict a normalized rating in ``[0, 1]`` for each ``(user, item)`` pair."""
         u = self.user_emb(user_idx)
         i = self.item_emb(item_idx)
         x = torch.cat([u, i], dim=-1)
@@ -50,18 +60,30 @@ class NCFLightningModule(pl.LightningModule):
         item_idx = batch["item_idx"].long()
         target = batch["rating_norm"].float()
         preds = self(user_idx, item_idx)
-        loss = F.mse_loss(preds, target)
+        loss = functional.mse_loss(preds, target)
         # sync_dist=True so the metric is averaged across Ray Train workers.
-        self.log(f"{stage}_loss", loss, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
+        self.log(
+            f"{stage}_loss",
+            loss,
+            prog_bar=True,
+            on_step=False,
+            on_epoch=True,
+            sync_dist=True,
+        )
         return loss
 
-    def training_step(self, batch, batch_idx):  # noqa: ARG002
+    def training_step(self, batch, batch_idx):
+        """Compute and log the training loss for one batch."""
+        del batch_idx
         return self._step(batch, "train")
 
-    def validation_step(self, batch, batch_idx):  # noqa: ARG002
+    def validation_step(self, batch, batch_idx):
+        """Compute and log the validation loss for one batch."""
+        del batch_idx
         return self._step(batch, "val")
 
     def configure_optimizers(self):
+        """Return an Adam optimizer using ``self.hparams.learning_rate``."""
         return torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
 
 

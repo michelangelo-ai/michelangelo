@@ -244,7 +244,12 @@ omit = [
     "*/__pycache__/*",
     "*/site-packages/*",
     "*/sandbox.py",
-    "*/*.tmpl",    
+    "*/*.tmpl",
+    # Trainer worker-internal modules: these run inside Ray Train workers
+    # and require a distributed Ray runtime to execute. They are covered
+    # via integration tests rather than unit tests, and the project's
+    # _private/ convention marks them as not-for-direct-import.
+    "*/lib/trainer/**/_private/*",
 ]
 
 [tool.coverage.report]
