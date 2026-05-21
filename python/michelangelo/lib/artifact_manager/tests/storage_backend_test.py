@@ -6,7 +6,7 @@ import os
 import tempfile
 from unittest import TestCase
 
-from michelangelo.workflow.tasks.pusher.storage_backend import (
+from michelangelo.lib.artifact_manager.storage_backend import (
     LocalStorageBackend,
     StorageBackend,
 )
