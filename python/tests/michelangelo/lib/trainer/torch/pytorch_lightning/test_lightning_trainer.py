@@ -352,11 +352,11 @@ class TestLightningTrainerWithStateDict:
         assert trainer._is_deepspeed_strategy() is False
 
     def test_update_state_dict_ddp_path(self, tmp_path):
-        """DDP path: ``torch.load`` is called and its ``state_dict`` is loaded into the model."""
+        """DDP path loads the state_dict from a torch checkpoint file."""
         trainer = self._build()  # no strategy → DDP path
 
         # Build a fake checkpoint directory containing a CHECKPOINT_NAME file.
-        from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (  # noqa: PLC0415
+        from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (
             CHECKPOINT_NAME,
         )
 
@@ -382,10 +382,10 @@ class TestLightningTrainerWithStateDict:
         torch_model.load_state_dict.assert_called_once_with(fake_state, strict=False)
 
     def test_update_state_dict_deepspeed_path(self, tmp_path):
-        """DeepSpeed path: ZeRO-conversion helper is called inside the env-var context."""
+        """DeepSpeed path: ZeRO helper is called inside the env-var context."""
         trainer = self._build(lightning_trainer_kwargs={"strategy": "deepspeed"})
 
-        from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (  # noqa: PLC0415
+        from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (
             CHECKPOINT_NAME,
         )
 
