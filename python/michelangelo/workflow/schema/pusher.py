@@ -62,7 +62,7 @@ class ModelPluginConfig:
     Example:
         >>> cfg = ModelPluginConfig(model_name="boston-xgb")
         >>> cfg.model_name
-        'boston-xgb'
+        'model-xyz'
         >>> cfg.extra_metadata
         {}
     """
