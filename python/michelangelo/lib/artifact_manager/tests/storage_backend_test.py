@@ -133,9 +133,11 @@ class TestLocalStorageBackendDirectoryUpload(TestCase):
         from unittest.mock import patch
 
         src_dir = tempfile.mkdtemp()
-        with patch("shutil.copytree", side_effect=OSError("disk full")):
-            with self.assertRaises(OSError):
-                self._backend.upload(src_dir, "models/v1")
+        with (
+            patch("shutil.copytree", side_effect=OSError("disk full")),
+            self.assertRaises(OSError),
+        ):
+            self._backend.upload(src_dir, "models/v1")
 
         # No stray .__tmp_ directories should remain under base_dir
         leftovers = [
