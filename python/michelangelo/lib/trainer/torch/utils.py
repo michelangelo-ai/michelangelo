@@ -1,79 +1,122 @@
-# ruff: noqa: I001
+"""Memory-footprint estimators for PyTorch / Transformers models."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import torch
 import torch.nn as nn
 
-from transformers import AutoModel
+if TYPE_CHECKING:
+    from transformers import PreTrainedModel
 
 
-def get_total_training_memory_transformers(model: AutoModel, batch_size: int, sequence_length: int) -> float:
+def get_total_training_memory_transformers(
+    model: PreTrainedModel,
+    batch_size: int,
+    sequence_length: int,
+) -> float:
+    """Estimate the total training memory (in MB) for a Transformers model.
+
+    Uses the formula from the EleutherAI Transformer Math reference.
+
+    Args:
+        model: A Hugging Face ``PreTrainedModel`` with ``config.hidden_size`` /
+            ``num_hidden_layers`` / ``num_attention_heads`` and ``torch_dtype``.
+        batch_size: Training batch size.
+        sequence_length: Input sequence length per sample.
+
+    Returns:
+        Estimated total training memory in MB, including a 20% buffer for
+        fragmentation overhead.
+
+    Reference:
+        https://blog.eleuther.ai/transformer-math/
     """
-    Get the total memory (in MB) required for training the model.
-    This function is specific to transformers models.
+    hidden_size = model.config.hidden_size
+    num_layers = model.config.num_hidden_layers
+    num_atten_heads = model.config.num_attention_heads
+    num_parameters = model.num_parameters()
+    dtype = model.config.torch_dtype
+    tensor_parallelism = 1
 
-    Reference: https://blog.eleuther.ai/transformer-math/
-    """
-    hidden_size = model.config.hidden_size  # Hidden size for activations
-    num_layers = model.config.num_hidden_layers  # Number of layers in the model
-    num_atten_heads = model.config.num_attention_heads  # Number of attention heads
-    num_parameters = model.num_parameters()  # Total number of parameters
-    dtype = model.config.torch_dtype  # Parameter type
-    tensor_parallelism = 1  # Number of tensor parallelism
+    bytes_per_parameter = torch.tensor([1]).to(dtype).element_size()
 
-    bytes_per_parameter = torch.tensor([1]).to(dtype).element_size()  # Bytes per parameter
-
-    # Calculating each memory component in MB
-    # 1. Parameter Memory
     parameter_memory = (num_parameters * bytes_per_parameter) / (1024**2)
-
-    # 2. Gradient Memory (same as Parameter Memory)
     gradient_memory = parameter_memory
-
-    # 3. Optimizer Memory (assuming two states per parameter for AdamW optimizer)
-    # Adam is magic, but it is highly memory inefficient.
-    # In addition to requiring you to have a copy of the model parameters and the gradient parameters,
-    # you also need to keep an additional three copies of the gradient parameters.
+    # AdamW: 3 extra copies of the parameters (two optimizer states + gradient buffer).
     optimizer_memory = 3 * parameter_memory
 
-    # 4. Activations Memory
-    # This is baseline formula for activations are stored in fp16.
+    # Baseline fp16 activations formula.
     fp16_activation_memory_per_layer = (
         batch_size
         * sequence_length
         * hidden_size
-        * (10 + 24 / tensor_parallelism + 5 * num_atten_heads * sequence_length / hidden_size / tensor_parallelism)
+        * (
+            10
+            + 24 / tensor_parallelism
+            + 5 * num_atten_heads * sequence_length / hidden_size / tensor_parallelism
+        )
         / (1024**2)
     )
 
-    # fp16 uses 2 bytes
-    activation_memory_per_layer = bytes_per_parameter / 2 * fp16_activation_memory_per_layer
+    # fp16 uses 2 bytes.
+    activation_memory_per_layer = (
+        bytes_per_parameter / 2 * fp16_activation_memory_per_layer
+    )
     activation_memory_total = activation_memory_per_layer * num_layers
 
-    # Summing up and adding 20% for additional buffers and overheads for GPU memory fragmentation.
-    total_memory = (parameter_memory + activation_memory_total + gradient_memory + optimizer_memory) * 1.2
-
+    # Sum and add a 20% buffer for GPU memory fragmentation.
+    total_memory = (
+        parameter_memory + activation_memory_total + gradient_memory + optimizer_memory
+    ) * 1.2
     return total_memory
 
 
-# Function to estimate activation memory on non-transformer layers
-def estimate_activation_memory_non_transformer(layer_output_dims, batch_size, bytes_per_value):
-    total_activation_memory_mb = 0
+def estimate_activation_memory_non_transformer(
+    layer_output_dims: dict,
+    batch_size: int,
+    bytes_per_value: int,
+) -> float:
+    """Estimate activation memory (MB) given captured per-layer output shapes.
 
+    Args:
+        layer_output_dims: Mapping of ``nn.Module`` -> tensor ``shape`` captured
+            via a forward hook.
+        batch_size: Training batch size.
+        bytes_per_value: Bytes per value in the activation tensor.
+
+    Returns:
+        Total activation memory in MB.
+    """
+    total_activation_memory_mb = 0
     for output_shape in layer_output_dims.values():
-        # Calculate the number of elements in the activation for this layer
         num_elements = batch_size * output_shape[-1]
-        # Calculate memory for this layer's activations in MB
         activation_memory_mb = (num_elements * bytes_per_value) / (1024**2)
         total_activation_memory_mb += activation_memory_mb
-
     return total_activation_memory_mb
 
 
-def get_total_training_memory_nn_module(model: torch.nn.Module, batch_size: int, input_size: int) -> float:
-    """
-    Get the total memory (in MB) required for training the model.
-    This function is specific to non-transformers models.
-    """
+def get_total_training_memory_nn_module(
+    model: torch.nn.Module,
+    batch_size: int,
+    input_size: int,
+) -> float:
+    """Estimate the total training memory (in MB) for a generic ``nn.Module``.
 
+    Registers forward hooks on ``Linear`` / ``Conv*`` / ``Norm*`` / ``RNN*``
+    layers to capture activation shapes, then sums parameter + gradient +
+    optimizer + activation memory.
+
+    Args:
+        model: The model to size.
+        batch_size: Training batch size.
+        input_size: Flat input size used to generate a sample input tensor.
+
+    Returns:
+        Estimated total training memory in MB, including a 20% buffer for
+        fragmentation overhead.
+    """
     num_parameters = sum(p.numel() for p in model.parameters())
 
     dtype = None
@@ -81,51 +124,44 @@ def get_total_training_memory_nn_module(model: torch.nn.Module, batch_size: int,
         dtype = param.dtype
         break
 
-    bytes_per_parameter = torch.tensor([1]).to(dtype).element_size()  # Bytes per parameter
+    bytes_per_parameter = torch.tensor([1]).to(dtype).element_size()
 
-    # Calculating each memory component in MB
-    # 1. Parameter Memory
     parameter_memory = (num_parameters * bytes_per_parameter) / (1024**2)
-
-    # 2. Gradient Memory (same as Parameter Memory)
     gradient_memory = parameter_memory
-
-    # 3. Optimizer Memory (assuming two states per parameter for AdamW optimizer)
-    # Adam is magic, but it is highly memory inefficient.
-    # In addition to requiring you to have a copy of the model parameters and the gradient parameters,
-    # you also need to keep an additional three copies of the gradient parameters.
+    # AdamW: 3 extra copies of the parameters (two optimizer states + gradient buffer).
     optimizer_memory = 3 * parameter_memory
 
     layer_output_dims = {}
 
-    # A hook function to capture the output dimensions of each layer
     def hook_fn(module, _input, output):
         layer_output_dims[module] = output.shape
 
-    # Register hooks for each layer in the model
-    # We only count Linear layers, Conv layers, Norm layers, and RNN layers
+    # We only count Linear layers, Conv layers, Norm layers, and RNN layers.
     hooks = []
-    supported_layer_types = (nn.Linear, nn.modules.conv._ConvNd, nn.modules.batchnorm._NormBase, nn.modules.rnn.RNNBase)
+    supported_layer_types = (
+        nn.Linear,
+        nn.modules.conv._ConvNd,
+        nn.modules.batchnorm._NormBase,
+        nn.modules.rnn.RNNBase,
+    )
 
     for layer in model.children():
         if isinstance(layer, supported_layer_types):
             hook = layer.register_forward_hook(hook_fn)
             hooks.append(hook)
 
-    # Generate a sample input tensor
     inputs = torch.randn(batch_size, input_size)
-
-    # Forward pass to capture output dimensions
     model(inputs)
 
-    # Remove hooks
     for hook in hooks:
         hook.remove()
 
-    # Use captured output dimensions to estimate activation memory
-    total_activation_memory = estimate_activation_memory_non_transformer(layer_output_dims, batch_size, bytes_per_parameter)
+    total_activation_memory = estimate_activation_memory_non_transformer(
+        layer_output_dims, batch_size, bytes_per_parameter
+    )
 
-    # Summing up and adding 20% for additional buffers and overheads for GPU memory fragmentation.
-    total_memory_mb = (parameter_memory + total_activation_memory + gradient_memory + optimizer_memory) * 1.2
-
+    # Sum and add a 20% buffer for GPU memory fragmentation.
+    total_memory_mb = (
+        parameter_memory + total_activation_memory + gradient_memory + optimizer_memory
+    ) * 1.2
     return total_memory_mb

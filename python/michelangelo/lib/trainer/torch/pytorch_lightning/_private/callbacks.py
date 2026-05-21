@@ -1,25 +1,31 @@
-# ruff: noqa: I001
+"""Ray Train ↔ PyTorch Lightning checkpoint reporting callbacks."""
+
+from __future__ import annotations
+
 import os
+import shutil
+from pathlib import Path
+
 import ray
 import ray.train.lightning
-import shutil
-
-from pathlib import Path
 from ray.train import Checkpoint
 
 
 class RayTrainReportCallback(ray.train.lightning.RayTrainReportCallback):
-    """
-    We follow existing implementation of RayTrainReportCallback,
-    only force rank zero to report checkpoint.
-    Reference: https://docs.ray.io/en/latest/_modules/ray/train/lightning/_lightning_utils.html#RayTrainReportCallback
+    """Rank-0-only checkpoint reporting callback.
+
+    Follows the upstream :class:`ray.train.lightning.RayTrainReportCallback`
+    implementation but forces only rank zero to report the checkpoint.
+
+    Reference:
+        https://docs.ray.io/en/latest/_modules/ray/train/lightning/_lightning_utils.html#RayTrainReportCallback.
     """
 
     def __init__(self) -> None:
         super().__init__()
         self.world_rank = ray.train.get_context().get_world_rank()
 
-    def on_train_epoch_end(self, trainer, pl_module) -> None:  # noqa: ARG002
+    def on_train_epoch_end(self, trainer, pl_module) -> None:
         # Creates a checkpoint dir with fixed name
         tmpdir = Path(self.tmpdir_prefix, str(trainer.current_epoch)).as_posix()
         os.makedirs(tmpdir, exist_ok=True)
@@ -52,37 +58,50 @@ class RayTrainReportCallback(ray.train.lightning.RayTrainReportCallback):
 
 
 class RayTrainReportPerNodeCallback(RayTrainReportCallback):
-    """
-    We derive from RayTrainReportCallback, but report checkpoint per node instead of on head rank.
-    Report per node is necessary for model parallelism for deepspeed zeros and FSDP.
-    Also supports step-wise checkpointing in addition to epoch-based checkpointing.
+    """Per-node checkpoint reporting callback.
+
+    Derives from :class:`RayTrainReportCallback` but reports the checkpoint per
+    node (local rank 0) instead of only on the head rank. Per-node reporting is
+    necessary for model parallelism with DeepSpeed ZeRO and FSDP, where each
+    node holds a shard of the model state. Also supports step-wise checkpointing
+    in addition to epoch-based checkpointing.
     """
 
     def __init__(self, step_checkpoint_frequency: int = 0) -> None:
-        """
+        """Initialize the callback.
+
         Args:
-            step_checkpoint_frequency: How often to create checkpoints during training steps.
-                Default is 0 steps. Set to 0 to disable step-wise checkpointing.
+            step_checkpoint_frequency: How often to create checkpoints during
+                training steps. Set to 0 to disable step-wise checkpointing.
         """
         super().__init__()
         self.step_checkpoint_frequency = step_checkpoint_frequency
         self.last_step_checkpoint = 0
 
-    def on_train_batch_end(self, trainer, *args, **kwargs) -> None:  # noqa: ARG002
+    def on_train_batch_end(self, trainer, *args, **kwargs) -> None:
         """Called when the train batch ends."""
         if self.step_checkpoint_frequency > 0:
             current_step = trainer.global_step
-            if current_step - self.last_step_checkpoint >= self.step_checkpoint_frequency:
+            if (
+                current_step - self.last_step_checkpoint
+                >= self.step_checkpoint_frequency
+            ):
                 checkpoint_id = f"step_{trainer.global_step}"
-                self._create_and_report_checkpoint(trainer, checkpoint_id, is_step_checkpoint=True)
+                self._create_and_report_checkpoint(
+                    trainer, checkpoint_id, is_step_checkpoint=True
+                )
                 self.last_step_checkpoint = current_step
 
-    def on_train_epoch_end(self, trainer, pl_module) -> None:  # noqa: ARG002
+    def on_train_epoch_end(self, trainer, pl_module) -> None:
         """Called when the train epoch ends."""
         checkpoint_id = f"epoch_{trainer.current_epoch}"
-        self._create_and_report_checkpoint(trainer, checkpoint_id, is_step_checkpoint=False)
+        self._create_and_report_checkpoint(
+            trainer, checkpoint_id, is_step_checkpoint=False
+        )
 
-    def _create_and_report_checkpoint(self, trainer, checkpoint_id: str, is_step_checkpoint: bool) -> None:
+    def _create_and_report_checkpoint(
+        self, trainer, checkpoint_id: str, is_step_checkpoint: bool
+    ) -> None:
         """Creates a checkpoint and reports it to Ray Train.
 
         Args:
@@ -96,7 +115,13 @@ class RayTrainReportPerNodeCallback(RayTrainReportCallback):
 
         metrics = trainer.callback_metrics
         metrics = {k: v.item() for k, v in metrics.items()}
-        metrics.update({"epoch": trainer.current_epoch, "step": trainer.global_step, "is_step_checkpoint": is_step_checkpoint})
+        metrics.update(
+            {
+                "epoch": trainer.current_epoch,
+                "step": trainer.global_step,
+                "is_step_checkpoint": is_step_checkpoint,
+            }
+        )
 
         # Save checkpoint and report to Ray Train
         ckpt_path = Path(tmpdir, self.CHECKPOINT_NAME).as_posix()

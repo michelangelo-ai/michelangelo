@@ -24,7 +24,7 @@ We are **incrementally open-sourcing Michelangelo's core capabilities**, ensurin
 ## Features
 
 - **Feature Management**: Efficiently handle large datasets with built-in support for data ingestion, transformation, and storage.
-- **Model Training**: Train models using various algorithms, including support for distributed training across multiple nodes.
+- **Model Training**: Train models using various algorithms, including support for distributed training across multiple nodes. The [`michelangelo.lib.trainer.torch.pytorch_lightning`](python/michelangelo/lib/trainer/torch/pytorch_lightning/) package provides a Ray Train wrapper around PyTorch Lightning, with pluggable experiment tracking (Comet, MLflow). See the [MovieLens NCF example](python/examples/movielens/) for an end-to-end walkthrough.
 - **Model Evaluation**: Assess model performance with a range of metrics and visualization tools.
 - **Model Deployment**: Seamlessly deploy models to production environments with support for both batch and real-time inference.
 - **Monitoring and Logging**: Continuously monitor model performance and log predictions to ensure reliability and accuracy.

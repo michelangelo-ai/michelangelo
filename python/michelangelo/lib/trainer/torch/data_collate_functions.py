@@ -17,11 +17,15 @@ The default :func:`literal_eval_data_collate_function` is implemented on top of 
 from __future__ import annotations
 
 import ast
+import contextlib
 
 import numpy as np
 import torch
 
-from michelangelo.lib.trainer.torch._numpy_utils import pad_ragged_tensor, sentinel_for_numpy_dtype
+from michelangelo.lib.trainer.torch._numpy_utils import (
+    pad_ragged_tensor,
+    sentinel_for_numpy_dtype,
+)
 
 # Default dtypes for all collate paths (subclass / kwargs may override per call).
 DEFAULT_COLLATE_NUMPY_DTYPE: np.dtype = np.dtype(np.float32)
@@ -85,9 +89,7 @@ def _batch_rows_are_one_scalar_each(items: list) -> bool:
     flat0 = items[0]
     if isinstance(flat0, np.ndarray) and flat0.ndim == 0:
         return True
-    if isinstance(flat0, (list, tuple, np.ndarray)):
-        return False
-    return True
+    return not isinstance(flat0, (list, tuple, np.ndarray))
 
 
 def _literal_eval_str_cells_in_object_array(obj: object) -> object:
@@ -97,7 +99,9 @@ def _literal_eval_str_cells_in_object_array(obj: object) -> object:
     if isinstance(obj, np.ndarray) and obj.dtype == np.dtype(object):
         if obj.ndim == 0:
             return _literal_eval_str_cells_in_object_array(obj.item())
-        return [_literal_eval_str_cells_in_object_array(obj[i]) for i in range(obj.shape[0])]
+        return [
+            _literal_eval_str_cells_in_object_array(obj[i]) for i in range(obj.shape[0])
+        ]
     return obj
 
 
@@ -108,7 +112,11 @@ def pad_ragged_lists(
     numpy_dtype: np.dtype | None = None,
 ) -> np.ndarray:
     """Pad nested lists to a rectangular array of *numpy_dtype* (default: :data:`DEFAULT_COLLATE_NUMPY_DTYPE`)."""
-    target = np.dtype(numpy_dtype) if numpy_dtype is not None else DEFAULT_COLLATE_NUMPY_DTYPE
+    target = (
+        np.dtype(numpy_dtype)
+        if numpy_dtype is not None
+        else DEFAULT_COLLATE_NUMPY_DTYPE
+    )
 
     if not items:
         return np.array([], dtype=target)
@@ -125,12 +133,16 @@ def pad_ragged_lists(
 
     flat0 = items[0]
     if row_is_list_of_nested_cells(flat0):
-        normalized = [[np.asarray(sub, dtype=target).ravel() for sub in row] for row in items]
+        normalized = [
+            [np.asarray(sub, dtype=target).ravel() for sub in row] for row in items
+        ]
     else:
         normalized = [np.asarray(seq, dtype=target).ravel() for seq in items]
 
     obj = np.asarray(normalized, dtype=object)
-    effective_pad = pad_value if pad_value is not None else sentinel_for_numpy_dtype(target)
+    effective_pad = (
+        pad_value if pad_value is not None else sentinel_for_numpy_dtype(target)
+    )
     padded = pad_ragged_tensor(obj, effective_pad)
     if padded.dtype == np.object_:
         return np.array(padded.tolist(), dtype=target)
@@ -145,13 +157,15 @@ def collate_value_to_float32_numpy(
     numpy_dtype: np.dtype | None = None,
 ) -> np.ndarray:
     """Convert a single batch column value to a :class:`numpy.ndarray` of *numpy_dtype*."""
-    target = np.dtype(numpy_dtype) if numpy_dtype is not None else DEFAULT_COLLATE_NUMPY_DTYPE
+    target = (
+        np.dtype(numpy_dtype)
+        if numpy_dtype is not None
+        else DEFAULT_COLLATE_NUMPY_DTYPE
+    )
 
     if parse_string_with_literal_eval and isinstance(value, str):
-        try:
+        with contextlib.suppress(ValueError, SyntaxError):
             value = ast.literal_eval(value)
-        except (ValueError, SyntaxError):
-            pass
 
     if not isinstance(value, np.ndarray):
         value = np.array(value)
@@ -179,7 +193,11 @@ def collate_value_to_float32_tensor(
     numpy_dtype: np.dtype | None = None,
 ) -> torch.Tensor:
     """Convert one column value to :class:`torch.Tensor` on *device* (see :func:`collate_value_to_float32_numpy`)."""
-    target = np.dtype(numpy_dtype) if numpy_dtype is not None else DEFAULT_COLLATE_NUMPY_DTYPE
+    target = (
+        np.dtype(numpy_dtype)
+        if numpy_dtype is not None
+        else DEFAULT_COLLATE_NUMPY_DTYPE
+    )
     arr = collate_value_to_float32_numpy(
         value,
         reshape_1d_features=reshape_1d_features,
@@ -199,7 +217,11 @@ def collate_batch_to_float32_tensors(
     numpy_dtype: np.dtype | None = None,
 ) -> dict[str, torch.Tensor]:
     """Map a batch dict of Python / NumPy values to tensors (default element dtype: float32)."""
-    target = np.dtype(numpy_dtype) if numpy_dtype is not None else DEFAULT_COLLATE_NUMPY_DTYPE
+    target = (
+        np.dtype(numpy_dtype)
+        if numpy_dtype is not None
+        else DEFAULT_COLLATE_NUMPY_DTYPE
+    )
     return {
         k: collate_value_to_float32_tensor(
             v,
@@ -223,10 +245,24 @@ class LiteralEvalFloat32Collate:
         parse_string_with_literal_eval: bool = True,
         numpy_dtype: np.dtype | None = None,
     ) -> None:
+        """Initialize the collate.
+
+        Args:
+            device: Target device for emitted tensors.
+            reshape_1d_features: If True, scalar features are reshaped to ``(N, 1)``.
+            parse_string_with_literal_eval: If True, string-encoded arrays are decoded
+                via :func:`ast.literal_eval`.
+            numpy_dtype: Optional numpy dtype to cast numeric values to before tensor
+                conversion; defaults to :data:`DEFAULT_COLLATE_NUMPY_DTYPE`.
+        """
         self.device = device
         self.reshape_1d_features = reshape_1d_features
         self.parse_string_with_literal_eval = parse_string_with_literal_eval
-        self.numpy_dtype = np.dtype(numpy_dtype) if numpy_dtype is not None else DEFAULT_COLLATE_NUMPY_DTYPE
+        self.numpy_dtype = (
+            np.dtype(numpy_dtype)
+            if numpy_dtype is not None
+            else DEFAULT_COLLATE_NUMPY_DTYPE
+        )
 
     def collate_value_to_numpy(self, value) -> np.ndarray:
         """Convert one column value to :class:`~numpy.ndarray` (override in subclasses)."""
@@ -248,6 +284,7 @@ class LiteralEvalFloat32Collate:
         return {k: self.collate_value_to_tensor(v) for k, v in batch_data.items()}
 
     def __call__(self, batch_data: dict) -> dict[str, torch.Tensor]:
+        """Delegate to :meth:`collate_batch`."""
         return self.collate_batch(batch_data)
 
 

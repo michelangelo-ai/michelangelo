@@ -51,7 +51,7 @@ forwards through to `_get_comet_logger`. With Comet enabled you'll see a
 export MLFLOW_TRACKING_URI=file:///tmp/mlflow_movielens        # required (or http://...)
 export MLFLOW_EXPERIMENT_NAME=ncf-movielens                    # optional, default ncf-movielens100k
 export MLFLOW_RUN_NAME=run-001                                 # optional
-export MLFLOW_TAGS=team=ml-platform,owner=dkurra                # optional, comma-separated key=value
+export MLFLOW_TAGS=team=ml-platform,owner=demo                 # optional, comma-separated key=value
 python -m examples.movielens.train
 ```
 

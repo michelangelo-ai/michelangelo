@@ -78,7 +78,9 @@ plugin = ["ray", "pyspark"]
 example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "xgboost", "xgboost_ray", "kaggle", "scikit-learn", "chronon-ai", "thrift", "sqlglot", "pyspark", "ray", "mlflow", "boto3", "peft"]
 vllm = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "vllm", "setuptools"]
 mactl = []
-trainer = ["ray", "torch", "pytorch_lightning", "transformers", "numpy", "comet_ml", "deepspeed"]
+trainer = ["ray", "torch", "pytorch_lightning", "transformers", "numpy"]
+trainer-comet = ["comet_ml"]
+trainer-deepspeed = ["deepspeed"]
 
 [tool.pytest.ini_options]
 pythonpath = [
@@ -183,6 +185,9 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "**/gen/**/*.py" = ["ALL"]
 "**/api/v2/services/gen/**/*.py" = ["ALL"]
 "**/tests/fixtures/**/*.py" = ["ALL"]
+# The trainer package is a one-time snapshot of internal training code; line-length
+# rule is relaxed to preserve the original code shape from the upstream source.
+"michelangelo/lib/trainer/**/*.py" = ["E501"]
 
 # Google-style docstrings
 [tool.ruff.lint.pydocstyle]

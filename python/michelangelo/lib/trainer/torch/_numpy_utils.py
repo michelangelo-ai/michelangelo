@@ -1,14 +1,12 @@
 """Numpy padding utilities used by the data-collate helpers.
 
-Ported (snapshot) from the internal Michelangelo SDK helpers at
-``uber.ai.michelangelo.shared.utils.numpy_utils.{pad,sentinel,type}`` and
-``uber.ai.michelangelo.shared.constants.sentinel``. Kept private to the trainer
-package; callers should use :mod:`michelangelo.lib.trainer.torch.data_collate_functions`.
+Kept private to the trainer package; callers should use
+:mod:`michelangelo.lib.trainer.torch.data_collate_functions`.
 """
 
 from __future__ import annotations
 
-from typing import Any, Union
+from typing import Any
 
 import numpy as np
 
@@ -19,7 +17,7 @@ BYTES_SENTINEL = b""
 BOOL_SENTINEL = False
 
 
-def sentinel_for_numpy_dtype(dtype: np.dtype) -> Union[float, int, str, bytes, bool]:
+def sentinel_for_numpy_dtype(dtype: np.dtype) -> float | int | str | bytes | bool:
     """Return the type-native sentinel value for *dtype*."""
     if np.issubdtype(dtype, np.floating):
         return FLOAT_SENTINEL
@@ -64,9 +62,17 @@ def pad_ragged_tensor(arr: np.ndarray, pad_value: Any | None = None) -> np.ndarr
         try:
             if all(isinstance(elem, np.ndarray) and elem.ndim == 1 for elem in arr):
                 first_non_empty = next((a for a in arr if a.size > 0), None)
-                if first_non_empty is not None and first_non_empty.dtype.kind not in ("U", "S", "O"):
+                if first_non_empty is not None and first_non_empty.dtype.kind not in (
+                    "U",
+                    "S",
+                    "O",
+                ):
                     dtype = next((a.dtype for a in arr if a.size > 0), np.int32)
-                    pad_value = sentinel_for_numpy_dtype(dtype) if pad_value is None else pad_value
+                    pad_value = (
+                        sentinel_for_numpy_dtype(dtype)
+                        if pad_value is None
+                        else pad_value
+                    )
                     return _pad_1d_arrays_fast(arr, pad_value, dtype)
         except (AttributeError, TypeError):
             pass
@@ -146,7 +152,9 @@ def _pad_array_recursive(
         if i < arr_len:
             elem = arr[i] if isinstance(arr, (np.ndarray, list)) else arr
             if isinstance(elem, (list, np.ndarray)):
-                padded_elem = _pad_array_recursive(elem, target_shape, pad_value, dtype, level + 1)
+                padded_elem = _pad_array_recursive(
+                    elem, target_shape, pad_value, dtype, level + 1
+                )
             else:
                 padded_elem = elem
             padded_list.append(padded_elem)

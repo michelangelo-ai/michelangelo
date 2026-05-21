@@ -1,15 +1,9 @@
-"""Schema dataclasses used by the Lightning trainer.
-
-Ported (snapshot) from the internal
-``uber.ai.michelangelo.sdk.common.schema`` module so the OSS trainer keeps the
-same typed surface as the internal trainer.
-"""
+"""Schema dataclasses used by the Lightning trainer."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 
 class TrainingType(Enum):
@@ -32,7 +26,7 @@ class ModelSpec:
 
     project_name: str
     model_name: str
-    revision_id: Optional[str] = None
+    revision_id: str | None = None
 
 
 @dataclass
@@ -41,7 +35,7 @@ class IncrementalTrainingMetadata:
 
     training_type: TrainingType
     baseline_model: ModelSpec
-    deployment_name: Optional[str] = None
+    deployment_name: str | None = None
     skip_training: bool = False
     log_layer_weights: bool = False
 
@@ -52,7 +46,7 @@ class IncrementalTrainingSpec:
 
     metadata: IncrementalTrainingMetadata
     load_optimizer_weights: bool = False
-    override_incremental_training_epoch: Optional[int] = None
+    override_incremental_training_epoch: int | None = None
 
 
 @dataclass
@@ -60,7 +54,7 @@ class TransferLearningMetadata:
     """Metadata for transfer learning."""
 
     learning_mode: LearningMode
-    baseline_model: Optional[ModelSpec]
+    baseline_model: ModelSpec | None
 
 
 @dataclass
@@ -69,7 +63,7 @@ class TransferLearningSpec:
 
     metadata: TransferLearningMetadata
 
-    model_loader_function: Optional[str] = None
+    model_loader_function: str | None = None
     layer_names_to_inherit: list[str] = field(default_factory=list)
     layer_names_to_inherit_regex: list[str] = field(default_factory=list)
     layer_names_to_freeze: list[str] = field(default_factory=list)
