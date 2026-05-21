@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from michelangelo.workflow.variables.metadata import ModelMetadata
+
 
 @dataclass
 class ModelArtifact:
@@ -18,23 +20,20 @@ class ModelArtifact:
     Attributes:
         path: Absolute local filesystem path to the packaged artifact file or
             directory.
-        metadata: Key-value pairs forwarded to the model registry at
-            registration time. Common keys: ``model_class``,
-            ``training_framework``, ``schema_version``.
+        metadata: Typed metadata forwarded to the model registry at
+            registration time. Subclass ``ModelMetadata`` to add
+            provider-specific fields.
 
     Example:
-        >>> artifact = ModelArtifact(
-        ...     path="/tmp/model",
-        ...     metadata={"framework": "xgboost", "task": "regression"},
-        ... )
-        >>> artifact.path
-        '/tmp/model'
-        >>> artifact.metadata["framework"]
+        >>> from michelangelo.workflow.variables.metadata import ModelMetadata
+        >>> meta = ModelMetadata(training_framework="xgboost", deployable=True)
+        >>> artifact = ModelArtifact(path="/tmp/model", metadata=meta)
+        >>> artifact.metadata.training_framework
         'xgboost'
     """
 
     path: str
-    metadata: dict[str, str] = field(default_factory=dict)
+    metadata: ModelMetadata = field(default_factory=ModelMetadata)
 
 
 @dataclass

@@ -2,13 +2,76 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from io import BytesIO
 from unittest import TestCase
 
+from michelangelo.workflow.variables.metadata import ModelMetadata
 from michelangelo.workflow.variables.types import (
     AssembledModel,
     ModelArtifact,
     PusherResult,
 )
+
+
+class TestModelMetadata(TestCase):
+    """Tests for ModelMetadata."""
+
+    def test_defaults_all_none_or_false(self):
+        """It initialises with all fields at their defaults."""
+        meta = ModelMetadata()
+        self.assertIsNone(meta.training_framework)
+        self.assertIsNone(meta.model_class)
+        self.assertFalse(meta.assembled)
+        self.assertFalse(meta.deployable)
+        self.assertIsNone(meta._schema)
+        self.assertIsNone(meta._sample_data)
+        self.assertIsNone(meta._hyperparameters)
+
+    def test_stores_training_framework(self):
+        """It stores the provided training_framework."""
+        meta = ModelMetadata(training_framework="xgboost")
+        self.assertEqual(meta.training_framework, "xgboost")
+
+    def test_stores_model_class(self):
+        """It stores the provided model_class import path."""
+        meta = ModelMetadata(model_class="mypackage.models.Clf")
+        self.assertEqual(meta.model_class, "mypackage.models.Clf")
+
+    def test_stores_assembled_and_deployable_flags(self):
+        """It stores assembled and deployable boolean flags."""
+        meta = ModelMetadata(assembled=True, deployable=True)
+        self.assertTrue(meta.assembled)
+        self.assertTrue(meta.deployable)
+
+    def test_stores_binary_payloads(self):
+        """It stores schema, sample_data, and hyperparameters as BytesIO."""
+        schema = BytesIO(b"schema-bytes")
+        sample = BytesIO(b"sample-bytes")
+        hparams = BytesIO(b"hparam-bytes")
+        meta = ModelMetadata(
+            _schema=schema,
+            _sample_data=sample,
+            _hyperparameters=hparams,
+        )
+        self.assertEqual(meta._schema.read(), b"schema-bytes")
+        self.assertEqual(meta._sample_data.read(), b"sample-bytes")
+        self.assertEqual(meta._hyperparameters.read(), b"hparam-bytes")
+
+    def test_is_subclassable(self):
+        """A subclass can add provider-specific fields."""
+
+        @dataclass
+        class UberModelMetadata(ModelMetadata):
+            training_job_id: str | None = None
+
+        uber_meta = UberModelMetadata(
+            training_framework="pytorch",
+            training_job_id="job-1",
+        )
+        self.assertEqual(uber_meta.training_framework, "pytorch")
+        self.assertEqual(uber_meta.training_job_id, "job-1")
+        self.assertIsInstance(uber_meta, ModelMetadata)
 
 
 class TestModelArtifact(TestCase):
@@ -19,22 +82,41 @@ class TestModelArtifact(TestCase):
         artifact = ModelArtifact(path="/tmp/model")
         self.assertEqual(artifact.path, "/tmp/model")
 
-    def test_metadata_defaults_to_empty_dict(self):
-        """It defaults metadata to an empty dict when not provided."""
+    def test_metadata_defaults_to_empty_model_metadata(self):
+        """It defaults metadata to a ModelMetadata instance with defaults."""
         artifact = ModelArtifact(path="/tmp/model")
-        self.assertEqual(artifact.metadata, {})
+        self.assertIsInstance(artifact.metadata, ModelMetadata)
+        self.assertIsNone(artifact.metadata.training_framework)
 
     def test_metadata_instances_are_independent(self):
-        """It creates a separate metadata dict for each instance."""
+        """It creates a separate ModelMetadata instance for each artifact."""
         a = ModelArtifact(path="/tmp/a")
         b = ModelArtifact(path="/tmp/b")
-        a.metadata["key"] = "value"
-        self.assertEqual(b.metadata, {})
+        a.metadata.training_framework = "pytorch"
+        self.assertIsNone(b.metadata.training_framework)
 
     def test_metadata_can_be_provided(self):
-        """It stores explicitly provided metadata."""
-        artifact = ModelArtifact(path="/tmp/m", metadata={"framework": "xgboost"})
-        self.assertEqual(artifact.metadata["framework"], "xgboost")
+        """It stores an explicitly provided ModelMetadata."""
+        meta = ModelMetadata(training_framework="xgboost", deployable=True)
+        artifact = ModelArtifact(path="/tmp/m", metadata=meta)
+        self.assertEqual(artifact.metadata.training_framework, "xgboost")
+        self.assertTrue(artifact.metadata.deployable)
+
+    def test_metadata_accepts_subclass(self):
+        """It stores a ModelMetadata subclass without modification."""
+
+        @dataclass
+        class UberModelMetadata(ModelMetadata):
+            training_job_id: str | None = None
+
+        uber_meta = UberModelMetadata(
+            training_framework="huggingface",
+            training_job_id="j-42",
+        )
+        artifact = ModelArtifact(path="/tmp/m", metadata=uber_meta)
+        self.assertIsInstance(artifact.metadata, ModelMetadata)
+        # type: ignore[attr-defined]
+        self.assertEqual(artifact.metadata.training_job_id, "j-42")  # type: ignore[attr-defined]
 
 
 class TestAssembledModel(TestCase):
