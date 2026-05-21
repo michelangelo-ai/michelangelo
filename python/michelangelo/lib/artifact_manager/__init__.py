@@ -10,6 +10,7 @@ Public API::
         LocalStorageBackend,
     )
 """
+
 # flake8: noqa:F401
 from michelangelo.lib.artifact_manager.storage_backend import (
     LocalStorageBackend,
