@@ -11,12 +11,26 @@ from typing import Any
 class RegisteredModel:
     """A model record returned after successful registration.
 
+    Carries both the registry handle (``registry_uri``) and the storage
+    locations of the underlying artifacts, so a caller can download the model
+    for inference or a fine-tuning run without making a second registry call.
+
     Attributes:
         name: Model name in the registry.
         version: Registry-assigned version string (e.g. ``"3"`` for MLflow,
             a resource ID suffix for Vertex AI).
         registry_uri: URI uniquely identifying this model version in the
-            registry (e.g. ``"models:/name/3"`` for MLflow).
+            registry (e.g. ``"models:/name/3"`` for MLflow). Use this to
+            reference, compare, or promote versions via the registry API.
+        artifact_uri: Storage URI of the raw model package (weights + sample
+            data), as returned by ``StorageBackend.upload()``. Use this to
+            download the model for offline validation or fine-tuning.
+            ``None`` when the registry implementation does not expose the
+            storage location (e.g. read-only registry views).
+        deployable_artifact_uri: Storage URI of the serving-ready bundle
+            (e.g. Triton config + weights). Use this to load the model onto
+            a model server for inference. ``None`` when not applicable or
+            not exposed by the registry.
         metadata: Additional key-value pairs stored with the registration.
 
     Example:
@@ -24,14 +38,18 @@ class RegisteredModel:
         ...     name="my-classifier",
         ...     version="1",
         ...     registry_uri="models:/my-classifier/1",
+        ...     artifact_uri="s3://bucket/models/my-classifier/raw",
+        ...     deployable_artifact_uri="s3://bucket/models/my-classifier/triton",
         ... )
-        >>> model.version
-        '1'
+        >>> model.artifact_uri
+        's3://bucket/models/my-classifier/raw'
     """
 
     name: str
     version: str
     registry_uri: str
+    artifact_uri: str | None = None
+    deployable_artifact_uri: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 

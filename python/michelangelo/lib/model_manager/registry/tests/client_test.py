@@ -47,6 +47,36 @@ class TestRegisteredModel(TestCase):
         )
         self.assertEqual(model.metadata["framework"], "xgboost")
 
+    def test_artifact_uri_defaults_to_none(self):
+        """It defaults artifact_uri to None when not provided."""
+        model = RegisteredModel(name="m", version="1", registry_uri="uri")
+        self.assertIsNone(model.artifact_uri)
+
+    def test_deployable_artifact_uri_defaults_to_none(self):
+        """It defaults deployable_artifact_uri to None when not provided."""
+        model = RegisteredModel(name="m", version="1", registry_uri="uri")
+        self.assertIsNone(model.deployable_artifact_uri)
+
+    def test_artifact_uri_can_be_provided(self):
+        """It stores an explicitly provided artifact_uri."""
+        model = RegisteredModel(
+            name="m",
+            version="1",
+            registry_uri="uri",
+            artifact_uri="s3://bucket/raw",
+        )
+        self.assertEqual(model.artifact_uri, "s3://bucket/raw")
+
+    def test_deployable_artifact_uri_can_be_provided(self):
+        """It stores an explicitly provided deployable_artifact_uri."""
+        model = RegisteredModel(
+            name="m",
+            version="1",
+            registry_uri="uri",
+            deployable_artifact_uri="s3://bucket/triton",
+        )
+        self.assertEqual(model.deployable_artifact_uri, "s3://bucket/triton")
+
 
 class _ConcreteClient(ModelRegistryClient):
     """Minimal concrete implementation for testing the ABC."""
