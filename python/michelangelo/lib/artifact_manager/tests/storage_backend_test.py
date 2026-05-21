@@ -111,6 +111,38 @@ class TestLocalStorageBackendDirectoryUpload(TestCase):
         self.assertTrue(uri.startswith(self._store_dir))
         self.assertTrue(os.path.isdir(uri))
 
+    def test_upload_directory_replaces_existing(self):
+        """It replaces an existing directory artifact at the same key."""
+        src_v1 = tempfile.mkdtemp()
+        with open(os.path.join(src_v1, "file.txt"), "w") as f:
+            f.write("v1")
+        src_v2 = tempfile.mkdtemp()
+        with open(os.path.join(src_v2, "file.txt"), "w") as f:
+            f.write("v2")
+
+        self._backend.upload(src_v1, "models/cls")
+        uri = self._backend.upload(src_v2, "models/cls")
+
+        dest_dir = tempfile.mkdtemp()
+        self._backend.download(uri, dest_dir)
+        with open(os.path.join(dest_dir, "file.txt")) as fh:
+            self.assertEqual(fh.read(), "v2")
+
+    def test_upload_directory_cleans_up_tmp_on_failure(self):
+        """It removes the temp artifact and re-raises when copytree fails."""
+        from unittest.mock import patch
+
+        src_dir = tempfile.mkdtemp()
+        with patch("shutil.copytree", side_effect=OSError("disk full")):
+            with self.assertRaises(OSError):
+                self._backend.upload(src_dir, "models/v1")
+
+        # No stray .__tmp_ directories should remain under base_dir
+        leftovers = [
+            name for name in os.listdir(self._store_dir) if ".__tmp_" in name
+        ]
+        self.assertEqual(leftovers, [])
+
 
 class TestLocalStorageBackendDownloadErrors(TestCase):
     """Tests for LocalStorageBackend download error handling."""
