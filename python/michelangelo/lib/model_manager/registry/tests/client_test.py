@@ -1,4 +1,4 @@
-"""Tests for the model registry client module."""
+"""Tests for the model registry client interface."""
 
 from __future__ import annotations
 
@@ -107,10 +107,7 @@ class TestModelRegistryClientABC(TestCase):
     def test_register_model_returns_registered_model(self):
         """It returns a RegisteredModel from a concrete implementation."""
         client = _ConcreteClient()
-        result = client.register_model(
-            name="clf",
-            artifact_uri="local:///tmp/raw",
-        )
+        result = client.register_model(name="clf", artifact_uri="local:///tmp/raw")
         self.assertIsInstance(result, RegisteredModel)
         self.assertEqual(result.name, "clf")
 
