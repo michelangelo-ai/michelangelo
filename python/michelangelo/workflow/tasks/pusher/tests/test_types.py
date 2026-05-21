@@ -1,4 +1,4 @@
-"""Tests for workflow variable types: ModelArtifact, AssembledModel, PusherResult, ModelMetadata."""
+"""Tests for workflow variable types: ModelArtifact, AssembledModel, PusherResult."""
 
 from __future__ import annotations
 
