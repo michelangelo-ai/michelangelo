@@ -292,3 +292,155 @@ func TestNewCadenceClient_TLSFlow(t *testing.T) {
 		}
 	})
 }
+
+func TestNewTemporalWorker_TLS(t *testing.T) {
+	t.Run("creates temporal worker with TLS enabled and custom config", func(t *testing.T) {
+		conf := Config{
+			Host:   "temporal.example.com:7233",
+			UseTLS: true,
+			Client: ClientConfig{
+				Domain: "test-domain",
+			},
+			Workers: []WorkerConfig{{TaskList: "test-tasklist"}},
+		}
+
+		logger := zap.NewNop()
+		mockFactory := &MockTemporalClientFactory{}
+		customTLSConfig := &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}
+
+		workers, err := newTemporalWorker(mockFactory, conf, customTLSConfig, logger)
+
+		assert.NoError(t, err)
+		assert.Len(t, workers, 1)
+	})
+
+	t.Run("creates temporal worker with TLS enabled and nil config", func(t *testing.T) {
+		conf := Config{
+			Host:   "temporal.example.com:7233",
+			UseTLS: true,
+			Client: ClientConfig{
+				Domain: "test-domain",
+			},
+			Workers: []WorkerConfig{{TaskList: "test-tasklist"}},
+		}
+
+		logger := zap.NewNop()
+		mockFactory := &MockTemporalClientFactory{}
+
+		workers, err := newTemporalWorker(mockFactory, conf, nil, logger)
+
+		assert.NoError(t, err)
+		assert.Len(t, workers, 1)
+	})
+
+	t.Run("creates temporal worker with TLS disabled", func(t *testing.T) {
+		conf := Config{
+			Host:   "localhost:7233",
+			UseTLS: false,
+			Client: ClientConfig{
+				Domain: "test-domain",
+			},
+			Workers: []WorkerConfig{{TaskList: "test-tasklist"}},
+		}
+
+		logger := zap.NewNop()
+		mockFactory := &MockTemporalClientFactory{}
+		customTLSConfig := &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}
+
+		workers, err := newTemporalWorker(mockFactory, conf, customTLSConfig, logger)
+
+		assert.NoError(t, err)
+		assert.Len(t, workers, 1)
+	})
+
+	t.Run("creates temporal worker with multiple workers", func(t *testing.T) {
+		conf := Config{
+			Host:   "temporal.example.com:7233",
+			UseTLS: true,
+			Client: ClientConfig{
+				Domain: "test-domain",
+			},
+			Workers: []WorkerConfig{
+				{TaskList: "test-tasklist-1"},
+				{TaskList: "test-tasklist-2"},
+				{TaskList: "test-tasklist-3"},
+			},
+		}
+
+		logger := zap.NewNop()
+		mockFactory := &MockTemporalClientFactory{}
+		customTLSConfig := &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}
+
+		workers, err := newTemporalWorker(mockFactory, conf, customTLSConfig, logger)
+
+		assert.NoError(t, err)
+		assert.Len(t, workers, 3)
+	})
+}
+
+func TestProvide_TemporalWithTLS(t *testing.T) {
+	t.Run("provide calls newTemporalWorker with TLS config", func(t *testing.T) {
+		conf := Config{
+			Provider: "temporal",
+			Host:     "temporal.example.com:7233",
+			UseTLS:   true,
+			Client: ClientConfig{
+				Domain: "test-domain",
+			},
+			Workers: []WorkerConfig{{TaskList: "test-tasklist"}},
+		}
+
+		logger := zap.NewNop()
+		mockTemporalFactory := &MockTemporalClientFactory{}
+		customTLSConfig := &tls.Config{
+			MinVersion: tls.VersionTLS13,
+		}
+
+		in := In{
+			Config:          conf,
+			Logger:          logger,
+			TemporalFactory: mockTemporalFactory,
+			TLSConfig:       customTLSConfig,
+		}
+
+		out, err := provide(in)
+
+		assert.NoError(t, err)
+		assert.Equal(t, service.BackendType("temporal"), out.Backend)
+		assert.Len(t, out.Workers, 1)
+	})
+
+	t.Run("provide calls newTemporalWorker without TLS config", func(t *testing.T) {
+		conf := Config{
+			Provider: "temporal",
+			Host:     "localhost:7233",
+			UseTLS:   false,
+			Client: ClientConfig{
+				Domain: "test-domain",
+			},
+			Workers: []WorkerConfig{{TaskList: "test-tasklist"}},
+		}
+
+		logger := zap.NewNop()
+		mockTemporalFactory := &MockTemporalClientFactory{}
+
+		in := In{
+			Config:          conf,
+			Logger:          logger,
+			TemporalFactory: mockTemporalFactory,
+			TLSConfig:       nil,
+		}
+
+		out, err := provide(in)
+
+		assert.NoError(t, err)
+		assert.Equal(t, service.BackendType("temporal"), out.Backend)
+		assert.Len(t, out.Workers, 1)
+	})
+}

@@ -99,7 +99,7 @@ func provide(in In) (Out, error) {
 		out.Workflow = cadence.NewWorkflow()
 	} else if conf.Provider == ProviderTemporal {
 		var err error
-		out.Workers, err = newTemporalWorker(in.TemporalFactory, in.Config, in.Logger)
+		out.Workers, err = newTemporalWorker(in.TemporalFactory, in.Config, in.TLSConfig, in.Logger)
 		if err != nil {
 			return out, err
 		}
@@ -183,18 +183,29 @@ func newCadenceClient(conf Config, tlsConfig *tls.Config) (workflowserviceclient
 }
 
 // newTemporalWorker creates a new Temporal worker.
-func newTemporalWorker(factory TemporalClientFactory, conf Config, log *zap.Logger) ([]sworker.Worker, error) {
+func newTemporalWorker(factory TemporalClientFactory, conf Config, tlsConfig *tls.Config, log *zap.Logger) ([]sworker.Worker, error) {
 	scope, _ := tallyv4.NewRootScope(tallyv4.ScopeOptions{
 		Prefix: "temporal",
 	}, time.Second)
 	// Create Temporal client
-	c, err := factory.NewTemporalClient(tempclient.Options{
+	opts := tempclient.Options{
 		HostPort:       conf.Host,
 		Namespace:      conf.Client.Domain,
 		DataConverter:  temporal.DataConverter{},
 		MetricsHandler: temptally.NewMetricsHandler(scope),
 		Logger:         temporal.NewZapLoggerAdapter(log),
-	})
+	}
+	// Add TLS connection options if UseTLS is enabled
+	if conf.UseTLS {
+		// Use the injected TLS configuration, or create a default one if not provided
+		if tlsConfig == nil {
+			tlsConfig = &tls.Config{}
+		}
+		opts.ConnectionOptions = tempclient.ConnectionOptions{
+			TLS: tlsConfig,
+		}
+	}
+	c, err := factory.NewTemporalClient(opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temporal client: %w", err)
 	}
