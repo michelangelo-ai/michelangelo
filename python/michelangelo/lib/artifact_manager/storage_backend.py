@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import uuid
 from abc import ABC, abstractmethod
 
 
@@ -102,14 +103,26 @@ class LocalStorageBackend(StorageBackend):
             to ``download()``.
 
         Raises:
+            ValueError: If ``destination_key`` is empty.
             IOError: If the copy operation fails.
         """
+        if not destination_key:
+            raise ValueError(
+                "destination_key must be a non-empty string. "
+                "Use a relative path such as 'models/classifier/v1'."
+            )
         dest = os.path.join(self._base_dir, destination_key)
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         if os.path.isdir(local_path):
-            if os.path.exists(dest):
-                shutil.rmtree(dest)
-            shutil.copytree(local_path, dest)
+            tmp_dest = dest + f".__tmp_{uuid.uuid4().hex}"
+            try:
+                shutil.copytree(local_path, tmp_dest)
+                if os.path.exists(dest):
+                    shutil.rmtree(dest)
+                os.rename(tmp_dest, dest)
+            except BaseException:
+                shutil.rmtree(tmp_dest, ignore_errors=True)
+                raise
         else:
             shutil.copy2(local_path, dest)
         return dest
@@ -127,7 +140,7 @@ class LocalStorageBackend(StorageBackend):
                 ``base_dir``, indicating it was not produced by this instance.
             IOError: If the copy operation fails.
         """
-        if not uri.startswith(self._base_dir):
+        if not uri.startswith(os.path.join(self._base_dir, "")):
             raise ValueError(
                 f"URI '{uri}' is not managed by this LocalStorageBackend "
                 f"(base_dir='{self._base_dir}'). Pass a URI returned by "

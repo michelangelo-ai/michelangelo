@@ -56,7 +56,8 @@ class AssembledModel:
         ...     raw_model=artifact,
         ...     deployable_model=artifact,
         ... )
-        True
+        >>> assembled.raw_model.path
+        '/tmp/model.ubj'
     """
 
     raw_model: ModelArtifact

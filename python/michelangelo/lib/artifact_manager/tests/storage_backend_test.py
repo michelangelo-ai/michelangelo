@@ -45,7 +45,8 @@ class TestLocalStorageBackendFileUpload(TestCase):
             src = f.name
         uri = self._backend.upload(src, "files/test.bin")
 
-        dest = tempfile.mktemp()
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".bin") as tmp:
+            dest = tmp.name
         self._backend.download(uri, dest)
 
         with open(dest, "rb") as fh:
@@ -70,7 +71,8 @@ class TestLocalStorageBackendFileUpload(TestCase):
         self._backend.upload(src1, "artifact.bin")
         uri = self._backend.upload(src2, "artifact.bin")
 
-        dest = tempfile.mktemp()
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".bin") as tmp:
+            dest = tmp.name
         self._backend.download(uri, dest)
         with open(dest, "rb") as fh:
             self.assertEqual(fh.read(), b"v2")
@@ -127,3 +129,29 @@ class TestLocalStorageBackendDownloadErrors(TestCase):
 
         self.assertIn("not managed by this LocalStorageBackend", str(ctx.exception))
         self.assertIn(backend_b._base_dir, str(ctx.exception))
+
+    def test_raises_value_error_for_sibling_directory_uri(self):
+        """It rejects a URI whose path shares a prefix but is a sibling directory."""
+        import os
+
+        store_dir = tempfile.mkdtemp()
+        # Create a sibling dir whose name starts with store_dir
+        sibling_dir = store_dir + "_sibling"
+        os.makedirs(sibling_dir, exist_ok=True)
+        backend = LocalStorageBackend(base_dir=store_dir)
+
+        foreign_uri = os.path.join(sibling_dir, "artifact.bin")
+        with open(foreign_uri, "w") as f:
+            f.write("foreign")
+
+        with self.assertRaises(ValueError):
+            backend.download(foreign_uri, tempfile.mktemp())
+
+    def test_upload_raises_for_empty_destination_key(self):
+        """It raises ValueError when destination_key is an empty string."""
+        backend = LocalStorageBackend(base_dir=tempfile.mkdtemp())
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            src = f.name
+        with self.assertRaises(ValueError) as ctx:
+            backend.upload(src, "")
+        self.assertIn("non-empty", str(ctx.exception))
