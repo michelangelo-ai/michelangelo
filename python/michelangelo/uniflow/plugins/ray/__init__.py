@@ -8,8 +8,12 @@ automatic scaling. This plugin allows Uniflow workflows to leverage Ray's capabi
 for parallel data processing and distributed task execution.
 """
 
+import contextlib
+
 from michelangelo.uniflow.plugins.ray.io import UF_PLUGIN_RAY_USE_FSSPEC, RayDatasetIO
-from michelangelo.uniflow.plugins.ray.task import RayTask
+
+with contextlib.suppress(ImportError):
+    from michelangelo.uniflow.plugins.ray.task import RayTask
 
 __all__ = [
     "UF_PLUGIN_RAY_USE_FSSPEC",
