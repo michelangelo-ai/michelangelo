@@ -1,11 +1,12 @@
-"""Typed configuration dataclasses for built-in DataSink implementations.
+"""Typed sink contracts: SinkResult and config dataclasses.
 
-Import the config you need, instantiate it, then pass it to the matching sink:
+Import what you need, then pass configs to the matching sink:
 
-    from michelangelo.workflow.schema.sinks import HiveSinkConfig
+    from michelangelo.workflow.schema.sinks import HiveSinkConfig, SinkResult
     from michelangelo.workflow.sinks import HiveSink
 
     sink = HiveSink(HiveSinkConfig(database="ml", table="predictions"))
+    result: SinkResult = sink.write(variable)
 
 Provider layers add their own config dataclasses in the same pattern.
 """
@@ -13,5 +14,6 @@ Provider layers add their own config dataclasses in the same pattern.
 from michelangelo.workflow.schema.sinks.hive import HiveSinkConfig
 from michelangelo.workflow.schema.sinks.local import LocalFileSinkConfig
 from michelangelo.workflow.schema.sinks.memory import InMemorySinkConfig
+from michelangelo.workflow.schema.sinks.result import SinkResult
 
-__all__ = ["HiveSinkConfig", "InMemorySinkConfig", "LocalFileSinkConfig"]
+__all__ = ["HiveSinkConfig", "InMemorySinkConfig", "LocalFileSinkConfig", "SinkResult"]

@@ -6,8 +6,9 @@ import logging
 import os
 from typing import TYPE_CHECKING
 
-from michelangelo.workflow.schema.data_sink import DataSink, SinkResult
 from michelangelo.workflow.schema.pusher import DatasetFormat
+from michelangelo.workflow.schema.sinks.result import SinkResult
+from michelangelo.workflow.sinks.base import DataSink
 
 if TYPE_CHECKING:
     from michelangelo.workflow.schema.sinks.local import LocalFileSinkConfig

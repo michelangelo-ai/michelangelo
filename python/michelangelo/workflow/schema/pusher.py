@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from michelangelo.workflow.schema.exceptions import ConfigurationError
 
 if TYPE_CHECKING:
-    from michelangelo.workflow.schema.data_sink import DataSink
+    from michelangelo.workflow.sinks.base import DataSink
 
 __all__ = [
     "DatasetFormat",

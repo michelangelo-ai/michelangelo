@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from michelangelo.workflow.schema.data_sink import DataSink, SinkResult
+from michelangelo.workflow.schema.sinks.result import SinkResult
+from michelangelo.workflow.sinks.base import DataSink
 
 if TYPE_CHECKING:
     from michelangelo.workflow.schema.sinks.hive import HiveSinkConfig

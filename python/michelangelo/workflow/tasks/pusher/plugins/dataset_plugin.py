@@ -56,7 +56,7 @@ class DatasetPusherPlugin(PusherPluginBase):
 
     Example::
 
-        from michelangelo.workflow.schema.data_sink import LocalFileSink
+        from michelangelo.workflow.sinks import LocalFileSink
         from michelangelo.workflow.schema.pusher import (
             DatasetFormat, DatasetPluginConfig,
         )

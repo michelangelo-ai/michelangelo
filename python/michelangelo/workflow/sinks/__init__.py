@@ -4,7 +4,9 @@ Each sink accepts a typed config dataclass from
 ``michelangelo.workflow.schema.sinks`` — validated at pipeline-definition time:
 
     from michelangelo.workflow.schema.sinks import HiveSinkConfig, LocalFileSinkConfig
-    from michelangelo.workflow.sinks import HiveSink, LocalFileSink, InMemorySink
+    from michelangelo.workflow.sinks import (
+        DataSink, HiveSink, LocalFileSink, InMemorySink
+    )
 
     sinks = [
         LocalFileSink(LocalFileSinkConfig("/tmp/out")),
@@ -15,8 +17,9 @@ Provider layers extend this by subclassing ``DataSink`` and registering their
 own config dataclasses in ``schema/sinks/``.
 """
 
+from michelangelo.workflow.sinks.base import DataSink
 from michelangelo.workflow.sinks.hive import HiveSink
 from michelangelo.workflow.sinks.local import LocalFileSink
 from michelangelo.workflow.sinks.memory import InMemorySink
 
-__all__ = ["HiveSink", "InMemorySink", "LocalFileSink"]
+__all__ = ["DataSink", "HiveSink", "InMemorySink", "LocalFileSink"]

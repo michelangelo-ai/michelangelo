@@ -1,19 +1,11 @@
-"""Tests for DataSink ABC and SinkResult."""
+"""Tests for DataSink ABC (workflow/sinks/base.py) and SinkResult (schema/sinks/result.py)."""
 
 from __future__ import annotations
 
 from unittest import TestCase
 
-from michelangelo.workflow.schema.data_sink import DataSink, SinkResult
-from michelangelo.workflow.variables import DatasetVariable
-
-import pandas as pd
-
-_DF = pd.DataFrame([{"name": "alice", "score": 0.92}, {"name": "bob", "score": 0.88}])
-
-
-def _artifact(df: pd.DataFrame | None = None) -> DatasetVariable:
-    return DatasetVariable(value=df if df is not None else _DF.copy())
+from michelangelo.workflow.schema.sinks import SinkResult
+from michelangelo.workflow.sinks import DataSink
 
 
 class TestDataSinkABC(TestCase):
