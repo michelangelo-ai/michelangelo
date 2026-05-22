@@ -25,9 +25,11 @@ func (m *MockTemporalClient) Close() {
 
 type MockTemporalClientFactory struct {
 	mock.Mock
+	CapturedOpts *tempclient.Options
 }
 
 func (m *MockTemporalClientFactory) NewTemporalClient(opts tempclient.Options) (tempclient.Client, error) {
+	m.CapturedOpts = &opts
 	return tempclient.NewLazyClient(opts)
 }
 
@@ -314,6 +316,9 @@ func TestNewTemporalWorker_TLS(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Len(t, workers, 1)
+		assert.NotNil(t, mockFactory.CapturedOpts)
+		assert.NotNil(t, mockFactory.CapturedOpts.ConnectionOptions.TLS)
+		assert.Equal(t, customTLSConfig, mockFactory.CapturedOpts.ConnectionOptions.TLS)
 	})
 
 	t.Run("creates temporal worker with TLS enabled and nil config", func(t *testing.T) {
@@ -333,6 +338,9 @@ func TestNewTemporalWorker_TLS(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Len(t, workers, 1)
+		assert.NotNil(t, mockFactory.CapturedOpts)
+		assert.NotNil(t, mockFactory.CapturedOpts.ConnectionOptions.TLS)
+		// When nil TLS config is passed with UseTLS=true, a default &tls.Config{} should be used
 	})
 
 	t.Run("creates temporal worker with TLS disabled", func(t *testing.T) {
@@ -355,6 +363,9 @@ func TestNewTemporalWorker_TLS(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Len(t, workers, 1)
+		assert.NotNil(t, mockFactory.CapturedOpts)
+		assert.Nil(t, mockFactory.CapturedOpts.ConnectionOptions.TLS)
+		// When UseTLS=false, TLS config should not be set even if provided
 	})
 
 	t.Run("creates temporal worker with multiple workers", func(t *testing.T) {
@@ -381,6 +392,9 @@ func TestNewTemporalWorker_TLS(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Len(t, workers, 3)
+		assert.NotNil(t, mockFactory.CapturedOpts)
+		assert.NotNil(t, mockFactory.CapturedOpts.ConnectionOptions.TLS)
+		assert.Equal(t, customTLSConfig, mockFactory.CapturedOpts.ConnectionOptions.TLS)
 	})
 }
 
