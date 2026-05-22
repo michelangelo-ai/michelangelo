@@ -85,10 +85,19 @@ class DatasetPluginConfig:
         DatasetPluginConfig(destination_path="/tmp/out", format=DatasetFormat.CSV)
 
         # Explicit sinks (preferred):
-        DatasetPluginConfig(sinks=[LocalFileSink("/tmp/out", DatasetFormat.CSV)])
+        from michelangelo.workflow.schema.sinks import (
+            HiveSinkConfig, LocalFileSinkConfig
+        )
+        from michelangelo.workflow.sinks import HiveSink, LocalFileSink
+        DatasetPluginConfig(sinks=[
+            LocalFileSink(LocalFileSinkConfig("/tmp/out", DatasetFormat.CSV))
+        ])
 
         # Multi-sink (write to local file and a remote target simultaneously):
-        DatasetPluginConfig(sinks=[LocalFileSink("/tmp/out"), HiveSink("db", "table")])
+        DatasetPluginConfig(sinks=[
+            LocalFileSink(LocalFileSinkConfig("/tmp/out")),
+            HiveSink(HiveSinkConfig(database="db", table="table")),
+        ])
 
     Attributes:
         sinks: Ordered list of sinks to write to. All sinks receive the same
@@ -120,13 +129,16 @@ class DatasetPluginConfig:
         """Auto-create a LocalFileSink from destination_path when sinks is unset."""
         if self.sinks is None:
             if self.destination_path is not None:
-                from michelangelo.workflow.schema.data_sink import LocalFileSink
+                from michelangelo.workflow.schema.sinks import LocalFileSinkConfig
+                from michelangelo.workflow.sinks import LocalFileSink
 
                 self.sinks = [
                     LocalFileSink(
-                        self.destination_path,
-                        format=self.format,
-                        partition_by=self.partition_by or None,
+                        LocalFileSinkConfig(
+                            destination_path=self.destination_path,
+                            format=self.format,
+                            partition_by=self.partition_by or [],
+                        )
                     )
                 ]
             else:

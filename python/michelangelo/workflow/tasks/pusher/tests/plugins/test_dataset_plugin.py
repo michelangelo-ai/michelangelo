@@ -8,14 +8,10 @@ from unittest import TestCase
 
 import pandas as pd
 
-from michelangelo.workflow.schema.data_sink import (
-    DataSink,
-    InMemorySink,
-    LocalFileSink,
-    SinkResult,
-)
+from michelangelo.workflow.schema.data_sink import DataSink, SinkResult
 from michelangelo.workflow.schema.exceptions import ConfigurationError
 from michelangelo.workflow.schema.pusher import DatasetFormat, DatasetPluginConfig
+from michelangelo.workflow.sinks import InMemorySink, LocalFileSink
 from michelangelo.workflow.tasks.pusher.plugins.dataset_plugin import (
     DatasetPusherPlugin,
 )
