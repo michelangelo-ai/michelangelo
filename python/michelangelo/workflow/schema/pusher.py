@@ -10,9 +10,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from michelangelo.workflow.schema.exceptions import ConfigurationError
+
+if TYPE_CHECKING:
+    from michelangelo.workflow.schema.data_sink import DataSink
 
 __all__ = [
     "DatasetFormat",
@@ -62,7 +65,7 @@ class ModelPluginConfig:
     Example:
         >>> cfg = ModelPluginConfig(model_name="boston-xgb")
         >>> cfg.model_name
-        'model-xyz'
+        'boston-xgb'
         >>> cfg.extra_metadata
         {}
     """
@@ -76,13 +79,31 @@ class ModelPluginConfig:
 class DatasetPluginConfig:
     """Configuration for ``DatasetPusherPlugin``.
 
+    Configure via an explicit sink list or the backwards-compatible shorthand:
+
+        # Shorthand (auto-creates a LocalFileSink):
+        DatasetPluginConfig(destination_path="/tmp/out", format=DatasetFormat.CSV)
+
+        # Explicit sinks (preferred):
+        DatasetPluginConfig(sinks=[LocalFileSink("/tmp/out", DatasetFormat.CSV)])
+
+        # Multi-sink (write to local file and a remote target simultaneously):
+        DatasetPluginConfig(sinks=[LocalFileSink("/tmp/out"), HiveSink("db", "table")])
+
     Attributes:
-        destination_path: Local directory path where the output file is
-            written. Created automatically if absent.
-        format: Output format. Defaults to ``DatasetFormat.PARQUET``.
-        partition_by: Optional list of column names to partition the
-            output by. Unused by the built-in file writer; available
-            for provider subclasses.
+        sinks: Ordered list of sinks to write to. All sinks receive the same
+            ``DatasetVariable``. Each sink accesses ``variable.value`` in its
+            native format — ``LocalFileSink`` checks ``isinstance(pd.DataFrame)``
+            and raises ``TypeError`` for non-pandas; ``HiveSink`` accesses
+            ``variable.value`` as a native Spark DataFrame (no ``toPandas()``
+            collection to the driver).
+        destination_path: Convenience shorthand. When ``sinks`` is ``None``
+            (not provided) and ``destination_path`` is set, a ``LocalFileSink``
+            is auto-created by ``__post_init__``. Passing ``sinks=[]`` explicitly
+            disables the auto-create even when ``destination_path`` is set.
+        format: Used only with the ``destination_path`` shorthand.
+        partition_by: Forwarded to the auto-created ``LocalFileSink``. Ignored
+            when ``sinks`` is provided explicitly.
 
     Example:
         >>> cfg = DatasetPluginConfig(destination_path="/tmp/data")
@@ -90,9 +111,26 @@ class DatasetPluginConfig:
         <DatasetFormat.PARQUET: 'parquet'>
     """
 
+    sinks: list[DataSink] | None = None
     destination_path: str | None = None
     format: DatasetFormat = DatasetFormat.PARQUET
     partition_by: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        """Auto-create a LocalFileSink from destination_path when sinks is unset."""
+        if self.sinks is None:
+            if self.destination_path is not None:
+                from michelangelo.workflow.schema.data_sink import LocalFileSink
+
+                self.sinks = [
+                    LocalFileSink(
+                        self.destination_path,
+                        format=self.format,
+                        partition_by=self.partition_by or None,
+                    )
+                ]
+            else:
+                self.sinks = []
 
 
 @dataclass

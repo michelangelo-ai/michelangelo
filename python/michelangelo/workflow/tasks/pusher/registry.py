@@ -141,10 +141,10 @@ class PluginRegistry:
 
             from michelangelo.workflow.tasks.pusher.registry import default_registry
 
-            uber_registry = default_registry.extend()
-            uber_registry.register(
+            provider_registry = default_registry.extend()
+            provider_registry.register(
                 "model_plugin",
-                UberModelPusherPlugin,
+                ProviderModelPusherPlugin,
                 AssembledModel,
             )
         """
