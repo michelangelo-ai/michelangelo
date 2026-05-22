@@ -131,6 +131,40 @@ cadence:
       type: NodePort
       nodePort: 30004
 
+  # Dynamic config overrides.
+  #
+  # The upstream Cadence helm subchart ships a minimal dynamicconfig that only
+  # sets retention + visibility store. It does NOT enable strongly-consistent
+  # queries, which Cadence's default is "off".
+  #
+  # The michelangelo controller hardcodes QueryConsistencyLevelStrong when
+  # querying the `task_progress` workflow handler on every reconcile loop
+  # (cadenceclient.go). Without this flag, every query fails with:
+  #   BadRequestError: cluster or domain does not enable strongly consistent
+  #   query but strongly consistent query was requested
+  # This leaves PipelineRun.status.steps[].subSteps[].activityId always empty,
+  # so the Retry button never appears even for terminated runs.
+  #
+  # The previous (pre-2026-05-13) sandbox used ubercadence/server:auto-setup,
+  # whose bundled development.yaml enables this by default. The helm migration
+  # silently dropped it.
+  #
+  # Key names must be exact: history.EnableConsistentQuery (capital E, history.
+  # prefix). Wrong prefix (system.) or wrong case are silently ignored.
+  dynamicConfig:
+    values:
+      system.minRetentionDays:
+        - value: 0
+          constraints: {}
+      system.writeVisibilityStoreName:
+        - value: "db"
+      system.readVisibilityStoreName:
+        - value: "db"
+      history.EnableConsistentQuery:
+        - value: true
+      history.EnableConsistentQueryByDomain:
+        - value: true
+
 # -----------------------------------------------------------------------------
 # Temporal subchart — bundled workflow engine for --workflow temporal.
 #
