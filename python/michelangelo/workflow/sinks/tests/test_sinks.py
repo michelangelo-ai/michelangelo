@@ -17,7 +17,7 @@ from michelangelo.workflow.schema.sinks import (
     InMemorySinkConfig,
     LocalFileSinkConfig,
 )
-from michelangelo.workflow.sinks import HiveSink, InMemorySink, LocalFileSink
+from michelangelo.workflow.sinks import DataSink, HiveSink, InMemorySink, LocalFileSink
 from michelangelo.workflow.variables import DatasetVariable
 
 _DF = pd.DataFrame([{"name": "alice", "score": 0.92}, {"name": "bob", "score": 0.88}])
@@ -269,3 +269,13 @@ class TestHiveSink(TestCase):
         mods = {"pyspark": MagicMock(), "pyspark.sql": mock_sql}
         with patch.dict(sys.modules, mods), self.assertRaises(TypeError):
             sink.write(artifact)
+
+
+class TestDataSinkABC(TestCase):
+    """Tests for the DataSink abstract base class."""
+
+    def test_cannot_be_instantiated_directly(self):
+        """It raises TypeError when instantiated without implementing write()."""
+        with self.assertRaises(TypeError):
+            DataSink()  # type: ignore[abstract]
+
