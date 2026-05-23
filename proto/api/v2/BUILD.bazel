@@ -19,6 +19,7 @@ proto_library(
         "deployment.proto",
         "deployment_svc.proto",
         "evaluation_report.proto",
+        "evaluation_report_svc.proto",
         "git.proto",
         "groupversion_info.proto",
         "inference_server.proto",
