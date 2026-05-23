@@ -1,14 +1,10 @@
-"""EvalReportPusherPlugin — enriches and persists an EvaluationReport."""
+"""EvalReportPusherPlugin — enriches an EvaluationReport and dispatches to sinks."""
 
 from __future__ import annotations
 
-import json
 import logging
-import tempfile
 import uuid
 from typing import TYPE_CHECKING, Any
-
-from google.protobuf.json_format import MessageToDict
 
 from michelangelo.gen.api.v2.evaluation_report_pb2 import EvaluationReport
 from michelangelo.workflow.schema.exceptions import ConfigurationError
@@ -23,33 +19,47 @@ __all__ = ["EvalReportPusherPlugin"]
 
 
 class EvalReportPusherPlugin(PusherPluginBase):
-    """Plugin that enriches an EvaluationReport and writes it to a JSON file.
+    """Plugin that enriches an EvaluationReport and dispatches it to sinks.
 
     Mirrors the internal plugin's enrichment pattern: resolves
     ``metadata.name`` (config override → proto field → auto-generated UUID),
-    sets it on the proto, then serializes the enriched document to a local
-    JSON file. The return dict exposes ``name`` and ``namespace`` so
-    downstream tasks can reference the report by identity — matching the
-    internal plugin's ``{"name": ..., "namespace": ...}`` return shape, with
-    ``output_path`` added for the file-based OS implementation.
+    sets it on the proto, then calls each configured sink's ``write()``
+    method. The return dict exposes ``name`` and ``namespace`` — matching
+    the internal plugin's ``{"name": ..., "namespace": ...}`` shape — plus
+    a ``sinks`` list for multi-sink result inspection and an ``output_path``
+    shorthand for the common single-file case.
 
-    Provider layers (e.g. Uber) subclass this and override ``execute()`` to
-    replace the local file write with a gRPC push to their API server. All
-    proto enrichment logic (name resolution, label injection, pipeline
-    linkage) lives in the subclass.
+    **Sinks** control where the report goes:
 
-    To integrate with MLflow, call
-    ``mlflow.log_artifact(result["output_path"])`` after ``execute()``::
+    - ``LocalFileEvalReportSink`` (default) — writes JSON to a temp dir.
+    - ``APISink`` — pushes to any gRPC ``EvaluationReportService`` endpoint,
+      including a local sandbox server.
+    - Provider / community sinks: subclass ``EvalReportSink`` and pass an
+      instance in ``EvalReportPluginConfig.sinks``.
+
+    To send to both a local file and a sandbox API::
+
+        from michelangelo.workflow.schema.eval_report_sinks.api import APISinkConfig
+        from michelangelo.workflow.tasks.functions.eval_report_sinks import (
+            APISink, LocalFileEvalReportSink,
+        )
+        cfg = EvalReportPluginConfig(
+            sinks=[
+                LocalFileEvalReportSink(),
+                APISink(APISinkConfig(endpoint="localhost:50051")),
+            ],
+            report_name="q1-eval",
+        )
+
+    To integrate with MLflow after the local file is written::
 
         result = plugin.execute()
         import mlflow
         mlflow.log_artifact(result["output_path"], artifact_path="eval_reports")
 
     Args:
-        config: ``EvalReportPluginConfig`` with optional ``report_name`` (name
-            override; takes precedence over ``artifact.metadata.name``) and
-            ``extra_fields`` (arbitrary key-value pairs merged into the output
-            JSON, e.g. CI run ID or git SHA — not part of the proto schema).
+        config: ``EvalReportPluginConfig`` controlling sinks, name, and
+            extra_fields.
         artifact: An ``EvaluationReport`` protobuf message.
         storage_backend: Unused by this built-in implementation.
         registry_client: Unused by this built-in implementation.
@@ -78,7 +88,7 @@ class EvalReportPusherPlugin(PusherPluginBase):
         )
         result = plugin.execute()
         # result["name"]        → "q1-eval"
-        # result["namespace"]   → ""  (set by provider subclasses)
+        # result["namespace"]   → ""  (set by provider subclasses / APISink)
         # result["output_path"] → "/tmp/michelangelo_reports_.../q1-eval.json"
     """
 
@@ -116,27 +126,28 @@ class EvalReportPusherPlugin(PusherPluginBase):
             )
 
     def execute(self) -> dict[str, Any]:
-        """Enrich the EvaluationReport, serialize to JSON, and write to disk.
+        """Enrich the EvaluationReport and dispatch to all configured sinks.
 
         Resolves ``metadata.name`` (config override → proto field →
-        auto-generated), sets it on the proto, then serializes the enriched
-        document. ``extra_fields`` are merged last and take precedence over
-        proto fields on key collision.
+        auto-generated), sets it on the proto, then calls each sink's
+        ``write()`` method with the enriched proto and ``extra_fields``.
 
         Returns:
             A dict with:
 
             - ``"name"``: resolved ``metadata.name`` of the report.
-            - ``"namespace"``: ``metadata.namespace`` from the proto (empty
-              string when not set; provider subclasses populate this from
-              their project/namespace context).
-            - ``"output_path"``: absolute path to the written JSON file.
+            - ``"namespace"``: ``metadata.namespace`` from the first sink
+              result (or the proto's own namespace when no sinks are active).
+            - ``"output_path"``: ``output_path`` from the first sink result
+              (empty string when the first sink does not write local files).
+            - ``"sinks"``: list of per-sink result dicts, each with
+              ``name``, ``namespace``, ``output_path``, and ``extra``.
 
         Raises:
-            IOError: If the temp directory or JSON file cannot be written.
+            IOError: If any sink raises during ``write()``.
         """
         # Resolve name: config override → proto.metadata.name → auto-generate.
-        # Then set it back on the proto so serialized output carries the name.
+        # Set it on the proto so every sink receives the enriched proto.
         name = (
             self._config.report_name
             or self._artifact.metadata.name
@@ -144,24 +155,27 @@ class EvalReportPusherPlugin(PusherPluginBase):
         )
         self._artifact.metadata.name = name
 
-        document = {
-            **MessageToDict(self._artifact, preserving_proto_field_name=True),
-            **self._config.extra_fields,
-        }
+        sink_results = []
+        for sink in self._config.sinks or []:
+            result = sink.write(self._artifact, self._config.extra_fields or {})
+            sink_results.append(
+                {
+                    "name": result.name,
+                    "namespace": result.namespace,
+                    "output_path": result.output_path,
+                    **result.extra,
+                }
+            )
 
-        output_dir = tempfile.mkdtemp(prefix="michelangelo_reports_")
-        output_path = f"{output_dir}/{name}.json"
-
-        with open(output_path, "w") as f:
-            json.dump(document, f, indent=2)
-
+        first = sink_results[0] if sink_results else {}
         _logger.info(
-            "EvalReportPusherPlugin: wrote report '%s' to '%s'.",
+            "EvalReportPusherPlugin: dispatched report '%s' to %d sink(s).",
             name,
-            output_path,
+            len(sink_results),
         )
         return {
             "name": name,
-            "namespace": self._artifact.metadata.namespace,
-            "output_path": output_path,
+            "namespace": first.get("namespace", self._artifact.metadata.namespace),
+            "output_path": first.get("output_path", ""),
+            "sinks": sink_results,
         }
