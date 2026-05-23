@@ -11,11 +11,11 @@ import "michelangelo/api/v2/time.proto";
 
 // Filter is used for the threshold bar in the performance report page.
 message Filter {
+  reserved 2;
+  reserved "filter_group";
+
   // A list of numeric values for the threshold filter.
   repeated double filter_values = 1;
-  // Used as the ID of the filter.
-  // @deprecated Use filter_id instead.
-  string filter_group = 2;
   // A list of string values for the segment filter.
   repeated string segment_values = 3;
   // The start and end time of the data range filter.
@@ -239,25 +239,13 @@ message RichText {
   string text = 1;
 }
 
-// @deprecated Replaced by ChartCellMeta.
-message AdditionalOps {
-  string field_name = 1;
-  // @deprecated
-  AdditionalOperationType additional_operation_type = 2;
-}
-
-// @deprecated
-enum AdditionalOperationType {
-  ADDITIONAL_OPERATION_TYPE_INVALID = 0;
-  ADDITIONAL_OPERATION_TYPE_CITY_ID_TO_CITY_NAME = 1;
-}
-
 // Represents a row of a table.
 message TableRow {
+  reserved 3;
+  reserved "additional_operations";
+
   repeated ChartCellValue values = 1;
   repeated ChartCellValue filter_value = 2;
-  // @deprecated Use ChartCellMeta instead.
-  repeated AdditionalOps additional_operations = 3;
 }
 
 // A representation of large amounts of data in a table.
