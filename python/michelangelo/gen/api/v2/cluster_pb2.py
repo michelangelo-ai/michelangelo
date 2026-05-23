@@ -28,7 +28,7 @@ from michelangelo.gen.api import conditions_pb2 as michelangelo_dot_api_dot_cond
 from michelangelo.gen.api.v2 import kubernetes_pb2 as michelangelo_dot_api_dot_v2_dot_kubernetes__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n!michelangelo/api/v2/cluster.proto\x12\x13michelangelo.api.v2\x1a\x34k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto\x1a\x1emichelangelo/api/options.proto\x1a!michelangelo/api/conditions.proto\x1a$michelangelo/api/v2/kubernetes.proto\"\xd8\x02\n\x0b\x43lusterSpec\x12:\n\x03sla\x18\x01 \x01(\x0e\x32(.michelangelo.api.v2.ClusterSpec.SLATypeR\x03sla\x12\x16\n\x06region\x18\x02 \x01(\tR\x06region\x12\x12\n\x04zone\x18\x03 \x01(\tR\x04zone\x12\x45\n\nkubernetes\x18\x05 \x01(\x0b\x32#.michelangelo.api.v2.KubernetesSpecH\x00R\nkubernetes\x12+\n\x02\x64\x63\x18\x07 \x01(\x0e\x32\x1b.michelangelo.api.v2.DCTypeR\x02\x64\x63\"P\n\x07SLAType\x12\x14\n\x10SLA_TYPE_INVALID\x10\x00\x12\x17\n\x13SLA_TYPE_PRODUCTION\x10\x01\x12\x16\n\x12SLA_TYPE_EPHEMERAL\x10\x02\x42\x0f\n\x07\x63luster\x12\x04\xe0\xc0\x03\x01J\x04\x08\x04\x10\x05J\x04\x08\x06\x10\x07\"_\n\rClusterStatus\x12H\n\x11status_conditions\x18\x02 \x03(\x0b\x32\x1b.michelangelo.api.ConditionR\x10statusConditionsJ\x04\x08\x01\x10\x02\"\x9b\x02\n\x07\x43luster\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12L\n\x08metadata\x18\x02 \x01(\x0b\x32\x30.k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMetaR\x08metadata\x12\x34\n\x04spec\x18\x03 \x01(\x0b\x32 .michelangelo.api.v2.ClusterSpecR\x04spec\x12:\n\x06status\x18\x04 \x01(\x0b\x32\".michelangelo.api.v2.ClusterStatusR\x06status:\x03\x82\x42\x00\"\xdf\x01\n\x0b\x43lusterList\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12J\n\x08metadata\x18\x02 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.ListMetaR\x08metadata\x12\x32\n\x05items\x18\x03 \x03(\x0b\x32\x1c.michelangelo.api.v2.ClusterR\x05items:\x03\xfa\x41\x00*I\n\x06\x44\x43Type\x12\x13\n\x0f\x44\x43_TYPE_INVALID\x10\x00\x12\x13\n\x0f\x44\x43_TYPE_ON_PREM\x10\x01\x12\x15\n\x11\x44\x43_TYPE_CLOUD_GCP\x10\x02\x42\x04Z\x02v2b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n!michelangelo/api/v2/cluster.proto\x12\x13michelangelo.api.v2\x1a\x34k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto\x1a\x1emichelangelo/api/options.proto\x1a!michelangelo/api/conditions.proto\x1a$michelangelo/api/v2/kubernetes.proto\"\xd8\x02\n\x0b\x43lusterSpec\x12:\n\x03sla\x18\x01 \x01(\x0e\x32(.michelangelo.api.v2.ClusterSpec.SLATypeR\x03sla\x12\x16\n\x06region\x18\x02 \x01(\tR\x06region\x12\x12\n\x04zone\x18\x03 \x01(\tR\x04zone\x12\x45\n\nkubernetes\x18\x05 \x01(\x0b\x32#.michelangelo.api.v2.KubernetesSpecH\x00R\nkubernetes\x12+\n\x02\x64\x63\x18\x07 \x01(\x0e\x32\x1b.michelangelo.api.v2.DCTypeR\x02\x64\x63\"P\n\x07SLAType\x12\x14\n\x10SLA_TYPE_INVALID\x10\x00\x12\x17\n\x13SLA_TYPE_PRODUCTION\x10\x01\x12\x16\n\x12SLA_TYPE_EPHEMERAL\x10\x02\x42\x0f\n\x07\x63luster\x12\x04\xe0\xc0\x03\x01J\x04\x08\x04\x10\x05J\x04\x08\x06\x10\x07\"_\n\rClusterStatus\x12H\n\x11status_conditions\x18\x02 \x03(\x0b\x32\x1b.michelangelo.api.ConditionR\x10statusConditionsJ\x04\x08\x01\x10\x02\"\x9e\x02\n\x07\x43luster\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12L\n\x08metadata\x18\x02 \x01(\x0b\x32\x30.k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMetaR\x08metadata\x12\x34\n\x04spec\x18\x03 \x01(\x0b\x32 .michelangelo.api.v2.ClusterSpecR\x04spec\x12:\n\x06status\x18\x04 \x01(\x0b\x32\".michelangelo.api.v2.ClusterStatusR\x06status:\x06\x82\x42\x03\xb0\x06\x01\"\xdf\x01\n\x0b\x43lusterList\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12J\n\x08metadata\x18\x02 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.ListMetaR\x08metadata\x12\x32\n\x05items\x18\x03 \x03(\x0b\x32\x1c.michelangelo.api.v2.ClusterR\x05items:\x03\xfa\x41\x00*`\n\x06\x44\x43Type\x12\x13\n\x0f\x44\x43_TYPE_INVALID\x10\x00\x12\x13\n\x0f\x44\x43_TYPE_ON_PREM\x10\x01\x12\x15\n\x11\x44\x43_TYPE_CLOUD_GCP\x10\x02\x12\x15\n\x11\x44\x43_TYPE_CLOUD_OCI\x10\x03\x42\x04Z\x02v2b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -39,11 +39,11 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_CLUSTERSPEC'].oneofs_by_name['cluster']._loaded_options = None
   _globals['_CLUSTERSPEC'].oneofs_by_name['cluster']._serialized_options = b'\340\300\003\001'
   _globals['_CLUSTER']._loaded_options = None
-  _globals['_CLUSTER']._serialized_options = b'\202B\000'
+  _globals['_CLUSTER']._serialized_options = b'\202B\003\260\006\001'
   _globals['_CLUSTERLIST']._loaded_options = None
   _globals['_CLUSTERLIST']._serialized_options = b'\372A\000'
-  _globals['_DCTYPE']._serialized_start=1173
-  _globals['_DCTYPE']._serialized_end=1246
+  _globals['_DCTYPE']._serialized_start=1176
+  _globals['_DCTYPE']._serialized_end=1272
   _globals['_CLUSTERSPEC']._serialized_start=218
   _globals['_CLUSTERSPEC']._serialized_end=562
   _globals['_CLUSTERSPEC_SLATYPE']._serialized_start=453
@@ -51,7 +51,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_CLUSTERSTATUS']._serialized_start=564
   _globals['_CLUSTERSTATUS']._serialized_end=659
   _globals['_CLUSTER']._serialized_start=662
-  _globals['_CLUSTER']._serialized_end=945
-  _globals['_CLUSTERLIST']._serialized_start=948
-  _globals['_CLUSTERLIST']._serialized_end=1171
+  _globals['_CLUSTER']._serialized_end=948
+  _globals['_CLUSTERLIST']._serialized_start=951
+  _globals['_CLUSTERLIST']._serialized_end=1174
 # @@protoc_insertion_point(module_scope)

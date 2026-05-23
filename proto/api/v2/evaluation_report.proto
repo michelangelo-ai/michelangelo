@@ -1,0 +1,78 @@
+// This file defines the EvaluationReport resource and related messages.
+
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "v2";
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/chart.proto";
+
+// Defines the status of a ML evaluation report.
+message EvaluationReportStatus {}
+
+// Defines the types of evaluation report source.
+enum EvaluationReportSourceType {
+  EVALUATION_REPORT_SOURCE_TYPE_INVALID = 0;
+  EVALUATION_REPORT_SOURCE_TYPE_CUSTOM_CREATED = 1;
+  EVALUATION_REPORT_SOURCE_TYPE_PIPELINE_RUN = 2;
+}
+
+// Defines the spec of an evaluation report for a trained model.
+message EvaluationReportSpec {
+  // Title for the report to be displayed to the user.
+  string title = 1;
+  // At least one chart is required.
+  repeated Chart charts = 2;
+  // List of filter values belonging to a filter group.
+  repeated Filter filters = 3;
+  // Source of data points. Check the chart level for per-chart data point sources.
+  DataPointSource data_point_source = 4;
+  // Source of the report.
+  EvaluationReportSourceType source_type = 5;
+  // Pipeline run that generated the report. Empty for custom-created reports.
+  michelangelo.api.ResourceIdentifier source_pipeline_run = 6 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.io/PipelineRun"
+    }
+  ];
+  // Specifies the layout of the filters.
+  FilterLayout filter_layout = 7;
+  // If sealed, the evaluation report cannot be modified.
+  bool sealed = 8;
+  // The pipeline that generated this evaluation report.
+  michelangelo.api.ResourceIdentifier source_pipeline = 9 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.io/Pipeline"
+    }
+  ];
+}
+
+// EvaluationReport refers to an evaluation report for a trained model.
+message EvaluationReport {
+  option (michelangelo.api.resource) = {
+    immutable: true,
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  // Spec of the desired behavior of the EvaluationReport.
+  EvaluationReportSpec spec = 3;
+
+  // Most recently observed status of the EvaluationReport.
+  EvaluationReportStatus status = 4;
+}
+
+// A list of EvaluationReport objects.
+message EvaluationReportList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  // A list of EvaluationReport items.
+  repeated EvaluationReport items = 3;
+}

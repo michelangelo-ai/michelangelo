@@ -1,0 +1,38 @@
+// This file defines the Time related messages in Michelangelo API.
+
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "v2";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+// Defines TimeRange information.
+message TimeRange {
+  google.protobuf.Timestamp start = 1;
+
+  google.protobuf.Timestamp end = 2;
+
+  // Defines the time range for the latest x duration from now.
+  google.protobuf.Duration duration_from_now = 3;
+}
+
+enum TimeUnit {
+  TIME_UNIT_INVALID = 0;
+  TIME_UNIT_YEAR = 1;
+  TIME_UNIT_QUARTER = 2;
+  TIME_UNIT_MONTH = 3;
+  TIME_UNIT_WEEK = 4;
+  TIME_UNIT_DAY = 5;
+  TIME_UNIT_HOUR = 6;
+  TIME_UNIT_MINUTE = 7;
+  TIME_UNIT_SECOND = 8;
+}
+
+// Customized time duration type.
+message Duration {
+  int64 num = 1;
+  TimeUnit unit = 2;
+}

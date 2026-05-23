@@ -29,7 +29,7 @@ from michelangelo.gen.api.v2 import git_pb2 as michelangelo_dot_api_dot_v2_dot_g
 from michelangelo.gen.api.v2 import user_pb2 as michelangelo_dot_api_dot_v2_dot_user__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\"michelangelo/api/v2/revision.proto\x12\x13michelangelo.api.v2\x1a\x19google/protobuf/any.proto\x1a\x34k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto\x1a\x1emichelangelo/api/options.proto\x1a\x1dmichelangelo/api/v2/git.proto\x1a\x1emichelangelo/api/v2/user.proto\"\xa9\x04\n\x0cRevisionSpec\x12K\n\tbase_type\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08\x62\x61seType\x12I\n\rbase_resource\x18\x02 \x01(\x0b\x32$.michelangelo.api.ResourceIdentifierR\x0c\x62\x61seResource\x12.\n\x07\x63ontent\x18\x03 \x01(\x0b\x32\x14.google.protobuf.AnyR\x07\x63ontent\x12\x33\n\x05owner\x18\x04 \x01(\x0b\x32\x1d.michelangelo.api.v2.UserInfoR\x05owner\x12\x62\n\x06parent\x18\x05 \x01(\x0b\x32$.michelangelo.api.ResourceIdentifierB$\xda\xe8\x02 \n\x1emichelangelo.uber.com/RevisionR\x06parent\x12\x17\n\x07git_ref\x18\x06 \x01(\tR\x06gitRef\x12\x1d\n\ngit_branch\x18\x07 \x01(\tR\tgitBranch\x12&\n\x0freview_tool_url\x18\x08 \x01(\tR\rreviewToolUrl\x12\x1f\n\x0brevision_id\x18\t \x01(\tR\nrevisionId\x12\x37\n\x06\x63ommit\x18\n \x01(\x0b\x32\x1f.michelangelo.api.v2.CommitInfoR\x06\x63ommit\"J\n\x0eRevisionStatus\x12\x38\n\x05state\x18\x01 \x01(\x0e\x32\".michelangelo.api.v2.RevisionStateR\x05state\"\xca\x03\n\x08Revision\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12L\n\x08metadata\x18\x02 \x01(\x0b\x32\x30.k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMetaR\x08metadata\x12\x35\n\x04spec\x18\x03 \x01(\x0b\x32!.michelangelo.api.v2.RevisionSpecR\x04spec\x12;\n\x06status\x18\x04 \x01(\x0b\x32#.michelangelo.api.v2.RevisionStatusR\x06status:\xae\x01\x82\x42\x00\x8a\x42#\n\x12spec.base_resource\x12\rbase_resource\x8a\x42 \n\x13spec.base_type.kind\x12\tbase_type\x8a\x42\x18\n\x0fspec.owner.name\x12\x05owner\x8a\x42#\n\x12spec.commit.branch\x12\rcommit_branch\x8a\x42\x1e\n\x13spec.commit.git_ref\x12\x07git_ref\"\xe1\x01\n\x0cRevisionList\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12J\n\x08metadata\x18\x02 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.ListMetaR\x08metadata\x12\x33\n\x05items\x18\x03 \x03(\x0b\x32\x1d.michelangelo.api.v2.RevisionR\x05items:\x03\xfa\x41\x00*\x98\x01\n\rRevisionState\x12\x1a\n\x16REVISION_STATE_INVALID\x10\x00\x12\x1a\n\x16REVISION_STATE_CREATED\x10\x01\x12\x1b\n\x17REVISION_STATE_BUILDING\x10\x02\x12\x18\n\x14REVISION_STATE_READY\x10\x03\x12\x18\n\x14REVISION_STATE_ERROR\x10\x04\x42.\n\x17\x63om.michelangelo.api.v2B\rRevisionProtoP\x01Z\x02v2b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\"michelangelo/api/v2/revision.proto\x12\x13michelangelo.api.v2\x1a\x19google/protobuf/any.proto\x1a\x34k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto\x1a\x1emichelangelo/api/options.proto\x1a\x1dmichelangelo/api/v2/git.proto\x1a\x1emichelangelo/api/v2/user.proto\"\xf1\x03\n\x0cRevisionSpec\x12K\n\tbase_type\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08\x62\x61seType\x12I\n\rbase_resource\x18\x02 \x01(\x0b\x32$.michelangelo.api.ResourceIdentifierR\x0c\x62\x61seResource\x12.\n\x07\x63ontent\x18\x03 \x01(\x0b\x32\x14.google.protobuf.AnyR\x07\x63ontent\x12\x33\n\x05owner\x18\x04 \x01(\x0b\x32\x1d.michelangelo.api.v2.UserInfoR\x05owner\x12\x62\n\x06parent\x18\x05 \x01(\x0b\x32$.michelangelo.api.ResourceIdentifierB$\xda\xe8\x02 \n\x1emichelangelo.uber.com/RevisionR\x06parent\x12\x1f\n\x0brevision_id\x18\t \x01(\tR\nrevisionId\x12\x1f\n\x06source\x18\n \x01(\tB\x07\xd2\xe8\x02\x03\xb0\x06\x01R\x06source\x12>\n\ngit_commit\x18\x0b \x01(\x0b\x32\x1f.michelangelo.api.v2.CommitInfoR\tgitCommit\"J\n\x0eRevisionStatus\x12\x38\n\x05state\x18\x01 \x01(\x0e\x32\".michelangelo.api.v2.RevisionStateR\x05state\"\x82\x03\n\x08Revision\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12L\n\x08metadata\x18\x02 \x01(\x0b\x32\x30.k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMetaR\x08metadata\x12\x35\n\x04spec\x18\x03 \x01(\x0b\x32!.michelangelo.api.v2.RevisionSpecR\x04spec\x12;\n\x06status\x18\x04 \x01(\x0b\x32#.michelangelo.api.v2.RevisionStatusR\x06status:g\x82\x42\x00\x8a\x42#\n\x12spec.base_resource\x12\rbase_resource\x8a\x42 \n\x13spec.base_type.kind\x12\tbase_type\x8a\x42\x18\n\x0fspec.owner.name\x12\x05owner\"\xe1\x01\n\x0cRevisionList\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12J\n\x08metadata\x18\x02 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.ListMetaR\x08metadata\x12\x33\n\x05items\x18\x03 \x03(\x0b\x32\x1d.michelangelo.api.v2.RevisionR\x05items:\x03\xfa\x41\x00*\x98\x01\n\rRevisionState\x12\x1a\n\x16REVISION_STATE_INVALID\x10\x00\x12\x1a\n\x16REVISION_STATE_CREATED\x10\x01\x12\x1b\n\x17REVISION_STATE_BUILDING\x10\x02\x12\x18\n\x14REVISION_STATE_READY\x10\x03\x12\x18\n\x14REVISION_STATE_ERROR\x10\x04\x42.\n\x17\x63om.michelangelo.api.v2B\rRevisionProtoP\x01Z\x02v2b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -39,18 +39,20 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._serialized_options = b'\n\027com.michelangelo.api.v2B\rRevisionProtoP\001Z\002v2'
   _globals['_REVISIONSPEC'].fields_by_name['parent']._loaded_options = None
   _globals['_REVISIONSPEC'].fields_by_name['parent']._serialized_options = b'\332\350\002 \n\036michelangelo.uber.com/Revision'
+  _globals['_REVISIONSPEC'].fields_by_name['source']._loaded_options = None
+  _globals['_REVISIONSPEC'].fields_by_name['source']._serialized_options = b'\322\350\002\003\260\006\001'
   _globals['_REVISION']._loaded_options = None
-  _globals['_REVISION']._serialized_options = b'\202B\000\212B#\n\022spec.base_resource\022\rbase_resource\212B \n\023spec.base_type.kind\022\tbase_type\212B\030\n\017spec.owner.name\022\005owner\212B#\n\022spec.commit.branch\022\rcommit_branch\212B\036\n\023spec.commit.git_ref\022\007git_ref'
+  _globals['_REVISION']._serialized_options = b'\202B\000\212B#\n\022spec.base_resource\022\rbase_resource\212B \n\023spec.base_type.kind\022\tbase_type\212B\030\n\017spec.owner.name\022\005owner'
   _globals['_REVISIONLIST']._loaded_options = None
   _globals['_REVISIONLIST']._serialized_options = b'\372A\000'
-  _globals['_REVISIONSTATE']._serialized_start=1557
-  _globals['_REVISIONSTATE']._serialized_end=1709
+  _globals['_REVISIONSTATE']._serialized_start=1429
+  _globals['_REVISIONSTATE']._serialized_end=1581
   _globals['_REVISIONSPEC']._serialized_start=236
-  _globals['_REVISIONSPEC']._serialized_end=789
-  _globals['_REVISIONSTATUS']._serialized_start=791
-  _globals['_REVISIONSTATUS']._serialized_end=865
-  _globals['_REVISION']._serialized_start=868
-  _globals['_REVISION']._serialized_end=1326
-  _globals['_REVISIONLIST']._serialized_start=1329
-  _globals['_REVISIONLIST']._serialized_end=1554
+  _globals['_REVISIONSPEC']._serialized_end=733
+  _globals['_REVISIONSTATUS']._serialized_start=735
+  _globals['_REVISIONSTATUS']._serialized_end=809
+  _globals['_REVISION']._serialized_start=812
+  _globals['_REVISION']._serialized_end=1198
+  _globals['_REVISIONLIST']._serialized_start=1201
+  _globals['_REVISIONLIST']._serialized_end=1426
 # @@protoc_insertion_point(module_scope)

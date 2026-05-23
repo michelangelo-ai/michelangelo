@@ -1,0 +1,443 @@
+// This file defines chart and visualization types used in evaluation reports.
+
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "v2";
+
+import "google/protobuf/struct.proto";
+import "michelangelo/api/v2/time.proto";
+
+// Filter is used for the threshold bar in the performance report page.
+message Filter {
+  // A list of numeric values for the threshold filter.
+  repeated double filter_values = 1;
+  // Used as the ID of the filter.
+  // @deprecated Use filter_id instead.
+  string filter_group = 2;
+  // A list of string values for the segment filter.
+  repeated string segment_values = 3;
+  // The start and end time of the data range filter.
+  TimeRange date_range = 4;
+  // The ID of the filter.
+  string filter_id = 5;
+  // The display name of the filter.
+  string filter_name = 6;
+  // The type of the filter.
+  FilterType filter_type = 7;
+  // The filter mode.
+  FilterMode filter_mode = 8;
+  // A list of custom operations for the filter.
+  repeated FilterCustomOperation operations = 9;
+  // A list of selected threshold filter values.
+  repeated double selected_filter_values = 10;
+  // A list of selected segment filter values.
+  repeated string selected_segment_values = 11;
+  // The selected start and end date of the data range filter.
+  TimeRange selected_date_range = 12;
+  // Decide whether to use dynamic filtering or not.
+  bool use_dynamic_filtering = 13;
+
+  enum FilterType {
+    FILTER_TYPE_INVALID = 0;
+    FILTER_TYPE_SEGMENT = 1;
+    FILTER_TYPE_MULTI_SEGMENT = 2;
+    FILTER_TYPE_THRESHOLD = 3;
+    FILTER_TYPE_DATE_RANGE = 4;
+  }
+
+  enum FilterMode {
+    FILTER_MODE_INVALID = 0;
+    FILTER_MODE_EAGER = 1;
+    FILTER_MODE_LAZY = 2;
+  }
+}
+
+// A collection of filters along with their layout specification.
+message FilterCollection {
+  repeated Filter filters = 1;
+  FilterLayout filter_layout = 2;
+}
+
+// Custom operation for the filter.
+message FilterCustomOperation {
+  string op_type = 1;
+  google.protobuf.Struct params = 2;
+}
+
+// Defines the layout spec of a filter.
+message FilterLayoutSpec {
+  FilterSize size = 1;
+
+  enum FilterSize {
+    FILTER_SIZE_INVALID = 0;
+    FILTER_SIZE_LARGE = 1;
+    FILTER_SIZE_SMALL = 2;
+  }
+}
+
+// Defines the grouped filters in the layout.
+message FilterLayoutGroup {
+  // The IDs of the filters to be grouped together in the layout.
+  repeated string filter_ids = 1;
+  // Title for the Layout Group that will be shown to users.
+  string title = 2;
+}
+
+// Specifies the layout of filters.
+message FilterLayout {
+  repeated FilterLayoutGroup filter_groups = 1;
+  map<string, FilterLayoutSpec> filter_id_to_layout_spec_map = 2;
+}
+
+// Defines the data point source for evaluation report.
+message DataPointSource {
+  enum Type {
+    DATA_POINT_SOURCE_TYPE_INVALID = 0;
+    // Data points are stored externally (e.g. object storage).
+    DATA_POINT_SOURCE_TYPE_EMBEDDED = 1;
+    // Data points fetched from metric store on the fly.
+    DATA_POINT_SOURCE_TYPE_METRIC_STORE = 2;
+  }
+  Type type = 1;
+  // Metric query string.
+  string query_string = 2;
+  // Key-value pairs for storage fields needed to fetch the metrics.
+  map<string, string> properties = 3;
+}
+
+// Represents the line style type.
+enum LineStyleType {
+  LINE_STYLE_TYPE_INVALID = 0;
+  LINE_STYLE_TYPE_SOLID = 1;
+  LINE_STYLE_TYPE_DOTTED = 2;
+}
+
+// Visual style of a line.
+message LineStyle {
+  LineStyleType style = 1;
+}
+
+// Information when mouse hovers over a particular data point.
+message Annotation {
+  string annotation = 1;
+  double x = 2;
+  double y = 3;
+  repeated ChartDataset lines = 4;
+  repeated LineStyle line_styles = 5;
+}
+
+// The chart cell meta operation information for additional operations.
+message ChartCellMetaOperation {
+  string op_type = 1;
+  google.protobuf.Struct params = 2;
+}
+
+// The chart cell meta data for additional operations.
+message ChartCellMeta {
+  repeated ChartCellMetaOperation operations = 1;
+
+  message CellValue {
+    oneof value {
+      string str_value = 1;
+      double number = 2;
+    }
+  }
+  repeated CellValue additional_values = 2;
+}
+
+// The generic meta operation information for additional operations.
+message MetaOperation {
+  string op_type = 1;
+  google.protobuf.Struct params = 2;
+}
+
+// The generic meta data for additional operations.
+message Metadata {
+  repeated MetaOperation operations = 1;
+}
+
+// Represents a cell value in a chart.
+message ChartCellValue {
+  string str_value = 1;
+  double number = 2;
+  ChartCellMeta metadata = 3;
+}
+
+// Represents a data point in a chart.
+message ChartDataPoint {
+  double x = 1;
+  double y = 2;
+  string point_label = 3;
+  ChartCellValue filter_value = 4;
+  map<string, string> point_metadata = 5;
+}
+
+// Represents a data set in a chart.
+message ChartDataset {
+  string line_name = 1;
+  repeated ChartDataPoint points = 2;
+  repeated ChartCellValue filter_value = 3;
+}
+
+// A graph connecting a series of data points with a continuous line.
+message LineChart {
+  string x_axis = 1;
+  string y_axis = 2;
+  repeated ChartDataset lines = 3;
+  repeated Annotation annotations = 4;
+}
+
+// A graph representing a series of data points not connected.
+message PointChart {
+  string x_axis = 1;
+  string y_axis = 2;
+  repeated ChartDataset point_sets = 3;
+}
+
+// Represents each bucket set in a histogram.
+message HistogramBucketSet {
+  double min = 1;
+  double max = 2;
+  double num = 3;
+  double sum = 4;
+  double sum_squared = 5;
+  double std_dev = 6;
+  double entropy = 7;
+  double average = 8;
+  repeated double bucket_limits = 9;
+  repeated string bucket_names = 10;
+  repeated double bucket_values = 11;
+  string chart_name = 12;
+}
+
+// Represents the histogram type.
+enum HistogramType {
+  HISTOGRAM_TYPE_INVALID = 0;
+  HISTOGRAM_TYPE_NUMERICAL = 1;
+  HISTOGRAM_TYPE_CATEGORICAL = 2;
+}
+
+// A graph representing a frequency distribution by means of rectangles.
+message Histogram {
+  string x_axis = 1;
+  string y_axis = 2;
+  repeated HistogramBucketSet histograms = 3;
+  HistogramType histogram_type = 4;
+  Metadata metadata = 5;
+}
+
+// A scalar quantity.
+message Scalar {
+  string scalar_name = 1;
+  ChartCellValue cell_value = 2;
+}
+
+// A text representation.
+message RichText {
+  string text = 1;
+}
+
+// @deprecated Replaced by ChartCellMeta.
+message AdditionalOps {
+  string field_name = 1;
+  // @deprecated
+  AdditionalOperationType additional_operation_type = 2;
+}
+
+// @deprecated
+enum AdditionalOperationType {
+  ADDITIONAL_OPERATION_TYPE_INVALID = 0;
+  ADDITIONAL_OPERATION_TYPE_CITY_ID_TO_CITY_NAME = 1;
+}
+
+// Represents a row of a table.
+message TableRow {
+  repeated ChartCellValue values = 1;
+  repeated ChartCellValue filter_value = 2;
+  // @deprecated Use ChartCellMeta instead.
+  repeated AdditionalOps additional_operations = 3;
+}
+
+// A representation of large amounts of data in a table.
+message Table {
+  repeated string column_names = 1;
+  repeated TableRow rows = 2;
+  string name = 3;
+  Metadata metadata = 4;
+  repeated string group_by = 5;
+}
+
+// A collection of tables displayed in tabs.
+message TableCollection {
+  repeated Table tables = 1;
+}
+
+// A method for graphically depicting groups of numerical data through quartiles.
+message BoxPlot {
+  double minimum = 1;
+  double first_quartile = 2;
+  double median = 3;
+  double third_quartile = 4;
+  double maximum = 5;
+}
+
+// Represents a row of a confusion matrix.
+message MatrixRow {
+  repeated ChartCellValue cells = 1;
+}
+
+// Represents a confusion matrix at a given threshold.
+message Matrix {
+  repeated MatrixRow matrix_rows = 1;
+  repeated ChartCellValue filter_values = 2;
+  string name = 3;
+}
+
+// A list of confusion matrices.
+message MatrixSeries {
+  repeated Matrix matrices = 1;
+}
+
+// A table layout for visualization of algorithm performance.
+message ConfusionMatrix {
+  repeated MatrixSeries matrix_series = 1;
+}
+
+// A confusion matrix for multi-class ML models.
+message MultiClassConfusionMatrix {
+  repeated string class_names = 1;
+  repeated TableRow rows = 2;
+}
+
+// A chart presenting categorical data with rectangular bars.
+message BarChart {
+  string x_axis = 1;
+  string y_axis = 2;
+  repeated ChartDataset bars = 3;
+  StackOrientation stack_orientation = 4;
+
+  enum StackOrientation {
+    STACK_ORIENTATION_INVALID = 0;
+    STACK_ORIENTATION_HORIZONTAL = 1;
+    STACK_ORIENTATION_VERTICAL = 2;
+  }
+}
+
+// A pre-rendered custom image.
+message Image {
+  // img src string recognized by the browser.
+  string img_src = 1;
+  string description = 2;
+}
+
+// A JSON block displaying data in JSON format.
+message JSONBlock {
+  google.protobuf.Struct data = 1;
+  repeated ChartCellValue filter_value = 3;
+}
+
+// A time series chart visualizing trend over a period of time.
+message TimeSeriesChart {
+  string x_axis = 1;
+  string y_axis = 2;
+  repeated ChartDataset lines = 3;
+  repeated Annotation annotations = 4;
+  string name = 5;
+  Metadata metadata = 6;
+}
+
+// A collection of time series rendered as a single chart.
+message TimeSeriesChartCollection {
+  repeated TimeSeriesChart time_series = 1;
+}
+
+// Represents different chart types.
+enum ChartType {
+  CHART_TYPE_RICH_INVALID = 0;
+  CHART_TYPE_RICH_TEXT = 1;
+  CHART_TYPE_LINE_CHART = 2;
+  CHART_TYPE_POINT_CHART = 3;
+  CHART_TYPE_HISTOGRAM = 4;
+  CHART_TYPE_SCALAR = 5;
+  CHART_TYPE_TABLE = 6;
+  CHART_TYPE_CONFUSION_MATRIX = 7;
+  CHART_TYPE_BOX_PLOT = 8;
+  CHART_TYPE_BAR_CHART = 9;
+  CHART_TYPE_MULTI_CLASS_CONFUSION_MATRIX = 10;
+  CHART_TYPE_IMAGE = 11;
+  CHART_TYPE_JSON = 12;
+  CHART_TYPE_TABLE_COLLECTION = 13;
+  CHART_TYPE_TIME_SERIES = 14;
+  CHART_TYPE_TIME_SERIES_COLLECTION = 15;
+  CHART_TYPE_FILTER = 16;
+  CHART_TYPE_FILTER_COLLECTION = 17;
+}
+
+// Represents the visual column style.
+enum ChartColumnStyle {
+  CHART_COLUMN_STYLE_INVALID = 0;
+  CHART_COLUMN_STYLE_FULL_ROW = 1;
+}
+
+// Layout spec for legend.
+message LegendLayoutSpec {
+  Orientation orientation = 1;
+  Position position = 2;
+  bool collapsible = 3;
+  bool filterable = 4;
+
+  enum Orientation {
+    ORIENTATION_INVALID = 0;
+    ORIENTATION_HORIZONTAL = 1;
+    ORIENTATION_VERTICAL = 2;
+  }
+
+  enum Position {
+    POSITION_INVALID = 0;
+    POSITION_TOP = 1;
+    POSITION_BOTTOM = 2;
+    POSITION_LEFT = 3;
+    POSITION_RIGHT = 4;
+  }
+}
+
+// Chart layout representing how a chart will be laid out in the UI.
+message ChartLayoutSpec {
+  bool is_inline = 1;
+  LegendLayoutSpec legend_layout_spec = 2;
+  string width = 3;
+  string height = 4;
+}
+
+// Defines different types of charts shown in the UI.
+message Chart {
+  ChartType chart_type = 1;
+  // A unique name for this chart section within the report.
+  string section_id = 2;
+  string title = 3;
+  LineChart line_chart = 4;
+  PointChart point_chart = 5;
+  Histogram histogram = 6;
+  Scalar scalar = 7;
+  RichText rich_text = 8;
+  Table table = 9;
+  BoxPlot box_plot = 10;
+  ConfusionMatrix confusion_matrix = 11;
+  MultiClassConfusionMatrix multiclass_confusion_matrix = 12;
+  bool filter_enabled = 13;
+  ChartColumnStyle column_style = 14;
+  repeated string filter_group = 15;
+  BarChart bar_chart = 16;
+  ChartLayoutSpec chart_layout_spec = 17;
+  DataPointSource data_point_source = 18;
+  Image image = 19;
+  JSONBlock json_block = 20;
+  TableCollection table_collection = 21;
+  TimeSeriesChart time_series = 22;
+  TimeSeriesChartCollection time_series_collection = 23;
+  Filter filter = 24;
+  FilterCollection filter_collection = 25;
+  string description = 26;
+}
