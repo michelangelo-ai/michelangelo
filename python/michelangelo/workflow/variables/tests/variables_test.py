@@ -190,6 +190,7 @@ class TestPusherResult(TestCase):
 # Helpers for mocking optional backends (pyspark / ray not installed)
 # ---------------------------------------------------------------------------
 
+
 def _mock_pyspark(df_instance=None):
     """Return (mock_pyspark_sql_module, mock_spark_df) for sys.modules patching."""
     mock_df_class = type("DataFrame", (), {})
@@ -294,6 +295,7 @@ class TestDatasetVariablePandas(TestCase):
     def test_init_import_from_package(self):
         """DatasetVariable is importable from the package __init__."""
         from michelangelo.workflow import variables as _wv
+
         self.assertIs(_wv.DatasetVariable, DatasetVariable)
 
 
@@ -316,8 +318,10 @@ class TestDatasetVariableBackendSpark(TestCase):
     def test_backend_unknown_when_pyspark_not_installed(self):
         """It returns 'unknown' when pyspark is absent and value is unrecognised."""
         artifact = DatasetVariable(value=object())
-        with patch.dict(sys.modules, {"pyspark": None, "pyspark.sql": None,
-                                      "ray": None, "ray.data": None}):
+        with patch.dict(
+            sys.modules,
+            {"pyspark": None, "pyspark.sql": None, "ray": None, "ray.data": None},
+        ):
             self.assertEqual(artifact.backend, "unknown")
 
 
@@ -345,8 +349,10 @@ class TestDatasetVariableSaveLoadSparkRay(TestCase):
         """save() calls save_spark_dataframe() for a Spark DataFrame value."""
         mock_sql, spark_df = _mock_pyspark()
         artifact = DatasetVariable(value=spark_df)
-        with patch.dict(sys.modules, _spark_mods(mock_sql)), \
-                patch.object(artifact, "save_spark_dataframe") as mock_save:
+        with (
+            patch.dict(sys.modules, _spark_mods(mock_sql)),
+            patch.object(artifact, "save_spark_dataframe") as mock_save,
+        ):
             artifact.save()
             mock_save.assert_called_once()
 
@@ -354,8 +360,10 @@ class TestDatasetVariableSaveLoadSparkRay(TestCase):
         """save() calls save_ray_dataset() for a Ray Dataset value."""
         mock_data, ray_ds = _mock_ray()
         artifact = DatasetVariable(value=ray_ds)
-        with patch.dict(sys.modules, _ray_mods(mock_data)), \
-                patch.object(artifact, "save_ray_dataset") as mock_save:
+        with (
+            patch.dict(sys.modules, _ray_mods(mock_data)),
+            patch.object(artifact, "save_ray_dataset") as mock_save,
+        ):
             artifact.save()
             mock_save.assert_called_once()
 
@@ -365,8 +373,10 @@ class TestDatasetVariableSaveLoadSparkRay(TestCase):
         mock_spark_io = type("SparkIO", (), {})
         mock_module = _types.SimpleNamespace(SparkIO=mock_spark_io)
         spark_patch = {"michelangelo.uniflow.plugins.spark.io": mock_module}
-        with patch.dict(sys.modules, spark_patch), \
-                patch.object(artifact, "_save_value_using_io") as mock_io:
+        with (
+            patch.dict(sys.modules, spark_patch),
+            patch.object(artifact, "_save_value_using_io") as mock_io,
+        ):
             artifact.save_spark_dataframe()
             mock_io.assert_called_once_with(mock_spark_io)
 
@@ -376,8 +386,10 @@ class TestDatasetVariableSaveLoadSparkRay(TestCase):
         mock_ray_io = type("RayDatasetIO", (), {})
         mock_module = _types.SimpleNamespace(RayDatasetIO=mock_ray_io)
         ray_patch = {"michelangelo.uniflow.plugins.ray.io": mock_module}
-        with patch.dict(sys.modules, ray_patch), \
-                patch.object(artifact, "_save_value_using_io") as mock_io:
+        with (
+            patch.dict(sys.modules, ray_patch),
+            patch.object(artifact, "_save_value_using_io") as mock_io,
+        ):
             artifact.save_ray_dataset()
             mock_io.assert_called_once_with(mock_ray_io)
 
@@ -387,8 +399,10 @@ class TestDatasetVariableSaveLoadSparkRay(TestCase):
         mock_spark_io = type("SparkIO", (), {})
         mock_module = _types.SimpleNamespace(SparkIO=mock_spark_io)
         spark_patch = {"michelangelo.uniflow.plugins.spark.io": mock_module}
-        with patch.dict(sys.modules, spark_patch), \
-                patch.object(artifact, "_load_value_using_io") as mock_io:
+        with (
+            patch.dict(sys.modules, spark_patch),
+            patch.object(artifact, "_load_value_using_io") as mock_io,
+        ):
             artifact.load_spark_dataframe()
             mock_io.assert_called_once_with(mock_spark_io)
 
@@ -398,8 +412,10 @@ class TestDatasetVariableSaveLoadSparkRay(TestCase):
         mock_ray_io = type("RayDatasetIO", (), {})
         mock_module = _types.SimpleNamespace(RayDatasetIO=mock_ray_io)
         ray_patch = {"michelangelo.uniflow.plugins.ray.io": mock_module}
-        with patch.dict(sys.modules, ray_patch), \
-                patch.object(artifact, "_load_value_using_io") as mock_io:
+        with (
+            patch.dict(sys.modules, ray_patch),
+            patch.object(artifact, "_load_value_using_io") as mock_io,
+        ):
             artifact.load_ray_dataset()
             mock_io.assert_called_once_with(mock_ray_io)
 
@@ -411,8 +427,10 @@ class TestDatasetVariableSaveLoadSparkRay(TestCase):
                 getActiveSession=lambda: object()  # non-None → active session
             )
         )
-        with patch.dict(sys.modules, _spark_mods(mock_sql)), \
-                patch.object(artifact, "load_spark_dataframe") as mock_load:
+        with (
+            patch.dict(sys.modules, _spark_mods(mock_sql)),
+            patch.object(artifact, "load_spark_dataframe") as mock_load,
+        ):
             artifact._load()
             mock_load.assert_called_once()
 
@@ -421,8 +439,9 @@ class TestDatasetVariableSaveLoadSparkRay(TestCase):
         artifact = DatasetVariable(path="/tmp/ray-lazy")
         mock_ray = _types.SimpleNamespace(is_initialized=lambda: True, data=object())
         ray_patch = {"pyspark": None, "pyspark.sql": None, "ray": mock_ray}
-        with patch.dict(sys.modules, ray_patch), \
-                patch.object(artifact, "load_ray_dataset") as mock_load:
+        with (
+            patch.dict(sys.modules, ray_patch),
+            patch.object(artifact, "load_ray_dataset") as mock_load,
+        ):
             artifact._load()
             mock_load.assert_called_once()
-

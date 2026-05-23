@@ -10,11 +10,13 @@ import pandas as pd
 
 from michelangelo.uniflow.plugins.pandas.io import PandasIO
 
-_DF = pd.DataFrame([
-    {"name": "alice", "score": 0.92},
-    {"name": "bob", "score": 0.88},
-    {"name": "carol", "score": 0.95},
-])
+_DF = pd.DataFrame(
+    [
+        {"name": "alice", "score": 0.92},
+        {"name": "bob", "score": 0.88},
+        {"name": "carol", "score": 0.95},
+    ]
+)
 
 
 class TestPandasIORoundtrip(TestCase):
@@ -37,8 +39,9 @@ class TestPandasIORoundtrip(TestCase):
         dest = self._dest()
         io.write(dest, _DF.copy())
         result = io.read(dest, None)
-        self.assertListEqual(sorted(result.columns.tolist()),
-                             sorted(_DF.columns.tolist()))
+        self.assertListEqual(
+            sorted(result.columns.tolist()), sorted(_DF.columns.tolist())
+        )
 
     def test_roundtrip_preserves_values(self):
         """Written DataFrame is read back with the same values."""
@@ -86,6 +89,7 @@ class TestPandasIORoundtrip(TestCase):
             with patch("fsspec.core.url_to_fs", return_value=(mock_fs, dest)):
                 io = PandasIO()
                 import contextlib
+
                 with contextlib.suppress(Exception):
                     io.write(dest, _DF.copy())
             mock_fs.mkdir.assert_called()

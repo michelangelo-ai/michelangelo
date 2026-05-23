@@ -11,7 +11,11 @@ import pandas as pd
 from michelangelo.workflow.schema.exceptions import ConfigurationError
 from michelangelo.workflow.schema.pusher import DatasetFormat, DatasetPluginConfig
 from michelangelo.workflow.schema.sinks import SinkResult
-from michelangelo.workflow.tasks.functions.sinks import DataSink, InMemorySink, LocalFileSink
+from michelangelo.workflow.tasks.functions.sinks import (
+    DataSink,
+    InMemorySink,
+    LocalFileSink,
+)
 from michelangelo.workflow.tasks.pusher.plugins.dataset_plugin import (
     DatasetPusherPlugin,
 )

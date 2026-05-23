@@ -262,8 +262,10 @@ class TestHiveSink(TestCase):
         """It raises ImportError when pyspark is not installed."""
         artifact = DatasetVariable(value=MagicMock())
         sink = HiveSink(HiveSinkConfig(database="ml", table="t"))
-        with patch.dict(sys.modules, {"pyspark": None, "pyspark.sql": None}), \
-                self.assertRaises(ImportError):
+        with (
+            patch.dict(sys.modules, {"pyspark": None, "pyspark.sql": None}),
+            self.assertRaises(ImportError),
+        ):
             sink.write(artifact)
 
     def test_raises_type_error_for_non_spark_artifact(self):
@@ -283,4 +285,3 @@ class TestDataSinkABC(TestCase):
         """It raises TypeError when instantiated without implementing write()."""
         with self.assertRaises(TypeError):
             DataSink()  # type: ignore[abstract]
-

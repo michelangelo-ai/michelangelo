@@ -36,4 +36,5 @@ class LocalFileSinkConfig:
         """Apply default format when not provided."""
         if self.format is None:
             from michelangelo.workflow.schema.pusher import DatasetFormat
+
             self.format = DatasetFormat.PARQUET
