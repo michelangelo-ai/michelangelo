@@ -31,10 +31,14 @@ class TestProtoIO(TestCase):
             path = f.name
 
         _jf = "michelangelo.uniflow.plugins.proto.io.json_format"
-        _mods = {"google.protobuf.json_format": mock_json_format,
-                 "google.protobuf": MagicMock()}
-        with patch(_jf, mock_json_format, create=True), \
-             patch.dict("sys.modules", _mods):
+        _mods = {
+            "google.protobuf.json_format": mock_json_format,
+            "google.protobuf": MagicMock(),
+        }
+        with (
+            patch(_jf, mock_json_format, create=True),
+            patch.dict("sys.modules", _mods),
+        ):
             io = ProtoIO()
             with patch("fsspec.core.url_to_fs") as mock_url_to_fs:
                 mock_fs = MagicMock()

@@ -118,8 +118,9 @@ class RayDatasetIO(IO[Any]):
     1. ``filter_empty_data()`` lists all parquet files, discards zero-byte files,
        and parallel-checks remaining files for non-empty row groups.
     2. ``ray.data.read_parquet`` reads the survivors.
-    3. If PyArrow raises on nested columns, ``_ParquetPolarsDatasource`` retries
-       with Polars and converts each file to an Arrow table.
+    3. If PyArrow raises on nested columns (ray-project/ray#61675), the Polars
+       fallback ``_ParquetPolarsDatasource`` retries the read. **Requires
+       ``polars`` to be installed** (``pip install michelangelo[ray-nested]``).
 
     Example:
         >>> import ray, tempfile, pandas as pd
@@ -208,7 +209,10 @@ class RayDatasetIO(IO[Any]):
         skipped = len(parquet_files) - len(candidates)
         _logger.info(
             "Found %d parquet file(s) at %s, %d zero-byte skipped, %d to check.",
-            len(parquet_files), url, skipped, len(candidates),
+            len(parquet_files),
+            url,
+            skipped,
+            len(candidates),
         )
 
         if not candidates:
@@ -221,7 +225,8 @@ class RayDatasetIO(IO[Any]):
         non_empty = [f for f, ok in zip(candidates, has_data) if ok]
         _logger.info(
             "Row-group check: %d have data, %d empty.",
-            len(non_empty), len(candidates) - len(non_empty),
+            len(non_empty),
+            len(candidates) - len(non_empty),
         )
         return non_empty
 

@@ -34,8 +34,8 @@ class ProtoIO(IO[Any]):
 
     Raises:
         ImportError: If ``google-protobuf`` is not installed.
-        KeyError: On ``read()`` when ``metadata`` does not contain
-            ``"value_type"``.
+        ValueError: On ``read()`` when ``metadata`` is ``None`` or missing
+            ``"value_type"``. Always pass the dict returned by ``write()``.
 
     Example:
         >>> from google.protobuf import struct_pb2
@@ -62,20 +62,29 @@ class ProtoIO(IO[Any]):
             f.write(json_format.MessageToJson(value))
         return {_META_VALUE_TYPE: type(value)}
 
-    def read(self, url: str, metadata: dict[str, Any]) -> Any:
+    def read(self, url: str, metadata: dict[str, Any] | None) -> Any:
         """Deserialise a protobuf message from JSON text at *url*.
 
         Args:
             url: Source path or fsspec URL.
             metadata: Dict returned by :meth:`write` containing
-                ``"value_type"`` — the concrete message class.
+                ``"value_type"`` — the concrete message class. Must not
+                be ``None``; pass the dict returned by ``write()``.
 
         Returns:
             A populated ``google.protobuf.message.Message`` instance.
+
+        Raises:
+            ValueError: If *metadata* is ``None`` or missing ``"value_type"``.
         """
         import fsspec.core
         from google.protobuf import json_format
 
+        if not metadata or _META_VALUE_TYPE not in metadata:
+            raise ValueError(
+                "ProtoIO.read() requires the metadata dict returned by write(). "
+                f"Expected a dict with key '{_META_VALUE_TYPE}', got: {metadata!r}."
+            )
         fs, path = fsspec.core.url_to_fs(url)
         msg_class = metadata[_META_VALUE_TYPE]
         instance = msg_class()
