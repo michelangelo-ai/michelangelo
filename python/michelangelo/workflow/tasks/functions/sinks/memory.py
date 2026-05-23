@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from michelangelo.workflow.schema.sinks.result import SinkResult
-from michelangelo.workflow.sinks.base import DataSink
+from michelangelo.workflow.tasks.functions.sinks.base import DataSink
 
 if TYPE_CHECKING:
     from michelangelo.workflow.schema.sinks.memory import InMemorySinkConfig
@@ -25,7 +25,7 @@ class InMemorySink(DataSink):
     Example::
 
         from michelangelo.workflow.schema.sinks import InMemorySinkConfig
-        from michelangelo.workflow.sinks import InMemorySink
+        from michelangelo.workflow.tasks.functions.sinks import InMemorySink
 
         sink = InMemorySink(InMemorySinkConfig())
         result = sink.write(variable)

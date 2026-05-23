@@ -6,7 +6,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from michelangelo.workflow.schema.sinks.result import SinkResult
-from michelangelo.workflow.sinks.base import DataSink
+from michelangelo.workflow.tasks.functions.sinks.base import DataSink
 
 if TYPE_CHECKING:
     from michelangelo.workflow.schema.sinks.hive import HiveSinkConfig
@@ -30,7 +30,7 @@ class HiveSink(DataSink):
     Example::
 
         from michelangelo.workflow.schema.sinks import HiveSinkConfig
-        from michelangelo.workflow.sinks import HiveSink
+        from michelangelo.workflow.tasks.functions.sinks import HiveSink
 
         sink = HiveSink(HiveSinkConfig(database="ml", table="training_features"))
         result = sink.write(variable)

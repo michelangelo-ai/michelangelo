@@ -17,7 +17,12 @@ from michelangelo.workflow.schema.sinks import (
     InMemorySinkConfig,
     LocalFileSinkConfig,
 )
-from michelangelo.workflow.sinks import DataSink, HiveSink, InMemorySink, LocalFileSink
+from michelangelo.workflow.tasks.functions.sinks import (
+    DataSink,
+    HiveSink,
+    InMemorySink,
+    LocalFileSink,
+)
 from michelangelo.workflow.variables import DatasetVariable
 
 _DF = pd.DataFrame([{"name": "alice", "score": 0.92}, {"name": "bob", "score": 0.88}])

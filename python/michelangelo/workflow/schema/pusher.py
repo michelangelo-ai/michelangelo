@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from michelangelo.workflow.schema.exceptions import ConfigurationError
 
 if TYPE_CHECKING:
-    from michelangelo.workflow.sinks.base import DataSink
+    from michelangelo.workflow.tasks.functions.sinks.base import DataSink
 
 __all__ = [
     "DatasetFormat",
@@ -88,7 +88,7 @@ class DatasetPluginConfig:
         from michelangelo.workflow.schema.sinks import (
             HiveSinkConfig, LocalFileSinkConfig
         )
-        from michelangelo.workflow.sinks import HiveSink, LocalFileSink
+        from michelangelo.workflow.tasks.functions.sinks import HiveSink, LocalFileSink
         DatasetPluginConfig(sinks=[
             LocalFileSink(LocalFileSinkConfig("/tmp/out", DatasetFormat.CSV))
         ])
@@ -130,7 +130,7 @@ class DatasetPluginConfig:
         if self.sinks is None:
             if self.destination_path is not None:
                 from michelangelo.workflow.schema.sinks import LocalFileSinkConfig
-                from michelangelo.workflow.sinks import LocalFileSink
+                from michelangelo.workflow.tasks.functions.sinks import LocalFileSink
 
                 self.sinks = [
                     LocalFileSink(

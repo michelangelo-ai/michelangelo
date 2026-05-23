@@ -29,7 +29,7 @@ class DataSink(ABC):
     Example::
 
         from michelangelo.workflow.schema.sinks import LocalFileSinkConfig, SinkResult
-        from michelangelo.workflow.sinks import DataSink, LocalFileSink
+        from michelangelo.workflow.tasks.functions.sinks import DataSink, LocalFileSink
 
         class S3ParquetSink(DataSink):
             def __init__(self, bucket: str, key: str) -> None:

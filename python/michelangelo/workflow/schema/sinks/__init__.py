@@ -3,7 +3,7 @@
 Import what you need, then pass configs to the matching sink:
 
     from michelangelo.workflow.schema.sinks import HiveSinkConfig, SinkResult
-    from michelangelo.workflow.sinks import HiveSink
+    from michelangelo.workflow.tasks.functions.sinks import HiveSink
 
     sink = HiveSink(HiveSinkConfig(database="ml", table="predictions"))
     result: SinkResult = sink.write(variable)

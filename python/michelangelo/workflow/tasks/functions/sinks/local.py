@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from michelangelo.workflow.schema.pusher import DatasetFormat
 from michelangelo.workflow.schema.sinks.result import SinkResult
-from michelangelo.workflow.sinks.base import DataSink
+from michelangelo.workflow.tasks.functions.sinks.base import DataSink
 
 if TYPE_CHECKING:
     from michelangelo.workflow.schema.sinks.local import LocalFileSinkConfig
@@ -35,7 +35,7 @@ class LocalFileSink(DataSink):
     Example::
 
         from michelangelo.workflow.schema.sinks import LocalFileSinkConfig
-        from michelangelo.workflow.sinks import LocalFileSink
+        from michelangelo.workflow.tasks.functions.sinks import LocalFileSink
 
         sink = LocalFileSink(
             LocalFileSinkConfig("/tmp/eval_data", format=DatasetFormat.CSV)
