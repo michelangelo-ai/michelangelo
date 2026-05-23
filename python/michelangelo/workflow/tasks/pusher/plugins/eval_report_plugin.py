@@ -1,4 +1,4 @@
-"""EvalReportPusherPlugin — writes an evaluation report to a JSON file."""
+"""EvalReportPusherPlugin — writes an EvaluationReport to a JSON file."""
 
 from __future__ import annotations
 
@@ -25,127 +25,114 @@ _RESERVED_KEY = "_report_name"
 
 
 class EvalReportPusherPlugin(PusherPluginBase):
-    """Plugin that writes an evaluation report to a JSON file.
+    """Plugin that serializes an EvaluationReport proto to a local JSON file.
 
-    Accepts either a plain ``dict`` of metrics or a typed ``EvaluationReport``
-    protobuf message. Both are serialized to JSON and written to a temp
-    directory. No storage backend or registry client is needed.
+    The ``EvaluationReport`` schema (title, charts, filters, data source,
+    pipeline references) is Michelangelo's canonical evaluation document type.
+    This built-in implementation writes it as JSON to a temp directory and
+    returns the output path. Provider layers (e.g. internal Uber) subclass
+    this and override ``execute()`` to push the report to a database or gRPC
+    service instead.
 
-    Provider layers (e.g. Uber) subclass this and override ``execute()`` to
-    post the report to a database or gRPC service instead.
+    To integrate with MLflow, call ``mlflow.log_artifact(result["output_path"])``
+    after ``execute()`` in a subclass or post-processing step.
 
     Args:
         config: ``EvalReportPluginConfig`` with optional ``report_name`` and
-            ``extra_fields``.
-        artifact: A ``dict`` of evaluation metrics or an ``EvaluationReport``
-            protobuf message. ``None`` raises ``ConfigurationError``.
+            ``extra_fields`` merged into the serialized document.
+        artifact: An ``EvaluationReport`` protobuf message.
         storage_backend: Unused by this built-in implementation.
         registry_client: Unused by this built-in implementation.
 
     Raises:
-        ConfigurationError: If ``artifact`` is ``None``, is an unsupported type,
-            or contains the reserved key ``"_report_name"``.
+        ConfigurationError: If ``artifact`` is ``None`` or not an
+            ``EvaluationReport`` instance.
 
-    Example (dict artifact)::
-
-        from michelangelo.workflow.schema.pusher import EvalReportPluginConfig
-        from michelangelo.workflow.tasks.pusher.plugins.eval_report_plugin import (
-            EvalReportPusherPlugin,
-        )
-
-        plugin = EvalReportPusherPlugin(
-            config=EvalReportPluginConfig(report_name="q1-eval"),
-            artifact={"accuracy": 0.93, "f1": 0.91},
-        )
-        result = plugin.execute()
-        # result["output_path"] → "/tmp/michelangelo_reports_.../q1-eval.json"
-
-    Example (EvaluationReport proto artifact)::
+    Example::
 
         from michelangelo.gen.api.v2.evaluation_report_pb2 import (
             EvaluationReport,
             EvaluationReportSpec,
         )
+        from michelangelo.workflow.schema.pusher import EvalReportPluginConfig
+        from michelangelo.workflow.tasks.pusher.plugins.eval_report_plugin import (
+            EvalReportPusherPlugin,
+        )
 
         spec = EvaluationReportSpec(title="Q1 Evaluation")
         report = EvaluationReport(spec=spec)
+
         plugin = EvalReportPusherPlugin(
-            config=EvalReportPluginConfig(report_name="q1-eval-proto"),
+            config=EvalReportPluginConfig(report_name="q1-eval"),
             artifact=report,
         )
         result = plugin.execute()
-        # result["output_path"] → "/tmp/michelangelo_reports_.../q1-eval-proto.json"
+        # result["output_path"] → "/tmp/michelangelo_reports_.../q1-eval.json"
     """
 
     def __init__(
         self,
         config: EvalReportPluginConfig,
-        artifact: dict[str, Any] | EvaluationReport | None = None,
+        artifact: EvaluationReport | None = None,
         storage_backend: Any = None,
         registry_client: Any = None,
     ) -> None:
-        """Validate artifact presence, type, and reserved key constraint.
+        """Validate that artifact is a non-None EvaluationReport.
 
         Args:
             config: Plugin configuration.
-            artifact: Evaluation report data as a ``dict`` or
-                ``EvaluationReport`` protobuf message.
+            artifact: An ``EvaluationReport`` protobuf message.
             storage_backend: Unused.
             registry_client: Unused.
 
         Raises:
-            ConfigurationError: If ``artifact`` is ``None``, an unsupported
-                type, or contains the reserved key ``"_report_name"``.
+            ConfigurationError: If ``artifact`` is ``None`` or not an
+                ``EvaluationReport`` instance.
         """
         super().__init__(config, artifact, storage_backend, registry_client)
         if artifact is None:
             raise ConfigurationError(
-                "EvalReportPusherPlugin requires a dict or EvaluationReport artifact. "
-                "Pass the evaluation metrics via the artifact= argument."
+                "EvalReportPusherPlugin requires an EvaluationReport artifact. "
+                "Build one with EvaluationReport(spec=EvaluationReportSpec(...)) "
+                "and pass it via artifact=."
             )
-        if isinstance(artifact, EvaluationReport):
-            self._artifact_dict: dict[str, Any] = MessageToDict(
-                artifact,
-                preserving_proto_field_name=True,
-            )
-        elif isinstance(artifact, dict):
-            self._artifact_dict = artifact
-        else:
+        if not isinstance(artifact, EvaluationReport):
             raise ConfigurationError(
-                f"Artifact must be a dict or EvaluationReport; "
-                f"got {type(artifact).__name__}. "
-                "Pass a plain dict or an EvaluationReport protobuf message."
-            )
-        if _RESERVED_KEY in self._artifact_dict:
-            raise ConfigurationError(
-                f"Artifact must not contain the reserved key {_RESERVED_KEY!r}. "
-                "It is added automatically by the plugin."
+                f"artifact must be an EvaluationReport; got {type(artifact).__name__}. "
+                "Use EvaluationReport(spec=EvaluationReportSpec(...)) to build one."
             )
 
     def execute(self) -> dict[str, Any]:
-        """Write the evaluation report to a JSON file.
+        """Serialize the EvaluationReport to JSON and write to a temp directory.
 
-        Merges the artifact (normalized from dict or proto), ``config.extra_fields``,
-        and ``_report_name`` into a single document. ``extra_fields`` take
-        precedence over artifact keys on collision.
+        Converts the proto to a snake_case JSON dict via ``MessageToDict``,
+        merges ``config.extra_fields`` (extra fields take precedence), injects
+        ``_report_name``, and writes the document to a file under a fresh
+        ``michelangelo_reports_`` temp directory.
 
         Returns:
             A dict with:
 
-            - ``"report_name"``: the assigned report name.
+            - ``"report_name"``: the assigned report name (from config or
+              auto-generated as ``"eval-report-{uuid8}"``).
             - ``"output_path"``: absolute path to the written JSON file.
-            - ``"num_keys"``: number of keys in the original artifact (not
-              counting ``extra_fields`` or ``_report_name``).
+            - ``"num_keys"``: number of top-level keys in the serialized proto
+              (not counting ``extra_fields`` or ``_report_name``).
 
         Raises:
             IOError: If the temp directory or JSON file cannot be written.
         """
-        num_keys = len(self._artifact_dict)
+        artifact_dict = MessageToDict(
+            self._artifact,
+            preserving_proto_field_name=True,
+        )
 
-        report_name = self._config.report_name or f"eval-report-{uuid.uuid4().hex[:8]}"
+        report_name = (
+            self._config.report_name or f"eval-report-{uuid.uuid4().hex[:8]}"
+        )
 
         document = {
-            **self._artifact_dict,
+            **artifact_dict,
             **self._config.extra_fields,
             _RESERVED_KEY: report_name,
         }
@@ -157,13 +144,12 @@ class EvalReportPusherPlugin(PusherPluginBase):
             json.dump(document, f, indent=2)
 
         _logger.info(
-            "EvalReportPusherPlugin: wrote %d-key report '%s' to '%s'.",
-            num_keys,
+            "EvalReportPusherPlugin: wrote report '%s' to '%s'.",
             report_name,
             output_path,
         )
         return {
             "report_name": report_name,
             "output_path": output_path,
-            "num_keys": num_keys,
+            "num_keys": len(artifact_dict),
         }

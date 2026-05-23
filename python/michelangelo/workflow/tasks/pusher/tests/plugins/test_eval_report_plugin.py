@@ -17,11 +17,14 @@ from michelangelo.workflow.tasks.pusher.plugins.eval_report_plugin import (
     EvalReportPusherPlugin,
 )
 
-_ARTIFACT = {"accuracy": 0.93, "f1": 0.91, "loss": 0.12}
+
+def _report(title: str = "Test Report") -> EvaluationReport:
+    """Build a minimal EvaluationReport for test use."""
+    return EvaluationReport(spec=EvaluationReportSpec(title=title))
 
 
 def _plugin(
-    artifact: dict | EvaluationReport | None = None,
+    artifact: EvaluationReport | None = None,
     report_name: str | None = None,
     extra_fields: dict | None = None,
 ) -> EvalReportPusherPlugin:
@@ -31,7 +34,7 @@ def _plugin(
             report_name=report_name,
             extra_fields=extra_fields or {},
         ),
-        artifact=artifact if artifact is not None else dict(_ARTIFACT),
+        artifact=artifact if artifact is not None else _report(),
     )
 
 
@@ -46,27 +49,17 @@ class TestEvalReportPusherPluginInit(TestCase):
                 artifact=None,
             )
 
-    def test_raises_when_artifact_contains_reserved_key(self):
-        """It raises ConfigurationError when artifact contains '_report_name'."""
-        with self.assertRaises(ConfigurationError):
-            _plugin(artifact={"_report_name": "clash", "accuracy": 0.9})
-
-    def test_raises_when_artifact_type_invalid(self):
-        """It raises ConfigurationError when artifact is not a dict or proto."""
+    def test_raises_when_artifact_is_not_evaluation_report(self):
+        """It raises ConfigurationError when artifact is not an EvaluationReport."""
         with self.assertRaises(ConfigurationError):
             EvalReportPusherPlugin(
                 config=EvalReportPluginConfig(),
-                artifact="not-a-dict",  # type: ignore[arg-type]
+                artifact={"accuracy": 0.9},  # type: ignore[arg-type]
             )
 
     def test_accepts_evaluation_report_proto(self):
-        """It accepts an EvaluationReport protobuf message without raising."""
-        spec = EvaluationReportSpec(title="Q1 Evaluation")
-        report = EvaluationReport(spec=spec)
-        plugin = EvalReportPusherPlugin(
-            config=EvalReportPluginConfig(report_name="q1-proto"),
-            artifact=report,
-        )
+        """It accepts an EvaluationReport without raising."""
+        plugin = _plugin()
         self.assertIsNotNone(plugin)
 
 
@@ -74,7 +67,7 @@ class TestEvalReportPusherPluginExecute(TestCase):
     """Tests for EvalReportPusherPlugin.execute()."""
 
     def setUp(self) -> None:
-        """Collect output paths for cleanup."""
+        """Collect output dirs for cleanup."""
         self._output_dirs: list[str] = []
 
     def tearDown(self) -> None:
@@ -89,13 +82,19 @@ class TestEvalReportPusherPluginExecute(TestCase):
         return result
 
     def test_output_file_exists_and_is_valid_json(self):
-        """It writes a valid JSON file containing artifact keys."""
+        """It writes a valid JSON file containing the report spec."""
         result = self._run()
         self.assertTrue(os.path.exists(result["output_path"]))
         with open(result["output_path"]) as f:
             doc = json.load(f)
-        self.assertIn("accuracy", doc)
-        self.assertIn("f1", doc)
+        self.assertIn("spec", doc)
+
+    def test_proto_title_preserved_in_output(self):
+        """It serializes the EvaluationReportSpec title into the JSON document."""
+        result = self._run(artifact=_report(title="Q1 Evaluation"))
+        with open(result["output_path"]) as f:
+            doc = json.load(f)
+        self.assertEqual(doc["spec"]["title"], "Q1 Evaluation")
 
     def test_config_report_name_used_as_filename(self):
         """It uses report_name as the JSON filename stem."""
@@ -115,15 +114,12 @@ class TestEvalReportPusherPluginExecute(TestCase):
             doc = json.load(f)
         self.assertEqual(doc["team"], "pricing")
 
-    def test_extra_fields_override_artifact_on_collision(self):
-        """It gives extra_fields precedence over artifact keys on collision."""
-        result = self._run(
-            artifact={"accuracy": 0.80},
-            extra_fields={"accuracy": 0.99},
-        )
+    def test_extra_fields_override_proto_keys_on_collision(self):
+        """It gives extra_fields precedence over proto fields on collision."""
+        result = self._run(extra_fields={"spec": "overridden"})
         with open(result["output_path"]) as f:
             doc = json.load(f)
-        self.assertEqual(doc["accuracy"], 0.99)
+        self.assertEqual(doc["spec"], "overridden")
 
     def test_returns_three_key_dict(self):
         """It returns a dict with report_name, output_path, num_keys."""
@@ -132,15 +128,15 @@ class TestEvalReportPusherPluginExecute(TestCase):
         self.assertIn("output_path", result)
         self.assertIn("num_keys", result)
 
-    def test_num_keys_counts_only_artifact_keys(self):
-        """It counts only artifact keys in num_keys, not extra or reserved."""
-        result = self._run(
-            artifact={"a": 1, "b": 2},
-            extra_fields={"extra": "x"},
-        )
-        self.assertEqual(result["num_keys"], 2)
+    def test_num_keys_counts_only_proto_fields(self):
+        """It counts only serialized proto fields in num_keys, not extra or reserved."""
+        result = self._run(extra_fields={"extra": "x"})
+        with open(result["output_path"]) as f:
+            doc = json.load(f)
+        proto_keys = set(doc.keys()) - {"extra", "_report_name"}
+        self.assertEqual(result["num_keys"], len(proto_keys))
 
-    def test_report_name_present_in_document(self):
+    def test_report_name_injected_into_document(self):
         """It writes the assigned report name to the document's '_report_name' key."""
         result = self._run(report_name="my-report")
         with open(result["output_path"]) as f:
@@ -148,35 +144,26 @@ class TestEvalReportPusherPluginExecute(TestCase):
         self.assertEqual(doc["_report_name"], "my-report")
 
     def test_output_written_inside_michelangelo_reports_tmpdir(self):
-        """It writes the output file inside a michelangelo_reports_ temp directory."""
+        """It writes output inside a michelangelo_reports_ temp directory."""
         result = self._run()
         parent = os.path.basename(os.path.dirname(result["output_path"]))
         self.assertTrue(parent.startswith("michelangelo_reports_"))
 
-    def test_proto_artifact_written_as_json(self):
-        """It serializes an EvaluationReport proto to JSON with snake_case keys."""
-        spec = EvaluationReportSpec(title="Q1 Eval")
-        report = EvaluationReport(spec=spec)
-        plugin = EvalReportPusherPlugin(
-            config=EvalReportPluginConfig(report_name="proto-eval"),
-            artifact=report,
+    def test_snake_case_field_names_in_json(self):
+        """It uses snake_case field names from the proto (not camelCase)."""
+        report = EvaluationReport(
+            spec=EvaluationReportSpec(
+                title="Test",
+                sealed=True,
+            )
         )
-        result = plugin.execute()
-        self._output_dirs.append(os.path.dirname(result["output_path"]))
-        self.assertTrue(os.path.exists(result["output_path"]))
-        with open(result["output_path"]) as f:
-            doc = json.load(f)
-        self.assertIn("spec", doc)
-        self.assertEqual(doc["spec"]["title"], "Q1 Eval")
-
-    def test_proto_num_keys_reflects_proto_fields(self):
-        """It counts top-level fields in the serialized proto for num_keys."""
-        spec = EvaluationReportSpec(title="Eval")
-        report = EvaluationReport(spec=spec)
-        plugin = EvalReportPusherPlugin(
+        result = EvalReportPusherPlugin(
             config=EvalReportPluginConfig(),
             artifact=report,
-        )
-        result = plugin.execute()
+        ).execute()
         self._output_dirs.append(os.path.dirname(result["output_path"]))
-        self.assertGreaterEqual(result["num_keys"], 1)
+        with open(result["output_path"]) as f:
+            doc = json.load(f)
+        # preserving_proto_field_name=True → snake_case keys
+        self.assertIn("spec", doc)
+        self.assertNotIn("typeMeta", doc)
