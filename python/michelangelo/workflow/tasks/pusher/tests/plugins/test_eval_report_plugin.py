@@ -59,8 +59,7 @@ class TestEvalReportPusherPluginInit(TestCase):
 
     def test_accepts_evaluation_report_proto(self):
         """It accepts an EvaluationReport without raising."""
-        plugin = _plugin()
-        self.assertIsNotNone(plugin)
+        self.assertIsNotNone(_plugin())
 
 
 class TestEvalReportPusherPluginExecute(TestCase):
@@ -81,67 +80,94 @@ class TestEvalReportPusherPluginExecute(TestCase):
         self._output_dirs.append(os.path.dirname(result["output_path"]))
         return result
 
-    def test_output_file_exists_and_is_valid_json(self):
-        """It writes a valid JSON file containing the report spec."""
+    def test_returns_name_namespace_output_path(self):
+        """It returns a dict with name, namespace, and output_path keys."""
         result = self._run()
-        self.assertTrue(os.path.exists(result["output_path"]))
-        with open(result["output_path"]) as f:
-            doc = json.load(f)
-        self.assertIn("spec", doc)
+        self.assertIn("name", result)
+        self.assertIn("namespace", result)
+        self.assertIn("output_path", result)
 
-    def test_proto_title_preserved_in_output(self):
-        """It serializes the EvaluationReportSpec title into the JSON document."""
-        result = self._run(artifact=_report(title="Q1 Evaluation"))
-        with open(result["output_path"]) as f:
-            doc = json.load(f)
-        self.assertEqual(doc["spec"]["title"], "Q1 Evaluation")
+    def test_config_report_name_takes_precedence(self):
+        """It uses config.report_name over proto.metadata.name."""
+        report = EvaluationReport(
+            spec=EvaluationReportSpec(title="T"),
+        )
+        report.metadata.name = "from-proto"
+        plugin = EvalReportPusherPlugin(
+            config=EvalReportPluginConfig(report_name="from-config"),
+            artifact=report,
+        )
+        result = plugin.execute()
+        self._output_dirs.append(os.path.dirname(result["output_path"]))
+        self.assertEqual(result["name"], "from-config")
 
-    def test_config_report_name_used_as_filename(self):
-        """It uses report_name as the JSON filename stem."""
-        result = self._run(report_name="q1-eval")
-        self.assertTrue(result["output_path"].endswith("q1-eval.json"))
-        self.assertEqual(result["report_name"], "q1-eval")
+    def test_proto_metadata_name_used_when_config_name_absent(self):
+        """It uses proto.metadata.name when config.report_name is not set."""
+        report = EvaluationReport(spec=EvaluationReportSpec(title="T"))
+        report.metadata.name = "proto-name"
+        plugin = EvalReportPusherPlugin(
+            config=EvalReportPluginConfig(),
+            artifact=report,
+        )
+        result = plugin.execute()
+        self._output_dirs.append(os.path.dirname(result["output_path"]))
+        self.assertEqual(result["name"], "proto-name")
 
-    def test_generated_report_name_starts_with_eval_report(self):
+    def test_auto_generates_name_when_none_set(self):
         """It generates a name starting with 'eval-report-' when none given."""
         result = self._run(report_name=None)
-        self.assertTrue(result["report_name"].startswith("eval-report-"))
+        self.assertTrue(result["name"].startswith("eval-report-"))
+
+    def test_name_set_on_proto_after_execute(self):
+        """It sets metadata.name on the artifact so the proto carries the name."""
+        report = _report()
+        plugin = EvalReportPusherPlugin(
+            config=EvalReportPluginConfig(report_name="my-report"),
+            artifact=report,
+        )
+        result = plugin.execute()
+        self._output_dirs.append(os.path.dirname(result["output_path"]))
+        self.assertEqual(report.metadata.name, "my-report")
+
+    def test_namespace_from_proto_in_result(self):
+        """It includes metadata.namespace from the proto in the result dict."""
+        report = EvaluationReport(spec=EvaluationReportSpec(title="T"))
+        report.metadata.namespace = "ml-project"
+        plugin = EvalReportPusherPlugin(
+            config=EvalReportPluginConfig(),
+            artifact=report,
+        )
+        result = plugin.execute()
+        self._output_dirs.append(os.path.dirname(result["output_path"]))
+        self.assertEqual(result["namespace"], "ml-project")
+
+    def test_output_file_is_valid_json_with_spec(self):
+        """It writes a valid JSON file containing the serialized proto spec."""
+        result = self._run(artifact=_report(title="Q1 Eval"))
+        with open(result["output_path"]) as f:
+            doc = json.load(f)
+        self.assertEqual(doc["spec"]["title"], "Q1 Eval")
+
+    def test_name_present_in_serialized_document(self):
+        """It serializes the resolved name into metadata.name in the JSON."""
+        result = self._run(report_name="named-report")
+        with open(result["output_path"]) as f:
+            doc = json.load(f)
+        self.assertEqual(doc["metadata"]["name"], "named-report")
 
     def test_extra_fields_merged_into_document(self):
         """It merges extra_fields into the written document."""
-        result = self._run(extra_fields={"team": "pricing"})
+        result = self._run(extra_fields={"ci_run_id": "build-42"})
         with open(result["output_path"]) as f:
             doc = json.load(f)
-        self.assertEqual(doc["team"], "pricing")
+        self.assertEqual(doc["ci_run_id"], "build-42")
 
-    def test_extra_fields_override_proto_keys_on_collision(self):
+    def test_extra_fields_take_precedence_over_proto_keys(self):
         """It gives extra_fields precedence over proto fields on collision."""
         result = self._run(extra_fields={"spec": "overridden"})
         with open(result["output_path"]) as f:
             doc = json.load(f)
         self.assertEqual(doc["spec"], "overridden")
-
-    def test_returns_three_key_dict(self):
-        """It returns a dict with report_name, output_path, num_keys."""
-        result = self._run()
-        self.assertIn("report_name", result)
-        self.assertIn("output_path", result)
-        self.assertIn("num_keys", result)
-
-    def test_num_keys_counts_only_proto_fields(self):
-        """It counts only serialized proto fields in num_keys, not extra or reserved."""
-        result = self._run(extra_fields={"extra": "x"})
-        with open(result["output_path"]) as f:
-            doc = json.load(f)
-        proto_keys = set(doc.keys()) - {"extra", "_report_name"}
-        self.assertEqual(result["num_keys"], len(proto_keys))
-
-    def test_report_name_injected_into_document(self):
-        """It writes the assigned report name to the document's '_report_name' key."""
-        result = self._run(report_name="my-report")
-        with open(result["output_path"]) as f:
-            doc = json.load(f)
-        self.assertEqual(doc["_report_name"], "my-report")
 
     def test_output_written_inside_michelangelo_reports_tmpdir(self):
         """It writes output inside a michelangelo_reports_ temp directory."""
@@ -150,20 +176,9 @@ class TestEvalReportPusherPluginExecute(TestCase):
         self.assertTrue(parent.startswith("michelangelo_reports_"))
 
     def test_snake_case_field_names_in_json(self):
-        """It uses snake_case field names from the proto (not camelCase)."""
-        report = EvaluationReport(
-            spec=EvaluationReportSpec(
-                title="Test",
-                sealed=True,
-            )
-        )
-        result = EvalReportPusherPlugin(
-            config=EvalReportPluginConfig(),
-            artifact=report,
-        ).execute()
-        self._output_dirs.append(os.path.dirname(result["output_path"]))
+        """It uses snake_case field names in the output JSON, not camelCase."""
+        result = self._run()
         with open(result["output_path"]) as f:
             doc = json.load(f)
-        # preserving_proto_field_name=True → snake_case keys
-        self.assertIn("spec", doc)
         self.assertNotIn("typeMeta", doc)
+        self.assertNotIn("objectMeta", doc)
