@@ -30,15 +30,11 @@ class TestProtoIO(TestCase):
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             path = f.name
 
-        _jf = "michelangelo.uniflow.plugins.proto.io.json_format"
         _mods = {
             "google.protobuf.json_format": mock_json_format,
             "google.protobuf": MagicMock(),
         }
-        with (
-            patch(_jf, mock_json_format, create=True),
-            patch.dict("sys.modules", _mods),
-        ):
+        with patch.dict("sys.modules", _mods):
             io = ProtoIO()
             with patch("fsspec.core.url_to_fs") as mock_url_to_fs:
                 mock_fs = MagicMock()
@@ -70,3 +66,19 @@ class TestProtoIO(TestCase):
         from michelangelo.uniflow.plugins.proto.io import _META_VALUE_TYPE
 
         self.assertEqual(_META_VALUE_TYPE, "value_type")
+
+    def test_read_raises_value_error_on_none_metadata(self):
+        """read() raises ValueError when metadata is None."""
+        from michelangelo.uniflow.plugins.proto.io import ProtoIO
+
+        with self.assertRaises(ValueError) as ctx:
+            ProtoIO().read("/tmp/x.json", None)
+        self.assertIn("value_type", str(ctx.exception))
+
+    def test_read_raises_value_error_on_empty_metadata(self):
+        """read() raises ValueError when metadata dict is missing 'value_type'."""
+        from michelangelo.uniflow.plugins.proto.io import ProtoIO
+
+        with self.assertRaises(ValueError) as ctx:
+            ProtoIO().read("/tmp/x.json", {})
+        self.assertIn("value_type", str(ctx.exception))

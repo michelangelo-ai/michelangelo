@@ -86,7 +86,14 @@ class _ParquetPolarsDatasource:
 
             def read_fn(_url: str = url, _paths: list[str] = paths):
                 import fsspec.core
-                import polars as pl
+
+                try:
+                    import polars as pl
+                except ImportError as exc:
+                    raise ImportError(
+                        "Polars is required for the PyArrow nested-data fallback. "
+                        "Install it with: pip install michelangelo[ray-nested]"
+                    ) from exc
 
                 fs, _ = fsspec.core.url_to_fs(_url)
                 for path in _paths:
@@ -262,6 +269,7 @@ def resolve_fs(protocol: str) -> Any:
             access_key=os.getenv("AWS_ACCESS_KEY_ID"),
             secret_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
             endpoint_override=os.getenv("AWS_ENDPOINT_URL"),
-            allow_bucket_creation=os.getenv("S3_ALLOW_BUCKET_CREATION"),
+            allow_bucket_creation=os.getenv("S3_ALLOW_BUCKET_CREATION", "").lower()
+            == "true",
         )
     return None

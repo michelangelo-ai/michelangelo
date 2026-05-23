@@ -262,6 +262,66 @@ class TestParquetPolarsDatasourceNoPolars(TestCase):
         self.assertEqual(len(captured_fns), 1)
         with (
             patch.dict(sys.modules, {"polars": None}),
-            self.assertRaises((ImportError, ModuleNotFoundError)),
+            self.assertRaises((ImportError, ModuleNotFoundError)) as ctx,
         ):
             list(captured_fns[0]())
+        self.assertIn("ray-nested", str(ctx.exception))
+
+
+class TestFsPathAndResolveFs(TestCase):
+    """Tests for _fs_path() env-var switching and resolve_fs() S3 branch."""
+
+    def test_fs_path_uses_fsspec_when_env_set(self):
+        """_fs_path() returns fsspec result when UF_PLUGIN_RAY_USE_FSSPEC='1'."""
+        from michelangelo.uniflow.plugins.ray.io import (
+            UF_PLUGIN_RAY_USE_FSSPEC,
+            _fs_path,
+        )
+
+        mock_fs = MagicMock()
+        with (
+            patch.dict("os.environ", {UF_PLUGIN_RAY_USE_FSSPEC: "1"}),
+            patch("fsspec.core.url_to_fs", return_value=(mock_fs, "/d")) as mock_url,
+        ):
+            fs, path = _fs_path("s3://bucket/d")
+        mock_url.assert_called_once_with("s3://bucket/d")
+        self.assertIs(fs, mock_fs)
+        self.assertEqual(path, "/d")
+
+    def test_fs_path_uses_pyarrow_by_default(self):
+        """_fs_path() falls back to resolve_fs when env var is '0' (default)."""
+        from michelangelo.uniflow.plugins.ray.io import (
+            UF_PLUGIN_RAY_USE_FSSPEC,
+            _fs_path,
+        )
+
+        with (
+            patch.dict("os.environ", {UF_PLUGIN_RAY_USE_FSSPEC: "0"}),
+            patch(
+                "michelangelo.uniflow.plugins.ray.io.resolve_fs", return_value=None
+            ) as mock_rfs,
+        ):
+            fs, _path = _fs_path("local:///tmp/d")
+        mock_rfs.assert_called_once_with("local")
+        self.assertIsNone(fs)
+
+    def test_resolve_fs_returns_s3_filesystem(self):
+        """resolve_fs('s3') returns a PyArrow S3FileSystem."""
+        import types as _t
+
+        from michelangelo.uniflow.plugins.ray.io import resolve_fs
+
+        mock_s3fs = MagicMock()
+        mock_pa_fs = _t.SimpleNamespace(S3FileSystem=MagicMock(return_value=mock_s3fs))
+        mock_pa = _t.SimpleNamespace(fs=mock_pa_fs)
+        with patch.dict(sys.modules, {"pyarrow": mock_pa, "pyarrow.fs": mock_pa_fs}):
+            result = resolve_fs("s3")
+        self.assertIs(result, mock_s3fs)
+
+    def test_resolve_fs_returns_none_for_local(self):
+        """resolve_fs returns None for non-s3 protocols."""
+        from michelangelo.uniflow.plugins.ray.io import resolve_fs
+
+        self.assertIsNone(resolve_fs("local"))
+        self.assertIsNone(resolve_fs("file"))
+        self.assertIsNone(resolve_fs(""))
