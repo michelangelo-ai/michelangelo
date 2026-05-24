@@ -7,12 +7,14 @@ import (
 
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	"github.com/michelangelo-ai/michelangelo/go/base/revision"
 )
 
 var (
 	// Module is the Uber FX module for the Pipeline controller.
 	//
-	// Provides the default Revisioner; consumers can swap it via fx.Decorate.
+	// Provides a revision.Manager and the default Revisioner; consumers can
+	// swap either via fx.Decorate.
 	//
 	// To use this module, include it in your FX application options:
 	//   fx.New(
@@ -20,6 +22,7 @@ var (
 	//       // other modules...
 	//   )
 	Module = fx.Options(
+		fx.Provide(revision.NewManager),
 		fx.Provide(NewDefaultRevisioner),
 		fx.Invoke(registerMetrics),
 		fx.Invoke(register),
