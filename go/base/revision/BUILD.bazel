@@ -3,9 +3,9 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "helpers.go",
         "interface.go",
         "manager.go",
-        "revision_manager.go",
         "source.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/base/revision",
@@ -28,8 +28,8 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "helpers_test.go",
         "manager_test.go",
-        "revision_manager_test.go",
     ],
     embed = [":go_default_library"],
     deps = [

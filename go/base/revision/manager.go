@@ -1,100 +1,116 @@
-// Package revision provides building blocks for producing Revision CRs.
-//
-// Per-controller Revisioner implementations (see go/components/<controller>/revisioner.go)
-// use these helpers to keep Revision CR shape — labels, source values, content format —
-// consistent across producers.
 package revision
 
 import (
+	"context"
 	"fmt"
 
-	pbtypes "github.com/gogo/protobuf/types"
-	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
+	"go.uber.org/zap"
+
+	"github.com/michelangelo-ai/michelangelo/go/api"
+	apiutils "github.com/michelangelo-ai/michelangelo/go/api/utils"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	revisionAPIVersion = "michelangelo.api/v2"
-	revisionKind       = "Revision"
+type revisionManager struct {
+	handler api.Handler
+	logger  *zap.Logger
+}
 
-	// Label keys applied to every Revision CR. Used by LabelSelectorFor to query
-	// revisions for a specific base resource.
-	LabelBaseResourceNamespace = "base_resource_namespace"
-	LabelBaseResourceName      = "base_resource_name"
-	LabelBaseType              = "base_type"
-)
+// NewManager creates a Manager backed by the given API handler.
+func NewManager(handler api.Handler, logger *zap.Logger) Manager {
+	return &revisionManager{handler: handler, logger: logger}
+}
 
-// NewCR builds a Revision CR from the given params, applying the conventional
-// TypeMeta, ObjectMeta (with cleanup labels), and Spec fields. Returns an error
-// if params.Content fails to marshal.
-func NewCR(params UpsertRevisionParams) (*v2pb.Revision, error) {
-	content, err := pbtypes.MarshalAny(params.Content)
+func (m *revisionManager) UpsertRevision(ctx context.Context, params UpsertRevisionParams) (bool, error) {
+	logger := m.logger.With(
+		zap.String("revision_name", params.RevisionName),
+		zap.String("base_type_kind", params.BaseType.Kind),
+	)
+
+	existing := &v2pb.Revision{}
+	err := m.handler.Get(ctx, params.BaseResource.Namespace, params.RevisionName, &metav1.GetOptions{}, existing)
 	if err != nil {
-		return nil, fmt.Errorf("marshal revision content: %w", err)
-	}
-
-	labels := params.Labels
-	if labels == nil {
-		labels = map[string]string{}
-	}
-	labels[LabelBaseResourceNamespace] = params.BaseResource.Namespace
-	labels[LabelBaseResourceName] = params.BaseResource.Name
-	labels[LabelBaseType] = params.BaseType.Kind
-
-	rev := &v2pb.Revision{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: revisionAPIVersion,
-			Kind:       revisionKind,
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        params.RevisionName,
-			Namespace:   params.BaseResource.Namespace,
-			Labels:      labels,
-			Annotations: params.Annotations,
-		},
-		Spec: v2pb.RevisionSpec{
-			BaseType:     params.BaseType,
-			BaseResource: params.BaseResource,
-			Content:      content,
-			Owner:        params.Owner,
-			RevisionId:   params.RevisionID,
-			Source:       params.Source,
-			GitCommit:    params.GitCommit,
-		},
-	}
-
-	if params.ParentRevisionName != nil {
-		rev.Spec.Parent = &apipb.ResourceIdentifier{
-			Namespace: params.BaseResource.Namespace,
-			Name:      *params.ParentRevisionName,
+		if !apiutils.IsNotFoundError(err) {
+			return false, fmt.Errorf("get existing revision: %w", err)
 		}
+
+		// Not found — create.
+		rev, buildErr := NewCR(params)
+		if buildErr != nil {
+			return false, buildErr
+		}
+		if params.Immutable {
+			apiutils.MarkImmutable(rev)
+		}
+		if createErr := m.handler.Create(ctx, rev, &metav1.CreateOptions{}); createErr != nil {
+			return false, fmt.Errorf("create revision %s/%s: %w", params.BaseResource.Namespace, params.RevisionName, createErr)
+		}
+		logger.Info("created revision")
+		return true, nil
 	}
 
+	// Exists — check immutability.
+	if apiutils.IsImmutable(existing) {
+		if params.Immutable {
+			return false, nil
+		}
+		return false, fmt.Errorf("cannot update immutable revision %s to mutable", params.RevisionName)
+	}
+
+	// Mutable existing revision — update content + labels.
+	rev, buildErr := NewCR(params)
+	if buildErr != nil {
+		return false, buildErr
+	}
+	existing.Spec.Content = rev.Spec.Content
+	for k, v := range params.Labels {
+		if existing.Labels == nil {
+			existing.Labels = map[string]string{}
+		}
+		existing.Labels[k] = v
+	}
+	if params.Immutable {
+		apiutils.MarkImmutable(existing)
+	}
+	if updateErr := m.handler.Update(ctx, existing, &metav1.UpdateOptions{}); updateErr != nil {
+		return false, fmt.Errorf("update revision %s/%s: %w", params.BaseResource.Namespace, params.RevisionName, updateErr)
+	}
+	logger.Info("updated revision")
+	return false, nil
+}
+
+func (m *revisionManager) GetRevision(ctx context.Context, namespace, name string) (*v2pb.Revision, error) {
+	if namespace == "" || name == "" {
+		return nil, fmt.Errorf("namespace and name must be non-empty")
+	}
+	rev := &v2pb.Revision{}
+	if err := m.handler.Get(ctx, namespace, name, &metav1.GetOptions{}, rev); err != nil {
+		return nil, err
+	}
 	return rev, nil
 }
 
-// LabelSelectorFor returns a label selector matching all Revisions for the
-// given base resource. Used to clean up revisions when a base resource is deleted.
-func LabelSelectorFor(namespace, resourceName, resourceKind string) string {
-	return fmt.Sprintf(
-		"%s=%s,%s=%s,%s=%s",
-		LabelBaseResourceNamespace, namespace,
-		LabelBaseResourceName, resourceName,
-		LabelBaseType, resourceKind,
-	)
+func (m *revisionManager) FetchRevisionID(ctx context.Context, namespace, name string) (string, error) {
+	rev, err := m.GetRevision(ctx, namespace, name)
+	if err != nil {
+		return "", err
+	}
+	return rev.Spec.GetRevisionId(), nil
 }
 
-// IsAlreadyExists reports whether err indicates the resource already exists,
-// recognizing both grpc (codes.AlreadyExists) and k8s (k8serrors.IsAlreadyExists)
-// error shapes. Used by Revisioner implementations to treat AlreadyExists as a
-// no-op — Revisions are immutable, and a revision for this identity already exists.
-func IsAlreadyExists(err error) bool {
-	if s, ok := status.FromError(err); ok {
-		return s.Code() == codes.AlreadyExists
+func (m *revisionManager) DeleteAllRevisions(ctx context.Context, namespace, name, kind string) error {
+	listOpts := &metav1.ListOptions{
+		LabelSelector: LabelSelectorFor(namespace, name, kind),
 	}
-	return k8serrors.IsAlreadyExists(err)
+	revList := &v2pb.RevisionList{}
+	if err := m.handler.List(ctx, namespace, listOpts, nil, revList); err != nil {
+		return fmt.Errorf("list revisions for %s/%s: %w", namespace, name, err)
+	}
+	for i := range revList.Items {
+		if err := m.handler.Delete(ctx, &revList.Items[i], &metav1.DeleteOptions{}); err != nil {
+			return fmt.Errorf("delete revision %s: %w", revList.Items[i].Name, err)
+		}
+	}
+	return nil
 }
