@@ -1,22 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
+import { getRpcHandlers } from '../handlers';
 
-vi.mock('../services', () => ({
-  getServices: vi.fn(),
-}));
+const mockGetServices = vi.hoisted(() => vi.fn());
+vi.mock('../services', () => ({ getServices: mockGetServices }));
 
-const { getServices } = await import('../services');
-const { getRpcHandlers } = await import('../handlers');
-const mockGetServices = getServices as ReturnType<typeof vi.fn>;
-
-// Single shared service mock — handlers are cached at module scope, so all
-// three test cases share the same handler instances built from this one mock.
 const createPipelineRun = vi.fn().mockResolvedValue({});
 const updatePipelineRun = vi.fn().mockResolvedValue({});
 const updateTriggerRun = vi.fn().mockResolvedValue({});
 
 mockGetServices.mockResolvedValue(
-  // Proxy returns vi.fn() for any unaccessed service method, so the handlers
-  // module's full sweep of services at construction time doesn't crash.
   new Proxy({} as Record<string, Record<string, unknown>>, {
     get(_, serviceName: string) {
       if (serviceName === 'PipelineRunService') {

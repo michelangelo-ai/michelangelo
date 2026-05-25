@@ -83,8 +83,7 @@ describe('useStudioMutation', () => {
     result.current.mutate({ name: 'test-run' });
 
     await waitFor(() => {
-      expect(onSuccess).toHaveBeenCalled();
-      expect(onSuccess.mock.calls[0][0]).toEqual(mockResponse);
+      expect(onSuccess).toHaveBeenCalledWith(mockResponse);
     });
   });
 
@@ -111,8 +110,7 @@ describe('useStudioMutation', () => {
     result.current.mutate({ name: 'test-run' });
 
     await waitFor(() => {
-      expect(onError).toHaveBeenCalled();
-      expect(onError.mock.calls[0][0]).toBeInstanceOf(ApplicationError);
+      expect(onError).toHaveBeenCalledWith(expect.any(ApplicationError));
     });
   });
 
