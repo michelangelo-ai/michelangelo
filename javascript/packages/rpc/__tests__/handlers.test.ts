@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { getRpcHandlers } from '../handlers';
 
 const mockGetServices = vi.hoisted(() => vi.fn());
