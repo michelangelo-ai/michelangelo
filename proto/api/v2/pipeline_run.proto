@@ -23,8 +23,8 @@ import "google/protobuf/any.proto";
 import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
-import "michelangelo/api/conditions.proto";
 import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/conditions.proto";
 import "michelangelo/api/v2/user.proto";
 import "michelangelo/api/v2/pipeline.proto";
 import "michelangelo/api/v2/notification.proto";
@@ -105,7 +105,12 @@ message PipelineRunSpec {
   // This allows customizing the base directory where pipeline artifacts and outputs are stored.
   // e.g. The path must be an absolute path in HDFS starting with '/' and can contain alphanumeric characters,
   // hyphens and underscores. A trailing slash is optional.
-  string workspace_root_dir = 9 [(michelangelo.api.validation) = {pattern: "^(/[\\w-]+)*/?$"}];
+  string workspace_root_dir = 9 [
+    (michelangelo.api.validation) = {
+      pattern: "^/([a-zA-Z0-9_.\\-]+/)*[a-zA-Z0-9_.\\-]+$|^$",
+      msg: "must be in format of /path containing only characters, numbers, and special characters /, ., -, _"
+    }
+  ];
 
   // A human-readable description that provides context about the purpose,
   // configuration or expected behavior of this pipeline run. This can be used
@@ -130,6 +135,22 @@ message PipelineRunSpec {
   // This field is automatically cleared after successful processing to prevent repeated retries.
   // The retry will bypass normal retry limits and restart from the beginning of the specified task.
   RetryInfo retry_info = 13;
+
+  // Filesystem used for workspace_root_dir (does not include the path).
+  // Configured as scheme://host where the host is optional (e.g., "hdfs://", "s3://default").
+  // If not specified, the default file system is used.
+  string workspace_fs = 14 [
+    (michelangelo.api.validation) = {
+      pattern: "^([a-zA-Z][a-zA-Z0-9+\\-\\.]*://([\\w\\-\\.]+)?)?$",
+      msg: "must be in format of scheme://host(optional) containing only characters, numbers, and special characters /, ., -, _"
+    }
+  ];
+
+  // Type of source pipeline (e.g., "train", "retrain"). Mirrors the ml-code yaml convention.
+  string source_pipeline_type = 15;
+
+  // Pre-cadence MLE parameter overrides expressed as a map of field alias to override value.
+  google.protobuf.Struct constant_overrides = 16;
 }
 
 // RetryInfo specifies retry configuration for manual retry operations.
@@ -220,6 +241,11 @@ enum PipelineRunState {
   // - The run was marked as skipped without errors
   // This state is used to track runs that were intentionally bypassed
   PIPELINE_RUN_STATE_SKIPPED = 6;
+
+  // The pipeline run failed and is being analysed for failure-classification.
+  // Set after a failure is detected and before exception_subtype/exception_type
+  // are populated by the analyser.
+  PIPELINE_RUN_STATE_FAILURE_ANALYSIS = 7;
 }
 
 // PipelineRunStatus defines the current state and execution details of a ML pipeline run.
@@ -292,6 +318,10 @@ message PipelineRunStatus {
   // This provides granular tracking and observability at the step level.
   repeated PipelineRunStepInfo steps = 8;
 
+  // Deprecated. Use source_pipeline (tag 10) instead.
+  // Snapshot of the pipeline definition for this run.
+  PipelineSpec pipeline_spec = 9 [deprecated = true, (michelangelo.api.external_storage) = true];
+
   // Source pipeline that this PipelineRun executes, containing:
   // - Pipeline definition and configuration
   // - Version/revision information
@@ -310,6 +340,32 @@ message PipelineRunStatus {
 
   // The ID of the workflow execution for this pipeline run.
   string workflow_run_id = 13;
+
+  // Granular exception category for a failed PipelineRun. The lowest group of
+  // errors that share a single semantic category and a single remediation action.
+  string exception_subtype = 14;
+
+  // Workflow session id used by the WFO orchestration component.
+  // TODO: remove once WFO is integrated into Unified API.
+  string wfo_session_id = 15;
+
+  // Session definition snapshot for this pipeline run.
+  // Stored externally because the payload can be large; see external_link_session
+  // for the externalized URL when this field is omitted on disk.
+  google.protobuf.Any session = 16 [(michelangelo.api.external_storage) = true];
+
+  // Run-level result for the pipeline run.
+  google.protobuf.Struct output = 17 [(michelangelo.api.external_storage) = true];
+
+  // External (Terrablob) link to the registered workflow blob.
+  string external_link_registered_workflow = 18;
+
+  // External (Terrablob) link to the externally stored session blob.
+  // When this is set, the apiserver may rehydrate the `session` field on read.
+  string external_link_session = 19;
+
+  // External (Terrablob) link to the ASL (Amazon States Language) blob.
+  string external_link_asl = 20;
 }
 
 // PipelineRunExceptionType indicates the category of failure for a failed PipelineRun.
@@ -338,6 +394,10 @@ enum PipelineRunExceptionType {
   // - Configuration mistakes
   // These errors are due to user mistakes rather than system issues.
   PIPELINE_RUN_EXCEPTION_TYPE_USER = 2;
+
+  // ResourceException represents resource-related failures distinct from generic
+  // infrastructure issues, e.g. quota exhaustion or capacity unavailability.
+  PIPELINE_RUN_EXCEPTION_TYPE_RESOURCE = 3;
 }
 
 // PipelineRunStepState represents the execution state of a pipeline step.
@@ -641,6 +701,11 @@ message Resume {
   // - Were not in a successful state in the previous run
   // This option is only applicable to orchestration pipelines.
   bool force_resume = 4;
+
+  // When enabled, enables intra-step resumption (e.g., from the last completed
+  // epoch checkpoint within a training step) instead of restarting the step
+  // from scratch. Useful for pre-empted jobs to save time and compute.
+  bool intra_step_resume = 5;
 }
 
 // PipelineRun represents an execution instance of a Pipeline workflow.
@@ -656,7 +721,9 @@ message Resume {
 // - Status monitoring
 // - Debugging and troubleshooting
 message PipelineRun {
-  option (michelangelo.api.resource) = {};
+  option (michelangelo.api.resource) = {
+    conversion: true  // Enable conversion for multi-version support
+  };
 
   option (michelangelo.api.index) = {
     path: "spec.pipeline",

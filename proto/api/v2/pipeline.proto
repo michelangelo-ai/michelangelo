@@ -278,7 +278,9 @@ message PipelineStatus {
 // - Execution monitoring
 // - Error tracking and debugging
 message Pipeline {
-  option (michelangelo.api.resource) = {};
+  option (michelangelo.api.resource) = {
+    conversion: true  // Enable conversion for multi-version support
+  };
 
   option (michelangelo.api.index) = {
     path: "spec.type",

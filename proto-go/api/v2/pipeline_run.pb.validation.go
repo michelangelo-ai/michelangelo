@@ -31,7 +31,8 @@ var _ = codes.InvalidArgument
 var _ = status.Error
 var _ = strconv.Itoa
 
-var PipelineRunSpecPattern0 = regexp.MustCompile("^^(/[\\w-]+)*/?$$")
+var PipelineRunSpecPattern0 = regexp.MustCompile("^^/([a-zA-Z0-9_.\\-]+/)*[a-zA-Z0-9_.\\-]+$|^$$")
+var PipelineRunSpecPattern1 = regexp.MustCompile("^^([a-zA-Z][a-zA-Z0-9+\\-\\.]*://([\\w\\-\\.]+)?)?$$")
 
 // pipelineRunSpecValidateExt is an extension hook for additional validation logic
 var pipelineRunSpecValidateExt func(*PipelineRunSpec, string) error
@@ -156,7 +157,7 @@ func (this *PipelineRunSpec) Validate(prefix string) error {
 		v := this.WorkspaceRootDir
 		n := `workspace_root_dir`
 		if !PipelineRunSpecPattern0.MatchString(v) {
-			return status.Error(codes.InvalidArgument, prefix+n+" "+"must match regular expression pattern /^(/[\\w-]+)*/?$/")
+			return status.Error(codes.InvalidArgument, prefix+n+" "+"must be in format of /path containing only characters, numbers, and special characters /, ., -, _")
 		}
 	}
 	{
@@ -203,6 +204,32 @@ func (this *PipelineRunSpec) Validate(prefix string) error {
 	{
 		v := this.GetRetryInfo()
 		n := `retry_info`
+		var i interface{}
+		if reflect.ValueOf(v).Kind() == reflect.Ptr {
+			i = reflect.ValueOf(v).Interface()
+			if reflect.ValueOf(v).IsNil() {
+				i = nil
+			}
+		} else {
+			i = reflect.ValueOf(&v).Interface()
+		}
+		validate, hasValidate := i.(interface{ Validate(string) error })
+		if hasValidate {
+			if err := validate.Validate(prefix + n + "."); err != nil {
+				return err
+			}
+		}
+	}
+	{
+		v := this.WorkspaceFs
+		n := `workspace_fs`
+		if !PipelineRunSpecPattern1.MatchString(v) {
+			return status.Error(codes.InvalidArgument, prefix+n+" "+"must be in format of scheme://host(optional) containing only characters, numbers, and special characters /, ., -, _")
+		}
+	}
+	{
+		v := this.GetConstantOverrides()
+		n := `constant_overrides`
 		var i interface{}
 		if reflect.ValueOf(v).Kind() == reflect.Ptr {
 			i = reflect.ValueOf(v).Interface()
@@ -343,8 +370,65 @@ func (this *PipelineRunStatus) Validate(prefix string) error {
 		}
 	}
 	{
+		v := this.GetPipelineSpec()
+		n := `pipeline_spec`
+		var i interface{}
+		if reflect.ValueOf(v).Kind() == reflect.Ptr {
+			i = reflect.ValueOf(v).Interface()
+			if reflect.ValueOf(v).IsNil() {
+				i = nil
+			}
+		} else {
+			i = reflect.ValueOf(&v).Interface()
+		}
+		validate, hasValidate := i.(interface{ Validate(string) error })
+		if hasValidate {
+			if err := validate.Validate(prefix + n + "."); err != nil {
+				return err
+			}
+		}
+	}
+	{
 		v := this.GetSourcePipeline()
 		n := `source_pipeline`
+		var i interface{}
+		if reflect.ValueOf(v).Kind() == reflect.Ptr {
+			i = reflect.ValueOf(v).Interface()
+			if reflect.ValueOf(v).IsNil() {
+				i = nil
+			}
+		} else {
+			i = reflect.ValueOf(&v).Interface()
+		}
+		validate, hasValidate := i.(interface{ Validate(string) error })
+		if hasValidate {
+			if err := validate.Validate(prefix + n + "."); err != nil {
+				return err
+			}
+		}
+	}
+	{
+		v := this.GetSession()
+		n := `session`
+		var i interface{}
+		if reflect.ValueOf(v).Kind() == reflect.Ptr {
+			i = reflect.ValueOf(v).Interface()
+			if reflect.ValueOf(v).IsNil() {
+				i = nil
+			}
+		} else {
+			i = reflect.ValueOf(&v).Interface()
+		}
+		validate, hasValidate := i.(interface{ Validate(string) error })
+		if hasValidate {
+			if err := validate.Validate(prefix + n + "."); err != nil {
+				return err
+			}
+		}
+	}
+	{
+		v := this.GetOutput()
+		n := `output`
 		var i interface{}
 		if reflect.ValueOf(v).Kind() == reflect.Ptr {
 			i = reflect.ValueOf(v).Interface()

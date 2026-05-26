@@ -15,6 +15,7 @@ proto_library(
         "cached_output_svc.proto",
         "cluster.proto",
         "cluster_svc.proto",
+        "conditions.proto",
         "deployment.proto",
         "deployment_svc.proto",
         "git.proto",
