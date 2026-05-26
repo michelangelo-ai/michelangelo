@@ -506,7 +506,6 @@ func (m *ShadowSpec) GetDryrun() bool {
 type DeploymentSpec struct {
 	DesiredRevision *api.ResourceIdentifier `protobuf:"bytes,1,opt,name=desired_revision,json=desiredRevision,proto3" json:"desiredRevision,omitempty"`
 	// Types that are valid to be assigned to Target:
-	//
 	//	*DeploymentSpec_InferenceServer
 	//	*DeploymentSpec_MobileSpec
 	Target        isDeploymentSpec_Target `protobuf_oneof:"target"`
@@ -937,7 +936,6 @@ func (m *DisaggregatedUpdate) GetSteps() []*DisaggregatedUpdateStep {
 type DisaggregatedUpdateStep struct {
 	Environment string `protobuf:"bytes,1,opt,name=environment,proto3" json:"environment,omitempty"`
 	// Types that are valid to be assigned to Strategy:
-	//
 	//	*DisaggregatedUpdateStep_Zonal
 	//	*DisaggregatedUpdateStep_SubZonal
 	//	*DisaggregatedUpdateStep_Blast
@@ -1042,7 +1040,6 @@ func (*DisaggregatedUpdateStep) XXX_OneofWrappers() []interface{} {
 
 type DeploymentStrategy struct {
 	// Types that are valid to be assigned to RolloutStrategy:
-	//
 	//	*DeploymentStrategy_Zonal
 	//	*DeploymentStrategy_Blast
 	//	*DeploymentStrategy_RedBlack
