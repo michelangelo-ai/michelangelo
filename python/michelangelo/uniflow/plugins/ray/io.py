@@ -15,12 +15,14 @@ from __future__ import annotations
 import concurrent.futures
 import logging
 import os
-from typing import TYPE_CHECKING, Any
+from typing import Any
+
+import ray
+import fsspec.core
+from ray.data import Dataset, ReadTask
+from ray.data.block import BlockMetadata
 
 from michelangelo.uniflow.core.io_registry import IO
-
-if TYPE_CHECKING:
-    from ray.data import Dataset
 
 _logger = logging.getLogger(__name__)
 
@@ -77,9 +79,6 @@ class _ParquetPolarsDatasource:
         self._paths = paths
 
     def get_read_tasks(self, parallelism: int) -> list[Any]:
-        from ray.data import ReadTask
-        from ray.data.block import BlockMetadata
-
         tasks = []
         for chunk in _chunk_list(self._paths, max(1, parallelism)):
             url, paths = self._url, chunk
@@ -163,8 +162,6 @@ class RayDatasetIO(IO[Any]):
         Returns:
             Ray Dataset. Returns an empty dataset when no data is found.
         """
-        import ray
-
         fs, _ = _fs_path(url)
         paths = RayDatasetIO.filter_empty_data(url)
         if not paths:
@@ -200,13 +197,8 @@ class RayDatasetIO(IO[Any]):
         Returns:
             List of paths that contain at least one parquet row group.
         """
-        import fsspec.core
-
         fs, path = fsspec.core.url_to_fs(url)
         file_info = fs.find(path, detail=True)
-        parquet_files = {
-            p: info for p, info in file_info.items() if p.endswith(".parquet")
-        }
 
         if not parquet_files:
             _logger.warning("No parquet files found at %s", url)
@@ -240,15 +232,11 @@ class RayDatasetIO(IO[Any]):
     @staticmethod
     def _read_parquet_fallback(url: str, paths: list[str]) -> Dataset:
         """Read *paths* via Polars — fallback for the PyArrow nested-data bug."""
-        import ray
-
         return ray.data.read_datasource(_ParquetPolarsDatasource(url, paths))
 
 
 def _fs_path(url: str) -> tuple[Any, str]:
     if os.environ.get(UF_PLUGIN_RAY_USE_FSSPEC, "0") == "1":
-        import fsspec.core
-
         return fsspec.core.url_to_fs(url)
     return resolve_fs(url.split("://")[0]), url
 

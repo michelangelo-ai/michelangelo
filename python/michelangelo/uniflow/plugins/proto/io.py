@@ -18,6 +18,9 @@ from __future__ import annotations
 
 from typing import Any
 
+import fsspec.core
+from google.protobuf import json_format
+
 from michelangelo.uniflow.core.io_registry import IO
 
 _META_VALUE_TYPE = "value_type"
@@ -33,7 +36,6 @@ class ProtoIO(IO[Any]):
             class needed for deserialisation.
 
     Raises:
-        ImportError: If ``google-protobuf`` is not installed.
         ValueError: On ``read()`` when ``metadata`` is ``None`` or missing
             ``"value_type"``. Always pass the dict returned by ``write()``.
 
@@ -54,9 +56,6 @@ class ProtoIO(IO[Any]):
             Metadata dict ``{"value_type": type(value)}`` required by
             :meth:`read` to reconstruct the message.
         """
-        import fsspec.core
-        from google.protobuf import json_format
-
         fs, path = fsspec.core.url_to_fs(url)
         with fs.open(path, "w") as f:
             f.write(json_format.MessageToJson(value))
@@ -77,9 +76,6 @@ class ProtoIO(IO[Any]):
         Raises:
             ValueError: If *metadata* is ``None`` or missing ``"value_type"``.
         """
-        import fsspec.core
-        from google.protobuf import json_format
-
         if not metadata or _META_VALUE_TYPE not in metadata:
             raise ValueError(
                 "ProtoIO.read() requires the metadata dict returned by write(). "
