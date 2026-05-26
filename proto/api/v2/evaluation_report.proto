@@ -13,15 +13,11 @@ import "michelangelo/api/v2/chart.proto";
 // Defines the status of a ML evaluation report.
 message EvaluationReportStatus {}
 
-// Defines the types of evaluation report source.
-enum EvaluationReportSourceType {
-  EVALUATION_REPORT_SOURCE_TYPE_INVALID = 0;
-  EVALUATION_REPORT_SOURCE_TYPE_CUSTOM_CREATED = 1;
-  EVALUATION_REPORT_SOURCE_TYPE_PIPELINE_RUN = 2;
-}
-
 // Defines the spec of an evaluation report for a trained model.
 message EvaluationReportSpec {
+  reserved 5;
+  reserved "source_type";
+
   // Title for the report to be displayed to the user.
   string title = 1;
   // At least one chart is required.
@@ -30,8 +26,6 @@ message EvaluationReportSpec {
   repeated Filter filters = 3;
   // Source of data points. Check the chart level for per-chart data point sources.
   DataPointSource data_point_source = 4;
-  // Source of the report.
-  EvaluationReportSourceType source_type = 5;
   // Pipeline run that generated the report. Empty for custom-created reports.
   michelangelo.api.ResourceIdentifier source_pipeline_run = 6 [
     (michelangelo.api.resource_reference) = {
