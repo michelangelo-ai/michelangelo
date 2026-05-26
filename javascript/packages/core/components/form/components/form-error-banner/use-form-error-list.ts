@@ -29,7 +29,7 @@ export function useFormErrorList(): ErrorEntry[] {
   for (const [fieldPath, isTouched] of Object.entries(touched ?? {})) {
     if (!isTouched) continue;
 
-    const errorMessage = getIn(errors, fieldPath);
+    const errorMessage: unknown = getIn(errors, fieldPath);
     if (typeof errorMessage !== 'string') continue;
 
     fieldEntries.push({
