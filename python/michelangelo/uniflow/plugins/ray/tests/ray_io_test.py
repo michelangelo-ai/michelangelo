@@ -326,9 +326,7 @@ class TestFsPathAndResolveFs(TestCase):
     """Tests for _fs_path() env-var switching and resolve_fs() S3 branch."""
 
     def test_fs_path_uses_fsspec_when_env_set(self):
-        """_fs_path() returns a PyFileSystem when UF_PLUGIN_RAY_USE_FSSPEC=1."""
-        from pyarrow.fs import PyFileSystem
-
+        """_fs_path() returns the raw fsspec FS when UF_PLUGIN_RAY_USE_FSSPEC=1."""
         from michelangelo.uniflow.plugins.ray.io import (
             UF_PLUGIN_RAY_USE_FSSPEC,
             _fs_path,
@@ -341,7 +339,7 @@ class TestFsPathAndResolveFs(TestCase):
         ):
             fs, path = _fs_path("s3://bucket/d")
         mock_url.assert_called_once_with("s3://bucket/d")
-        self.assertIsInstance(fs, PyFileSystem)
+        self.assertIs(fs, mock_fs)
         self.assertEqual(path, "/d")
 
     def test_fs_path_uses_pyarrow_by_default(self):

@@ -6,8 +6,8 @@ for the PyArrow nested-data bug (https://github.com/ray-project/ray/issues/61675
 
 Filesystem backend is selected via ``UF_PLUGIN_RAY_USE_FSSPEC``:
 
-- ``"1"`` — fsspec (flexible: local, S3, GCS, etc.), wrapped via
-  ``pyarrow.fs.PyFileSystem`` for Ray compatibility.
+- ``"1"`` — fsspec (flexible: local, S3, GCS, etc.). PyArrow accepts fsspec
+  filesystems directly and wraps them transparently via ``FSSpecHandler``.
 - ``"0"`` (default) — native PyArrow filesystem (S3 with MinIO credential support)
 """
 
@@ -20,7 +20,6 @@ from typing import Any
 
 import fsspec.core
 import ray
-from pyarrow.fs import FSSpecHandler, PyFileSystem
 from ray.data import Dataset, ReadTask
 from ray.data.block import BlockMetadata
 
@@ -249,13 +248,10 @@ class RayDatasetIO(IO[Dataset]):
             int(os.environ.get(UF_PLUGIN_RAY_FILTER_WORKERS, _FILTER_WORKERS_DEFAULT)),
             len(candidates),
         )
-        # Wrap fsspec FS so pq.read_metadata receives a pyarrow.fs.FileSystem.
-        pyarrow_fs = PyFileSystem(FSSpecHandler(fsspec_fs))
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
             has_data = list(
-                pool.map(lambda f: _has_row_groups(f, pyarrow_fs), candidates)
+                pool.map(lambda f: _has_row_groups(f, fsspec_fs), candidates)
             )
-
         non_empty = [f for f, ok in zip(candidates, has_data) if ok]
         _logger.info(
             "Row-group check: %d have data, %d empty.",
@@ -271,15 +267,14 @@ class RayDatasetIO(IO[Dataset]):
 
 
 def _fs_path(url: str) -> tuple[Any, str]:
-    """Return a (PyArrow filesystem, path) tuple for *url*.
+    """Return a (filesystem, path) tuple for *url*.
 
-    When ``UF_PLUGIN_RAY_USE_FSSPEC=1``, the fsspec filesystem is wrapped via
-    ``pyarrow.fs.PyFileSystem`` so it is compatible with Ray's ``filesystem=``
-    parameter, which requires a ``pyarrow.fs.FileSystem``.
+    When ``UF_PLUGIN_RAY_USE_FSSPEC=1``, returns an fsspec filesystem. PyArrow
+    accepts fsspec filesystems directly and wraps them transparently at the C++
+    layer via ``FSSpecHandler`` — no manual wrapping required.
     """
     if os.environ.get(UF_PLUGIN_RAY_USE_FSSPEC, "0") == "1":
-        fsspec_fs, path = fsspec.core.url_to_fs(url)
-        return PyFileSystem(FSSpecHandler(fsspec_fs)), path
+        return fsspec.core.url_to_fs(url)
     return resolve_fs(url.split("://")[0]), url
 
 
