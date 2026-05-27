@@ -63,3 +63,11 @@ class TestProtoIO(TestCase):
         with self.assertRaises(ValueError) as ctx:
             ProtoIO().read("/tmp/x.json", {})
         self.assertIn("value_type", str(ctx.exception))
+
+    def test_read_raises_value_error_on_unresolvable_class(self):
+        """read() raises ValueError when the encoded class cannot be imported."""
+        from michelangelo.uniflow.plugins.proto.io import ProtoIO
+
+        with self.assertRaises(ValueError) as ctx:
+            ProtoIO().read("/tmp/x.json", {"value_type": "no.such.module:NoSuchClass"})
+        self.assertIn("no.such.module:NoSuchClass", str(ctx.exception))

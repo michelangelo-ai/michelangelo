@@ -79,6 +79,19 @@ class TestRayDatasetIOFilterEmptyData(TestCase):
             sorted(result), ["/data/part-0.parquet", "/data/part-1.parquet"]
         )
 
+    def test_returns_empty_when_all_candidates_have_no_row_groups(self):
+        """Returns [] when all non-zero-byte files have empty row groups."""
+        from michelangelo.uniflow.plugins.ray.io import RayDatasetIO
+
+        fs = self._make_fs({"/data/empty.parquet": {"size": 100}})
+        _rg_patch = "michelangelo.uniflow.plugins.ray.io._has_row_groups"
+        with (
+            patch("fsspec.core.url_to_fs", return_value=(fs, "/data")),
+            patch(_rg_patch, return_value=False),
+        ):
+            result = RayDatasetIO.filter_empty_data("/data")
+        self.assertEqual(result, [])
+
 
 class TestHasRowGroups(TestCase):
     """Tests for _has_row_groups()."""
@@ -121,6 +134,12 @@ class TestHasRowGroups(TestCase):
 
 class TestChunkList(TestCase):
     """Tests for _chunk_list()."""
+
+    def test_zero_chunks_treated_as_one(self):
+        """num_chunks <= 0 is treated as 1 — returns single chunk."""
+        from michelangelo.uniflow.plugins.ray.io import _chunk_list
+
+        self.assertEqual(_chunk_list(["a", "b"], 0), [["a", "b"]])
 
     def test_empty_list_returns_empty(self):
         """Returns [] for an empty input."""
@@ -183,7 +202,6 @@ class TestRayDatasetIOReadPaths(TestCase):
     def test_polars_fallback_triggered_on_nested_array_error(self):
         """read() calls _read_parquet_fallback on the PyArrow nested-data error."""
         import michelangelo.uniflow.plugins.ray.io as io_mod
-
         from michelangelo.uniflow.plugins.ray.io import (
             _NESTED_CHUNKED_ARRAY_ERROR,
             RayDatasetIO,
@@ -199,7 +217,9 @@ class TestRayDatasetIOReadPaths(TestCase):
             patch.object(io_mod, "ray", mock_ray),
             patch(_fs, return_value=(None, "/d")),
             patch.object(RayDatasetIO, "filter_empty_data", return_value=_fe),
-            patch.object(RayDatasetIO, "_read_parquet_fallback", return_value=mock_ds) as mock_fb,
+            patch.object(
+                RayDatasetIO, "_read_parquet_fallback", return_value=mock_ds
+            ) as mock_fb,
         ):
             result = RayDatasetIO().read("/d", None)
 
@@ -209,7 +229,6 @@ class TestRayDatasetIOReadPaths(TestCase):
     def test_reraises_unrelated_exceptions(self):
         """read() propagates exceptions unrelated to the nested-data bug."""
         import michelangelo.uniflow.plugins.ray.io as io_mod
-
         from michelangelo.uniflow.plugins.ray.io import RayDatasetIO
 
         mock_ray = MagicMock()
@@ -225,14 +244,59 @@ class TestRayDatasetIOReadPaths(TestCase):
         ):
             RayDatasetIO().read("/d", None)
 
+    def test_read_returns_dataset_on_success(self):
+        """read() returns the Ray Dataset when read_parquet succeeds."""
+        import michelangelo.uniflow.plugins.ray.io as io_mod
+        from michelangelo.uniflow.plugins.ray.io import RayDatasetIO
 
-class TestParquetPolarsDatasourceNoPolars(TestCase):
+        mock_ds = MagicMock()
+        mock_ray = MagicMock()
+        mock_ray.data.read_parquet.return_value = mock_ds
+
+        _fs = "michelangelo.uniflow.plugins.ray.io._fs_path"
+        _fe = ["/d/f.parquet"]
+        with (
+            patch.object(io_mod, "ray", mock_ray),
+            patch(_fs, return_value=(None, "/d")),
+            patch.object(RayDatasetIO, "filter_empty_data", return_value=_fe),
+        ):
+            result = RayDatasetIO().read("/d", None)
+
+        self.assertIs(result, mock_ds)
+
+    def test_write_calls_write_parquet(self):
+        """write() passes the PyArrow filesystem and path to Dataset.write_parquet."""
+        import michelangelo.uniflow.plugins.ray.io as io_mod
+        from michelangelo.uniflow.plugins.ray.io import RayDatasetIO
+
+        mock_ds = MagicMock()
+        mock_fs = MagicMock()
+        with patch(
+            "michelangelo.uniflow.plugins.ray.io._fs_path",
+            return_value=(mock_fs, "/d"),
+        ):
+            RayDatasetIO().write("/d", mock_ds)
+        mock_ds.write_parquet.assert_called_once_with("/d", filesystem=mock_fs)
+
+    def test_read_parquet_fallback_calls_read_datasource(self):
+        """_read_parquet_fallback delegates to ray.data.read_datasource."""
+        import michelangelo.uniflow.plugins.ray.io as io_mod
+        from michelangelo.uniflow.plugins.ray.io import RayDatasetIO
+
+        mock_ray = MagicMock()
+        mock_result = MagicMock()
+        mock_ray.data.read_datasource.return_value = mock_result
+
+        with patch.object(io_mod, "ray", mock_ray):
+            result = RayDatasetIO._read_parquet_fallback("/d", ["/d/f.parquet"])
+
+        self.assertIs(result, mock_result)
+        mock_ray.data.read_datasource.assert_called_once()class TestParquetPolarsDatasourceNoPolars(TestCase):
     """Tests for _ParquetPolarsDatasource when Polars is not installed."""
 
     def test_read_fn_raises_import_error_when_polars_missing(self):
         """read_fn raises ImportError when polars is absent at call time."""
         import michelangelo.uniflow.plugins.ray.io as io_mod
-
         from michelangelo.uniflow.plugins.ray.io import _ParquetPolarsDatasource
 
         mock_read_task = MagicMock()
@@ -260,7 +324,7 @@ class TestFsPathAndResolveFs(TestCase):
     """Tests for _fs_path() env-var switching and resolve_fs() S3 branch."""
 
     def test_fs_path_uses_fsspec_when_env_set(self):
-        """_fs_path() wraps fsspec result in PyFileSystem when UF_PLUGIN_RAY_USE_FSSPEC='1'."""
+        """_fs_path() wraps fsspec FS in PyFileSystem when UF_PLUGIN_RAY_USE_FSSPEC='1'."""
         from pyarrow.fs import PyFileSystem
 
         from michelangelo.uniflow.plugins.ray.io import (

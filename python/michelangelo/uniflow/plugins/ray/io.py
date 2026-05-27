@@ -32,7 +32,10 @@ UF_PLUGIN_RAY_USE_FSSPEC = "UF_PLUGIN_RAY_USE_FSSPEC"
 """Environment variable: set to ``"1"`` to use fsspec instead of PyArrow."""
 
 UF_PLUGIN_RAY_FILTER_WORKERS = "UF_PLUGIN_RAY_FILTER_WORKERS"
-"""Environment variable: maximum parallel workers for empty-file filtering (default 64)."""
+"""Environment variable: maximum parallel workers for empty-file filtering.
+
+Default: 64.
+"""
 
 _FILTER_WORKERS_DEFAULT = 64
 
@@ -210,8 +213,8 @@ class RayDatasetIO(IO[Dataset]):
 
         1. ``fs.find(detail=True)`` — bulk listing (single round-trip).
         2. Discard zero-byte files immediately.
-        3. Parallel-check remaining files for row groups (up to ``UF_PLUGIN_RAY_FILTER_WORKERS``
-           workers, default 64).
+        3. Parallel-check remaining files for row groups (up to
+           ``UF_PLUGIN_RAY_FILTER_WORKERS`` workers, default 64).
 
         Args:
             url: Directory path or URL containing parquet files.
@@ -221,7 +224,9 @@ class RayDatasetIO(IO[Dataset]):
         """
         fsspec_fs, path = fsspec.core.url_to_fs(url)
         file_info = fsspec_fs.find(path, detail=True)
-        parquet_files = {p: info for p, info in file_info.items() if p.endswith(".parquet")}
+        parquet_files = {
+            p: info for p, info in file_info.items() if p.endswith(".parquet")
+        }
 
         if not parquet_files:
             _logger.warning("No parquet files found at %s", url)
@@ -247,7 +252,9 @@ class RayDatasetIO(IO[Dataset]):
         # Wrap fsspec FS so pq.read_metadata receives a pyarrow.fs.FileSystem.
         pyarrow_fs = PyFileSystem(FSSpecHandler(fsspec_fs))
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
-            has_data = list(pool.map(lambda f: _has_row_groups(f, pyarrow_fs), candidates))
+            has_data = list(
+                pool.map(lambda f: _has_row_groups(f, pyarrow_fs), candidates)
+            )
 
         non_empty = [f for f, ok in zip(candidates, has_data) if ok]
         _logger.info(
