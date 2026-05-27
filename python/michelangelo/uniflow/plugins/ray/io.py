@@ -31,7 +31,10 @@ _logger = logging.getLogger(__name__)
 UF_PLUGIN_RAY_USE_FSSPEC = "UF_PLUGIN_RAY_USE_FSSPEC"
 """Environment variable: set to ``"1"`` to use fsspec instead of PyArrow."""
 
-_FILTER_WORKERS = 64
+UF_PLUGIN_RAY_FILTER_WORKERS = "UF_PLUGIN_RAY_FILTER_WORKERS"
+"""Environment variable: maximum parallel workers for empty-file filtering (default 64)."""
+
+_FILTER_WORKERS_DEFAULT = 64
 
 # Substring of the PyArrow error raised on nested list/struct columns in Ray workers.
 # Kept as a fallback alongside isinstance(exc, ArrowNotImplementedError) in case
@@ -209,7 +212,8 @@ class RayDatasetIO(IO[Dataset]):
 
         1. ``fs.find(detail=True)`` — bulk listing (single round-trip).
         2. Discard zero-byte files immediately.
-        3. Parallel-check remaining files for row groups (up to 64 workers).
+        3. Parallel-check remaining files for row groups (up to ``UF_PLUGIN_RAY_FILTER_WORKERS``
+           workers, default 64).
 
         Args:
             url: Directory path or URL containing parquet files.
@@ -238,7 +242,10 @@ class RayDatasetIO(IO[Dataset]):
         if not candidates:
             return []
 
-        max_workers = min(_FILTER_WORKERS, len(candidates))
+        max_workers = min(
+            int(os.environ.get(UF_PLUGIN_RAY_FILTER_WORKERS, _FILTER_WORKERS_DEFAULT)),
+            len(candidates),
+        )
         # Wrap fsspec FS so pq.read_metadata receives a pyarrow.fs.FileSystem.
         pyarrow_fs = PyFileSystem(FSSpecHandler(fsspec_fs))
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
