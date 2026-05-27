@@ -121,18 +121,8 @@ cadence:
     enabled: false
   postgresql:
     enabled: false
-
-  # Bitnami discontinued their free community image catalog in mid-2025 and
-  # removed the docker.io/bitnami/kafka tags the Cadence subchart pins
-  # (3.8.1-debian-12-r0). Without this override, kafka pods sit forever in
-  # ImagePullBackOff and the workflow engine never gets the queue it needs,
-  # so every PipelineRun fails with Execute Workflow stuck PENDING.
-  # bitnamilegacy/* is Bitnami's transition repo and still serves the same
-  # image digest under the old tag.
   kafka:
-    image:
-      repository: bitnamilegacy/kafka
-      tag: 3.8.1-debian-12-r0
+    enabled: false
 
   # Cadence Web UI exposed via NodePort 30004 → host port 8088.
   web:
