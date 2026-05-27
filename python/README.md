@@ -108,6 +108,8 @@ written.
 | Plugin | Type handled | Import |
 |--------|-------------|--------|
 | `RayDatasetIO` | `ray.data.Dataset` | `from michelangelo.uniflow.plugins.ray import RayDatasetIO` |
+| `PandasIO` | `pandas.DataFrame` | `from michelangelo.uniflow.plugins.pandas import PandasIO` |
+| `SparkIO` | `pyspark.sql.DataFrame` | `from michelangelo.uniflow.plugins.spark import SparkIO` |
 | `ProtoIO` | `google.protobuf.message.Message` | `from michelangelo.uniflow.plugins.proto import ProtoIO` |
 
 `ProtoIO` serialises protobuf messages as JSON (via `google.protobuf.json_format`)
