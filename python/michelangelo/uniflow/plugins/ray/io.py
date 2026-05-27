@@ -199,6 +199,7 @@ class RayDatasetIO(IO[Any]):
         """
         fs, path = fsspec.core.url_to_fs(url)
         file_info = fs.find(path, detail=True)
+        parquet_files = {p: info for p, info in file_info.items() if p.endswith(".parquet")}
 
         if not parquet_files:
             _logger.warning("No parquet files found at %s", url)
