@@ -183,9 +183,7 @@ class RayDatasetIO(IO[Dataset]):
         fs, _ = _fs_path(url)
         paths = RayDatasetIO.filter_empty_data(url)
         if not paths:
-            raise FileNotFoundError(
-                f"RayDatasetIO: no parquet files found at '{url}'."
-            )
+            raise FileNotFoundError(f"RayDatasetIO: no parquet files found at '{url}'.")
         try:
             ds = ray.data.read_parquet(
                 paths, filesystem=fs, file_extensions=["parquet"]

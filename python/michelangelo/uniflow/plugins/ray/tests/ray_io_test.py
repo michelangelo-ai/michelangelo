@@ -87,37 +87,33 @@ class TestHasRowGroups(TestCase):
         """Returns True when num_row_groups > 0."""
         from michelangelo.uniflow.plugins.ray.io import _has_row_groups
 
-        mock_pq = MagicMock()
-        mock_pq.read_metadata.return_value.num_row_groups = 2
-        with patch.dict(sys.modules, {"pyarrow.parquet": mock_pq}):
+        mock_meta = MagicMock()
+        mock_meta.num_row_groups = 2
+        with patch("pyarrow.parquet.read_metadata", return_value=mock_meta):
             self.assertTrue(_has_row_groups("/f.parquet", MagicMock()))
 
     def test_returns_false_when_zero_row_groups(self):
         """Returns False when num_row_groups == 0."""
         from michelangelo.uniflow.plugins.ray.io import _has_row_groups
 
-        mock_pq = MagicMock()
-        mock_pq.read_metadata.return_value.num_row_groups = 0
-        with patch.dict(sys.modules, {"pyarrow.parquet": mock_pq}):
+        mock_meta = MagicMock()
+        mock_meta.num_row_groups = 0
+        with patch("pyarrow.parquet.read_metadata", return_value=mock_meta):
             self.assertFalse(_has_row_groups("/f.parquet", MagicMock()))
 
     def test_returns_false_on_non_oserror(self):
         """Returns False (logs warning) for unexpected exceptions."""
         from michelangelo.uniflow.plugins.ray.io import _has_row_groups
 
-        mock_pq = MagicMock()
-        mock_pq.read_metadata.side_effect = ValueError("corrupt")
-        with patch.dict(sys.modules, {"pyarrow.parquet": mock_pq}):
+        with patch("pyarrow.parquet.read_metadata", side_effect=ValueError("corrupt")):
             self.assertFalse(_has_row_groups("/f.parquet", MagicMock()))
 
     def test_reraises_oserror(self):
         """Re-raises OSError instead of swallowing it."""
         from michelangelo.uniflow.plugins.ray.io import _has_row_groups
 
-        mock_pq = MagicMock()
-        mock_pq.read_metadata.side_effect = OSError("not found")
         with (
-            patch.dict(sys.modules, {"pyarrow.parquet": mock_pq}),
+            patch("pyarrow.parquet.read_metadata", side_effect=OSError("not found")),
             self.assertRaises(OSError),
         ):
             _has_row_groups("/f.parquet", MagicMock())
@@ -186,26 +182,24 @@ class TestRayDatasetIOReadPaths(TestCase):
 
     def test_polars_fallback_triggered_on_nested_array_error(self):
         """read() calls _read_parquet_fallback on the PyArrow nested-data error."""
+        import michelangelo.uniflow.plugins.ray.io as io_mod
+
         from michelangelo.uniflow.plugins.ray.io import (
             _NESTED_CHUNKED_ARRAY_ERROR,
             RayDatasetIO,
         )
 
-        mods, mock_data = self._mock_ray()
         mock_ds = MagicMock()
-        mock_data.read_parquet = MagicMock(
-            side_effect=Exception(_NESTED_CHUNKED_ARRAY_ERROR)
-        )
+        mock_ray = MagicMock()
+        mock_ray.data.read_parquet.side_effect = Exception(_NESTED_CHUNKED_ARRAY_ERROR)
 
         _fs = "michelangelo.uniflow.plugins.ray.io._fs_path"
         _fe = ["/d/f.parquet"]
         with (
-            patch.dict(sys.modules, mods),
+            patch.object(io_mod, "ray", mock_ray),
             patch(_fs, return_value=(None, "/d")),
             patch.object(RayDatasetIO, "filter_empty_data", return_value=_fe),
-            patch.object(
-                RayDatasetIO, "_read_parquet_fallback", return_value=mock_ds
-            ) as mock_fb,
+            patch.object(RayDatasetIO, "_read_parquet_fallback", return_value=mock_ds) as mock_fb,
         ):
             result = RayDatasetIO().read("/d", None)
 
@@ -214,15 +208,17 @@ class TestRayDatasetIOReadPaths(TestCase):
 
     def test_reraises_unrelated_exceptions(self):
         """read() propagates exceptions unrelated to the nested-data bug."""
+        import michelangelo.uniflow.plugins.ray.io as io_mod
+
         from michelangelo.uniflow.plugins.ray.io import RayDatasetIO
 
-        mods, mock_data = self._mock_ray()
-        mock_data.read_parquet = MagicMock(side_effect=RuntimeError("disk full"))
+        mock_ray = MagicMock()
+        mock_ray.data.read_parquet.side_effect = RuntimeError("disk full")
 
         _fs = "michelangelo.uniflow.plugins.ray.io._fs_path"
         _fe = ["/d/f.parquet"]
         with (
-            patch.dict(sys.modules, mods),
+            patch.object(io_mod, "ray", mock_ray),
             patch(_fs, return_value=(None, "/d")),
             patch.object(RayDatasetIO, "filter_empty_data", return_value=_fe),
             self.assertRaises(RuntimeError),
@@ -235,25 +231,22 @@ class TestParquetPolarsDatasourceNoPolars(TestCase):
 
     def test_read_fn_raises_import_error_when_polars_missing(self):
         """read_fn raises ImportError when polars is absent at call time."""
-        import types as _t
+        import michelangelo.uniflow.plugins.ray.io as io_mod
 
         from michelangelo.uniflow.plugins.ray.io import _ParquetPolarsDatasource
 
-        # Mock ray.data.ReadTask and BlockMetadata so get_read_tasks() can run.
+        mock_read_task = MagicMock()
         captured_fns = []
-        mock_read_task = MagicMock(side_effect=lambda fn, meta: captured_fns.append(fn))
+        mock_read_task.side_effect = lambda fn, meta: captured_fns.append(fn)
         mock_block_meta = MagicMock()
-        mock_ray_data = _t.SimpleNamespace(
-            ReadTask=mock_read_task,
-            block=_t.SimpleNamespace(BlockMetadata=lambda **kw: mock_block_meta),
-        )
-        mods = {"ray.data": mock_ray_data, "ray.data.block": mock_ray_data.block}
 
         src = _ParquetPolarsDatasource(url="/tmp", paths=["/tmp/f.parquet"])
-        with patch.dict(sys.modules, mods):
+        with (
+            patch.object(io_mod, "ReadTask", mock_read_task),
+            patch.object(io_mod, "BlockMetadata", return_value=mock_block_meta),
+        ):
             src.get_read_tasks(1)
 
-        # The read_fn is captured; calling it with polars absent raises ImportError.
         self.assertEqual(len(captured_fns), 1)
         with (
             patch.dict(sys.modules, {"polars": None}),
@@ -267,7 +260,9 @@ class TestFsPathAndResolveFs(TestCase):
     """Tests for _fs_path() env-var switching and resolve_fs() S3 branch."""
 
     def test_fs_path_uses_fsspec_when_env_set(self):
-        """_fs_path() returns fsspec result when UF_PLUGIN_RAY_USE_FSSPEC='1'."""
+        """_fs_path() wraps fsspec result in PyFileSystem when UF_PLUGIN_RAY_USE_FSSPEC='1'."""
+        from pyarrow.fs import PyFileSystem
+
         from michelangelo.uniflow.plugins.ray.io import (
             UF_PLUGIN_RAY_USE_FSSPEC,
             _fs_path,
@@ -280,7 +275,7 @@ class TestFsPathAndResolveFs(TestCase):
         ):
             fs, path = _fs_path("s3://bucket/d")
         mock_url.assert_called_once_with("s3://bucket/d")
-        self.assertIs(fs, mock_fs)
+        self.assertIsInstance(fs, PyFileSystem)
         self.assertEqual(path, "/d")
 
     def test_fs_path_uses_pyarrow_by_default(self):
