@@ -7,14 +7,6 @@ import { Icon } from '#core/components/icon/icon';
 import type { MenuAdapterProps } from 'baseui/list';
 import type { ResolvedActionItem } from '#core/components/actions/types';
 
-/**
- * Props for ActionMenuItem, combining BaseUI's MenuAdapter props with
- * action-menu-level state for tooltip coordination.
- *
- * BaseUI injects `$isHighlighted`, `$disabled`, `onClick`, etc. via the
- * Option override. The remaining props (`hoveredItem`, `keyboardActive`, etc.)
- * are passed from ActionMenu through the override's `props` field.
- */
 type ActionMenuItemProps = {
   /** Named `item` to match BaseUI's MenuAdapter injection. */
   item: ResolvedActionItem;
@@ -25,12 +17,8 @@ type ActionMenuItemProps = {
    * Compared by object identity against `item` to derive `isHovered`.
    */
   hoveredItem: object | null;
-  setHoveredItem: (item: object | null) => void;
-  /**
-   * True after any keydown inside the menu. False on mouse enter.
-   * Gates the keyboard tooltip path so auto-highlight on focus
-   * doesn't flash a tooltip.
-   */
+  setHoveredItem: (action: object | null) => void;
+  /** True after any keydown; false on mouse enter. Gates keyboard tooltip to suppress auto-highlight flash. */
   keyboardActive: boolean;
   setKeyboardActive: (active: boolean) => void;
 } & Omit<MenuAdapterProps, 'children' | 'item'>;
