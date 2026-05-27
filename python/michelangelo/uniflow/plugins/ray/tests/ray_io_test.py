@@ -291,7 +291,10 @@ class TestRayDatasetIOReadPaths(TestCase):
             result = RayDatasetIO._read_parquet_fallback("/d", ["/d/f.parquet"])
 
         self.assertIs(result, mock_result)
-        mock_ray.data.read_datasource.assert_called_once()class TestParquetPolarsDatasourceNoPolars(TestCase):
+        mock_ray.data.read_datasource.assert_called_once()
+
+
+class TestParquetPolarsDatasourceNoPolars(TestCase):
     """Tests for _ParquetPolarsDatasource when Polars is not installed."""
 
     def test_read_fn_raises_import_error_when_polars_missing(self):
@@ -324,7 +327,7 @@ class TestFsPathAndResolveFs(TestCase):
     """Tests for _fs_path() env-var switching and resolve_fs() S3 branch."""
 
     def test_fs_path_uses_fsspec_when_env_set(self):
-        """_fs_path() wraps fsspec FS in PyFileSystem when UF_PLUGIN_RAY_USE_FSSPEC='1'."""
+        """_fs_path() returns a PyFileSystem when UF_PLUGIN_RAY_USE_FSSPEC=1."""
         from pyarrow.fs import PyFileSystem
 
         from michelangelo.uniflow.plugins.ray.io import (
