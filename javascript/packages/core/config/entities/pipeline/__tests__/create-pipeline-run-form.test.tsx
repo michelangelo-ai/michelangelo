@@ -15,15 +15,16 @@ import {
 } from '#core/test/wrappers/get-service-provider-wrapper';
 
 describe('CreatePipelineRunForm', () => {
-  // Stateful wrapper providing real isOpen state so FormDialog can close on success.
-  // Defined inside describe (not module level) and data is co-located.
+  // Mount-when-visible pattern: the dispatcher mounts the component while open and
+  // unmounts on close. This wrapper mirrors that — unmounting on onClose.
   function FormWrapper() {
-    const [isOpen, setIsOpen] = useState(true);
+    const [mounted, setMounted] = useState(true);
     const data = {
       metadata: { name: 'test-pipeline', namespace: 'test-namespace' },
       spec: { owner: { name: 'test-owner' } },
     };
-    return <CreatePipelineRunForm record={data} isOpen={isOpen} onClose={() => setIsOpen(false)} />;
+    if (!mounted) return null;
+    return <CreatePipelineRunForm record={data} onClose={() => setMounted(false)} />;
   }
 
   it('submits pipeline run with correct data structure and closes dialog', async () => {

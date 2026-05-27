@@ -18,7 +18,6 @@ import {
 } from '#core/test/wrappers/get-service-provider-wrapper';
 import { PhaseEntityView } from '../phase-entity-view';
 
-import type { ActionComponentProps } from '#core/components/actions/types';
 import type { ListableEntity } from '../types';
 
 describe('PhaseEntityView', () => {
@@ -88,15 +87,16 @@ describe('PhaseEntityView', () => {
 
   it('opens the action component when an action menu item is clicked', async () => {
     const user = userEvent.setup();
-    const RunDialog = ({ isOpen }: ActionComponentProps) =>
-      isOpen ? <div role="dialog">Run dialog</div> : null;
+    const RunDialog = () => <div role="dialog">Run dialog</div>;
 
     render(
       <PhaseEntityView
         phaseConfig={buildPhaseConfig()}
         entities={[
           buildPipelineEntityConfig({
-            actions: [{ display: { label: 'Run' }, component: RunDialog }],
+            actions: [
+              { display: { label: 'Run' }, modal: { type: 'custom', component: RunDialog } },
+            ],
           }) as ListableEntity,
         ]}
       />,
@@ -120,8 +120,7 @@ describe('PhaseEntityView', () => {
 
   it('resolves interpolated disabled conditions per-row', async () => {
     const user = userEvent.setup();
-    const StubDialog = ({ isOpen }: ActionComponentProps) =>
-      isOpen ? <div role="dialog">Stub</div> : null;
+    const StubDialog = () => <div role="dialog">Stub</div>;
 
     render(
       <PhaseEntityView
@@ -131,7 +130,7 @@ describe('PhaseEntityView', () => {
             actions: [
               {
                 display: { label: 'Delete' },
-                component: StubDialog,
+                modal: { type: 'custom', component: StubDialog },
                 disabled: [
                   {
                     condition: interpolate(

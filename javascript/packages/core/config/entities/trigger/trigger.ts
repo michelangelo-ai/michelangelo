@@ -22,7 +22,7 @@ export const TRIGGER_ENTITY_CONFIG: PhaseEntityConfig = {
   actions: [
     {
       display: { label: 'Kill', icon: 'stopCircle' },
-      component: KillTriggerRunForm,
+      modal: { type: 'custom', component: KillTriggerRunForm },
       hierarchy: interpolate(({ data }) =>
         isKillable(data) ? ActionHierarchy.SECONDARY : ActionHierarchy.TERTIARY
       ),

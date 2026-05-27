@@ -18,7 +18,6 @@ const ACTION_CONFIG = {
 
 function TriggerRunActionForm({
   record,
-  isOpen,
   onClose,
   action,
 }: ActionComponentProps<TriggerRun> & { action: keyof typeof ACTION_CONFIG }) {
@@ -52,7 +51,7 @@ function TriggerRunActionForm({
 
   return (
     <FormDialog<TriggerRun>
-      isOpen={isOpen}
+      isOpen
       onDismiss={onClose}
       heading={config.heading}
       onSubmit={handleSubmit}

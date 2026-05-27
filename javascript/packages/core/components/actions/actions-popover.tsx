@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom-v5-compat';
 import { useStyletron } from 'baseui';
 import { Button, KIND, SHAPE, SIZE } from 'baseui/button';
 import { PLACEMENT, StatefulPopover } from 'baseui/popover';
 
 import { Icon } from '#core/components/icon/icon';
+import { ActionDispatcher } from './action-dispatcher';
 import { ActionMenu } from './action-menu/action-menu';
 import { useResolvedActionItems } from './use-resolved-action-items';
 
@@ -26,9 +28,16 @@ export function ActionsPopover<T extends Data>({
 }: ActionsPopoverProps<T>) {
   const scrollDisabledRef = useRef(false);
   const [activeAction, setActiveAction] = useState<ActionConfig<T> | null>(null);
+  const navigate = useNavigate();
   const [, theme] = useStyletron();
 
-  const items = useResolvedActionItems(actions, setActiveAction);
+  const items = useResolvedActionItems(actions, (action) => {
+    if (action.modal) {
+      setActiveAction(action);
+    } else if (action.action?.type === 'route') {
+      navigate(action.action.route);
+    }
+  });
 
   const disableScroll = () => {
     document.body.style.overflow = 'hidden';
@@ -47,8 +56,6 @@ export function ActionsPopover<T extends Data>({
       }
     };
   }, []);
-
-  const ActiveComponent = activeAction?.component;
 
   return (
     <>
@@ -90,8 +97,12 @@ export function ActionsPopover<T extends Data>({
           <Icon name="overflowMenu" />
         </Button>
       </StatefulPopover>
-      {ActiveComponent && (
-        <ActiveComponent record={record} isOpen onClose={() => setActiveAction(null)} />
+      {activeAction && (
+        <ActionDispatcher
+          action={activeAction}
+          record={record}
+          onClose={() => setActiveAction(null)}
+        />
       )}
     </>
   );

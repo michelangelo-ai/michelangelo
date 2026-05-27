@@ -87,7 +87,7 @@ describe('adaptTableConfigToTableProps', () => {
   it('returns a render function when actions are configured', () => {
     // Full actions interaction is tested at the PhaseEntityView level.
     const tableConfig = buildTableConfig({
-      actions: [{ display: { label: 'Delete' }, component: () => null }],
+      actions: [{ display: { label: 'Delete' }, modal: { type: 'custom', component: () => null } }],
     });
     const result = adaptTableConfigToTableProps(tableConfig, {
       data: [{ name: 'Item 1', status: 'Active' }],

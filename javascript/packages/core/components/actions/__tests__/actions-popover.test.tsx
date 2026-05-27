@@ -1,26 +1,33 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { ActionMenu } from '#core/components/actions/action-menu/action-menu';
 import { ActionsPopover } from '#core/components/actions/actions-popover';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
+import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
+import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
+import {
+  createQueryMockRouter,
+  getServiceProviderWrapper,
+} from '#core/test/wrappers/get-service-provider-wrapper';
 
 import type { ActionComponentProps } from '#core/components/actions/types';
 
 describe('ActionsPopover', () => {
-  function DeleteDialog({ isOpen }: ActionComponentProps) {
-    return isOpen ? <div role="dialog">Delete dialog</div> : null;
+  function DeleteDialog({ record }: ActionComponentProps) {
+    const id = typeof record.id === 'string' ? record.id : '';
+    return <div role="dialog">Delete dialog {id}</div>;
   }
 
   it('renders an "Actions" trigger button', () => {
     render(
       <ActionsPopover
-        actions={[{ display: { label: 'Delete' }, component: DeleteDialog }]}
+        actions={[{ display: { label: 'Delete' }, modal: { type: 'custom', component: DeleteDialog } }]}
         record={{}}
       />,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
     );
     expect(screen.getByRole('button', { name: 'Actions' })).toBeInTheDocument();
   });
@@ -28,10 +35,10 @@ describe('ActionsPopover', () => {
   it('does not show menu items before the trigger is clicked', () => {
     render(
       <ActionsPopover
-        actions={[{ display: { label: 'Delete' }, component: DeleteDialog }]}
+        actions={[{ display: { label: 'Delete' }, modal: { type: 'custom', component: DeleteDialog } }]}
         record={{}}
       />,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
     );
     expect(screen.queryByRole('option', { name: 'Delete' })).not.toBeInTheDocument();
   });
@@ -40,10 +47,10 @@ describe('ActionsPopover', () => {
     const user = userEvent.setup();
     render(
       <ActionsPopover
-        actions={[{ display: { label: 'Delete' }, component: DeleteDialog }]}
+        actions={[{ display: { label: 'Delete' }, modal: { type: 'custom', component: DeleteDialog } }]}
         record={{}}
       />,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
     );
     await user.click(screen.getByRole('button', { name: 'Actions' }));
     expect(await screen.findByRole('option', { name: 'Delete' })).toBeInTheDocument();
@@ -56,7 +63,7 @@ describe('ActionsPopover', () => {
         actions={[
           {
             display: { label: 'Delete', icon: 'trash' },
-            component: DeleteDialog,
+            modal: { type: 'custom', component: DeleteDialog },
           },
         ]}
         record={{}}
@@ -64,6 +71,7 @@ describe('ActionsPopover', () => {
       buildWrapper([
         getBaseProviderWrapper(),
         getIconProviderWrapper({ icons: { trash: () => <div>Trash</div> } }),
+        getRouterWrapper(),
       ])
     );
 
@@ -75,10 +83,10 @@ describe('ActionsPopover', () => {
     const user = userEvent.setup();
     render(
       <ActionsPopover
-        actions={[{ display: { label: 'Delete' }, component: DeleteDialog }]}
+        actions={[{ display: { label: 'Delete' }, modal: { type: 'custom', component: DeleteDialog } }]}
         record={{}}
       />,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
     );
     await user.click(screen.getByRole('button', { name: 'Actions' }));
     await user.click(await screen.findByRole('option', { name: 'Delete' }));
@@ -90,15 +98,15 @@ describe('ActionsPopover', () => {
 
   it('passes data to the action component', async () => {
     const user = userEvent.setup();
-    const Component = ({ record, isOpen }: ActionComponentProps) =>
-      isOpen ? <div role="dialog">{String(record.id)}</div> : null;
+    const Component = ({ record }: ActionComponentProps) =>
+      <div role="dialog">{String(record.id)}</div>;
     const data = { id: '42', type: 'pipeline' };
     render(
       <ActionsPopover
-        actions={[{ display: { label: 'Run' }, component: Component }]}
+        actions={[{ display: { label: 'Run' }, modal: { type: 'custom', component: Component } }]}
         record={data}
       />,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
     );
     await user.click(screen.getByRole('button', { name: 'Actions' }));
     await user.click(await screen.findByRole('option', { name: 'Run' }));
@@ -109,10 +117,10 @@ describe('ActionsPopover', () => {
     const user = userEvent.setup();
     const { unmount } = render(
       <ActionsPopover
-        actions={[{ display: { label: 'Delete' }, component: DeleteDialog }]}
+        actions={[{ display: { label: 'Delete' }, modal: { type: 'custom', component: DeleteDialog } }]}
         record={{}}
       />,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
     );
     await user.click(screen.getByRole('button', { name: 'Actions' }));
     expect(document.body.style.overflow).toBe('hidden');
@@ -124,10 +132,10 @@ describe('ActionsPopover', () => {
     const user = userEvent.setup();
     render(
       <ActionsPopover
-        actions={[{ display: { label: 'Delete' }, component: DeleteDialog }]}
+        actions={[{ display: { label: 'Delete' }, modal: { type: 'custom', component: DeleteDialog } }]}
         record={{}}
       />,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
     );
     await user.click(screen.getByRole('button', { name: 'Actions' }));
     expect(await screen.findByRole('option', { name: 'Delete' })).toBeInTheDocument();
@@ -140,7 +148,7 @@ describe('ActionsPopover', () => {
   describe('disabled actions', () => {
     const disabledAction = {
       display: { label: 'Delete' },
-      component: DeleteDialog,
+      modal: { type: 'custom' as const, component: DeleteDialog },
       disabled: [{ condition: true, message: 'Cannot delete' }],
     };
 
@@ -148,7 +156,7 @@ describe('ActionsPopover', () => {
       const user = userEvent.setup();
       render(
         <ActionsPopover actions={[disabledAction]} record={{}} />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
       );
       await user.click(screen.getByRole('button', { name: 'Actions' }));
       expect(await screen.findByRole('option', { name: 'Delete' })).toBeInTheDocument();
@@ -158,7 +166,7 @@ describe('ActionsPopover', () => {
       const user = userEvent.setup();
       render(
         <ActionsPopover actions={[disabledAction]} record={{}} />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
       );
       await user.click(screen.getByRole('button', { name: 'Actions' }));
       await user.click(await screen.findByRole('option', { name: 'Delete' }));
@@ -169,7 +177,7 @@ describe('ActionsPopover', () => {
       const user = userEvent.setup();
       render(
         <ActionsPopover actions={[disabledAction]} record={{}} />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
       );
       await user.click(screen.getByRole('button', { name: 'Actions' }));
       await user.hover(await screen.findByRole('option', { name: 'Delete' }));
@@ -180,7 +188,7 @@ describe('ActionsPopover', () => {
       const user = userEvent.setup();
       render(
         <ActionsPopover actions={[disabledAction]} record={{}} />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
       );
       await user.click(screen.getByRole('button', { name: 'Actions' }));
       await user.hover(await screen.findByRole('option', { name: 'Delete' }));
@@ -198,13 +206,13 @@ describe('ActionsPopover', () => {
           actions={[
             {
               display: { label: 'Delete' },
-              component: DeleteDialog,
+              modal: { type: 'custom', component: DeleteDialog },
               disabled: [{ condition: true, message: 'Item is locked' }],
             },
           ]}
           record={{ status: 'locked' }}
         />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
       );
       await user.click(screen.getByRole('button', { name: 'Actions' }));
       await user.hover(await screen.findByRole('option', { name: 'Delete' }));
@@ -218,7 +226,7 @@ describe('ActionsPopover', () => {
           actions={[
             {
               display: { label: 'Delete' },
-              component: DeleteDialog,
+              modal: { type: 'custom', component: DeleteDialog },
               disabled: [
                 { condition: false, message: 'Should not appear' },
                 { condition: true, message: 'Second rule matches' },
@@ -227,7 +235,7 @@ describe('ActionsPopover', () => {
           ]}
           record={{}}
         />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
       );
       await user.click(screen.getByRole('button', { name: 'Actions' }));
       await user.hover(await screen.findByRole('option', { name: 'Delete' }));
@@ -242,7 +250,7 @@ describe('ActionsPopover', () => {
           actions={[
             {
               display: { label: 'Delete' },
-              component: DeleteDialog,
+              modal: { type: 'custom', component: DeleteDialog },
               disabled: [
                 { condition: false, message: 'Should not appear' },
                 { condition: true, message: 'Second rule matches' },
@@ -252,7 +260,7 @@ describe('ActionsPopover', () => {
           ]}
           record={{}}
         />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
       );
       await user.click(screen.getByRole('button', { name: 'Actions' }));
       await user.hover(await screen.findByRole('option', { name: 'Delete' }));
@@ -369,14 +377,92 @@ describe('ActionsPopover', () => {
       const user = userEvent.setup();
       render(
         <ActionsPopover
-          actions={[disabledAction, { display: { label: 'Edit' }, component: DeleteDialog }]}
+          actions={[
+            disabledAction,
+            { display: { label: 'Edit' }, modal: { type: 'custom', component: DeleteDialog } },
+          ]}
           record={{}}
         />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
       );
       await user.click(screen.getByRole('button', { name: 'Actions' }));
       await user.click(await screen.findByRole('option', { name: 'Edit' }));
       expect(await screen.findByRole('dialog')).toBeInTheDocument();
     });
+  });
+
+  it('mutation-confirm action: shows confirm dialog and fires mutation on confirm', async () => {
+    const user = userEvent.setup();
+    const mockRequest = createQueryMockRouter({ UpdateTriggerRun: { triggerRun: {} } });
+
+    render(
+      <ActionsPopover
+        actions={[
+          {
+            display: { label: 'Kill' },
+            action: { type: 'mutation', mutation: { mutationName: 'UpdateTriggerRun' } },
+            modal: {
+              type: 'confirm',
+              header: { title: 'Confirm kill?' },
+              button: { label: 'Kill it' },
+              destructive: true,
+            },
+          },
+        ]}
+        record={{ id: 'run-1' }}
+      />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getRouterWrapper(),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Actions' }));
+    await user.click(await screen.findByRole('option', { name: 'Kill' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Confirm kill?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Kill it' }));
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith('UpdateTriggerRun', { id: 'run-1' });
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+  });
+
+  it('route-confirm action: shows confirm dialog and navigates on confirm', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ActionsPopover
+        actions={[
+          {
+            display: { label: 'Open detail' },
+            action: { type: 'route', route: '/dest/page' },
+            modal: {
+              type: 'confirm',
+              header: { title: 'Open detail page?' },
+              button: { label: 'Open' },
+            },
+          },
+        ]}
+        record={{}}
+      />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getRouterWrapper({ location: '/start' }),
+      ])
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Actions' }));
+    await user.click(await screen.findByRole('option', { name: 'Open detail' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Open detail page?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Open' }));
+
+    expect(screen.getByText(/Current pathname: \/dest\/page/)).toBeInTheDocument();
   });
 });

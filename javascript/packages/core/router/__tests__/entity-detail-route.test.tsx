@@ -720,12 +720,11 @@ describe('EntityDetailRoute', () => {
 
   test('renders entity-level actions in the detail page header', async () => {
     const user = userEvent.setup();
-    const RunDialog = ({ isOpen, onClose }: ActionComponentProps) =>
-      isOpen ? (
-        <div role="dialog">
-          Run form <button onClick={onClose}>Close</button>
-        </div>
-      ) : null;
+    const RunDialog = ({ onClose }: ActionComponentProps) => (
+      <div role="dialog">
+        Run form <button onClick={onClose}>Close</button>
+      </div>
+    );
 
     const testPhases = {
       train: buildPhase({
@@ -735,7 +734,7 @@ describe('EntityDetailRoute', () => {
             actions: [
               {
                 display: { label: 'Run', icon: 'playerPlay' },
-                component: RunDialog,
+                modal: { type: 'custom', component: RunDialog },
                 hierarchy: ActionHierarchy.PRIMARY,
               },
             ],
@@ -784,8 +783,7 @@ describe('EntityDetailRoute', () => {
   });
 
   test('resolves interpolated action hierarchy in the detail page header', async () => {
-    const StubDialog = ({ isOpen }: ActionComponentProps) =>
-      isOpen ? <div role="dialog">Stub</div> : null;
+    const StubDialog = () => <div role="dialog">Stub</div>;
 
     const testPhases = {
       train: buildPhase({
@@ -795,7 +793,7 @@ describe('EntityDetailRoute', () => {
             actions: [
               {
                 display: { label: 'Resume' },
-                component: StubDialog,
+                modal: { type: 'custom', component: StubDialog },
                 hierarchy: interpolate(({ data }) => {
                   const record = data as { status?: { state?: string } } | undefined;
                   return record?.status?.state === 'PAUSED'

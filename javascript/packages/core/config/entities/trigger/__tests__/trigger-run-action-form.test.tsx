@@ -17,13 +17,13 @@ import { TriggerRunAction, TriggerRunState } from '../types';
 import type { ActionComponentProps } from '#core/components/actions/types';
 import type { TriggerRun } from '../types';
 
-// Provides real isOpen state so FormDialog can close on success.
+// Mount-when-visible pattern matching the dispatcher's lifecycle: unmount on close.
 function FormWrapper({
   Form,
 }: {
   Form: (props: ActionComponentProps<TriggerRun>) => React.ReactElement | null;
 }) {
-  const [isOpen, setIsOpen] = useState(true);
+  const [mounted, setMounted] = useState(true);
   const record: TriggerRun = {
     metadata: { name: 'my-trigger', namespace: 'test-ns' },
     spec: {
@@ -38,7 +38,8 @@ function FormWrapper({
     },
     status: { state: TriggerRunState.RUNNING },
   };
-  return <Form record={record} isOpen={isOpen} onClose={() => setIsOpen(false)} />;
+  if (!mounted) return null;
+  return <Form record={record} onClose={() => setMounted(false)} />;
 }
 
 it.each([
