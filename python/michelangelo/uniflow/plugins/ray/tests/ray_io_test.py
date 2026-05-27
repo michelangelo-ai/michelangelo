@@ -266,7 +266,6 @@ class TestRayDatasetIOReadPaths(TestCase):
 
     def test_write_calls_write_parquet(self):
         """write() passes the PyArrow filesystem and path to Dataset.write_parquet."""
-        import michelangelo.uniflow.plugins.ray.io as io_mod
         from michelangelo.uniflow.plugins.ray.io import RayDatasetIO
 
         mock_ds = MagicMock()
