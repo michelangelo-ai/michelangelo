@@ -10,7 +10,7 @@ Michelangelo is an end-to-end ML platform for building, deploying, and managing 
 
 ## Why Michelangelo
 
-Most ML teams spend more engineering time on infrastructure than on models. Training pipelines break in production. Feature logic gets duplicated across teams. Serving containers are hand-rolled for each project. Stitching together PyTorch, MLflow, Airflow, and a custom serving layer works until it doesn't — and when it breaks, it's your problem to fix.
+Most ML teams spend more engineering time on infrastructure than on models. Training pipelines break in production. Feature logic gets duplicated across teams. Serving containers are hand-rolled for each project. Stitching together a training framework, an experiment tracker, an orchestrator, and a custom serving layer works until it doesn't — and when it breaks, it's your problem to fix.
 
 Michelangelo exists so you don't have to build that stack from scratch. It covers the full ML lifecycle — data preparation, training, evaluation, deployment, and monitoring — in a single system that has been running in production at Uber's scale for eight years. Not a proof of concept. Not a framework you assemble yourself. A complete platform, battle-tested across thousands of models, now available for any team to adopt.
 
