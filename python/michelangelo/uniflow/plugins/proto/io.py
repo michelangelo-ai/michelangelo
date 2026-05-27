@@ -109,7 +109,8 @@ class ProtoIO(IO[Message]):
         except (ValueError, ImportError, AttributeError) as exc:
             raise ValueError(
                 f"ProtoIO.read() could not resolve message class from "
-                f"'{value_type}'. Ensure the module is importable."
+                f"'{value_type}'. Ensure the module is importable in the reading "
+                f"process (it may need to be on the Python path)."
             ) from exc
         fs, path = fsspec.core.url_to_fs(url)
         instance = msg_class()

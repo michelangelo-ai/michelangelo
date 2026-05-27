@@ -33,7 +33,9 @@ UF_PLUGIN_RAY_USE_FSSPEC = "UF_PLUGIN_RAY_USE_FSSPEC"
 
 _FILTER_WORKERS = 64
 
-# PyArrow exception class and substring for the nested-column bug.
+# Substring of the PyArrow error raised on nested list/struct columns in Ray workers.
+# Kept as a fallback alongside isinstance(exc, ArrowNotImplementedError) in case
+# PyArrow refactors its exception hierarchy in a future release.
 # https://github.com/ray-project/ray/issues/61675
 _NESTED_CHUNKED_ARRAY_ERROR = (
     "Nested data conversions not implemented for chunked array"
