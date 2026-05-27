@@ -6,8 +6,9 @@ for the PyArrow nested-data bug (https://github.com/ray-project/ray/issues/61675
 
 Filesystem backend is selected via ``UF_PLUGIN_RAY_USE_FSSPEC``:
 
-- ``"1"`` — fsspec (flexible: local, S3, GCS, etc.)
-- ``"0"`` (default) — PyArrow filesystem (S3 with MinIO credential support)
+- ``"1"`` — fsspec (flexible: local, S3, GCS, etc.), wrapped via
+  ``pyarrow.fs.PyFileSystem`` for Ray compatibility.
+- ``"0"`` (default) — native PyArrow filesystem (S3 with MinIO credential support)
 """
 
 from __future__ import annotations
@@ -17,8 +18,9 @@ import logging
 import os
 from typing import Any
 
-import ray
 import fsspec.core
+import ray
+from pyarrow.fs import FSSpecHandler, PyFileSystem
 from ray.data import Dataset, ReadTask
 from ray.data.block import BlockMetadata
 
@@ -31,7 +33,7 @@ UF_PLUGIN_RAY_USE_FSSPEC = "UF_PLUGIN_RAY_USE_FSSPEC"
 
 _FILTER_WORKERS = 64
 
-# Substring of the PyArrow error raised on nested list/struct columns in Ray workers.
+# PyArrow exception class and substring for the nested-column bug.
 # https://github.com/ray-project/ray/issues/61675
 _NESTED_CHUNKED_ARRAY_ERROR = (
     "Nested data conversions not implemented for chunked array"
@@ -67,9 +69,10 @@ def _chunk_list(lst: list[str], num_chunks: int) -> list[list[str]]:
 class _ParquetPolarsDatasource:
     """Polars-based parquet reader for Ray — fallback for the PyArrow nested-data bug.
 
-    When ``ray.data.read_parquet`` raises ``ArrowNotImplementedError`` on nested
-    list/struct columns, this datasource reads each file via Polars (which handles
-    nested types correctly), converts to an Arrow table, and yields it as a Ray block.
+    Triggered automatically by ``RayDatasetIO.read()`` when nested list/struct
+    columns cause ``ray.data.read_parquet`` to raise ``ArrowNotImplementedError``.
+    Reads each file via Polars (which handles nested types correctly), converts to
+    an Arrow table, and yields it as a Ray block.
 
     See: https://github.com/ray-project/ray/issues/61675
     """
@@ -91,7 +94,7 @@ class _ParquetPolarsDatasource:
                 except ImportError as exc:
                     raise ImportError(
                         "Polars is required for the PyArrow nested-data fallback. "
-                        "Install it with: pip install michelangelo[ray-nested]"
+                        "Install it with: pip install michelangelo[ray-polars]"
                     ) from exc
 
                 fs, _ = fsspec.core.url_to_fs(_url)
@@ -114,7 +117,7 @@ class _ParquetPolarsDatasource:
         return tasks
 
 
-class RayDatasetIO(IO[Any]):
+class RayDatasetIO(IO[Dataset]):
     """I/O handler for Ray Dataset objects stored as Parquet.
 
     On **write**: delegates to ``Dataset.write_parquet`` with the configured filesystem.
@@ -124,24 +127,31 @@ class RayDatasetIO(IO[Any]):
     1. ``filter_empty_data()`` lists all parquet files, discards zero-byte files,
        and parallel-checks remaining files for non-empty row groups.
     2. ``ray.data.read_parquet`` reads the survivors.
-    3. If PyArrow raises on nested columns (ray-project/ray#61675), the Polars
-       fallback ``_ParquetPolarsDatasource`` retries the read. **Requires
-       ``polars`` to be installed** (``pip install michelangelo[ray-nested]``).
+    3. If PyArrow raises ``ArrowNotImplementedError`` on nested columns
+       (ray-project/ray#61675), the Polars fallback ``_ParquetPolarsDatasource``
+       retries the read. **Requires ``polars`` to be installed**
+       (``pip install michelangelo[ray-polars]``).
+
+    Raises:
+        FileNotFoundError: If no parquet files are found at *url* on read.
 
     Example:
         >>> import ray, tempfile, pandas as pd
         >>> ds = ray.data.from_pandas(pd.DataFrame([{"x": 1}]))
         >>> io = RayDatasetIO()
-        >>> dest = tempfile.mkdtemp()
+        >>> import tempfile; dest = tempfile.mkdtemp()
         >>> io.write(dest, ds)
         >>> result = io.read(dest, None)
+        >>> result.count()
+        1
     """
 
     def write(self, url: str, value: Dataset) -> None:
         """Write *value* to *url* as Parquet files.
 
         Args:
-            url: Destination path or URL (local, ``s3://``, etc.).
+            url: Destination directory path or URL (local, ``s3://``, etc.).
+                Ray writes multiple shard files under this directory.
             value: Ray Dataset to write.
 
         Returns:
@@ -156,17 +166,21 @@ class RayDatasetIO(IO[Any]):
         """Read a Ray Dataset from *url*, skipping empty parquet files.
 
         Args:
-            url: Source path or URL.
+            url: Source directory path or URL.
             _metadata: Unused; pass ``None``.
 
         Returns:
-            Ray Dataset. Returns an empty dataset when no data is found.
+            Ray Dataset loaded from Parquet shards under *url*.
+
+        Raises:
+            FileNotFoundError: If no non-empty parquet files exist at *url*.
         """
         fs, _ = _fs_path(url)
         paths = RayDatasetIO.filter_empty_data(url)
         if not paths:
-            _logger.warning("RayDatasetIO: no data at '%s', empty dataset.", url)
-            return ray.data.from_items([])
+            raise FileNotFoundError(
+                f"RayDatasetIO: no parquet files found at '{url}'."
+            )
         try:
             ds = ray.data.read_parquet(
                 paths, filesystem=fs, file_extensions=["parquet"]
@@ -174,7 +188,11 @@ class RayDatasetIO(IO[Any]):
             _logger.info("RayDatasetIO: read %d file(s) from '%s'.", len(paths), url)
             return ds
         except Exception as exc:
-            if _NESTED_CHUNKED_ARRAY_ERROR in str(exc):
+            import pyarrow.lib
+
+            if isinstance(exc, pyarrow.lib.ArrowNotImplementedError) or (
+                _NESTED_CHUNKED_ARRAY_ERROR in str(exc)
+            ):
                 _logger.info(
                     "RayDatasetIO: PyArrow nested-data error, falling back to Polars."
                 )
@@ -237,8 +255,15 @@ class RayDatasetIO(IO[Any]):
 
 
 def _fs_path(url: str) -> tuple[Any, str]:
+    """Return a (PyArrow filesystem, path) tuple for *url*.
+
+    When ``UF_PLUGIN_RAY_USE_FSSPEC=1``, the fsspec filesystem is wrapped via
+    ``pyarrow.fs.PyFileSystem`` so it is compatible with Ray's ``filesystem=``
+    parameter, which requires a ``pyarrow.fs.FileSystem``.
+    """
     if os.environ.get(UF_PLUGIN_RAY_USE_FSSPEC, "0") == "1":
-        return fsspec.core.url_to_fs(url)
+        fsspec_fs, path = fsspec.core.url_to_fs(url)
+        return PyFileSystem(FSSpecHandler(fsspec_fs)), path
     return resolve_fs(url.split("://")[0]), url
 
 

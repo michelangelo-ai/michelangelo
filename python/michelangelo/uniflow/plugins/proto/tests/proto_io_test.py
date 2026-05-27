@@ -21,7 +21,7 @@ class TestProtoIO(TestCase):
         return msg_class, instance, mock_json_format
 
     def test_write_returns_value_type_metadata(self):
-        """write() returns {'value_type': type(value)}."""
+        """write() returns {'value_type': 'module:ClassName'} as a JSON-serializable string."""
         from michelangelo.uniflow.plugins.proto.io import _META_VALUE_TYPE, ProtoIO
 
         msg_class, instance, mock_json_format = self._make_proto_env()
@@ -43,6 +43,8 @@ class TestProtoIO(TestCase):
                 mock_url_to_fs.return_value = (mock_fs, path)
                 result = io.write(path, instance)
             self.assertIn(_META_VALUE_TYPE, result)
+            self.assertIsInstance(result[_META_VALUE_TYPE], str)
+            self.assertIn(":", result[_META_VALUE_TYPE])
 
     def test_write_read_roundtrip_with_local_file(self):
         """write() + read() roundtrip using a temp local file and real fsspec."""

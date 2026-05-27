@@ -265,7 +265,7 @@ class TestParquetPolarsDatasourceNoPolars(TestCase):
             self.assertRaises((ImportError, ModuleNotFoundError)) as ctx,
         ):
             list(captured_fns[0]())
-        self.assertIn("ray-nested", str(ctx.exception))
+        self.assertIn("ray-polars", str(ctx.exception))
 
 
 class TestFsPathAndResolveFs(TestCase):
