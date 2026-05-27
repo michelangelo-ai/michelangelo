@@ -170,24 +170,19 @@ class TestRayDatasetIOReadPaths(TestCase):
         mock_ray = _t.SimpleNamespace(data=mock_data)
         return {"ray": mock_ray, "ray.data": mock_data}, mock_data
 
-    def test_returns_empty_dataset_when_no_files_found(self):
-        """read() returns ray.data.from_items([]) when no data is found."""
+    def test_raises_file_not_found_when_no_files_found(self):
+        """read() raises FileNotFoundError when no parquet files exist at url."""
         from michelangelo.uniflow.plugins.ray.io import RayDatasetIO
 
-        mods, mock_data = self._mock_ray()
-        mock_empty = MagicMock()
-        mock_data.from_items = MagicMock(return_value=mock_empty)
-
+        mods, _ = self._mock_ray()
         _fs = "michelangelo.uniflow.plugins.ray.io._fs_path"
         with (
             patch.dict(sys.modules, mods),
             patch(_fs, return_value=(None, "/d")),
             patch.object(RayDatasetIO, "filter_empty_data", return_value=[]),
+            self.assertRaises(FileNotFoundError),
         ):
-            result = RayDatasetIO().read("/d", None)
-
-        mock_data.from_items.assert_called_once_with([])
-        self.assertIs(result, mock_empty)
+            RayDatasetIO().read("/d", None)
 
     def test_polars_fallback_triggered_on_nested_array_error(self):
         """read() calls _read_parquet_fallback on the PyArrow nested-data error."""
