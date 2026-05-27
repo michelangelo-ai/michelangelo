@@ -139,7 +139,7 @@ class RayDatasetIO(IO[Dataset]):
         >>> import ray, tempfile, pandas as pd
         >>> ds = ray.data.from_pandas(pd.DataFrame([{"x": 1}]))
         >>> io = RayDatasetIO()
-        >>> import tempfile; dest = tempfile.mkdtemp()
+        >>> dest = tempfile.mkdtemp()
         >>> io.write(dest, ds)
         >>> result = io.read(dest, None)
         >>> result.count()
@@ -215,8 +215,8 @@ class RayDatasetIO(IO[Dataset]):
         Returns:
             List of paths that contain at least one parquet row group.
         """
-        fs, path = fsspec.core.url_to_fs(url)
-        file_info = fs.find(path, detail=True)
+        fsspec_fs, path = fsspec.core.url_to_fs(url)
+        file_info = fsspec_fs.find(path, detail=True)
         parquet_files = {p: info for p, info in file_info.items() if p.endswith(".parquet")}
 
         if not parquet_files:
@@ -237,8 +237,10 @@ class RayDatasetIO(IO[Dataset]):
             return []
 
         max_workers = min(_FILTER_WORKERS, len(candidates))
+        # Wrap fsspec FS so pq.read_metadata receives a pyarrow.fs.FileSystem.
+        pyarrow_fs = PyFileSystem(FSSpecHandler(fsspec_fs))
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
-            has_data = list(pool.map(lambda f: _has_row_groups(f, fs), candidates))
+            has_data = list(pool.map(lambda f: _has_row_groups(f, pyarrow_fs), candidates))
 
         non_empty = [f for f, ok in zip(candidates, has_data) if ok]
         _logger.info(
