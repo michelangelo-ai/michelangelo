@@ -1,2 +1,0 @@
-# Exclude downloaded dependency tarballs from packaged chart
-charts/*.tgz
