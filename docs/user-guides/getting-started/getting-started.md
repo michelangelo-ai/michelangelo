@@ -28,6 +28,7 @@ Each step runs as an isolated, containerized task. Michelangelo AI handles data 
 * Java 17 with `JAVA_HOME` set — required for the Spark preprocessing step. Java 21 is not compatible with PySpark 3.5 + Hadoop 3.3 (`getSubject is not supported` error). On macOS: `brew install openjdk@17` then `export JAVA_HOME=$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home`
 * For remote runs: Docker and access to a Kubernetes cluster (or use the [local sandbox](../../getting-started/sandbox-setup.md))
 * [Create a project](./project-management-for-ml-pipelines.md)
+* **macOS only**: XGBoost requires OpenMP (`libomp.dylib`), which is not installed by default. Run `brew install libomp` before installing dependencies.
 
 ## Environment setup
 
