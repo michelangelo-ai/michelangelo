@@ -149,8 +149,16 @@ class EvalReportPusherPlugin(PusherPluginBase):
             - ``"sinks"``: list of per-sink result dicts, each with
               ``name``, ``namespace``, ``output_path``, and ``extra``.
 
+            .. note::
+                Sinks are called in order (fail-fast). If sink *N* raises,
+                sinks *N+1…M* are not called and partial results from sinks
+                *0…N-1* are not returned. Inspect ``result["sinks"]`` for
+                per-sink details; ``output_path`` and ``namespace`` reflect
+                the **first** sink only.
+
         Raises:
-            IOError: If any sink raises during ``write()``.
+            IOError: If any sink raises during ``write()``. The exception
+                propagates immediately; remaining sinks are not called.
         """
         # Resolve name: config override → proto.metadata.name → auto-generate.
         # Set it on the proto so every sink receives the enriched proto.

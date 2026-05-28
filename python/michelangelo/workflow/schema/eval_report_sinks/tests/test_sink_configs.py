@@ -76,7 +76,7 @@ class TestGRPCEvalReportSinkConfig(TestCase):
     def test_tls_config(self):
         """It accepts insecure=False for TLS connections."""
         cfg = GRPCEvalReportSinkConfig(
-            endpoint="api.michelangelo.io:443",
+            endpoint="eval-reports.example.com:443",
             namespace="ml-prod",
             insecure=False,
         )

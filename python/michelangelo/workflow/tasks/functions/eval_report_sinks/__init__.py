@@ -1,4 +1,4 @@
-"""EvalReportSink ABC and built-in implementations.
+"""EvalReportSink ABC, built-in implementations, and utilities.
 
 Import from this package::
 
@@ -6,6 +6,7 @@ Import from this package::
         EvalReportSink,
         LocalFileEvalReportSink,
         GRPCEvalReportSink,
+        flatten_report_to_metrics,
     )
 
 Note:
@@ -18,9 +19,17 @@ from __future__ import annotations
 from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
     GRPCEvalReportSink,
 )
-from michelangelo.workflow.tasks.functions.eval_report_sinks.base import EvalReportSink
+from michelangelo.workflow.tasks.functions.eval_report_sinks.base import (
+    EvalReportSink,
+    flatten_report_to_metrics,
+)
 from michelangelo.workflow.tasks.functions.eval_report_sinks.local_file import (
     LocalFileEvalReportSink,
 )
 
-__all__ = ["EvalReportSink", "GRPCEvalReportSink", "LocalFileEvalReportSink"]
+__all__ = [
+    "EvalReportSink",
+    "GRPCEvalReportSink",
+    "LocalFileEvalReportSink",
+    "flatten_report_to_metrics",
+]

@@ -46,7 +46,7 @@ class DatasetPusherPlugin(PusherPluginBase):
     Args:
         config: ``DatasetPluginConfig`` containing at least one sink.
         artifact: A ``DatasetVariable`` wrapping the dataset to write.
-        storage_backend: Unused by the built-in sinks. Available for provider
+        storage_backend: Unused by the built-in sinks. Available for custom
             sink implementations that compose with a ``StorageBackend``.
         registry_client: Unused by this plugin.
 
