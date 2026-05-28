@@ -1,7 +1,7 @@
 # How to Write a Task in `michelangelo` (Open Source)
 
-> LLM-readable reference. Synthesises learnings from the CanvasFlex Pusher Phase 1
-> migration (PR3). Read this before generating code for any new workflow task.
+> Reference guide for contributors writing new workflow tasks in the `michelangelo`
+> package. Read this before generating code for any new workflow task.
 
 ---
 
@@ -42,8 +42,7 @@ workflow/
 
 ## Config/Implementation Separation
 
-Every sink (and by extension, every configurable component) follows a two-layer pattern
-learned from the internal `schema/v2alpha1/data_sink.py`:
+Every sink (and by extension, every configurable component) follows a two-layer pattern:
 
 ```
 schema/sinks/<name>.py       — typed config dataclass (validated at definition time)

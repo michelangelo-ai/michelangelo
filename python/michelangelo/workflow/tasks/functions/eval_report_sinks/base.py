@@ -26,7 +26,7 @@ class EvalReportSink(ABC):
 
     - ``LocalFileEvalReportSink`` — writes JSON to a local directory
       (built-in, zero dependencies beyond the core package).
-    - ``APISink`` — pushes to any ``EvaluationReportService`` gRPC endpoint,
+    - ``GRPCEvalReportSink`` — pushes to any ``EvaluationReportService`` gRPC endpoint,
       including a local sandbox server (built-in, requires ``grpcio``).
     - Community / provider sinks live outside this package.
 
@@ -60,11 +60,11 @@ class EvalReportSink(ABC):
         Args:
             report: An ``EvaluationReport`` proto with ``metadata.name`` already
                 set by the plugin. Sinks may further enrich the proto (e.g.
-                ``APISink`` injects ``metadata.namespace``).
+                ``GRPCEvalReportSink`` injects ``metadata.namespace``).
             extra_fields: Additional key-value pairs to merge into the output
                 document. Sinks that write structured files (e.g.
                 ``LocalFileEvalReportSink``) merge these into the JSON.
-                Sinks that push to an API (e.g. ``APISink``) ignore them.
+                Sinks that push to an API (e.g. ``GRPCEvalReportSink``) ignore them.
 
         Returns:
             ``EvalReportSinkResult`` with the resolved ``name``,

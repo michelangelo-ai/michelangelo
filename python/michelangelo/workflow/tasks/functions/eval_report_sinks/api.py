@@ -1,4 +1,4 @@
-"""APISink — pushes an EvaluationReport to a gRPC EvaluationReportService."""
+"""GRPCEvalReportSink — pushes an EvaluationReport to a gRPC EvaluationReportService."""
 
 from __future__ import annotations
 
@@ -10,54 +10,67 @@ from michelangelo.workflow.tasks.functions.eval_report_sinks.base import EvalRep
 
 if TYPE_CHECKING:
     from michelangelo.gen.api.v2.evaluation_report_pb2 import EvaluationReport
-    from michelangelo.workflow.schema.eval_report_sinks.api import APISinkConfig
+    from michelangelo.workflow.schema.eval_report_sinks.api import (
+        GRPCEvalReportSinkConfig,
+    )
 
 _logger = logging.getLogger(__name__)
 
-__all__ = ["APISink"]
+__all__ = ["GRPCEvalReportSink"]
 
 
-class APISink(EvalReportSink):
+class GRPCEvalReportSink(EvalReportSink):
     """EvalReportSink that creates the report via a gRPC EvaluationReportService.
 
     Works with any server that implements the ``EvaluationReportService``
-    interface defined in ``proto/api/v2/evaluation_report_svc.proto`` — a
-    local sandbox, a community deployment, or a provider API server.
+    interface defined in ``proto/api/v2/evaluation_report_svc.proto``.
 
-    Uses an **insecure channel** by default for local sandbox convenience.
+    Uses a **plaintext channel** by default for local development convenience.
     Set ``config.insecure=False`` and point ``config.endpoint`` at a TLS
-    endpoint for production use.
+    endpoint for any non-local use.
 
     Requires ``grpcio``::
 
         pip install grpcio
 
+    This sink implements the context-manager protocol for explicit channel
+    cleanup. Use it as a context manager in long-running processes::
+
+        with GRPCEvalReportSink(cfg) as sink:
+            sink.write(report)
+
     Args:
-        config: ``APISinkConfig`` with the server endpoint and connection
-            options.
+        config: ``GRPCEvalReportSinkConfig`` with the server endpoint and
+            connection options.
 
     Raises:
         ImportError: If ``grpcio`` is not installed.
 
-    Example (local sandbox)::
+    Example (local server)::
 
-        from michelangelo.workflow.schema.eval_report_sinks.api import APISinkConfig
-        from michelangelo.workflow.tasks.functions.eval_report_sinks import APISink
+        from michelangelo.workflow.schema.eval_report_sinks.api import (
+            GRPCEvalReportSinkConfig,
+        )
+        from michelangelo.workflow.tasks.functions.eval_report_sinks import (
+            GRPCEvalReportSink,
+        )
 
-        sink = APISink(APISinkConfig(endpoint="localhost:50051"))
+        sink = GRPCEvalReportSink(
+            GRPCEvalReportSinkConfig(endpoint="localhost:50051")
+        )
 
     Example (remote TLS server)::
 
-        sink = APISink(
-            APISinkConfig(
-                endpoint="api.michelangelo.io:443",
+        sink = GRPCEvalReportSink(
+            GRPCEvalReportSinkConfig(
+                endpoint="eval-reports.example.com:443",
                 namespace="ml-prod",
                 insecure=False,
             )
         )
     """
 
-    def __init__(self, config: APISinkConfig) -> None:
+    def __init__(self, config: GRPCEvalReportSinkConfig) -> None:
         """Connect to the gRPC endpoint described by ``config``.
 
         Args:
@@ -74,24 +87,36 @@ class APISink(EvalReportSink):
             )
         except ImportError as exc:
             raise ImportError(
-                "APISink requires the 'grpcio' package. "
+                "GRPCEvalReportSink requires the 'grpcio' package. "
                 "Install it with: pip install grpcio"
             ) from exc
 
-        channel = (
+        self._channel = (
             grpc.insecure_channel(config.endpoint)
             if config.insecure
             else grpc.secure_channel(
                 config.endpoint, grpc.ssl_channel_credentials()
             )
         )
-        self._stub = EvaluationReportServiceStub(channel)
+        self._stub = EvaluationReportServiceStub(self._channel)
         self._config = config
         _logger.info(
-            "APISink ready (endpoint=%s, insecure=%s).",
+            "GRPCEvalReportSink ready (endpoint=%s, insecure=%s).",
             config.endpoint,
             config.insecure,
         )
+
+    def close(self) -> None:
+        """Close the underlying gRPC channel and release resources."""
+        self._channel.close()
+
+    def __enter__(self) -> GRPCEvalReportSink:
+        """Return self to support use as a context manager."""
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        """Close the channel on context-manager exit."""
+        self.close()
 
     def write(
         self,
@@ -116,6 +141,8 @@ class APISink(EvalReportSink):
         Raises:
             IOError: If the gRPC call fails.
         """
+        import grpc
+
         from michelangelo.gen.api.v2.evaluation_report_svc_pb2 import (
             CreateEvaluationReportRequest,
         )
@@ -128,15 +155,16 @@ class APISink(EvalReportSink):
                 CreateEvaluationReportRequest(evaluation_report=report),
                 timeout=self._config.timeout_seconds,
             )
-        except Exception as exc:
+        except grpc.RpcError as exc:
             raise OSError(
-                f"APISink: gRPC CreateEvaluationReport failed "
-                f"(endpoint={self._config.endpoint!r})."
+                f"GRPCEvalReportSink: gRPC CreateEvaluationReport failed "
+                f"(endpoint={self._config.endpoint!r}, "
+                f"code={exc.code()}, details={exc.details()!r})."
             ) from exc
 
         created = resp.evaluation_report
         _logger.info(
-            "APISink: created report '%s' in namespace '%s'.",
+            "GRPCEvalReportSink: created report '%s' in namespace '%s'.",
             created.metadata.name,
             created.metadata.namespace,
         )

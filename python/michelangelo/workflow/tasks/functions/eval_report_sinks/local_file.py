@@ -16,7 +16,7 @@ from michelangelo.workflow.tasks.functions.eval_report_sinks.base import EvalRep
 if TYPE_CHECKING:
     from michelangelo.gen.api.v2.evaluation_report_pb2 import EvaluationReport
     from michelangelo.workflow.schema.eval_report_sinks.local_file import (
-        LocalFileEvalSinkConfig,
+        LocalFileEvalReportSinkConfig,
     )
 
 _logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ class LocalFileEvalReportSink(EvalReportSink):
     Suitable as the default sink when no external service is configured.
 
     Args:
-        config: ``LocalFileEvalSinkConfig`` controlling the output directory.
+        config: ``LocalFileEvalReportSinkConfig`` controlling the output directory.
             A fresh ``tempfile.mkdtemp(prefix="michelangelo_reports_")``
             directory is created automatically when ``config`` is ``None`` or
             ``config.output_dir`` is ``None``.
@@ -39,16 +39,16 @@ class LocalFileEvalReportSink(EvalReportSink):
     Example:
         >>> import tempfile
         >>> from michelangelo.workflow.schema.eval_report_sinks.local_file import (
-        ...     LocalFileEvalSinkConfig,
+        ...     LocalFileEvalReportSinkConfig,
         ... )
         >>> sink = LocalFileEvalReportSink(
-        ...     LocalFileEvalSinkConfig(output_dir=tempfile.mkdtemp())
+        ...     LocalFileEvalReportSinkConfig(output_dir=tempfile.mkdtemp())
         ... )
     """
 
     def __init__(
         self,
-        config: LocalFileEvalSinkConfig | None = None,
+        config: LocalFileEvalReportSinkConfig | None = None,
     ) -> None:
         """Initialise with an optional output directory config."""
         self._config = config
@@ -95,7 +95,7 @@ class LocalFileEvalReportSink(EvalReportSink):
         }
 
         output_path = os.path.join(output_dir, f"{name}.json")
-        with open(output_path, "w") as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             json.dump(document, f, indent=2)
 
         _logger.info(

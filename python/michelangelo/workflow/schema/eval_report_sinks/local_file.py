@@ -1,14 +1,14 @@
-"""LocalFileEvalSinkConfig — config for the local filesystem EvalReport sink."""
+"""LocalFileEvalReportSinkConfig — config for the local filesystem EvalReport sink."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-__all__ = ["LocalFileEvalSinkConfig"]
+__all__ = ["LocalFileEvalReportSinkConfig"]
 
 
 @dataclass
-class LocalFileEvalSinkConfig:
+class LocalFileEvalReportSinkConfig:
     """Configuration for ``LocalFileEvalReportSink``.
 
     Attributes:
@@ -17,7 +17,7 @@ class LocalFileEvalSinkConfig:
             is created automatically when ``None``.
 
     Example:
-        >>> cfg = LocalFileEvalSinkConfig(output_dir="/tmp/reports")
+        >>> cfg = LocalFileEvalReportSinkConfig(output_dir="/tmp/reports")
         >>> cfg.output_dir
         '/tmp/reports'
     """

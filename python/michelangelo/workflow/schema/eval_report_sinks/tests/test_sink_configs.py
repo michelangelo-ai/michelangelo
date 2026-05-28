@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from unittest import TestCase
 
-from michelangelo.workflow.schema.eval_report_sinks.api import APISinkConfig
+from michelangelo.workflow.schema.eval_report_sinks.api import GRPCEvalReportSinkConfig
 from michelangelo.workflow.schema.eval_report_sinks.local_file import (
-    LocalFileEvalSinkConfig,
+    LocalFileEvalReportSinkConfig,
 )
 from michelangelo.workflow.schema.eval_report_sinks.result import EvalReportSinkResult
 from michelangelo.workflow.schema.exceptions import ConfigurationError
@@ -39,43 +39,43 @@ class TestEvalReportSinkResult(TestCase):
             r.name = "changed"  # type: ignore[misc]
 
 
-class TestLocalFileEvalSinkConfig(TestCase):
-    """Tests for LocalFileEvalSinkConfig."""
+class TestLocalFileEvalReportSinkConfig(TestCase):
+    """Tests for LocalFileEvalReportSinkConfig."""
 
     def test_output_dir_defaults_to_none(self):
         """It defaults output_dir to None (tempdir created at write time)."""
-        cfg = LocalFileEvalSinkConfig()
+        cfg = LocalFileEvalReportSinkConfig()
         self.assertIsNone(cfg.output_dir)
 
     def test_explicit_output_dir(self):
         """It stores an explicit output_dir."""
-        cfg = LocalFileEvalSinkConfig(output_dir="/tmp/reports")
+        cfg = LocalFileEvalReportSinkConfig(output_dir="/tmp/reports")
         self.assertEqual(cfg.output_dir, "/tmp/reports")
 
 
-class TestAPISinkConfig(TestCase):
-    """Tests for APISinkConfig."""
+class TestGRPCEvalReportSinkConfig(TestCase):
+    """Tests for GRPCEvalReportSinkConfig."""
 
     def test_required_endpoint(self):
         """It stores the endpoint."""
-        cfg = APISinkConfig(endpoint="localhost:50051")
+        cfg = GRPCEvalReportSinkConfig(endpoint="localhost:50051")
         self.assertEqual(cfg.endpoint, "localhost:50051")
 
     def test_raises_on_empty_endpoint(self):
         """It raises ConfigurationError when endpoint is empty."""
         with self.assertRaises(ConfigurationError):
-            APISinkConfig(endpoint="")
+            GRPCEvalReportSinkConfig(endpoint="")
 
     def test_defaults(self):
         """It defaults to insecure=True, no namespace, timeout 30s."""
-        cfg = APISinkConfig(endpoint="localhost:50051")
+        cfg = GRPCEvalReportSinkConfig(endpoint="localhost:50051")
         self.assertTrue(cfg.insecure)
         self.assertEqual(cfg.namespace, "")
         self.assertEqual(cfg.timeout_seconds, 30)
 
     def test_tls_config(self):
         """It accepts insecure=False for TLS connections."""
-        cfg = APISinkConfig(
+        cfg = GRPCEvalReportSinkConfig(
             endpoint="api.michelangelo.io:443",
             namespace="ml-prod",
             insecure=False,

@@ -164,7 +164,7 @@ class EvalReportPluginConfig:
             when both this and ``report.metadata.name`` are absent.
         extra_fields: Key-value pairs merged into the output document for
             sinks that write files (e.g. CI run ID, git SHA). Take precedence
-            over proto fields on collision. Ignored by ``APISink``.
+            over proto fields on collision. Ignored by ``GRPCEvalReportSink``.
 
     Example (default — local file)::
 
@@ -173,20 +173,26 @@ class EvalReportPluginConfig:
     Example (local sandbox API)::
 
         >>> from michelangelo.workflow.schema.eval_report_sinks.api import (
-        ...     APISinkConfig,
+        ...     GRPCEvalReportSinkConfig,
         ... )
-        >>> from michelangelo.workflow.tasks.functions.eval_report_sinks import APISink
+        >>> from michelangelo.workflow.tasks.functions.eval_report_sinks import (
+        ...     GRPCEvalReportSink,
+        ... )
         >>> cfg = EvalReportPluginConfig(
-        ...     sinks=[APISink(APISinkConfig(endpoint="localhost:50051"))],
+        ...     sinks=[GRPCEvalReportSink(
+        ...         GRPCEvalReportSinkConfig(endpoint="localhost:50051")
+        ...     )],
         ...     report_name="q1-eval",
         ... )
 
-    Example (multi-sink — local file + API)::
+    Example (multi-sink — local file + gRPC)::
 
         >>> cfg = EvalReportPluginConfig(
         ...     sinks=[
         ...         LocalFileEvalReportSink(),
-        ...         APISink(APISinkConfig(endpoint="localhost:50051")),
+        ...         GRPCEvalReportSink(
+        ...             GRPCEvalReportSinkConfig(endpoint="localhost:50051")
+        ...         ),
         ...     ],
         ... )
     """
@@ -194,14 +200,6 @@ class EvalReportPluginConfig:
     sinks: list[EvalReportSink] | None = None
     report_name: str | None = None
     extra_fields: dict[str, Any] = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        """Auto-create a LocalFileEvalReportSink when sinks is None."""
-        if self.sinks is None:
-            from michelangelo.workflow.tasks.functions.eval_report_sinks import (
-                LocalFileEvalReportSink,
-            )
-            self.sinks = [LocalFileEvalReportSink()]
 
 
 @dataclass

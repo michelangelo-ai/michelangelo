@@ -21,32 +21,33 @@ __all__ = ["EvalReportPusherPlugin"]
 class EvalReportPusherPlugin(PusherPluginBase):
     """Plugin that enriches an EvaluationReport and dispatches it to sinks.
 
-    Mirrors the internal plugin's enrichment pattern: resolves
-    ``metadata.name`` (config override → proto field → auto-generated UUID),
-    sets it on the proto, then calls each configured sink's ``write()``
-    method. The return dict exposes ``name`` and ``namespace`` — matching
-    the internal plugin's ``{"name": ..., "namespace": ...}`` shape — plus
-    a ``sinks`` list for multi-sink result inspection and an ``output_path``
-    shorthand for the common single-file case.
+    Resolves ``metadata.name`` (config override → proto field → auto-generated
+    UUID), sets it on the proto, then calls each configured sink's ``write()``
+    method. The return dict exposes ``name``, ``namespace``, ``output_path``,
+    and ``sinks`` for multi-sink result inspection.
 
     **Sinks** control where the report goes:
 
     - ``LocalFileEvalReportSink`` (default) — writes JSON to a temp dir.
-    - ``APISink`` — pushes to any gRPC ``EvaluationReportService`` endpoint,
-      including a local sandbox server.
-    - Provider / community sinks: subclass ``EvalReportSink`` and pass an
-      instance in ``EvalReportPluginConfig.sinks``.
+    - ``GRPCEvalReportSink`` — pushes to any gRPC ``EvaluationReportService``
+      endpoint.
+    - Custom sinks: subclass ``EvalReportSink`` and pass an instance in
+      ``EvalReportPluginConfig.sinks``.
 
-    To send to both a local file and a sandbox API::
+    To send to both a local file and a gRPC endpoint::
 
-        from michelangelo.workflow.schema.eval_report_sinks.api import APISinkConfig
+        from michelangelo.workflow.schema.eval_report_sinks.api import (
+            GRPCEvalReportSinkConfig,
+        )
         from michelangelo.workflow.tasks.functions.eval_report_sinks import (
-            APISink, LocalFileEvalReportSink,
+            GRPCEvalReportSink, LocalFileEvalReportSink,
         )
         cfg = EvalReportPluginConfig(
             sinks=[
                 LocalFileEvalReportSink(),
-                APISink(APISinkConfig(endpoint="localhost:50051")),
+                GRPCEvalReportSink(
+                    GRPCEvalReportSinkConfig(endpoint="localhost:50051")
+                ),
             ],
             report_name="q1-eval",
         )
@@ -56,6 +57,11 @@ class EvalReportPusherPlugin(PusherPluginBase):
         result = plugin.execute()
         import mlflow
         mlflow.log_artifact(result["output_path"], artifact_path="eval_reports")
+
+    .. note::
+        The ``output_path`` and ``namespace`` at the top level of the result
+        dict come from the **first** sink only. In a multi-sink setup, inspect
+        ``result["sinks"]`` for per-sink details.
 
     Args:
         config: ``EvalReportPluginConfig`` controlling sinks, name, and
@@ -88,7 +94,7 @@ class EvalReportPusherPlugin(PusherPluginBase):
         )
         result = plugin.execute()
         # result["name"]        → "q1-eval"
-        # result["namespace"]   → ""  (set by provider subclasses / APISink)
+        # result["namespace"]   → ""  (set by GRPCEvalReportSink / custom sinks)
         # result["output_path"] → "/tmp/michelangelo_reports_.../q1-eval.json"
     """
 
@@ -151,13 +157,21 @@ class EvalReportPusherPlugin(PusherPluginBase):
         name = (
             self._config.report_name
             or self._artifact.metadata.name
-            or f"eval-report-{uuid.uuid4().hex[:8]}"
+            or f"eval-report-{uuid.uuid4().hex[:12]}"
         )
         self._artifact.metadata.name = name
 
+        sinks = self._config.sinks
+        if sinks is None:
+            from michelangelo.workflow.tasks.functions.eval_report_sinks import (
+                LocalFileEvalReportSink,
+            )
+            sinks = [LocalFileEvalReportSink()]
+
         sink_results = []
-        for sink in self._config.sinks or []:
-            result = sink.write(self._artifact, self._config.extra_fields or {})
+        extra = dict(self._config.extra_fields or {})
+        for sink in sinks:
+            result = sink.write(self._artifact, extra)
             sink_results.append(
                 {
                     "name": result.name,

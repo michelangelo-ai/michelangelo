@@ -14,9 +14,9 @@ from michelangelo.gen.api.v2.evaluation_report_pb2 import (
     EvaluationReport,
     EvaluationReportSpec,
 )
-from michelangelo.workflow.schema.eval_report_sinks.api import APISinkConfig
+from michelangelo.workflow.schema.eval_report_sinks.api import GRPCEvalReportSinkConfig
 from michelangelo.workflow.schema.eval_report_sinks.local_file import (
-    LocalFileEvalSinkConfig,
+    LocalFileEvalReportSinkConfig,
 )
 from michelangelo.workflow.tasks.functions.eval_report_sinks.base import EvalReportSink
 from michelangelo.workflow.tasks.functions.eval_report_sinks.local_file import (
@@ -84,7 +84,7 @@ class TestLocalFileEvalReportSink(TestCase):
         import tempfile
         d = tempfile.mkdtemp()
         self._output_dirs.append(d)
-        cfg = LocalFileEvalSinkConfig(output_dir=d)
+        cfg = LocalFileEvalReportSinkConfig(output_dir=d)
         sink = LocalFileEvalReportSink(cfg)
         result = sink.write(_report())
         self.assertTrue(result.output_path.startswith(d))
@@ -118,8 +118,8 @@ class TestLocalFileEvalReportSink(TestCase):
         self.assertNotIn("typeMeta", doc)
 
 
-class TestAPISink(TestCase):
-    """Tests for APISink."""
+class TestGRPCEvalReportSink(TestCase):
+    """Tests for GRPCEvalReportSink."""
 
     _STUB_PATH = (
         "michelangelo.gen.api.v2"
@@ -143,18 +143,21 @@ class TestAPISink(TestCase):
         """It raises ImportError when grpcio is not installed."""
         with patch.dict(sys.modules, {"grpc": None}):
             from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
-                APISink,
+                GRPCEvalReportSink,
             )
             with self.assertRaises(ImportError):
-                APISink(APISinkConfig(endpoint="localhost:50051"))
+                GRPCEvalReportSink(GRPCEvalReportSinkConfig(endpoint="localhost:50051"))
 
     def test_creates_report_via_grpc(self):
         """It calls CreateEvaluationReport on the stub and returns the result."""
-        from michelangelo.workflow.tasks.functions.eval_report_sinks.api import APISink
+        from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
+            GRPCEvalReportSink,
+        )
 
         stub = self._make_stub("r1", "ns1")
         with patch(self._STUB_PATH, return_value=stub):
-            sink = APISink(APISinkConfig(endpoint="localhost:50051"))
+            cfg = GRPCEvalReportSinkConfig(endpoint="localhost:50051")
+            sink = GRPCEvalReportSink(cfg)
             result = sink.write(_report(name="r1"))
 
         stub.CreateEvaluationReport.assert_called_once()
@@ -164,13 +167,16 @@ class TestAPISink(TestCase):
 
     def test_namespace_injected_from_config(self):
         """It sets report.metadata.namespace from config.namespace before create."""
-        from michelangelo.workflow.tasks.functions.eval_report_sinks.api import APISink
+        from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
+            GRPCEvalReportSink,
+        )
 
         stub = self._make_stub("r1", "injected-ns")
         with patch(self._STUB_PATH, return_value=stub):
-            sink = APISink(
-                APISinkConfig(endpoint="localhost:50051", namespace="injected-ns")
+            cfg = GRPCEvalReportSinkConfig(
+                endpoint="localhost:50051", namespace="injected-ns"
             )
+            sink = GRPCEvalReportSink(cfg)
             report = _report(name="r1", namespace="")
             sink.write(report)
 
