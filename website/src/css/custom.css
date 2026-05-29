@@ -49,14 +49,8 @@
   --custom-border-color: #e8e8e8;
   --uber-light-gray: #f3f3f3;
 
-  /* Landing page variables - Light mode (fallbacks; landing page forces dark) */
-  --landing-bg: #000000;
-  --landing-gradient-1: rgba(39, 110, 241, 0.35);
-  --landing-gradient-2: rgba(39, 110, 241, 0.15);
-  --landing-gradient-3: rgba(39, 110, 241, 0.08);
+  /* Landing page accent (Uber blue) */
   --landing-accent: #276ef1;
-  --landing-gradient-text-1: #276ef1;
-  --landing-gradient-text-2: #60a5fa;
 }
 
 [data-theme='dark'] {
@@ -82,24 +76,8 @@
   --custom-content-background: #000000;
   --custom-border-color: #333333;
 
-  /* Landing page variables - Dark mode */
-  --landing-bg: #000000;
-  --landing-gradient-1: rgba(39, 110, 241, 0.3);
-  --landing-gradient-2: rgba(39, 110, 241, 0.12);
-  --landing-gradient-3: rgba(39, 110, 241, 0.06);
+  /* Landing page accent (Uber blue) */
   --landing-accent: #276ef1;
-  --landing-gradient-text-1: #276ef1;
-  --landing-gradient-text-2: #60a5fa;
-}
-
-[data-landing-page='true'] {
-  --landing-bg: #000000;
-  --landing-gradient-1: rgba(39, 110, 241, 0.3);
-  --landing-gradient-2: rgba(39, 110, 241, 0.12);
-  --landing-gradient-3: rgba(39, 110, 241, 0.06);
-  --landing-accent: #276ef1;
-  --landing-gradient-text-1: #276ef1;
-  --landing-gradient-text-2: #60a5fa;
 }
 
 /* ============================================
