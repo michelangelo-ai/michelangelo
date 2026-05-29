@@ -203,7 +203,6 @@ You should see workflow logs in your terminal and, when it finishes, a trained m
 For the full story on local vs. remote execution, building Docker images, configuring storage, and using either workflow engine end to end, see:
 
 - [Pipeline Running Modes](../user-guides/ml-pipelines/pipeline-running-modes.md) — the four execution modes Michelangelo supports
-- [Getting Started with ML Pipelines](../user-guides/ml-pipelines/getting-started.md) — write and run your own workflow
 
 > **Note:** Local execution doesn't support caching, retries, or resource constraints. Use remote execution (covered in the ML Pipelines guides) for production-like behavior.
 
