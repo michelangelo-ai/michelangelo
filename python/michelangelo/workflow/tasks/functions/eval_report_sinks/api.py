@@ -137,8 +137,10 @@ class GRPCEvalReportSink(EvalReportSink):
 
     Example (APIClient convenience path)::
 
+        import os
+        os.environ["MA_API_SERVER"] = "localhost:50051"  # or your server address
         from michelangelo.api.v2 import APIClient
-        APIClient.init()
+        APIClient.set_caller("my-app")  # optional but sets the rpc-caller header
         sink = GRPCEvalReportSink()  # config=None, reuses APIClient channel
     """
 
@@ -147,8 +149,9 @@ class GRPCEvalReportSink(EvalReportSink):
 
         Args:
             config: Connection configuration. When ``None``, reuses the
-                ``APIClient`` channel — ``APIClient.init()`` must have been
-                called before this constructor.
+                ``APIClient`` channel. ``MA_API_SERVER`` must be set in the
+                environment before this constructor is called; the first
+                ``write()`` call will raise ``ValueError`` if it is absent.
 
         Raises:
             ImportError: If ``grpcio`` is not installed (``config`` provided path).
@@ -235,13 +238,11 @@ class GRPCEvalReportSink(EvalReportSink):
             else:
                 created = self._svc.create(report, timeout=self._config.timeout_seconds)
         except Exception as exc:
-            # grpc.RpcError is only available when grpcio is installed.
             try:
                 import grpc as _grpc
-
-                if not isinstance(exc, _grpc.RpcError):
-                    raise
             except ImportError:
+                raise exc from None
+            if not isinstance(exc, _grpc.RpcError):
                 raise
             endpoint = self._config.endpoint if self._config else "APIClient"
             raise OSError(
