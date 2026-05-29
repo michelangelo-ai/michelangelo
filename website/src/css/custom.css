@@ -51,6 +51,7 @@
 
   /* Landing page accent (Uber blue) */
   --landing-accent: #276ef1;
+  --landing-hero-bg: #ffffff;
 }
 
 [data-theme='dark'] {
@@ -78,6 +79,7 @@
 
   /* Landing page accent (Uber blue) */
   --landing-accent: #276ef1;
+  --landing-hero-bg: #000000;
 }
 
 /* ============================================
