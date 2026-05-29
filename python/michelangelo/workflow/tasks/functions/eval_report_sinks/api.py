@@ -150,6 +150,9 @@ class GRPCEvalReportSink(EvalReportSink):
         )
         ctx = Context()
         ctx.channel = self._channel
+        # DefaultHeaderProvider requires a caller; set a default so the sink
+        # works without APIClient.set_caller() being called globally.
+        ctx.header_provider._caller = "michelangelo-eval-report-sink"
         self._svc = _EvalReportGRPCService(ctx)
         self._config = config
         _logger.info(

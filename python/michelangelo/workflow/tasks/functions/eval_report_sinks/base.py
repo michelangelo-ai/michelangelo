@@ -91,7 +91,10 @@ class EvalReportSink(ABC):
       package. Use :func:`flatten_report_to_metrics` to convert the proto to
       a flat dict for systems that expect key-value metrics.
 
-    Example implementation::
+    Example implementation (imports and ``self._bucket`` initialisation elided)::
+
+        # MessageToDict is used the same way as in flatten_report_to_metrics()
+        from google.protobuf.json_format import MessageToDict
 
         class S3EvalReportSink(EvalReportSink):
             def write(

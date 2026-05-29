@@ -176,4 +176,96 @@ class TestGRPCEvalReportSink(TestCase):
 
         self.assertEqual(report.metadata.namespace, "injected-ns")
 
-        self.assertEqual(report.metadata.namespace, "injected-ns")
+    def test_grpc_rpc_error_raised_as_oserror(self):
+        """It wraps grpc.RpcError as OSError with the endpoint in the message."""
+        import grpc
+
+        class _FakeRpcError(grpc.RpcError):
+            def code(self):
+                return grpc.StatusCode.UNAVAILABLE
+
+            def details(self):
+                return "server unreachable"
+
+        sink = self._make_sink()
+        sink._svc = MagicMock()
+        sink._svc.create.side_effect = _FakeRpcError()
+
+        with self.assertRaises(OSError) as ctx:
+            sink.write(_report(name="r1"))
+        self.assertIn("localhost:50051", str(ctx.exception))
+
+    def test_default_caller_set_on_context(self):
+        """It sets a default rpc-caller; no APIClient.set_caller() needed."""
+        from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
+            GRPCEvalReportSink,
+        )
+
+        with patch("grpc.insecure_channel"), patch("grpc.secure_channel"):
+            sink = GRPCEvalReportSink(
+                GRPCEvalReportSinkConfig(endpoint="localhost:50051")
+            )
+        self.assertIsNotNone(sink._svc._context.header_provider._caller)
+
+
+class TestFlattenReportToMetrics(TestCase):
+    """Tests for flatten_report_to_metrics().
+
+    flatten_report_to_metrics() uses MessageToDict to convert the proto, then
+    traverses doc["spec"]["charts"][i]["series"][0]["data_points"][0]["value"].
+    Tests mock MessageToDict to exercise the traversal logic without requiring
+    exact proto construction for each chart sub-type.
+    """
+
+    _MSGTODICT = "google.protobuf.json_format.MessageToDict"
+
+    def _run(self, charts: list) -> dict:
+        from michelangelo.workflow.tasks.functions.eval_report_sinks.base import (
+            flatten_report_to_metrics,
+        )
+
+        doc = {"spec": {"charts": charts}}
+        with patch(self._MSGTODICT, return_value=doc):
+            return flatten_report_to_metrics(_report())
+
+    def test_empty_report_returns_empty_dict(self):
+        """It returns {} when there are no charts."""
+        from michelangelo.workflow.tasks.functions.eval_report_sinks.base import (
+            flatten_report_to_metrics,
+        )
+
+        with patch(self._MSGTODICT, return_value={}):
+            self.assertEqual(flatten_report_to_metrics(_report()), {})
+
+    def test_single_scalar_chart_extracted(self):
+        """It extracts title→float for a chart with one single-point series."""
+        result = self._run([
+            {"title": "accuracy", "series": [{"data_points": [{"value": "0.95"}]}]},
+        ])
+        self.assertAlmostEqual(result["accuracy"], 0.95)
+
+    def test_missing_title_falls_back_to_index(self):
+        """It uses metric_<i> when title is absent."""
+        result = self._run([
+            {"series": [{"data_points": [{"value": "0.8"}]}]},
+        ])
+        self.assertAlmostEqual(result["metric_0"], 0.8)
+
+    def test_non_numeric_value_silently_skipped(self):
+        """It silently drops data points whose value cannot be cast to float."""
+        result = self._run([
+            {"title": "bad", "series": [{"data_points": [{"value": "n/a"}]}]},
+        ])
+        self.assertNotIn("bad", result)
+
+    def test_multi_point_series_skipped(self):
+        """It skips charts whose series has more than one data point."""
+        result = self._run([
+            {
+                "title": "loss_curve",
+                "series": [
+                    {"data_points": [{"value": "0.9"}, {"value": "0.8"}]}
+                ],
+            }
+        ])
+        self.assertNotIn("loss_curve", result)
