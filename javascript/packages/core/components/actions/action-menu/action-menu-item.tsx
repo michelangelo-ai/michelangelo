@@ -12,10 +12,17 @@ type ActionMenuItemProps = {
   item: ResolvedActionItem;
   onSelectAction: (action: ResolvedActionItem) => void;
   onClose?: () => void;
-  /** Action currently under the mouse cursor; compared by object identity to derive `isHovered`. */
+  /**
+   * The action currently under the mouse cursor, or null.
+   * Compared by object identity against `action` to derive `isHovered`.
+   */
   hoveredItem: object | null;
-  setHoveredItem: (action: object | null) => void;
-  /** True after any keydown; false on mouse enter. Gates keyboard tooltip to suppress auto-highlight flash. */
+  setHoveredItem: (item: object | null) => void;
+  /**
+   * True after any keydown inside the menu. False on mouse enter.
+   * Gates the keyboard tooltip path so auto-highlight on focus
+   * doesn't flash a tooltip.
+   */
   keyboardActive: boolean;
   setKeyboardActive: (active: boolean) => void;
 } & Omit<MenuAdapterProps, 'children' | 'item'>;
