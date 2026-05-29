@@ -13,8 +13,8 @@ type ActionMenuItemProps = {
   onSelectAction: (action: ResolvedActionItem) => void;
   onClose?: () => void;
   /**
-   * The action currently under the mouse cursor, or null.
-   * Compared by object identity against `action` to derive `isHovered`.
+   * The item currently under the mouse cursor, or null.
+   * Compared by object identity against `item` to derive `isHovered`.
    */
   hoveredItem: object | null;
   setHoveredItem: (item: object | null) => void;

@@ -8,9 +8,7 @@ import type { ResolvedActionItem } from '#core/components/actions/types';
 
 type ActionMenuProps = {
   actions: ResolvedActionItem[];
-  /** Called when the user selects an action (mouse click or keyboard enter). */
   onSelectAction: (action: ResolvedActionItem) => void;
-  /** Called when the menu should close (e.g. Escape key). Distinct from onSelectAction. */
   onClose?: () => void;
 };
 
