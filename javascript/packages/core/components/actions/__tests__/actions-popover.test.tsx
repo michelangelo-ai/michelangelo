@@ -235,6 +235,32 @@ describe('ActionsPopover', () => {
       expect(screen.queryByText('Should not appear')).not.toBeInTheDocument();
     });
 
+    it('ignores subsequent matching rules after the first', async () => {
+      const user = userEvent.setup();
+      render(
+        <ActionsPopover
+          actions={[
+            {
+              display: { label: 'Delete' },
+              component: DeleteDialog,
+              disabled: [
+                { condition: false, message: 'Should not appear' },
+                { condition: true, message: 'Second rule matches' },
+                { condition: true, message: 'Third rule should not appear' },
+              ],
+            },
+          ]}
+          record={{}}
+        />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+      await user.click(screen.getByRole('button', { name: 'Actions' }));
+      await user.hover(await screen.findByRole('option', { name: 'Delete' }));
+      expect(await screen.findByText('Second rule matches')).toBeInTheDocument();
+      expect(screen.queryByText('Should not appear')).not.toBeInTheDocument();
+      expect(screen.queryByText('Third rule should not appear')).not.toBeInTheDocument();
+    });
+
     it('shows only one tooltip at a time when hovering between two disabled items', async () => {
       const user = userEvent.setup();
       render(
