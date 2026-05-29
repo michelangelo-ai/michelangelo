@@ -17,8 +17,12 @@ type ActionMenuItemProps = {
    * Compared by object identity against `item` to derive `isHovered`.
    */
   hoveredItem: object | null;
-  setHoveredItem: (action: object | null) => void;
-  /** True after any keydown; false on mouse enter. Gates keyboard tooltip to suppress auto-highlight flash. */
+  setHoveredItem: (item: object | null) => void;
+  /**
+   * True after any keydown inside the menu. False on mouse enter.
+   * Gates the keyboard tooltip path so auto-highlight on focus
+   * doesn't flash a tooltip.
+   */
   keyboardActive: boolean;
   setKeyboardActive: (active: boolean) => void;
 } & Omit<MenuAdapterProps, 'children' | 'item'>;
