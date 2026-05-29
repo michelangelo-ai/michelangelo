@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import TYPE_CHECKING, Any
 
+from michelangelo.api.v2.services.base import (
+    _DEFAULT_SERVICE_CONFIG,
+    _MAX_MESSAGE_LENGTH,
+    _TIMEOUT_SECONDS,
+    BaseService,
+    Context,
+)
 from michelangelo.workflow.schema.eval_report_sinks.result import EvalReportSinkResult
 from michelangelo.workflow.tasks.functions.eval_report_sinks.base import EvalReportSink
 
@@ -18,12 +26,56 @@ _logger = logging.getLogger(__name__)
 
 __all__ = ["GRPCEvalReportSink"]
 
+_CHANNEL_OPTIONS = [
+    ("grpc.service_config", json.dumps(_DEFAULT_SERVICE_CONFIG)),
+    ("grpc.max_send_message_length", _MAX_MESSAGE_LENGTH),
+    ("grpc.max_receive_message_length", _MAX_MESSAGE_LENGTH),
+]
+
+
+class _EvalReportGRPCService(BaseService):
+    """Private gRPC service for EvaluationReportService.
+
+    Uses the ``APIClient`` ``BaseService`` infrastructure (header injection,
+    retry policy via channel options) with a per-instance channel so each
+    ``GRPCEvalReportSink`` can target an independent endpoint.
+    """
+
+    def __init__(self, context: Context) -> None:
+        from michelangelo.gen.api.v2.evaluation_report_svc_pb2_grpc import (
+            EvaluationReportServiceStub,
+        )
+
+        super().__init__(context, EvaluationReportServiceStub)
+
+    def create(
+        self,
+        report: EvaluationReport,
+        timeout: int = _TIMEOUT_SECONDS,
+    ) -> EvaluationReport:
+        """Call ``CreateEvaluationReport`` and return the created proto."""
+        from michelangelo.gen.api.v2.evaluation_report_svc_pb2 import (
+            CreateEvaluationReportRequest,
+        )
+
+        resp = self._stub.CreateEvaluationReport(
+            CreateEvaluationReportRequest(evaluation_report=report),
+            metadata=self._get_metadata({}),
+            timeout=timeout,
+        )
+        return resp.evaluation_report
+
 
 class GRPCEvalReportSink(EvalReportSink):
     """EvalReportSink that creates the report via a gRPC EvaluationReportService.
 
     Works with any server that implements the ``EvaluationReportService``
     interface defined in ``proto/api/v2/evaluation_report_svc.proto``.
+
+    Uses the ``APIClient`` ``BaseService`` infrastructure for header injection
+    and the retry policy (3 attempts, exponential 0.1 s → 10 s backoff on
+    INTERNAL / UNAVAILABLE / UNKNOWN), while keeping a **per-instance channel**
+    so each sink can target an independent endpoint.
 
     Uses a **plaintext channel** by default for local development convenience.
     Set ``config.insecure=False`` and point ``config.endpoint`` at a TLS
@@ -81,10 +133,6 @@ class GRPCEvalReportSink(EvalReportSink):
         """
         try:
             import grpc
-
-            from michelangelo.gen.api.v2.evaluation_report_svc_pb2_grpc import (
-                EvaluationReportServiceStub,
-            )
         except ImportError as exc:
             raise ImportError(
                 "GRPCEvalReportSink requires the 'grpcio' package. "
@@ -92,13 +140,17 @@ class GRPCEvalReportSink(EvalReportSink):
             ) from exc
 
         self._channel = (
-            grpc.insecure_channel(config.endpoint)
+            grpc.insecure_channel(config.endpoint, options=_CHANNEL_OPTIONS)
             if config.insecure
             else grpc.secure_channel(
-                config.endpoint, grpc.ssl_channel_credentials()
+                config.endpoint,
+                grpc.ssl_channel_credentials(),
+                options=_CHANNEL_OPTIONS,
             )
         )
-        self._stub = EvaluationReportServiceStub(self._channel)
+        ctx = Context()
+        ctx.channel = self._channel
+        self._svc = _EvalReportGRPCService(ctx)
         self._config = config
         _logger.info(
             "GRPCEvalReportSink ready (endpoint=%s, insecure=%s).",
@@ -143,18 +195,11 @@ class GRPCEvalReportSink(EvalReportSink):
         """
         import grpc
 
-        from michelangelo.gen.api.v2.evaluation_report_svc_pb2 import (
-            CreateEvaluationReportRequest,
-        )
-
         if self._config.namespace:
             report.metadata.namespace = self._config.namespace
 
         try:
-            resp = self._stub.CreateEvaluationReport(
-                CreateEvaluationReportRequest(evaluation_report=report),
-                timeout=self._config.timeout_seconds,
-            )
+            created = self._svc.create(report, timeout=self._config.timeout_seconds)
         except grpc.RpcError as exc:
             raise OSError(
                 f"GRPCEvalReportSink: gRPC CreateEvaluationReport failed "
@@ -162,7 +207,6 @@ class GRPCEvalReportSink(EvalReportSink):
                 f"code={exc.code()}, details={exc.details()!r})."
             ) from exc
 
-        created = resp.evaluation_report
         _logger.info(
             "GRPCEvalReportSink: created report '%s' in namespace '%s'.",
             created.metadata.name,

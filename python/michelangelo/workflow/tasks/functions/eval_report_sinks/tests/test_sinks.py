@@ -121,23 +121,25 @@ class TestLocalFileEvalReportSink(TestCase):
 class TestGRPCEvalReportSink(TestCase):
     """Tests for GRPCEvalReportSink."""
 
-    _STUB_PATH = (
-        "michelangelo.gen.api.v2"
-        ".evaluation_report_svc_pb2_grpc.EvaluationReportServiceStub"
-    )
-
-    def _make_stub(
+    def _make_created(
         self, report_name: str = "api-report", namespace: str = "ns"
-    ) -> MagicMock:
-        """Build a mock gRPC stub with a canned CreateEvaluationReport response."""
-        stub = MagicMock()
+    ) -> EvaluationReport:
+        """Build a canned EvaluationReport response proto."""
         created = EvaluationReport()
         created.metadata.name = report_name
         created.metadata.namespace = namespace
-        resp = MagicMock()
-        resp.evaluation_report = created
-        stub.CreateEvaluationReport.return_value = resp
-        return stub
+        return created
+
+    def _make_sink(self, endpoint: str = "localhost:50051", **kwargs):
+        """Build a GRPCEvalReportSink with a mocked _svc.create."""
+        from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
+            GRPCEvalReportSink,
+        )
+
+        cfg = GRPCEvalReportSinkConfig(endpoint=endpoint, **kwargs)
+        with patch("grpc.insecure_channel"), patch("grpc.secure_channel"):
+            sink = GRPCEvalReportSink(cfg)
+        return sink
 
     def test_raises_import_error_when_grpcio_missing(self):
         """It raises ImportError when grpcio is not installed."""
@@ -149,35 +151,29 @@ class TestGRPCEvalReportSink(TestCase):
                 GRPCEvalReportSink(GRPCEvalReportSinkConfig(endpoint="localhost:50051"))
 
     def test_creates_report_via_grpc(self):
-        """It calls CreateEvaluationReport on the stub and returns the result."""
-        from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
-            GRPCEvalReportSink,
-        )
+        """It delegates to _svc.create and returns an EvalReportSinkResult."""
+        sink = self._make_sink()
+        created = self._make_created("r1", "ns1")
+        sink._svc = MagicMock()
+        sink._svc.create.return_value = created
 
-        stub = self._make_stub("r1", "ns1")
-        with patch(self._STUB_PATH, return_value=stub):
-            cfg = GRPCEvalReportSinkConfig(endpoint="localhost:50051")
-            sink = GRPCEvalReportSink(cfg)
-            result = sink.write(_report(name="r1"))
+        result = sink.write(_report(name="r1"))
 
-        stub.CreateEvaluationReport.assert_called_once()
+        sink._svc.create.assert_called_once()
         self.assertEqual(result.name, "r1")
         self.assertEqual(result.namespace, "ns1")
         self.assertEqual(result.output_path, "")
 
     def test_namespace_injected_from_config(self):
         """It sets report.metadata.namespace from config.namespace before create."""
-        from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
-            GRPCEvalReportSink,
-        )
+        sink = self._make_sink(namespace="injected-ns")
+        created = self._make_created("r1", "injected-ns")
+        sink._svc = MagicMock()
+        sink._svc.create.return_value = created
 
-        stub = self._make_stub("r1", "injected-ns")
-        with patch(self._STUB_PATH, return_value=stub):
-            cfg = GRPCEvalReportSinkConfig(
-                endpoint="localhost:50051", namespace="injected-ns"
-            )
-            sink = GRPCEvalReportSink(cfg)
-            report = _report(name="r1", namespace="")
-            sink.write(report)
+        report = _report(name="r1", namespace="")
+        sink.write(report)
+
+        self.assertEqual(report.metadata.namespace, "injected-ns")
 
         self.assertEqual(report.metadata.namespace, "injected-ns")
