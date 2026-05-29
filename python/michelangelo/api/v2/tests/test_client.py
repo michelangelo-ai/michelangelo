@@ -14,8 +14,8 @@ from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
 
-class TestAPIClientSingletonBackwardCompat(TestCase):
-    """Existing class-level singleton usage must work unchanged."""
+class TestAPIClientClassLevelSingleton(TestCase):
+    """Tests for the class-level singleton API."""
 
     def test_class_attributes_are_service_instances(self):
         """All service names are wired as class-level attributes at import time."""
