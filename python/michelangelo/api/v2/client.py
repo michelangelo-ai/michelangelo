@@ -87,12 +87,9 @@ class APIClient(ServicesGen):
         with APIClient(endpoint="localhost:50051", caller="my-trainer") as client:
             model = client.ModelService.get_model(namespace="proj", name="clf")
 
-    Available services
-    ------------------
-    ``CachedOutputService``, ``ModelService``, ``ModelFamilyService``,
-    ``PipelineService``, ``PipelineRunService``, ``ProjectService``,
-    ``RayClusterService``, ``RayJobService``, ``SparkJobService``,
-    ``TriggerRunService``
+    To list all available services at runtime::
+
+        [s for s in dir(APIClient) if s.endswith("Service")]
 
     Args:
         endpoint: gRPC server address as ``"host:port"``.  Required — use the
