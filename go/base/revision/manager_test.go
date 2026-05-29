@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	pbtypes "github.com/gogo/protobuf/types"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
@@ -27,16 +28,28 @@ func newTestManager(t *testing.T) (Manager, api.Handler) {
 	return NewManager(handler, zaptest.NewLogger(t)), handler
 }
 
-func testParams() UpsertRevisionParams {
-	return UpsertRevisionParams{
-		RevisionName: "pipeline-my-pipeline-abc123456789",
-		RevisionID:   "abc123456789",
-		Content:      &v2pb.Pipeline{},
-		Owner:        &v2pb.UserInfo{Name: "owner"},
-		BaseType:     &metav1.TypeMeta{Kind: "Pipeline", APIVersion: "michelangelo.api/v2"},
-		BaseResource: &apipb.ResourceIdentifier{Namespace: "test-ns", Name: "my-pipeline"},
-		Source:       SourceGit,
-		GitCommit:    &v2pb.CommitInfo{GitRef: "abc123456789", Branch: "main"},
+func testRevision(t *testing.T) *v2pb.Revision {
+	t.Helper()
+	content, err := pbtypes.MarshalAny(&v2pb.Pipeline{})
+	require.NoError(t, err)
+	return &v2pb.Revision{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "michelangelo.api/v2",
+			Kind:       "Revision",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pipeline-my-pipeline-abc123456789",
+			Namespace: "test-ns",
+		},
+		Spec: v2pb.RevisionSpec{
+			BaseType:     &metav1.TypeMeta{Kind: "Pipeline", APIVersion: "michelangelo.api/v2"},
+			BaseResource: &apipb.ResourceIdentifier{Namespace: "test-ns", Name: "my-pipeline"},
+			Content:      content,
+			Owner:        &v2pb.UserInfo{Name: "owner"},
+			RevisionId:   "abc123456789",
+			Source:       SourceGit,
+			GitCommit:    &v2pb.CommitInfo{GitRef: "abc123456789", Branch: "main"},
+		},
 	}
 }
 
@@ -51,7 +64,7 @@ func TestUpsertRevision_Create(t *testing.T) {
 	mgr, h := newTestManager(t)
 	ctx := context.Background()
 
-	created, err := mgr.UpsertRevision(ctx, testParams())
+	created, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{})
 	require.NoError(t, err)
 	assert.True(t, created)
 
@@ -63,10 +76,8 @@ func TestUpsertRevision_Create(t *testing.T) {
 func TestUpsertRevision_CreateImmutable(t *testing.T) {
 	mgr, h := newTestManager(t)
 	ctx := context.Background()
-	params := testParams()
-	params.Immutable = true
 
-	created, err := mgr.UpsertRevision(ctx, params)
+	created, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{Immutable: true})
 	require.NoError(t, err)
 	assert.True(t, created)
 
@@ -77,13 +88,11 @@ func TestUpsertRevision_CreateImmutable(t *testing.T) {
 func TestUpsertRevision_DedupImmutable(t *testing.T) {
 	mgr, _ := newTestManager(t)
 	ctx := context.Background()
-	params := testParams()
-	params.Immutable = true
 
-	_, err := mgr.UpsertRevision(ctx, params)
+	_, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{Immutable: true})
 	require.NoError(t, err)
 
-	created, err := mgr.UpsertRevision(ctx, params)
+	created, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{Immutable: true})
 	require.NoError(t, err)
 	assert.False(t, created, "second upsert of immutable revision should be a no-op")
 }
@@ -91,13 +100,11 @@ func TestUpsertRevision_DedupImmutable(t *testing.T) {
 func TestUpsertRevision_RejectImmutableToMutable(t *testing.T) {
 	mgr, _ := newTestManager(t)
 	ctx := context.Background()
-	params := testParams()
-	params.Immutable = true
-	_, err := mgr.UpsertRevision(ctx, params)
+
+	_, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{Immutable: true})
 	require.NoError(t, err)
 
-	params.Immutable = false
-	_, err = mgr.UpsertRevision(ctx, params)
+	_, err = mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot update immutable revision")
 }
@@ -106,10 +113,10 @@ func TestUpsertRevision_UpdateMutable(t *testing.T) {
 	mgr, _ := newTestManager(t)
 	ctx := context.Background()
 
-	_, err := mgr.UpsertRevision(ctx, testParams())
+	_, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{})
 	require.NoError(t, err)
 
-	created, err := mgr.UpsertRevision(ctx, testParams())
+	created, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{})
 	require.NoError(t, err)
 	assert.False(t, created)
 }
@@ -118,12 +125,10 @@ func TestUpsertRevision_MutableThenImmutable(t *testing.T) {
 	mgr, h := newTestManager(t)
 	ctx := context.Background()
 
-	_, err := mgr.UpsertRevision(ctx, testParams())
+	_, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{})
 	require.NoError(t, err)
 
-	params := testParams()
-	params.Immutable = true
-	created, err := mgr.UpsertRevision(ctx, params)
+	created, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{Immutable: true})
 	require.NoError(t, err)
 	assert.False(t, created)
 

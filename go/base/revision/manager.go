@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 
+	"go.uber.org/yarpc"
 	"go.uber.org/zap"
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiutils "github.com/michelangelo-ai/michelangelo/go/api/utils"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type revisionManager struct {
@@ -22,54 +24,85 @@ func NewManager(handler api.Handler, logger *zap.Logger) Manager {
 	return &revisionManager{handler: handler, logger: logger}
 }
 
-func (m *revisionManager) UpsertRevision(ctx context.Context, params UpsertRevisionParams) (bool, error) {
+func (m *revisionManager) UpsertRevision(ctx context.Context, rev client.Object, opts UpsertOpts, _ ...yarpc.CallOption) (bool, error) {
+	namespace := rev.GetNamespace()
+	name := rev.GetName()
 	logger := m.logger.With(
-		zap.String("revision_name", params.RevisionName),
-		zap.String("base_type_kind", params.BaseType.Kind),
+		zap.String("revision_name", name),
+		zap.String("namespace", namespace),
 	)
 
 	existing := &v2pb.Revision{}
-	err := m.handler.Get(ctx, params.BaseResource.Namespace, params.RevisionName, &metav1.GetOptions{}, existing)
+	err := m.handler.Get(ctx, namespace, name, &metav1.GetOptions{}, existing)
 	if err != nil {
 		if !apiutils.IsNotFoundError(err) {
 			return false, fmt.Errorf("get existing revision: %w", err)
 		}
 
-		// Not found — create.
-		rev, buildErr := NewRevision(params)
-		if buildErr != nil {
-			return false, buildErr
-		}
-		if params.Immutable {
+		if opts.Immutable {
 			apiutils.MarkImmutable(rev)
 		}
 		if createErr := m.handler.Create(ctx, rev, &metav1.CreateOptions{}); createErr != nil {
-			return false, fmt.Errorf("create revision %s/%s: %w", params.BaseResource.Namespace, params.RevisionName, createErr)
+			return false, fmt.Errorf("create revision %s/%s: %w", namespace, name, createErr)
 		}
 		logger.Info("created revision")
 		return true, nil
 	}
 
-	// Exists — check immutability.
 	if apiutils.IsImmutable(existing) {
-		if params.Immutable {
+		if opts.Immutable {
 			return false, nil
 		}
-		return false, fmt.Errorf("cannot update immutable revision %s to mutable", params.RevisionName)
+		return false, fmt.Errorf("cannot update immutable revision %s to mutable", name)
 	}
 
-	// Mutable existing revision — update content + labels.
-	rev, buildErr := NewRevision(params)
-	if buildErr != nil {
-		return false, buildErr
+	// Mutable existing revision — replace with caller's object.
+	rev.SetResourceVersion(existing.GetResourceVersion())
+	if opts.Immutable {
+		apiutils.MarkImmutable(rev)
 	}
-	existing.Spec.Content = rev.Spec.Content
-	if params.Immutable {
-		apiutils.MarkImmutable(existing)
-	}
-	if updateErr := m.handler.Update(ctx, existing, &metav1.UpdateOptions{}); updateErr != nil {
-		return false, fmt.Errorf("update revision %s/%s: %w", params.BaseResource.Namespace, params.RevisionName, updateErr)
+	if updateErr := m.handler.Update(ctx, rev, &metav1.UpdateOptions{}); updateErr != nil {
+		return false, fmt.Errorf("update revision %s/%s: %w", namespace, name, updateErr)
 	}
 	logger.Info("updated revision")
 	return false, nil
+}
+
+func (m *revisionManager) CheckRevision(ctx context.Context, namespace, name string, _ ...yarpc.CallOption) (bool, error) {
+	rev := &v2pb.Revision{}
+	if err := m.handler.Get(ctx, namespace, name, &metav1.GetOptions{}, rev); err != nil {
+		if apiutils.IsNotFoundError(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("check revision %s/%s: %w", namespace, name, err)
+	}
+	return true, nil
+}
+
+func (m *revisionManager) GetRevision(ctx context.Context, namespace, name string, _ ...yarpc.CallOption) (*v2pb.Revision, error) {
+	rev := &v2pb.Revision{}
+	if err := m.handler.Get(ctx, namespace, name, &metav1.GetOptions{}, rev); err != nil {
+		return nil, fmt.Errorf("get revision %s/%s: %w", namespace, name, err)
+	}
+	return rev, nil
+}
+
+func (m *revisionManager) FetchRevisionID(ctx context.Context, namespace, name string, _ ...yarpc.CallOption) (string, error) {
+	rev, err := m.GetRevision(ctx, namespace, name)
+	if err != nil {
+		return "", err
+	}
+	return rev.Spec.RevisionId, nil
+}
+
+func (m *revisionManager) DeleteAllRevisions(ctx context.Context, namespace, name, kind string, _ ...yarpc.CallOption) error {
+	return m.handler.DeleteCollection(
+		ctx,
+		&v2pb.Revision{},
+		namespace,
+		&metav1.DeleteOptions{},
+		&metav1.ListOptions{
+			FieldSelector: fmt.Sprintf("spec.base_resource.name=%s,spec.base_type.kind=%s", name, kind),
+		},
+	)
 }

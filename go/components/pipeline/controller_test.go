@@ -13,6 +13,7 @@ import (
 
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	"github.com/michelangelo-ai/michelangelo/go/base/revision"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.uber.org/zap/zaptest"
@@ -253,10 +254,11 @@ func setUpReconciler(t *testing.T, initialObjects []client.Object, env env.Conte
 	err := v2pb.AddToScheme(scheme)
 	require.NoError(t, err)
 	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initialObjects...).WithStatusSubresource(initialObjects...).Build()
+	handler := apiHandler.NewFakeAPIHandler(k8sClient)
 	reconciler := &Reconciler{
-		Handler:    apiHandler.NewFakeAPIHandler(k8sClient),
-		logger:     zaptest.NewLogger(t),
-		revisioner: NewNoOpRevisioner(),
+		Handler:         handler,
+		logger:          zaptest.NewLogger(t),
+		revisionManager: revision.NewManager(handler, zaptest.NewLogger(t)),
 	}
 	return reconciler
 }

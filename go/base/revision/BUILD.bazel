@@ -3,7 +3,6 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
-        "helpers.go",
         "interface.go",
         "manager.go",
         "source.go",
@@ -13,11 +12,10 @@ go_library(
     deps = [
         "//go/api:go_default_library",
         "//go/api/utils:go_default_library",
-        "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
-        "@com_github_gogo_protobuf//proto:go_default_library",
-        "@com_github_gogo_protobuf//types:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
+        "@org_uber_go_yarpc//:go_default_library",
         "@org_uber_go_zap//:go_default_library",
     ],
 )
@@ -25,7 +23,6 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
-        "helpers_test.go",
         "manager_test.go",
     ],
     embed = [":go_default_library"],
@@ -35,6 +32,7 @@ go_test(
         "//go/api/utils:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
+        "@com_github_gogo_protobuf//types:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",

@@ -1,12 +1,4 @@
-// Package pipeline implements a Kubernetes controller for managing Pipeline resources.
-//
-// The controller watches Pipeline custom resources and reconciles their state by:
-//   - Updating the latest revision reference
-//   - Managing pipeline state transitions
-//   - Scheduling periodic reconciliation for non-terminal states
-//
-// The controller integrates with the Michelangelo API handler to perform CRUD
-// operations on Pipeline resources and updates their status accordingly.
+// Package pipeline implements the Pipeline controller.
 package pipeline
 
 import (
@@ -18,10 +10,12 @@ import (
 
 	"go.uber.org/zap"
 
+	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	"github.com/michelangelo-ai/michelangelo/go/base/revision"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,35 +23,21 @@ import (
 )
 
 const (
-	// reconcileInterval defines how frequently non-terminal pipelines are reconciled.
-	reconcileInterval = 10 * time.Second
+	reconcileInterval  = 10 * time.Second
+	pipelineAPIVersion = "michelangelo.api/v2"
+	pipelineKind       = "Pipeline"
 )
 
-// Reconciler implements the controller-runtime Reconciler interface for Pipeline resources.
-//
-// It manages the reconciliation loop for Pipeline custom resources, handling state
-// updates and revision tracking. The reconciler uses an API handler for Kubernetes
-// operations and maintains environment context and logging capabilities.
+// Reconciler reconciles Pipeline resources.
 type Reconciler struct {
 	api.Handler
 	env               env.Context
 	logger            *zap.Logger
 	apiHandlerFactory apiHandler.Factory
-	revisioner        Revisioner
+	revisionManager   revision.Manager
 }
 
-// Reconcile is the main reconciliation loop entry point for Pipeline resources.
-//
-// It processes reconciliation requests for Pipeline objects by:
-//   - Retrieving the Pipeline resource from Kubernetes
-//   - Updating the latest revision reference based on the pipeline's git commit
-//   - Transitioning the pipeline state to READY
-//   - Persisting status updates back to Kubernetes
-//
-// The reconcile loop will requeue non-terminal pipelines at regular intervals
-// to ensure continuous monitoring. Terminal states (READY, ERROR) do not requeue.
-//
-// Returns a Result indicating whether to requeue and an error if reconciliation failed.
+// Reconcile processes a Pipeline, updating its status and snapshotting a Revision.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := r.logger.With(zap.String("namespace-name", req.NamespacedName.String()))
 	logger.Info("Reconciling pipeline starts")
@@ -102,13 +82,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		IncPipelineReconcileSuccess(pipeline.Namespace, pipeline.Name)
 	}
 
-	// Snapshot the pipeline as a Revision for every READY reconcile. The default
-	// Revisioner deduplicates by identity (AlreadyExists is treated as a no-op),
-	// so this is safe to call repeatedly. Status is already persisted above, so
-	// returning an error here requeues only for the snapshot retry without
-	// affecting the pipeline's READY state.
+	// Snapshot the pipeline as a Revision on every READY reconcile.
+	// UpsertRevision deduplicates immutable revisions, so this is safe to call
+	// repeatedly. Status is already persisted above, so returning an error here
+	// requeues only for the snapshot retry without affecting the pipeline's
+	// READY state.
 	if err == nil && pipeline.Status.State == v2pb.PIPELINE_STATE_READY {
-		if snapshotErr := r.revisioner.Snapshot(ctx, pipeline); snapshotErr != nil {
+		if snapshotErr := r.snapshotRevision(ctx, pipeline); snapshotErr != nil {
 			logger.Error("failed to snapshot pipeline revision", zap.Error(snapshotErr))
 			return result, snapshotErr
 		}
@@ -117,13 +97,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return result, err
 }
 
-// updatePipelineStatus persists pipeline status changes to Kubernetes.
-//
-// It compares the original and updated pipeline status and writes changes
-// to the API server if they differ. For non-terminal states, it schedules
-// requeue after the reconcileInterval to ensure continued reconciliation.
-//
-// Returns a Result with requeue information and an error if the update fails.
 func (r *Reconciler) updatePipelineStatus(ctx context.Context, pipeline *v2pb.Pipeline, originalPipeline *v2pb.Pipeline, logger *zap.Logger) (ctrl.Result, error) {
 	result := ctrl.Result{}
 	if !isTerminatedState(pipeline.Status.State) {
@@ -145,12 +118,6 @@ func (r *Reconciler) updatePipelineStatus(ctx context.Context, pipeline *v2pb.Pi
 	return result, nil
 }
 
-// formatRevisionName generates a standardized revision name for a pipeline.
-//
-// The name format is: "pipeline-{lowercase-pipeline-name}-{git-ref-prefix}"
-// where git-ref-prefix is the first 12 characters (or less) of the git reference.
-//
-// For example: "pipeline-my-model-a1b2c3d4e5f6"
 func formatRevisionName(pipeline *v2pb.Pipeline) string {
 	if pipeline.Spec.Commit != nil {
 		return fmt.Sprintf("%s-%s-%s", "pipeline", strings.ToLower(pipeline.Name), pipeline.Spec.Commit.GitRef[:min(len(pipeline.Spec.Commit.GitRef), 12)])
@@ -158,24 +125,55 @@ func formatRevisionName(pipeline *v2pb.Pipeline) string {
 	return ""
 }
 
-// isTerminatedState checks if a pipeline state is terminal.
-//
-// Terminal states (READY, ERROR) indicate the pipeline has reached a final
-// state and does not require further reconciliation. Non-terminal states
-// will continue to be reconciled at regular intervals.
 func isTerminatedState(state v2pb.PipelineState) bool {
 	return state == v2pb.PIPELINE_STATE_READY ||
 		state == v2pb.PIPELINE_STATE_ERROR
 }
 
-// Register sets up the Pipeline controller with the controller-runtime manager.
-//
-// It initializes the API handler from the factory and configures the controller
-// to watch Pipeline resources. The controller will reconcile all Pipeline objects
-// in the cluster whenever they are created, updated, or deleted.
-//
-// Returns an error if the API handler cannot be created or the controller
-// registration fails.
+func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeline) error {
+	if pipeline.Spec.Commit == nil {
+		r.logger.Info("skipping revision snapshot: pipeline has no commit info",
+			zap.String("namespace", pipeline.Namespace),
+			zap.String("name", pipeline.Name))
+		return nil
+	}
+
+	content, err := pbtypes.MarshalAny(pipeline)
+	if err != nil {
+		return fmt.Errorf("marshal pipeline content: %w", err)
+	}
+
+	rev := &v2pb.Revision{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: pipelineAPIVersion,
+			Kind:       "Revision",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        formatRevisionName(pipeline),
+			Namespace:   pipeline.Namespace,
+			Annotations: pipeline.Annotations,
+		},
+		Spec: v2pb.RevisionSpec{
+			BaseType: &metav1.TypeMeta{
+				Kind:       pipelineKind,
+				APIVersion: pipelineAPIVersion,
+			},
+			BaseResource: &apipb.ResourceIdentifier{
+				Name:      pipeline.Name,
+				Namespace: pipeline.Namespace,
+			},
+			Content:    content,
+			Owner:      pipeline.Spec.GetOwner(),
+			RevisionId: pipeline.Spec.Commit.GitRef,
+			Source:     revision.SourceGit,
+			GitCommit:  pipeline.Spec.Commit,
+		},
+	}
+
+	_, err = r.revisionManager.UpsertRevision(ctx, rev, revision.UpsertOpts{})
+	return err
+}
+
 func (r *Reconciler) Register(mgr ctrl.Manager) error {
 	handler, err := r.apiHandlerFactory.GetAPIHandler(mgr.GetClient())
 	if err != nil {
