@@ -9,13 +9,13 @@ Projects provide:
 - **Pipeline grouping** -- all pipelines within a project share configuration and resources
 - **Lifecycle tracking** -- projects progress through phases from development to production
 
-A project must be created before you can register or run pipelines. See [Pipeline Management](./ml-pipelines/pipeline-management.md) for creating pipelines within a project.
+A project must be created before you can register or run pipelines. See [Pipeline Management](../ml-pipelines/pipeline-management.md) for creating pipelines within a project.
 
 ## Prerequisites
 
 Before creating a project, complete the initial setup:
 
-1. **Set up the Michelangelo CLI and sandbox environment.** See the [CLI Reference - Prerequisites](./reference/cli.md#prerequisites) for installation and setup instructions.
+1. **Set up the Michelangelo CLI and sandbox environment.** See the [CLI Reference - Prerequisites](../reference/cli.md#prerequisites) for installation and setup instructions.
 
 2. **Verify the environment is ready:**
 
@@ -145,7 +145,7 @@ The CLI detects that the project already exists and performs an update.
 ma project delete --namespace="my-ml-project" --name="my-ml-project"
 ```
 
-See the [CLI Reference](./reference/cli.md) for the full list of supported commands and flags.
+See the [CLI Reference](../reference/cli.md) for the full list of supported commands and flags.
 
 ## Project-pipeline relationship
 
@@ -176,7 +176,7 @@ spec:
 ma pipeline apply -f "./pipeline.yaml"
 ```
 
-See [Pipeline Management](./ml-pipelines/pipeline-management.md) for details on creating and managing pipelines.
+See [Pipeline Management](../ml-pipelines/pipeline-management.md) for details on creating and managing pipelines.
 
 ## Project lifecycle
 
@@ -214,8 +214,8 @@ The API enforces the following constraints when creating or updating projects:
 
 ## Next steps
 
-- [Pipeline Management](./ml-pipelines/pipeline-management.md) -- Create and manage pipelines within your project
-- [Pipeline Running Modes](./ml-pipelines/pipeline-running-modes.md) -- Understand local, remote, dev, and production run modes
-- [CLI Reference](./reference/cli.md) -- Full command reference for the `ma` CLI
-- [Set Up Triggers](./ml-pipelines/set-up-triggers.md) -- Schedule and automate pipeline execution
-- [ML Pipelines Overview](./ml-pipelines/index.md) -- End-to-end guide to building ML workflows
+- [Pipeline Management](../ml-pipelines/pipeline-management.md) -- Create and manage pipelines within your project
+- [Pipeline Running Modes](../ml-pipelines/pipeline-running-modes.md) -- Understand local, remote, dev, and production run modes
+- [CLI Reference](../reference/cli.md) -- Full command reference for the `ma` CLI
+- [Set Up Triggers](../ml-pipelines/set-up-triggers.md) -- Schedule and automate pipeline execution
+- [ML Pipelines Overview](../ml-pipelines/index.md) -- End-to-end guide to building ML workflows

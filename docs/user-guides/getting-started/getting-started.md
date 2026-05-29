@@ -26,7 +26,7 @@ Each step runs as an isolated, containerized task. Michelangelo handles data pas
 * Python 3.9+
 * [Poetry](https://python-poetry.org/) installed
 * For remote runs: Docker and access to a Kubernetes cluster (or use the [local sandbox](../../getting-started/sandbox-setup.md))
-* [Create a project](../project-management-for-ml-pipelines.md)
+* [Create a project](./project-management-for-ml-pipelines.md)
 
 ## Environment setup
 

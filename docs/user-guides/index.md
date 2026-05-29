@@ -21,7 +21,7 @@ New to Michelangelo? Follow this path:
 | [ML Pipelines Overview](./ml-pipelines/index.md) | Tasks, workflows, pipelines, and the Uniflow framework |
 | [Running Uniflow Pipelines](./ml-pipelines/running-uniflow.md) | Run pipelines locally and remotely |
 | [Pipeline Running Modes](./ml-pipelines/pipeline-running-modes.md) | Local Run, Remote Run, Pipeline Dev Run, and Pipeline Run |
-| [Project Management](./project-management-for-ml-pipelines.md) | Organize pipelines, models, and resources into projects |
+| [Project Management](./getting-started/project-management-for-ml-pipelines.md) | Organize pipelines, models, and resources into projects |
 | [Pipeline Management](./ml-pipelines/pipeline-management.md) | Create, update, and manage pipelines |
 | [Set Up Triggers](./ml-pipelines/set-up-triggers.md) | Schedule pipelines on a cron schedule |
 | [Backfill Pipelines](./ml-pipelines/backfill.md) | Reprocess historical data windows |

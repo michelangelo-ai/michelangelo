@@ -122,4 +122,4 @@ Start with the [Getting started](../getting-started/getting-started.md) guide to
 | [**File Sync**](./file-sync-testing-flow-runbook.md) | Sync local code changes to remote runs |
 | [**Set Up Triggers**](./set-up-triggers.md) | Schedule and automate pipeline execution |
 | [**CLI Reference**](../reference/cli.md) | Command-line tools for pipeline and project management |
-| [**Project Management**](../project-management-for-ml-pipelines.md) | Create and configure MA Studio projects |
+| [**Project Management**](../getting-started/project-management-for-ml-pipelines.md) | Create and configure MA Studio projects |

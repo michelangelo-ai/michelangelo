@@ -43,7 +43,7 @@ The custom workflows are fully customized Uniflow workflows.
 
 ## Pipeline creation
 
-An MA Studio project is required before creating pipelines. Please refer to [Project Management](../project-management-for-ml-pipelines.md) for project creation.
+An MA Studio project is required before creating pipelines. Please refer to [Project Management](../getting-started/project-management-for-ml-pipelines.md) for project creation.
 
 ### Pipeline creation for standard workflows
 
