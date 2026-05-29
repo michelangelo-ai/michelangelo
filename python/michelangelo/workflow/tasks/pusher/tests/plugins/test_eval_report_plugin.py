@@ -107,9 +107,7 @@ class TestEvalReportPusherPluginExecute(TestCase):
         """It uses config.report_name over proto.metadata.name."""
         report = _report()
         report.metadata.name = "from-proto"
-        result, _ = self._run_with_mock_sink(
-            artifact=report, report_name="from-config"
-        )
+        result, _ = self._run_with_mock_sink(artifact=report, report_name="from-config")
         self.assertEqual(result["name"], "from-config")
 
     def test_proto_metadata_name_used_when_config_name_absent(self):
@@ -205,8 +203,6 @@ class TestEvalReportPusherPluginExecute(TestCase):
             artifact=_report(),
         ).execute()
         if result["sinks"][0]["output_path"]:
-            self._output_dirs.append(
-                os.path.dirname(result["sinks"][0]["output_path"])
-            )
+            self._output_dirs.append(os.path.dirname(result["sinks"][0]["output_path"]))
         self.assertEqual(len(result["sinks"]), 2)
         mock_api_sink.write.assert_called_once()

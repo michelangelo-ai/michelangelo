@@ -34,6 +34,7 @@ class TestEvalReportSinkResult(TestCase):
     def test_is_frozen(self):
         """It raises FrozenInstanceError when a field is assigned after construction."""
         from dataclasses import FrozenInstanceError
+
         r = EvalReportSinkResult(name="r1", namespace="")
         with self.assertRaises(FrozenInstanceError):
             r.name = "changed"  # type: ignore[misc]

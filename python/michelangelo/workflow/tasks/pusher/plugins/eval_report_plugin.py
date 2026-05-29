@@ -174,6 +174,7 @@ class EvalReportPusherPlugin(PusherPluginBase):
             from michelangelo.workflow.tasks.functions.eval_report_sinks import (
                 LocalFileEvalReportSink,
             )
+
             sinks = [LocalFileEvalReportSink()]
 
         sink_results = []

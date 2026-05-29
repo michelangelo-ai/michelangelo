@@ -82,6 +82,7 @@ class TestLocalFileEvalReportSink(TestCase):
     def test_explicit_output_dir_used(self):
         """It writes to the configured output_dir."""
         import tempfile
+
         d = tempfile.mkdtemp()
         self._output_dirs.append(d)
         cfg = LocalFileEvalReportSinkConfig(output_dir=d)
@@ -147,6 +148,7 @@ class TestGRPCEvalReportSink(TestCase):
             from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
                 GRPCEvalReportSink,
             )
+
             with self.assertRaises(ImportError):
                 GRPCEvalReportSink(GRPCEvalReportSinkConfig(endpoint="localhost:50051"))
 
@@ -239,33 +241,39 @@ class TestFlattenReportToMetrics(TestCase):
 
     def test_single_scalar_chart_extracted(self):
         """It extracts title→float for a chart with one single-point series."""
-        result = self._run([
-            {"title": "accuracy", "series": [{"data_points": [{"value": "0.95"}]}]},
-        ])
+        result = self._run(
+            [
+                {"title": "accuracy", "series": [{"data_points": [{"value": "0.95"}]}]},
+            ]
+        )
         self.assertAlmostEqual(result["accuracy"], 0.95)
 
     def test_missing_title_falls_back_to_index(self):
         """It uses metric_<i> when title is absent."""
-        result = self._run([
-            {"series": [{"data_points": [{"value": "0.8"}]}]},
-        ])
+        result = self._run(
+            [
+                {"series": [{"data_points": [{"value": "0.8"}]}]},
+            ]
+        )
         self.assertAlmostEqual(result["metric_0"], 0.8)
 
     def test_non_numeric_value_silently_skipped(self):
         """It silently drops data points whose value cannot be cast to float."""
-        result = self._run([
-            {"title": "bad", "series": [{"data_points": [{"value": "n/a"}]}]},
-        ])
+        result = self._run(
+            [
+                {"title": "bad", "series": [{"data_points": [{"value": "n/a"}]}]},
+            ]
+        )
         self.assertNotIn("bad", result)
 
     def test_multi_point_series_skipped(self):
         """It skips charts whose series has more than one data point."""
-        result = self._run([
-            {
-                "title": "loss_curve",
-                "series": [
-                    {"data_points": [{"value": "0.9"}, {"value": "0.8"}]}
-                ],
-            }
-        ])
+        result = self._run(
+            [
+                {
+                    "title": "loss_curve",
+                    "series": [{"data_points": [{"value": "0.9"}, {"value": "0.8"}]}],
+                }
+            ]
+        )
         self.assertNotIn("loss_curve", result)
