@@ -29,6 +29,8 @@ each with their own endpoint, caller name, and gRPC channel — eliminating the
 race conditions and shared-state surprises of the singleton pattern.
 """
 
+from __future__ import annotations
+
 import os
 
 import grpc
@@ -211,7 +213,7 @@ class APIClient(ServicesGen):
         if self._channel_owned and self._context._channel is not None:
             self._context._channel.close()
 
-    def __enter__(self) -> "APIClient":
+    def __enter__(self) -> APIClient:
         """Return self to support use as a context manager."""
         return self
 
@@ -316,7 +318,7 @@ class APIClient(ServicesGen):
             )
 
     @classmethod
-    def from_env(cls, caller: str) -> "APIClient":
+    def from_env(cls, caller: str) -> APIClient:
         """Create a per-instance client from the ``MA_API_SERVER`` environment variable.
 
         Validates that ``MA_API_SERVER`` is set and correctly formatted, then
