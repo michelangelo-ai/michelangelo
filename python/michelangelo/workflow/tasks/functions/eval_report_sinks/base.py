@@ -10,8 +10,11 @@ ready-made helper.
 from __future__ import annotations
 
 import contextlib
+import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
+
+_logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from michelangelo.gen.api.v2.evaluation_report_pb2 import EvaluationReport
@@ -59,11 +62,25 @@ def flatten_report_to_metrics(report: EvaluationReport) -> dict[str, float]:
     for i, chart in enumerate(doc.get("spec", {}).get("charts", [])):
         key = chart.get("title") or f"metric_{i}"
         series = chart.get("series", [])
-        if len(series) == 1:
-            data_points = series[0].get("data_points", [])
-            if len(data_points) == 1:
-                with contextlib.suppress(TypeError, ValueError):
-                    metrics[key] = float(data_points[0].get("value", 0))
+        if len(series) != 1:
+            # TODO(v2): support multi-series charts (comparison, overlays) — #1258
+            _logger.debug(
+                "flatten_report_to_metrics: skipping %r — %d series (expected 1)",
+                key,
+                len(series),
+            )
+            continue
+        data_points = series[0].get("data_points", [])
+        if len(data_points) != 1:
+            # TODO(v2): multi-point series; expose step for log_metric(step=) — #1258
+            _logger.debug(
+                "flatten_report_to_metrics: skipping %r — %d data points (expected 1)",
+                key,
+                len(data_points),
+            )
+            continue
+        with contextlib.suppress(TypeError, ValueError):
+            metrics[key] = float(data_points[0].get("value", 0))
     return metrics
 
 

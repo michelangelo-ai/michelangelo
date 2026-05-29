@@ -93,10 +93,10 @@ class GRPCEvalReportSink(EvalReportSink):
         pip install grpcio
 
     **APIClient convenience** (``config=None``):
-    Delegates to ``APIClient.EvaluationReportService``, reusing the channel
-    already established by ``APIClient.init()``. Requires ``MA_API_SERVER`` to
-    be set in the environment and ``APIClient.init()`` to have been called
-    before the sink is created. No extra channel is opened or closed.
+    Delegates to ``APIClient.EvaluationReportService``, reusing the shared
+    channel wired at import time. Requires ``MA_API_SERVER`` to be set in the
+    environment before the first ``write()`` call. No extra channel is opened
+    or closed.
 
     The self-contained path supports the context-manager protocol for explicit
     channel cleanup::
@@ -220,6 +220,16 @@ class GRPCEvalReportSink(EvalReportSink):
 
         Args:
             report: An ``EvaluationReport`` proto with ``metadata.name`` set.
+
+                .. warning::
+                    The self-contained path (``config`` provided) mutates
+                    ``report.metadata.namespace`` in place when
+                    ``config.namespace`` is set. In a multi-sink workflow
+                    where the same proto is passed to multiple sinks, this
+                    mutation is visible to all subsequent sinks. Clone the
+                    report before passing if you need to preserve the original
+                    namespace.
+
             extra_fields: Ignored by this sink.
 
         Returns:

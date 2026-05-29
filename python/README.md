@@ -147,7 +147,7 @@ APIClient.ProjectService.create_project(proj)
 Set the API server address via environment variable:
 
 ```bash
-export MICHELANGELO_API_SERVER="localhost:12345"
+export MA_API_SERVER="localhost:12345"
 ```
 
 ## Documentation

@@ -219,11 +219,7 @@ class TestGRPCEvalReportSink(TestCase):
         mock_apiclient = MagicMock()
         mock_apiclient.EvaluationReportService = mock_svc
 
-        with patch(
-            "michelangelo.workflow.tasks.functions.eval_report_sinks.api.APIClient",
-            mock_apiclient,
-            create=True,
-        ):
+        with patch("michelangelo.api.v2.APIClient", mock_apiclient):
             sink = GRPCEvalReportSink()
 
         self.assertIs(sink._svc, mock_svc)
@@ -243,11 +239,7 @@ class TestGRPCEvalReportSink(TestCase):
             created
         )
 
-        with patch(
-            "michelangelo.workflow.tasks.functions.eval_report_sinks.api.APIClient",
-            mock_apiclient,
-            create=True,
-        ):
+        with patch("michelangelo.api.v2.APIClient", mock_apiclient):
             sink = GRPCEvalReportSink()
 
         result = sink.write(report)
@@ -270,11 +262,7 @@ class TestGRPCEvalReportSink(TestCase):
             created
         )
 
-        with patch(
-            "michelangelo.workflow.tasks.functions.eval_report_sinks.api.APIClient",
-            mock_apiclient,
-            create=True,
-        ):
+        with patch("michelangelo.api.v2.APIClient", mock_apiclient):
             sink = GRPCEvalReportSink()
 
         report = _report(name="r1", namespace="caller-ns")
@@ -288,11 +276,7 @@ class TestGRPCEvalReportSink(TestCase):
         )
 
         mock_apiclient = MagicMock()
-        with patch(
-            "michelangelo.workflow.tasks.functions.eval_report_sinks.api.APIClient",
-            mock_apiclient,
-            create=True,
-        ):
+        with patch("michelangelo.api.v2.APIClient", mock_apiclient):
             sink = GRPCEvalReportSink()
 
         sink.close()  # must not raise
