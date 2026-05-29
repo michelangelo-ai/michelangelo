@@ -63,6 +63,8 @@ class APIClientEvalReportSink(EvalReportSink):
     To target a **different endpoint** than the default ``MA_API_SERVER``, pass
     an explicit service built from a per-instance ``APIClient``::
 
+        import os
+        os.environ["MA_API_SERVER"] = "localhost:50051"  # or your server address
         from michelangelo.api.v2 import APIClient
         client = APIClient(endpoint="other-server:50051", caller="my-trainer")
         sink = APIClientEvalReportSink(svc=client.EvaluationReportService)
