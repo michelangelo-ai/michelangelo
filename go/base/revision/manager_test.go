@@ -57,7 +57,7 @@ func TestUpsertRevision_Create(t *testing.T) {
 
 	rev := getRevision(t, h, "test-ns", "pipeline-my-pipeline-abc123456789")
 	assert.Equal(t, "abc123456789", rev.Spec.RevisionId)
-	assert.Equal(t, "Pipeline", rev.Labels[LabelBaseType])
+	assert.Equal(t, "Pipeline", rev.Spec.BaseType.Kind)
 }
 
 func TestUpsertRevision_CreateImmutable(t *testing.T) {
@@ -103,20 +103,15 @@ func TestUpsertRevision_RejectImmutableToMutable(t *testing.T) {
 }
 
 func TestUpsertRevision_UpdateMutable(t *testing.T) {
-	mgr, h := newTestManager(t)
+	mgr, _ := newTestManager(t)
 	ctx := context.Background()
 
 	_, err := mgr.UpsertRevision(ctx, testParams())
 	require.NoError(t, err)
 
-	params := testParams()
-	params.Labels = map[string]string{"extra": "label"}
-	created, err := mgr.UpsertRevision(ctx, params)
+	created, err := mgr.UpsertRevision(ctx, testParams())
 	require.NoError(t, err)
 	assert.False(t, created)
-
-	rev := getRevision(t, h, "test-ns", "pipeline-my-pipeline-abc123456789")
-	assert.Equal(t, "label", rev.Labels["extra"])
 }
 
 func TestUpsertRevision_MutableThenImmutable(t *testing.T) {

@@ -30,27 +30,12 @@ func TestNewRevision(t *testing.T) {
 	assert.Equal(t, "pipeline-my-pipeline-abc123", rev.Name)
 	assert.Equal(t, "test-ns", rev.Namespace)
 	assert.Equal(t, map[string]string{"a": "1"}, rev.Annotations)
-	// Cleanup labels are applied automatically.
-	assert.Equal(t, "test-ns", rev.Labels[LabelBaseResourceNamespace])
-	assert.Equal(t, "my-pipeline", rev.Labels[LabelBaseResourceName])
-	assert.Equal(t, "Pipeline", rev.Labels[LabelBaseType])
 	assert.Equal(t, "abc123", rev.Spec.RevisionId)
 	assert.Equal(t, SourceGit, rev.Spec.Source)
 	assert.Equal(t, "abc123", rev.Spec.GitCommit.GitRef)
+	assert.Equal(t, "my-pipeline", rev.Spec.BaseResource.Name)
+	assert.Equal(t, "Pipeline", rev.Spec.BaseType.Kind)
 	require.NotNil(t, rev.Spec.Parent)
 	assert.Equal(t, parent, rev.Spec.Parent.Name)
 	require.NotNil(t, rev.Spec.Content)
-}
-
-func TestNewRevisionMergesCallerLabels(t *testing.T) {
-	rev, err := NewRevision(UpsertRevisionParams{
-		Content:      &v2pb.UserInfo{},
-		BaseType:     &metav1.TypeMeta{Kind: "Pipeline"},
-		BaseResource: &apipb.ResourceIdentifier{Namespace: "ns", Name: "p"},
-		Labels:       map[string]string{"caller-key": "caller-val"},
-	})
-	require.NoError(t, err)
-	assert.Equal(t, "caller-val", rev.Labels["caller-key"])
-	// Cleanup labels still applied.
-	assert.Equal(t, "ns", rev.Labels[LabelBaseResourceNamespace])
 }

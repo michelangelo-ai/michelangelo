@@ -37,6 +37,5 @@ type UpsertRevisionParams struct {
 	// Conventionally set when Source == SourceGit.
 	GitCommit   *v2pb.CommitInfo
 	Immutable   bool
-	Labels      map[string]string
 	Annotations map[string]string
 }

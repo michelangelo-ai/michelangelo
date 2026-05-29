@@ -64,12 +64,6 @@ func (m *revisionManager) UpsertRevision(ctx context.Context, params UpsertRevis
 		return false, buildErr
 	}
 	existing.Spec.Content = rev.Spec.Content
-	for k, v := range params.Labels {
-		if existing.Labels == nil {
-			existing.Labels = map[string]string{}
-		}
-		existing.Labels[k] = v
-	}
 	if params.Immutable {
 		apiutils.MarkImmutable(existing)
 	}
