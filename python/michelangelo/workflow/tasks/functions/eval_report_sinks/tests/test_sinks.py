@@ -209,6 +209,71 @@ class TestGRPCEvalReportSink(TestCase):
             )
         self.assertIsNotNone(sink._svc._context.header_provider._caller)
 
+    def test_config_none_delegates_to_apiclient(self):
+        """config=None path reuses APIClient.EvaluationReportService."""
+        from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
+            GRPCEvalReportSink,
+        )
+
+        mock_svc = MagicMock()
+        mock_apiclient = MagicMock()
+        mock_apiclient.EvaluationReportService = mock_svc
+
+        with (
+            patch.dict(sys.modules, {"michelangelo.api.v2": mock_apiclient}),
+            patch(
+                "michelangelo.workflow.tasks.functions.eval_report_sinks.api.APIClient",
+                mock_apiclient,
+                create=True,
+            ),
+        ):
+            sink = GRPCEvalReportSink()
+
+        self.assertIs(sink._svc, mock_svc)
+        self.assertIsNone(sink._channel)
+        self.assertIsNone(sink._config)
+
+    def test_config_none_write_calls_create_evaluation_report(self):
+        """config=None write() calls svc.create_evaluation_report, not svc.create."""
+        from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
+            GRPCEvalReportSink,
+        )
+
+        mock_apiclient = MagicMock()
+        created = self._make_created("r1", "ns1")
+        mock_apiclient.EvaluationReportService.create_evaluation_report.return_value = (
+            created
+        )
+
+        with patch(
+            "michelangelo.workflow.tasks.functions.eval_report_sinks.api.APIClient",
+            mock_apiclient,
+            create=True,
+        ):
+            sink = GRPCEvalReportSink()
+
+        result = sink.write(_report(name="r1"))
+
+        mock_apiclient.EvaluationReportService.create_evaluation_report.assert_called_once()
+        self.assertEqual(result.name, "r1")
+        self.assertEqual(result.namespace, "ns1")
+
+    def test_config_none_close_is_noop(self):
+        """close() is a no-op when no channel was opened (config=None path)."""
+        from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
+            GRPCEvalReportSink,
+        )
+
+        mock_apiclient = MagicMock()
+        with patch(
+            "michelangelo.workflow.tasks.functions.eval_report_sinks.api.APIClient",
+            mock_apiclient,
+            create=True,
+        ):
+            sink = GRPCEvalReportSink()
+
+        sink.close()  # must not raise
+
 
 class TestFlattenReportToMetrics(TestCase):
     """Tests for flatten_report_to_metrics().
