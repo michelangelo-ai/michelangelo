@@ -240,8 +240,18 @@ describe('ActionsPopover', () => {
       render(
         <ActionMenu
           actions={[
-            { display: { label: 'Delete' }, disabled: true, disabledMessage: 'Cannot delete', onClick: vi.fn() },
-            { display: { label: 'Archive' }, disabled: true, disabledMessage: 'Cannot archive', onClick: vi.fn() },
+            {
+              display: { label: 'Delete' },
+              disabled: true,
+              disabledMessage: 'Cannot delete',
+              onClick: vi.fn(),
+            },
+            {
+              display: { label: 'Archive' },
+              disabled: true,
+              disabledMessage: 'Cannot archive',
+              onClick: vi.fn(),
+            },
           ]}
           onSelectAction={vi.fn()}
         />,
@@ -261,7 +271,14 @@ describe('ActionsPopover', () => {
     it('does not show the tooltip from auto-highlight when the menu opens', async () => {
       render(
         <ActionMenu
-          actions={[{ display: { label: 'Delete' }, disabled: true, disabledMessage: 'Cannot delete', onClick: vi.fn() }]}
+          actions={[
+            {
+              display: { label: 'Delete' },
+              disabled: true,
+              disabledMessage: 'Cannot delete',
+              onClick: vi.fn(),
+            },
+          ]}
           onSelectAction={vi.fn()}
         />,
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
@@ -276,7 +293,12 @@ describe('ActionsPopover', () => {
         <ActionMenu
           actions={[
             { display: { label: 'Edit' }, disabled: false, onClick: vi.fn() },
-            { display: { label: 'Delete' }, disabled: true, disabledMessage: 'Cannot delete', onClick: vi.fn() },
+            {
+              display: { label: 'Delete' },
+              disabled: true,
+              disabledMessage: 'Cannot delete',
+              onClick: vi.fn(),
+            },
           ]}
           onSelectAction={vi.fn()}
         />,
@@ -292,8 +314,18 @@ describe('ActionsPopover', () => {
       render(
         <ActionMenu
           actions={[
-            { display: { label: 'Delete' }, disabled: true, disabledMessage: 'Cannot delete', onClick: vi.fn() },
-            { display: { label: 'Archive' }, disabled: true, disabledMessage: 'Cannot archive', onClick: vi.fn() },
+            {
+              display: { label: 'Delete' },
+              disabled: true,
+              disabledMessage: 'Cannot delete',
+              onClick: vi.fn(),
+            },
+            {
+              display: { label: 'Archive' },
+              disabled: true,
+              disabledMessage: 'Cannot archive',
+              onClick: vi.fn(),
+            },
           ]}
           onSelectAction={vi.fn()}
         />,
@@ -311,10 +343,7 @@ describe('ActionsPopover', () => {
       const user = userEvent.setup();
       render(
         <ActionsPopover
-          actions={[
-            disabledAction,
-            { display: { label: 'Edit' }, component: DeleteDialog },
-          ]}
+          actions={[disabledAction, { display: { label: 'Edit' }, component: DeleteDialog }]}
           record={{}}
         />,
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
