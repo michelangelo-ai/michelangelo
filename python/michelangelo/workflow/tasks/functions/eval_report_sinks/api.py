@@ -226,8 +226,6 @@ class GRPCEvalReportSink(EvalReportSink):
         Raises:
             IOError: If the gRPC call fails.
         """
-        import grpc
-
         if self._config is not None and self._config.namespace:
             report.metadata.namespace = self._config.namespace
 
@@ -236,12 +234,20 @@ class GRPCEvalReportSink(EvalReportSink):
                 created = self._svc.create_evaluation_report(report)
             else:
                 created = self._svc.create(report, timeout=self._config.timeout_seconds)
-        except grpc.RpcError as exc:
+        except Exception as exc:
+            # grpc.RpcError is only available when grpcio is installed.
+            try:
+                import grpc as _grpc
+
+                if not isinstance(exc, _grpc.RpcError):
+                    raise
+            except ImportError:
+                raise
             endpoint = self._config.endpoint if self._config else "APIClient"
             raise OSError(
                 f"GRPCEvalReportSink: gRPC CreateEvaluationReport failed "
                 f"(endpoint={endpoint!r}, "
-                f"code={exc.code()}, details={exc.details()!r})."
+                f"code={exc.code()}, details={exc.details()!r})."  # type: ignore[attr-defined]
             ) from exc
 
         _logger.info(

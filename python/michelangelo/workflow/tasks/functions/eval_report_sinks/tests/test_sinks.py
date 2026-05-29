@@ -219,13 +219,10 @@ class TestGRPCEvalReportSink(TestCase):
         mock_apiclient = MagicMock()
         mock_apiclient.EvaluationReportService = mock_svc
 
-        with (
-            patch.dict(sys.modules, {"michelangelo.api.v2": mock_apiclient}),
-            patch(
-                "michelangelo.workflow.tasks.functions.eval_report_sinks.api.APIClient",
-                mock_apiclient,
-                create=True,
-            ),
+        with patch(
+            "michelangelo.workflow.tasks.functions.eval_report_sinks.api.APIClient",
+            mock_apiclient,
+            create=True,
         ):
             sink = GRPCEvalReportSink()
 
@@ -241,6 +238,7 @@ class TestGRPCEvalReportSink(TestCase):
 
         mock_apiclient = MagicMock()
         created = self._make_created("r1", "ns1")
+        report = _report(name="r1")
         mock_apiclient.EvaluationReportService.create_evaluation_report.return_value = (
             created
         )
@@ -252,11 +250,36 @@ class TestGRPCEvalReportSink(TestCase):
         ):
             sink = GRPCEvalReportSink()
 
-        result = sink.write(_report(name="r1"))
+        result = sink.write(report)
 
-        mock_apiclient.EvaluationReportService.create_evaluation_report.assert_called_once()
+        mock_apiclient.EvaluationReportService.create_evaluation_report.assert_called_once_with(
+            report
+        )
         self.assertEqual(result.name, "r1")
         self.assertEqual(result.namespace, "ns1")
+
+    def test_config_none_namespace_not_injected(self):
+        """config=None path never injects a namespace (caller must set it)."""
+        from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
+            GRPCEvalReportSink,
+        )
+
+        mock_apiclient = MagicMock()
+        created = self._make_created("r1", "caller-ns")
+        mock_apiclient.EvaluationReportService.create_evaluation_report.return_value = (
+            created
+        )
+
+        with patch(
+            "michelangelo.workflow.tasks.functions.eval_report_sinks.api.APIClient",
+            mock_apiclient,
+            create=True,
+        ):
+            sink = GRPCEvalReportSink()
+
+        report = _report(name="r1", namespace="caller-ns")
+        sink.write(report)
+        self.assertEqual(report.metadata.namespace, "caller-ns")
 
     def test_config_none_close_is_noop(self):
         """close() is a no-op when no channel was opened (config=None path)."""
