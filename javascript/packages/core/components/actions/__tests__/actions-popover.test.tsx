@@ -24,7 +24,9 @@ describe('ActionsPopover', () => {
   it('renders an "Actions" trigger button', () => {
     render(
       <ActionsPopover
-        actions={[{ display: { label: 'Delete' }, modal: { type: 'custom', component: DeleteDialog } }]}
+        actions={[
+          { display: { label: 'Delete' }, modal: { type: 'custom', component: DeleteDialog } },
+        ]}
         record={{}}
       />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
@@ -35,7 +37,9 @@ describe('ActionsPopover', () => {
   it('does not show menu items before the trigger is clicked', () => {
     render(
       <ActionsPopover
-        actions={[{ display: { label: 'Delete' }, modal: { type: 'custom', component: DeleteDialog } }]}
+        actions={[
+          { display: { label: 'Delete' }, modal: { type: 'custom', component: DeleteDialog } },
+        ]}
         record={{}}
       />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
@@ -47,7 +51,9 @@ describe('ActionsPopover', () => {
     const user = userEvent.setup();
     render(
       <ActionsPopover
-        actions={[{ display: { label: 'Delete' }, modal: { type: 'custom', component: DeleteDialog } }]}
+        actions={[
+          { display: { label: 'Delete' }, modal: { type: 'custom', component: DeleteDialog } },
+        ]}
         record={{}}
       />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
@@ -83,7 +89,9 @@ describe('ActionsPopover', () => {
     const user = userEvent.setup();
     render(
       <ActionsPopover
-        actions={[{ display: { label: 'Delete' }, modal: { type: 'custom', component: DeleteDialog } }]}
+        actions={[
+          { display: { label: 'Delete' }, modal: { type: 'custom', component: DeleteDialog } },
+        ]}
         record={{}}
       />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
@@ -98,8 +106,9 @@ describe('ActionsPopover', () => {
 
   it('passes data to the action component', async () => {
     const user = userEvent.setup();
-    const Component = ({ record }: ActionComponentProps) =>
-      <div role="dialog">{String(record.id)}</div>;
+    const Component = ({ record }: ActionComponentProps) => (
+      <div role="dialog">{String(record.id)}</div>
+    );
     const data = { id: '42', type: 'pipeline' };
     render(
       <ActionsPopover
@@ -117,7 +126,9 @@ describe('ActionsPopover', () => {
     const user = userEvent.setup();
     const { unmount } = render(
       <ActionsPopover
-        actions={[{ display: { label: 'Delete' }, modal: { type: 'custom', component: DeleteDialog } }]}
+        actions={[
+          { display: { label: 'Delete' }, modal: { type: 'custom', component: DeleteDialog } },
+        ]}
         record={{}}
       />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
@@ -132,7 +143,9 @@ describe('ActionsPopover', () => {
     const user = userEvent.setup();
     render(
       <ActionsPopover
-        actions={[{ display: { label: 'Delete' }, modal: { type: 'custom', component: DeleteDialog } }]}
+        actions={[
+          { display: { label: 'Delete' }, modal: { type: 'custom', component: DeleteDialog } },
+        ]}
         record={{}}
       />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
