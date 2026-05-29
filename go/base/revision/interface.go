@@ -11,17 +11,10 @@ import (
 // Controllers that produce revisions depend on this interface rather than
 // calling the API handler directly.
 //
-// Both the OSS implementation and the internal (Uber) implementation satisfy
-// this interface. At mergeback the internal binary swaps the implementation
-// via fx.Decorate; the call-sites in each controller remain unchanged.
-//
 // UpsertRevision follows the controller-runtime caller-owns-type pattern:
 // callers build a fully populated Revision (in whatever API version they use)
 // and pass it as a client.Object. The Manager handles the get-or-create state
 // machine without inspecting version-specific fields.
-//
-// Read and delete operations (Get, DeleteCollection) are thin wrappers over
-// handler methods, so controllers use the handler directly for those.
 type Manager interface {
 	// UpsertRevision creates or updates a Revision. The caller builds the
 	// complete Revision object; the Manager orchestrates the state machine
