@@ -166,11 +166,11 @@ class EvalReportPluginConfig:
             sinks that write files (e.g. CI run ID, git SHA). Take precedence
             over proto fields on collision. Ignored by ``GRPCEvalReportSink``.
 
-    Example (default — local file)::
+    Example (default — local file):
 
         >>> cfg = EvalReportPluginConfig(report_name="q1-eval")
 
-    Example (local sandbox API)::
+    Example (local sandbox API):
 
         >>> from michelangelo.workflow.schema.eval_report_sinks.api import (
         ...     GRPCEvalReportSinkConfig,
@@ -185,7 +185,7 @@ class EvalReportPluginConfig:
         ...     report_name="q1-eval",
         ... )
 
-    Example (multi-sink — local file + gRPC)::
+    Example (multi-sink — local file + gRPC):
 
         >>> cfg = EvalReportPluginConfig(
         ...     sinks=[
