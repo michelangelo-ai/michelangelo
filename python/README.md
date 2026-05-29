@@ -40,6 +40,7 @@ pip install michelangelo[plugin]
 | Extra | What it includes | When to use it |
 |-------|-----------------|----------------|
 | `michelangelo[plugin]` | Ray, PySpark | You want to run tasks on distributed Ray or Spark clusters |
+| `michelangelo[ray-polars]` | Ray, Polars | You read Ray Datasets with nested list/struct columns (Polars fallback for [ray#61675](https://github.com/ray-project/ray/issues/61675)) |
 | `michelangelo[vllm]` | vLLM, Ray, PyTorch, Transformers | You're serving or fine-tuning large language models |
 | `michelangelo[example]` | All ML libraries for examples | You want to run the included example projects |
 | `michelangelo[dev]` | pytest, ruff, pre-commit, Ray | You're contributing to Michelangelo itself |
@@ -97,6 +98,23 @@ def process_data(df):
     # Your Spark processing logic
     return df
 ```
+
+### I/O Plugins
+
+Michelangelo provides typed I/O handlers for passing data between tasks. The
+handler is selected automatically based on the Python type of the value being
+written.
+
+| Plugin | Type handled | Import |
+|--------|-------------|--------|
+| `RayDatasetIO` | `ray.data.Dataset` | `from michelangelo.uniflow.plugins.ray import RayDatasetIO` |
+| `PandasIO` | `pandas.DataFrame` | `from michelangelo.uniflow.plugins.pandas import PandasIO` |
+| `SparkIO` | `pyspark.sql.DataFrame` | `from michelangelo.uniflow.plugins.spark import SparkIO` |
+| `ProtoIO` | `google.protobuf.message.Message` | `from michelangelo.uniflow.plugins.proto import ProtoIO` |
+
+`ProtoIO` serialises protobuf messages as JSON (via `google.protobuf.json_format`)
+and stores the message type in the metadata dict for automatic reconstruction on
+read. `protobuf` is a core dependency — no extra install required.
 
 For complete working examples, see the [examples directory](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples), including:
 

@@ -15,6 +15,9 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from michelangelo.workflow.schema.exceptions import ConfigurationError
 
 if TYPE_CHECKING:
+    from michelangelo.workflow.tasks.functions.eval_report_sinks.base import (
+        EvalReportSink,
+    )
     from michelangelo.workflow.tasks.functions.sinks.base import DataSink
 
 __all__ = [
@@ -149,18 +152,52 @@ class DatasetPluginConfig:
 class EvalReportPluginConfig:
     """Configuration for ``EvalReportPusherPlugin``.
 
-    Attributes:
-        report_name: Name assigned to the evaluation report. A unique
-            name is generated automatically when ``None``.
-        extra_fields: Additional key-value pairs merged into the report
-            document before it is written.
+    Sinks control where the report is written. The default (``sinks=None``)
+    auto-creates a ``LocalFileEvalReportSink`` so the plugin works with zero
+    configuration. Pass ``sinks=[]`` to suppress all output (dry-run).
 
-    Example:
-        >>> cfg = EvalReportPluginConfig(report_name="run-2026")
-        >>> cfg.extra_fields
-        {}
+    Attributes:
+        sinks: Ordered list of ``EvalReportSink`` instances. ``None`` creates
+            a single ``LocalFileEvalReportSink`` automatically.
+        report_name: Overrides ``report.metadata.name``. Takes precedence over
+            any name already set on the proto. A UUID-based name is generated
+            when both this and ``report.metadata.name`` are absent.
+        extra_fields: Key-value pairs merged into the output document for
+            sinks that write files (e.g. CI run ID, git SHA). Take precedence
+            over proto fields on collision. Ignored by ``GRPCEvalReportSink``.
+
+    Example (default — local file):
+
+        >>> cfg = EvalReportPluginConfig(report_name="q1-eval")
+
+    Example (local sandbox API):
+
+        >>> from michelangelo.workflow.schema.eval_report_sinks.api import (
+        ...     GRPCEvalReportSinkConfig,
+        ... )
+        >>> from michelangelo.workflow.tasks.functions.eval_report_sinks import (
+        ...     GRPCEvalReportSink,
+        ... )
+        >>> cfg = EvalReportPluginConfig(
+        ...     sinks=[GRPCEvalReportSink(
+        ...         GRPCEvalReportSinkConfig(endpoint="localhost:50051")
+        ...     )],
+        ...     report_name="q1-eval",
+        ... )
+
+    Example (multi-sink — local file + gRPC):
+
+        >>> cfg = EvalReportPluginConfig(
+        ...     sinks=[
+        ...         LocalFileEvalReportSink(),
+        ...         GRPCEvalReportSink(
+        ...             GRPCEvalReportSinkConfig(endpoint="localhost:50051")
+        ...         ),
+        ...     ],
+        ... )
     """
 
+    sinks: list[EvalReportSink] | None = None
     report_name: str | None = None
     extra_fields: dict[str, Any] = field(default_factory=dict)
 

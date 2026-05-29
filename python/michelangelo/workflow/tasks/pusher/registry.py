@@ -14,12 +14,12 @@ class PluginRegistry:
     """Registry mapping plugin names to their implementation class and artifact type.
 
     The open source library ships a ``default_registry`` pre-populated with
-    the three built-in plugins (populated by ``plugins/__init__.py``). Provider
-    layers call ``extend()`` to create a child registry and register their own
+    the three built-in plugins (populated by ``plugins/__init__.py``). Downstream
+    packages call ``extend()`` to create a child registry and register their own
     plugins without mutating the shared default.
 
     Lookups fall through to the parent registry when a name is not found
-    locally, forming a chain: provider registry → ``default_registry``.
+    locally, forming a chain: child registry → ``default_registry``.
 
     Args:
         parent: Optional parent registry to inherit registrations from. When
