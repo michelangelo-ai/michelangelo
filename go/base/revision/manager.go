@@ -36,7 +36,7 @@ func (m *revisionManager) UpsertRevision(ctx context.Context, params UpsertRevis
 		}
 
 		// Not found — create.
-		rev, buildErr := NewCR(params)
+		rev, buildErr := NewRevision(params)
 		if buildErr != nil {
 			return false, buildErr
 		}
@@ -59,7 +59,7 @@ func (m *revisionManager) UpsertRevision(ctx context.Context, params UpsertRevis
 	}
 
 	// Mutable existing revision — update content + labels.
-	rev, buildErr := NewCR(params)
+	rev, buildErr := NewRevision(params)
 	if buildErr != nil {
 		return false, buildErr
 	}
@@ -78,39 +78,4 @@ func (m *revisionManager) UpsertRevision(ctx context.Context, params UpsertRevis
 	}
 	logger.Info("updated revision")
 	return false, nil
-}
-
-func (m *revisionManager) GetRevision(ctx context.Context, namespace, name string) (*v2pb.Revision, error) {
-	if namespace == "" || name == "" {
-		return nil, fmt.Errorf("namespace and name must be non-empty")
-	}
-	rev := &v2pb.Revision{}
-	if err := m.handler.Get(ctx, namespace, name, &metav1.GetOptions{}, rev); err != nil {
-		return nil, err
-	}
-	return rev, nil
-}
-
-func (m *revisionManager) FetchRevisionID(ctx context.Context, namespace, name string) (string, error) {
-	rev, err := m.GetRevision(ctx, namespace, name)
-	if err != nil {
-		return "", err
-	}
-	return rev.Spec.GetRevisionId(), nil
-}
-
-func (m *revisionManager) DeleteAllRevisions(ctx context.Context, namespace, name, kind string) error {
-	listOpts := &metav1.ListOptions{
-		LabelSelector: LabelSelectorFor(namespace, name, kind),
-	}
-	revList := &v2pb.RevisionList{}
-	if err := m.handler.List(ctx, namespace, listOpts, nil, revList); err != nil {
-		return fmt.Errorf("list revisions for %s/%s: %w", namespace, name, err)
-	}
-	for i := range revList.Items {
-		if err := m.handler.Delete(ctx, &revList.Items[i], &metav1.DeleteOptions{}); err != nil {
-			return fmt.Errorf("delete revision %s: %w", revList.Items[i].Name, err)
-		}
-	}
-	return nil
 }

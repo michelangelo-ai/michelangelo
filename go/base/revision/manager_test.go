@@ -13,16 +13,18 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	apiutils "github.com/michelangelo-ai/michelangelo/go/api/utils"
 )
 
-func newTestManager(t *testing.T) Manager {
+func newTestManager(t *testing.T) (Manager, api.Handler) {
 	t.Helper()
 	scheme := runtime.NewScheme()
 	require.NoError(t, v2pb.AddToScheme(scheme))
 	k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-	return NewManager(apiHandler.NewFakeAPIHandler(k8sClient), zaptest.NewLogger(t))
+	handler := apiHandler.NewFakeAPIHandler(k8sClient)
+	return NewManager(handler, zaptest.NewLogger(t)), handler
 }
 
 func testParams() UpsertRevisionParams {
@@ -38,22 +40,28 @@ func testParams() UpsertRevisionParams {
 	}
 }
 
+func getRevision(t *testing.T, h api.Handler, namespace, name string) *v2pb.Revision {
+	t.Helper()
+	rev := &v2pb.Revision{}
+	require.NoError(t, h.Get(context.Background(), namespace, name, &metav1.GetOptions{}, rev))
+	return rev
+}
+
 func TestUpsertRevision_Create(t *testing.T) {
-	mgr := newTestManager(t)
+	mgr, h := newTestManager(t)
 	ctx := context.Background()
 
 	created, err := mgr.UpsertRevision(ctx, testParams())
 	require.NoError(t, err)
 	assert.True(t, created)
 
-	rev, err := mgr.GetRevision(ctx, "test-ns", "pipeline-my-pipeline-abc123456789")
-	require.NoError(t, err)
+	rev := getRevision(t, h, "test-ns", "pipeline-my-pipeline-abc123456789")
 	assert.Equal(t, "abc123456789", rev.Spec.RevisionId)
 	assert.Equal(t, "Pipeline", rev.Labels[LabelBaseType])
 }
 
 func TestUpsertRevision_CreateImmutable(t *testing.T) {
-	mgr := newTestManager(t)
+	mgr, h := newTestManager(t)
 	ctx := context.Background()
 	params := testParams()
 	params.Immutable = true
@@ -62,13 +70,12 @@ func TestUpsertRevision_CreateImmutable(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, created)
 
-	rev, err := mgr.GetRevision(ctx, "test-ns", "pipeline-my-pipeline-abc123456789")
-	require.NoError(t, err)
+	rev := getRevision(t, h, "test-ns", "pipeline-my-pipeline-abc123456789")
 	assert.True(t, apiutils.IsImmutable(rev))
 }
 
 func TestUpsertRevision_DedupImmutable(t *testing.T) {
-	mgr := newTestManager(t)
+	mgr, _ := newTestManager(t)
 	ctx := context.Background()
 	params := testParams()
 	params.Immutable = true
@@ -82,7 +89,7 @@ func TestUpsertRevision_DedupImmutable(t *testing.T) {
 }
 
 func TestUpsertRevision_RejectImmutableToMutable(t *testing.T) {
-	mgr := newTestManager(t)
+	mgr, _ := newTestManager(t)
 	ctx := context.Background()
 	params := testParams()
 	params.Immutable = true
@@ -96,7 +103,7 @@ func TestUpsertRevision_RejectImmutableToMutable(t *testing.T) {
 }
 
 func TestUpsertRevision_UpdateMutable(t *testing.T) {
-	mgr := newTestManager(t)
+	mgr, h := newTestManager(t)
 	ctx := context.Background()
 
 	_, err := mgr.UpsertRevision(ctx, testParams())
@@ -108,13 +115,12 @@ func TestUpsertRevision_UpdateMutable(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, created)
 
-	rev, err := mgr.GetRevision(ctx, "test-ns", "pipeline-my-pipeline-abc123456789")
-	require.NoError(t, err)
+	rev := getRevision(t, h, "test-ns", "pipeline-my-pipeline-abc123456789")
 	assert.Equal(t, "label", rev.Labels["extra"])
 }
 
 func TestUpsertRevision_MutableThenImmutable(t *testing.T) {
-	mgr := newTestManager(t)
+	mgr, h := newTestManager(t)
 	ctx := context.Background()
 
 	_, err := mgr.UpsertRevision(ctx, testParams())
@@ -126,52 +132,6 @@ func TestUpsertRevision_MutableThenImmutable(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, created)
 
-	rev, err := mgr.GetRevision(ctx, "test-ns", "pipeline-my-pipeline-abc123456789")
-	require.NoError(t, err)
+	rev := getRevision(t, h, "test-ns", "pipeline-my-pipeline-abc123456789")
 	assert.True(t, apiutils.IsImmutable(rev))
-}
-
-func TestGetRevision_NotFound(t *testing.T) {
-	mgr := newTestManager(t)
-	_, err := mgr.GetRevision(context.Background(), "test-ns", "does-not-exist")
-	assert.Error(t, err)
-}
-
-func TestGetRevision_EmptyNamespace(t *testing.T) {
-	mgr := newTestManager(t)
-	_, err := mgr.GetRevision(context.Background(), "", "some-name")
-	assert.Error(t, err)
-}
-
-func TestFetchRevisionID(t *testing.T) {
-	mgr := newTestManager(t)
-	ctx := context.Background()
-	_, err := mgr.UpsertRevision(ctx, testParams())
-	require.NoError(t, err)
-
-	id, err := mgr.FetchRevisionID(ctx, "test-ns", "pipeline-my-pipeline-abc123456789")
-	require.NoError(t, err)
-	assert.Equal(t, "abc123456789", id)
-}
-
-func TestDeleteAllRevisions(t *testing.T) {
-	mgr := newTestManager(t)
-	ctx := context.Background()
-
-	p1 := testParams()
-	p1.RevisionName = "pipeline-my-pipeline-aaaaaaaaaaaa"
-	p2 := testParams()
-	p2.RevisionName = "pipeline-my-pipeline-bbbbbbbbbbbb"
-	_, err := mgr.UpsertRevision(ctx, p1)
-	require.NoError(t, err)
-	_, err = mgr.UpsertRevision(ctx, p2)
-	require.NoError(t, err)
-
-	err = mgr.DeleteAllRevisions(ctx, "test-ns", "my-pipeline", "Pipeline")
-	require.NoError(t, err)
-
-	_, err = mgr.GetRevision(ctx, "test-ns", "pipeline-my-pipeline-aaaaaaaaaaaa")
-	assert.Error(t, err)
-	_, err = mgr.GetRevision(ctx, "test-ns", "pipeline-my-pipeline-bbbbbbbbbbbb")
-	assert.Error(t, err)
 }
