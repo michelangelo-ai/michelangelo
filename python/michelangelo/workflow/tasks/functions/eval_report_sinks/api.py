@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import TYPE_CHECKING, Any
 
 from michelangelo.api.v2.services.base import (
-    _DEFAULT_SERVICE_CONFIG,
-    _MAX_MESSAGE_LENGTH,
+    _CHANNEL_OPTIONS,
     _TIMEOUT_SECONDS,
     BaseService,
     Context,
@@ -25,12 +23,6 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 
 __all__ = ["GRPCEvalReportSink"]
-
-_CHANNEL_OPTIONS = [
-    ("grpc.service_config", json.dumps(_DEFAULT_SERVICE_CONFIG)),
-    ("grpc.max_send_message_length", _MAX_MESSAGE_LENGTH),
-    ("grpc.max_receive_message_length", _MAX_MESSAGE_LENGTH),
-]
 
 
 class _EvalReportGRPCService(BaseService):

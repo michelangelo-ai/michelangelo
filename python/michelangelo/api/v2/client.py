@@ -29,15 +29,13 @@ each with their own endpoint, caller name, and gRPC channel — eliminating the
 race conditions and shared-state surprises of the singleton pattern.
 """
 
-import json
 import os
 
 import grpc
 
 from .services.base import (
-    _DEFAULT_SERVICE_CONFIG,
+    _CHANNEL_OPTIONS,
     _MA_API_SERVER_ENV,
-    _MAX_MESSAGE_LENGTH,
     Context,
     DefaultHeaderProvider,
 )
@@ -45,18 +43,12 @@ from .services.gen import ServicesGen
 
 __all__ = ["APIClient"]
 
-_CHANNEL_OPTIONS = [
-    ("grpc.service_config", json.dumps(_DEFAULT_SERVICE_CONFIG)),
-    ("grpc.max_send_message_length", _MAX_MESSAGE_LENGTH),
-    ("grpc.max_receive_message_length", _MAX_MESSAGE_LENGTH),
-]
-
 
 class APIClient(ServicesGen):
     """Michelangelo 2.0 API client.
 
     Can be used as a **class-level singleton** (existing usage, no breaking
-    changes) or as an **instance** for per-process isolation.
+    changes) or as a **per-instance client** for process isolation.
 
     Singleton usage
     ---------------
@@ -85,7 +77,7 @@ class APIClient(ServicesGen):
         client_b = APIClient(endpoint="server-b:443", caller="pipeline-b")
 
         # Completely independent — different channels, different callers:
-        report = client_a.EvaluationReportService.create_evaluation_report(r)
+        model = client_a.ModelService.get_model(namespace="proj", name="clf")
 
         client_a.close()
         client_b.close()
@@ -93,7 +85,7 @@ class APIClient(ServicesGen):
     Use as a context manager to close the channel automatically::
 
         with APIClient(endpoint="localhost:50051", caller="my-trainer") as client:
-            client.ModelService.get_model(namespace="proj", name="clf")
+            model = client.ModelService.get_model(namespace="proj", name="clf")
 
     Available services
     ------------------
@@ -103,15 +95,27 @@ class APIClient(ServicesGen):
     ``TriggerRunService``
 
     Args:
-        endpoint: gRPC server address as ``"host:port"``.  When provided an
-            isolated per-instance channel is created.  When omitted the
-            class-level singleton channel (from ``MA_API_SERVER``) is used.
+        endpoint: gRPC server address as ``"host:port"``.  Required — use the
+            class directly (``APIClient.ModelService``) for singleton access.
         caller: Caller name forwarded to the server as the ``rpc-caller``
-            header.  Optional; sets the header on this instance only.
+            header.  Recommended for observability.
         channel: Pre-built ``grpc.Channel`` to use instead of creating one
             from ``endpoint``.  Mutually exclusive with ``endpoint``.
-        insecure: When ``True`` (default) create a plaintext channel from
-            ``endpoint``.  Set ``False`` for TLS.
+        credentials: ``grpc.ChannelCredentials`` for TLS.  When ``None``
+            (default) a plaintext channel is created.  Pass
+            ``grpc.ssl_channel_credentials()`` for standard TLS or supply
+            custom credentials for mutual TLS / token-based auth.
+
+            .. warning::
+                The default (``credentials=None``) creates a **plaintext
+                channel**.  All headers — including ``rpc-caller`` — travel
+                unencrypted.  Always pass ``credentials`` for any non-localhost
+                deployment.
+
+        interceptors: List of ``grpc.ClientInterceptor`` instances applied to
+            the channel.  Use for distributed tracing, custom auth, or
+            logging.  Ignored when ``channel`` is provided (the injected
+            channel already has its interceptors applied).
         header_provider: Custom ``HeaderProvider`` for this instance.
     """
 
@@ -127,55 +131,71 @@ class APIClient(ServicesGen):
         *,
         caller: str | None = None,
         channel=None,
-        insecure: bool = True,
+        credentials: grpc.ChannelCredentials | None = None,
+        interceptors: list | None = None,
         header_provider=None,
     ) -> None:
         """Create a per-instance client with its own channel and service stubs.
 
         Args:
             endpoint: Server address as ``"host:port"``.  An insecure or TLS
-                channel is created from this value (controlled by ``insecure``).
-                Mutually exclusive with ``channel``.
+                channel is created from this value.  Mutually exclusive with
+                ``channel``.  Required — omitting both ``endpoint`` and
+                ``channel`` raises ``ValueError``.
             caller: Caller name for the ``rpc-caller`` header.
             channel: Pre-built ``grpc.Channel``.  The caller is responsible for
                 closing it.  Mutually exclusive with ``endpoint``.
-            insecure: Create a plaintext channel when ``True`` (default).
-                Ignored when ``channel`` is provided.
-            header_provider: Replaces the default ``DefaultHeaderProvider`` for
-                this instance.
+            credentials: ``grpc.ChannelCredentials`` for TLS connections.
+                When ``None`` a plaintext channel is opened (default).
+                Pass ``grpc.ssl_channel_credentials()`` for TLS.
+            interceptors: ``grpc.ClientInterceptor`` list wrapping the created
+                channel.  Ignored when ``channel`` is injected.
+            header_provider: Replaces ``DefaultHeaderProvider`` for this
+                instance.
 
         Raises:
-            ValueError: If both ``endpoint`` and ``channel`` are provided.
+            ValueError: If both ``endpoint`` and ``channel`` are provided, or
+                if neither is provided (use the class directly for singleton
+                access).
         """
         if endpoint is not None and channel is not None:
             raise ValueError("Provide either 'endpoint' or 'channel', not both.")
+        if endpoint is None and channel is None:
+            raise ValueError(
+                "Provide 'endpoint' or 'channel' to create a per-instance client. "
+                "For singleton access use the class directly: APIClient.ModelService"
+            )
 
         ctx = Context()
 
         if channel is not None:
             ctx.channel = channel
             self._channel_owned = False
-        elif endpoint is not None:
-            factory = (
-                grpc.insecure_channel
-                if insecure
-                else (
-                    lambda addr, **kw: grpc.secure_channel(
-                        addr, grpc.ssl_channel_credentials(), **kw
-                    )
-                )
-            )
-            ctx.channel = factory(endpoint, options=_CHANNEL_OPTIONS)
-            self._channel_owned = True
         else:
-            # No endpoint or channel — share the singleton channel lazily.
-            self._channel_owned = False
+            ch = (
+                grpc.secure_channel(endpoint, credentials, options=_CHANNEL_OPTIONS)
+                if credentials is not None
+                else grpc.insecure_channel(endpoint, options=_CHANNEL_OPTIONS)
+            )
+            if interceptors:
+                ch = grpc.intercept_channel(ch, *interceptors)
+            ctx.channel = ch
+            self._channel_owned = True
 
         if header_provider is not None:
             ctx.header_provider = header_provider
 
         if caller is not None:
-            ctx.header_provider.caller = caller
+            # Check the *class* for the caller descriptor to avoid triggering
+            # DefaultHeaderProvider.caller's getter (which raises ValueError
+            # when _caller is None before the setter has been called).
+            if getattr(type(ctx.header_provider), "caller", None) is not None:
+                ctx.header_provider.caller = caller
+            else:
+                raise TypeError(
+                    f"Header provider {type(ctx.header_provider).__name__!r} has no "
+                    "'caller' attribute. Set the caller directly on the provider."
+                )
 
         self._context = ctx
 
@@ -188,9 +208,8 @@ class APIClient(ServicesGen):
     def close(self) -> None:
         """Close the per-instance gRPC channel.
 
-        Only closes channels that were created by this instance (i.e. when
-        ``endpoint`` was passed to the constructor).  No-op when a pre-built
-        ``channel`` was injected or when using the no-arg constructor.
+        Only closes channels created by this instance (i.e. when ``endpoint``
+        was passed).  No-op when a pre-built ``channel`` was injected.
         """
         if self._channel_owned and self._context._channel is not None:
             self._context._channel.close()
@@ -203,6 +222,16 @@ class APIClient(ServicesGen):
         """Close the channel on context-manager exit."""
         self.close()
 
+    def __repr__(self) -> str:
+        """Return a human-readable description useful in REPLs and logs."""
+        ch = self._context._channel
+        caller = (
+            self._context._header_provider._caller
+            if self._context._header_provider
+            else None
+        )
+        return f"APIClient(channel={ch!r}, caller={caller!r})"
+
     # ------------------------------------------------------------------
     # Class-level singleton helpers (backward compat)
     # ------------------------------------------------------------------
@@ -211,7 +240,7 @@ class APIClient(ServicesGen):
     def set_channel(cls, channel) -> None:
         """Set a custom gRPC channel for the class-level singleton.
 
-        After calling this, call ``APIClient.init()`` to re-wire the singleton
+        After calling this, call :meth:`init` to re-wire the singleton
         service stubs to the new channel.
 
         Args:
@@ -233,8 +262,8 @@ class APIClient(ServicesGen):
         """Set the caller name for the class-level singleton.
 
         The caller is forwarded to the server as the ``rpc-caller`` header.
-        This method always targets the *current* header provider, so it is
-        safe to call after ``set_header_provider()``.
+        Always targets the *current* header provider, so it is safe to call
+        after :meth:`set_header_provider`.
 
         Args:
             caller: Stable, human-readable identifier for the calling service.
@@ -252,8 +281,8 @@ class APIClient(ServicesGen):
     def init(cls) -> None:
         """Re-wire singleton service stubs to the current class-level context.
 
-        Call this after ``set_channel()`` to ensure the singleton service stubs
-        use the new channel.  Idempotent — safe to call multiple times.
+        Call this after :meth:`set_channel` to ensure the singleton service
+        stubs use the new channel.  Idempotent — safe to call multiple times.
 
         Example::
 
@@ -274,13 +303,14 @@ class APIClient(ServicesGen):
         first RPC rather than receiving an error mid-request.
 
         Raises:
-            ValueError: If ``MA_API_SERVER`` is not set or is not ``host:port``.
+            ValueError: If ``MA_API_SERVER`` is not set or not ``host:port``.
         """
         server = os.getenv(_MA_API_SERVER_ENV)
         if not server:
             raise ValueError(
                 f"Environment variable '{_MA_API_SERVER_ENV}' is not set. "
-                "Set it to the Michelangelo API server address in 'host:port' format."
+                "Set it to the Michelangelo API server address in 'host:port' format, "
+                "e.g. 'localhost:50051'."
             )
         if ":" not in server:
             raise ValueError(
@@ -289,19 +319,19 @@ class APIClient(ServicesGen):
             )
 
     @classmethod
-    def from_env(cls, caller: str) -> type:
-        """Validate the environment, set the caller, and return the class.
+    def from_env(cls, caller: str) -> "APIClient":
+        """Create a per-instance client from the ``MA_API_SERVER`` environment variable.
 
-        Convenience entry point for singleton usage — validates ``MA_API_SERVER``
-        is set before the first RPC, then sets the caller name.
+        Validates that ``MA_API_SERVER`` is set and correctly formatted, then
+        creates and returns an isolated :class:`APIClient` instance using that
+        endpoint.  Each call produces an independent client with its own channel.
 
         Args:
             caller: Caller name for the ``rpc-caller`` header.
 
         Returns:
-            ``APIClient`` (the class) so callers can chain::
-
-                APIClient.from_env("my-pipeline").ModelService.get_model(...)
+            A new :class:`APIClient` instance connected to the server at
+            ``MA_API_SERVER``.
 
         Raises:
             ValueError: If ``MA_API_SERVER`` is not set or malformed.
@@ -313,11 +343,11 @@ class APIClient(ServicesGen):
 
             from michelangelo.api.v2 import APIClient
 
-            APIClient.from_env("my-pipeline")
-            model = APIClient.ModelService.get_model(
-                namespace="my-project", name="my-model"
-            )
+            with APIClient.from_env("my-pipeline") as client:
+                model = client.ModelService.get_model(
+                    namespace="my-project", name="my-model"
+                )
         """
         cls.validate_env()
-        cls.set_caller(caller)
-        return cls
+        endpoint = os.environ[_MA_API_SERVER_ENV]
+        return cls(endpoint=endpoint, caller=caller)
