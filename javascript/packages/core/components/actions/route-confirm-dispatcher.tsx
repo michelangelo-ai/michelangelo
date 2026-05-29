@@ -2,8 +2,8 @@ import { useNavigate } from 'react-router-dom-v5-compat';
 import { ARTWORK_TYPE } from 'baseui/banner';
 
 import { Banner } from '#core/components/banner/banner';
-import { ConfirmDialog } from '#core/components/modal/confirm-dialog/confirm-dialog';
 import { Icon } from '#core/components/icon/icon';
+import { ConfirmDialog } from '#core/components/modal/confirm-dialog/confirm-dialog';
 
 import type { ActionConfig, ConfirmModalConfig, Data, RouteActionConfig } from './types';
 
@@ -33,7 +33,7 @@ export function RouteConfirmDispatcher<T extends Data>({ action, onClose }: Prop
           kind={action.modal.banner.kind}
           artwork={
             action.modal.banner.icon
-              ? { type: ARTWORK_TYPE.icon, icon: () => <Icon name={action.modal.banner!.icon!} /> }
+              ? { type: ARTWORK_TYPE.icon, icon: () => <Icon name={action.modal.banner!.icon} /> }
               : undefined
           }
         >

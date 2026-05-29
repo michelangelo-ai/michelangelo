@@ -1,8 +1,8 @@
 import { ARTWORK_TYPE } from 'baseui/banner';
 
 import { Banner } from '#core/components/banner/banner';
-import { ConfirmDialog } from '#core/components/modal/confirm-dialog/confirm-dialog';
 import { Icon } from '#core/components/icon/icon';
+import { ConfirmDialog } from '#core/components/modal/confirm-dialog/confirm-dialog';
 import { useSchemaMiddleware } from '#core/hooks/use-schema-middleware/use-schema-middleware';
 import { useStudioMutation } from '#core/hooks/use-studio-mutation';
 
@@ -40,7 +40,7 @@ export function MutationConfirmDispatcher<T extends Data>({ action, record, onCl
           kind={action.modal.banner.kind}
           artwork={
             action.modal.banner.icon
-              ? { type: ARTWORK_TYPE.icon, icon: () => <Icon name={action.modal.banner!.icon!} /> }
+              ? { type: ARTWORK_TYPE.icon, icon: () => <Icon name={action.modal.banner!.icon} /> }
               : undefined
           }
         >
