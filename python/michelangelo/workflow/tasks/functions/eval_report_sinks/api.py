@@ -163,3 +163,93 @@ class APIClientEvalReportSink(EvalReportSink):
             name=created.metadata.name,
             namespace=created.metadata.namespace,
         )
+
+
+class APIClientEvalReportSink(EvalReportSink):
+    """EvalReportSink that delegates to ``APIClient.EvaluationReportService``.
+
+    Reuses the shared gRPC channel already managed by ``APIClient`` — no
+    additional channel is opened or closed. Use this when the calling process
+    already initialises ``APIClient`` via the ``MA_API_SERVER`` environment
+    variable and you want eval-report writes to share that connection.
+
+    Requires ``MA_API_SERVER`` to be set in the environment before the first
+    ``write()`` call (the channel is opened lazily on the first RPC).
+
+    Does **not** inject a namespace — the caller is responsible for setting
+    ``report.metadata.namespace`` before calling ``write()``.
+
+    Example::
+
+        import os
+        os.environ["MA_API_SERVER"] = "localhost:50051"
+        from michelangelo.api.v2 import APIClient
+        APIClient.set_caller("my-trainer")  # optional, sets rpc-caller header
+
+        from michelangelo.workflow.tasks.functions.eval_report_sinks import (
+            APIClientEvalReportSink,
+        )
+
+        sink = APIClientEvalReportSink()
+        report.metadata.namespace = "my-project"
+        sink.write(report)
+    """
+
+    def __init__(self) -> None:
+        """Bind to ``APIClient.EvaluationReportService``.
+
+        Raises:
+            ValueError: On the first ``write()`` call if ``MA_API_SERVER`` is
+                not set in the environment (raised by the lazy channel init).
+        """
+        from michelangelo.api.v2 import APIClient
+
+        self._svc: _EvaluationReportServiceType = APIClient.EvaluationReportService
+        _logger.info("APIClientEvalReportSink ready (APIClient channel).")
+
+    def write(
+        self,
+        report: EvaluationReport,
+        extra_fields: dict[str, Any] | None = None,
+    ) -> EvalReportSinkResult:
+        """Create the evaluation report via ``APIClient.EvaluationReportService``.
+
+        ``extra_fields`` are ignored — they are not part of the proto schema
+        and cannot be forwarded to the API server.
+
+        Args:
+            report: An ``EvaluationReport`` proto with ``metadata.name`` and
+                ``metadata.namespace`` already set by the caller.
+            extra_fields: Ignored by this sink.
+
+        Returns:
+            ``EvalReportSinkResult`` with name and namespace as confirmed by
+            the server response.
+
+        Raises:
+            IOError: If the gRPC call fails.
+            ValueError: If ``MA_API_SERVER`` is not set (raised on first call).
+        """
+        try:
+            created = self._svc.create_evaluation_report(report)
+        except Exception as exc:
+            try:
+                import grpc as _grpc
+            except ImportError:
+                raise exc from None
+            if not isinstance(exc, _grpc.RpcError):
+                raise
+            raise OSError(
+                f"APIClientEvalReportSink: gRPC CreateEvaluationReport failed "
+                f"(code={exc.code()}, details={exc.details()!r})."  # type: ignore[attr-defined]
+            ) from exc
+
+        _logger.info(
+            "APIClientEvalReportSink: created report '%s' in namespace '%s'.",
+            created.metadata.name,
+            created.metadata.namespace,
+        )
+        return EvalReportSinkResult(
+            name=created.metadata.name,
+            namespace=created.metadata.namespace,
+        )

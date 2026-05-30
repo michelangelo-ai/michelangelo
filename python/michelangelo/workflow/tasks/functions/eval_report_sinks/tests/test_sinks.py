@@ -373,29 +373,60 @@ class TestAPIClientEvalReportSink(TestCase):
             sink.write(_report(name="r1"))
         self.assertIn("APIClientEvalReportSink", str(ctx.exception))
 
-    def test_config_none_delegates_to_apiclient(self):
-        """config=None path reuses APIClient.EvaluationReportService."""
+    def test_close_closes_channel(self):
+        """close() closes the owned gRPC channel."""
+        sink = self._make_sink()
+        sink._channel = MagicMock()
+        sink.close()
+        sink._channel.close.assert_called_once()
+
+    def test_context_manager_closes_channel(self):
+        """__exit__ calls close(), which closes the channel."""
         from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
             GRPCEvalReportSink,
         )
 
+        with (
+            patch("grpc.insecure_channel") as mock_ch,
+            patch("grpc.secure_channel"),
+            GRPCEvalReportSink(GRPCEvalReportSinkConfig(endpoint="localhost:50051")),
+        ):
+            pass
+        mock_ch.return_value.close.assert_called_once()
+
+
+class TestAPIClientEvalReportSink(TestCase):
+    """Tests for APIClientEvalReportSink (delegates to APIClient)."""
+
+    def _make_sink(self, mock_apiclient: MagicMock):
+        """Build an APIClientEvalReportSink with a mocked APIClient."""
+        from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
+            APIClientEvalReportSink,
+        )
+
+        with patch("michelangelo.api.v2.APIClient", mock_apiclient):
+            return APIClientEvalReportSink()
+
+    def _make_created(
+        self, report_name: str = "api-report", namespace: str = "ns"
+    ) -> EvaluationReport:
+        created = EvaluationReport()
+        created.metadata.name = report_name
+        created.metadata.namespace = namespace
+        return created
+
+    def test_delegates_to_apiclient_evaluation_report_service(self):
+        """It binds _svc to APIClient.EvaluationReportService at construction."""
         mock_svc = MagicMock()
         mock_apiclient = MagicMock()
         mock_apiclient.EvaluationReportService = mock_svc
 
-        with patch("michelangelo.api.v2.APIClient", mock_apiclient):
-            sink = GRPCEvalReportSink()
+        sink = self._make_sink(mock_apiclient)
 
         self.assertIs(sink._svc, mock_svc)
-        self.assertIsNone(sink._channel)
-        self.assertIsNone(sink._config)
 
-    def test_config_none_write_calls_create_evaluation_report(self):
-        """config=None write() calls svc.create_evaluation_report, not svc.create."""
-        from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
-            GRPCEvalReportSink,
-        )
-
+    def test_write_calls_create_evaluation_report(self):
+        """write() calls svc.create_evaluation_report with the report."""
         mock_apiclient = MagicMock()
         created = self._make_created("r1", "ns1")
         report = _report(name="r1")
@@ -403,9 +434,7 @@ class TestAPIClientEvalReportSink(TestCase):
             created
         )
 
-        with patch("michelangelo.api.v2.APIClient", mock_apiclient):
-            sink = GRPCEvalReportSink()
-
+        sink = self._make_sink(mock_apiclient)
         result = sink.write(report)
 
         mock_apiclient.EvaluationReportService.create_evaluation_report.assert_called_once_with(
@@ -414,36 +443,47 @@ class TestAPIClientEvalReportSink(TestCase):
         self.assertEqual(result.name, "r1")
         self.assertEqual(result.namespace, "ns1")
 
-    def test_config_none_namespace_not_injected(self):
-        """config=None path never injects a namespace (caller must set it)."""
-        from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
-            GRPCEvalReportSink,
-        )
-
+    def test_namespace_not_injected(self):
+        """write() does not mutate report.metadata.namespace."""
         mock_apiclient = MagicMock()
         created = self._make_created("r1", "caller-ns")
         mock_apiclient.EvaluationReportService.create_evaluation_report.return_value = (
             created
         )
 
-        with patch("michelangelo.api.v2.APIClient", mock_apiclient):
-            sink = GRPCEvalReportSink()
-
+        sink = self._make_sink(mock_apiclient)
         report = _report(name="r1", namespace="caller-ns")
+        original_ns = report.metadata.namespace
         sink.write(report)
-        self.assertEqual(report.metadata.namespace, "caller-ns")
 
-    def test_config_none_close_is_noop(self):
-        """close() is a no-op when no channel was opened (config=None path)."""
-        from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
-            GRPCEvalReportSink,
-        )
+        self.assertEqual(report.metadata.namespace, original_ns)
+
+    def test_no_channel_owned(self):
+        """APIClientEvalReportSink holds no channel reference."""
+        mock_apiclient = MagicMock()
+        sink = self._make_sink(mock_apiclient)
+        self.assertFalse(hasattr(sink, "_channel"))
+
+    def test_grpc_rpc_error_raised_as_oserror(self):
+        """It wraps grpc.RpcError as OSError."""
+        import grpc
+
+        class _FakeRpcError(grpc.RpcError):
+            def code(self):
+                return grpc.StatusCode.UNAVAILABLE
+
+            def details(self):
+                return "server unreachable"
 
         mock_apiclient = MagicMock()
-        with patch("michelangelo.api.v2.APIClient", mock_apiclient):
-            sink = GRPCEvalReportSink()
+        mock_apiclient.EvaluationReportService.create_evaluation_report.side_effect = (
+            _FakeRpcError()
+        )
 
-        sink.close()  # must not raise
+        sink = self._make_sink(mock_apiclient)
+        with self.assertRaises(OSError) as ctx:
+            sink.write(_report(name="r1"))
+        self.assertIn("APIClientEvalReportSink", str(ctx.exception))
 
 
 class TestFlattenReportToMetrics(TestCase):
