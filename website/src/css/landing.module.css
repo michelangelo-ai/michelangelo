@@ -79,7 +79,6 @@
 /* Hero Section */
 .hero {
   position: relative;
-  overflow: hidden;
   min-height: calc(100vh - 60px);
   display: flex;
   align-items: center;
@@ -88,63 +87,10 @@
   background-color: var(--landing-hero-bg);
 }
 
-.hero::before,
-.hero::after {
-  content: '';
-  position: absolute;
-  inset: -100%;
-  background-color: var(--landing-hero-bg);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 40'%3E%3Cpath d='M0,20 Q30,0 60,20 T120,20' fill='none' stroke='%239c9c9c' stroke-width='3'/%3E%3C/svg%3E");
-  background-size: 120px 40px;
-  background-repeat: repeat;
-  pointer-events: none;
-  z-index: 0;
-}
-
-:global([data-theme='dark']) .hero::before,
-:global([data-theme='dark']) .hero::after {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 40'%3E%3Cpath d='M0,20 Q30,0 60,20 T120,20' fill='none' stroke='%23828282' stroke-width='3'/%3E%3C/svg%3E");
-}
-
-.hero::after {
-  animation: moireRotate 300s linear infinite;
-  mix-blend-mode: screen;
-}
-
-:global([data-theme='dark']) .hero::after {
-  mix-blend-mode: multiply;
-}
-
-@keyframes moireRotate {
-  from { transform: rotate(20deg); }
-  to { transform: rotate(380deg); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .hero::after {
-    animation: none;
-    transform: rotate(20deg);
-  }
-}
-
 .heroContent {
   position: relative;
-  z-index: 1;
   max-width: 900px;
   text-align: center;
-}
-
-.heroContent::before {
-  content: '';
-  position: absolute;
-  inset: -8% -10%;
-  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0) 70%);
-  z-index: -1;
-  pointer-events: none;
-}
-
-:global([data-theme='dark']) .heroContent::before {
-  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 70%);
 }
 
 .heroLogo {

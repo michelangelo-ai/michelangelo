@@ -4,6 +4,82 @@
  */
 
 /* ============================================
+   Brand Fonts (UberMove / UberMoveText)
+   ============================================ */
+
+@font-face {
+  font-family: 'UberMove';
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+  src: url('https://tb-static.uber.com/prod/uber-static/UberMove-Light.woff2') format('woff2'),
+    url('https://tb-static.uber.com/prod/uber-static/UberMove-Light.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'UberMove';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url('https://tb-static.uber.com/prod/uber-static/UberMove-Regular.woff2') format('woff2'),
+    url('https://tb-static.uber.com/prod/uber-static/UberMove-Regular.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'UberMove';
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: url('https://tb-static.uber.com/prod/uber-static/UberMove-Medium.woff2') format('woff2'),
+    url('https://tb-static.uber.com/prod/uber-static/UberMove-Medium.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'UberMove';
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url('https://tb-static.uber.com/prod/uber-static/UberMove-Bold.woff2') format('woff2'),
+    url('https://tb-static.uber.com/prod/uber-static/UberMove-Bold.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'UberMoveText';
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+  src: url('https://tb-static.uber.com/prod/uber-static/UberMoveText-Light.woff2') format('woff2'),
+    url('https://tb-static.uber.com/prod/uber-static/UberMoveText-Light.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'UberMoveText';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url('https://tb-static.uber.com/prod/uber-static/UberMoveText-Regular.woff2') format('woff2'),
+    url('https://tb-static.uber.com/prod/uber-static/UberMoveText-Regular.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'UberMoveText';
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: url('https://tb-static.uber.com/prod/uber-static/UberMoveText-Medium.woff2') format('woff2'),
+    url('https://tb-static.uber.com/prod/uber-static/UberMoveText-Medium.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'UberMoveText';
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url('https://tb-static.uber.com/prod/uber-static/UberMoveText-Bold.woff2') format('woff2'),
+    url('https://tb-static.uber.com/prod/uber-static/UberMoveText-Bold.woff') format('woff');
+}
+
+/* ============================================
    CSS Variables & Theme
    ============================================ */
 
@@ -22,8 +98,10 @@
   --ifm-font-color-base: #000000;
 
   /* Typography */
-  --ifm-font-family-base: system-ui, -apple-system, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
+  --ifm-font-family-base: 'UberMoveText', system-ui, -apple-system, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --ifm-heading-font-family: 'UberMove', 'UberMoveText', system-ui, -apple-system,
+    'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --ifm-font-family-monospace: 'SF Mono', SFMono-Regular, ui-monospace, Menlo,
     Monaco, Consolas, 'Liberation Mono', monospace;
   --ifm-heading-font-weight: 600;
