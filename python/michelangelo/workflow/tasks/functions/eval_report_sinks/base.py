@@ -149,7 +149,7 @@ class EvalReportSink(ABC):
             If ``report_name`` is fixed in ``EvalReportPluginConfig``, retrying
             a failed pipeline run will call ``write()`` again with the same
             ``metadata.name``. Sinks that create server-side resources (e.g.
-            ``GRPCEvalReportSink``) should be idempotent or handle duplicates
+            ``APIClientEvalReportSink``) should be idempotent or handle duplicates
             gracefully.
 
         Args:

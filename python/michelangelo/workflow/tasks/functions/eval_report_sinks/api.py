@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 import warnings
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 
 from michelangelo.workflow.schema.eval_report_sinks.result import EvalReportSinkResult
 from michelangelo.workflow.tasks.functions.eval_report_sinks.base import EvalReportSink
@@ -32,7 +32,7 @@ _logger = logging.getLogger(__name__)
 __all__ = ["APIClientEvalReportSink"]
 
 
-def _raise_as_oserror(exc: Exception, context: str) -> None:
+def _raise_as_oserror(exc: Exception, context: str) -> NoReturn:
     """Re-raise a grpc.RpcError as OSError; pass all other exceptions through."""
     try:
         import grpc as _grpc
@@ -113,7 +113,7 @@ class APIClientEvalReportSink(EvalReportSink):
                     "Set MA_API_SERVER in the environment before constructing "
                     "APIClientEvalReportSink."
                 )
-        _logger.info("APIClientEvalReportSink ready (APIClient channel).")
+        _logger.debug("APIClientEvalReportSink ready (APIClient channel).")
 
     def write(
         self,
@@ -136,8 +136,7 @@ class APIClientEvalReportSink(EvalReportSink):
             the server response.
 
         Raises:
-            IOError: If the gRPC call fails.
-            ValueError: If ``MA_API_SERVER`` is not set (raised on first call).
+            OSError: If the gRPC call fails.
         """
         if extra_fields:
             warnings.warn(

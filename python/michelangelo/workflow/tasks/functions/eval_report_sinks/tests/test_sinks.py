@@ -213,7 +213,6 @@ class TestEvaluationReportService(TestCase):
         self.assertEqual(len(result.items), 2)
 
 
-
 class TestAPIClientEvalReportSink(TestCase):
     """Tests for APIClientEvalReportSink (delegates to APIClient)."""
 
@@ -324,6 +323,34 @@ class TestAPIClientEvalReportSink(TestCase):
 
         self.assertTrue(any(issubclass(w.category, UserWarning) for w in caught))
         self.assertTrue(any("extra_fields" in str(w.message) for w in caught))
+
+    def test_extra_fields_none_does_not_warn(self):
+        """write() emits no warning when extra_fields is None or omitted."""
+        mock_apiclient = MagicMock()
+        created = self._make_created("r1", "ns1")
+        mock_apiclient.EvaluationReportService.create_evaluation_report.return_value = (
+            created
+        )
+
+        sink = self._make_sink(mock_apiclient)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            sink.write(_report(name="r1"))  # no extra_fields
+
+        user_warnings = [w for w in caught if issubclass(w.category, UserWarning)]
+        self.assertEqual(user_warnings, [])
+
+    def test_non_rpc_error_propagates_unchanged(self):
+        """Non-gRPC exceptions from write() are not wrapped as OSError."""
+        mock_apiclient = MagicMock()
+        mock_apiclient.EvaluationReportService.create_evaluation_report.side_effect = (
+            ValueError("bad proto")
+        )
+
+        sink = self._make_sink(mock_apiclient)
+        with self.assertRaises(ValueError) as ctx:
+            sink.write(_report(name="r1"))
+        self.assertIn("bad proto", str(ctx.exception))
 
     def test_grpc_rpc_error_raised_as_oserror(self):
         """It wraps grpc.RpcError as OSError."""
