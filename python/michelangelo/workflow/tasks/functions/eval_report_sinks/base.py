@@ -64,8 +64,9 @@ def flatten_report_to_metrics(report: EvaluationReport) -> dict[str, float]:
         series = chart.get("series", [])
         if len(series) != 1:
             # TODO(v2): support multi-series charts (comparison, overlays) — #1258
-            _logger.debug(
-                "flatten_report_to_metrics: skipping %r — %d series (expected 1)",
+            _logger.warning(
+                "flatten_report_to_metrics: skipping %r — %d series (expected 1); "
+                "data will not appear in the returned dict",
                 key,
                 len(series),
             )
@@ -73,14 +74,18 @@ def flatten_report_to_metrics(report: EvaluationReport) -> dict[str, float]:
         data_points = series[0].get("data_points", [])
         if len(data_points) != 1:
             # TODO(v2): multi-point series; expose step for log_metric(step=) — #1258
-            _logger.debug(
-                "flatten_report_to_metrics: skipping %r — %d data points (expected 1)",
+            _logger.warning(
+                "flatten_report_to_metrics: skipping %r — %d data points (expected 1); "
+                "data will not appear in the returned dict",
                 key,
                 len(data_points),
             )
             continue
+        v = data_points[0].get("value")
+        if v is None:
+            continue
         with contextlib.suppress(TypeError, ValueError):
-            metrics[key] = float(data_points[0].get("value", 0))
+            metrics[key] = float(v)
     return metrics
 
 
