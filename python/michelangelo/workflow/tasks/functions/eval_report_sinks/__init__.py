@@ -6,6 +6,7 @@ Import from this package::
         EvalReportSink,
         LocalFileEvalReportSink,
         GRPCEvalReportSink,
+        APIClientEvalReportSink,
         flatten_report_to_metrics,
     )
 
@@ -17,6 +18,7 @@ Note:
 from __future__ import annotations
 
 from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
+    APIClientEvalReportSink,
     GRPCEvalReportSink,
 )
 from michelangelo.workflow.tasks.functions.eval_report_sinks.base import (
@@ -28,6 +30,7 @@ from michelangelo.workflow.tasks.functions.eval_report_sinks.local_file import (
 )
 
 __all__ = [
+    "APIClientEvalReportSink",
     "EvalReportSink",
     "GRPCEvalReportSink",
     "LocalFileEvalReportSink",
