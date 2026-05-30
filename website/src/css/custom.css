@@ -170,14 +170,16 @@
 }
 
 .navbar__title {
-  font-weight: 600;
+  font-family: var(--ifm-heading-font-family);
+  font-weight: 500;
   color: #ffffff;
 }
 
 .navbar__link {
+  font-family: var(--ifm-heading-font-family);
   font-weight: 500;
   border-radius: 9999px;
-  padding: 0.5rem 1rem;
+  padding: 0.25rem 0.75rem;
   transition: background-color 0.15s ease, color 0.15s ease;
   color: #ffffff;
 }
