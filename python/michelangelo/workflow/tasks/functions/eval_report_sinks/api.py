@@ -14,7 +14,6 @@ To target a different endpoint, pass an explicit service via the ``svc`` param::
 
 from __future__ import annotations
 
-import copy
 import logging
 import warnings
 from typing import TYPE_CHECKING, Any, NoReturn
@@ -180,14 +179,14 @@ class APIClientEvalReportSink(EvalReportSink):
     Does **not** inject a namespace — the caller is responsible for setting
     ``report.metadata.namespace`` before calling ``write()``.
 
-    **When to use each sink:**
+    To target a **different endpoint** than the default ``MA_API_SERVER``, pass
+    an explicit service built from a per-instance ``APIClient``::
 
-    - Use ``APIClientEvalReportSink`` when your process already calls
-      ``APIClient`` services and you want a shared connection.
-    - Use ``GRPCEvalReportSink`` when you need an isolated channel, a
-      different endpoint, or automatic namespace injection.
+        from michelangelo.api.v2 import APIClient
+        client = APIClient(endpoint="other-server:50051", caller="my-trainer")
+        sink = APIClientEvalReportSink(svc=client.EvaluationReportService)
 
-    Example::
+    Example (default — reads ``MA_API_SERVER``)::
 
         import os
         os.environ["MA_API_SERVER"] = "localhost:50051"
@@ -210,7 +209,12 @@ class APIClientEvalReportSink(EvalReportSink):
             svc: Optional pre-built ``EvaluationReportService`` instance. When
                 ``None`` (default), the service is taken from
                 ``APIClient.EvaluationReportService``. Pass an explicit service
-                for testing or to target a different instance.
+                to target a different endpoint or for testing without patching
+                globals::
+
+                    from michelangelo.api.v2 import APIClient
+                    client = APIClient(endpoint="other:50051", caller="job")
+                    sink = APIClientEvalReportSink(svc=client.EvaluationReportService)
 
         Raises:
             RuntimeError: If ``APIClient.EvaluationReportService`` is ``None``
