@@ -83,6 +83,12 @@
    CSS Variables & Theme
    ============================================ */
 
+html,
+body {
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+}
+
 :root {
   /* Uber brand colors */
   --ifm-color-primary: #276ef1;
@@ -171,7 +177,8 @@
 
 .navbar__title {
   font-family: var(--ifm-heading-font-family);
-  font-weight: 500;
+  font-size: 1.5rem;
+  font-weight: 400;
   color: #ffffff;
 }
 
