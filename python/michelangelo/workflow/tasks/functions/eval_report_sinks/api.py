@@ -14,6 +14,7 @@ To target a different endpoint, pass an explicit service via the ``svc`` param::
 
 from __future__ import annotations
 
+import copy
 import logging
 import warnings
 from typing import TYPE_CHECKING, Any, NoReturn
@@ -179,6 +180,13 @@ class APIClientEvalReportSink(EvalReportSink):
     Does **not** inject a namespace — the caller is responsible for setting
     ``report.metadata.namespace`` before calling ``write()``.
 
+    **When to use each sink:**
+
+    - Use ``APIClientEvalReportSink`` when your process already calls
+      ``APIClient`` services and you want a shared connection.
+    - Use ``GRPCEvalReportSink`` when you need an isolated channel, a
+      different endpoint, or automatic namespace injection.
+
     Example::
 
         import os
@@ -195,16 +203,31 @@ class APIClientEvalReportSink(EvalReportSink):
         sink.write(report)
     """
 
-    def __init__(self) -> None:
+    def __init__(self, svc: _EvaluationReportServiceType | None = None) -> None:
         """Bind to ``APIClient.EvaluationReportService``.
 
-        Raises:
-            ValueError: On the first ``write()`` call if ``MA_API_SERVER`` is
-                not set in the environment (raised by the lazy channel init).
-        """
-        from michelangelo.api.v2 import APIClient
+        Args:
+            svc: Optional pre-built ``EvaluationReportService`` instance. When
+                ``None`` (default), the service is taken from
+                ``APIClient.EvaluationReportService``. Pass an explicit service
+                for testing or to target a different instance.
 
-        self._svc: _EvaluationReportServiceType = APIClient.EvaluationReportService
+        Raises:
+            RuntimeError: If ``APIClient.EvaluationReportService`` is ``None``
+                (i.e. ``MA_API_SERVER`` was not set before this import).
+        """
+        if svc is not None:
+            self._svc: _EvaluationReportServiceType = svc
+        else:
+            from michelangelo.api.v2 import APIClient
+
+            self._svc = APIClient.EvaluationReportService
+            if self._svc is None:
+                raise RuntimeError(
+                    "APIClient.EvaluationReportService is not initialized. "
+                    "Set MA_API_SERVER in the environment before constructing "
+                    "APIClientEvalReportSink."
+                )
         _logger.info("APIClientEvalReportSink ready (APIClient channel).")
 
     def write(
@@ -214,13 +237,14 @@ class APIClientEvalReportSink(EvalReportSink):
     ) -> EvalReportSinkResult:
         """Create the evaluation report via ``APIClient.EvaluationReportService``.
 
-        ``extra_fields`` are ignored — they are not part of the proto schema
-        and cannot be forwarded to the API server.
+        ``extra_fields`` are not part of the proto schema and cannot be
+        forwarded to the server — a ``UserWarning`` is emitted if provided.
 
         Args:
             report: An ``EvaluationReport`` proto with ``metadata.name`` and
                 ``metadata.namespace`` already set by the caller.
-            extra_fields: Ignored by this sink.
+            extra_fields: Not supported by this sink. Pass ``None`` or omit.
+                A ``UserWarning`` is emitted if a non-empty dict is provided.
 
         Returns:
             ``EvalReportSinkResult`` with name and namespace as confirmed by
@@ -230,21 +254,21 @@ class APIClientEvalReportSink(EvalReportSink):
             IOError: If the gRPC call fails.
             ValueError: If ``MA_API_SERVER`` is not set (raised on first call).
         """
+        if extra_fields:
+            warnings.warn(
+                f"APIClientEvalReportSink.write() received extra_fields but this sink "
+                f"does not support extra fields ({list(extra_fields)!r} ignored). "
+                "Use LocalFileEvalReportSink if you need extra fields in the output.",
+                UserWarning,
+                stacklevel=2,
+            )
+
         try:
             created = self._svc.create_evaluation_report(report)
         except Exception as exc:
-            try:
-                import grpc as _grpc
-            except ImportError:
-                raise exc from None
-            if not isinstance(exc, _grpc.RpcError):
-                raise
-            raise OSError(
-                f"APIClientEvalReportSink: gRPC CreateEvaluationReport failed "
-                f"(code={exc.code()}, details={exc.details()!r})."  # type: ignore[attr-defined]
-            ) from exc
+            _raise_as_oserror(exc, "APIClientEvalReportSink")
 
-        _logger.info(
+        _logger.debug(
             "APIClientEvalReportSink: created report '%s' in namespace '%s'.",
             created.metadata.name,
             created.metadata.namespace,

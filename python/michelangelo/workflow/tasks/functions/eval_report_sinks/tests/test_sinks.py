@@ -373,6 +373,20 @@ class TestAPIClientEvalReportSink(TestCase):
             sink.write(_report(name="r1"))
         self.assertIn("APIClientEvalReportSink", str(ctx.exception))
 
+    def test_extra_fields_emits_user_warning(self):
+        """write() emits UserWarning when extra_fields is non-empty."""
+        sink = self._make_sink()
+        created = self._make_created("r1", "ns1")
+        sink._svc = MagicMock()
+        sink._svc.create.return_value = created
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            sink.write(_report(name="r1"), extra_fields={"key": "value"})
+
+        self.assertTrue(any(issubclass(w.category, UserWarning) for w in caught))
+        self.assertTrue(any("extra_fields" in str(w.message) for w in caught))
+
     def test_close_closes_channel(self):
         """close() closes the owned gRPC channel."""
         sink = self._make_sink()
@@ -425,6 +439,32 @@ class TestAPIClientEvalReportSink(TestCase):
 
         self.assertIs(sink._svc, mock_svc)
 
+    def test_accepts_injected_svc_for_di(self):
+        """It accepts an explicit svc param without touching APIClient."""
+        from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
+            APIClientEvalReportSink,
+        )
+
+        mock_svc = MagicMock()
+        sink = APIClientEvalReportSink(svc=mock_svc)
+        self.assertIs(sink._svc, mock_svc)
+
+    def test_raises_when_apiclient_service_is_none(self):
+        """It raises RuntimeError when APIClient.EvaluationReportService is None."""
+        from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
+            APIClientEvalReportSink,
+        )
+
+        mock_apiclient = MagicMock()
+        mock_apiclient.EvaluationReportService = None
+
+        with (
+            patch("michelangelo.api.v2.APIClient", mock_apiclient),
+            self.assertRaises(RuntimeError) as ctx,
+        ):
+            APIClientEvalReportSink()
+        self.assertIn("MA_API_SERVER", str(ctx.exception))
+
     def test_write_calls_create_evaluation_report(self):
         """write() calls svc.create_evaluation_report with the report."""
         mock_apiclient = MagicMock()
@@ -463,6 +503,22 @@ class TestAPIClientEvalReportSink(TestCase):
         mock_apiclient = MagicMock()
         sink = self._make_sink(mock_apiclient)
         self.assertFalse(hasattr(sink, "_channel"))
+
+    def test_extra_fields_emits_user_warning(self):
+        """write() emits UserWarning when extra_fields is non-empty."""
+        mock_apiclient = MagicMock()
+        created = self._make_created("r1", "ns1")
+        mock_apiclient.EvaluationReportService.create_evaluation_report.return_value = (
+            created
+        )
+
+        sink = self._make_sink(mock_apiclient)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            sink.write(_report(name="r1"), extra_fields={"key": "value"})
+
+        self.assertTrue(any(issubclass(w.category, UserWarning) for w in caught))
+        self.assertTrue(any("extra_fields" in str(w.message) for w in caught))
 
     def test_grpc_rpc_error_raised_as_oserror(self):
         """It wraps grpc.RpcError as OSError."""
