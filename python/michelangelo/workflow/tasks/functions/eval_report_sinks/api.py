@@ -232,7 +232,7 @@ class APIClientEvalReportSink(EvalReportSink):
                     "Set MA_API_SERVER in the environment before constructing "
                     "APIClientEvalReportSink."
                 )
-        _logger.info("APIClientEvalReportSink ready (APIClient channel).")
+        _logger.debug("APIClientEvalReportSink ready (APIClient channel).")
 
     def write(
         self,
@@ -255,8 +255,7 @@ class APIClientEvalReportSink(EvalReportSink):
             the server response.
 
         Raises:
-            IOError: If the gRPC call fails.
-            ValueError: If ``MA_API_SERVER`` is not set (raised on first call).
+            OSError: If the gRPC call fails.
         """
         if extra_fields:
             warnings.warn(
