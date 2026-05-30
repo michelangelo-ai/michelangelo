@@ -50,6 +50,3 @@ class TestLocalFileEvalReportSinkConfig(TestCase):
         """It stores an explicit output_dir."""
         cfg = LocalFileEvalReportSinkConfig(output_dir="/tmp/reports")
         self.assertEqual(cfg.output_dir, "/tmp/reports")
-
-
-
