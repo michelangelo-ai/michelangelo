@@ -164,35 +164,28 @@ class EvalReportPluginConfig:
             when both this and ``report.metadata.name`` are absent.
         extra_fields: Key-value pairs merged into the output document for
             sinks that write files (e.g. CI run ID, git SHA). Take precedence
-            over proto fields on collision. Ignored by ``GRPCEvalReportSink``.
+            over proto fields on collision. Ignored by ``APIClientEvalReportSink``.
 
     Example (default — local file):
 
         >>> cfg = EvalReportPluginConfig(report_name="q1-eval")
 
-    Example (local sandbox API):
+    Example (push to API):
 
-        >>> from michelangelo.workflow.schema.eval_report_sinks.api import (
-        ...     GRPCEvalReportSinkConfig,
-        ... )
         >>> from michelangelo.workflow.tasks.functions.eval_report_sinks import (
-        ...     GRPCEvalReportSink,
+        ...     APIClientEvalReportSink,
         ... )
         >>> cfg = EvalReportPluginConfig(
-        ...     sinks=[GRPCEvalReportSink(
-        ...         GRPCEvalReportSinkConfig(endpoint="localhost:50051")
-        ...     )],
+        ...     sinks=[APIClientEvalReportSink()],
         ...     report_name="q1-eval",
         ... )
 
-    Example (multi-sink — local file + gRPC):
+    Example (multi-sink — local file + API):
 
         >>> cfg = EvalReportPluginConfig(
         ...     sinks=[
         ...         LocalFileEvalReportSink(),
-        ...         GRPCEvalReportSink(
-        ...             GRPCEvalReportSinkConfig(endpoint="localhost:50051")
-        ...         ),
+        ...         APIClientEvalReportSink(),
         ...     ],
         ... )
     """

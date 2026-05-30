@@ -106,11 +106,10 @@ class EvalReportSink(ABC):
 
     - ``LocalFileEvalReportSink`` — writes JSON to a local directory
       (built-in, zero dependencies beyond the core package).
-    - ``GRPCEvalReportSink`` — pushes to any ``EvaluationReportService`` gRPC
-      endpoint, including a local development server (built-in, requires
-      ``grpcio``).
-    - Custom sinks (e.g. cloud storage, message queues) live outside this
-      package. Use :func:`flatten_report_to_metrics` to convert the proto to
+    - ``APIClientEvalReportSink`` — pushes to ``APIClient.EvaluationReportService``
+      via the shared singleton gRPC channel (built-in).
+    - Custom sinks (e.g. cloud storage, message queues, MLflow, W&B) live outside
+      this package. Use :func:`flatten_report_to_metrics` to convert the proto to
       a flat dict for systems that expect key-value metrics.
 
     Example implementation (imports and ``self._bucket`` initialisation elided)::
@@ -155,13 +154,14 @@ class EvalReportSink(ABC):
 
         Args:
             report: An ``EvaluationReport`` proto with ``metadata.name`` already
-                set by the plugin. Sinks may further enrich the proto (e.g.
-                ``GRPCEvalReportSink`` injects ``metadata.namespace``).
+                set by the plugin. Sinks may further enrich the proto before
+                sending.
             extra_fields: Additional key-value pairs to merge into the output
                 document. Sinks that write structured files (e.g.
                 ``LocalFileEvalReportSink``) merge these into the JSON.
-                Sinks that push to an API (e.g. ``GRPCEvalReportSink``) ignore
-                them. Treat as read-only — do not mutate the dict.
+                Sinks that push to an API (e.g. ``APIClientEvalReportSink``)
+                emit a ``UserWarning`` and ignore them. Treat as read-only —
+                do not mutate the dict.
 
         Returns:
             ``EvalReportSinkResult`` with the resolved ``name``,

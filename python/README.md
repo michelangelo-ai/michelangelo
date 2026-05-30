@@ -161,7 +161,7 @@ If you've used MLflow or W&B, here's the conceptual mapping:
 | `metadata.name` | Run name | Run name |
 | Chart with one data point | `log_metric(key, value)` | `wandb.log({key: value})` |
 
-**Via `APIClientEvalReportSink`** (recommended when your process already uses `APIClient`):
+**Push a report via `APIClientEvalReportSink`:**
 
 ```python
 import os
@@ -185,20 +185,16 @@ sink = APIClientEvalReportSink()
 sink.write(report)
 ```
 
-**Via `GRPCEvalReportSink`** (standalone, useful for custom endpoints):
+**Target a different endpoint** (e.g. multi-region, per-worker isolation):
 
 ```python
-from michelangelo.workflow.schema.eval_report_sinks.api import GRPCEvalReportSinkConfig
-from michelangelo.workflow.tasks.functions.eval_report_sinks import GRPCEvalReportSink
+from michelangelo.api.v2 import APIClient
+from michelangelo.workflow.tasks.functions.eval_report_sinks import APIClientEvalReportSink
 
-with GRPCEvalReportSink(
-    GRPCEvalReportSinkConfig(
-        endpoint="eval-reports.example.com:443",
-        namespace="my-project",
-        insecure=False,
-    )
-) as sink:
-    sink.write(report)
+client = APIClient(endpoint="other-server:50051", caller="my-trainer")
+sink = APIClientEvalReportSink(svc=client.EvaluationReportService)
+sink.write(report)
+client.close()
 ```
 
 **Convert to a flat metrics dict for MLflow / W&B / Comet:**

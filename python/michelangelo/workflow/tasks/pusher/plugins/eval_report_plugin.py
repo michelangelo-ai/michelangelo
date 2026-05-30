@@ -29,25 +29,20 @@ class EvalReportPusherPlugin(PusherPluginBase):
     **Sinks** control where the report goes:
 
     - ``LocalFileEvalReportSink`` (default) — writes JSON to a temp dir.
-    - ``GRPCEvalReportSink`` — pushes to any gRPC ``EvaluationReportService``
-      endpoint.
+    - ``APIClientEvalReportSink`` — pushes to ``APIClient.EvaluationReportService``
+      via the shared singleton gRPC channel.
     - Custom sinks: subclass ``EvalReportSink`` and pass an instance in
       ``EvalReportPluginConfig.sinks``.
 
-    To send to both a local file and a gRPC endpoint::
+    To send to both a local file and the API::
 
-        from michelangelo.workflow.schema.eval_report_sinks.api import (
-            GRPCEvalReportSinkConfig,
-        )
         from michelangelo.workflow.tasks.functions.eval_report_sinks import (
-            GRPCEvalReportSink, LocalFileEvalReportSink,
+            APIClientEvalReportSink, LocalFileEvalReportSink,
         )
         cfg = EvalReportPluginConfig(
             sinks=[
                 LocalFileEvalReportSink(),
-                GRPCEvalReportSink(
-                    GRPCEvalReportSinkConfig(endpoint="localhost:50051")
-                ),
+                APIClientEvalReportSink(),
             ],
             report_name="q1-eval",
         )
@@ -94,7 +89,7 @@ class EvalReportPusherPlugin(PusherPluginBase):
         )
         result = plugin.execute()
         # result["name"]        → "q1-eval"
-        # result["namespace"]   → ""  (set by GRPCEvalReportSink / custom sinks)
+        # result["namespace"]   → ""  (set by APIClientEvalReportSink / custom sinks)
         # result["output_path"] → "/tmp/michelangelo_reports_.../q1-eval.json"
     """
 

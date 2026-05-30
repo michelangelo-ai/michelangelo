@@ -4,12 +4,10 @@ from __future__ import annotations
 
 from unittest import TestCase
 
-from michelangelo.workflow.schema.eval_report_sinks.api import GRPCEvalReportSinkConfig
 from michelangelo.workflow.schema.eval_report_sinks.local_file import (
     LocalFileEvalReportSinkConfig,
 )
 from michelangelo.workflow.schema.eval_report_sinks.result import EvalReportSinkResult
-from michelangelo.workflow.schema.exceptions import ConfigurationError
 
 
 class TestEvalReportSinkResult(TestCase):
@@ -54,32 +52,4 @@ class TestLocalFileEvalReportSinkConfig(TestCase):
         self.assertEqual(cfg.output_dir, "/tmp/reports")
 
 
-class TestGRPCEvalReportSinkConfig(TestCase):
-    """Tests for GRPCEvalReportSinkConfig."""
 
-    def test_required_endpoint(self):
-        """It stores the endpoint."""
-        cfg = GRPCEvalReportSinkConfig(endpoint="localhost:50051")
-        self.assertEqual(cfg.endpoint, "localhost:50051")
-
-    def test_raises_on_empty_endpoint(self):
-        """It raises ConfigurationError when endpoint is empty."""
-        with self.assertRaises(ConfigurationError):
-            GRPCEvalReportSinkConfig(endpoint="")
-
-    def test_defaults(self):
-        """It defaults to insecure=True, no namespace, timeout 30s."""
-        cfg = GRPCEvalReportSinkConfig(endpoint="localhost:50051")
-        self.assertTrue(cfg.insecure)
-        self.assertEqual(cfg.namespace, "")
-        self.assertEqual(cfg.timeout_seconds, 30)
-
-    def test_tls_config(self):
-        """It accepts insecure=False for TLS connections."""
-        cfg = GRPCEvalReportSinkConfig(
-            endpoint="eval-reports.example.com:443",
-            namespace="ml-prod",
-            insecure=False,
-        )
-        self.assertFalse(cfg.insecure)
-        self.assertEqual(cfg.namespace, "ml-prod")

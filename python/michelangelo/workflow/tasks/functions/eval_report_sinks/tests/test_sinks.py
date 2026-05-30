@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import sys
 import warnings
 from typing import Any
 from unittest import TestCase
@@ -15,7 +14,6 @@ from michelangelo.gen.api.v2.evaluation_report_pb2 import (
     EvaluationReport,
     EvaluationReportSpec,
 )
-from michelangelo.workflow.schema.eval_report_sinks.api import GRPCEvalReportSinkConfig
 from michelangelo.workflow.schema.eval_report_sinks.local_file import (
     LocalFileEvalReportSinkConfig,
 )
@@ -214,146 +212,6 @@ class TestEvaluationReportService(TestCase):
         svc._service_stub.ListEvaluationReport.assert_called_once()
         self.assertEqual(len(result.items), 2)
 
-
-class TestGRPCEvalReportSink(TestCase):
-    """Tests for GRPCEvalReportSink (self-contained gRPC channel)."""
-
-    def _make_created(
-        self, report_name: str = "api-report", namespace: str = "ns"
-    ) -> EvaluationReport:
-        """Build a canned EvaluationReport response proto."""
-        created = EvaluationReport()
-        created.metadata.name = report_name
-        created.metadata.namespace = namespace
-        return created
-
-    def _make_sink(self, endpoint: str = "localhost:50051", **kwargs):
-        """Build a GRPCEvalReportSink with a mocked channel."""
-        from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
-            GRPCEvalReportSink,
-        )
-
-        cfg = GRPCEvalReportSinkConfig(endpoint=endpoint, **kwargs)
-        with patch("grpc.insecure_channel"), patch("grpc.secure_channel"):
-            sink = GRPCEvalReportSink(cfg)
-        return sink
-
-    def test_raises_import_error_when_grpcio_missing(self):
-        """It raises ImportError when grpcio is not installed."""
-        with patch.dict(sys.modules, {"grpc": None}):
-            from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
-                GRPCEvalReportSink,
-            )
-
-            with self.assertRaises(ImportError):
-                GRPCEvalReportSink(GRPCEvalReportSinkConfig(endpoint="localhost:50051"))
-
-    def test_creates_report_via_grpc(self):
-        """It delegates to _svc.create and returns an EvalReportSinkResult."""
-        sink = self._make_sink()
-        created = self._make_created("r1", "ns1")
-        sink._svc = MagicMock()
-        sink._svc.create.return_value = created
-
-        result = sink.write(_report(name="r1"))
-
-        sink._svc.create.assert_called_once()
-        self.assertEqual(result.name, "r1")
-        self.assertEqual(result.namespace, "ns1")
-        self.assertEqual(result.output_path, "")
-
-    def test_namespace_injected_into_copy_not_original(self):
-        """config.namespace is injected into a deep copy; the original is unchanged."""
-        sink = self._make_sink(namespace="injected-ns")
-        created = self._make_created("r1", "injected-ns")
-        sink._svc = MagicMock()
-        sink._svc.create.return_value = created
-
-        report = _report(name="r1", namespace="original-ns")
-        sink.write(report)
-
-        sent = sink._svc.create.call_args[0][0]
-        self.assertEqual(sent.metadata.namespace, "injected-ns")
-        self.assertEqual(report.metadata.namespace, "original-ns")  # unchanged
-
-    def test_namespace_not_overridden_when_config_empty(self):
-        """When config.namespace is empty, report namespace is preserved as-is."""
-        sink = self._make_sink()  # no namespace in config
-        created = self._make_created("r1", "caller-ns")
-        sink._svc = MagicMock()
-        sink._svc.create.return_value = created
-
-        report = _report(name="r1", namespace="caller-ns")
-        sink.write(report)
-
-        sent = sink._svc.create.call_args[0][0]
-        self.assertEqual(sent.metadata.namespace, "caller-ns")
-
-    def test_grpc_rpc_error_raised_as_oserror(self):
-        """It wraps grpc.RpcError as OSError with the endpoint in the message."""
-        import grpc
-
-        class _FakeRpcError(grpc.RpcError):
-            def code(self):
-                return grpc.StatusCode.UNAVAILABLE
-
-            def details(self):
-                return "server unreachable"
-
-        sink = self._make_sink()
-        sink._svc = MagicMock()
-        sink._svc.create.side_effect = _FakeRpcError()
-
-        with self.assertRaises(OSError) as ctx:
-            sink.write(_report(name="r1"))
-        self.assertIn("localhost:50051", str(ctx.exception))
-
-    def test_default_caller_set_on_context(self):
-        """It sets a default rpc-caller; no APIClient.set_caller() needed."""
-        from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
-            GRPCEvalReportSink,
-        )
-
-        with patch("grpc.insecure_channel"), patch("grpc.secure_channel"):
-            sink = GRPCEvalReportSink(
-                GRPCEvalReportSinkConfig(endpoint="localhost:50051")
-            )
-        self.assertIsNotNone(sink._svc._context.header_provider._caller)
-
-    def test_extra_fields_emits_user_warning(self):
-        """write() emits UserWarning when extra_fields is non-empty."""
-        sink = self._make_sink()
-        created = self._make_created("r1", "ns1")
-        sink._svc = MagicMock()
-        sink._svc.create.return_value = created
-
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            sink.write(_report(name="r1"), extra_fields={"key": "value"})
-
-        self.assertTrue(any(issubclass(w.category, UserWarning) for w in caught))
-        self.assertTrue(any("extra_fields" in str(w.message) for w in caught))
-
-    def test_close_closes_channel(self):
-        """close() closes the owned gRPC channel."""
-        sink = self._make_sink()
-        sink._channel = MagicMock()
-        sink.close()
-        sink._channel.close.assert_called_once()
-
-    def test_context_manager_closes_channel(self):
-        """__exit__ calls close(), which closes the channel."""
-        from michelangelo.workflow.tasks.functions.eval_report_sinks.api import (
-            GRPCEvalReportSink,
-        )
-
-        with (
-            patch("grpc.insecure_channel") as mock_ch,
-            patch("grpc.secure_channel"),
-            GRPCEvalReportSink(GRPCEvalReportSinkConfig(endpoint="localhost:50051")),
-        ):
-            pass
-        mock_ch.return_value.close.assert_called_once()
 
 
 class TestAPIClientEvalReportSink(TestCase):
