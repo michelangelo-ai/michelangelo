@@ -11,14 +11,14 @@ Typical usage::
 
     from michelangelo.lib.artifact_manager.storage_backend import LocalStorageBackend
     from michelangelo.lib.model_manager.registry.client import InMemoryRegistryClient
-    from michelangelo.workflow.schema.pusher import ModelPusherPluginConfig
+    from michelangelo.workflow.schema.pusher import ModelPluginConfig
     from michelangelo.workflow.tasks.pusher.plugins.model_plugin import ModelPusherPlugin
     from michelangelo.workflow.variables.types import AssembledModel, ModelArtifact
 
     backend = LocalStorageBackend(tempfile.mkdtemp())
     registry = InMemoryRegistryClient()  # replace with your registry in production
     result = ModelPusherPlugin(
-        config=ModelPusherPluginConfig(model_name="my-classifier"),
+        config=ModelPluginConfig(model_name="my-classifier"),
         artifact=AssembledModel(
             raw_model=ModelArtifact(path="/tmp/raw"),
             deployable_model=ModelArtifact(path="/tmp/deployable"),
@@ -34,7 +34,7 @@ Multi-registry fan-out — register in two registries simultaneously::
 
     from michelangelo.lib.artifact_manager.storage_backend import LocalStorageBackend
     from michelangelo.lib.model_manager.registry.client import InMemoryRegistryClient
-    from michelangelo.workflow.schema.pusher import ModelPusherPluginConfig
+    from michelangelo.workflow.schema.pusher import ModelPluginConfig
     from michelangelo.workflow.tasks.pusher.plugins.model_plugin import ModelPusherPlugin
     from michelangelo.workflow.variables.types import AssembledModel, ModelArtifact
 
@@ -42,7 +42,7 @@ Multi-registry fan-out — register in two registries simultaneously::
     primary = InMemoryRegistryClient()
     catalog = InMemoryRegistryClient()
     result = ModelPusherPlugin(
-        config=ModelPusherPluginConfig(
+        config=ModelPluginConfig(
             model_name="clf",
             registry_clients=[primary, catalog],
         ),
@@ -97,7 +97,7 @@ if TYPE_CHECKING:
         RegisteredModel,
         ModelRegistryClient,
     )
-    from michelangelo.workflow.schema.pusher import ModelPusherPluginConfig
+    from michelangelo.workflow.schema.pusher import ModelPluginConfig
     from michelangelo.workflow.variables.types import AssembledModel
 
 _logger = logging.getLogger(__name__)
@@ -245,7 +245,7 @@ class ModelPusherPlugin(PusherPluginBase):
         partial registration and compensate as needed.
 
     Args:
-        config: ``ModelPusherPluginConfig`` specifying the optional
+        config: ``ModelPluginConfig`` specifying the optional
             ``model_name``, ``description``, ``labels``, ``run_id``, and
             ``registry_clients`` list for multi-registry fan-out.
         artifact: An ``AssembledModel`` with a pre-packaged ``raw_model``.
@@ -273,14 +273,14 @@ class ModelPusherPlugin(PusherPluginBase):
 
         from michelangelo.lib.artifact_manager.storage_backend import LocalStorageBackend
         from michelangelo.lib.model_manager.registry.client import InMemoryRegistryClient
-        from michelangelo.workflow.schema.pusher import ModelPusherPluginConfig
+        from michelangelo.workflow.schema.pusher import ModelPluginConfig
         from michelangelo.workflow.tasks.pusher.plugins.model_plugin import ModelPusherPlugin
         from michelangelo.workflow.variables.types import AssembledModel, ModelArtifact
 
         backend = LocalStorageBackend(tempfile.mkdtemp())
         registry = InMemoryRegistryClient()  # replace with your registry in production
         plugin = ModelPusherPlugin(
-            config=ModelPusherPluginConfig(
+            config=ModelPluginConfig(
                 model_name="my-classifier",
                 description="Boston housing XGBoost model",
                 labels={"owner": "ml-platform"},
@@ -306,7 +306,7 @@ class ModelPusherPlugin(PusherPluginBase):
 
     def __init__(
         self,
-        config: ModelPusherPluginConfig,
+        config: ModelPluginConfig,
         artifact: AssembledModel | None = None,
         storage_backend: StorageBackend | None = None,
         registry_client: ModelRegistryClient | None = None,
@@ -470,19 +470,21 @@ class ModelPusherPlugin(PusherPluginBase):
     def _build_metadata(self) -> dict[str, Any]:
         """Build the supplementary metadata dict.
 
-        Injects ``config.run_id`` under the key ``"run_id"`` when set.
-        Registries with native run linkage (e.g. MLflow) should extract
-        ``metadata["run_id"]`` in their ``register_model()`` implementation
-        and pass it to the registry-native API.
+        Merges ``config.metadata`` with ``run_id`` injected under the key
+        ``"run_id"`` when set. ``run_id`` takes precedence over any ``"run_id"``
+        key in ``config.metadata``. Registries with native run linkage (e.g.
+        MLflow) should extract ``metadata["run_id"]`` in their
+        ``register_model()`` implementation and pass it to the registry-native
+        API.
 
         Returns:
             A ``dict[str, Any]`` suitable for ``ModelRegistryClient.register_model(
             metadata=...)``. Returns an empty dict when no supplementary
             metadata is configured.
         """
-        result: dict[str, Any] = {}
+        result: dict[str, Any] = dict(self._config.metadata)
         if self._config.run_id is not None:
-            result["run_id"] = self._config.run_id
+            result["run_id"] = self._config.run_id  # run_id wins on collision
         return result
 
 

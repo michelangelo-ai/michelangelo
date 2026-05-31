@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 from michelangelo.lib.model_manager.registry.client import RegisteredModel
 from michelangelo.workflow.schema.exceptions import ConfigurationError
-from michelangelo.workflow.schema.pusher import ModelPusherPluginConfig
+from michelangelo.workflow.schema.pusher import ModelPluginConfig
 from michelangelo.workflow.tasks.pusher.plugins.model_plugin import (
     ModelPusherPlugin,
     PartialRegistrationError,
@@ -63,14 +63,16 @@ def _plugin(
     labels: dict | None = None,
     description: str | None = None,
     run_id: str | None = None,
+    metadata: dict | None = None,
 ) -> ModelPusherPlugin:
     """Return a fully-configured ModelPusherPlugin using mock infrastructure."""
     return ModelPusherPlugin(
-        config=ModelPusherPluginConfig(
+        config=ModelPluginConfig(
             model_name=model_name,
             labels=labels or {},
             description=description,
             run_id=run_id,
+            metadata=metadata or {},
         ),
         artifact=artifact or _assembled(),
         storage_backend=backend or _mock_backend(),
@@ -90,7 +92,7 @@ class TestModelPusherPluginInit(TestCase):
         """It raises ConfigurationError when artifact=None."""
         with self.assertRaises(ConfigurationError) as ctx:
             ModelPusherPlugin(
-                config=ModelPusherPluginConfig(),
+                config=ModelPluginConfig(),
                 artifact=None,
                 storage_backend=_mock_backend(),
                 registry_client=_mock_registry(),
@@ -101,7 +103,7 @@ class TestModelPusherPluginInit(TestCase):
         """It raises ConfigurationError when storage_backend=None."""
         with self.assertRaises(ConfigurationError) as ctx:
             ModelPusherPlugin(
-                config=ModelPusherPluginConfig(),
+                config=ModelPluginConfig(),
                 artifact=_assembled(),
                 storage_backend=None,
                 registry_client=_mock_registry(),
@@ -112,7 +114,7 @@ class TestModelPusherPluginInit(TestCase):
         """It raises ConfigurationError when registry_client=None."""
         with self.assertRaises(ConfigurationError) as ctx:
             ModelPusherPlugin(
-                config=ModelPusherPluginConfig(),
+                config=ModelPluginConfig(),
                 artifact=_assembled(),
                 storage_backend=_mock_backend(),
                 registry_client=None,
@@ -144,7 +146,7 @@ class TestModelPusherPluginExecute(TestCase):
         self.assertIn("registrations", result)
 
     def test_uses_config_model_name(self):
-        """It registers the model under the name set in ModelPusherPluginConfig."""
+        """It registers the model under the name set in ModelPluginConfig."""
         registry = _mock_registry(name="my-clf")
         _plugin(model_name="my-clf", registry=registry).execute()
         call_kwargs = registry.register_model.call_args.kwargs
@@ -157,7 +159,7 @@ class TestModelPusherPluginExecute(TestCase):
             name=name, version="1", registry_uri=f"mock://{name}/1"
         )
         result = ModelPusherPlugin(
-            config=ModelPusherPluginConfig(model_name=None),
+            config=ModelPluginConfig(model_name=None),
             artifact=_assembled(),
             storage_backend=_mock_backend(),
             registry_client=registry,
@@ -204,7 +206,7 @@ class TestModelPusherPluginExecute(TestCase):
             deployable=True,
         )
         ModelPusherPlugin(
-            config=ModelPusherPluginConfig(
+            config=ModelPluginConfig(
                 model_name="m", labels={"owner": "ml-platform"}
             ),
             artifact=artifact,
@@ -229,7 +231,7 @@ class TestModelPusherPluginExecute(TestCase):
         artifact = _assembled()
         artifact.raw_model.metadata = ModelMetadata(training_framework="xgboost")
         ModelPusherPlugin(
-            config=ModelPusherPluginConfig(
+            config=ModelPluginConfig(
                 model_name="m", labels={"training_framework": "override"}
             ),
             artifact=artifact,
@@ -260,13 +262,35 @@ class TestModelPusherPluginExecute(TestCase):
         metadata = registry.register_model.call_args.kwargs["metadata"]
         self.assertEqual(metadata, {})
 
+    def test_config_metadata_forwarded_to_register_model(self):
+        """config.metadata values are forwarded in the metadata kwarg."""
+        registry = _mock_registry(name="m")
+        _plugin(
+            model_name="m", registry=registry,
+            metadata={"accuracy": 0.94, "git_sha": "abc123"},
+        ).execute()
+        metadata = registry.register_model.call_args.kwargs["metadata"]
+        self.assertEqual(metadata["accuracy"], 0.94)
+        self.assertEqual(metadata["git_sha"], "abc123")
+
+    def test_run_id_takes_precedence_over_metadata_key_collision(self):
+        """config.run_id overwrites metadata['run_id'] on collision."""
+        registry = _mock_registry(name="m")
+        _plugin(
+            model_name="m", registry=registry,
+            run_id="authoritative-run",
+            metadata={"run_id": "should-be-overwritten"},
+        ).execute()
+        metadata = registry.register_model.call_args.kwargs["metadata"]
+        self.assertEqual(metadata["run_id"], "authoritative-run")
+
     def test_raw_artifact_uploaded_before_deployable(self):
         """It uploads raw_model before deployable_model; verified via call_args_list."""
         raw_path = _artifact_file()
         dep_path = _artifact_file()
         backend = _mock_backend()
         ModelPusherPlugin(
-            config=ModelPusherPluginConfig(model_name="m"),
+            config=ModelPluginConfig(model_name="m"),
             artifact=AssembledModel(
                 raw_model=ModelArtifact(path=raw_path),
                 deployable_model=ModelArtifact(path=dep_path),
@@ -283,7 +307,7 @@ class TestModelPusherPluginExecute(TestCase):
         backend = _mock_backend(raw_uri="s3://bucket/raw", dep_uri="s3://bucket/dep")
         registry = _mock_registry(name="m")
         result = ModelPusherPlugin(
-            config=ModelPusherPluginConfig(model_name="m"),
+            config=ModelPluginConfig(model_name="m"),
             artifact=AssembledModel(raw_model=ModelArtifact(path=_artifact_file())),
             storage_backend=backend,
             registry_client=registry,
@@ -295,7 +319,7 @@ class TestModelPusherPluginExecute(TestCase):
         """When deployable_model is None, register_model receives deployable_artifact_uri=None."""
         registry = _mock_registry(name="m")
         ModelPusherPlugin(
-            config=ModelPusherPluginConfig(model_name="m"),
+            config=ModelPluginConfig(model_name="m"),
             artifact=AssembledModel(raw_model=ModelArtifact(path=_artifact_file())),
             storage_backend=_mock_backend(),
             registry_client=registry,
@@ -329,7 +353,7 @@ class TestModelPusherPluginExecute(TestCase):
             name="m", version="2", registry_uri="mock://m/2"
         )
         result = ModelPusherPlugin(
-            config=ModelPusherPluginConfig(model_name="m"),
+            config=ModelPluginConfig(model_name="m"),
             artifact=_assembled(),
             storage_backend=backend,
             registry_client=registry,
@@ -363,7 +387,7 @@ class TestModelPusherPluginMultiRegistry(TestCase):
         r1 = self._make_registry("1", "mlflow://")
         r2 = self._make_registry("42", "catalog://")
         plugin = ModelPusherPlugin(
-            config=ModelPusherPluginConfig(
+            config=ModelPluginConfig(
                 model_name="clf",
                 registry_clients=[r1, r2],
             ),
@@ -381,7 +405,7 @@ class TestModelPusherPluginMultiRegistry(TestCase):
         r1 = self._make_registry("v10", "first://")
         r2 = self._make_registry("v99", "second://")
         result = ModelPusherPlugin(
-            config=ModelPusherPluginConfig(
+            config=ModelPluginConfig(
                 model_name="m", registry_clients=[r1, r2]
             ),
             artifact=_assembled(),
@@ -394,7 +418,7 @@ class TestModelPusherPluginMultiRegistry(TestCase):
         r1 = self._make_registry("1", "mlflow://models")
         r2 = self._make_registry("abc", "catalog://models")
         result = ModelPusherPlugin(
-            config=ModelPusherPluginConfig(
+            config=ModelPluginConfig(
                 model_name="m", registry_clients=[r1, r2]
             ),
             artifact=_assembled(),
@@ -409,7 +433,7 @@ class TestModelPusherPluginMultiRegistry(TestCase):
         r2 = self._make_registry("1", "b://")
         backend = _mock_backend(raw_uri="s3://raw", dep_uri="s3://dep")
         ModelPusherPlugin(
-            config=ModelPusherPluginConfig(model_name="m", registry_clients=[r1, r2]),
+            config=ModelPluginConfig(model_name="m", registry_clients=[r1, r2]),
             artifact=_assembled(),
             storage_backend=backend,
         ).execute()
@@ -422,7 +446,7 @@ class TestModelPusherPluginMultiRegistry(TestCase):
         """It raises ConfigurationError when registry_client=None and config list is empty."""
         with self.assertRaises(ConfigurationError) as ctx:
             ModelPusherPlugin(
-                config=ModelPusherPluginConfig(),
+                config=ModelPluginConfig(),
                 artifact=_assembled(),
                 storage_backend=_mock_backend(),
                 registry_client=None,
@@ -435,7 +459,7 @@ class TestModelPusherPluginMultiRegistry(TestCase):
         r2 = self._make_registry("1", "b://")
         with self.assertRaises(ConfigurationError) as ctx:
             ModelPusherPlugin(
-                config=ModelPusherPluginConfig(registry_clients=[r1]),
+                config=ModelPluginConfig(registry_clients=[r1]),
                 artifact=_assembled(),
                 storage_backend=_mock_backend(),
                 registry_client=r2,
@@ -460,7 +484,7 @@ class TestModelPusherPluginMultiRegistry(TestCase):
         r2.register_model.side_effect = capture_r2
 
         ModelPusherPlugin(
-            config=ModelPusherPluginConfig(model_name="m", registry_clients=[r1, r2]),
+            config=ModelPluginConfig(model_name="m", registry_clients=[r1, r2]),
             artifact=_assembled(),
             storage_backend=_mock_backend(),
         ).execute()
@@ -485,7 +509,7 @@ class TestModelPusherPluginMultiRegistry(TestCase):
         r2.register_model.side_effect = capture_r2
 
         ModelPusherPlugin(
-            config=ModelPusherPluginConfig(
+            config=ModelPluginConfig(
                 model_name="m", registry_clients=[r1, r2], run_id="run-123"
             ),
             artifact=_assembled(),
@@ -502,7 +526,7 @@ class TestModelPusherPluginMultiRegistry(TestCase):
 
         with self.assertRaises(PartialRegistrationError) as ctx:
             ModelPusherPlugin(
-                config=ModelPusherPluginConfig(
+                config=ModelPluginConfig(
                     model_name="m", registry_clients=[r1, r2]
                 ),
                 artifact=_assembled(),
@@ -524,7 +548,7 @@ class TestModelPusherPluginMultiRegistry(TestCase):
 
         with self.assertRaises(IOError):
             ModelPusherPlugin(
-                config=ModelPusherPluginConfig(model_name="m"),
+                config=ModelPluginConfig(model_name="m"),
                 artifact=_assembled(),
                 storage_backend=_mock_backend(),
                 registry_client=registry,
@@ -582,7 +606,7 @@ class TestModelPusherPluginNameValidation(TestCase):
         """It raises ConfigurationError when model_name is an empty string."""
         with self.assertRaises(ConfigurationError) as ctx:
             ModelPusherPlugin(
-                config=ModelPusherPluginConfig(model_name=""),
+                config=ModelPluginConfig(model_name=""),
                 artifact=_assembled(),
                 storage_backend=_mock_backend(),
                 registry_client=_mock_registry(),

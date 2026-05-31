@@ -26,7 +26,6 @@ __all__ = [
     "DatasetPluginConfig",
     "EvalReportPluginConfig",
     "ModelPluginConfig",
-    "ModelPusherPluginConfig",
     "PusherConfig",
     "PusherPluginConfig",
 ]
@@ -51,11 +50,8 @@ class DatasetFormat(Enum):
 
 
 @dataclass
-class ModelPusherPluginConfig:
+class ModelPluginConfig:
     """Configuration for ``ModelPusherPlugin``.
-
-    Formerly known as ``ModelPluginConfig`` — that name is retained as an
-    alias for backward compatibility.
 
     Attributes:
         model_name: Name to register the model under in the registry. A
@@ -76,6 +72,14 @@ class ModelPusherPluginConfig:
             under the key ``"run_id"``. Registries with native run linkage
             (e.g. MLflow's ``create_model_version(run_id=...)``) should
             extract this value and pass it natively in their implementation.
+            When both ``run_id`` and ``metadata`` set ``"run_id"``, ``run_id``
+            takes precedence.
+        metadata: Supplementary key-value pairs forwarded to the registry as
+            non-indexed metadata (e.g.
+            ``{"accuracy": 0.94, "git_sha": "abc123"}``).
+            Values may be any JSON-serializable type. Merged with the
+            ``run_id`` field before calling ``register_model()``; ``run_id``
+            takes precedence on key collision.
         registry_clients: Ordered list of ``ModelRegistryClient`` instances
             to register the model in simultaneously (fan-out). The same
             artifact URIs are sent to every client. When non-empty, this
@@ -88,7 +92,7 @@ class ModelPusherPluginConfig:
                 from michelangelo.lib.model_manager.registry.client import (
                     InMemoryRegistryClient,
                 )
-                cfg = ModelPusherPluginConfig(
+                cfg = ModelPluginConfig(
                     model_name="clf",
                     registry_clients=[
                         mlflow_client,
@@ -97,10 +101,12 @@ class ModelPusherPluginConfig:
                 )
 
     Example:
-        >>> cfg = ModelPusherPluginConfig(model_name="boston-xgb")
+        >>> cfg = ModelPluginConfig(model_name="boston-xgb")
         >>> cfg.model_name
         'boston-xgb'
         >>> cfg.labels
+        {}
+        >>> cfg.metadata
         {}
     """
 
@@ -108,12 +114,8 @@ class ModelPusherPluginConfig:
     description: str | None = None
     labels: dict[str, str] = field(default_factory=dict)
     run_id: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
     registry_clients: list[ModelRegistryClient] = field(default_factory=list)
-
-
-# Backward-compatible alias — prefer ModelPusherPluginConfig in new code.
-ModelPluginConfig = ModelPusherPluginConfig
-
 
 @dataclass
 class DatasetPluginConfig:
@@ -254,18 +256,18 @@ class PusherPluginConfig:
 
     Example:
         >>> from michelangelo.workflow.schema.pusher import (
-        ...     ModelPusherPluginConfig, PusherPluginConfig
+        ...     ModelPluginConfig, PusherPluginConfig
         ... )
         >>> cfg = PusherPluginConfig(
         ...     name="clf",
-        ...     model_plugin=ModelPusherPluginConfig(model_name="my-clf"),
+        ...     model_plugin=ModelPluginConfig(model_name="my-clf"),
         ... )
         >>> cfg.resolved_plugin_name()
         'model_plugin'
     """
 
     name: str
-    model_plugin: ModelPusherPluginConfig | None = None
+    model_plugin: ModelPluginConfig | None = None
     dataset_plugin: DatasetPluginConfig | None = None
     eval_report_plugin: EvalReportPluginConfig | None = None
     plugin_name: str | None = None
@@ -332,7 +334,7 @@ class PusherPluginConfig:
         """Return the typed config for built-in plugins or raw dict for custom ones.
 
         For built-in plugins, returns the typed config dataclass (e.g.
-        ``ModelPusherPluginConfig``). For provider-registered plugins where
+        ``ModelPluginConfig``). For provider-registered plugins where
         ``plugin_name`` is set to a name that is not a dataclass field,
         returns ``plugin_config`` (the raw dict).
 
@@ -377,7 +379,7 @@ class PusherConfig:
         >>> cfg = PusherConfig(items=[
         ...     PusherPluginConfig(
         ...         name="model",
-        ...         model_plugin=ModelPusherPluginConfig(),
+        ...         model_plugin=ModelPluginConfig(),
         ...     )
         ... ])
         >>> len(cfg.items)

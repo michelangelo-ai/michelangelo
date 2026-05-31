@@ -26,15 +26,16 @@ class TestDatasetFormat(TestCase):
 
 
 class TestModelPluginConfig(TestCase):
-    """Tests for ModelPusherPluginConfig defaults and field storage (ModelPluginConfig alias)."""
+    """Tests for ModelPluginConfig defaults and field storage."""
 
     def test_defaults(self):
-        """It defaults model_name, description, and run_id to None and labels to {}."""
+        """It defaults model_name, description, and run_id to None; labels and metadata to {}."""
         cfg = ModelPluginConfig()
         self.assertIsNone(cfg.model_name)
         self.assertIsNone(cfg.description)
         self.assertIsNone(cfg.run_id)
         self.assertEqual(cfg.labels, {})
+        self.assertEqual(cfg.metadata, {})
 
     def test_labels_instances_are_independent(self):
         """It creates a separate labels dict for each instance."""
