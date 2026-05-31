@@ -1,4 +1,4 @@
-"""Typed metadata for model artifacts in CanvasFlex workflow tasks."""
+"""Typed metadata for model artifacts in Michelangelo workflow tasks."""
 
 from __future__ import annotations
 
@@ -17,12 +17,21 @@ class ModelMetadata:
     downstream tasks (pusher, validator, serving) can make decisions without
     opening the artifact itself.
 
-    Subclass to add provider-specific fields::
+    Subclass to add provider-specific fields and extend ``to_registry_dict()``
+    to include them::
 
         @dataclass
-        class UberModelMetadata(ModelMetadata):
+        class MyModelMetadata(ModelMetadata):
             training_job_id: str | None = None
             experiment_id: str | None = None
+
+            def to_registry_dict(self) -> dict[str, str]:
+                result = super().to_registry_dict()
+                if self.training_job_id is not None:
+                    result["training_job_id"] = self.training_job_id
+                if self.experiment_id is not None:
+                    result["experiment_id"] = self.experiment_id
+                return result
 
     Attributes:
         training_framework: Name of the training framework (e.g. ``"pytorch"``,
@@ -58,3 +67,36 @@ class ModelMetadata:
     _schema: BytesIO | None = field(default=None, repr=False)
     _sample_data: BytesIO | None = field(default=None, repr=False)
     _hyperparameters: BytesIO | None = field(default=None, repr=False)
+
+    def to_registry_dict(self) -> dict[str, str]:
+        """Return a flat string dict of public fields suitable for registry tags.
+
+        Omits ``None``-valued optional fields and serialises ``bool`` fields as
+        ``"true"`` / ``"false"`` (lowercase) for consistent cross-registry
+        storage. Binary payload fields (``_schema``, ``_sample_data``,
+        ``_hyperparameters``) are excluded.
+
+        Subclasses should override this method to include their own fields::
+
+            @dataclass
+            class MyModelMetadata(ModelMetadata):
+                training_job_id: str | None = None
+
+                def to_registry_dict(self) -> dict[str, str]:
+                    result = super().to_registry_dict()
+                    if self.training_job_id is not None:
+                        result["training_job_id"] = self.training_job_id
+                    return result
+
+        Returns:
+            A ``dict[str, str]`` ready for ``ModelRegistryClient.register_model(
+            metadata=...)``.
+        """
+        result: dict[str, str] = {}
+        if self.training_framework is not None:
+            result["training_framework"] = self.training_framework
+        if self.model_class is not None:
+            result["model_class"] = self.model_class
+        result["assembled"] = str(self.assembled).lower()
+        result["deployable"] = str(self.deployable).lower()
+        return result

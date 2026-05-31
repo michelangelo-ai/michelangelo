@@ -13,6 +13,13 @@ Public API::
         CustomTritonPackager,
     )
     from michelangelo.lib.model_manager.registry import (
-        ModelRegistryClient, RegisteredModel,
+        InMemoryRegistryClient, ModelRegistryClient, RegisteredModel,
     )
 """
+
+# flake8: noqa:F401
+from michelangelo.lib.model_manager.registry import (
+    InMemoryRegistryClient,
+    ModelRegistryClient,
+    RegisteredModel,
+)

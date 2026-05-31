@@ -2,6 +2,7 @@
 
 # flake8: noqa:F401
 from michelangelo.lib.model_manager.registry.client import (
+    InMemoryRegistryClient,
     ModelRegistryClient,
     RegisteredModel,
 )

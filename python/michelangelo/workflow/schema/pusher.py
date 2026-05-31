@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from michelangelo.workflow.schema.exceptions import ConfigurationError
 
 if TYPE_CHECKING:
+    from michelangelo.lib.model_manager.registry.client import ModelRegistryClient
     from michelangelo.workflow.tasks.functions.eval_report_sinks.base import (
         EvalReportSink,
     )
@@ -25,6 +26,7 @@ __all__ = [
     "DatasetPluginConfig",
     "EvalReportPluginConfig",
     "ModelPluginConfig",
+    "ModelPusherPluginConfig",
     "PusherConfig",
     "PusherPluginConfig",
 ]
@@ -49,33 +51,68 @@ class DatasetFormat(Enum):
 
 
 @dataclass
-class ModelPluginConfig:
+class ModelPusherPluginConfig:
     """Configuration for ``ModelPusherPlugin``.
+
+    Formerly known as ``ModelPluginConfig`` — that name is retained as an
+    alias for backward compatibility.
 
     Attributes:
         model_name: Name to register the model under in the registry. A
             unique name is generated automatically when ``None``.
         description: Optional human-readable description stored in the
-            registry alongside the model.
-        extra_metadata: Additional string key-value pairs forwarded to
-            the registry at registration time as free-form tags (e.g.
-            ``{"team": "pricing", "region": "us-east"}``). These are
-            push-time registry labels and are separate from
-            ``ModelArtifact.metadata``, which carries typed artifact
-            properties (framework, deployable flag, etc.) set by the
-            assembler.
+            registry alongside the model version.
+        labels: Indexed, filterable string key-value pairs forwarded to the
+            registry at registration time (e.g.
+            ``{"owner": "ml-platform", "training_framework": "xgboost"}``).
+            All keys and values must be strings — this mirrors the constraint
+            of Vertex AI ``labels``, BentoML ``labels``, and MLflow ``tags``.
+            These complement the artifact-derived labels from ``ModelMetadata``
+            (framework, deployable flag, etc.); caller-supplied ``labels``
+            take precedence on key conflicts.
+        run_id: Optional training run identifier for lineage tracing
+            (e.g. an MLflow run ID, W&B run name, or pipeline task ID).
+            Injected into the ``metadata`` dict passed to ``register_model()``
+            under the key ``"run_id"``. Registries with native run linkage
+            (e.g. MLflow's ``create_model_version(run_id=...)``) should
+            extract this value and pass it natively in their implementation.
+        registry_clients: Ordered list of ``ModelRegistryClient`` instances
+            to register the model in simultaneously (fan-out). The same
+            artifact URIs are sent to every client. When non-empty, this
+            field takes precedence over the ``registry_client=`` constructor
+            argument. Use an empty list (the default) to rely on the
+            injected ``registry_client`` instead.
+
+            Example — register in both MLflow and a custom catalog::
+
+                from michelangelo.lib.model_manager.registry.client import (
+                    InMemoryRegistryClient,
+                )
+                cfg = ModelPusherPluginConfig(
+                    model_name="clf",
+                    registry_clients=[
+                        mlflow_client,
+                        InMemoryRegistryClient(),
+                    ],
+                )
 
     Example:
-        >>> cfg = ModelPluginConfig(model_name="boston-xgb")
+        >>> cfg = ModelPusherPluginConfig(model_name="boston-xgb")
         >>> cfg.model_name
         'boston-xgb'
-        >>> cfg.extra_metadata
+        >>> cfg.labels
         {}
     """
 
     model_name: str | None = None
     description: str | None = None
-    extra_metadata: dict[str, str] = field(default_factory=dict)
+    labels: dict[str, str] = field(default_factory=dict)
+    run_id: str | None = None
+    registry_clients: list[ModelRegistryClient] = field(default_factory=list)
+
+
+# Backward-compatible alias — prefer ModelPusherPluginConfig in new code.
+ModelPluginConfig = ModelPusherPluginConfig
 
 
 @dataclass
@@ -217,18 +254,18 @@ class PusherPluginConfig:
 
     Example:
         >>> from michelangelo.workflow.schema.pusher import (
-        ...     ModelPluginConfig, PusherPluginConfig
+        ...     ModelPusherPluginConfig, PusherPluginConfig
         ... )
         >>> cfg = PusherPluginConfig(
         ...     name="clf",
-        ...     model_plugin=ModelPluginConfig(model_name="my-clf"),
+        ...     model_plugin=ModelPusherPluginConfig(model_name="my-clf"),
         ... )
         >>> cfg.resolved_plugin_name()
         'model_plugin'
     """
 
     name: str
-    model_plugin: ModelPluginConfig | None = None
+    model_plugin: ModelPusherPluginConfig | None = None
     dataset_plugin: DatasetPluginConfig | None = None
     eval_report_plugin: EvalReportPluginConfig | None = None
     plugin_name: str | None = None
@@ -295,7 +332,7 @@ class PusherPluginConfig:
         """Return the typed config for built-in plugins or raw dict for custom ones.
 
         For built-in plugins, returns the typed config dataclass (e.g.
-        ``ModelPluginConfig``). For provider-registered plugins where
+        ``ModelPusherPluginConfig``). For provider-registered plugins where
         ``plugin_name`` is set to a name that is not a dataclass field,
         returns ``plugin_config`` (the raw dict).
 
@@ -340,7 +377,7 @@ class PusherConfig:
         >>> cfg = PusherConfig(items=[
         ...     PusherPluginConfig(
         ...         name="model",
-        ...         model_plugin=ModelPluginConfig(),
+        ...         model_plugin=ModelPusherPluginConfig(),
         ...     )
         ... ])
         >>> len(cfg.items)
