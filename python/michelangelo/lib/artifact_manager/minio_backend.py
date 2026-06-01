@@ -28,6 +28,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import sys
 import tarfile
 import tempfile
 from typing import TYPE_CHECKING
@@ -40,6 +41,34 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 
 __all__ = ["MinioStorageBackend"]
+
+
+def _safe_extractall(tar: tarfile.TarFile, dest: str) -> None:
+    """Extract a tar archive into ``dest`` without path-traversal risk.
+
+    Uses ``filter="data"`` on Python 3.12+ (PEP 706), which strips absolute
+    paths, ``..`` traversal components, and unsafe symlinks. On older runtimes
+    a manual member check provides the same protection.
+
+    Raises:
+        ValueError: If a member's resolved path escapes ``dest`` (Python < 3.12).
+    """
+    if sys.version_info >= (3, 12):
+        tar.extractall(dest, filter="data")
+    else:
+        real_dest = os.path.realpath(dest)
+        safe_members = []
+        for member in tar.getmembers():
+            if not member.name:  # skip the empty-name root entry from arcname=""
+                continue
+            member_path = os.path.realpath(os.path.join(dest, member.name))
+            if not member_path.startswith(real_dest + os.sep):
+                raise ValueError(
+                    f"Refusing to extract '{member.name}': path would escape "
+                    f"the destination directory '{dest}'."
+                )
+            safe_members.append(member)
+        tar.extractall(dest, members=safe_members)
 
 
 class MinioStorageBackend(StorageBackend):
@@ -167,7 +196,7 @@ class MinioStorageBackend(StorageBackend):
             if tarfile.is_tarfile(tmp_path):
                 os.makedirs(local_path, exist_ok=True)
                 with tarfile.open(tmp_path, "r") as tar:
-                    tar.extractall(local_path)
+                    _safe_extractall(tar, local_path)
             else:
                 shutil.copy2(tmp_path, local_path)
         finally:
