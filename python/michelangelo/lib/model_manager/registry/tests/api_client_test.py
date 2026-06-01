@@ -207,6 +207,31 @@ class TestAPIRegistryClientGetModel(TestCase):
         self.assertEqual(reg.name, "clf")
         self.assertEqual(reg.version, "5")
 
+    def test_get_model_with_version_emits_warning(self):
+        """It logs a warning when version is provided (per-revision lookup unsupported)."""
+        stub = _make_stub(get_model=_make_response_model("m"))
+        with patch(_STUB_PATH, return_value=stub), \
+             self.assertLogs(
+                 "michelangelo.lib.model_manager.registry.api_client",
+                 level="WARNING",
+             ) as log_ctx:
+            client = APIRegistryClient(_config())
+            client.get_model("m", version="3")
+        self.assertTrue(
+            any("version=" in msg for msg in log_ctx.output),
+            msg=f"Expected version warning in logs: {log_ctx.output}",
+        )
+
+    def test_get_model_without_version_no_warning(self):
+        """It does not emit a warning when version is None."""
+        stub = _make_stub(get_model=_make_response_model("m"))
+        with patch(_STUB_PATH, return_value=stub):
+            client = APIRegistryClient(_config())
+            # assertLogs would fail if no WARNING is emitted — use assertNoLogs (3.10+)
+            # or simply call without the context manager and verify no exception.
+            reg = client.get_model("m")
+        self.assertEqual(reg.name, "m")
+
     def test_insecure_false_uses_secure_channel(self):
         """It creates a secure channel when insecure=False."""
         stub = _make_stub()

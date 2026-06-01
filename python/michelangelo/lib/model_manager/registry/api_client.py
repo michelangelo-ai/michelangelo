@@ -192,13 +192,16 @@ class APIRegistryClient(ModelRegistryClient):
         """Retrieve the latest model registration by name.
 
         .. note::
-            The ``ModelService`` API returns the current (latest) model record.
-            The ``version`` argument is accepted for interface compatibility but
-            is not forwarded to the API — the latest revision is always returned.
+            The ``ModelService`` API does not support per-revision lookup — it
+            always returns the current (latest) model record. Passing a
+            non-``None`` ``version`` emits a warning and the latest revision is
+            returned regardless.
 
         Args:
             name: Model name to look up.
-            version: Accepted but ignored. The latest revision is returned.
+            version: If provided, a warning is emitted because per-revision
+                lookup is not supported by the ``ModelService`` API. The latest
+                revision is returned in all cases.
 
         Returns:
             A :class:`~michelangelo.lib.model_manager.registry.client.RegisteredModel`
@@ -207,6 +210,14 @@ class APIRegistryClient(ModelRegistryClient):
         Raises:
             grpc.RpcError: If the model is not found or the call fails.
         """
+        if version is not None:
+            _logger.warning(
+                "APIRegistryClient.get_model() does not support per-revision "
+                "lookup (requested version=%r for model '%s'). "
+                "The ModelService API always returns the latest revision.",
+                version,
+                name,
+            )
         _logger.info("Calling GetModel for '%s'.", name)
         resp = self._stub.GetModel(
             model_svc_pb2.GetModelRequest(
