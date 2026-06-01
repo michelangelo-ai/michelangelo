@@ -467,7 +467,9 @@ describe('ActionsPopover', () => {
       buildWrapper([
         getBaseProviderWrapper(),
         getIconProviderWrapper(),
+        getErrorProviderWrapper(),
         getRouterWrapper({ location: '/start' }),
+        getServiceProviderWrapper({ request: vi.fn() }),
       ])
     );
 
