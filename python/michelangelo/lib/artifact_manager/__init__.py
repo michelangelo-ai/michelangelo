@@ -11,6 +11,16 @@ Public API::
         MinioStorageBackend,
         MinioStorageConfig,
     )
+
+Production configuration
+------------------------
+
+- :class:`MinioStorageConfig` defaults to ``secure=True`` (TLS). Pass
+  ``secure=False`` **only** for local sandbox servers where TLS is not
+  configured — never in production.
+- ``create_bucket_if_missing`` defaults to ``False``. Enable it only for
+  sandbox / dev environments where the bucket may not exist yet. Most
+  production IAM policies do not grant ``s3:CreateBucket``.
 """
 
 # flake8: noqa:F401

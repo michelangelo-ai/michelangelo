@@ -146,11 +146,14 @@ class ModelRegistryClient(ABC):
                 the model version in the registry.
             schema: Optional model input/output schema.
 
-                .. note::
-                    The built-in ``ModelPusherPlugin`` does not populate this
-                    argument — it will always be ``None`` unless called from a
-                    subclass override. Registry implementations that do not
-                    support a native schema field may ignore this argument.
+                Implementations that do not support a native schema field
+                **must** silently accept and ignore this argument rather than
+                raising — ignoring ``schema`` is the correct behaviour for any
+                registry that lacks a dedicated schema API. Both
+                :class:`APIRegistryClient` and :class:`InMemoryRegistryClient`
+                follow this convention.  The built-in ``ModelPusherPlugin``
+                does not populate this argument (it will always be ``None``
+                unless called from a custom subclass).
 
             labels: Optional string-to-string key-value pairs stored as
                 indexed, filterable labels in the registry (e.g.
