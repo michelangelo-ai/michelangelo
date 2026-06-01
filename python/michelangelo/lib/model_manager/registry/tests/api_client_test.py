@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import grpc
 
 from michelangelo.gen.api.v2 import model_pb2
-from michelangelo.lib.model_manager.registry.api_client import APIRegistryClient
+from michelangelo.lib.model_manager.registry.api_client import APIRegistryClient, METADATA_ANNOTATION_KEY
 from michelangelo.lib.model_manager.registry.schema.api import APIRegistryConfig
 from michelangelo.lib.exceptions import ConfigurationError
 
@@ -136,7 +136,7 @@ class TestAPIRegistryClientRegisterModel(TestCase):
                 "m", "s3://b/raw", metadata={"run_id": "r1", "rmse": 2.4}
             )
         request = stub.CreateModel.call_args[0][0]
-        raw = request.model.metadata.annotations["michelangelo.io/metadata"]
+        raw = request.model.metadata.annotations[METADATA_ANNOTATION_KEY]
         parsed = json.loads(raw)
         self.assertEqual(parsed["run_id"], "r1")
         self.assertAlmostEqual(parsed["rmse"], 2.4)
@@ -181,6 +181,52 @@ class TestAPIRegistryClientRegisterModel(TestCase):
         self.assertEqual(update_model.metadata.resourceVersion, "rv-42")
         self.assertEqual(reg.version, "3")
 
+    def test_failed_precondition_retries_up_to_max(self):
+        """On FAILED_PRECONDITION from UpdateModel, it retries CreateModel→Update."""
+        already_exists = _RpcError(grpc.StatusCode.ALREADY_EXISTS)
+        failed_precondition = _RpcError(grpc.StatusCode.FAILED_PRECONDITION)
+
+        existing = _make_response_model("m", revision_id=2)
+        existing.metadata.resourceVersion = "rv-1"
+        final = _make_response_model("m", revision_id=3)
+
+        stub = MagicMock()
+        # CreateModel always returns ALREADY_EXISTS
+        stub.CreateModel.side_effect = already_exists
+        get_resp = MagicMock(); get_resp.model = existing
+        stub.GetModel.return_value = get_resp
+        # UpdateModel fails twice then succeeds
+        upd_resp = MagicMock(); upd_resp.model = final
+        stub.UpdateModel.side_effect = [
+            failed_precondition,
+            failed_precondition,
+            upd_resp,
+        ]
+
+        with patch(_STUB_PATH, return_value=stub):
+            client = APIRegistryClient(_config())
+            reg = client.register_model("m", "s3://b/raw")
+
+        self.assertEqual(stub.UpdateModel.call_count, 3)
+        self.assertEqual(reg.version, "3")
+
+    def test_failed_precondition_raises_after_max_retries(self):
+        """It raises RuntimeError when all retries are exhausted."""
+        already_exists = _RpcError(grpc.StatusCode.ALREADY_EXISTS)
+        failed_precondition = _RpcError(grpc.StatusCode.FAILED_PRECONDITION)
+
+        existing = _make_response_model("m")
+        stub = MagicMock()
+        stub.CreateModel.side_effect = already_exists
+        get_resp = MagicMock(); get_resp.model = existing
+        stub.GetModel.return_value = get_resp
+        stub.UpdateModel.side_effect = failed_precondition
+
+        with patch(_STUB_PATH, return_value=stub):
+            client = APIRegistryClient(_config())
+            with self.assertRaises(RuntimeError):
+                client.register_model("m", "s3://b/raw")
+
     def test_grpc_error_propagates_on_non_already_exists(self):
         """It re-raises gRPC errors other than ALREADY_EXISTS."""
         mock_error = _RpcError(grpc.StatusCode.INTERNAL)
@@ -206,6 +252,18 @@ class TestAPIRegistryClientGetModel(TestCase):
         stub.GetModel.assert_called_once()
         self.assertEqual(reg.name, "clf")
         self.assertEqual(reg.version, "5")
+
+    def test_corrupt_metadata_annotation_raises_value_error(self):
+        """It raises ValueError with model name when the metadata annotation is invalid JSON."""
+        response_model = _make_response_model("bad-model")
+        response_model.metadata.annotations[METADATA_ANNOTATION_KEY] = "not-json{"
+        stub = _make_stub(get_model=response_model)
+        with patch(_STUB_PATH, return_value=stub):
+            client = APIRegistryClient(_config())
+            with self.assertRaises(ValueError) as ctx:
+                client.get_model("bad-model")
+        self.assertIn("bad-model", str(ctx.exception))
+        self.assertIn(METADATA_ANNOTATION_KEY, str(ctx.exception))
 
     def test_get_model_with_version_emits_warning(self):
         """It logs a warning when version is provided (per-revision lookup unsupported)."""

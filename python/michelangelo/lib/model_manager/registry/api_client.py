@@ -56,9 +56,13 @@ if TYPE_CHECKING:
     from michelangelo.lib.model_manager.registry.schema.api import APIRegistryConfig
 
 _logger = logging.getLogger(__name__)
-_METADATA_ANNOTATION_KEY = "michelangelo.io/metadata"
 
-__all__ = ["APIRegistryClient"]
+METADATA_ANNOTATION_KEY = "michelangelo.io/metadata"
+"""Annotation key under which free-form metadata is JSON-serialised in the ModelService API."""
+
+_MAX_REGISTER_RETRIES = 3
+
+__all__ = ["APIRegistryClient", "METADATA_ANNOTATION_KEY"]
 
 
 class APIRegistryClient(ModelRegistryClient):
@@ -74,11 +78,18 @@ class APIRegistryClient(ModelRegistryClient):
     point ``endpoint`` at a locally running API server with ``insecure=True``.
     For production, set ``insecure=False`` and provide a TLS-enabled endpoint.
 
-    **Create vs. update:** :meth:`register_model` attempts ``CreateModel``
-    first. If the server responds with ``ALREADY_EXISTS`` (the model name is
-    already registered), the client fetches the current ``resourceVersion``
-    and calls ``UpdateModel`` instead — matching the Kubernetes optimistic
-    concurrency pattern used internally.
+    **Create vs. update (with retry):** :meth:`register_model` attempts
+    ``CreateModel`` first. If the server responds with ``ALREADY_EXISTS``, the
+    client fetches the current ``resourceVersion`` and calls ``UpdateModel``
+    instead. If ``UpdateModel`` fails with ``FAILED_PRECONDITION`` (a concurrent
+    writer updated the resource between our ``GetModel`` and ``UpdateModel``),
+    the whole sequence is retried up to :data:`_MAX_REGISTER_RETRIES` times.
+
+    **registry_uri format:** The ``registry_uri`` field of the returned
+    :class:`RegisteredModel` uses the Michelangelo-internal format
+    ``models:/{namespace}/{name}/{version}`` — *not* the MLflow two-segment
+    format ``models:/{name}/{version}``. Do not pass this URI to MLflow
+    client libraries.
 
     **Labels** are stored in ``model.metadata.labels`` (indexed, filterable
     string key-value pairs). **Metadata** is JSON-serialised and stored under
@@ -154,7 +165,9 @@ class APIRegistryClient(ModelRegistryClient):
         Builds a ``Model`` CRD proto from the supplied arguments and calls
         ``CreateModel``. If the server returns ``ALREADY_EXISTS``, the current
         ``resourceVersion`` is fetched via ``GetModel`` and the call is retried
-        as ``UpdateModel`` (Kubernetes optimistic concurrency).
+        as ``UpdateModel``. If a concurrent writer causes ``UpdateModel`` to
+        return ``FAILED_PRECONDITION``, the whole sequence is retried up to
+        :data:`_MAX_REGISTER_RETRIES` times.
 
         Args:
             name: Model name to register. Used as ``model.metadata.name``.
@@ -179,45 +192,66 @@ class APIRegistryClient(ModelRegistryClient):
 
         Raises:
             grpc.RpcError: If the gRPC call fails for any reason other than
-                ``ALREADY_EXISTS``.
-            OSError: If the gRPC channel cannot reach the endpoint.
+                ``ALREADY_EXISTS`` / ``FAILED_PRECONDITION`` handled by the
+                retry loop.
+            RuntimeError: If all :data:`_MAX_REGISTER_RETRIES` attempts are
+                exhausted due to repeated concurrent writes.
         """
-        model = self._build_model_proto(
-            name=name,
-            artifact_uri=artifact_uri,
-            deployable_artifact_uri=deployable_artifact_uri,
-            description=description,
-            labels=labels,
-            metadata=metadata,
-        )
-        try:
-            _logger.info("Calling CreateModel for '%s'.", name)
-            resp = self._stub.CreateModel(
-                model_svc_pb2.CreateModelRequest(model=model),
-                timeout=self._config.timeout_seconds,
+        for attempt in range(1, _MAX_REGISTER_RETRIES + 1):
+            model = self._build_model_proto(
+                name=name,
+                artifact_uri=artifact_uri,
+                deployable_artifact_uri=deployable_artifact_uri,
+                description=description,
+                labels=labels,
+                metadata=metadata,
             )
-            return self._to_registered_model(resp.model)
-        except grpc.RpcError as exc:
-            if exc.code() == grpc.StatusCode.ALREADY_EXISTS:
-                _logger.info(
-                    "Model '%s' already exists — fetching resourceVersion "
-                    "and updating.",
-                    name,
-                )
-                get_resp = self._stub.GetModel(
-                    model_svc_pb2.GetModelRequest(
-                        name=name,
-                        namespace=self._config.namespace,
-                    ),
+            try:
+                _logger.info("Calling CreateModel for '%s'.", name)
+                resp = self._stub.CreateModel(
+                    model_svc_pb2.CreateModelRequest(model=model),
                     timeout=self._config.timeout_seconds,
                 )
-                model.metadata.resourceVersion = get_resp.model.metadata.resourceVersion
+                return self._to_registered_model(resp.model)
+            except grpc.RpcError as exc:
+                if exc.code() != grpc.StatusCode.ALREADY_EXISTS:
+                    raise
+
+            # ALREADY_EXISTS — fetch resourceVersion and update instead
+            _logger.warning(
+                "Model '%s' already exists — fetching resourceVersion and "
+                "updating (attempt %d/%d).",
+                name, attempt, _MAX_REGISTER_RETRIES,
+            )
+            get_resp = self._stub.GetModel(
+                model_svc_pb2.GetModelRequest(
+                    name=name,
+                    namespace=self._config.namespace,
+                ),
+                timeout=self._config.timeout_seconds,
+            )
+            model.metadata.resourceVersion = get_resp.model.metadata.resourceVersion
+            try:
                 upd_resp = self._stub.UpdateModel(
                     model_svc_pb2.UpdateModelRequest(model=model),
                     timeout=self._config.timeout_seconds,
                 )
                 return self._to_registered_model(upd_resp.model)
-            raise
+            except grpc.RpcError as upd_exc:
+                if upd_exc.code() == grpc.StatusCode.FAILED_PRECONDITION:
+                    if attempt < _MAX_REGISTER_RETRIES:
+                        _logger.warning(
+                            "UpdateModel for '%s' hit FAILED_PRECONDITION — "
+                            "concurrent write detected, retrying (%d/%d).",
+                            name, attempt, _MAX_REGISTER_RETRIES,
+                        )
+                        continue
+                    raise RuntimeError(
+                        f"register_model: exhausted {_MAX_REGISTER_RETRIES} retries "
+                        f"for {name!r} due to repeated concurrent writes. "
+                        "Call register_model() again to retry."
+                    ) from upd_exc
+                raise
 
     def get_model(self, name: str, version: str | None = None) -> RegisteredModel:
         """Retrieve the latest model registration by name.
@@ -284,7 +318,7 @@ class APIRegistryClient(ModelRegistryClient):
         for k, v in (labels or {}).items():
             model.metadata.labels[k] = v
         if metadata:
-            model.metadata.annotations[_METADATA_ANNOTATION_KEY] = json.dumps(
+            model.metadata.annotations[METADATA_ANNOTATION_KEY] = json.dumps(
                 dict(metadata)
             )
         return model
@@ -307,9 +341,20 @@ class APIRegistryClient(ModelRegistryClient):
         )
         labels = dict(model.metadata.labels)
 
-        metadata_str = dict(model.metadata.annotations).get(_METADATA_ANNOTATION_KEY)
-        metadata: dict[str, Any] = json.loads(metadata_str) if metadata_str else {}
+        metadata_str = dict(model.metadata.annotations).get(METADATA_ANNOTATION_KEY)
+        if metadata_str:
+            try:
+                metadata: dict[str, Any] = json.loads(metadata_str)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"Model {name!r}: annotation {METADATA_ANNOTATION_KEY!r} "
+                    f"contains invalid JSON: {exc}"
+                ) from exc
+        else:
+            metadata = {}
 
+        # registry_uri uses Michelangelo's internal three-segment format
+        # "models:/{namespace}/{name}/{version}" — not the two-segment MLflow format.
         return RegisteredModel(
             name=name,
             version=version,

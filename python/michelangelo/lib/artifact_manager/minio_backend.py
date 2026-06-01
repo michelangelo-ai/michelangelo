@@ -263,7 +263,8 @@ class MinioStorageBackend(StorageBackend):
                 local_path, self._config.bucket, destination_key,
             )
             with tarfile.open(tmp_path, "w") as tar:
-                tar.add(local_path, arcname="")
+                for entry in os.scandir(local_path):
+                    tar.add(entry.path, arcname=entry.name)
             try:
                 self._client.fput_object(self._config.bucket, destination_key, tmp_path)
             except self._S3Error as exc:
