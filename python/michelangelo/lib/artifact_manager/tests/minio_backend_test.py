@@ -11,7 +11,7 @@ from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
 from michelangelo.lib.artifact_manager.schema.minio import MinioStorageConfig
-from michelangelo.workflow.schema.exceptions import ConfigurationError
+from michelangelo.lib.exceptions import ConfigurationError
 
 
 def _config(**kwargs) -> MinioStorageConfig:

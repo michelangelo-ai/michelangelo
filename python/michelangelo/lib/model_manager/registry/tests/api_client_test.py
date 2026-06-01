@@ -11,7 +11,7 @@ import grpc
 from michelangelo.gen.api.v2 import model_pb2
 from michelangelo.lib.model_manager.registry.api_client import APIRegistryClient
 from michelangelo.lib.model_manager.registry.schema.api import APIRegistryConfig
-from michelangelo.workflow.schema.exceptions import ConfigurationError
+from michelangelo.lib.exceptions import ConfigurationError
 
 _STUB_PATH = "michelangelo.lib.model_manager.registry.api_client.ModelServiceStub"
 

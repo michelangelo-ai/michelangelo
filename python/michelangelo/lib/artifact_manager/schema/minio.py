@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from michelangelo.workflow.schema.exceptions import ConfigurationError
+from michelangelo.lib.exceptions import ConfigurationError
 
 
 @dataclass
