@@ -1,5 +1,15 @@
 """Michelangelo gRPC model service registry client.
 
+.. note::
+    **Internal adapter — requires a running Michelangelo ModelService.**
+    This client imports ``michelangelo.gen.api.v2`` gRPC stubs that are generated
+    from Michelangelo's internal protobuf definitions. It is intended for use
+    within a Michelangelo deployment. External adopters using a different model
+    registry should implement
+    :class:`~michelangelo.lib.model_manager.registry.client.ModelRegistryClient`
+    directly (e.g. :class:`~michelangelo.lib.model_manager.registry.client.InMemoryRegistryClient`
+    for testing).
+
 Implements :class:`~michelangelo.lib.model_manager.registry.client.ModelRegistryClient`
 by calling Michelangelo's ``ModelService`` gRPC API. Works against any running
 ``ModelService`` endpoint — a local sandbox API server (``insecure=True``) or
@@ -12,17 +22,17 @@ Typical usage::
     from michelangelo.lib.model_manager.registry.api_client import APIRegistryClient
     from michelangelo.lib.model_manager.registry.schema.api import APIRegistryConfig
 
-    client = APIRegistryClient(APIRegistryConfig(
+    with APIRegistryClient(APIRegistryConfig(
         endpoint="localhost:50051",
         namespace="sandbox",
-    ))
-    registered = client.register_model(
-        name="my-classifier",
-        artifact_uri="s3://bucket/models/my-classifier/abc123/raw",
-        labels={"training_framework": "xgboost"},
-        metadata={"run_id": "mlflow-run-abc"},
-    )
-    print(registered.version, registered.registry_uri)
+    )) as client:
+        registered = client.register_model(
+            name="my-classifier",
+            artifact_uri="s3://bucket/models/my-classifier/abc123/raw",
+            labels={"training_framework": "xgboost"},
+            metadata={"run_id": "mlflow-run-abc"},
+        )
+        print(registered.version, registered.registry_uri)
 """
 
 from __future__ import annotations
@@ -54,6 +64,12 @@ __all__ = ["APIRegistryClient"]
 class APIRegistryClient(ModelRegistryClient):
     """ModelRegistryClient backed by Michelangelo's gRPC ``ModelService`` API.
 
+    .. note::
+        This client depends on ``michelangelo.gen.api.v2`` gRPC stubs generated
+        from Michelangelo's internal protobuf definitions. It requires a running
+        ``ModelService`` endpoint. External adopters should implement
+        :class:`ModelRegistryClient` directly rather than using this class.
+
     Connects to any running ``ModelService`` endpoint. For local sandbox use,
     point ``endpoint`` at a locally running API server with ``insecure=True``.
     For production, set ``insecure=False`` and provide a TLS-enabled endpoint.
@@ -68,6 +84,10 @@ class APIRegistryClient(ModelRegistryClient):
     string key-value pairs). **Metadata** is JSON-serialised and stored under
     the annotation key ``michelangelo.io/metadata``.
 
+    **Channel lifecycle:** The underlying gRPC channel holds native threads and
+    TCP connections. Call :meth:`close` when done, or use the client as a
+    context manager (``with APIRegistryClient(...) as client:``).
+
     Args:
         config: :class:`APIRegistryConfig
             <michelangelo.lib.model_manager.registry.schema.api.APIRegistryConfig>`
@@ -78,20 +98,20 @@ class APIRegistryClient(ModelRegistryClient):
         from michelangelo.lib.model_manager.registry.api_client import APIRegistryClient
         from michelangelo.lib.model_manager.registry.schema.api import APIRegistryConfig
 
-        client = APIRegistryClient(APIRegistryConfig(
+        with APIRegistryClient(APIRegistryConfig(
             endpoint="localhost:50051",
             namespace="sandbox",
-        ))
-        reg = client.register_model(
-            name="boston-xgb",
-            artifact_uri="s3://bucket/models/boston-xgb/abc123/raw",
-            deployable_artifact_uri="s3://bucket/models/boston-xgb/abc123/deployable",
-            description="XGBoost model trained on Boston housing data",
-            labels={"training_framework": "xgboost"},
-            metadata={"run_id": "mlflow-run-abc", "rmse": 2.41},
-        )
-        print(reg.version)       # "1"
-        print(reg.registry_uri)  # "models:/sandbox/boston-xgb/1"
+        )) as client:
+            reg = client.register_model(
+                name="boston-xgb",
+                artifact_uri="s3://bucket/models/boston-xgb/abc123/raw",
+                deployable_artifact_uri="s3://bucket/models/boston-xgb/abc123/deployable",
+                description="XGBoost model trained on Boston housing data",
+                labels={"training_framework": "xgboost"},
+                metadata={"run_id": "mlflow-run-abc", "rmse": 2.41},
+            )
+            print(reg.version)       # "1"
+            print(reg.registry_uri)  # "models:/sandbox/boston-xgb/1"
     """
 
     def __init__(self, config: APIRegistryConfig) -> None:
@@ -106,7 +126,18 @@ class APIRegistryClient(ModelRegistryClient):
         else:
             credentials = grpc.ssl_channel_credentials()
             channel = grpc.secure_channel(config.endpoint, credentials)
+        self._channel = channel
         self._stub = ModelServiceStub(channel)
+
+    def close(self) -> None:
+        """Close the underlying gRPC channel, releasing threads and connections."""
+        self._channel.close()
+
+    def __enter__(self) -> "APIRegistryClient":
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
 
     def register_model(
         self,

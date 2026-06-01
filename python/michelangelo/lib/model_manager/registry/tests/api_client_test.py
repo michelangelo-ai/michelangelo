@@ -240,3 +240,23 @@ class TestAPIRegistryClientGetModel(TestCase):
              patch("grpc.ssl_channel_credentials", return_value=MagicMock()):
             APIRegistryClient(_config(insecure=False))
         mock_secure.assert_called_once()
+
+    def test_close_calls_channel_close(self):
+        """close() releases the underlying gRPC channel."""
+        stub = _make_stub()
+        mock_channel = MagicMock()
+        with patch(_STUB_PATH, return_value=stub), \
+             patch("grpc.insecure_channel", return_value=mock_channel):
+            client = APIRegistryClient(_config())
+            client.close()
+        mock_channel.close.assert_called_once()
+
+    def test_context_manager_closes_channel_on_exit(self):
+        """The context manager calls close() on __exit__."""
+        stub = _make_stub()
+        mock_channel = MagicMock()
+        with patch(_STUB_PATH, return_value=stub), \
+             patch("grpc.insecure_channel", return_value=mock_channel):
+            with APIRegistryClient(_config()):
+                pass
+        mock_channel.close.assert_called_once()
