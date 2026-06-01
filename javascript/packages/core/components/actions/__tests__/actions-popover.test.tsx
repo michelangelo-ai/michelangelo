@@ -446,6 +446,44 @@ describe('ActionsPopover', () => {
     });
   });
 
+  it('mutation-confirm action: keeps dialog open and shows error on mutation failure', async () => {
+    const user = userEvent.setup();
+    const failingRequest = vi.fn().mockRejectedValue(new Error('rpc error'));
+
+    render(
+      <ActionsPopover
+        actions={[
+          {
+            display: { label: 'Kill' },
+            action: { type: 'mutation', mutation: { mutationName: 'UpdateTriggerRun' } },
+            modal: {
+              type: 'confirm',
+              header: { title: 'Confirm kill?' },
+              button: { label: 'Kill it' },
+              destructive: true,
+            },
+          },
+        ]}
+        record={{ id: 'run-1' }}
+      />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getRouterWrapper(),
+        getServiceProviderWrapper({ request: failingRequest }),
+      ])
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Actions' }));
+    await user.click(await screen.findByRole('option', { name: 'Kill' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Confirm kill?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Kill it' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Confirm kill?' })).toBeInTheDocument();
+    expect(await screen.findByText('Test error')).toBeInTheDocument();
+  });
+
   it('route-confirm action: shows confirm dialog and navigates on confirm', async () => {
     const user = userEvent.setup();
 
