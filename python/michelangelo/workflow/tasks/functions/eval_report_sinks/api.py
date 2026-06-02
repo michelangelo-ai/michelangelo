@@ -72,7 +72,7 @@ class APIClientEvalReportSink(EvalReportSink):
         import os
         os.environ["MA_API_SERVER"] = "localhost:50051"
         from michelangelo.api.v2 import APIClient
-        APIClient.set_caller("my-trainer")  # optional, sets rpc-caller header
+        APIClient.set_caller("my-trainer")  # optional, sets the rpc-caller header
 
         from michelangelo.workflow.tasks.functions.eval_report_sinks import (
             APIClientEvalReportSink,
