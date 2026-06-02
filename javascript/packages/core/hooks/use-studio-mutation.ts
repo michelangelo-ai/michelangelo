@@ -23,7 +23,11 @@ export const useStudioMutation = <TData, TVariables extends Record<string, unkno
         throw normalizeError(error)!;
       }
     },
-    onSuccess: config?.clientOptions?.onSuccess ? (data) => config.clientOptions!.onSuccess!(data) : undefined,
-    onError: config?.clientOptions?.onError ? (error) => config.clientOptions!.onError!(error) : undefined,
+    onSuccess: config?.clientOptions?.onSuccess
+      ? (data) => config.clientOptions!.onSuccess!(data)
+      : undefined,
+    onError: config?.clientOptions?.onError
+      ? (error) => config.clientOptions!.onError!(error)
+      : undefined,
   });
 };

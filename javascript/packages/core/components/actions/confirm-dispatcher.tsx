@@ -16,7 +16,10 @@ import type {
 } from './types';
 
 type Props<T extends Data> = {
-  action: ActionConfig<T> & { action: MutationActionConfig | RouteActionConfig; modal: ConfirmModalConfig };
+  action: ActionConfig<T> & {
+    action: MutationActionConfig | RouteActionConfig;
+    modal: ConfirmModalConfig;
+  };
   record: T;
   onClose: () => void;
 };
