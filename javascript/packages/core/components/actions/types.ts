@@ -23,12 +23,19 @@ export type ActionConfig<T = Data> = ActionConfigBase &
   );
 
 export type ActionConfigBase = {
-  /** Controls how the action's trigger button is displayed to the user. */
+  /**
+   * Controls how the action's trigger button is displayed to the user.
+   *
+   * @see {@link ActionTriggerDisplay}
+   */
   display: ActionTriggerDisplay;
 
   /**
-   * Visual hierarchy of the action's trigger button.
-   * Actions without an explicit hierarchy default to tertiary (overflow menu).
+   * Visual hierarchy of the action's trigger button
+   *
+   * @note Actions without an explicit hierarchy default to tertiary (overflow menu).
+   *
+   * @see {@link ActionHierarchy}
    */
   hierarchy?: ActionHierarchy;
 
@@ -73,6 +80,7 @@ export type CustomModalConfig<T> = {
 export type BannerConfig = {
   content: ReactNode;
   kind?: BannerProps['kind'];
+  /** Registered icon name from the icon provider. */
   icon?: string;
 };
 
@@ -113,6 +121,11 @@ export type ResolvedActionItem = {
   onClick: () => void;
 };
 
+/**
+ * How the action's trigger button is displayed to the user
+ *
+ * @note icon is a string reference to an icon in the icon provider
+ */
 type ActionTriggerDisplay = {
   label: string;
   icon?: string;
