@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { MutationConfirmDispatcher } from '#core/components/actions/mutation-confirm-dispatcher';
+import { ConfirmDispatcher } from '#core/components/actions/confirm-dispatcher';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
@@ -39,18 +39,14 @@ function buildAction(overrides: Partial<MutationActionConfig> = {}): ActionConfi
   };
 }
 
-describe('MutationConfirmDispatcher', () => {
+describe('ConfirmDispatcher', () => {
   it('confirms → mutates with the record → closes', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
     const mockRequest = createQueryMockRouter({ UpdateTriggerRun: { triggerRun: {} } });
 
     render(
-      <MutationConfirmDispatcher
-        action={buildAction()}
-        record={{ id: 'run-1' }}
-        onClose={onClose}
-      />,
+      <ConfirmDispatcher action={buildAction()} record={{ id: 'run-1' }} onClose={onClose} />,
       buildWrapper([
         getBaseProviderWrapper(),
         getErrorProviderWrapper(),
@@ -78,11 +74,7 @@ describe('MutationConfirmDispatcher', () => {
     });
 
     render(
-      <MutationConfirmDispatcher
-        action={buildAction()}
-        record={{ id: 'run-1' }}
-        onClose={onClose}
-      />,
+      <ConfirmDispatcher action={buildAction()} record={{ id: 'run-1' }} onClose={onClose} />,
       buildWrapper([
         getBaseProviderWrapper(),
         getErrorProviderWrapper(),
@@ -105,11 +97,7 @@ describe('MutationConfirmDispatcher', () => {
     const mockRequest = createQueryMockRouter({ UpdateTriggerRun: {} });
 
     render(
-      <MutationConfirmDispatcher
-        action={buildAction()}
-        record={{ id: 'run-1' }}
-        onClose={onClose}
-      />,
+      <ConfirmDispatcher action={buildAction()} record={{ id: 'run-1' }} onClose={onClose} />,
       buildWrapper([
         getBaseProviderWrapper(),
         getErrorProviderWrapper(),
@@ -132,7 +120,7 @@ describe('MutationConfirmDispatcher', () => {
     });
 
     render(
-      <MutationConfirmDispatcher
+      <ConfirmDispatcher
         action={buildAction({
           successOperations: [{ type: 'toast', message: 'Trigger killed' }],
         })}
@@ -162,7 +150,7 @@ describe('MutationConfirmDispatcher', () => {
     });
 
     render(
-      <MutationConfirmDispatcher
+      <ConfirmDispatcher
         action={buildAction({
           successOperations: [{ type: 'toast', message: 'Should not appear' }],
         })}

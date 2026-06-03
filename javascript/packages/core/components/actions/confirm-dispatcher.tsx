@@ -6,6 +6,7 @@ import { Icon } from '#core/components/icon/icon';
 import { ConfirmDialog } from '#core/components/modal/confirm-dialog/confirm-dialog';
 import { useSchemaMiddleware } from '#core/hooks/use-schema-middleware/use-schema-middleware';
 import { useStudioMutation } from '#core/hooks/use-studio-mutation';
+import { useSuccessOperations } from './use-success-operations';
 
 import type {
   ActionConfig,
@@ -32,10 +33,14 @@ export function ConfirmDispatcher<T extends Data>({ action, record, onClose }: P
   const mutation = useStudioMutation<unknown, T>(
     action.operation.type === 'mutation' ? action.operation.mutation : null
   );
+  const runSuccessOperations = useSuccessOperations(
+    action.operation.type === 'mutation' ? action.operation.successOperations : undefined
+  );
 
   const onConfirm = async () => {
     if (action.operation.type === 'mutation') {
-      await mutation.mutateAsync(applyMiddleware(record));
+      const response = await mutation.mutateAsync(applyMiddleware(record));
+      runSuccessOperations(response);
     } else {
       navigate(action.operation.route);
     }
