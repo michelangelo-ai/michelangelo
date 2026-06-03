@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "interface.go",
         "manager.go",
+        "noop.go",
         "source.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/base/revision",

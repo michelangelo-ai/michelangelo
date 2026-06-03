@@ -23,6 +23,9 @@ ingester:
   concurrentReconciles: 1
   requeuePeriod: 30s
 
+pipeline:
+  revisioningEnabled: false
+
 pipelineRun:
   # ttlDays: 0  # 0 disables TTL eviction; set e.g. 30 to evict runs older than 30 days
 

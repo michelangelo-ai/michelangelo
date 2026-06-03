@@ -1,13 +1,17 @@
 package pipeline
 
 import (
+	"go.uber.org/config"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	"github.com/michelangelo-ai/michelangelo/go/base/revision"
 )
+
+const configKey = "pipeline"
 
 var (
 	// Module is the Uber FX module for the Pipeline controller.
@@ -22,15 +26,33 @@ var (
 	//       // other modules...
 	//   )
 	Module = fx.Options(
+		fx.Provide(newConfig),
 		fx.Invoke(registerMetrics),
 		fx.Invoke(register),
 	)
 )
 
+func newConfig(provider config.Provider) (Config, error) {
+	cfg := Config{}
+	err := provider.Get(configKey).Populate(&cfg)
+	return cfg, err
+}
+
 // registerMetrics registers pipeline metrics with Prometheus
 // This is invoked once during application initialization
 func registerMetrics() {
 	RegisterPipelineMetrics()
+}
+
+type registerParams struct {
+	fx.In
+
+	Mgr               manager.Manager
+	Env               env.Context
+	APIHandlerFactory apiHandler.Factory
+	Logger            *zap.Logger
+	RevisionManager   revision.Manager `optional:"true"`
+	Config            Config
 }
 
 // register initializes and registers the Pipeline controller with the manager.
@@ -39,18 +61,15 @@ func registerMetrics() {
 // is loaded. It creates a new Reconciler with the provided dependencies and
 // registers it with the controller-runtime manager to watch Pipeline resources.
 //
-// Dependencies are injected by FX:
-//   - mgr: The controller-runtime manager for registering the controller
-//   - env: Environment context for runtime configuration
-//   - apiHandlerFactory: Factory for creating API handlers
-//   - logger: Structured logger for the controller
-//
-// Returns an error if controller registration fails.
-func register(
-	mgr manager.Manager,
-	env env.Context,
-	apiHandlerFactory apiHandler.Factory,
-	logger *zap.Logger,
-) error {
-	return NewReconciler(env, apiHandlerFactory, logger).Register(mgr)
+// revision.Manager is optional: when no external implementation is provided,
+// Register will construct one from the API handler. Callers that need a custom
+// store (e.g. an internal service backed store) can inject their own.
+func register(p registerParams) error {
+	return (&Reconciler{
+		env:               p.Env,
+		apiHandlerFactory: p.APIHandlerFactory,
+		logger:            p.Logger,
+		revisionManager:   p.RevisionManager, // may be nil; Register fills it in
+		config:            p.Config,
+	}).Register(p.Mgr)
 }

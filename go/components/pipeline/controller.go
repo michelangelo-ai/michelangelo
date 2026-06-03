@@ -18,10 +18,12 @@ import (
 
 	"go.uber.org/zap"
 
+	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	"github.com/michelangelo-ai/michelangelo/go/base/revision"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,7 +32,9 @@ import (
 
 const (
 	// reconcileInterval defines how frequently non-terminal pipelines are reconciled.
-	reconcileInterval = 10 * time.Second
+	reconcileInterval  = 10 * time.Second
+	pipelineAPIVersion = "michelangelo.api/v2"
+	pipelineKind       = "Pipeline"
 )
 
 // Reconciler implements the controller-runtime Reconciler interface for Pipeline resources.
@@ -43,6 +47,8 @@ type Reconciler struct {
 	env               env.Context
 	logger            *zap.Logger
 	apiHandlerFactory apiHandler.Factory
+	revisionManager   revision.Manager
+	config            Config
 }
 
 // NewReconciler constructs a Reconciler with required dependencies.
@@ -68,6 +74,9 @@ func NewReconciler(
 //   - Updating the latest revision reference based on the pipeline's git commit
 //   - Transitioning the pipeline state to READY
 //   - Persisting status updates back to Kubernetes
+//
+// When Config.RevisioningEnabled is true, it also snapshots a Revision CR and
+// sets pipeline.Status.LatestRevision to point at it.
 //
 // The reconcile loop will requeue non-terminal pipelines at regular intervals
 // to ensure continuous monitoring. Terminal states (READY, ERROR) do not requeue.
@@ -97,9 +106,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	originalPipeline := pipeline.DeepCopy()
 	state := pipeline.Status.State
 	logger.Info("Reconciling pipeline", zap.Any("PipelineStatusState", state.String()))
-	pipeline.Status.LatestRevision = &apipb.ResourceIdentifier{
-		Name:      formatRevisionName(pipeline),
-		Namespace: pipeline.Namespace,
+
+	if r.config.RevisioningEnabled {
+		pipeline.Status.LatestRevision = &apipb.ResourceIdentifier{
+			Name:      formatRevisionName(pipeline),
+			Namespace: pipeline.Namespace,
+		}
 	}
 	pipeline.Status.State = v2pb.PIPELINE_STATE_READY
 
@@ -115,6 +127,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		IncPipelineReconcileError(pipeline.Namespace, pipeline.Name)
 	} else if pipeline.Status.State == v2pb.PIPELINE_STATE_READY {
 		IncPipelineReconcileSuccess(pipeline.Namespace, pipeline.Name)
+	}
+
+	// Snapshot a Revision CR on every successful READY reconcile when revisioning
+	// is enabled. UpsertRevision deduplicates immutable revisions, so repeated
+	// calls for the same commit are safe. Status is already persisted above, so
+	// a snapshot error requeues only this step without affecting the READY state.
+	if err == nil && r.config.RevisioningEnabled && pipeline.Status.State == v2pb.PIPELINE_STATE_READY {
+		if snapshotErr := r.snapshotRevision(ctx, pipeline); snapshotErr != nil {
+			logger.Error("failed to snapshot pipeline revision", zap.Error(snapshotErr))
+			return result, snapshotErr
+		}
 	}
 
 	return result, err
@@ -152,11 +175,9 @@ func (r *Reconciler) updatePipelineStatus(ctx context.Context, pipeline *v2pb.Pi
 //
 // The name format is: "pipeline-{lowercase-pipeline-name}-{git-ref-prefix}"
 // where git-ref-prefix is the first 12 characters (or less) of the git reference.
-//
-// For example: "pipeline-my-model-a1b2c3d4e5f6"
 func formatRevisionName(pipeline *v2pb.Pipeline) string {
 	if pipeline.Spec.Commit != nil {
-		return fmt.Sprintf("%s-%s-%s", "pipeline", strings.ToLower(pipeline.Name), pipeline.Spec.Commit.GitRef[:min(len(pipeline.Spec.Commit.GitRef), 12)])
+		return fmt.Sprintf("pipeline-%s-%s", strings.ToLower(pipeline.Name), pipeline.Spec.Commit.GitRef[:min(len(pipeline.Spec.Commit.GitRef), 12)])
 	}
 	return ""
 }
@@ -169,6 +190,50 @@ func formatRevisionName(pipeline *v2pb.Pipeline) string {
 func isTerminatedState(state v2pb.PipelineState) bool {
 	return state == v2pb.PIPELINE_STATE_READY ||
 		state == v2pb.PIPELINE_STATE_ERROR
+}
+
+func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeline) error {
+	if pipeline.Spec.Commit == nil {
+		r.logger.Info("skipping revision snapshot: pipeline has no commit info",
+			zap.String("namespace", pipeline.Namespace),
+			zap.String("name", pipeline.Name))
+		return nil
+	}
+
+	content, err := pbtypes.MarshalAny(pipeline)
+	if err != nil {
+		return fmt.Errorf("marshal pipeline content: %w", err)
+	}
+
+	rev := &v2pb.Revision{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: pipelineAPIVersion,
+			Kind:       "Revision",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        formatRevisionName(pipeline),
+			Namespace:   pipeline.Namespace,
+			Annotations: pipeline.Annotations,
+		},
+		Spec: v2pb.RevisionSpec{
+			BaseType: &metav1.TypeMeta{
+				Kind:       pipelineKind,
+				APIVersion: pipelineAPIVersion,
+			},
+			BaseResource: &apipb.ResourceIdentifier{
+				Name:      pipeline.Name,
+				Namespace: pipeline.Namespace,
+			},
+			Content:    content,
+			Owner:      pipeline.Spec.GetOwner(),
+			RevisionId: pipeline.Spec.Commit.GitRef,
+			Source:     revision.SourceGit,
+			GitCommit:  pipeline.Spec.Commit,
+		},
+	}
+
+	_, err = r.revisionManager.UpsertRevision(ctx, rev, revision.UpsertOpts{})
+	return err
 }
 
 // Register sets up the Pipeline controller with the controller-runtime manager.
