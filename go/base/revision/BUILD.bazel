@@ -21,9 +21,7 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = [
-        "manager_test.go",
-    ],
+    srcs = ["manager_test.go"],
     embed = [":go_default_library"],
     deps = [
         "//go/api:go_default_library",
