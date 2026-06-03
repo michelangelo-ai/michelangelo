@@ -18,8 +18,9 @@ export type Data = Record<string, unknown>;
  */
 export type ActionConfig<T = Data> = ActionConfigBase &
   (
-    | { action: MutationActionConfig | RouteActionConfig; modal?: ConfirmModalConfig }
-    | { modal: CustomModalConfig<T>; action?: never }
+    | { operation: MutationActionConfig | RouteActionConfig; modal: ConfirmModalConfig }
+    | { operation: MutationActionConfig | RouteActionConfig; modal?: never }
+    | { modal: CustomModalConfig<T>; operation?: never }
   );
 
 export type ActionConfigBase = {
@@ -106,15 +107,12 @@ export enum ActionHierarchy {
 }
 
 /**
- * Item shape consumed by action renderers (see `useResolvedActionItems`).
- * Only display + `onClick` — no action-type knowledge. The `onClick`
- * delegates to whatever `onSelect` the renderer provided when the item
- * was resolved.
+ * Item shape consumed by action renderers — display + `onClick` with no
+ * action-type knowledge. The `onClick` is pre-bound by whoever resolved the items.
  */
 export type ResolvedActionItem = {
   display: ActionTriggerDisplay;
   hierarchy?: ActionHierarchy;
-  /** True if any of the source action's disabled rules matched. */
   disabled: boolean;
   /** Tooltip shown on hover/keyboard navigation when `disabled` is true. */
   disabledMessage?: string;

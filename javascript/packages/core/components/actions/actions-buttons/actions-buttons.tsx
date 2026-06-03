@@ -39,8 +39,8 @@ export function ActionsButtons<T extends Data>({
   const activateAction = (action: ActionConfig<T>) => {
     if (action.modal) {
       setActiveAction(action);
-    } else if (action.action?.type === 'route') {
-      navigate(action.action.route);
+    } else if (action.operation?.type === 'route') {
+      navigate(action.operation.route);
     }
   };
 

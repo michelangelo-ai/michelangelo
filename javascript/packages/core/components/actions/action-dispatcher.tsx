@@ -1,6 +1,6 @@
 import { ConfirmDispatcher } from './confirm-dispatcher';
 
-import type { ActionConfig, Data } from './types';
+import type { ActionConfig, ConfirmModalConfig, Data, MutationActionConfig, RouteActionConfig } from './types';
 
 type Props<T extends Data> = {
   action: ActionConfig<T>;
@@ -13,14 +13,17 @@ export function ActionDispatcher<T extends Data>({ action, record, onClose }: Pr
     const Component = action.modal.component;
     return <Component record={record} onClose={onClose} />;
   }
-  if (action.modal?.type === 'confirm' && action.action) {
-    return (
-      <ConfirmDispatcher
-        action={{ ...action, action: action.action, modal: action.modal }}
-        record={record}
-        onClose={onClose}
-      />
-    );
+  if (isConfirmAction(action)) {
+    return <ConfirmDispatcher action={action} record={record} onClose={onClose} />;
   }
   return null;
+}
+
+// `action.modal?.type === 'confirm'` narrows `action.modal` to ConfirmModalConfig
+// but doesn't eliminate the `{ modal?: never }` branch from ActionConfig<T>'s union,
+// so `action` still types as the full union when passed to ConfirmDispatcher.
+function isConfirmAction<T extends Data>(
+  action: ActionConfig<T>
+): action is ActionConfig<T> & { operation: MutationActionConfig | RouteActionConfig; modal: ConfirmModalConfig } {
+  return action.modal?.type === 'confirm';
 }

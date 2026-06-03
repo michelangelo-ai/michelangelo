@@ -17,7 +17,7 @@ import type {
 
 type Props<T extends Data> = {
   action: ActionConfig<T> & {
-    action: MutationActionConfig | RouteActionConfig;
+    operation: MutationActionConfig | RouteActionConfig;
     modal: ConfirmModalConfig;
   };
   record: T;
@@ -27,17 +27,17 @@ type Props<T extends Data> = {
 export function ConfirmDispatcher<T extends Data>({ action, record, onClose }: Props<T>) {
   const navigate = useNavigate();
   const { applyMiddleware } = useSchemaMiddleware(
-    action.action.type === 'mutation' ? (action.action.middleware ?? null) : null
+    action.operation.type === 'mutation' ? (action.operation.middleware ?? null) : null
   );
   const mutation = useStudioMutation<unknown, T>(
-    action.action.type === 'mutation' ? action.action.mutation : null
+    action.operation.type === 'mutation' ? action.operation.mutation : null
   );
 
   const onConfirm = async () => {
-    if (action.action.type === 'mutation') {
+    if (action.operation.type === 'mutation') {
       await mutation.mutateAsync(applyMiddleware(record));
     } else {
-      navigate(action.action.route);
+      navigate(action.operation.route);
     }
   };
 

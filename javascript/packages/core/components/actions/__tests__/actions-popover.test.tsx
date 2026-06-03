@@ -413,7 +413,7 @@ describe('ActionsPopover', () => {
         actions={[
           {
             display: { label: 'Kill' },
-            action: { type: 'mutation', mutation: { mutationName: 'UpdateTriggerRun' } },
+            operation: { type: 'mutation', mutation: { mutationName: 'UpdateTriggerRun' } },
             modal: {
               type: 'confirm',
               header: { title: 'Confirm kill?' },
@@ -455,7 +455,7 @@ describe('ActionsPopover', () => {
         actions={[
           {
             display: { label: 'Kill' },
-            action: { type: 'mutation', mutation: { mutationName: 'UpdateTriggerRun' } },
+            operation: { type: 'mutation', mutation: { mutationName: 'UpdateTriggerRun' } },
             modal: {
               type: 'confirm',
               header: { title: 'Confirm kill?' },
@@ -492,7 +492,7 @@ describe('ActionsPopover', () => {
         actions={[
           {
             display: { label: 'Open detail' },
-            action: { type: 'route', route: '/dest/page' },
+            operation: { type: 'route', route: '/dest/page' },
             modal: {
               type: 'confirm',
               header: { title: 'Open detail page?' },

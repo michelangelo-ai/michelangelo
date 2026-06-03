@@ -34,8 +34,8 @@ export function ActionsPopover<T extends Data>({
   const items = useResolvedActionItems(actions, (action) => {
     if (action.modal) {
       setActiveAction(action);
-    } else if (action.action?.type === 'route') {
-      navigate(action.action.route);
+    } else if (action.operation?.type === 'route') {
+      navigate(action.operation.route);
     }
   });
 
