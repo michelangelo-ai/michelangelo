@@ -50,7 +50,7 @@ class TestMinioStorageBackendValidation(TestCase):
             MinioStorageBackend(endpoint="", bucket="b", access_key="a", secret_key="s")
 
     def test_raises_on_empty_bucket(self):
-        """It raises ConfigurationError when bucket is empty."""
+        """It raises ConfigurationError when the bucket is empty."""
         from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
         with self.assertRaises(ConfigurationError):
             MinioStorageBackend(endpoint="localhost:9000", bucket="", access_key="a", secret_key="s")
