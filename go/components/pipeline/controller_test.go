@@ -13,8 +13,6 @@ import (
 
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
-	"github.com/michelangelo-ai/michelangelo/go/base/revision"
-	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.uber.org/zap/zaptest"
 	"k8s.io/apimachinery/pkg/types"
@@ -25,13 +23,12 @@ func TestReconcile(t *testing.T) {
 	now := metav1.Now()
 	gracePeriod := int64(0)
 	testCases := []struct {
-		name                         string
-		initialObjects               []client.Object
-		env                          env.Context
-		expectedResult               ctrl.Result
-		expectedError                string
-		expectedStatusState          v2pb.PipelineState
-		expectedStatusLatestRevision *apipb.ResourceIdentifier
+		name                string
+		initialObjects      []client.Object
+		env                 env.Context
+		expectedResult      ctrl.Result
+		expectedError       string
+		expectedStatusState v2pb.PipelineState
 	}{
 		{
 			name: "Invalid -> READY",
@@ -52,13 +49,9 @@ func TestReconcile(t *testing.T) {
 			expectedResult:      ctrl.Result{},
 			expectedError:       "",
 			expectedStatusState: v2pb.PIPELINE_STATE_READY,
-			expectedStatusLatestRevision: &apipb.ResourceIdentifier{
-				Name:      "pipeline-test-pipeline-1234556",
-				Namespace: "test-namespace",
-			},
 		},
 		{
-			name: "Ready -> should not reconcile",
+			name: "Already READY -> stays READY",
 			initialObjects: []client.Object{
 				&v2pb.Pipeline{
 					ObjectMeta: metav1.ObjectMeta{
@@ -73,23 +66,15 @@ func TestReconcile(t *testing.T) {
 					},
 					Status: v2pb.PipelineStatus{
 						State: v2pb.PIPELINE_STATE_READY,
-						LatestRevision: &apipb.ResourceIdentifier{
-							Name:      "pipeline-test-pipeline-123456",
-							Namespace: "test-namespace",
-						},
 					},
 				},
 			},
 			expectedResult:      ctrl.Result{},
 			expectedError:       "",
 			expectedStatusState: v2pb.PIPELINE_STATE_READY,
-			expectedStatusLatestRevision: &apipb.ResourceIdentifier{
-				Name:      "pipeline-test-pipeline-123456",
-				Namespace: "test-namespace",
-			},
 		},
 		{
-			name: "Ready -> should reconcile",
+			name: "Already READY with new commit -> stays READY",
 			initialObjects: []client.Object{
 				&v2pb.Pipeline{
 					ObjectMeta: metav1.ObjectMeta{
@@ -104,20 +89,12 @@ func TestReconcile(t *testing.T) {
 					},
 					Status: v2pb.PipelineStatus{
 						State: v2pb.PIPELINE_STATE_READY,
-						LatestRevision: &apipb.ResourceIdentifier{
-							Name:      "pipeline-test-pipeline-123456",
-							Namespace: "test-namespace",
-						},
 					},
 				},
 			},
 			expectedResult:      ctrl.Result{},
 			expectedError:       "",
 			expectedStatusState: v2pb.PIPELINE_STATE_READY,
-			expectedStatusLatestRevision: &apipb.ResourceIdentifier{
-				Name:      "pipeline-test-pipeline-234567",
-				Namespace: "test-namespace",
-			},
 		},
 		{
 			// A Pipeline with a deletionTimestamp is being torn down by the
@@ -170,81 +147,6 @@ func TestReconcile(t *testing.T) {
 			err = reconciler.Get(context.Background(), "test-namespace", "test-pipeline", &metav1.GetOptions{}, pipeline)
 			require.NoError(t, err)
 			require.Equal(t, tc.expectedStatusState, pipeline.Status.State)
-			if tc.expectedStatusLatestRevision != nil {
-				require.Equal(t, tc.expectedStatusLatestRevision, pipeline.Status.LatestRevision)
-			} else {
-				require.Nil(t, pipeline.Status.LatestRevision)
-			}
-		})
-	}
-}
-
-func TestFormatRevisionName(t *testing.T) {
-	testCases := []struct {
-		name           string
-		pipeline       *v2pb.Pipeline
-		expectedResult string
-	}{
-		{
-			name: "Normal git ref",
-			pipeline: &v2pb.Pipeline{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "my-pipeline",
-				},
-				Spec: v2pb.PipelineSpec{
-					Commit: &v2pb.CommitInfo{
-						GitRef: "abcdef1234567890",
-					},
-				},
-			},
-			expectedResult: "pipeline-my-pipeline-abcdef123456",
-		},
-		{
-			name: "Short git ref",
-			pipeline: &v2pb.Pipeline{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-pipe",
-				},
-				Spec: v2pb.PipelineSpec{
-					Commit: &v2pb.CommitInfo{
-						GitRef: "abc123",
-					},
-				},
-			},
-			expectedResult: "pipeline-test-pipe-abc123",
-		},
-		{
-			name: "Uppercase pipeline name",
-			pipeline: &v2pb.Pipeline{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "MY-PIPELINE",
-				},
-				Spec: v2pb.PipelineSpec{
-					Commit: &v2pb.CommitInfo{
-						GitRef: "def456789012",
-					},
-				},
-			},
-			expectedResult: "pipeline-my-pipeline-def456789012",
-		},
-		{
-			name: "No commit info",
-			pipeline: &v2pb.Pipeline{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "no-commit",
-				},
-				Spec: v2pb.PipelineSpec{
-					Commit: nil,
-				},
-			},
-			expectedResult: "",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result := formatRevisionName(tc.pipeline)
-			require.Equal(t, tc.expectedResult, result)
 		})
 	}
 }
@@ -256,9 +158,8 @@ func setUpReconciler(t *testing.T, initialObjects []client.Object, env env.Conte
 	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initialObjects...).WithStatusSubresource(initialObjects...).Build()
 	handler := apiHandler.NewFakeAPIHandler(k8sClient)
 	reconciler := &Reconciler{
-		Handler:         handler,
-		logger:          zaptest.NewLogger(t),
-		revisionManager: revision.NewManager(handler, zaptest.NewLogger(t)),
+		Handler: handler,
+		logger:  zaptest.NewLogger(t),
 	}
 	return reconciler
 }

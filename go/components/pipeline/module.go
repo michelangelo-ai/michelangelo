@@ -7,7 +7,6 @@ import (
 
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
-	"github.com/michelangelo-ai/michelangelo/go/base/revision"
 )
 
 var (
@@ -23,7 +22,6 @@ var (
 	//       // other modules...
 	//   )
 	Module = fx.Options(
-		fx.Provide(revision.NewManager),
 		fx.Invoke(registerMetrics),
 		fx.Invoke(register),
 	)
@@ -53,12 +51,10 @@ func register(
 	env env.Context,
 	apiHandlerFactory apiHandler.Factory,
 	logger *zap.Logger,
-	revisionManager revision.Manager,
 ) error {
 	return (&Reconciler{
 		env:               env,
 		apiHandlerFactory: apiHandlerFactory,
 		logger:            logger,
-		revisionManager:   revisionManager,
 	}).Register(mgr)
 }
