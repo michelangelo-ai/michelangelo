@@ -1,6 +1,12 @@
 import { ConfirmDispatcher } from './confirm-dispatcher';
 
-import type { ActionConfig, ConfirmModalConfig, Data, MutationActionConfig, RouteActionConfig } from './types';
+import type {
+  ActionConfig,
+  ConfirmModalConfig,
+  Data,
+  MutationActionConfig,
+  RouteActionConfig,
+} from './types';
 
 type Props<T extends Data> = {
   action: ActionConfig<T>;
@@ -24,6 +30,9 @@ export function ActionDispatcher<T extends Data>({ action, record, onClose }: Pr
 // so `action` still types as the full union when passed to ConfirmDispatcher.
 function isConfirmAction<T extends Data>(
   action: ActionConfig<T>
-): action is ActionConfig<T> & { operation: MutationActionConfig | RouteActionConfig; modal: ConfirmModalConfig } {
+): action is ActionConfig<T> & {
+  operation: MutationActionConfig | RouteActionConfig;
+  modal: ConfirmModalConfig;
+} {
   return action.modal?.type === 'confirm';
 }
