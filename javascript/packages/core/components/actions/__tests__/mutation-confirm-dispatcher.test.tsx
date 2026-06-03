@@ -13,11 +13,13 @@ import {
 } from '#core/test/wrappers/get-service-provider-wrapper';
 import { getSnackbarProviderWrapper } from '#core/test/wrappers/get-snackbar-provider-wrapper';
 
-import type { ActionConfig, ConfirmModalConfig, MutationActionConfig } from '#core/components/actions/types';
+import type {
+  ActionConfig,
+  ConfirmModalConfig,
+  MutationActionConfig,
+} from '#core/components/actions/types';
 
-function buildAction(
-  overrides: Partial<MutationActionConfig> = {}
-): ActionConfig & {
+function buildAction(overrides: Partial<MutationActionConfig> = {}): ActionConfig & {
   operation: MutationActionConfig;
   modal: ConfirmModalConfig;
 } {
