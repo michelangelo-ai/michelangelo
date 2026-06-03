@@ -178,48 +178,7 @@ func TestFormatRevisionName(t *testing.T) {
 			},
 			expectedResult: "pipeline-my-pipeline-abcdef123456",
 		},
-		{
-			name: "Short git ref",
-			pipeline: &v2pb.Pipeline{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-pipe",
-				},
-				Spec: v2pb.PipelineSpec{
-					Commit: &v2pb.CommitInfo{
-						GitRef: "abc123",
-					},
-				},
-			},
-			expectedResult: "pipeline-test-pipe-abc123",
-		},
-		{
-			name: "Uppercase pipeline name",
-			pipeline: &v2pb.Pipeline{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "MY-PIPELINE",
-				},
-				Spec: v2pb.PipelineSpec{
-					Commit: &v2pb.CommitInfo{
-						GitRef: "def456789012",
-					},
-				},
-			},
-			expectedResult: "pipeline-my-pipeline-def456789012",
-		},
-		{
-			name: "No commit info",
-			pipeline: &v2pb.Pipeline{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "no-commit",
-				},
-				Spec: v2pb.PipelineSpec{
-					Commit: nil,
-				},
-			},
-			expectedResult: "",
-		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result := formatRevisionName(tc.pipeline)

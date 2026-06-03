@@ -59,4 +59,5 @@ type registerParams struct {
 
 func register(p registerParams) error {
 	return NewReconciler(p.Env, p.APIHandlerFactory, p.Logger, p.RevisionManager, p.Config).Register(p.Mgr)
+
 }
