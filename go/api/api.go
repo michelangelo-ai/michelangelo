@@ -23,6 +23,11 @@ const (
 	// If this annotation is "true", ingester will delete this CRD in both k8s/ETCD and MySQL.
 	DeletingAnnotation = "michelangelo/Deleting"
 
+	// DeletePropagationAnnotation records the caller's Kubernetes delete propagation
+	// policy (e.g. "Foreground") so the ingester can honor it when it issues the
+	// real delete on the metadata-storage delete path.
+	DeletePropagationAnnotation = "michelangelo/DeletePropagation"
+
 	// ImmutableAnnotation is used to mark a CRD object if the spec and status of the object
 	// will no longer be updated .  If this annotation is set to "true", ingester will remove
 	// this CRD object from k8s/ETCD and only the annotation and label of the immutable CRD

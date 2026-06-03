@@ -217,7 +217,7 @@ func (r *Reconciler) handleDeletionAnnotation(ctx context.Context, log logr.Logg
 	// Delete from K8s/ETCD. The finalizer is intentionally left in place so that
 	// K8s sets a DeletionTimestamp instead of removing the object immediately;
 	// handleDeletion will remove the finalizer on the next reconcile.
-	if err := r.Delete(ctx, object); err != nil {
+	if err := r.Delete(ctx, object, deleteOptionsFromAnnotations(object)...); err != nil {
 		log.Error(err, "Failed to delete from K8s")
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
@@ -249,7 +249,7 @@ func (r *Reconciler) handleImmutableObject(ctx context.Context, log logr.Logger,
 	}
 
 	// Delete from K8s/ETCD (object now only exists in metadata storage)
-	if err := r.Delete(ctx, object); err != nil {
+	if err := r.Delete(ctx, object, deleteOptionsFromAnnotations(object)...); err != nil {
 		log.Error(err, "Failed to delete immutable object from K8s")
 		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
 	}
@@ -299,6 +299,23 @@ func isDeletingAnnotationSet(object client.Object) bool {
 		return false
 	}
 	return annotations[api.DeletingAnnotation] == "true"
+}
+
+// deleteOptionsFromAnnotations builds the controller-runtime delete options from the
+// object's annotations. When the apiserver recorded a delete propagation policy on the
+// metadata-storage delete path (api.DeletePropagationAnnotation), it is honored here so
+// the real K8s delete uses the caller's propagation policy (e.g. Foreground for cascade
+// deletion). Returns nil when no policy annotation is present.
+func deleteOptionsFromAnnotations(object client.Object) []client.DeleteOption {
+	annotations := object.GetAnnotations()
+	if annotations == nil {
+		return nil
+	}
+	policy, ok := annotations[api.DeletePropagationAnnotation]
+	if !ok || policy == "" {
+		return nil
+	}
+	return []client.DeleteOption{client.PropagationPolicy(metav1.DeletionPropagation(policy))}
 }
 
 func isImmutable(object client.Object) bool {
