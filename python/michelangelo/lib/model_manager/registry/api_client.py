@@ -20,12 +20,8 @@ The ``grpcio`` package is a required dependency and is always available.
 Typical usage::
 
     from michelangelo.lib.model_manager.registry.api_client import APIRegistryClient
-    from michelangelo.lib.model_manager.registry.schema.api import APIRegistryConfig
 
-    with APIRegistryClient(APIRegistryConfig(
-        endpoint="localhost:50051",
-        namespace="sandbox",
-    )) as client:
+    with APIRegistryClient(endpoint="localhost:50051", namespace="sandbox") as client:
         registered = client.register_model(
             name="my-classifier",
             artifact_uri="s3://bucket/models/my-classifier/abc123/raw",
@@ -45,6 +41,7 @@ import grpc
 
 from michelangelo.gen.api.v2 import model_pb2, model_svc_pb2
 from michelangelo.gen.api.v2.model_svc_pb2_grpc import ModelServiceStub
+from michelangelo.lib.exceptions import ConfigurationError
 from michelangelo.lib.model_manager.registry.client import (
     ModelRegistryClient,
     RegisteredModel,
@@ -52,8 +49,6 @@ from michelangelo.lib.model_manager.registry.client import (
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-
-    from michelangelo.lib.model_manager.registry.schema.api import APIRegistryConfig
 
 _logger = logging.getLogger(__name__)
 
@@ -100,19 +95,22 @@ class APIRegistryClient(ModelRegistryClient):
     context manager (``with APIRegistryClient(...) as client:``).
 
     Args:
-        config: :class:`APIRegistryConfig
-            <michelangelo.lib.model_manager.registry.schema.api.APIRegistryConfig>`
-            holding endpoint, namespace, TLS, and timeout settings.
+        endpoint: gRPC server address without the scheme
+            (e.g. ``"localhost:50051"`` or ``"api.michelangelo.io:443"``).
+        namespace: Kubernetes namespace used for model resources. Leave empty
+            to use the server's default namespace.
+        insecure: Use a plaintext gRPC channel (no TLS). Set ``True`` for a
+            local sandbox API server, ``False`` for any TLS-protected endpoint.
+        timeout_seconds: Per-call deadline in seconds.
+
+    Raises:
+        ConfigurationError: If ``endpoint`` is empty.
 
     Example::
 
         from michelangelo.lib.model_manager.registry.api_client import APIRegistryClient
-        from michelangelo.lib.model_manager.registry.schema.api import APIRegistryConfig
 
-        with APIRegistryClient(APIRegistryConfig(
-            endpoint="localhost:50051",
-            namespace="sandbox",
-        )) as client:
+        with APIRegistryClient(endpoint="localhost:50051", namespace="sandbox") as client:
             reg = client.register_model(
                 name="boston-xgb",
                 artifact_uri="s3://bucket/models/boston-xgb/abc123/raw",
@@ -125,18 +123,36 @@ class APIRegistryClient(ModelRegistryClient):
             print(reg.registry_uri)  # "models:/sandbox/boston-xgb/1"
     """
 
-    def __init__(self, config: APIRegistryConfig) -> None:
+    def __init__(
+        self,
+        endpoint: str,
+        namespace: str = "",
+        insecure: bool = True,
+        timeout_seconds: int = 30,
+    ) -> None:
         """Open a gRPC channel and create the ModelService stub.
 
         Args:
-            config: Connection and namespace configuration.
+            endpoint: gRPC server address without the scheme.
+            namespace: Kubernetes namespace for model resources.
+            insecure: Use plaintext gRPC (no TLS). Defaults to ``True``.
+            timeout_seconds: Per-call deadline in seconds. Defaults to ``30``.
+
+        Raises:
+            ConfigurationError: If ``endpoint`` is empty.
         """
-        self._config = config
-        if config.insecure:
-            channel = grpc.insecure_channel(config.endpoint)
+        if not endpoint:
+            raise ConfigurationError(
+                "APIRegistryClient endpoint must be non-empty. "
+                "Provide the gRPC server address, e.g. 'localhost:50051'."
+            )
+        self._namespace = namespace
+        self._timeout_seconds = timeout_seconds
+        if insecure:
+            channel = grpc.insecure_channel(endpoint)
         else:
             credentials = grpc.ssl_channel_credentials()
-            channel = grpc.secure_channel(config.endpoint, credentials)
+            channel = grpc.secure_channel(endpoint, credentials)
         self._channel = channel
         self._stub = ModelServiceStub(channel)
 
@@ -210,7 +226,7 @@ class APIRegistryClient(ModelRegistryClient):
                 _logger.info("Calling CreateModel for '%s'.", name)
                 resp = self._stub.CreateModel(
                     model_svc_pb2.CreateModelRequest(model=model),
-                    timeout=self._config.timeout_seconds,
+                    timeout=self._timeout_seconds,
                 )
                 return self._to_registered_model(resp.model)
             except grpc.RpcError as exc:
@@ -226,15 +242,15 @@ class APIRegistryClient(ModelRegistryClient):
             get_resp = self._stub.GetModel(
                 model_svc_pb2.GetModelRequest(
                     name=name,
-                    namespace=self._config.namespace,
+                    namespace=self._namespace,
                 ),
-                timeout=self._config.timeout_seconds,
+                timeout=self._timeout_seconds,
             )
             model.metadata.resourceVersion = get_resp.model.metadata.resourceVersion
             try:
                 upd_resp = self._stub.UpdateModel(
                     model_svc_pb2.UpdateModelRequest(model=model),
-                    timeout=self._config.timeout_seconds,
+                    timeout=self._timeout_seconds,
                 )
                 return self._to_registered_model(upd_resp.model)
             except grpc.RpcError as upd_exc:
@@ -287,9 +303,9 @@ class APIRegistryClient(ModelRegistryClient):
         resp = self._stub.GetModel(
             model_svc_pb2.GetModelRequest(
                 name=name,
-                namespace=self._config.namespace,
+                namespace=self._namespace,
             ),
-            timeout=self._config.timeout_seconds,
+            timeout=self._timeout_seconds,
         )
         return self._to_registered_model(resp.model)
 
@@ -307,8 +323,8 @@ class APIRegistryClient(ModelRegistryClient):
         """Construct a ``Model`` CRD proto from registration arguments."""
         model = model_pb2.Model()
         model.metadata.name = name
-        if self._config.namespace:
-            model.metadata.namespace = self._config.namespace
+        if self._namespace:
+            model.metadata.namespace = self._namespace
 
         model.spec.model_artifact_uri.append(artifact_uri)
         if deployable_artifact_uri:
@@ -326,7 +342,7 @@ class APIRegistryClient(ModelRegistryClient):
     def _to_registered_model(self, model: model_pb2.Model) -> RegisteredModel:
         """Map a ``Model`` proto response to a :class:`RegisteredModel`."""
         name = model.metadata.name
-        namespace = model.metadata.namespace or self._config.namespace
+        namespace = model.metadata.namespace or self._namespace
         version = str(model.spec.revision_id)
 
         artifact_uri = (

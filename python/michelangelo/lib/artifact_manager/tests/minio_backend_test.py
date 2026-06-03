@@ -10,7 +10,6 @@ import tempfile
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
-from michelangelo.lib.artifact_manager.schema.minio import MinioStorageConfig
 from michelangelo.lib.exceptions import ConfigurationError
 
 
@@ -20,18 +19,6 @@ class _FakeS3Error(Exception):
     def __init__(self, msg: str = "", code: str = "") -> None:
         super().__init__(msg)
         self.code = code
-
-
-def _config(**kwargs) -> MinioStorageConfig:
-    defaults = {
-        "endpoint": "localhost:9000",
-        "bucket": "test-bucket",
-        "access_key": "minioadmin",
-        "secret_key": "minioadmin",
-        "secure": False,  # local sandbox
-    }
-    defaults.update(kwargs)
-    return MinioStorageConfig(**defaults)
 
 
 def _make_mock_minio(bucket_exists: bool = True) -> tuple[MagicMock, MagicMock]:
@@ -44,51 +31,57 @@ def _make_mock_minio(bucket_exists: bool = True) -> tuple[MagicMock, MagicMock]:
     return mock_module, mock_client
 
 
-class TestMinioStorageConfig(TestCase):
-    """Tests for MinioStorageConfig validation."""
+_DEFAULT_KWARGS = {
+    "endpoint": "localhost:9000",
+    "bucket": "test-bucket",
+    "access_key": "minioadmin",
+    "secret_key": "minioadmin",
+    "secure": False,
+}
+
+
+class TestMinioStorageBackendValidation(TestCase):
+    """Tests for MinioStorageBackend constructor validation."""
 
     def test_raises_on_empty_endpoint(self):
         """It raises ConfigurationError when endpoint is empty."""
+        from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
         with self.assertRaises(ConfigurationError):
-            _config(endpoint="")
+            MinioStorageBackend(endpoint="", bucket="b", access_key="a", secret_key="s")
 
     def test_raises_on_empty_bucket(self):
         """It raises ConfigurationError when bucket is empty."""
+        from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
         with self.assertRaises(ConfigurationError):
-            _config(bucket="")
+            MinioStorageBackend(endpoint="localhost:9000", bucket="", access_key="a", secret_key="s")
 
     def test_defaults_secure_true(self):
-        """It defaults to secure=True (matches MinIO SDK default)."""
-        cfg = MinioStorageConfig(
-            endpoint="localhost:9000",
-            bucket="b",
-            access_key="a",
-            secret_key="s",
-        )
-        self.assertTrue(cfg.secure)
+        """secure defaults to True (matches MinIO SDK default)."""
+        mock_module, mock_client = _make_mock_minio()
+        with patch.dict(sys.modules, {"minio": mock_module, "minio.error": mock_module.error}):
+            from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
+            MinioStorageBackend(endpoint="localhost:9000", bucket="b", access_key="a", secret_key="s")
+        call_kwargs = mock_module.Minio.call_args[1]
+        self.assertTrue(call_kwargs["secure"])
 
     def test_defaults_create_bucket_false(self):
-        """It defaults to create_bucket_if_missing=False."""
-        cfg = _config()
-        self.assertFalse(cfg.create_bucket_if_missing)
-
-    def test_region_defaults_none(self):
-        """It defaults region to None."""
-        cfg = _config()
-        self.assertIsNone(cfg.region)
+        """create_bucket_if_missing defaults to False — bucket_exists not called."""
+        mock_module, mock_client = _make_mock_minio()
+        with patch.dict(sys.modules, {"minio": mock_module, "minio.error": mock_module.error}):
+            from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
+            MinioStorageBackend(**_DEFAULT_KWARGS)
+        mock_client.bucket_exists.assert_not_called()
 
 
 class TestMinioStorageBackendInit(TestCase):
-    """Tests for MinioStorageBackend.__init__()."""
+    """Tests for MinioStorageBackend.__init__() bucket management."""
 
     def test_raises_import_error_when_minio_missing(self):
         """It raises ImportError with an install hint when minio is absent."""
         with patch.dict(sys.modules, {"minio": None}):
-            from michelangelo.lib.artifact_manager.minio_backend import (
-                MinioStorageBackend,
-            )
+            from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
             with self.assertRaises(ImportError) as ctx:
-                MinioStorageBackend(_config())
+                MinioStorageBackend(**_DEFAULT_KWARGS)
         self.assertIn("pip install", str(ctx.exception))
 
     def test_no_ensure_bucket_by_default(self):
@@ -96,7 +89,7 @@ class TestMinioStorageBackendInit(TestCase):
         mock_module, mock_client = _make_mock_minio()
         with patch.dict(sys.modules, {"minio": mock_module, "minio.error": mock_module.error}):
             from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
-            MinioStorageBackend(_config())
+            MinioStorageBackend(**_DEFAULT_KWARGS)
         mock_client.bucket_exists.assert_not_called()
         mock_client.make_bucket.assert_not_called()
 
@@ -105,7 +98,7 @@ class TestMinioStorageBackendInit(TestCase):
         mock_module, mock_client = _make_mock_minio(bucket_exists=True)
         with patch.dict(sys.modules, {"minio": mock_module, "minio.error": mock_module.error}):
             from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
-            MinioStorageBackend(_config(create_bucket_if_missing=True))
+            MinioStorageBackend(**_DEFAULT_KWARGS, create_bucket_if_missing=True)
         mock_client.make_bucket.assert_not_called()
 
     def test_ensure_bucket_calls_make_when_absent(self):
@@ -113,7 +106,7 @@ class TestMinioStorageBackendInit(TestCase):
         mock_module, mock_client = _make_mock_minio(bucket_exists=False)
         with patch.dict(sys.modules, {"minio": mock_module, "minio.error": mock_module.error}):
             from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
-            MinioStorageBackend(_config(create_bucket_if_missing=True))
+            MinioStorageBackend(**_DEFAULT_KWARGS, create_bucket_if_missing=True)
         mock_client.make_bucket.assert_called_once_with("test-bucket")
 
     def test_ensure_bucket_handles_concurrent_creation(self):
@@ -124,8 +117,7 @@ class TestMinioStorageBackendInit(TestCase):
         )
         with patch.dict(sys.modules, {"minio": mock_module, "minio.error": mock_module.error}):
             from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
-            # Should not raise
-            MinioStorageBackend(_config(create_bucket_if_missing=True))
+            MinioStorageBackend(**_DEFAULT_KWARGS, create_bucket_if_missing=True)
 
 
 class TestMinioStorageBackendUpload(TestCase):
@@ -157,7 +149,7 @@ class TestMinioStorageBackendUpload(TestCase):
     def _backend(self, mock_client):
         from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
         b = object.__new__(MinioStorageBackend)
-        b._config = _config()
+        b._bucket = "test-bucket"
         b._client = mock_client
         b._S3Error = _FakeS3Error
         return b
@@ -226,7 +218,7 @@ class TestMinioStorageBackendDownload(TestCase):
     def _backend(self, mock_client):
         from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
         b = object.__new__(MinioStorageBackend)
-        b._config = _config()
+        b._bucket = "test-bucket"
         b._client = mock_client
         b._S3Error = _FakeS3Error
         return b
@@ -279,17 +271,16 @@ class TestMinioStorageBackendDownload(TestCase):
 
         dest = tempfile.mkdtemp()
         self._tmp_dirs.append(dest)
-        # URI must use /__dir__.tar suffix to trigger extraction
         backend.download("s3://test-bucket/models/clf/raw/__dir__.tar", dest)
         self.assertTrue(os.path.exists(os.path.join(dest, "weights.bin")))
 
     def test_download_plain_tar_not_extracted(self):
-        """A plain .tar file uploaded as a file is NOT extracted (no /__dir__.tar URI)."""
+        """A plain .tar file is NOT extracted when URI lacks /__dir__.tar suffix."""
         src_dir = tempfile.mkdtemp()
         self._tmp_dirs.append(src_dir)
         tar_path = os.path.join(src_dir, "data.tar")
         with tarfile.open(tar_path, "w") as tar:
-            pass  # empty tar
+            pass
 
         def fake_fget(bucket, key, local):
             shutil.copy2(tar_path, local)
@@ -301,7 +292,6 @@ class TestMinioStorageBackendDownload(TestCase):
         dest_dir = tempfile.mkdtemp()
         self._tmp_dirs.append(dest_dir)
         dest = os.path.join(dest_dir, "out.tar")
-        # No /__dir__.tar suffix → should copy as-is
         backend.download("s3://test-bucket/models/clf/raw", dest)
         self.assertTrue(os.path.isfile(dest))
 

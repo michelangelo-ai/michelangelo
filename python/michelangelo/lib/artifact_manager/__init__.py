@@ -9,15 +9,13 @@ Public API::
         StorageBackend,
         LocalStorageBackend,
         MinioStorageBackend,
-        MinioStorageConfig,
     )
 
 Production configuration
 ------------------------
 
-- :class:`MinioStorageConfig` defaults to ``secure=True`` (TLS). Pass
-  ``secure=False`` **only** for local sandbox servers where TLS is not
-  configured — never in production.
+- ``secure`` defaults to ``True`` (TLS). Pass ``secure=False`` **only** for
+  local sandbox servers where TLS is not configured — never in production.
 - ``create_bucket_if_missing`` defaults to ``False``. Enable it only for
   sandbox / dev environments where the bucket may not exist yet. Most
   production IAM policies do not grant ``s3:CreateBucket``.
@@ -25,7 +23,6 @@ Production configuration
 
 # flake8: noqa:F401
 from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
-from michelangelo.lib.artifact_manager.schema.minio import MinioStorageConfig
 from michelangelo.lib.artifact_manager.storage_backend import (
     LocalStorageBackend,
     StorageBackend,

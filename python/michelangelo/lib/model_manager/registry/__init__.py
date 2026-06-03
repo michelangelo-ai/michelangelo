@@ -4,9 +4,8 @@ Production configuration
 ------------------------
 
 - :class:`APIRegistryClient` requires a running Michelangelo ``ModelService``
-  gRPC endpoint. Set ``insecure=False`` in :class:`APIRegistryConfig` for any
-  TLS-protected production endpoint (``insecure=True`` is the default for
-  local sandbox use only).
+  gRPC endpoint. Set ``insecure=False`` for any TLS-protected production
+  endpoint (``insecure=True`` is the default for local sandbox use only).
 - Always call :meth:`APIRegistryClient.close` or use the client as a context
   manager (``with APIRegistryClient(...) as client:``) to release gRPC channel
   resources when done.
@@ -21,4 +20,3 @@ from michelangelo.lib.model_manager.registry.client import (
     ModelRegistryClient,
     RegisteredModel,
 )
-from michelangelo.lib.model_manager.registry.schema.api import APIRegistryConfig

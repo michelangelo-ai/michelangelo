@@ -10,7 +10,6 @@ import grpc
 
 from michelangelo.gen.api.v2 import model_pb2
 from michelangelo.lib.model_manager.registry.api_client import APIRegistryClient, METADATA_ANNOTATION_KEY
-from michelangelo.lib.model_manager.registry.schema.api import APIRegistryConfig
 from michelangelo.lib.exceptions import ConfigurationError
 
 _STUB_PATH = "michelangelo.lib.model_manager.registry.api_client.ModelServiceStub"
@@ -26,10 +25,10 @@ class _RpcError(grpc.RpcError):
         return self._code
 
 
-def _config(**kwargs) -> APIRegistryConfig:
+def _kwargs(**overrides) -> dict:
     defaults = {"endpoint": "localhost:50051", "namespace": "test-ns"}
-    defaults.update(kwargs)
-    return APIRegistryConfig(**defaults)
+    defaults.update(overrides)
+    return defaults
 
 
 def _make_response_model(
@@ -71,20 +70,23 @@ def _make_stub(
     return stub
 
 
-class TestAPIRegistryConfig(TestCase):
-    """Tests for APIRegistryConfig validation."""
+class TestAPIRegistryClientValidation(TestCase):
+    """Tests for APIRegistryClient constructor validation and defaults."""
 
     def test_raises_on_empty_endpoint(self):
         """It raises ConfigurationError when endpoint is empty."""
         with self.assertRaises(ConfigurationError):
-            APIRegistryConfig(endpoint="")
+            with patch(_STUB_PATH):
+                APIRegistryClient(endpoint="")
 
     def test_defaults(self):
         """It defaults to insecure=True, empty namespace, 30s timeout."""
-        cfg = APIRegistryConfig(endpoint="localhost:50051")
-        self.assertTrue(cfg.insecure)
-        self.assertEqual(cfg.namespace, "")
-        self.assertEqual(cfg.timeout_seconds, 30)
+        stub = _make_stub()
+        with patch(_STUB_PATH, return_value=stub), \
+             patch("grpc.insecure_channel", return_value=MagicMock()):
+            client = APIRegistryClient(endpoint="localhost:50051")
+        self.assertEqual(client._namespace, "")
+        self.assertEqual(client._timeout_seconds, 30)
 
 
 class TestAPIRegistryClientRegisterModel(TestCase):
@@ -94,7 +96,7 @@ class TestAPIRegistryClientRegisterModel(TestCase):
         """It calls CreateModel and maps the response to RegisteredModel."""
         stub = _make_stub(_make_response_model("my-model", revision_id=1))
         with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(_config())
+            client = APIRegistryClient(**_kwargs())
             reg = client.register_model("my-model", "s3://bucket/raw")
         stub.CreateModel.assert_called_once()
         self.assertEqual(reg.name, "my-model")
@@ -105,15 +107,15 @@ class TestAPIRegistryClientRegisterModel(TestCase):
         """It builds registry_uri as 'models:/{namespace}/{name}/{version}'."""
         stub = _make_stub(_make_response_model("clf", namespace="ns", revision_id=3))
         with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(_config(namespace="ns"))
+            client = APIRegistryClient(**_kwargs(namespace="ns"))
             reg = client.register_model("clf", "s3://b/raw")
         self.assertEqual(reg.registry_uri, "models:/ns/clf/3")
 
     def test_namespace_injected_into_model_proto(self):
-        """It sets model.metadata.namespace from config.namespace."""
+        """It sets model.metadata.namespace from the namespace arg."""
         stub = _make_stub()
         with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(_config(namespace="my-ns"))
+            client = APIRegistryClient(**_kwargs(namespace="my-ns"))
             client.register_model("m", "s3://b/raw")
         request = stub.CreateModel.call_args[0][0]
         self.assertEqual(request.model.metadata.namespace, "my-ns")
@@ -122,7 +124,7 @@ class TestAPIRegistryClientRegisterModel(TestCase):
         """It stores labels on model.metadata.labels."""
         stub = _make_stub()
         with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(_config())
+            client = APIRegistryClient(**_kwargs())
             client.register_model("m", "s3://b/raw", labels={"fw": "xgboost"})
         request = stub.CreateModel.call_args[0][0]
         self.assertEqual(request.model.metadata.labels["fw"], "xgboost")
@@ -131,7 +133,7 @@ class TestAPIRegistryClientRegisterModel(TestCase):
         """It JSON-encodes metadata under the michelangelo.io/metadata annotation."""
         stub = _make_stub()
         with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(_config())
+            client = APIRegistryClient(**_kwargs())
             client.register_model(
                 "m", "s3://b/raw", metadata={"run_id": "r1", "rmse": 2.4}
             )
@@ -145,7 +147,7 @@ class TestAPIRegistryClientRegisterModel(TestCase):
         """It appends deployable_artifact_uri to spec when provided."""
         stub = _make_stub()
         with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(_config())
+            client = APIRegistryClient(**_kwargs())
             client.register_model("m", "s3://b/raw", deployable_artifact_uri="s3://b/dep")
         request = stub.CreateModel.call_args[0][0]
         self.assertIn("s3://b/dep", list(request.model.spec.deployable_artifact_uri))
@@ -154,7 +156,7 @@ class TestAPIRegistryClientRegisterModel(TestCase):
         """It leaves spec.deployable_artifact_uri empty when not provided."""
         stub = _make_stub()
         with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(_config())
+            client = APIRegistryClient(**_kwargs())
             client.register_model("m", "s3://b/raw")
         request = stub.CreateModel.call_args[0][0]
         self.assertEqual(len(request.model.spec.deployable_artifact_uri), 0)
@@ -172,7 +174,7 @@ class TestAPIRegistryClientRegisterModel(TestCase):
         stub.CreateModel.side_effect = mock_error
 
         with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(_config())
+            client = APIRegistryClient(**_kwargs())
             reg = client.register_model("m", "s3://b/raw")
 
         stub.GetModel.assert_called_once()
@@ -191,11 +193,9 @@ class TestAPIRegistryClientRegisterModel(TestCase):
         final = _make_response_model("m", revision_id=3)
 
         stub = MagicMock()
-        # CreateModel always returns ALREADY_EXISTS
         stub.CreateModel.side_effect = already_exists
         get_resp = MagicMock(); get_resp.model = existing
         stub.GetModel.return_value = get_resp
-        # UpdateModel fails twice then succeeds
         upd_resp = MagicMock(); upd_resp.model = final
         stub.UpdateModel.side_effect = [
             failed_precondition,
@@ -204,7 +204,7 @@ class TestAPIRegistryClientRegisterModel(TestCase):
         ]
 
         with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(_config())
+            client = APIRegistryClient(**_kwargs())
             reg = client.register_model("m", "s3://b/raw")
 
         self.assertEqual(stub.UpdateModel.call_count, 3)
@@ -223,7 +223,7 @@ class TestAPIRegistryClientRegisterModel(TestCase):
         stub.UpdateModel.side_effect = failed_precondition
 
         with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(_config())
+            client = APIRegistryClient(**_kwargs())
             with self.assertRaises(RuntimeError):
                 client.register_model("m", "s3://b/raw")
 
@@ -234,7 +234,7 @@ class TestAPIRegistryClientRegisterModel(TestCase):
         stub.CreateModel.side_effect = mock_error
 
         with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(_config())
+            client = APIRegistryClient(**_kwargs())
             with self.assertRaises(grpc.RpcError):
                 client.register_model("m", "s3://b/raw")
 
@@ -247,7 +247,7 @@ class TestAPIRegistryClientGetModel(TestCase):
         response_model = _make_response_model("clf", namespace="ns", revision_id=5)
         stub = _make_stub(get_model=response_model)
         with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(_config(namespace="ns"))
+            client = APIRegistryClient(**_kwargs(namespace="ns"))
             reg = client.get_model("clf")
         stub.GetModel.assert_called_once()
         self.assertEqual(reg.name, "clf")
@@ -259,7 +259,7 @@ class TestAPIRegistryClientGetModel(TestCase):
         response_model.metadata.annotations[METADATA_ANNOTATION_KEY] = "not-json{"
         stub = _make_stub(get_model=response_model)
         with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(_config())
+            client = APIRegistryClient(**_kwargs())
             with self.assertRaises(ValueError) as ctx:
                 client.get_model("bad-model")
         self.assertIn("bad-model", str(ctx.exception))
@@ -273,7 +273,7 @@ class TestAPIRegistryClientGetModel(TestCase):
                  "michelangelo.lib.model_manager.registry.api_client",
                  level="WARNING",
              ) as log_ctx:
-            client = APIRegistryClient(_config())
+            client = APIRegistryClient(**_kwargs())
             client.get_model("m", version="3")
         self.assertTrue(
             any("version=" in msg for msg in log_ctx.output),
@@ -284,9 +284,7 @@ class TestAPIRegistryClientGetModel(TestCase):
         """It does not emit a warning when version is None."""
         stub = _make_stub(get_model=_make_response_model("m"))
         with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(_config())
-            # assertLogs would fail if no WARNING is emitted — use assertNoLogs (3.10+)
-            # or simply call without the context manager and verify no exception.
+            client = APIRegistryClient(**_kwargs())
             reg = client.get_model("m")
         self.assertEqual(reg.name, "m")
 
@@ -296,7 +294,7 @@ class TestAPIRegistryClientGetModel(TestCase):
         with patch(_STUB_PATH, return_value=stub), \
              patch("grpc.secure_channel") as mock_secure, \
              patch("grpc.ssl_channel_credentials", return_value=MagicMock()):
-            APIRegistryClient(_config(insecure=False))
+            APIRegistryClient(**_kwargs(insecure=False))
         mock_secure.assert_called_once()
 
     def test_close_calls_channel_close(self):
@@ -305,7 +303,7 @@ class TestAPIRegistryClientGetModel(TestCase):
         mock_channel = MagicMock()
         with patch(_STUB_PATH, return_value=stub), \
              patch("grpc.insecure_channel", return_value=mock_channel):
-            client = APIRegistryClient(_config())
+            client = APIRegistryClient(**_kwargs())
             client.close()
         mock_channel.close.assert_called_once()
 
@@ -315,6 +313,6 @@ class TestAPIRegistryClientGetModel(TestCase):
         mock_channel = MagicMock()
         with patch(_STUB_PATH, return_value=stub), \
              patch("grpc.insecure_channel", return_value=mock_channel):
-            with APIRegistryClient(_config()):
+            with APIRegistryClient(**_kwargs()):
                 pass
         mock_channel.close.assert_called_once()

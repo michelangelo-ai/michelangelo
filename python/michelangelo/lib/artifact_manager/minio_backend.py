@@ -11,25 +11,24 @@ Requires the ``minio`` package::
 Typical usage::
 
     from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
-    from michelangelo.lib.artifact_manager.schema.minio import MinioStorageConfig
 
     # Production — TLS enabled, bucket pre-created by infra
-    backend = MinioStorageBackend(MinioStorageConfig(
+    backend = MinioStorageBackend(
         endpoint="minio.prod.example.com:443",
         bucket="michelangelo-models",
         access_key=os.environ["MINIO_ACCESS_KEY"],
         secret_key=os.environ["MINIO_SECRET_KEY"],
-    ))
+    )
 
     # Local sandbox — plaintext, auto-create bucket
-    backend = MinioStorageBackend(MinioStorageConfig(
+    backend = MinioStorageBackend(
         endpoint="localhost:9000",
         bucket="michelangelo-models",
         access_key="minioadmin",
         secret_key="minioadmin",
         secure=False,            # local dev only — do not use in production
         create_bucket_if_missing=True,
-    ))
+    )
 
     uri = backend.upload("/tmp/my-model", "models/clf/v1/raw")
     backend.download(uri, "/tmp/retrieved")
@@ -43,12 +42,9 @@ import shutil
 import sys
 import tarfile
 import tempfile
-from typing import TYPE_CHECKING
 
 from michelangelo.lib.artifact_manager.storage_backend import StorageBackend
-
-if TYPE_CHECKING:
-    from michelangelo.lib.artifact_manager.schema.minio import MinioStorageConfig
+from michelangelo.lib.exceptions import ConfigurationError
 
 _logger = logging.getLogger(__name__)
 
@@ -100,53 +96,88 @@ class MinioStorageBackend(StorageBackend):
     delivered as-is on download.
 
     **Bucket creation:** By default the backend does *not* attempt to create the
-    bucket. Set ``config.create_bucket_if_missing = True`` for local sandbox
-    environments where the bucket may not exist yet. Most production IAM
-    policies do not grant ``s3:CreateBucket``, so the default avoids a
-    confusing permission error on startup.
+    bucket. Set ``create_bucket_if_missing=True`` for local sandbox environments
+    where the bucket may not exist yet. Most production IAM policies do not grant
+    ``s3:CreateBucket``, so the default avoids a confusing permission error on
+    startup.
 
     The ``minio`` package is imported lazily so the rest of the library
     remains usable without it. If ``minio`` is not installed, instantiating
     this class raises :class:`ImportError` with an actionable install hint.
 
     Args:
-        config: :class:`MinioStorageConfig
-            <michelangelo.lib.artifact_manager.schema.minio.MinioStorageConfig>`
-            holding endpoint, bucket, credentials, TLS settings, and
-            bucket-creation preference.
+        endpoint: MinIO or S3-compatible server address without the scheme
+            (e.g. ``"localhost:9000"`` or ``"s3.amazonaws.com"``).
+        bucket: Target bucket name.
+        access_key: Access key ID (MinIO root user or AWS IAM key ID).
+        secret_key: Secret access key matching ``access_key``.
+        secure: Use TLS for the connection. Defaults to ``True`` (matches the
+            MinIO SDK default). Set ``False`` only for a local sandbox server
+            where TLS is not configured.
+        region: AWS region string (e.g. ``"us-east-1"``). Required when
+            connecting to AWS S3. Leave ``None`` for plain MinIO installations.
+        create_bucket_if_missing: When ``True``, calls ``make_bucket`` on
+            initialisation if the configured bucket does not exist. Defaults
+            to ``False`` — useful when the IAM policy does not grant
+            ``s3:CreateBucket`` (most production environments).
 
     Raises:
         ImportError: If the ``minio`` package is not installed.
-        ConfigurationError: Propagated from ``MinioStorageConfig.__post_init__``
-            if ``endpoint`` or ``bucket`` is empty.
+        ConfigurationError: If ``endpoint`` or ``bucket`` is empty.
 
     Example::
 
         from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
-        from michelangelo.lib.artifact_manager.schema.minio import MinioStorageConfig
 
-        backend = MinioStorageBackend(MinioStorageConfig(
+        backend = MinioStorageBackend(
             endpoint="localhost:9000",
             bucket="my-bucket",
             access_key="minioadmin",
             secret_key="minioadmin",
             secure=False,            # local dev only
             create_bucket_if_missing=True,
-        ))
+        )
         uri = backend.upload("/tmp/weights.pt", "models/clf/abc123/raw")
         # uri == "s3://my-bucket/models/clf/abc123/raw"
         backend.download(uri, "/tmp/retrieved.pt")
     """
 
-    def __init__(self, config: MinioStorageConfig) -> None:
+    def __init__(
+        self,
+        endpoint: str,
+        bucket: str,
+        access_key: str,
+        secret_key: str,
+        secure: bool = True,
+        region: str | None = None,
+        create_bucket_if_missing: bool = False,
+    ) -> None:
         """Initialize the backend and optionally ensure the target bucket exists.
 
         Args:
-            config: MinIO connection and bucket configuration.
+            endpoint: Server address without scheme (e.g. ``"localhost:9000"``).
+            bucket: Target bucket name.
+            access_key: Access key ID.
+            secret_key: Secret access key.
+            secure: Use TLS. Defaults to ``True``.
+            region: AWS region, or ``None`` for plain MinIO.
+            create_bucket_if_missing: Create the bucket if absent. Defaults to
+                ``False``.
 
         Raises:
+            ConfigurationError: If ``endpoint`` or ``bucket`` is empty.
             ImportError: If ``minio`` is not installed.
         """
+        if not endpoint:
+            raise ConfigurationError(
+                "MinioStorageBackend endpoint must be non-empty. "
+                "Provide the server address, e.g. 'localhost:9000'."
+            )
+        if not bucket:
+            raise ConfigurationError(
+                "MinioStorageBackend bucket must be non-empty. "
+                "Provide the target bucket name."
+            )
         try:
             from minio import Minio
             from minio.error import S3Error
@@ -155,16 +186,16 @@ class MinioStorageBackend(StorageBackend):
                 "MinioStorageBackend requires the 'minio' package. "
                 "Install it with: pip install 'michelangelo[minio]'"
             ) from exc
-        self._config = config
+        self._bucket = bucket
         self._S3Error = S3Error
         self._client = Minio(
-            config.endpoint,
-            access_key=config.access_key,
-            secret_key=config.secret_key,
-            secure=config.secure,
-            region=config.region,
+            endpoint,
+            access_key=access_key,
+            secret_key=secret_key,
+            secure=secure,
+            region=region,
         )
-        if config.create_bucket_if_missing:
+        if create_bucket_if_missing:
             self._ensure_bucket()
 
     def upload(self, local_path: str, destination_key: str) -> str:
@@ -197,19 +228,19 @@ class MinioStorageBackend(StorageBackend):
         if os.path.isdir(local_path):
             dir_key = destination_key + _DIR_TAR_SUFFIX
             self._upload_directory(local_path, dir_key)
-            return f"s3://{self._config.bucket}/{dir_key}"
+            return f"s3://{self._bucket}/{dir_key}"
         else:
             _logger.debug(
                 "Uploading file '%s' to s3://%s/%s.",
-                local_path, self._config.bucket, destination_key,
+                local_path, self._bucket, destination_key,
             )
             try:
-                self._client.fput_object(self._config.bucket, destination_key, local_path)
+                self._client.fput_object(self._bucket, destination_key, local_path)
             except self._S3Error as exc:
                 raise OSError(
                     f"MinIO upload failed for key {destination_key!r}: {exc}"
                 ) from exc
-        return f"s3://{self._config.bucket}/{destination_key}"
+        return f"s3://{self._bucket}/{destination_key}"
 
     def download(self, uri: str, local_path: str) -> None:
         """Download an artifact from MinIO to a local path.
@@ -260,13 +291,13 @@ class MinioStorageBackend(StorageBackend):
         try:
             _logger.debug(
                 "Archiving directory '%s' before upload to s3://%s/%s.",
-                local_path, self._config.bucket, destination_key,
+                local_path, self._bucket, destination_key,
             )
             with tarfile.open(tmp_path, "w") as tar:
                 for entry in os.scandir(local_path):
                     tar.add(entry.path, arcname=entry.name)
             try:
-                self._client.fput_object(self._config.bucket, destination_key, tmp_path)
+                self._client.fput_object(self._bucket, destination_key, tmp_path)
             except self._S3Error as exc:
                 raise OSError(
                     f"MinIO upload failed for key {destination_key!r}: {exc}"
@@ -281,16 +312,16 @@ class MinioStorageBackend(StorageBackend):
         Handles the ``BucketAlreadyOwnedByYou`` race that can occur when two
         workers start simultaneously and both observe the bucket as absent.
         """
-        if not self._client.bucket_exists(self._config.bucket):
+        if not self._client.bucket_exists(self._bucket):
             try:
-                _logger.info("Creating bucket '%s'.", self._config.bucket)
-                self._client.make_bucket(self._config.bucket)
+                _logger.info("Creating bucket '%s'.", self._bucket)
+                self._client.make_bucket(self._bucket)
             except self._S3Error as exc:
                 if exc.code != "BucketAlreadyOwnedByYou":
                     raise
                 _logger.info(
                     "Bucket '%s' already exists (created concurrently).",
-                    self._config.bucket,
+                    self._bucket,
                 )
 
     def _parse_uri(self, uri: str) -> tuple[str, str]:
@@ -318,4 +349,3 @@ class MinioStorageBackend(StorageBackend):
         if not sep or not key:
             raise ValueError(f"URI contains no object key: {uri!r}")
         return bucket, key
-
