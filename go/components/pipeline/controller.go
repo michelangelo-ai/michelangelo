@@ -20,12 +20,12 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -62,7 +62,21 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	logger.Info("Reconciling pipeline starts")
 	pipeline := &v2pb.Pipeline{}
 	if err := r.Get(ctx, req.Namespace, req.Name, &metav1.GetOptions{}, pipeline); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		// The API handler surfaces not-found as a gRPC status error, so use
+		// utils.IsNotFoundError (handles both gRPC and k8s-typed errors) rather
+		// than client.IgnoreNotFound (k8s-typed only). A deleted Pipeline is a
+		// clean no-op.
+		if utils.IsNotFoundError(err) {
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
+	// When the Pipeline is being deleted (a deletionTimestamp is set), stop
+	// reconciling so we do not keep stamping status and requeueing while the
+	// Kubernetes garbage collector and finalizers tear the object down.
+	if !pipeline.GetDeletionTimestamp().IsZero() {
+		logger.Info("Pipeline is being deleted; skipping reconcile")
+		return ctrl.Result{}, nil
 	}
 	originalPipeline := pipeline.DeepCopy()
 	state := pipeline.Status.State

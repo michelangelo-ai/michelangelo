@@ -21,6 +21,8 @@ import (
 )
 
 func TestReconcile(t *testing.T) {
+	now := metav1.Now()
+	gracePeriod := int64(0)
 	testCases := []struct {
 		name                         string
 		initialObjects               []client.Object
@@ -115,6 +117,41 @@ func TestReconcile(t *testing.T) {
 				Name:      "pipeline-test-pipeline-234567",
 				Namespace: "test-namespace",
 			},
+		},
+		{
+			// A Pipeline with a deletionTimestamp is being torn down by the
+			// Kubernetes garbage collector. Reconcile must short-circuit so it
+			// does not keep stamping status and requeueing during deletion.
+			// The fake client only accepts a deletion timestamp when a finalizer
+			// and a (zero) grace period are also set.
+			name: "Being deleted -> skip reconcile",
+			initialObjects: []client.Object{
+				&v2pb.Pipeline{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:                       "test-pipeline",
+						Namespace:                  "test-namespace",
+						DeletionTimestamp:          &now,
+						DeletionGracePeriodSeconds: &gracePeriod,
+						Finalizers:                 []string{"michelangelo.uber.com/pipeline"},
+					},
+					Spec: v2pb.PipelineSpec{
+						Commit: &v2pb.CommitInfo{
+							GitRef: "345678",
+							Branch: "test-git-branch",
+						},
+					},
+					Status: v2pb.PipelineStatus{
+						State: v2pb.PIPELINE_STATE_CREATED,
+					},
+				},
+			},
+			// No requeue, no error, and the status is left untouched (state stays
+			// CREATED and LatestRevision is never set), proving UpdateStatus and
+			// the READY stamping were skipped.
+			expectedResult:               ctrl.Result{},
+			expectedError:                "",
+			expectedStatusState:          v2pb.PIPELINE_STATE_CREATED,
+			expectedStatusLatestRevision: nil,
 		},
 	}
 	for _, tc := range testCases {
