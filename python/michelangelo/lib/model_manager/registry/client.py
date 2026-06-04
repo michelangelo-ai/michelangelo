@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 @dataclass
@@ -218,6 +220,7 @@ class InMemoryRegistryClient(ModelRegistryClient):
     """
 
     def __init__(self) -> None:
+        """Initialize an empty in-memory model registry store."""
         self._store: dict[str, list[RegisteredModel]] = {}
 
     def register_model(

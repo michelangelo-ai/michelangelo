@@ -21,4 +21,5 @@ class ConfigurationError(Exception):
     """
 
     def __init__(self, message: str) -> None:
+        """Initialize with a human-readable configuration error message."""
         super().__init__(message)

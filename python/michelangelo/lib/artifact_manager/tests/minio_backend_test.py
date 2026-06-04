@@ -60,8 +60,8 @@ class TestMinioStorageBackendValidation(TestCase):
             )
 
     def test_defaults_secure_true(self):
-        """secure defaults to True (matches MinIO SDK default)."""
-        mock_module, mock_client = _make_mock_minio()
+        """Secure defaults to True (matches MinIO SDK default)."""
+        mock_module, _ = _make_mock_minio()
         with patch.dict(
             sys.modules, {"minio": mock_module, "minio.error": mock_module.error}
         ):
@@ -104,7 +104,10 @@ class TestMinioStorageBackendInit(TestCase):
         self.assertIn("pip install", str(ctx.exception))
 
     def test_no_ensure_bucket_by_default(self):
-        """It does not check or create the bucket when create_bucket_if_missing=False."""
+        """It does not check or create the bucket when create_bucket_if_missing=False.
+
+        Neither bucket_exists nor make_bucket should be called.
+        """
         mock_module, mock_client = _make_mock_minio()
         with patch.dict(
             sys.modules, {"minio": mock_module, "minio.error": mock_module.error}
@@ -118,7 +121,10 @@ class TestMinioStorageBackendInit(TestCase):
         mock_client.make_bucket.assert_not_called()
 
     def test_ensure_bucket_skips_make_when_exists(self):
-        """With create_bucket_if_missing=True it skips make_bucket when bucket exists."""
+        """With create_bucket_if_missing=True it skips make_bucket when bucket exists.
+
+        make_bucket should not be called if the bucket already exists.
+        """
         mock_module, mock_client = _make_mock_minio(bucket_exists=True)
         with patch.dict(
             sys.modules, {"minio": mock_module, "minio.error": mock_module.error}
@@ -163,9 +169,11 @@ class TestMinioStorageBackendUpload(TestCase):
     """Tests for MinioStorageBackend.upload()."""
 
     def setUp(self) -> None:
+        """Set up test fixtures."""
         self._tmp_dirs: list[str] = []
 
     def tearDown(self) -> None:
+        """Clean up test fixtures."""
         for d in self._tmp_dirs:
             if os.path.exists(d):
                 shutil.rmtree(d)
@@ -248,9 +256,11 @@ class TestMinioStorageBackendDownload(TestCase):
     """Tests for MinioStorageBackend.download()."""
 
     def setUp(self) -> None:
+        """Set up test fixtures."""
         self._tmp_dirs: list[str] = []
 
     def tearDown(self) -> None:
+        """Clean up test fixtures."""
         for d in self._tmp_dirs:
             if os.path.exists(d):
                 shutil.rmtree(d)
@@ -320,7 +330,7 @@ class TestMinioStorageBackendDownload(TestCase):
         src_dir = tempfile.mkdtemp()
         self._tmp_dirs.append(src_dir)
         tar_path = os.path.join(src_dir, "data.tar")
-        with tarfile.open(tar_path, "w") as tar:
+        with tarfile.open(tar_path, "w"):
             pass
 
         def fake_fget(bucket, key, local):

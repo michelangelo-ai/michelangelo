@@ -7,7 +7,8 @@
     within a Michelangelo deployment. External adopters using a different model
     registry should implement
     :class:`~michelangelo.lib.model_manager.registry.client.ModelRegistryClient`
-    directly (e.g. :class:`~michelangelo.lib.model_manager.registry.client.InMemoryRegistryClient`
+    directly (e.g.
+    :class:`~michelangelo.lib.model_manager.registry.client.InMemoryRegistryClient`
     for testing).
 
 Implements :class:`~michelangelo.lib.model_manager.registry.client.ModelRegistryClient`
@@ -53,11 +54,12 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 
 METADATA_ANNOTATION_KEY = "michelangelo.io/metadata"
-"""Annotation key under which free-form metadata is JSON-serialised in the ModelService API."""
+"""Annotation key under which free-form metadata is JSON-serialised
+in the ModelService API."""
 
 _MAX_REGISTER_RETRIES = 3
 
-__all__ = ["APIRegistryClient", "METADATA_ANNOTATION_KEY"]
+__all__ = ["METADATA_ANNOTATION_KEY", "APIRegistryClient"]
 
 
 class APIRegistryClient(ModelRegistryClient):
@@ -110,11 +112,15 @@ class APIRegistryClient(ModelRegistryClient):
 
         from michelangelo.lib.model_manager.registry.api_client import APIRegistryClient
 
-        with APIRegistryClient(endpoint="localhost:50051", namespace="sandbox") as client:
+        with APIRegistryClient(
+            endpoint="localhost:50051", namespace="sandbox"
+        ) as client:
             reg = client.register_model(
                 name="boston-xgb",
                 artifact_uri="s3://bucket/models/boston-xgb/abc123/raw",
-                deployable_artifact_uri="s3://bucket/models/boston-xgb/abc123/deployable",
+                deployable_artifact_uri=(
+                    "s3://bucket/models/boston-xgb/abc123/deployable"
+                ),
                 description="XGBoost model trained on Boston housing data",
                 labels={"training_framework": "xgboost"},
                 metadata={"run_id": "mlflow-run-abc", "rmse": 2.41},
@@ -160,10 +166,12 @@ class APIRegistryClient(ModelRegistryClient):
         """Close the underlying gRPC channel, releasing threads and connections."""
         self._channel.close()
 
-    def __enter__(self) -> "APIRegistryClient":
+    def __enter__(self) -> APIRegistryClient:
+        """Enter the context manager, returning self."""
         return self
 
     def __exit__(self, *_: object) -> None:
+        """Exit the context manager, closing the gRPC channel."""
         self.close()
 
     def register_model(

@@ -9,11 +9,11 @@ from unittest.mock import MagicMock, patch
 import grpc
 
 from michelangelo.gen.api.v2 import model_pb2
-from michelangelo.lib.model_manager.registry.api_client import (
-    APIRegistryClient,
-    METADATA_ANNOTATION_KEY,
-)
 from michelangelo.lib.exceptions import ConfigurationError
+from michelangelo.lib.model_manager.registry.api_client import (
+    METADATA_ANNOTATION_KEY,
+    APIRegistryClient,
+)
 
 _STUB_PATH = "michelangelo.lib.model_manager.registry.api_client.ModelServiceStub"
 
@@ -78,9 +78,8 @@ class TestAPIRegistryClientValidation(TestCase):
 
     def test_raises_on_empty_endpoint(self):
         """It raises ConfigurationError when endpoint is empty."""
-        with self.assertRaises(ConfigurationError):
-            with patch(_STUB_PATH):
-                APIRegistryClient(endpoint="")
+        with self.assertRaises(ConfigurationError), patch(_STUB_PATH):
+            APIRegistryClient(endpoint="")
 
     def test_defaults(self):
         """It defaults to insecure=True, empty namespace, 30s timeout."""
@@ -264,7 +263,7 @@ class TestAPIRegistryClientGetModel(TestCase):
         self.assertEqual(reg.version, "5")
 
     def test_corrupt_metadata_annotation_raises_value_error(self):
-        """It raises ValueError with model name when the metadata annotation is invalid JSON."""
+        """It raises ValueError when the metadata annotation contains invalid JSON."""
         response_model = _make_response_model("bad-model")
         response_model.metadata.annotations[METADATA_ANNOTATION_KEY] = "not-json{"
         stub = _make_stub(get_model=response_model)
@@ -276,7 +275,7 @@ class TestAPIRegistryClientGetModel(TestCase):
         self.assertIn(METADATA_ANNOTATION_KEY, str(ctx.exception))
 
     def test_get_model_with_version_emits_warning(self):
-        """It logs a warning when version is provided (per-revision lookup unsupported)."""
+        """It logs a warning when a version argument is passed."""
         stub = _make_stub(get_model=_make_response_model("m"))
         with (
             patch(_STUB_PATH, return_value=stub),
@@ -330,7 +329,7 @@ class TestAPIRegistryClientGetModel(TestCase):
         with (
             patch(_STUB_PATH, return_value=stub),
             patch("grpc.insecure_channel", return_value=mock_channel),
+            APIRegistryClient(**_kwargs()),
         ):
-            with APIRegistryClient(**_kwargs()):
-                pass
+            pass
         mock_channel.close.assert_called_once()

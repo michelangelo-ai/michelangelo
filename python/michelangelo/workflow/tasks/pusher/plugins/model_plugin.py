@@ -12,7 +12,9 @@ Typical usage::
     from michelangelo.lib.artifact_manager.storage_backend import LocalStorageBackend
     from michelangelo.lib.model_manager.registry.client import InMemoryRegistryClient
     from michelangelo.workflow.schema.pusher import ModelPluginConfig
-    from michelangelo.workflow.tasks.pusher.plugins.model_plugin import ModelPusherPlugin
+    from michelangelo.workflow.tasks.pusher.plugins.model_plugin import (
+        ModelPusherPlugin,
+    )
     from michelangelo.workflow.variables.types import AssembledModel, ModelArtifact
 
     backend = LocalStorageBackend(tempfile.mkdtemp())
@@ -35,7 +37,9 @@ Multi-registry fan-out — register in two registries simultaneously::
     from michelangelo.lib.artifact_manager.storage_backend import LocalStorageBackend
     from michelangelo.lib.model_manager.registry.client import InMemoryRegistryClient
     from michelangelo.workflow.schema.pusher import ModelPluginConfig
-    from michelangelo.workflow.tasks.pusher.plugins.model_plugin import ModelPusherPlugin
+    from michelangelo.workflow.tasks.pusher.plugins.model_plugin import (
+        ModelPusherPlugin,
+    )
     from michelangelo.workflow.variables.types import AssembledModel, ModelArtifact
 
     backend = LocalStorageBackend(tempfile.mkdtemp())
@@ -94,7 +98,6 @@ from michelangelo.workflow.tasks.pusher.plugins.base import PusherPluginBase
 if TYPE_CHECKING:
     from michelangelo.lib.artifact_manager.storage_backend import StorageBackend
     from michelangelo.lib.model_manager.registry.client import (
-        RegisteredModel,
         ModelRegistryClient,
     )
     from michelangelo.workflow.schema.pusher import ModelPluginConfig
@@ -140,6 +143,7 @@ class PartialRegistrationError(Exception):
         failed_registry_type: str,
         cause: Exception,
     ) -> None:
+        """Initialize with completed registrations, failed registry type, and cause."""
         self.registrations_completed = registrations_completed
         self.failed_registry_type = failed_registry_type
         super().__init__(
@@ -276,10 +280,16 @@ class ModelPusherPlugin(PusherPluginBase):
 
         import tempfile
 
-        from michelangelo.lib.artifact_manager.storage_backend import LocalStorageBackend
-        from michelangelo.lib.model_manager.registry.client import InMemoryRegistryClient
+        from michelangelo.lib.artifact_manager.storage_backend import (
+            LocalStorageBackend,
+        )
+        from michelangelo.lib.model_manager.registry.client import (
+            InMemoryRegistryClient,
+        )
         from michelangelo.workflow.schema.pusher import ModelPluginConfig
-        from michelangelo.workflow.tasks.pusher.plugins.model_plugin import ModelPusherPlugin
+        from michelangelo.workflow.tasks.pusher.plugins.model_plugin import (
+            ModelPusherPlugin,
+        )
         from michelangelo.workflow.variables.types import AssembledModel, ModelArtifact
 
         backend = LocalStorageBackend(tempfile.mkdtemp())
@@ -304,8 +314,11 @@ class ModelPusherPlugin(PusherPluginBase):
         #     "version": "1",
         #     "push_id": "a1b2c3d4e5f6a7b8",
         #     "raw_artifact_uri": "/store/models/my-classifier/<push_id>/raw",
-        #     "deployable_artifact_uri": "/store/models/my-classifier/<push_id>/deployable",
-        #     "registrations": [{"version": "1", "registry_uri": "memory://my-classifier/1"}],
+        #     "deployable_artifact_uri":
+        #         "/store/models/my-classifier/<push_id>/deployable",
+        #     "registrations": [
+        #         {"version": "1", "registry_uri": "memory://my-classifier/1"}
+        #     ],
         # }
     """
 
@@ -346,7 +359,7 @@ class ModelPusherPlugin(PusherPluginBase):
         if has_config_list:
             effective: list[ModelRegistryClient] = list(config.registry_clients)
         elif has_injected:
-            effective = [registry_client]  # type: ignore[list-item]  # narrowed by has_injected
+            effective = [registry_client]  # type: ignore[list-item]
         else:
             raise ConfigurationError(
                 "ModelPusherPlugin requires at least one registry client. "

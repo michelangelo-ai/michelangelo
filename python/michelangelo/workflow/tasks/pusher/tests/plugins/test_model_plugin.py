@@ -131,7 +131,7 @@ class TestModelPusherPluginExecute(TestCase):
     """Tests for ModelPusherPlugin.execute()."""
 
     def test_uploads_twice_registers_once_returns_six_keys(self):
-        """It calls upload() twice and register_model() once, returning a 6-key result."""
+        """It calls upload() twice and register_model() once; result has 6 keys."""
         backend = _mock_backend()
         registry = _mock_registry(name="clf", version="3")
         result = _plugin(model_name="clf", backend=backend, registry=registry).execute()
@@ -197,7 +197,7 @@ class TestModelPusherPluginExecute(TestCase):
         self.assertIsNone(call_kwargs["description"])
 
     def test_labels_merges_model_metadata_and_config_labels(self):
-        """It merges ModelMetadata.to_registry_dict() with config.labels in labels kwarg."""
+        """It merges ModelMetadata.to_registry_dict() with config.labels."""
         registry = MagicMock()
         registry.register_model.side_effect = lambda name, **kw: RegisteredModel(
             name=name, version="1", registry_uri=f"mock://{name}/1"
@@ -242,7 +242,7 @@ class TestModelPusherPluginExecute(TestCase):
         self.assertEqual(labels["training_framework"], "override")
 
     def test_run_id_forwarded_to_metadata_kwarg(self):
-        """config.run_id is injected into metadata['run_id'] passed to register_model()."""
+        """config.run_id is injected into metadata['run_id'] for register_model()."""
         registry = _mock_registry(name="m")
         _plugin(model_name="m", registry=registry, run_id="mlflow-run-abc123").execute()
         call_kwargs = registry.register_model.call_args.kwargs
@@ -256,7 +256,7 @@ class TestModelPusherPluginExecute(TestCase):
         self.assertNotIn("run_id", labels)
 
     def test_metadata_empty_when_run_id_not_set(self):
-        """metadata kwarg is an empty dict when config.run_id is None."""
+        """Metadata kwarg is an empty dict when config.run_id is None."""
         registry = _mock_registry(name="m")
         _plugin(model_name="m", registry=registry).execute()
         metadata = registry.register_model.call_args.kwargs["metadata"]
@@ -305,7 +305,7 @@ class TestModelPusherPluginExecute(TestCase):
         self.assertEqual(calls[1][0][0], dep_path)
 
     def test_raw_only_model_skips_deployable_upload(self):
-        """When deployable_model is None, upload() is called once and deployable_artifact_uri is None."""
+        """When deployable_model is None, upload() is called once only."""
         backend = _mock_backend(raw_uri="s3://bucket/raw", dep_uri="s3://bucket/dep")
         registry = _mock_registry(name="m")
         result = ModelPusherPlugin(
@@ -318,7 +318,7 @@ class TestModelPusherPluginExecute(TestCase):
         self.assertIsNone(result["deployable_artifact_uri"])
 
     def test_raw_only_model_passes_none_deployable_uri_to_registry(self):
-        """When deployable_model is None, register_model receives deployable_artifact_uri=None."""
+        """Raw-only model: register_model receives deployable_artifact_uri=None."""
         registry = _mock_registry(name="m")
         ModelPusherPlugin(
             config=ModelPluginConfig(model_name="m"),
@@ -330,16 +330,16 @@ class TestModelPusherPluginExecute(TestCase):
         self.assertIsNone(call_kwargs["deployable_artifact_uri"])
 
     def test_upload_io_error_propagates_before_registry_call(self):
-        """If upload() raises IOError, it propagates and register_model() is never called."""
+        """If upload() raises IOError, registry.register_model() is never called."""
         backend = MagicMock()
-        backend.upload.side_effect = IOError("storage unavailable")
+        backend.upload.side_effect = OSError("storage unavailable")
         registry = _mock_registry(name="m")
         with self.assertRaises(IOError, msg="storage unavailable"):
             _plugin(model_name="m", backend=backend, registry=registry).execute()
         registry.register_model.assert_not_called()
 
     def test_result_contains_registrations_list(self):
-        """execute() always returns a 'registrations' list with one entry per registry."""
+        """execute() returns a 'registrations' list with one entry per registry."""
         registry = _mock_registry(name="clf", version="5")
         result = _plugin(model_name="clf", registry=registry).execute()
         self.assertIn("registrations", result)
@@ -375,7 +375,7 @@ class TestModelPusherPluginExecute(TestCase):
 
 
 class TestModelPusherPluginMultiRegistry(TestCase):
-    """Tests for ModelPusherPlugin multi-registry fan-out via config.registry_clients."""
+    """Tests for ModelPusherPlugin multi-registry fan-out via registry_clients."""
 
     def _make_registry(self, version: str, uri_prefix: str) -> MagicMock:
         client = MagicMock()
@@ -445,7 +445,7 @@ class TestModelPusherPluginMultiRegistry(TestCase):
             self.assertEqual(kw["deployable_artifact_uri"], "s3://dep")
 
     def test_raises_when_no_registry_configured(self):
-        """It raises ConfigurationError when registry_client=None and config list is empty."""
+        """It raises ConfigurationError when no registry is configured."""
         with self.assertRaises(ConfigurationError) as ctx:
             ModelPusherPlugin(
                 config=ModelPluginConfig(),
@@ -456,7 +456,7 @@ class TestModelPusherPluginMultiRegistry(TestCase):
         self.assertIn("registry", str(ctx.exception).lower())
 
     def test_raises_when_both_registry_client_and_registry_clients_provided(self):
-        """It raises ConfigurationError when both registry_client= and registry_clients are set."""
+        """ConfigurationError when both registry_client and registry_clients are set."""
         r1 = self._make_registry("1", "a://")
         r2 = self._make_registry("1", "b://")
         with self.assertRaises(ConfigurationError) as ctx:
@@ -524,7 +524,7 @@ class TestModelPusherPluginMultiRegistry(TestCase):
         """PartialRegistrationError is raised when r2 fails after r1 succeeds."""
         r1 = self._make_registry("1", "a://")
         r2 = MagicMock()
-        r2.register_model.side_effect = IOError("registry-2 unavailable")
+        r2.register_model.side_effect = OSError("registry-2 unavailable")
 
         with self.assertRaises(PartialRegistrationError) as ctx:
             ModelPusherPlugin(
@@ -542,9 +542,9 @@ class TestModelPusherPluginMultiRegistry(TestCase):
         r2.register_model.assert_called_once()
 
     def test_single_registry_failure_propagates_raw(self):
-        """When only one registry is configured and it fails, the raw exception propagates."""
+        """When one registry fails, the raw exception propagates (no wrapping)."""
         registry = MagicMock()
-        registry.register_model.side_effect = IOError("registry unavailable")
+        registry.register_model.side_effect = OSError("registry unavailable")
 
         with self.assertRaises(IOError):
             ModelPusherPlugin(

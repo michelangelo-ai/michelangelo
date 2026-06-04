@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest import TestCase
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 from michelangelo.lib.model_manager.registry.client import (
     ModelRegistryClient,
@@ -198,6 +200,7 @@ class TestInMemoryRegistryClient(TestCase):
     """Tests for InMemoryRegistryClient — the reference implementation."""
 
     def setUp(self) -> None:
+        """Set up test fixtures."""
         from michelangelo.lib.model_manager.registry.client import (
             InMemoryRegistryClient,
         )
@@ -236,7 +239,10 @@ class TestInMemoryRegistryClient(TestCase):
         self.assertNotIn("run_id", reg.labels)
 
     def test_get_model_returns_latest_when_version_is_none(self):
-        """get_model() returns the most recently registered version when version=None."""
+        """get_model() returns the most recently registered version when version=None.
+
+        The latest registration (highest version) is returned by default.
+        """
         self.registry.register_model(name="clf", artifact_uri="s3://v1")
         self.registry.register_model(name="clf", artifact_uri="s3://v2")
         reg = self.registry.get_model(name="clf")

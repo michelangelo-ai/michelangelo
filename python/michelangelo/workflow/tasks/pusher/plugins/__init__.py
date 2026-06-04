@@ -2,7 +2,7 @@
 
 # flake8: noqa:F401
 from michelangelo.workflow.tasks.pusher.plugins.model_plugin import (
-    ModelPushResult,
     ModelPusherPlugin,
+    ModelPushResult,
     RegistrationResult,
 )
