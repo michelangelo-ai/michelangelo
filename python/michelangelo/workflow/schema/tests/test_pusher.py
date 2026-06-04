@@ -29,7 +29,7 @@ class TestModelPluginConfig(TestCase):
     """Tests for ModelPluginConfig defaults and field storage."""
 
     def test_defaults(self):
-        """It defaults model_name, description, and run_id to None; labels and metadata to {}."""
+        """model_name, description, run_id default to None; labels and metadata to {}."""
         cfg = ModelPluginConfig()
         self.assertIsNone(cfg.model_name)
         self.assertIsNone(cfg.description)
