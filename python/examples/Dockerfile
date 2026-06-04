@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 ###############################################################################
 # $ cd $REPO_ROOT/python
 # $ docker build -t <IMAGE_NAME> -f ./examples/bert_cola/Dockerfile .
@@ -6,10 +7,13 @@
 # Use a base image with Python installed
 FROM nvidia/cuda:12.8.0-base-ubuntu22.04
 
-# Install all system dependencies in a single layer to minimise image size and
-# avoid running apt-get update more than once (extra runs are a common source
-# of flakiness in emulated/QEMU builds).
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install all system dependencies in a single layer.
+# --mount=type=cache persists the apt cache across builds so packages are not
+# re-downloaded on every run. sharing=locked prevents cache corruption when
+# two platform builds run concurrently on the same runner.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     curl \
     software-properties-common \
     vim \
@@ -22,8 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libffi-dev \
     liblzma-dev \
     zlib1g-dev \
-    openjdk-11-jdk \
-    && rm -rf /var/lib/apt/lists/*
+    openjdk-11-jdk
 
 # Set Python version
 ENV PYTHON_VERSION=3.9.18
