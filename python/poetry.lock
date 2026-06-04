@@ -80,7 +80,7 @@ description = "Async http client/server framework (asyncio)"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\") or python_version != \"3.9\" and python_version < \"3.10\" and (platform_system == \"Linux\" or platform_system == \"Windows\") and (extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"trainer\") and (platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "aiohttp-3.13.2-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:2372b15a5f62ed37789a6b383ff7344fc5b9f243999b0cd9b629d8bc5f5b4155"},
     {file = "aiohttp-3.13.2-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:e7f8659a48995edee7229522984bd1009c1213929c769c2daa80b40fe49a180c"},
@@ -434,7 +434,7 @@ description = "A database migration tool for SQLAlchemy."
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.10\" and extra == \"example\""
+markers = "python_version < \"3.10\" and (python_version == \"3.9\" or platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"example\" and (python_version == \"3.9\" or platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "alembic-1.16.5-py3-none-any.whl", hash = "sha256:e845dfe090c5ffa7b92593ae6687c5cb1a101e91fa53868497dbd79847f9dbe3"},
     {file = "alembic-1.16.5.tar.gz", hash = "sha256:a88bb7f6e513bd4301ecf4c7f2206fe93f9913f9b48dac3b78babde2d6fe765e"},
@@ -597,7 +597,7 @@ description = "Timeout context manager for asyncio programs"
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "python_version <= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\")"
+markers = "python_version < \"3.11\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\")"
 files = [
     {file = "async_timeout-5.0.1-py3-none-any.whl", hash = "sha256:39e3809566ff85354557ec2398b55e096c8364bacac9405a7a1fa429e77fe76c"},
     {file = "async_timeout-5.0.1.tar.gz", hash = "sha256:d9321a7a3d5a6a5e187e824d2fa0793ce379a202935782d555d6e9d2735677d3"},
@@ -746,7 +746,7 @@ description = "An easy safelist-based HTML-sanitizing tool."
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.10\" and extra == \"example\""
+markers = "python_version < \"3.10\" and (python_version == \"3.9\" or platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"example\" and (python_version == \"3.9\" or platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "bleach-6.2.0-py3-none-any.whl", hash = "sha256:117d9c6097a7c3d22fd578fcd8d35ff1e125df6736f554da4e432fdd63f31e5e"},
     {file = "bleach-6.2.0.tar.gz", hash = "sha256:123e894118b8a599fd80d3ec1a6d4cc7ce4e5882b1317a7e1ba69b56e95f991f"},
@@ -842,7 +842,7 @@ description = "Extensible memoizing collections and decorators"
 optional = true
 python-versions = ">=3.7"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or (platform_system == \"Linux\" or platform_system == \"Windows\") and (extra == \"example\" or extra == \"vllm\") and platform_machine == \"aarch64\" or platform_system == \"Windows\" and (extra == \"example\" or extra == \"vllm\")"
 files = [
     {file = "cachetools-5.5.2-py3-none-any.whl", hash = "sha256:d26a22bcc62eb95c3beabd9f1ee5e820d3d2704fe2967cbe350e20c8ffcd3f0a"},
     {file = "cachetools-5.5.2.tar.gz", hash = "sha256:1a661caa9175d26759571b2e19580f9d6393969e5dfca11fdb1f947a23e640d4"},
@@ -1124,7 +1124,7 @@ description = "Composable command line interface toolkit"
 optional = false
 python-versions = ">=3.7"
 groups = ["main"]
-markers = "python_version < \"3.10\" and (extra == \"example\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"vllm\" or extra == \"trainer\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\") or python_version != \"3.9\" and python_version < \"3.10\" and (platform_system == \"Linux\" or platform_system == \"Windows\") and (extra == \"example\" or extra == \"vllm\") and (platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "click-8.1.8-py3-none-any.whl", hash = "sha256:63c132bbbed01578a06712a2d1f497bb62d9c1c0d329b7903a866228027263b2"},
     {file = "click-8.1.8.tar.gz", hash = "sha256:ed53c9d8990d83c2a27deae68e4ee337473f6330c040a31d4225c9574d16096a"},
@@ -1140,7 +1140,7 @@ description = "Composable command line interface toolkit"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"example\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"vllm\" or extra == \"trainer\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\")"
 files = [
     {file = "click-8.2.1-py3-none-any.whl", hash = "sha256:61a3265b914e850b85317d0b3109c7f8cd35a670f963866005d6ef1d5175a12b"},
     {file = "click-8.2.1.tar.gz", hash = "sha256:27c491cc05d968d271d5a1db13e3b5a184636d9d930f148c50b038f0d0646202"},
@@ -1169,7 +1169,7 @@ description = "Cross-platform colored terminal text."
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,>=2.7"
 groups = ["main"]
-markers = "(extra == \"dev\" or extra == \"vllm\") and sys_platform == \"win32\" and platform_system != \"Windows\" or platform_system == \"Windows\" and (extra == \"example\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "platform_system == \"Windows\" and (extra == \"dev\" or extra == \"vllm\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\") or (extra == \"dev\" or extra == \"vllm\") and sys_platform == \"win32\""
 files = [
     {file = "colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"},
     {file = "colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44"},
@@ -1263,7 +1263,7 @@ description = "Python library for calculating contours of 2D quadrilateral grids
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.10\" and extra == \"example\""
+markers = "python_version < \"3.10\" and (python_version == \"3.9\" or platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"example\" and (python_version == \"3.9\" or platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "contourpy-1.3.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:880ea32e5c774634f9fcd46504bf9f080a41ad855f4fef54f5380f5133d343c7"},
     {file = "contourpy-1.3.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:76c905ef940a4474a6289c71d53122a4f77766eef23c03cd57016ce19d0f7b42"},
@@ -1520,7 +1520,7 @@ description = "Code coverage measurement for Python"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.10\" and extra == \"dev\""
+markers = "python_version < \"3.10\" and (python_version == \"3.9\" or platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"dev\" and (python_version == \"3.9\" or platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "coverage-7.10.7-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:fc04cc7a3db33664e0c2d10eb8990ff6b3536f6842c9590ae8da4c614b9ed05a"},
     {file = "coverage-7.10.7-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:e201e015644e207139f7e2351980feb7040e6f4b2c2978892f3e3789d1c125e5"},
@@ -1957,7 +1957,7 @@ description = "Distribution utilities"
 optional = true
 python-versions = "*"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or (platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"dev\" and platform_machine == \"aarch64\" or platform_system == \"Windows\" and extra == \"dev\""
 files = [
     {file = "distlib-0.4.0-py2.py3-none-any.whl", hash = "sha256:9659f7d87e46584a30b5780e43ac7a2143098441670ff0a49d5f9034c54a6c16"},
     {file = "distlib-0.4.0.tar.gz", hash = "sha256:feec40075be03a04501a973d81f633735b4b69f98b05450592310c0f401a4e0d"},
@@ -2029,7 +2029,7 @@ description = "Python Git Library"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.10\" and extra == \"trainer-comet\""
+markers = "python_version < \"3.10\" and (python_version == \"3.9\" or platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"trainer-comet\" and (python_version == \"3.9\" or platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "dulwich-0.24.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:2169c36b7955b40e1ec9b0543301a3dd536718c3b7840959ca70e7ed17397c25"},
     {file = "dulwich-0.24.1-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:d16507ca6d6c2d29d7d942da4cc50fa589d58ab066030992dfa3932de6695062"},
@@ -2184,7 +2184,7 @@ description = "Backport of PEP 654 (exception groups)"
 optional = true
 python-versions = ">=3.7"
 groups = ["main"]
-markers = "python_version <= \"3.10\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\")"
+markers = "(extra == \"dev\" or extra == \"example\" or extra == \"vllm\") and python_version < \"3.11\""
 files = [
     {file = "exceptiongroup-1.3.0-py3-none-any.whl", hash = "sha256:4d111e6e0c13d0644cad6ddaa7ed0261a0b36971f6d23e7ec9b4b9097da78a10"},
     {file = "exceptiongroup-1.3.0.tar.gz", hash = "sha256:b241f5885f560bc56a59ee63ca4c6a8bfa46ae4ad651af316d4e81817bb9fd88"},
@@ -2361,7 +2361,7 @@ description = "A platform independent file lock."
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\") or python_version != \"3.9\" and python_version < \"3.10\" and (platform_system == \"Linux\" or platform_system == \"Windows\") and (extra == \"dev\" or extra == \"vllm\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\") and (platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "filelock-3.19.1-py3-none-any.whl", hash = "sha256:d38e30481def20772f5baf097c122c3babc4fcdb7e14e57049eb9d88c6dc017d"},
     {file = "filelock-3.19.1.tar.gz", hash = "sha256:66eda1888b0171c998b35be2bcc0f6d75c388a7ce20c3f3f37aa8e96c2dddf58"},
@@ -2761,7 +2761,7 @@ description = "Google Authentication Library"
 optional = true
 python-versions = ">=3.7"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or (platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"example\" and platform_machine == \"aarch64\" or platform_system == \"Windows\" and extra == \"example\""
 files = [
     {file = "google_auth-2.42.1-py2.py3-none-any.whl", hash = "sha256:eb73d71c91fc95dbd221a2eb87477c278a355e7367a35c0d84e6b0e5f9b4ad11"},
     {file = "google_auth-2.42.1.tar.gz", hash = "sha256:30178b7a21aa50bffbdc1ffcb34ff770a2f65c712170ecd5446c4bef4dc2b94e"},
@@ -3297,7 +3297,7 @@ description = "Read metadata from Python packages"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "(python_version < \"3.10\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\") and (extra == \"example\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"vllm\" or extra == \"trainer\")"
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or python_version == \"3.9\" and (extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer\") or (platform_system == \"Linux\" or platform_system == \"Windows\") and (extra == \"example\" or extra == \"vllm\") and platform_machine == \"aarch64\" or platform_system == \"Windows\" and (extra == \"example\" or extra == \"vllm\")"
 files = [
     {file = "importlib_metadata-8.7.0-py3-none-any.whl", hash = "sha256:e5dd1551894c77868a30651cef00984d50e1002d06942a7101d34870c5f02afd"},
     {file = "importlib_metadata-8.7.0.tar.gz", hash = "sha256:d13b81ad223b890aa16c5471f2ac3056cf76c5f10f82d6f9292f0b415f389000"},
@@ -3322,7 +3322,7 @@ description = "Read resources from Python packages"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.10\" and extra == \"example\""
+markers = "python_version < \"3.10\" and (python_version == \"3.9\" or platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"example\" and (python_version == \"3.9\" or platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "importlib_resources-6.5.2-py3-none-any.whl", hash = "sha256:789cfdc3ed28c78b67a06acb8126751ced69a3d5f79c095a98298cd8a760ccec"},
     {file = "importlib_resources-6.5.2.tar.gz", hash = "sha256:185f87adef5bcc288449d98fb4fba07cea78bc036455dd44c5fc4a2fe78fed2c"},
@@ -3346,7 +3346,7 @@ description = "brain-dead simple config-ini parsing"
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "python_version < \"3.10\" and extra == \"dev\""
+markers = "python_version < \"3.10\" and (python_version == \"3.9\" or platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"dev\" and (python_version == \"3.9\" or platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "iniconfig-2.1.0-py3-none-any.whl", hash = "sha256:9deba5723312380e77435581c6bf4935c94cbfab9b1ed33ef8d238ea168eb760"},
     {file = "iniconfig-2.1.0.tar.gz", hash = "sha256:3abbd2e30b36733fee78f9c7f7308f2d0050e88f0087fd25c2645f63c773e1c7"},
@@ -3624,7 +3624,7 @@ description = "A fast implementation of the Cassowary constraint solver"
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "python_version < \"3.10\" and extra == \"example\""
+markers = "python_version < \"3.10\" and (python_version == \"3.9\" or platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"example\" and (python_version == \"3.9\" or platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "kiwisolver-1.4.7-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:8a9c83f75223d5e48b0bc9cb1bf2776cf01563e00ade8775ffe13b0b6e1af3a6"},
     {file = "kiwisolver-1.4.7-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:58370b1ffbd35407444d57057b57da5d6549d2d854fa30249771775c63b5fe17"},
@@ -3975,7 +3975,7 @@ description = "Python implementation of John Gruber's Markdown."
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.10\" and extra == \"example\""
+markers = "python_version < \"3.10\" and (python_version == \"3.9\" or platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"example\" and (python_version == \"3.9\" or platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "markdown-3.9-py3-none-any.whl", hash = "sha256:9f4d91ed810864ea88a6f32c07ba8bee1346c0cc1f6b1f9f6c822f2a9667d280"},
     {file = "markdown-3.9.tar.gz", hash = "sha256:d2900fe1782bd33bdbbd56859defef70c2e78fc46668f8eb9df3128138f2cb6a"},
@@ -4012,7 +4012,7 @@ description = "Python port of markdown-it. Markdown parsing, done right!"
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "python_version < \"3.10\" and (extra == \"trainer-comet\" or extra == \"vllm\")"
+markers = "python_version < \"3.10\" and (python_version == \"3.9\" or platform_system == \"Linux\" or platform_system == \"Windows\") and (extra == \"trainer-comet\" or extra == \"vllm\") and (python_version == \"3.9\" or platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "markdown-it-py-3.0.0.tar.gz", hash = "sha256:e3f60a94fa066dc52ec76661e37c851cb232d92f9886b15cb560aaada2df8feb"},
     {file = "markdown_it_py-3.0.0-py3-none-any.whl", hash = "sha256:355216845c60bd96232cd8d8c40e8f9765cc86f46880e43a8fd22dc1a1a8cab1"},
@@ -4163,7 +4163,7 @@ description = "Python plotting package"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.10\" and extra == \"example\""
+markers = "python_version < \"3.10\" and (python_version == \"3.9\" or platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"example\" and (python_version == \"3.9\" or platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "matplotlib-3.9.4-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:c5fdd7abfb706dfa8d307af64a87f1a862879ec3cd8d0ec8637458f0885b9c50"},
     {file = "matplotlib-3.9.4-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:d89bc4e85e40a71d1477780366c27fb7c6494d293e1617788986f74e2a03d7ff"},
@@ -4515,7 +4515,7 @@ description = "MessagePack serializer"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or (platform_system == \"Linux\" or platform_system == \"Windows\") and (extra == \"example\" or extra == \"vllm\") and platform_machine == \"aarch64\" or platform_system == \"Windows\" and (extra == \"example\" or extra == \"vllm\")"
 files = [
     {file = "msgpack-1.1.2-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:0051fffef5a37ca2cd16978ae4f0aef92f164df86823871b5162812bebecd8e2"},
     {file = "msgpack-1.1.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:a605409040f2da88676e9c9e5853b3449ba8011973616189ea5ee55ddbc5bc87"},
@@ -4841,7 +4841,7 @@ description = "Python package for creating and manipulating graphs and networks"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.10\" and (extra == \"vllm\" or extra == \"example\" or extra == \"dev\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "python_version < \"3.10\" and (python_version == \"3.9\" or platform_system == \"Linux\" or platform_system == \"Windows\") and (extra == \"vllm\" or extra == \"example\" or extra == \"dev\" or extra == \"trainer\" or extra == \"trainer-deepspeed\") and (python_version == \"3.9\" or platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "networkx-3.2.1-py3-none-any.whl", hash = "sha256:f18c69adc97877c42332c170849c96cefa91881c99a7cb3e95b7c659ebdc1ec2"},
     {file = "networkx-3.2.1.tar.gz", hash = "sha256:9f1bb5cf3409bf324e0a722c20bdb4c20ee39bf1c30ce8ae499c8502b0b5e0c6"},
@@ -4983,7 +4983,7 @@ description = "Fundamental package for array computing in Python"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "platform_system != \"Windows\" and (python_version < \"3.10\" or extra == \"vllm\" or extra == \"example\" or extra == \"dev\" or extra == \"trainer\" or extra == \"trainer-deepspeed\") and (extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"trainer\" or extra == \"trainer-deepspeed\") or platform_system == \"Windows\" and (extra == \"vllm\" or extra == \"example\" or extra == \"dev\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "extra == \"vllm\" or extra == \"example\" or extra == \"dev\" or extra == \"trainer\" or extra == \"trainer-deepspeed\""
 files = [
     {file = "numpy-1.26.4-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:9ff0f4f29c51e2803569d7a51c2304de5554655a60c5d776e35b4a41413830d0"},
     {file = "numpy-1.26.4-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:2e4ee3380d6de9c9ec04745830fd9e2eccb3e6cf790d39d7b98ffd19b0dd754a"},
@@ -5324,7 +5324,7 @@ description = "OpenTelemetry Python API"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or (platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"example\" and platform_machine == \"aarch64\" or platform_system == \"Windows\" and extra == \"example\""
 files = [
     {file = "opentelemetry_api-1.38.0-py3-none-any.whl", hash = "sha256:2891b0197f47124454ab9f0cf58f3be33faca394457ac3e09daba13ff50aa582"},
     {file = "opentelemetry_api-1.38.0.tar.gz", hash = "sha256:f4c193b5e8acb0912b06ac5b16321908dd0843d75049c091487322284a3eea12"},
@@ -5375,7 +5375,7 @@ description = "OpenTelemetry Python SDK"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or (platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"example\" and platform_machine == \"aarch64\" or platform_system == \"Windows\" and extra == \"example\""
 files = [
     {file = "opentelemetry_sdk-1.38.0-py3-none-any.whl", hash = "sha256:1c66af6564ecc1553d72d811a01df063ff097cdc82ce188da9951f93b8d10f6b"},
     {file = "opentelemetry_sdk-1.38.0.tar.gz", hash = "sha256:93df5d4d871ed09cb4272305be4d996236eedb232253e3ab864c8620f051cebe"},
@@ -5393,7 +5393,7 @@ description = "OpenTelemetry Semantic Conventions"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or (platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"example\" and platform_machine == \"aarch64\" or platform_system == \"Windows\" and extra == \"example\""
 files = [
     {file = "opentelemetry_semantic_conventions-0.59b0-py3-none-any.whl", hash = "sha256:35d3b8833ef97d614136e253c1da9342b4c3c083bbaf29ce31d572a1c3825eed"},
     {file = "opentelemetry_semantic_conventions-0.59b0.tar.gz", hash = "sha256:7a6db3f30d70202d5bf9fa4b69bc866ca6a30437287de6c510fb594878aed6b0"},
@@ -5495,7 +5495,7 @@ description = "Core utilities for Python packages"
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "extra == \"example\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\""
 files = [
     {file = "packaging-24.2-py3-none-any.whl", hash = "sha256:09abb1bccd265c01f4a3aa3f7a7db064b36514d2cba19a2f694fe6150451a759"},
     {file = "packaging-24.2.tar.gz", hash = "sha256:c228a6dc5e932d346bc5739379109d49e8853dd8223571c7c5b55260edc0b97f"},
@@ -5653,7 +5653,7 @@ description = "Python Imaging Library (Fork)"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.10\" and (extra == \"example\" or extra == \"vllm\")"
+markers = "python_version < \"3.10\" and (python_version == \"3.9\" or platform_system == \"Linux\" or platform_system == \"Windows\") and (extra == \"example\" or extra == \"vllm\") and (python_version == \"3.9\" or platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "pillow-11.3.0-cp310-cp310-macosx_10_10_x86_64.whl", hash = "sha256:1b9c17fd4ace828b3003dfd1e30bff24863e0eb59b535e8f80194d9cc7ecf860"},
     {file = "pillow-11.3.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:65dc69160114cdd0ca0f35cb434633c75e8e7fad4cf855177a05bf38678f73ad"},
@@ -5889,7 +5889,7 @@ description = "A small Python package for determining appropriate platform-speci
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\")"
 files = [
     {file = "platformdirs-4.4.0-py3-none-any.whl", hash = "sha256:abd01743f24e5287cd7a5db3752faf1a2d65353f38ec26d98e25a6db65958c85"},
     {file = "platformdirs-4.4.0.tar.gz", hash = "sha256:ca753cf4d81dc309bc67b0ea38fd15dc97bc30ce419a7f58d13eb3bf14c4febf"},
@@ -5907,7 +5907,7 @@ description = "A small Python package for determining appropriate platform-speci
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\") or python_version != \"3.9\" and python_version < \"3.10\" and (platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"dev\" and (platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "platformdirs-4.5.0-py3-none-any.whl", hash = "sha256:e578a81bb873cbb89a41fcc904c7ef523cc18284b7e3b3ccf06aca1403b7ebd3"},
     {file = "platformdirs-4.5.0.tar.gz", hash = "sha256:70ddccdd7c99fc5942e9fc25636a8b34d04c24b335100223152c2803e4063312"},
@@ -5942,7 +5942,7 @@ description = "Blazingly fast DataFrame library"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.10\" and (extra == \"dev\" or extra == \"ray-polars\")"
+markers = "python_version < \"3.10\" and (python_version == \"3.9\" or platform_system == \"Linux\" or platform_system == \"Windows\") and (extra == \"dev\" or extra == \"ray-polars\") and (python_version == \"3.9\" or platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "polars-1.36.1-py3-none-any.whl", hash = "sha256:853c1bbb237add6a5f6d133c15094a9b727d66dd6a4eb91dbb07cdb056b2b8ef"},
     {file = "polars-1.36.1.tar.gz", hash = "sha256:12c7616a2305559144711ab73eaa18814f7aa898c522e7645014b68f1432d54c"},
@@ -6032,7 +6032,7 @@ description = "Blazingly fast DataFrame library"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.10\" and (extra == \"dev\" or extra == \"ray-polars\")"
+markers = "python_version < \"3.10\" and (python_version == \"3.9\" or platform_system == \"Linux\" or platform_system == \"Windows\") and (extra == \"dev\" or extra == \"ray-polars\") and (python_version == \"3.9\" or platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "polars_runtime_32-1.36.1-cp39-abi3-macosx_10_12_x86_64.whl", hash = "sha256:327b621ca82594f277751f7e23d4b939ebd1be18d54b4cdf7a2f8406cecc18b2"},
     {file = "polars_runtime_32-1.36.1-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:ab0d1f23084afee2b97de8c37aa3e02ec3569749ae39571bd89e7a8b11ae9e83"},
@@ -6090,7 +6090,7 @@ description = "Python client for the Prometheus monitoring system."
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or (platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"vllm\" and platform_machine == \"aarch64\" or platform_system == \"Windows\" and extra == \"vllm\""
 files = [
     {file = "prometheus_client-0.23.1-py3-none-any.whl", hash = "sha256:dd1913e6e76b59cfe44e7a4b83e01afc9873c1bdfd2ed8739f1e76aeca115f99"},
     {file = "prometheus_client-0.23.1.tar.gz", hash = "sha256:6ae8f9081eaaaf153a2e959d2e6c4f4fb57b12ef76c8c7980202f1e57b48b2ce"},
@@ -6433,7 +6433,7 @@ description = "Pure-Python implementation of ASN.1 types and DER/BER/CER codecs 
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or (platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"example\" and platform_machine == \"aarch64\" or platform_system == \"Windows\" and extra == \"example\""
 files = [
     {file = "pyasn1-0.6.1-py3-none-any.whl", hash = "sha256:0d632f46f2ba09143da3a8afe9e33fb6f92fa2320ab7e886e2d0f7672af84629"},
     {file = "pyasn1-0.6.1.tar.gz", hash = "sha256:6f580d2bdd84365380830acf45550f2511469f673cb4a5ae3857a3170128b034"},
@@ -6446,7 +6446,7 @@ description = "A collection of ASN.1-based protocols modules"
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or (platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"example\" and platform_machine == \"aarch64\" or platform_system == \"Windows\" and extra == \"example\""
 files = [
     {file = "pyasn1_modules-0.4.2-py3-none-any.whl", hash = "sha256:29253a9207ce32b64c3ac6600edc75368f98473906e8fd1043bd6b5b1de2c14a"},
     {file = "pyasn1_modules-0.4.2.tar.gz", hash = "sha256:677091de870a80aae844b1ca6134f54652fa2c8c5a52aa396440ac3106e941e6"},
@@ -7206,7 +7206,7 @@ description = "Ray provides a simple, universal API for building distributed app
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\") or python_version != \"3.9\" and python_version < \"3.10\" and (platform_system == \"Linux\" or platform_system == \"Windows\") and (extra == \"example\" or extra == \"vllm\") and (platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "ray-2.53.0-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:4db914a0a6dd608fa49c066929a1282745a2dbd73caee67d7b80fe684ca65bdd"},
     {file = "ray-2.53.0-cp310-cp310-manylinux2014_aarch64.whl", hash = "sha256:4108280d8a1cb90d7d68e5c954c35e63b8bb9a4ba15f88c5e7da0e2025647712"},
@@ -7350,7 +7350,7 @@ description = "JSON Referencing + Python"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-comet\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-comet\") or python_version != \"3.9\" and python_version < \"3.10\" and (platform_system == \"Linux\" or platform_system == \"Windows\") and (extra == \"trainer-comet\" or extra == \"example\" or extra == \"vllm\") and (platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "referencing-0.36.2-py3-none-any.whl", hash = "sha256:e8699adbbf8b5c7de96d8ffa0eb5c158b3beafce084968e2ea8bb08c6794dcd0"},
     {file = "referencing-0.36.2.tar.gz", hash = "sha256:df2e89862cd09deabbdba16944cc3f10feb6b3e6f18e902f7cc25609a34775aa"},
@@ -7726,7 +7726,7 @@ description = "Python bindings to Rust's persistent data structures (rpds)"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-comet\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-comet\") or python_version != \"3.9\" and python_version < \"3.10\" and (platform_system == \"Linux\" or platform_system == \"Windows\") and (extra == \"trainer-comet\" or extra == \"example\" or extra == \"vllm\") and (platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "rpds_py-0.27.1-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:68afeec26d42ab3b47e541b272166a0b4400313946871cba3ed3a4fc0cab1cef"},
     {file = "rpds_py-0.27.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:74e5b2f7bb6fa38b1b10546d27acbacf2a022a8b5543efb06cfebc72a59c85be"},
@@ -8018,7 +8018,7 @@ description = "Pure-Python RSA implementation"
 optional = true
 python-versions = "<4,>=3.6"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or (platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"example\" and platform_machine == \"aarch64\" or platform_system == \"Windows\" and extra == \"example\""
 files = [
     {file = "rsa-4.9.1-py3-none-any.whl", hash = "sha256:68635866661c6836b8d39430f97a996acbd61bfa49406748ea243539fe239762"},
     {file = "rsa-4.9.1.tar.gz", hash = "sha256:e7bdbfdb5497da4c07dfd35530e1a902659db6ff241e39d9953cad06ebd0ae75"},
@@ -8144,7 +8144,7 @@ description = "A set of python modules for machine learning and data mining"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.10\" and extra == \"example\""
+markers = "python_version < \"3.10\" and (python_version == \"3.9\" or platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"example\" and (python_version == \"3.9\" or platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "scikit_learn-1.6.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:d056391530ccd1e501056160e3c9673b4da4805eb67eb2bdf4e983e1f9c9204e"},
     {file = "scikit_learn-1.6.1-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:0c8d036eb937dbb568c6242fa598d551d88fb4399c0344d95c001980ec1c7d36"},
@@ -8257,7 +8257,7 @@ description = "Fundamental algorithms for scientific computing in Python"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.10\" and (extra == \"example\" or extra == \"vllm\")"
+markers = "python_version < \"3.10\" and (python_version == \"3.9\" or platform_system == \"Linux\" or platform_system == \"Windows\") and (extra == \"example\" or extra == \"vllm\") and (python_version == \"3.9\" or platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "scipy-1.13.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:20335853b85e9a49ff7572ab453794298bcf0354d8068c5f6775a0eabf350aca"},
     {file = "scipy-1.13.1-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:d605e9c23906d1994f55ace80e0125c587f96c020037ea6aa98d01b4bd2e222f"},
@@ -8526,7 +8526,7 @@ description = "Easily download, build, install, upgrade, and uninstall Python pa
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "(extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or python_version >= \"3.12\") and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"trainer-comet\")"
+markers = "(extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"trainer-comet\") and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or python_version >= \"3.12\")"
 files = [
     {file = "setuptools-74.1.1-py3-none-any.whl", hash = "sha256:fc91b5f89e392ef5b77fe143b17e32f65d3024744fba66dc3afe07201684d766"},
     {file = "setuptools-74.1.1.tar.gz", hash = "sha256:2353af060c06388be1cecbf5953dcdb1f38362f87a2356c480b6b4d5fcfc8847"},
@@ -8668,7 +8668,7 @@ description = "Python 2 and 3 compatibility utilities"
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
 groups = ["main"]
-markers = "(python_version < \"3.12\" or extra == \"vllm\" or extra == \"example\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer\") and (extra == \"example\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"vllm\" or extra == \"trainer\")"
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\""
 files = [
     {file = "six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"},
     {file = "six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81"},
@@ -9058,7 +9058,7 @@ description = "A lil' TOML parser"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "python_version <= \"3.10\""
+markers = "python_version < \"3.11\""
 files = [
     {file = "tomli-2.3.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:88bd15eb972f3664f5ed4b57c1634a97153b4bac4479dcb6a495f41921eb7f45"},
     {file = "tomli-2.3.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:883b1c0d6398a6a9d29b508c331fa56adbcdff647f6ace4dfca0f50e90dfd0ba"},
@@ -9454,7 +9454,7 @@ description = "HTTP library with thread-safe connection pooling, file post, and 
 optional = true
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,>=2.7"
 groups = ["main"]
-markers = "python_version < \"3.10\" and (extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer\" or extra == \"trainer-comet\" or extra == \"minio\")"
+markers = "python_version == \"3.9\" and (extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"trainer\" or extra == \"trainer-comet\" or extra == \"minio\" or extra == \"plugin\" or extra == \"ray-polars\") or python_version != \"3.9\" and python_version < \"3.10\" and (platform_system == \"Linux\" or platform_system == \"Windows\") and (extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"trainer\" or extra == \"trainer-comet\" or extra == \"minio\") and (platform_machine == \"aarch64\" or platform_system == \"Windows\")"
 files = [
     {file = "urllib3-1.26.20-py2.py3-none-any.whl", hash = "sha256:0ed14ccfbf1c30a9072c7ca157e4319b70d65f623e91e7b32fadb2853431016e"},
     {file = "urllib3-1.26.20.tar.gz", hash = "sha256:40c2dc0c681e47eb8f90e7e27bf6ff7df2e677421fd46756da1161c39ca70d32"},
@@ -9472,7 +9472,7 @@ description = "HTTP library with thread-safe connection pooling, file post, and 
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer\" or extra == \"trainer-comet\" or extra == \"minio\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-comet\" or extra == \"minio\")"
 files = [
     {file = "urllib3-2.5.0-py3-none-any.whl", hash = "sha256:e6b01673c0fa6a13e374b50871808eb3bf7046c4b125b216f6bf1cc604cff0dc"},
     {file = "urllib3-2.5.0.tar.gz", hash = "sha256:3fc47733c7e419d4bc3f6b3dc2b4f890bb743906a30d56ba4a5bfa4bbff92760"},
@@ -9584,7 +9584,7 @@ description = "Virtual Python Environment builder"
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or (platform_system == \"Linux\" or platform_system == \"Windows\") and extra == \"dev\" and platform_machine == \"aarch64\" or platform_system == \"Windows\" and extra == \"dev\""
 files = [
     {file = "virtualenv-20.35.4-py3-none-any.whl", hash = "sha256:c21c9cede36c9753eeade68ba7d523529f228a403463376cf821eaae2b650f1b"},
     {file = "virtualenv-20.35.4.tar.gz", hash = "sha256:643d3914d73d3eeb0c552cbb12d7e82adf0e504dbf86a3182f8771a153a1971c"},
@@ -10454,7 +10454,7 @@ description = "Backport of pathlib-compatible object wrapper for zip files"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "(python_version < \"3.10\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\") and (extra == \"example\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"vllm\" or extra == \"trainer\")"
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or python_version == \"3.9\" and (extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer\") or (platform_system == \"Linux\" or platform_system == \"Windows\") and (extra == \"example\" or extra == \"vllm\") and platform_machine == \"aarch64\" or platform_system == \"Windows\" and (extra == \"example\" or extra == \"vllm\")"
 files = [
     {file = "zipp-3.23.0-py3-none-any.whl", hash = "sha256:071652d6115ed432f5ce1d34c336c0adfd6a884660d1e9712a256d3d3bd4b14e"},
     {file = "zipp-3.23.0.tar.gz", hash = "sha256:a07157588a12518c9d4034df3fbbee09c814741a33ff63c05fa29d26a2404166"},
@@ -10469,18 +10469,18 @@ test = ["big-O", "jaraco.functools", "jaraco.itertools", "jaraco.test", "more_it
 type = ["pytest-mypy"]
 
 [extras]
-dev = ["coverage", "docker", "jinja2", "numpy", "pandas", "polars", "pre-commit", "pyarrow", "pytest", "pytest-cov", "pytorch_lightning", "ray", "ruff", "torch", "transformers"]
-example = ["accelerate", "boto3", "chronon-ai", "datasets", "einops", "kaggle", "mlflow", "numpy", "pandas", "peft", "pyarrow", "pyspark", "pytorch_lightning", "ray", "ray", "s3fs", "scikit-learn", "sqlglot", "thrift", "torch", "transformers", "xgboost", "xgboost_ray"]
+dev = ["coverage", "docker", "jinja2", "numpy", "pandas", "polars", "pre-commit", "pyarrow", "pytest", "pytest-cov", "pytorch_lightning", "ray", "ray", "ruff", "torch", "transformers"]
+example = ["accelerate", "boto3", "chronon-ai", "datasets", "einops", "kaggle", "mlflow", "numpy", "pandas", "peft", "pyarrow", "pyspark", "pytorch_lightning", "ray", "ray", "ray", "ray", "s3fs", "scikit-learn", "sqlglot", "thrift", "torch", "transformers", "xgboost", "xgboost_ray"]
 mactl = []
 minio = ["minio"]
-plugin = ["pyspark", "ray"]
-ray-polars = ["polars", "ray"]
-trainer = ["numpy", "pytorch_lightning", "ray", "torch", "transformers"]
+plugin = ["pyspark", "ray", "ray"]
+ray-polars = ["polars", "ray", "ray"]
+trainer = ["numpy", "pytorch_lightning", "ray", "ray", "torch", "transformers"]
 trainer-comet = ["comet_ml"]
 trainer-deepspeed = ["deepspeed"]
-vllm = ["accelerate", "datasets", "einops", "numpy", "pandas", "pyarrow", "pytorch_lightning", "ray", "s3fs", "setuptools", "torch", "transformers", "vllm"]
+vllm = ["accelerate", "datasets", "einops", "numpy", "pandas", "pyarrow", "pytorch_lightning", "ray", "ray", "s3fs", "setuptools", "torch", "transformers", "vllm"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9.0"
-content-hash = "d05353c5bd016da4576883453c9351844cb95e30cf9a6993f7fa4d5f60c9ed58"
+content-hash = "4149f2c1c2358e6d0b6ac52440535c4235f8a87fe04588610762e932c1bc56aa"
