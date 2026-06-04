@@ -127,13 +127,13 @@ def create_import_rewriter(defs_path: str, prefix: str) -> ast.NodeTransformer:
     imports = os.listdir(defs_path)
 
     class ImportRewriter(ast.NodeTransformer):
-        def visit_Import(self, node):
+        def visit_Import(self, node):  # noqa: N802
             for alias in node.names:
                 if any(alias.name.startswith(import_name) for import_name in imports):
                     alias.name = prefix + alias.name
             return node
 
-        def visit_ImportFrom(self, node):
+        def visit_ImportFrom(self, node):  # noqa: N802
             if any(node.module.startswith(import_name) for import_name in imports):
                 node.module = prefix + node.module
             return node
