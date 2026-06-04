@@ -6,8 +6,10 @@
 # Use a base image with Python installed
 FROM nvidia/cuda:12.8.0-base-ubuntu22.04
 
-# Install dependencies required for building Python
-RUN apt-get update && apt-get install -y \
+# Install all system dependencies in a single layer to minimise image size and
+# avoid running apt-get update more than once (extra runs are a common source
+# of flakiness in emulated/QEMU builds).
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     software-properties-common \
     vim \
@@ -20,6 +22,7 @@ RUN apt-get update && apt-get install -y \
     libffi-dev \
     liblzma-dev \
     zlib1g-dev \
+    openjdk-11-jdk \
     && rm -rf /var/lib/apt/lists/*
 
 # Set Python version
@@ -77,8 +80,6 @@ RUN mkdir -p ${SPARK_HOME}/conf && \
 ###
 ### Install Java
 ###
-# Install OpenJDK 11 (multi-arch compatible and open-source)
-RUN apt-get update && apt-get install -y openjdk-11-jdk
 
 # Detect JAVA_HOME at build time so the image works on both arm64 and amd64.
 RUN JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java)))) && \
