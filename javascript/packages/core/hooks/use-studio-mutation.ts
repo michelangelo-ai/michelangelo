@@ -28,8 +28,12 @@ export const useStudioMutation = <TData, TVariables extends Record<string, unkno
         throw normalizeError(error)!;
       }
     },
-    onSuccess: config?.clientOptions?.onSuccess,
-    onError: config?.clientOptions?.onError,
+    onSuccess: config?.clientOptions?.onSuccess
+      ? (data) => config.clientOptions!.onSuccess!(data)
+      : undefined,
+    onError: config?.clientOptions?.onError
+      ? (error) => config.clientOptions!.onError!(error)
+      : undefined,
     // Auto-invalidation per ARCHITECTURE.md § 3 "Studio conventions encoded
     // in the runtime": derive the entity from `mutationName` and invalidate
     // its Get/List query keys on settle (success or failure).
