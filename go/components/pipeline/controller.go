@@ -12,6 +12,7 @@ package pipeline
 import (
 	"context"
 	"fmt"
+	"maps"
 	"reflect"
 	"strings"
 	"time"
@@ -107,7 +108,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	state := pipeline.Status.State
 	logger.Info("Reconciling pipeline", zap.Any("PipelineStatusState", state.String()))
 
-	if r.config.RevisioningEnabled {
+	if r.config.RevisioningEnabled && pipeline.Spec.Commit != nil {
 		pipeline.Status.LatestRevision = &apipb.ResourceIdentifier{
 			Name:      formatRevisionName(pipeline),
 			Namespace: pipeline.Namespace,
@@ -213,7 +214,7 @@ func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeli
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        formatRevisionName(pipeline),
 			Namespace:   pipeline.Namespace,
-			Annotations: pipeline.Annotations,
+			Annotations: maps.Clone(pipeline.Annotations),
 		},
 		Spec: v2pb.RevisionSpec{
 			BaseType: &metav1.TypeMeta{

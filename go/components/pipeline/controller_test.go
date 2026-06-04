@@ -147,10 +147,45 @@ func TestReconcile_RevisioningEnabled_NoCommit(t *testing.T) {
 	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}})
 	require.NoError(t, err)
 
-	// No Revision should be created when the pipeline has no commit.
 	got := &v2pb.Pipeline{}
 	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "test-pipeline", &metav1.GetOptions{}, got))
 	require.Equal(t, v2pb.PIPELINE_STATE_READY, got.Status.State)
+	assert.Nil(t, got.Status.LatestRevision, "LatestRevision should not be set when pipeline has no commit")
+
+	// Confirm no Revision CR was created.
+	rev := &v2pb.Revision{}
+	err = reconciler.Get(context.Background(), "test-namespace", "pipeline-test-pipeline-", &metav1.GetOptions{}, rev)
+	assert.True(t, err != nil, "no Revision CR should exist when pipeline has no commit")
+}
+
+// TestReconcile_RevisionAnnotationsDoNotAliasPipeline guards against the Revision CR
+// sharing its annotation map with the pipeline. If the maps alias, any write to
+// rev.Annotations (e.g. MarkImmutable) would silently corrupt pipeline.Annotations.
+func TestReconcile_RevisionAnnotationsDoNotAliasPipeline(t *testing.T) {
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pipeline",
+			Namespace: "test-namespace",
+			Annotations: map[string]string{
+				"custom-annotation": "original-value",
+			},
+		},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{
+				GitRef: "abc123456789",
+				Branch: "main",
+			},
+		},
+	}
+
+	reconciler := setUpReconciler(t, []client.Object{pipeline}, env.Context{}, Config{RevisioningEnabled: true})
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}})
+	require.NoError(t, err)
+
+	got := &v2pb.Pipeline{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "test-pipeline", &metav1.GetOptions{}, got))
+	assert.Equal(t, "original-value", got.Annotations["custom-annotation"], "reconcile should not modify pipeline annotations")
+	assert.NotContains(t, got.Annotations, "michelangelo/Immutable", "reconcile should not add internal annotations to the pipeline")
 }
 
 func setUpReconciler(t *testing.T, initialObjects []client.Object, env env.Context, cfg Config) *Reconciler {
