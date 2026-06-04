@@ -8,6 +8,7 @@ import (
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/notification"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/plugin"
+	"github.com/michelangelo-ai/michelangelo/go/storage"
 	"go.uber.org/zap"
 )
 
@@ -38,6 +39,7 @@ func register(
 	p *plugin.Plugin,
 	notifier *notification.PipelineRunNotifier,
 	cfg Config,
+	metadataStorageConfig storage.MetadataStorageConfig,
 ) error {
-	return NewReconciler(p, logger, apiHandlerFactory, notifier, cfg).Register(mgr)
+	return NewReconciler(p, logger, apiHandlerFactory, notifier, cfg, metadataStorageConfig).Register(mgr)
 }

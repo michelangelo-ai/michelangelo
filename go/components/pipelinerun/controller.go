@@ -26,6 +26,7 @@ import (
 	defaultEngine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/notification"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/plugin"
+	"github.com/michelangelo-ai/michelangelo/go/storage"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
@@ -34,6 +35,7 @@ type Config struct {
 	// TTLDays is how long after last update a terminal PipelineRun is kept in
 	// ETCD before being marked immutable and evicted to MySQL-only storage.
 	// Zero means TTL eviction is disabled.
+	// Note: TTL eviction only works when metadata storage is enabled.
 	TTLDays int `yaml:"ttlDays"`
 }
 
@@ -45,12 +47,13 @@ type Config struct {
 // status and updates the PipelineRun resource accordingly.
 type Reconciler struct {
 	api.Handler
-	logger            *zap.Logger
-	config            Config
-	plugin            *plugin.Plugin
-	engine            *defaultEngine.DefaultEngine[*v2pb.PipelineRun]
-	apiHandlerFactory apiHandler.Factory
-	notifier          *notification.PipelineRunNotifier
+	logger                      *zap.Logger
+	config                      Config
+	metadataStorageEnabled      bool // Cached at initialization - doesn't change at runtime
+	plugin                      *plugin.Plugin
+	engine                      *defaultEngine.DefaultEngine[*v2pb.PipelineRun]
+	apiHandlerFactory           apiHandler.Factory
+	notifier                    *notification.PipelineRunNotifier
 }
 
 // NewReconciler creates a new PipelineRun controller reconciler.
@@ -64,6 +67,8 @@ type Reconciler struct {
 //   - logger: Structured logger for the controller
 //   - apiHandlerFactory: Factory for creating API handlers to interact with Kubernetes
 //   - notifier: Handles pipeline run notifications for state changes
+//   - config: PipelineRun controller configuration including TTL settings
+//   - metadataStorageConfig: Metadata storage configuration to determine if MySQL backup exists
 //
 // Returns a configured Reconciler ready to be registered with a controller manager.
 func NewReconciler(
@@ -72,15 +77,17 @@ func NewReconciler(
 	apiHandlerFactory apiHandler.Factory,
 	notifier *notification.PipelineRunNotifier,
 	config Config,
+	metadataStorageConfig storage.MetadataStorageConfig,
 ) *Reconciler {
 	logger = logger.With(zap.String("component", "pipelinerun"))
 	return &Reconciler{
-		plugin:            plugin,
-		logger:            logger,
-		config:            config,
-		engine:            defaultEngine.NewDefaultEngine[*v2pb.PipelineRun](logger),
-		apiHandlerFactory: apiHandlerFactory,
-		notifier:          notifier,
+		plugin:                 plugin,
+		logger:                 logger,
+		config:                 config,
+		metadataStorageEnabled: storage.EnableMetadataStorage(&metadataStorageConfig),
+		engine:                 defaultEngine.NewDefaultEngine[*v2pb.PipelineRun](logger),
+		apiHandlerFactory:      apiHandlerFactory,
+		notifier:               notifier,
 	}
 }
 
@@ -163,7 +170,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	// For terminal runs, check if TTL has elapsed and mark immutable if so.
 	// This evicts the run from ETCD once it's old enough, keeping ETCD lean.
-	if returnErr == nil && currentIsTerminal {
+	// CRITICAL: Only do this when metadata storage is enabled (MySQL backup exists).
+	// Otherwise, evicting from ETCD would permanently delete the records.
+	if returnErr == nil && currentIsTerminal && r.metadataStorageEnabled {
 		if requeueAt, done := r.markImmutableIfExpired(ctx, logger, pipelineRun); !done {
 			return ctrl.Result{RequeueAfter: requeueAt}, nil
 		}
