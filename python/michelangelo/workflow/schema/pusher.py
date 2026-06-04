@@ -117,6 +117,7 @@ class ModelPluginConfig:
     metadata: dict[str, Any] = field(default_factory=dict)
     registry_clients: list[ModelRegistryClient] = field(default_factory=list)
 
+
 @dataclass
 class DatasetPluginConfig:
     """Configuration for ``DatasetPusherPlugin``.

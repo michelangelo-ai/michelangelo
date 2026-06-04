@@ -198,7 +198,10 @@ class TestInMemoryRegistryClient(TestCase):
     """Tests for InMemoryRegistryClient — the reference implementation."""
 
     def setUp(self) -> None:
-        from michelangelo.lib.model_manager.registry.client import InMemoryRegistryClient
+        from michelangelo.lib.model_manager.registry.client import (
+            InMemoryRegistryClient,
+        )
+
         self.registry = InMemoryRegistryClient()
 
     def test_register_model_returns_version_one_for_first_registration(self):

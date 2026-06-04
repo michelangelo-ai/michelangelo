@@ -183,7 +183,9 @@ class TestModelPusherPluginExecute(TestCase):
     def test_description_forwarded_to_register_model(self):
         """It passes config.description to register_model(description=...)."""
         registry = _mock_registry(name="m")
-        _plugin(model_name="m", registry=registry, description="My prod classifier").execute()
+        _plugin(
+            model_name="m", registry=registry, description="My prod classifier"
+        ).execute()
         call_kwargs = registry.register_model.call_args.kwargs
         self.assertEqual(call_kwargs["description"], "My prod classifier")
 
@@ -206,9 +208,7 @@ class TestModelPusherPluginExecute(TestCase):
             deployable=True,
         )
         ModelPusherPlugin(
-            config=ModelPluginConfig(
-                model_name="m", labels={"owner": "ml-platform"}
-            ),
+            config=ModelPluginConfig(model_name="m", labels={"owner": "ml-platform"}),
             artifact=artifact,
             storage_backend=_mock_backend(),
             registry_client=registry,
@@ -266,7 +266,8 @@ class TestModelPusherPluginExecute(TestCase):
         """config.metadata values are forwarded in the metadata kwarg."""
         registry = _mock_registry(name="m")
         _plugin(
-            model_name="m", registry=registry,
+            model_name="m",
+            registry=registry,
             metadata={"accuracy": 0.94, "git_sha": "abc123"},
         ).execute()
         metadata = registry.register_model.call_args.kwargs["metadata"]
@@ -277,7 +278,8 @@ class TestModelPusherPluginExecute(TestCase):
         """config.run_id overwrites metadata['run_id'] on collision."""
         registry = _mock_registry(name="m")
         _plugin(
-            model_name="m", registry=registry,
+            model_name="m",
+            registry=registry,
             run_id="authoritative-run",
             metadata={"run_id": "should-be-overwritten"},
         ).execute()
@@ -405,9 +407,7 @@ class TestModelPusherPluginMultiRegistry(TestCase):
         r1 = self._make_registry("v10", "first://")
         r2 = self._make_registry("v99", "second://")
         result = ModelPusherPlugin(
-            config=ModelPluginConfig(
-                model_name="m", registry_clients=[r1, r2]
-            ),
+            config=ModelPluginConfig(model_name="m", registry_clients=[r1, r2]),
             artifact=_assembled(),
             storage_backend=_mock_backend(),
         ).execute()
@@ -418,14 +418,16 @@ class TestModelPusherPluginMultiRegistry(TestCase):
         r1 = self._make_registry("1", "mlflow://models")
         r2 = self._make_registry("abc", "catalog://models")
         result = ModelPusherPlugin(
-            config=ModelPluginConfig(
-                model_name="m", registry_clients=[r1, r2]
-            ),
+            config=ModelPluginConfig(model_name="m", registry_clients=[r1, r2]),
             artifact=_assembled(),
             storage_backend=_mock_backend(),
         ).execute()
-        self.assertEqual(result["registrations"][0]["registry_uri"], "mlflow://models/m/1")
-        self.assertEqual(result["registrations"][1]["registry_uri"], "catalog://models/m/abc")
+        self.assertEqual(
+            result["registrations"][0]["registry_uri"], "mlflow://models/m/1"
+        )
+        self.assertEqual(
+            result["registrations"][1]["registry_uri"], "catalog://models/m/abc"
+        )
 
     def test_same_artifact_uris_sent_to_all_registries(self):
         """All registries receive the same raw_uri and deployable_uri."""
@@ -526,9 +528,7 @@ class TestModelPusherPluginMultiRegistry(TestCase):
 
         with self.assertRaises(PartialRegistrationError) as ctx:
             ModelPusherPlugin(
-                config=ModelPluginConfig(
-                    model_name="m", registry_clients=[r1, r2]
-                ),
+                config=ModelPluginConfig(model_name="m", registry_clients=[r1, r2]),
                 artifact=_assembled(),
                 storage_backend=_mock_backend(),
             ).execute()

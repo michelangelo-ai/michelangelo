@@ -9,7 +9,10 @@ from unittest.mock import MagicMock, patch
 import grpc
 
 from michelangelo.gen.api.v2 import model_pb2
-from michelangelo.lib.model_manager.registry.api_client import APIRegistryClient, METADATA_ANNOTATION_KEY
+from michelangelo.lib.model_manager.registry.api_client import (
+    APIRegistryClient,
+    METADATA_ANNOTATION_KEY,
+)
 from michelangelo.lib.exceptions import ConfigurationError
 
 _STUB_PATH = "michelangelo.lib.model_manager.registry.api_client.ModelServiceStub"
@@ -82,8 +85,10 @@ class TestAPIRegistryClientValidation(TestCase):
     def test_defaults(self):
         """It defaults to insecure=True, empty namespace, 30s timeout."""
         stub = _make_stub()
-        with patch(_STUB_PATH, return_value=stub), \
-             patch("grpc.insecure_channel", return_value=MagicMock()):
+        with (
+            patch(_STUB_PATH, return_value=stub),
+            patch("grpc.insecure_channel", return_value=MagicMock()),
+        ):
             client = APIRegistryClient(endpoint="localhost:50051")
         self.assertEqual(client._namespace, "")
         self.assertEqual(client._timeout_seconds, 30)
@@ -148,7 +153,9 @@ class TestAPIRegistryClientRegisterModel(TestCase):
         stub = _make_stub()
         with patch(_STUB_PATH, return_value=stub):
             client = APIRegistryClient(**_kwargs())
-            client.register_model("m", "s3://b/raw", deployable_artifact_uri="s3://b/dep")
+            client.register_model(
+                "m", "s3://b/raw", deployable_artifact_uri="s3://b/dep"
+            )
         request = stub.CreateModel.call_args[0][0]
         self.assertIn("s3://b/dep", list(request.model.spec.deployable_artifact_uri))
 
@@ -194,9 +201,11 @@ class TestAPIRegistryClientRegisterModel(TestCase):
 
         stub = MagicMock()
         stub.CreateModel.side_effect = already_exists
-        get_resp = MagicMock(); get_resp.model = existing
+        get_resp = MagicMock()
+        get_resp.model = existing
         stub.GetModel.return_value = get_resp
-        upd_resp = MagicMock(); upd_resp.model = final
+        upd_resp = MagicMock()
+        upd_resp.model = final
         stub.UpdateModel.side_effect = [
             failed_precondition,
             failed_precondition,
@@ -218,7 +227,8 @@ class TestAPIRegistryClientRegisterModel(TestCase):
         existing = _make_response_model("m")
         stub = MagicMock()
         stub.CreateModel.side_effect = already_exists
-        get_resp = MagicMock(); get_resp.model = existing
+        get_resp = MagicMock()
+        get_resp.model = existing
         stub.GetModel.return_value = get_resp
         stub.UpdateModel.side_effect = failed_precondition
 
@@ -268,11 +278,13 @@ class TestAPIRegistryClientGetModel(TestCase):
     def test_get_model_with_version_emits_warning(self):
         """It logs a warning when version is provided (per-revision lookup unsupported)."""
         stub = _make_stub(get_model=_make_response_model("m"))
-        with patch(_STUB_PATH, return_value=stub), \
-             self.assertLogs(
-                 "michelangelo.lib.model_manager.registry.api_client",
-                 level="WARNING",
-             ) as log_ctx:
+        with (
+            patch(_STUB_PATH, return_value=stub),
+            self.assertLogs(
+                "michelangelo.lib.model_manager.registry.api_client",
+                level="WARNING",
+            ) as log_ctx,
+        ):
             client = APIRegistryClient(**_kwargs())
             client.get_model("m", version="3")
         self.assertTrue(
@@ -291,9 +303,11 @@ class TestAPIRegistryClientGetModel(TestCase):
     def test_insecure_false_uses_secure_channel(self):
         """It creates a secure channel when insecure=False."""
         stub = _make_stub()
-        with patch(_STUB_PATH, return_value=stub), \
-             patch("grpc.secure_channel") as mock_secure, \
-             patch("grpc.ssl_channel_credentials", return_value=MagicMock()):
+        with (
+            patch(_STUB_PATH, return_value=stub),
+            patch("grpc.secure_channel") as mock_secure,
+            patch("grpc.ssl_channel_credentials", return_value=MagicMock()),
+        ):
             APIRegistryClient(**_kwargs(insecure=False))
         mock_secure.assert_called_once()
 
@@ -301,8 +315,10 @@ class TestAPIRegistryClientGetModel(TestCase):
         """close() releases the underlying gRPC channel."""
         stub = _make_stub()
         mock_channel = MagicMock()
-        with patch(_STUB_PATH, return_value=stub), \
-             patch("grpc.insecure_channel", return_value=mock_channel):
+        with (
+            patch(_STUB_PATH, return_value=stub),
+            patch("grpc.insecure_channel", return_value=mock_channel),
+        ):
             client = APIRegistryClient(**_kwargs())
             client.close()
         mock_channel.close.assert_called_once()
@@ -311,8 +327,10 @@ class TestAPIRegistryClientGetModel(TestCase):
         """The context manager calls close() on __exit__."""
         stub = _make_stub()
         mock_channel = MagicMock()
-        with patch(_STUB_PATH, return_value=stub), \
-             patch("grpc.insecure_channel", return_value=mock_channel):
+        with (
+            patch(_STUB_PATH, return_value=stub),
+            patch("grpc.insecure_channel", return_value=mock_channel),
+        ):
             with APIRegistryClient(**_kwargs()):
                 pass
         mock_channel.close.assert_called_once()

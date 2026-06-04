@@ -237,7 +237,9 @@ class APIRegistryClient(ModelRegistryClient):
             _logger.warning(
                 "Model '%s' already exists — fetching resourceVersion and "
                 "updating (attempt %d/%d).",
-                name, attempt, _MAX_REGISTER_RETRIES,
+                name,
+                attempt,
+                _MAX_REGISTER_RETRIES,
             )
             get_resp = self._stub.GetModel(
                 model_svc_pb2.GetModelRequest(
@@ -259,7 +261,9 @@ class APIRegistryClient(ModelRegistryClient):
                         _logger.warning(
                             "UpdateModel for '%s' hit FAILED_PRECONDITION — "
                             "concurrent write detected, retrying (%d/%d).",
-                            name, attempt, _MAX_REGISTER_RETRIES,
+                            name,
+                            attempt,
+                            _MAX_REGISTER_RETRIES,
                         )
                         continue
                     raise RuntimeError(
@@ -346,9 +350,7 @@ class APIRegistryClient(ModelRegistryClient):
         version = str(model.spec.revision_id)
 
         artifact_uri = (
-            model.spec.model_artifact_uri[0]
-            if model.spec.model_artifact_uri
-            else None
+            model.spec.model_artifact_uri[0] if model.spec.model_artifact_uri else None
         )
         deployable_artifact_uri = (
             model.spec.deployable_artifact_uri[0]

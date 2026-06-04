@@ -123,8 +123,8 @@ class PickleDefinitionTest(TestCase):
         op4.arg = 0
 
         mock_stack_before = create_autospec(list, instance=True)
-        mock_stack_before.__contains__.side_effect = (
-            lambda x: x == pickletools.markobject
+        mock_stack_before.__contains__.side_effect = lambda x: (
+            x == pickletools.markobject
         )
         mock_stack_before.index.side_effect = ValueError
         op4.stack_before = mock_stack_before

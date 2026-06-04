@@ -46,29 +46,45 @@ class TestMinioStorageBackendValidation(TestCase):
     def test_raises_on_empty_endpoint(self):
         """It raises ConfigurationError when endpoint is empty."""
         from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
+
         with self.assertRaises(ConfigurationError):
             MinioStorageBackend(endpoint="", bucket="b", access_key="a", secret_key="s")
 
     def test_raises_on_empty_bucket(self):
         """It raises ConfigurationError when the bucket is empty."""
         from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
+
         with self.assertRaises(ConfigurationError):
-            MinioStorageBackend(endpoint="localhost:9000", bucket="", access_key="a", secret_key="s")
+            MinioStorageBackend(
+                endpoint="localhost:9000", bucket="", access_key="a", secret_key="s"
+            )
 
     def test_defaults_secure_true(self):
         """secure defaults to True (matches MinIO SDK default)."""
         mock_module, mock_client = _make_mock_minio()
-        with patch.dict(sys.modules, {"minio": mock_module, "minio.error": mock_module.error}):
-            from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
-            MinioStorageBackend(endpoint="localhost:9000", bucket="b", access_key="a", secret_key="s")
+        with patch.dict(
+            sys.modules, {"minio": mock_module, "minio.error": mock_module.error}
+        ):
+            from michelangelo.lib.artifact_manager.minio_backend import (
+                MinioStorageBackend,
+            )
+
+            MinioStorageBackend(
+                endpoint="localhost:9000", bucket="b", access_key="a", secret_key="s"
+            )
         call_kwargs = mock_module.Minio.call_args[1]
         self.assertTrue(call_kwargs["secure"])
 
     def test_defaults_create_bucket_false(self):
         """create_bucket_if_missing defaults to False — bucket_exists not called."""
         mock_module, mock_client = _make_mock_minio()
-        with patch.dict(sys.modules, {"minio": mock_module, "minio.error": mock_module.error}):
-            from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
+        with patch.dict(
+            sys.modules, {"minio": mock_module, "minio.error": mock_module.error}
+        ):
+            from michelangelo.lib.artifact_manager.minio_backend import (
+                MinioStorageBackend,
+            )
+
             MinioStorageBackend(**_DEFAULT_KWARGS)
         mock_client.bucket_exists.assert_not_called()
 
@@ -79,7 +95,10 @@ class TestMinioStorageBackendInit(TestCase):
     def test_raises_import_error_when_minio_missing(self):
         """It raises ImportError with an install hint when minio is absent."""
         with patch.dict(sys.modules, {"minio": None}):
-            from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
+            from michelangelo.lib.artifact_manager.minio_backend import (
+                MinioStorageBackend,
+            )
+
             with self.assertRaises(ImportError) as ctx:
                 MinioStorageBackend(**_DEFAULT_KWARGS)
         self.assertIn("pip install", str(ctx.exception))
@@ -87,8 +106,13 @@ class TestMinioStorageBackendInit(TestCase):
     def test_no_ensure_bucket_by_default(self):
         """It does not check or create the bucket when create_bucket_if_missing=False."""
         mock_module, mock_client = _make_mock_minio()
-        with patch.dict(sys.modules, {"minio": mock_module, "minio.error": mock_module.error}):
-            from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
+        with patch.dict(
+            sys.modules, {"minio": mock_module, "minio.error": mock_module.error}
+        ):
+            from michelangelo.lib.artifact_manager.minio_backend import (
+                MinioStorageBackend,
+            )
+
             MinioStorageBackend(**_DEFAULT_KWARGS)
         mock_client.bucket_exists.assert_not_called()
         mock_client.make_bucket.assert_not_called()
@@ -96,16 +120,26 @@ class TestMinioStorageBackendInit(TestCase):
     def test_ensure_bucket_skips_make_when_exists(self):
         """With create_bucket_if_missing=True it skips make_bucket when bucket exists."""
         mock_module, mock_client = _make_mock_minio(bucket_exists=True)
-        with patch.dict(sys.modules, {"minio": mock_module, "minio.error": mock_module.error}):
-            from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
+        with patch.dict(
+            sys.modules, {"minio": mock_module, "minio.error": mock_module.error}
+        ):
+            from michelangelo.lib.artifact_manager.minio_backend import (
+                MinioStorageBackend,
+            )
+
             MinioStorageBackend(**_DEFAULT_KWARGS, create_bucket_if_missing=True)
         mock_client.make_bucket.assert_not_called()
 
     def test_ensure_bucket_calls_make_when_absent(self):
         """With create_bucket_if_missing=True it calls make_bucket when absent."""
         mock_module, mock_client = _make_mock_minio(bucket_exists=False)
-        with patch.dict(sys.modules, {"minio": mock_module, "minio.error": mock_module.error}):
-            from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
+        with patch.dict(
+            sys.modules, {"minio": mock_module, "minio.error": mock_module.error}
+        ):
+            from michelangelo.lib.artifact_manager.minio_backend import (
+                MinioStorageBackend,
+            )
+
             MinioStorageBackend(**_DEFAULT_KWARGS, create_bucket_if_missing=True)
         mock_client.make_bucket.assert_called_once_with("test-bucket")
 
@@ -115,8 +149,13 @@ class TestMinioStorageBackendInit(TestCase):
         mock_client.make_bucket.side_effect = _FakeS3Error(
             "already owned", code="BucketAlreadyOwnedByYou"
         )
-        with patch.dict(sys.modules, {"minio": mock_module, "minio.error": mock_module.error}):
-            from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
+        with patch.dict(
+            sys.modules, {"minio": mock_module, "minio.error": mock_module.error}
+        ):
+            from michelangelo.lib.artifact_manager.minio_backend import (
+                MinioStorageBackend,
+            )
+
             MinioStorageBackend(**_DEFAULT_KWARGS, create_bucket_if_missing=True)
 
 
@@ -148,6 +187,7 @@ class TestMinioStorageBackendUpload(TestCase):
 
     def _backend(self, mock_client):
         from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
+
         b = object.__new__(MinioStorageBackend)
         b._bucket = "test-bucket"
         b._client = mock_client
@@ -217,6 +257,7 @@ class TestMinioStorageBackendDownload(TestCase):
 
     def _backend(self, mock_client):
         from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
+
         b = object.__new__(MinioStorageBackend)
         b._bucket = "test-bucket"
         b._client = mock_client

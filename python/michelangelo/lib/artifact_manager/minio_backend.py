@@ -232,7 +232,9 @@ class MinioStorageBackend(StorageBackend):
         else:
             _logger.debug(
                 "Uploading file '%s' to s3://%s/%s.",
-                local_path, self._bucket, destination_key,
+                local_path,
+                self._bucket,
+                destination_key,
             )
             try:
                 self._client.fput_object(self._bucket, destination_key, local_path)
@@ -291,7 +293,9 @@ class MinioStorageBackend(StorageBackend):
         try:
             _logger.debug(
                 "Archiving directory '%s' before upload to s3://%s/%s.",
-                local_path, self._bucket, destination_key,
+                local_path,
+                self._bucket,
+                destination_key,
             )
             with tarfile.open(tmp_path, "w") as tar:
                 for entry in os.scandir(local_path):

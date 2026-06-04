@@ -102,7 +102,12 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
-__all__ = ["ModelPushResult", "ModelPusherPlugin", "PartialRegistrationError", "RegistrationResult"]
+__all__ = [
+    "ModelPushResult",
+    "ModelPusherPlugin",
+    "PartialRegistrationError",
+    "RegistrationResult",
+]
 
 
 class PartialRegistrationError(Exception):
@@ -396,7 +401,9 @@ class ModelPusherPlugin(PusherPluginBase):
         base_labels = self._build_labels()
         base_metadata = self._build_metadata()
 
-        _logger.info("Uploading raw model artifact for '%s' (push %s).", model_name, push_id)
+        _logger.info(
+            "Uploading raw model artifact for '%s' (push %s).", model_name, push_id
+        )
         raw_uri = self._storage_backend.upload(
             self._artifact.raw_model.path,
             f"models/{model_name}/{push_id}/raw",
@@ -421,8 +428,12 @@ class ModelPusherPlugin(PusherPluginBase):
                     artifact_uri=raw_uri,
                     deployable_artifact_uri=deployable_uri,
                     description=self._config.description,
-                    labels=dict(base_labels),    # shallow copy — prevents cross-registry mutation
-                    metadata=dict(base_metadata),  # shallow copy — prevents cross-registry mutation
+                    labels=dict(
+                        base_labels
+                    ),  # shallow copy — prevents cross-registry mutation
+                    metadata=dict(
+                        base_metadata
+                    ),  # shallow copy — prevents cross-registry mutation
                 )
             except Exception as exc:
                 if registrations:
@@ -434,7 +445,9 @@ class ModelPusherPlugin(PusherPluginBase):
                 raise
             _logger.info(
                 "Registered '%s' v%s at %s.",
-                registered.name, registered.version, registered.registry_uri,
+                registered.name,
+                registered.version,
+                registered.registry_uri,
             )
             registrations.append(
                 RegistrationResult(
@@ -463,7 +476,9 @@ class ModelPusherPlugin(PusherPluginBase):
             A ``dict[str, str]`` suitable for ``ModelRegistryClient.register_model(
             labels=...)``. A fresh dict is returned on each call.
         """
-        result: dict[str, str] = dict(self._artifact.raw_model.metadata.to_registry_dict())
+        result: dict[str, str] = dict(
+            self._artifact.raw_model.metadata.to_registry_dict()
+        )
         result.update(self._config.labels)
         return result
 

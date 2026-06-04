@@ -98,9 +98,9 @@ class PickleDefinitionWalkerTest(TestCase):
             defs = set(
                 walk_pickle_definitions_in_dir(
                     temp_dir,
-                    match=lambda m, a, f: m.endswith("mod")
-                    and a == "A"
-                    and "subsubdir1" in f,
+                    match=lambda m, a, f: (
+                        m.endswith("mod") and a == "A" and "subsubdir1" in f
+                    ),
                 )
             )
 
