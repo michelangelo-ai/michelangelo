@@ -865,7 +865,7 @@ func TestMarkImmutableIfExpired(t *testing.T) {
 		ttlDays                   int
 		expectedImmutable         bool
 		expectedRequeue           bool
-		expectedRequeueAfterRange []time.Duration // [min, max] range
+		expectedRequeueAfterRange struct{ min, max time.Duration }
 	}{
 		{
 			name: "TTL not elapsed - should requeue",
@@ -883,9 +883,9 @@ func TestMarkImmutableIfExpired(t *testing.T) {
 			ttlDays:           2, // TTL is 2 days, but only 1 day has passed
 			expectedImmutable: false,
 			expectedRequeue:   true,
-			expectedRequeueAfterRange: []time.Duration{
-				23*time.Hour + 59*time.Minute, // ~1 day remaining
-				24*time.Hour + 1*time.Minute,
+			expectedRequeueAfterRange: struct{ min, max time.Duration }{
+				min: 23*time.Hour + 59*time.Minute, // ~1 day remaining
+				max: 24*time.Hour + 1*time.Minute,
 			},
 		},
 		{
@@ -977,8 +977,8 @@ func TestMarkImmutableIfExpired(t *testing.T) {
 			// Check requeue behavior
 			if tt.expectedRequeue {
 				require.False(t, done, "Expected not done (should requeue)")
-				require.Greater(t, requeueAfter, tt.expectedRequeueAfterRange[0], "Requeue time too short")
-				require.Less(t, requeueAfter, tt.expectedRequeueAfterRange[1], "Requeue time too long")
+				require.Greater(t, requeueAfter, tt.expectedRequeueAfterRange.min, "Requeue time too short")
+				require.Less(t, requeueAfter, tt.expectedRequeueAfterRange.max, "Requeue time too long")
 			} else {
 				require.True(t, done, "Expected done (should not requeue)")
 				require.Equal(t, time.Duration(0), requeueAfter, "Expected no requeue delay")
@@ -1011,7 +1011,6 @@ func TestReconcileTTLWithMetadataStorageDisabled(t *testing.T) {
 		metadataStorageConfig storage.MetadataStorageConfig
 		ttlDays               int
 		shouldMarkImmutable   bool
-		description           string
 	}{
 		{
 			name: "Metadata storage enabled - TTL should work",
@@ -1020,7 +1019,6 @@ func TestReconcileTTLWithMetadataStorageDisabled(t *testing.T) {
 			},
 			ttlDays:             1,
 			shouldMarkImmutable: true,
-			description:         "When metadata storage is enabled, expired PipelineRuns should be marked immutable",
 		},
 		{
 			name: "Metadata storage disabled - TTL should be skipped",
@@ -1029,7 +1027,6 @@ func TestReconcileTTLWithMetadataStorageDisabled(t *testing.T) {
 			},
 			ttlDays:             1,
 			shouldMarkImmutable: false,
-			description:         "When metadata storage is disabled, expired PipelineRuns should NOT be marked immutable to prevent data loss",
 		},
 	}
 
@@ -1068,19 +1065,19 @@ func TestReconcileTTLWithMetadataStorageDisabled(t *testing.T) {
 				},
 				metadataStorageEnabled: storage.EnableMetadataStorage(&tt.metadataStorageConfig),
 				engine:                 defaultEngine.NewDefaultEngine[*v2pb.PipelineRun](logger),
+				// Empty actors list: engine immediately returns terminal+satisfied,
+				// exercising the TTL branch without requiring workflow/blob dependencies.
+				plugin:   &plugin.Plugin{},
+				notifier: notification.NewPipelineRunNotifier(nil, logger),
 			}
 
-			// Simulate the reconcile logic for terminal state
-			currentIsTerminal := isTerminalState(pipelineRun.Status.State)
-			require.True(t, currentIsTerminal, "PipelineRun should be in terminal state")
-
-			// Execute the TTL check logic (mirroring what happens in Reconcile)
-			result := ctrl.Result{}
-			if currentIsTerminal && reconciler.metadataStorageEnabled {
-				if requeueAt, done := reconciler.markImmutableIfExpired(context.Background(), logger, pipelineRun); !done {
-					result = ctrl.Result{RequeueAfter: requeueAt}
-				}
-			}
+			result, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      pipelineRun.Name,
+					Namespace: pipelineRun.Namespace,
+				},
+			})
+			require.NoError(t, err)
 
 			// Verify the result
 			updatedPR := &v2.PipelineRun{}
