@@ -13,8 +13,7 @@ repos:
         types: [python]
       - id: prettier
         name: prettier formatter
-        entry: bash -c 'cd javascript && yarn prettier --write "${@#javascript/}"' --
+        entry: bash -c 'cd javascript && yarn prettier --write --log-level warn .'
         language: system
-        types_or: [ts, tsx, javascript, jsx, json, css, yaml, markdown]
         files: ^javascript/
-        pass_filenames: true
+        pass_filenames: false
