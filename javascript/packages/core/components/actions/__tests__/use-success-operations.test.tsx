@@ -55,7 +55,13 @@ describe('useSuccessOperations — invalidate', () => {
 
   it('processes multiple targets in order', () => {
     const operations: SuccessOperation[] = [
-      { type: 'invalidate', targets: ['ListPipelineRun', 'GetPipelineRun'] },
+      {
+        type: 'invalidate',
+        targets: [
+          'ListPipelineRun',
+          { name: 'GetPipelineRun', serviceOptions: { name: 'run-1', namespace: 'ns' } },
+        ],
+      },
     ];
     const { result } = renderHook(
       () => ({ run: useSuccessOperations(operations), queryClient: useQueryClient() }),
@@ -70,6 +76,8 @@ describe('useSuccessOperations — invalidate', () => {
     const spy = vi.spyOn(result.current.queryClient, 'invalidateQueries');
     result.current.run({});
     expect(spy).toHaveBeenNthCalledWith(1, { queryKey: ['ListPipelineRun'] });
-    expect(spy).toHaveBeenNthCalledWith(2, { queryKey: ['GetPipelineRun'] });
+    expect(spy).toHaveBeenNthCalledWith(2, {
+      queryKey: ['GetPipelineRun', { name: 'run-1', namespace: 'ns' }],
+    });
   });
 });
