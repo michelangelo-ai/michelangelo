@@ -146,6 +146,9 @@ Python packages and CLI tools are managed with Poetry under the `python/` direct
 ```bash
 cd $REPO_ROOT/python
 poetry install -E dev
+
+# Activate pre-commit hooks (runs prettier and ruff on each commit — do this once after cloning)
+poetry run pre-commit install
 ```
 
 ### Linting and Formatting
@@ -153,13 +156,13 @@ poetry install -E dev
 ```bash
 cd $REPO_ROOT/python
 
-# Pre-commit checks
-poetry run pre-commit
+# Run all pre-commit checks manually
+poetry run pre-commit run --all-files
 
-# Lint
+# Lint a specific file
 poetry run ruff check $FILE
 
-# Format
+# Format a specific file
 poetry run ruff format $FILE
 ```
 
@@ -171,25 +174,6 @@ poetry run ma sandbox create
 ```
 
 For more detail, see the [Sandbox Setup Guide](../getting-started/sandbox-setup.md).
-
-### Check before create commit
-
-```bash
-# under `$REPO_ROOT/python` directory
-$ poetry run pre-commit
-```
-
-### Check in manual
-
-```bash
-# under `$REPO_ROOT/python` directory
-# lint check
-$ poetry run ruff check $PYTHON_FILE_NAME
-
-# Run formatter
-$ poetry run ruff format $PYTHON_FILE_NAME
-```
-
 
 ## IDE Setup
 
