@@ -1,6 +1,7 @@
 import {
   capitalizeFirstLetter,
   isAbsoluteURL,
+  isNavigableURL,
   safeStringify,
   sentenceCaseEnumValue,
 } from '../string-utils';
@@ -39,6 +40,25 @@ describe('isAbsoluteURL', () => {
 
   it('should return false if the string is not a valid absolute URL', () => {
     expect(isAbsoluteURL('something')).toBe(false);
+  });
+});
+
+describe('isNavigableURL', () => {
+  it('should return true for absolute URLs', () => {
+    expect(isNavigableURL('https://www.google.com')).toBe(true);
+    expect(isNavigableURL('http://localhost:3000')).toBe(true);
+  });
+
+  it('should return true for root-relative paths', () => {
+    expect(isNavigableURL('/pipelines/my-pipeline')).toBe(true);
+    expect(isNavigableURL('/namespace/models/foo')).toBe(true);
+    expect(isNavigableURL('/')).toBe(true);
+  });
+
+  it('should return false for non-URL strings', () => {
+    expect(isNavigableURL('not_a_url')).toBe(false);
+    expect(isNavigableURL('www.google.com')).toBe(false);
+    expect(isNavigableURL('')).toBe(false);
   });
 });
 

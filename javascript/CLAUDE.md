@@ -53,6 +53,8 @@ Run from the `javascript/` directory:
 | `yarn generate`   | Regenerate gRPC clients from protobuf definitions                  |
 | `yarn setup`      | Fresh install + generate (use after cloning or switching branches) |
 
+**Test output:** vitest is configured with `silent: 'passed-only'` — passing tests produce no output; only failures are printed. Run commands as-is with no `--reporter` flag. Adding `--reporter=verbose` defeats this and floods output.
+
 ---
 
 ## Skills
