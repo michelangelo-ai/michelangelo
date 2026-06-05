@@ -87,6 +87,12 @@ class ModelPluginConfig:
             argument. Use an empty list (the default) to rely on the
             injected ``registry_client`` instead.
 
+            .. warning::
+                This field holds live Python objects and is **not
+                serializable** through the UniFlow codec. ``PusherConfig``
+                must be constructed inside the ``@task`` body — do not pass
+                it as a serialized task argument across the workflow boundary.
+
             Example — register in both MLflow and a custom catalog::
 
                 from michelangelo.lib.model_manager.registry.client import (
