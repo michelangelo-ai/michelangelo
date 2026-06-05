@@ -243,6 +243,19 @@ class PusherPluginConfig:
     (``plugin_name`` + ``plugin_config``) must be set. Setting zero or
     more than one raises ``ConfigurationError``.
 
+    **Two-tier configuration model:**
+
+    - *Built-in plugins* (``model_plugin``, ``dataset_plugin``,
+      ``eval_report_plugin``) use typed dataclass fields for validated,
+      IDE-discoverable configuration.
+    - *Community/third-party plugins* registered via
+      :class:`~michelangelo.workflow.tasks.pusher.registry.PluginRegistry`
+      use the ``plugin_name`` + ``plugin_config`` dict path. This is the
+      **intended extension contract** — not a second-class fallback. The
+      ``plugin_config`` dict is forwarded verbatim to the plugin's
+      constructor, so each community plugin defines its own configuration
+      schema independently.
+
     Attributes:
         name: Artifact identifier matching a key in the ``artifacts``
             dict passed to ``push()``.

@@ -29,6 +29,7 @@ from michelangelo.workflow.variables.types import (
 # Fake plugin helpers
 # ---------------------------------------------------------------------------
 
+
 def _fake_plugin_class(
     return_value: dict[str, Any] | None = None,
     raises: Exception | None = None,
@@ -78,6 +79,7 @@ def _storage() -> LocalStorageBackend:
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestPushSingleSuccess(TestCase):
     """Test 1: single plugin succeeds."""
@@ -288,3 +290,157 @@ class TestPushChildRegistry(TestCase):
 
         self.assertTrue(results[0].success)
         self.assertEqual(results[0].value["source"], "child")
+
+
+class TestPushOnErrorCallbackRaises(TestCase):
+    """Test 10: on_error callback that raises is suppressed; push still proceeds."""
+
+    def test_raising_on_error_is_suppressed(self) -> None:
+        """It suppresses exceptions from on_error and still raises PusherPluginError."""
+        fail_plugin = _fake_plugin_class(raises=RuntimeError("plugin-fail"))
+        reg = _registry(("fp", fail_plugin, AssembledModel))
+
+        def bad_callback(name: str, plugin: str, exc: Exception) -> None:
+            raise ValueError("callback-fail")
+
+        with self.assertRaises(PusherPluginError):
+            push(
+                config=_config(_item("art", "fp")),
+                artifacts={"art": _assembled()},
+                storage_backend=_storage(),
+                registry=reg,
+                on_error=bad_callback,
+                fail_fast=True,
+            )
+
+    def test_raising_on_error_does_not_affect_fail_fast_false(self) -> None:
+        """It suppresses callback exception and continues processing remaining items."""
+        fail_plugin = _fake_plugin_class(raises=RuntimeError("boom"))
+        ok_plugin = _fake_plugin_class(return_value={"ok": True})
+        reg = _registry(
+            ("fail_plugin", fail_plugin, AssembledModel),
+            ("ok_plugin", ok_plugin, AssembledModel),
+        )
+
+        def bad_callback(name: str, plugin: str, exc: Exception) -> None:
+            raise ValueError("callback-boom")
+
+        results = push(
+            config=_config(_item("first", "fail_plugin"), _item("second", "ok_plugin")),
+            artifacts={"first": _assembled(), "second": _assembled()},
+            storage_backend=_storage(),
+            registry=reg,
+            on_error=bad_callback,
+            fail_fast=False,
+        )
+
+        self.assertEqual(len(results), 2)
+        self.assertFalse(results[0].success)
+        self.assertTrue(results[1].success)
+
+
+class TestPushDefaultStorageBackend(TestCase):
+    """Test 11: storage_backend=None uses an ephemeral LocalStorageBackend."""
+
+    def test_no_storage_backend_succeeds(self) -> None:
+        """It succeeds without an explicit storage_backend (uses temp dir default)."""
+        fake_plugin = _fake_plugin_class(return_value={"ok": True})
+        reg = _registry(("fp", fake_plugin, AssembledModel))
+
+        results = push(
+            config=_config(_item("art", "fp")),
+            artifacts={"art": _assembled()},
+            registry=reg,
+            # storage_backend intentionally omitted
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertTrue(results[0].success)
+
+
+class TestPushDefaultRegistry(TestCase):
+    """Test 12: registry=None uses default_registry with built-in plugins."""
+
+    def test_default_registry_resolves_model_plugin(self) -> None:
+        """It dispatches through default_registry when no explicit registry is given."""
+        from michelangelo.lib.model_manager.registry.client import (
+            InMemoryRegistryClient,
+        )
+        from michelangelo.workflow.schema.pusher import (
+            ModelPluginConfig,
+            PusherPluginConfig,
+        )
+
+        artifact = _assembled()
+        cfg = PusherConfig(
+            items=[
+                PusherPluginConfig(
+                    name="model",
+                    model_plugin=ModelPluginConfig(model_name="test-model"),
+                )
+            ]
+        )
+
+        results = push(
+            config=cfg,
+            artifacts={"model": artifact},
+            storage_backend=_storage(),
+            registry_client=InMemoryRegistryClient(),
+            # registry intentionally omitted — uses default_registry
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertTrue(results[0].success)
+        self.assertEqual(results[0].plugin, "model_plugin")
+
+
+class TestPushUntypedPlugin(TestCase):
+    """Test 13: plugin registered with artifact_type=None accepts any artifact."""
+
+    def test_untyped_plugin_accepts_any_artifact(self) -> None:
+        """It skips isinstance check when artifact_type is None."""
+        fake_plugin = _fake_plugin_class(return_value={"ok": True})
+        reg = PluginRegistry()
+        reg.register("untyped_plugin", fake_plugin, None)  # no type constraint
+
+        results = push(
+            config=_config(_item("anything", "untyped_plugin")),
+            artifacts={"anything": {"arbitrary": "dict"}},  # not an AssembledModel
+            storage_backend=_storage(),
+            registry=reg,
+        )
+
+        self.assertTrue(results[0].success)
+
+
+class TestPushTupleExpectedType(TestCase):
+    """Test 14: plugin registered with a tuple of types accepts any matching type."""
+
+    def test_tuple_type_accepts_matching_types(self) -> None:
+        """It passes isinstance check when artifact matches any type in the tuple."""
+        fake_plugin = _fake_plugin_class(return_value={"ok": True})
+        reg = PluginRegistry()
+        reg.register("multi_plugin", fake_plugin, (AssembledModel, dict))
+
+        for artifact in [_assembled(), {"raw": "dict"}]:
+            results = push(
+                config=_config(_item("art", "multi_plugin")),
+                artifacts={"art": artifact},
+                storage_backend=_storage(),
+                registry=reg,
+            )
+            self.assertTrue(results[0].success)
+
+    def test_tuple_type_rejects_non_matching_type(self) -> None:
+        """It raises ConfigurationError when artifact doesn't match any tuple type."""
+        fake_plugin = _fake_plugin_class()
+        reg = PluginRegistry()
+        reg.register("multi_plugin", fake_plugin, (AssembledModel, dict))
+
+        with self.assertRaises(ConfigurationError):
+            push(
+                config=_config(_item("art", "multi_plugin")),
+                artifacts={"art": [1, 2, 3]},  # list — not in (AssembledModel, dict)
+                storage_backend=_storage(),
+                registry=reg,
+            )

@@ -55,7 +55,6 @@ Public API
     )
 """
 
-# flake8: noqa:F401
 from michelangelo.workflow.schema.pusher import (
     DatasetPluginConfig,
     EvalReportPluginConfig,
@@ -80,3 +79,25 @@ from michelangelo.workflow.tasks.pusher.plugins import (
 from michelangelo.workflow.tasks.pusher.pusher import push
 from michelangelo.workflow.tasks.pusher.registry import PluginRegistry, default_registry
 from michelangelo.workflow.variables.types import PusherResult
+
+__all__ = [
+    "ArtifactNotFoundError",
+    "ConfigurationError",
+    "DatasetPluginConfig",
+    "DatasetPusherPlugin",
+    "EvalReportPluginConfig",
+    "EvalReportPusherPlugin",
+    "ModelPluginConfig",
+    "ModelPushResult",
+    "ModelPusherPlugin",
+    "PartialRegistrationError",
+    "PluginRegistry",
+    "PusherConfig",
+    "PusherError",
+    "PusherPluginConfig",
+    "PusherPluginError",
+    "PusherResult",
+    "RegistrationResult",
+    "default_registry",
+    "push",
+]

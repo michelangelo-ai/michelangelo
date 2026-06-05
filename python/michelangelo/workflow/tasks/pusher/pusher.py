@@ -44,7 +44,9 @@ def push(
         artifacts: Mapping from artifact name to artifact value. Keys must
             match ``PusherPluginConfig.name`` for each item in config.
         storage_backend: Backend used for artifact uploads. Defaults to a
-            temporary ``LocalStorageBackend`` when ``None``.
+            temporary ``LocalStorageBackend`` when ``None`` — a warning is
+            logged and the caller is responsible for cleaning up the directory.
+            Pass an explicit backend for production use.
         registry_client: Registry client injected into plugins that require
             one (e.g. ``ModelPusherPlugin``). Pass ``None`` for plugins that
             don't need a registry, or when registry clients are specified
@@ -97,6 +99,10 @@ def push(
         )
         assert result[0].success
     """
+    # Importing pusher.plugins here guarantees default_registry is populated
+    # with the three built-in plugins regardless of how push() was imported
+    # (package __init__ or direct module import).
+    import michelangelo.workflow.tasks.pusher.plugins  # noqa: F401
     from michelangelo.lib.artifact_manager.storage_backend import (
         LocalStorageBackend,
     )
@@ -107,7 +113,14 @@ def push(
     effective_registry = registry if registry is not None else default_registry
 
     if storage_backend is None:
-        storage_backend = LocalStorageBackend(tempfile.mkdtemp())
+        _tmp = tempfile.mkdtemp()
+        _logger.warning(
+            "No storage_backend provided; using ephemeral temp dir '%s'. "
+            "The caller is responsible for cleanup. Pass an explicit "
+            "storage_backend for production use.",
+            _tmp,
+        )
+        storage_backend = LocalStorageBackend(_tmp)
 
     results: list[PusherResult] = []
 
@@ -122,10 +135,14 @@ def push(
         plugin_class, expected_type = effective_registry.get(plugin_name)
 
         if expected_type is not None and not isinstance(artifact, expected_type):
+            if isinstance(expected_type, tuple):
+                expected_name = " | ".join(t.__name__ for t in expected_type)
+            else:
+                expected_name = expected_type.__name__
             raise ConfigurationError(
                 f"Artifact '{artifact_name}' has type "
                 f"{type(artifact).__name__!r} but plugin '{plugin_name}' "
-                f"expects {expected_type.__name__!r}."
+                f"expects {expected_name!r}."
             )
 
         plugin_cfg = item.resolved_plugin_config()
@@ -158,7 +175,12 @@ def push(
                 try:
                     on_error(artifact_name, plugin_name, exc)
                 except Exception as cb_exc:
-                    _logger.warning("on_error callback raised: %s", cb_exc)
+                    _logger.warning(
+                        "on_error callback raised for artifact '%s' plugin '%s': %s",
+                        artifact_name,
+                        plugin_name,
+                        cb_exc,
+                    )
 
             if fail_fast:
                 raise PusherPluginError(artifact_name, plugin_name) from exc
