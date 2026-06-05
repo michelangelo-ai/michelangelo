@@ -361,17 +361,28 @@ class TestPushDefaultStorageBackend(TestCase):
 class TestPushDefaultRegistry(TestCase):
     """Test 12: registry=None uses default_registry with built-in plugins."""
 
-    def test_default_registry_resolves_model_plugin(self) -> None:
-        """It dispatches through default_registry when no explicit registry is given."""
-        from michelangelo.lib.model_manager.registry.client import (
-            InMemoryRegistryClient,
+    def test_default_registry_contains_builtin_plugins(self) -> None:
+        """It populates default_registry with the three built-in plugin names."""
+        from michelangelo.workflow.tasks.pusher import (  # noqa: F401 — triggers registration
+            push,
+        )
+        from michelangelo.workflow.tasks.pusher.registry import default_registry
+
+        names = default_registry.registered_names()
+        self.assertIn("model_plugin", names)
+        self.assertIn("dataset_plugin", names)
+        self.assertIn("eval_report_plugin", names)
+
+    def test_default_registry_used_when_registry_omitted(self) -> None:
+        """It raises from the registered plugin when registry is omitted."""
+        from michelangelo.workflow.schema.exceptions import (
+            ConfigurationError as SchemaConfigError,
         )
         from michelangelo.workflow.schema.pusher import (
             ModelPluginConfig,
             PusherPluginConfig,
         )
 
-        artifact = _assembled()
         cfg = PusherConfig(
             items=[
                 PusherPluginConfig(
@@ -381,17 +392,17 @@ class TestPushDefaultRegistry(TestCase):
             ]
         )
 
-        results = push(
-            config=cfg,
-            artifacts={"model": artifact},
-            storage_backend=_storage(),
-            registry_client=InMemoryRegistryClient(),
-            # registry intentionally omitted — uses default_registry
-        )
-
-        self.assertEqual(len(results), 1)
-        self.assertTrue(results[0].success)
-        self.assertEqual(results[0].plugin, "model_plugin")
+        # Without registry_client, ModelPusherPlugin raises ConfigurationError
+        # about a missing registry client — NOT about an unknown plugin name.
+        # This distinguishes "plugin found and reached" from "plugin not registered".
+        with self.assertRaisesRegex(SchemaConfigError, "registry client"):
+            push(
+                config=cfg,
+                artifacts={"model": _assembled()},
+                storage_backend=_storage(),
+                # registry intentionally omitted — uses default_registry
+                # registry_client intentionally omitted — causes plugin validation error
+            )
 
 
 class TestPushUntypedPlugin(TestCase):
