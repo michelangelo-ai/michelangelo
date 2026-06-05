@@ -73,7 +73,7 @@ export type ExecutionDetailViewSchema<
      * accessor: (data) => data.workflow?.tasks || []
      * ```
      */
-    accessor: Accessor<TTaskRecord[]>;
+    accessor: Accessor<unknown, TTaskRecord[]>;
 
     /**
      * Optional accessor to extract child tasks from each task record.
@@ -89,7 +89,7 @@ export type ExecutionDetailViewSchema<
      * subTasksAccessor: (task) => task.children?.filter(child => child.visible)
      * ```
      */
-    subTasksAccessor?: Accessor<TTaskRecord[]>;
+    subTasksAccessor?: Accessor<unknown, TTaskRecord[]>;
 
     /**
      * Configuration for extracting display information from task records.
@@ -108,7 +108,7 @@ export type ExecutionDetailViewSchema<
        * heading: (task) => `${task.type}: ${task.name}`
        * ```
        */
-      heading: Accessor<string>;
+      heading: Accessor<unknown, string>;
 
       /**
        * Optional metadata fields to display as rich content below the task heading.
