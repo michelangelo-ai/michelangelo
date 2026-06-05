@@ -63,5 +63,5 @@ func (m *revisionManager) UpsertRevision(ctx context.Context, rev client.Object,
 		return false, fmt.Errorf("update revision %s/%s: %w", namespace, name, updateErr)
 	}
 	logger.Info("updated revision")
-	return false, nil
+	return true, nil
 }

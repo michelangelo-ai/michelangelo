@@ -18,8 +18,9 @@ import (
 type Manager interface {
 	// UpsertRevision creates or updates a Revision. The caller builds the
 	// complete Revision object; the Manager orchestrates the state machine
-	// (get existing → create if absent → check immutability → update if mutable).
-	// Returns (true, nil) on create, (false, nil) on dedup or update.
+	// (get existing, create if absent, check immutability, update if mutable).
+	// Returns (true, nil) on create or update, (false, nil) on dedup (an
+	// existing immutable Revision with the same name already exists).
 	UpsertRevision(ctx context.Context, rev client.Object, opts UpsertOpts, options ...yarpc.CallOption) (bool, error)
 }
 

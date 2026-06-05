@@ -116,9 +116,9 @@ func TestUpsertRevision_UpdateMutable(t *testing.T) {
 	_, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{})
 	require.NoError(t, err)
 
-	created, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{})
+	updated, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{})
 	require.NoError(t, err)
-	assert.False(t, created)
+	assert.True(t, updated)
 }
 
 func TestUpsertRevision_MutableThenImmutable(t *testing.T) {
@@ -128,9 +128,9 @@ func TestUpsertRevision_MutableThenImmutable(t *testing.T) {
 	_, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{})
 	require.NoError(t, err)
 
-	created, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{Immutable: true})
+	updated, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{Immutable: true})
 	require.NoError(t, err)
-	assert.False(t, created)
+	assert.True(t, updated)
 
 	rev := getRevision(t, h, "test-ns", "pipeline-my-pipeline-abc123456789")
 	assert.True(t, apiutils.IsImmutable(rev))
