@@ -47,13 +47,13 @@ type Config struct {
 // status and updates the PipelineRun resource accordingly.
 type Reconciler struct {
 	api.Handler
-	logger                      *zap.Logger
-	config                      Config
-	metadataStorageEnabled      bool // Cached at initialization - doesn't change at runtime
-	plugin                      *plugin.Plugin
-	engine                      *defaultEngine.DefaultEngine[*v2pb.PipelineRun]
-	apiHandlerFactory           apiHandler.Factory
-	notifier                    *notification.PipelineRunNotifier
+	logger                 *zap.Logger
+	config                 Config
+	metadataStorageEnabled bool // Cached at initialization - doesn't change at runtime
+	plugin                 *plugin.Plugin
+	engine                 *defaultEngine.DefaultEngine[*v2pb.PipelineRun]
+	apiHandlerFactory      apiHandler.Factory
+	notifier               *notification.PipelineRunNotifier
 }
 
 // NewReconciler creates a new PipelineRun controller reconciler.
