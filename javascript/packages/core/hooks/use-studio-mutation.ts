@@ -7,10 +7,6 @@ import type { UseMutationResult } from '@tanstack/react-query';
 import type { ApplicationError } from '#core/types/error-types';
 import type { MutationConfig } from '#core/types/query-types';
 
-// Standard Kubernetes CRUD verbs. DeleteCollection must precede Delete so the
-// regex matches it first (alternation is left-to-right).
-const VERB_PATTERN = /^(DeleteCollection|Create|Update|Delete)(.+)$/;
-
 export const useStudioMutation = <TData, TVariables extends Record<string, unknown>>(
   config: MutationConfig | null
 ): UseMutationResult<TData, ApplicationError, TVariables> => {
@@ -34,14 +30,21 @@ export const useStudioMutation = <TData, TVariables extends Record<string, unkno
     onError: config?.clientOptions?.onError
       ? (error) => config.clientOptions!.onError!(error)
       : undefined,
-    // Auto-invalidation per ARCHITECTURE.md § 3 "Studio conventions encoded
-    // in the runtime": derive the entity from `mutationName` and invalidate
-    // its Get/List query keys on settle (success or failure).
+    // The API server names handlers as {Verb}{Kind} (Kubernetes convention);
+    // strip the verb to derive the kind and invalidate Get{Kind}+List{Kind}
+    // on every settle so reads stay consistent without per-call declarations.
     onSettled: () => {
-      const entity = VERB_PATTERN.exec(config?.mutationName ?? '')?.[2];
+      const entity = k8sEntityFromMutationName(config?.mutationName ?? '');
       if (!entity) return;
       void queryClient.invalidateQueries({ queryKey: [`Get${entity}`] });
       void queryClient.invalidateQueries({ queryKey: [`List${entity}`] });
     },
   });
 };
+
+// Kubernetes CRUD verbs — DeleteCollection precedes Delete to avoid prefix collision.
+const K8S_CRUD_VERB = /^(?<verb>DeleteCollection|Create|Update|Delete)(?<entity>.+)$/;
+
+function k8sEntityFromMutationName(mutationName: string): string | undefined {
+  return K8S_CRUD_VERB.exec(mutationName)?.groups?.entity;
+}

@@ -76,7 +76,6 @@ export const RetryCell = (props: CellRendererProps<string>) => {
       await updatePipelineRunMutation.mutateAsync(updatedPipelineRun);
       setShowRetryModal(false);
       setRetryReason('Manual retry from UI');
-      // useStudioMutation auto-invalidates GetPipelineRun + ListPipelineRun on settle.
     } catch {
       // Error is captured in updatePipelineRunMutation.error and displayed in the modal
     }

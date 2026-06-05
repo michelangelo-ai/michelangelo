@@ -60,10 +60,9 @@ export type MutationActionConfig = {
 /**
  * Side-effect to run after a mutation succeeds.
  *
- * `useStudioMutation` already auto-invalidates `Get{Entity}` and `List{Entity}`
- * by parsing `mutationName` (see ARCHITECTURE.md § 3 "Studio conventions
- * encoded in the runtime"). Use `invalidate` for any additional invalidations
- * the convention does not cover (cross-service queries, custom names).
+ * `useStudioMutation` already auto-invalidates `Get{Kind}` and `List{Kind}` derived
+ * from the Kubernetes-convention mutation name. Use `invalidate` for any additional
+ * invalidations the convention doesn't cover (cross-service queries, custom names).
  */
 export type SuccessOperation = InvalidateOperation | ToastOperation;
 
