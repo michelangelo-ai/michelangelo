@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	constants "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	"github.com/michelangelo-ai/michelangelo/go/components/spark/job"
 	sparkv1beta2 "github.com/michelangelo-ai/michelangelo/go/thirdparty/k8s-crds/apis/sparkoperator.k8s.io/v1beta2"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -133,6 +134,31 @@ func (r SparkClient) GetJobStatus(ctx context.Context, logger logr.Logger, job *
 
 	stateStr := string(state)
 	return &stateStr, url, errorMessage, nil
+}
+
+// DeleteJob terminates a running Spark job by deleting its SparkApplication.
+//
+// Deleting the SparkApplication custom resource instructs the Spark Operator to
+// tear down the driver and executor pods, terminating the underlying workload.
+//
+// Returns an error if the deletion fails. Callers should treat a not-found error
+// as success, since it means the SparkApplication has already been removed.
+func (r SparkClient) DeleteJob(ctx context.Context, log logr.Logger, job *v2pb.SparkJob) error {
+	opts := metav1.DeleteOptions{}
+	err := r.K8sClient.Delete().
+		Namespace(job.Namespace).
+		Resource(constants.KubeSparkResource).
+		Name(job.Name).
+		Body(&opts).
+		Do(ctx).
+		Error()
+	if err != nil {
+		log.Error(err, "Failed to delete SparkApplication")
+		return err
+	}
+
+	log.Info("Deleted SparkApplication", "name", job.Name, "namespace", job.Namespace)
+	return nil
 }
 
 // toSparkPodSpec converts a Michelangelo PodSpec to Spark Operator SparkPodSpec.

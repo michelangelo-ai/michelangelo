@@ -36,6 +36,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	constants "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
+	jobsutils "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/utils"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -111,6 +112,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return res, err
 	}
 	original := sparkJob.DeepCopy()
+
+	// If termination is requested, terminate the SparkApplication and drive
+	// the SparkJob to a terminal state.
+	if sparkJob.Spec.GetTermination().GetType() != v2pb.TERMINATION_TYPE_INVALID {
+		return r.handleTermination(ctx, logger, &sparkJob)
+	}
 
 	stateStr, url, errorMessage, err := r.getJobStatus(ctx, logger, &sparkJob)
 	if err != nil {
@@ -240,4 +247,94 @@ func (r *Reconciler) createJob(ctx context.Context, log logr.Logger, job *v2pb.S
 //   - Error if status retrieval fails
 func (r *Reconciler) getJobStatus(ctx context.Context, logger logr.Logger, job *v2pb.SparkJob) (*string, string, string, error) {
 	return r.sparkClient.GetJobStatus(ctx, logger, job)
+}
+
+// isSparkJobKilled reports whether the SparkJob has already reached the killed
+// terminal state, so termination handling is idempotent across reconciles.
+func isSparkJobKilled(job *v2pb.SparkJob) bool {
+	for _, cond := range job.Status.StatusConditions {
+		if cond.Type == constants.KilledCondition && cond.Status == apipb.CONDITION_STATUS_TRUE {
+			return true
+		}
+	}
+	return false
+}
+
+// getSuccessFromTerminateSpec derives the Succeeded condition status from the
+// requested termination type: an explicit SUCCEEDED termination resolves to TRUE,
+// anything else (FAILED, etc.) to FALSE.
+func getSuccessFromTerminateSpec(job *v2pb.SparkJob) apipb.ConditionStatus {
+	if job.Spec.Termination.GetType() == v2pb.TERMINATION_TYPE_SUCCEEDED {
+		return apipb.CONDITION_STATUS_TRUE
+	}
+	return apipb.CONDITION_STATUS_FALSE
+}
+
+// handleTermination terminates the underlying SparkApplication and drives the
+// SparkJob to a terminal state, marking it immutable.
+//
+// Deleting the SparkApplication is best-effort: a not-found error means the
+// workload is already gone and is treated as success.
+func (r *Reconciler) handleTermination(ctx context.Context, logger logr.Logger, job *v2pb.SparkJob) (ctrl.Result, error) {
+	res := ctrl.Result{}
+
+	// Already terminal - nothing left to do.
+	if isSparkJobKilled(job) {
+		return res, nil
+	}
+
+	if err := r.sparkClient.DeleteJob(ctx, logger, job); err != nil && !utils.IsNotFoundError(err) {
+		logger.Error(err, "failed to terminate SparkApplication",
+			"operation", "terminate_job",
+			"namespace", job.Namespace,
+			"name", job.Name)
+		res.RequeueAfter = requeueAfter
+		return res, fmt.Errorf("terminate spark job %q/%q: %w", job.Namespace, job.Name, err)
+	}
+
+	message := "Spark job killed"
+	if job.Spec.Termination.Reason != "" {
+		message = job.Spec.Termination.Reason
+	}
+
+	// Drive the SparkJob to its terminal state using the shared condition helpers:
+	// set Killed and the Succeeded condition derived from the termination type, so
+	// consumers have a definite outcome for the terminated job.
+	killed := jobsutils.GetCondition(&job.Status.StatusConditions, constants.KilledCondition, job.Generation)
+	jobsutils.UpdateCondition(killed, jobsutils.ConditionUpdateParams{
+		Status:     apipb.CONDITION_STATUS_TRUE,
+		Generation: job.Generation,
+		Reason:     constants.SparkAppKilled,
+		Message:    message,
+	})
+	succeeded := jobsutils.GetCondition(&job.Status.StatusConditions, constants.SucceededCondition, job.Generation)
+	jobsutils.UpdateCondition(succeeded, jobsutils.ConditionUpdateParams{
+		Status:     getSuccessFromTerminateSpec(job),
+		Generation: job.Generation,
+		Reason:     job.Spec.Termination.Reason,
+	})
+
+	// Mark the SparkJob immutable so it cannot transition further once killed.
+	// Update() persists the annotation; Status().Update() persists the status
+	// conditions. Both are needed because the CRD has a status subresource.
+	utils.MarkImmutable(job)
+	if err := r.Update(ctx, job); err != nil {
+		logger.Error(err, "failed to update SparkJob",
+			"operation", "update",
+			"namespace", job.Namespace,
+			"name", job.Name)
+		res.RequeueAfter = requeueAfter
+		return res, fmt.Errorf("update spark job for %q/%q: %w", job.Namespace, job.Name, err)
+	}
+	if err := r.Status().Update(ctx, job); err != nil {
+		logger.Error(err, "failed to update SparkJob status",
+			"operation", "update_status",
+			"namespace", job.Namespace,
+			"name", job.Name)
+		res.RequeueAfter = requeueAfter
+		return res, fmt.Errorf("update spark job status for %q/%q: %w", job.Namespace, job.Name, err)
+	}
+
+	logger.Info("SparkJob terminated", "name", job.Name, "namespace", job.Namespace)
+	return res, nil
 }
