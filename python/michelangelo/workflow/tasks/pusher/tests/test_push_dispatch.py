@@ -26,7 +26,7 @@ from michelangelo.workflow.variables.types import (
 )
 
 # ---------------------------------------------------------------------------
-# Fake plugin helpers
+# Mock plugin helpers
 # ---------------------------------------------------------------------------
 
 
