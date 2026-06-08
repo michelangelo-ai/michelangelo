@@ -60,9 +60,8 @@ export type MutationActionConfig = {
 /**
  * Side-effect to run after a mutation succeeds.
  *
- * `useStudioMutation` already auto-invalidates `Get{Kind}` and `List{Kind}` derived
- * from the Kubernetes-convention mutation name. Use `invalidate` for any additional
- * invalidations the convention doesn't cover (cross-service queries, custom names).
+ * Use `invalidate` to refresh related queries explicitly after a mutation
+ * succeeds, either broadly by query name or narrowly by name + args.
  */
 export type SuccessOperation = InvalidateOperation | ToastOperation;
 

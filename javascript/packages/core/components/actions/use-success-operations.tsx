@@ -15,9 +15,6 @@ const DEFAULT_TOAST_ICON = 'checkCircle';
  *
  * The runner resolves response interpolation (e.g. `${response.metadata.name}`)
  * against the mutation result, then applies each operation in order.
- *
- * @see ARCHITECTURE.md § 3 "Studio conventions encoded in the runtime" for
- * the auto-invalidation behavior that complements explicit `invalidate` ops.
  */
 export function useSuccessOperations(operations?: SuccessOperation[]) {
   const queryClient = useQueryClient();

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useStyletron } from 'baseui';
 import { Button, KIND, SIZE } from 'baseui/button';
 import { Textarea } from 'baseui/textarea';
@@ -18,6 +19,7 @@ export const RetryCell = (props: CellRendererProps<string>) => {
   const [css, theme] = useStyletron();
   const [showRetryModal, setShowRetryModal] = useState(false);
   const [retryReason, setRetryReason] = useState('Manual retry from UI');
+  const queryClient = useQueryClient();
 
   const { projectId, entityId } = useStudioParams('detail');
 
@@ -76,6 +78,10 @@ export const RetryCell = (props: CellRendererProps<string>) => {
       await updatePipelineRunMutation.mutateAsync(updatedPipelineRun);
       setShowRetryModal(false);
       setRetryReason('Manual retry from UI');
+
+      await queryClient.invalidateQueries({
+        queryKey: ['GetPipelineRun', { namespace: projectId, name: entityId }],
+      });
     } catch {
       // Error is captured in updatePipelineRunMutation.error and displayed in the modal
     }

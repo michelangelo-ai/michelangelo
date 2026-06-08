@@ -49,12 +49,6 @@ Configurations are not a flat catalog. They compose:
 - **`QueryConfig` and `MutationConfig`** are parallel descriptors for backend calls — `QueryConfig` for reads (consumed by `useStudioQuery`), `MutationConfig` for writes (consumed by `useStudioMutation`). Anything that loads or mutates data references one of these: a `TableConfig`'s row source uses a `QueryConfig`; an `ActionConfig`'s mutation and a `FormConfig`'s submission use a `MutationConfig`.
 - **`FormConfig` embeds inside other configs.** An `ActionConfig` can embed a `FormConfig` to render a form when the action is triggered (e.g. "Create Pipeline"); a `ViewConfig` for a form view wraps it directly; a detail view can embed one as a tab.
 
-### Studio conventions encoded in the runtime
-
-A few studio-wide naming conventions are encoded in the runtime so configs don't have to repeat them. Each one is a deliberate trade-off against "core is business-logic agnostic" — listed here to keep the surface explicit.
-
-**Cache invalidation by mutation name.** The studio's API server follows Kubernetes resource-handler naming: mutations are `{Verb}{Kind}` (`CreatePipelineRun`, `UpdateTriggerRun`) and reads are `Get{Kind}` / `List{Kind}`. `useStudioMutation` exploits this — on every mutation it strips the verb prefix to derive the kind and invalidates the corresponding `Get{Kind}` and `List{Kind}` queries. Recognized verbs: `Create`, `Update`, `Delete`, `DeleteCollection` (the standard Kubernetes CRUD set; `DeleteCollection` is checked before `Delete` to avoid a prefix collision). Mutations whose names don't match this pattern skip auto-invalidation. Declare additional invalidations that the convention doesn't cover via `MutationActionConfig.successOperations`.
-
 ### Customization escape hatches
 
 The configuration runtime is the path of least resistance. Most customization happens by adjusting configuration — registering custom column renderers, choosing different field types, supplying disabled rules. Specific escape hatches let consumers ship React components when an interaction doesn't fit configuration:
