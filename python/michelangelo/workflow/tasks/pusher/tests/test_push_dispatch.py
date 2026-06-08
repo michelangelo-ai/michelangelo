@@ -340,22 +340,20 @@ class TestPushOnErrorCallbackRaises(TestCase):
 
 
 class TestPushDefaultStorageBackend(TestCase):
-    """Test 11: storage_backend=None uses an ephemeral LocalStorageBackend."""
+    """Test 11: storage_backend=None raises ConfigurationError."""
 
-    def test_no_storage_backend_succeeds(self) -> None:
-        """It succeeds without an explicit storage_backend (uses temp dir default)."""
+    def test_no_storage_backend_raises(self) -> None:
+        """It raises ConfigurationError when storage_backend is omitted."""
         fake_plugin = _fake_plugin_class(return_value={"ok": True})
         reg = _registry(("fp", fake_plugin, AssembledModel))
 
-        results = push(
-            config=_config(_item("art", "fp")),
-            artifacts={"art": _assembled()},
-            registry=reg,
-            # storage_backend intentionally omitted
-        )
-
-        self.assertEqual(len(results), 1)
-        self.assertTrue(results[0].success)
+        with self.assertRaisesRegex(ConfigurationError, "storage_backend"):
+            push(
+                config=_config(_item("art", "fp")),
+                artifacts={"art": _assembled()},
+                registry=reg,
+                # storage_backend intentionally omitted
+            )
 
 
 class TestPushDefaultRegistry(TestCase):

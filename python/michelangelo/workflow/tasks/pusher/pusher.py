@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import tempfile
 from typing import TYPE_CHECKING, Any, Callable
 
 from michelangelo.workflow.schema.exceptions import ConfigurationError
@@ -43,10 +42,10 @@ def push(
         config: Top-level pusher configuration listing artifact/plugin pairs.
         artifacts: Mapping from artifact name to artifact value. Keys must
             match ``PusherPluginConfig.name`` for each item in config.
-        storage_backend: Backend used for artifact uploads. Defaults to a
-            temporary ``LocalStorageBackend`` when ``None`` — a warning is
-            logged and the caller is responsible for cleaning up the directory.
-            Pass an explicit backend for production use.
+        storage_backend: Backend used for artifact uploads. Required —
+            pass a ``LocalStorageBackend``, ``MinioStorageBackend``, or any
+            :class:`~michelangelo.lib.artifact_manager.storage_backend.StorageBackend`
+            subclass. Raises :class:`ConfigurationError` when ``None``.
         registry_client: Registry client injected into plugins that require
             one (e.g. ``ModelPusherPlugin``). Pass ``None`` for plugins that
             don't need a registry, or when registry clients are specified
@@ -103,9 +102,6 @@ def push(
     # with the three built-in plugins regardless of how push() was imported
     # (package __init__ or direct module import).
     import michelangelo.workflow.tasks.pusher.plugins  # noqa: F401
-    from michelangelo.lib.artifact_manager.storage_backend import (
-        LocalStorageBackend,
-    )
     from michelangelo.workflow.tasks.pusher.registry import (
         default_registry,
     )
@@ -113,14 +109,10 @@ def push(
     effective_registry = registry if registry is not None else default_registry
 
     if storage_backend is None:
-        _tmp = tempfile.mkdtemp()
-        _logger.warning(
-            "No storage_backend provided; using ephemeral temp dir '%s'. "
-            "The caller is responsible for cleanup. Pass an explicit "
-            "storage_backend for production use.",
-            _tmp,
+        raise ConfigurationError(
+            "storage_backend is required. Pass a LocalStorageBackend, "
+            "MinioStorageBackend, or any StorageBackend subclass."
         )
-        storage_backend = LocalStorageBackend(_tmp)
 
     results: list[PusherResult] = []
 
