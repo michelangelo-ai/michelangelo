@@ -826,7 +826,7 @@ func setUpReconciler(
 		ConfigProvider: createMockConfigProvider(),
 	})
 	// Create a mock notifier to avoid nil pointer dereference
-	mockNotifier := notification.NewPipelineRunNotifier(mockWorkflowClient, logger)
+	mockNotifier := notification.NewPipelineRunNotifier(notification.Config{TaskList: "notification-worker"}, mockWorkflowClient, logger)
 
 	reconciler := &Reconciler{
 		Handler:  handler,
@@ -1069,7 +1069,7 @@ func TestReconcileTTLWithMetadataStorageDisabled(t *testing.T) {
 				// Empty actors list: engine immediately returns terminal+satisfied,
 				// exercising the TTL branch without requiring workflow/blob dependencies.
 				plugin:   &plugin.Plugin{},
-				notifier: notification.NewPipelineRunNotifier(nil, logger),
+				notifier: notification.NewPipelineRunNotifier(notification.Config{}, nil, logger),
 			}
 
 			result, err := reconciler.Reconcile(context.Background(), ctrl.Request{

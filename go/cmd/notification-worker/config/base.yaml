@@ -1,0 +1,39 @@
+worker:
+  address: localhost:15566
+  maApiServiceName: ma-apiserver
+
+logging:
+  level: info
+  development: true
+  encoding: console
+
+workflow-engine:
+  # for cadence
+  host: 127.0.0.1:7833
+  # for temporal
+#  host: 127.0.0.1:7233
+  transport: grpc
+  # for cadence
+  provider: cadence
+  # for temporal
+#  provider: temporal
+  workers:
+    - domain: default
+      taskList: notification_worker
+  client:
+    domain: default
+
+# Notification-specific configuration.
+notification:
+  # taskList must match the taskList registered above and the value of
+  # PipelineRunNotifier.Config.TaskList in the controller manager.
+  taskList: notification_worker
+
+  # studioBaseURL is the base URL of the platform UI, used to build deep links
+  # in notification message bodies. Set this to your deployed Studio URL.
+  # Example: "https://ml.mycompany.com/studio/"
+  studioBaseURL: ""
+
+  # senderEmail is the From address for outgoing email notifications.
+  # Set this to a monitored address at your organisation.
+  senderEmail: ""

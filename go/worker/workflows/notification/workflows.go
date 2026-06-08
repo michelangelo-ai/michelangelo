@@ -1,120 +1,98 @@
+// Package notification provides the pipeline run notification workflow.
 package notification
 
 import (
+	"errors"
 	"time"
 
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	"github.com/michelangelo-ai/michelangelo/go/base/notification/types"
 	notificationActivities "github.com/michelangelo-ai/michelangelo/go/worker/activities/notification"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.uber.org/zap"
 )
 
-// Notification Workflow name
-const (
-	PRNotificationWorkflowName = "PRNotificationWorkflow"
-)
+var workflowActivityOpts = workflow.ActivityOptions{
+	ScheduleToStartTimeout: 1 * time.Minute,
+	StartToCloseTimeout:    30 * time.Minute,
+	HeartbeatTimeout:       1 * time.Minute,
+}
 
-var (
-	workflowActivityOpts = workflow.ActivityOptions{
-		ScheduleToStartTimeout: 1 * time.Minute,
-		StartToCloseTimeout:    30 * time.Minute,
-		HeartbeatTimeout:       1 * time.Minute,
-	}
-)
-
-// sendSlackNotification sends a slack notification through workflow activity execution.
-//
-// This method executes the SendMessageToSlackActivity as part of a notification workflow.
-//
-// Params:
-// - ctx: The workflow context for the operation.
-// - channel: The Slack channel to send the message to.
-// - text: The message content to send.
-//
-// Returns:
-// - error: Error information if the activity execution fails.
+// sendSlackNotification executes SendMessageToSlackActivity as a workflow activity.
 func sendSlackNotification(ctx workflow.Context, channel, text string) error {
 	logger := workflow.GetLogger(ctx)
-	ao := workflowActivityOpts
-	if err := workflow.ExecuteActivity(
-		workflow.WithActivityOptions(ctx, ao),
+	err := workflow.ExecuteActivity(
+		workflow.WithActivityOptions(ctx, workflowActivityOpts),
 		notificationActivities.SendMessageToSlackActivity,
 		&notificationActivities.SendMessageToSlackActivityRequest{
 			Channel: channel,
 			Text:    text,
-		}).Get(ctx, nil); err != nil {
-		logger.Error("The slack message failed to send with", zap.Error(err))
+		}).Get(ctx, nil)
+	if err != nil {
+		logger.Error("Slack notification failed", zap.Error(err))
 		return err
 	}
-	logger.Info("The slack message was sent successfully")
+	logger.Info("Slack notification sent")
 	return nil
 }
 
-// sendEmailNotification sends an email notification through workflow activity execution.
-//
-// This method executes the SendMessageToEmailActivity as part of a notification workflow.
-//
-// Params:
-// - ctx: The workflow context for the operation.
-// - to: List of email addresses to send the notification to.
-// - subject: The email subject line.
-// - text: The email message content.
-//
-// Returns:
-// - error: Error information if the activity execution fails.
-func sendEmailNotification(ctx workflow.Context, to []string, subject, text string) error {
+// sendEmailNotification executes SendMessageToEmailActivity as a workflow activity.
+func sendEmailNotification(ctx workflow.Context, to []string, subject, text, sendAs string) error {
 	logger := workflow.GetLogger(ctx)
-	ao := workflowActivityOpts
-	if err := workflow.ExecuteActivity(
-		workflow.WithActivityOptions(ctx, ao),
+	err := workflow.ExecuteActivity(
+		workflow.WithActivityOptions(ctx, workflowActivityOpts),
 		notificationActivities.SendMessageToEmailActivity,
 		&notificationActivities.SendMessageToEmailActivityRequest{
 			To:      to,
 			Subject: subject,
 			Text:    text,
-			SendAs:  "michelangelo@uber.com",
-		}).Get(ctx, nil); err != nil {
-		logger.Error("The email message failed to send with", zap.Error(err))
+			SendAs:  sendAs,
+		}).Get(ctx, nil)
+	if err != nil {
+		logger.Error("Email notification failed", zap.Error(err))
 		return err
 	}
-	logger.Info("The email message sent successfully")
+	logger.Info("Email notification sent")
 	return nil
 }
 
-// SendPRNotification sends notifications for a pipeline run based on configured notification settings.
+// SendPipelineRunNotification fans out email and Slack notifications for a
+// pipeline run state change.
 //
-// This method is executed as a workflow to process pipeline run state changes and send
-// appropriate notifications via email and Slack channels based on the notification configuration.
-//
-// Params:
-// - ctx: The workflow context for the operation.
-// - pipelineRun: The pipeline run object containing notification configurations and current state.
-//
-// Returns:
-// - error: Error information if any notification delivery fails.
-func SendPRNotification(ctx workflow.Context, pipelineRun *v2pb.PipelineRun) error {
+// Notification delivery failures are accumulated with errors.Join so that a
+// failure on one channel does not suppress errors from others. The workflow
+// returns a non-nil error only when at least one notification fails.
+func SendPipelineRunNotification(ctx workflow.Context, req *types.PipelineRunNotificationRequest) error {
 	ctx = workflow.WithActivityOptions(ctx, workflowActivityOpts)
 	logger := workflow.GetLogger(ctx)
-	notifications := pipelineRun.Spec.Notifications
-	var err error
-	for _, notif := range notifications {
-		eventTypes := notif.EventTypes
-		if types.ContainsEventType(eventTypes, pipelineRun.Status.State) {
-			err = sendEmailNotification(ctx, notif.Emails,
+
+	pipelineRun := req.PipelineRun
+	var errs error
+
+	for _, notif := range pipelineRun.Spec.Notifications {
+		if !types.ContainsEventType(notif.EventTypes, pipelineRun.Status.State) {
+			continue
+		}
+
+		notifText := types.GenerateText(pipelineRun, "email", req.StudioBaseURL, nil)
+		if len(notif.Emails) > 0 {
+			if err := sendEmailNotification(ctx, notif.Emails,
 				types.GenerateSubject(pipelineRun),
-				types.GenerateText(pipelineRun, "email"))
-			if err != nil {
-				logger.Error("Email notification sent failed with", zap.Error(err))
+				notifText,
+				req.SenderEmail,
+			); err != nil {
+				logger.Error("Email notification failed", zap.Error(err))
+				errs = errors.Join(errs, err)
 			}
-			for _, slack := range notif.SlackDestinations {
-				err = sendSlackNotification(ctx, slack,
-					types.GenerateText(pipelineRun, "slack"))
-				if err != nil {
-					logger.Error("Slack notification sent failed with", zap.Error(err))
-				}
+		}
+
+		slackText := types.GenerateText(pipelineRun, "slack", req.StudioBaseURL, nil)
+		for _, channel := range notif.SlackDestinations {
+			if err := sendSlackNotification(ctx, channel, slackText); err != nil {
+				logger.Error("Slack notification failed", zap.String("channel", channel), zap.Error(err))
+				errs = errors.Join(errs, err)
 			}
 		}
 	}
-	return err
+
+	return errs
 }

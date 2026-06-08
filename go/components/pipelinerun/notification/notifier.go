@@ -8,29 +8,53 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/base/notification/types"
 	clientInterfaces "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
-	"github.com/michelangelo-ai/michelangelo/go/worker/workflows/notification"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.uber.org/zap"
 )
 
-// PipelineRunNotifier handles notification logic for pipeline run state changes.
+// Config holds operator-supplied configuration for PipelineRunNotifier.
+type Config struct {
+	// TaskList is the Cadence/Temporal task list on which the notification
+	// workflow runs. It must match the task list registered by the
+	// notification-worker binary.
+	TaskList string
+	// StudioBaseURL is the base URL of the platform UI, used to build deep
+	// links in notification message bodies.
+	// Example: "https://ml.mycompany.com/studio/"
+	// If empty, no deep link is included in notification messages.
+	StudioBaseURL string
+	// SenderEmail is the From address for outgoing email notifications.
+	// If empty, the activity implementation chooses its own default.
+	SenderEmail string
+}
+
+// PipelineRunNotifier starts the notification workflow when a pipeline run
+// transitions to a state that has matching notification configuration.
 type PipelineRunNotifier struct {
+	cfg            Config
 	workflowClient clientInterfaces.WorkflowClient
 	logger         *zap.Logger
 }
 
-// NewPipelineRunNotifier creates a new pipeline run notifier.
+// NewPipelineRunNotifier creates a new PipelineRunNotifier.
 func NewPipelineRunNotifier(
+	cfg Config,
 	workflowClient clientInterfaces.WorkflowClient,
 	logger *zap.Logger,
 ) *PipelineRunNotifier {
 	return &PipelineRunNotifier{
+		cfg:            cfg,
 		workflowClient: workflowClient,
 		logger:         logger.With(zap.String("component", "pipeline-run-notifier")),
 	}
 }
 
-// NotifyOnStateChange detects pipeline run state transitions and sends notifications.
+// NotifyOnStateChange detects pipeline run state transitions and starts the
+// notification workflow when the new state matches a configured event type.
+//
+// The error returned is from StartWorkflow. Callers (typically a reconciler)
+// should log it at Warn level — notification failures must not block pipeline
+// run reconciliation.
 func (n *PipelineRunNotifier) NotifyOnStateChange(
 	ctx context.Context,
 	oldPipelineRun, newPipelineRun *v2pb.PipelineRun,
@@ -44,21 +68,22 @@ func (n *PipelineRunNotifier) NotifyOnStateChange(
 		zap.String("namespace", newPipelineRun.Namespace),
 	)
 
-	// Check for state change and determine if we should notify
 	if !n.shouldNotify(oldPipelineRun, newPipelineRun, logger) {
 		return nil
 	}
 
 	logger.Info("State change detected, starting notification workflow")
 
-	// Crop pipeline run to reduce payload size for workflow
-	croppedPipelineRun := types.CropPipelineRun(newPipelineRun)
+	req := &types.PipelineRunNotificationRequest{
+		PipelineRun:   types.CropPipelineRun(newPipelineRun),
+		StudioBaseURL: n.cfg.StudioBaseURL,
+		SenderEmail:   n.cfg.SenderEmail,
+	}
 
-	// Start notification workflow
 	workflowID := fmt.Sprintf("%s.%s.notification", newPipelineRun.Namespace, newPipelineRun.Name)
 	options := clientInterfaces.StartWorkflowOptions{
 		ID:                              workflowID,
-		TaskList:                        "pipeline_run",
+		TaskList:                        n.cfg.TaskList,
 		ExecutionStartToCloseTimeout:    60 * time.Hour,
 		DecisionTaskStartToCloseTimeout: 30 * time.Second,
 	}
@@ -66,32 +91,25 @@ func (n *PipelineRunNotifier) NotifyOnStateChange(
 	execution, err := n.workflowClient.StartWorkflow(
 		ctx,
 		options,
-		notification.PRNotificationWorkflowName,
-		croppedPipelineRun,
+		types.PipelineRunNotificationWorkflowName,
+		req,
 	)
-
 	if err != nil {
 		logger.Error("Failed to start notification workflow", zap.Error(err))
-		// Don't fail reconciliation due to notification issues
-		return nil
+		return err
 	}
 
-	logger.Info("Notification workflow started successfully",
+	logger.Info("Notification workflow started",
 		zap.String("workflow_run_id", execution.RunID))
-
 	return nil
 }
 
-// shouldNotify determines if a pipeline run state change should trigger notifications.
+// shouldNotify reports whether a state change on newPipelineRun should trigger
+// a notification workflow.
 func (n *PipelineRunNotifier) shouldNotify(
 	oldPipelineRun, newPipelineRun *v2pb.PipelineRun,
 	logger *zap.Logger,
 ) bool {
-	if newPipelineRun == nil {
-		return false
-	}
-
-	// Extract effective states for comparison
 	oldState := getEffectiveState(oldPipelineRun)
 	newState := getEffectiveState(newPipelineRun)
 
@@ -99,31 +117,29 @@ func (n *PipelineRunNotifier) shouldNotify(
 		zap.String("old_state", oldState.String()),
 		zap.String("new_state", newState.String()))
 
-	// Only process state changes
 	if oldState == newState {
-		logger.Debug("No state change detected, skipping notification")
+		logger.Debug("No state change, skipping notification")
 		return false
 	}
 
-	// Check if notifications are configured
 	if len(newPipelineRun.Spec.Notifications) == 0 {
-		logger.Debug("No notifications configured for pipeline run")
+		logger.Debug("No notifications configured")
 		return false
 	}
 
-	// Check if any notification is configured for this state
 	for _, notif := range newPipelineRun.Spec.Notifications {
 		if types.ContainsEventType(notif.EventTypes, newState) {
 			return true
 		}
 	}
 
-	logger.Debug("No notifications configured for this state",
+	logger.Debug("No notification configured for this state",
 		zap.String("state", newState.String()))
 	return false
 }
 
-// getEffectiveState returns the effective state of a pipeline run.
+// getEffectiveState returns the effective state of a pipeline run, treating nil
+// and INVALID as PENDING.
 func getEffectiveState(pipelineRun *v2pb.PipelineRun) v2pb.PipelineRunState {
 	if pipelineRun == nil {
 		return v2pb.PIPELINE_RUN_STATE_PENDING
