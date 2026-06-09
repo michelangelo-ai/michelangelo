@@ -25,6 +25,7 @@ Each step runs as an isolated, containerized task. Michelangelo handles data pas
 
 * Python 3.9+
 * [Poetry](https://python-poetry.org/) installed
+* Java 11+ with `JAVA_HOME` set — required for the Spark preprocessing step. On macOS: `brew install openjdk@21` then `export JAVA_HOME=$(brew --prefix openjdk@21)/libexec/openjdk.jdk/Contents/Home`
 * For remote runs: Docker and access to a Kubernetes cluster (or use the [local sandbox](../../getting-started/sandbox-setup.md))
 * [Create a project](./project-management-for-ml-pipelines.md)
 
@@ -71,11 +72,14 @@ from michelangelo.workflow.variables import DatasetVariable
 def feature_prep(
     columns: list[str],
     test_size: float = 0.25,
+    seed: int = 1,
 ) -> tuple[DatasetVariable, DatasetVariable]:
     """Download data and split into train/validation sets."""
+    import logging
     import ray.data
     from sklearn.datasets import fetch_california_housing
 
+    log = logging.getLogger(__name__)
     housing = fetch_california_housing(as_frame=True)
     df = housing.frame.rename(columns={"MedHouseVal": "target"})
 
@@ -123,7 +127,8 @@ def train_workflow(dataset_cols: str):
 
     # Step 2: Train the model
     result = train(
-        pr,
+        train_dv=train_dv,
+        validation_dv=validation_dv,
         params={
             "objective": "reg:squarederror",
             "colsample_bytree": 0.3,
@@ -191,9 +196,11 @@ k3d image import my-workflow:latest -c michelangelo-sandbox
 ```bash
 PYTHONPATH=. poetry run python examples/california_housing_xgb/california_housing_xgb.py remote-run \
   --image docker.io/library/my-workflow:latest \
-  --storage-url s3://my-bucket/workflows \
+  --storage-url s3://michelangelo/workflows \
   --yes
 ```
+
+> **Sandbox storage URL**: the `michelangelo` bucket is created automatically by `ma sandbox create`. For other environments replace with your own S3-compatible bucket URL.
 
 Remote runs execute workflow code in a Cadence/Temporal worker and task code in Kubernetes containers with full resource isolation. For detailed remote setup instructions including sandbox configuration, see [Running Uniflow pipelines](../ml-pipelines/running-uniflow.md).
 

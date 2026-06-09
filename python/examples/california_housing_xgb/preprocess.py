@@ -80,7 +80,7 @@ def preprocess(
     validation_dv_pr.save_spark_dataframe()
 
     log.info(
-        "Processed Train Spark schema:\n%s", train_data_pr._jdf.schema().treeString()
+        "Processed Train Spark schema:\n%s", train_data_pr.schema().simpleString()
     )
 
     return PreprocessResult(

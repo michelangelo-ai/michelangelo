@@ -8,6 +8,8 @@ and supports Parquet format for data persistence.
 import os
 from typing import Any, Optional
 
+_s3a_configured = False  # module-level flag so _ensure_s3a_config() is idempotent
+
 from pyspark.sql import DataFrame, SparkSession
 
 from michelangelo.uniflow.core.io_registry import IO
@@ -21,13 +23,17 @@ def _ensure_s3a_config():
     If no session exists yet, creates one. If one already exists (started by
     SparkTask.pre_run), reconfigures it in place via the Hadoop configuration API
     so the S3A credentials are available before any read/write call.
+
+    The function is idempotent: subsequent calls after the first are no-ops.
     """
+    global _s3a_configured
+    if _s3a_configured:
+        return
     spark = SparkSession.getActiveSession()
     if spark is None:
         spark = (
             SparkSession.builder.appName("SparkIO-S3A-Inject")
             .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
-            .config("spark.hadoop.fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
             .config(
                 "spark.hadoop.fs.AbstractFileSystem.s3a.impl",
                 "org.apache.hadoop.fs.s3a.S3A",
@@ -42,9 +48,12 @@ def _ensure_s3a_config():
         )
     else:
         # Session already started by SparkTask.pre_run — inject S3A config at runtime.
-        hadoop_conf = spark.sparkContext._jsc.hadoopConfiguration()
+        # Uses the Hadoop Configuration API (Py4J bridge) to set keys on the live
+        # SparkContext. Note: if S3AFileSystem instances are already cached by the JVM
+        # FileSystem cache, those instances retain their original (empty) credentials.
+        # See GitHub issue #1286 for the proper fix via SparkTask.pre_run injection.
+        hadoop_conf = spark.sparkContext._jsc.hadoopConfiguration()  # type: ignore[attr-defined]
         hadoop_conf.set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
-        hadoop_conf.set("fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
         hadoop_conf.set(
             "fs.AbstractFileSystem.s3a.impl", "org.apache.hadoop.fs.s3a.S3A"
         )
@@ -52,6 +61,7 @@ def _ensure_s3a_config():
         hadoop_conf.set("fs.s3a.secret.key", os.getenv("AWS_SECRET_ACCESS_KEY", ""))
         hadoop_conf.set("fs.s3a.endpoint", os.getenv("AWS_ENDPOINT_URL", ""))
         hadoop_conf.set("fs.s3a.path.style.access", "true")
+    _s3a_configured = True
 
 
 def read_data(url: str) -> DataFrame:
@@ -129,5 +139,5 @@ class SparkIO(IO[DataFrame]):
         """
         _ensure_s3a_config()
         url = os.path.expanduser(url)
-        spark = SparkSession.getActiveSession()
+        spark = SparkSession.getActiveSession() or SparkSession.builder.getOrCreate()
         return spark.read.parquet(url)
