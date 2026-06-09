@@ -16,6 +16,7 @@ from michelangelo.uniflow.plugins.ray import RayTask
 
 if TYPE_CHECKING:
     import ray.data
+
     from examples.california_housing_xgb.preprocess import PreprocessResult
 
 log = logging.getLogger(__name__)

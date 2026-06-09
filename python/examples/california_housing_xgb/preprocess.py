@@ -79,9 +79,7 @@ def preprocess(
     validation_dv_pr = DatasetVariable.create(validation_data_pr)
     validation_dv_pr.save_spark_dataframe()
 
-    log.info(
-        "Processed Train Spark schema:\n%s", train_data_pr.schema.simpleString()
-    )
+    log.info("Processed Train Spark schema:\n%s", train_data_pr.schema.simpleString())
 
     return PreprocessResult(
         train_data=train_dv_pr,

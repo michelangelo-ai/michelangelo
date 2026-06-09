@@ -33,14 +33,18 @@ def _ensure_s3a_config():
     if spark is None:
         spark = (
             SparkSession.builder.appName("SparkIO-S3A-Inject")
-            .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+            .config(
+                "spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem"
+            )
             # fs.s3.impl redirects legacy s3:// URIs to S3AFileSystem (needed in Hadoop 3.x)
             .config("spark.hadoop.fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
             .config(
                 "spark.hadoop.fs.AbstractFileSystem.s3a.impl",
                 "org.apache.hadoop.fs.s3a.S3A",
             )
-            .config("spark.hadoop.fs.s3a.access.key", os.getenv("AWS_ACCESS_KEY_ID", ""))
+            .config(
+                "spark.hadoop.fs.s3a.access.key", os.getenv("AWS_ACCESS_KEY_ID", "")
+            )
             .config(
                 "spark.hadoop.fs.s3a.secret.key", os.getenv("AWS_SECRET_ACCESS_KEY", "")
             )
