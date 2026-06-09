@@ -2,10 +2,10 @@ apiVersion: michelangelo.api/v2
 kind: Pipeline
 metadata:
   namespace: "ma-dev-test"
-  name: "boston-housing-xgb"
+  name: "california-housing-xgb"
   annotations:
     michelangelo/uniflow-image: ghcr.io/michelangelo-ai/examples:main
 spec:
   type: "PIPELINE_TYPE_TRAIN"
   manifest:
-    filePath: examples.boston_housing_xgb.boston_housing_xgb
+    filePath: examples.california_housing_xgb.california_housing_xgb

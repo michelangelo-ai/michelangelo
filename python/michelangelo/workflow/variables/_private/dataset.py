@@ -57,6 +57,7 @@ class DatasetVariable(Variable):
         value: Any = None,
         path: str | None = None,
         metadata: Any = None,
+        _io_metadata: Any = None,
     ) -> None:
         """Initialise with an optional in-memory value and/or storage path.
 
@@ -67,6 +68,9 @@ class DatasetVariable(Variable):
                 ``UF_STORAGE_URL`` env var (default ``memory://storage``) when
                 not provided.
             metadata: Optional metadata forwarded to the IO layer.
+            _io_metadata: Internal metadata written by the IO layer after a
+                save. Passed through by the UniFlow codec when reconstructing
+                a ``DatasetVariable`` from a task result.
         """
         import os
         import uuid
@@ -74,6 +78,7 @@ class DatasetVariable(Variable):
         if path is None:
             path = f"{os.environ.get('UF_STORAGE_URL', 'memory://storage')}/{uuid.uuid4().hex}"
         super().__init__(path=path, metadata=metadata)
+        self._io_metadata = _io_metadata
         self._value = value  # override Variable.__post_init__'s None sentinel
 
     @classmethod

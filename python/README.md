@@ -119,7 +119,7 @@ read. `protobuf` is a core dependency — no extra install required.
 For complete working examples, see the [examples directory](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples), including:
 
 - [BERT fine-tuning on CoLA](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/bert_cola) — Text classification with distributed GPU training
-- [XGBoost on Boston Housing](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/boston_housing_xgb) — Tabular regression with distributed training
+- [XGBoost on California Housing](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/california_housing_xgb) — Tabular regression with distributed training
 - [GPT fine-tuning with LoRA](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/gpt_oss_20b_finetune) — Large language model fine-tuning
 
 ## Using the Python API Client

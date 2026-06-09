@@ -1,43 +1,32 @@
-"""XGBoost regression workflow for Boston Housing price prediction.
+"""XGBoost training task for the California Housing workflow.
 
-Example workflow demonstrating XGBoost training with Ray for distributed model
-training on the Boston Housing dataset.
+Trains an XGBoost regression model on preprocessed California Housing data
+using Ray's distributed XGBoostTrainer.
 """
+
+from __future__ import annotations
 
 import logging
 import os
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING
 
-import numpy as np
-import pandas as pd
 import ray
 import ray.data
 import xgboost
 import xgboost_ray  # noqa: F401 - needed for metabuild dependency discovery
-from pyspark.sql import DataFrame
 from ray.train import RunConfig, ScalingConfig
 from ray.train.xgboost import RayTrainReportCallback, XGBoostTrainer
 
 import michelangelo.uniflow.core as uniflow
 from michelangelo.uniflow.plugins.ray import RayTask
-from michelangelo.uniflow.plugins.spark import SparkTask
-from michelangelo.workflow.variables import DatasetVariable
+
+if TYPE_CHECKING:
+    from examples.california_housing_xgb.preprocess import PreprocessResult
 
 log = logging.getLogger(__name__)
 
-
-@dataclass
-class PreprocessResult:
-    """Container for preprocessing results.
-
-    Attributes:
-        train_data: Training dataset.
-        validation_data: Validation dataset.
-    """
-
-    train_data: DatasetVariable
-    validation_data: DatasetVariable
+__all__ = ["TrainResult", "train"]
 
 
 @dataclass
@@ -50,118 +39,7 @@ class TrainResult:
     """
 
     path: str
-    metrics: Optional[dict] = None
-
-
-@uniflow.task(
-    config=RayTask(
-        head_cpu=1,
-        head_gpu=0,
-        head_memory="4Gi",
-        worker_cpu=1,
-        worker_gpu=0,
-        worker_memory="4Gi",
-        worker_instances=0,
-        # breakpoint=True,
-    ),
-    cache_enabled=True,
-)
-def feature_prep(
-    columns: list[str],
-    test_size: float = 0.25,
-    seed: int = 1,
-) -> tuple[DatasetVariable, DatasetVariable]:
-    """Prepare features from Boston Housing dataset.
-
-    Downloads the Boston Housing dataset, performs train/test split, and converts
-    to Ray Datasets for distributed processing.
-
-    Args:
-        columns: List of feature column names.
-        test_size: Fraction of data to use for validation. Defaults to 0.25.
-        seed: Random seed for reproducibility. Defaults to 1.
-
-    Returns:
-        Tuple of (train_dataset, validation_dataset) as DatasetVariables.
-    """
-    data_url = "http://lib.stat.cmu.edu/datasets/boston"
-    raw_df = pd.read_csv(data_url, sep=r"\s+", skiprows=22, header=None)
-    X = np.hstack([raw_df.values[::2, :], raw_df.values[1::2, :2]])  # noqa: N806
-    y = raw_df.values[1::2, 2]
-
-    feature_names = columns[:-1]  # assuming the last column is 'target'
-
-    dataset = [
-        dict(zip(feature_names, features), target=target)
-        for features, target in zip(X, y)
-    ]
-    data = ray.data.from_items(dataset).select_columns(columns)
-
-    train_data, validation_data = data.train_test_split(
-        test_size=test_size, shuffle=True, seed=seed
-    )
-
-    train_dv = DatasetVariable.create(train_data)
-    train_dv.save_ray_dataset()
-
-    validation_dv = DatasetVariable.create(validation_data)
-    validation_dv.save_ray_dataset()
-
-    log.info("Train dataset schema: %s", train_data.schema())
-    log.info("Train dataset sample: %s", train_data.take(1))
-
-    return train_dv, validation_dv
-
-
-@uniflow.task(
-    config=SparkTask(
-        driver_cpu=1,
-        executor_cpu=1,
-    ),
-    cache_enabled=True,
-)
-def preprocess(
-    cast_float_columns: list[str],
-    train_dv: DatasetVariable,
-    validation_dv: DatasetVariable,
-) -> PreprocessResult:
-    """Preprocess datasets using Spark to cast columns to float type.
-
-    Args:
-        cast_float_columns: List of column names to cast to float type.
-        train_dv: Training DatasetVariable containing Spark DataFrame.
-        validation_dv: Validation DatasetVariable containing Spark DataFrame.
-
-    Returns:
-        PreprocessResult containing preprocessed training and validation datasets.
-    """
-    train_dv.load_spark_dataframe()
-    train_data: DataFrame = train_dv.value
-
-    validation_dv.load_spark_dataframe()
-    validation_data: DataFrame = validation_dv.value
-
-    def cast_float(df: DataFrame) -> DataFrame:
-        cols = {col: df[col].cast("float") for col in cast_float_columns}
-        return df.withColumns(cols)
-
-    train_data_pr = cast_float(train_data)
-    validation_data_pr = cast_float(validation_data)
-
-    train_dv_pr = DatasetVariable.create(train_data_pr)
-    train_dv_pr.save_spark_dataframe()
-
-    validation_dv_pr = DatasetVariable.create(validation_data_pr)
-    validation_dv_pr.save_spark_dataframe()
-
-    log.info(
-        "Processed Train Spark schema:\n%s", train_data_pr._jdf.schema().treeString()
-    )
-
-    return PreprocessResult(
-        train_data=train_dv_pr,
-        validation_data=validation_dv_pr,
-    )
+    metrics: dict | None = None
 
 
 @uniflow.task(
@@ -173,21 +51,16 @@ def preprocess(
         worker_gpu=0,
         worker_memory="12Gi",
         worker_instances=1,
-        runtime_env={
-            "env_vars": {
-                "TEST_ENV_VAR": "test_value",
-            },
-        },
     ),
 )
 def train(
     pr: PreprocessResult,
-    params: dict,
+    params: dict[str, float | int],
 ) -> TrainResult:
     """Train XGBoost model using Ray for distributed training.
 
-    Trains an XGBoost regression model on preprocessed Boston Housing data using
-    Ray's distributed XGBoostTrainer with automatic hyperparameter tuning.
+    Trains an XGBoost regression model on preprocessed California Housing data
+    using Ray's distributed XGBoostTrainer.
 
     Args:
         pr: PreprocessResult containing preprocessed training and validation datasets.
@@ -211,14 +84,14 @@ def train(
             log.warning("Dropping column %s from validation data", col)
             validation_data = validation_data.drop_columns([col])
 
-    # 🛠️ Debug print: schema and first rows
+    # Debug: log schema and first rows
     log.info("Train dataset schema: %s", train_data.schema())
     log.info("Train dataset sample: %s", train_data.take(1))
 
     def create_scaling_config(
         *,
         cpu_per_worker: int,
-        trainer_cpu: Optional[int] = None,
+        trainer_cpu: int | None = None,
     ) -> ScalingConfig:
         """Create optimized ScalingConfig for Ray trainer resource allocation.
 
@@ -344,64 +217,4 @@ def train(
     return TrainResult(
         path=result.path,
         metrics=result.metrics,
-    )
-
-
-@uniflow.workflow()
-def train_workflow(
-    dataset_cols: str = (
-        "CRIM,ZN,INDUS,CHAS,NOX,RM,AGE,DIS,RAD,TAX,PTRATIO,B,LSTAT,target"
-    ),
-):
-    """Complete XGBoost training workflow for Boston Housing dataset.
-
-    Orchestrates the end-to-end ML workflow: feature preparation,
-    preprocessing with Spark, and distributed training with Ray XGBoost.
-
-    Args:
-        dataset_cols: Comma-separated string of column names including
-            features and target. Example:
-            "feature1,feature2,feature3,target".
-    """
-    _dataset_cols = dataset_cols.split(",")
-    feature_prep_overrides = feature_prep.with_overrides(
-        alias="feature_prep_overrides",
-        config=RayTask(
-            head_cpu=2,
-            worker_instances=1,
-        ),
-    )
-    train_dv, validation_dv = feature_prep_overrides(
-        columns=_dataset_cols,
-    )
-    pr = preprocess.with_overrides(
-        alias="preprocess_overrides",
-        config=SparkTask(executor_cpu=1, driver_cpu=1),
-    )(
-        cast_float_columns=_dataset_cols,
-        train_dv=train_dv,
-        validation_dv=validation_dv,
-    )
-    train_result = train(
-        pr,
-        params={
-            "objective": "reg:linear",
-            "colsample_bytree": 0.3,
-            "learning_rate": 0.1,
-            "max_depth": 5,
-            "alpha": 10,
-            "n_estimators": 10,
-        },
-    )
-    print("train_result.path:", train_result.path)
-    return train_result
-
-
-if __name__ == "__main__":
-    ctx = uniflow.create_context()
-
-    ctx.environ["IMAGE_PULL_POLICY"] = "IfNotPresent"
-    ctx.run(
-        train_workflow,
-        dataset_cols="CRIM,ZN,INDUS,CHAS,NOX,RM,AGE,DIS,RAD,TAX,PTRATIO,B,LSTAT,target",
     )
