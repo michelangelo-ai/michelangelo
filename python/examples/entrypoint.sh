@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+# Load auto-detected JAVA_HOME (written at image build time to handle arm64/amd64).
+# shellcheck disable=SC1091
+[ -f /etc/environment ] && . /etc/environment
+export JAVA_HOME PATH
+
 if [[ "$1" == "driver" || "$1" == "executor" ]]; then
   echo "[entrypoint] Removing Spark role argument: $1"
   shift

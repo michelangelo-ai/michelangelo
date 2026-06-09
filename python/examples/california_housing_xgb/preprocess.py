@@ -38,7 +38,10 @@ class PreprocessResult:
 @uniflow.task(
     config=SparkTask(
         driver_cpu=1,
+        driver_memory="4G",
         executor_cpu=1,
+        executor_memory="2G",
+        executor_instances=1,
     ),
     cache_enabled=True,
 )

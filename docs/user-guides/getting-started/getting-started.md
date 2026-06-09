@@ -78,15 +78,21 @@ def feature_prep(
 
     housing = fetch_california_housing(as_frame=True)
     df = housing.frame.rename(columns={"MedHouseVal": "target"})
+
     data = ray.data.from_pandas(df).select_columns(columns)
+
     train_data, validation_data = data.train_test_split(
-        test_size=test_size, shuffle=True, seed=1
+        test_size=test_size, shuffle=True, seed=seed
     )
 
     train_dv = DatasetVariable.create(train_data)
     train_dv.save_ray_dataset()
+
     validation_dv = DatasetVariable.create(validation_data)
     validation_dv.save_ray_dataset()
+
+    log.info("Train dataset schema: %s", train_data.schema())
+    log.info("Train dataset sample: %s", train_data.take(1))
 
     return train_dv, validation_dv
 ```
@@ -117,12 +123,14 @@ def train_workflow(dataset_cols: str):
 
     # Step 2: Train the model
     result = train(
-        train_dv=train_dv,
-        validation_dv=validation_dv,
+        pr,
         params={
-            "objective": "reg:linear",
-            "max_depth": 5,
+            "objective": "reg:squarederror",
+            "colsample_bytree": 0.3,
             "learning_rate": 0.1,
+            "max_depth": 5,
+            "alpha": 10,
+            "n_estimators": 10,
         },
     )
     return result
@@ -146,7 +154,7 @@ if __name__ == "__main__":
 
     ctx.run(
         train_workflow,
-        dataset_cols="CRIM,ZN,INDUS,CHAS,NOX,RM,AGE,DIS,RAD,TAX,PTRATIO,B,LSTAT,target",
+        dataset_cols="MedInc,HouseAge,AveRooms,AveBedrms,Population,AveOccup,Latitude,Longitude,target",
     )
 ```
 
@@ -175,6 +183,7 @@ When you need more compute power or want to validate against production infrastr
 
 ```bash
 docker build -t my-workflow:latest -f ./examples/Dockerfile .
+k3d image import my-workflow:latest -c michelangelo-sandbox
 ```
 
 ### Run with remote execution
