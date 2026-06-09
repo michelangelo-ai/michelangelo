@@ -49,7 +49,7 @@ New to Michelangelo? Follow this path:
 
 | Example | Description |
 |---------|-------------|
-| [Boston Housing Regression](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/boston_housing_xgb) | Predict house prices with XGBoost |
+| [California Housing Regression](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/california_housing_xgb) | Predict house prices with XGBoost |
 | [BERT Text Classification](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/bert_cola) | Classify text with pre-trained transformers |
 | [GPT Fine-tuning](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/gpt_oss_20b_finetune) | Fine-tune large language models with LoRA |
 | [Amazon Books Recommendation](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/amazon_books_qwen) | Dual-encoder recommendation system |

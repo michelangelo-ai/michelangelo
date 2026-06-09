@@ -89,7 +89,7 @@ task_configs:
       source:
         dataset:
           namespace: my-project
-          name: boston-housing
+          name: california-housing
       split:
         ratio:
           train_ratio: 0.8

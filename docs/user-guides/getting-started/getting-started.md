@@ -74,20 +74,11 @@ def feature_prep(
 ) -> tuple[DatasetVariable, DatasetVariable]:
     """Download data and split into train/validation sets."""
     import ray.data
-    import pandas as pd
-    import numpy as np
+    from sklearn.datasets import fetch_california_housing
 
-    data_url = "http://lib.stat.cmu.edu/datasets/boston"
-    raw_df = pd.read_csv(data_url, sep=r"\s+", skiprows=22, header=None)
-    X = np.hstack([raw_df.values[::2, :], raw_df.values[1::2, :2]])
-    y = raw_df.values[1::2, 2]
-
-    feature_names = columns[:-1]
-    dataset = [
-        dict(zip(feature_names, features), target=target)
-        for features, target in zip(X, y)
-    ]
-    data = ray.data.from_items(dataset).select_columns(columns)
+    housing = fetch_california_housing(as_frame=True)
+    df = housing.frame.rename(columns={"MedHouseVal": "target"})
+    data = ray.data.from_pandas(df).select_columns(columns)
     train_data, validation_data = data.train_test_split(
         test_size=test_size, shuffle=True, seed=1
     )
@@ -171,7 +162,7 @@ Then run it:
 
 ```bash
 cd michelangelo/python
-PYTHONPATH=. poetry run python examples/boston_housing_xgb/boston_housing_xgb.py
+PYTHONPATH=. poetry run python examples/california_housing_xgb/california_housing_xgb.py
 ```
 
 Local runs execute everything in your Python interpreter with zero infrastructure setup. This is the fastest way to iterate on your workflow logic.
@@ -189,7 +180,7 @@ docker build -t my-workflow:latest -f ./examples/Dockerfile .
 ### Run with remote execution
 
 ```bash
-PYTHONPATH=. poetry run python examples/boston_housing_xgb/boston_housing_xgb.py remote-run \
+PYTHONPATH=. poetry run python examples/california_housing_xgb/california_housing_xgb.py remote-run \
   --image docker.io/library/my-workflow:latest \
   --storage-url s3://my-bucket/workflows \
   --yes
@@ -208,13 +199,13 @@ apiVersion: michelangelo.api/v2
 kind: Pipeline
 metadata:
   namespace: my-project  # Your project name
-  name: boston-housing-xgb
+  name: california-housing-xgb
   annotations:
     michelangelo/uniflow-image: ghcr.io/michelangelo-ai/examples:main
 spec:
   type: PIPELINE_TYPE_TRAIN
   manifest:
-    filePath: examples.boston_housing_xgb.boston_housing_xgb
+    filePath: examples.california_housing_xgb.california_housing_xgb
 ```
 
 ### Register the pipeline
@@ -226,7 +217,7 @@ ma pipeline apply -f pipeline.yaml
 ### Run the registered pipeline
 
 ```bash
-ma pipeline run --namespace my-project --name boston-housing-xgb
+ma pipeline run --namespace my-project --name california-housing-xgb
 ```
 
 ## Workflow constraints
@@ -299,7 +290,7 @@ def train_workflow(dataset_cols: str):
 
 ## Complete example
 
-See the full Boston Housing XGBoost example at [`python/examples/boston_housing_xgb/`](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/boston_housing_xgb). This example demonstrates:
+See the full California Housing XGBoost example at [`python/examples/california_housing_xgb/`](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/california_housing_xgb). This example demonstrates:
 
 * **Heterogeneous workflow**: Ray tasks for data prep and training, Spark task for preprocessing
 * **Task caching**: Reuse feature preparation results across runs
