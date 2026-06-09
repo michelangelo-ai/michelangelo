@@ -4,17 +4,9 @@ import { vi } from 'vitest';
 
 import { ServiceProvider } from '#core/providers/service-provider/service-provider';
 
+import type React from 'react';
 import type { ServiceContextType } from '#core/providers/service-provider/types';
 import type { WrapperComponentProps } from './types';
-
-type ServiceProviderTestHandles = {
-  queryClient: QueryClient;
-};
-
-type ServiceProviderTestContext = {
-  handles: ServiceProviderTestHandles;
-  wrapper: ({ children }: WrapperComponentProps) => JSX.Element;
-};
 
 /**
  * Creates a React wrapper for testing components that use service features.
@@ -54,9 +46,10 @@ export function getServiceProviderWrapper(serviceProvider: Partial<ServiceContex
   return createServiceProviderTestContext(serviceProvider).wrapper;
 }
 
-export function createServiceProviderTestContext(
-  serviceProvider: Partial<ServiceContextType>
-): ServiceProviderTestContext {
+export function createServiceProviderTestContext(serviceProvider: Partial<ServiceContextType>): {
+  handles: { queryClient: QueryClient };
+  wrapper: ({ children }: WrapperComponentProps) => React.JSX.Element;
+} {
   const mockRequest = vi.fn();
   const base = {
     request: mockRequest,
@@ -73,7 +66,9 @@ export function createServiceProviderTestContext(
 
   return {
     handles: { queryClient },
-    wrapper: function ServiceProviderWrapper({ children }: WrapperComponentProps) {
+    wrapper: function ServiceProviderWrapper({
+      children,
+    }: WrapperComponentProps): React.JSX.Element {
       return (
         <QueryClientProvider client={queryClient}>
           <ServiceProvider {...base} {...serviceProvider}>

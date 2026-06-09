@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event';
 
 import { ActionMenu } from '#core/components/actions/action-menu/action-menu';
 import { ActionsPopover } from '#core/components/actions/actions-popover';
-import { interpolate } from '#core/interpolation/interpolate';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
@@ -650,5 +649,4 @@ describe('ActionsPopover', () => {
     await within(dialog).findByText(/Test error/);
     expect(screen.queryByText('Should not appear')).not.toBeInTheDocument();
   });
-
 });
