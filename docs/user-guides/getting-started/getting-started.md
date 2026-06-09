@@ -25,7 +25,7 @@ Each step runs as an isolated, containerized task. Michelangelo handles data pas
 
 * Python 3.9+
 * [Poetry](https://python-poetry.org/) installed
-* Java 11+ with `JAVA_HOME` set — required for the Spark preprocessing step. On macOS: `brew install openjdk@21` then `export JAVA_HOME=$(brew --prefix openjdk@21)/libexec/openjdk.jdk/Contents/Home`
+* Java 17 with `JAVA_HOME` set — required for the Spark preprocessing step. Java 21 is not compatible with PySpark 3.5 + Hadoop 3.3 (`getSubject is not supported` error). On macOS: `brew install openjdk@17` then `export JAVA_HOME=$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home`
 * For remote runs: Docker and access to a Kubernetes cluster (or use the [local sandbox](../../getting-started/sandbox-setup.md))
 * [Create a project](./project-management-for-ml-pipelines.md)
 
@@ -326,3 +326,4 @@ See the full California Housing XGBoost example at [`python/examples/california_
 * **Out of memory during training?** Increase `head_memory` or `worker_memory` in your task config, or reduce your dataset size for local runs.
 * **Remote run fails to start?** Verify your Docker image exists and is accessible. Check that `--storage-url` points to a valid S3-compatible bucket.
 * **Workflow code errors with "not supported in Starlark"?** Move the unsupported syntax (imports, try-except, f-strings) into a task function. See [Workflow constraints](#workflow-constraints).
+* **Spark fails with `getSubject is not supported`?** Java 21 is incompatible with PySpark 3.5 + Hadoop 3.3. Switch to Java 17: `brew install openjdk@17` then `export JAVA_HOME=$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home`.

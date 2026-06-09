@@ -87,7 +87,7 @@ df: DataFrame = validation_dv.value             # now a real Spark DataFrame
 ## Requirements
 
 - Python 3.9+
-- Java (for Spark) — `brew install openjdk` on macOS
+- Java 17 with `JAVA_HOME` set — required for Spark. Java 21 is incompatible with PySpark 3.5 + Hadoop 3.3 (`getSubject is not supported`). On macOS: `brew install openjdk@17` then `export JAVA_HOME=$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home`
 - Ray and PySpark installed via the project venv
 
 ## Local Run
