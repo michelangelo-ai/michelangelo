@@ -32,9 +32,7 @@ __all__ = [
 
 @uniflow.workflow()
 def train_workflow(
-    dataset_cols: str = (
-        "MedInc,HouseAge,AveRooms,AveBedrms,Population,AveOccup,Latitude,Longitude,target"
-    ),
+    dataset_cols: str = "MedInc,HouseAge,AveRooms,AveBedrms,Population,AveOccup,Latitude,Longitude,target",
 ):
     """Data pipeline workflow: feature prep, preprocessing, and training.
 
