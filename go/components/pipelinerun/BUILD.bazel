@@ -41,6 +41,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "@com_github_stretchr_testify//mock:go_default_library",
         "//go/api:go_default_library",
         "//go/api/handler:go_default_library",
         "//go/api/utils:go_default_library",

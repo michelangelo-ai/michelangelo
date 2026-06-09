@@ -11,6 +11,8 @@ import (
 
 	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
@@ -1101,6 +1103,167 @@ func TestReconcileTTLWithMetadataStorageDisabled(t *testing.T) {
 				require.Equal(t, time.Duration(0), result.RequeueAfter,
 					"Should not requeue when TTL is skipped")
 			}
+		})
+	}
+}
+
+// MockWorkflowClient is a mock implementation of WorkflowClient for testing
+type MockWorkflowClient struct {
+	mock.Mock
+}
+
+func (m *MockWorkflowClient) StartWorkflow(ctx context.Context, options clientInterfaces.StartWorkflowOptions, workflowName string, args ...interface{}) (*clientInterfaces.WorkflowExecution, error) {
+	mockArgs := m.Called(ctx, options, workflowName, args)
+	if mockArgs.Get(0) == nil {
+		return nil, mockArgs.Error(1)
+	}
+	return mockArgs.Get(0).(*clientInterfaces.WorkflowExecution), mockArgs.Error(1)
+}
+
+func (m *MockWorkflowClient) GetWorkflowExecutionInfo(ctx context.Context, workflowID string, runID string) (*clientInterfaces.WorkflowExecutionInfo, error) {
+	mockArgs := m.Called(ctx, workflowID, runID)
+	if mockArgs.Get(0) == nil {
+		return nil, mockArgs.Error(1)
+	}
+	return mockArgs.Get(0).(*clientInterfaces.WorkflowExecutionInfo), mockArgs.Error(1)
+}
+
+func (m *MockWorkflowClient) CancelWorkflow(ctx context.Context, workflowID string, runID string, reason string) error {
+	mockArgs := m.Called(ctx, workflowID, runID, reason)
+	return mockArgs.Error(0)
+}
+
+func (m *MockWorkflowClient) QueryWorkflow(ctx context.Context, workflowID string, runID string, queryHandlerKey string, queryResult any) error {
+	mockArgs := m.Called(ctx, workflowID, runID, queryHandlerKey, queryResult)
+	return mockArgs.Error(0)
+}
+
+func (m *MockWorkflowClient) GetProvider() string {
+	mockArgs := m.Called()
+	return mockArgs.String(0)
+}
+
+func (m *MockWorkflowClient) GetDomain() string {
+	mockArgs := m.Called()
+	return mockArgs.String(0)
+}
+
+func (m *MockWorkflowClient) ListOpenWorkflow(ctx context.Context, request clientInterfaces.ListOpenWorkflowExecutionsRequest) (*clientInterfaces.ListOpenWorkflowExecutionsResponse, error) {
+	mockArgs := m.Called(ctx, request)
+	if mockArgs.Get(0) == nil {
+		return nil, mockArgs.Error(1)
+	}
+	return mockArgs.Get(0).(*clientInterfaces.ListOpenWorkflowExecutionsResponse), mockArgs.Error(1)
+}
+
+func (m *MockWorkflowClient) TerminateWorkflow(ctx context.Context, workflowID string, runID string, reason string) error {
+	mockArgs := m.Called(ctx, workflowID, runID, reason)
+	return mockArgs.Error(0)
+}
+
+func (m *MockWorkflowClient) ResetWorkflow(ctx context.Context, options clientInterfaces.ResetWorkflowOptions) (*clientInterfaces.WorkflowExecution, error) {
+	mockArgs := m.Called(ctx, options)
+	if mockArgs.Get(0) == nil {
+		return nil, mockArgs.Error(1)
+	}
+	return mockArgs.Get(0).(*clientInterfaces.WorkflowExecution), mockArgs.Error(1)
+}
+
+func (m *MockWorkflowClient) GetWorkflowExecutionHistory(ctx context.Context, workflowID string, runID string, pageToken []byte, pageSize int32) (*clientInterfaces.WorkflowHistory, error) {
+	mockArgs := m.Called(ctx, workflowID, runID, pageToken, pageSize)
+	if mockArgs.Get(0) == nil {
+		return nil, mockArgs.Error(1)
+	}
+	return mockArgs.Get(0).(*clientInterfaces.WorkflowHistory), mockArgs.Error(1)
+}
+
+func (m *MockWorkflowClient) GetActivityTaskScheduledEventType() string {
+	mockArgs := m.Called()
+	return mockArgs.String(0)
+}
+
+func (m *MockWorkflowClient) GetActivityTaskCompletedEventType() string {
+	mockArgs := m.Called()
+	return mockArgs.String(0)
+}
+
+func (m *MockWorkflowClient) GetDecisionTaskCompletedEventType() string {
+	mockArgs := m.Called()
+	return mockArgs.String(0)
+}
+
+func (m *MockWorkflowClient) PauseTrigger(ctx context.Context, workflowID string) error {
+	mockArgs := m.Called(ctx, workflowID)
+	return mockArgs.Error(0)
+}
+
+func (m *MockWorkflowClient) UnpauseTrigger(ctx context.Context, workflowID string) error {
+	mockArgs := m.Called(ctx, workflowID)
+	return mockArgs.Error(0)
+}
+
+func (m *MockWorkflowClient) DeleteTrigger(ctx context.Context, workflowID string, runID string) error {
+	mockArgs := m.Called(ctx, workflowID, runID)
+	return mockArgs.Error(0)
+}
+
+func (m *MockWorkflowClient) UpdateTrigger(ctx context.Context, workflowID string, newCronSchedule string) error {
+	mockArgs := m.Called(ctx, workflowID, newCronSchedule)
+	return mockArgs.Error(0)
+}
+
+func TestMapWorkflowStatusToPipelineRunState(t *testing.T) {
+	tests := []struct {
+		name           string
+		workflowStatus clientInterfaces.WorkflowExecutionStatus
+		expectedState  v2pb.PipelineRunState
+	}{
+		{
+			name:           "running workflow maps to RUNNING",
+			workflowStatus: clientInterfaces.WorkflowExecutionStatusRunning,
+			expectedState:  v2pb.PIPELINE_RUN_STATE_RUNNING,
+		},
+		{
+			name:           "completed workflow maps to SUCCEEDED",
+			workflowStatus: clientInterfaces.WorkflowExecutionStatusCompleted,
+			expectedState:  v2pb.PIPELINE_RUN_STATE_SUCCEEDED,
+		},
+		{
+			name:           "failed workflow maps to FAILED",
+			workflowStatus: clientInterfaces.WorkflowExecutionStatusFailed,
+			expectedState:  v2pb.PIPELINE_RUN_STATE_FAILED,
+		},
+		{
+			name:           "terminated workflow maps to KILLED",
+			workflowStatus: clientInterfaces.WorkflowExecutionStatusTerminated,
+			expectedState:  v2pb.PIPELINE_RUN_STATE_KILLED,
+		},
+		{
+			name:           "canceled workflow maps to KILLED",
+			workflowStatus: clientInterfaces.WorkflowExecutionStatusCanceled,
+			expectedState:  v2pb.PIPELINE_RUN_STATE_KILLED,
+		},
+		{
+			name:           "timed out workflow maps to FAILED",
+			workflowStatus: clientInterfaces.WorkflowExecutionStatusTimedOut,
+			expectedState:  v2pb.PIPELINE_RUN_STATE_FAILED,
+		},
+		{
+			name:           "continued as new workflow maps to RUNNING",
+			workflowStatus: clientInterfaces.WorkflowExecutionStatusContinuedAsNew,
+			expectedState:  v2pb.PIPELINE_RUN_STATE_RUNNING,
+		},
+		{
+			name:           "unspecified workflow status defaults to RUNNING",
+			workflowStatus: clientInterfaces.WorkflowExecutionStatusUnSpecified,
+			expectedState:  v2pb.PIPELINE_RUN_STATE_RUNNING,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := mapWorkflowStatusToPipelineRunState(tt.workflowStatus)
+			assert.Equal(t, tt.expectedState, result)
 		})
 	}
 }
