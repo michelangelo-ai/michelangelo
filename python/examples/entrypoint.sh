@@ -2,6 +2,7 @@
 set -e
 
 # Load auto-detected JAVA_HOME (written at image build time to handle arm64/amd64).
+# TODO(#1295): remove once Dockerfile no longer hardcodes ENV JAVA_HOME=${TARGETARCH}.
 # shellcheck disable=SC1091
 [ -f /etc/environment ] && . /etc/environment
 export JAVA_HOME PATH
