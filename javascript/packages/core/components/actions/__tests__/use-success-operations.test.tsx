@@ -24,7 +24,9 @@ describe('useSuccessOperations', () => {
 
       render(
         <Fragment>
-          <QueryClientCapture onReady={(capturedQueryClient) => (queryClient = capturedQueryClient)} />
+          <QueryClientCapture
+            onReady={(capturedQueryClient) => (queryClient = capturedQueryClient)}
+          />
           <UseSuccessOperationsTestHarness />
         </Fragment>,
         buildWrapper([
@@ -53,7 +55,9 @@ describe('useSuccessOperations', () => {
 
       render(
         <Fragment>
-          <QueryClientCapture onReady={(capturedQueryClient) => (queryClient = capturedQueryClient)} />
+          <QueryClientCapture
+            onReady={(capturedQueryClient) => (queryClient = capturedQueryClient)}
+          />
           <UseSuccessOperationsTestHarness
             operations={[{ type: 'invalidate', targets: ['ListPipelineRun'] }]}
           />
@@ -84,7 +88,9 @@ describe('useSuccessOperations', () => {
 
       render(
         <Fragment>
-          <QueryClientCapture onReady={(capturedQueryClient) => (queryClient = capturedQueryClient)} />
+          <QueryClientCapture
+            onReady={(capturedQueryClient) => (queryClient = capturedQueryClient)}
+          />
           <UseSuccessOperationsTestHarness
             operations={[
               {
@@ -124,7 +130,9 @@ describe('useSuccessOperations', () => {
 
       render(
         <Fragment>
-          <QueryClientCapture onReady={(capturedQueryClient) => (queryClient = capturedQueryClient)} />
+          <QueryClientCapture
+            onReady={(capturedQueryClient) => (queryClient = capturedQueryClient)}
+          />
           <UseSuccessOperationsTestHarness
             operations={[
               {
@@ -166,7 +174,9 @@ describe('useSuccessOperations', () => {
 
       render(
         <Fragment>
-          <QueryClientCapture onReady={(capturedQueryClient) => (queryClient = capturedQueryClient)} />
+          <QueryClientCapture
+            onReady={(capturedQueryClient) => (queryClient = capturedQueryClient)}
+          />
           <UseSuccessOperationsTestHarness
             operations={[
               {
@@ -208,7 +218,9 @@ describe('useSuccessOperations', () => {
       const user = userEvent.setup();
 
       render(
-        <UseSuccessOperationsTestHarness operations={[{ type: 'toast', message: 'Pipeline created' }]} />,
+        <UseSuccessOperationsTestHarness
+          operations={[{ type: 'toast', message: 'Pipeline created' }]}
+        />,
         buildWrapper([
           getBaseProviderWrapper(),
           getRouterWrapper(),
@@ -320,7 +332,9 @@ describe('useSuccessOperations', () => {
 
       render(
         <UseSuccessOperationsTestHarness
-          operations={[{ type: 'toast', message: interpolate('Pipeline ${response.name} created') }]}
+          operations={[
+            { type: 'toast', message: interpolate('Pipeline ${response.name} created') },
+          ]}
           response={{ name: 'training-v2' }}
         />,
         buildWrapper([
