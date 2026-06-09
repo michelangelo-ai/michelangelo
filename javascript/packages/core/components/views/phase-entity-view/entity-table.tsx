@@ -1,4 +1,4 @@
-import { useLocalStorageTableState } from '#core/components/table/plugins/state-persistence/use-local-storage-table-state';
+import { useTableState } from '#core/components/table/plugins/state-persistence/use-table-state';
 import { Table } from '#core/components/table/table';
 import { adaptTableConfigToTableProps } from '#core/components/views/utils/table-view-adapter';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
@@ -34,9 +34,13 @@ export function EntityTable<T extends object = object>({
     },
   });
 
-  const entityTableState = useLocalStorageTableState({
+  const entityTableState = useTableState({
     filterSettingsId: `${projectId}/${tableSettingsId}`,
     tableSettingsId,
+    ...(tableConfig.enableShareUrl && {
+      validColumnIds: tableConfig.columns.map((col) => col.id),
+      urlFilters: { enabled: true },
+    }),
   });
 
   const tableProps = adaptTableConfigToTableProps<T>(tableConfig, {

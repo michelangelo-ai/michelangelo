@@ -24,6 +24,7 @@ export function adaptTableConfigToTableProps<T extends TableData = TableData>(
   const actionBarConfig: TableActionBarConfig = {
     enableSearch: !config.disableSearch,
     enableFilters: !config.disableFilters,
+    enableShareUrl: config.enableShareUrl,
   };
 
   return {

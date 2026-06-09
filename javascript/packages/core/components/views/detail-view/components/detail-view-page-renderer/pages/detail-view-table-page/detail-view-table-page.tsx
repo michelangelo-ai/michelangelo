@@ -1,4 +1,4 @@
-import { useLocalStorageTableState } from '#core/components/table/plugins/state-persistence/use-local-storage-table-state';
+import { useTableState } from '#core/components/table/plugins/state-persistence/use-table-state';
 import { Table } from '#core/components/table/table';
 import { adaptTableConfigToTableProps } from '#core/components/views/utils/table-view-adapter';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
@@ -47,7 +47,7 @@ export function DetailViewTablePage<T extends object = object>({
     },
   });
 
-  const tableState = useLocalStorageTableState({
+  const tableState = useTableState({
     tableSettingsId: `${phase}/${entity}/${pageId}`,
     filterSettingsId: `${projectId}/${phase}/${entity}/${pageId}`,
   });

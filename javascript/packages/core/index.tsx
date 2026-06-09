@@ -148,6 +148,7 @@ export type { RepeatedLayoutState } from '#core/providers/repeated-layout-provid
 // Table
 export { Table } from '#core/components/table/table';
 export { useLocalStorageTableState } from '#core/components/table/plugins/state-persistence/use-local-storage-table-state';
+export { useTableState } from '#core/components/table/plugins/state-persistence/use-table-state';
 export { useTableSelectionContext } from '#core/components/table/plugins/selection/table-selection-context';
 export { FilterMode } from '#core/components/table/components/filter/types';
 export type { ColumnConfig } from '#core/components/table/types/column-types';
