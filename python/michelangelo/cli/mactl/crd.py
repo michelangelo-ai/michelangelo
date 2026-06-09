@@ -253,7 +253,7 @@ def _get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mes
         crd_method_info,
         **{
             "namespace": get_single_arg(bound_args.arguments, "namespace"),
-            "name": _resolve_name_arg(bound_args.arguments),
+            "name": get_single_arg(bound_args.arguments, "name"),
         },
     )
 

@@ -368,7 +368,8 @@ class GetFuncImplTest(TestCase):
                 arguments={
                     "self": mock_crd,
                     "namespace": "ns",
-                    "name": None,
+                    "name": "",
+                    "name_flag": "",
                     "limit": 50,
                 }
             ),
@@ -600,6 +601,31 @@ class GenerateGetTest(TestCase):
         crd.generate_get(mock_channel)
 
         result = crd.get(namespace="test-ns", name="test-name")
+
+        self.assertEqual(result, mock_response)
+        call_args = mock_crd_method_call_kwargs.call_args
+        self.assertEqual(call_args.kwargs["namespace"], "test-ns")
+        self.assertEqual(call_args.kwargs["name"], "test-name")
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
+    @patch.object(CRD, "_extract_method_info")
+    def test_generate_get_execution_via_name_flag(
+        self, mock_extract_method_info, mock_crd_method_call_kwargs
+    ):
+        """Generated `get` resolves the --name flag (dest=name_flag) like positional.
+
+        Exercises the full bind_signature path with `name=""` and `name_flag="X"`,
+        the binding state that argparse produces when the user supplies --name only.
+        """
+        mock_channel = Mock()
+        mock_extract_method_info.return_value = ("GetTestCrd", Mock, Mock)
+        mock_response = Mock()
+        mock_crd_method_call_kwargs.return_value = mock_response
+
+        crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.generate_get(mock_channel)
+
+        result = crd.get(namespace="test-ns", name_flag="test-name")
 
         self.assertEqual(result, mock_response)
         call_args = mock_crd_method_call_kwargs.call_args
