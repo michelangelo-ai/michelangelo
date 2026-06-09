@@ -11,17 +11,11 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-import ray
-import ray.data
-import xgboost
-import xgboost_ray  # noqa: F401 - needed for metabuild dependency discovery
-from ray.train import RunConfig, ScalingConfig
-from ray.train.xgboost import RayTrainReportCallback, XGBoostTrainer
-
 import michelangelo.uniflow.core as uniflow
 from michelangelo.uniflow.plugins.ray import RayTask
 
 if TYPE_CHECKING:
+    import ray.data
     from examples.california_housing_xgb.preprocess import PreprocessResult
 
 log = logging.getLogger(__name__)
@@ -69,6 +63,13 @@ def train(
     Returns:
         TrainResult containing the path to saved model and training metrics.
     """
+    import ray
+    import ray.data
+    import xgboost
+    import xgboost_ray  # noqa: F401 - needed for metabuild dependency discovery
+    from ray.train import RunConfig, ScalingConfig
+    from ray.train.xgboost import RayTrainReportCallback, XGBoostTrainer
+
     pr.train_data.load_ray_dataset()
     train_data: ray.data.Dataset = pr.train_data.value
 
