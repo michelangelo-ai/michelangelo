@@ -77,8 +77,7 @@ class DatasetVariable(Variable):
 
         if path is None:
             path = f"{os.environ.get('UF_STORAGE_URL', 'memory://storage')}/{uuid.uuid4().hex}"
-        super().__init__(path=path, metadata=metadata)
-        self._io_metadata = _io_metadata
+        super().__init__(path=path, metadata=metadata, _io_metadata=_io_metadata)
         self._value = value  # override Variable.__post_init__'s None sentinel
 
     @classmethod
