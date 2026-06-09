@@ -197,6 +197,9 @@ export { FormStep } from '#core/components/form/layout/form-step/form-step';
 export { ArrayFormRow } from '#core/components/form/layout/array-form-row/array-form-row';
 export { ArrayFormGroup } from '#core/components/form/layout/array-form-group/array-form-group';
 
+// Actions
+export { ActionHierarchy } from '#core/components/actions/types';
+
 // Detail View
 export { DetailView } from '#core/components/views/detail-view/detail-view';
 export { DetailViewPages } from '#core/components/views/detail-view/components/detail-view-pages/detail-view-pages';

@@ -19,6 +19,11 @@ export interface DetailHeaderBaseProps {
    * Main heading displayed next to the back button
    */
   title?: string;
+
+  /**
+   * ReactNode to be rendered next to the title in the header
+   */
+  titleEnhancer?: React.ReactNode;
   onGoBack?: () => void;
 
   /**
