@@ -294,6 +294,62 @@ class GetFuncImplTest(TestCase):
         mock_crd._get.assert_called_once_with(namespace="ns", name="proj")
         self.assertEqual(result, mock_response)
 
+    def test_get_func_impl_with_name_flag_calls_get(self):
+        """`--name X` (dest=name_flag) routes through _get just like positional."""
+        mock_crd = Mock()
+        mock_response = Mock()
+        mock_crd._get.return_value = mock_response
+
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Get",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        result = get_func_impl(
+            crd_method_info,
+            Mock(
+                arguments={
+                    "self": mock_crd,
+                    "namespace": "ns",
+                    "name": "",
+                    "name_flag": "proj",
+                }
+            ),
+        )
+
+        mock_crd._get.assert_called_once_with(namespace="ns", name="proj")
+        self.assertEqual(result, mock_response)
+
+    def test_get_func_impl_positional_overrides_name_flag(self):
+        """Positional `name` wins when both are supplied."""
+        mock_crd = Mock()
+        mock_crd._get.return_value = Mock()
+
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Get",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        get_func_impl(
+            crd_method_info,
+            Mock(
+                arguments={
+                    "self": mock_crd,
+                    "namespace": "ns",
+                    "name": "from-positional",
+                    "name_flag": "from-flag",
+                }
+            ),
+        )
+
+        mock_crd._get.assert_called_once_with(
+            namespace="ns", name="from-positional"
+        )
+
     def test_get_func_impl_without_name_calls_list(self):
         """Test get_func_impl without name calls list with limit."""
         mock_crd = Mock()

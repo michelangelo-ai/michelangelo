@@ -233,6 +233,18 @@ def crd_method_call(crd_method_info, request_input: Message) -> Message:
     return response
 
 
+def _resolve_name_arg(arguments: dict) -> str:
+    """Merge positional `name` and --name flag (`name_flag`) for the get action.
+
+    Positional takes precedence; either may be empty. The `--name` flag is
+    bound to a separate dest to avoid an argparse override that silently
+    blanks the positional value.
+    """
+    positional = arguments.get("name") or ""
+    flag = arguments.get("name_flag") or ""
+    return positional or flag
+
+
 def _get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
     """Raw CRD GET implementation - returns message instance without printing."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
@@ -241,7 +253,7 @@ def _get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mes
         crd_method_info,
         **{
             "namespace": get_single_arg(bound_args.arguments, "namespace"),
-            "name": get_single_arg(bound_args.arguments, "name"),
+            "name": _resolve_name_arg(bound_args.arguments),
         },
     )
 
@@ -254,8 +266,9 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
     _self: CRD = bound_args.arguments["self"]
+    name = _resolve_name_arg(bound_args.arguments)
 
-    if "name" not in bound_args.arguments or not bound_args.arguments["name"]:
+    if not name:
         _LOG.debug("No name argument passed. List CRD in the namespace.")
         _self.generate_list(crd_method_info.channel)
         return _self.list(
@@ -264,7 +277,8 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
         )
 
     call_res = _self._get(
-        **{k: v for k, v in bound_args.arguments.items() if k != "self"}
+        namespace=get_single_arg(bound_args.arguments, "namespace"),
+        name=name,
     )
     print(call_res)
     return call_res
@@ -527,16 +541,6 @@ class CRD:
                 "help": "Get an Entity or list all entities in the namespace",
                 "args": [
                     {
-                        "args": ["name"],
-                        "kwargs": {
-                            "nargs": "?",
-                            "type": str,
-                            "help": (
-                                "Name of the resource (can be configured with --name)"
-                            ),
-                        },
-                    },
-                    {
                         "func_signature": Parameter(
                             "namespace", Parameter.POSITIONAL_OR_KEYWORD
                         ),
@@ -553,12 +557,32 @@ class CRD:
                             Parameter.POSITIONAL_OR_KEYWORD,
                             default="",
                         ),
+                        "args": ["name"],
+                        "kwargs": {
+                            "nargs": "?",
+                            "type": str,
+                            "default": "",
+                            "help": (
+                                "Name of the resource (can also be supplied as "
+                                "--name; omit both to list all)"
+                            ),
+                        },
+                    },
+                    {
+                        "func_signature": Parameter(
+                            "name_flag",
+                            Parameter.POSITIONAL_OR_KEYWORD,
+                            default="",
+                        ),
                         "args": ["--name"],
                         "kwargs": {
-                            "dest": "name",
+                            "dest": "name_flag",
                             "type": str,
+                            "default": "",
                             "required": False,
-                            "help": "Name of the resource",
+                            "help": (
+                                "Name of the resource (alternative to positional)"
+                            ),
                         },
                     },
                     {
