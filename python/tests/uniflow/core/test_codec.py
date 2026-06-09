@@ -17,7 +17,8 @@ class Color(Enum):
 
 @dataclass
 class Entity:
-    """Dataclass to represent a generic entity for testing purposes."""
+    """Dataclass to represent a generic entity for testing purposes.
+    """
 
     id: str  # Unique identifier for the entity. Simple string field.
     value: Any  # Entity value. Can be any type.

@@ -33,7 +33,8 @@ class Data:
 
 @task(config=TaskA(cpu=2))
 def generate_random_text(spec: RandomTextSpec) -> Data:
-    """Generates random text based on the given spec. Returns the generated text as bytes."""
+    """Generates random text based on the given spec. Returns the generated text as bytes.
+    """
     # Ensure that the task decorator has called the TaskA.pre_run hook which initializes the global a_environ.
     assert a_environ
     assert isinstance(a_environ["config"], TaskA)

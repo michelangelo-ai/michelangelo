@@ -28,8 +28,8 @@ class PipelineRunTest(TestCase):
             2026, 4, 2, 14, 30, 22, tzinfo=timezone.utc
         )
         mock_uuid.uuid4.return_value = MagicMock()
-        mock_uuid.uuid4.return_value.__str__ = lambda x: (
-            "abc123de-f456-7890-1234-567890abcdef"
+        mock_uuid.uuid4.return_value.__str__ = (
+            lambda x: "abc123de-f456-7890-1234-567890abcdef"
         )
 
         result = generate_pipeline_run_name()

@@ -16,7 +16,8 @@ _test_env = {
 
 @workflow()
 def my_workflow(spec: dict):
-    """Minimal Uniflow workflow function for testing purposes."""
+    """Minimal Uniflow workflow function for testing purposes.
+    """
     print(spec)
     return 0
 
@@ -25,7 +26,8 @@ class Test(unittest.TestCase):
     @patch("subprocess.run")
     @patch.dict(os.environ, _test_env)
     def test_main_minimal_command(self, subprocess_run):
-        """This test case verifies the remote run command with a minimal set of arguments."""
+        """This test case verifies the remote run command with a minimal set of arguments.
+        """
         subprocess_run.return_value.stdout = ""
         subprocess_run.return_value.stderr = ""
         # Provide a minimal set of the arguments required to run the workflow in the remote mode.
