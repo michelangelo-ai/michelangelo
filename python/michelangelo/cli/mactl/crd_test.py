@@ -346,9 +346,7 @@ class GetFuncImplTest(TestCase):
             ),
         )
 
-        mock_crd._get.assert_called_once_with(
-            namespace="ns", name="from-positional"
-        )
+        mock_crd._get.assert_called_once_with(namespace="ns", name="from-positional")
 
     def test_get_func_impl_without_name_calls_list(self):
         """Test get_func_impl without name calls list with limit."""
