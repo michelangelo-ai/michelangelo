@@ -1,11 +1,10 @@
 """XGBoost regression workflow for California Housing price prediction.
 
-Workflow entry point that orchestrates the California Housing data pipeline:
-feature preparation, Spark preprocessing, and distributed XGBoost training
-with Ray. The individual task implementations live in sibling modules
-(``feature_prep``, ``preprocess``, ``train``).
-
-Model push is added in the pusher integration layer — see ``push_model.py``.
+Workflow entry point that orchestrates the full California Housing pipeline:
+feature preparation, Spark preprocessing, distributed XGBoost training with
+Ray, and pushing the model and evaluation report via the pusher API. The
+individual task implementations live in sibling modules (``feature_prep``,
+``preprocess``, ``train``, ``push_model``).
 """
 
 from __future__ import annotations
@@ -13,6 +12,7 @@ from __future__ import annotations
 import michelangelo.uniflow.core as uniflow
 from examples.california_housing_xgb.feature_prep import feature_prep
 from examples.california_housing_xgb.preprocess import PreprocessResult, preprocess
+from examples.california_housing_xgb.push_model import push_model
 from examples.california_housing_xgb.train import TrainResult, train
 from michelangelo.uniflow.plugins.ray import RayTask
 from michelangelo.uniflow.plugins.spark import SparkTask
@@ -22,6 +22,7 @@ __all__ = [
     "TrainResult",
     "feature_prep",
     "preprocess",
+    "push_model",
     "train",
     "train_workflow",
 ]
@@ -34,10 +35,12 @@ __all__ = [
 def train_workflow(
     dataset_cols: str = "MedInc,HouseAge,AveRooms,AveBedrms,Population,AveOccup,Latitude,Longitude,target",
 ):
-    """Data pipeline workflow: feature prep, preprocessing, and training.
+    """End-to-end ML workflow: feature prep, preprocessing, training, and push.
 
-    Orchestrates the California Housing data pipeline: feature preparation,
-    preprocessing with Spark, and distributed training with Ray XGBoost.
+    Orchestrates the full ML lifecycle for California Housing: feature
+    preparation, preprocessing with Spark, distributed training with Ray
+    XGBoost, and pushing the trained model and evaluation report to storage
+    and registry.
 
     Args:
         dataset_cols: Comma-separated string of column names including
@@ -45,7 +48,7 @@ def train_workflow(
             "feature1,feature2,feature3,target".
 
     Returns:
-        TrainResult containing the checkpoint path and training metrics.
+        List of PusherResult from the push_model task, one per artifact pushed.
     """
     _dataset_cols = dataset_cols.split(",")
     feature_prep_overrides = feature_prep.with_overrides(
@@ -66,7 +69,7 @@ def train_workflow(
         train_dv=train_dv,
         validation_dv=validation_dv,
     )
-    return train(
+    train_result = train(
         pr,
         params={
             "objective": "reg:squarederror",
@@ -77,6 +80,7 @@ def train_workflow(
             "n_estimators": 10,
         },
     )
+    return push_model(train_result)
 
 
 if __name__ == "__main__":
