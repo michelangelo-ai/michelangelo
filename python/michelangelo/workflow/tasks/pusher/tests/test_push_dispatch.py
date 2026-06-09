@@ -72,8 +72,9 @@ def _assembled(path: str = "/tmp/raw") -> AssembledModel:
 
 
 def _storage() -> LocalStorageBackend:
-    """Return a temporary LocalStorageBackend."""
-    return LocalStorageBackend(tempfile.mkdtemp())
+    """Return a temporary LocalStorageBackend backed by a self-cleaning temp dir."""
+    tmp = tempfile.mkdtemp()
+    return LocalStorageBackend(tmp)
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +170,7 @@ class TestPushTypeMismatch(TestCase):
         fake_plugin = _fake_plugin_class()
         reg = _registry(("typed_plugin", fake_plugin, AssembledModel))
 
-        with self.assertRaises(ConfigurationError):
+        with self.assertRaisesRegex(ConfigurationError, r"type|AssembledModel"):
             push(
                 config=_config(_item("report", "typed_plugin")),
                 artifacts={"report": {"not": "an AssembledModel"}},
@@ -453,3 +454,50 @@ class TestPushTupleExpectedType(TestCase):
                 storage_backend=_storage(),
                 registry=reg,
             )
+
+
+class TestPushOnErrorCallbackExceptionSuppressed(TestCase):
+    """Test 15: exceptions raised inside on_error are suppressed, not re-raised."""
+
+    def test_on_error_exception_does_not_mask_plugin_error(self) -> None:
+        """When on_error itself raises, PusherPluginError still propagates."""
+        fail_plugin = _fake_plugin_class(raises=RuntimeError("plugin boom"))
+
+        def _bad_callback(name: str, plugin: str, exc: Exception) -> None:
+            raise RuntimeError("callback boom")
+
+        reg = _registry(("fp", fail_plugin, AssembledModel))
+
+        with self.assertRaises(PusherPluginError):
+            push(
+                config=_config(_item("art", "fp")),
+                artifacts={"art": _assembled()},
+                storage_backend=_storage(),
+                registry=reg,
+                fail_fast=True,
+                on_error=_bad_callback,
+            )
+
+    def test_on_error_exception_suppressed_in_fail_fast_false(self) -> None:
+        """In fail_fast=False mode, a raising on_error still records the result."""
+        fail_plugin = _fake_plugin_class(raises=RuntimeError("plugin boom"))
+        callback_raised: list[bool] = []
+
+        def _bad_callback(name: str, plugin: str, exc: Exception) -> None:
+            callback_raised.append(True)
+            raise RuntimeError("callback boom")
+
+        reg = _registry(("fp", fail_plugin, AssembledModel))
+
+        results = push(
+            config=_config(_item("art", "fp")),
+            artifacts={"art": _assembled()},
+            storage_backend=_storage(),
+            registry=reg,
+            fail_fast=False,
+            on_error=_bad_callback,
+        )
+
+        self.assertTrue(callback_raised)
+        self.assertFalse(results[0].success)
+        self.assertIn("plugin boom", results[0].error)

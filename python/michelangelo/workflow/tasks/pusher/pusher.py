@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
+__all__ = ["push"]
+
 
 def push(
     config: PusherConfig,

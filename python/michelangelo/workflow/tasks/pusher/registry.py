@@ -9,6 +9,8 @@ if TYPE_CHECKING:
 
 from michelangelo.workflow.schema.exceptions import ConfigurationError
 
+__all__ = ["PluginRegistry", "default_registry"]
+
 
 class PluginRegistry:
     """Registry mapping plugin names to their implementation class and artifact type.
