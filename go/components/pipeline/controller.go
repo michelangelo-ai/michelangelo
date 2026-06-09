@@ -1,6 +1,7 @@
 // Package pipeline implements a Kubernetes controller for managing Pipeline resources.
 //
 // The controller watches Pipeline custom resources and reconciles their state by:
+//   - Updating the latest revision reference
 //   - Managing pipeline state transitions
 //   - Scheduling periodic reconciliation for non-terminal states
 //
@@ -12,6 +13,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -20,6 +22,7 @@ import (
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -33,8 +36,8 @@ const (
 // Reconciler implements the controller-runtime Reconciler interface for Pipeline resources.
 //
 // It manages the reconciliation loop for Pipeline custom resources, handling state
-// updates. The reconciler uses an API handler for Kubernetes operations and maintains
-// environment context and logging capabilities.
+// updates and revision tracking. The reconciler uses an API handler for Kubernetes
+// operations and maintains environment context and logging capabilities.
 type Reconciler struct {
 	api.Handler
 	env               env.Context
@@ -46,6 +49,7 @@ type Reconciler struct {
 //
 // It processes reconciliation requests for Pipeline objects by:
 //   - Retrieving the Pipeline resource from Kubernetes
+//   - Updating the latest revision reference based on the pipeline's git commit
 //   - Transitioning the pipeline state to READY
 //   - Persisting status updates back to Kubernetes
 //
@@ -77,6 +81,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	originalPipeline := pipeline.DeepCopy()
 	state := pipeline.Status.State
 	logger.Info("Reconciling pipeline", zap.Any("PipelineStatusState", state.String()))
+	pipeline.Status.LatestRevision = &apipb.ResourceIdentifier{
+		Name:      formatRevisionName(pipeline),
+		Namespace: pipeline.Namespace,
+	}
 	pipeline.Status.State = v2pb.PIPELINE_STATE_READY
 
 	// Emit metrics for pipeline becoming ready
@@ -122,6 +130,19 @@ func (r *Reconciler) updatePipelineStatus(ctx context.Context, pipeline *v2pb.Pi
 	}
 
 	return result, nil
+}
+
+// formatRevisionName generates a standardized revision name for a pipeline.
+//
+// The name format is: "pipeline-{lowercase-pipeline-name}-{git-ref-prefix}"
+// where git-ref-prefix is the first 12 characters (or less) of the git reference.
+//
+// For example: "pipeline-my-model-a1b2c3d4e5f6"
+func formatRevisionName(pipeline *v2pb.Pipeline) string {
+	if pipeline.Spec.Commit != nil {
+		return fmt.Sprintf("%s-%s-%s", "pipeline", strings.ToLower(pipeline.Name), pipeline.Spec.Commit.GitRef[:min(len(pipeline.Spec.Commit.GitRef), 12)])
+	}
+	return ""
 }
 
 // isTerminatedState checks if a pipeline state is terminal.
