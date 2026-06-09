@@ -7,6 +7,15 @@ import { ServiceProvider } from '#core/providers/service-provider/service-provid
 import type { ServiceContextType } from '#core/providers/service-provider/types';
 import type { WrapperComponentProps } from './types';
 
+type ServiceProviderTestHandles = {
+  queryClient: QueryClient;
+};
+
+type ServiceProviderTestContext = {
+  handles: ServiceProviderTestHandles;
+  wrapper: ({ children }: WrapperComponentProps) => JSX.Element;
+};
+
 /**
  * Creates a React wrapper for testing components that use service features.
  * This wrapper is essential for testing components that use service hooks
@@ -42,6 +51,12 @@ import type { WrapperComponentProps } from './types';
  * ```
  */
 export function getServiceProviderWrapper(serviceProvider: Partial<ServiceContextType>) {
+  return createServiceProviderTestContext(serviceProvider).wrapper;
+}
+
+export function createServiceProviderTestContext(
+  serviceProvider: Partial<ServiceContextType>
+): ServiceProviderTestContext {
   const mockRequest = vi.fn();
   const base = {
     request: mockRequest,
@@ -56,14 +71,17 @@ export function getServiceProviderWrapper(serviceProvider: Partial<ServiceContex
     },
   });
 
-  return function ServiceProviderWrapper({ children }: WrapperComponentProps) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        <ServiceProvider {...base} {...serviceProvider}>
-          {children}
-        </ServiceProvider>
-      </QueryClientProvider>
-    );
+  return {
+    handles: { queryClient },
+    wrapper: function ServiceProviderWrapper({ children }: WrapperComponentProps) {
+      return (
+        <QueryClientProvider client={queryClient}>
+          <ServiceProvider {...base} {...serviceProvider}>
+            {children}
+          </ServiceProvider>
+        </QueryClientProvider>
+      );
+    },
   };
 }
 

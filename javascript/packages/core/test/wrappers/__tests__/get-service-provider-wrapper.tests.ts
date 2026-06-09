@@ -1,4 +1,7 @@
-import { createQueryMockRouter } from '#core/test/wrappers/get-service-provider-wrapper';
+import {
+  createQueryMockRouter,
+  createServiceProviderTestContext,
+} from '#core/test/wrappers/get-service-provider-wrapper';
 
 describe('createQueryMockRouter', () => {
   test('routes different query names to correct responses', async () => {
@@ -138,5 +141,14 @@ describe('createQueryMockRouter', () => {
 
     const emptyArgsResponse = await mockRequest('ListPipelineRun', {});
     expect(emptyArgsResponse).toEqual({ pipelineRunList: { items: [{ name: 'empty-args' }] } });
+  });
+});
+
+describe('createServiceProviderTestContext', () => {
+  test('returns a wrapper and query client handle', () => {
+    const testContext = createServiceProviderTestContext({ request: vi.fn() });
+
+    expect(testContext.wrapper).toBeTypeOf('function');
+    expect(testContext.handles.queryClient).toBeDefined();
   });
 });

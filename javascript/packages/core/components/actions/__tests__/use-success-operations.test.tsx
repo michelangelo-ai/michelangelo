@@ -1,48 +1,33 @@
-import { Fragment } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import {
-  QueryClientCapture,
-  UseSuccessOperationsTestHarness,
-} from '#core/components/actions/__fixtures__/use-success-operations-test-harness';
+import { UseSuccessOperationsTestHarness } from '#core/components/actions/__fixtures__/use-success-operations-test-harness';
 import { interpolate } from '#core/interpolation/interpolate';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
-import { getServiceProviderWrapper } from '#core/test/wrappers/get-service-provider-wrapper';
+import { createServiceProviderTestContext } from '#core/test/wrappers/get-service-provider-wrapper';
 import { getSnackbarProviderWrapper } from '#core/test/wrappers/get-snackbar-provider-wrapper';
-
-import type { QueryClient } from '@tanstack/react-query';
 
 describe('useSuccessOperations', () => {
   describe('invalidate', () => {
     it('does nothing when no operations are configured', async () => {
       const user = userEvent.setup();
-      let queryClient: QueryClient | null = null;
+      const testContext = createServiceProviderTestContext({ request: vi.fn() });
 
       render(
-        <Fragment>
-          <QueryClientCapture
-            onReady={(capturedQueryClient) => (queryClient = capturedQueryClient)}
-          />
-          <UseSuccessOperationsTestHarness />
-        </Fragment>,
+        <UseSuccessOperationsTestHarness />,
         buildWrapper([
           getBaseProviderWrapper(),
           getRouterWrapper(),
-          getServiceProviderWrapper({ request: vi.fn() }),
+          testContext.wrapper,
           getSnackbarProviderWrapper(),
           getIconProviderWrapper(),
         ])
       );
 
-      await waitFor(() => {
-        expect(queryClient).not.toBeNull();
-      });
-
-      const spy = vi.spyOn(queryClient!, 'invalidateQueries');
+      const spy = vi.spyOn(testContext.handles.queryClient, 'invalidateQueries');
 
       await user.click(screen.getByRole('button', { name: 'Run success operations' }));
 
@@ -51,31 +36,22 @@ describe('useSuccessOperations', () => {
 
     it('invalidates a query by name only', async () => {
       const user = userEvent.setup();
-      let queryClient: QueryClient | null = null;
+      const testContext = createServiceProviderTestContext({ request: vi.fn() });
 
       render(
-        <Fragment>
-          <QueryClientCapture
-            onReady={(capturedQueryClient) => (queryClient = capturedQueryClient)}
-          />
-          <UseSuccessOperationsTestHarness
-            operations={[{ type: 'invalidate', targets: ['ListPipelineRun'] }]}
-          />
-        </Fragment>,
+        <UseSuccessOperationsTestHarness
+          operations={[{ type: 'invalidate', targets: ['ListPipelineRun'] }]}
+        />,
         buildWrapper([
           getBaseProviderWrapper(),
           getRouterWrapper(),
-          getServiceProviderWrapper({ request: vi.fn() }),
+          testContext.wrapper,
           getSnackbarProviderWrapper(),
           getIconProviderWrapper(),
         ])
       );
 
-      await waitFor(() => {
-        expect(queryClient).not.toBeNull();
-      });
-
-      const spy = vi.spyOn(queryClient!, 'invalidateQueries');
+      const spy = vi.spyOn(testContext.handles.queryClient, 'invalidateQueries');
 
       await user.click(screen.getByRole('button', { name: 'Run success operations' }));
 
@@ -84,38 +60,29 @@ describe('useSuccessOperations', () => {
 
     it('invalidates a query by name + serviceOptions', async () => {
       const user = userEvent.setup();
-      let queryClient: QueryClient | null = null;
+      const testContext = createServiceProviderTestContext({ request: vi.fn() });
 
       render(
-        <Fragment>
-          <QueryClientCapture
-            onReady={(capturedQueryClient) => (queryClient = capturedQueryClient)}
-          />
-          <UseSuccessOperationsTestHarness
-            operations={[
-              {
-                type: 'invalidate',
-                targets: [
-                  { name: 'GetPipelineRun', serviceOptions: { name: 'run-1', namespace: 'ns' } },
-                ],
-              },
-            ]}
-          />
-        </Fragment>,
+        <UseSuccessOperationsTestHarness
+          operations={[
+            {
+              type: 'invalidate',
+              targets: [
+                { name: 'GetPipelineRun', serviceOptions: { name: 'run-1', namespace: 'ns' } },
+              ],
+            },
+          ]}
+        />,
         buildWrapper([
           getBaseProviderWrapper(),
           getRouterWrapper(),
-          getServiceProviderWrapper({ request: vi.fn() }),
+          testContext.wrapper,
           getSnackbarProviderWrapper(),
           getIconProviderWrapper(),
         ])
       );
 
-      await waitFor(() => {
-        expect(queryClient).not.toBeNull();
-      });
-
-      const spy = vi.spyOn(queryClient!, 'invalidateQueries');
+      const spy = vi.spyOn(testContext.handles.queryClient, 'invalidateQueries');
 
       await user.click(screen.getByRole('button', { name: 'Run success operations' }));
 
@@ -126,39 +93,30 @@ describe('useSuccessOperations', () => {
 
     it('processes multiple invalidate targets in order', async () => {
       const user = userEvent.setup();
-      let queryClient: QueryClient | null = null;
+      const testContext = createServiceProviderTestContext({ request: vi.fn() });
 
       render(
-        <Fragment>
-          <QueryClientCapture
-            onReady={(capturedQueryClient) => (queryClient = capturedQueryClient)}
-          />
-          <UseSuccessOperationsTestHarness
-            operations={[
-              {
-                type: 'invalidate',
-                targets: [
-                  'ListPipelineRun',
-                  { name: 'GetPipelineRun', serviceOptions: { name: 'run-1', namespace: 'ns' } },
-                ],
-              },
-            ]}
-          />
-        </Fragment>,
+        <UseSuccessOperationsTestHarness
+          operations={[
+            {
+              type: 'invalidate',
+              targets: [
+                'ListPipelineRun',
+                { name: 'GetPipelineRun', serviceOptions: { name: 'run-1', namespace: 'ns' } },
+              ],
+            },
+          ]}
+        />,
         buildWrapper([
           getBaseProviderWrapper(),
           getRouterWrapper(),
-          getServiceProviderWrapper({ request: vi.fn() }),
+          testContext.wrapper,
           getSnackbarProviderWrapper(),
           getIconProviderWrapper(),
         ])
       );
 
-      await waitFor(() => {
-        expect(queryClient).not.toBeNull();
-      });
-
-      const spy = vi.spyOn(queryClient!, 'invalidateQueries');
+      const spy = vi.spyOn(testContext.handles.queryClient, 'invalidateQueries');
 
       await user.click(screen.getByRole('button', { name: 'Run success operations' }));
 
@@ -170,39 +128,30 @@ describe('useSuccessOperations', () => {
 
     it('can invalidate and toast in the same run', async () => {
       const user = userEvent.setup();
-      let queryClient: QueryClient | null = null;
+      const testContext = createServiceProviderTestContext({ request: vi.fn() });
 
       render(
-        <Fragment>
-          <QueryClientCapture
-            onReady={(capturedQueryClient) => (queryClient = capturedQueryClient)}
-          />
-          <UseSuccessOperationsTestHarness
-            operations={[
-              {
-                type: 'invalidate',
-                targets: [
-                  { name: 'GetPipelineRun', serviceOptions: { name: 'run-1', namespace: 'ns' } },
-                ],
-              },
-              { type: 'toast', message: 'Pipeline updated' },
-            ]}
-          />
-        </Fragment>,
+        <UseSuccessOperationsTestHarness
+          operations={[
+            {
+              type: 'invalidate',
+              targets: [
+                { name: 'GetPipelineRun', serviceOptions: { name: 'run-1', namespace: 'ns' } },
+              ],
+            },
+            { type: 'toast', message: 'Pipeline updated' },
+          ]}
+        />,
         buildWrapper([
           getBaseProviderWrapper(),
           getRouterWrapper(),
-          getServiceProviderWrapper({ request: vi.fn() }),
+          testContext.wrapper,
           getSnackbarProviderWrapper(),
           getIconProviderWrapper(),
         ])
       );
 
-      await waitFor(() => {
-        expect(queryClient).not.toBeNull();
-      });
-
-      const spy = vi.spyOn(queryClient!, 'invalidateQueries');
+      const spy = vi.spyOn(testContext.handles.queryClient, 'invalidateQueries');
 
       await user.click(screen.getByRole('button', { name: 'Run success operations' }));
 
@@ -224,7 +173,7 @@ describe('useSuccessOperations', () => {
         buildWrapper([
           getBaseProviderWrapper(),
           getRouterWrapper(),
-          getServiceProviderWrapper({ request: vi.fn() }),
+          createServiceProviderTestContext({ request: vi.fn() }).wrapper,
           getSnackbarProviderWrapper(),
           getIconProviderWrapper({
             icons: {
@@ -250,7 +199,7 @@ describe('useSuccessOperations', () => {
         buildWrapper([
           getBaseProviderWrapper(),
           getRouterWrapper(),
-          getServiceProviderWrapper({ request: vi.fn() }),
+          createServiceProviderTestContext({ request: vi.fn() }).wrapper,
           getSnackbarProviderWrapper(),
           getIconProviderWrapper({
             icons: {
@@ -282,7 +231,7 @@ describe('useSuccessOperations', () => {
         buildWrapper([
           getBaseProviderWrapper(),
           getRouterWrapper({ location: '/start' }),
-          getServiceProviderWrapper({ request: vi.fn() }),
+          createServiceProviderTestContext({ request: vi.fn() }).wrapper,
           getSnackbarProviderWrapper(),
           getIconProviderWrapper(),
         ])
@@ -311,7 +260,7 @@ describe('useSuccessOperations', () => {
         buildWrapper([
           getBaseProviderWrapper(),
           getRouterWrapper({ location: '/start' }),
-          getServiceProviderWrapper({ request: vi.fn() }),
+          createServiceProviderTestContext({ request: vi.fn() }).wrapper,
           getSnackbarProviderWrapper(),
           getIconProviderWrapper(),
         ])
@@ -340,7 +289,7 @@ describe('useSuccessOperations', () => {
         buildWrapper([
           getBaseProviderWrapper(),
           getRouterWrapper(),
-          getServiceProviderWrapper({ request: vi.fn() }),
+          createServiceProviderTestContext({ request: vi.fn() }).wrapper,
           getSnackbarProviderWrapper(),
           getIconProviderWrapper(),
         ])
