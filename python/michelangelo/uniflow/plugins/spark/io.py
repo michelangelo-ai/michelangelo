@@ -14,31 +14,44 @@ from michelangelo.uniflow.core.io_registry import IO
 
 
 def _ensure_s3a_config():
-    """Configure Spark session with S3A filesystem settings.
+    """Inject S3A filesystem settings into the active Spark session.
 
-    Initializes or retrieves a Spark session configured for S3A access, including
-    MinIO compatibility. Reads AWS credentials and endpoint from environment variables.
-
-    This function is called at module import time to ensure S3A configuration is
-    available before any I/O operations.
+    Called lazily on first I/O operation so that importing this module in a
+    non-Spark runtime (e.g. a Ray task container) does not start a SparkContext.
+    If no session exists yet, creates one. If one already exists (started by
+    SparkTask.pre_run), reconfigures it in place via the Hadoop configuration API
+    so the S3A credentials are available before any read/write call.
     """
-    SparkSession.builder.appName("SparkIO-S3A-Inject").config(
-        "spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem"
-    ).config(
-        "spark.hadoop.fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem"
-    ).config(
-        "spark.hadoop.fs.AbstractFileSystem.s3a.impl",
-        "org.apache.hadoop.fs.s3a.S3A",
-    ).config(
-        "spark.hadoop.fs.s3a.access.key", os.getenv("AWS_ACCESS_KEY_ID", "")
-    ).config(
-        "spark.hadoop.fs.s3a.secret.key", os.getenv("AWS_SECRET_ACCESS_KEY", "")
-    ).config("spark.hadoop.fs.s3a.endpoint", os.getenv("AWS_ENDPOINT_URL", "")).config(
-        "spark.hadoop.fs.s3a.path.style.access", "true"
-    ).getOrCreate()
-
-
-_ensure_s3a_config()
+    spark = SparkSession.getActiveSession()
+    if spark is None:
+        spark = (
+            SparkSession.builder.appName("SparkIO-S3A-Inject")
+            .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+            .config("spark.hadoop.fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+            .config(
+                "spark.hadoop.fs.AbstractFileSystem.s3a.impl",
+                "org.apache.hadoop.fs.s3a.S3A",
+            )
+            .config("spark.hadoop.fs.s3a.access.key", os.getenv("AWS_ACCESS_KEY_ID", ""))
+            .config(
+                "spark.hadoop.fs.s3a.secret.key", os.getenv("AWS_SECRET_ACCESS_KEY", "")
+            )
+            .config("spark.hadoop.fs.s3a.endpoint", os.getenv("AWS_ENDPOINT_URL", ""))
+            .config("spark.hadoop.fs.s3a.path.style.access", "true")
+            .getOrCreate()
+        )
+    else:
+        # Session already started by SparkTask.pre_run — inject S3A config at runtime.
+        hadoop_conf = spark.sparkContext._jsc.hadoopConfiguration()
+        hadoop_conf.set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+        hadoop_conf.set("fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+        hadoop_conf.set(
+            "fs.AbstractFileSystem.s3a.impl", "org.apache.hadoop.fs.s3a.S3A"
+        )
+        hadoop_conf.set("fs.s3a.access.key", os.getenv("AWS_ACCESS_KEY_ID", ""))
+        hadoop_conf.set("fs.s3a.secret.key", os.getenv("AWS_SECRET_ACCESS_KEY", ""))
+        hadoop_conf.set("fs.s3a.endpoint", os.getenv("AWS_ENDPOINT_URL", ""))
+        hadoop_conf.set("fs.s3a.path.style.access", "true")
 
 
 def read_data(url: str) -> DataFrame:
@@ -50,6 +63,7 @@ def read_data(url: str) -> DataFrame:
     Returns:
         The loaded Spark DataFrame.
     """
+    _ensure_s3a_config()
     spark = SparkSession.getActiveSession() or SparkSession.builder.getOrCreate()
     return spark.read.parquet(url)
 
@@ -99,6 +113,7 @@ class SparkIO(IO[DataFrame]):
             url: Target URL for writing. Tilde paths are expanded.
             data: The Spark DataFrame to write.
         """
+        _ensure_s3a_config()
         url = os.path.expanduser(url)
         data.write.parquet(url)
 
@@ -112,6 +127,7 @@ class SparkIO(IO[DataFrame]):
         Returns:
             The loaded Spark DataFrame.
         """
+        _ensure_s3a_config()
         url = os.path.expanduser(url)
         spark = SparkSession.getActiveSession()
         return spark.read.parquet(url)
