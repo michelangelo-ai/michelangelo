@@ -8,11 +8,11 @@ and supports Parquet format for data persistence.
 import os
 from typing import Any, Optional
 
-_s3a_configured = False  # module-level flag so _ensure_s3a_config() is idempotent
-
 from pyspark.sql import DataFrame, SparkSession
 
 from michelangelo.uniflow.core.io_registry import IO
+
+_s3a_configured = False  # module-level flag so _ensure_s3a_config() is idempotent
 
 
 def _ensure_s3a_config():
@@ -36,7 +36,7 @@ def _ensure_s3a_config():
             .config(
                 "spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem"
             )
-            # fs.s3.impl redirects legacy s3:// URIs to S3AFileSystem (needed in Hadoop 3.x)
+            # fs.s3.impl maps s3:// URIs to S3AFileSystem (needed in Hadoop 3.x)
             .config("spark.hadoop.fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
             .config(
                 "spark.hadoop.fs.AbstractFileSystem.s3a.impl",
