@@ -44,7 +44,7 @@ class TrainResult:
         worker_cpu=1,
         worker_gpu=0,
         worker_memory="4Gi",
-        worker_instances=1,
+        worker_instances=2,
     ),
 )
 def train(

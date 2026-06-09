@@ -34,6 +34,8 @@ def _ensure_s3a_config():
         spark = (
             SparkSession.builder.appName("SparkIO-S3A-Inject")
             .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+            # fs.s3.impl redirects legacy s3:// URIs to S3AFileSystem (needed in Hadoop 3.x)
+            .config("spark.hadoop.fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
             .config(
                 "spark.hadoop.fs.AbstractFileSystem.s3a.impl",
                 "org.apache.hadoop.fs.s3a.S3A",
@@ -54,6 +56,8 @@ def _ensure_s3a_config():
         # See GitHub issue #1286 for the proper fix via SparkTask.pre_run injection.
         hadoop_conf = spark.sparkContext._jsc.hadoopConfiguration()  # type: ignore[attr-defined]
         hadoop_conf.set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+        # fs.s3.impl redirects legacy s3:// URIs to S3AFileSystem (needed in Hadoop 3.x)
+        hadoop_conf.set("fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
         hadoop_conf.set(
             "fs.AbstractFileSystem.s3a.impl", "org.apache.hadoop.fs.s3a.S3A"
         )
