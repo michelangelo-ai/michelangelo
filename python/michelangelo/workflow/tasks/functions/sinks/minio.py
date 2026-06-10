@@ -29,9 +29,22 @@ class MinioSink(DataSink):
 
     The ``MinioStorageBackend`` is constructed by the caller (typically inside
     a ``@uniflow.task`` body) so that credentials are not serialised into the
-    config dataclass:
+    config dataclass — stateful objects cannot cross the UniFlow codec boundary.
 
-    .. code-block:: python
+    The uploaded object key is ``config.destination_key + "/data.<ext>"``, where
+    ``<ext>`` matches the configured ``DatasetFormat``.
+
+    Args:
+        config: Sink configuration carrying the destination key prefix and format.
+        storage_backend: Initialised ``MinioStorageBackend`` (or any
+            ``StorageBackend`` subclass) used for the upload.
+
+    Raises:
+        TypeError: If ``artifact.value`` is not a pandas DataFrame.
+        ValueError: If the configured ``DatasetFormat`` is not supported.
+        OSError: If the upload fails (propagated from the backend).
+
+    Example::
 
         from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
         from michelangelo.workflow.schema.sinks.minio import MinioSinkConfig
@@ -46,24 +59,11 @@ class MinioSink(DataSink):
             create_bucket_if_missing=True,
         )
         sink = MinioSink(
-            MinioSinkConfig("datasets/california/v1", format=DatasetFormat.PARQUET),
+            MinioSinkConfig("datasets/california/v1"),
             storage_backend=backend,
         )
         result = sink.write(variable)
         # result.uri == "s3://my-bucket/datasets/california/v1/data.parquet"
-
-    The uploaded object key is ``config.destination_key + "/data.<ext>"``, where
-    ``<ext>`` matches the configured ``DatasetFormat``.
-
-    Args:
-        config: Sink configuration carrying the destination key prefix and format.
-        storage_backend: Initialised ``MinioStorageBackend`` (or any
-            ``StorageBackend`` subclass) used for the upload.
-
-    Raises:
-        TypeError: If ``artifact.value`` is not a pandas DataFrame.
-        ValueError: If the configured ``DatasetFormat`` is not supported.
-        OSError: If the upload fails (propagated from the backend).
     """
 
     def __init__(
@@ -127,7 +127,5 @@ class MinioSink(DataSink):
                 os.unlink(tmp_path)
 
         num_records = len(df)
-        _logger.info(
-            "MinioSink: uploaded %d records to '%s'.", num_records, uri
-        )
+        _logger.info("MinioSink: uploaded %d records to '%s'.", num_records, uri)
         return SinkResult(uri=uri, num_records=num_records)

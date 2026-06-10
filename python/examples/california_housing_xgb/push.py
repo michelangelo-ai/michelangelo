@@ -123,15 +123,16 @@ def push_step(
         )
 
     # ── Storage backend (model + eval report) ─────────────────────────────────
-    # MINIO_* vars → MinIO (remote). Absent → local temp dir (development/CI).
-    # Separate from UF_STORAGE_URL (UniFlow's internal checkpoint storage).
+    # MINIO_* env vars → MinIO / S3-compatible (remote runs).
+    # Unset → local temp directory (development and CI runs).
+    # Separate from the UniFlow checkpoint store (configured via --storage-url).
     #
-    # To add another backend (S3, GCS, Azure Blob, …), subclass StorageBackend
-    # and implement upload() / download():
+    # To use a different backend (GCS, Azure Blob, HDFS, …), subclass
+    # StorageBackend and implement upload() / download():
     #
     #   from michelangelo.lib.artifact_manager.storage_backend import StorageBackend
     #
-    #   class S3StorageBackend(StorageBackend):
+    #   class GCSStorageBackend(StorageBackend):
     #       def upload(self, local_path: str, destination_key: str) -> str: ...
     #       def download(self, uri: str, local_path: str) -> None: ...
     endpoint = os.environ.get("MINIO_ENDPOINT")
@@ -156,7 +157,7 @@ def push_step(
             create_bucket_if_missing=True,
         )
         log.info(
-            "push_step: using MinioStorageBackend → endpoint=%s bucket=%s",
+            "push_step: using MinioStorageBackend (remote) → endpoint=%s bucket=%s",
             endpoint,
             bucket,
         )
@@ -165,12 +166,10 @@ def push_step(
             LocalStorageBackend,
         )
 
-        storage_backend = LocalStorageBackend(
-            tempfile.mkdtemp(prefix="california_push_")
-        )
+        _local_dir = tempfile.mkdtemp(prefix="california_push_")
+        storage_backend = LocalStorageBackend(_local_dir)
         log.info(
-            "push_step: using LocalStorageBackend → base_dir=%s",
-            storage_backend._base_dir,
+            "push_step: using LocalStorageBackend (local/CI — artifacts not persisted)"
         )
 
     # ── Registry client ───────────────────────────────────────────────────────

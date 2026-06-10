@@ -52,7 +52,7 @@ def _sink(
 
 
 class TestMinioSinkConfig(TestCase):
-    """Tests for MinioSinkConfig defaults and field types."""
+    """Tests for MinioSinkConfig defaults, field types, and validation."""
 
     def test_default_format_is_parquet(self):
         """Format defaults to PARQUET when not specified."""
@@ -68,6 +68,26 @@ class TestMinioSinkConfig(TestCase):
         """The destination_key field is stored as-is."""
         cfg = MinioSinkConfig(destination_key="my/prefix/v3")
         self.assertEqual(cfg.destination_key, "my/prefix/v3")
+
+    def test_raises_on_empty_destination_key(self):
+        """It raises ValueError when destination_key is empty."""
+        with self.assertRaises(ValueError):
+            MinioSinkConfig(destination_key="")
+
+    def test_raises_on_whitespace_destination_key(self):
+        """It raises ValueError when destination_key is whitespace only."""
+        with self.assertRaises(ValueError):
+            MinioSinkConfig(destination_key="   ")
+
+    def test_raises_on_leading_slash(self):
+        """It raises ValueError when destination_key starts with '/'."""
+        with self.assertRaises(ValueError):
+            MinioSinkConfig(destination_key="/datasets/v1")
+
+    def test_trailing_slash_is_stripped(self):
+        """Trailing slashes are stripped from destination_key."""
+        cfg = MinioSinkConfig(destination_key="datasets/v1/")
+        self.assertEqual(cfg.destination_key, "datasets/v1")
 
 
 # ---------------------------------------------------------------------------
