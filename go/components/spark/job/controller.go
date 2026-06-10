@@ -314,9 +314,18 @@ func (r *Reconciler) handleTermination(ctx context.Context, logger logr.Logger, 
 		Reason:     job.Spec.Termination.Reason,
 	})
 
+	// Persist conditions before the immutable Update(): the status subresource
+	// means a later Update() would overwrite them with the stored status.
+	if err := r.Status().Update(ctx, job); err != nil {
+		logger.Error(err, "failed to update SparkJob status",
+			"operation", "update_status",
+			"namespace", job.Namespace,
+			"name", job.Name)
+		res.RequeueAfter = requeueAfter
+		return res, fmt.Errorf("update spark job status for %q/%q: %w", job.Namespace, job.Name, err)
+	}
+
 	// Mark the SparkJob immutable so it cannot transition further once killed.
-	// Update() persists the annotation; Status().Update() persists the status
-	// conditions. Both are needed because the CRD has a status subresource.
 	utils.MarkImmutable(job)
 	if err := r.Update(ctx, job); err != nil {
 		logger.Error(err, "failed to update SparkJob",
@@ -325,14 +334,6 @@ func (r *Reconciler) handleTermination(ctx context.Context, logger logr.Logger, 
 			"name", job.Name)
 		res.RequeueAfter = requeueAfter
 		return res, fmt.Errorf("update spark job for %q/%q: %w", job.Namespace, job.Name, err)
-	}
-	if err := r.Status().Update(ctx, job); err != nil {
-		logger.Error(err, "failed to update SparkJob status",
-			"operation", "update_status",
-			"namespace", job.Namespace,
-			"name", job.Name)
-		res.RequeueAfter = requeueAfter
-		return res, fmt.Errorf("update spark job status for %q/%q: %w", job.Namespace, job.Name, err)
 	}
 
 	logger.Info("SparkJob terminated", "name", job.Name, "namespace", job.Namespace)

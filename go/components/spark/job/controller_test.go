@@ -189,15 +189,17 @@ func TestReconciler_Reconcile_Termination(t *testing.T) {
 				},
 			}
 
-			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sparkJob).Build()
-			fakeClientWrapper := testfakes.NewFakeClientWrapper(fakeClient)
+			// WithStatusSubresource makes a plain Update() behave like production
+			// (status not persisted), guarding the termination ordering regression.
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).
+				WithObjects(sparkJob).WithStatusSubresource(sparkJob).Build()
 
 			mockClient := jobmocks.NewMockClient(mockCtrl)
 			mockClient.EXPECT().DeleteJob(gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(tc.deleteJobErr)
 
 			r := &Reconciler{
-				Client:      fakeClientWrapper,
+				Client:      fakeClient,
 				sparkClient: mockClient,
 			}
 
