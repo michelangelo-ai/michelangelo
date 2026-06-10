@@ -25,6 +25,7 @@ Each step runs as an isolated, containerized task. Michelangelo handles data pas
 
 * Python 3.9+
 * [Poetry](https://python-poetry.org/) installed
+* Java 17 with `JAVA_HOME` set — required for the Spark preprocessing step. Java 21 is not compatible with PySpark 3.5 + Hadoop 3.3 (`getSubject is not supported` error). On macOS: `brew install openjdk@17` then `export JAVA_HOME=$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home`
 * For remote runs: Docker and access to a Kubernetes cluster (or use the [local sandbox](../../getting-started/sandbox-setup.md))
 * [Create a project](./project-management-for-ml-pipelines.md)
 
@@ -208,6 +209,7 @@ PYTHONPATH=. poetry run python examples/california_housing_xgb/california_housin
   --storage-url s3://my-bucket/workflows \
   --yes
 ```
+**Sandbox storage URL**: the `michelangelo` bucket is created automatically by `ma sandbox create`. For other environments replace with your own S3-compatible bucket URL.
 
 Remote runs execute workflow code in a Cadence/Temporal worker and task code in Kubernetes containers with full resource isolation. For detailed remote setup instructions including sandbox configuration, see [Running Uniflow pipelines](../ml-pipelines/running-uniflow.md).
 
@@ -333,3 +335,4 @@ See the full California Housing XGBoost example at [`python/examples/california_
 * **Out of memory during training?** Increase `head_memory` or `worker_memory` in your task config, or reduce your dataset size for local runs.
 * **Remote run fails to start?** Verify your Docker image exists and is accessible. Check that `--storage-url` points to a valid S3-compatible bucket.
 * **Workflow code errors with "not supported in Starlark"?** Move the unsupported syntax (imports, try-except, f-strings) into a task function. See [Workflow constraints](#workflow-constraints).
+* **Spark fails with `getSubject is not supported`?** Java 21 is incompatible with PySpark 3.5 + Hadoop 3.3. Switch to Java 17: `brew install openjdk@17` then `export JAVA_HOME=$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home`.
