@@ -1,10 +1,9 @@
 """Pusher step for the California Housing XGBoost workflow.
 
 Pushes all pipeline artifacts in a single Spark task: trained XGBoost model,
-evaluation report, and preprocessed train/validation datasets. Datasets are
-written to Hive tables via HiveSink (Spark-native, no toPandas() collection).
-Storage backends for model and eval report are selected at runtime from
-environment variables.
+evaluation report, and preprocessed train/validation datasets. All four artifacts
+share the same storage backend — MinIO / S3-compatible for remote runs,
+local filesystem for development and CI.
 """
 
 from __future__ import annotations
@@ -21,8 +20,6 @@ from michelangelo.workflow.schema.pusher import (
     PusherConfig,
     PusherPluginConfig,
 )
-from michelangelo.workflow.schema.sinks import HiveSinkConfig
-from michelangelo.workflow.tasks.functions.sinks import HiveSink
 from michelangelo.workflow.tasks.pusher import push
 from michelangelo.workflow.variables.types import (
     AssembledModel,
@@ -54,28 +51,31 @@ def push_step(
 ) -> list[PusherResult]:
     """Push all pipeline artifacts to storage and registry in a single Spark step.
 
-    Pushes four artifacts:
+    Pushes four artifacts using a single storage backend selected at runtime:
 
     - **model** — trained XGBoost checkpoint via ``ModelPusherPlugin``.
     - **eval_report** — training metrics via ``EvalReportPusherPlugin``.
     - **train_data** — preprocessed training dataset via ``DatasetPusherPlugin``
-      + ``HiveSink`` (Spark-native ``saveAsTable``, no ``toPandas()`` collection).
-    - **validation_data** — preprocessed validation dataset via ``DatasetPusherPlugin``
-      + ``HiveSink``.
+      + ``S3Sink`` (remote) or ``LocalFileSink`` (local/CI).
+    - **validation_data** — preprocessed validation dataset via
+      ``DatasetPusherPlugin`` + ``S3Sink`` (remote) or ``LocalFileSink`` (local/CI).
+
+    All four artifacts share the same storage backend:
+
+    - **Remote** (``MINIO_ENDPOINT`` set): ``MinioStorageBackend`` — model and
+      eval report are uploaded directly; datasets are serialised to Parquet and
+      uploaded via ``S3Sink``.
+    - **Local** (default): ``LocalStorageBackend`` — model and eval report are
+      copied to a temp directory; datasets are written as Parquet via
+      ``LocalFileSink``.
 
     All infrastructure (storage backend, registry client, sinks) is constructed
     inside the task body — required by the UniFlow codec boundary. Stateful
     objects cannot be serialised across the workflow→task boundary.
 
-    Hive database is configured via ``HIVE_DATABASE`` (default:
-    ``california_housing``). Storage backend for model / eval report:
-
-    - **Remote** (``MINIO_ENDPOINT`` set): ``MinioStorageBackend``.
-    - **Local** (default): ``LocalStorageBackend`` writing to a temp directory.
-
     Args:
         pr: Result of the ``preprocess`` task, holding preprocessed training
-            and validation ``DatasetVariable`` handles (Spark DataFrames).
+            and validation ``DatasetVariable`` handles.
         train_result: Result of the ``train`` task, holding the XGBoost
             checkpoint path and training metrics.
 
@@ -101,28 +101,18 @@ def push_step(
             if os.path.isfile(p)
         ]
     if not matches:
-        raise FileNotFoundError(f"No model checkpoint found under {train_result.path}")
+        raise FileNotFoundError(
+            f"No model checkpoint found under {train_result.path}"
+        )
     checkpoint_path = matches[0]
     log.info("Found model checkpoint: %s", checkpoint_path)
 
-    # ── Load datasets as Spark DataFrames ─────────────────────────────────────
-    # HiveSink requires pyspark.sql.DataFrame — load_spark_dataframe() reads
-    # the Parquet written by the preprocess task back into Spark.
-    pr.train_data.load_spark_dataframe()
-    pr.validation_data.load_spark_dataframe()
+    # ── Load datasets as pandas DataFrames ───────────────────────────────────
+    # Both S3Sink and LocalFileSink require pandas DataFrames.
+    pr.train_data.load_pandas_dataframe()
+    pr.validation_data.load_pandas_dataframe()
 
-    # ── Hive sinks ────────────────────────────────────────────────────────────
-    # Write preprocessed datasets to Hive tables via Spark saveAsTable.
-    # Database is configurable via HIVE_DATABASE (default: california_housing).
-    hive_db = os.environ.get("HIVE_DATABASE", "california_housing")
-    log.info("push_step: writing datasets to Hive database '%s'", hive_db)
-
-    def _dataset_config(table: str) -> DatasetPluginConfig:
-        return DatasetPluginConfig(
-            sinks=[HiveSink(HiveSinkConfig(database=hive_db, table=table))]
-        )
-
-    # ── Storage backend (model + eval report) ─────────────────────────────────
+    # ── Storage backend ───────────────────────────────────────────────────────
     # MINIO_* env vars → MinIO / S3-compatible (remote runs).
     # Unset → local temp directory (development and CI runs).
     # Separate from the UniFlow checkpoint store (configured via --storage-url).
@@ -146,6 +136,8 @@ def push_step(
                 "to use local storage."
             )
         from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
+        from michelangelo.workflow.schema.sinks.s3 import S3SinkConfig
+        from michelangelo.workflow.tasks.functions.sinks import S3Sink
 
         bucket = os.environ["MINIO_BUCKET"]
         storage_backend = MinioStorageBackend(
@@ -160,10 +152,17 @@ def push_step(
             "push_step: using MinioStorageBackend (remote) → %s",
             storage_backend.get_storage_location(),
         )
+
+        def _dataset_config(key: str) -> DatasetPluginConfig:
+            return DatasetPluginConfig(
+                sinks=[S3Sink(S3SinkConfig(key, storage_backend=storage_backend))]
+            )
     else:
         from michelangelo.lib.artifact_manager.storage_backend import (
             LocalStorageBackend,
         )
+        from michelangelo.workflow.schema.sinks.local import LocalFileSinkConfig
+        from michelangelo.workflow.tasks.functions.sinks import LocalFileSink
 
         _local_dir = tempfile.mkdtemp(prefix="california_push_")
         storage_backend = LocalStorageBackend(_local_dir)
@@ -171,6 +170,17 @@ def push_step(
             "push_step: using LocalStorageBackend (local/CI) → %s",
             storage_backend.get_storage_location(),
         )
+
+        def _dataset_config(key: str) -> DatasetPluginConfig:  # type: ignore[misc]
+            return DatasetPluginConfig(
+                sinks=[
+                    LocalFileSink(
+                        LocalFileSinkConfig(
+                            destination_path=os.path.join(_local_dir, key)
+                        )
+                    )
+                ]
+            )
 
     # ── Registry client ───────────────────────────────────────────────────────
     # REGISTRY_ENDPOINT → APIRegistryClient (remote); else InMemoryRegistryClient.
@@ -224,11 +234,13 @@ def push_step(
             ),
             PusherPluginConfig(
                 name="train_data",
-                dataset_plugin=_dataset_config("train_data"),
+                dataset_plugin=_dataset_config("datasets/california-housing/train"),
             ),
             PusherPluginConfig(
                 name="validation_data",
-                dataset_plugin=_dataset_config("validation_data"),
+                dataset_plugin=_dataset_config(
+                    "datasets/california-housing/validation"
+                ),
             ),
         ]
     )
