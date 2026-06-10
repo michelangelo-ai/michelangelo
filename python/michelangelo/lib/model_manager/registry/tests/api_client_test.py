@@ -11,8 +11,10 @@ import grpc
 from michelangelo.gen.api.v2 import model_pb2
 from michelangelo.lib.exceptions import ConfigurationError
 from michelangelo.lib.model_manager.registry.api_client import (
+    _YARPC_METADATA,
     METADATA_ANNOTATION_KEY,
     APIRegistryClient,
+    _YARPCInterceptor,
 )
 
 _STUB_PATH = "michelangelo.lib.model_manager.registry.api_client.ModelServiceStub"
@@ -333,3 +335,69 @@ class TestAPIRegistryClientGetModel(TestCase):
         ):
             pass
         mock_channel.close.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# _YARPCInterceptor
+# ---------------------------------------------------------------------------
+
+
+class TestYARPCInterceptor(TestCase):
+    """Tests for _YARPCInterceptor metadata injection."""
+
+    def _make_details(self, metadata=None):
+        details = grpc.ClientCallDetails()
+        details.metadata = metadata or []
+        details.method = "/svc/Method"
+        details.timeout = None
+        details.credentials = None
+        return details
+
+    def test_yarpc_headers_appended_to_metadata(self):
+        """Interceptor appends all three YARPC headers to call metadata."""
+        interceptor = _YARPCInterceptor()
+        captured = {}
+
+        def continuation(details, request):
+            captured["metadata"] = dict(details.metadata)
+            return MagicMock()
+
+        interceptor.intercept_unary_unary(continuation, self._make_details(), object())
+
+        for key, value in _YARPC_METADATA:
+            self.assertEqual(captured["metadata"][key], value)
+
+    def test_existing_metadata_preserved(self):
+        """Interceptor keeps caller-supplied metadata alongside YARPC headers."""
+        interceptor = _YARPCInterceptor()
+        captured = {}
+
+        def continuation(details, request):
+            captured["metadata"] = list(details.metadata)
+            return MagicMock()
+
+        existing = [("x-custom", "val")]
+        interceptor.intercept_unary_unary(
+            continuation, self._make_details(metadata=existing), object()
+        )
+
+        keys = [k for k, _ in captured["metadata"]]
+        self.assertIn("x-custom", keys)
+        self.assertIn("rpc-caller", keys)
+
+    def test_none_metadata_treated_as_empty(self):
+        """Interceptor handles None metadata without error."""
+        interceptor = _YARPCInterceptor()
+        called = []
+
+        def continuation(details, request):
+            called.append(list(details.metadata))
+            return MagicMock()
+
+        details = self._make_details(metadata=None)
+        details.metadata = None
+        interceptor.intercept_unary_unary(continuation, details, object())
+
+        yarpc_keys = {k for k, _ in _YARPC_METADATA}
+        result_keys = {k for k, _ in called[0]}
+        self.assertTrue(yarpc_keys.issubset(result_keys))

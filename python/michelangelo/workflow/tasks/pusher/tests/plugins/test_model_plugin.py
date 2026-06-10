@@ -624,11 +624,13 @@ class TestModelPusherPluginStorageKey(TestCase):
         self.assertTrue(dep_key.endswith("/serving_model.zip"), dep_key)
 
     def test_raw_key_with_trailing_slash_path_uses_name(self):
-        """A path with a trailing slash still produces a non-empty filename in the key."""
+        """Trailing-slash path produces a non-empty filename segment in the key."""
         backend = _mock_backend()
         ModelPusherPlugin(
             config=ModelPluginConfig(model_name="m"),
-            artifact=AssembledModel(raw_model=ModelArtifact(path="/tmp/checkpoints/run1/")),
+            artifact=AssembledModel(
+                raw_model=ModelArtifact(path="/tmp/checkpoints/run1/")
+            ),
             storage_backend=backend,
             registry_client=_mock_registry(),
         ).execute()

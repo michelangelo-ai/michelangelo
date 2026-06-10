@@ -82,11 +82,6 @@ class S3SinkConfig:
                 "Use a relative path such as 'datasets/california-housing/v1'."
             )
         self.destination_key = self.destination_key.rstrip("/")
-        if not self.destination_key:
-            raise ValueError(
-                "destination_key must not consist entirely of '/' characters. "
-                "Use a relative path such as 'datasets/california-housing/v1'."
-            )
         if self.storage_backend is None:
             raise ValueError(
                 "storage_backend is required. Pass an initialised StorageBackend "

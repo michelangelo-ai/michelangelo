@@ -75,10 +75,13 @@ class _YARPCInterceptor(grpc.UnaryUnaryClientInterceptor):
         new_details.method = client_call_details.method
         new_details.timeout = client_call_details.timeout
         new_details.credentials = client_call_details.credentials
-        new_details.wait_for_ready = getattr(client_call_details, "wait_for_ready", None)
+        new_details.wait_for_ready = getattr(
+            client_call_details, "wait_for_ready", None
+        )
         new_details.compression = getattr(client_call_details, "compression", None)
         new_details.metadata = existing + list(_YARPC_METADATA)
         return continuation(new_details, request)
+
 
 METADATA_ANNOTATION_KEY = "michelangelo.io/metadata"
 """Annotation key under which free-form metadata is JSON-serialised
