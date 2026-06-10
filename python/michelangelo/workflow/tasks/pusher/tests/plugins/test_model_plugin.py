@@ -587,6 +587,55 @@ class TestModelPusherPluginPushId(TestCase):
         self.assertNotIn("push_id", metadata)
         self.assertNotIn("michelangelo.push_id", metadata)
 
+
+# ---------------------------------------------------------------------------
+# Storage key — artifact filename in raw / deployable key
+# ---------------------------------------------------------------------------
+
+
+class TestModelPusherPluginStorageKey(TestCase):
+    """Tests for artifact filename inclusion in S3 storage keys."""
+
+    def test_raw_key_includes_artifact_filename(self):
+        """Raw upload key ends with the artifact's filename."""
+        backend = _mock_backend()
+        ModelPusherPlugin(
+            config=ModelPluginConfig(model_name="m"),
+            artifact=AssembledModel(raw_model=ModelArtifact(path="/tmp/model.ubj")),
+            storage_backend=backend,
+            registry_client=_mock_registry(),
+        ).execute()
+        raw_key = backend.upload.call_args_list[0][0][1]
+        self.assertTrue(raw_key.endswith("/model.ubj"), raw_key)
+
+    def test_deployable_key_includes_artifact_filename(self):
+        """Deployable upload key ends with the artifact's filename."""
+        backend = _mock_backend()
+        ModelPusherPlugin(
+            config=ModelPluginConfig(model_name="m"),
+            artifact=AssembledModel(
+                raw_model=ModelArtifact(path="/tmp/model.ubj"),
+                deployable_model=ModelArtifact(path="/tmp/serving_model.zip"),
+            ),
+            storage_backend=backend,
+            registry_client=_mock_registry(),
+        ).execute()
+        dep_key = backend.upload.call_args_list[1][0][1]
+        self.assertTrue(dep_key.endswith("/serving_model.zip"), dep_key)
+
+    def test_raw_key_with_trailing_slash_path_uses_name(self):
+        """A path with a trailing slash still produces a non-empty filename in the key."""
+        backend = _mock_backend()
+        ModelPusherPlugin(
+            config=ModelPluginConfig(model_name="m"),
+            artifact=AssembledModel(raw_model=ModelArtifact(path="/tmp/checkpoints/run1/")),
+            storage_backend=backend,
+            registry_client=_mock_registry(),
+        ).execute()
+        raw_key = backend.upload.call_args_list[0][0][1]
+        # Path("/tmp/checkpoints/run1/").name == "run1" — not empty
+        self.assertTrue(raw_key.endswith("/run1"), raw_key)
+
     def test_push_id_unique_across_calls(self):
         """Consecutive execute() calls produce different push_ids."""
         r1 = _plugin(model_name="m", backend=_mock_backend()).execute()

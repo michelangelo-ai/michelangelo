@@ -93,6 +93,11 @@ class TestS3SinkConfig(TestCase):
         with self.assertRaises(ValueError):
             S3SinkConfig("/datasets/v1", storage_backend=_mock_backend())
 
+    def test_raises_when_key_is_only_slashes(self):
+        """It raises ValueError when destination_key consists entirely of slashes."""
+        with self.assertRaises(ValueError):
+            S3SinkConfig("///", storage_backend=_mock_backend())
+
     def test_trailing_slash_is_stripped(self):
         """Trailing slashes are stripped from destination_key."""
         cfg = S3SinkConfig("datasets/v1/", storage_backend=_mock_backend())
