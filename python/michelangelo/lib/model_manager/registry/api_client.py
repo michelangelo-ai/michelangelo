@@ -53,6 +53,33 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
+_YARPC_METADATA = (
+    ("rpc-caller", "michelangelo-python-client"),
+    ("rpc-service", "ma-apiserver"),
+    ("rpc-encoding", "proto"),
+)
+
+
+class _YARPCInterceptor(grpc.UnaryUnaryClientInterceptor):
+    """Inject YARPC transport headers into every unary gRPC call.
+
+    The Michelangelo apiserver uses YARPC, which requires ``rpc-caller``,
+    ``rpc-service``, and ``rpc-encoding`` metadata on every request.
+    Plain gRPC clients omit these, causing the server to reject the call with
+    "missing service name, caller name, encoding".
+    """
+
+    def intercept_unary_unary(self, continuation, client_call_details, request):
+        existing = list(client_call_details.metadata or [])
+        new_details = grpc.ClientCallDetails()
+        new_details.method = client_call_details.method
+        new_details.timeout = client_call_details.timeout
+        new_details.credentials = client_call_details.credentials
+        new_details.wait_for_ready = getattr(client_call_details, "wait_for_ready", None)
+        new_details.compression = getattr(client_call_details, "compression", None)
+        new_details.metadata = existing + list(_YARPC_METADATA)
+        return continuation(new_details, request)
+
 METADATA_ANNOTATION_KEY = "michelangelo.io/metadata"
 """Annotation key under which free-form metadata is JSON-serialised
 in the ModelService API."""
@@ -159,6 +186,7 @@ class APIRegistryClient(ModelRegistryClient):
         else:
             credentials = grpc.ssl_channel_credentials()
             channel = grpc.secure_channel(endpoint, credentials)
+        channel = grpc.intercept_channel(channel, _YARPCInterceptor())
         self._channel = channel
         self._stub = ModelServiceStub(channel)
 

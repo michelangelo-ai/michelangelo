@@ -17,7 +17,7 @@ feature_prep  →  preprocess  →  train  →  push_step
 | `feature_prep` | `feature_prep.py` | Ray | Load dataset, train/test split, Ray Datasets |
 | `preprocess` | `preprocess.py` | Spark | Cast columns to float |
 | `train` | `train.py` | Ray | Distributed XGBoost training |
-| `push_step` | `push.py` | Spark | Push model + eval report to storage/registry; write datasets to Hive tables |
+| `push_step` | `push.py` | Spark | Push model, eval report, and preprocessed datasets to storage/registry |
 
 The workflow is orchestrated in `california_housing_xgb.py`, which imports each step from its own module.
 
@@ -96,12 +96,10 @@ df: DataFrame = validation_dv.value             # now a real Spark DataFrame
 |---|---|---|
 | `model` | `ModelPusherPlugin` | `StorageBackend` (MinIO or local) + registry |
 | `eval_report` | `EvalReportPusherPlugin` | `StorageBackend` (MinIO or local) + registry |
-| `train_data` | `DatasetPusherPlugin` | `HiveSink` → Hive table (`<HIVE_DATABASE>.train_data`) |
-| `validation_data` | `DatasetPusherPlugin` | `HiveSink` → Hive table (`<HIVE_DATABASE>.validation_data`) |
+| `train_data` | `DatasetPusherPlugin` | `S3Sink` → MinIO (remote) / `LocalFileSink` → temp dir (local/CI) |
+| `validation_data` | `DatasetPusherPlugin` | `S3Sink` → MinIO (remote) / `LocalFileSink` → temp dir (local/CI) |
 
-Datasets are loaded as Spark DataFrames and written to Hive via `saveAsTable` —
-no `toPandas()` collection. The Hive database is set by `HIVE_DATABASE`
-(default: `california_housing`).
+Datasets are loaded as pandas DataFrames and serialized to Parquet before upload.
 
 The model and eval report storage backend is selected at runtime:
 `MINIO_ENDPOINT` set → `MinioStorageBackend` (remote);
@@ -131,12 +129,12 @@ class GCSStorageBackend(StorageBackend):
 
 ```bash
 cd michelangelo-ai/michelangelo/python
+JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home \
 PYTHONPATH=. poetry run python examples/california_housing_xgb/california_housing_xgb.py
 ```
 
-Without `MINIO_ENDPOINT`, `push_step` uses `LocalStorageBackend` for the model
-and eval report (written to a temp directory). Datasets are written to the local
-Hive metastore under database `california_housing`.
+Without `MINIO_ENDPOINT`, `push_step` uses `LocalStorageBackend` for all artifacts
+and writes datasets as Parquet to a temporary directory (no external services required).
 
 ## Remote Run
 
@@ -147,6 +145,7 @@ affect the local launcher and do not propagate.
 
 ```bash
 cd michelangelo-ai/michelangelo/python
+JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home \
 PYTHONPATH=. poetry run python examples/california_housing_xgb/california_housing_xgb.py \
   remote-run \
   --image docker.io/library/my-workflow:latest \
@@ -156,40 +155,65 @@ PYTHONPATH=. poetry run python examples/california_housing_xgb/california_housin
   --environ MINIO_ACCESS_KEY=your-access-key \
   --environ MINIO_SECRET_KEY=your-secret-key \
   --environ MINIO_SECURE=false \
-  --environ HIVE_DATABASE=california_housing \
-  --environ REGISTRY_ENDPOINT=your-registry-host:port \
+  --environ REGISTRY_ENDPOINT=your-apiserver-host:15566 \
+  --environ REGISTRY_INSECURE=true \
   --yes
+```
+
+### k3d sandbox
+
+```bash
+cd michelangelo-ai/michelangelo/python
+JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home \
+PYTHONPATH=. poetry run python examples/california_housing_xgb/california_housing_xgb.py \
+  remote-run \
+  --image docker.io/library/my-workflow:latest \
+  --storage-url s3://michelangelo/workflows \
+  --environ MINIO_ENDPOINT=minio:9091 \
+  --environ MINIO_BUCKET=michelangelo \
+  --environ MINIO_ACCESS_KEY=minioadmin \
+  --environ MINIO_SECRET_KEY=minioadmin \
+  --environ MINIO_SECURE=false \
+  --environ REGISTRY_ENDPOINT=michelangelo-apiserver:15566 \
+  --environ REGISTRY_INSECURE=true \
+  --yes
+```
+
+Before running, rebuild and import the image into the cluster:
+
+```bash
+docker build -t my-workflow:latest -f examples/Dockerfile .
+k3d image import my-workflow:latest -c michelangelo-sandbox
+kubectl delete cachedoutputs --all   # clear stale cached task outputs
 ```
 
 ### Environment variables
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `MINIO_ENDPOINT` | No | — | MinIO / S3-compatible endpoint. Unset → local storage |
-| `MINIO_BUCKET` | If `MINIO_ENDPOINT` set | — | Target bucket |
-| `MINIO_ACCESS_KEY` | If `MINIO_ENDPOINT` set | — | Access key |
-| `MINIO_SECRET_KEY` | If `MINIO_ENDPOINT` set | — | Secret key |
+| `MINIO_ENDPOINT` | No | — | MinIO / S3-compatible endpoint (no scheme). Unset → local storage |
+| `MINIO_BUCKET` | If `MINIO_ENDPOINT` set | — | Target bucket name |
+| `MINIO_ACCESS_KEY` | If `MINIO_ENDPOINT` set | — | Access key ID |
+| `MINIO_SECRET_KEY` | If `MINIO_ENDPOINT` set | — | Secret access key |
 | `MINIO_SECURE` | No | `true` | Set `false` for plaintext (non-TLS) endpoints |
-| `HIVE_DATABASE` | No | `california_housing` | Hive database for dataset tables |
-| `REGISTRY_ENDPOINT` | No | — | Model registry endpoint. Unset → in-memory (not persisted) |
-| `REGISTRY_NAMESPACE` | No | `""` | Model registry namespace |
+| `REGISTRY_ENDPOINT` | No | — | Model registry gRPC endpoint (`host:port`). Unset → in-memory only |
+| `REGISTRY_INSECURE` | No | `true` | Set `false` to enable TLS for the registry connection |
+| `REGISTRY_NAMESPACE` | No | `default` | Model registry namespace |
 
-With `MINIO_ENDPOINT` set, `push_step` uploads the model checkpoint to your bucket:
-
-```
-s3://your-bucket/models/california-housing-xgb/<version>/
-```
-
-Datasets are written to Hive tables regardless of storage backend:
+With `MINIO_ENDPOINT` set, `push_step` uploads all artifacts to MinIO:
 
 ```
-california_housing.train_data
-california_housing.validation_data
+s3://your-bucket/models/california-housing-xgb/<push-id>/raw   ← model checkpoint
+s3://your-bucket/datasets/california-housing/<run-id>/train/data.parquet
+s3://your-bucket/datasets/california-housing/<run-id>/validation/data.parquet
 ```
 
-> **Sandbox tip:** The k3d sandbox ships with a local MinIO instance. Use the
-> NodePort exposed by `ma sandbox start` as `MINIO_ENDPOINT`. Check your port
-> mapping with `kubectl get svc -n minio` for the exact address.
+Each run writes to a unique path derived from the Ray training run ID — concurrent
+runs never overwrite each other.
+
+> **Sandbox MinIO NodePort:** MinIO is exposed at `localhost:30007` from the host
+> (for browsing via the MinIO console at `localhost:30008`). Tasks inside the cluster
+> reach it at `minio:9091` (the in-cluster service address).
 
 ## Debugging
 
@@ -219,10 +243,8 @@ INFO     preprocess    Processed Train Spark schema:
 INFO     train         scaling_config: ScalingConfig(num_workers=1, ...)
 INFO     train         run_config: RunConfig(storage_path='s3://.../ray_results')
 INFO     train         TrainResult(path='.../ray_results/...', metrics={'validation-rmse': 0.876})
-INFO     push_step     push_step: using LocalStorageBackend (local/CI — artifacts not persisted)
-INFO     push_step     push_step: writing datasets to Hive database 'california_housing'
-INFO     push_step     HiveSink: wrote 15480 records to 'hive://california_housing.train_data'
-INFO     push_step     HiveSink: wrote 5160 records to 'hive://california_housing.validation_data'
+INFO     push_step     push_step: using LocalStorageBackend (local/CI) → /tmp/california_push_...
+INFO     push_step     Found model checkpoint: /tmp/checkpoint_.../model.ubj
 INFO     push_step     push model (model_plugin): success=True value=... error=None
 INFO     push_step     push eval_report (eval_report_plugin): success=True value=... error=None
 INFO     push_step     push train_data (dataset_plugin): success=True value=... error=None

@@ -86,25 +86,57 @@ def push_step(
     import os
     import tempfile
 
+    endpoint = os.environ.get("MINIO_ENDPOINT")
+
     # ── Locate XGBoost checkpoint ────────────────────────────────────────────
-    checkpoint_glob = os.path.join(train_result.path, "**", "model.ubj")
-    matches = glob.glob(checkpoint_glob, recursive=True)
-    if not matches:
-        # model.ubj is the default XGBoost binary checkpoint written by
-        # XGBoostTrainer. Fall back to any non-directory file under the
-        # checkpoint dir if Ray writes to a different name in future versions.
-        matches = [
-            p
-            for p in glob.glob(
-                os.path.join(train_result.path, "**", "*"), recursive=True
-            )
-            if os.path.isfile(p)
-        ]
-    if not matches:
-        raise FileNotFoundError(
-            f"No model checkpoint found under {train_result.path}"
+    # In a remote run, train_result.path is an S3 path (e.g.
+    # "michelangelo/workflows/ray_results/ray_train_run-...") and glob.glob
+    # cannot traverse S3. Use the MinIO client to list and download model.ubj.
+    # In a local run, train_result.path is a local filesystem path.
+    raw_path = train_result.path
+    if endpoint:
+        from minio import Minio
+
+        _mc = Minio(
+            endpoint,
+            access_key=os.environ.get("MINIO_ACCESS_KEY", ""),
+            secret_key=os.environ.get("MINIO_SECRET_KEY", ""),
+            secure=os.environ.get("MINIO_SECURE", "true").lower() != "false",
         )
-    checkpoint_path = matches[0]
+        # Normalize: strip s3:// scheme if present
+        s3_path = raw_path.removeprefix("s3://")
+        bucket, _, prefix = s3_path.partition("/")
+
+        objects = list(_mc.list_objects(bucket, prefix=prefix, recursive=True))
+        ubj_objects = [o for o in objects if o.object_name.endswith("model.ubj")]
+        if not ubj_objects:
+            ubj_objects = [o for o in objects if not o.is_dir]
+        if not ubj_objects:
+            raise FileNotFoundError(
+                f"No model checkpoint found in s3://{bucket}/{prefix}"
+            )
+        tmp_ckpt_dir = tempfile.mkdtemp(prefix="checkpoint_")
+        checkpoint_path = os.path.join(tmp_ckpt_dir, "model.ubj")
+        _mc.fget_object(bucket, ubj_objects[0].object_name, checkpoint_path)
+    else:
+        checkpoint_glob = os.path.join(raw_path, "**", "model.ubj")
+        matches = glob.glob(checkpoint_glob, recursive=True)
+        if not matches:
+            # model.ubj is the default XGBoost binary checkpoint written by
+            # XGBoostTrainer. Fall back to any non-directory file under the
+            # checkpoint dir if Ray writes to a different name in future versions.
+            matches = [
+                p
+                for p in glob.glob(
+                    os.path.join(raw_path, "**", "*"), recursive=True
+                )
+                if os.path.isfile(p)
+            ]
+        if not matches:
+            raise FileNotFoundError(
+                f"No model checkpoint found under {raw_path}"
+            )
+        checkpoint_path = matches[0]
     log.info("Found model checkpoint: %s", checkpoint_path)
 
     # ── Per-run path prefix ───────────────────────────────────────────────────
@@ -133,7 +165,6 @@ def push_step(
     #   class GCSStorageBackend(StorageBackend):
     #       def upload(self, local_path: str, destination_key: str) -> str: ...
     #       def download(self, uri: str, local_path: str) -> None: ...
-    endpoint = os.environ.get("MINIO_ENDPOINT")
     if endpoint:
         _required_minio = ("MINIO_BUCKET", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY")
         missing = [k for k in _required_minio if k not in os.environ]
@@ -200,7 +231,7 @@ def push_step(
 
         registry_client = APIRegistryClient(
             endpoint=registry_endpoint,
-            namespace=os.environ.get("REGISTRY_NAMESPACE", ""),
+            namespace=os.environ.get("REGISTRY_NAMESPACE", "default"),
             insecure=os.environ.get("REGISTRY_INSECURE", "true").lower() != "false",
         )
         log.info("push_step: using APIRegistryClient at %s", registry_endpoint)
