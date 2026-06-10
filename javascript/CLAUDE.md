@@ -4,11 +4,11 @@
 
 Michelangelo Studio is a **pluggable ML UI**. The `javascript/` directory contains two packages and an application:
 
-| Directory       | Name                      | Purpose                                              |
-| --------------- | ------------------------- | ---------------------------------------------------- |
-| `packages/core` | `@uber/michelangelo-core` | UI rendering engine — the primary library            |
-| `packages/rpc`  | `@michelangelo/rpc`       | Optional ConnectRPC/gRPC-Web client                  |
-| `app/`          | `@michelangelo/app`       | Reference application — served via Docker/Kubernetes |
+| Directory       | Name                    | Purpose                                              |
+| --------------- | ----------------------- | ---------------------------------------------------- |
+| `packages/core` | `@michelangelo-ai/core` | UI rendering engine — the primary library            |
+| `packages/rpc`  | `@michelangelo/rpc`     | Optional ConnectRPC/gRPC-Web client                  |
+| `app/`          | `@michelangelo/app`     | Reference application — served via Docker/Kubernetes |
 
 ### Component-driven first, configuration-driven on top
 
@@ -55,7 +55,14 @@ Run from the `javascript/` directory:
 
 **Test output:** vitest is configured with `silent: 'passed-only'` — passing tests produce no output; only failures are printed. Run commands as-is with no `--reporter` flag. Adding `--reporter=verbose` defeats this and floods output.
 
----
+## CI/CD Checks
+
+These are independent — run them in parallel before pushing:
+
+- `yarn lint --quiet`
+- `yarn typecheck`
+- `yarn format --write`
+- `yarn test`
 
 ## Skills
 

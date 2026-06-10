@@ -30,7 +30,7 @@ export const TRIGGER_ENTITY_CONFIG: PhaseEntityConfig = {
           message: 'Only running or paused trigger runs can be killed',
         },
       ],
-      action: {
+      operation: {
         type: 'mutation',
         mutation: { mutationName: 'UpdateTriggerRun' },
         middleware: {

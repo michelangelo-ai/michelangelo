@@ -1,7 +1,9 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { useQueryClient } from '@tanstack/react-query';
+import { render, renderHook, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { UseSuccessOperationsTestHarness } from '#core/components/actions/__fixtures__/use-success-operations-test-harness';
+import { useSuccessOperations } from '#core/components/actions/use-success-operations';
 import { interpolate } from '#core/interpolation/interpolate';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
@@ -9,6 +11,8 @@ import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wr
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { createServiceProviderTestContext } from '#core/test/wrappers/get-service-provider-wrapper';
 import { getSnackbarProviderWrapper } from '#core/test/wrappers/get-snackbar-provider-wrapper';
+
+import type { SuccessOperation } from '#core/components/actions/types';
 
 describe('useSuccessOperations', () => {
   describe('invalidate', () => {
@@ -164,6 +168,7 @@ describe('useSuccessOperations', () => {
     it('delayMs defers the invalidate by the given number of ms', () => {
       vi.useFakeTimers();
       try {
+        const testContext = createServiceProviderTestContext({ request: vi.fn() });
         const operations: SuccessOperation[] = [
           { type: 'invalidate', targets: ['ListPipelineRun'], delayMs: 2000 },
         ];
@@ -175,7 +180,7 @@ describe('useSuccessOperations', () => {
           buildWrapper([
             getBaseProviderWrapper(),
             getRouterWrapper(),
-            getServiceProviderWrapper({ request: vi.fn() }),
+            testContext.wrapper,
             getSnackbarProviderWrapper(),
             getIconProviderWrapper(),
           ])
