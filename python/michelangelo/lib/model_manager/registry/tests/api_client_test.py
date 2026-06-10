@@ -4,24 +4,19 @@ from __future__ import annotations
 
 import json
 from unittest import TestCase
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import grpc
 
 from michelangelo.gen.api.v2 import model_pb2
-from michelangelo.lib.exceptions import ConfigurationError
 from michelangelo.lib.model_manager.registry.api_client import (
-    _YARPC_METADATA,
     METADATA_ANNOTATION_KEY,
     APIRegistryClient,
-    _YARPCInterceptor,
 )
-
-_STUB_PATH = "michelangelo.lib.model_manager.registry.api_client.ModelServiceStub"
 
 
 class _RpcError(grpc.RpcError):
-    """Minimal RpcError subclass for tests — grpc.RpcError itself is not raiseable."""
+    """Minimal RpcError subclass — grpc.RpcError itself is not raiseable."""
 
     def __init__(self, status_code: grpc.StatusCode) -> None:
         self._code = status_code
@@ -30,17 +25,11 @@ class _RpcError(grpc.RpcError):
         return self._code
 
 
-def _kwargs(**overrides) -> dict:
-    defaults = {"endpoint": "localhost:50051", "namespace": "test-ns"}
-    defaults.update(overrides)
-    return defaults
-
-
-def _make_response_model(
+def _model(
     name: str = "my-model",
-    namespace: str = "test-ns",
+    namespace: str = "default",
     revision_id: int = 1,
-    artifact_uri: str = "s3://bucket/raw",
+    artifact_uri: str = "s3://bucket/raw/model.ubj",
     deployable_uri: str | None = None,
 ) -> model_pb2.Model:
     """Build a minimal Model proto that mimics a service response."""
@@ -54,350 +43,216 @@ def _make_response_model(
     return m
 
 
-def _make_stub(
-    response_model: model_pb2.Model | None = None,
-    get_model: model_pb2.Model | None = None,
-    update_model: model_pb2.Model | None = None,
+def _mock_svc(
+    create_return: model_pb2.Model | None = None,
+    get_return: model_pb2.Model | None = None,
+    update_return: model_pb2.Model | None = None,
 ) -> MagicMock:
-    stub = MagicMock()
-    resp_model = response_model or _make_response_model()
-    create_resp = MagicMock()
-    create_resp.model = resp_model
-    stub.CreateModel.return_value = create_resp
-
-    get_resp = MagicMock()
-    get_resp.model = get_model or _make_response_model()
-    stub.GetModel.return_value = get_resp
-
-    update_resp = MagicMock()
-    update_resp.model = update_model or _make_response_model()
-    stub.UpdateModel.return_value = update_resp
-    return stub
+    """Return a mock ModelService with sensible defaults."""
+    svc = MagicMock()
+    svc.create_model.return_value = create_return or _model()
+    svc.get_model.return_value = get_return or _model()
+    svc.update_model.return_value = update_return or _model()
+    return svc
 
 
-class TestAPIRegistryClientValidation(TestCase):
-    """Tests for APIRegistryClient constructor validation and defaults."""
+def _client(svc=None, namespace="default") -> APIRegistryClient:
+    return APIRegistryClient(svc=svc or _mock_svc(), namespace=namespace)
 
-    def test_raises_on_empty_endpoint(self):
-        """It raises ConfigurationError when endpoint is empty."""
-        with self.assertRaises(ConfigurationError), patch(_STUB_PATH):
-            APIRegistryClient(endpoint="")
 
-    def test_defaults(self):
-        """It defaults to insecure=True, empty namespace, 30s timeout."""
-        stub = _make_stub()
-        with (
-            patch(_STUB_PATH, return_value=stub),
-            patch("grpc.insecure_channel", return_value=MagicMock()),
-        ):
-            client = APIRegistryClient(endpoint="localhost:50051")
-        self.assertEqual(client._namespace, "")
-        self.assertEqual(client._timeout_seconds, 30)
+# ---------------------------------------------------------------------------
+# Constructor
+# ---------------------------------------------------------------------------
+
+
+class TestAPIRegistryClientConstructor(TestCase):
+    """Tests for APIRegistryClient.__init__()."""
+
+    def test_accepts_explicit_svc(self):
+        """It stores the supplied ModelService and does not call APIClient."""
+        svc = _mock_svc()
+        client = APIRegistryClient(svc=svc, namespace="ns")
+        self.assertIs(client._svc, svc)
+        self.assertEqual(client._namespace, "ns")
+
+    def test_default_namespace_is_default(self):
+        """Namespace defaults to 'default' when not supplied."""
+        client = APIRegistryClient(svc=_mock_svc())
+        self.assertEqual(client._namespace, "default")
+
+    def test_singleton_raises_when_model_service_not_initialised(self):
+        """It raises RuntimeError when APIClient.ModelService is None."""
+        import unittest.mock as mock
+
+        with mock.patch("michelangelo.api.v2.APIClient") as mock_api:
+            mock_api.ModelService = None
+            with self.assertRaises(RuntimeError) as ctx:
+                APIRegistryClient()
+            self.assertIn("MA_API_SERVER", str(ctx.exception))
+
+
+# ---------------------------------------------------------------------------
+# register_model — happy path
+# ---------------------------------------------------------------------------
 
 
 class TestAPIRegistryClientRegisterModel(TestCase):
-    """Tests for APIRegistryClient.register_model()."""
+    """Tests for APIRegistryClient.register_model() happy path."""
 
     def test_calls_create_model_and_returns_registered_model(self):
-        """It calls CreateModel and maps the response to RegisteredModel."""
-        stub = _make_stub(_make_response_model("my-model", revision_id=1))
-        with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(**_kwargs())
-            reg = client.register_model("my-model", "s3://bucket/raw")
-        stub.CreateModel.assert_called_once()
+        """It calls create_model() and maps the response to RegisteredModel."""
+        svc = _mock_svc(_model("my-model", revision_id=1))
+        reg = _client(svc).register_model("my-model", "s3://bucket/raw/model.ubj")
+        svc.create_model.assert_called_once()
         self.assertEqual(reg.name, "my-model")
         self.assertEqual(reg.version, "1")
-        self.assertEqual(reg.artifact_uri, "s3://bucket/raw")
+        self.assertEqual(reg.artifact_uri, "s3://bucket/raw/model.ubj")
 
     def test_registry_uri_format(self):
-        """It builds registry_uri as 'models:/{namespace}/{name}/{version}'."""
-        stub = _make_stub(_make_response_model("clf", namespace="ns", revision_id=3))
-        with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(**_kwargs(namespace="ns"))
-            reg = client.register_model("clf", "s3://b/raw")
+        """registry_uri uses models:/{namespace}/{name}/{version} format."""
+        svc = _mock_svc(_model("clf", namespace="ns", revision_id=3))
+        reg = _client(svc, namespace="ns").register_model("clf", "s3://b/raw")
         self.assertEqual(reg.registry_uri, "models:/ns/clf/3")
 
-    def test_namespace_injected_into_model_proto(self):
-        """It sets model.metadata.namespace from the namespace arg."""
-        stub = _make_stub()
-        with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(**_kwargs(namespace="my-ns"))
-            client.register_model("m", "s3://b/raw")
-        request = stub.CreateModel.call_args[0][0]
-        self.assertEqual(request.model.metadata.namespace, "my-ns")
+    def test_namespace_set_on_model_proto(self):
+        """The namespace is written to model.metadata.namespace."""
+        svc = _mock_svc()
+        _client(svc, namespace="my-ns").register_model("m", "s3://b/raw")
+        created_model = svc.create_model.call_args[0][0]
+        self.assertEqual(created_model.metadata.namespace, "my-ns")
 
     def test_labels_set_on_model_metadata(self):
-        """It stores labels on model.metadata.labels."""
-        stub = _make_stub()
-        with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(**_kwargs())
-            client.register_model("m", "s3://b/raw", labels={"fw": "xgboost"})
-        request = stub.CreateModel.call_args[0][0]
-        self.assertEqual(request.model.metadata.labels["fw"], "xgboost")
+        """Labels are stored in model.metadata.labels."""
+        svc = _mock_svc()
+        _client(svc).register_model("m", "s3://b/raw", labels={"fw": "xgboost"})
+        created_model = svc.create_model.call_args[0][0]
+        self.assertEqual(created_model.metadata.labels["fw"], "xgboost")
 
     def test_metadata_stored_as_annotation(self):
-        """It JSON-encodes metadata under the michelangelo.io/metadata annotation."""
-        stub = _make_stub()
-        with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(**_kwargs())
-            client.register_model(
-                "m", "s3://b/raw", metadata={"run_id": "r1", "rmse": 2.4}
-            )
-        request = stub.CreateModel.call_args[0][0]
-        raw = request.model.metadata.annotations[METADATA_ANNOTATION_KEY]
+        """Metadata is JSON-encoded under the michelangelo.io/metadata annotation."""
+        svc = _mock_svc()
+        _client(svc).register_model(
+            "m", "s3://b/raw", metadata={"run_id": "r1", "rmse": 2.4}
+        )
+        created_model = svc.create_model.call_args[0][0]
+        raw = created_model.metadata.annotations[METADATA_ANNOTATION_KEY]
         parsed = json.loads(raw)
         self.assertEqual(parsed["run_id"], "r1")
         self.assertAlmostEqual(parsed["rmse"], 2.4)
 
     def test_deployable_artifact_uri_set_when_provided(self):
-        """It appends deployable_artifact_uri to spec when provided."""
-        stub = _make_stub()
-        with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(**_kwargs())
-            client.register_model(
-                "m", "s3://b/raw", deployable_artifact_uri="s3://b/dep"
-            )
-        request = stub.CreateModel.call_args[0][0]
-        self.assertIn("s3://b/dep", list(request.model.spec.deployable_artifact_uri))
+        """deployable_artifact_uri is appended to spec when provided."""
+        svc = _mock_svc()
+        _client(svc).register_model(
+            "m", "s3://b/raw", deployable_artifact_uri="s3://b/dep"
+        )
+        created_model = svc.create_model.call_args[0][0]
+        self.assertIn("s3://b/dep", list(created_model.spec.deployable_artifact_uri))
 
     def test_deployable_artifact_uri_absent_when_none(self):
-        """It leaves spec.deployable_artifact_uri empty when not provided."""
-        stub = _make_stub()
-        with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(**_kwargs())
-            client.register_model("m", "s3://b/raw")
-        request = stub.CreateModel.call_args[0][0]
-        self.assertEqual(len(request.model.spec.deployable_artifact_uri), 0)
+        """spec.deployable_artifact_uri is empty when not provided."""
+        svc = _mock_svc()
+        _client(svc).register_model("m", "s3://b/raw")
+        created_model = svc.create_model.call_args[0][0]
+        self.assertEqual(len(created_model.spec.deployable_artifact_uri), 0)
 
-    def test_already_exists_falls_back_to_get_then_update(self):
-        """On ALREADY_EXISTS, it fetches resourceVersion and calls UpdateModel."""
-        mock_error = _RpcError(grpc.StatusCode.ALREADY_EXISTS)
 
-        existing = _make_response_model("m", revision_id=2)
+# ---------------------------------------------------------------------------
+# register_model — ALREADY_EXISTS retry
+# ---------------------------------------------------------------------------
+
+
+class TestAPIRegistryClientAlreadyExists(TestCase):
+    """Tests for the ALREADY_EXISTS → get + update retry path."""
+
+    def test_falls_back_to_get_then_update_on_already_exists(self):
+        """On ALREADY_EXISTS it fetches resourceVersion and calls update_model."""
+        existing = _model("m", revision_id=2)
         existing.metadata.resourceVersion = "rv-42"
-        stub = _make_stub(
-            get_model=existing,
-            update_model=_make_response_model("m", revision_id=3),
+
+        svc = _mock_svc(
+            get_return=existing,
+            update_return=_model("m", revision_id=3),
         )
-        stub.CreateModel.side_effect = mock_error
+        svc.create_model.side_effect = _RpcError(grpc.StatusCode.ALREADY_EXISTS)
 
-        with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(**_kwargs())
-            reg = client.register_model("m", "s3://b/raw")
+        reg = _client(svc).register_model("m", "s3://b/raw")
 
-        stub.GetModel.assert_called_once()
-        stub.UpdateModel.assert_called_once()
-        update_model = stub.UpdateModel.call_args[0][0].model
-        self.assertEqual(update_model.metadata.resourceVersion, "rv-42")
+        svc.get_model.assert_called_once()
+        svc.update_model.assert_called_once()
         self.assertEqual(reg.version, "3")
+
+    def test_resource_version_propagated_to_update(self):
+        """The resourceVersion from get_model is set on the update proto."""
+        existing = _model("m")
+        existing.metadata.resourceVersion = "rv-99"
+
+        svc = _mock_svc(get_return=existing)
+        svc.create_model.side_effect = _RpcError(grpc.StatusCode.ALREADY_EXISTS)
+
+        _client(svc).register_model("m", "s3://b/raw")
+
+        updated_model = svc.update_model.call_args[0][0]
+        self.assertEqual(updated_model.metadata.resourceVersion, "rv-99")
+
+    def test_non_already_exists_error_is_reraised(self):
+        """Non-ALREADY_EXISTS gRPC errors propagate immediately."""
+        svc = _mock_svc()
+        svc.create_model.side_effect = _RpcError(grpc.StatusCode.UNAVAILABLE)
+        with self.assertRaises(grpc.RpcError):
+            _client(svc).register_model("m", "s3://b/raw")
+        svc.get_model.assert_not_called()
 
     def test_failed_precondition_retries_up_to_max(self):
-        """On FAILED_PRECONDITION from UpdateModel, it retries CreateModel→Update."""
-        already_exists = _RpcError(grpc.StatusCode.ALREADY_EXISTS)
-        failed_precondition = _RpcError(grpc.StatusCode.FAILED_PRECONDITION)
-
-        existing = _make_response_model("m", revision_id=2)
-        existing.metadata.resourceVersion = "rv-1"
-        final = _make_response_model("m", revision_id=3)
-
-        stub = MagicMock()
-        stub.CreateModel.side_effect = already_exists
-        get_resp = MagicMock()
-        get_resp.model = existing
-        stub.GetModel.return_value = get_resp
-        upd_resp = MagicMock()
-        upd_resp.model = final
-        stub.UpdateModel.side_effect = [
-            failed_precondition,
-            failed_precondition,
-            upd_resp,
+        """FAILED_PRECONDITION on update retries the full sequence."""
+        existing = _model("m")
+        svc = _mock_svc(
+            get_return=existing,
+            update_return=_model("m", revision_id=5),
+        )
+        svc.create_model.side_effect = _RpcError(grpc.StatusCode.ALREADY_EXISTS)
+        # Fail twice with FAILED_PRECONDITION, succeed on third attempt.
+        svc.update_model.side_effect = [
+            _RpcError(grpc.StatusCode.FAILED_PRECONDITION),
+            _RpcError(grpc.StatusCode.FAILED_PRECONDITION),
+            _model("m", revision_id=5),
         ]
 
-        with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(**_kwargs())
-            reg = client.register_model("m", "s3://b/raw")
+        reg = _client(svc).register_model("m", "s3://b/raw")
+        self.assertEqual(reg.version, "5")
+        self.assertEqual(svc.update_model.call_count, 3)
 
-        self.assertEqual(stub.UpdateModel.call_count, 3)
-        self.assertEqual(reg.version, "3")
+    def test_exhausted_retries_raises_runtime_error(self):
+        """Exhausting all FAILED_PRECONDITION retries raises RuntimeError."""
+        svc = _mock_svc()
+        svc.create_model.side_effect = _RpcError(grpc.StatusCode.ALREADY_EXISTS)
+        svc.update_model.side_effect = _RpcError(grpc.StatusCode.FAILED_PRECONDITION)
 
-    def test_failed_precondition_raises_after_max_retries(self):
-        """It raises RuntimeError when all retries are exhausted."""
-        already_exists = _RpcError(grpc.StatusCode.ALREADY_EXISTS)
-        failed_precondition = _RpcError(grpc.StatusCode.FAILED_PRECONDITION)
+        with self.assertRaises(RuntimeError):
+            _client(svc).register_model("m", "s3://b/raw")
 
-        existing = _make_response_model("m")
-        stub = MagicMock()
-        stub.CreateModel.side_effect = already_exists
-        get_resp = MagicMock()
-        get_resp.model = existing
-        stub.GetModel.return_value = get_resp
-        stub.UpdateModel.side_effect = failed_precondition
 
-        with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(**_kwargs())
-            with self.assertRaises(RuntimeError):
-                client.register_model("m", "s3://b/raw")
-
-    def test_grpc_error_propagates_on_non_already_exists(self):
-        """It re-raises gRPC errors other than ALREADY_EXISTS."""
-        mock_error = _RpcError(grpc.StatusCode.INTERNAL)
-        stub = MagicMock()
-        stub.CreateModel.side_effect = mock_error
-
-        with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(**_kwargs())
-            with self.assertRaises(grpc.RpcError):
-                client.register_model("m", "s3://b/raw")
+# ---------------------------------------------------------------------------
+# get_model
+# ---------------------------------------------------------------------------
 
 
 class TestAPIRegistryClientGetModel(TestCase):
     """Tests for APIRegistryClient.get_model()."""
 
-    def test_get_model_calls_stub_and_returns_registered_model(self):
-        """It calls GetModel and maps the response correctly."""
-        response_model = _make_response_model("clf", namespace="ns", revision_id=5)
-        stub = _make_stub(get_model=response_model)
-        with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(**_kwargs(namespace="ns"))
-            reg = client.get_model("clf")
-        stub.GetModel.assert_called_once()
+    def test_calls_get_model_and_returns_registered_model(self):
+        """It delegates to svc.get_model() and maps the response."""
+        svc = _mock_svc(get_return=_model("clf", revision_id=7))
+        reg = _client(svc, namespace="ns").get_model("clf")
+        svc.get_model.assert_called_once_with("ns", "clf")
         self.assertEqual(reg.name, "clf")
-        self.assertEqual(reg.version, "5")
+        self.assertEqual(reg.version, "7")
 
-    def test_corrupt_metadata_annotation_raises_value_error(self):
-        """It raises ValueError when the metadata annotation contains invalid JSON."""
-        response_model = _make_response_model("bad-model")
-        response_model.metadata.annotations[METADATA_ANNOTATION_KEY] = "not-json{"
-        stub = _make_stub(get_model=response_model)
-        with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(**_kwargs())
-            with self.assertRaises(ValueError) as ctx:
-                client.get_model("bad-model")
-        self.assertIn("bad-model", str(ctx.exception))
-        self.assertIn(METADATA_ANNOTATION_KEY, str(ctx.exception))
-
-    def test_get_model_with_version_emits_warning(self):
-        """It logs a warning when a version argument is passed."""
-        stub = _make_stub(get_model=_make_response_model("m"))
-        with (
-            patch(_STUB_PATH, return_value=stub),
-            self.assertLogs(
-                "michelangelo.lib.model_manager.registry.api_client",
-                level="WARNING",
-            ) as log_ctx,
-        ):
-            client = APIRegistryClient(**_kwargs())
-            client.get_model("m", version="3")
-        self.assertTrue(
-            any("version=" in msg for msg in log_ctx.output),
-            msg=f"Expected version warning in logs: {log_ctx.output}",
-        )
-
-    def test_get_model_without_version_no_warning(self):
-        """It does not emit a warning when version is None."""
-        stub = _make_stub(get_model=_make_response_model("m"))
-        with patch(_STUB_PATH, return_value=stub):
-            client = APIRegistryClient(**_kwargs())
-            reg = client.get_model("m")
-        self.assertEqual(reg.name, "m")
-
-    def test_insecure_false_uses_secure_channel(self):
-        """It creates a secure channel when insecure=False."""
-        stub = _make_stub()
-        with (
-            patch(_STUB_PATH, return_value=stub),
-            patch("grpc.secure_channel") as mock_secure,
-            patch("grpc.ssl_channel_credentials", return_value=MagicMock()),
-        ):
-            APIRegistryClient(**_kwargs(insecure=False))
-        mock_secure.assert_called_once()
-
-    def test_close_calls_channel_close(self):
-        """close() releases the underlying gRPC channel."""
-        stub = _make_stub()
-        mock_channel = MagicMock()
-        with (
-            patch(_STUB_PATH, return_value=stub),
-            patch("grpc.insecure_channel", return_value=mock_channel),
-        ):
-            client = APIRegistryClient(**_kwargs())
-            client.close()
-        mock_channel.close.assert_called_once()
-
-    def test_context_manager_closes_channel_on_exit(self):
-        """The context manager calls close() on __exit__."""
-        stub = _make_stub()
-        mock_channel = MagicMock()
-        with (
-            patch(_STUB_PATH, return_value=stub),
-            patch("grpc.insecure_channel", return_value=mock_channel),
-            APIRegistryClient(**_kwargs()),
-        ):
-            pass
-        mock_channel.close.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# _YARPCInterceptor
-# ---------------------------------------------------------------------------
-
-
-class TestYARPCInterceptor(TestCase):
-    """Tests for _YARPCInterceptor metadata injection."""
-
-    def _make_details(self, metadata=None):
-        details = grpc.ClientCallDetails()
-        details.metadata = metadata or []
-        details.method = "/svc/Method"
-        details.timeout = None
-        details.credentials = None
-        return details
-
-    def test_yarpc_headers_appended_to_metadata(self):
-        """Interceptor appends all three YARPC headers to call metadata."""
-        interceptor = _YARPCInterceptor()
-        captured = {}
-
-        def continuation(details, request):
-            captured["metadata"] = dict(details.metadata)
-            return MagicMock()
-
-        interceptor.intercept_unary_unary(continuation, self._make_details(), object())
-
-        for key, value in _YARPC_METADATA:
-            self.assertEqual(captured["metadata"][key], value)
-
-    def test_existing_metadata_preserved(self):
-        """Interceptor keeps caller-supplied metadata alongside YARPC headers."""
-        interceptor = _YARPCInterceptor()
-        captured = {}
-
-        def continuation(details, request):
-            captured["metadata"] = list(details.metadata)
-            return MagicMock()
-
-        existing = [("x-custom", "val")]
-        interceptor.intercept_unary_unary(
-            continuation, self._make_details(metadata=existing), object()
-        )
-
-        keys = [k for k, _ in captured["metadata"]]
-        self.assertIn("x-custom", keys)
-        self.assertIn("rpc-caller", keys)
-
-    def test_none_metadata_treated_as_empty(self):
-        """Interceptor handles None metadata without error."""
-        interceptor = _YARPCInterceptor()
-        called = []
-
-        def continuation(details, request):
-            called.append(list(details.metadata))
-            return MagicMock()
-
-        details = self._make_details(metadata=None)
-        details.metadata = None
-        interceptor.intercept_unary_unary(continuation, details, object())
-
-        yarpc_keys = {k for k, _ in _YARPC_METADATA}
-        result_keys = {k for k, _ in called[0]}
-        self.assertTrue(yarpc_keys.issubset(result_keys))
+    def test_version_arg_emits_warning(self):
+        """Passing a version emits a log warning (per-revision lookup unsupported)."""
+        svc = _mock_svc()
+        with self.assertLogs(
+            "michelangelo.lib.model_manager.registry.api_client", level="WARNING"
+        ) as cm:
+            _client(svc).get_model("m", version="2")
+        self.assertTrue(any("version" in msg.lower() for msg in cm.output))

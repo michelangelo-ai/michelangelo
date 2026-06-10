@@ -1,35 +1,40 @@
-"""Michelangelo gRPC model service registry client.
+"""ModelRegistryClient backed by ``APIClient.ModelService``.
 
-.. note::
-    **Internal adapter — requires a running Michelangelo ModelService.**
-    This client imports ``michelangelo.gen.api.v2`` gRPC stubs that are generated
-    from Michelangelo's internal protobuf definitions. It is intended for use
-    within a Michelangelo deployment. External adopters using a different model
-    registry should implement
-    :class:`~michelangelo.lib.model_manager.registry.client.ModelRegistryClient`
-    directly (e.g.
-    :class:`~michelangelo.lib.model_manager.registry.client.InMemoryRegistryClient`
-    for testing).
-
-Implements :class:`~michelangelo.lib.model_manager.registry.client.ModelRegistryClient`
-by calling Michelangelo's ``ModelService`` gRPC API. Works against any running
-``ModelService`` endpoint — a local sandbox API server (``insecure=True``) or
-a production cluster (``insecure=False`` with TLS).
-
-The ``grpcio`` package is a required dependency and is always available.
+Delegates all gRPC calls to the shared ``APIClient`` channel, which manages
+connection lifecycle and automatically injects the YARPC transport headers
+(``rpc-caller``, ``rpc-service``, ``rpc-encoding``) required by the
+Michelangelo apiserver via ``DefaultHeaderProvider``.
 
 Typical usage::
 
+    from michelangelo.api.v2 import APIClient
     from michelangelo.lib.model_manager.registry.api_client import APIRegistryClient
 
-    with APIRegistryClient(endpoint="localhost:50051", namespace="sandbox") as client:
-        registered = client.register_model(
-            name="my-classifier",
-            artifact_uri="s3://bucket/models/my-classifier/abc123/raw",
-            labels={"training_framework": "xgboost"},
-            metadata={"run_id": "mlflow-run-abc"},
-        )
-        print(registered.version, registered.registry_uri)
+    # One APIClient per process — it manages the shared gRPC channel.
+    client = APIClient(endpoint="localhost:15566", caller="my-pipeline")
+    registry = APIRegistryClient(svc=client.ModelService, namespace="default")
+    registered = registry.register_model(
+        name="my-classifier",
+        artifact_uri="s3://bucket/models/my-classifier/abc123/raw/model.ubj",
+        labels={"framework": "xgboost"},
+        metadata={"rmse": 0.87},
+    )
+    print(registered.version, registered.registry_uri)
+
+To target the singleton channel (``MA_API_SERVER`` env var)::
+
+    import os
+    os.environ["MA_API_SERVER"] = "localhost:15566"
+
+    from michelangelo.api.v2 import APIClient
+    APIClient.set_caller("my-pipeline")
+
+    from michelangelo.lib.model_manager.registry.api_client import APIRegistryClient
+    registry = APIRegistryClient(namespace="default")
+    registered = registry.register_model("my-model", "s3://bucket/raw/model.ubj")
+
+For testing without a real server, use
+:class:`~michelangelo.lib.model_manager.registry.client.InMemoryRegistryClient`.
 """
 
 from __future__ import annotations
@@ -40,9 +45,7 @@ from typing import TYPE_CHECKING, Any
 
 import grpc
 
-from michelangelo.gen.api.v2 import model_pb2, model_svc_pb2
-from michelangelo.gen.api.v2.model_svc_pb2_grpc import ModelServiceStub
-from michelangelo.lib.exceptions import ConfigurationError
+from michelangelo.gen.api.v2 import model_pb2
 from michelangelo.lib.model_manager.registry.client import (
     ModelRegistryClient,
     RegisteredModel,
@@ -51,41 +54,12 @@ from michelangelo.lib.model_manager.registry.client import (
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from michelangelo.api.v2.services.gen.model import ModelService as _ModelServiceType
+
 _logger = logging.getLogger(__name__)
 
-_YARPC_METADATA = (
-    ("rpc-caller", "michelangelo-python-client"),
-    ("rpc-service", "ma-apiserver"),
-    ("rpc-encoding", "proto"),
-)
-
-
-class _YARPCInterceptor(grpc.UnaryUnaryClientInterceptor):
-    """Inject YARPC transport headers into every unary gRPC call.
-
-    The Michelangelo apiserver uses YARPC, which requires ``rpc-caller``,
-    ``rpc-service``, and ``rpc-encoding`` metadata on every request.
-    Plain gRPC clients omit these, causing the server to reject the call with
-    "missing service name, caller name, encoding".
-    """
-
-    def intercept_unary_unary(self, continuation, client_call_details, request):
-        existing = list(client_call_details.metadata or [])
-        new_details = grpc.ClientCallDetails()
-        new_details.method = client_call_details.method
-        new_details.timeout = client_call_details.timeout
-        new_details.credentials = client_call_details.credentials
-        new_details.wait_for_ready = getattr(
-            client_call_details, "wait_for_ready", None
-        )
-        new_details.compression = getattr(client_call_details, "compression", None)
-        new_details.metadata = existing + list(_YARPC_METADATA)
-        return continuation(new_details, request)
-
-
 METADATA_ANNOTATION_KEY = "michelangelo.io/metadata"
-"""Annotation key under which free-form metadata is JSON-serialised
-in the ModelService API."""
+"""Annotation key under which free-form metadata is JSON-serialised."""
 
 _MAX_REGISTER_RETRIES = 3
 
@@ -93,117 +67,79 @@ __all__ = ["METADATA_ANNOTATION_KEY", "APIRegistryClient"]
 
 
 class APIRegistryClient(ModelRegistryClient):
-    """ModelRegistryClient backed by Michelangelo's gRPC ``ModelService`` API.
+    """ModelRegistryClient that delegates to ``APIClient.ModelService``.
 
-    .. note::
-        This client depends on ``michelangelo.gen.api.v2`` gRPC stubs generated
-        from Michelangelo's internal protobuf definitions. It requires a running
-        ``ModelService`` endpoint. External adopters should implement
-        :class:`ModelRegistryClient` directly rather than using this class.
-
-    Connects to any running ``ModelService`` endpoint. For local sandbox use,
-    point ``endpoint`` at a locally running API server with ``insecure=True``.
-    For production, set ``insecure=False`` and provide a TLS-enabled endpoint.
+    Reuses the ``APIClient`` channel already managed by the calling process —
+    no additional gRPC channel is opened or closed. ``APIClient`` injects the
+    required YARPC transport headers (``rpc-caller``, ``rpc-service``,
+    ``rpc-encoding``) on every call via ``DefaultHeaderProvider``, eliminating
+    the need for a manual interceptor.
 
     **Create vs. update (with retry):** :meth:`register_model` attempts
-    ``CreateModel`` first. If the server responds with ``ALREADY_EXISTS``, the
-    client fetches the current ``resourceVersion`` and calls ``UpdateModel``
-    instead. If ``UpdateModel`` fails with ``FAILED_PRECONDITION`` (a concurrent
-    writer updated the resource between our ``GetModel`` and ``UpdateModel``),
-    the whole sequence is retried up to :data:`_MAX_REGISTER_RETRIES` times.
+    ``create_model`` first. On ``ALREADY_EXISTS`` it fetches ``resourceVersion``
+    via ``get_model`` and retries as ``update_model``. On ``FAILED_PRECONDITION``
+    (concurrent write) the whole sequence retries up to
+    :data:`_MAX_REGISTER_RETRIES` times.
 
-    **registry_uri format:** The ``registry_uri`` field of the returned
-    :class:`RegisteredModel` uses the Michelangelo-internal format
-    ``models:/{namespace}/{name}/{version}`` — *not* the MLflow two-segment
-    format ``models:/{name}/{version}``. Do not pass this URI to MLflow
-    client libraries.
-
-    **Labels** are stored in ``model.metadata.labels`` (indexed, filterable
-    string key-value pairs). **Metadata** is JSON-serialised and stored under
-    the annotation key ``michelangelo.io/metadata``.
-
-    **Channel lifecycle:** The underlying gRPC channel holds native threads and
-    TCP connections. Call :meth:`close` when done, or use the client as a
-    context manager (``with APIRegistryClient(...) as client:``).
+    **registry_uri format:** ``models:/{namespace}/{name}/{version}`` —
+    Michelangelo's three-segment format, not the two-segment MLflow format.
 
     Args:
-        endpoint: gRPC server address without the scheme
-            (e.g. ``"localhost:50051"`` or ``"api.michelangelo.io:443"``).
-        namespace: Kubernetes namespace used for model resources. Leave empty
-            to use the server's default namespace.
-        insecure: Use a plaintext gRPC channel (no TLS). Set ``True`` for a
-            local sandbox API server, ``False`` for any TLS-protected endpoint.
-        timeout_seconds: Per-call deadline in seconds.
+        svc: Pre-built ``ModelService`` instance (e.g. ``client.ModelService``).
+            When ``None``, the singleton ``APIClient.ModelService`` is used —
+            requires ``MA_API_SERVER`` to be set in the environment.
+        namespace: Kubernetes namespace for model resources. Defaults to
+            ``"default"``.
 
     Raises:
-        ConfigurationError: If ``endpoint`` is empty.
+        RuntimeError: If ``svc`` is ``None`` and ``APIClient.ModelService`` has
+            not been initialised (``MA_API_SERVER`` not set).
 
     Example::
 
+        from michelangelo.api.v2 import APIClient
         from michelangelo.lib.model_manager.registry.api_client import APIRegistryClient
 
-        with APIRegistryClient(
-            endpoint="localhost:50051", namespace="sandbox"
-        ) as client:
-            reg = client.register_model(
-                name="boston-xgb",
-                artifact_uri="s3://bucket/models/boston-xgb/abc123/raw",
-                deployable_artifact_uri=(
-                    "s3://bucket/models/boston-xgb/abc123/deployable"
-                ),
-                description="XGBoost model trained on Boston housing data",
-                labels={"training_framework": "xgboost"},
-                metadata={"run_id": "mlflow-run-abc", "rmse": 2.41},
-            )
-            print(reg.version)       # "1"
-            print(reg.registry_uri)  # "models:/sandbox/boston-xgb/1"
+        client = APIClient(endpoint="apiserver:15566", caller="push-step")
+        registry = APIRegistryClient(svc=client.ModelService, namespace="my-project")
+        reg = registry.register_model(
+            name="california-housing-xgb",
+            artifact_uri="s3://bucket/models/california-housing-xgb/abc/raw/model.ubj",
+            labels={"framework": "xgboost"},
+            metadata={"validation-rmse": 0.876},
+        )
+        print(reg.registry_uri)  # "models:/my-project/california-housing-xgb/1"
     """
 
     def __init__(
         self,
-        endpoint: str,
-        namespace: str = "",
-        insecure: bool = True,
-        timeout_seconds: int = 30,
+        svc: _ModelServiceType | None = None,
+        namespace: str = "default",
     ) -> None:
-        """Open a gRPC channel and create the ModelService stub.
+        """Bind to a ``ModelService`` instance.
 
         Args:
-            endpoint: gRPC server address without the scheme.
+            svc: Optional pre-built ``ModelService``. When ``None``, taken from
+                ``APIClient.ModelService`` (requires ``MA_API_SERVER``).
             namespace: Kubernetes namespace for model resources.
-            insecure: Use plaintext gRPC (no TLS). Defaults to ``True``.
-            timeout_seconds: Per-call deadline in seconds. Defaults to ``30``.
 
         Raises:
-            ConfigurationError: If ``endpoint`` is empty.
+            RuntimeError: If ``svc`` is ``None`` and ``APIClient.ModelService``
+                is not initialised.
         """
-        if not endpoint:
-            raise ConfigurationError(
-                "APIRegistryClient endpoint must be non-empty. "
-                "Provide the gRPC server address, e.g. 'localhost:50051'."
-            )
-        self._namespace = namespace
-        self._timeout_seconds = timeout_seconds
-        if insecure:
-            channel = grpc.insecure_channel(endpoint)
+        if svc is not None:
+            self._svc = svc
         else:
-            credentials = grpc.ssl_channel_credentials()
-            channel = grpc.secure_channel(endpoint, credentials)
-        channel = grpc.intercept_channel(channel, _YARPCInterceptor())
-        self._channel = channel
-        self._stub = ModelServiceStub(channel)
+            from michelangelo.api.v2 import APIClient
 
-    def close(self) -> None:
-        """Close the underlying gRPC channel, releasing threads and connections."""
-        self._channel.close()
-
-    def __enter__(self) -> APIRegistryClient:
-        """Enter the context manager, returning self."""
-        return self
-
-    def __exit__(self, *_: object) -> None:
-        """Exit the context manager, closing the gRPC channel."""
-        self.close()
+            self._svc = APIClient.ModelService
+            if self._svc is None:
+                raise RuntimeError(
+                    "APIClient.ModelService is not initialised. "
+                    "Set MA_API_SERVER in the environment before constructing "
+                    "APIRegistryClient, or pass an explicit svc= argument."
+                )
+        self._namespace = namespace
 
     def register_model(
         self,
@@ -215,42 +151,25 @@ class APIRegistryClient(ModelRegistryClient):
         labels: Mapping[str, str] | None = None,
         metadata: Mapping[str, Any] | None = None,
     ) -> RegisteredModel:
-        """Register a model via ``CreateModel``, falling back to ``UpdateModel``.
-
-        Builds a ``Model`` CRD proto from the supplied arguments and calls
-        ``CreateModel``. If the server returns ``ALREADY_EXISTS``, the current
-        ``resourceVersion`` is fetched via ``GetModel`` and the call is retried
-        as ``UpdateModel``. If a concurrent writer causes ``UpdateModel`` to
-        return ``FAILED_PRECONDITION``, the whole sequence is retried up to
-        :data:`_MAX_REGISTER_RETRIES` times.
+        """Register a model via ``create_model``, falling back to ``update_model``.
 
         Args:
-            name: Model name to register. Used as ``model.metadata.name``.
-            artifact_uri: URI of the raw model artifact (e.g. an S3 URI
-                returned by ``StorageBackend.upload()``). Stored in
-                ``spec.model_artifact_uri``.
+            name: Model name. Used as ``model.metadata.name``.
+            artifact_uri: URI of the raw model artifact.
             deployable_artifact_uri: Optional URI of the serving-ready bundle.
-                Stored in ``spec.deployable_artifact_uri`` when provided.
-            description: Optional human-readable description stored in
-                ``spec.description``.
-            schema: Ignored. The ``ModelService`` API does not expose a
-                dedicated schema field; subclasses may override this method to
-                embed schema in ``spec.input_schema`` / ``spec.output_schema``.
-            labels: String key-value pairs stored in ``model.metadata.labels``
-                (indexed and filterable via the API).
-            metadata: Arbitrary JSON-serializable key-value pairs stored as the
-                annotation ``michelangelo.io/metadata``.
+            description: Optional human-readable description.
+            schema: Ignored — ``ModelService`` has no dedicated schema field.
+            labels: String key-value pairs stored in ``model.metadata.labels``.
+            metadata: Arbitrary JSON-serializable key-value pairs stored under
+                the annotation ``michelangelo.io/metadata``.
 
         Returns:
-            A :class:`~michelangelo.lib.model_manager.registry.client.RegisteredModel`
-            built from the service response.
+            :class:`~michelangelo.lib.model_manager.registry.client.RegisteredModel`
 
         Raises:
-            grpc.RpcError: If the gRPC call fails for any reason other than
-                ``ALREADY_EXISTS`` / ``FAILED_PRECONDITION`` handled by the
-                retry loop.
-            RuntimeError: If all :data:`_MAX_REGISTER_RETRIES` attempts are
-                exhausted due to repeated concurrent writes.
+            grpc.RpcError: On gRPC errors other than ``ALREADY_EXISTS`` /
+                ``FAILED_PRECONDITION`` handled by the retry loop.
+            RuntimeError: After exhausting :data:`_MAX_REGISTER_RETRIES` retries.
         """
         for attempt in range(1, _MAX_REGISTER_RETRIES + 1):
             model = self._build_model_proto(
@@ -262,17 +181,13 @@ class APIRegistryClient(ModelRegistryClient):
                 metadata=metadata,
             )
             try:
-                _logger.info("Calling CreateModel for '%s'.", name)
-                resp = self._stub.CreateModel(
-                    model_svc_pb2.CreateModelRequest(model=model),
-                    timeout=self._timeout_seconds,
-                )
-                return self._to_registered_model(resp.model)
+                _logger.info("Calling create_model for '%s'.", name)
+                created = self._svc.create_model(model)
+                return self._to_registered_model(created)
             except grpc.RpcError as exc:
                 if exc.code() != grpc.StatusCode.ALREADY_EXISTS:
                     raise
 
-            # ALREADY_EXISTS — fetch resourceVersion and update instead
             _logger.warning(
                 "Model '%s' already exists — fetching resourceVersion and "
                 "updating (attempt %d/%d).",
@@ -280,25 +195,16 @@ class APIRegistryClient(ModelRegistryClient):
                 attempt,
                 _MAX_REGISTER_RETRIES,
             )
-            get_resp = self._stub.GetModel(
-                model_svc_pb2.GetModelRequest(
-                    name=name,
-                    namespace=self._namespace,
-                ),
-                timeout=self._timeout_seconds,
-            )
-            model.metadata.resourceVersion = get_resp.model.metadata.resourceVersion
+            existing = self._svc.get_model(self._namespace, name)
+            model.metadata.resourceVersion = existing.metadata.resourceVersion
             try:
-                upd_resp = self._stub.UpdateModel(
-                    model_svc_pb2.UpdateModelRequest(model=model),
-                    timeout=self._timeout_seconds,
-                )
-                return self._to_registered_model(upd_resp.model)
+                updated = self._svc.update_model(model)
+                return self._to_registered_model(updated)
             except grpc.RpcError as upd_exc:
                 if upd_exc.code() == grpc.StatusCode.FAILED_PRECONDITION:
                     if attempt < _MAX_REGISTER_RETRIES:
                         _logger.warning(
-                            "UpdateModel for '%s' hit FAILED_PRECONDITION — "
+                            "update_model for '%s' hit FAILED_PRECONDITION — "
                             "concurrent write detected, retrying (%d/%d).",
                             name,
                             attempt,
@@ -307,29 +213,20 @@ class APIRegistryClient(ModelRegistryClient):
                         continue
                     raise RuntimeError(
                         f"register_model: exhausted {_MAX_REGISTER_RETRIES} retries "
-                        f"for {name!r} due to repeated concurrent writes. "
-                        "Call register_model() again to retry."
+                        f"for {name!r} due to repeated concurrent writes."
                     ) from upd_exc
                 raise
 
     def get_model(self, name: str, version: str | None = None) -> RegisteredModel:
         """Retrieve the latest model registration by name.
 
-        .. note::
-            The ``ModelService`` API does not support per-revision lookup — it
-            always returns the current (latest) model record. Passing a
-            non-``None`` ``version`` emits a warning and the latest revision is
-            returned regardless.
-
         Args:
             name: Model name to look up.
-            version: If provided, a warning is emitted because per-revision
-                lookup is not supported by the ``ModelService`` API. The latest
-                revision is returned in all cases.
+            version: Emits a warning if provided — ``ModelService`` always
+                returns the latest revision.
 
         Returns:
-            A :class:`~michelangelo.lib.model_manager.registry.client.RegisteredModel`
-            built from the service response.
+            :class:`~michelangelo.lib.model_manager.registry.client.RegisteredModel`
 
         Raises:
             grpc.RpcError: If the model is not found or the call fails.
@@ -337,20 +234,13 @@ class APIRegistryClient(ModelRegistryClient):
         if version is not None:
             _logger.warning(
                 "APIRegistryClient.get_model() does not support per-revision "
-                "lookup (requested version=%r for model '%s'). "
-                "The ModelService API always returns the latest revision.",
+                "lookup (version=%r for '%s'). Returning the latest revision.",
                 version,
                 name,
             )
-        _logger.info("Calling GetModel for '%s'.", name)
-        resp = self._stub.GetModel(
-            model_svc_pb2.GetModelRequest(
-                name=name,
-                namespace=self._namespace,
-            ),
-            timeout=self._timeout_seconds,
-        )
-        return self._to_registered_model(resp.model)
+        _logger.info("Calling get_model for '%s'.", name)
+        model = self._svc.get_model(self._namespace, name)
+        return self._to_registered_model(model)
 
     # ── Private helpers ──────────────────────────────────────────────────────
 
@@ -363,12 +253,10 @@ class APIRegistryClient(ModelRegistryClient):
         labels: Mapping[str, str] | None,
         metadata: Mapping[str, Any] | None,
     ) -> model_pb2.Model:
-        """Construct a ``Model`` CRD proto from registration arguments."""
         model = model_pb2.Model()
         model.metadata.name = name
         if self._namespace:
             model.metadata.namespace = self._namespace
-
         model.spec.model_artifact_uri.append(artifact_uri)
         if deployable_artifact_uri:
             model.spec.deployable_artifact_uri.append(deployable_artifact_uri)
@@ -383,11 +271,9 @@ class APIRegistryClient(ModelRegistryClient):
         return model
 
     def _to_registered_model(self, model: model_pb2.Model) -> RegisteredModel:
-        """Map a ``Model`` proto response to a :class:`RegisteredModel`."""
         name = model.metadata.name
         namespace = model.metadata.namespace or self._namespace
         version = str(model.spec.revision_id)
-
         artifact_uri = (
             model.spec.model_artifact_uri[0] if model.spec.model_artifact_uri else None
         )
@@ -397,7 +283,6 @@ class APIRegistryClient(ModelRegistryClient):
             else None
         )
         labels = dict(model.metadata.labels)
-
         metadata_str = dict(model.metadata.annotations).get(METADATA_ANNOTATION_KEY)
         if metadata_str:
             try:
@@ -409,9 +294,6 @@ class APIRegistryClient(ModelRegistryClient):
                 ) from exc
         else:
             metadata = {}
-
-        # registry_uri uses Michelangelo's internal three-segment format
-        # "models:/{namespace}/{name}/{version}" — not the two-segment MLflow format.
         return RegisteredModel(
             name=name,
             version=version,

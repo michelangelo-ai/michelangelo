@@ -221,14 +221,16 @@ def push_step(
     # REGISTRY_ENDPOINT → APIRegistryClient (remote); else InMemoryRegistryClient.
     registry_endpoint = os.environ.get("REGISTRY_ENDPOINT")
     if registry_endpoint:
-        from michelangelo.lib.model_manager.registry.api_client import (
-            APIRegistryClient,
-        )
+        from michelangelo.api.v2 import APIClient
+        from michelangelo.lib.model_manager.registry.api_client import APIRegistryClient
 
-        registry_client = APIRegistryClient(
+        _api_client = APIClient(
             endpoint=registry_endpoint,
+            caller="california-housing-push-step",
+        )
+        registry_client = APIRegistryClient(
+            svc=_api_client.ModelService,
             namespace=os.environ.get("REGISTRY_NAMESPACE", "default"),
-            insecure=os.environ.get("REGISTRY_INSECURE", "true").lower() != "false",
         )
         log.info("push_step: using APIRegistryClient at %s", registry_endpoint)
     else:
