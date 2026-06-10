@@ -13,7 +13,7 @@ export function DetailView({
   actions,
   record,
   loading,
-  titleEnhancer
+  titleEnhancer,
 }: DetailViewProps) {
   const [css, theme] = useStyletron();
 
