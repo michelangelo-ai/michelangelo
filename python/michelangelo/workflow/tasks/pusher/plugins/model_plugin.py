@@ -89,6 +89,7 @@ To implement a custom registry, subclass ``ModelRegistryClient``::
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from typing import TYPE_CHECKING, Any, TypedDict
 
@@ -419,7 +420,7 @@ class ModelPusherPlugin(PusherPluginBase):
         )
         raw_uri = self._storage_backend.upload(
             self._artifact.raw_model.path,
-            f"models/{model_name}/{push_id}/raw",
+            f"models/{model_name}/{push_id}/raw/{os.path.basename(self._artifact.raw_model.path)}",
         )
 
         deployable_uri: str | None = None
@@ -429,7 +430,7 @@ class ModelPusherPlugin(PusherPluginBase):
             )
             deployable_uri = self._storage_backend.upload(
                 self._artifact.deployable_model.path,
-                f"models/{model_name}/{push_id}/deployable",
+                f"models/{model_name}/{push_id}/deployable/{os.path.basename(self._artifact.deployable_model.path)}",
             )
 
         registrations: list[RegistrationResult] = []
