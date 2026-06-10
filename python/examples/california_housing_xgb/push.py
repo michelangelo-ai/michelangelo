@@ -127,15 +127,11 @@ def push_step(
             # checkpoint dir if Ray writes to a different name in future versions.
             matches = [
                 p
-                for p in glob.glob(
-                    os.path.join(raw_path, "**", "*"), recursive=True
-                )
+                for p in glob.glob(os.path.join(raw_path, "**", "*"), recursive=True)
                 if os.path.isfile(p)
             ]
         if not matches:
-            raise FileNotFoundError(
-                f"No model checkpoint found under {raw_path}"
-            )
+            raise FileNotFoundError(f"No model checkpoint found under {raw_path}")
         checkpoint_path = matches[0]
     log.info("Found model checkpoint: %s", checkpoint_path)
 

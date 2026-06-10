@@ -40,7 +40,8 @@ def _config(
 ) -> S3SinkConfig:
     return S3SinkConfig(
         destination_key=key,
-        storage_backend=backend or _mock_backend(f"s3://test-bucket/{key}/data.{fmt.value}"),
+        storage_backend=backend
+        or _mock_backend(f"s3://test-bucket/{key}/data.{fmt.value}"),
         format=fmt,
     )
 
@@ -349,7 +350,9 @@ class TestS3SinkViaDatasetPusherPlugin(TestCase):
 
         self.assertEqual(len(result["sinks"]), 2)
         self.assertTrue(result["sinks"][0]["uri"].startswith(local_dest))
-        self.assertEqual(result["sinks"][1]["uri"], "s3://my-bucket/datasets/v1/data.parquet")
+        self.assertEqual(
+            result["sinks"][1]["uri"], "s3://my-bucket/datasets/v1/data.parquet"
+        )
         backend.upload.assert_called_once()
 
 
