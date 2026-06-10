@@ -107,6 +107,14 @@ def push_step(
     checkpoint_path = matches[0]
     log.info("Found model checkpoint: %s", checkpoint_path)
 
+    # ── Per-run path prefix ───────────────────────────────────────────────────
+    # Derive a unique run ID from the Ray training run directory name so that
+    # dataset and model outputs from different runs never share the same path.
+    # Using the train_result path basename keeps dataset keys correlated with
+    # the model checkpoint — both live under the same run identifier.
+    # Example: "ray_train_run-2026-06-09_19-42-48"
+    _run_id = os.path.basename(train_result.path)
+
     # ── Load datasets as pandas DataFrames ───────────────────────────────────
     # Both S3Sink and LocalFileSink require pandas DataFrames.
     pr.train_data.load_pandas_dataframe()
@@ -234,12 +242,14 @@ def push_step(
             ),
             PusherPluginConfig(
                 name="train_data",
-                dataset_plugin=_dataset_config("datasets/california-housing/train"),
+                dataset_plugin=_dataset_config(
+                    f"datasets/california-housing/{_run_id}/train"
+                ),
             ),
             PusherPluginConfig(
                 name="validation_data",
                 dataset_plugin=_dataset_config(
-                    "datasets/california-housing/validation"
+                    f"datasets/california-housing/{_run_id}/validation"
                 ),
             ),
         ]
