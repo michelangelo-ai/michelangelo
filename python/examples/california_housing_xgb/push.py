@@ -157,9 +157,8 @@ def push_step(
             create_bucket_if_missing=True,
         )
         log.info(
-            "push_step: using MinioStorageBackend (remote) → endpoint=%s bucket=%s",
-            endpoint,
-            bucket,
+            "push_step: using MinioStorageBackend (remote) → %s",
+            storage_backend.get_storage_location(),
         )
     else:
         from michelangelo.lib.artifact_manager.storage_backend import (
@@ -169,7 +168,8 @@ def push_step(
         _local_dir = tempfile.mkdtemp(prefix="california_push_")
         storage_backend = LocalStorageBackend(_local_dir)
         log.info(
-            "push_step: using LocalStorageBackend (local/CI — artifacts not persisted)"
+            "push_step: using LocalStorageBackend (local/CI) → %s",
+            storage_backend.get_storage_location(),
         )
 
     # ── Registry client ───────────────────────────────────────────────────────

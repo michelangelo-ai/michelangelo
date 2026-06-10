@@ -1,4 +1,4 @@
-"""MinioSink: uploads a DatasetVariable to a MinIO / S3-compatible object store."""
+"""S3Sink: uploads a DatasetVariable to any S3-compatible object store."""
 
 from __future__ import annotations
 
@@ -12,32 +12,36 @@ from michelangelo.workflow.schema.sinks.result import SinkResult
 from michelangelo.workflow.tasks.functions.sinks.base import DataSink
 
 if TYPE_CHECKING:
-    from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
-    from michelangelo.workflow.schema.sinks.minio import MinioSinkConfig
+    from michelangelo.workflow.schema.sinks.s3 import S3SinkConfig
     from michelangelo.workflow.variables import DatasetVariable
 
 _logger = logging.getLogger(__name__)
 
 
-class MinioSink(DataSink):
-    """Sink that uploads a dataset artifact to a MinIO / S3-compatible object store.
+class S3Sink(DataSink):
+    """Sink that uploads a dataset artifact to any S3-compatible object store.
 
     Serialises the artifact's pandas DataFrame to a temporary local file and
-    uploads it via the supplied ``MinioStorageBackend``. The returned
-    ``SinkResult.uri`` is the ``s3://`` URI produced by the backend's
+    uploads it via the ``StorageBackend`` in ``config.storage_backend``. The
+    returned ``SinkResult.uri`` is the ``s3://`` URI produced by the backend's
     ``upload()`` method.
 
-    The ``MinioStorageBackend`` is constructed by the caller (typically inside
-    a ``@uniflow.task`` body) so that credentials are not serialised into the
-    config dataclass — stateful objects cannot cross the UniFlow codec boundary.
+    Works with any ``StorageBackend`` subclass — ``MinioStorageBackend`` for
+    MinIO and S3-compatible endpoints, or a custom implementation for GCS,
+    Azure Blob, HDFS, etc.
 
-    The uploaded object key is ``config.destination_key + "/data.<ext>"``, where
-    ``<ext>`` matches the configured ``DatasetFormat``.
+    The backend is provided via ``S3SinkConfig.storage_backend``, keeping
+    ``S3Sink`` consistent with the single-argument constructor pattern of
+    ``LocalFileSink`` and ``HiveSink``. Construct the backend inside the
+    ``@uniflow.task`` body — stateful objects cannot cross the UniFlow codec
+    boundary.
+
+    The uploaded object key is ``config.destination_key + "/data.<ext>"``,
+    where ``<ext>`` matches the configured ``DatasetFormat``.
 
     Args:
-        config: Sink configuration carrying the destination key prefix and format.
-        storage_backend: Initialised ``MinioStorageBackend`` (or any
-            ``StorageBackend`` subclass) used for the upload.
+        config: ``S3SinkConfig`` carrying the destination key, format, and
+            an initialised storage backend.
 
     Raises:
         TypeError: If ``artifact.value`` is not a pandas DataFrame.
@@ -47,8 +51,8 @@ class MinioSink(DataSink):
     Example::
 
         from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
-        from michelangelo.workflow.schema.sinks.minio import MinioSinkConfig
-        from michelangelo.workflow.tasks.functions.sinks import MinioSink
+        from michelangelo.workflow.schema.sinks.s3 import S3SinkConfig
+        from michelangelo.workflow.tasks.functions.sinks import S3Sink
 
         backend = MinioStorageBackend(
             endpoint="localhost:9000",
@@ -58,25 +62,18 @@ class MinioSink(DataSink):
             secure=False,
             create_bucket_if_missing=True,
         )
-        sink = MinioSink(
-            MinioSinkConfig("datasets/california/v1"),
-            storage_backend=backend,
-        )
+        sink = S3Sink(S3SinkConfig("datasets/california/v1", storage_backend=backend))
         result = sink.write(variable)
         # result.uri == "s3://my-bucket/datasets/california/v1/data.parquet"
     """
 
-    def __init__(
-        self,
-        config: MinioSinkConfig,
-        storage_backend: MinioStorageBackend,
-    ) -> None:
-        """Initialise with a typed config and a pre-built storage backend."""
+    def __init__(self, config: S3SinkConfig) -> None:
+        """Initialise with a typed config (includes the storage backend)."""
         self._config = config
-        self._backend = storage_backend
+        self._backend = config.storage_backend
 
     def write(self, artifact: DatasetVariable) -> SinkResult:
-        """Serialise the artifact and upload it to the configured MinIO bucket.
+        """Serialise the artifact and upload it to the configured S3 bucket.
 
         The DataFrame is written to a temporary file, uploaded via the backend,
         and the temp file is removed after the upload completes (or fails).
@@ -92,13 +89,13 @@ class MinioSink(DataSink):
         Raises:
             TypeError: If ``artifact.value`` is not a pandas DataFrame.
             ValueError: If the configured format is not supported.
-            OSError: Propagated from ``MinioStorageBackend.upload()`` on failure.
+            OSError: Propagated from the storage backend's ``upload()`` on failure.
         """
         import pandas as _pd
 
         if not isinstance(artifact.value, _pd.DataFrame):
             raise TypeError(
-                f"MinioSink requires artifact.value to be a pandas.DataFrame, "
+                f"S3Sink requires artifact.value to be a pandas.DataFrame, "
                 f"got {type(artifact.value).__name__}. "
                 "For Spark DataFrames use HiveSink; for Ray Datasets use a "
                 "custom DataSink."
@@ -127,5 +124,5 @@ class MinioSink(DataSink):
                 os.unlink(tmp_path)
 
         num_records = len(df)
-        _logger.info("MinioSink: uploaded %d records to '%s'.", num_records, uri)
+        _logger.info("S3Sink: uploaded %d records to '%s'.", num_records, uri)
         return SinkResult(uri=uri, num_records=num_records)

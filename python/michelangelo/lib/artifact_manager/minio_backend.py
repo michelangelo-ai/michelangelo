@@ -284,6 +284,17 @@ class MinioStorageBackend(StorageBackend):
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
 
+    # ── Public helpers ───────────────────────────────────────────────────────
+
+    def get_storage_location(self) -> str:
+        """Return the ``s3://bucket`` URI for this backend.
+
+        Returns:
+            URI in the form ``s3://{bucket}`` identifying the root of the
+            configured bucket. Useful for logging and debugging.
+        """
+        return f"s3://{self._bucket}"
+
     # ── Private helpers ──────────────────────────────────────────────────────
 
     def _upload_directory(self, local_path: str, destination_key: str) -> None:
