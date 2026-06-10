@@ -21,5 +21,6 @@ from michelangelo.workflow.tasks.functions.sinks.base import DataSink
 from michelangelo.workflow.tasks.functions.sinks.hive import HiveSink
 from michelangelo.workflow.tasks.functions.sinks.local import LocalFileSink
 from michelangelo.workflow.tasks.functions.sinks.memory import InMemorySink
+from michelangelo.workflow.tasks.functions.sinks.minio import MinioSink
 
-__all__ = ["DataSink", "HiveSink", "InMemorySink", "LocalFileSink"]
+__all__ = ["DataSink", "HiveSink", "InMemorySink", "LocalFileSink", "MinioSink"]

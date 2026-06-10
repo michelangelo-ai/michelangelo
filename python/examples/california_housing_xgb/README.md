@@ -1,14 +1,15 @@
 # California Housing XGBoost
 
-Train workflow for California Housing price prediction using XGBoost.
-Demonstrates the Michelangelo data pipeline: feature preparation, Spark
-preprocessing, and distributed Ray training.
+End-to-end ML pipeline for California Housing price prediction using XGBoost.
+Demonstrates the full Michelangelo workflow: feature preparation, Spark
+preprocessing, distributed Ray training, and a pusher step that exports the
+model, evaluation report, and preprocessed datasets to storage and registry.
 
 ## Pipeline
 
 ```
-feature_prep  →  preprocess  →  train
-   (Ray)           (Spark)       (Ray)
+feature_prep  →  preprocess  →  train  →  push_step
+   (Ray)           (Spark)       (Ray)      (Ray)
 ```
 
 | Step | File | Runtime | Description |
@@ -16,6 +17,7 @@ feature_prep  →  preprocess  →  train
 | `feature_prep` | `feature_prep.py` | Ray | Load dataset, train/test split, Ray Datasets |
 | `preprocess` | `preprocess.py` | Spark | Cast columns to float |
 | `train` | `train.py` | Ray | Distributed XGBoost training |
+| `push_step` | `push.py` | Ray | Push model, eval report, and preprocessed datasets to storage and registry |
 
 The workflow is orchestrated in `california_housing_xgb.py`, which imports each step from its own module.
 
@@ -48,7 +50,8 @@ Starlark for deterministic execution on Cadence/Temporal:
 def train_workflow(dataset_cols: str = ...):
     train_dv, validation_dv = feature_prep(columns=...)
     pr = preprocess(train_dv=train_dv, ...)
-    ...
+    train_result = train(pr, params={...})
+    return push_step(pr, train_result)
 ```
 
 To override resources for a specific run without changing the task definition,
@@ -84,6 +87,31 @@ df: DataFrame = validation_dv.value             # now a real Spark DataFrame
 > channels) cannot be serialized across the workflow→task boundary — passing a
 > live client as a task argument would raise a codec error at runtime.
 
+### push_step — single pusher for all artifacts
+
+`push_step` receives both `PreprocessResult` (for the datasets) and `TrainResult`
+(for the model checkpoint) and pushes four artifacts in one call:
+
+| Artifact | Plugin | Sink |
+|---|---|---|
+| `model` | `ModelPusherPlugin` | `StorageBackend` + registry |
+| `eval_report` | `EvalReportPusherPlugin` | `StorageBackend` + registry |
+| `train_data` | `DatasetPusherPlugin` | `MinioSink` or `LocalFileSink` |
+| `validation_data` | `DatasetPusherPlugin` | `MinioSink` or `LocalFileSink` |
+
+The sink is selected at runtime: `MINIO_ENDPOINT` set → `MinioSink` (remote);
+absent → `LocalFileSink` writing to a temporary directory (local / CI).
+
+To add another storage backend (S3, GCS, Azure Blob), subclass `StorageBackend`:
+
+```python
+from michelangelo.lib.artifact_manager.storage_backend import StorageBackend
+
+class S3StorageBackend(StorageBackend):
+    def upload(self, local_path: str, destination_key: str) -> str: ...
+    def download(self, uri: str, local_path: str) -> None: ...
+```
+
 ## Requirements
 
 - Python 3.9+
@@ -97,6 +125,9 @@ cd michelangelo-ai/michelangelo/python
 PYTHONPATH=. poetry run python examples/california_housing_xgb/california_housing_xgb.py
 ```
 
+`push_step` falls back to `LocalFileSink` when `MINIO_ENDPOINT` is unset —
+datasets are written to a temporary directory, model to a local temp dir.
+
 ## Remote Run
 
 Pass environment variables via `--environ` flags — they are serialized into the
@@ -109,8 +140,23 @@ cd michelangelo-ai/michelangelo/python
 PYTHONPATH=. poetry run python examples/california_housing_xgb/california_housing_xgb.py \
   remote-run \
   --image docker.io/library/my-workflow:latest \
-  --storage-url s3://my-bucket/workflows \
+  --storage-url s3://michelangelo/workflows \
+  --environ MINIO_ENDPOINT=minio:9091 \
+  --environ MINIO_BUCKET=michelangelo \
+  --environ MINIO_ACCESS_KEY=minioadmin \
+  --environ MINIO_SECRET_KEY=minioadmin \
+  --environ MINIO_SECURE=false \
+  --environ REGISTRY_ENDPOINT=<registry-host:port> \
   --yes
+```
+
+`push_step` picks up `MINIO_*` variables and uploads preprocessed datasets and
+the model checkpoint to MinIO:
+
+```
+s3://michelangelo/datasets/california-housing/train/data.parquet
+s3://michelangelo/datasets/california-housing/validation/data.parquet
+s3://michelangelo/models/california-housing-xgb/<version>/raw
 ```
 
 > **Sandbox values:** UniFlow's internal checkpoint storage (`--storage-url`) uses
@@ -146,4 +192,9 @@ INFO     preprocess    Processed Train Spark schema:
 INFO     train         scaling_config: ScalingConfig(num_workers=1, ...)
 INFO     train         run_config: RunConfig(storage_path='s3://.../ray_results')
 INFO     train         TrainResult(path='.../ray_results/...', metrics={'validation-rmse': 0.876})
+INFO     push_step     using LocalStorageBackend → base_dir=/tmp/california_push_...
+INFO     push_step     push model (model_plugin): success=True value=... error=None
+INFO     push_step     push eval_report (eval_report_plugin): success=True value=... error=None
+INFO     push_step     push train_data (dataset_plugin): success=True value=... error=None
+INFO     push_step     push validation_data (dataset_plugin): success=True value=... error=None
 ```

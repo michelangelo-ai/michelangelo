@@ -2,9 +2,10 @@
 
 Workflow entry point that orchestrates the full California Housing pipeline:
 feature preparation, Spark preprocessing, distributed XGBoost training with
-Ray, and pushing the model and evaluation report via the pusher API. The
-individual task implementations live in sibling modules (``feature_prep``,
-``preprocess``, ``train``, ``push_model``).
+Ray, and a single pusher step that exports the model, evaluation report, and
+preprocessed datasets to storage and registry. The individual task
+implementations live in sibling modules (``feature_prep``, ``preprocess``,
+``train``, ``push``).
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from __future__ import annotations
 import michelangelo.uniflow.core as uniflow
 from examples.california_housing_xgb.feature_prep import feature_prep
 from examples.california_housing_xgb.preprocess import PreprocessResult, preprocess
-from examples.california_housing_xgb.push_model import push_model
+from examples.california_housing_xgb.push import push_step
 from examples.california_housing_xgb.train import TrainResult, train
 from michelangelo.uniflow.plugins.ray import RayTask
 from michelangelo.uniflow.plugins.spark import SparkTask
@@ -22,7 +23,7 @@ __all__ = [
     "TrainResult",
     "feature_prep",
     "preprocess",
-    "push_model",
+    "push_step",
     "train",
     "train_workflow",
 ]
@@ -41,8 +42,8 @@ def train_workflow(
 
     Orchestrates the full ML lifecycle for California Housing: feature
     preparation, preprocessing with Spark, distributed training with Ray
-    XGBoost, and pushing the trained model and evaluation report to storage
-    and registry.
+    XGBoost, and a single pusher step that pushes the trained model, evaluation
+    report, and preprocessed datasets to storage and registry.
 
     Args:
         dataset_cols: Comma-separated string of column names including
@@ -50,7 +51,7 @@ def train_workflow(
             "feature1,feature2,feature3,target".
 
     Returns:
-        List of PusherResult from the push_model task, one per artifact pushed.
+        List of PusherResult from push_step, one per artifact pushed.
     """
     _dataset_cols = dataset_cols.split(",")
     feature_prep_overrides = feature_prep.with_overrides(
@@ -82,7 +83,7 @@ def train_workflow(
             "n_estimators": 10,
         },
     )
-    return push_model(train_result)
+    return push_step(pr, train_result)
 
 
 if __name__ == "__main__":
