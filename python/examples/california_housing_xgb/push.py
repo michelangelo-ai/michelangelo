@@ -234,7 +234,6 @@ def push_step(
             else _grpc.secure_channel(registry_endpoint, _credentials)
         )
         _api_client = APIClient(
-            endpoint=registry_endpoint,
             caller="california-housing-push-step",
             channel=_channel,
         )
