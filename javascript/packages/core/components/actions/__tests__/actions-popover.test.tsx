@@ -384,7 +384,9 @@ describe('ActionsPopover', () => {
       expect(await screen.findByText('Cannot archive')).toBeInTheDocument();
       await user.hover(screen.getByRole('option', { name: 'Delete' }));
       expect(await screen.findByText('Cannot delete')).toBeInTheDocument();
-      expect(screen.queryByText('Cannot archive')).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.queryByText('Cannot archive')).not.toBeInTheDocument();
+      });
     });
 
     it('enabled and disabled actions coexist — enabled action still opens its component', async () => {

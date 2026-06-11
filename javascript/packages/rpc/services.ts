@@ -1,6 +1,6 @@
+import { createRegistry } from '@bufbuild/protobuf';
 import { createClient } from '@connectrpc/connect';
 import { createConnectTransport } from '@connectrpc/connect-web';
-import { createRegistry } from '@bufbuild/protobuf';
 
 import { TypedStructSchema } from './gen/michelangelo/api/typed_struct_pb';
 import { DeploymentService } from './gen/michelangelo/api/v2/deployment_svc_pb';
