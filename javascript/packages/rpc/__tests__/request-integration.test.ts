@@ -36,8 +36,9 @@ global.fetch = vi.fn().mockResolvedValue({
 
 it('decodes a ListPipelineRun response containing a TypedStruct Any field', async () => {
   const result = await request('ListPipelineRun', {} as never);
-  const details = (result as { pipelineRunList: { items: [{ status: { details: unknown[] } }] } })
-    .pipelineRunList.items[0].status.details;
+  const details = (
+    result as unknown as { pipelineRunList: { items: { status: { details: unknown[] } }[] } }
+  ).pipelineRunList.items[0].status.details;
 
   // The Any is decoded to { typeUrl, value: Uint8Array } by the registry.
   // Without TypedStructSchema in the registry, fromJson throws before reaching here.
