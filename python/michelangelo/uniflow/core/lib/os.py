@@ -21,7 +21,7 @@ class _Environ:
 
         @workflow()
         def my_workflow():
-            last_ts = environ.get("LAST_EXECUTION_TIMESTAMP")
+            last_ts = environ.get("LAST_SCHEDULE_TIMESTAMP")
             if last_ts != None:
                 # incremental: process data since int(last_ts)
                 ...

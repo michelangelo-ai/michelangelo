@@ -551,8 +551,8 @@ func TestGeneratePipelineRunRequestInjectsLastExecutionTimestamp(t *testing.T) {
 		environField := req.PipelineRun.Spec.Input.Fields["environ"]
 		require.NotNil(t, environField, "environ field must be present")
 
-		val := environField.GetStructValue().Fields["LAST_EXECUTION_TIMESTAMP"]
-		require.NotNil(t, val, "LAST_EXECUTION_TIMESTAMP must be set in environ")
+		val := environField.GetStructValue().Fields["LAST_SCHEDULE_TIMESTAMP"]
+		require.NotNil(t, val, "LAST_SCHEDULE_TIMESTAMP must be set in environ")
 		assert.Equal(t, "1705309200", val.GetStringValue()) // lastTs unix = ts - 1h
 	})
 
@@ -563,8 +563,8 @@ func TestGeneratePipelineRunRequestInjectsLastExecutionTimestamp(t *testing.T) {
 		if req.PipelineRun.Spec.Input != nil {
 			environField := req.PipelineRun.Spec.Input.Fields["environ"]
 			if environField != nil {
-				val := environField.GetStructValue().Fields["LAST_EXECUTION_TIMESTAMP"]
-				assert.Nil(t, val, "LAST_EXECUTION_TIMESTAMP must not be set when lastTs is nil")
+				val := environField.GetStructValue().Fields["LAST_SCHEDULE_TIMESTAMP"]
+				assert.Nil(t, val, "LAST_SCHEDULE_TIMESTAMP must not be set when lastTs is nil")
 			}
 		}
 	})
@@ -594,6 +594,6 @@ func TestGeneratePipelineRunRequestInjectsLastExecutionTimestamp(t *testing.T) {
 		// Existing environ key preserved
 		assert.Equal(t, "my-value", fields["MY_VAR"].GetStringValue())
 		// New key injected
-		assert.Equal(t, "1705309200", fields["LAST_EXECUTION_TIMESTAMP"].GetStringValue())
+		assert.Equal(t, "1705309200", fields["LAST_SCHEDULE_TIMESTAMP"].GetStringValue())
 	})
 }
