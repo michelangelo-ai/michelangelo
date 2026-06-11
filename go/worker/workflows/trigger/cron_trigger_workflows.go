@@ -232,7 +232,7 @@ func runPipeline(ctx workflow.Context, triggerRun *v2pb.TriggerRun, param parame
 	executionTimestamp := param.GetExecutionTimestamp(logicalTs)
 
 	// Compute the previous scheduled time from the trigger's schedule so the pipeline
-	// run can determine the gap to process via os.environ["LAST_EXECUTION_TIMESTAMP"].
+	// run can determine the gap to process via os.environ["LAST_SCHEDULE_TIMESTAMP"].
 	lastTs := prevScheduledTime(triggerRun.Spec.Trigger, executionTimestamp)
 
 	// Generate pipeline run request
@@ -334,7 +334,7 @@ func generatePipelineRunRequest(
 		if pbStruct.Fields["environ"] == nil {
 			pbStruct.Fields["environ"] = utils.NewStructValue(&pbtypes.Struct{Fields: make(map[string]*pbtypes.Value)})
 		}
-		pbStruct.Fields["environ"].GetStructValue().Fields["LAST_EXECUTION_TIMESTAMP"] = utils.NewStringValue(
+		pbStruct.Fields["environ"].GetStructValue().Fields["LAST_SCHEDULE_TIMESTAMP"] = utils.NewStringValue(
 			fmt.Sprintf("%d", lastTs.Unix()),
 		)
 	}
@@ -448,7 +448,7 @@ func generateRandomString(length int) string {
 // IMPORTANT — this is NOT the actual last-run timestamp from history.
 // It is a purely deterministic value derived from the schedule interval:
 //
-//	last_execution_timestamp = executionTimestamp - cron_interval
+//	LAST_SCHEDULE_TIMESTAMP = executionTimestamp - cron_interval
 //
 // Rationale: the trigger workflow does not query historical pipeline runs.
 // Instead it uses the schedule's own periodicity as the authoritative interval,
