@@ -13,9 +13,9 @@ The OSS release is staged so each version makes a specific, scoped promise rathe
 
 | Version | Target | Focus |
 |---|---|---|
-| **0.1.2** | June 2026 | Release management + core pipeline platform — UniFlow, Ray, pipeline/run/trigger management, MA commands, MA Studio |
-| **0.2.0** | July 2026 | End-to-end LLM model management — Foundation Model fine-tuning, model registry, offline inference, progressive serving |
-| **0.3.0** | Q3 FY26 | Agent + LLM Gateway — K8s-native containerized agent (Agent Job API + Controller Manager) + LLM Gateway (LiteLLM or Bifrost, CRD-sync routing) |
+| **0.2.0** | June 2026 | Release management + core pipeline platform — UniFlow, Ray/ Spark integration, pipeline/run/trigger management, MA commands, MA Studio |
+| **0.3.0** | July 2026 | End-to-end LLM model management — Foundation Model fine-tuning, model registry, offline inference, progressive serving |
+| **0.4.0** | H2 FY26 | Agent + LLM Gateway — K8s-native containerized agent (Agent Job API + Controller Manager) + LLM Gateway (LiteLLM or Bifrost, CRD-sync routing) |
 
 ## Versioning Policy
 
@@ -33,7 +33,7 @@ These capabilities are shipped and available in the current release.
 
 **Project & Pipeline Management**
 - Project creation and lifecycle management
-- Pipeline authoring in YAML, Python, and Uniflow
+- Pipeline authoring in K3s CRD YAML, Python, and Uniflow
 - Revision management and versioning
 - Overridable parameters via S3/GCS URLs
 - Auto-flip triggers on main branch merge
