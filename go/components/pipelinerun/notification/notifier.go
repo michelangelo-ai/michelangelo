@@ -24,7 +24,9 @@ type Config struct {
 	// If empty, no deep link is included in notification messages.
 	StudioBaseURL string
 	// SenderEmail is the From address for outgoing email notifications.
-	// If empty, the activity implementation chooses its own default.
+	// Required when a real email transport activity is wired. The built-in
+	// no-op activity ignores this field — emails will not be delivered until
+	// the activity is replaced with a real implementation (SMTP, SendGrid, etc.).
 	SenderEmail string
 }
 

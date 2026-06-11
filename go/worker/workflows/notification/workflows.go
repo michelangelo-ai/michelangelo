@@ -7,7 +7,6 @@ import (
 
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	"github.com/michelangelo-ai/michelangelo/go/base/notification/types"
-	notificationActivities "github.com/michelangelo-ai/michelangelo/go/worker/activities/notification"
 	"go.uber.org/zap"
 )
 
@@ -20,72 +19,41 @@ var workflowActivityOpts = workflow.ActivityOptions{
 // Workflow holds workflow-level dependencies injected at worker registration time.
 //
 // Keeping these as struct fields — rather than embedding them in the serialized
-// request — allows non-serializable values such as PhaseResolver (a function) to
-// be injected via FX without modifying the Cadence/Temporal workflow input schema.
+// request — allows non-serializable values (functions, interfaces) to be injected
+// via FX without modifying the Cadence/Temporal workflow input schema.
 type Workflow struct {
 	phaseResolver types.PhaseResolver
+	sinks         []Sink
 }
 
-// NewWorkflow creates a Workflow with the given PhaseResolver.
+// NewWorkflow creates a Workflow with the given PhaseResolver and notification sinks.
 //
-// Pass nil to use DefaultPhaseResolver, which covers the built-in pipeline types.
-// Operators with custom pipeline types should supply their own resolver:
+// Pass nil for phaseResolver to use DefaultPhaseResolver, which covers the
+// built-in pipeline types. Operators with custom pipeline types should supply
+// their own resolver via FX:
 //
 //	fx.Decorate(func() types.PhaseResolver { return myCustomResolver })
-func NewWorkflow(phaseResolver types.PhaseResolver) *Workflow {
+//
+// Pass a non-empty sinks slice to override the default email and Slack sinks.
+// Add new sinks (e.g. PagerDuty, webhook) without modifying this workflow:
+//
+//	fx.Decorate(func() []Sink { return []Sink{&EmailSink{}, &PagerDutySink{}} })
+func NewWorkflow(phaseResolver types.PhaseResolver, sinks []Sink) *Workflow {
 	if phaseResolver == nil {
 		phaseResolver = types.DefaultPhaseResolver
 	}
-	return &Workflow{phaseResolver: phaseResolver}
-}
-
-// sendSlackNotification executes SendMessageToSlackActivity as a workflow activity.
-func sendSlackNotification(ctx workflow.Context, channel, text string) error {
-	logger := workflow.GetLogger(ctx)
-	err := workflow.ExecuteActivity(
-		workflow.WithActivityOptions(ctx, workflowActivityOpts),
-		notificationActivities.SendMessageToSlackActivity,
-		&notificationActivities.SendMessageToSlackActivityRequest{
-			Channel: channel,
-			Text:    text,
-		}).Get(ctx, nil)
-	if err != nil {
-		logger.Error("Slack notification failed", zap.Error(err))
-		return err
+	return &Workflow{
+		phaseResolver: phaseResolver,
+		sinks:         sinks,
 	}
-	logger.Info("Slack notification sent")
-	return nil
 }
 
-// sendEmailNotification executes SendMessageToEmailActivity as a workflow activity.
-func sendEmailNotification(ctx workflow.Context, to []string, subject, text, sendAs string) error {
-	logger := workflow.GetLogger(ctx)
-	err := workflow.ExecuteActivity(
-		workflow.WithActivityOptions(ctx, workflowActivityOpts),
-		notificationActivities.SendMessageToEmailActivity,
-		&notificationActivities.SendMessageToEmailActivityRequest{
-			To:      to,
-			Subject: subject,
-			Text:    text,
-			SendAs:  sendAs,
-		}).Get(ctx, nil)
-	if err != nil {
-		logger.Error("Email notification failed", zap.Error(err))
-		return err
-	}
-	logger.Info("Email notification sent")
-	return nil
-}
-
-// SendPipelineRunNotification fans out email and Slack notifications for a
-// pipeline run state change.
+// SendPipelineRunNotification fans out notifications for a pipeline run state
+// change to all registered sinks.
 //
-// Notification delivery failures are accumulated with errors.Join so that a
-// failure on one channel does not suppress errors from others. The workflow
-// returns a non-nil error only when at least one notification fails.
-//
-// The PhaseResolver injected into the Workflow struct is used to build deep
-// links in notification bodies. Override it via FX to support custom pipeline types.
+// Each configured notification is matched against the current pipeline run state;
+// only matching notifications are delivered. Delivery failures are accumulated
+// with errors.Join so that a failure on one sink does not suppress others.
 func (wf *Workflow) SendPipelineRunNotification(ctx workflow.Context, req *types.PipelineRunNotificationRequest) error {
 	ctx = workflow.WithActivityOptions(ctx, workflowActivityOpts)
 	logger := workflow.GetLogger(ctx)
@@ -98,22 +66,16 @@ func (wf *Workflow) SendPipelineRunNotification(ctx workflow.Context, req *types
 			continue
 		}
 
-		notifText := types.GenerateText(pipelineRun, "email", req.StudioBaseURL, wf.phaseResolver)
-		if len(notif.Emails) > 0 {
-			if err := sendEmailNotification(ctx, notif.Emails,
-				types.GenerateSubject(pipelineRun),
-				notifText,
-				req.SenderEmail,
-			); err != nil {
-				logger.Error("Email notification failed", zap.Error(err))
-				errs = errors.Join(errs, err)
-			}
+		msg := Message{
+			Subject:   types.GenerateSubject(pipelineRun),
+			EmailText: types.GenerateText(pipelineRun, "email", req.StudioBaseURL, wf.phaseResolver),
+			SlackText: types.GenerateText(pipelineRun, "slack", req.StudioBaseURL, wf.phaseResolver),
+			SendAs:    req.SenderEmail,
 		}
 
-		slackText := types.GenerateText(pipelineRun, "slack", req.StudioBaseURL, wf.phaseResolver)
-		for _, channel := range notif.SlackDestinations {
-			if err := sendSlackNotification(ctx, channel, slackText); err != nil {
-				logger.Error("Slack notification failed", zap.String("channel", channel), zap.Error(err))
+		for _, sink := range wf.sinks {
+			if err := sink.Notify(ctx, notif, msg); err != nil {
+				logger.Error("Notification sink failed", zap.Error(err))
 				errs = errors.Join(errs, err)
 			}
 		}

@@ -17,7 +17,10 @@ const (
 	// PipelineRunNotificationWorkflowName is the registered name of the pipeline run
 	// notification workflow in Cadence/Temporal. Both the notifier (which starts the
 	// workflow) and the worker (which registers it) must use this constant.
-	PipelineRunNotificationWorkflowName = "PipelineRunNotificationWorkflow"
+	//
+	// The name follows the reverse-DNS convention recommended by Temporal to avoid
+	// collisions in multi-tenant namespaces.
+	PipelineRunNotificationWorkflowName = "io.michelangelo.notification.PipelineRunFanout"
 
 	_sourcePipelineTypeLabelName         = "michelangelo/SourcePipelineType"
 	_sourcePipelineManifestTypeLabelName = "pipeline.michelangelo/PipelineManifestType"

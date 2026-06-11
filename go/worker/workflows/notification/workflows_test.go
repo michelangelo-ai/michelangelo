@@ -13,17 +13,22 @@ import (
 // TestNewWorkflow verifies that NewWorkflow wires the PhaseResolver correctly.
 func TestNewWorkflow(t *testing.T) {
 	t.Run("nil resolver defaults to DefaultPhaseResolver", func(t *testing.T) {
-		wf := NewWorkflow(nil)
+		wf := NewWorkflow(nil, nil)
 		assert.NotNil(t, wf)
 		assert.NotNil(t, wf.phaseResolver)
-		// DefaultPhaseResolver maps PIPELINE_TYPE_TRAIN to "train"
 		assert.Equal(t, "train", wf.phaseResolver("PIPELINE_TYPE_TRAIN"))
 	})
 
 	t.Run("custom resolver is used", func(t *testing.T) {
 		custom := types.PhaseResolver(func(_ string) string { return "custom-phase" })
-		wf := NewWorkflow(custom)
+		wf := NewWorkflow(custom, nil)
 		assert.Equal(t, "custom-phase", wf.phaseResolver("anything"))
+	})
+
+	t.Run("sinks are stored as provided", func(t *testing.T) {
+		sinks := []Sink{&EmailSink{}, &SlackSink{}}
+		wf := NewWorkflow(nil, sinks)
+		assert.Len(t, wf.sinks, 2)
 	})
 }
 
@@ -31,7 +36,7 @@ func TestNewWorkflow(t *testing.T) {
 // via the shared types package (it must not be defined locally to avoid the
 // layering violation where the controller imports the worker package).
 func TestWorkflowConstants(t *testing.T) {
-	assert.Equal(t, "PipelineRunNotificationWorkflow", types.PipelineRunNotificationWorkflowName)
+	assert.Equal(t, "io.michelangelo.notification.PipelineRunFanout", types.PipelineRunNotificationWorkflowName)
 	assert.NotZero(t, workflowActivityOpts.ScheduleToStartTimeout)
 	assert.NotZero(t, workflowActivityOpts.StartToCloseTimeout)
 	assert.NotZero(t, workflowActivityOpts.HeartbeatTimeout)

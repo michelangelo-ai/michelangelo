@@ -10,26 +10,38 @@ import (
 
 // Module provides FX dependency injection for the notification workflow.
 //
-// By default the built-in DefaultPhaseResolver is used to build deep links in
-// notification bodies. Operators with custom pipeline types can override it:
+// Default bindings:
+//   - PhaseResolver: types.DefaultPhaseResolver (covers built-in pipeline types)
+//   - Sinks: EmailSink and SlackSink
 //
-//	fx.Decorate(func() types.PhaseResolver { return myCustomResolver })
+// Override either binding via fx.Decorate to extend without forking:
+//
+//	// Custom phase resolver
+//	fx.Decorate(func() types.PhaseResolver { return myResolver })
+//
+//	// Additional notification channel
+//	fx.Decorate(func() []Sink { return []Sink{&EmailSink{}, &SlackSink{}, &PagerDutySink{}} })
 var Module = fx.Options(
 	fx.Provide(providePhaseResolver),
+	fx.Provide(provideDefaultSinks),
 	fx.Provide(NewWorkflow),
 	fx.Invoke(register),
 )
 
 // providePhaseResolver supplies the default PhaseResolver to FX.
-// Override this binding to support custom pipeline type labels.
 func providePhaseResolver() types.PhaseResolver {
 	return types.DefaultPhaseResolver
 }
 
-// register registers the notification workflow with each worker instance.
+// provideDefaultSinks supplies the built-in email and Slack sinks.
+// Override via fx.Decorate to add or replace channels.
+func provideDefaultSinks() []Sink {
+	return []Sink{&EmailSink{}, &SlackSink{}}
+}
+
+// register registers the notification workflow method with each worker instance.
 func register(wf *Workflow, workers []worker.Worker) {
 	for _, w := range workers {
 		w.RegisterWorkflow(wf.SendPipelineRunNotification, types.PipelineRunNotificationWorkflowName)
 	}
 }
-
