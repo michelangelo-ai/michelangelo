@@ -221,12 +221,22 @@ def push_step(
     # REGISTRY_ENDPOINT → APIRegistryClient (remote); else InMemoryRegistryClient.
     registry_endpoint = os.environ.get("REGISTRY_ENDPOINT")
     if registry_endpoint:
+        import grpc as _grpc
+
         from michelangelo.api.v2 import APIClient
         from michelangelo.lib.model_manager.registry.api_client import APIRegistryClient
 
+        _insecure = os.environ.get("REGISTRY_INSECURE", "true").lower() != "false"
+        _credentials = None if _insecure else _grpc.ssl_channel_credentials()
+        _channel = (
+            _grpc.insecure_channel(registry_endpoint)
+            if _insecure
+            else _grpc.secure_channel(registry_endpoint, _credentials)
+        )
         _api_client = APIClient(
             endpoint=registry_endpoint,
             caller="california-housing-push-step",
+            channel=_channel,
         )
         registry_client = APIRegistryClient(
             svc=_api_client.ModelService,

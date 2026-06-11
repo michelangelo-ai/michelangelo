@@ -195,6 +195,7 @@ kubectl delete cachedoutputs --all   # clear stale cached task outputs
 | `MINIO_SECRET_KEY` | If `MINIO_ENDPOINT` set | — | Secret access key |
 | `MINIO_SECURE` | No | `true` | Set `false` for plaintext (non-TLS) endpoints |
 | `REGISTRY_ENDPOINT` | No | — | Model registry gRPC endpoint (`host:port`). Unset → in-memory only |
+| `REGISTRY_INSECURE` | No | `true` | Set `false` to enable TLS for the registry connection |
 | `REGISTRY_NAMESPACE` | No | `default` | Model registry namespace |
 
 With `MINIO_ENDPOINT` set, `push_step` uploads all artifacts to MinIO:
