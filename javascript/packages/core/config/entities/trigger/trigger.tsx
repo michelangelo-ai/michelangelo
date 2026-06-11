@@ -51,15 +51,10 @@ export const TRIGGER_ENTITY_CONFIG: PhaseEntityConfig = {
       modal: {
         type: 'confirm',
         header: { title: 'Kill Trigger Run' },
-        body: interpolate(({ data }) => {
-          const run = data as TriggerRun;
-          return (
-            <p>
-              Kill run <strong>{run.metadata.name}</strong> in pipeline{' '}
-              <strong>{run.spec.pipeline.name}</strong>? This action cannot be undone.
-            </p>
-          );
-        }),
+        body: interpolate(
+          ({ data }) =>
+            `Kill run **${(data as TriggerRun).metadata.name}** in pipeline **${(data as TriggerRun).spec.pipeline.name}**? This action cannot be undone.`
+        ),
         button: { label: 'Kill' },
         destructive: true,
       },

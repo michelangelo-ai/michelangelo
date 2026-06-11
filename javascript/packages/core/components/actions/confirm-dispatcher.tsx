@@ -3,6 +3,7 @@ import { ARTWORK_TYPE } from 'baseui/banner';
 
 import { Banner } from '#core/components/banner/banner';
 import { Icon } from '#core/components/icon/icon';
+import { Markdown } from '#core/components/markdown/markdown';
 import { ConfirmDialog } from '#core/components/modal/confirm-dialog/confirm-dialog';
 import { useSchemaMiddleware } from '#core/hooks/use-schema-middleware/use-schema-middleware';
 import { useStudioMutation } from '#core/hooks/use-studio-mutation';
@@ -69,7 +70,7 @@ export function ConfirmDispatcher<T extends Data>({ action, record, onClose }: P
           {modal.banner.content}
         </Banner>
       )}
-      {modal.body}
+      {modal.body && <Markdown>{modal.body}</Markdown>}
     </ConfirmDialog>
   );
 }
