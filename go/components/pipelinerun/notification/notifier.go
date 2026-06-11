@@ -101,7 +101,7 @@ func (n *PipelineRunNotifier) NotifyOnStateChange(
 		req,
 	)
 	if err != nil {
-		logger.Error("Failed to start notification workflow", zap.Error(err))
+		logger.Warn("Failed to start notification workflow", zap.Error(err))
 		return err
 	}
 

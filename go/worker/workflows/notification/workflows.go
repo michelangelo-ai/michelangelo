@@ -17,6 +17,28 @@ var workflowActivityOpts = workflow.ActivityOptions{
 	HeartbeatTimeout:       1 * time.Minute,
 }
 
+// Workflow holds workflow-level dependencies injected at worker registration time.
+//
+// Keeping these as struct fields — rather than embedding them in the serialized
+// request — allows non-serializable values such as PhaseResolver (a function) to
+// be injected via FX without modifying the Cadence/Temporal workflow input schema.
+type Workflow struct {
+	phaseResolver types.PhaseResolver
+}
+
+// NewWorkflow creates a Workflow with the given PhaseResolver.
+//
+// Pass nil to use DefaultPhaseResolver, which covers the built-in pipeline types.
+// Operators with custom pipeline types should supply their own resolver:
+//
+//	fx.Decorate(func() types.PhaseResolver { return myCustomResolver })
+func NewWorkflow(phaseResolver types.PhaseResolver) *Workflow {
+	if phaseResolver == nil {
+		phaseResolver = types.DefaultPhaseResolver
+	}
+	return &Workflow{phaseResolver: phaseResolver}
+}
+
 // sendSlackNotification executes SendMessageToSlackActivity as a workflow activity.
 func sendSlackNotification(ctx workflow.Context, channel, text string) error {
 	logger := workflow.GetLogger(ctx)
@@ -61,7 +83,10 @@ func sendEmailNotification(ctx workflow.Context, to []string, subject, text, sen
 // Notification delivery failures are accumulated with errors.Join so that a
 // failure on one channel does not suppress errors from others. The workflow
 // returns a non-nil error only when at least one notification fails.
-func SendPipelineRunNotification(ctx workflow.Context, req *types.PipelineRunNotificationRequest) error {
+//
+// The PhaseResolver injected into the Workflow struct is used to build deep
+// links in notification bodies. Override it via FX to support custom pipeline types.
+func (wf *Workflow) SendPipelineRunNotification(ctx workflow.Context, req *types.PipelineRunNotificationRequest) error {
 	ctx = workflow.WithActivityOptions(ctx, workflowActivityOpts)
 	logger := workflow.GetLogger(ctx)
 
@@ -73,7 +98,7 @@ func SendPipelineRunNotification(ctx workflow.Context, req *types.PipelineRunNot
 			continue
 		}
 
-		notifText := types.GenerateText(pipelineRun, "email", req.StudioBaseURL, nil)
+		notifText := types.GenerateText(pipelineRun, "email", req.StudioBaseURL, wf.phaseResolver)
 		if len(notif.Emails) > 0 {
 			if err := sendEmailNotification(ctx, notif.Emails,
 				types.GenerateSubject(pipelineRun),
@@ -85,7 +110,7 @@ func SendPipelineRunNotification(ctx workflow.Context, req *types.PipelineRunNot
 			}
 		}
 
-		slackText := types.GenerateText(pipelineRun, "slack", req.StudioBaseURL, nil)
+		slackText := types.GenerateText(pipelineRun, "slack", req.StudioBaseURL, wf.phaseResolver)
 		for _, channel := range notif.SlackDestinations {
 			if err := sendSlackNotification(ctx, channel, slackText); err != nil {
 				logger.Error("Slack notification failed", zap.String("channel", channel), zap.Error(err))

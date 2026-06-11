@@ -10,7 +10,24 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// TestWorkflowConstants verifies that the workflow name constant is accessible
+// TestNewWorkflow verifies that NewWorkflow wires the PhaseResolver correctly.
+func TestNewWorkflow(t *testing.T) {
+	t.Run("nil resolver defaults to DefaultPhaseResolver", func(t *testing.T) {
+		wf := NewWorkflow(nil)
+		assert.NotNil(t, wf)
+		assert.NotNil(t, wf.phaseResolver)
+		// DefaultPhaseResolver maps PIPELINE_TYPE_TRAIN to "train"
+		assert.Equal(t, "train", wf.phaseResolver("PIPELINE_TYPE_TRAIN"))
+	})
+
+	t.Run("custom resolver is used", func(t *testing.T) {
+		custom := types.PhaseResolver(func(_ string) string { return "custom-phase" })
+		wf := NewWorkflow(custom)
+		assert.Equal(t, "custom-phase", wf.phaseResolver("anything"))
+	})
+}
+
+
 // via the shared types package (it must not be defined locally to avoid the
 // layering violation where the controller imports the worker package).
 func TestWorkflowConstants(t *testing.T) {
