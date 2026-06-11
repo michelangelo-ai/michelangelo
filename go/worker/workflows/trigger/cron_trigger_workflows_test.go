@@ -419,11 +419,11 @@ func TestPrevScheduledTime(t *testing.T) {
 	anchor := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
 
 	tests := []struct {
-		name        string
-		trigger     *v2pb.Trigger
-		ts          time.Time
-		wantNil     bool
-		wantLastTs  time.Time
+		name       string
+		trigger    *v2pb.Trigger
+		ts         time.Time
+		wantNil    bool
+		wantLastTs time.Time
 	}{
 		{
 			name: "IntervalSchedule 1 hour — previous is exactly 1 hour before",
@@ -456,8 +456,8 @@ func TestPrevScheduledTime(t *testing.T) {
 					CronSchedule: &v2pb.CronSchedule{Cron: "0 * * * *"},
 				},
 			},
-			ts:         anchor,                               // 10:00
-			wantLastTs: anchor.Add(-time.Hour),               // 09:00
+			ts:         anchor,                 // 10:00
+			wantLastTs: anchor.Add(-time.Hour), // 09:00
 		},
 		{
 			name: "CronSchedule daily midnight — previous day",
@@ -480,7 +480,7 @@ func TestPrevScheduledTime(t *testing.T) {
 			wantLastTs: time.Date(2024, 1, 15, 10, 15, 0, 0, time.UTC),
 		},
 		{
-			name: "nil trigger — returns nil",
+			name:    "nil trigger — returns nil",
 			trigger: nil,
 			ts:      anchor,
 			wantNil: true,
