@@ -56,7 +56,6 @@ export const TRIGGER_ENTITY_CONFIG: PhaseEntityConfig = {
             `Kill run **${(data as TriggerRun).metadata.name}** in pipeline **${(data as TriggerRun).spec.pipeline.name}**? This action cannot be undone.`
         ),
         button: { label: 'Kill' },
-        destructive: true,
       },
     },
   ],
