@@ -45,6 +45,12 @@ func TestWorkflowConstants(t *testing.T) {
 // TestSendPipelineRunNotificationInputValidation tests basic input handling for
 // the workflow function. Full workflow execution requires a Cadence/Temporal
 // test environment; these tests verify the function handles inputs without panicking.
+//
+// Coverage gap: errors.Join fan-out behaviour (partial sink failures) is not
+// tested here because Cadence/Temporal activity execution requires a real or
+// test-harness workflow context. An integration test would: register EmailSink
+// and a failing stub sink, execute the workflow, and assert that the error from
+// the stub is returned while email delivery still proceeds.
 func TestSendPipelineRunNotificationInputValidation(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -134,8 +140,8 @@ func TestSendPipelineRunNotificationInputValidation(t *testing.T) {
 					for _, notif := range tt.req.PipelineRun.Spec.Notifications {
 						_ = types.ContainsEventType(notif.EventTypes, tt.req.PipelineRun.Status.State)
 						_ = types.GenerateSubject(tt.req.PipelineRun)
-						_ = types.GenerateText(tt.req.PipelineRun, "email", tt.req.StudioBaseURL, nil)
-						_ = types.GenerateText(tt.req.PipelineRun, "slack", tt.req.StudioBaseURL, nil)
+						_ = types.GenerateText(tt.req.PipelineRun, types.NotificationTypeEmail, tt.req.StudioBaseURL, nil)
+						_ = types.GenerateText(tt.req.PipelineRun, types.NotificationTypeSlack, tt.req.StudioBaseURL, nil)
 					}
 				}, tt.description)
 			}
@@ -171,12 +177,12 @@ func TestNotificationHelperFunctions(t *testing.T) {
 	})
 
 	t.Run("GenerateEmailText", func(t *testing.T) {
-		text := types.GenerateText(testPipelineRun, "email", "https://ml.example.com/", nil)
+		text := types.GenerateText(testPipelineRun, types.NotificationTypeEmail, "https://ml.example.com/", nil)
 		assert.NotEmpty(t, text)
 	})
 
 	t.Run("GenerateSlackText", func(t *testing.T) {
-		text := types.GenerateText(testPipelineRun, "slack", "https://ml.example.com/", nil)
+		text := types.GenerateText(testPipelineRun, types.NotificationTypeSlack, "https://ml.example.com/", nil)
 		assert.NotEmpty(t, text)
 	})
 

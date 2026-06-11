@@ -68,8 +68,8 @@ func (wf *Workflow) SendPipelineRunNotification(ctx workflow.Context, req *types
 
 		msg := Message{
 			Subject:   types.GenerateSubject(pipelineRun),
-			EmailText: types.GenerateText(pipelineRun, "email", req.StudioBaseURL, wf.phaseResolver),
-			SlackText: types.GenerateText(pipelineRun, "slack", req.StudioBaseURL, wf.phaseResolver),
+			EmailText: types.GenerateText(pipelineRun, types.NotificationTypeEmail, req.StudioBaseURL, wf.phaseResolver),
+			SlackText: types.GenerateText(pipelineRun, types.NotificationTypeSlack, req.StudioBaseURL, wf.phaseResolver),
 			SendAs:    req.SenderEmail,
 		}
 

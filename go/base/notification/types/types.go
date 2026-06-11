@@ -22,8 +22,18 @@ const (
 	// collisions in multi-tenant namespaces.
 	PipelineRunNotificationWorkflowName = "io.michelangelo.notification.PipelineRunFanout"
 
-	_sourcePipelineTypeLabelName         = "michelangelo/SourcePipelineType"
-	_sourcePipelineManifestTypeLabelName = "pipeline.michelangelo/PipelineManifestType"
+	// NotificationTypeEmail selects the plain-text email body in GenerateText.
+	NotificationTypeEmail = "email"
+	// NotificationTypeSlack selects the Slack-formatted body in GenerateText.
+	NotificationTypeSlack = "slack"
+
+	// SourcePipelineTypeLabelName is the Kubernetes label key that identifies the
+	// pipeline type (e.g. PIPELINE_TYPE_TRAIN). External integrators can read this
+	// label to drive custom routing logic without hardcoding the key string.
+	SourcePipelineTypeLabelName = "michelangelo/SourcePipelineType"
+	// SourcePipelineManifestTypeLabelName is the Kubernetes label key that identifies
+	// the pipeline manifest type (e.g. PIPELINE_MANIFEST_TYPE_ASL).
+	SourcePipelineManifestTypeLabelName = "pipeline.michelangelo/PipelineManifestType"
 
 	// _pipelineManifestTypeASL identifies ASL (Amazon States Language) pipelines.
 	// These use Cadence as the workflow engine, so the notification includes a
@@ -110,27 +120,32 @@ func GenerateSubject(pipelineRun *v2pb.PipelineRun) string {
 
 // GenerateText returns the notification body for email or Slack.
 //
+// textType must be NotificationTypeEmail or NotificationTypeSlack.
+//
 // studioBaseURL is the base URL of the platform UI used to build a deep link.
-// Pass an empty string to omit the link.
+// A trailing slash is added automatically if missing. Pass an empty string to
+// omit the link entirely.
 //
 // phaseResolver maps the pipeline type label value to a UI path segment.
-// Pass nil to use DefaultPhaseResolver.
+// Pass nil to use DefaultPhaseResolver. Implement PhaseResolver to customize
+// path segments for non-standard or operator-defined pipeline types.
 func GenerateText(pipelineRun *v2pb.PipelineRun, textType string, studioBaseURL string, phaseResolver PhaseResolver) string {
 	if phaseResolver == nil {
 		phaseResolver = DefaultPhaseResolver
 	}
-	pipelineType := pipelineRun.Labels[_sourcePipelineTypeLabelName]
-	pipelineManifestType := pipelineRun.Labels[_sourcePipelineManifestTypeLabelName]
+	pipelineType := pipelineRun.Labels[SourcePipelineTypeLabelName]
+	pipelineManifestType := pipelineRun.Labels[SourcePipelineManifestTypeLabelName]
 	state := strings.TrimPrefix(pipelineRun.Status.State.String(), "PIPELINE_RUN_STATE_")
 	pipelineTypeStr := strings.TrimPrefix(pipelineType, "PIPELINE_TYPE_")
 
 	var studioLink string
 	if studioBaseURL != "" {
+		base := strings.TrimRight(studioBaseURL, "/") + "/"
 		phase := phaseResolver(pipelineType)
-		studioLink = fmt.Sprintf("%s%s/%s/runs/%s", studioBaseURL, pipelineRun.Namespace, phase, pipelineRun.Name)
+		studioLink = fmt.Sprintf("%s%s/%s/runs/%s", base, pipelineRun.Namespace, phase, pipelineRun.Name)
 	}
 
-	if textType == "slack" {
+	if textType == NotificationTypeSlack {
 		text := fmt.Sprintf("%s:\n- Name: %s\n- Project: %s\n- State: %s\n- Pipeline Type: %s\n",
 			GenerateSubject(pipelineRun), pipelineRun.Name, pipelineRun.Namespace, state, pipelineTypeStr)
 		if studioLink != "" {

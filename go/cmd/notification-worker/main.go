@@ -12,18 +12,44 @@
 // # Configuration
 //
 // The binary reads go/cmd/notification-worker/config/base.yaml at startup.
+// All fields support ${ENV_VAR:default} syntax for environment-variable override.
 // Key fields:
 //
-//	workflow-engine.workers[].taskList   — must match the task list used by
-//	                                       PipelineRunNotifier.Config.TaskList
-//	notification.studioBaseURL           — base URL for deep links in messages
-//	notification.senderEmail             — From address for email notifications
+//	notification.taskList       — must match PipelineRunNotifier.Config.TaskList
+//	notification.studioBaseURL  — base URL for deep links in messages (must end with /)
+//	notification.senderEmail    — From address for email notifications
 //
 // # Extending notification delivery
 //
 // The default SendMessageToSlackActivity and SendMessageToEmailActivity
 // implementations log the request and return nil. To deliver real messages,
-// replace the activity module with your own before calling app.Run().
+// replace the activity module with your own transport before calling app.Run():
+//
+//	func main() {
+//	    fx.New(
+//	        // Replace the default no-op module with your own transport:
+//	        mysmtp.ActivityModule,   // provides SendMessageToEmailActivity
+//	        myslack.ActivityModule,  // provides SendMessageToSlackActivity
+//
+//	        notificationWorkflows.Module,
+//	        worker.Module,
+//	        env.Module,
+//	        config.Module,
+//	        zapfx.Module,
+//	    ).Run()
+//	}
+//
+// To add a new notification channel (e.g. PagerDuty) without editing the
+// workflow, implement the notification.Sink interface and override the sinks
+// binding via fx.Decorate in your module:
+//
+//	fx.Decorate(func() []notification.Sink {
+//	    return []notification.Sink{
+//	        &notification.EmailSink{},
+//	        &notification.SlackSink{},
+//	        &mypagerduty.Sink{},
+//	    }
+//	})
 package main
 
 import (

@@ -113,8 +113,8 @@ func TestGenerateText(t *testing.T) {
 			Name:      "test-run",
 			Namespace: "test-project",
 			Labels: map[string]string{
-				"michelangelo/SourcePipelineType":            "PIPELINE_TYPE_TRAIN",
-				"pipeline.michelangelo/PipelineManifestType": "PIPELINE_MANIFEST_TYPE_ASL",
+				SourcePipelineTypeLabelName:         "PIPELINE_TYPE_TRAIN",
+				SourcePipelineManifestTypeLabelName: "PIPELINE_MANIFEST_TYPE_ASL",
 			},
 		},
 		Status: v2pb.PipelineRunStatus{
@@ -123,7 +123,7 @@ func TestGenerateText(t *testing.T) {
 		},
 	}
 
-	emailText := GenerateText(pipelineRun, "email", testStudioURL, nil)
+	emailText := GenerateText(pipelineRun, NotificationTypeEmail, testStudioURL, nil)
 	assert.Contains(t, emailText, "test-run")
 	assert.Contains(t, emailText, "test-project")
 	assert.Contains(t, emailText, "SUCCEEDED")
@@ -131,7 +131,7 @@ func TestGenerateText(t *testing.T) {
 	assert.Contains(t, emailText, testStudioURL)
 	assert.Contains(t, emailText, "https://workflow.example.com/run/123")
 
-	slackText := GenerateText(pipelineRun, "slack", testStudioURL, nil)
+	slackText := GenerateText(pipelineRun, NotificationTypeSlack, testStudioURL, nil)
 	assert.Contains(t, slackText, "test-run")
 	assert.Contains(t, slackText, "test-project")
 	assert.Contains(t, slackText, "SUCCEEDED")
@@ -140,11 +140,16 @@ func TestGenerateText(t *testing.T) {
 	assert.Contains(t, slackText, "<https://workflow.example.com/run/123|Workflow Log URL>")
 
 	// No studio link when studioBaseURL is empty.
-	noLinkText := GenerateText(pipelineRun, "email", "", nil)
+	noLinkText := GenerateText(pipelineRun, NotificationTypeEmail, "", nil)
 	assert.NotContains(t, noLinkText, "Studio URL")
 
+	// StudioBaseURL without trailing slash produces the same link as with one.
+	withSlash := GenerateText(pipelineRun, NotificationTypeEmail, "https://ml.example.com/studio/", nil)
+	withoutSlash := GenerateText(pipelineRun, NotificationTypeEmail, "https://ml.example.com/studio", nil)
+	assert.Equal(t, withSlash, withoutSlash)
+
 	// Custom phase resolver is honoured.
-	customText := GenerateText(pipelineRun, "email", testStudioURL, func(_ string) string { return "custom-phase" })
+	customText := GenerateText(pipelineRun, NotificationTypeEmail, testStudioURL, func(_ string) string { return "custom-phase" })
 	assert.Contains(t, customText, "custom-phase")
 }
 
