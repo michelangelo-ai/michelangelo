@@ -45,6 +45,22 @@ type Reconciler struct {
 	apiHandlerFactory apiHandler.Factory
 }
 
+// NewReconciler constructs a Reconciler with required dependencies.
+//
+// This provides a stable construction API for downstream users so they do not
+// need to rely on reflection to set unexported fields.
+func NewReconciler(
+	env env.Context,
+	apiHandlerFactory apiHandler.Factory,
+	logger *zap.Logger,
+) *Reconciler {
+	return &Reconciler{
+		env:               env,
+		apiHandlerFactory: apiHandlerFactory,
+		logger:            logger,
+	}
+}
+
 // Reconcile is the main reconciliation loop entry point for Pipeline resources.
 //
 // It processes reconciliation requests for Pipeline objects by:

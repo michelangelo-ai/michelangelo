@@ -52,9 +52,5 @@ func register(
 	apiHandlerFactory apiHandler.Factory,
 	logger *zap.Logger,
 ) error {
-	return (&Reconciler{
-		env:               env,
-		apiHandlerFactory: apiHandlerFactory,
-		logger:            logger,
-	}).Register(mgr)
+	return NewReconciler(env, apiHandlerFactory, logger).Register(mgr)
 }
