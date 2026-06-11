@@ -1,5 +1,7 @@
 import { expect, it, vi } from 'vitest';
 
+import { request } from '../request';
+
 // Bypass the /config.json fetch — we only care about the RPC transport layer.
 vi.mock('../runtime-config', () => ({
   getRuntimeConfig: () => Promise.resolve({ apiBaseUrl: 'http://test' }),
@@ -33,7 +35,6 @@ global.fetch = vi.fn().mockResolvedValue({
 });
 
 it('decodes a ListPipelineRun response containing a TypedStruct Any field', async () => {
-  const { request } = await import('../request');
   const result = await request('ListPipelineRun', {} as never);
   const details = (
     result as unknown as { pipelineRunList: { items: { status: { details: unknown[] } }[] } }
