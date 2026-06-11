@@ -70,10 +70,6 @@ These capabilities are shipped and available in the current release.
 
 These features are actively being built and will land in upcoming releases.
 
-**Project Management**
-- GenAI project flavor support
-- Team ownership via OSS ownership model (CODEOWNERS)
-
 **Pipeline Authoring**
 - Draft-based authoring workflow
 - Dev/Prod environment labels derived from git branch
@@ -106,6 +102,8 @@ These features are actively being built and will land in upcoming releases.
 These are planned capabilities we are working towards adding down the road.
 
 **Project Management**
+- GenAI project flavor support
+- Team ownership via OSS ownership model (CODEOWNERS)
 - Cloud zone annotations for multi-cloud routing
 - Git repository migration allowlist
 - Routing affinity inheritance (parent-to-child annotation propagation)
