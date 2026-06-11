@@ -10,6 +10,7 @@ package notification
 
 import (
 	"context"
+	"errors"
 
 	"github.com/cadence-workflow/starlark-worker/activity"
 	"go.uber.org/zap"
@@ -55,6 +56,9 @@ type SendMessageToEmailActivityRequest struct {
 // message. Replace the body of this function with your transport integration
 // (Slack API, webhook, etc.) before relying on Slack notifications in production.
 func SendMessageToSlackActivity(ctx context.Context, req *SendMessageToSlackActivityRequest) error {
+	if req == nil {
+		return errors.New("SendMessageToSlackActivityRequest cannot be nil")
+	}
 	logger := activity.GetLogger(ctx)
 	if logger == nil {
 		logger = zap.NewNop()
@@ -71,6 +75,9 @@ func SendMessageToSlackActivity(ctx context.Context, req *SendMessageToSlackActi
 // message. Replace the body of this function with your transport integration
 // (SMTP, SendGrid, etc.) before relying on email notifications in production.
 func SendMessageToEmailActivity(ctx context.Context, req *SendMessageToEmailActivityRequest) error {
+	if req == nil {
+		return errors.New("SendMessageToEmailActivityRequest cannot be nil")
+	}
 	logger := activity.GetLogger(ctx)
 	if logger == nil {
 		logger = zap.NewNop()

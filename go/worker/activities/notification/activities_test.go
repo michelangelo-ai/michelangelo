@@ -21,32 +21,32 @@ func TestSendMessageToEmailActivity(t *testing.T) {
 		{
 			name: "Valid email request",
 			request: &SendMessageToEmailActivityRequest{
-				To:      []string{"test@uber.com"},
+				To:      []string{"test@example.com"},
 				Subject: "Test Subject",
 				Text:    "Test message",
-				SendAs:  "michelangelo@uber.com",
+				SendAs:  "notifications@example.com",
 			},
 			description: "Should handle valid email request without error",
 		},
 		{
 			name: "Email request with CC and BCC",
 			request: &SendMessageToEmailActivityRequest{
-				To:      []string{"test@uber.com"},
-				Cc:      []string{"cc@uber.com"},
-				Bcc:     []string{"bcc@uber.com"},
+				To:      []string{"test@example.com"},
+				Cc:      []string{"cc@example.com"},
+				Bcc:     []string{"bcc@example.com"},
 				Subject: "Test Subject",
 				Text:    "Test message",
-				SendAs:  "sender@uber.com",
+				SendAs:  "sender@example.com",
 			},
 			description: "Should handle email request with CC and BCC fields",
 		},
 		{
 			name: "Email request with HTML content",
 			request: &SendMessageToEmailActivityRequest{
-				To:      []string{"test@uber.com"},
+				To:      []string{"test@example.com"},
 				Subject: "Test Subject",
 				HTML:    "<p>HTML test message</p>",
-				SendAs:  "sender@uber.com",
+				SendAs:  "sender@example.com",
 			},
 			description: "Should handle email request with HTML content",
 		},
@@ -110,24 +110,20 @@ func TestSendMessageToSlackActivity(t *testing.T) {
 	}
 }
 
-// TestSendMessageToEmailActivityNilRequest tests email activity with nil request.
+// TestSendMessageToEmailActivityNilRequest verifies that a nil request returns
+// an error rather than panicking — a panic would crash the Cadence/Temporal worker process.
 func TestSendMessageToEmailActivityNilRequest(t *testing.T) {
 	ctx := context.Background()
-
-	// The current implementation doesn't validate for nil input and will likely panic
-	// This test documents the current behavior - in production we'd want input validation
-	assert.Panics(t, func() {
-		_ = SendMessageToEmailActivity(ctx, nil)
-	}, "Current implementation should panic with nil request - production code should add validation")
+	err := SendMessageToEmailActivity(ctx, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot be nil")
 }
 
-// TestSendMessageToSlackActivityNilRequest tests slack activity with nil request.
+// TestSendMessageToSlackActivityNilRequest verifies that a nil request returns
+// an error rather than panicking — a panic would crash the Cadence/Temporal worker process.
 func TestSendMessageToSlackActivityNilRequest(t *testing.T) {
 	ctx := context.Background()
-
-	// The current implementation doesn't validate for nil input and will likely panic
-	// This test documents the current behavior - in production we'd want input validation
-	assert.Panics(t, func() {
-		_ = SendMessageToSlackActivity(ctx, nil)
-	}, "Current implementation should panic with nil request - production code should add validation")
+	err := SendMessageToSlackActivity(ctx, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot be nil")
 }
