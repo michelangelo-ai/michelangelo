@@ -193,11 +193,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// Send notifications for state changes (non-blocking)
-	if notificationErr := r.notifier.NotifyOnStateChange(ctx, originalPipelineRun, pipelineRun); notificationErr != nil {
-		logger.Warn("Failed to send notifications",
-			zap.Error(notificationErr),
-			zap.String("pipeline_run", req.NamespacedName.String()))
-		// Don't fail reconciliation due to notification errors
+	if r.notifier != nil {
+		if notificationErr := r.notifier.NotifyOnStateChange(ctx, originalPipelineRun, pipelineRun); notificationErr != nil {
+			logger.Warn("Failed to send notifications",
+				zap.Error(notificationErr),
+				zap.String("pipeline_run", req.NamespacedName.String()))
+			// Don't fail reconciliation due to notification errors
+		}
 	}
 
 	// Check if state changed to terminal state and emit metrics
