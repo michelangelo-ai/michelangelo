@@ -33,7 +33,6 @@ func TestNewWorkflow(t *testing.T) {
 	})
 }
 
-
 // via the shared types package (it must not be defined locally to avoid the
 // layering violation where the controller imports the worker package).
 func TestWorkflowConstants(t *testing.T) {

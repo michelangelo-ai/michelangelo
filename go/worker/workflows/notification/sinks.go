@@ -5,8 +5,8 @@ import (
 	"errors"
 
 	"github.com/cadence-workflow/starlark-worker/workflow"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	notificationActivities "github.com/michelangelo-ai/michelangelo/go/worker/activities/notification"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // Sink delivers a notification to one or more destinations.
