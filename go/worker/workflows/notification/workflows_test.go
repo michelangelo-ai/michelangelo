@@ -13,7 +13,7 @@ import (
 // TestNewWorkflow verifies that NewWorkflow wires the PhaseResolver correctly.
 func TestNewWorkflow(t *testing.T) {
 	t.Run("nil resolver defaults to DefaultPhaseResolver", func(t *testing.T) {
-		wf := NewWorkflow(nil, nil)
+		wf := NewWorkflow(nil, nil, nil)
 		assert.NotNil(t, wf)
 		assert.NotNil(t, wf.phaseResolver)
 		assert.Equal(t, "train", wf.phaseResolver("PIPELINE_TYPE_TRAIN"))
@@ -21,13 +21,13 @@ func TestNewWorkflow(t *testing.T) {
 
 	t.Run("custom resolver is used", func(t *testing.T) {
 		custom := types.PhaseResolver(func(_ string) string { return "custom-phase" })
-		wf := NewWorkflow(custom, nil)
+		wf := NewWorkflow(nil, custom, nil)
 		assert.Equal(t, "custom-phase", wf.phaseResolver("anything"))
 	})
 
 	t.Run("sinks are stored as provided", func(t *testing.T) {
 		sinks := []Sink{&EmailSink{}, &SlackSink{}}
-		wf := NewWorkflow(nil, sinks)
+		wf := NewWorkflow(nil, nil, sinks)
 		assert.Len(t, wf.sinks, 2)
 	})
 }

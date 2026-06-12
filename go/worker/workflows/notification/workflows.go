@@ -22,11 +22,17 @@ var workflowActivityOpts = workflow.ActivityOptions{
 // request — allows non-serializable values (functions, interfaces) to be injected
 // via FX without modifying the Cadence/Temporal workflow input schema.
 type Workflow struct {
+	backend       workflow.Workflow
 	phaseResolver types.PhaseResolver
 	sinks         []Sink
 }
 
-// NewWorkflow creates a Workflow with the given PhaseResolver and notification sinks.
+// NewWorkflow creates a Workflow with the given backend, PhaseResolver and notification sinks.
+//
+// backend is the starlark-worker Workflow backend provided by workflowfx. It is
+// attached to the workflow context via workflow.WithBackend so that
+// workflow.ExecuteActivity resolves correctly. Pass nil only in unit tests that
+// do not invoke activities through a real workflow context.
 //
 // Pass nil for phaseResolver to use DefaultPhaseResolver, which covers the
 // built-in pipeline types. Operators with custom pipeline types should supply
@@ -38,11 +44,12 @@ type Workflow struct {
 // Add new sinks (e.g. PagerDuty, webhook) without modifying this workflow:
 //
 //	fx.Decorate(func() []Sink { return []Sink{&EmailSink{}, &PagerDutySink{}} })
-func NewWorkflow(phaseResolver types.PhaseResolver, sinks []Sink) *Workflow {
+func NewWorkflow(backend workflow.Workflow, phaseResolver types.PhaseResolver, sinks []Sink) *Workflow {
 	if phaseResolver == nil {
 		phaseResolver = types.DefaultPhaseResolver
 	}
 	return &Workflow{
+		backend:       backend,
 		phaseResolver: phaseResolver,
 		sinks:         sinks,
 	}
@@ -55,6 +62,12 @@ func NewWorkflow(phaseResolver types.PhaseResolver, sinks []Sink) *Workflow {
 // only matching notifications are delivered. Delivery failures are accumulated
 // with errors.Join so that a failure on one sink does not suppress others.
 func (wf *Workflow) SendPipelineRunNotification(ctx workflow.Context, req *types.PipelineRunNotificationRequest) error {
+	// Attach the workflow backend so that workflow.ExecuteActivity can resolve
+	// activities. This mirrors the pattern used by other Go workflows in this
+	// codebase (e.g. trigger.CronTrigger).
+	if wf.backend != nil {
+		ctx = workflow.WithBackend(ctx, wf.backend)
+	}
 	ctx = workflow.WithActivityOptions(ctx, workflowActivityOpts)
 	logger := workflow.GetLogger(ctx)
 

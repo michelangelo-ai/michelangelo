@@ -35,10 +35,18 @@ notification:
   # Example: "https://ml.mycompany.com/studio/"
   # Optional — if empty, no deep link is included in notifications.
   # Override: NOTIFICATION_STUDIO_BASE_URL=https://ml.mycompany.com/studio/
-  studioBaseURL: ${NOTIFICATION_STUDIO_BASE_URL:}
+  studioBaseURL: ${NOTIFICATION_STUDIO_BASE_URL:""}
 
   # senderEmail is the From address for outgoing email notifications.
   # Required when a real email transport activity is wired; the built-in
   # no-op activity ignores this field.
   # Override: NOTIFICATION_SENDER_EMAIL=ml-notifications@mycompany.com
-  senderEmail: ${NOTIFICATION_SENDER_EMAIL:}
+  senderEmail: ${NOTIFICATION_SENDER_EMAIL:""}
+
+# MinIO blobstore — required by the shared worker activity framework.
+# In the sandbox the in-cluster MinIO is exposed on localhost:9091.
+minio:
+  awsRegion: us-east-1
+  awsAccessKeyId: minioadmin
+  awsSecretAccessKey: minioadmin
+  awsEndpointUrl: ${MINIO_ENDPOINT:localhost:9091}
