@@ -70,17 +70,17 @@ These capabilities are shipped and available in the current release.
 
 These features are actively being built and will land in upcoming releases.
 
-**Pipeline Authoring**
+**Pipeline Management**
 - Draft-based authoring workflow
 - Dev/Prod environment labels derived from git branch
+- Pipeline deletion
 
 **Model Deployment**
 - Automatic rollback on alert firing
 - Decommission workflow with no-traffic validation gate
-- DeploymentEvent tracking
 
 **Generative AI & LLM**
-- GenAI service deployment: first-class support for deploying and managing LLM-backed inference endpoints
+- GenAI service deployment: first-class support for deploying and managing LLM-backed inference 
 
 **Evaluation & Reporting**
 - Experiment reports
@@ -90,10 +90,6 @@ These features are actively being built and will land in upcoming releases.
 - Dashboard management via OSS Grafana operator
 - Prometheus-based alerting for decommission gating
 
-**Infrastructure**
-- Notebook (Jupyter) sessions
-- Docker image builds via Kaniko/BuildKit
-
 **Automation**
 - Finalizer-based cascade deletion (Pipeline → Revisions; FeatureGroup → Datasets)
 
@@ -102,7 +98,6 @@ These features are actively being built and will land in upcoming releases.
 These are planned capabilities we are working towards adding down the road.
 
 **Project Management**
-- GenAI project flavor support
 - Team ownership via OSS ownership model (CODEOWNERS)
 - Cloud zone annotations for multi-cloud routing
 - Git repository migration allowlist
