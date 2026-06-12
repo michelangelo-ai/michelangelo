@@ -55,15 +55,23 @@ type Reconciler struct {
 //
 // This provides a stable construction API for downstream users so they do not
 // need to rely on reflection to set unexported fields.
+//
+// revisionManager is optional: when nil, Register constructs one from the API
+// handler. Callers that need a custom store-backed implementation can supply
+// their own.
 func NewReconciler(
 	env env.Context,
 	apiHandlerFactory apiHandler.Factory,
 	logger *zap.Logger,
+	revisionManager revision.Manager,
+	cfg Config,
 ) *Reconciler {
 	return &Reconciler{
 		env:               env,
 		apiHandlerFactory: apiHandlerFactory,
 		logger:            logger,
+		revisionManager:   revisionManager,
+		config:            cfg,
 	}
 }
 

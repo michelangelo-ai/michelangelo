@@ -65,11 +65,5 @@ type registerParams struct {
 // Register will construct one from the API handler. Callers that need a custom
 // store (e.g. an internal service backed store) can inject their own.
 func register(p registerParams) error {
-	return (&Reconciler{
-		env:               p.Env,
-		apiHandlerFactory: p.APIHandlerFactory,
-		logger:            p.Logger,
-		revisionManager:   p.RevisionManager, // may be nil; Register fills it in
-		config:            p.Config,
-	}).Register(p.Mgr)
+	return NewReconciler(p.Env, p.APIHandlerFactory, p.Logger, p.RevisionManager, p.Config).Register(p.Mgr)
 }
