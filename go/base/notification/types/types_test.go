@@ -123,7 +123,7 @@ func TestGenerateText(t *testing.T) {
 		},
 	}
 
-	emailText := GenerateText(pipelineRun, NotificationTypeEmail, testStudioURL, nil)
+	emailText := GenerateText(pipelineRun, v2pb.NOTIFICATION_TYPE_EMAIL, testStudioURL, nil)
 	assert.Contains(t, emailText, "test-run")
 	assert.Contains(t, emailText, "test-project")
 	assert.Contains(t, emailText, "SUCCEEDED")
@@ -131,7 +131,7 @@ func TestGenerateText(t *testing.T) {
 	assert.Contains(t, emailText, testStudioURL)
 	assert.Contains(t, emailText, "https://workflow.example.com/run/123")
 
-	slackText := GenerateText(pipelineRun, NotificationTypeSlack, testStudioURL, nil)
+	slackText := GenerateText(pipelineRun, v2pb.NOTIFICATION_TYPE_SLACK, testStudioURL, nil)
 	assert.Contains(t, slackText, "test-run")
 	assert.Contains(t, slackText, "test-project")
 	assert.Contains(t, slackText, "SUCCEEDED")
@@ -140,16 +140,16 @@ func TestGenerateText(t *testing.T) {
 	assert.Contains(t, slackText, "<https://workflow.example.com/run/123|Workflow Log URL>")
 
 	// No studio link when studioBaseURL is empty.
-	noLinkText := GenerateText(pipelineRun, NotificationTypeEmail, "", nil)
+	noLinkText := GenerateText(pipelineRun, v2pb.NOTIFICATION_TYPE_EMAIL, "", nil)
 	assert.NotContains(t, noLinkText, "Studio URL")
 
 	// StudioBaseURL without trailing slash produces the same link as with one.
-	withSlash := GenerateText(pipelineRun, NotificationTypeEmail, "https://ml.example.com/studio/", nil)
-	withoutSlash := GenerateText(pipelineRun, NotificationTypeEmail, "https://ml.example.com/studio", nil)
+	withSlash := GenerateText(pipelineRun, v2pb.NOTIFICATION_TYPE_EMAIL, "https://ml.example.com/studio/", nil)
+	withoutSlash := GenerateText(pipelineRun, v2pb.NOTIFICATION_TYPE_EMAIL, "https://ml.example.com/studio", nil)
 	assert.Equal(t, withSlash, withoutSlash)
 
 	// Custom phase resolver is honoured.
-	customText := GenerateText(pipelineRun, NotificationTypeEmail, testStudioURL, func(_ string) string { return "custom-phase" })
+	customText := GenerateText(pipelineRun, v2pb.NOTIFICATION_TYPE_EMAIL, testStudioURL, func(_ string) string { return "custom-phase" })
 	assert.Contains(t, customText, "custom-phase")
 }
 

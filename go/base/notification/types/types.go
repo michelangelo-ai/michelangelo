@@ -22,11 +22,6 @@ const (
 	// collisions in multi-tenant namespaces.
 	PipelineRunNotificationWorkflowName = "io.michelangelo.notification.PipelineRunFanout"
 
-	// NotificationTypeEmail selects the plain-text email body in GenerateText.
-	NotificationTypeEmail = "email"
-	// NotificationTypeSlack selects the Slack-formatted body in GenerateText.
-	NotificationTypeSlack = "slack"
-
 	// SourcePipelineTypeLabelName is the Kubernetes label key that identifies the
 	// pipeline type (e.g. PIPELINE_TYPE_TRAIN). External integrators can read this
 	// label to drive custom routing logic without hardcoding the key string.
@@ -120,7 +115,7 @@ func GenerateSubject(pipelineRun *v2pb.PipelineRun) string {
 
 // GenerateText returns the notification body for email or Slack.
 //
-// textType must be NotificationTypeEmail or NotificationTypeSlack.
+// textType must be v2pb.NOTIFICATION_TYPE_EMAIL or v2pb.NOTIFICATION_TYPE_SLACK.
 //
 // studioBaseURL is the base URL of the platform UI used to build a deep link.
 // A trailing slash is added automatically if missing. Pass an empty string to
@@ -129,7 +124,7 @@ func GenerateSubject(pipelineRun *v2pb.PipelineRun) string {
 // phaseResolver maps the pipeline type label value to a UI path segment.
 // Pass nil to use DefaultPhaseResolver. Implement PhaseResolver to customize
 // path segments for non-standard or operator-defined pipeline types.
-func GenerateText(pipelineRun *v2pb.PipelineRun, textType string, studioBaseURL string, phaseResolver PhaseResolver) string {
+func GenerateText(pipelineRun *v2pb.PipelineRun, textType v2pb.Notification_NotificationType, studioBaseURL string, phaseResolver PhaseResolver) string {
 	if phaseResolver == nil {
 		phaseResolver = DefaultPhaseResolver
 	}
@@ -145,7 +140,7 @@ func GenerateText(pipelineRun *v2pb.PipelineRun, textType string, studioBaseURL 
 		studioLink = fmt.Sprintf("%s%s/%s/runs/%s", base, pipelineRun.Namespace, phase, pipelineRun.Name)
 	}
 
-	if textType == NotificationTypeSlack {
+	if textType == v2pb.NOTIFICATION_TYPE_SLACK {
 		text := fmt.Sprintf("%s:\n- Name: %s\n- Project: %s\n- State: %s\n- Pipeline Type: %s\n",
 			GenerateSubject(pipelineRun), pipelineRun.Name, pipelineRun.Namespace, state, pipelineTypeStr)
 		if studioLink != "" {

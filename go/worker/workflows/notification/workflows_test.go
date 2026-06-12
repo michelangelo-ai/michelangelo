@@ -140,8 +140,8 @@ func TestSendPipelineRunNotificationInputValidation(t *testing.T) {
 					for _, notif := range tt.req.PipelineRun.Spec.Notifications {
 						_ = types.ContainsEventType(notif.EventTypes, tt.req.PipelineRun.Status.State)
 						_ = types.GenerateSubject(tt.req.PipelineRun)
-						_ = types.GenerateText(tt.req.PipelineRun, types.NotificationTypeEmail, tt.req.StudioBaseURL, nil)
-						_ = types.GenerateText(tt.req.PipelineRun, types.NotificationTypeSlack, tt.req.StudioBaseURL, nil)
+						_ = types.GenerateText(tt.req.PipelineRun, v2pb.NOTIFICATION_TYPE_EMAIL, tt.req.StudioBaseURL, nil)
+						_ = types.GenerateText(tt.req.PipelineRun, v2pb.NOTIFICATION_TYPE_SLACK, tt.req.StudioBaseURL, nil)
 					}
 				}, tt.description)
 			}
@@ -177,17 +177,17 @@ func TestNotificationHelperFunctions(t *testing.T) {
 	})
 
 	t.Run("GenerateEmailText", func(t *testing.T) {
-		text := types.GenerateText(testPipelineRun, types.NotificationTypeEmail, "https://ml.example.com/", nil)
+		text := types.GenerateText(testPipelineRun, v2pb.NOTIFICATION_TYPE_EMAIL, "https://ml.example.com/", nil)
 		assert.NotEmpty(t, text)
 	})
 
 	t.Run("GenerateSlackText", func(t *testing.T) {
-		text := types.GenerateText(testPipelineRun, types.NotificationTypeSlack, "https://ml.example.com/", nil)
+		text := types.GenerateText(testPipelineRun, v2pb.NOTIFICATION_TYPE_SLACK, "https://ml.example.com/", nil)
 		assert.NotEmpty(t, text)
 	})
 
 	t.Run("GenerateTextNoURL", func(t *testing.T) {
-		text := types.GenerateText(testPipelineRun, "email", "", nil)
+		text := types.GenerateText(testPipelineRun, v2pb.NOTIFICATION_TYPE_EMAIL, "", nil)
 		assert.NotContains(t, text, "Studio URL")
 	})
 
@@ -242,8 +242,8 @@ func TestSendPipelineRunNotification_FanOut(t *testing.T) {
 			}
 			msg := Message{
 				Subject:   types.GenerateSubject(matchingPR),
-				EmailText: types.GenerateText(matchingPR, types.NotificationTypeEmail, "", wf.phaseResolver),
-				SlackText: types.GenerateText(matchingPR, types.NotificationTypeSlack, "", wf.phaseResolver),
+				EmailText: types.GenerateText(matchingPR, v2pb.NOTIFICATION_TYPE_EMAIL, "", wf.phaseResolver),
+				SlackText: types.GenerateText(matchingPR, v2pb.NOTIFICATION_TYPE_SLACK, "", wf.phaseResolver),
 				Metadata: map[string]any{
 					"run_name":  matchingPR.Name,
 					"namespace": matchingPR.Namespace,
