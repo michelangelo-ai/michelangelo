@@ -51,19 +51,12 @@ type registerParams struct {
 	Env               env.Context
 	APIHandlerFactory apiHandler.Factory
 	Logger            *zap.Logger
-	RevisionManager   revision.Manager `optional:"true"`
-	Config            Config
+	// RevisionManager is optional; when absent Register constructs one from
+	// the API handler. Internal callers can inject a store-backed implementation.
+	RevisionManager revision.Manager `optional:"true"`
+	Config          Config
 }
 
-// register initializes and registers the Pipeline controller with the manager.
-//
-// This function is automatically invoked by the FX framework when the Module
-// is loaded. It creates a new Reconciler with the provided dependencies and
-// registers it with the controller-runtime manager to watch Pipeline resources.
-//
-// revision.Manager is optional: when no external implementation is provided,
-// Register will construct one from the API handler. Callers that need a custom
-// store (e.g. an internal service backed store) can inject their own.
 func register(p registerParams) error {
 	return NewReconciler(p.Env, p.APIHandlerFactory, p.Logger, p.RevisionManager, p.Config).Register(p.Mgr)
 }
