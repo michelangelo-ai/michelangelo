@@ -71,7 +71,7 @@ func DefaultPhaseResolver(pipelineType string) string {
 		"PIPELINE_TYPE_LLM_ONE_OFF_GENERATION_ORCHESTRATION":
 		return "genai-prompt"
 	default:
-		return "unknown"
+		return "pipeline"
 	}
 }
 

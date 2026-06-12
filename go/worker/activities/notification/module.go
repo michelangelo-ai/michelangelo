@@ -21,9 +21,11 @@ var Module = fx.Options(
 // Registered Components:
 // - SendMessageToEmailActivity: Sends email notifications
 // - SendMessageToSlackActivity: Sends Slack notifications
+// - SendMessageToWebhookActivity: Sends webhook notifications
 func register(workers []worker.Worker) {
 	for _, w := range workers {
 		w.RegisterActivity(SendMessageToEmailActivity)
 		w.RegisterActivity(SendMessageToSlackActivity)
+		w.RegisterActivity(SendMessageToWebhookActivity)
 	}
 }

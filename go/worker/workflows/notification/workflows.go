@@ -84,6 +84,12 @@ func (wf *Workflow) SendPipelineRunNotification(ctx workflow.Context, req *types
 			EmailText: types.GenerateText(pipelineRun, types.NotificationTypeEmail, req.StudioBaseURL, wf.phaseResolver),
 			SlackText: types.GenerateText(pipelineRun, types.NotificationTypeSlack, req.StudioBaseURL, wf.phaseResolver),
 			SendAs:    req.SenderEmail,
+			Metadata: map[string]any{
+				"run_name":  pipelineRun.Name,
+				"namespace": pipelineRun.Namespace,
+				"state":     pipelineRun.Status.State.String(),
+				"log_url":   pipelineRun.Status.LogUrl,
+			},
 		}
 
 		for _, sink := range wf.sinks {

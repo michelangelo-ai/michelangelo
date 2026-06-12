@@ -4,6 +4,8 @@ go_library(
     name = "go_default_library",
     srcs = [
         "module.go",
+        "sinks.go",
+        "testing.go",
         "workflows.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/worker/workflows/notification",

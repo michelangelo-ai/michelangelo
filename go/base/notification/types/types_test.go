@@ -167,7 +167,7 @@ func TestDefaultPhaseResolver(t *testing.T) {
 		{"PIPELINE_TYPE_EMBEDDING_GENERATION", "genai-data"},
 		{"PIPELINE_TYPE_TRAIN_LLM", "genai-finetune"},
 		{"PIPELINE_TYPE_EVAL_PROMPT", "genai-prompt"},
-		{"UNKNOWN_TYPE", "unknown"},
+		{"UNKNOWN_TYPE", "pipeline"},
 	}
 	for _, tt := range tests {
 		assert.Equal(t, tt.want, DefaultPhaseResolver(tt.pipelineType), tt.pipelineType)

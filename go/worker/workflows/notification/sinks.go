@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"encoding/json"
 	"errors"
 
 	"github.com/cadence-workflow/starlark-worker/workflow"
@@ -32,6 +33,9 @@ type Message struct {
 	SlackText string
 	// SendAs is the From address used by the email sink.
 	SendAs string
+	// Metadata is an arbitrary key-value map attached to the notification event.
+	// It is included in webhook payloads and may be used by custom sinks.
+	Metadata map[string]any
 }
 
 // EmailSink delivers notifications via email.
@@ -77,6 +81,55 @@ func (s *SlackSink) Notify(ctx workflow.Context, notif *v2pb.Notification, msg M
 			&notificationActivities.SendMessageToSlackActivityRequest{
 				Channel: channel,
 				Text:    msg.SlackText,
+			}).Get(ctx, nil)
+		if err != nil {
+			errs = errors.Join(errs, err)
+		}
+	}
+	return errs
+}
+
+// WebhookSink delivers notifications to one or more HTTP webhook endpoints.
+//
+// URLs are configured at construction time via the URLs field rather than read
+// from the Notification proto, which means no proto schema changes are required.
+// Replace the SendMessageToWebhookActivity body with a real HTTP client before
+// relying on webhook delivery in production.
+type WebhookSink struct {
+	// URLs is the list of webhook endpoints to POST notifications to.
+	URLs []string
+	// Headers is an optional map of HTTP headers sent with every request.
+	Headers map[string]string
+}
+
+// Notify POSTs a JSON payload to every URL configured on the sink.
+// Returns nil immediately when URLs is empty.
+// Errors from individual endpoints are accumulated with errors.Join so that a
+// failure on one endpoint does not suppress delivery to others.
+func (s *WebhookSink) Notify(ctx workflow.Context, notif *v2pb.Notification, msg Message) error {
+	if len(s.URLs) == 0 {
+		return nil
+	}
+
+	bodyBytes, err := json.Marshal(map[string]any{
+		"subject":  msg.Subject,
+		"text":     msg.SlackText,
+		"metadata": msg.Metadata,
+	})
+	if err != nil {
+		return err
+	}
+
+	var errs error
+	for _, url := range s.URLs {
+		err := workflow.ExecuteActivity(
+			workflow.WithActivityOptions(ctx, workflowActivityOpts),
+			notificationActivities.SendMessageToWebhookActivity,
+			&notificationActivities.SendMessageToWebhookActivityRequest{
+				URL:     url,
+				Headers: s.Headers,
+				Subject: msg.Subject,
+				Body:    string(bodyBytes),
 			}).Get(ctx, nil)
 		if err != nil {
 			errs = errors.Join(errs, err)
