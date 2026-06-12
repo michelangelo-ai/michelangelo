@@ -294,13 +294,15 @@ ma sandbox sync   # redeploy without recreating the cluster
 
 During `ma sandbox create`, Helm deploys operators (kuberay, spark) with a timeout. On slow connections or underpowered machines, the timeout can fire before the operator pod finishes pulling its image — even though the deployment will succeed on its own a few minutes later.
 
-If you see `Progress deadline exceeded` in the output, check whether the affected pods are still making progress:
+This is a **first-run phenomenon** caused by large image pulls racing against Helm's deadline. On subsequent `create` or `sync` runs with cached images, operator deployments complete well within the timeout.
+
+If you see `Progress deadline exceeded` in the output, verify that the operators are still coming up:
 
 ```bash
-kubectl get pods -w
+kubectl get pods -A
 ```
 
-Wait a few minutes. If pods transition to `Running`, the sandbox is healthy despite the error message. Run `ma sandbox sync` to finish deploying any remaining services. Only proceed to `ma sandbox delete` if pods are stuck in `ImagePullBackOff` or `CrashLoopBackOff` with no sign of progress.
+Within a few minutes of the Helm error, you should see the operator deployments transition to `Running`. If they do, the sandbox is healthy despite the error message — run `ma sandbox sync` to finish deploying any remaining services. Only proceed to `ma sandbox delete` if pods are stuck in `ImagePullBackOff` or `CrashLoopBackOff` with no sign of progress.
 
 ### Grafana pod in `CrashLoopBackOff`
 
