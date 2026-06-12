@@ -535,6 +535,35 @@ class ReadModuleFromFileTest(TestCase):
             # Verify returns None
             self.assertIsNone(result)
 
+    def test_returns_none_when_plugin_raises_import_error(self):
+        """Resilience: a broken plugin (ImportError on exec) is skipped, not raised."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            plugin_dir = Path(tmpdir) / "entity" / "broken_entity"
+            plugin_dir.mkdir(parents=True)
+            (plugin_dir / "main.py").write_text(
+                "import this_module_definitely_does_not_exist_12345\n"
+            )
+
+            with patch("michelangelo.cli.mactl.mactl._LOG") as mock_log:
+                result = read_module_from_file("broken_entity", Path(tmpdir))
+
+            self.assertIsNone(result)
+            mock_log.error.assert_called_once()
+            self.assertTrue(mock_log.error.call_args.kwargs.get("exc_info"))
+
+    def test_returns_none_when_plugin_raises_at_top_level(self):
+        """Resilience: any top-level exception in a plugin is contained."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            plugin_dir = Path(tmpdir) / "entity" / "raises_entity"
+            plugin_dir.mkdir(parents=True)
+            (plugin_dir / "main.py").write_text(
+                "raise RuntimeError('plugin top-level boom')\n"
+            )
+
+            result = read_module_from_file("raises_entity", Path(tmpdir))
+
+            self.assertIsNone(result)
+
 
 class DiscoverCrdsTest(TestCase):
     """Tests for discover_crds function."""
@@ -1008,6 +1037,24 @@ class ApplyEntityPluginsTest(TestCase):
         apply_entity_plugins(mock_crd, MagicMock(), {"pipeline": [mock_plugin]})
         # no exception raised, plugin silently skipped
 
+    def test_one_failing_plugin_does_not_block_others(self):
+        """Resilience: exception from one apply_plugins is logged and others still run."""
+        mock_crd = MagicMock()
+        mock_crd.name = "pipeline"
+        bad = MagicMock(spec=["apply_plugins"])
+        bad.apply_plugins.side_effect = RuntimeError("boom")
+        good = MagicMock(spec=["apply_plugins"])
+
+        with patch("michelangelo.cli.mactl.mactl._LOG") as mock_log:
+            apply_entity_plugins(
+                mock_crd, MagicMock(), {"pipeline": [bad, good]}
+            )
+
+        bad.apply_plugins.assert_called_once()
+        good.apply_plugins.assert_called_once()
+        mock_log.error.assert_called_once()
+        self.assertTrue(mock_log.error.call_args.kwargs.get("exc_info"))
+
 
 class ApplyCommandPluginsTest(TestCase):
     """Tests for apply_command_plugins function."""
@@ -1050,6 +1097,24 @@ class ApplyCommandPluginsTest(TestCase):
             mock_crd, "create", {}, MagicMock(), {"pipeline": [mock_plugin]}
         )
         # no exception raised, plugin silently skipped
+
+    def test_one_failing_plugin_does_not_block_others(self):
+        """Resilience: exception from one apply_plugin_command is logged and others still run."""
+        mock_crd = MagicMock()
+        mock_crd.name = "pipeline"
+        bad = MagicMock(spec=["apply_plugin_command"])
+        bad.apply_plugin_command.side_effect = RuntimeError("boom")
+        good = MagicMock(spec=["apply_plugin_command"])
+
+        with patch("michelangelo.cli.mactl.mactl._LOG") as mock_log:
+            apply_command_plugins(
+                mock_crd, "create", {}, MagicMock(), {"pipeline": [bad, good]}
+            )
+
+        bad.apply_plugin_command.assert_called_once()
+        good.apply_plugin_command.assert_called_once()
+        mock_log.error.assert_called_once()
+        self.assertTrue(mock_log.error.call_args.kwargs.get("exc_info"))
 
 
 class AddPluginDirsToSyspathTest(TestCase):

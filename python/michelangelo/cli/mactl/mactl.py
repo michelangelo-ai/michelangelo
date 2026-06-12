@@ -117,7 +117,13 @@ def read_module_from_file(
     if plugin_module is None:
         _LOG.error("Failed to create plugin module for %r", spec)
         return
-    spec.loader.exec_module(plugin_module)  # type: ignore[attr-defined]
+    try:
+        spec.loader.exec_module(plugin_module)  # type: ignore[attr-defined]
+    except Exception as e:
+        _LOG.error(
+            "Failed to load plugin %r (skipped): %s", plugin_main, e, exc_info=True
+        )
+        return None
     _LOG.info("Loaded plugin module: %r", plugin_module)
     return plugin_module
 
@@ -411,7 +417,13 @@ def apply_entity_plugins(
     for i, plugin in enumerate(plugins):
         _LOG.debug("Applying entity plugin #%d: %r", i, plugin)
         if hasattr(plugin, "apply_plugins"):
-            plugin.apply_plugins(crd, channel)
+            try:
+                plugin.apply_plugins(crd, channel)
+            except Exception as e:
+                _LOG.error(
+                    "Plugin %r apply_plugins failed (skipped): %s",
+                    plugin, e, exc_info=True,
+                )
         else:
             _LOG.debug(
                 "Plugin module %r has no 'apply_plugins' function (skipped)", plugin
@@ -449,7 +461,13 @@ def apply_command_plugins(
     for i, plugin in enumerate(plugins):
         _LOG.debug("Applying command plugin #%d: %r", i, plugin)
         if hasattr(plugin, "apply_plugin_command"):
-            plugin.apply_plugin_command(crd, action, crds, channel)
+            try:
+                plugin.apply_plugin_command(crd, action, crds, channel)
+            except Exception as e:
+                _LOG.error(
+                    "Plugin %r apply_plugin_command failed (skipped): %s",
+                    plugin, e, exc_info=True,
+                )
         else:
             _LOG.debug(
                 "Plugin module %r has no 'apply_plugin_command' function (skipped)",
