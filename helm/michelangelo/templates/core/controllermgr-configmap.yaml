@@ -46,6 +46,9 @@ data:
         {{ $k }}: {{ $v }}
       {{- end }}
 
+    pipeline:
+      revisioningEnabled: {{ .Values.controllermgr.pipeline.revisioningEnabled }}
+
     workflowClient:
       {{- if eq .Values.workflow.engine "cadence" }}
       service: cadence-frontend

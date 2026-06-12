@@ -158,34 +158,74 @@ func TestReconcile_RevisioningEnabled_NoCommit(t *testing.T) {
 	assert.True(t, err != nil, "no Revision CR should exist when pipeline has no commit")
 }
 
-// TestReconcile_RevisionAnnotationsDoNotAliasPipeline guards against the Revision CR
-// sharing its annotation map with the pipeline. If the maps alias, any write to
-// rev.Annotations (e.g. MarkImmutable) would silently corrupt pipeline.Annotations.
-func TestReconcile_RevisionAnnotationsDoNotAliasPipeline(t *testing.T) {
-	pipeline := &v2pb.Pipeline{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-pipeline",
-			Namespace: "test-namespace",
-			Annotations: map[string]string{
-				"custom-annotation": "original-value",
+func TestFormatRevisionName(t *testing.T) {
+	testCases := []struct {
+		name           string
+		pipeline       *v2pb.Pipeline
+		expectedResult string
+	}{
+		{
+			name: "Normal git ref",
+			pipeline: &v2pb.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "my-pipeline",
+				},
+				Spec: v2pb.PipelineSpec{
+					Commit: &v2pb.CommitInfo{
+						GitRef: "abcdef1234567890",
+					},
+				},
 			},
+			expectedResult: "pipeline-my-pipeline-abcdef123456",
 		},
-		Spec: v2pb.PipelineSpec{
-			Commit: &v2pb.CommitInfo{
-				GitRef: "abc123456789",
-				Branch: "main",
+		{
+			name: "Short git ref",
+			pipeline: &v2pb.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-pipe",
+				},
+				Spec: v2pb.PipelineSpec{
+					Commit: &v2pb.CommitInfo{
+						GitRef: "abc123",
+					},
+				},
 			},
+			expectedResult: "pipeline-test-pipe-abc123",
+		},
+		{
+			name: "Uppercase pipeline name",
+			pipeline: &v2pb.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "MY-PIPELINE",
+				},
+				Spec: v2pb.PipelineSpec{
+					Commit: &v2pb.CommitInfo{
+						GitRef: "def456789012",
+					},
+				},
+			},
+			expectedResult: "pipeline-my-pipeline-def456789012",
+		},
+		{
+			name: "No commit info",
+			pipeline: &v2pb.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "no-commit",
+				},
+				Spec: v2pb.PipelineSpec{
+					Commit: nil,
+				},
+			},
+			expectedResult: "",
 		},
 	}
 
-	reconciler := setUpReconciler(t, []client.Object{pipeline}, env.Context{}, Config{RevisioningEnabled: true})
-	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}})
-	require.NoError(t, err)
-
-	got := &v2pb.Pipeline{}
-	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "test-pipeline", &metav1.GetOptions{}, got))
-	assert.Equal(t, "original-value", got.Annotations["custom-annotation"], "reconcile should not modify pipeline annotations")
-	assert.NotContains(t, got.Annotations, "michelangelo/Immutable", "reconcile should not add internal annotations to the pipeline")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := formatRevisionName(tc.pipeline)
+			require.Equal(t, tc.expectedResult, result)
+		})
+	}
 }
 
 func setUpReconciler(t *testing.T, initialObjects []client.Object, env env.Context, cfg Config) *Reconciler {

@@ -12,7 +12,6 @@ package pipeline
 import (
 	"context"
 	"fmt"
-	"maps"
 	"reflect"
 	"strings"
 	"time"
@@ -212,9 +211,8 @@ func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeli
 			Kind:       "Revision",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        formatRevisionName(pipeline),
-			Namespace:   pipeline.Namespace,
-			Annotations: maps.Clone(pipeline.Annotations),
+			Name:      formatRevisionName(pipeline),
+			Namespace: pipeline.Namespace,
 		},
 		Spec: v2pb.RevisionSpec{
 			BaseType: &metav1.TypeMeta{
@@ -251,6 +249,9 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 		return err
 	}
 	r.Handler = handler
+	if r.revisionManager == nil {
+		r.revisionManager = revision.NewManager(handler, r.logger)
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.Pipeline{}).
 		Complete(r)

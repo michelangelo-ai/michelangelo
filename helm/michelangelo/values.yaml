@@ -356,6 +356,12 @@ controllermgr:
       Pipeline: 3
       Revision: 3
 
+  pipeline:
+    # When true, the controller snapshots a Revision CR on every successful
+    # READY reconcile. Disabled by default; enable for deployments with a
+    # revision store (see revision.Manager).
+    revisioningEnabled: false
+
   # Workflow client extras (controllermgr-only).
   workflowClient:
     # Cadence Web URL template. Empty by default; set in values-k3d.yaml for
