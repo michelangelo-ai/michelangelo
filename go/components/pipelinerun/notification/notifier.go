@@ -40,15 +40,17 @@ type PipelineRunNotifier struct {
 
 // NewPipelineRunNotifier creates a new PipelineRunNotifier.
 //
-// Returns an error if cfg.TaskList is empty — a missing task list causes
-// silent failures at workflow dispatch time rather than at startup.
+// Returns (nil, nil) when cfg.TaskList is empty — notifications are disabled
+// and the caller's nil guard skips dispatch. This allows the controller manager
+// to start without a notification-worker deployed.
 func NewPipelineRunNotifier(
 	cfg Config,
 	workflowClient clientInterfaces.WorkflowClient,
 	logger *zap.Logger,
 ) (*PipelineRunNotifier, error) {
 	if cfg.TaskList == "" {
-		return nil, fmt.Errorf("notification.Config.TaskList is required")
+		logger.Info("notification.taskList is empty — PipelineRun notifications disabled")
+		return nil, nil
 	}
 	return &PipelineRunNotifier{
 		cfg:            cfg,

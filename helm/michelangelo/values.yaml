@@ -104,6 +104,7 @@ workflow:
 images:
   apiserver:        ghcr.io/michelangelo-ai/apiserver:main
   worker:           ghcr.io/michelangelo-ai/worker:main
+  notificationWorker: ghcr.io/michelangelo-ai/notification-worker:main
   ui:               ghcr.io/michelangelo-ai/ui:main
   controllermgr:    ghcr.io/michelangelo-ai/controllermgr:main
   envoy:            envoyproxy/envoy:v1.29-latest
@@ -312,6 +313,38 @@ worker:
     level: info
     development: true
     encoding: console
+
+  resources: {}
+
+# -----------------------------------------------------------------------------
+# notificationWorker — delivers PipelineRun state-change notifications.
+#
+# Disabled by default. Enable when you want email/Slack/webhook notifications
+# for pipeline run state changes. The notification-worker polls its own task
+# list so it can be scaled and updated independently of the shared worker.
+# -----------------------------------------------------------------------------
+notificationWorker:
+  enabled: false
+
+  replicas: 1
+
+  # taskList must match notification.taskList in the controllermgr config.
+  # Both values default to "notification_worker".
+  taskList: notification_worker
+
+  # Base URL of the platform UI, used to build deep links in notifications.
+  # Must end with a trailing slash. Leave empty to omit links.
+  # Example: "https://ml.mycompany.com/studio/"
+  studioBaseURL: ""
+
+  # From address for outgoing email notifications.
+  # Only relevant when SendMessageToEmailActivity is replaced with a real transport.
+  senderEmail: ""
+
+  logging:
+    level: info
+    development: false
+    encoding: json
 
   resources: {}
 

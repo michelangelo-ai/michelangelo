@@ -89,4 +89,13 @@ data:
             logURLFormat: {{ . | quote }}
             {{- end }}
     {{- end }}
+
+    notification:
+      taskList: {{ .Values.notificationWorker.taskList | default "" | quote }}
+      {{- with .Values.notificationWorker.studioBaseURL }}
+      studioBaseURL: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.notificationWorker.senderEmail }}
+      senderEmail: {{ . | quote }}
+      {{- end }}
 {{- end }}

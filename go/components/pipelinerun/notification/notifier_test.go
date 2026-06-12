@@ -14,11 +14,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestNewPipelineRunNotifier_TaskListRequired(t *testing.T) {
+func TestNewPipelineRunNotifier_TaskListEmpty(t *testing.T) {
 	logger := zap.NewNop()
-	_, err := NewPipelineRunNotifier(Config{}, nil, logger)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "TaskList")
+	notifier, err := NewPipelineRunNotifier(Config{}, nil, logger)
+	assert.NoError(t, err)
+	assert.Nil(t, notifier, "empty TaskList should return nil notifier, not an error")
 }
 
 func TestPipelineRunNotifier_NotifyOnStateChange(t *testing.T) {
