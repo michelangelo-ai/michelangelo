@@ -60,13 +60,11 @@ func SendMessageToSlackActivity(ctx context.Context, req *SendMessageToSlackActi
 	if req == nil {
 		return errors.New("SendMessageToSlackActivityRequest cannot be nil")
 	}
-	logger := activity.GetLogger(ctx)
-	if logger == nil {
-		logger = zap.NewNop()
+	if logger := activity.GetLogger(ctx); logger != nil {
+		logger.Info("SendMessageToSlackActivity called (no-op: no transport configured)",
+			zap.String("channel", req.Channel),
+			zap.String("text", req.Text))
 	}
-	logger.Info("SendMessageToSlackActivity called (no-op: no transport configured)",
-		zap.String("channel", req.Channel),
-		zap.String("text", req.Text))
 	return nil
 }
 
@@ -79,14 +77,12 @@ func SendMessageToEmailActivity(ctx context.Context, req *SendMessageToEmailActi
 	if req == nil {
 		return errors.New("SendMessageToEmailActivityRequest cannot be nil")
 	}
-	logger := activity.GetLogger(ctx)
-	if logger == nil {
-		logger = zap.NewNop()
+	if logger := activity.GetLogger(ctx); logger != nil {
+		logger.Info("SendMessageToEmailActivity called (no-op: no transport configured)",
+			zap.Strings("to", req.To),
+			zap.String("subject", req.Subject),
+			zap.String("send_as", req.SendAs))
 	}
-	logger.Info("SendMessageToEmailActivity called (no-op: no transport configured)",
-		zap.Strings("to", req.To),
-		zap.String("subject", req.Subject),
-		zap.String("send_as", req.SendAs))
 	return nil
 }
 
@@ -111,12 +107,10 @@ func SendMessageToWebhookActivity(ctx context.Context, req *SendMessageToWebhook
 	if req == nil {
 		return errors.New("SendMessageToWebhookActivityRequest cannot be nil")
 	}
-	logger := activity.GetLogger(ctx)
-	if logger == nil {
-		logger = zap.NewNop()
+	if logger := activity.GetLogger(ctx); logger != nil {
+		logger.Info("SendMessageToWebhookActivity called (no-op: no transport configured)",
+			zap.String("url", req.URL),
+			zap.String("subject", req.Subject))
 	}
-	logger.Info("SendMessageToWebhookActivity called (no-op: no transport configured)",
-		zap.String("url", req.URL),
-		zap.String("subject", req.Subject))
 	return nil
 }
