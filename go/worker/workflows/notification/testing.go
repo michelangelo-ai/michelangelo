@@ -4,6 +4,7 @@ package notification
 import (
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	"go.uber.org/zap"
 )
 
 // RecordingSinkCall holds the arguments passed to a single RecordingSink.Notify call.
@@ -23,7 +24,7 @@ type RecordingSink struct {
 }
 
 // Notify records the call and returns nil.
-func (r *RecordingSink) Notify(_ workflow.Context, notif *v2pb.Notification, msg Message) error {
+func (r *RecordingSink) Notify(_ workflow.Context, _ *zap.Logger, notif *v2pb.Notification, msg Message) error {
 	r.Calls = append(r.Calls, RecordingSinkCall{Notif: notif, Msg: msg})
 	return nil
 }
@@ -37,6 +38,6 @@ type FailingSink struct {
 }
 
 // Notify always returns f.Err.
-func (f *FailingSink) Notify(_ workflow.Context, _ *v2pb.Notification, _ Message) error {
+func (f *FailingSink) Notify(_ workflow.Context, _ *zap.Logger, _ *v2pb.Notification, _ Message) error {
 	return f.Err
 }

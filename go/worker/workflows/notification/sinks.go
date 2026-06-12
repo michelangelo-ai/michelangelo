@@ -7,6 +7,7 @@ import (
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	notificationActivities "github.com/michelangelo-ai/michelangelo/go/worker/activities/notification"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	"go.uber.org/zap"
 )
 
 // Sink delivers a notification to one or more destinations.
@@ -19,7 +20,7 @@ type Sink interface {
 	// Notify sends msg to all matching destinations in notif.
 	// Implementations should return nil when notif contains no destinations
 	// relevant to this sink — skipping silently is the correct behaviour.
-	Notify(ctx workflow.Context, notif *v2pb.Notification, msg Message) error
+	Notify(ctx workflow.Context, logger *zap.Logger, notif *v2pb.Notification, msg Message) error
 }
 
 // Message carries pre-rendered notification content for every supported channel.
@@ -47,7 +48,7 @@ type EmailSink struct{}
 
 // Notify sends an email to all addresses listed in notif.Emails.
 // Returns nil immediately when Emails is empty.
-func (s *EmailSink) Notify(ctx workflow.Context, notif *v2pb.Notification, msg Message) error {
+func (s *EmailSink) Notify(ctx workflow.Context, _ *zap.Logger, notif *v2pb.Notification, msg Message) error {
 	if len(notif.Emails) == 0 {
 		return nil
 	}
@@ -72,7 +73,7 @@ type SlackSink struct{}
 // Notify posts a message to every channel in notif.SlackDestinations.
 // Errors from individual channels are accumulated with errors.Join so that a
 // failure on one channel does not suppress delivery to others.
-func (s *SlackSink) Notify(ctx workflow.Context, notif *v2pb.Notification, msg Message) error {
+func (s *SlackSink) Notify(ctx workflow.Context, _ *zap.Logger, notif *v2pb.Notification, msg Message) error {
 	var errs error
 	for _, channel := range notif.SlackDestinations {
 		err := workflow.ExecuteActivity(
@@ -106,7 +107,7 @@ type WebhookSink struct {
 // Returns nil immediately when URLs is empty.
 // Errors from individual endpoints are accumulated with errors.Join so that a
 // failure on one endpoint does not suppress delivery to others.
-func (s *WebhookSink) Notify(ctx workflow.Context, notif *v2pb.Notification, msg Message) error {
+func (s *WebhookSink) Notify(ctx workflow.Context, _ *zap.Logger, notif *v2pb.Notification, msg Message) error {
 	if len(s.URLs) == 0 {
 		return nil
 	}

@@ -68,7 +68,6 @@ func (wf *Workflow) SendPipelineRunNotification(ctx workflow.Context, req *types
 	if wf.backend != nil {
 		ctx = workflow.WithBackend(ctx, wf.backend)
 	}
-	ctx = workflow.WithActivityOptions(ctx, workflowActivityOpts)
 	logger := workflow.GetLogger(ctx)
 
 	pipelineRun := req.PipelineRun
@@ -93,8 +92,10 @@ func (wf *Workflow) SendPipelineRunNotification(ctx workflow.Context, req *types
 		}
 
 		for _, sink := range wf.sinks {
-			if err := sink.Notify(ctx, notif, msg); err != nil {
-				logger.Error("Notification sink failed", zap.Error(err))
+			if err := sink.Notify(ctx, logger, notif, msg); err != nil {
+				if logger != nil {
+					logger.Error("Notification sink failed", zap.Error(err))
+				}
 				errs = errors.Join(errs, err)
 			}
 		}

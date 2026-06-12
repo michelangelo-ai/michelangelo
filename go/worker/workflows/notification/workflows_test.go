@@ -251,7 +251,7 @@ func TestSendPipelineRunNotification_FanOut(t *testing.T) {
 					"log_url":   matchingPR.Status.LogUrl,
 				},
 			}
-			_ = rec.Notify(nil, notif, msg)
+			_ = rec.Notify(nil, nil, notif, msg)
 		}
 
 		// Only the SUCCEEDED notification matches; FAILED should be skipped.
@@ -262,13 +262,13 @@ func TestSendPipelineRunNotification_FanOut(t *testing.T) {
 
 	t.Run("FailingSink error is non-nil", func(t *testing.T) {
 		fail := &FailingSink{Err: errors.New("sink unavailable")}
-		err := fail.Notify(nil, nil, Message{})
+		err := fail.Notify(nil, nil, nil, Message{})
 		assert.ErrorContains(t, err, "sink unavailable")
 	})
 
 	t.Run("RecordingSink returns nil", func(t *testing.T) {
 		rec := &RecordingSink{}
-		err := rec.Notify(nil, &v2pb.Notification{}, Message{Subject: "test"})
+		err := rec.Notify(nil, nil, &v2pb.Notification{}, Message{Subject: "test"})
 		assert.NoError(t, err)
 		assert.Len(t, rec.Calls, 1)
 	})
