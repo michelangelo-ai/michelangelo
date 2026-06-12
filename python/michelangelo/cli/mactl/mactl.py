@@ -422,7 +422,9 @@ def apply_entity_plugins(
             except Exception as e:
                 _LOG.error(
                     "Plugin %r apply_plugins failed (skipped): %s",
-                    plugin, e, exc_info=True,
+                    plugin,
+                    e,
+                    exc_info=True,
                 )
         else:
             _LOG.debug(
@@ -466,7 +468,9 @@ def apply_command_plugins(
             except Exception as e:
                 _LOG.error(
                     "Plugin %r apply_plugin_command failed (skipped): %s",
-                    plugin, e, exc_info=True,
+                    plugin,
+                    e,
+                    exc_info=True,
                 )
         else:
             _LOG.debug(

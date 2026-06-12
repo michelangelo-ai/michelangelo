@@ -1038,7 +1038,7 @@ class ApplyEntityPluginsTest(TestCase):
         # no exception raised, plugin silently skipped
 
     def test_one_failing_plugin_does_not_block_others(self):
-        """Resilience: exception from one apply_plugins is logged and others still run."""
+        """Resilience: a failing apply_plugins is logged and others still run."""
         mock_crd = MagicMock()
         mock_crd.name = "pipeline"
         bad = MagicMock(spec=["apply_plugins"])
@@ -1046,9 +1046,7 @@ class ApplyEntityPluginsTest(TestCase):
         good = MagicMock(spec=["apply_plugins"])
 
         with patch("michelangelo.cli.mactl.mactl._LOG") as mock_log:
-            apply_entity_plugins(
-                mock_crd, MagicMock(), {"pipeline": [bad, good]}
-            )
+            apply_entity_plugins(mock_crd, MagicMock(), {"pipeline": [bad, good]})
 
         bad.apply_plugins.assert_called_once()
         good.apply_plugins.assert_called_once()
@@ -1099,7 +1097,7 @@ class ApplyCommandPluginsTest(TestCase):
         # no exception raised, plugin silently skipped
 
     def test_one_failing_plugin_does_not_block_others(self):
-        """Resilience: exception from one apply_plugin_command is logged and others still run."""
+        """Resilience: a failing apply_plugin_command is logged and others still run."""
         mock_crd = MagicMock()
         mock_crd.name = "pipeline"
         bad = MagicMock(spec=["apply_plugin_command"])
