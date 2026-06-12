@@ -15,8 +15,8 @@ import (
 // Config holds operator-supplied configuration for PipelineRunNotifier.
 type Config struct {
 	// TaskList is the Cadence/Temporal task list on which the notification
-	// workflow runs. It must match the task list registered by the
-	// notification-worker binary.
+	// workflow runs. It must match the task list registered by the worker
+	// (default: "notification_worker" in the shared worker config).
 	TaskList string
 	// StudioBaseURL is the base URL of the platform UI, used to build deep
 	// links in notification message bodies.
@@ -42,7 +42,7 @@ type PipelineRunNotifier struct {
 //
 // Returns (nil, nil) when cfg.TaskList is empty — notifications are disabled
 // and the caller's nil guard skips dispatch. This allows the controller manager
-// to start without a notification-worker deployed.
+// to start with notifications disabled.
 func NewPipelineRunNotifier(
 	cfg Config,
 	workflowClient clientInterfaces.WorkflowClient,
