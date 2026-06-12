@@ -24,6 +24,8 @@ workflow-engine:
       taskList: trigger_run
     - domain: default
       taskList: pipeline_run
+    - domain: default
+      taskList: notification_worker
   client:
     domain: default
 

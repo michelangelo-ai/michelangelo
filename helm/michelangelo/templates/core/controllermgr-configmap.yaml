@@ -91,11 +91,11 @@ data:
     {{- end }}
 
     notification:
-      taskList: {{ .Values.notificationWorker.taskList | default "" | quote }}
-      {{- with .Values.notificationWorker.studioBaseURL }}
+      taskList: {{ .Values.notification.taskList | default "" | quote }}
+      {{- with .Values.notification.studioBaseURL }}
       studioBaseURL: {{ . | quote }}
       {{- end }}
-      {{- with .Values.notificationWorker.senderEmail }}
+      {{- with .Values.notification.senderEmail }}
       senderEmail: {{ . | quote }}
       {{- end }}
 {{- end }}

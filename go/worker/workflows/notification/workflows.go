@@ -42,7 +42,7 @@ type Workflow struct {
 //	fx.Decorate(func() types.PhaseResolver { return myCustomResolver })
 //
 // Pass a non-empty sinks slice to override the default email and Slack sinks.
-// Add new sinks (e.g. PagerDuty, webhook) without modifying this workflow:
+// Add new sinks (e.g. PagerDuty, SMS) without modifying this workflow:
 //
 //	fx.Decorate(func() []Sink { return []Sink{&EmailSink{}, &PagerDutySink{}} })
 func NewWorkflow(backend workflow.Workflow, phaseResolver types.PhaseResolver, sinks []Sink) *Workflow {

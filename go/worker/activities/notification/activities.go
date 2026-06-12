@@ -3,7 +3,7 @@
 //
 // Default implementations log the request and return nil. They are intentional
 // no-ops: no message is sent unless the activity body is replaced with a real
-// transport (SMTP, Slack API, webhook, etc.). Operators who need actual delivery
+// transport (SMTP, Slack API, etc.). Operators who need actual delivery
 // must either replace these functions or implement the activity registration with
 // their own transport before relying on notifications in production.
 package notification
@@ -18,9 +18,8 @@ import (
 
 // Activity names registered with the Cadence/Temporal worker.
 const (
-	SendMessageToEmailActivityName   = "SendMessageToEmailActivity"
-	SendMessageToSlackActivityName   = "SendMessageToSlackActivity"
-	SendMessageToWebhookActivityName = "SendMessageToWebhookActivity"
+	SendMessageToEmailActivityName = "SendMessageToEmailActivity"
+	SendMessageToSlackActivityName = "SendMessageToSlackActivity"
 )
 
 // SendMessageToSlackActivityRequest holds the parameters for a Slack notification.
@@ -55,7 +54,7 @@ type SendMessageToEmailActivityRequest struct {
 //
 // This implementation logs the request and returns nil without sending any
 // message. Replace the body of this function with your transport integration
-// (Slack API, webhook, etc.) before relying on Slack notifications in production.
+// (Slack API, etc.) before relying on Slack notifications in production.
 func SendMessageToSlackActivity(ctx context.Context, req *SendMessageToSlackActivityRequest) error {
 	if req == nil {
 		return errors.New("SendMessageToSlackActivityRequest cannot be nil")
@@ -82,35 +81,6 @@ func SendMessageToEmailActivity(ctx context.Context, req *SendMessageToEmailActi
 			zap.Strings("to", req.To),
 			zap.String("subject", req.Subject),
 			zap.String("send_as", req.SendAs))
-	}
-	return nil
-}
-
-// SendMessageToWebhookActivityRequest holds the parameters for a webhook notification.
-type SendMessageToWebhookActivityRequest struct {
-	// URL is the HTTP endpoint to POST the notification payload to.
-	URL string `json:"url"`
-	// Headers is an optional map of HTTP request headers.
-	Headers map[string]string `json:"headers,omitempty"`
-	// Subject is a short human-readable title for the notification.
-	Subject string `json:"subject"`
-	// Body is the JSON-encoded notification payload.
-	Body string `json:"body"`
-}
-
-// SendMessageToWebhookActivity is the default webhook notification activity.
-//
-// This implementation logs the request and returns nil without sending any
-// HTTP request. Replace the body of this function with a real HTTP client
-// before relying on webhook delivery in production.
-func SendMessageToWebhookActivity(ctx context.Context, req *SendMessageToWebhookActivityRequest) error {
-	if req == nil {
-		return errors.New("SendMessageToWebhookActivityRequest cannot be nil")
-	}
-	if logger := activity.GetLogger(ctx); logger != nil {
-		logger.Info("SendMessageToWebhookActivity called (no-op: no transport configured)",
-			zap.String("url", req.URL),
-			zap.String("subject", req.Subject))
 	}
 	return nil
 }

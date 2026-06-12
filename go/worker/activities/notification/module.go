@@ -10,22 +10,9 @@ var Module = fx.Options(
 	fx.Invoke(register),
 )
 
-// register registers notification activities with the workers.
-//
-// This function registers all notification-related activities with the Cadence worker
-// instances, making them available for execution when workflow clients start them.
-//
-// Params:
-// - workers: Array of worker instances to register activities with.
-//
-// Registered Components:
-// - SendMessageToEmailActivity: Sends email notifications
-// - SendMessageToSlackActivity: Sends Slack notifications
-// - SendMessageToWebhookActivity: Sends webhook notifications
 func register(workers []worker.Worker) {
 	for _, w := range workers {
 		w.RegisterActivity(SendMessageToEmailActivity)
 		w.RegisterActivity(SendMessageToSlackActivity)
-		w.RegisterActivity(SendMessageToWebhookActivity)
 	}
 }
