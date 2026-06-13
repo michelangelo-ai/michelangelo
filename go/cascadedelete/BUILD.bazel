@@ -1,0 +1,47 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "apihook.go",
+        "drain.go",
+        "metrics.go",
+        "ownerref.go",
+        "retain.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/cascadedelete",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_prometheus_client_golang//prometheus:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@io_k8s_sigs_controller_runtime//:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/controller/controllerutil:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/metrics:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "apihook_test.go",
+        "drain_test.go",
+        "metrics_test.go",
+        "ownerref_test.go",
+        "retain_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = [
+        "//proto/api/v2:go_default_library",
+        "@com_github_prometheus_client_golang//prometheus:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@io_k8s_apimachinery//pkg/types:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/controller/controllerutil:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+    ],
+)
