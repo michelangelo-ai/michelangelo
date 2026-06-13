@@ -35,7 +35,7 @@ go_test(
         "@io_k8s_apimachinery//pkg/types:go_default_library",
         "@io_k8s_sigs_controller_runtime//:go_default_library",
         "@org_uber_go_zap//zaptest:go_default_library",
-        "@org_google_golang_grpc//codes:go_default_library",
-        "@org_google_golang_grpc//status:go_default_library",
+        "@org_golang_google_grpc//codes:go_default_library",
+        "@org_golang_google_grpc//status:go_default_library",
     ],
 )
