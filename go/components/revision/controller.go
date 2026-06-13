@@ -39,8 +39,8 @@ func NewReconciler(
 	}
 }
 
-// Reconcile fetches the Revision, dispatches to the matching Handler, then
-// persists any status changes the handler made.
+// Reconcile implements reconcile.Reconciler. Status is persisted only when
+// the handler changes rev.Status.State, to avoid unnecessary writes.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := r.logger.With(zap.String("namespace-name", req.NamespacedName.String()))
 

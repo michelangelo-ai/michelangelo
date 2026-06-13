@@ -31,6 +31,7 @@ go_library(
         "//go/components/pipeline:go_default_library",
         "//go/components/pipelinerun:go_default_library",
         "//go/components/ray:go_default_library",
+        "//go/components/revision:go_default_library",
         "//go/components/spark:go_default_library",
         "//go/components/triggerrun:go_default_library",
         "//go/controllermgr:go_default_library",

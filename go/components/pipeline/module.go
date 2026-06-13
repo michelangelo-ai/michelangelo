@@ -9,6 +9,7 @@ import (
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/revision"
+	comprevision "github.com/michelangelo-ai/michelangelo/go/components/revision"
 )
 
 const configKey = "pipeline"
@@ -29,6 +30,13 @@ var (
 		fx.Provide(newConfig),
 		fx.Invoke(registerMetrics),
 		fx.Invoke(register),
+		fx.Provide(
+			fx.Annotate(
+				NewPipelineRevisionHandler,
+				fx.As(new(comprevision.Handler)),
+				fx.ResultTags(`group:"revision-handler"`),
+			),
+		),
 	)
 )
 

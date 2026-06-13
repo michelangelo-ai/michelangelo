@@ -23,8 +23,7 @@ type Handler interface {
 	// persists any changes after Reconcile returns.
 	Reconcile(ctx context.Context, rev *v2pb.Revision) error
 
-	// TypeMeta returns the APIVersion and Kind of the owning resource type
+	// TypeMeta returns the dispatch key matched against Revision.Spec.BaseType
 	// (e.g. {APIVersion: "michelangelo.api/v2", Kind: "Pipeline"}).
-	// Used as the dispatch key against Revision.Spec.BaseType.
 	TypeMeta() metav1.TypeMeta
 }
