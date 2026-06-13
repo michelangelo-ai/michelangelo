@@ -10,6 +10,7 @@ All resource types support `get`, `apply`, and `delete` (see [supported resource
 |---------|-------------|
 | `ma pipeline run` | Execute a registered pipeline |
 | `ma pipeline dev-run` | Run a pipeline without registering it |
+| `ma pipeline delete` | Delete a pipeline (cascades to child runs by default) |
 | `ma pipeline_run kill` | Terminate a running pipeline run |
 | `ma trigger_run kill` | Terminate a running trigger |
 | `ma sandbox create` | Set up a local development environment |
@@ -159,6 +160,26 @@ ma project delete --namespace="my-project" --name="my-project"
 # Delete a pipeline run
 ma pipeline_run delete --namespace="my-project" --name="run-001"
 ```
+
+#### Pipeline delete and cascade
+
+`ma pipeline delete` removes a Pipeline **and cascades to its child PipelineRuns and TriggerRuns** (Kubernetes `foreground` propagation): in-flight runs are drained, their final state is retained in MySQL, then they are removed before the Pipeline. The command prompts for confirmation; pass `--yes` to skip it. This is **irreversible**.
+
+```bash
+ma pipeline delete --namespace="<namespace>" --name="<name>" [--yes]
+```
+
+- `--yes` — skip the confirmation prompt
+
+```bash
+# Prompts for confirmation
+ma pipeline delete --namespace="my-project" --name="bert-cola-test"
+
+# Skip confirmation (scripting)
+ma pipeline delete --namespace="my-project" --name="bert-cola-test" --yes
+```
+
+To delete a Pipeline but **keep** its runs, use `kubectl delete pipeline <name> -n <namespace> --cascade=orphan`. For propagation policy, the RBAC caveat, and monitoring, see the [Cascade Delete operator guide](../../operator-guides/cascade-delete.md).
 
 ## Type-specific commands
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/api"
+	"github.com/michelangelo-ai/michelangelo/go/cascadedelete"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -65,6 +66,14 @@ func WithConfig(cfg Config) Option {
 	return func(r *Reconciler) { r.config = cfg }
 }
 
+// WithRetainPolicy injects the per-kind cascade retain opt-in. For opted-in kinds,
+// a non-apiserver delete (cascade GC, kubectl, GitOps) retains the object's final
+// state in MySQL instead of leaving a stale row. Other kinds keep today's behavior.
+// If not provided, no kind retains (NewStaticRetainPolicy with an empty set).
+func WithRetainPolicy(rp cascadedelete.RetainPolicy) Option {
+	return func(r *Reconciler) { r.retain = rp }
+}
+
 // Reconciler reconciles a generic CRD object with metadata storage.
 //
 // All fields are unexported. Exported struct fields become permanent public API surface —
@@ -77,6 +86,9 @@ type Reconciler struct {
 	targetKind      client.Object
 	metadataStorage storage.MetadataStorage
 	config          Config
+	// retain answers whether a kind's final state must be retained in MySQL on a
+	// non-apiserver delete. Defaults to an empty (no-retain) policy.
+	retain cascadedelete.RetainPolicy
 }
 
 // NewReconciler creates a new Reconciler for the given CRD target kind.
@@ -99,6 +111,7 @@ func NewReconciler(
 		targetKind:      targetKind,
 		metadataStorage: metadataStorage,
 		config:          Config{ConcurrentReconciles: 1, RequeuePeriod: defaultRequeuePeriod},
+		retain:          cascadedelete.NewStaticRetainPolicy(),
 	}
 	for _, opt := range opts {
 		opt(r)
@@ -166,9 +179,12 @@ func (r *Reconciler) handleSync(ctx context.Context, log logr.Logger, object cli
 	return ctrl.Result{}, nil
 }
 
-// handleDeletion handles object deletion triggered by a K8s DeletionTimestamp.
-// MySQL deletion is handled upstream via the DeletingAnnotation path; this function
-// only removes the ingester finalizer so K8s can finish garbage-collecting the object.
+// handleDeletion handles an object that K8s has marked with a DeletionTimestamp.
+//
+// On the normal apiserver delete the row is already soft-deleted/retained via the
+// DeletingAnnotation path, so this only removes the ingester finalizer. On a non-apiserver
+// delete (foreground GC, kubectl/GitOps) the annotation is absent; handleCascadeDeletion then
+// retains the final state of opted-in kinds before the finalizer is removed.
 func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object client.Object) (ctrl.Result, error) {
 	log.Info("Object is being deleted")
 
@@ -176,6 +192,21 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
 	if !ctrlutil.ContainsFinalizer(object, api.IngesterFinalizer) {
 		log.Info("Finalizer not present, nothing to do")
 		return ctrl.Result{}, nil
+	}
+
+	// Non-apiserver delete (no DeletingAnnotation: foreground GC, kubectl/GitOps):
+	// retain opted-in kinds before the finalizer is removed; no-op otherwise.
+	if !isDeletingAnnotationSet(object) {
+		wait, err := r.handleCascadeDeletion(ctx, log, object)
+		if err != nil {
+			return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
+		}
+		if wait {
+			// Drain in flight: keep the ingester finalizer and requeue (no timeout —
+			// see handleCascadeDeletion).
+			return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, nil
+		}
+		// Terminal cases fall through to the shared finalizer removal below.
 	}
 
 	// Remove our finalizer so K8s can finish deleting the object.
@@ -187,6 +218,67 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
 
 	log.Info("Successfully removed finalizer")
 	return ctrl.Result{}, nil
+}
+
+// handleCascadeDeletion reconciles the MySQL end-state for an object deleted
+// directly (no DeletingAnnotation), scoped to opted-in kinds via the RetainPolicy.
+// It never touches the ingester finalizer or issues a delete — GC owns that. It
+// returns wait=true only while an opted-in object still carries a non-ingester
+// (drain) finalizer, so the caller keeps the ingester finalizer and requeues;
+// there is deliberately no independent ingester timeout (unwedging a stuck drain
+// is the drain safety timeout's job). On drain completion it upserts the final
+// state (retain).
+func (r *Reconciler) handleCascadeDeletion(ctx context.Context, log logr.Logger, object client.Object) (wait bool, err error) {
+	// TODO(#943): gvks[0] may be non-deterministic when a type is registered under
+	// multiple versions. See issue for planned multi-GVK selection strategy.
+	gvks, _, err := r.scheme.ObjectKinds(object)
+	if err != nil || len(gvks) == 0 {
+		return false, fmt.Errorf("failed to get GVK for %T: %w", object, err)
+	}
+
+	if !r.retain.RetainOnCascade(gvks[0].Kind) {
+		// Not a cascade-retain kind: the caller just removes the ingester finalizer
+		// (unchanged behavior).
+		return false, nil
+	}
+
+	if hasNonIngesterFinalizer(object) {
+		// Drain in flight: refresh MySQL with the in-progress state and wait
+		// (bounded by the drain finalizer's lifecycle).
+		if err := r.upsertToStorage(ctx, object); err != nil {
+			log.Error(err, "Failed to refresh draining object in metadata storage")
+			return false, err
+		}
+		log.Info("Cascade drain in progress; keeping ingester finalizer and requeuing")
+		return true, nil
+	}
+
+	// Drain complete (finalizer gone / never present): capture the final state.
+	log.Info("Retaining final state for cascade-deleted object")
+	return false, r.upsertToStorage(ctx, object)
+}
+
+// hasNonIngesterFinalizer reports whether the object carries any finalizer other
+// than the ingester's. For opted-in kinds the only finalizers are the ingester's
+// and the drain one, so this signals an in-flight drain.
+func hasNonIngesterFinalizer(object client.Object) bool {
+	for _, f := range object.GetFinalizers() {
+		if f != api.IngesterFinalizer {
+			return true
+		}
+	}
+	return false
+}
+
+// upsertToStorage upserts the object to metadata storage, extracting indexed
+// fields when the object implements storage.IndexedObject. It mirrors the upsert
+// performed by handleSync/handleImmutableObject.
+func (r *Reconciler) upsertToStorage(ctx context.Context, object client.Object) error {
+	var indexedFields []storage.IndexedField
+	if indexedObj, ok := object.(storage.IndexedObject); ok {
+		indexedFields = indexedObj.GetIndexedKeyValuePairs()
+	}
+	return r.metadataStorage.Upsert(ctx, object, false, indexedFields)
 }
 
 // handleDeletionAnnotation handles objects marked with DeletingAnnotation.

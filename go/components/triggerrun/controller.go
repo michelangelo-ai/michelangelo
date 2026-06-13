@@ -26,6 +26,11 @@
 // The controller integrates with Cadence or Temporal workflow engines to execute
 // scheduled workflows. Each Runner implementation manages workflow lifecycle operations
 // including starting, monitoring, and terminating workflow executions.
+//
+// Cascade delete: when the owning Pipeline is deleted, the controller drains the
+// run's recurring cron/schedule before GC removes it. The drain finalizer is
+// installed before the ownerReference so the run is never GC-eligible unprotected,
+// and a deleting run can never re-arm its cron; a 24h timeout is the backstop.
 package triggerrun
 
 import (
@@ -39,18 +44,34 @@ import (
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	apiutils "github.com/michelangelo-ai/michelangelo/go/api/utils"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
+	"github.com/michelangelo-ai/michelangelo/go/cascadedelete"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.uber.org/fx"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 const (
 	// maximumConcurrentReconciles defines the maximum number of concurrent reconcile loops
 	// for the TriggerRun controller. This value can be tuned based on cluster capacity.
 	maximumConcurrentReconciles = 10
+
+	// drainFinalizer blocks garbage collection of a run until its workflow has
+	// been drained. Keep this string stable across releases for rollout safety —
+	// do not change it.
+	drainFinalizer = "triggerruns.michelangelo.uber.com/drain"
+
+	// metricKind is this kind's cascade metric label. It is a documented dashboard
+	// contract (see the cascade-delete plan §8) — do not change this value.
+	metricKind = "trigger_run"
+
+	// drainRequeueInterval paces re-checks of a TriggerRun being drained (cascade delete).
+	// The kill path is synchronous, so this mainly lets the terminal-state branch remove the
+	// finalizer on the next loop.
+	drainRequeueInterval = 10 * time.Second
 )
 
 // Params contains the dependencies required to instantiate the TriggerRun Reconciler.
@@ -94,6 +115,7 @@ type Reconciler struct {
 	scheme *runtime.Scheme
 
 	apiHandlerFactory apiHandler.Factory
+	workflowClient    clientInterface.WorkflowClient
 
 	cronTrigger       Runner // Executes cron-scheduled workflows
 	intervalTrigger   Runner // Executes interval-based workflows
@@ -108,6 +130,7 @@ type Reconciler struct {
 func NewReconciler(p Params) *Reconciler {
 	return &Reconciler{
 		apiHandlerFactory: p.APIHandlerFactory,
+		workflowClient:    p.WorkflowClient,
 		cronTrigger:       p.CronTrigger,
 		intervalTrigger:   p.IntervalTrigger,
 		backfillTrigger:   p.BackfillTrigger,
@@ -134,6 +157,31 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 		return ctrl.Result{}, err
 	}
+
+	// On cascade delete (deletionTimestamp set), hand off to the drain driver
+	// before the state machine so a deleting run can't re-arm its cron.
+	if !triggerRun.GetDeletionTimestamp().IsZero() {
+		st := cascadedelete.DrainState{
+			Object:      triggerRun,
+			Kind:        metricKind,
+			Finalizer:   drainFinalizer,
+			IsTerminal:  isTerminateState(triggerRun),
+			WorkStarted: triggerRunWorkStarted(triggerRun),
+		}
+		return cascadedelete.RunDrainStep(ctx, st, &triggerRunDrainTarget{r: r, log: log, run: triggerRun}, drainRequeueInterval)
+	}
+
+	// Finalizer before ownerRef: the ownerRef makes the run GC-eligible, so the
+	// finalizer must be present first or GC could remove the run and orphan the cron.
+	if err := r.ensureDrainFinalizer(ctx, log, triggerRun); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Ensure the ownerReference; runs before the state machine so terminal runs are covered.
+	if err := r.ensureOwnerRef(ctx, log, triggerRun); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	return r.reconcile(ctx, log, triggerRun)
 }
 
@@ -321,6 +369,154 @@ StateMachine:
 		}
 	}
 	return ctrl.Result{RequeueAfter: 60 * time.Second}, nil
+}
+
+// ensureOwnerRef is a transitional MIGRATION: it stamps the owning Pipeline as
+// the run's controller ownerReference on CRs that predate the apiserver
+// BeforeCreate hook, which is the canonical place ownerRefs are set. Idempotent;
+// a no-op once stamped or when the Pipeline/ref is absent.
+//
+// TODO(#1337): remove after the migration completes. New runs get their ownerRef
+// from the BeforeCreate apihook — all supported creates (CLI + triggers) route
+// through ma-apiserver; runs created outside it are the creator's responsibility.
+func (r *Reconciler) ensureOwnerRef(ctx context.Context, log logr.Logger, triggerRun *v2pb.TriggerRun) error {
+	pipelineRef := triggerRun.Spec.GetPipeline()
+	if pipelineRef == nil || pipelineRef.GetName() == "" {
+		return nil
+	}
+	namespace := pipelineRef.GetNamespace()
+	if namespace == "" {
+		// ownerReferences are namespace-local; default to the run's own
+		// namespace when the reference omits one.
+		namespace = triggerRun.GetNamespace()
+	}
+
+	pipeline := &v2pb.Pipeline{}
+	if err := r.Get(ctx, namespace, pipelineRef.GetName(), &metav1.GetOptions{}, pipeline); err != nil {
+		// The owning Pipeline may not exist (yet/anymore); skip quietly.
+		if apiutils.IsNotFoundError(err) {
+			return nil
+		}
+		return err
+	}
+
+	changed, err := cascadedelete.EnsureControllerRef(triggerRun, pipeline, r.scheme)
+	if err != nil {
+		return err
+	}
+	if !changed {
+		return nil
+	}
+	if err := r.Update(ctx, triggerRun, &metav1.UpdateOptions{}); err != nil {
+		return err
+	}
+	cascadedelete.IncOwnerRefBackfill(metricKind)
+	log.Info("Ensured Pipeline ownerReference on trigger run", "pipeline", pipelineRef.GetName())
+	return nil
+}
+
+// ensureDrainFinalizer adds the drain finalizer to an active run so a Pipeline
+// delete blocks on stopping its recurring cron/schedule before GC. No-op for
+// terminal runs or once already present.
+func (r *Reconciler) ensureDrainFinalizer(ctx context.Context, log logr.Logger, triggerRun *v2pb.TriggerRun) error {
+	if isTerminateState(triggerRun) {
+		return nil
+	}
+	if ctrlutil.ContainsFinalizer(triggerRun, drainFinalizer) {
+		return nil
+	}
+	ctrlutil.AddFinalizer(triggerRun, drainFinalizer)
+	if err := r.Update(ctx, triggerRun, &metav1.UpdateOptions{}); err != nil {
+		return err
+	}
+	log.Info("Added cascade drain finalizer to trigger run")
+	return nil
+}
+
+// triggerRunDrainTarget adapts a single TriggerRun to cascadedelete.DrainTarget. Each
+// mutating method persists via the controller's api.Handler; the driver
+// (cascadedelete.RunDrainStep) holds no client and writes only through these methods.
+type triggerRunDrainTarget struct {
+	r   *Reconciler
+	log logr.Logger
+	run *v2pb.TriggerRun
+}
+
+// triggerRunWorkStarted reports whether a schedule/workflow was ever created, from
+// the persisted state — a live "open run" probe would mis-read an idle recurring
+// schedule as never-started and leave it armed.
+func triggerRunWorkStarted(run *v2pb.TriggerRun) bool {
+	return run.Status.State != v2pb.TRIGGER_RUN_STATE_INVALID
+}
+
+// RequestCancel stops the recurring cron (idempotent kill) and stamps the
+// drain-counted token in one persisted update.
+func (t *triggerRunDrainTarget) RequestCancel(ctx context.Context) error {
+	runner := t.r.getRunner(t.run)
+	status, err := runner.Kill(ctx, t.run)
+	if err != nil {
+		return fmt.Errorf("kill trigger run %s/%s during drain: %w", t.run.Namespace, t.run.Name, err)
+	}
+	t.run.Status = status
+	cascadedelete.MarkDrainCounted(t.run)
+	if err := t.r.Update(ctx, t.run, &metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("begin drain for trigger run %s/%s: %w", t.run.Namespace, t.run.Name, err)
+	}
+	t.log.Info("killed trigger run during drain", "state", t.run.Status.State.String())
+	return nil
+}
+
+// Progress re-issues the idempotent kill and re-checks terminal, so a failed prior
+// status-update cannot wedge the drain. It persists status and reports terminal.
+func (t *triggerRunDrainTarget) Progress(ctx context.Context) (bool, error) {
+	runner := t.r.getRunner(t.run)
+	status, err := runner.Kill(ctx, t.run)
+	if err != nil {
+		return false, fmt.Errorf("re-issue kill for trigger run %s/%s during drain: %w", t.run.Namespace, t.run.Name, err)
+	}
+	t.run.Status = status
+	if err := t.r.UpdateStatus(ctx, t.run, &metav1.UpdateOptions{}); err != nil {
+		return false, err
+	}
+	return isTerminateState(t.run), nil
+}
+
+// MarkKilled drives a never-started run straight to terminal KILLED without engine
+// work, persisting status. It must NOT stamp the drain-counted token.
+func (t *triggerRunDrainTarget) MarkKilled(ctx context.Context) error {
+	t.run.Status.State = v2pb.TRIGGER_RUN_STATE_KILLED
+	if err := t.r.UpdateStatus(ctx, t.run, &metav1.UpdateOptions{}); err != nil {
+		return err
+	}
+	t.log.Info("draining trigger run that never started; marked KILLED")
+	return nil
+}
+
+// ForceKill performs best-effort engine teardown on the safety timeout, deleting
+// the trigger so no schedule stays armed to spawn orphaned workflows. Errors are
+// logged and swallowed by the driver.
+func (t *triggerRunDrainTarget) ForceKill(ctx context.Context) error {
+	if err := ForceKillWorkflow(ctx, t.run, t.log, t.r.workflowClient); err != nil {
+		t.log.Error(err, "force-kill workflow during drain timeout failed")
+		return err
+	}
+	return nil
+}
+
+// CompleteDrain finalizes in ONE persisted metadata update: it marks the run
+// immutable (a TriggerRun always retains — no TTL, no storage gate), clears the
+// drain-counted token, and removes the drain finalizer.
+func (t *triggerRunDrainTarget) CompleteDrain(ctx context.Context) error {
+	if !apiutils.IsImmutable(t.run) {
+		apiutils.MarkImmutable(t.run)
+	}
+	cascadedelete.ClearDrainCounted(t.run)
+	ctrlutil.RemoveFinalizer(t.run, drainFinalizer)
+	if err := t.r.Update(ctx, t.run, &metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("complete drain for trigger %s/%s: %w", t.run.Namespace, t.run.Name, err)
+	}
+	t.log.Info("removed cascade drain finalizer from trigger run")
+	return nil
 }
 
 // Register registers the TriggerRun controller with the controller manager.

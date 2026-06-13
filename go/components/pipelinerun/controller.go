@@ -9,6 +9,10 @@
 // Each stage is implemented as a ConditionActor that checks prerequisites and executes
 // actions. The controller manages state transitions and ensures consistent status updates
 // for long-running pipeline executions.
+//
+// For cascade delete, the loop stamps the owning Pipeline ownerReference and a
+// drain finalizer so that when the Pipeline is deleted, the run's in-flight
+// workflow is drained before GC removes it.
 package pipelinerun
 
 import (
@@ -19,15 +23,36 @@ import (
 
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	defaultEngine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
+	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
+	"github.com/michelangelo-ai/michelangelo/go/cascadedelete"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/notification"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/plugin"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+)
+
+const (
+	// drainFinalizer blocks garbage collection of a run until its workflow has
+	// been drained. It is BYTE-IDENTICAL across releases for rollout safety
+	// (see the cascade-delete plan §8) — do not change this string.
+	drainFinalizer = "pipelineruns.michelangelo.uber.com/drain"
+
+	// metricKind is this kind's cascade metric label. It is a documented dashboard
+	// contract (see the cascade-delete plan §8) — do not change this value.
+	metricKind = "pipeline_run"
+
+	// drainRequeueInterval is how often a PipelineRun being drained for
+	// cascade-delete is re-reconciled while its workflow is still terminating. It
+	// matches the engine's default inactive requeue period.
+	drainRequeueInterval = 10 * time.Second
 )
 
 // Config holds configuration for the PipelineRun controller.
@@ -52,8 +77,12 @@ type Reconciler struct {
 	metadataStorageEnabled bool // Cached at initialization - doesn't change at runtime
 	plugin                 *plugin.Plugin
 	engine                 *defaultEngine.DefaultEngine[*v2pb.PipelineRun]
-	apiHandlerFactory      apiHandler.Factory
-	notifier               *notification.PipelineRunNotifier
+	// workflowClient drives direct workflow teardown on the cascade safety-timeout
+	// path (ForceKill); graceful cancellation goes through the engine via Spec.Kill.
+	workflowClient    clientInterface.WorkflowClient
+	apiHandlerFactory apiHandler.Factory
+	notifier          *notification.PipelineRunNotifier
+	scheme            *runtime.Scheme
 }
 
 // NewReconciler creates a new PipelineRun controller reconciler.
@@ -64,6 +93,7 @@ type Reconciler struct {
 //
 // Parameters:
 //   - plugin: Contains the ConditionActors for pipeline execution stages
+//   - workflowClient: Client used to tear down a run's workflow on the cascade safety-timeout path
 //   - logger: Structured logger for the controller
 //   - apiHandlerFactory: Factory for creating API handlers to interact with Kubernetes
 //   - notifier: Handles pipeline run notifications for state changes
@@ -73,6 +103,7 @@ type Reconciler struct {
 // Returns a configured Reconciler ready to be registered with a controller manager.
 func NewReconciler(
 	plugin *plugin.Plugin,
+	workflowClient clientInterface.WorkflowClient,
 	logger *zap.Logger,
 	apiHandlerFactory apiHandler.Factory,
 	notifier *notification.PipelineRunNotifier,
@@ -82,6 +113,7 @@ func NewReconciler(
 	logger = logger.With(zap.String("component", "pipelinerun"))
 	return &Reconciler{
 		plugin:                 plugin,
+		workflowClient:         workflowClient,
 		logger:                 logger,
 		config:                 config,
 		metadataStorageEnabled: storage.EnableMetadataStorage(&metadataStorageConfig),
@@ -112,6 +144,30 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if err := r.Get(ctx, req.Namespace, req.Name, &metav1.GetOptions{}, pipelineRun); err != nil {
 		return ctrl.Result{}, fmt.Errorf("get pipeline run %q: %w", req.NamespacedName, err)
 	}
+
+	// Cascade-delete bookkeeping. GC stamps a deletionTimestamp when the owning
+	// Pipeline is foreground-deleted: drain the in-flight workflow before letting
+	// GC remove the run.
+	if !pipelineRun.GetDeletionTimestamp().IsZero() {
+		st := cascadedelete.DrainState{
+			Object:      pipelineRun,
+			Kind:        metricKind,
+			Finalizer:   drainFinalizer,
+			IsTerminal:  isTerminalState(pipelineRun.Status.State),
+			WorkStarted: pipelineRunWorkStarted(pipelineRun),
+		}
+		return cascadedelete.RunDrainStep(ctx, st, &pipelineRunDrainTarget{r: r, logger: logger, run: pipelineRun}, drainRequeueInterval)
+	}
+	// Finalizer before ownerRef: the ownerRef makes the run GC-eligible, so the
+	// finalizer must be present first or GC could remove the run with its workflow
+	// still live.
+	if err := r.ensureDrainFinalizer(ctx, logger, pipelineRun); err != nil {
+		return ctrl.Result{}, err
+	}
+	if err := r.ensureOwnerRef(ctx, logger, pipelineRun); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	originalPipelineRun := pipelineRun.DeepCopy()
 	conditionResult, err := r.engine.Run(ctx, r.plugin, pipelineRun)
 	result := conditionResult.Result
@@ -179,6 +235,165 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	return result, returnErr
+}
+
+// ensureOwnerRef is a transitional MIGRATION: it stamps the owning Pipeline as
+// the run's controller ownerReference on CRs that predate the apiserver
+// BeforeCreate hook, which is the canonical place ownerRefs are set. Idempotent;
+// a no-op once stamped or when the Pipeline/ref is absent.
+//
+// TODO(#1337): remove after the migration completes. New runs get their ownerRef
+// from the BeforeCreate apihook — all supported creates (CLI + triggers) route
+// through ma-apiserver; runs created outside it are the creator's responsibility.
+func (r *Reconciler) ensureOwnerRef(ctx context.Context, logger *zap.Logger, pipelineRun *v2pb.PipelineRun) error {
+	pipelineRef := pipelineRun.Spec.GetPipeline()
+	if pipelineRef == nil || pipelineRef.GetName() == "" {
+		return nil
+	}
+	namespace := pipelineRef.GetNamespace()
+	if namespace == "" {
+		// ownerReferences are namespace-local; default to the run's own
+		// namespace when the reference omits one.
+		namespace = pipelineRun.GetNamespace()
+	}
+
+	pipeline := &v2pb.Pipeline{}
+	if err := r.Get(ctx, namespace, pipelineRef.GetName(), &metav1.GetOptions{}, pipeline); err != nil {
+		// The owning Pipeline may not exist (yet/anymore); skip quietly.
+		if utils.IsNotFoundError(err) {
+			return nil
+		}
+		return err
+	}
+
+	changed, err := cascadedelete.EnsureControllerRef(pipelineRun, pipeline, r.scheme)
+	if err != nil {
+		return err
+	}
+	if !changed {
+		return nil
+	}
+	if err := r.Update(ctx, pipelineRun, &metav1.UpdateOptions{}); err != nil {
+		return err
+	}
+	cascadedelete.IncOwnerRefBackfill(metricKind)
+	logger.Info("Ensured Pipeline ownerReference on pipeline run", zap.String("pipeline", pipelineRef.GetName()))
+	return nil
+}
+
+// ensureDrainFinalizer adds the drain finalizer to active runs so a Pipeline
+// delete blocks on draining their workflow before GC, rather than orphaning live
+// Spark/Ray compute. No-op for terminal runs or once already present.
+func (r *Reconciler) ensureDrainFinalizer(ctx context.Context, logger *zap.Logger, pipelineRun *v2pb.PipelineRun) error {
+	if isTerminalState(pipelineRun.Status.State) {
+		return nil
+	}
+	if ctrlutil.ContainsFinalizer(pipelineRun, drainFinalizer) {
+		return nil
+	}
+	ctrlutil.AddFinalizer(pipelineRun, drainFinalizer)
+	if err := r.Update(ctx, pipelineRun, &metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("add drain finalizer to pipeline run %q: %w", pipelineRun.Name, err)
+	}
+	logger.Info("Added drain finalizer to active pipeline run")
+	return nil
+}
+
+// pipelineRunDrainTarget adapts a single PipelineRun to cascadedelete.DrainTarget. Each
+// mutating method persists via the controller's api.Handler; the driver
+// (cascadedelete.RunDrainStep) holds no client and writes only through these methods.
+type pipelineRunDrainTarget struct {
+	r      *Reconciler
+	logger *zap.Logger
+	run    *v2pb.PipelineRun
+}
+
+// pipelineRunWorkStarted reports whether the workflow actually started; an empty
+// WorkflowId/WorkflowRunId means the ExecuteWorkflow actor never launched one, so
+// there is nothing to cancel.
+func pipelineRunWorkStarted(run *v2pb.PipelineRun) bool {
+	return run.Status.WorkflowId != "" && run.Status.WorkflowRunId != ""
+}
+
+// RequestCancel sets Spec.Kill (which the ExecuteWorkflow actor reads to cancel
+// the workflow and tear down Spark/Ray) and stamps the drain-counted token in one
+// persisted update.
+func (t *pipelineRunDrainTarget) RequestCancel(ctx context.Context) error {
+	t.run.Spec.Kill = true
+	cascadedelete.MarkDrainCounted(t.run)
+	if err := t.r.Update(ctx, t.run, &metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("request kill for draining pipeline run %q: %w", t.run.Name, err)
+	}
+	t.logger.Info("PipelineRun drain started; requested workflow cancellation")
+	return nil
+}
+
+// Progress drives the engine to advance the cancellation (reusing the exact path a
+// user-initiated kill takes), maps the engine result to a state, persists status,
+// and reports whether the run is now terminal.
+func (t *pipelineRunDrainTarget) Progress(ctx context.Context) (bool, error) {
+	originalPipelineRun := t.run.DeepCopy()
+	conditionResult, err := t.r.engine.Run(ctx, t.r.plugin, t.run)
+	if err != nil {
+		return false, fmt.Errorf("run engine while draining pipeline run %q: %w", t.run.Name, err)
+	}
+	if conditionResult.IsKilled {
+		t.run.Status.State = v2pb.PIPELINE_RUN_STATE_KILLED
+	} else if !conditionResult.IsTerminal {
+		t.run.Status.State = v2pb.PIPELINE_RUN_STATE_RUNNING
+	} else if conditionResult.AreSatisfied {
+		t.run.Status.State = v2pb.PIPELINE_RUN_STATE_SUCCEEDED
+	} else {
+		t.run.Status.State = v2pb.PIPELINE_RUN_STATE_FAILED
+	}
+	if err := t.r.updatePipelineRunStatus(ctx, t.run, originalPipelineRun); err != nil {
+		return false, err
+	}
+	return isTerminalState(t.run.Status.State), nil
+}
+
+// MarkKilled drives the run straight to terminal KILLED without engine work (the
+// workflow never started), persisting status. It must NOT stamp the drain-counted
+// token.
+func (t *pipelineRunDrainTarget) MarkKilled(ctx context.Context) error {
+	originalPipelineRun := t.run.DeepCopy()
+	t.run.Status.State = v2pb.PIPELINE_RUN_STATE_KILLED
+	if err := t.r.updatePipelineRunStatus(ctx, t.run, originalPipelineRun); err != nil {
+		return err
+	}
+	t.logger.Info("PipelineRun drain: workflow never started, marking killed without starting one")
+	return nil
+}
+
+// ForceKill is the cascade safety-timeout teardown: it directly cancels the run's
+// workflow via the workflow client using the recorded WorkflowId/WorkflowRunId, so
+// a run that never drained gracefully (e.g. first reconciled past the timeout, or
+// whose cancellation never succeeded) still has its Spark/Ray workflow torn down
+// before GC removes it. Best-effort — the driver swallows the error. No-op when no
+// workflow was ever started.
+func (t *pipelineRunDrainTarget) ForceKill(ctx context.Context) error {
+	wid, rid := t.run.Status.WorkflowId, t.run.Status.WorkflowRunId
+	if wid == "" || rid == "" {
+		return nil
+	}
+	return t.r.workflowClient.CancelWorkflow(ctx, wid, rid, defaultEngine.KillReason)
+}
+
+// CompleteDrain finalizes in ONE persisted metadata update: when metadata storage
+// is enabled it marks the run immutable (so the ingester evicts it to MySQL-only
+// storage); always it clears the drain-counted token and removes the drain
+// finalizer.
+func (t *pipelineRunDrainTarget) CompleteDrain(ctx context.Context) error {
+	if t.r.metadataStorageEnabled {
+		utils.MarkImmutable(t.run)
+	}
+	cascadedelete.ClearDrainCounted(t.run)
+	ctrlutil.RemoveFinalizer(t.run, drainFinalizer)
+	if err := t.r.Update(ctx, t.run, &metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("remove drain finalizer from pipeline run %q: %w", t.run.Name, err)
+	}
+	t.logger.Info("PipelineRun drained; removed drain finalizer")
+	return nil
 }
 
 // markImmutableIfExpired checks whether a terminal PipelineRun has been idle
@@ -255,6 +470,7 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 		return err
 	}
 	r.Handler = handler
+	r.scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.PipelineRun{}).
 		Complete(r)

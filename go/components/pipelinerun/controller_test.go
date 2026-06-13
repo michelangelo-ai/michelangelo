@@ -834,6 +834,7 @@ func setUpReconciler(
 		plugin:   plugin,
 		engine:   defaultEngine.NewDefaultEngine[*v2pb.PipelineRun](logger),
 		notifier: mockNotifier,
+		scheme:   scheme,
 	}
 
 	return reconciler

@@ -496,5 +496,6 @@ func setUpReconciler(t *testing.T, initialObjects []runtime.Object, params Param
 		Build()
 	reconciler := NewReconciler(params)
 	reconciler.Handler = apiHandler.NewFakeAPIHandler(k8sClient)
+	reconciler.scheme = scheme
 	return *reconciler
 }

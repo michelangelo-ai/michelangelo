@@ -1,0 +1,17 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["apihook.go"],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/apihook",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/api:go_default_library",
+        "//go/api/utils:go_default_library",
+        "//go/cascadedelete:go_default_library",
+        "//proto/api/v2:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+    ],
+)

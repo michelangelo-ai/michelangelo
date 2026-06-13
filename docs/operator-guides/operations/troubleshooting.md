@@ -240,3 +240,50 @@ kubectl get configmap envoy-config -o yaml
 - **Monitoring**: Set up proactive alerting so issues surface before users report them in the [Monitoring guide](./monitoring.md)
 - **Network & Ingress**: Resolve Ingress and CORS issues at the source with the [Network guide](../setup/network.md)
 - **Authentication**: Fix RBAC and OIDC configuration issues with the [Authentication guide](../setup/authentication.md)
+
+---
+
+## Pipeline stuck in Terminating after cascade delete
+
+**Symptoms**: A Pipeline has a `deletionTimestamp` set but does not disappear. Under `foreground` propagation (the `ma pipeline delete` default) it remains in `Terminating` state because one or more child runs are still draining.
+
+**Diagnostics**:
+```bash
+# Check Pipeline finalizers and deletion timestamp
+kubectl get pipeline <name> -n <namespace> -o jsonpath='{.metadata.finalizers}'
+kubectl get pipeline <name> -n <namespace> -o jsonpath='{.metadata.deletionTimestamp}'
+
+# List child PipelineRuns (and TriggerRuns — same query) that still have drain
+# finalizers, with each child's own deletionTimestamp (the per-child 24h clock)
+kubectl get pipelineruns -n <namespace> -o json | \
+  jq '.items[] | select(.metadata.ownerReferences[]?.uid == "<pipeline-uid>") | {name: .metadata.name, deletionTimestamp: .metadata.deletionTimestamp, finalizers: .metadata.finalizers}'
+
+# Check controller manager logs for cascade-related messages
+kubectl -n ma-system logs deployment/michelangelo-controllermgr | grep -i "cascade\|drain\|force"
+```
+
+The safety timeout is **per child**, keyed off each child's own `deletionTimestamp` (above) — there is no Pipeline-level cascade annotation or clock. Watch the per-kind drain metrics to see which kind is wedged: `cascade_child_drain_active{kind="pipeline_run"|"trigger_run"}` (currently draining) and `cascade_child_drain_timeout_total{kind=...}` (drains that blew past the 24h backstop).
+
+**Likely causes**:
+- Child PipelineRuns or TriggerRuns still have drain finalizers — their workflows have not finished cancelling. Wait for drains to complete (or up to 24 hours after each child's `deletionTimestamp` for that child's safety timeout to force-remove its finalizer).
+- The controller manager is not running — the drain controllers need to be running to process child drain finalizers. Ensure the controller manager is healthy.
+- The workflow engine (Cadence/Temporal) is unreachable — the drain controller cannot cancel the workflow. Check workflow engine connectivity.
+
+---
+
+## Child resources not deleted after Pipeline cascade delete
+
+**Symptoms**: The Pipeline is gone, but PipelineRuns or TriggerRuns that belonged to it remain.
+
+**Diagnostics** — check whether the orphaned children carry an ownerReference to the Pipeline:
+```bash
+kubectl get pipelineruns -n <namespace> -o json | \
+  jq '.items[] | select(.metadata.ownerReferences[]?.name == "<pipeline-name>") | .metadata.name'
+```
+
+**Likely cause**: the Pipeline was deleted with a non-cascading [propagation policy](../cascade-delete.md#controlling-cascade-behavior) (`--cascade=orphan`/`background`), or the children predate the ownerReference backfill (lazy, applied on each child's next reconcile).
+
+**Remedy**: re-run with foreground cascade — or, if the Pipeline is already gone, delete the runs directly (`ma pipeline_run delete` / `kubectl delete pipelinerun …`), which drains and removes them individually:
+```bash
+kubectl delete pipeline <name> -n <namespace> --cascade=foreground
+```

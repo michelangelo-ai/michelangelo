@@ -66,6 +66,7 @@ Michelangelo is designed to run alongside existing ML infrastructure. The guides
 |-------|-------------|
 | [Monitoring & Observability](operations/monitoring.md) | Prometheus scrape config, key metrics, alerting rules, Grafana dashboards, structured logging |
 | [Compliance](operations/compliance.md) | SOC 2, GDPR, and HIPAA configuration |
+| [Cascade Delete](cascade-delete.md) | Pipeline cascade delete (on by default) — propagation policy, RBAC, lifecycle, drain finalizers, per-child safety timeout, and metrics |
 | [Troubleshooting](operations/troubleshooting.md) | Common failure modes and `kubectl` diagnostic commands |
 
 ## Architecture & Reference
