@@ -30,7 +30,8 @@ pipelineRun:
   # ttlDays: 0  # 0 disables TTL eviction; set e.g. 30 to evict runs older than 30 days
 
 # Notification configuration for PipelineRun state-change workflows.
-# taskList must match the task list registered by the notification-worker binary.
+# taskList must match the task list registered by the worker
+# (default: notification_worker — registered by the shared worker binary).
 # Leave taskList empty to disable notifications — the controller starts normally
 # but no notification workflows are dispatched.
 notification:

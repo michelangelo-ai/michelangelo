@@ -4,6 +4,7 @@ package notification
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/michelangelo-ai/michelangelo/go/base/notification/types"
@@ -17,17 +18,17 @@ type Config struct {
 	// TaskList is the Cadence/Temporal task list on which the notification
 	// workflow runs. It must match the task list registered by the worker
 	// (default: "notification_worker" in the shared worker config).
-	TaskList string
+	TaskList string `yaml:"taskList"`
 	// StudioBaseURL is the base URL of the platform UI, used to build deep
 	// links in notification message bodies.
 	// Example: "https://ml.mycompany.com/studio/"
 	// If empty, no deep link is included in notification messages.
-	StudioBaseURL string
+	StudioBaseURL string `yaml:"studioBaseURL"`
 	// SenderEmail is the From address for outgoing email notifications.
 	// Required when a real email transport activity is wired. The built-in
 	// no-op activity ignores this field — emails will not be delivered until
 	// the activity is replaced with a real implementation (SMTP, SendGrid, etc.).
-	SenderEmail string
+	SenderEmail string `yaml:"senderEmail"`
 }
 
 // PipelineRunNotifier starts the notification workflow when a pipeline run
@@ -90,7 +91,17 @@ func (n *PipelineRunNotifier) NotifyOnStateChange(
 		SenderEmail:   n.cfg.SenderEmail,
 	}
 
-	workflowID := fmt.Sprintf("%s.%s.notification", newPipelineRun.Namespace, newPipelineRun.Name)
+	// Include the new state in the workflow ID so that STARTED and terminal-state
+	// workflows for the same run never collide. Cadence/Temporal rejects a
+	// StartWorkflow call when a workflow with the same ID is still in flight
+	// (AllowDuplicate only permits reuse after the previous execution closes);
+	// a constant ID would silently drop the terminal notification if the STARTED
+	// workflow is still running.
+	workflowID := fmt.Sprintf("%s.%s.notification.%s",
+		newPipelineRun.Namespace,
+		newPipelineRun.Name,
+		strings.ToLower(getEffectiveState(newPipelineRun).String()),
+	)
 	options := clientInterfaces.StartWorkflowOptions{
 		ID:                              workflowID,
 		TaskList:                        n.cfg.TaskList,
