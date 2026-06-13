@@ -28,7 +28,10 @@ func (m *mockRevisionHandler) Reconcile(ctx context.Context, rev *v2pb.Revision)
 	return m.reconcileFn(ctx, rev)
 }
 
-var testTypeMeta = metav1.TypeMeta{
+// pipelineTypeMeta is the dispatch key shared between handler registration and
+// BaseType assertions. All tests that register a pipeline handler use this so
+// the key is guaranteed to agree on both sides.
+var pipelineTypeMeta = metav1.TypeMeta{
 	APIVersion: "michelangelo.api/v2",
 	Kind:       "Pipeline",
 }
@@ -46,14 +49,6 @@ func newTestReconciler(t *testing.T, apiHandler *apimocks.MockHandler, handlers 
 	}
 }
 
-func testRequest() ctrl.Request {
-	return ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "test-ns", Name: "test-rev"}}
-}
-
-func notFoundErr() error {
-	return status.Error(codes.NotFound, "not found")
-}
-
 func TestReconcile_GetNotFound(t *testing.T) {
 	mc := gomock.NewController(t)
 	defer mc.Finish()
@@ -61,10 +56,12 @@ func TestReconcile_GetNotFound(t *testing.T) {
 	mockAPI := apimocks.NewMockHandler(mc)
 	mockAPI.EXPECT().
 		Get(gomock.Any(), "test-ns", "test-rev", gomock.Any(), gomock.Any()).
-		Return(notFoundErr())
+		Return(status.Error(codes.NotFound, "not found"))
 
 	r := newTestReconciler(t, mockAPI)
-	result, err := r.Reconcile(context.Background(), testRequest())
+	result, err := r.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Namespace: "test-ns", Name: "test-rev"},
+	})
 	require.NoError(t, err)
 	require.Equal(t, ctrl.Result{}, result)
 }
@@ -80,7 +77,9 @@ func TestReconcile_GetOtherError(t *testing.T) {
 		Return(sentinel)
 
 	r := newTestReconciler(t, mockAPI)
-	_, err := r.Reconcile(context.Background(), testRequest())
+	_, err := r.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Namespace: "test-ns", Name: "test-rev"},
+	})
 	require.ErrorIs(t, err, sentinel)
 }
 
@@ -101,7 +100,9 @@ func TestReconcile_DeletionTimestampSet(t *testing.T) {
 		})
 
 	r := newTestReconciler(t, mockAPI)
-	result, err := r.Reconcile(context.Background(), testRequest())
+	result, err := r.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Namespace: "test-ns", Name: "test-rev"},
+	})
 	require.NoError(t, err)
 	require.Equal(t, ctrl.Result{}, result)
 }
@@ -119,7 +120,9 @@ func TestReconcile_BaseTypeNil(t *testing.T) {
 		})
 
 	r := newTestReconciler(t, mockAPI)
-	result, err := r.Reconcile(context.Background(), testRequest())
+	result, err := r.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Namespace: "test-ns", Name: "test-rev"},
+	})
 	require.NoError(t, err)
 	require.Equal(t, ctrl.Result{}, result)
 }
@@ -137,7 +140,9 @@ func TestReconcile_NoHandlerRegistered(t *testing.T) {
 		})
 
 	r := newTestReconciler(t, mockAPI)
-	result, err := r.Reconcile(context.Background(), testRequest())
+	result, err := r.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Namespace: "test-ns", Name: "test-rev"},
+	})
 	require.NoError(t, err)
 	require.Equal(t, ctrl.Result{}, result)
 }
@@ -151,17 +156,19 @@ func TestReconcile_HandlerError(t *testing.T) {
 	mockAPI.EXPECT().
 		Get(gomock.Any(), "test-ns", "test-rev", gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, _, _ string, _ *metav1.GetOptions, obj *v2pb.Revision) error {
-			obj.Spec.BaseType = &testTypeMeta
+			obj.Spec.BaseType = &pipelineTypeMeta
 			return nil
 		})
 
 	h := &mockRevisionHandler{
-		typeMeta:    testTypeMeta,
+		typeMeta:    pipelineTypeMeta,
 		reconcileFn: func(_ context.Context, _ *v2pb.Revision) error { return handlerErr },
 	}
 
 	r := newTestReconciler(t, mockAPI, h)
-	_, err := r.Reconcile(context.Background(), testRequest())
+	_, err := r.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Namespace: "test-ns", Name: "test-rev"},
+	})
 	require.ErrorIs(t, err, handlerErr)
 }
 
@@ -173,7 +180,7 @@ func TestReconcile_StatusChanged_CallsUpdateStatus(t *testing.T) {
 	mockAPI.EXPECT().
 		Get(gomock.Any(), "test-ns", "test-rev", gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, _, _ string, _ *metav1.GetOptions, obj *v2pb.Revision) error {
-			obj.Spec.BaseType = &testTypeMeta
+			obj.Spec.BaseType = &pipelineTypeMeta
 			obj.Status.State = v2pb.REVISION_STATE_CREATED
 			return nil
 		})
@@ -182,7 +189,7 @@ func TestReconcile_StatusChanged_CallsUpdateStatus(t *testing.T) {
 		Return(nil)
 
 	h := &mockRevisionHandler{
-		typeMeta: testTypeMeta,
+		typeMeta: pipelineTypeMeta,
 		reconcileFn: func(_ context.Context, rev *v2pb.Revision) error {
 			rev.Status.State = v2pb.REVISION_STATE_READY
 			return nil
@@ -190,7 +197,9 @@ func TestReconcile_StatusChanged_CallsUpdateStatus(t *testing.T) {
 	}
 
 	r := newTestReconciler(t, mockAPI, h)
-	result, err := r.Reconcile(context.Background(), testRequest())
+	result, err := r.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Namespace: "test-ns", Name: "test-rev"},
+	})
 	require.NoError(t, err)
 	require.Equal(t, ctrl.Result{}, result)
 }
@@ -203,21 +212,23 @@ func TestReconcile_StatusUnchanged_SkipsUpdateStatus(t *testing.T) {
 	mockAPI.EXPECT().
 		Get(gomock.Any(), "test-ns", "test-rev", gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, _, _ string, _ *metav1.GetOptions, obj *v2pb.Revision) error {
-			obj.Spec.BaseType = &testTypeMeta
+			obj.Spec.BaseType = &pipelineTypeMeta
 			obj.Status.State = v2pb.REVISION_STATE_READY
 			return nil
 		})
 	// UpdateStatus must NOT be called — no EXPECT for it.
 
 	h := &mockRevisionHandler{
-		typeMeta: testTypeMeta,
+		typeMeta: pipelineTypeMeta,
 		reconcileFn: func(_ context.Context, _ *v2pb.Revision) error {
 			return nil
 		},
 	}
 
 	r := newTestReconciler(t, mockAPI, h)
-	result, err := r.Reconcile(context.Background(), testRequest())
+	result, err := r.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Namespace: "test-ns", Name: "test-rev"},
+	})
 	require.NoError(t, err)
 	require.Equal(t, ctrl.Result{}, result)
 }
