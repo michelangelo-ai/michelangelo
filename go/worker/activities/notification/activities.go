@@ -48,6 +48,8 @@ type SendMessageToEmailActivityRequest struct {
 	Text string `json:"text,omitempty"`
 	// SendAs is the From address shown to recipients.
 	SendAs string `json:"send_as"`
+	// Additional fields (attachments, categories, headers) can be added here
+	// when integrating with a real email transport (SMTP, SendGrid, etc.).
 }
 
 // SendMessageToSlackActivity is the default Slack notification activity.

@@ -95,6 +95,10 @@ type PipelineRunNotificationRequest struct {
 
 // ContainsEventType reports whether any of eventTypes corresponds to prState.
 func ContainsEventType(eventTypes []v2pb.Notification_EventType, prState v2pb.PipelineRunState) bool {
+	// PIPELINE_RUN_STATE_RUNNING maps to EVENT_TYPE_PIPELINE_RUN_STATE_STARTED:
+	// from a user perspective the run has "started" when it enters the RUNNING
+	// state. The event name reflects the lifecycle milestone, not the internal
+	// state constant name.
 	stateMap := map[v2pb.PipelineRunState]v2pb.Notification_EventType{
 		v2pb.PIPELINE_RUN_STATE_FAILED:    v2pb.EVENT_TYPE_PIPELINE_RUN_STATE_FAILED,
 		v2pb.PIPELINE_RUN_STATE_SUCCEEDED: v2pb.EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED,
