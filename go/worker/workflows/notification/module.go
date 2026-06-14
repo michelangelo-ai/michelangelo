@@ -40,8 +40,13 @@ func provideDefaultSinks() []Sink {
 }
 
 // register registers the notification workflow method with each worker instance.
+// The deprecated name "PRNotificationWorkflow" is registered as an alias so that
+// in-flight executions dispatched by a pre-upgrade controllermgr can drain
+// without hanging. Remove the alias registration after all operators have rolled
+// past this release.
 func register(wf *Workflow, workers []worker.Worker) {
 	for _, w := range workers {
 		w.RegisterWorkflow(wf.SendPipelineRunNotification, types.PipelineRunNotificationWorkflowName)
+		w.RegisterWorkflow(wf.SendPipelineRunNotification, types.DeprecatedPRNotificationWorkflowName)
 	}
 }

@@ -22,6 +22,13 @@ const (
 	// collisions in multi-tenant namespaces.
 	PipelineRunNotificationWorkflowName = "io.michelangelo.notification.PipelineRunFanout"
 
+	// DeprecatedPRNotificationWorkflowName is the workflow name used before this
+	// package was open-sourced. The worker registers this alias for one release so
+	// that in-flight executions dispatched by a pre-upgrade controllermgr can drain
+	// without hanging until their 60h ExecutionStartToCloseTimeout. Remove once all
+	// operators have rolled past this release.
+	DeprecatedPRNotificationWorkflowName = "PRNotificationWorkflow"
+
 	// SourcePipelineTypeLabelName is the Kubernetes label key that identifies the
 	// pipeline type (e.g. PIPELINE_TYPE_TRAIN). External integrators can read this
 	// label to drive custom routing logic without hardcoding the key string.
