@@ -192,16 +192,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	}
 
-	// Send notifications for state changes (non-blocking)
-	if r.notifier != nil {
-		if notificationErr := r.notifier.NotifyOnStateChange(ctx, originalPipelineRun, pipelineRun); notificationErr != nil {
-			logger.Warn("Failed to send notifications",
-				zap.Error(notificationErr),
-				zap.String("pipeline_run", req.NamespacedName.String()))
-			// Don't fail reconciliation due to notification errors
-		}
-	}
-
 	// Check if state changed to terminal state and emit metrics
 	originalIsTerminal := isTerminalState(originalPipelineRun.Status.State)
 	currentIsTerminal := isTerminalState(pipelineRun.Status.State)
@@ -224,6 +214,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	} else if currentIsTerminal {
 		// Only count as successful reconciliation when reaching terminal state
 		IncPipelineRunReconcileSuccess(req.Namespace, req.Name)
+	}
+
+	// Send notifications after status is persisted. Dispatching before the
+	// status write would re-fire the notification on every reconcile until the
+	// write succeeds (controller restart or conflict between dispatch and persist).
+	if returnErr == nil && r.notifier != nil {
+		if notificationErr := r.notifier.NotifyOnStateChange(ctx, originalPipelineRun, pipelineRun); notificationErr != nil {
+			logger.Warn("Failed to send notifications",
+				zap.Error(notificationErr),
+				zap.String("pipeline_run", req.NamespacedName.String()))
+			// Don't fail reconciliation due to notification errors
+		}
 	}
 
 	// For terminal runs, check if TTL has elapsed and mark immutable if so.
