@@ -3,10 +3,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from io import BytesIO
+
+
+TRAINING_FRAMEWORK_CUSTOM = "custom"
+"""Training framework identifier for user-defined ``CustomModel`` subclasses."""
+
+TRAINING_FRAMEWORK_PYTORCH = "pytorch"
+"""Training framework identifier for plain ``torch.nn.Module`` models."""
+
+TRAINING_FRAMEWORK_LIGHTNING = "lightning"
+"""Training framework identifier for ``pytorch_lightning.LightningModule`` models."""
 
 
 @dataclass
@@ -51,6 +61,11 @@ class ModelMetadata:
             the deployed model. Not included in ``repr``.
         _hyperparameters: Serialised training hyperparameters for
             reproducibility. Not included in ``repr``.
+        hyperparameters: Live training hyperparameters as a Python dict.
+            Used by ``ModelVariable.load_lightning_model()`` to re-instantiate
+            the model class via ``model_class(**hyperparameters)``. Distinct
+            from ``_hyperparameters``, which is the registry-bound serialised
+            form.
 
     Example:
         >>> meta = ModelMetadata(training_framework="xgboost", deployable=True)
@@ -67,6 +82,7 @@ class ModelMetadata:
     _schema: BytesIO | None = field(default=None, repr=False)
     _sample_data: BytesIO | None = field(default=None, repr=False)
     _hyperparameters: BytesIO | None = field(default=None, repr=False)
+    hyperparameters: dict[str, Any] | None = None
 
     def to_registry_dict(self) -> dict[str, str]:
         """Return a flat string dict of public fields suitable for registry tags.
