@@ -543,7 +543,7 @@ describe('Table', () => {
         await user.click(addFilterButton);
 
         // Step 2: Select department column
-        const departmentOption = screen.getByTestId('filter-option-Department');
+        const departmentOption = screen.getByRole('option', { name: 'Department' });
         await user.click(departmentOption);
 
         // Step 3: Select Engineering value in categorical filter
@@ -578,7 +578,7 @@ describe('Table', () => {
 
         // Apply a filter first
         await user.click(screen.getByRole('button', { name: 'Add filter' }));
-        await user.click(screen.getByTestId('filter-option-Department'));
+        await user.click(screen.getByRole('option', { name: 'Department' }));
         await user.click(screen.getByLabelText('Engineering'));
         await user.click(screen.getByRole('button', { name: 'Apply' }));
 
@@ -589,7 +589,7 @@ describe('Table', () => {
 
         // Open filter menu again and remove filter
         await user.click(screen.getByRole('button', { name: 'Add filter' }));
-        await user.click(screen.getByTestId('filter-option-Department'));
+        await user.click(screen.getByRole('option', { name: 'Department' }));
         await user.click(screen.getByLabelText('Engineering')); // Uncheck
         await user.click(screen.getByRole('button', { name: 'Apply' }));
 
@@ -604,7 +604,7 @@ describe('Table', () => {
 
         // Open filter menu and select Department column
         await user.click(screen.getByRole('button', { name: 'Add filter' }));
-        await user.click(screen.getByTestId('filter-option-Department'));
+        await user.click(screen.getByRole('option', { name: 'Department' }));
 
         // Select Marketing (we want to exclude this)
         await user.click(screen.getByLabelText('Marketing'));
@@ -666,7 +666,7 @@ describe('Table', () => {
 
         // But filter options should include all departments from unFilteredData
         await user.click(screen.getByRole('button', { name: 'Add filter' }));
-        await user.click(screen.getByTestId('filter-option-Department'));
+        await user.click(screen.getByRole('option', { name: 'Department' }));
 
         // Should have all department options available (Engineering, Marketing, Sales)
         expect(screen.getByLabelText('Engineering')).toBeInTheDocument();
@@ -704,7 +704,7 @@ describe('Table', () => {
         );
 
         await user.click(screen.getByRole('button', { name: 'Add filter' }));
-        await user.click(screen.getByTestId('filter-option-Department'));
+        await user.click(screen.getByRole('option', { name: 'Department' }));
 
         await waitFor(() => {
           expect(screen.getAllByText('Dept: Engineering')).toHaveLength(2);
@@ -758,7 +758,7 @@ describe('Table', () => {
         expect(screen.getByText('ML training pipeline')).toBeInTheDocument();
 
         await user.click(screen.getByRole('button', { name: 'Add filter' }));
-        await user.click(screen.getByTestId('filter-option-Pipeline'));
+        await user.click(screen.getByRole('option', { name: 'Pipeline' }));
         await waitFor(() => {
           expect(screen.getAllByText('my-ml-pipeline')).toHaveLength(2);
           expect(screen.getAllByText('data-processing')).toHaveLength(2);
@@ -798,11 +798,11 @@ describe('Table', () => {
         await user.click(screen.getByRole('button', { name: 'Add filter' }));
 
         // Should show CLIENT and SERVER mode columns
-        expect(screen.getByTestId('filter-option-Name')).toBeInTheDocument();
-        expect(screen.getByTestId('filter-option-Department')).toBeInTheDocument();
+        expect(screen.getByRole('option', { name: 'Name' })).toBeInTheDocument();
+        expect(screen.getByRole('option', { name: 'Department' })).toBeInTheDocument();
 
         // Should NOT show NONE mode column
-        expect(screen.queryByTestId('filter-option-Notes')).not.toBeInTheDocument();
+        expect(screen.queryByRole('option', { name: 'Notes' })).not.toBeInTheDocument();
       });
 
       it('hides filter menu entirely when all columns have FilterMode.NONE', () => {
@@ -868,7 +868,7 @@ describe('Table', () => {
 
       // Open filter menu and select DATE column
       await user.click(screen.getByRole('button', { name: 'Add filter' }));
-      await user.click(screen.getByTestId('filter-option-Created At'));
+      await user.click(screen.getByRole('option', { name: 'Created At' }));
 
       // Should open datetime filter (not categorical filter)
       // DatetimeFilter should render with Apply button
@@ -1148,9 +1148,7 @@ describe('Table', () => {
 
     it('respects disablePagination even with custom component', () => {
       const CustomPaginationComponent = (props: TablePaginationProps) => (
-        <div>
-          Custom Pagination - Page {props.state.pageIndex + 1}
-        </div>
+        <div>Custom Pagination - Page {props.state.pageIndex + 1}</div>
       );
 
       render(
@@ -1390,6 +1388,7 @@ describe('Table', () => {
 
         // Apply column filter that drastically reduces results
         await user.click(screen.getByRole('button', { name: 'Add filter' }));
+        // eslint-disable-next-line testing-library/no-test-id-queries -- BaseUI popover animation leaves options visibility:hidden in jsdom after pagination renders; getByRole cannot find them
         await user.click(screen.getByTestId('filter-option-Column1'));
         await user.click(screen.getByLabelText('row1-col1-data'));
         await user.click(screen.getByRole('button', { name: 'Apply' }));
@@ -1424,6 +1423,7 @@ describe('Table', () => {
 
         // Apply filter that still leaves 2 pages (4 rows with pageSize=3 → 2 pages)
         await user.click(screen.getByRole('button', { name: 'Add filter' }));
+        // eslint-disable-next-line testing-library/no-test-id-queries -- BaseUI popover animation leaves options visibility:hidden in jsdom after pagination renders; getByRole cannot find them
         await user.click(screen.getByTestId('filter-option-Column1'));
         await user.click(screen.getByLabelText('row1-col1-data'));
         await user.click(screen.getByLabelText('row2-col1-data'));
