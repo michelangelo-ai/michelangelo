@@ -41,7 +41,7 @@ describe('Banner', () => {
       buildWrapper([getBaseProviderWrapper()])
     );
 
-    const banner = screen.getByTestId('custom-banner');
+    const banner = screen.getByRole('complementary');
     expect(banner).toHaveAttribute('role', 'complementary');
   });
 
@@ -60,7 +60,7 @@ describe('Banner', () => {
       buildWrapper([getBaseProviderWrapper()])
     );
 
-    const banner = screen.getByTestId('custom-root');
+    const banner = screen.getByRole('complementary');
     expect(banner).toHaveStyle({
       marginTop: '0px',
       marginRight: '0px',

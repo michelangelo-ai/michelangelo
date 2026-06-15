@@ -8,7 +8,7 @@ import {
 
 export function TableLoadingState() {
   return (
-    <StyledTableBody data-testid="table-loading-state">
+    <StyledTableBody aria-label="Loading">
       {[1, 2, 3].map((row) => (
         <StyledTableBodyRow key={row}>
           <StyledTableBodyCell colSpan={100}>

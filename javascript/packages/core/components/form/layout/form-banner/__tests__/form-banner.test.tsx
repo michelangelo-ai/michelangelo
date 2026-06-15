@@ -69,6 +69,6 @@ describe('FormBanner', () => {
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
     );
 
-    expect(screen.getByTestId('custom-content')).toBeInTheDocument();
+    expect(screen.getByText('Custom element')).toBeInTheDocument();
   });
 });

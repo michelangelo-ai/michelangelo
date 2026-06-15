@@ -8,6 +8,7 @@ import typesInTypesFile from './eslint-local-rules/types-in-types-file.js';
 import tseslint from 'typescript-eslint';
 import prettierConfig from 'eslint-config-prettier';
 import baseUIEslint from 'eslint-plugin-baseui';
+import testingLibrary from 'eslint-plugin-testing-library';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
@@ -172,6 +173,18 @@ export default [
     },
     rules: {
       'local/no-module-scope-test-setup': 'error',
+    },
+  },
+
+  // All package tests — testing-library query and testid conventions
+  {
+    files: ['packages/**/__tests__/**/*.{ts,tsx}'],
+    plugins: {
+      'testing-library': testingLibrary,
+    },
+    rules: {
+      'testing-library/no-test-id-queries': 'error',
+      'testing-library/prefer-screen-queries': 'error',
     },
   },
 

@@ -176,7 +176,6 @@ describe('useGetCellRenderer', () => {
         ])
       );
 
-      expect(screen.getByTestId('custom-badge')).toBeInTheDocument();
       expect(screen.getByText('Badge: test value')).toBeInTheDocument();
     });
 
@@ -262,7 +261,7 @@ describe('useGetCellRenderer', () => {
       );
 
       expect(screen.getByText('Column Custom: test value')).toBeInTheDocument();
-      expect(screen.queryByTestId('custom-badge')).not.toBeInTheDocument();
+      expect(screen.queryByText('Badge: test value')).not.toBeInTheDocument();
     });
 
     it('should prioritize provider custom renderers over built-in renderers', () => {
@@ -289,7 +288,6 @@ describe('useGetCellRenderer', () => {
         ])
       );
 
-      expect(screen.getByTestId('custom-text')).toBeInTheDocument();
       expect(screen.getByText('Custom Text: test value')).toBeInTheDocument();
     });
 

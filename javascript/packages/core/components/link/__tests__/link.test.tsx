@@ -90,10 +90,11 @@ describe('Link', () => {
     });
 
     it('should render custom link component', () => {
-      expect(screen.getByTestId('custom-link')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Custom Link' })).toBeInTheDocument();
     });
 
     it('should render custom icon component', () => {
+      // eslint-disable-next-line testing-library/no-test-id-queries -- bare span, no accessible identity
       expect(screen.getByTestId('custom-icon')).toBeInTheDocument();
     });
   });

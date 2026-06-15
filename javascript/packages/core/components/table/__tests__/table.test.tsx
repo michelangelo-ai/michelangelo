@@ -157,7 +157,7 @@ describe('Table', () => {
     });
 
     it('renders the default loading state', () => {
-      expect(screen.getByTestId('table-loading-state')).toBeInTheDocument();
+      expect(screen.getByRole('rowgroup', { name: 'Loading' })).toBeInTheDocument();
     });
 
     it('renders column headers when loading', () => {
@@ -189,7 +189,7 @@ describe('Table', () => {
     });
 
     it('does not render the default loading state', () => {
-      expect(screen.queryByTestId('table-loading-state')).not.toBeInTheDocument();
+      expect(screen.queryByRole('rowgroup', { name: 'Loading' })).not.toBeInTheDocument();
     });
 
     it('renders column headers when loading', () => {
@@ -543,7 +543,7 @@ describe('Table', () => {
         await user.click(addFilterButton);
 
         // Step 2: Select department column
-        const departmentOption = screen.getByTestId('filter-option-Department');
+        const departmentOption = screen.getByRole('option', { name: 'Department' });
         await user.click(departmentOption);
 
         // Step 3: Select Engineering value in categorical filter
@@ -578,7 +578,7 @@ describe('Table', () => {
 
         // Apply a filter first
         await user.click(screen.getByRole('button', { name: 'Add filter' }));
-        await user.click(screen.getByTestId('filter-option-Department'));
+        await user.click(screen.getByRole('option', { name: 'Department' }));
         await user.click(screen.getByLabelText('Engineering'));
         await user.click(screen.getByRole('button', { name: 'Apply' }));
 
@@ -589,7 +589,7 @@ describe('Table', () => {
 
         // Open filter menu again and remove filter
         await user.click(screen.getByRole('button', { name: 'Add filter' }));
-        await user.click(screen.getByTestId('filter-option-Department'));
+        await user.click(screen.getByRole('option', { name: 'Department' }));
         await user.click(screen.getByLabelText('Engineering')); // Uncheck
         await user.click(screen.getByRole('button', { name: 'Apply' }));
 
@@ -604,7 +604,7 @@ describe('Table', () => {
 
         // Open filter menu and select Department column
         await user.click(screen.getByRole('button', { name: 'Add filter' }));
-        await user.click(screen.getByTestId('filter-option-Department'));
+        await user.click(screen.getByRole('option', { name: 'Department' }));
 
         // Select Marketing (we want to exclude this)
         await user.click(screen.getByLabelText('Marketing'));
@@ -666,7 +666,7 @@ describe('Table', () => {
 
         // But filter options should include all departments from unFilteredData
         await user.click(screen.getByRole('button', { name: 'Add filter' }));
-        await user.click(screen.getByTestId('filter-option-Department'));
+        await user.click(screen.getByRole('option', { name: 'Department' }));
 
         // Should have all department options available (Engineering, Marketing, Sales)
         expect(screen.getByLabelText('Engineering')).toBeInTheDocument();
@@ -704,7 +704,7 @@ describe('Table', () => {
         );
 
         await user.click(screen.getByRole('button', { name: 'Add filter' }));
-        await user.click(screen.getByTestId('filter-option-Department'));
+        await user.click(screen.getByRole('option', { name: 'Department' }));
 
         await waitFor(() => {
           expect(screen.getAllByText('Dept: Engineering')).toHaveLength(2);
@@ -758,7 +758,7 @@ describe('Table', () => {
         expect(screen.getByText('ML training pipeline')).toBeInTheDocument();
 
         await user.click(screen.getByRole('button', { name: 'Add filter' }));
-        await user.click(screen.getByTestId('filter-option-Pipeline'));
+        await user.click(screen.getByRole('option', { name: 'Pipeline' }));
         await waitFor(() => {
           expect(screen.getAllByText('my-ml-pipeline')).toHaveLength(2);
           expect(screen.getAllByText('data-processing')).toHaveLength(2);
@@ -798,11 +798,11 @@ describe('Table', () => {
         await user.click(screen.getByRole('button', { name: 'Add filter' }));
 
         // Should show CLIENT and SERVER mode columns
-        expect(screen.getByTestId('filter-option-Name')).toBeInTheDocument();
-        expect(screen.getByTestId('filter-option-Department')).toBeInTheDocument();
+        expect(screen.getByRole('option', { name: 'Name' })).toBeInTheDocument();
+        expect(screen.getByRole('option', { name: 'Department' })).toBeInTheDocument();
 
         // Should NOT show NONE mode column
-        expect(screen.queryByTestId('filter-option-Notes')).not.toBeInTheDocument();
+        expect(screen.queryByRole('option', { name: 'Notes' })).not.toBeInTheDocument();
       });
 
       it('hides filter menu entirely when all columns have FilterMode.NONE', () => {
@@ -868,7 +868,7 @@ describe('Table', () => {
 
       // Open filter menu and select DATE column
       await user.click(screen.getByRole('button', { name: 'Add filter' }));
-      await user.click(screen.getByTestId('filter-option-Created At'));
+      await user.click(screen.getByRole('option', { name: 'Created At' }));
 
       // Should open datetime filter (not categorical filter)
       // DatetimeFilter should render with Apply button
@@ -1123,7 +1123,7 @@ describe('Table', () => {
 
     it('renders custom pagination component instead of default', () => {
       const CustomPaginationComponent = (props: TablePaginationProps) => (
-        <div data-testid="custom-pagination">
+        <div>
           <span>Custom Pagination - Page {props.state.pageIndex + 1}</span>
           <button onClick={() => props.gotoPage(props.state.pageIndex + 1)}>Custom Next</button>
         </div>
@@ -1142,14 +1142,13 @@ describe('Table', () => {
         ])
       );
 
-      expect(screen.getByTestId('custom-pagination')).toBeInTheDocument();
       expect(screen.getByText('Custom Pagination - Page 1')).toBeInTheDocument();
       expect(screen.queryByText('Page 1 of')).not.toBeInTheDocument();
     });
 
     it('respects disablePagination even with custom component', () => {
       const CustomPaginationComponent = (props: TablePaginationProps) => (
-        <div data-testid="custom-pagination">
+        <div>
           Custom Pagination - Page {props.state.pageIndex + 1}
         </div>
       );
@@ -1168,7 +1167,7 @@ describe('Table', () => {
         ])
       );
 
-      expect(screen.queryByTestId('custom-pagination')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Custom Pagination/)).not.toBeInTheDocument();
       expect(screen.getAllByRole('row')).toHaveLength(16);
     });
 
@@ -1391,7 +1390,7 @@ describe('Table', () => {
 
         // Apply column filter that drastically reduces results
         await user.click(screen.getByRole('button', { name: 'Add filter' }));
-        await user.click(screen.getByTestId('filter-option-Column1'));
+        await user.click(screen.getByRole('option', { name: 'Column1' }));
         await user.click(screen.getByLabelText('row1-col1-data'));
         await user.click(screen.getByRole('button', { name: 'Apply' }));
 
@@ -1425,7 +1424,7 @@ describe('Table', () => {
 
         // Apply filter that still leaves 2 pages (4 rows with pageSize=3 → 2 pages)
         await user.click(screen.getByRole('button', { name: 'Add filter' }));
-        await user.click(screen.getByTestId('filter-option-Column1'));
+        await user.click(screen.getByRole('option', { name: 'Column1' }));
         await user.click(screen.getByLabelText('row1-col1-data'));
         await user.click(screen.getByLabelText('row2-col1-data'));
         await user.click(screen.getByLabelText('row3-col1-data'));
@@ -2121,6 +2120,7 @@ describe('Table', () => {
 
       // Check for sticky column test IDs that the withStickySides HOC adds
       // Should have sticky cells for both header and data rows in first column
+      // eslint-disable-next-line testing-library/no-test-id-queries -- HOC-injected testid, no accessible identity on these cells
       const stickyCells = screen.getAllByTestId('sticky-cell-left-sticky');
       expect(stickyCells.length).toBeGreaterThan(0);
     });
@@ -2132,6 +2132,7 @@ describe('Table', () => {
       );
 
       // Should not have sticky cell test IDs
+      // eslint-disable-next-line testing-library/no-test-id-queries -- HOC-injected testid, no accessible identity on these cells
       expect(screen.queryByTestId('sticky-cell-left-sticky')).not.toBeInTheDocument();
     });
   });

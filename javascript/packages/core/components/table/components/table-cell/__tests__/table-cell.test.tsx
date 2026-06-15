@@ -110,6 +110,7 @@ describe('TableCell', () => {
       );
 
       expect(screen.getByText('test-value')).toBeInTheDocument();
+      // eslint-disable-next-line testing-library/no-test-id-queries -- bare hover div, no accessible identity
       expect(screen.queryByTestId('tooltip-hover-container')).not.toBeInTheDocument();
     });
 
@@ -133,6 +134,7 @@ describe('TableCell', () => {
       );
 
       expect(screen.getByText('test-value')).toBeInTheDocument();
+      // eslint-disable-next-line testing-library/no-test-id-queries -- bare hover div, no accessible identity
       expect(screen.getByTestId('tooltip-hover-container')).toBeInTheDocument();
     });
 
@@ -213,6 +215,7 @@ describe('TableCell', () => {
       );
 
       expect(screen.getByText('test-value')).toBeInTheDocument();
+      // eslint-disable-next-line testing-library/no-test-id-queries -- bare hover div, no accessible identity
       expect(screen.queryByTestId('tooltip-hover-container')).not.toBeInTheDocument();
     });
 

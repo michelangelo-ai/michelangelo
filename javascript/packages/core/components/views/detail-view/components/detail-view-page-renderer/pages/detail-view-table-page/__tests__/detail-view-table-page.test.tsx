@@ -70,7 +70,7 @@ describe('DetailViewTablePage', () => {
     expect(mockRequest).not.toHaveBeenCalledWith('ListPipelineRun', expect.anything());
 
     expect(screen.queryByText('Should Not Appear')).not.toBeInTheDocument();
-    expect(screen.getByTestId('table-loading-state')).toBeInTheDocument();
+    expect(screen.getByRole('rowgroup', { name: 'Loading' })).toBeInTheDocument();
   });
 
   test('respects query clientOptions.enabled when detail view is not loading', () => {
