@@ -17,6 +17,7 @@ export function CircleExclamationMark({
 
   return (
     <svg
+      role="img"
       aria-label="Circle Exclamation Mark icon"
       viewBox="0 0 38 38"
       width={width}

@@ -1390,7 +1390,7 @@ describe('Table', () => {
 
         // Apply column filter that drastically reduces results
         await user.click(screen.getByRole('button', { name: 'Add filter' }));
-        await user.click(screen.getByRole('option', { name: 'Column1' }));
+        await user.click(await screen.findByRole('option', { name: 'Column1' }));
         await user.click(screen.getByLabelText('row1-col1-data'));
         await user.click(screen.getByRole('button', { name: 'Apply' }));
 
@@ -1424,7 +1424,7 @@ describe('Table', () => {
 
         // Apply filter that still leaves 2 pages (4 rows with pageSize=3 → 2 pages)
         await user.click(screen.getByRole('button', { name: 'Add filter' }));
-        await user.click(screen.getByRole('option', { name: 'Column1' }));
+        await user.click(await screen.findByRole('option', { name: 'Column1' }));
         await user.click(screen.getByLabelText('row1-col1-data'));
         await user.click(screen.getByLabelText('row2-col1-data'));
         await user.click(screen.getByLabelText('row3-col1-data'));

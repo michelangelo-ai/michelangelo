@@ -10,7 +10,7 @@ import type { TableRow } from './row-types';
 
 declare module '@tanstack/react-table' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-empty-object-type
-  interface ColumnMeta<TData extends TableData, TValue> extends ColumnConfig<TData> {}
+  interface ColumnMeta<TData extends TableData, TValue> {}
 }
 
 export type ColumnConfig<TData = TableData> = DistributiveOmit<Cell<TData>, 'tooltip'> & {
