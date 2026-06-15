@@ -128,7 +128,7 @@ func options() fx.Option {
 		cluster.Module,
 		client.Module,
 		fx.Invoke(func(logger logr.Logger) {
-			ctrl.SetLogger(logger)
+			ctrl.SetLogger(controllermgr.NewAlertingLogger(logger))
 		}),
 	)
 }
