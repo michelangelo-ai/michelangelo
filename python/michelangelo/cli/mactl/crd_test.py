@@ -434,6 +434,66 @@ class ApplyFuncImplTest(TestCase):
         mock_crd._get.assert_called_once_with("ns", "name")
         mock_crd.read_yaml_and_update_crd_request.assert_called_once()
 
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.get_crd_namespace_and_name_from_yaml")
+    def test_apply_func_impl_invokes_pre_apply_hook(
+        self, mock_get_ns: MagicMock, _
+    ):
+        """apply_func_impl runs registered pre-apply checks with the CRD full name."""
+        from michelangelo.cli.mactl import apply_hooks
+
+        received: list[str] = []
+        apply_hooks._pre_apply_checks.clear()
+        apply_hooks.register_pre_apply_check(received.append)
+        self.addCleanup(apply_hooks._pre_apply_checks.clear)
+
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Apply",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        mock_crd = Mock()
+        mock_crd.full_name = "test.Service"
+        mock_crd._get.return_value = Mock()
+        mock_crd.read_yaml_and_update_crd_request.return_value = Mock()
+        mock_get_ns.return_value = ("ns", "name")
+
+        apply_func_impl(
+            crd_method_info, Mock(arguments={"self": mock_crd, "file": "f.yaml"})
+        )
+
+        self.assertEqual(received, ["test.Service"])
+
+    def test_apply_func_impl_pre_apply_hook_can_abort(self):
+        """A raising pre-apply check halts apply_func_impl before any gRPC call."""
+        from michelangelo.cli.mactl import apply_hooks
+
+        def reject(_: str) -> None:
+            raise RuntimeError("blocked by hook")
+
+        apply_hooks._pre_apply_checks.clear()
+        apply_hooks.register_pre_apply_check(reject)
+        self.addCleanup(apply_hooks._pre_apply_checks.clear)
+
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Apply",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        mock_crd = Mock()
+
+        with self.assertRaisesRegex(RuntimeError, "blocked by hook"):
+            apply_func_impl(
+                crd_method_info,
+                Mock(arguments={"self": mock_crd, "file": "f.yaml"}),
+            )
+
+        mock_crd._get.assert_not_called()
+
 
 class CreateFuncImplTest(TestCase):
     """Test cases for create_func_impl function."""

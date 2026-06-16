@@ -22,6 +22,7 @@ from grpc import (
 from yaml import YAMLError
 from yaml import safe_load as yaml_safe_load
 
+from michelangelo.cli.mactl.apply_hooks import run_pre_apply_checks
 from michelangelo.cli.mactl.grpc_tools import (
     get_message_class_by_name,
     get_methods_from_service,
@@ -425,6 +426,7 @@ def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> M
 
 def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
     """Default common CRD member method implementation for APPLY method."""
+    run_pre_apply_checks(crd_method_info.crd_full_name)
     _LOG.info("Bound arguments: %r", bound_args.arguments)
     _self: CRD = bound_args.arguments["self"]
     _LOG.info("Start apply_func for %r", _self.full_name)
