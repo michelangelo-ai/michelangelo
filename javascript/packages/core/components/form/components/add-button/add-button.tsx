@@ -24,6 +24,7 @@ import type { AddButtonProps } from './types';
  */
 export function AddButton({ label = 'Add more', shape, onClick }: AddButtonProps) {
   const [, theme] = useStyletron();
+  const handleButtonClick = onClick;
 
   return (
     <Button
