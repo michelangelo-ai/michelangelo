@@ -25,7 +25,7 @@ import type { WithStickySidesProps } from './types';
 export function withStickySides<P extends object>(
   Component: React.ComponentType<P>
 ): React.ComponentType<P & WithStickySidesProps> {
-  return function StickySidesHOC(props: P & WithStickySidesProps) {
+  return function StickySidesHoc(props: P & WithStickySidesProps) {
     const {
       enableStickySides,
       enableRowSelection,

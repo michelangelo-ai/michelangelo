@@ -1,4 +1,4 @@
-import { getDateFromEpochSeconds, getEpochSecondsFromDate, parseISOString } from '../time-utils';
+import { getDateFromEpochSeconds, getEpochSecondsFromDate, parseIsoString } from '../time-utils';
 
 describe('time-utils', () => {
   describe('getDateFromEpochSeconds', () => {
@@ -57,7 +57,7 @@ describe('time-utils', () => {
     });
   });
 
-  describe('parseISOString', () => {
+  describe('parseIsoString', () => {
     const validCases = [
       {
         input: '2024-01-01T12:00:00.000Z',
@@ -93,12 +93,12 @@ describe('time-utils', () => {
     ];
 
     test.each(validCases)('should parse $description', ({ input, expected }) => {
-      const result = parseISOString(input);
+      const result = parseIsoString(input);
       expect(result).toEqual(expected);
     });
 
     test.each(invalidCases)('should return null for $description', ({ input }) => {
-      const result = parseISOString(input);
+      const result = parseIsoString(input);
       expect(result).toBe(null);
     });
   });

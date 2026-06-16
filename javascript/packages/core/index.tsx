@@ -56,7 +56,7 @@ export { useStudioQuery } from '#core/hooks/use-studio-query';
 export { ServiceProvider } from '#core/providers/service-provider/service-provider';
 
 export { useCellToString } from '#core/components/cell/use-cell-to-string';
-export { cellTooltipHOC } from '#core/components/cell/components/tooltip/cell-tooltip-hoc';
+export { cellTooltipHoc } from '#core/components/cell/components/tooltip/cell-tooltip-hoc';
 export { DefaultCellRenderer } from '#core/components/cell/renderers/default-cell-renderer';
 export { useGetCellRenderer } from '#core/components/cell/use-get-cell-renderer';
 export * from '#core/components/cell/types';

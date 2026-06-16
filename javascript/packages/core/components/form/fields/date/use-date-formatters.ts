@@ -28,15 +28,15 @@ export function useDateFormatters(dateFormat: DateFormat = DateFormat.ISO_DATE_S
       : (date: Date | null) => (date ? date.toISOString() : '');
 
   return {
-    format: (value: string) => translateUTCDateToUserTimezone(toDate(value)),
-    parse: (value: Date | null) => fromDate(translateUserDateToUTC(value)),
+    format: (value: string) => translateUtcDateToUserTimezone(toDate(value)),
+    parse: (value: Date | null) => fromDate(translateUserDateToUtc(value)),
   };
 }
 
 /**
  * Adjusts a UTC Date so its local representation matches the original UTC components
  */
-function translateUTCDateToUserTimezone(date: Date | null): Date | null {
+function translateUtcDateToUserTimezone(date: Date | null): Date | null {
   if (!date) return null;
 
   const offsetMinutes = date.getTimezoneOffset();
@@ -46,7 +46,7 @@ function translateUTCDateToUserTimezone(date: Date | null): Date | null {
 /**
  * Adjusts a local-timezone Date so its UTC components match the original local display
  */
-function translateUserDateToUTC(date: Date | null): Date | null {
+function translateUserDateToUtc(date: Date | null): Date | null {
   if (!date) return date;
 
   const offsetMinutes = date.getTimezoneOffset();

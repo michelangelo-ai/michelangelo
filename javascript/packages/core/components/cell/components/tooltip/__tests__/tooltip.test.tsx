@@ -5,7 +5,7 @@ import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
 import { CellTooltipContentRenderer } from '../cell-tooltip-content-renderer';
-import { cellTooltipHOC } from '../cell-tooltip-hoc';
+import { cellTooltipHoc } from '../cell-tooltip-hoc';
 import { CellTooltipWrapper } from '../cell-tooltip-wrapper';
 
 import type { CellRendererProps } from '#core/components/cell/types';
@@ -107,7 +107,7 @@ describe('Cell Tooltip Components', () => {
     });
   });
 
-  describe('cellTooltipHOC', () => {
+  describe('cellTooltipHoc', () => {
     const TestComponent = (props: CellRendererProps<string>) => <div>{props.value}</div>;
     const defaultProps = {
       value: 'Test Value',
@@ -122,7 +122,7 @@ describe('Cell Tooltip Components', () => {
 
     it('wraps component with tooltip functionality', async () => {
       const user = userEvent.setup();
-      const WrappedComponent = cellTooltipHOC(TestComponent);
+      const WrappedComponent = cellTooltipHoc(TestComponent);
 
       render(<WrappedComponent {...defaultProps} />, buildWrapper([getBaseProviderWrapper()]));
 

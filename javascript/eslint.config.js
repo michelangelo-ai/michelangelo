@@ -87,6 +87,10 @@ const sharedRules = {
   '@typescript-eslint/naming-convention': [
     'error',
     {
+      selector: 'function',
+      format: ['strictCamelCase', 'StrictPascalCase'],
+    },
+    {
       selector: 'typeLike',
       format: ['PascalCase'],
       custom: { regex: 'T$', match: false },
