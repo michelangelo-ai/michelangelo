@@ -8,13 +8,21 @@ Three frameworks are supported as first-class citizens:
 
 - ``"custom"`` — user-defined ``Model`` subclasses (``CustomModel.save`` /
   ``CustomModel.load``) from
-  ``michelangelo.lib.model_manager.interface.custom_model``.
-- ``"pytorch"`` — generic ``torch.nn.Module`` via ``torch.save`` /
-  ``torch.load``. The storage path is auto-suffixed with ``.pt`` for
-  compatibility with the Triton torch packager.
-- ``"lightning"`` — ``pytorch_lightning.LightningModule`` via
-  ``state_dict`` round-trip; loading re-instantiates ``metadata.model_class``
-  with ``metadata.hyperparameters`` and applies ``load_state_dict``.
+  ``michelangelo.lib.model_manager.interface.custom_model``. Artifact layout
+  is a directory tree controlled by the user's ``save()`` implementation.
+- ``"pytorch"`` — generic ``torch.nn.Module`` via ``torch.save(state_dict())``
+  and ``torch.load(..., weights_only=True)``. Re-instantiation on load is
+  driven by ``metadata.model_class`` plus optional
+  ``metadata.hyperparameters`` — mirroring the PyTorch documented
+  state_dict + class-name pattern.
+- ``"lightning"`` — ``pytorch_lightning.LightningModule`` via the same
+  ``state_dict`` round-trip; ``metadata.model_class`` and
+  ``metadata.hyperparameters`` drive reconstruction.
+
+The state_dict + ``model_class`` pattern is the community standard (see
+MLflow's ``mlflow.pytorch`` flavor, BentoML's PyTorch integration, and the
+PyTorch documentation on saving and loading models). It loads safely with
+``weights_only=True`` and avoids pickling user code into the artifact.
 
 ``_private/`` convention:
     This file lives in ``_private/`` — do not import directly from this path.
@@ -26,7 +34,6 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
-from dataclasses import dataclass
 from typing import Any
 
 import fsspec
@@ -43,39 +50,89 @@ from michelangelo.workflow.variables.metadata import (
 _logger = logging.getLogger(__name__)
 
 
-@dataclass
 class ModelVariable(Variable):
     """A model variable flowing between workflow tasks.
 
-    Subclasses ``Variable``. Underlying it could be a PyTorch model, a Lightning
-    module, or a user-defined ``CustomModel``. Persistence is delegated to
-    framework-specific handlers; dispatch is keyed on
+    Subclasses ``Variable``. Underlying it could be a PyTorch model, a
+    Lightning module, or a user-defined ``CustomModel``. Persistence is
+    delegated to framework-specific handlers; dispatch is keyed on
     ``metadata.training_framework``.
+
+    Example:
+        >>> import torch  # doctest: +SKIP
+        >>> model = torch.nn.Linear(2, 1)  # doctest: +SKIP
+        >>> var = ModelVariable.create(model)  # doctest: +SKIP
+        >>> var.metadata.training_framework  # doctest: +SKIP
+        'pytorch'
+        >>> var.save()  # doctest: +SKIP
+        >>> restored = ModelVariable(path=var.path, metadata=var.metadata)
+        >>> isinstance(restored.value, torch.nn.Linear)  # doctest: +SKIP
+        True
     """
+
+    def __init__(
+        self,
+        value: Any = None,
+        path: str | None = None,
+        metadata: Any = None,
+        _io_metadata: Any = None,
+    ) -> None:
+        """Initialise with an optional in-memory value and/or storage path.
+
+        Args:
+            value: The in-memory model. When provided, ``save()`` persists it
+                to ``path``. When ``None``, accessing ``value`` triggers a
+                lazy load.
+            path: Storage path (local or fsspec URL). Auto-generated from the
+                ``UF_STORAGE_URL`` env var (default ``memory://storage``)
+                when not provided.
+            metadata: Optional ``ModelMetadata`` instance. Defaults to an
+                empty ``ModelMetadata()`` so that ``save()`` / ``_load()``
+                can raise a clear ``ValueError`` instead of an
+                ``AttributeError`` when ``training_framework`` is unset.
+            _io_metadata: Internal metadata written by the IO layer after a
+                save. Passed through by the UniFlow codec when reconstructing
+                a ``ModelVariable`` from a task result.
+        """
+        import uuid
+
+        if path is None:
+            path = (
+                f"{os.environ.get('UF_STORAGE_URL', 'memory://storage')}/"
+                f"{uuid.uuid4().hex}"
+            )
+        if metadata is None:
+            metadata = ModelMetadata()
+        super().__init__(path=path, metadata=metadata, _io_metadata=_io_metadata)
+        self._value = value
 
     @classmethod
     def create(cls, value: Any) -> ModelVariable:
         """Create a ``ModelVariable`` and auto-detect the training framework.
 
-        The framework is set to ``"custom"`` when ``value`` implements the
-        ``CustomModel`` ABC, ``"pytorch"`` when it's a ``torch.nn.Module``,
-        and otherwise left unset (callers must populate ``metadata`` manually
-        before calling ``save()``).
+        Detection order — first match wins:
+
+        1. ``CustomModel`` (the ``Model`` ABC from
+           ``michelangelo.lib.model_manager.interface.custom_model``)
+           → ``training_framework="custom"``.
+        2. ``pytorch_lightning.LightningModule`` →
+           ``training_framework="lightning"``. Checked before plain PyTorch
+           because ``LightningModule`` subclasses ``torch.nn.Module``.
+        3. ``torch.nn.Module`` → ``training_framework="pytorch"``.
+
+        Any other type leaves ``training_framework`` unset; callers must
+        populate ``metadata`` manually before calling ``save()``.
 
         Args:
-            value: The in-memory model. ``CustomModel`` and ``torch.nn.Module``
-                instances are recognised automatically; other framework types
-                require manual ``metadata.training_framework`` setup.
+            value: The in-memory model. ``CustomModel``, ``LightningModule``,
+                and ``torch.nn.Module`` instances are recognised
+                automatically; other framework types require manual
+                ``metadata.training_framework`` setup.
 
         Returns:
             A new ``ModelVariable`` with ``value`` ready in memory and
-            ``metadata`` populated with framework + ``model_class``.
-
-        Example:
-            >>> import torch  # doctest: +SKIP
-            >>> var = ModelVariable.create(torch.nn.Linear(2, 1))  # doctest: +SKIP
-            >>> var.metadata.training_framework  # doctest: +SKIP
-            'pytorch'
+            ``metadata`` populated with the detected framework +
+            ``model_class``.
         """
         res = super().create(value)
         res.metadata = ModelMetadata()
@@ -87,6 +144,16 @@ class ModelVariable(Variable):
 
             if isinstance(value, CustomModel):
                 res.metadata.training_framework = TRAINING_FRAMEWORK_CUSTOM
+                res.metadata.model_class = dot_path(type(value))
+                return res
+        except ImportError:
+            pass
+
+        try:
+            import pytorch_lightning as pl
+
+            if isinstance(value, pl.LightningModule):
+                res.metadata.training_framework = TRAINING_FRAMEWORK_LIGHTNING
                 res.metadata.model_class = dot_path(type(value))
                 return res
         except ImportError:
@@ -119,17 +186,15 @@ class ModelVariable(Variable):
         elif self.metadata.training_framework == TRAINING_FRAMEWORK_LIGHTNING:
             self.load_lightning_model()
         else:
-            raise ValueError(
-                f"Unrecognized training framework: {self.metadata.training_framework}"
-            )
+            raise ValueError(self._unknown_framework_message())
 
     def save(self):
         """Save value to variable path, dispatched on training_framework.
 
         Raises:
             ValueError: If no value has been set on this variable, or if
-                ``metadata.training_framework`` is unset or unrecognised. Call
-                the framework-specific ``save_*`` method directly when
+                ``metadata.training_framework`` is unset or unrecognised.
+                Call the framework-specific ``save_*`` method directly when
                 auto-dispatch is not possible.
         """
         if self._value is None:
@@ -141,9 +206,19 @@ class ModelVariable(Variable):
         elif self.metadata.training_framework == TRAINING_FRAMEWORK_LIGHTNING:
             self.save_lightning_model()
         else:
-            raise ValueError(
-                f"Unrecognized training framework: {self.metadata.training_framework}"
-            )
+            raise ValueError(self._unknown_framework_message())
+
+    def _unknown_framework_message(self) -> str:
+        """Build an actionable error message for an unset/unknown framework."""
+        return (
+            f"Unrecognized training framework: "
+            f"{self.metadata.training_framework!r}. "
+            f"Set metadata.training_framework to one of "
+            f"{TRAINING_FRAMEWORK_CUSTOM!r}, {TRAINING_FRAMEWORK_PYTORCH!r}, "
+            f"or {TRAINING_FRAMEWORK_LIGHTNING!r} "
+            f"(see michelangelo.workflow.variables.metadata), or construct "
+            f"the variable via ModelVariable.create(value) which auto-detects."
+        )
 
     # ------------------------------------------------------------------
     # Custom model
@@ -185,7 +260,9 @@ class ModelVariable(Variable):
 
         if not self.metadata.model_class:
             raise ValueError(
-                "model_class must be set in metadata to load a custom model."
+                "metadata.model_class must be set to load a custom model "
+                "(e.g. var.metadata.model_class = 'mypackage.models.MyModel'). "
+                "ModelVariable.create(value) sets it automatically."
             )
 
         model_class = import_attribute(self.metadata.model_class)
@@ -202,12 +279,15 @@ class ModelVariable(Variable):
     # ------------------------------------------------------------------
 
     def save_torch_model(self):
-        """Save a ``torch.nn.Module`` to ``self.path`` with a ``.pt`` suffix.
+        """Save a ``torch.nn.Module``'s ``state_dict`` to ``self.path``.
 
-        The ``.pt`` extension is appended when missing — required for
-        compatibility with the Triton torch packager. The full model object
-        is pickled via ``torch.save(self._value, ...)``; loading therefore
-        requires ``weights_only=False`` (see ``load_torch_model``).
+        Persists only the ``state_dict`` (not the full ``nn.Module``
+        object). This matches the PyTorch-recommended serialization pattern
+        and lets the artifact be loaded safely with ``weights_only=True``.
+
+        Reconstruction on load requires ``metadata.model_class`` (set
+        automatically by ``ModelVariable.create()``) and, when the class
+        constructor needs arguments, ``metadata.hyperparameters``.
         """
         import torch
 
@@ -219,47 +299,65 @@ class ModelVariable(Variable):
             )
             return
 
-        if not self.path.endswith(".pt"):
-            self.path = f"{self.path}.pt"
+        if not self.metadata.model_class:
+            self.metadata.model_class = dot_path(type(self._value))
 
         fs, path = fsspec.core.url_to_fs(self.path)
         with tempfile.TemporaryDirectory() as temp_dir:
             model_file = os.path.join(temp_dir, "model.pt")
-            torch.save(self._value, model_file)
+            torch.save(self._value.state_dict(), model_file)
             fs.put(model_file, path)
 
         self._saved = True
 
-    def load_torch_model(self, weights_only: bool = True):
-        """Load a ``torch.nn.Module`` via ``torch.load`` (CPU map-location).
+    def load_torch_model(self):
+        """Load a ``torch.nn.Module`` by re-instantiating ``model_class``.
 
-        Args:
-            weights_only: Forwarded to ``torch.load``. Defaults to ``True`` —
-                the safer mode that refuses to execute arbitrary pickle
-                opcodes. Pass ``weights_only=False`` when loading artifacts
-                produced by ``save_torch_model``, which pickle the full
-                ``nn.Module`` object (state_dict-only artifacts work with
-                the default).
+        Steps:
 
-        Security:
-            ``weights_only=False`` permits arbitrary code execution from the
-            pickle stream. Only set it when the artifact source is trusted.
+        1. Import the class from ``metadata.model_class``.
+        2. Construct an instance via
+           ``model_class(**metadata.hyperparameters)`` (empty dict when
+           ``hyperparameters`` is ``None``).
+        3. Download the ``state_dict`` from ``self.path`` and apply
+           ``load_state_dict`` (``weights_only=True`` — only tensors are
+           unpickled, so the call is safe against malicious artifacts).
+
+        Raises:
+            ValueError: If ``metadata.model_class`` is not set, or if the
+                class constructor requires arguments not supplied via
+                ``metadata.hyperparameters``.
         """
+        if not self.metadata.model_class:
+            raise ValueError(
+                "metadata.model_class must be set to load a PyTorch model "
+                "(ModelVariable.create(value) sets it automatically for "
+                "torch.nn.Module instances)."
+            )
+
         import torch
 
-        _logger.info(
-            "Loading PyTorch model from %s (weights_only=%s)",
-            self.path,
-            weights_only,
-        )
+        _logger.info("Loading PyTorch model from %s", self.path)
+
+        model_class = import_attribute(self.metadata.model_class)
+        hyperparameters = self.metadata.hyperparameters or {}
+        try:
+            model = model_class(**hyperparameters)
+        except TypeError as e:
+            raise ValueError(
+                f"Cannot reconstruct {self.metadata.model_class}: {e}. "
+                "Set metadata.hyperparameters before save() with the kwargs "
+                "required by the model constructor."
+            ) from e
 
         fs, path = fsspec.core.url_to_fs(self.path)
         with tempfile.TemporaryDirectory() as temp_dir:
-            model_path = os.path.join(temp_dir, "model")
-            fs.get(path, model_path, recursive=True)
-            self._value = torch.load(
-                model_path, map_location="cpu", weights_only=weights_only
-            )
+            model_file = os.path.join(temp_dir, "model.pt")
+            fs.get(path, model_file)
+            state_dict = torch.load(model_file, map_location="cpu", weights_only=True)
+            model.load_state_dict(state_dict)
+
+        self._value = model
         self._saved = True
 
     # ------------------------------------------------------------------
@@ -284,11 +382,14 @@ class ModelVariable(Variable):
             )
             return
 
+        if not self.metadata.model_class:
+            self.metadata.model_class = dot_path(type(self._value))
+
         fs, path = fsspec.core.url_to_fs(self.path)
         with tempfile.TemporaryDirectory() as temp_dir:
             model_file = os.path.join(temp_dir, "model.pt")
             torch.save(self._value.state_dict(), model_file)
-            fs.put(model_file, path, recursive=True)
+            fs.put(model_file, path)
 
         self._saved = True
 
@@ -298,19 +399,24 @@ class ModelVariable(Variable):
         Steps:
 
         1. Import the class from ``metadata.model_class``.
-        2. Construct an instance via ``model_class(**metadata.hyperparameters)``
-           (empty dict when ``hyperparameters`` is ``None``).
+        2. Construct an instance via
+           ``model_class(**metadata.hyperparameters)`` (empty dict when
+           ``hyperparameters`` is ``None``).
         3. Download the ``state_dict`` from ``self.path`` and apply
            ``load_state_dict`` (``weights_only=True`` — only tensors are
            unpickled, so the call is safe against malicious artifacts).
         4. Call ``model.eval()`` and store as ``self._value``.
 
         Raises:
-            ValueError: If ``metadata.model_class`` is not set.
+            ValueError: If ``metadata.model_class`` is not set, or if the
+                class constructor requires arguments not supplied via
+                ``metadata.hyperparameters``.
         """
         if not self.metadata.model_class:
             raise ValueError(
-                "model_class must be set in metadata to load Lightning model"
+                "metadata.model_class must be set to load a Lightning model "
+                "(ModelVariable.create(value) sets it automatically for "
+                "pytorch_lightning.LightningModule instances)."
             )
 
         import torch
@@ -319,12 +425,19 @@ class ModelVariable(Variable):
 
         model_class = import_attribute(self.metadata.model_class)
         hyperparameters = self.metadata.hyperparameters or {}
-        model = model_class(**hyperparameters)
+        try:
+            model = model_class(**hyperparameters)
+        except TypeError as e:
+            raise ValueError(
+                f"Cannot reconstruct {self.metadata.model_class}: {e}. "
+                "Set metadata.hyperparameters before save() with the kwargs "
+                "required by the model constructor."
+            ) from e
 
         fs, path = fsspec.core.url_to_fs(self.path)
         with tempfile.TemporaryDirectory() as temp_dir:
             model_file = os.path.join(temp_dir, "model.pt")
-            fs.get(path, model_file, recursive=True)
+            fs.get(path, model_file)
             state_dict = torch.load(model_file, map_location="cpu", weights_only=True)
             model.load_state_dict(state_dict)
 

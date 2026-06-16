@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import types as _types
+import unittest
 from dataclasses import dataclass
 from io import BytesIO
 from unittest import TestCase
@@ -774,65 +775,161 @@ class TestModelVariableCustomIO(TestCase):
 
 
 class TestModelVariableTorchIO(TestCase):
-    """Tests for save_torch_model / load_torch_model IO."""
+    """Tests for save_torch_model / load_torch_model IO (state_dict + metadata)."""
 
-    def test_save_torch_auto_appends_pt_extension(self):
-        """save_torch_model() appends .pt to the path when missing."""
+    def test_save_torch_writes_state_dict_not_full_module(self):
+        """save_torch_model() persists model.state_dict(), not the model itself."""
         mock_torch, _ = _mock_torch()
-        var = ModelVariable(path="memory://target", metadata=ModelMetadata())
-        var._value = object()
+        state_dict = {"layer.weight": "tensor"}
+        mock_model = MagicMock()
+        mock_model.state_dict.return_value = state_dict
+        var = ModelVariable(path="memory://target")
+        var._value = mock_model
         with (
             patch.dict(sys.modules, {"torch": mock_torch}),
             patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec,
         ):
-            mock_fsspec.core.url_to_fs.return_value = (MagicMock(), "target.pt")
+            mock_fsspec.core.url_to_fs.return_value = (MagicMock(), "target")
             var.save_torch_model()
-        self.assertTrue(var.path.endswith(".pt"))
-        mock_torch.save.assert_called_once()
+        save_args, _ = mock_torch.save.call_args
+        self.assertIs(save_args[0], state_dict)
+        mock_model.state_dict.assert_called_once()
 
-    def test_save_torch_preserves_existing_pt_extension(self):
-        """save_torch_model() does not double-append .pt."""
+    def test_save_torch_does_not_mutate_path(self):
+        """save_torch_model() leaves self.path unchanged (no .pt auto-append)."""
         mock_torch, _ = _mock_torch()
-        var = ModelVariable(path="memory://target.pt", metadata=ModelMetadata())
-        var._value = object()
+        mock_model = MagicMock()
+        mock_model.state_dict.return_value = {}
+        var = ModelVariable(path="memory://target", _io_metadata=None)
+        var._value = mock_model
         with (
             patch.dict(sys.modules, {"torch": mock_torch}),
             patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec,
         ):
-            mock_fsspec.core.url_to_fs.return_value = (MagicMock(), "target.pt")
+            mock_fsspec.core.url_to_fs.return_value = (MagicMock(), "target")
             var.save_torch_model()
-        self.assertEqual(var.path, "memory://target.pt")
+        self.assertEqual(var.path, "memory://target")
 
-    def test_load_torch_defaults_to_weights_only_true(self):
-        """load_torch_model() forwards weights_only=True to torch.load by default."""
-        loaded_obj = object()
+    def test_save_torch_uses_non_recursive_put(self):
+        """save_torch_model() writes a single file with fs.put (no recursive)."""
         mock_torch, _ = _mock_torch()
-        mock_torch.load = MagicMock(return_value=loaded_obj)
-        var = ModelVariable(path="memory://x.pt", metadata=ModelMetadata())
+        mock_model = MagicMock()
+        mock_model.state_dict.return_value = {}
+        mock_fs = MagicMock()
+        var = ModelVariable(path="memory://target")
+        var._value = mock_model
         with (
             patch.dict(sys.modules, {"torch": mock_torch}),
             patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec,
         ):
-            mock_fsspec.core.url_to_fs.return_value = (MagicMock(), "x.pt")
+            mock_fsspec.core.url_to_fs.return_value = (mock_fs, "target")
+            var.save_torch_model()
+        _, put_kwargs = mock_fs.put.call_args
+        self.assertNotIn("recursive", put_kwargs)
+
+    def test_save_torch_auto_populates_model_class(self):
+        """save_torch_model() sets metadata.model_class from type(value) if unset."""
+        mock_torch, _ = _mock_torch()
+
+        class _FakeModel:
+            def state_dict(self):
+                return {}
+
+        var = ModelVariable(path="memory://target")
+        var._value = _FakeModel()
+        with (
+            patch.dict(sys.modules, {"torch": mock_torch}),
+            patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec,
+        ):
+            mock_fsspec.core.url_to_fs.return_value = (MagicMock(), "target")
+            var.save_torch_model()
+        self.assertIsNotNone(var.metadata.model_class)
+        self.assertTrue(var.metadata.model_class.endswith("_FakeModel"))
+
+    def test_load_torch_raises_when_model_class_missing(self):
+        """load_torch_model() raises ValueError without importing torch first."""
+        var = ModelVariable(path="memory://x")
+        with self.assertRaises(ValueError) as ctx:
+            var.load_torch_model()
+        self.assertIn("model_class", str(ctx.exception))
+
+    def test_load_torch_instantiates_with_hyperparameters(self):
+        """load_torch_model() builds model_class(**hyperparameters)."""
+        mock_torch, _ = _mock_torch()
+        mock_torch.load = MagicMock(return_value={"w": 1.0})
+        built = MagicMock(name="built")
+        mock_class = MagicMock(return_value=built)
+        var = ModelVariable(
+            path="memory://x",
+            metadata=ModelMetadata(model_class="pkg.M", hyperparameters={"hidden": 16}),
+        )
+        with (
+            patch.dict(sys.modules, {"torch": mock_torch}),
+            patch(f"{_MODEL_PATH}.import_attribute", return_value=mock_class),
+            patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec,
+        ):
+            mock_fsspec.core.url_to_fs.return_value = (MagicMock(), "x")
+            var.load_torch_model()
+        mock_class.assert_called_once_with(hidden=16)
+        built.load_state_dict.assert_called_once_with({"w": 1.0})
+        self.assertIs(var._value, built)
+
+    def test_load_torch_uses_weights_only_true(self):
+        """load_torch_model() always loads state_dict with weights_only=True."""
+        mock_torch, _ = _mock_torch()
+        mock_torch.load = MagicMock(return_value={})
+        var = ModelVariable(
+            path="memory://x", metadata=ModelMetadata(model_class="pkg.M")
+        )
+        with (
+            patch.dict(sys.modules, {"torch": mock_torch}),
+            patch(f"{_MODEL_PATH}.import_attribute", return_value=MagicMock()),
+            patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec,
+        ):
+            mock_fsspec.core.url_to_fs.return_value = (MagicMock(), "x")
             var.load_torch_model()
         _, load_kwargs = mock_torch.load.call_args
         self.assertTrue(load_kwargs.get("weights_only"))
         self.assertEqual(load_kwargs.get("map_location"), "cpu")
-        self.assertIs(var._value, loaded_obj)
 
-    def test_load_torch_respects_weights_only_override(self):
-        """load_torch_model(weights_only=False) forwards the override to torch.load."""
+    def test_load_torch_uses_non_recursive_get(self):
+        """load_torch_model() reads a single file with fs.get (no recursive)."""
         mock_torch, _ = _mock_torch()
-        mock_torch.load = MagicMock(return_value=object())
-        var = ModelVariable(path="memory://x.pt", metadata=ModelMetadata())
+        mock_torch.load = MagicMock(return_value={})
+        mock_fs = MagicMock()
+        var = ModelVariable(
+            path="memory://x", metadata=ModelMetadata(model_class="pkg.M")
+        )
         with (
             patch.dict(sys.modules, {"torch": mock_torch}),
+            patch(f"{_MODEL_PATH}.import_attribute", return_value=MagicMock()),
             patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec,
         ):
-            mock_fsspec.core.url_to_fs.return_value = (MagicMock(), "x.pt")
-            var.load_torch_model(weights_only=False)
-        _, load_kwargs = mock_torch.load.call_args
-        self.assertFalse(load_kwargs.get("weights_only"))
+            mock_fsspec.core.url_to_fs.return_value = (mock_fs, "x")
+            var.load_torch_model()
+        _, get_kwargs = mock_fs.get.call_args
+        self.assertNotIn("recursive", get_kwargs)
+
+    def test_load_torch_wraps_constructor_typeerror(self):
+        """load_torch_model() turns a constructor TypeError into a clear ValueError."""
+        mock_torch, _ = _mock_torch()
+        mock_torch.load = MagicMock(return_value={})
+
+        def _bad_ctor(**kwargs):
+            raise TypeError("missing 1 required positional argument: 'in_features'")
+
+        var = ModelVariable(
+            path="memory://x", metadata=ModelMetadata(model_class="pkg.M")
+        )
+        with (
+            patch.dict(sys.modules, {"torch": mock_torch}),
+            patch(f"{_MODEL_PATH}.import_attribute", return_value=_bad_ctor),
+            patch(f"{_MODEL_PATH}.fsspec"),
+            self.assertRaises(ValueError) as ctx,
+        ):
+            var.load_torch_model()
+        self.assertIn("hyperparameters", str(ctx.exception))
+        self.assertIn("pkg.M", str(ctx.exception))
 
 
 class TestModelVariableLightningIO(TestCase):
@@ -906,6 +1003,27 @@ class TestModelVariableLightningIO(TestCase):
         _, load_kwargs = mock_torch.load.call_args
         self.assertTrue(load_kwargs.get("weights_only"))
 
+    def test_load_lightning_wraps_constructor_typeerror(self):
+        """load_lightning_model() turns a TypeError from __init__ into a ValueError."""
+        mock_torch, _ = _mock_torch()
+        mock_torch.load = MagicMock(return_value={})
+
+        def _bad_ctor(**kwargs):
+            raise TypeError("missing 1 required positional argument: 'hidden'")
+
+        var = ModelVariable(
+            path="memory://lit", metadata=ModelMetadata(model_class="pkg.M")
+        )
+        with (
+            patch.dict(sys.modules, {"torch": mock_torch}),
+            patch(f"{_MODEL_PATH}.import_attribute", return_value=_bad_ctor),
+            patch(f"{_MODEL_PATH}.fsspec"),
+            self.assertRaises(ValueError) as ctx,
+        ):
+            var.load_lightning_model()
+        self.assertIn("hyperparameters", str(ctx.exception))
+        self.assertIn("pkg.M", str(ctx.exception))
+
     def test_load_lightning_defaults_hyperparameters_to_empty_dict(self):
         """load_lightning_model() treats hyperparameters=None as {}."""
         mock_torch, _ = _mock_torch()
@@ -933,3 +1051,205 @@ class TestModelVariableImports(TestCase):
         from michelangelo.workflow import variables as _wv
 
         self.assertIs(_wv.ModelVariable, ModelVariable)
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for review-feedback fixes (M1, M5, M6, M4-lightning)
+# ---------------------------------------------------------------------------
+
+
+def _mock_lightning(instance=None):
+    """Return (mock_pytorch_lightning_module, mock_lightning_instance).
+
+    The fake module exposes a ``LightningModule`` class that subclasses the
+    mock torch ``nn.Module``, mirroring the real ``pl.LightningModule`` <:
+    ``torch.nn.Module`` relationship that powers the M1 detection check.
+    """
+    mock_torch, _ = _mock_torch()
+    nn_module_cls = mock_torch.nn.Module
+    lit_module_cls = type("LightningModule", (nn_module_cls,), {})
+    mock_pl = _types.SimpleNamespace(LightningModule=lit_module_cls)
+    inst = instance if instance is not None else lit_module_cls()
+    return mock_pl, mock_torch, inst
+
+
+class TestModelVariableCreateLightning(TestCase):
+    """Regression for M1: Lightning is detected before plain PyTorch in create()."""
+
+    def test_create_detects_lightning_module_before_pytorch(self):
+        """A LightningModule (subclass of nn.Module) is classified as lightning."""
+        mock_pl, mock_torch, inst = _mock_lightning()
+        with patch.dict(
+            sys.modules, {"pytorch_lightning": mock_pl, "torch": mock_torch}
+        ):
+            var = ModelVariable.create(inst)
+        self.assertEqual(var.metadata.training_framework, TRAINING_FRAMEWORK_LIGHTNING)
+        self.assertTrue(var.metadata.model_class.endswith("LightningModule"))
+
+    def test_create_falls_back_to_pytorch_when_lightning_missing(self):
+        """Plain torch.nn.Module is still detected when pytorch_lightning is absent."""
+        mock_torch, inst = _mock_torch()
+        with patch.dict(sys.modules, {"torch": mock_torch, "pytorch_lightning": None}):
+            var = ModelVariable.create(inst)
+        self.assertEqual(var.metadata.training_framework, TRAINING_FRAMEWORK_PYTORCH)
+
+
+class TestModelVariableInitErgonomics(TestCase):
+    """Regression for M5 (metadata None footgun) and M6 (value= constructor)."""
+
+    def test_init_accepts_value_keyword(self):
+        """ModelVariable(value=model) attaches the value without using create()."""
+        sentinel = object()
+        var = ModelVariable(value=sentinel)
+        self.assertIs(var._value, sentinel)
+
+    def test_init_auto_generates_path_when_omitted(self):
+        """ModelVariable() generates a memory:// path when none is provided."""
+        var = ModelVariable()
+        self.assertTrue(var.path.startswith("memory://"))
+
+    def test_init_defaults_metadata_to_empty_model_metadata(self):
+        """ModelVariable(metadata=None) attaches a fresh ModelMetadata, not None."""
+        var = ModelVariable(path="/tmp/x")
+        self.assertIsInstance(var.metadata, ModelMetadata)
+        self.assertIsNone(var.metadata.training_framework)
+
+    def test_save_with_default_metadata_raises_value_error(self):
+        """Default metadata + save() raises a guided ValueError, not AttributeError."""
+        var = ModelVariable(value=object(), path="/tmp/x")
+        with self.assertRaises(ValueError) as ctx:
+            var.save()
+        msg = str(ctx.exception)
+        self.assertIn("training_framework", msg)
+        self.assertIn("pytorch", msg)
+        self.assertIn("custom", msg)
+        self.assertIn("lightning", msg)
+
+
+class TestModelVariableLightningFsspecFlags(TestCase):
+    """Regression for M4: Lightning save/load use non-recursive fsspec ops."""
+
+    def test_save_lightning_uses_non_recursive_put(self):
+        """save_lightning_model() writes a single file with fs.put (no recursive)."""
+        mock_torch, _ = _mock_torch()
+        mock_fs = MagicMock()
+        var = ModelVariable(path="memory://lit")
+        var._value = MagicMock(state_dict=MagicMock(return_value={}))
+        with (
+            patch.dict(sys.modules, {"torch": mock_torch}),
+            patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec,
+        ):
+            mock_fsspec.core.url_to_fs.return_value = (mock_fs, "lit")
+            var.save_lightning_model()
+        _, put_kwargs = mock_fs.put.call_args
+        self.assertNotIn("recursive", put_kwargs)
+
+    def test_load_lightning_uses_non_recursive_get(self):
+        """load_lightning_model() reads a single file with fs.get (no recursive)."""
+        mock_torch, _ = _mock_torch()
+        mock_torch.load = MagicMock(return_value={})
+        mock_fs = MagicMock()
+        var = ModelVariable(
+            path="memory://lit", metadata=ModelMetadata(model_class="pkg.M")
+        )
+        with (
+            patch.dict(sys.modules, {"torch": mock_torch}),
+            patch(f"{_MODEL_PATH}.import_attribute", return_value=MagicMock()),
+            patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec,
+        ):
+            mock_fsspec.core.url_to_fs.return_value = (mock_fs, "lit")
+            var.load_lightning_model()
+        _, get_kwargs = mock_fs.get.call_args
+        self.assertNotIn("recursive", get_kwargs)
+
+
+# ---------------------------------------------------------------------------
+# B3 — End-to-end round-trip tests (guarded; run only when torch/lightning
+# are installed). These would have caught the previous
+# save(full-pickle) / load(weights_only=True) contract mismatch in CI.
+# ---------------------------------------------------------------------------
+
+try:
+    import torch as _torch_real
+
+    _HAS_TORCH = True
+except ImportError:
+    _HAS_TORCH = False
+
+try:
+    import pytorch_lightning as _pl_real
+
+    _HAS_LIGHTNING = True
+except ImportError:
+    _HAS_LIGHTNING = False
+
+
+@unittest.skipUnless(_HAS_TORCH, "torch not installed")
+class TestModelVariableTorchRoundTrip(TestCase):
+    """End-to-end save/load round-trip for plain torch.nn.Module."""
+
+    def test_create_save_then_lazy_load_via_value(self):
+        """create() -> save() -> ModelVariable(path, metadata).value reconstructs."""
+        import tempfile
+
+        torch = _torch_real
+        original = torch.nn.Linear(2, 1)
+
+        var = ModelVariable.create(original)
+        var.metadata.hyperparameters = {"in_features": 2, "out_features": 1}
+        with tempfile.TemporaryDirectory() as tmp:
+            var.path = f"{tmp}/model"
+            var.save()
+
+            restored = ModelVariable(path=var.path, metadata=var.metadata)
+            loaded = restored.value
+            self.assertIsInstance(loaded, torch.nn.Linear)
+            self.assertEqual(loaded.in_features, 2)
+            self.assertEqual(loaded.out_features, 1)
+
+            for k, v in original.state_dict().items():
+                self.assertTrue(torch.equal(loaded.state_dict()[k], v))
+
+
+if _HAS_TORCH and _HAS_LIGHTNING:
+
+    class _RoundTripLightningModel(_pl_real.LightningModule):
+        """Module-level Lightning model so dot-path import_attribute can find it."""
+
+        def __init__(self, hidden: int = 4):
+            super().__init__()
+            self.hidden = hidden
+            self.layer = _torch_real.nn.Linear(hidden, 1)
+
+        def forward(self, x):
+            return self.layer(x)
+
+
+@unittest.skipUnless(
+    _HAS_TORCH and _HAS_LIGHTNING, "torch + pytorch_lightning not installed"
+)
+class TestModelVariableLightningRoundTrip(TestCase):
+    """End-to-end save/load round-trip for pytorch_lightning.LightningModule."""
+
+    def test_create_save_then_lazy_load_via_value(self):
+        """create() detects lightning, save+reload reconstructs and calls eval()."""
+        import tempfile
+
+        torch = _torch_real
+
+        original = _RoundTripLightningModel(hidden=4)
+        var = ModelVariable.create(original)
+        self.assertEqual(var.metadata.training_framework, TRAINING_FRAMEWORK_LIGHTNING)
+        var.metadata.hyperparameters = {"hidden": 4}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            var.path = f"{tmp}/lit"
+            var.save()
+
+            restored = ModelVariable(path=var.path, metadata=var.metadata)
+            loaded = restored.value
+            self.assertIsInstance(loaded, _RoundTripLightningModel)
+            self.assertEqual(loaded.hidden, 4)
+            self.assertFalse(loaded.training)
+            for k, v in original.state_dict().items():
+                self.assertTrue(torch.equal(loaded.state_dict()[k], v))
