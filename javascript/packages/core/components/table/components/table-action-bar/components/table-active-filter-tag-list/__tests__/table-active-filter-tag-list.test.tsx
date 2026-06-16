@@ -12,11 +12,32 @@ import type { FilterableColumn } from '#core/components/table/components/table-a
 describe('ActiveFilterTagList', () => {
   test('renders nothing when no columns have active filters', () => {
     const columns: FilterableColumn[] = [
-      { id: 'testCol1', label: 'Option 1', type: CellType.TEXT, getFilterValue: () => undefined, setFilterValue: vi.fn() },
-      { id: 'testCol2', label: 'Option 2', type: CellType.DATE, getFilterValue: () => undefined, setFilterValue: vi.fn() },
-      { id: 'testCol3', label: 'Option 3', type: CellType.TEXT, getFilterValue: () => undefined, setFilterValue: vi.fn() },
+      {
+        id: 'testCol1',
+        label: 'Option 1',
+        type: CellType.TEXT,
+        getFilterValue: () => undefined,
+        setFilterValue: vi.fn(),
+      },
+      {
+        id: 'testCol2',
+        label: 'Option 2',
+        type: CellType.DATE,
+        getFilterValue: () => undefined,
+        setFilterValue: vi.fn(),
+      },
+      {
+        id: 'testCol3',
+        label: 'Option 3',
+        type: CellType.TEXT,
+        getFilterValue: () => undefined,
+        setFilterValue: vi.fn(),
+      },
     ];
-    render(<TableActiveFilterTagList filterableColumns={columns} preFilteredRows={[]} />, buildWrapper([getBaseProviderWrapper()]));
+    render(
+      <TableActiveFilterTagList filterableColumns={columns} preFilteredRows={[]} />,
+      buildWrapper([getBaseProviderWrapper()])
+    );
     expect(screen.queryByText('Option 1')).not.toBeInTheDocument();
     expect(screen.queryByText('Option 2')).not.toBeInTheDocument();
     expect(screen.queryByText('Option 3')).not.toBeInTheDocument();
@@ -24,11 +45,36 @@ describe('ActiveFilterTagList', () => {
 
   test('renders active filter tags for columns with filter values', () => {
     const columns: FilterableColumn[] = [
-      { id: 'testCol1', label: 'Option 1', type: CellType.TEXT, getFilterValue: () => ['opt1', 'opt2', 'opt3'], setFilterValue: vi.fn() },
-      { id: 'testCol2', label: 'Option 2', type: CellType.DATE, getFilterValue: () => ({ range: ['dummy'], selection: ['dummy'], description: 'dateOption' }), setFilterValue: vi.fn() },
-      { id: 'testCol3', label: 'Option 3', type: CellType.TEXT, getFilterValue: () => undefined, setFilterValue: vi.fn() },
+      {
+        id: 'testCol1',
+        label: 'Option 1',
+        type: CellType.TEXT,
+        getFilterValue: () => ['opt1', 'opt2', 'opt3'],
+        setFilterValue: vi.fn(),
+      },
+      {
+        id: 'testCol2',
+        label: 'Option 2',
+        type: CellType.DATE,
+        getFilterValue: () => ({
+          range: ['dummy'],
+          selection: ['dummy'],
+          description: 'dateOption',
+        }),
+        setFilterValue: vi.fn(),
+      },
+      {
+        id: 'testCol3',
+        label: 'Option 3',
+        type: CellType.TEXT,
+        getFilterValue: () => undefined,
+        setFilterValue: vi.fn(),
+      },
     ];
-    render(<TableActiveFilterTagList filterableColumns={columns} preFilteredRows={[]} />, buildWrapper([getBaseProviderWrapper()]));
+    render(
+      <TableActiveFilterTagList filterableColumns={columns} preFilteredRows={[]} />,
+      buildWrapper([getBaseProviderWrapper()])
+    );
     expect(screen.getByText('(3) Option 1: opt1, opt2, opt3')).toBeInTheDocument();
     expect(screen.getByText('Option 2: dateOption')).toBeInTheDocument();
     expect(screen.queryByText('Option 3')).not.toBeInTheDocument();
@@ -38,7 +84,18 @@ describe('ActiveFilterTagList', () => {
     const user = userEvent.setup();
     const setFilterMock = vi.fn();
     render(
-      <TableActiveFilterTagList filterableColumns={[{ id: 'testCol1', label: 'Option 1', type: CellType.TEXT, getFilterValue: () => ['opt1', 'opt2', 'opt3'], setFilterValue: setFilterMock }]} preFilteredRows={[]} />,
+      <TableActiveFilterTagList
+        filterableColumns={[
+          {
+            id: 'testCol1',
+            label: 'Option 1',
+            type: CellType.TEXT,
+            getFilterValue: () => ['opt1', 'opt2', 'opt3'],
+            setFilterValue: setFilterMock,
+          },
+        ]}
+        preFilteredRows={[]}
+      />,
       buildWrapper([getBaseProviderWrapper()])
     );
     const deleteButton = screen.getAllByTitle('Delete')[0];
@@ -49,7 +106,18 @@ describe('ActiveFilterTagList', () => {
   test('clicking on tag opens filter popover', async () => {
     const user = userEvent.setup();
     render(
-      <TableActiveFilterTagList filterableColumns={[{ id: 'testCol1', label: 'Option 1', type: CellType.TEXT, getFilterValue: () => ['opt1', 'opt2', 'opt3'], setFilterValue: vi.fn() }]} preFilteredRows={[]} />,
+      <TableActiveFilterTagList
+        filterableColumns={[
+          {
+            id: 'testCol1',
+            label: 'Option 1',
+            type: CellType.TEXT,
+            getFilterValue: () => ['opt1', 'opt2', 'opt3'],
+            setFilterValue: vi.fn(),
+          },
+        ]}
+        preFilteredRows={[]}
+      />,
       buildWrapper([getBaseProviderWrapper()])
     );
     const tag = screen.getByText('(3) Option 1: opt1, opt2, opt3');
