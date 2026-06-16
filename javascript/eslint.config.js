@@ -18,7 +18,7 @@ import globals from 'globals';
 // Shared plugins (used in app and packages/*)
 const sharedPlugins = {
   'react-hooks': reactHooks,
-  'react': react,
+  react: react,
   'simple-import-sort': simpleImportSort,
   'react-refresh': reactRefresh,
   baseui: baseUIEslint,

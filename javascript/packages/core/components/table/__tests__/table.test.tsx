@@ -1611,8 +1611,6 @@ describe('Table', () => {
       const customSortingFn = (rowA: unknown, rowB: unknown, columnId: string) => {
         const aValue = (rowA as { getValue: (id: string) => string }).getValue(columnId);
         const bValue = (rowB as { getValue: (id: string) => string }).getValue(columnId);
-        console.log('aValue', aValue);
-        console.log('bValue', bValue);
         return aValue.length - bValue.length;
       };
 
