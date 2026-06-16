@@ -29,6 +29,7 @@ export const TableHeader = <T extends TableData = TableData>({
   scrollRatio,
 }: TableHeaderProps<T>) => {
   const [css, theme] = useStyletron();
+  const handleRowSelectionToggle = onToggleSelection;
 
   return (
     <StyledTableHead>
