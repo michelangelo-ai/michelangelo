@@ -37,7 +37,7 @@ export const InlineRadioField: React.FC<RadioFieldProps> = ({
 
   const isBoolean = options.every(({ value }) => typeof value === 'boolean');
 
-  const handleChange = useCallback(
+  const persistSelection = useCallback(
     (event: React.FormEvent<HTMLInputElement>) => {
       const strVal = event.currentTarget.value;
       input.onChange(isBoolean ? strVal === 'true' : strVal);
@@ -85,7 +85,7 @@ export const InlineRadioField: React.FC<RadioFieldProps> = ({
         value={typeof input.value === 'boolean' ? String(input.value) : input.value}
         align={align}
         disabled={disabled}
-        onChange={handleChange}
+        onChange={persistSelection}
         onBlur={input.onBlur}
         onFocus={input.onFocus}
         overrides={{

@@ -11,7 +11,7 @@ export function TableSelectionColumn({
     return null;
   }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const applyToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
     e.stopPropagation();
     onToggleSelection(e.target.checked);
   };
@@ -19,7 +19,7 @@ export function TableSelectionColumn({
   return (
     <Checkbox
       checked={isSelected}
-      onChange={handleChange}
+      onChange={applyToggle}
       overrides={{
         Root: {
           style: {

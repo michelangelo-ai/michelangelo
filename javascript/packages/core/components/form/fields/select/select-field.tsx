@@ -78,7 +78,7 @@ export function SelectField<V = string | number>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [findByValue, isLoading]);
 
-  const handleChange = (params: OnChangeParams) => {
+  const commitSelection = (params: OnChangeParams) => {
     const selected = params.value as Array<{ id: string }>;
 
     if (multi) {
@@ -117,7 +117,7 @@ export function SelectField<V = string | number>({
         id={name}
         value={baseUIValue}
         options={baseUIOptions}
-        onChange={handleChange}
+        onChange={commitSelection}
         onBlur={input.onBlur}
         onFocus={input.onFocus}
         placeholder={!disabled && !readOnly ? placeholder : ''}
