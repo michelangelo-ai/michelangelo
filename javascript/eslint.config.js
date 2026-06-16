@@ -53,6 +53,7 @@ const sharedRules = {
   // 'baseui/deprecated-theme-api': 'warn',
   // 'baseui/deprecated-component-api': 'warn',
   'no-nested-ternary': 'error',
+  'no-console': ['error', { allow: ['warn', 'error'] }],
   eqeqeq: ['error', 'always', { null: 'ignore' }],
   'no-restricted-syntax': [
     'error',
