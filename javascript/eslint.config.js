@@ -12,11 +12,13 @@ import testingLibrary from 'eslint-plugin-testing-library';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
+import react from 'eslint-plugin-react';
 import globals from 'globals';
 
 // Shared plugins (used in app and packages/*)
 const sharedPlugins = {
   'react-hooks': reactHooks,
+  'react': react,
   'simple-import-sort': simpleImportSort,
   'react-refresh': reactRefresh,
   baseui: baseUIEslint,
@@ -25,6 +27,9 @@ const sharedPlugins = {
 // Shared rules (used in app and packages/*)
 const sharedRules = {
   ...reactHooks.configs.recommended.rules,
+  'react/no-multi-comp': ['error', { ignoreStateless: false }],
+  'react/no-unstable-nested-components': ['error', { allowAsProps: true }],
+  'react/jsx-no-constructed-context-values': 'error',
   'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
   'simple-import-sort/imports': [
     'error',
@@ -282,6 +287,20 @@ export default [
   {
     files: ['vitest.config.ts'],
     ...tseslint.configs.disableTypeChecked,
+  },
+
+  // no-multi-comp: tests and styled-component files legitimately define multiple components
+  {
+    files: [
+      'packages/**/__tests__/**/*.{ts,tsx}',
+      'app/**/__tests__/**/*.{ts,tsx}',
+      'packages/**/test/**/*.{ts,tsx}',
+      'packages/**/*styled-components.tsx',
+      'app/**/*styled-components.tsx',
+    ],
+    rules: {
+      'react/no-multi-comp': 'off',
+    },
   },
 
   // Disable conflicting style rules (Prettier)

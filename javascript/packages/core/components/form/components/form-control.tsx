@@ -66,6 +66,9 @@ export const FormControl: React.FC<FormControlProps> = ({
   );
 };
 
+// Counter and labelEndEnhancer are rendered together with shared spacing — keeping
+// this helper inline avoids threading both props through an intermediate component.
+// eslint-disable-next-line react/no-multi-comp
 const LabelEndEnhancerContent: React.FC<Pick<FormControlProps, 'counter' | 'labelEndEnhancer'>> = ({
   counter,
   labelEndEnhancer,

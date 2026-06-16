@@ -1,3 +1,7 @@
+// Each breadcrumb segment is a small private component that reads URL params via
+// useStudioParams. Keeping them co-located avoids prop-drilling the same params
+// through BreadcrumbBar and makes the rendering logic easy to follow in sequence.
+/* eslint-disable react/no-multi-comp */
 import { useStyletron } from 'baseui';
 import { Breadcrumbs } from 'baseui/breadcrumbs';
 import { Cell, Grid } from 'baseui/layout-grid';

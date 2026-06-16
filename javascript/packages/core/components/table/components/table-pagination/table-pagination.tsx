@@ -49,7 +49,10 @@ export function TablePagination(props: TablePaginationProps) {
   );
 }
 
-export function LoadingButton() {
+// BaseUI requires a stable component reference in overrides — an inline arrow function
+// would remount the button on every render. Keeping it here avoids a one-off file.
+// eslint-disable-next-line react/no-multi-comp
+function LoadingButton() {
   return (
     <Button isLoading={true} kind={KIND.tertiary}>
       Next

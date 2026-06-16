@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { Form as FinalForm } from 'react-final-form';
 import { useStyletron } from 'baseui';
 import arrayMutators from 'final-form-arrays';
@@ -23,9 +23,10 @@ export const Form = <FieldValues extends FormData = FormData>({
 }: FormProps<FieldValues>) => {
   const [css, theme] = useStyletron();
   const registryRef = useRef<FieldRegistry>(new Map());
+  const formContextValue = useMemo(() => ({ fieldRegistry: registryRef.current }), []);
 
   return (
-    <FormContext.Provider value={{ fieldRegistry: registryRef.current }}>
+    <FormContext.Provider value={formContextValue}>
       <FinalForm
         onSubmit={onSubmit}
         initialValues={initialValues}

@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+
 import { CellContext } from './cell-context';
 
 import type { CellContextType } from './types';
@@ -23,9 +25,7 @@ export const CellProvider = ({
   children,
   renderers = {},
 }: { children: React.ReactNode } & Partial<CellContextType>) => {
-  const contextValue: CellContextType = {
-    renderers,
-  };
+  const contextValue = useMemo<CellContextType>(() => ({ renderers }), [renderers]);
 
   return <CellContext.Provider value={contextValue}>{children}</CellContext.Provider>;
 };
