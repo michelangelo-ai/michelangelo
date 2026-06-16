@@ -23,7 +23,7 @@ tester.run('no-event-handler-prefix', rule, {
     },
     {
       name: 'member expression pass-through',
-      code: `const C = ({ onClick }) => <Button onClick={props.onClick} />;`,
+      code: `const C = (props) => <Button onClick={props.onClick} />;`,
     },
     {
       name: 'non-event prop is ignored',
@@ -42,12 +42,12 @@ tester.run('no-event-handler-prefix', rule, {
       code: `const C = ({ onClose: handleClose }) => <Modal onClose={handleClose} />;`,
     },
     {
-      name: 'handleRowChange is descriptive — not a mirror of onChange',
-      code: `const C = () => <Input onChange={handleRowChange} />;`,
+      name: 'persistInput names the effect, not the trigger',
+      code: `const C = () => <Input onChange={persistInput} />;`,
     },
     {
-      name: 'handleDeleteClick is descriptive — not a mirror of onClick',
-      code: `const C = () => <Button onClick={handleDeleteClick} />;`,
+      name: 'deleteItem names the trigger, not the effect',
+      code: `const C = () => <Button onClick={deleteItem} />;`,
     },
   ],
 
@@ -75,6 +75,11 @@ tester.run('no-event-handler-prefix', rule, {
     {
       name: 'onSubmit={onSubmit} — locally-declared var that mirrors prop',
       code: `const onSubmit = () => {}; const C = () => <Form onSubmit={onSubmit} />;`,
+      errors: [{ messageId: 'noHandlerMirror' }],
+    },
+    {
+      name: 'known limitation — destructured member expression pass-through',
+      code: `const C = (props) => { const { onClick } = props; return <Button onClick={onClick} />; }`,
       errors: [{ messageId: 'noHandlerMirror' }],
     },
   ],
