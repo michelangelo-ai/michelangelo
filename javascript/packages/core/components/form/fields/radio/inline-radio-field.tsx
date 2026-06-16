@@ -37,13 +37,14 @@ export const InlineRadioField: React.FC<RadioFieldProps> = ({
 
   const isBoolean = options.every(({ value }) => typeof value === 'boolean');
 
-  const persistSelection = useCallback(
+  const handleSelectionChange = useCallback(
     (event: React.FormEvent<HTMLInputElement>) => {
       const strVal = event.currentTarget.value;
       input.onChange(isBoolean ? strVal === 'true' : strVal);
     },
     [input, isBoolean]
   );
+
 
   if (readOnly) {
     return (
@@ -85,8 +86,10 @@ export const InlineRadioField: React.FC<RadioFieldProps> = ({
         value={typeof input.value === 'boolean' ? String(input.value) : input.value}
         align={align}
         disabled={disabled}
-        onChange={persistSelection}
+        onChange={handleSelectionChange}
+        // eslint-disable-next-line react/jsx-handler-names -- react-final-form input wiring
         onBlur={input.onBlur}
+        // eslint-disable-next-line react/jsx-handler-names -- react-final-form input wiring
         onFocus={input.onFocus}
         overrides={{
           RadioGroupRoot: {

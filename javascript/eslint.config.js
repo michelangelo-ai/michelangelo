@@ -32,6 +32,7 @@ const sharedRules = {
   'react/no-multi-comp': ['error', { ignoreStateless: false }],
   'react/no-unstable-nested-components': ['error', { allowAsProps: true }],
   'react/jsx-no-constructed-context-values': 'error',
+  'react/jsx-handler-names': ['error', { checkLocalVariables: true, checkInlineFunction: false }],
   'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
   'simple-import-sort/imports': [
     'error',

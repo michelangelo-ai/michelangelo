@@ -39,12 +39,12 @@ export function ActionsPopover<T extends Data>({
     }
   });
 
-  const disableScroll = () => {
+  const handleScrollDisable = () => {
     document.body.style.overflow = 'hidden';
     scrollDisabledRef.current = true;
   };
 
-  const enableScroll = () => {
+  const handleScrollEnable = () => {
     document.body.style.overflow = '';
     scrollDisabledRef.current = false;
   };
@@ -68,18 +68,18 @@ export function ActionsPopover<T extends Data>({
           },
         }}
         {...popoverProps}
-        content={({ close }) => (
+        content={({ close: handleMenuClose }) => (
           <ActionMenu
             actions={items}
             onSelectAction={(action) => {
               action.onClick();
-              close();
+              handleMenuClose();
             }}
-            onClose={close}
+            onClose={handleMenuClose}
           />
         )}
-        onClose={enableScroll}
-        onOpen={disableScroll}
+        onClose={handleScrollEnable}
+        onOpen={handleScrollDisable}
       >
         <Button
           kind={KIND.tertiary}

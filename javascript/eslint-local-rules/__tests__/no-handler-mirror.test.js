@@ -88,3 +88,4 @@ tester.run('no-handler-mirror', rule, {
     },
   ],
 });
+

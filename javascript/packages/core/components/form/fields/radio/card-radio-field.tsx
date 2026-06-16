@@ -48,7 +48,7 @@ export const CardRadioField: React.FC<RadioFieldProps> = ({
     [options, input]
   );
 
-  const selectTileAtIndex = useCallback(
+  const handleTileSelect = useCallback(
     (e: React.SyntheticEvent | KeyboardEvent, index: number) => {
       // Each tile is a button, so we need to prevent the default behavior and stop propagation to avoid form submission
       e.preventDefault();
@@ -69,7 +69,7 @@ export const CardRadioField: React.FC<RadioFieldProps> = ({
     >
       <TileGroup
         kind={TILE_GROUP_KIND.singleSelect}
-        onClick={selectTileAtIndex}
+        onClick={handleTileSelect}
         selected={selectedIndex}
         // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
         disabled={disabled || readOnly}

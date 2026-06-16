@@ -39,7 +39,7 @@ export const ActionMenuItem = forwardRef<HTMLLIElement, ActionMenuItemProps>((pr
   const {
     item: action,
     onSelectAction,
-    onClose,
+    onClose: handleTooltipDismiss,
     hoveredItem,
     setHoveredItem,
     keyboardActive,
@@ -47,6 +47,7 @@ export const ActionMenuItem = forwardRef<HTMLLIElement, ActionMenuItemProps>((pr
     ...baseMenuProps
   } = props;
   const isHovered = hoveredItem === action;
+  const handleActionSelect = action.disabled ? undefined : () => onSelectAction(action);
 
   const menuItem = (
     <MenuAdapter
@@ -67,7 +68,7 @@ export const ActionMenuItem = forwardRef<HTMLLIElement, ActionMenuItemProps>((pr
       // Opacity dims the entire item (icon + text) uniformly.
       overrides={{ Root: { style: { height: '44px', opacity: action.disabled ? 0.4 : 1 } } }}
       $disabled={action.disabled}
-      onClick={action.disabled ? undefined : () => onSelectAction(action)}
+      onClick={handleActionSelect}
     >
       <ListItemLabel>{action.display.label}</ListItemLabel>
     </MenuAdapter>
@@ -91,8 +92,10 @@ export const ActionMenuItem = forwardRef<HTMLLIElement, ActionMenuItemProps>((pr
           preventOverflow: { enabled: true, boundariesElement: 'window', padding: 8 },
         },
       }}
-      onEsc={onClose}
+      onEsc={handleTooltipDismiss}
+      // eslint-disable-next-line react/jsx-handler-names -- delay props accept numbers, not functions
       onMouseEnterDelay={0}
+      // eslint-disable-next-line react/jsx-handler-names -- delay props accept numbers, not functions
       onMouseLeaveDelay={0}
       // Entering mouse mode: track this item as hovered and disable the keyboard
       // path so the previously arrow-key-highlighted item's tooltip hides.

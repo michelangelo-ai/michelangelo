@@ -25,11 +25,11 @@ export function TableActiveFilterTag<TData = unknown>(props: ActiveFilterTagProp
     label: column.label,
   } satisfies ColumnConfig<TData>);
 
-  const showTooltipAfterDelay = () => {
+  const handleTooltipDelayStart = () => {
     setDelayHandler(setTimeout(() => setShowTooltip(true), 1000));
   };
 
-  const hideTooltipImmediately = () => {
+  const handleTooltipHide = () => {
     if (delayHandler) {
       clearTimeout(delayHandler);
     }
@@ -77,8 +77,8 @@ export function TableActiveFilterTag<TData = unknown>(props: ActiveFilterTagProp
           )}
           placement={PLACEMENT.top}
           isOpen={showTooltip}
-          onMouseEnter={showTooltipAfterDelay}
-          onMouseLeave={hideTooltipImmediately}
+          onMouseEnter={handleTooltipDelayStart}
+          onMouseLeave={handleTooltipHide}
           showArrow={true}
         >
           <TruncatedText>{filter.getFilterSummary(column.getFilterValue())}</TruncatedText>

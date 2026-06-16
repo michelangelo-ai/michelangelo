@@ -42,7 +42,11 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
     initialState,
   });
 
-  const { scrollRatio, tableRef, updateScrollRatio } = useScrollRatio(columns);
+  const {
+    scrollRatio,
+    tableRef,
+    updateScrollRatio: handleScrollRatioUpdate,
+  } = useScrollRatio(columns);
 
   const table = useReactTable<T>({
     data: props.data,
@@ -139,7 +143,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
         <div
           className={css({ overflow: 'auto', position: 'relative' })}
           ref={tableRef as React.RefObject<HTMLDivElement>}
-          onScroll={updateScrollRatio}
+          onScroll={handleScrollRatioUpdate}
         >
           <StyledTable>
             {viewState === 'loading' && <props.loadingView />}

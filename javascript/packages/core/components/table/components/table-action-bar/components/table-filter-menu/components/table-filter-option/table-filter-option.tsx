@@ -3,10 +3,10 @@ import { FilterOptionItem } from './styled-components';
 
 import type { TableFilterOptionProps } from './types';
 
-export function TableFilterOption({ label, onClick }: TableFilterOptionProps) {
+export function TableFilterOption({ label, onClick: handleOptionClick }: TableFilterOptionProps) {
   return (
     <FilterOptionItem
-      onClick={onClick}
+      onClick={handleOptionClick}
       role="option"
       aria-label={label}
       data-testid={`filter-option-${label}`}

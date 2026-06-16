@@ -78,7 +78,7 @@ export function SelectField<V = string | number>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [findByValue, isLoading]);
 
-  const commitSelection = (params: OnChangeParams) => {
+  const handleCommitSelection = (params: OnChangeParams) => {
     const selected = params.value as Array<{ id: string }>;
 
     if (multi) {
@@ -104,6 +104,7 @@ export function SelectField<V = string | number>({
     return items;
   }, [input.value, findByKey, creatable]);
 
+
   return (
     <FormControl
       label={label}
@@ -117,8 +118,10 @@ export function SelectField<V = string | number>({
         id={name}
         value={baseUIValue}
         options={baseUIOptions}
-        onChange={commitSelection}
+        onChange={handleCommitSelection}
+        // eslint-disable-next-line react/jsx-handler-names -- react-final-form input wiring
         onBlur={input.onBlur}
+        // eslint-disable-next-line react/jsx-handler-names -- react-final-form input wiring
         onFocus={input.onFocus}
         placeholder={!disabled && !readOnly ? placeholder : ''}
         disabled={disabled}

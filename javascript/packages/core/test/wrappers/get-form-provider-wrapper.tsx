@@ -8,8 +8,9 @@ export function getFormProviderWrapper({
   initialValues = {},
 }: Partial<Pick<FormProps, 'onSubmit' | 'initialValues'>> = {}) {
   return function FormProviderWrapper({ children }: WrapperComponentProps) {
+    const handleFormSubmit = onSubmit;
     return (
-      <Form onSubmit={onSubmit} initialValues={initialValues}>
+      <Form onSubmit={handleFormSubmit} initialValues={initialValues}>
         {children}
       </Form>
     );

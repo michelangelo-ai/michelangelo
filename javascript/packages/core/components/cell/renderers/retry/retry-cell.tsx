@@ -48,7 +48,7 @@ export const RetryCell = (props: CellRendererProps<string>) => {
     return null;
   }
 
-  const submitRetry = async () => {
+  const handleRetrySubmit = async () => {
     if (updatePipelineRunMutation.isPending || !pipelineRunData?.pipelineRun) {
       return;
     }
@@ -106,7 +106,7 @@ export const RetryCell = (props: CellRendererProps<string>) => {
           primaryAction: (
             <Button
               kind={KIND.primary}
-              onClick={submitRetry}
+              onClick={handleRetrySubmit}
               isLoading={updatePipelineRunMutation.isPending}
             >
               Retry Task

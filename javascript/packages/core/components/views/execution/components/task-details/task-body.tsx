@@ -22,12 +22,13 @@ export function TaskBody<TTaskRecord extends object>(props: TaskBodyProps<TTaskR
 
   if (subTasks?.length) {
     const matrix = buildTaskMatrix(subTasks, task);
+    const handleScrollToTask = scrollToTask;
     return (
       <TaskContentStack>
         <Box>
           <TaskFlow
             matrix={matrix}
-            onTaskClick={scrollToTask}
+            onTaskClick={handleScrollToTask}
             overrides={{
               TaskListRenderer: overrides?.TaskListRenderer,
               SubTaskListRenderer: overrides?.SubTaskListRenderer,

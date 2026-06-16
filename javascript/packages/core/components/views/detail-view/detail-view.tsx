@@ -23,6 +23,7 @@ export function DetailView({
         title={title}
         subtitle={subtitle}
         titleEnhancer={titleEnhancer}
+        // eslint-disable-next-line react/jsx-handler-names -- pass-through prop, no local logic
         onGoBack={onGoBack}
         actions={actions}
         record={record}

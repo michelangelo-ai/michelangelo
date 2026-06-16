@@ -24,7 +24,7 @@ export const TableHeader = <T extends TableData = TableData>({
   setColumnVisibility,
   enableRowSelection,
   isSelected,
-  onToggleSelection,
+  onToggleSelection: handleRowSelectionChange,
   enableStickySides,
   scrollRatio,
 }: TableHeaderProps<T>) => {
@@ -47,19 +47,20 @@ export const TableHeader = <T extends TableData = TableData>({
             <TableSelectionColumn
               canSelect={enableRowSelection}
               isSelected={isSelected}
-              onToggleSelection={onToggleSelection}
+              onToggleSelection={handleRowSelectionChange}
             />
           </StyledTableHeadCell>
         )}
 
         {columns
           .filter((column) => column.isVisible)
-          .map((column) =>
-            column.canSort ? (
+          .map((column) => {
+            const handleSortChange = column.onToggleSort;
+            return column.canSort ? (
               <StyledSortableTableHeadCell
                 key={column.id}
                 $isFocusVisible={false}
-                onClick={column.onToggleSort}
+                onClick={handleSortChange}
                 role="columnheader"
               >
                 <div
@@ -77,8 +78,8 @@ export const TableHeader = <T extends TableData = TableData>({
               <StyledTableHeadCell key={column.id} role="columnheader">
                 {column.label}
               </StyledTableHeadCell>
-            )
-          )}
+            );
+          })}
 
         {setColumnOrder && setColumnVisibility && (
           <StyledTableConfigurationButtonHeadCell role="columnheader">

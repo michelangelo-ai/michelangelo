@@ -22,7 +22,7 @@ import type { AddButtonProps } from './types';
  * <AddButton onClick={add} label="Add item" />
  * ```
  */
-export function AddButton({ label = 'Add more', shape, onClick }: AddButtonProps) {
+export function AddButton({ label = 'Add more', shape, onClick: handleItemAdd }: AddButtonProps) {
   const [, theme] = useStyletron();
 
   return (
@@ -37,7 +37,7 @@ export function AddButton({ label = 'Add more', shape, onClick }: AddButtonProps
       overrides={{
         BaseButton: { style: { marginBottom: theme.sizing.scale600, width: '260px' } },
       }}
-      onClick={onClick}
+      onClick={handleItemAdd}
     >
       {label}
     </Button>

@@ -21,10 +21,10 @@ describe('Form', () => {
   describe('integration', () => {
     it('submits form with multiple field values', async () => {
       const user = userEvent.setup();
-      const onSubmit = vi.fn();
+      const handleFormSubmit = vi.fn();
 
       render(
-        <Form onSubmit={onSubmit}>
+        <Form onSubmit={handleFormSubmit}>
           <StringField name="email" label="Email" />
           <StringField name="name" label="Name" />
           <button type="submit">Submit</button>
@@ -37,7 +37,7 @@ describe('Form', () => {
       await user.click(screen.getByRole('button', { name: 'Submit' }));
 
       await waitFor(() =>
-        expect(onSubmit).toHaveBeenCalledWith(
+        expect(handleFormSubmit).toHaveBeenCalledWith(
           {
             email: 'test@example.com',
             name: 'John Doe',
@@ -50,12 +50,12 @@ describe('Form', () => {
 
     it('provides initial values to fields', async () => {
       const user = userEvent.setup();
-      const onSubmit = vi.fn();
+      const handleFormSubmit = vi.fn();
       const initialValues = { email: 'initial@example.com', name: 'Initial User' };
 
       render(
         <div>
-          <Form onSubmit={onSubmit} initialValues={initialValues}>
+          <Form onSubmit={handleFormSubmit} initialValues={initialValues}>
             <StringField name="email" label="Email" />
             <StringField name="name" label="Name" />
             <button type="submit">Submit</button>
@@ -69,13 +69,18 @@ describe('Form', () => {
       expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Initial User');
       await user.click(screen.getByRole('button', { name: 'Submit' }));
       await waitFor(() =>
-        expect(onSubmit).toHaveBeenCalledWith(initialValues, expect.anything(), expect.anything())
+        expect(handleFormSubmit).toHaveBeenCalledWith(
+          initialValues,
+          expect.anything(),
+          expect.anything()
+        )
       );
     });
 
     it('populates the field with defaultValue', () => {
+      const handleFormSubmit = vi.fn();
       render(
-        <Form onSubmit={vi.fn()}>
+        <Form onSubmit={handleFormSubmit}>
           <StringField name="email" label="Email" defaultValue="from-default" />
         </Form>,
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
@@ -85,8 +90,9 @@ describe('Form', () => {
     });
 
     it('uses initialValues over defaultValue when both are provided', () => {
+      const handleFormSubmit = vi.fn();
       render(
-        <Form onSubmit={vi.fn()} initialValues={{ email: 'from-form' }}>
+        <Form onSubmit={handleFormSubmit} initialValues={{ email: 'from-form' }}>
           <StringField name="email" label="Email" defaultValue="from-default" />
         </Form>,
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
@@ -96,8 +102,9 @@ describe('Form', () => {
     });
 
     it('uses field-level initialValue over defaultValue when both are provided', () => {
+      const handleFormSubmit = vi.fn();
       render(
-        <Form onSubmit={vi.fn()}>
+        <Form onSubmit={handleFormSubmit}>
           <StringField
             name="email"
             label="Email"
@@ -112,8 +119,9 @@ describe('Form', () => {
     });
 
     it('uses field-level initialValue when all three value sources are provided', () => {
+      const handleFormSubmit = vi.fn();
       render(
-        <Form onSubmit={vi.fn()} initialValues={{ email: 'from-form' }}>
+        <Form onSubmit={handleFormSubmit} initialValues={{ email: 'from-form' }}>
           <StringField
             name="email"
             label="Email"
@@ -129,10 +137,10 @@ describe('Form', () => {
 
     it('applies parse to transform input before storing in form state', async () => {
       const user = userEvent.setup();
-      const onSubmit = vi.fn();
+      const handleFormSubmit = vi.fn();
 
       render(
-        <Form onSubmit={onSubmit}>
+        <Form onSubmit={handleFormSubmit}>
           <StringField
             name="code"
             label="Code"
@@ -147,13 +155,18 @@ describe('Form', () => {
       await user.click(screen.getByRole('button', { name: 'Submit' }));
 
       await waitFor(() =>
-        expect(onSubmit).toHaveBeenCalledWith({ code: 'ABC' }, expect.anything(), expect.anything())
+        expect(handleFormSubmit).toHaveBeenCalledWith(
+          { code: 'ABC' },
+          expect.anything(),
+          expect.anything()
+        )
       );
     });
 
     it('applies format to transform stored value for display', () => {
+      const handleFormSubmit = vi.fn();
       render(
-        <Form onSubmit={vi.fn()} initialValues={{ price: '1000' }}>
+        <Form onSubmit={handleFormSubmit} initialValues={{ price: '1000' }}>
           <StringField
             name="price"
             label="Price"
@@ -168,10 +181,10 @@ describe('Form', () => {
 
     it('applies format and parse together as inverse transforms', async () => {
       const user = userEvent.setup();
-      const onSubmit = vi.fn();
+      const handleFormSubmit = vi.fn();
 
       render(
-        <Form onSubmit={onSubmit} initialValues={{ tag: 'initial' }}>
+        <Form onSubmit={handleFormSubmit} initialValues={{ tag: 'initial' }}>
           <StringField
             name="tag"
             label="Tag"
@@ -190,7 +203,7 @@ describe('Form', () => {
       await user.click(screen.getByRole('button', { name: 'Submit' }));
 
       await waitFor(() =>
-        expect(onSubmit).toHaveBeenCalledWith(
+        expect(handleFormSubmit).toHaveBeenCalledWith(
           { tag: 'updated' },
           expect.anything(),
           expect.anything()
@@ -200,11 +213,11 @@ describe('Form', () => {
 
     it('supports external submit button via form id', async () => {
       const user = userEvent.setup();
-      const onSubmit = vi.fn();
+      const handleFormSubmit = vi.fn();
 
       render(
         <div>
-          <Form id="test-form" onSubmit={onSubmit}>
+          <Form id="test-form" onSubmit={handleFormSubmit}>
             <StringField name="email" label="Email" />
           </Form>
           <button type="submit" form="test-form">
@@ -218,7 +231,7 @@ describe('Form', () => {
       await user.click(screen.getByRole('button', { name: 'External Submit' }));
 
       await waitFor(() =>
-        expect(onSubmit).toHaveBeenCalledWith(
+        expect(handleFormSubmit).toHaveBeenCalledWith(
           { email: 'test@example.com' },
           expect.anything(),
           expect.anything()
@@ -228,12 +241,12 @@ describe('Form', () => {
 
     it('supports render prop for wrapping form element', async () => {
       const user = userEvent.setup();
-      const onSubmit = vi.fn();
+      const handleFormSubmit = vi.fn();
 
       render(
         <Form
           id="wrapped-form"
-          onSubmit={onSubmit}
+          onSubmit={handleFormSubmit}
           render={(formElement) => (
             <div>
               <div>Header Content</div>
@@ -256,7 +269,7 @@ describe('Form', () => {
       await user.click(screen.getByRole('button', { name: 'Submit' }));
 
       await waitFor(() =>
-        expect(onSubmit).toHaveBeenCalledWith(
+        expect(handleFormSubmit).toHaveBeenCalledWith(
           { email: 'test@example.com' },
           expect.anything(),
           expect.anything()
@@ -266,12 +279,12 @@ describe('Form', () => {
 
     it('allows external submit button in render prop wrapper via form id', async () => {
       const user = userEvent.setup();
-      const onSubmit = vi.fn();
+      const handleFormSubmit = vi.fn();
 
       render(
         <Form
           id="wrapped-form"
-          onSubmit={onSubmit}
+          onSubmit={handleFormSubmit}
           render={(formElement) => (
             <div data-testid="wrapper">
               {formElement}
@@ -292,7 +305,7 @@ describe('Form', () => {
       await user.click(screen.getByRole('button', { name: 'External Submit' }));
 
       await waitFor(() =>
-        expect(onSubmit).toHaveBeenCalledWith(
+        expect(handleFormSubmit).toHaveBeenCalledWith(
           { email: 'test@example.com' },
           expect.anything(),
           expect.anything()
@@ -302,7 +315,7 @@ describe('Form', () => {
 
     it('useForm change() updates field value before submit', async () => {
       const user = userEvent.setup();
-      const onSubmit = vi.fn();
+      const handleFormSubmit = vi.fn();
 
       function SetStatusButton() {
         const { change } = useForm();
@@ -310,7 +323,7 @@ describe('Form', () => {
       }
 
       render(
-        <Form onSubmit={onSubmit}>
+        <Form onSubmit={handleFormSubmit}>
           <StringField name="status" label="Status" />
           <SetStatusButton />
           <button type="submit">Submit</button>
@@ -322,7 +335,7 @@ describe('Form', () => {
       await user.click(screen.getByRole('button', { name: 'Submit' }));
 
       await waitFor(() =>
-        expect(onSubmit).toHaveBeenCalledWith(
+        expect(handleFormSubmit).toHaveBeenCalledWith(
           { status: 'in-progress' },
           expect.anything(),
           expect.anything()
@@ -332,7 +345,7 @@ describe('Form', () => {
 
     it('useForm multiple change() calls accumulate', async () => {
       const user = userEvent.setup();
-      const onSubmit = vi.fn();
+      const handleFormSubmit = vi.fn();
 
       function SetFieldsButton() {
         const { change } = useForm();
@@ -349,7 +362,7 @@ describe('Form', () => {
       }
 
       render(
-        <Form onSubmit={onSubmit}>
+        <Form onSubmit={handleFormSubmit}>
           <StringField name="first" label="First" />
           <StringField name="second" label="Second" />
           <SetFieldsButton />
@@ -362,7 +375,7 @@ describe('Form', () => {
       await user.click(screen.getByRole('button', { name: 'Submit' }));
 
       await waitFor(() =>
-        expect(onSubmit).toHaveBeenCalledWith(
+        expect(handleFormSubmit).toHaveBeenCalledWith(
           { first: 'alpha', second: 'beta' },
           expect.anything(),
           expect.anything()
@@ -372,7 +385,7 @@ describe('Form', () => {
 
     it('useForm submit() triggers onSubmit programmatically', async () => {
       const user = userEvent.setup();
-      const onSubmit = vi.fn();
+      const handleFormSubmit = vi.fn();
 
       function ProgrammaticSubmitButton() {
         const { submit } = useForm();
@@ -380,7 +393,7 @@ describe('Form', () => {
       }
 
       render(
-        <Form onSubmit={onSubmit} initialValues={{ email: 'test@example.com' }}>
+        <Form onSubmit={handleFormSubmit} initialValues={{ email: 'test@example.com' }}>
           <StringField name="email" label="Email" />
           <ProgrammaticSubmitButton />
         </Form>,
@@ -390,7 +403,7 @@ describe('Form', () => {
       await user.click(screen.getByRole('button', { name: 'Programmatic Submit' }));
 
       await waitFor(() =>
-        expect(onSubmit).toHaveBeenCalledWith(
+        expect(handleFormSubmit).toHaveBeenCalledWith(
           { email: 'test@example.com' },
           expect.anything(),
           expect.anything()
@@ -400,10 +413,10 @@ describe('Form', () => {
 
     it('submits form via sticky footer shorthand right content', async () => {
       const user = userEvent.setup();
-      const onSubmit = vi.fn();
+      const handleFormSubmit = vi.fn();
 
       render(
-        <Form onSubmit={onSubmit} footer={{ right: <button type="submit">Save</button> }}>
+        <Form onSubmit={handleFormSubmit} footer={{ right: <button type="submit">Save</button> }}>
           <StringField name="email" label="Email" />
         </Form>,
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
@@ -413,7 +426,7 @@ describe('Form', () => {
       await user.click(screen.getByRole('button', { name: 'Save' }));
 
       await waitFor(() =>
-        expect(onSubmit).toHaveBeenCalledWith(
+        expect(handleFormSubmit).toHaveBeenCalledWith(
           { email: 'test@example.com' },
           expect.anything(),
           expect.anything()
@@ -422,9 +435,10 @@ describe('Form', () => {
     });
 
     it('renders sticky footer with shorthand left and right content', () => {
+      const handleFormSubmit = vi.fn();
       render(
         <Form
-          onSubmit={vi.fn()}
+          onSubmit={handleFormSubmit}
           footer={{ left: <span>Last saved 2m ago</span>, right: <button>Save</button> }}
         >
           <StringField name="email" label="Email" />
@@ -436,8 +450,9 @@ describe('Form', () => {
     });
 
     it('renders custom footer ReactNode directly', () => {
+      const handleFormSubmit = vi.fn();
       render(
-        <Form onSubmit={vi.fn()} footer={<div>Custom</div>}>
+        <Form onSubmit={handleFormSubmit} footer={<div>Custom</div>}>
           <StringField name="email" label="Email" />
         </Form>,
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
@@ -450,10 +465,10 @@ describe('Form', () => {
 
       it('submits ArrayFormGroup data as a nested array', async () => {
         const user = userEvent.setup();
-        const onSubmit = vi.fn();
+        const handleFormSubmit = vi.fn();
 
         render(
-          <Form onSubmit={onSubmit}>
+          <Form onSubmit={handleFormSubmit}>
             <ArrayFormGroup rootFieldPath="addresses" groupLabel="Address" minItems={1}>
               {(name) => <StringField name={`${name}.street`} label="Street" />}
             </ArrayFormGroup>
@@ -467,7 +482,7 @@ describe('Form', () => {
         await user.click(screen.getByRole('button', { name: 'Submit' }));
 
         await waitFor(() =>
-          expect(onSubmit).toHaveBeenCalledWith(
+          expect(handleFormSubmit).toHaveBeenCalledWith(
             { addresses: [{ street: '123 Main St' }] },
             expect.anything(),
             expect.anything()
@@ -477,10 +492,10 @@ describe('Form', () => {
 
       it('submits ArrayFormRow data as a nested array', async () => {
         const user = userEvent.setup();
-        const onSubmit = vi.fn();
+        const handleFormSubmit = vi.fn();
 
         render(
-          <Form onSubmit={onSubmit}>
+          <Form onSubmit={handleFormSubmit}>
             <ArrayFormRow rootFieldPath="tags" minItems={1}>
               {(name) => <StringField name={`${name}.value`} label="Tag" />}
             </ArrayFormRow>
@@ -494,7 +509,7 @@ describe('Form', () => {
         await user.click(screen.getByRole('button', { name: 'Submit' }));
 
         await waitFor(() =>
-          expect(onSubmit).toHaveBeenCalledWith(
+          expect(handleFormSubmit).toHaveBeenCalledWith(
             { tags: [{ value: 'ml' }] },
             expect.anything(),
             expect.anything()
@@ -503,9 +518,10 @@ describe('Form', () => {
       });
 
       it('populates ArrayFormGroup fields from initialValues', async () => {
+        const handleFormSubmit = vi.fn();
         render(
           <Form
-            onSubmit={vi.fn()}
+            onSubmit={handleFormSubmit}
             initialValues={{
               addresses: [{ street: '1 Infinite Loop' }, { street: '1600 Amphitheatre' }],
             }}
@@ -526,10 +542,10 @@ describe('Form', () => {
 
       it('submits multiple added items', async () => {
         const user = userEvent.setup();
-        const onSubmit = vi.fn();
+        const handleFormSubmit = vi.fn();
 
         render(
-          <Form onSubmit={onSubmit}>
+          <Form onSubmit={handleFormSubmit}>
             <ArrayFormGroup rootFieldPath="contacts" groupLabel="Contact" minItems={1}>
               {(name) => <StringField name={`${name}.email`} label="Email" />}
             </ArrayFormGroup>
@@ -547,7 +563,7 @@ describe('Form', () => {
         await user.click(screen.getByRole('button', { name: 'Submit' }));
 
         await waitFor(() =>
-          expect(onSubmit).toHaveBeenCalledWith(
+          expect(handleFormSubmit).toHaveBeenCalledWith(
             { contacts: [{ email: 'a@example.com' }, { email: 'b@example.com' }] },
             expect.anything(),
             expect.anything()
@@ -560,10 +576,10 @@ describe('Form', () => {
   describe('validation', () => {
     it('allows submission after required field is filled', async () => {
       const user = userEvent.setup();
-      const onSubmit = vi.fn();
+      const handleFormSubmit = vi.fn();
 
       render(
-        <Form onSubmit={onSubmit}>
+        <Form onSubmit={handleFormSubmit}>
           <StringField name="username" label="Username" required />
           <button type="submit">Submit</button>
         </Form>,
@@ -577,7 +593,7 @@ describe('Form', () => {
       await user.click(screen.getByRole('button', { name: 'Submit' }));
 
       await waitFor(() =>
-        expect(onSubmit).toHaveBeenCalledWith(
+        expect(handleFormSubmit).toHaveBeenCalledWith(
           { username: 'johndoe' },
           expect.anything(),
           expect.anything()
@@ -587,10 +603,10 @@ describe('Form', () => {
 
     it('shows first error when composed validators fail sequentially', async () => {
       const user = userEvent.setup();
-      const onSubmit = vi.fn();
+      const handleFormSubmit = vi.fn();
 
       render(
-        <Form onSubmit={onSubmit}>
+        <Form onSubmit={handleFormSubmit}>
           <StringField
             name="username"
             label="Username"
@@ -604,20 +620,21 @@ describe('Form', () => {
 
       await user.click(screen.getByRole('button', { name: 'Submit' }));
       expect(await screen.findByText('This field is required.')).toBeInTheDocument();
-      expect(onSubmit).not.toHaveBeenCalled();
+      expect(handleFormSubmit).not.toHaveBeenCalled();
 
       await user.type(screen.getByRole('textbox', { name: 'Username *' }), 'abc');
       await user.click(screen.getByRole('button', { name: 'Submit' }));
 
       expect(await screen.findByText('Must be at least 6 characters.')).toBeInTheDocument();
-      expect(onSubmit).not.toHaveBeenCalled();
+      expect(handleFormSubmit).not.toHaveBeenCalled();
     });
 
     it('focuses first field with error on failed submit', async () => {
       const user = userEvent.setup();
 
+      const handleFormSubmit = vi.fn();
       render(
-        <Form onSubmit={vi.fn()}>
+        <Form onSubmit={handleFormSubmit}>
           <StringField name="email" label="Email" required />
           <StringField name="name" label="Name" required />
           <button type="submit">Submit</button>
@@ -646,8 +663,9 @@ describe('Form', () => {
     it('shows errors after failed submit', async () => {
       const user = userEvent.setup();
 
+      const handleFormSubmit = vi.fn();
       render(
-        <Form onSubmit={vi.fn()}>
+        <Form onSubmit={handleFormSubmit}>
           <StringField name="email" label="Email Address" required />
           <FormErrorBanner />
           <button type="submit">Submit</button>
@@ -665,8 +683,9 @@ describe('Form', () => {
     it('clears errors when field is corrected', async () => {
       const user = userEvent.setup();
 
+      const handleFormSubmit = vi.fn();
       render(
-        <Form onSubmit={vi.fn()}>
+        <Form onSubmit={handleFormSubmit}>
           <StringField name="email" label="Email Address" required />
           <FormErrorBanner />
           <button type="submit">Submit</button>
@@ -687,8 +706,9 @@ describe('Form', () => {
     it('focuses the correct field when clicking a label among multiple errors', async () => {
       const user = userEvent.setup();
 
+      const handleFormSubmit = vi.fn();
       render(
-        <Form onSubmit={vi.fn()}>
+        <Form onSubmit={handleFormSubmit}>
           <StringField name="email" label="Email" required />
           <StringField name="name" label="Name" required />
           <FormErrorBanner />
@@ -708,10 +728,10 @@ describe('Form', () => {
 
     it('does not show a clickable button for form-level errors', async () => {
       const user = userEvent.setup();
-      const onSubmit = vi.fn().mockResolvedValue({ [FORM_ERROR]: 'Something went wrong' });
+      const handleFormSubmit = vi.fn().mockResolvedValue({ [FORM_ERROR]: 'Something went wrong' });
 
       render(
-        <Form onSubmit={onSubmit}>
+        <Form onSubmit={handleFormSubmit}>
           <StringField name="email" label="Email" />
           <FormErrorBanner />
           <button type="submit">Submit</button>
@@ -729,8 +749,9 @@ describe('Form', () => {
     it('shows separate errors for sibling fields in the same nested object', async () => {
       const user = userEvent.setup();
 
+      const handleFormSubmit = vi.fn();
       render(
-        <Form onSubmit={vi.fn()}>
+        <Form onSubmit={handleFormSubmit}>
           <StringField name="address.street" label="Street" required />
           <StringField name="address.city" label="City" required />
           <FormErrorBanner />
@@ -748,10 +769,10 @@ describe('Form', () => {
 
     it('shows form-level error alongside field validation errors', async () => {
       const user = userEvent.setup();
-      const onSubmit = vi.fn().mockResolvedValue({ [FORM_ERROR]: 'Server unavailable' });
+      const handleFormSubmit = vi.fn().mockResolvedValue({ [FORM_ERROR]: 'Server unavailable' });
 
       render(
-        <Form onSubmit={onSubmit}>
+        <Form onSubmit={handleFormSubmit}>
           <StringField name="email" label="Email" required />
           <FormErrorBanner />
           <button type="submit">Submit</button>
@@ -774,8 +795,9 @@ describe('Form', () => {
     it('removes only the corrected field error when one of multiple errors is fixed', async () => {
       const user = userEvent.setup();
 
+      const handleFormSubmit = vi.fn();
       render(
-        <Form onSubmit={vi.fn()}>
+        <Form onSubmit={handleFormSubmit}>
           <StringField name="email" label="Email" required />
           <StringField name="name" label="Name" required />
           <FormErrorBanner />
@@ -806,8 +828,9 @@ describe('Form', () => {
     it('shows error without label when field has no label', async () => {
       const user = userEvent.setup();
 
+      const handleFormSubmit = vi.fn();
       render(
-        <Form onSubmit={vi.fn()}>
+        <Form onSubmit={handleFormSubmit}>
           <StringField name="username" required />
           <FormErrorBanner />
           <button type="submit">Submit</button>
@@ -825,8 +848,9 @@ describe('Form', () => {
     it('shows error in banner for a field with a bracket-notation slash key', async () => {
       const user = userEvent.setup();
 
+      const handleFormSubmit = vi.fn();
       render(
-        <Form onSubmit={vi.fn()}>
+        <Form onSubmit={handleFormSubmit}>
           <StringField name="labels[some/key]" label="Label" required />
           <FormErrorBanner />
           <button type="submit">Submit</button>
@@ -891,11 +915,11 @@ describe('Form', () => {
 
     it('submits form data and auto-closes on success', async () => {
       const user = userEvent.setup();
-      const onSubmit = vi.fn().mockResolvedValue(undefined);
-      const onDismiss = vi.fn();
+      const handleFormSubmit = vi.fn().mockResolvedValue(undefined);
+      const handleDialogDismiss = vi.fn();
 
       render(
-        <FormDialog {...defaultProps} onSubmit={onSubmit} onDismiss={onDismiss}>
+        <FormDialog {...defaultProps} onSubmit={handleFormSubmit} onDismiss={handleDialogDismiss}>
           <StringField name="email" label="Email" />
         </FormDialog>,
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
@@ -905,36 +929,36 @@ describe('Form', () => {
       await user.click(screen.getByRole('button', { name: 'Submit' }));
 
       await waitFor(() => {
-        expect(onSubmit).toHaveBeenCalledWith({ email: 'test@example.com' });
+        expect(handleFormSubmit).toHaveBeenCalledWith({ email: 'test@example.com' });
       });
 
       await waitFor(() => {
-        expect(onDismiss).toHaveBeenCalledTimes(1);
+        expect(handleDialogDismiss).toHaveBeenCalledTimes(1);
       });
     });
 
     it('calls onDismiss when cancel is clicked', async () => {
       const user = userEvent.setup();
-      const onDismiss = vi.fn();
+      const handleDialogDismiss = vi.fn();
 
       render(
-        <FormDialog {...defaultProps} onDismiss={onDismiss}>
+        <FormDialog {...defaultProps} onDismiss={handleDialogDismiss}>
           <StringField name="email" label="Email" />
         </FormDialog>,
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
 
       await user.click(screen.getByRole('button', { name: 'Cancel' }));
-      expect(onDismiss).toHaveBeenCalledTimes(1);
+      expect(handleDialogDismiss).toHaveBeenCalledTimes(1);
     });
 
     it('handles submit errors without auto-closing', async () => {
       const user = userEvent.setup();
-      const onSubmit = vi.fn().mockRejectedValue(new Error('Submit failed'));
-      const onDismiss = vi.fn();
+      const handleFormSubmit = vi.fn().mockRejectedValue(new Error('Submit failed'));
+      const handleDialogDismiss = vi.fn();
 
       render(
-        <FormDialog {...defaultProps} onSubmit={onSubmit} onDismiss={onDismiss}>
+        <FormDialog {...defaultProps} onSubmit={handleFormSubmit} onDismiss={handleDialogDismiss}>
           <StringField name="email" label="Email" />
         </FormDialog>,
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
@@ -943,10 +967,10 @@ describe('Form', () => {
       await user.click(screen.getByRole('button', { name: 'Submit' }));
 
       await waitFor(() => {
-        expect(onSubmit).toHaveBeenCalled();
+        expect(handleFormSubmit).toHaveBeenCalled();
       });
 
-      expect(onDismiss).not.toHaveBeenCalled();
+      expect(handleDialogDismiss).not.toHaveBeenCalled();
       expect(screen.getByRole('dialog', { name: 'Test Dialog' })).toBeInTheDocument();
       await screen.findByText(/Submit failed/);
     });

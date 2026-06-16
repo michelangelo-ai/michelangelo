@@ -10,7 +10,7 @@ export function TextEditor({
   language,
   readOnly = false,
   height = '300px',
-  onChange,
+  onChange: handleContentChange,
 }: TextEditorProps) {
   const [css] = useStyletron();
 
@@ -45,7 +45,7 @@ export function TextEditor({
         value={value}
         height={height}
         extensions={[...extensions, themeExtension]}
-        onChange={onChange}
+        onChange={handleContentChange}
         editable={!readOnly}
         basicSetup={{
           lineNumbers: true,

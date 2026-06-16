@@ -21,7 +21,7 @@ export function TableSearchInput({ value, onChange }: TableSearchInputProps) {
     };
   }, [onChange]);
 
-  const persistNewSearchValue = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setLocalValue(newValue);
     debouncedOnChange(newValue);
@@ -32,7 +32,7 @@ export function TableSearchInput({ value, onChange }: TableSearchInputProps) {
       clearable
       type="search"
       value={localValue}
-      onChange={persistNewSearchValue}
+      onChange={handleQueryChange}
       size={SIZE.compact}
       overrides={{
         Root: { style: { width: '250px' } },

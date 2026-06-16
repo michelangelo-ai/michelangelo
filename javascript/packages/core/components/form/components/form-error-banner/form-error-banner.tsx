@@ -31,7 +31,7 @@ export function FormErrorBanner() {
             <StyledLink
               $as="button"
               type="button"
-              onClick={entry.focus}
+              onClick={() => entry.focus?.()}
               className={css({
                 background: 'none',
                 border: 'none',

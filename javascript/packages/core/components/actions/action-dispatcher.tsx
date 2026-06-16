@@ -14,13 +14,13 @@ type Props<T extends Data> = {
   onClose: () => void;
 };
 
-export function ActionDispatcher<T extends Data>({ action, record, onClose }: Props<T>) {
+export function ActionDispatcher<T extends Data>({ action, record, onClose: handleModalClose }: Props<T>) {
   if (action.modal?.type === 'custom') {
     const Component = action.modal.component;
-    return <Component record={record} onClose={onClose} />;
+    return <Component record={record} onClose={handleModalClose} />;
   }
   if (isConfirmAction(action)) {
-    return <ConfirmDispatcher action={action} record={record} onClose={onClose} />;
+    return <ConfirmDispatcher action={action} record={record} onClose={handleModalClose} />;
   }
   return null;
 }

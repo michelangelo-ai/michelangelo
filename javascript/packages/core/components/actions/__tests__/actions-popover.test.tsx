@@ -285,6 +285,7 @@ describe('ActionsPopover', () => {
 
     it('shows only one tooltip at a time when hovering between two disabled items', async () => {
       const user = userEvent.setup();
+      const handleActionSelect = vi.fn();
       render(
         <ActionMenu
           actions={[
@@ -301,7 +302,7 @@ describe('ActionsPopover', () => {
               onClick: vi.fn(),
             },
           ]}
-          onSelectAction={vi.fn()}
+          onSelectAction={handleActionSelect}
         />,
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
@@ -317,6 +318,7 @@ describe('ActionsPopover', () => {
     });
 
     it('does not show the tooltip from auto-highlight when the menu opens', async () => {
+      const handleActionSelect = vi.fn();
       render(
         <ActionMenu
           actions={[
@@ -327,7 +329,7 @@ describe('ActionsPopover', () => {
               onClick: vi.fn(),
             },
           ]}
-          onSelectAction={vi.fn()}
+          onSelectAction={handleActionSelect}
         />,
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
@@ -337,6 +339,7 @@ describe('ActionsPopover', () => {
 
     it('shows the tooltip when a disabled item is highlighted via keyboard', async () => {
       const user = userEvent.setup();
+      const handleActionSelect = vi.fn();
       render(
         <ActionMenu
           actions={[
@@ -348,7 +351,7 @@ describe('ActionsPopover', () => {
               onClick: vi.fn(),
             },
           ]}
-          onSelectAction={vi.fn()}
+          onSelectAction={handleActionSelect}
         />,
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
@@ -359,6 +362,7 @@ describe('ActionsPopover', () => {
 
     it('switches from keyboard tooltip to mouse tooltip when hovering a different item', async () => {
       const user = userEvent.setup();
+      const handleActionSelect = vi.fn();
       render(
         <ActionMenu
           actions={[
@@ -375,7 +379,7 @@ describe('ActionsPopover', () => {
               onClick: vi.fn(),
             },
           ]}
-          onSelectAction={vi.fn()}
+          onSelectAction={handleActionSelect}
         />,
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );

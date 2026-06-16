@@ -720,9 +720,9 @@ describe('EntityDetailRoute', () => {
 
   test('renders entity-level actions in the detail page header', async () => {
     const user = userEvent.setup();
-    const RunDialog = ({ onClose }: ActionComponentProps) => (
+    const RunDialog = ({ onClose: handleDialogClose }: ActionComponentProps) => (
       <div role="dialog">
-        Run form <button onClick={onClose}>Close</button>
+        Run form <button onClick={handleDialogClose}>Close</button>
       </div>
     );
 

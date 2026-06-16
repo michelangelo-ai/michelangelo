@@ -16,7 +16,7 @@ export function DetailViewHeader({
   subtitle,
   title,
   titleEnhancer,
-  onGoBack,
+  onGoBack: handleNavigateBack,
   children,
   actions,
   record,
@@ -54,10 +54,10 @@ export function DetailViewHeader({
           <div
             className={css({ display: 'flex', alignItems: 'center', gap: theme.sizing.scale300 })}
           >
-            {onGoBack && (
+            {handleNavigateBack && (
               <Button
                 aria-label="Go back"
-                onClick={onGoBack}
+                onClick={handleNavigateBack}
                 kind={KIND.tertiary}
                 shape={SHAPE.circle}
                 size={SIZE.compact}

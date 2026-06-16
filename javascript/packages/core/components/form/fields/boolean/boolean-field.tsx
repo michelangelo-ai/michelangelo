@@ -34,7 +34,7 @@ export const BooleanField: React.FC<BooleanFieldProps> = ({
     parse,
   });
 
-  const handleChange = (event: React.FormEvent<HTMLInputElement>) => {
+  const handleCheckedChange = (event: React.FormEvent<HTMLInputElement>) => {
     input.onChange(event.currentTarget.checked);
   };
 
@@ -51,8 +51,11 @@ export const BooleanField: React.FC<BooleanFieldProps> = ({
     >
       <Checkbox
         checked={input.value ?? false}
-        onChange={readOnly ? undefined : handleChange}
+        // eslint-disable-next-line react/jsx-handler-names -- conditional: undefined when readOnly, handleCheckedChange otherwise
+        onChange={readOnly ? undefined : handleCheckedChange}
+        // eslint-disable-next-line react/jsx-handler-names -- react-final-form input wiring
         onBlur={input.onBlur}
+        // eslint-disable-next-line react/jsx-handler-names -- react-final-form input wiring
         onFocus={input.onFocus}
         disabled={disabled}
         checkmarkType={toggle ? STYLE_TYPE.toggle_round : STYLE_TYPE.default}

@@ -61,8 +61,11 @@ export const DateField: React.FC<DateFieldProps> = ({
         placeholder={!disabled && !readOnly ? (placeholder ?? 'MM/dd/yyyy') : ''}
         formatString="MM/dd/yyyy"
         mask="99/99/9999"
+        // eslint-disable-next-line react/jsx-handler-names -- react-final-form input wiring
         onOpen={input.onFocus}
+        // eslint-disable-next-line react/jsx-handler-names -- react-final-form input wiring
         onRangeChange={input.onBlur}
+        // eslint-disable-next-line react/jsx-handler-names -- react-final-form input wiring
         onClose={input.onBlur}
         maxDate={noFutureDate ? new Date() : undefined}
         disabled={disabled}
