@@ -775,14 +775,19 @@ class TestModelVariableCustomIO(TestCase):
 
 
 class TestModelVariableTorchIO(TestCase):
-    """Tests for save_torch_model / load_torch_model IO (state_dict + metadata)."""
+    """Tests for save_torch_model / load_torch_model IO (full nn.Module pickle).
 
-    def test_save_torch_writes_state_dict_not_full_module(self):
-        """save_torch_model() persists model.state_dict(), not the model itself."""
+    ``ModelVariable`` is workflow scratch storage; the PyTorch path pickles
+    the full ``nn.Module`` so fused models with nested submodules and
+    non-trivial constructors round-trip without callers re-supplying
+    constructor arguments. See ``save_torch_model`` / ``load_torch_model``
+    docstrings for the security trade-off.
+    """
+
+    def test_save_torch_writes_full_module(self):
+        """save_torch_model() persists the full nn.Module (not state_dict)."""
         mock_torch, _ = _mock_torch()
-        state_dict = {"layer.weight": "tensor"}
-        mock_model = MagicMock()
-        mock_model.state_dict.return_value = state_dict
+        mock_model = MagicMock(name="full-module")
         var = ModelVariable(path="memory://target")
         var._value = mock_model
         with (
@@ -792,16 +797,14 @@ class TestModelVariableTorchIO(TestCase):
             mock_fsspec.core.url_to_fs.return_value = (MagicMock(), "target")
             var.save_torch_model()
         save_args, _ = mock_torch.save.call_args
-        self.assertIs(save_args[0], state_dict)
-        mock_model.state_dict.assert_called_once()
+        self.assertIs(save_args[0], mock_model)
+        mock_model.state_dict.assert_not_called()
 
     def test_save_torch_does_not_mutate_path(self):
         """save_torch_model() leaves self.path unchanged (no .pt auto-append)."""
         mock_torch, _ = _mock_torch()
-        mock_model = MagicMock()
-        mock_model.state_dict.return_value = {}
-        var = ModelVariable(path="memory://target", _io_metadata=None)
-        var._value = mock_model
+        var = ModelVariable(path="memory://target")
+        var._value = MagicMock()
         with (
             patch.dict(sys.modules, {"torch": mock_torch}),
             patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec,
@@ -813,11 +816,9 @@ class TestModelVariableTorchIO(TestCase):
     def test_save_torch_uses_non_recursive_put(self):
         """save_torch_model() writes a single file with fs.put (no recursive)."""
         mock_torch, _ = _mock_torch()
-        mock_model = MagicMock()
-        mock_model.state_dict.return_value = {}
         mock_fs = MagicMock()
         var = ModelVariable(path="memory://target")
-        var._value = mock_model
+        var._value = MagicMock()
         with (
             patch.dict(sys.modules, {"torch": mock_torch}),
             patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec,
@@ -827,109 +828,51 @@ class TestModelVariableTorchIO(TestCase):
         _, put_kwargs = mock_fs.put.call_args
         self.assertNotIn("recursive", put_kwargs)
 
-    def test_save_torch_auto_populates_model_class(self):
-        """save_torch_model() sets metadata.model_class from type(value) if unset."""
+    def test_load_torch_defaults_weights_only_false(self):
+        """load_torch_model() defaults weights_only=False to match full-pickle save."""
+        loaded = object()
         mock_torch, _ = _mock_torch()
-
-        class _FakeModel:
-            def state_dict(self):
-                return {}
-
-        var = ModelVariable(path="memory://target")
-        var._value = _FakeModel()
-        with (
-            patch.dict(sys.modules, {"torch": mock_torch}),
-            patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec,
-        ):
-            mock_fsspec.core.url_to_fs.return_value = (MagicMock(), "target")
-            var.save_torch_model()
-        self.assertIsNotNone(var.metadata.model_class)
-        self.assertTrue(var.metadata.model_class.endswith("_FakeModel"))
-
-    def test_load_torch_raises_when_model_class_missing(self):
-        """load_torch_model() raises ValueError without importing torch first."""
+        mock_torch.load = MagicMock(return_value=loaded)
         var = ModelVariable(path="memory://x")
-        with self.assertRaises(ValueError) as ctx:
-            var.load_torch_model()
-        self.assertIn("model_class", str(ctx.exception))
-
-    def test_load_torch_instantiates_with_hyperparameters(self):
-        """load_torch_model() builds model_class(**hyperparameters)."""
-        mock_torch, _ = _mock_torch()
-        mock_torch.load = MagicMock(return_value={"w": 1.0})
-        built = MagicMock(name="built")
-        mock_class = MagicMock(return_value=built)
-        var = ModelVariable(
-            path="memory://x",
-            metadata=ModelMetadata(model_class="pkg.M", hyperparameters={"hidden": 16}),
-        )
         with (
             patch.dict(sys.modules, {"torch": mock_torch}),
-            patch(f"{_MODEL_PATH}.import_attribute", return_value=mock_class),
-            patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec,
-        ):
-            mock_fsspec.core.url_to_fs.return_value = (MagicMock(), "x")
-            var.load_torch_model()
-        mock_class.assert_called_once_with(hidden=16)
-        built.load_state_dict.assert_called_once_with({"w": 1.0})
-        self.assertIs(var._value, built)
-
-    def test_load_torch_uses_weights_only_true(self):
-        """load_torch_model() always loads state_dict with weights_only=True."""
-        mock_torch, _ = _mock_torch()
-        mock_torch.load = MagicMock(return_value={})
-        var = ModelVariable(
-            path="memory://x", metadata=ModelMetadata(model_class="pkg.M")
-        )
-        with (
-            patch.dict(sys.modules, {"torch": mock_torch}),
-            patch(f"{_MODEL_PATH}.import_attribute", return_value=MagicMock()),
             patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec,
         ):
             mock_fsspec.core.url_to_fs.return_value = (MagicMock(), "x")
             var.load_torch_model()
         _, load_kwargs = mock_torch.load.call_args
-        self.assertTrue(load_kwargs.get("weights_only"))
+        self.assertFalse(load_kwargs.get("weights_only"))
         self.assertEqual(load_kwargs.get("map_location"), "cpu")
+        self.assertIs(var._value, loaded)
+
+    def test_load_torch_respects_weights_only_override(self):
+        """load_torch_model(weights_only=True) forwards the override to torch.load."""
+        mock_torch, _ = _mock_torch()
+        mock_torch.load = MagicMock(return_value=object())
+        var = ModelVariable(path="memory://x")
+        with (
+            patch.dict(sys.modules, {"torch": mock_torch}),
+            patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec,
+        ):
+            mock_fsspec.core.url_to_fs.return_value = (MagicMock(), "x")
+            var.load_torch_model(weights_only=True)
+        _, load_kwargs = mock_torch.load.call_args
+        self.assertTrue(load_kwargs.get("weights_only"))
 
     def test_load_torch_uses_non_recursive_get(self):
         """load_torch_model() reads a single file with fs.get (no recursive)."""
         mock_torch, _ = _mock_torch()
-        mock_torch.load = MagicMock(return_value={})
+        mock_torch.load = MagicMock(return_value=object())
         mock_fs = MagicMock()
-        var = ModelVariable(
-            path="memory://x", metadata=ModelMetadata(model_class="pkg.M")
-        )
+        var = ModelVariable(path="memory://x")
         with (
             patch.dict(sys.modules, {"torch": mock_torch}),
-            patch(f"{_MODEL_PATH}.import_attribute", return_value=MagicMock()),
             patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec,
         ):
             mock_fsspec.core.url_to_fs.return_value = (mock_fs, "x")
             var.load_torch_model()
         _, get_kwargs = mock_fs.get.call_args
         self.assertNotIn("recursive", get_kwargs)
-
-    def test_load_torch_wraps_constructor_typeerror(self):
-        """load_torch_model() turns a constructor TypeError into a clear ValueError."""
-        mock_torch, _ = _mock_torch()
-        mock_torch.load = MagicMock(return_value={})
-
-        def _bad_ctor(**kwargs):
-            raise TypeError("missing 1 required positional argument: 'in_features'")
-
-        var = ModelVariable(
-            path="memory://x", metadata=ModelMetadata(model_class="pkg.M")
-        )
-        with (
-            patch.dict(sys.modules, {"torch": mock_torch}),
-            patch(f"{_MODEL_PATH}.import_attribute", return_value=_bad_ctor),
-            patch(f"{_MODEL_PATH}.fsspec"),
-            self.assertRaises(ValueError) as ctx,
-        ):
-            var.load_torch_model()
-        self.assertIn("hyperparameters", str(ctx.exception))
-        self.assertIn("pkg.M", str(ctx.exception))
 
 
 class TestModelVariableLightningIO(TestCase):
@@ -1184,19 +1127,45 @@ except ImportError:
     _HAS_LIGHTNING = False
 
 
+if _HAS_TORCH:
+
+    class _FusedRoundTripModel(_torch_real.nn.Module):
+        """Fused model with nested submodules and a non-trivial constructor.
+
+        Exercises the exact case raised in review (kenns29, 2026-06-16):
+        ``state_dict + model_class(**hyperparameters)`` could not reconstruct
+        fused models whose ``__init__`` builds nested submodules whose
+        shapes depend on positional/keyword args not preserved in a flat
+        ``hyperparameters`` dict. The full-pickle path round-trips them.
+        """
+
+        def __init__(self, encoder, decoder, scale: float):
+            super().__init__()
+            self.encoder = encoder
+            self.decoder = decoder
+            self.register_buffer("scale", _torch_real.tensor(scale))
+
+        def forward(self, x):
+            return self.decoder(self.encoder(x)) * self.scale
+
+
 @unittest.skipUnless(_HAS_TORCH, "torch not installed")
 class TestModelVariableTorchRoundTrip(TestCase):
     """End-to-end save/load round-trip for plain torch.nn.Module."""
 
     def test_create_save_then_lazy_load_via_value(self):
-        """create() -> save() -> ModelVariable(path, metadata).value reconstructs."""
+        """create() -> save() -> ModelVariable(path, metadata).value reconstructs.
+
+        No ``hyperparameters`` are set on the metadata: the full ``nn.Module``
+        is pickled by ``save_torch_model``, so the loader does not need to
+        re-instantiate the class from constructor args.
+        """
         import tempfile
 
         torch = _torch_real
         original = torch.nn.Linear(2, 1)
 
         var = ModelVariable.create(original)
-        var.metadata.hyperparameters = {"in_features": 2, "out_features": 1}
         with tempfile.TemporaryDirectory() as tmp:
             var.path = f"{tmp}/model"
             var.save()
@@ -1207,6 +1176,32 @@ class TestModelVariableTorchRoundTrip(TestCase):
             self.assertEqual(loaded.in_features, 2)
             self.assertEqual(loaded.out_features, 1)
 
+            for k, v in original.state_dict().items():
+                self.assertTrue(torch.equal(loaded.state_dict()[k], v))
+
+    def test_fused_model_with_nested_submodules_round_trips(self):
+        """Fused module whose ctor takes prebuilt submodules round-trips.
+
+        ``_FusedRoundTripModel.__init__(encoder, decoder, scale)`` cannot
+        be reconstructed from a flat hyperparameters dict, but the
+        full-pickle save/load contract handles it transparently.
+        """
+        import tempfile
+
+        torch = _torch_real
+        encoder = torch.nn.Sequential(torch.nn.Linear(3, 4), torch.nn.ReLU())
+        decoder = torch.nn.Linear(4, 2)
+        original = _FusedRoundTripModel(encoder, decoder, scale=0.5)
+
+        var = ModelVariable.create(original)
+        with tempfile.TemporaryDirectory() as tmp:
+            var.path = f"{tmp}/fused"
+            var.save()
+
+            restored = ModelVariable(path=var.path, metadata=var.metadata)
+            loaded = restored.value
+            self.assertIsInstance(loaded, _FusedRoundTripModel)
+            self.assertTrue(torch.equal(loaded.scale, original.scale))
             for k, v in original.state_dict().items():
                 self.assertTrue(torch.equal(loaded.state_dict()[k], v))
 
