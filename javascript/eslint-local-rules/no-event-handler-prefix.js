@@ -13,8 +13,7 @@ const rule = {
   meta: {
     type: 'suggestion',
     docs: {
-      description:
-        'Disallow event handler names that mirror the prop name without adding context',
+      description: 'Disallow event handler names that mirror the prop name without adding context',
       recommended: true,
     },
     messages: {
@@ -56,9 +55,9 @@ const rule = {
         const eventName = propName.slice(2); // 'onChange' -> 'Change'
 
         const mirrors = [
-          propName,                          // onClick={onClick}
-          `handle${capitalize(eventName)}`,  // onChange={handleChange}
-          `handle${capitalize(propName)}`,   // onClick={handleOnClick}
+          propName, // onClick={onClick}
+          `handle${capitalize(eventName)}`, // onChange={handleChange}
+          `handle${capitalize(propName)}`, // onClick={handleOnClick}
         ];
 
         if (mirrors.includes(valueName)) {
