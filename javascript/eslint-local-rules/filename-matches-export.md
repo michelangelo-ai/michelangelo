@@ -32,13 +32,17 @@ export function ThemeProvider() { ... }
 
 ## Exemptions (auto-detected)
 
-| Case                        | Example                              | Why exempt                         |
-| --------------------------- | ------------------------------------ | ---------------------------------- |
-| `index.tsx`                 | entry points                         | intentionally multi-export         |
-| Files with `types` in name  | `cell-types.tsx`                     | type definition files              |
-| Files with `styled` in name | `styled-components.tsx`              | multi-component styled collections |
-| Only lowercase exports      | `helpers.tsx` exporting `formatDate` | utility files, not components      |
-| Only `ALL_CAPS` exports     | `icons.tsx` exporting `ICONS`        | constant maps                      |
+| Case                        | Example                              | Why exempt                          |
+| --------------------------- | ------------------------------------ | ----------------------------------- |
+| `index.tsx`                 | entry points                         | intentionally multi-export          |
+| Files with `styled` in name | `styled-components.tsx`              | multi-component styled collections  |
+| Only lowercase exports      | `helpers.tsx` exporting `formatDate` | utility files, not components       |
+| Only `ALL_CAPS` exports     | `icons.tsx` exporting `ICONS`        | constant maps                       |
+| Type-only exports           | `export type { Foo }`                | `exportKind === 'type'` not counted |
+
+**Note on `.ts` files**: this rule only applies to `.tsx` files. Type definition files (`types.ts`) are `.ts` and exempt by default. Hook files (`use-*.ts`) are similarly `.ts` and exempt — the `types` stem exclusion was removed as redundant.
+
+**Future**: hook files that are `.tsx` (e.g. `use-studio-mutation.tsx` → `useStudioMutation`) are not yet covered. Camelcase stem conversion is tracked for a follow-up.
 
 ## File vs export — which to rename?
 

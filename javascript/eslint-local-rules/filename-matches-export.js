@@ -20,6 +20,7 @@ const rule = {
       description:
         'Enforce that a .tsx file exports a component whose name matches the filename stem in PascalCase',
       recommended: true,
+      url: 'https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/eslint-local-rules/filename-matches-export.md',
     },
     messages: {
       filenameMismatch:
@@ -38,8 +39,8 @@ const rule = {
 
     const stem = basename.slice(0, -4);
 
-    // Skip entry points, type files, styled-component collections
-    if (stem === 'index' || stem.includes('types') || stem.includes('styled')) return {};
+    // Skip entry points and styled-component collections
+    if (stem === 'index' || stem.includes('styled')) return {};
 
     // Skip files that don't follow kebab-case (e.g. single-word all-lowercase utility files)
     // A valid component file stem must produce a meaningful PascalCase name

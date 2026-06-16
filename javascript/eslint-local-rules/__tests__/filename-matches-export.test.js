@@ -48,11 +48,6 @@ tester.run('filename-matches-export', rule, {
       code: `export const ICONS = {};`,
     },
     {
-      name: 'file with types in name is skipped',
-      filename: 'cell-types.tsx',
-      code: `export const CellTypes = () => null;`,
-    },
-    {
       name: '.ts file is ignored',
       filename: 'button-group.ts',
       code: `export function ButtonGroup() {}`,
