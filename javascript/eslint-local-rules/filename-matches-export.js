@@ -80,7 +80,11 @@ const rule = {
         if (!hasPascalExport) return;
 
         if (!exportedNames.has(expectedName)) {
-          context.report({ node, messageId: 'filenameMismatch', data: { expectedName, filename: basename } });
+          context.report({
+            node,
+            messageId: 'filenameMismatch',
+            data: { expectedName, filename: basename },
+          });
         }
       },
     };

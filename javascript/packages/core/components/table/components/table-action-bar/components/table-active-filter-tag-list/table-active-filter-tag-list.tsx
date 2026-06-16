@@ -1,10 +1,10 @@
 import { useStyletron } from 'baseui';
 
-import { ActiveFilterTag } from './table-active-filter-tag';
+import { TableActiveFilterTag } from './table-active-filter-tag';
 
 import type { ActiveFilterTagListProps } from './types';
 
-export function ActiveFilterTagList<TData = unknown>(props: ActiveFilterTagListProps<TData>) {
+export function TableActiveFilterTagList<TData = unknown>(props: ActiveFilterTagListProps<TData>) {
   const { filterableColumns, preFilteredRows } = props;
   const [css, theme] = useStyletron();
 
@@ -20,7 +20,7 @@ export function ActiveFilterTagList<TData = unknown>(props: ActiveFilterTagListP
   return (
     <div className={css({ display: 'flex', flexWrap: 'wrap', gap: theme.sizing.scale300 })}>
       {filteredColumns.map((column) => (
-        <ActiveFilterTag key={column.id} column={column} preFilteredRows={preFilteredRows} />
+        <TableActiveFilterTag key={column.id} column={column} preFilteredRows={preFilteredRows} />
       ))}
     </div>
   );

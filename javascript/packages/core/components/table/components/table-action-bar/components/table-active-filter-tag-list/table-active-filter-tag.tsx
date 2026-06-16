@@ -12,7 +12,7 @@ import type { Theme } from 'baseui';
 import type { ColumnConfig } from '#core/components/table/types/column-types';
 import type { ActiveFilterTagProps } from './types';
 
-export function ActiveFilterTag<TData = unknown>(props: ActiveFilterTagProps<TData>) {
+export function TableActiveFilterTag<TData = unknown>(props: ActiveFilterTagProps<TData>) {
   const { column, preFilteredRows } = props;
   const [css, theme] = useStyletron();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
