@@ -20,7 +20,6 @@ import globals from 'globals';
 const sharedPlugins = {
   'react-hooks': reactHooks,
   react: react,
-  'react': react,
   'simple-import-sort': simpleImportSort,
   'react-refresh': reactRefresh,
   baseui: baseUIEslint,
