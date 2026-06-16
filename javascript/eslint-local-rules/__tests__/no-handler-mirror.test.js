@@ -42,6 +42,7 @@ tester.run('no-handler-mirror', rule, {
       code: `const C = ({ onClose: handleClose }) => <Modal onClose={handleClose} />;`,
     },
     {
+    {
       name: 'persistInput names the effect, not the trigger',
       code: `const C = () => <Input onChange={persistInput} />;`,
     },
