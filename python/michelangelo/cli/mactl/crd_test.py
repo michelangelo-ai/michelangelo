@@ -436,9 +436,7 @@ class ApplyFuncImplTest(TestCase):
 
     @patch("michelangelo.cli.mactl.crd.crd_method_call")
     @patch("michelangelo.cli.mactl.crd.get_crd_namespace_and_name_from_yaml")
-    def test_apply_func_impl_invokes_pre_apply_hook(
-        self, mock_get_ns: MagicMock, _
-    ):
+    def test_apply_func_impl_invokes_pre_apply_hook(self, mock_get_ns: MagicMock, _):
         """apply_func_impl runs registered pre-apply checks with the CRD full name."""
         from michelangelo.cli.mactl import apply_hooks
 
