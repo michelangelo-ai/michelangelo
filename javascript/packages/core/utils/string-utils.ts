@@ -6,19 +6,19 @@ export const capitalizeFirstLetter = (str: string): string =>
 /**
  * Checks for absolute URLs, including localhost values without a public TLD.
  */
-export const isAbsoluteURL = (value: string) =>
+export const isAbsoluteUrl = (value: string) =>
   isURL(encodeURI(value), { require_protocol: true, require_tld: false });
 
 /**
  * Checks whether a value is a navigable URL — either an absolute URL or a
  * root-relative path. Use this to decide whether to render a value as a link.
  *
- * Distinct from {@link isAbsoluteURL}, which rejects relative paths and is
+ * Distinct from {@link isAbsoluteUrl}, which rejects relative paths and is
  * appropriate for validation (e.g., requiring a fully-qualified URL in a form
  * field). This function is appropriate for display logic where internal
  * navigation paths like `/{namespace}/models/foo` are valid link targets.
  */
-export const isNavigableURL = (value: string) => isAbsoluteURL(value) || value.startsWith('/');
+export const isNavigableUrl = (value: string) => isAbsoluteUrl(value) || value.startsWith('/');
 
 /**
  * @description

@@ -1,4 +1,4 @@
-import { isAbsoluteURL } from '#core/utils/string-utils';
+import { isAbsoluteUrl } from '#core/utils/string-utils';
 
 import type { FieldValidator } from './types';
 
@@ -75,5 +75,5 @@ export const url =
   (errorMessage = 'Must be a valid URL.'): FieldValidator =>
   (value) => {
     if (isEmpty(value)) return undefined;
-    return isAbsoluteURL(String(value)) ? undefined : errorMessage;
+    return isAbsoluteUrl(String(value)) ? undefined : errorMessage;
   };

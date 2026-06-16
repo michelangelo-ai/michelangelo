@@ -91,6 +91,11 @@ const sharedRules = {
       format: ['strictCamelCase', 'StrictPascalCase'],
     },
     {
+      selector: 'variable',
+      format: ['strictCamelCase', 'StrictPascalCase', 'UPPER_CASE'],
+      leadingUnderscore: 'allow',
+    },
+    {
       selector: 'typeLike',
       format: ['PascalCase'],
       custom: { regex: 'T$', match: false },

@@ -4,13 +4,13 @@ import type { ComponentType } from 'react';
 
 export const createMuiIconAdapter = (Icon: ComponentType<SvgIconProps>) => {
   return (props: IconProps) => {
-    const { size, style, color, shapeRendering, title, ...baseUIProps } = props;
+    const { size, style, color, shapeRendering, title, ...baseUiProps } = props;
 
     // Scale Material UI icons to match internal icon sizing (14px internal ≈ 12px Material UI)
     const scaledSize = size ? `calc(${size} * 1.125)` : size;
 
     // Remove BaseUI-specific props that would cause type errors
-    const { overrides: _overrides, fontSize: _fontSize, ...compatibleProps } = baseUIProps;
+    const { overrides: _overrides, fontSize: _fontSize, ...compatibleProps } = baseUiProps;
 
     return (
       <Icon

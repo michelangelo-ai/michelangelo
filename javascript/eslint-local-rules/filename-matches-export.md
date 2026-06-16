@@ -39,15 +39,6 @@ export function useScrollRatio() {}
 export function useUrlQueryString() {}
 ```
 
-## Acronym convention
-
-Hook names use **mechanical camelCase** — every word after `use` has its first letter capitalized, including acronyms:
-
-- `use-url-query-string.ts` → `useUrlQueryString` (not `useURLQueryString`)
-- `use-html-parser.ts` → `useHtmlParser` (not `useHTMLParser`)
-
-This eliminates ambiguous word boundaries in the middle of names.
-
 ## Exemptions (auto-detected)
 
 | Case                        | Example                              | Why exempt                                   |
