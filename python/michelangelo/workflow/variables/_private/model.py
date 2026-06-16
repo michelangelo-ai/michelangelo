@@ -10,19 +10,17 @@ Three frameworks are supported as first-class citizens:
   ``CustomModel.load``) from
   ``michelangelo.lib.model_manager.interface.custom_model``. Artifact layout
   is a directory tree controlled by the user's ``save()`` implementation.
-- ``"pytorch"`` — generic ``torch.nn.Module`` via ``torch.save(state_dict())``
-  and ``torch.load(..., weights_only=True)``. Re-instantiation on load is
-  driven by ``metadata.model_class`` plus optional
-  ``metadata.hyperparameters`` — mirroring the PyTorch documented
-  state_dict + class-name pattern.
-- ``"lightning"`` — ``pytorch_lightning.LightningModule`` via the same
+- ``"pytorch"`` — generic ``torch.nn.Module`` via ``torch.save`` /
+  ``torch.load``. The full ``nn.Module`` object is pickled so fused models
+  with nested submodules (and any non-trivial constructor signature) round
+  trip without requiring callers to re-supply constructor arguments.
+  ``ModelVariable`` is for intra-workflow scratch storage of task
+  intermediates within the same trusted pipeline run — for long-term
+  registry artifacts, prefer the ``state_dict`` + ``ModelMetadata``
+  pattern (see ``save_lightning_model``).
+- ``"lightning"`` — ``pytorch_lightning.LightningModule`` via the
   ``state_dict`` round-trip; ``metadata.model_class`` and
   ``metadata.hyperparameters`` drive reconstruction.
-
-The state_dict + ``model_class`` pattern is the community standard (see
-MLflow's ``mlflow.pytorch`` flavor, BentoML's PyTorch integration, and the
-PyTorch documentation on saving and loading models). It loads safely with
-``weights_only=True`` and avoids pickling user code into the artifact.
 
 ``_private/`` convention:
     This file lives in ``_private/`` — do not import directly from this path.
@@ -279,15 +277,17 @@ class ModelVariable(Variable):
     # ------------------------------------------------------------------
 
     def save_torch_model(self):
-        """Save a ``torch.nn.Module``'s ``state_dict`` to ``self.path``.
+        """Save a ``torch.nn.Module`` to ``self.path`` via ``torch.save``.
 
-        Persists only the ``state_dict`` (not the full ``nn.Module``
-        object). This matches the PyTorch-recommended serialization pattern
-        and lets the artifact be loaded safely with ``weights_only=True``.
-
-        Reconstruction on load requires ``metadata.model_class`` (set
-        automatically by ``ModelVariable.create()``) and, when the class
-        constructor needs arguments, ``metadata.hyperparameters``.
+        Persists the full ``nn.Module`` object — including any nested
+        submodules and bound state that a state_dict alone could not
+        capture. ``ModelVariable`` is intended for intra-workflow scratch
+        storage of task intermediates (not for long-term registry
+        artifacts), so the simpler full-pickle pattern is preferred over a
+        state_dict + class-reconstruction step that cannot represent fused
+        models with non-trivial constructors. Lightning modules, which have
+        a canonical ``state_dict`` + class re-instantiation path, go
+        through ``save_lightning_model`` / ``load_lightning_model``.
         """
         import torch
 
@@ -299,65 +299,65 @@ class ModelVariable(Variable):
             )
             return
 
-        if not self.metadata.model_class:
-            self.metadata.model_class = dot_path(type(self._value))
-
         fs, path = fsspec.core.url_to_fs(self.path)
         with tempfile.TemporaryDirectory() as temp_dir:
             model_file = os.path.join(temp_dir, "model.pt")
-            torch.save(self._value.state_dict(), model_file)
+            torch.save(self._value, model_file)
             fs.put(model_file, path)
 
         self._saved = True
 
-    def load_torch_model(self):
-        """Load a ``torch.nn.Module`` by re-instantiating ``model_class``.
+    def load_torch_model(
+        self,
+        weights_only: bool = False,
+        map_location: Any = "cpu",
+    ):
+        """Load a ``torch.nn.Module`` from ``self.path`` via ``torch.load``.
 
-        Steps:
+        Args:
+            weights_only: Forwarded to ``torch.load``. Defaults to ``False``
+                because ``save_torch_model`` pickles the full
+                ``nn.Module``; loading the artifact this class wrote
+                requires the unsafe mode. Pass ``weights_only=True`` only
+                when you know the artifact at ``self.path`` is a
+                state_dict-only file written by an external producer.
+            map_location: Forwarded to ``torch.load``. Defaults to ``"cpu"``
+                so that an artifact pickled from a CUDA device on the
+                producer host always loads on consumers without matching
+                GPU topology (otherwise ``torch.load`` raises
+                ``RuntimeError`` if the recorded CUDA device is not
+                available). Pass ``None`` to use ``torch.load``'s default
+                (restore tensors to their original device), a device
+                string such as ``"cuda:0"`` to pin to a specific device,
+                a ``torch.device``, a ``{src: dst}`` device-map dict, or
+                a callable — anything ``torch.load`` accepts.
 
-        1. Import the class from ``metadata.model_class``.
-        2. Construct an instance via
-           ``model_class(**metadata.hyperparameters)`` (empty dict when
-           ``hyperparameters`` is ``None``).
-        3. Download the ``state_dict`` from ``self.path`` and apply
-           ``load_state_dict`` (``weights_only=True`` — only tensors are
-           unpickled, so the call is safe against malicious artifacts).
-
-        Raises:
-            ValueError: If ``metadata.model_class`` is not set, or if the
-                class constructor requires arguments not supplied via
-                ``metadata.hyperparameters``.
+        Security:
+            ``weights_only=False`` permits arbitrary code execution from
+            the pickle stream. ``ModelVariable`` is designed for
+            intra-workflow scratch storage where the producer and consumer
+            are part of the same trusted pipeline run; do not load
+            artifacts from untrusted sources without setting
+            ``weights_only=True``.
         """
-        if not self.metadata.model_class:
-            raise ValueError(
-                "metadata.model_class must be set to load a PyTorch model "
-                "(ModelVariable.create(value) sets it automatically for "
-                "torch.nn.Module instances)."
-            )
-
         import torch
 
-        _logger.info("Loading PyTorch model from %s", self.path)
-
-        model_class = import_attribute(self.metadata.model_class)
-        hyperparameters = self.metadata.hyperparameters or {}
-        try:
-            model = model_class(**hyperparameters)
-        except TypeError as e:
-            raise ValueError(
-                f"Cannot reconstruct {self.metadata.model_class}: {e}. "
-                "Set metadata.hyperparameters before save() with the kwargs "
-                "required by the model constructor."
-            ) from e
+        _logger.info(
+            "Loading PyTorch model from %s (weights_only=%s, map_location=%s)",
+            self.path,
+            weights_only,
+            map_location,
+        )
 
         fs, path = fsspec.core.url_to_fs(self.path)
         with tempfile.TemporaryDirectory() as temp_dir:
             model_file = os.path.join(temp_dir, "model.pt")
             fs.get(path, model_file)
-            state_dict = torch.load(model_file, map_location="cpu", weights_only=True)
-            model.load_state_dict(state_dict)
-
-        self._value = model
+            self._value = torch.load(
+                model_file,
+                map_location=map_location,
+                weights_only=weights_only,
+            )
         self._saved = True
 
     # ------------------------------------------------------------------
@@ -393,7 +393,7 @@ class ModelVariable(Variable):
 
         self._saved = True
 
-    def load_lightning_model(self):
+    def load_lightning_model(self, map_location: Any = "cpu"):
         """Load a Lightning module by re-instantiating ``model_class``.
 
         Steps:
@@ -406,6 +406,13 @@ class ModelVariable(Variable):
            ``load_state_dict`` (``weights_only=True`` — only tensors are
            unpickled, so the call is safe against malicious artifacts).
         4. Call ``model.eval()`` and store as ``self._value``.
+
+        Args:
+            map_location: Forwarded to ``torch.load``. Defaults to ``"cpu"``
+                so artifacts saved on a CUDA device load on consumers
+                without matching GPU topology. Accepts the same value
+                shapes as ``torch.load`` (device string, ``torch.device``,
+                ``{src: dst}`` device-map dict, callable, or ``None``).
 
         Raises:
             ValueError: If ``metadata.model_class`` is not set, or if the
@@ -421,7 +428,11 @@ class ModelVariable(Variable):
 
         import torch
 
-        _logger.info("Loading Lightning model from %s", self.path)
+        _logger.info(
+            "Loading Lightning model from %s (map_location=%s)",
+            self.path,
+            map_location,
+        )
 
         model_class = import_attribute(self.metadata.model_class)
         hyperparameters = self.metadata.hyperparameters or {}
@@ -438,7 +449,9 @@ class ModelVariable(Variable):
         with tempfile.TemporaryDirectory() as temp_dir:
             model_file = os.path.join(temp_dir, "model.pt")
             fs.get(path, model_file)
-            state_dict = torch.load(model_file, map_location="cpu", weights_only=True)
+            state_dict = torch.load(
+                model_file, map_location=map_location, weights_only=True
+            )
             model.load_state_dict(state_dict)
 
         model.eval()

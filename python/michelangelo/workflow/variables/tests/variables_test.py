@@ -859,6 +859,34 @@ class TestModelVariableTorchIO(TestCase):
         _, load_kwargs = mock_torch.load.call_args
         self.assertTrue(load_kwargs.get("weights_only"))
 
+    def test_load_torch_respects_map_location_override(self):
+        """load_torch_model(map_location=...) forwards the override to torch.load."""
+        mock_torch, _ = _mock_torch()
+        mock_torch.load = MagicMock(return_value=object())
+        var = ModelVariable(path="memory://x")
+        with (
+            patch.dict(sys.modules, {"torch": mock_torch}),
+            patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec,
+        ):
+            mock_fsspec.core.url_to_fs.return_value = (MagicMock(), "x")
+            var.load_torch_model(map_location="cuda:0")
+        _, load_kwargs = mock_torch.load.call_args
+        self.assertEqual(load_kwargs.get("map_location"), "cuda:0")
+
+    def test_load_torch_accepts_map_location_none(self):
+        """map_location=None is forwarded so torch.load uses original device."""
+        mock_torch, _ = _mock_torch()
+        mock_torch.load = MagicMock(return_value=object())
+        var = ModelVariable(path="memory://x")
+        with (
+            patch.dict(sys.modules, {"torch": mock_torch}),
+            patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec,
+        ):
+            mock_fsspec.core.url_to_fs.return_value = (MagicMock(), "x")
+            var.load_torch_model(map_location=None)
+        _, load_kwargs = mock_torch.load.call_args
+        self.assertIsNone(load_kwargs.get("map_location"))
+
     def test_load_torch_uses_non_recursive_get(self):
         """load_torch_model() reads a single file with fs.get (no recursive)."""
         mock_torch, _ = _mock_torch()
@@ -945,6 +973,25 @@ class TestModelVariableLightningIO(TestCase):
             var.load_lightning_model()
         _, load_kwargs = mock_torch.load.call_args
         self.assertTrue(load_kwargs.get("weights_only"))
+        self.assertEqual(load_kwargs.get("map_location"), "cpu")
+
+    def test_load_lightning_respects_map_location_override(self):
+        """load_lightning_model(map_location=...) is forwarded to torch.load."""
+        mock_torch, _ = _mock_torch()
+        mock_torch.load = MagicMock(return_value={})
+        var = ModelVariable(
+            path="memory://lit",
+            metadata=ModelMetadata(model_class="pkg.M"),
+        )
+        with (
+            patch.dict(sys.modules, {"torch": mock_torch}),
+            patch(f"{_MODEL_PATH}.import_attribute", return_value=MagicMock()),
+            patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec,
+        ):
+            mock_fsspec.core.url_to_fs.return_value = (MagicMock(), "lit")
+            var.load_lightning_model(map_location="cuda:0")
+        _, load_kwargs = mock_torch.load.call_args
+        self.assertEqual(load_kwargs.get("map_location"), "cuda:0")
 
     def test_load_lightning_wraps_constructor_typeerror(self):
         """load_lightning_model() turns a TypeError from __init__ into a ValueError."""
