@@ -53,6 +53,21 @@ tester.run('filename-matches-export', rule, {
       code: `export function ButtonGroup() {}`,
     },
     {
+      name: 'hook .ts file matches camelCase export',
+      filename: 'use-studio-mutation.ts',
+      code: `export function useStudioMutation() {}`,
+    },
+    {
+      name: 'hook .tsx file matches camelCase export',
+      filename: 'use-cell-provider.tsx',
+      code: `export function useCellProvider() { return null; }`,
+    },
+    {
+      name: 'non-hook .ts file is skipped (no use- prefix)',
+      filename: 'string-utils.ts',
+      code: `export function useHelper() {}`,
+    },
+    {
       name: 'file exports expected name alongside others',
       filename: 'table-pagination.tsx',
       code: `export function TablePagination() { return null; } export function LoadingButton() { return null; }`,
@@ -76,6 +91,18 @@ tester.run('filename-matches-export', rule, {
       name: 'export matches a different PascalCase name but not the expected one',
       filename: 'theme-provider.tsx',
       code: `export function OtherProvider() { return null; }`,
+      errors: [{ messageId: 'filenameMismatch' }],
+    },
+    {
+      name: 'hook .ts file export does not match filename stem',
+      filename: 'use-scroll.ts',
+      code: `export function useScrollRatio() {}`,
+      errors: [{ messageId: 'filenameMismatch' }],
+    },
+    {
+      name: 'acronym casing in hook name does not match mechanical camelCase',
+      filename: 'use-url-query-string.ts',
+      code: `export function useURLQueryString() {}`,
       errors: [{ messageId: 'filenameMismatch' }],
     },
   ],

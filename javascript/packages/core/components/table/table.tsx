@@ -10,7 +10,7 @@ import {
 } from '@tanstack/react-table';
 import { useStyletron } from 'baseui';
 
-import { useScrollRatio } from '#core/hooks/use-scroll';
+import { useScrollRatio } from '#core/hooks/use-scroll-ratio';
 import { FilterMode } from './components/filter/types';
 import { TableActionBar } from './components/table-action-bar/table-action-bar';
 import { transformRows } from './components/table-body/row-transformer';

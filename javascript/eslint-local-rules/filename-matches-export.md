@@ -2,7 +2,10 @@
 
 ## What this rule enforces
 
-A `.tsx` component file's primary named export must match the filename stem in PascalCase. The filename is the canonical identifier in a component library — it's what autocomplete, "go to file", and grep resolve first.
+A component or hook file's primary named export must match the filename stem. The filename is the canonical identifier in a component library — it's what autocomplete, "go to file", and grep resolve first.
+
+- `.tsx` component files: filename stem in **PascalCase** (`button-group.tsx` → `ButtonGroup`)
+- `use-*.ts` and `use-*.tsx` hook files: filename stem in **camelCase** (`use-studio-mutation.ts` → `useStudioMutation`)
 
 ## Flagged patterns
 
@@ -10,11 +13,14 @@ A `.tsx` component file's primary named export must match the filename stem in P
 // ❌ button-group.tsx — expected export: ButtonGroup
 export function BtnGroup() { ... }
 
-// ❌ form-control.tsx — expected export: FormControl
-export const FormCtrl = () => ...;
-
 // ❌ provider.tsx — expected export: Provider
 export function ThemeProvider() { ... }  // rename file to theme-provider.tsx
+
+// ❌ use-scroll.ts — expected export: useScroll
+export function useScrollRatio() {}  // rename file to use-scroll-ratio.ts
+
+// ❌ use-url-query-string.ts — expected export: useUrlQueryString (acronyms lowercased)
+export function useURLQueryString() {}
 ```
 
 ## Correct patterns
@@ -23,12 +29,24 @@ export function ThemeProvider() { ... }  // rename file to theme-provider.tsx
 // ✓ button-group.tsx
 export function ButtonGroup() { ... }
 
-// ✓ form-control.tsx
-export const FormControl = () => ...;
-
 // ✓ theme-provider.tsx
 export function ThemeProvider() { ... }
+
+// ✓ use-scroll-ratio.ts
+export function useScrollRatio() {}
+
+// ✓ use-url-query-string.ts
+export function useUrlQueryString() {}
 ```
+
+## Acronym convention
+
+Hook names use **mechanical camelCase** — every word after `use` has its first letter capitalized, including acronyms:
+
+- `use-url-query-string.ts` → `useUrlQueryString` (not `useURLQueryString`)
+- `use-html-parser.ts` → `useHtmlParser` (not `useHTMLParser`)
+
+This eliminates ambiguous word boundaries in the middle of names.
 
 ## Exemptions (auto-detected)
 
@@ -39,14 +57,11 @@ export function ThemeProvider() { ... }
 | Only lowercase exports      | `helpers.tsx` exporting `formatDate` | utility files, not components       |
 | Only `ALL_CAPS` exports     | `icons.tsx` exporting `ICONS`        | constant maps                       |
 | Type-only exports           | `export type { Foo }`                | `exportKind === 'type'` not counted |
-
-**Note on `.ts` files**: this rule only applies to `.tsx` files. Type definition files (`types.ts`) are `.ts` and exempt by default. Hook files (`use-*.ts`) are similarly `.ts` and exempt — the `types` stem exclusion was removed as redundant.
-
-**Future**: hook files that are `.tsx` (e.g. `use-studio-mutation.tsx` → `useStudioMutation`) are not yet covered. Camelcase stem conversion is tracked for a follow-up.
+| Non-hook `.ts` files        | `string-utils.ts`                    | only `use-*.ts` files are checked   |
 
 ## File vs export — which to rename?
 
 If the filename and export diverge, rename whichever is wrong:
 
-- Export name adds meaningful context the filename lacks → rename the **file** (e.g. `provider.tsx` → `theme-provider.tsx`)
-- Export name is an abbreviation or shorthand → rename the **export** to match the file
+- Export name adds meaningful context the filename lacks → rename the **file** (e.g. `provider.tsx` → `theme-provider.tsx`, `use-scroll.ts` → `use-scroll-ratio.ts`)
+- Export name is an abbreviation or uses non-standard casing → rename the **export** to match the file

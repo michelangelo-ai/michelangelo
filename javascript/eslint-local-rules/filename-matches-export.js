@@ -1,9 +1,10 @@
 /**
- * @fileoverview Enforces that a .tsx file's primary component export matches its filename.
+ * @fileoverview Enforces that a component or hook file's primary export matches its filename.
  *
- * A file named `button-group.tsx` should export `ButtonGroup`. Drift between
- * filename and export name makes grep and autocomplete unreliable in a component
- * library where the filename is the canonical identifier.
+ * A file named `button-group.tsx` should export `ButtonGroup`.
+ * A file named `use-studio-mutation.ts` should export `useStudioMutation`.
+ * Drift between filename and export makes grep and autocomplete unreliable in a
+ * component library where the filename is the canonical identifier.
  */
 
 const kebabToPascal = (str) =>
@@ -12,19 +13,31 @@ const kebabToPascal = (str) =>
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join('');
 
+// use-studio-mutation → useStudioMutation
+const kebabToCamel = (str) => {
+  const parts = str.split('-');
+  return (
+    parts[0] +
+    parts
+      .slice(1)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join('')
+  );
+};
+
 /** @type {import('eslint').Rule.RuleModule} */
 const rule = {
   meta: {
     type: 'suggestion',
     docs: {
       description:
-        'Enforce that a .tsx file exports a component whose name matches the filename stem in PascalCase',
+        'Enforce that a component or hook file exports a name matching the filename stem',
       recommended: true,
       url: 'https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/eslint-local-rules/filename-matches-export.md',
     },
     messages: {
       filenameMismatch:
-        "'{{filename}}' must export a component named '{{expectedName}}'. " +
+        "'{{filename}}' must export a component or hook named '{{expectedName}}'. " +
         'Rename the export or the file so they match.',
     },
     schema: [],
@@ -34,17 +47,25 @@ const rule = {
     const filename = context.getPhysicalFilename?.() ?? context.filename;
     const basename = filename.split('/').pop() ?? '';
 
-    // Only apply to .tsx files
-    if (!basename.endsWith('.tsx')) return {};
+    const isTsx = basename.endsWith('.tsx');
+    const isTs = basename.endsWith('.ts');
+    if (!isTsx && !isTs) return {};
 
-    const stem = basename.slice(0, -4);
+    const stem = isTsx ? basename.slice(0, -4) : basename.slice(0, -3);
 
     // Skip entry points and styled-component collections
     if (stem === 'index' || stem.includes('styled')) return {};
 
-    // Skip files that don't follow kebab-case (e.g. single-word all-lowercase utility files)
-    // A valid component file stem must produce a meaningful PascalCase name
-    const expectedName = kebabToPascal(stem);
+    const isHookFile = stem.startsWith('use-');
+
+    let expectedName;
+    if (isHookFile) {
+      expectedName = kebabToCamel(stem);
+    } else if (isTsx) {
+      expectedName = kebabToPascal(stem);
+    } else {
+      return {}; // Non-hook .ts files (utilities, types) — skip
+    }
 
     const exportedNames = new Set();
 
@@ -74,11 +95,16 @@ const rule = {
       },
 
       'Program:exit'(node) {
-        // Only flag files that have at least one PascalCase export — these are component files.
-        // ALL_CAPS constants and lowercase utilities are exempt. Requires uppercase first char
-        // followed by at least one lowercase char to distinguish PascalCase from ALL_CAPS.
-        const hasPascalExport = [...exportedNames].some((name) => /^[A-Z][a-z]/.test(name));
-        if (!hasPascalExport) return;
+        if (isHookFile) {
+          // Only flag files that export at least one hook (use + uppercase letter)
+          const hasHookExport = [...exportedNames].some((name) => /^use[A-Z]/.test(name));
+          if (!hasHookExport) return;
+        } else {
+          // Only flag files that have at least one PascalCase export — these are component files.
+          // ALL_CAPS constants and lowercase utilities are exempt.
+          const hasPascalExport = [...exportedNames].some((name) => /^[A-Z][a-z]/.test(name));
+          if (!hasPascalExport) return;
+        }
 
         if (!exportedNames.has(expectedName)) {
           context.report({

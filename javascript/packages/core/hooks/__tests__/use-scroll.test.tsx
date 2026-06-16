@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 
-import { useScrollRatio } from '../use-scroll';
+import { useScrollRatio } from '../use-scroll-ratio';
 
 describe('useScrollRatio', () => {
   it('should return -1 initially', () => {

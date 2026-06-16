@@ -1,14 +1,14 @@
 import { renderHook } from '@testing-library/react';
 
-import { useURLQueryString } from '#core/hooks/routing/use-url-query-string';
+import { useUrlQueryString } from '#core/hooks/routing/use-url-query-string';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 
-describe('useURLQueryString', () => {
+describe('useUrlQueryString', () => {
   describe('with no query parameters', () => {
     it('returns empty object', () => {
       const { result } = renderHook(
-        () => useURLQueryString(),
+        () => useUrlQueryString(),
         buildWrapper([getRouterWrapper({ location: '/ma/ma-customer-sandbox/train/pipelines' })])
       );
 
@@ -19,7 +19,7 @@ describe('useURLQueryString', () => {
   describe('with single query parameter', () => {
     it('parses single parameter correctly', () => {
       const { result } = renderHook(
-        () => useURLQueryString<{ revisionId: string }>(),
+        () => useUrlQueryString<{ revisionId: string }>(),
         buildWrapper([
           getRouterWrapper({
             location: '/ma/ma-customer-sandbox/train/pipelines?revisionId=123',
@@ -34,7 +34,7 @@ describe('useURLQueryString', () => {
   describe('with multiple query parameters', () => {
     it('parses multiple parameters correctly', () => {
       const { result } = renderHook(
-        () => useURLQueryString<{ revisionId: string; status: string }>(),
+        () => useUrlQueryString<{ revisionId: string; status: string }>(),
         buildWrapper([
           getRouterWrapper({
             location: '/ma/ma-customer-sandbox/train/pipelines?revisionId=123&status=active',
@@ -53,7 +53,7 @@ describe('useURLQueryString', () => {
     it('decodes parameters correctly', () => {
       const { result } = renderHook(
         () =>
-          useURLQueryString<{
+          useUrlQueryString<{
             filter: string;
             search: string;
           }>(),
@@ -75,7 +75,7 @@ describe('useURLQueryString', () => {
     it('uses last value for duplicate parameters', () => {
       const { result } = renderHook(
         () =>
-          useURLQueryString<{
+          useUrlQueryString<{
             tag: string;
           }>(),
         buildWrapper([
@@ -95,7 +95,7 @@ describe('useURLQueryString', () => {
     it('handles empty values correctly', () => {
       const { result } = renderHook(
         () =>
-          useURLQueryString<{
+          useUrlQueryString<{
             empty: string;
             normal: string;
           }>(),

@@ -101,7 +101,7 @@ export { UserProvider } from '#core/providers/user-provider/user-provider';
 
 export { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 export * from '#core/hooks/routing/use-studio-params/types';
-export { useURLQueryString } from '#core/hooks/routing/use-url-query-string';
+export { useUrlQueryString } from '#core/hooks/routing/use-url-query-string';
 
 export * from '#core/utils/object-utils';
 export * from '#core/utils/string-utils';
