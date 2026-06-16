@@ -1,8 +1,8 @@
 """ModelVariable — trained-model variable for ML workflow tasks.
 
-Mirrors the internal ``ModelVariable`` design exactly: subclasses ``Variable``,
-wraps a storage path and a transient in-memory value, and dispatches save/load
-to format-specific handlers based on ``metadata.training_framework``.
+Subclasses ``Variable``, wraps a storage path and a transient in-memory value,
+and dispatches save/load to format-specific handlers based on
+``metadata.training_framework``.
 
 Three frameworks are supported as first-class citizens:
 
@@ -21,7 +21,6 @@ Three frameworks are supported as first-class citizens:
     Import ``ModelVariable`` from ``michelangelo.workflow.variables`` instead.
 """
 
-# ruff: noqa: I001
 from __future__ import annotations
 
 import logging
@@ -48,8 +47,7 @@ _logger = logging.getLogger(__name__)
 class ModelVariable(Variable):
     """A model variable flowing between workflow tasks.
 
-    Subclasses ``Variable`` — the same base used by the internal
-    ``ModelVariable``. Underlying it could be a PyTorch model, a Lightning
+    Subclasses ``Variable``. Underlying it could be a PyTorch model, a Lightning
     module, or a user-defined ``CustomModel``. Persistence is delegated to
     framework-specific handlers; dispatch is keyed on
     ``metadata.training_framework``.
@@ -104,8 +102,6 @@ class ModelVariable(Variable):
         except ImportError:
             pass
 
-        # TODO: implement other models
-
         return res
 
     def _load(self):
@@ -131,10 +127,13 @@ class ModelVariable(Variable):
         """Save value to variable path, dispatched on training_framework.
 
         Raises:
-            ValueError: If ``metadata.training_framework`` is unset or
-                unrecognised. Call the framework-specific ``save_*`` method
-                directly when auto-dispatch is not possible.
+            ValueError: If no value has been set on this variable, or if
+                ``metadata.training_framework`` is unset or unrecognised. Call
+                the framework-specific ``save_*`` method directly when
+                auto-dispatch is not possible.
         """
+        if self._value is None:
+            raise ValueError("Cannot save: no value has been set on this variable.")
         if self.metadata.training_framework == TRAINING_FRAMEWORK_CUSTOM:
             self.save_custom_model()
         elif self.metadata.training_framework == TRAINING_FRAMEWORK_PYTORCH:
@@ -157,11 +156,11 @@ class ModelVariable(Variable):
         directory tree to ``self.path`` via fsspec. No-ops when the value has
         already been saved.
         """
-        _logger.info(f"Saving custom model for {self.path}")
+        _logger.info("Saving custom model for %s", self.path)
 
         if self._saved:
             _logger.info(
-                f"Custom model value already saved for {self.path}. Skipping saving."
+                "Custom model value already saved for %s. Skipping saving.", self.path
             )
             return
 
@@ -178,8 +177,16 @@ class ModelVariable(Variable):
         Imports the model class from ``metadata.model_class``, downloads the
         artifact tree from ``self.path`` to a temporary directory, and calls
         ``model_class.load(temp_path)``.
+
+        Raises:
+            ValueError: If ``metadata.model_class`` is not set.
         """
-        _logger.info(f"Loading custom model from {self.path}")
+        _logger.info("Loading custom model from %s", self.path)
+
+        if not self.metadata.model_class:
+            raise ValueError(
+                "model_class must be set in metadata to load a custom model."
+            )
 
         model_class = import_attribute(self.metadata.model_class)
 
@@ -198,15 +205,17 @@ class ModelVariable(Variable):
         """Save a ``torch.nn.Module`` to ``self.path`` with a ``.pt`` suffix.
 
         The ``.pt`` extension is appended when missing — required for
-        compatibility with the Triton torch packager.
+        compatibility with the Triton torch packager. The full model object
+        is pickled via ``torch.save(self._value, ...)``; loading therefore
+        requires ``weights_only=False`` (see ``load_torch_model``).
         """
         import torch
 
-        _logger.info(f"Saving PyTorch model for {self.path}")
+        _logger.info("Saving PyTorch model for %s", self.path)
 
         if self._saved:
             _logger.info(
-                f"PyTorch model value already saved for {self.path}. Skipping saving."
+                "PyTorch model value already saved for %s. Skipping saving.", self.path
             )
             return
 
@@ -221,21 +230,36 @@ class ModelVariable(Variable):
 
         self._saved = True
 
-    def load_torch_model(self):
+    def load_torch_model(self, weights_only: bool = True):
         """Load a ``torch.nn.Module`` via ``torch.load`` (CPU map-location).
 
-        Uses ``weights_only=False`` to permit full pickle loading — callers
-        must trust the artifact source.
+        Args:
+            weights_only: Forwarded to ``torch.load``. Defaults to ``True`` —
+                the safer mode that refuses to execute arbitrary pickle
+                opcodes. Pass ``weights_only=False`` when loading artifacts
+                produced by ``save_torch_model``, which pickle the full
+                ``nn.Module`` object (state_dict-only artifacts work with
+                the default).
+
+        Security:
+            ``weights_only=False`` permits arbitrary code execution from the
+            pickle stream. Only set it when the artifact source is trusted.
         """
         import torch
 
-        _logger.info(f"Loading PyTorch model from {self.path}")
+        _logger.info(
+            "Loading PyTorch model from %s (weights_only=%s)",
+            self.path,
+            weights_only,
+        )
 
         fs, path = fsspec.core.url_to_fs(self.path)
         with tempfile.TemporaryDirectory() as temp_dir:
             model_path = os.path.join(temp_dir, "model")
             fs.get(path, model_path, recursive=True)
-            self._value = torch.load(model_path, map_location="cpu", weights_only=False)
+            self._value = torch.load(
+                model_path, map_location="cpu", weights_only=weights_only
+            )
         self._saved = True
 
     # ------------------------------------------------------------------
@@ -251,11 +275,12 @@ class ModelVariable(Variable):
         """
         import torch
 
-        _logger.info(f"Saving Lightning model for {self.path}")
+        _logger.info("Saving Lightning model for %s", self.path)
 
         if self._saved:
             _logger.info(
-                f"Lightning model value already saved for {self.path}. Skipping saving."
+                "Lightning model value already saved for %s. Skipping saving.",
+                self.path,
             )
             return
 
@@ -276,20 +301,21 @@ class ModelVariable(Variable):
         2. Construct an instance via ``model_class(**metadata.hyperparameters)``
            (empty dict when ``hyperparameters`` is ``None``).
         3. Download the ``state_dict`` from ``self.path`` and apply
-           ``load_state_dict`` (``weights_only=True`` for safety).
+           ``load_state_dict`` (``weights_only=True`` — only tensors are
+           unpickled, so the call is safe against malicious artifacts).
         4. Call ``model.eval()`` and store as ``self._value``.
 
         Raises:
             ValueError: If ``metadata.model_class`` is not set.
         """
-        import torch
-
-        _logger.info(f"Loading Lightning model from {self.path}")
-
         if not self.metadata.model_class:
             raise ValueError(
                 "model_class must be set in metadata to load Lightning model"
             )
+
+        import torch
+
+        _logger.info("Loading Lightning model from %s", self.path)
 
         model_class = import_attribute(self.metadata.model_class)
         hyperparameters = self.metadata.hyperparameters or {}
