@@ -1,0 +1,81 @@
+import { RuleTester } from 'eslint';
+
+import rule from '../no-event-handler-prefix.js';
+
+RuleTester.describe = describe;
+RuleTester.it = it;
+
+const tester = new RuleTester({
+  languageOptions: {
+    ecmaVersion: 2020,
+    sourceType: 'module',
+    parserOptions: {
+      ecmaFeatures: { jsx: true },
+    },
+  },
+});
+
+tester.run('no-event-handler-prefix', rule, {
+  valid: [
+    {
+      name: 'descriptive name — not a mirror',
+      code: `const C = () => <Input onChange={commitSelection} />;`,
+    },
+    {
+      name: 'member expression pass-through',
+      code: `const C = ({ onClick }) => <Button onClick={props.onClick} />;`,
+    },
+    {
+      name: 'non-event prop is ignored',
+      code: `const C = () => <Button label={label} />;`,
+    },
+    {
+      name: 'prop forwarded from parameter destructuring — onClick pass-through',
+      code: `const C = ({ onClick }) => <Button onClick={onClick} />;`,
+    },
+    {
+      name: 'prop forwarded from parameter destructuring — onChange pass-through',
+      code: `const C = ({ onChange }) => <Input onChange={onChange} />;`,
+    },
+    {
+      name: 'aliased destructuring is still a parameter — exempt',
+      code: `const C = ({ onClose: handleClose }) => <Modal onClose={handleClose} />;`,
+    },
+    {
+      name: 'handleRowChange is descriptive — not a mirror of onChange',
+      code: `const C = () => <Input onChange={handleRowChange} />;`,
+    },
+    {
+      name: 'handleDeleteClick is descriptive — not a mirror of onClick',
+      code: `const C = () => <Button onClick={handleDeleteClick} />;`,
+    },
+  ],
+
+  invalid: [
+    {
+      name: 'onClick={onClick} — mirrors prop name exactly',
+      code: `const handleClick = () => {}; const C = () => <Button onClick={handleClick} />;`,
+      errors: [{ messageId: 'noHandlerMirror' }],
+    },
+    {
+      name: 'onChange={handleChange} — handle + eventName',
+      code: `const handleChange = () => {}; const C = () => <Input onChange={handleChange} />;`,
+      errors: [{ messageId: 'noHandlerMirror' }],
+    },
+    {
+      name: 'onSubmit={handleSubmit} — handle + eventName',
+      code: `const handleSubmit = () => {}; const C = () => <Form onSubmit={handleSubmit} />;`,
+      errors: [{ messageId: 'noHandlerMirror' }],
+    },
+    {
+      name: 'onClick={handleOnClick} — handle + full prop name',
+      code: `const handleOnClick = () => {}; const C = () => <Button onClick={handleOnClick} />;`,
+      errors: [{ messageId: 'noHandlerMirror' }],
+    },
+    {
+      name: 'onSubmit={onSubmit} — locally-declared var that mirrors prop',
+      code: `const onSubmit = () => {}; const C = () => <Form onSubmit={onSubmit} />;`,
+      errors: [{ messageId: 'noHandlerMirror' }],
+    },
+  ],
+});
