@@ -571,6 +571,14 @@ class TestModelVariableCreate(TestCase):
             var = ModelVariable.create(object())
         self.assertIsNone(var.metadata.training_framework)
 
+    def test_create_falls_through_when_torch_importable_but_value_not_module(self):
+        """create() returns unset framework when torch loads but value is non-Module."""
+        mock_torch, _ = _mock_torch()
+        with patch.dict(sys.modules, {"torch": mock_torch}):
+            var = ModelVariable.create("not-a-module")
+        self.assertIsNone(var.metadata.training_framework)
+        self.assertIsNone(var.metadata.model_class)
+
 
 class TestModelVariableSaveDispatch(TestCase):
     """Tests for ModelVariable.save() dispatch and pre-conditions."""
@@ -699,6 +707,21 @@ class TestModelVariableSkipWhenAlreadySaved(TestCase):
             var.save_torch_model()
             mock_torch.save.assert_not_called()
             mock_fsspec.core.url_to_fs.assert_not_called()
+
+    def test_save_lightning_skips_when_already_saved(self):
+        """save_lightning_model() returns early without touching torch or fs."""
+        mock_torch, _ = _mock_torch()
+        var = ModelVariable(path="memory://lit", metadata=ModelMetadata())
+        var._value = MagicMock(name="lightning-model")
+        var._saved = True
+        with (
+            patch.dict(sys.modules, {"torch": mock_torch}),
+            patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec,
+        ):
+            var.save_lightning_model()
+            mock_torch.save.assert_not_called()
+            mock_fsspec.core.url_to_fs.assert_not_called()
+            var._value.state_dict.assert_not_called()
 
 
 class TestModelVariableCustomIO(TestCase):
