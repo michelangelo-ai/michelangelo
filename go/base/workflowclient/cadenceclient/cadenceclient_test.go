@@ -732,7 +732,7 @@ func TestUpdateTrigger(t *testing.T) {
 	client := &CadenceClient{
 		Client: &cadencemocks.Client{},
 	}
-	err := client.UpdateTrigger(context.Background(), workflowID, newCronSchedule)
+	err := client.UpdateTrigger(context.Background(), workflowID, newCronSchedule, nil)
 	assert.NoError(t, err)
 }
 
