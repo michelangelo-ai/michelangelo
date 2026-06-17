@@ -32,6 +32,7 @@ DEFAULT_CONFIG = {
     },
     "plugin": {
         "dirs": [],
+        "packages": [],
         "modules": {},
     },
 }
