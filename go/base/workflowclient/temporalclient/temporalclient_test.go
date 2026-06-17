@@ -725,14 +725,18 @@ func TestUpdateTrigger(t *testing.T) {
 	workflowID := "testWorkflowID"
 	scheduleID := workflowID + "-schedule"
 	newCronSchedule := "0 6 * * *"
+	pauseTrue := true
+	pauseFalse := false
 
 	testCases := []struct {
 		name      string
+		paused    *bool
 		setupMock func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle)
 		errMsg    string
 	}{
 		{
-			name: "success",
+			name:   "success - cron only",
+			paused: nil,
 			setupMock: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
 				mockClient.On("ScheduleClient").Return(mockScheduleClient)
 				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
@@ -740,16 +744,36 @@ func TestUpdateTrigger(t *testing.T) {
 			},
 		},
 		{
-			name: "error - describe fails",
+			name:   "success - cron with pause",
+			paused: &pauseTrue,
 			setupMock: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
 				mockClient.On("ScheduleClient").Return(mockScheduleClient)
 				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
-				mockScheduleHandle.On("Update", mock.Anything, mock.Anything).Return(fmt.Errorf("describe error"))
+				mockScheduleHandle.On("Update", mock.Anything, mock.Anything).Return(nil)
 			},
-			errMsg: "describe error",
 		},
 		{
-			name: "error - update fails",
+			name:   "success - cron with resume",
+			paused: &pauseFalse,
+			setupMock: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
+				mockScheduleHandle.On("Update", mock.Anything, mock.Anything).Return(nil)
+			},
+		},
+		{
+			name:   "error - update fails",
+			paused: nil,
+			setupMock: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
+				mockScheduleHandle.On("Update", mock.Anything, mock.Anything).Return(fmt.Errorf("update error"))
+			},
+			errMsg: "update error",
+		},
+		{
+			name:   "error - update fails with pause",
+			paused: &pauseTrue,
 			setupMock: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
 				mockClient.On("ScheduleClient").Return(mockScheduleClient)
 				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
@@ -766,7 +790,7 @@ func TestUpdateTrigger(t *testing.T) {
 			mockScheduleHandle := temporalMocks.NewScheduleHandle(t)
 			client := &TemporalClient{Client: mockClient}
 			testCase.setupMock(mockClient, mockScheduleClient, mockScheduleHandle)
-			err := client.UpdateTrigger(context.Background(), workflowID, newCronSchedule)
+			err := client.UpdateTrigger(context.Background(), workflowID, newCronSchedule, testCase.paused)
 			if testCase.errMsg != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), testCase.errMsg)
