@@ -198,7 +198,7 @@ func (c *cronTrigger) Resume(ctx context.Context, triggerRun *v2pb.TriggerRun) (
 //
 // Returns the current TriggerRunStatus (preserving state) on success, or an error status if
 // the update fails.
-func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
+func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun, action v2pb.TriggerRunAction) (v2pb.TriggerRunStatus, bool, error) {
 	log := c.Log.WithValues("triggerRun", k8stypes.NamespacedName{
 		Namespace: triggerRun.Namespace,
 		Name:      triggerRun.Name,
@@ -208,7 +208,7 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun) (
 	desiredCron := triggerRun.Spec.Trigger.GetCronSchedule().GetCron()
 	if desiredCron == "" {
 		log.Info("no cron schedule in spec, skipping update")
-		return triggerRun.Status, nil
+		return triggerRun.Status, false, nil
 	}
 
 	// Get actual cron schedule from status
@@ -217,17 +217,29 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun) (
 		actualCron = triggerRun.Status.ActualTrigger.GetCronSchedule().GetCron()
 	}
 
+	// Determine if we need to set paused state atomically with the cron update
+	var paused *bool
+	actionHandled := false
+	if action == v2pb.TRIGGER_RUN_ACTION_PAUSE {
+		p := true
+		paused = &p
+	} else if action == v2pb.TRIGGER_RUN_ACTION_RESUME {
+		p := false
+		paused = &p
+	}
+
 	// Compare and update if different
 	if actualCron != desiredCron {
 		log.Info("cron schedule drift detected, updating workflow engine schedule",
 			"desiredCron", desiredCron,
-			"actualCron", actualCron)
+			"actualCron", actualCron,
+			"atomicPaused", paused)
 
 		// Get workflow ID
 		wid := generateWorkflowID(triggerRun)
 
-		// Try to update the schedule in workflow engine
-		err := c.WorkflowClient.UpdateTrigger(ctx, wid, desiredCron)
+		// Try to update the schedule in workflow engine (with optional pause state)
+		err := c.WorkflowClient.UpdateTrigger(ctx, wid, desiredCron, paused)
 		if err != nil {
 			// If schedule doesn't exist (e.g., manually deleted), recreate it
 			if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "NotFound") {
@@ -252,7 +264,7 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun) (
 					return v2pb.TriggerRunStatus{
 							ErrorMessage: createErr.Error(),
 							State:        triggerRun.Status.State,
-						}, fmt.Errorf("recreate schedule for %s/%s: %w",
+						}, false, fmt.Errorf("recreate schedule for %s/%s: %w",
 							triggerRun.Namespace, triggerRun.Name, createErr)
 				}
 
@@ -268,7 +280,7 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun) (
 						CronSchedule: &v2pb.CronSchedule{Cron: desiredCron},
 					},
 				}
-				return newStatus, nil
+				return newStatus, false, nil
 			}
 
 			// Other errors - return as failure
@@ -278,13 +290,14 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun) (
 			return v2pb.TriggerRunStatus{
 					ErrorMessage: err.Error(),
 					State:        triggerRun.Status.State,
-				}, fmt.Errorf("update trigger schedule for %s/%s: %w",
+				}, false, fmt.Errorf("update trigger schedule for %s/%s: %w",
 					triggerRun.Namespace, triggerRun.Name, err)
 		}
 
 		log.Info("successfully updated trigger schedule",
 			"workflowId", wid,
-			"newCron", desiredCron)
+			"newCron", desiredCron,
+			"atomicPaused", paused)
 
 		// Update status with the new actual trigger
 		newStatus := triggerRun.Status
@@ -293,9 +306,21 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun) (
 				CronSchedule: &v2pb.CronSchedule{Cron: desiredCron},
 			},
 		}
-		return newStatus, nil
+
+		// If pause/resume was applied atomically, update state accordingly
+		if paused != nil {
+			actionHandled = true
+			if *paused {
+				newStatus.State = v2pb.TRIGGER_RUN_STATE_PAUSED
+			} else {
+				newStatus.State = v2pb.TRIGGER_RUN_STATE_RUNNING
+			}
+			newStatus.ErrorMessage = ""
+		}
+
+		return newStatus, actionHandled, nil
 	}
 
 	// No drift, return current status unchanged
-	return triggerRun.Status, nil
+	return triggerRun.Status, false, nil
 }

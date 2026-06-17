@@ -405,9 +405,9 @@ func (c *TemporalClient) DeleteTrigger(ctx context.Context, workflowID string, r
 	return c.Client.TerminateWorkflow(ctx, workflowID, runID, "trigger killed")
 }
 
-// UpdateTrigger updates the cron schedule for a recurring trigger.
-// Returns an error if the schedule doesn't exist.
-func (c *TemporalClient) UpdateTrigger(ctx context.Context, workflowID string, newCronSchedule string) error {
+// UpdateTrigger updates the cron schedule and optionally the paused state of a recurring trigger
+// in a single atomic Temporal schedule.Update() call.
+func (c *TemporalClient) UpdateTrigger(ctx context.Context, workflowID string, newCronSchedule string, paused *bool) error {
 	scheduleID := scheduleIDForWorkflow(workflowID)
 	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
 
@@ -420,6 +420,16 @@ func (c *TemporalClient) UpdateTrigger(ctx context.Context, workflowID string, n
 			// don't merge with stale Calendars, which would cause both old and new
 			// schedules to fire.
 			input.Description.Schedule.Spec.Calendars = nil
+
+			if paused != nil {
+				input.Description.Schedule.State.Paused = *paused
+				if *paused {
+					input.Description.Schedule.State.Note = "paused by michelangelo"
+				} else {
+					input.Description.Schedule.State.Note = "unpaused by michelangelo"
+				}
+			}
+
 			return &temporalClient.ScheduleUpdate{
 				Schedule: &input.Description.Schedule,
 			}, nil

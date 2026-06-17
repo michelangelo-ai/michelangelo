@@ -302,6 +302,6 @@ func (c *CadenceClient) DeleteTrigger(ctx context.Context, workflowID string, ru
 // UpdateTrigger is a no-op for Cadence (schedule updates are a Temporal feature).
 // In Cadence, cron schedules are embedded in the workflow and cannot be updated in place.
 // Returns nil to indicate success - the operation is silently skipped.
-func (c *CadenceClient) UpdateTrigger(_ context.Context, _ string, _ string) error {
+func (c *CadenceClient) UpdateTrigger(_ context.Context, _ string, _ string, _ *bool) error {
 	return nil
 }

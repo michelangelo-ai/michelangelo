@@ -484,7 +484,7 @@ func TestBackfillTrigger_Update(t *testing.T) {
 	// No workflow client calls expected - backfill update is a no-op
 
 	backfillTrigger := NewBackfillTrigger(logger, mockClient)
-	status, err := backfillTrigger.Update(context.Background(), triggerRun)
+	status, _, err := backfillTrigger.Update(context.Background(), triggerRun, v2pb.TRIGGER_RUN_ACTION_NO_ACTION)
 
 	assert.NoError(t, err)
 	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_RUNNING, status.State)
