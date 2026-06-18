@@ -11,6 +11,23 @@ The status reconstruction feature was added to handle disaster recovery scenario
 - `status.WorkflowRunId`  
 - `status.State` (mapped from workflow execution status)
 
+## Known Limitations
+
+### MySQL UID vs Workflow ID Mismatch
+
+**Issue**: If a PipelineRun is deleted and recreated with the same name in a new Kubernetes cluster:
+- The new PipelineRun will have a **different K8s UID** (UIDs are unique per cluster/object)
+- But the **workflow ID remains the same** (workflow ID = PipelineRun name)
+- MySQL uses K8s UID as the primary key
+- Workflow engine uses PipelineRun name as workflow ID
+
+**Result**: Status reconstruction will work (finds workflow by name), but MySQL will have orphaned records from the old UID.
+
+**Workaround**: 
+- Avoid recreating PipelineRuns with the same name across clusters
+- If migration is necessary, use a different name or ensure workflows are terminated first
+- Future enhancement: Add finalizers to prevent deletion while workflow is running
+
 ## Test Scenarios
 
 ### Scenario 1: Status Reconstruction After etcd Data Loss
@@ -72,6 +89,32 @@ kubectl get pipelinerun <name> -n <namespace> -o jsonpath='{.status.state}'
 - Controller reconstructs status showing the NEW run ID (after reset)
 - Retry detection works correctly (new run ID ≠ retry target run ID)
 - Prevents duplicate retry
+
+### Scenario 5: Recreated PipelineRun with Same Name (Edge Case)
+
+**Setup:**
+1. Create a PipelineRun that starts a workflow
+2. Note the K8s UID and workflow ID
+3. Delete the PipelineRun (workflow still running in Cadence)
+4. Recreate a PipelineRun with the **same name**
+5. Observe the new UID (different from step 2)
+6. Trigger reconciliation
+
+**Expected Result:**
+- Controller reconstructs status (workflow found by name)
+- Status fields are populated correctly
+- Controller logs include warning about potential MySQL UID mismatch
+- **MySQL caveat**: Old UID record remains orphaned; new UID record created
+
+**Verification:**
+```bash
+# Check for orphaned MySQL records (if metadata storage enabled)
+kubectl exec -n michelangelo-system mysql-pod -- mysql -e \
+  "SELECT uid, name, namespace FROM pipeline_runs WHERE name='<name>'"
+# Should show TWO records with different UIDs if recreated
+```
+
+**Recommendation**: Avoid this scenario in production by using unique PipelineRun names or ensuring workflows are terminated before deletion.
 
 ## Test Implementation
 

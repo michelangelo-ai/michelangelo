@@ -148,7 +148,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	// Reconstruct status from workflow engine if missing (disaster recovery).
 	// This handles cases where status is lost due to etcd corruption, TTL eviction,
+	// Reconstruct status from workflow engine if missing (disaster recovery).
+	// This handles cases where status is lost due to etcd corruption, TTL eviction,
 	// or controller restarts during critical updates.
+	//
+	// IMPORTANT: If a PipelineRun is deleted and recreated with the same name, the new
+	// PipelineRun will have a different K8s UID but the same workflow ID. This can cause
+	// MySQL primary key mismatches (MySQL uses UID as PK, workflow uses name as ID).
+	// Status reconstruction will work, but the MySQL metadata storage will have orphaned
+	// records from the old UID. Avoid recreating PipelineRuns with the same name.
 	if r.workflowClient != nil && (pipelineRun.Status.WorkflowId == "" || pipelineRun.Status.WorkflowRunId == "") {
 		workflowID := pipelineRun.Name
 		if exec, err := r.workflowClient.GetWorkflowExecutionInfo(ctx, workflowID, ""); err == nil && exec.Execution != nil {
@@ -159,7 +167,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			logger.Info("reconstructed status from workflow engine",
 				zap.String("workflow_id", workflowID),
 				zap.String("workflow_run_id", exec.Execution.RunID),
-				zap.String("state", pipelineRun.Status.State.String()))
+				zap.String("state", pipelineRun.Status.State.String()),
+				zap.String("uid", string(pipelineRun.UID)))
 		}
 		// Continue on error - might be a new pipeline run or workflow engine temporarily unavailable
 	}
