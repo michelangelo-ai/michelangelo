@@ -468,14 +468,8 @@ def discover_all_plugins() -> dict[str, list[object]]:
             _LOG.debug("Found entity plugin: %s (from %s)", entity_name, package_name)
             plugin_module = read_module_from_package(entity_name, package_name)
             if plugin_module is None:
-                # Entity package was discoverable but main.py failed to import.
-                # Surface at WARNING so users see it at default log level —
-                # the helper only logs DEBUG for ModuleNotFoundError, which
-                # would otherwise be a silent failure.
                 _LOG.warning(
-                    "Skipped entity '%s' from package %r "
-                    "(entity package present but main.py failed to load — "
-                    "see prior log for details)",
+                    "Skipped entity '%s' from package %r — main.py failed to load",
                     entity_name,
                     package_name,
                 )
