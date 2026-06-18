@@ -25,10 +25,11 @@ Read the template from `.github/pull_request_template.md` and use it as the exac
 
 ## PR Title
 
-- Use conventional commit format: `<type>: <short description>`
-- Types: `feat`, `fix`, `docs`, `refactor`, `chore`, `test`, `perf`
+- Use conventional commit format: `<type>(<scope>): <short description>`
+- Types: `feat`, `fix`, `docs`, `ci`, `refactor`, `chore`, `test`, `perf`
+- Scopes (optional): `python`, `helm`, `ci`, `npm`, `ui`, `go`
 - Keep under 70 characters
-- Example: `docs: add PR template skill`
+- Examples: `docs(contributing): add PR template skill`, `ci(release): add PyPI publishing step`
 
 ## Filling in the Template
 
