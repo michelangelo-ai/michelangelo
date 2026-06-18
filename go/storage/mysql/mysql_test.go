@@ -417,11 +417,11 @@ func TestExtractMatchValue_EmptyStringWrapperFallsThrough(t *testing.T) {
 
 func TestFullUpsert_StablePrimaryKey(t *testing.T) {
 	tests := []struct {
-		name                  string
-		uid                   string
-		annotations           map[string]string
-		expectedPrimaryKey    string
-		description           string
+		name               string
+		uid                string
+		annotations        map[string]string
+		expectedPrimaryKey string
+		description        string
 	}{
 		{
 			name:               "uses UID when no annotation",
@@ -449,8 +449,8 @@ func TestFullUpsert_StablePrimaryKey(t *testing.T) {
 			uid:  "uid-xyz-456",
 			annotations: map[string]string{
 				"michelangelo/MetadataStoragePrimaryKey": "stable-pk-999",
-				"michelangelo/Immutable":                  "true",
-				"other-annotation":                        "some-value",
+				"michelangelo/Immutable":                 "true",
+				"other-annotation":                       "some-value",
 			},
 			expectedPrimaryKey: "stable-pk-999",
 			description:        "Stable PK works alongside other annotations",
@@ -462,12 +462,12 @@ func TestFullUpsert_StablePrimaryKey(t *testing.T) {
 			// Create a mock object with UID and annotations
 			obj := &v2pb.PipelineRun{
 				ObjectMeta: metav1.ObjectMeta{
-					UID:                types.UID(tt.uid),
-					Name:               "test-pipeline",
-					Namespace:          "default",
-					ResourceVersion:    "1",
-					CreationTimestamp:  metav1.Now(),
-					Annotations:        tt.annotations,
+					UID:               types.UID(tt.uid),
+					Name:              "test-pipeline",
+					Namespace:         "default",
+					ResourceVersion:   "1",
+					CreationTimestamp: metav1.Now(),
+					Annotations:       tt.annotations,
 				},
 				Spec: v2pb.PipelineRunSpec{},
 			}
