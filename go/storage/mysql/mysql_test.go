@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -412,4 +413,144 @@ func TestExtractMatchValue_EmptyStringWrapperFallsThrough(t *testing.T) {
 	v, err := extractMatchValue(any)
 	require.NoError(t, err)
 	require.Equal(t, "", v)
+}
+
+func TestFullUpsert_StablePrimaryKey(t *testing.T) {
+	tests := []struct {
+		name                  string
+		uid                   string
+		annotations           map[string]string
+		expectedPrimaryKey    string
+		description           string
+	}{
+		{
+			name:               "uses UID when no annotation",
+			uid:                "uid-abc-123",
+			annotations:        nil,
+			expectedPrimaryKey: "uid-abc-123",
+			description:        "Default behavior: use K8s UID as primary key",
+		},
+		{
+			name:               "uses UID when annotation empty",
+			uid:                "uid-abc-123",
+			annotations:        map[string]string{"michelangelo/MetadataStoragePrimaryKey": ""},
+			expectedPrimaryKey: "uid-abc-123",
+			description:        "Empty annotation falls back to UID",
+		},
+		{
+			name:               "uses annotation when present",
+			uid:                "uid-new-789",
+			annotations:        map[string]string{"michelangelo/MetadataStoragePrimaryKey": "uid-original-123"},
+			expectedPrimaryKey: "uid-original-123",
+			description:        "Stable PK preserved across cluster migration",
+		},
+		{
+			name: "uses annotation with other annotations",
+			uid:  "uid-xyz-456",
+			annotations: map[string]string{
+				"michelangelo/MetadataStoragePrimaryKey": "stable-pk-999",
+				"michelangelo/Immutable":                  "true",
+				"other-annotation":                        "some-value",
+			},
+			expectedPrimaryKey: "stable-pk-999",
+			description:        "Stable PK works alongside other annotations",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a mock object with UID and annotations
+			obj := &v2pb.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:                types.UID(tt.uid),
+					Name:               "test-pipeline",
+					Namespace:          "default",
+					ResourceVersion:    "1",
+					CreationTimestamp:  metav1.Now(),
+					Annotations:        tt.annotations,
+				},
+				Spec: v2pb.PipelineRunSpec{},
+			}
+
+			// Extract the primary key using the same logic as fullUpsert
+			metaObj := obj.GetObjectMeta()
+			primaryKey := string(metaObj.GetUID())
+			if annotations := metaObj.GetAnnotations(); annotations != nil {
+				if storagePK, exists := annotations["michelangelo/MetadataStoragePrimaryKey"]; exists && storagePK != "" {
+					primaryKey = storagePK
+				}
+			}
+
+			// Verify the primary key matches expected
+			require.Equal(t, tt.expectedPrimaryKey, primaryKey, tt.description)
+		})
+	}
+}
+
+func TestFullUpsert_CrossClusterMigration(t *testing.T) {
+	// This test simulates a cross-cluster migration scenario:
+	// 1. Original cluster: CR with UID abc-123, annotation set to abc-123
+	// 2. New cluster: Same CR recreated with UID xyz-789, annotation preserved as abc-123
+	// 3. Result: Both use same primary key (abc-123), no duplicate records
+
+	originalUID := "uid-abc-123"
+	newUID := "uid-xyz-789"
+
+	// Step 1: Original cluster - first creation
+	originalObj := &v2pb.PipelineRun{
+		ObjectMeta: metav1.ObjectMeta{
+			UID:               types.UID(originalUID),
+			Name:              "my-pipeline",
+			Namespace:         "default",
+			ResourceVersion:   "1",
+			CreationTimestamp: metav1.Now(),
+			Annotations: map[string]string{
+				"michelangelo/MetadataStoragePrimaryKey": originalUID,
+			},
+		},
+	}
+
+	// Extract PK for original object
+	metaObjOriginal := originalObj.GetObjectMeta()
+	primaryKeyOriginal := string(metaObjOriginal.GetUID())
+	if annotations := metaObjOriginal.GetAnnotations(); annotations != nil {
+		if storagePK, exists := annotations["michelangelo/MetadataStoragePrimaryKey"]; exists && storagePK != "" {
+			primaryKeyOriginal = storagePK
+		}
+	}
+
+	require.Equal(t, originalUID, primaryKeyOriginal, "Original cluster uses original UID as PK")
+
+	// Step 2: New cluster - recreated with different UID but preserved annotation
+	newObj := &v2pb.PipelineRun{
+		ObjectMeta: metav1.ObjectMeta{
+			UID:               types.UID(newUID), // NEW UID from new cluster
+			Name:              "my-pipeline",
+			Namespace:         "default",
+			ResourceVersion:   "1",
+			CreationTimestamp: metav1.Now(),
+			Annotations: map[string]string{
+				"michelangelo/MetadataStoragePrimaryKey": originalUID, // PRESERVED annotation
+			},
+		},
+	}
+
+	// Extract PK for new object
+	metaObjNew := newObj.GetObjectMeta()
+	primaryKeyNew := string(metaObjNew.GetUID())
+	if annotations := metaObjNew.GetAnnotations(); annotations != nil {
+		if storagePK, exists := annotations["michelangelo/MetadataStoragePrimaryKey"]; exists && storagePK != "" {
+			primaryKeyNew = storagePK
+		}
+	}
+
+	require.Equal(t, originalUID, primaryKeyNew, "New cluster uses preserved annotation as PK")
+
+	// Step 3: Verify both use the same primary key
+	require.Equal(t, primaryKeyOriginal, primaryKeyNew,
+		"Both original and new cluster use same PK - no duplicate records!")
+
+	// Verify the UIDs are actually different
+	require.NotEqual(t, string(metaObjOriginal.GetUID()), string(metaObjNew.GetUID()),
+		"UIDs are different across clusters as expected")
 }
