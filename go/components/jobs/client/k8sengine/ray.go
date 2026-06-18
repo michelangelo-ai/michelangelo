@@ -60,7 +60,8 @@ func (m Mapper) mapRay(rayJob *v2pb.RayJob, jobClusterObject runtime.Object, clu
 				"ray.io/cluster":      rayCluster.Name,
 				"rayClusterNamespace": RayLocalNamespace,
 			},
-			Entrypoint: rayJob.Spec.Entrypoint,
+			Entrypoint:              rayJob.Spec.Entrypoint,
+			TTLSecondsAfterFinished: k8sptr.To(int32(300)),
 			// kuberay 1.0 only support SubmitterPodTemplate for configuration submitter pod
 			// We need to allow user to configure the submitter pod template via ray task configuration
 			// Note: Add support for v1.2.2 kuberay once we upgrade to newer version

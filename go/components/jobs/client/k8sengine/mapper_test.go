@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	k8sptr "k8s.io/utils/ptr"
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -72,7 +73,8 @@ func TestMapper_MapGlobalJobToLocal(t *testing.T) {
 						"ray.io/cluster":      rayCluster.Name,
 						"rayClusterNamespace": RayLocalNamespace,
 					},
-					SubmitterPodTemplate: submitterPod,
+					TTLSecondsAfterFinished: k8sptr.To(int32(300)),
+					SubmitterPodTemplate:    submitterPod,
 				},
 			},
 		},
