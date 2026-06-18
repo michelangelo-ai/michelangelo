@@ -467,13 +467,25 @@ def discover_all_plugins() -> dict[str, list[object]]:
         for entity_name in _iter_entity_names_in_package(package_name):
             _LOG.debug("Found entity plugin: %s (from %s)", entity_name, package_name)
             plugin_module = read_module_from_package(entity_name, package_name)
-            if plugin_module is not None:
-                registry.setdefault(entity_name, []).append(plugin_module)
-                _LOG.info(
-                    "Registered plugin for entity '%s' from package %r",
+            if plugin_module is None:
+                # Entity package was discoverable but main.py failed to import.
+                # Surface at WARNING so users see it at default log level —
+                # the helper only logs DEBUG for ModuleNotFoundError, which
+                # would otherwise be a silent failure.
+                _LOG.warning(
+                    "Skipped entity '%s' from package %r "
+                    "(entity package present but main.py failed to load — "
+                    "see prior log for details)",
                     entity_name,
                     package_name,
                 )
+                continue
+            registry.setdefault(entity_name, []).append(plugin_module)
+            _LOG.info(
+                "Registered plugin for entity '%s' from package %r",
+                entity_name,
+                package_name,
+            )
 
     _LOG.info(
         "Plugin discovery complete. Found plugins for %d entities: %s",
