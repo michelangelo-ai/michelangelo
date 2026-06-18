@@ -1104,11 +1104,20 @@ func (m *mysqlMetadataStorage) fullUpsert(ctx context.Context, tx *sql.Tx, table
 		indexedFieldsMap[field.Key] = field.Value
 	}
 
+	// Determine primary key: use MetadataStoragePrimaryKeyAnnotation if set, else UID
+	// This enables stable identity across cluster migrations
+	primaryKey := string(metaObj.GetUID())
+	if annotations := metaObj.GetAnnotations(); annotations != nil {
+		if storagePK, exists := annotations["michelangelo/MetadataStoragePrimaryKey"]; exists && storagePK != "" {
+			primaryKey = storagePK
+		}
+	}
+
 	// Build dynamic SQL based on indexed fields
 	columns := []string{"uid", "group_ver", "namespace", "name", "res_version", "create_time", "update_time", "proto", "json"}
 	placeholders := []string{"?", "?", "?", "?", "?", "?", "?", "?", "?"}
 	values := []interface{}{
-		string(metaObj.GetUID()),
+		primaryKey, // Use annotation-based PK if available
 		groupVer,
 		metaObj.GetNamespace(),
 		metaObj.GetName(),

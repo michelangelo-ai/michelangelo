@@ -34,6 +34,13 @@ const (
 	// object can be changed in MySQL later on.
 	ImmutableAnnotation = "michelangelo/Immutable"
 
+	// MetadataStoragePrimaryKeyAnnotation stores a stable identifier to use as the primary
+	// key in metadata storage (MySQL, Postgres, etc). When set, ingester and metadata
+	// storage use this value instead of K8s UID. This enables disaster recovery across
+	// clusters where UIDs change but logical identity (namespace + name) remains the same.
+	// The value is typically the original UID from the first cluster, preserved during migration.
+	MetadataStoragePrimaryKeyAnnotation = "michelangelo/MetadataStoragePrimaryKey"
+
 	/////////////////////////// K8s Labels ///////////////////////////
 
 	// SpecUpdateTimestampLabel is used to record the last time the spec of the object is updated.
