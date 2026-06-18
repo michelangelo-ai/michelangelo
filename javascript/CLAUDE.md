@@ -35,7 +35,6 @@ yarn test
 
 - Start with `useStyletron`; extract to `styled()` at 4+ CSS properties or when used in 2+ places
 - Styled component names are semantic — never `Container`, `Card`, `Wrapper`
-- Handler names express intent: `toggleMenu` not `handleOnClick`
 
 ### Testing
 

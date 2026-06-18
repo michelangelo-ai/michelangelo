@@ -49,6 +49,10 @@ tester.run('no-event-handler-prefix', rule, {
       name: 'deleteItem names the trigger, not the effect',
       code: `const C = () => <Button onClick={deleteItem} />;`,
     },
+    {
+      name: 'handle + descriptive suffix — handleCommitSelection is valid for onChange',
+      code: `const C = () => <Select onChange={handleCommitSelection} />;`,
+    },
   ],
 
   invalid: [

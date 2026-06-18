@@ -2,7 +2,7 @@
 
 ## What this rule enforces
 
-Event handler names passed as JSX props must describe _what they do_, not just the event type. A name that mirrors the prop adds no information for the reader.
+Event handler names passed as JSX props must add context beyond the event type. A name that merely mirrors the prop tells the reader nothing about what is being handled.
 
 ## Flagged patterns
 
@@ -10,41 +10,32 @@ Event handler names passed as JSX props must describe _what they do_, not just t
 // ❌ mirrors the prop name exactly
 <Button onClick={onClick} />
 
-// ❌ "handle" + event name — still no context
+// ❌ "handle" + bare event name — no context added
 <RadioGroup onChange={handleChange} />
 <Select onChange={handleChange} />
 
-// ❌ "handle" + full prop name
+// ❌ "handle" + full prop name — still no context
 <Form onClick={handleOnClick} />
 ```
 
 ## Correct patterns
 
 ```tsx
-// ✓ names the effect, not the trigger
+// ✓ descriptive name without prefix
 <RadioGroup onChange={persistSelection} />
 <Select onChange={commitSelection} />
-<Checkbox onChange={applyToggle} />
 <Form onSubmit={submitAndClose} />
+
+// ✓ "handle" prefix with a descriptive suffix
+<RadioGroup onChange={handleRowChange} />
+<Select onChange={handleCommitSelection} />
+<Form onSubmit={handleSubmitAndClose} />
 
 // ✓ member expression pass-through — explicitly forwarded
 <Child onClick={props.onClick} />
 ```
 
-## Naming guidance
-
-Name the **effect**, not the trigger. Drop the `handle` prefix when the function describes a domain action.
-
-| Context                                 | Instead of     | Use                |
-| --------------------------------------- | -------------- | ------------------ |
-| Radio coerces DOM string to typed value | `handleChange` | `persistSelection` |
-| Select maps option objects to typed IDs | `handleChange` | `commitSelection`  |
-| Checkbox stops propagation + toggles    | `handleChange` | `applyToggle`      |
-| Form submit that also closes the dialog | `handleSubmit` | `submitAndClose`   |
-| Confirm dialog executes mutation/route  | `onConfirm`    | `executeAction`    |
-| Row delete on click                     | `handleClick`  | `deleteRow`        |
-
-The name should answer "what does this function do to the application state?" — not "what event is it responding to?"
+The rule flags names that add no information. Whether you use a `handle` prefix is a matter of team preference — what matters is that the name describes what is handled.
 
 ## Prop forwarding
 

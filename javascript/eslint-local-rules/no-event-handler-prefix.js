@@ -3,7 +3,7 @@
  *
  * onClick={onClick}, onChange={handleChange}, onClick={handleOnClick} all tell
  * the reader nothing about *what* is being handled. Descriptive names like
- * onChange={handleRowChange} make the intent clear at the call site.
+ * onChange={handleRowChange} or onChange={commitSelection} make the intent clear.
  */
 
 const capitalize = (str) => str.charAt(0).toUpperCase() + str.slice(1);
