@@ -25,6 +25,7 @@ There are other easy ways to help support the project and show your appreciation
 - [Reporting Bugs](#reporting-bugs)
   - [Before Submitting a Bug Report](#before-submitting-a-bug-report)
   - [How Do I Submit a Good Bug Report?](#how-do-i-submit-a-good-bug-report)
+- [Commit Messages](#commit-messages)
 - [Creating a Pull Request](#creating-a-pull-request)
   - [Before Creating a Pull Request](#before-creating-a-pull-request)
   - [How Do I Submit a Good Pull Request?](#how-do-i-submit-a-good-pull-request)
@@ -122,6 +123,98 @@ We use GitHub issues to track bugs. If you run into an issue with the project:
 * The project team will label the issue accordingly.
 * A project maintainer will try to reproduce the issue with your provided steps. If there are no reproduction steps, or no obvious way to reproduce the issue, we’ll request these details but the bug won’t be addressed until they are provided.
 * If the team is able to reproduce the issue, it will be tagged and the issue will be queued to be implemented.
+
+<a id="commit-messages"></a>
+## Commit Messages
+
+This project uses the [Conventional Commits](https://www.conventionalcommits.org/) specification. All commits to the repository must follow this format. Commit messages feed the automated changelog generation (via git-cliff) and drive semantic version bumps in the release pipeline.
+
+### Format
+
+```
+type(scope): short description
+
+Optional longer body explaining the motivation or detail.
+
+BREAKING CHANGE: description of the breaking change (if applicable)
+```
+
+- **type** — required; describes the kind of change (see table below)
+- **scope** — optional; identifies the component affected (see table below)
+- **short description** — required; imperative mood, no capital first letter, no trailing period, ≤72 chars total for the subject line
+- **body** — optional; separated from the subject by a blank line
+- **BREAKING CHANGE footer** — required when the change breaks backwards compatibility
+
+### Allowed types
+
+| Type | When to use |
+|---|---|
+| `feat` | A new feature visible to users or downstream consumers |
+| `fix` | A bug fix |
+| `docs` | Documentation changes only |
+| `ci` | CI/CD pipeline or workflow changes |
+| `chore` | Build process or tooling changes with no production code change |
+| `refactor` | Code change that neither fixes a bug nor adds a feature |
+| `test` | Adding or updating tests |
+| `perf` | Performance improvement |
+
+### Allowed scopes
+
+| Scope | Component |
+|---|---|
+| `python` | Python SDK / PyPI package |
+| `helm` | Helm chart |
+| `ci` | CI workflows and scripts |
+| `npm` | npm / JavaScript package |
+| `ui` | UI container |
+| `go` | Go services / containers |
+
+Scope may be omitted when a change is truly cross-cutting and does not belong to a single component.
+
+### Examples
+
+Simple feature:
+```
+feat(python): add async client support
+```
+
+Bug fix with scope:
+```
+fix(helm): correct default resource limits
+```
+
+Cross-cutting docs change (no scope):
+```
+docs: update quickstart guide
+```
+
+CI change:
+```
+ci(go): pin golangci-lint to v1.57.2
+```
+
+Tooling update (no scope):
+```
+chore: bump dev dependencies
+```
+
+Feature with a breaking change:
+```
+feat(python): remove deprecated v1 API
+
+The v1 client module has been removed to reduce maintenance burden.
+Migrate all callers to the v2 client before upgrading.
+
+BREAKING CHANGE: The `michelangelo.v1` module is no longer available.
+Replace all imports of `michelangelo.v1` with `michelangelo.v2`.
+```
+
+### BREAKING CHANGE convention
+
+Add a `BREAKING CHANGE:` line in the commit footer (after a blank line separating it from the body) to signal a backwards-incompatible change. The release tooling will:
+
+1. Include the commit in the **BREAKING CHANGES** section of the generated changelog.
+2. Trigger a **major** version bump when the change ships in a release.
 
 <a id="creating-a-pull-request"></a>
 ## Creating a Pull Request
