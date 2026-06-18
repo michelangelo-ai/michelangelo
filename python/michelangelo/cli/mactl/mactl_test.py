@@ -1143,9 +1143,7 @@ class IterEntityNamesInPackageTest(TestCase):
             _write_pkg_plugin(Path(tmpdir), "ien_pkg", "alpha", "")
             _write_pkg_plugin(Path(tmpdir), "ien_pkg", "beta", "")
             # Also drop a non-package file that should be ignored.
-            non_pkg_file = (
-                Path(tmpdir) / "ien_pkg" / "entity" / "stray_file.py"
-            )
+            non_pkg_file = Path(tmpdir) / "ien_pkg" / "entity" / "stray_file.py"
             non_pkg_file.write_text("# not a subpackage")
             sys.path.insert(0, tmpdir)
             try:
@@ -1178,6 +1176,47 @@ class IterEntityNamesInPackageTest(TestCase):
 
         self.assertEqual(names, [])
 
+    def test_returns_empty_when_entity_import_raises_unexpected_error(self):
+        """Resilience: entity subpackage whose code raises is skipped, not raised."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pkg_dir = Path(tmpdir) / "ien_boom_pkg"
+            pkg_dir.mkdir()
+            (pkg_dir / "__init__.py").write_text("")
+            entity_pkg = pkg_dir / "entity"
+            entity_pkg.mkdir()
+            entity_pkg.joinpath("__init__.py").write_text(
+                "raise RuntimeError('entity boom')"
+            )
+            sys.path.insert(0, tmpdir)
+            try:
+                names = _iter_entity_names_in_package("ien_boom_pkg")
+            finally:
+                sys.path.remove(tmpdir)
+                for k in list(sys.modules):
+                    if k.startswith("ien_boom_pkg"):
+                        del sys.modules[k]
+
+        self.assertEqual(names, [])
+
+    def test_returns_empty_when_entity_has_no_path_attr(self):
+        """Edge: `{pkg}.entity` resolves to a single-file module (no `__path__`)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pkg_dir = Path(tmpdir) / "ien_nopath_pkg"
+            pkg_dir.mkdir()
+            (pkg_dir / "__init__.py").write_text("")
+            # `entity` is a single .py module, not a subpackage — no iter
+            (pkg_dir / "entity.py").write_text("# not a package")
+            sys.path.insert(0, tmpdir)
+            try:
+                names = _iter_entity_names_in_package("ien_nopath_pkg")
+            finally:
+                sys.path.remove(tmpdir)
+                for k in list(sys.modules):
+                    if k.startswith("ien_nopath_pkg"):
+                        del sys.modules[k]
+
+        self.assertEqual(names, [])
+
 
 class DiscoverAllPluginsFromPackagesTest(TestCase):
     """Tests covering the [plugin.packages] discovery path of discover_all_plugins."""
@@ -1185,9 +1224,7 @@ class DiscoverAllPluginsFromPackagesTest(TestCase):
     def test_discovers_plugins_from_configured_packages(self):
         """Core: configured packages are scanned and their entity plugins registered."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            _write_pkg_plugin(
-                Path(tmpdir), "daps_one_pkg", "pipeline", "loaded = True"
-            )
+            _write_pkg_plugin(Path(tmpdir), "daps_one_pkg", "pipeline", "loaded = True")
             sys.path.insert(0, tmpdir)
             try:
                 with (
@@ -1247,10 +1284,11 @@ class DiscoverAllPluginsFromPackagesTest(TestCase):
 
     def test_returns_empty_when_packages_key_missing(self):
         """Edge: no `packages` key behaves identically to packages = []."""
-        with patch(
-            "michelangelo.cli.mactl.mactl._CONFIG", {"plugin": {"dirs": []}}
-        ), patch(
-            "michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS", Path("/nonexistent")
+        with (
+            patch("michelangelo.cli.mactl.mactl._CONFIG", {"plugin": {"dirs": []}}),
+            patch(
+                "michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS", Path("/nonexistent")
+            ),
         ):
             registry = discover_all_plugins()
 

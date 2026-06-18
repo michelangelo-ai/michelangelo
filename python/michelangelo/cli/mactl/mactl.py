@@ -129,9 +129,7 @@ def read_module_from_file(
     return plugin_module
 
 
-def read_module_from_package(
-    crd_name: str, package_name: str
-) -> Union[object, None]:
+def read_module_from_package(crd_name: str, package_name: str) -> Union[object, None]:
     """Read and load a plugin module via the import system, not by file path.
 
     Looks for ``{package_name}.entity.{crd_name}.main`` and returns it on
