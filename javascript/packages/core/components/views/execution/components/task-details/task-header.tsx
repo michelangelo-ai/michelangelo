@@ -29,7 +29,10 @@ export function TaskHeader<TTaskRecord extends object>(props: TaskHeaderProps<TT
           {name}
         </div>
       </div>
-      {metadata && <Row items={metadata} record={task.record as Record<string, unknown>} />}
+      {metadata && (
+        // cast: task.record is typed as unknown from the execution schema; always a plain record at runtime
+        <Row items={metadata} record={task.record as Record<string, unknown>} />
+      )}
     </TaskContentStack>
   );
 }

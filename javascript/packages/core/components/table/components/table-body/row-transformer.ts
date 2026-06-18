@@ -19,7 +19,7 @@ export function transformRows<T extends TableData = TableData>(
         row,
         columnIndex,
       }),
-      column: cell.column.columnDef.meta! as ColumnConfig<T>,
+      column: cell.column.columnDef.meta! as ColumnConfig<T>, // cast: tanstack-table types meta as unknown; always ColumnConfig<T> per our column setup
       value: cell.getValue(),
       isVisible: cell.column.getIsVisible(),
     })),

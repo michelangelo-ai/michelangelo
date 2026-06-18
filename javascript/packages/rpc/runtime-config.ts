@@ -23,6 +23,7 @@ export async function getRuntimeConfig(): Promise<RuntimeConfig> {
 
   let config: RuntimeConfig;
   try {
+    // cast: response.json() returns unknown; we've fetched a valid JSON config endpoint
     config = (await response.json()) as RuntimeConfig;
   } catch (error) {
     console.error(

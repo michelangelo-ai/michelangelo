@@ -33,6 +33,7 @@ export function createColumnListChangeHandler<T extends TableData = TableData>(
       }));
     } else {
       setColumnOrder(
+        // cast: arrayMove returns string[]; ColumnOrderState is string[] aliased for semantic clarity
         arrayMove(
           columns.map((c) => c.id),
           oldIndex,

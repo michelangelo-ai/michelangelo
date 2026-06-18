@@ -96,6 +96,7 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
     );
   }
 
+  // cast: service response is typed as unknown; keyed access by service name produces the entity data object
   const entityData = data?.[entityConfig!.service] as Record<string, unknown> | undefined;
   const resolvedDetailViewConfig = resolver(detailViewConfig, { page: entityData });
   return (

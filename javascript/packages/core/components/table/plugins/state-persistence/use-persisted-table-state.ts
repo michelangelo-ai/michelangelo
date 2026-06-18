@@ -21,7 +21,7 @@ export function usePersistedTableState<StateType>(
 ): [StateType, Dispatch<SetStateAction<StateType>>] {
   const settings = getAllTableUserSettings();
   // lodash.get can return Partial<StateType> so we need to cast to StateType
-  const [state, setState] = useState<StateType>(get(settings, id, defaultValue) as StateType);
+  const [state, setState] = useState<StateType>(get(settings, id, defaultValue) as StateType); // cast: lodash.get returns any; defaultValue guarantees StateType shape when key is absent
 
   const updateAndPersistState = (updater: SetStateAction<StateType>) => {
     const newStateValue = updater instanceof Function ? updater(state) : updater;

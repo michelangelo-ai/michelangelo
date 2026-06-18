@@ -91,14 +91,14 @@ export enum CellType {
 }
 
 export const CELL_RENDERERS: Record<string, CellRenderer<unknown>> = {
-  [CellType.BOOLEAN]: BooleanCell as CellRenderer<boolean>,
-  [CellType.DATE]: DateCell as CellRenderer<string>,
+  [CellType.BOOLEAN]: BooleanCell as CellRenderer<boolean>, // cast: registry is typed CellRenderer<unknown>; each renderer expects its specific value type
+  [CellType.DATE]: DateCell as CellRenderer<string>, // cast: registry is typed CellRenderer<unknown>; DateCell expects string epoch value
   [CellType.DESCRIPTION]: DescriptionCell,
   [CellType.LINK]: LinkCell,
   [CellType.MULTI]: MultiCell,
   [CellType.REPEATED_ITEMS]: MultiCell,
-  [CellType.RETRY]: RetryCell as CellRenderer<string>,
-  [CellType.STATE]: StateCell as CellRenderer<string>,
+  [CellType.RETRY]: RetryCell as CellRenderer<string>, // cast: registry is typed CellRenderer<unknown>; RetryCell expects string value
+  [CellType.STATE]: StateCell as CellRenderer<string>, // cast: registry is typed CellRenderer<unknown>; StateCell expects string value
   [CellType.TAG]: TagCell,
   [CellType.TYPE]: TypeCell,
   [CellType.TEXT]: TextCell,

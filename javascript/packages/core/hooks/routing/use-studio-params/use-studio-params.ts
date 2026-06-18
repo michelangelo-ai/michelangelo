@@ -33,6 +33,7 @@ export function useStudioParams<T extends StudioParamsView = 'unregistered'>(
 
   return React.useMemo(() => {
     if (!params.phase) {
+      // cast: no-phase path always returns project-scoped params; mapped type can't be satisfied without cast from the concrete shape
       return {
         ...queryParams,
         revisionId: params.revisionId,
@@ -44,6 +45,6 @@ export function useStudioParams<T extends StudioParamsView = 'unregistered'>(
     }
 
     const transformer = VIEW_TYPE_TO_PARAMS[viewType];
-    return transformer(normalizeEntityParam(params), queryParams) as ViewTypeToParamType<T>;
+    return transformer(normalizeEntityParam(params), queryParams) as ViewTypeToParamType<T>; // cast: transformer is selected by viewType; return value always matches ViewTypeToParamType<T> at runtime
   }, [params, queryParams, viewType]);
 }

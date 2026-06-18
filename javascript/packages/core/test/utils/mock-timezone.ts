@@ -17,6 +17,7 @@
 export function mockTimezone(defaultTimezone = 'Europe/Amsterdam') {
   const originalDateTimeFormat = Intl.DateTimeFormat;
 
+  // cast: Intl.DateTimeFormat has overloaded constructor signatures; double-cast through unknown to assign a plain function literal
   global.Intl.DateTimeFormat = function (
     locale?: string | string[],
     options?: Intl.DateTimeFormatOptions

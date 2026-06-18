@@ -9,6 +9,7 @@ import '@testing-library/jest-dom';
  * {@link https://github.com/testing-library/user-event/issues/1115}
  */
 vi.stubGlobal('jest', {
+  // cast: vi.advanceTimersByTime.bind returns Function; narrowed to the concrete signature for the jest stub shape
   advanceTimersByTime: vi.advanceTimersByTime.bind(vi) as (ms: number) => void,
 });
 

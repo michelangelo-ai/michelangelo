@@ -23,6 +23,6 @@ export class FunctionInterpolation<
   U
 > {
   execute(params: Partial<InterpolationContext<U>>): InterpolationResult {
-    return this.interpolator(params as InterpolationContext<U>);
+    return this.interpolator(params as InterpolationContext<U>); // cast: execute receives Partial<InterpolationContext<U>> from base; interpolator functions expect a full context
   }
 }

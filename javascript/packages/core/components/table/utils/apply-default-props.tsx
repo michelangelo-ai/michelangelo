@@ -73,7 +73,7 @@ function resolveTableState(
   };
 
   if (disablePagination) {
-    return baseState as Partial<ControlledTableState>;
+    return baseState as Partial<ControlledTableState>; // cast: baseState is built from user-provided state; Partial<ControlledTableState> is the expected return shape
   }
 
   const requestedPageSize = baseState?.pagination?.pageSize;

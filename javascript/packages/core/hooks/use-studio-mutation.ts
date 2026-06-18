@@ -19,7 +19,7 @@ export const useStudioMutation = <TData, TVariables extends Record<string, unkno
     mutationFn: async (variables: TVariables) => {
       if (!config) throw new Error('useStudioMutation called without config');
       try {
-        return (await request(config.mutationName, variables)) as Promise<TData>;
+        return (await request(config.mutationName, variables)) as Promise<TData>; // cast: service request returns unknown; TData is the caller-declared response type
       } catch (error) {
         console.error('mutation error', error);
         throw normalizeError(error)!;

@@ -81,7 +81,7 @@ export function TaskBody<TTaskRecord extends object>(props: TaskBodyProps<TTaskR
               <TaskBodyMetadata
                 key={index}
                 label={label}
-                value={task.record as Record<string, unknown>}
+                value={task.record as Record<string, unknown>} // cast: task.record is typed as unknown from the execution schema; always a plain record at runtime
                 cells={cells}
               />
             );

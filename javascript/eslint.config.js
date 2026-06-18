@@ -5,6 +5,7 @@ import noBarrelExports from './eslint-local-rules/no-barrel-exports.js';
 import noHandlerMirror from './eslint-local-rules/no-handler-mirror.js';
 import requireHandlerPrefix from './eslint-local-rules/require-handler-prefix.js';
 import filenameMatchesExport from './eslint-local-rules/filename-matches-export.js';
+import requireCastComment from './eslint-local-rules/require-cast-comment.js';
 import noFixtureConstants from './eslint-local-rules/no-fixture-constants.js';
 import noModuleScopeTestSetup from './eslint-local-rules/no-module-scope-test-setup.js';
 import typesInTypesFile from './eslint-local-rules/types-in-types-file.js';
@@ -239,6 +240,7 @@ export default [
           'no-handler-mirror': noHandlerMirror,
           'require-handler-prefix': requireHandlerPrefix,
           'filename-matches-export': filenameMatchesExport,
+          'require-cast-comment': requireCastComment,
           'types-in-types-file': typesInTypesFile,
         },
       },
@@ -248,6 +250,7 @@ export default [
       'local/no-handler-mirror': 'error',
       'local/require-handler-prefix': 'error',
       'local/filename-matches-export': 'error',
+      'local/require-cast-comment': 'error',
       'local/types-in-types-file': 'error',
     },
   },

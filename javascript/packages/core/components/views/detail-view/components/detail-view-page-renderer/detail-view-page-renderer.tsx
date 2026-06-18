@@ -17,13 +17,13 @@ export function DetailViewPageRenderer<T extends object = object>({
 }: PageRendererProps<T>) {
   switch (page.type) {
     case 'custom':
-      return React.createElement((page as CustomDetailPageConfig).component, { data, isLoading });
+      return React.createElement((page as CustomDetailPageConfig).component, { data, isLoading }); // cast: type discriminant ensures page is CustomDetailPageConfig in this case branch
 
     case 'execution':
-      return <Execution schema={page as ExecutionDetailPageConfig} data={data ?? {}} />;
+      return <Execution schema={page as ExecutionDetailPageConfig} data={data ?? {}} />; // cast: type discriminant ensures page is ExecutionDetailPageConfig in this case branch
 
     case 'table': {
-      const tablePage = page as TableDetailPageConfig<T>;
+      const tablePage = page as TableDetailPageConfig<T>; // cast: type discriminant ensures page is TableDetailPageConfig in this case branch
       return (
         <DetailViewTablePage<T>
           isDetailViewLoading={isLoading}

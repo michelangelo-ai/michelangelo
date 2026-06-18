@@ -7,7 +7,7 @@ import { TableStateWrapper } from '../table-state-wrapper';
 import type { TableErrorStateProps } from './types';
 
 export function TableErrorState({ error }: TableErrorStateProps) {
-  switch (error.code as GrpcStatusCode) {
+  switch (error.code as GrpcStatusCode) { // cast: error.code is typed as number; comparing against GrpcStatusCode enum for known status cases
     case GrpcStatusCode.DEADLINE_EXCEEDED:
       return (
         <TableStateWrapper>

@@ -18,7 +18,7 @@ export function applyMiddleware<T extends object>(
   const sourceObject = options?.sourceFromObject ?? clone;
 
   for (const op of schema.operations) {
-    if (op.subTypes && !op.subTypes.includes(get(clone, schema.subTypePath!) as string)) {
+    if (op.subTypes && !op.subTypes.includes(get(clone, schema.subTypePath!) as string)) { // cast: lodash.get returns any; subTypePath points to a string discriminant field
       continue;
     }
 
@@ -34,7 +34,7 @@ export function applyMiddleware<T extends object>(
     } else if (isNil(sourceValue) && 'default' in op) {
       const defaultVal =
         typeof op.default === 'function'
-          ? (op.default as (args: { studio: StudioParamsBase }) => unknown)({ studio: context! })
+          ? (op.default as (args: { studio: StudioParamsBase }) => unknown)({ studio: context! }) // cast: op.default is typed as unknown when it's a function; callers must pass the studio context shape
           : op.default;
       set(clone, op.destination, defaultVal);
     }

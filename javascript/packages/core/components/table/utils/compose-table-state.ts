@@ -43,12 +43,13 @@ export function composeTableState(combinedState: InputTableState): {
         );
       }
 
-      state[propertyName] = combinedState[propertyName] as TableState[keyof TableState];
+      state[propertyName] = combinedState[propertyName] as TableState[keyof TableState]; // cast: dynamic property access on InputTableState; value matches TableState union at this key
+      // cast: dynamic setter access; value matches ControlledTableState setter union at this key
       state[setterName] = combinedState[
         setterName
       ] as ControlledTableState[keyof ControlledTableState];
     } else if (propertyName in combinedState) {
-      initialState[propertyName] = combinedState[propertyName] as TableState[keyof TableState];
+      initialState[propertyName] = combinedState[propertyName] as TableState[keyof TableState]; // cast: dynamic property access; value is initial (uncontrolled) state matching TableState at this key
     }
   });
 

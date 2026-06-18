@@ -41,7 +41,7 @@ export function withStickySides<P extends object>(
     const isContainerHovered = useHover(hoverContainerRef);
 
     if (!enableStickySides) {
-      return <Component {...(componentProps as P)}>{children}</Component>;
+      return <Component {...(componentProps as P)}>{children}</Component>; // cast: rest spread after destructuring known props; remaining props match Component's P
     }
 
     const backgroundColor =
@@ -50,13 +50,14 @@ export function withStickySides<P extends object>(
         : theme.colors.tableHeadBackgroundColor;
 
     const sharedStickyStyles = {
-      position: 'sticky !important' as 'sticky',
+      position: 'sticky !important' as 'sticky', // cast: CSS-in-JS requires the literal 'sticky'; the !important suffix makes the string not assignable without cast
       backgroundColor: `${backgroundColor} !important`,
     };
 
     const stickyConfigs = getTableStickyConfigs(enableRowSelection, lastColumnIndex);
 
     return (
+      // cast: rest spread after destructuring WithStickySidesProps; remaining props match Component's generic P
       <Component {...(componentProps as P)} ref={hoverContainerRef}>
         {React.Children.map(children, (child, index) => {
           const config = stickyConfigs[index];
@@ -67,6 +68,7 @@ export function withStickySides<P extends object>(
             [config.stickySide]: `${config.position}px !important`,
           };
 
+          // cast: React.Children.map yields ReactNode; we know each sticky cell child is a ReactElement
           return React.cloneElement(child as React.ReactElement<Record<string, unknown>>, {
             className: `${css(stickyStyles)} ${css(buildShadowStyles(config.shadowSide, scrollRatio))}`,
             'data-testid': `sticky-cell-${config.stickySide}-sticky`,

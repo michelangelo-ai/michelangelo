@@ -67,5 +67,5 @@ function resolveFooter(footer: FormProps['footer']): ReactNode {
     return <StickyFooter leftContent={left} rightContent={right} />;
   }
 
-  return footer as ReactNode;
+  return footer as ReactNode; // cast: footer passed object/slot checks above; remaining case is always a valid ReactNode
 }

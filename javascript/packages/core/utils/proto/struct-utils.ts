@@ -26,7 +26,7 @@ function getDistinctKindValue(value: ProtobufValue): {
 } {
   const pairs = toPairs(value);
   const [kind, kindValue] = pairs[0] || [];
-  return { kind: kind as keyof typeof STRUCT_KINDS, kindValue };
+  return { kind: kind as keyof typeof STRUCT_KINDS, kindValue }; // cast: toPairs returns string keys; kind is always one of the STRUCT_KINDS keys in a valid protobuf value
 }
 
 /**
@@ -58,13 +58,13 @@ export function decodeStruct(struct: unknown): DecodedStruct {
 
   // Handle value objects
   if (typeof struct === 'object' && struct !== null) {
-    const value = struct as ProtobufValue;
+    const value = struct as ProtobufValue; // cast: struct passed the typeof object check; ProtobufValue is the expected shape for protobuf value objects
     const { kind, kindValue } = getDistinctKindValue(value);
 
     switch (kind) {
       case STRUCT_KINDS.listValue:
         if (kindValue && typeof kindValue === 'object' && 'values' in kindValue) {
-          const listValue = kindValue as { values: ProtobufValue[] };
+          const listValue = kindValue as { values: ProtobufValue[] }; // cast: kindValue passed the object + 'values' checks; narrowing to the listValue proto shape
           return listValue.values.map((item) => decodeStruct(item));
         }
         return [];

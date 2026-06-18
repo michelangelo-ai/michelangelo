@@ -33,6 +33,7 @@ export function extractEntityFromResponse<T extends HasTypeName>(
     .toLowerCase();
 
   if (entityName in response) {
+    // cast: dynamic key access on response loses type; we've verified entityName exists in the response above
     return response[entityName] as ExtractEntityFromResponse<T>;
   }
 

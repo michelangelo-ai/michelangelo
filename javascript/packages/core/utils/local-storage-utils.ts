@@ -27,7 +27,7 @@ export function safeLocalStorageGetItem<T>(key: string, defaultValue: T): T {
     if (item === null) {
       return defaultValue;
     }
-    const result = JSON.parse(item) as T;
+    const result = JSON.parse(item) as T; // cast: JSON.parse returns any; caller's T constrains the expected shape of serialized data
     return result ?? defaultValue;
   } catch {
     return defaultValue;

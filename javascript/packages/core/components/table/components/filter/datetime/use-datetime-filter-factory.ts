@@ -54,7 +54,7 @@ export function useDatetimeFilterFactory<T extends TableData = TableData>(): (
         const cellValue = getCellValueForColumn(column, row, id);
 
         const cellDate = getDateFromEpochSeconds(
-          typeof cellValue === 'number' ? cellValue : parseFloat(cellValue as string)
+          typeof cellValue === 'number' ? cellValue : parseFloat(cellValue as string) // cast: cellValue is unknown; non-number branch is expected to be a string epoch
         );
 
         return DatetimeColumn({

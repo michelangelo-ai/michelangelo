@@ -130,6 +130,7 @@ function parseArgsFromKey(key: string): { queryName: string; args: object } | nu
   const argsStr = key.slice(colonIndex + 1);
 
   try {
+    // cast: JSON.parse returns any; we know this is a plain args object from the encoded key
     const args = JSON.parse(argsStr) as object;
     return { queryName, args };
   } catch {

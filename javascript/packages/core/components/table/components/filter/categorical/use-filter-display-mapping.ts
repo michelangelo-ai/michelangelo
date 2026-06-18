@@ -24,7 +24,7 @@ export function useFilterDisplayMapping<TData>({
       const rawValue = getCellValueForColumn(column, row, column.id);
       if (rawValue == null) return;
 
-      const displayValue = cellToString({ value: rawValue, record: row.record as object, column });
+      const displayValue = cellToString({ value: rawValue, record: row.record as object, column }); // cast: tanstack types row.original as unknown; row records are always plain objects
 
       // Preserve empty strings as valid filter options when cellToString returns null/undefined
       const finalDisplayValue = displayValue == null && rawValue === '' ? '' : displayValue;

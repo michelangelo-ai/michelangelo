@@ -8,7 +8,7 @@ export function applyScaffold<T extends object>(data: T, schema: MiddlewareSchem
   if (!schema.scaffold && !schema.scaffoldBySubType) return data;
 
   if (schema.scaffoldBySubType) {
-    const subType = get(data, schema.subTypePath!) as string;
+    const subType = get(data, schema.subTypePath!) as string; // cast: lodash.get returns any; subTypePath points to a string discriminant field
     return merge({}, parseYaml(schema.scaffoldBySubType[subType]), data);
   }
 
