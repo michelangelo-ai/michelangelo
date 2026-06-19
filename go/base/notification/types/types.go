@@ -36,10 +36,10 @@ const (
 	// the pipeline manifest type (e.g. PIPELINE_MANIFEST_TYPE_ASL).
 	sourcePipelineManifestTypeLabelName = "pipeline.michelangelo/PipelineManifestType"
 
-	// _pipelineManifestTypeASL identifies ASL (Amazon States Language) pipelines.
+	// pipelineManifestTypeASL identifies ASL (Amazon States Language) pipelines.
 	// These use Cadence as the workflow engine, so the notification includes a
 	// workflow log URL that is not relevant for other pipeline types.
-	_pipelineManifestTypeASL = "PIPELINE_MANIFEST_TYPE_ASL"
+	pipelineManifestTypeASL = "PIPELINE_MANIFEST_TYPE_ASL"
 )
 
 // PhaseResolver maps a pipeline type label value to a UI path segment used when
@@ -156,7 +156,7 @@ func GenerateText(pipelineRun *v2pb.PipelineRun, textType v2pb.Notification_Noti
 		if studioLink != "" {
 			text += fmt.Sprintf("- <%s|Studio URL>\n", studioLink)
 		}
-		if pipelineManifestType == _pipelineManifestTypeASL && pipelineRun.Status.LogUrl != "" {
+		if pipelineManifestType == pipelineManifestTypeASL && pipelineRun.Status.LogUrl != "" {
 			text += fmt.Sprintf("- <%s|Workflow Log URL>\n", pipelineRun.Status.LogUrl)
 		}
 		return text
@@ -167,7 +167,7 @@ func GenerateText(pipelineRun *v2pb.PipelineRun, textType v2pb.Notification_Noti
 	if studioLink != "" {
 		text += fmt.Sprintf("- Studio URL: %s\n", studioLink)
 	}
-	if pipelineManifestType == _pipelineManifestTypeASL && pipelineRun.Status.LogUrl != "" {
+	if pipelineManifestType == pipelineManifestTypeASL && pipelineRun.Status.LogUrl != "" {
 		text += fmt.Sprintf("- Workflow Log URL: %s\n", pipelineRun.Status.LogUrl)
 	}
 	return text
