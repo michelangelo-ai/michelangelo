@@ -6,12 +6,12 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
+	workermod "github.com/michelangelo-ai/michelangelo/go/worker"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/notification"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/ray"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/spark"
 	rayplugin "github.com/michelangelo-ai/michelangelo/go/worker/plugins/ray"
 	sparkplugin "github.com/michelangelo-ai/michelangelo/go/worker/plugins/spark"
-	workermod "github.com/michelangelo-ai/michelangelo/go/worker"
 
 	"go.uber.org/fx"
 )

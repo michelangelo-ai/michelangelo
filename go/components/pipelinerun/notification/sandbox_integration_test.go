@@ -63,7 +63,7 @@ func TestSandboxNotifyOnStateChange(t *testing.T) {
 			Name:      "sandbox-notif-run-3",
 			Namespace: "default",
 			Labels: map[string]string{
-				"michelangelo/SourcePipelineType":              "PIPELINE_TYPE_TRAIN",
+				"michelangelo/SourcePipelineType":            "PIPELINE_TYPE_TRAIN",
 				"pipeline.michelangelo/PipelineManifestType": "PIPELINE_MANIFEST_TYPE_ASL",
 			},
 		},
@@ -128,7 +128,7 @@ func TestSandboxNotifyOnStateChangeTemporal(t *testing.T) {
 			Name:      "sandbox-notif-temporal-1",
 			Namespace: "default",
 			Labels: map[string]string{
-				"michelangelo/SourcePipelineType":              "PIPELINE_TYPE_TRAIN",
+				"michelangelo/SourcePipelineType":            "PIPELINE_TYPE_TRAIN",
 				"pipeline.michelangelo/PipelineManifestType": "PIPELINE_MANIFEST_TYPE_ASL",
 			},
 		},
