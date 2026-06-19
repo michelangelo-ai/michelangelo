@@ -110,7 +110,9 @@ func ContainsEventType(eventTypes []v2pb.Notification_EventType, prState v2pb.Pi
 		return false
 	}
 	for _, et := range eventTypes {
-		if et == mapped {
+		// Accept both STARTED (new) and deprecated RUNNING for backward
+		// compatibility with currently deployed systems.
+		if et == mapped || (mapped == v2pb.EVENT_TYPE_PIPELINE_RUN_STATE_STARTED && et == v2pb.EVENT_TYPE_PIPELINE_RUN_STATE_RUNNING) {
 			return true
 		}
 	}

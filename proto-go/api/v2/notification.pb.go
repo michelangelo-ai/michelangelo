@@ -62,7 +62,9 @@ const (
 	EVENT_TYPE_TRIGGER_RUN_STATE_SUCCEEDED  Notification_EventType = 7
 	EVENT_TYPE_PIPELINE_STATE_READY         Notification_EventType = 8
 	EVENT_TYPE_PIPELINE_STATE_ERROR         Notification_EventType = 9
-	EVENT_TYPE_PIPELINE_RUN_STATE_STARTED   Notification_EventType = 10
+	// Deprecated: use EVENT_TYPE_PIPELINE_RUN_STATE_STARTED instead.
+	EVENT_TYPE_PIPELINE_RUN_STATE_RUNNING Notification_EventType = 10
+	EVENT_TYPE_PIPELINE_RUN_STATE_STARTED Notification_EventType = 11
 )
 
 var Notification_EventType_name = map[int32]string{
@@ -76,7 +78,8 @@ var Notification_EventType_name = map[int32]string{
 	7:  "EVENT_TYPE_TRIGGER_RUN_STATE_SUCCEEDED",
 	8:  "EVENT_TYPE_PIPELINE_STATE_READY",
 	9:  "EVENT_TYPE_PIPELINE_STATE_ERROR",
-	10: "EVENT_TYPE_PIPELINE_RUN_STATE_STARTED",
+	10: "EVENT_TYPE_PIPELINE_RUN_STATE_RUNNING",
+	11: "EVENT_TYPE_PIPELINE_RUN_STATE_STARTED",
 }
 
 var Notification_EventType_value = map[string]int32{
@@ -90,7 +93,8 @@ var Notification_EventType_value = map[string]int32{
 	"EVENT_TYPE_TRIGGER_RUN_STATE_SUCCEEDED":  7,
 	"EVENT_TYPE_PIPELINE_STATE_READY":         8,
 	"EVENT_TYPE_PIPELINE_STATE_ERROR":         9,
-	"EVENT_TYPE_PIPELINE_RUN_STATE_STARTED":   10,
+	"EVENT_TYPE_PIPELINE_RUN_STATE_RUNNING":   10,
+	"EVENT_TYPE_PIPELINE_RUN_STATE_STARTED":   11,
 }
 
 func (Notification_EventType) EnumDescriptor() ([]byte, []int) {

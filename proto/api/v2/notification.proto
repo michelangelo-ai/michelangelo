@@ -61,8 +61,12 @@ message Notification {
     EVENT_TYPE_PIPELINE_STATE_READY = 8;
     // Reserved. Not yet implemented — configuring this event type has no effect.
     EVENT_TYPE_PIPELINE_STATE_ERROR = 9;
+    // Deprecated: use EVENT_TYPE_PIPELINE_RUN_STATE_STARTED instead. Kept for
+    // backward compatibility with currently deployed systems. Will be removed in
+    // a future release.
+    EVENT_TYPE_PIPELINE_RUN_STATE_RUNNING = 10;
     // Notification is generated when a pipeline run transitions to the running state.
-    EVENT_TYPE_PIPELINE_RUN_STATE_STARTED = 10;
+    EVENT_TYPE_PIPELINE_RUN_STATE_STARTED = 11;
   }
   enum ResourceType {
     // Invalid resource type.
