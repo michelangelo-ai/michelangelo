@@ -1,6 +1,6 @@
 import { RuleTester } from 'eslint';
 
-import rule from '../no-event-handler-prefix.js';
+import rule from '../no-handler-mirror.js';
 
 RuleTester.describe = describe;
 RuleTester.it = it;
@@ -15,7 +15,7 @@ const tester = new RuleTester({
   },
 });
 
-tester.run('no-event-handler-prefix', rule, {
+tester.run('no-handler-mirror', rule, {
   valid: [
     {
       name: 'descriptive name — not a mirror',

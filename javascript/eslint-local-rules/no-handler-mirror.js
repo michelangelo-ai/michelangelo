@@ -15,7 +15,7 @@ const rule = {
     docs: {
       description: 'Disallow event handler names that mirror the prop name without adding context',
       recommended: true,
-      url: 'https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/eslint-local-rules/no-event-handler-prefix.md',
+      url: 'https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/eslint-local-rules/no-handler-mirror.md',
     },
     messages: {
       noHandlerMirror:

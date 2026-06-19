@@ -2,7 +2,7 @@
 import js from '@eslint/js';
 
 import noBarrelExports from './eslint-local-rules/no-barrel-exports.js';
-import noEventHandlerPrefix from './eslint-local-rules/no-event-handler-prefix.js';
+import noHandlerMirror from './eslint-local-rules/no-handler-mirror.js';
 import filenameMatchesExport from './eslint-local-rules/filename-matches-export.js';
 import noFixtureConstants from './eslint-local-rules/no-fixture-constants.js';
 import noModuleScopeTestSetup from './eslint-local-rules/no-module-scope-test-setup.js';
@@ -220,7 +220,7 @@ export default [
       local: {
         rules: {
           'no-barrel-exports': noBarrelExports,
-          'no-event-handler-prefix': noEventHandlerPrefix,
+          'no-handler-mirror': noHandlerMirror,
           'filename-matches-export': filenameMatchesExport,
           'types-in-types-file': typesInTypesFile,
         },
@@ -228,7 +228,7 @@ export default [
     },
     rules: {
       'local/no-barrel-exports': 'error',
-      'local/no-event-handler-prefix': 'error',
+      'local/no-handler-mirror': 'error',
       'local/filename-matches-export': 'error',
       'local/types-in-types-file': 'error',
     },
