@@ -29,13 +29,12 @@ const (
 	// operators have rolled past this release.
 	DeprecatedPRNotificationWorkflowName = "PRNotificationWorkflow"
 
-	// SourcePipelineTypeLabelName is the Kubernetes label key that identifies the
-	// pipeline type (e.g. PIPELINE_TYPE_TRAIN). External integrators can read this
-	// label to drive custom routing logic without hardcoding the key string.
-	SourcePipelineTypeLabelName = "michelangelo/SourcePipelineType"
-	// SourcePipelineManifestTypeLabelName is the Kubernetes label key that identifies
+	// sourcePipelineTypeLabelName is the Kubernetes label key that identifies the
+	// pipeline type (e.g. PIPELINE_TYPE_TRAIN).
+	sourcePipelineTypeLabelName = "michelangelo/SourcePipelineType"
+	// sourcePipelineManifestTypeLabelName is the Kubernetes label key that identifies
 	// the pipeline manifest type (e.g. PIPELINE_MANIFEST_TYPE_ASL).
-	SourcePipelineManifestTypeLabelName = "pipeline.michelangelo/PipelineManifestType"
+	sourcePipelineManifestTypeLabelName = "pipeline.michelangelo/PipelineManifestType"
 
 	// _pipelineManifestTypeASL identifies ASL (Amazon States Language) pipelines.
 	// These use Cadence as the workflow engine, so the notification includes a
@@ -139,8 +138,8 @@ func GenerateText(pipelineRun *v2pb.PipelineRun, textType v2pb.Notification_Noti
 	if phaseResolver == nil {
 		phaseResolver = DefaultPhaseResolver
 	}
-	pipelineType := pipelineRun.Labels[SourcePipelineTypeLabelName]
-	pipelineManifestType := pipelineRun.Labels[SourcePipelineManifestTypeLabelName]
+	pipelineType := pipelineRun.Labels[sourcePipelineTypeLabelName]
+	pipelineManifestType := pipelineRun.Labels[sourcePipelineManifestTypeLabelName]
 	state := strings.TrimPrefix(pipelineRun.Status.State.String(), "PIPELINE_RUN_STATE_")
 	pipelineTypeStr := strings.TrimPrefix(pipelineType, "PIPELINE_TYPE_")
 

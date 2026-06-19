@@ -113,8 +113,8 @@ func TestGenerateText(t *testing.T) {
 			Name:      "test-run",
 			Namespace: "test-project",
 			Labels: map[string]string{
-				SourcePipelineTypeLabelName:         "PIPELINE_TYPE_TRAIN",
-				SourcePipelineManifestTypeLabelName: "PIPELINE_MANIFEST_TYPE_ASL",
+				sourcePipelineTypeLabelName:         "PIPELINE_TYPE_TRAIN",
+				sourcePipelineManifestTypeLabelName: "PIPELINE_MANIFEST_TYPE_ASL",
 			},
 		},
 		Status: v2pb.PipelineRunStatus{
