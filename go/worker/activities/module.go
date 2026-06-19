@@ -12,8 +12,8 @@ import (
 // Module provides activity registrations for the shared worker binary.
 //
 // Notification activities are intentionally excluded — they are registered
-// in cmd/worker/main.go so that downstream forks (e.g. Grab) can supply
-// their own transport implementations without conflicting with the defaults.
+// in cmd/worker/main.go so that downstream forks can supply their own
+// transport implementations without conflicting with the defaults.
 var Module = fx.Options(
 	storage.Module,
 	model.Module,
