@@ -12,6 +12,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/spark"
 	rayplugin "github.com/michelangelo-ai/michelangelo/go/worker/plugins/ray"
 	sparkplugin "github.com/michelangelo-ai/michelangelo/go/worker/plugins/spark"
+	notificationWorkflows "github.com/michelangelo-ai/michelangelo/go/worker/workflows/notification"
 
 	"go.uber.org/fx"
 )
@@ -24,6 +25,7 @@ func options() fx.Option {
 	return fx.Options(
 		ray.Module,
 		spark.Module,
+		notificationWorkflows.Module,
 		fx.Invoke(RegisterRayPlugin),
 		fx.Invoke(RegisterSparkPlugin),
 		fx.Invoke(RegisterNotificationActivities),
