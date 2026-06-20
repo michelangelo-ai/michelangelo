@@ -58,6 +58,7 @@ Michelangelo is designed to run alongside existing ML infrastructure. The guides
 | Guide | Description |
 |-------|-------------|
 | [Experiment Tracking Setup](experiment-tracking.md) | Make an experiment tracking server reachable from task pods — network, ConfigMap injection, auth, and operator/user boundary |
+| [Notification Delivery Setup](notifications.md) | Wire in email and Slack delivery for PipelineRun state-change notifications — task queue config, activity implementation, and verification |
 | [Browse all integrations](integrations/index.md) | MLflow and other third-party integration guides |
 
 ## Operations
