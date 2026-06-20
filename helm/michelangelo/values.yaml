@@ -96,6 +96,7 @@ workflow:
   taskLists:
     - default
     - trigger_run
+    # Deprecated: will be removed in a future release. Kept for backward compatibility with currently deployed systems.
     - pipeline_run
     - notification_worker
 
