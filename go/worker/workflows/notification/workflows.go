@@ -63,6 +63,10 @@ func NewWorkflow(backend workflow.Workflow, phaseResolver types.PhaseResolver, s
 // only matching notifications are delivered. Delivery failures are accumulated
 // with errors.Join so that a failure on one sink does not suppress others.
 func (wf *Workflow) SendPipelineRunNotification(ctx workflow.Context, req *types.PipelineRunNotificationRequest) error {
+	if req == nil || req.PipelineRun == nil {
+		return errors.New("notification request or pipeline run is nil")
+	}
+
 	// Attach the workflow backend so that workflow.ExecuteActivity can resolve
 	// activities. This mirrors the pattern used by other Go workflows in this
 	// codebase (e.g. trigger.CronTrigger).

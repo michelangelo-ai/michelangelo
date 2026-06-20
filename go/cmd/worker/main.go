@@ -15,6 +15,7 @@ import (
 	notificationWorkflows "github.com/michelangelo-ai/michelangelo/go/worker/workflows/notification"
 
 	"go.uber.org/fx"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -48,9 +49,13 @@ func RegisterSparkPlugin(registry map[string]service.IPlugin) {
 }
 
 // RegisterNotificationActivities registers the default (no-op) email and Slack
-// notification activities. Downstream forks should replace this function with
-// their own transport implementations (SMTP, Slack API, PagerDuty, etc.).
+// notification activities. Operators using fx can override via fx.Decorate on
+// the Sink interface in the notification workflow module (preferred). Downstream
+// forks may also replace this function with their own transport implementations
+// (SMTP, Slack API, PagerDuty, etc.) as a last-resort alternative when not
+// using fx.
 func RegisterNotificationActivities(workers []worker.Worker) {
+	zap.L().Warn("registering no-op email and Slack notification activities — messages will not be delivered; replace SendMessageToEmailActivity and SendMessageToSlackActivity in your fork (see go/worker/activities/notification/activities.go)")
 	for _, w := range workers {
 		w.RegisterActivity(notification.SendMessageToEmailActivity)
 		w.RegisterActivity(notification.SendMessageToSlackActivity)

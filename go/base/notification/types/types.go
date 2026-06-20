@@ -18,8 +18,10 @@ const (
 	// notification workflow in Cadence/Temporal. Both the notifier (which starts the
 	// workflow) and the worker (which registers it) must use this constant.
 	//
-	// The name follows the reverse-DNS convention recommended by Temporal to avoid
-	// collisions in multi-tenant namespaces.
+	// The name uses a reverse-DNS prefix to avoid collisions in shared Cadence/Temporal
+	// namespaces where multiple teams or services register workflows side by side.
+	// Temporal does not mandate this convention, but it is a widely used practice for
+	// the same reason Java uses it for package names.
 	PipelineRunNotificationWorkflowName = "io.michelangelo.notification.PipelineRunFanout"
 
 	// DeprecatedPRNotificationWorkflowName is the workflow name used before this

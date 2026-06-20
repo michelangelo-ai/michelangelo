@@ -55,6 +55,8 @@ func NewPipelineRunNotifier(
 		logger.Info("notification.taskList is empty — PipelineRun notifications disabled")
 		return nil, nil
 	}
+	logger.Info("notification task list configured; ensure the worker registers this task list",
+		zap.String("taskList", cfg.TaskList))
 	return &PipelineRunNotifier{
 		cfg:            cfg,
 		workflowClient: workflowClient,

@@ -330,7 +330,7 @@ notification:
   taskList: notification_worker
 
   # Base URL of the platform UI, used to build deep links in notifications.
-  # Must end with a trailing slash. Leave empty to omit links.
+  # Trailing slash is optional — normalized automatically. Leave empty to omit links.
   # Example: "https://ml.mycompany.com/studio/"
   studioBaseURL: ""
 

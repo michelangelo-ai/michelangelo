@@ -64,7 +64,7 @@ message Notification {
     // Deprecated: use EVENT_TYPE_PIPELINE_RUN_STATE_STARTED instead. Kept for
     // backward compatibility with currently deployed systems. Will be removed in
     // a future release.
-    EVENT_TYPE_PIPELINE_RUN_STATE_RUNNING = 10;
+    EVENT_TYPE_PIPELINE_RUN_STATE_RUNNING = 10 [deprecated = true];
     // Notification is generated when a pipeline run transitions to the running state.
     EVENT_TYPE_PIPELINE_RUN_STATE_STARTED = 11;
   }
