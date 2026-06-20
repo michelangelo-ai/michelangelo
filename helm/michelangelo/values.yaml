@@ -325,7 +325,8 @@ worker:
 # Set studioBaseURL and senderEmail to enable deep links and outgoing email.
 # -----------------------------------------------------------------------------
 notification:
-  # taskList must match notification.taskList in the controllermgr config.
+  # taskList routes notifications to the worker that handles them. Override only
+  # if you register notification activities on a different task list in your fork.
   taskList: notification_worker
 
   # Base URL of the platform UI, used to build deep links in notifications.

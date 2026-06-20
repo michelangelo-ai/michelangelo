@@ -16,8 +16,10 @@ import (
 // Config holds operator-supplied configuration for PipelineRunNotifier.
 type Config struct {
 	// TaskList is the Cadence/Temporal task list on which the notification
-	// workflow runs. It must match the task list registered by the worker
-	// (default: "notification_worker" in the shared worker config).
+	// workflow runs. It must match the task list registered by the worker.
+	// To customize, update this value and register the notification workflow
+	// and activities on the same task list in your cmd/worker/main.go.
+	// Set to "" to disable notifications.
 	TaskList string `yaml:"taskList"`
 	// StudioBaseURL is the base URL of the platform UI, used to build deep
 	// links in notification message bodies.

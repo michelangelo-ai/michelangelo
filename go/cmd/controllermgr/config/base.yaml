@@ -30,10 +30,11 @@ pipelineRun:
   # ttlDays: 0  # 0 disables TTL eviction; set e.g. 30 to evict runs older than 30 days
 
 # Notification configuration for PipelineRun state-change workflows.
-# Override NOTIFICATION_TASK_LIST to route to a custom worker task list,
-# or set it to "" to disable notifications entirely.
+# To use a custom worker task list, change taskList here and in helm values.yaml,
+# and register the notification workflow/activities on that task list in your
+# cmd/worker/main.go. Set taskList to "" to disable notifications entirely.
 notification:
-  taskList: ${NOTIFICATION_TASK_LIST:"notification_worker"}
+  taskList: notification_worker
   studioBaseURL: ${NOTIFICATION_STUDIO_BASE_URL:""}
   senderEmail: ${NOTIFICATION_SENDER_EMAIL:""}
 
