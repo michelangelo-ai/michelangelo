@@ -71,8 +71,6 @@ kubectl rollout restart deployment/michelangelo-worker -n <release-namespace>
 
 Both activity functions in `go/worker/activities/notification/activities.go` are no-ops with a `TODO` comment. You have two paths:
 
-### Option A — Override with `fx.Decorate` (recommended)
-
 In your fork of `go/cmd/worker/main.go`, use `fx.Decorate` to replace the activity implementations without modifying the shared package:
 
 ```go
@@ -96,10 +94,6 @@ func options() fx.Option {
 ```
 
 Implement `myEmailClient` and `mySlackClient` to call your organization's email and Slack APIs.
-
-### Option B — Edit the activity functions directly
-
-Open `go/worker/activities/notification/activities.go` and replace the placeholder bodies of `SendMessageToEmailActivity` and `SendMessageToSlackActivity` with real delivery logic. This is simpler for single-organization deployments.
 
 #### Email activity signature
 
