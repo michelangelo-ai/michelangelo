@@ -83,6 +83,40 @@ def add_function_signature(crd: CRD) -> None:
                         ),
                     },
                 },
+                {
+                    "func_signature": Parameter(
+                        "slack",
+                        Parameter.POSITIONAL_OR_KEYWORD,
+                        default=None,
+                    ),
+                    "args": ["--slack"],
+                    "kwargs": {
+                        "type": str,
+                        "required": False,
+                        "default": None,
+                        "help": (
+                            "Comma-separated Slack destinations (channels or "
+                            "@users) for run notifications"
+                        ),
+                    },
+                },
+                {
+                    "func_signature": Parameter(
+                        "email",
+                        Parameter.POSITIONAL_OR_KEYWORD,
+                        default=None,
+                    ),
+                    "args": ["--email"],
+                    "kwargs": {
+                        "type": str,
+                        "required": False,
+                        "default": None,
+                        "help": (
+                            "Comma-separated email addresses for run "
+                            "notifications"
+                        ),
+                    },
+                },
             ],
         },
     )
@@ -128,13 +162,17 @@ def generate_run(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = 
         _namespace = get_single_arg(bound_args.arguments, "namespace")
         _name = get_single_arg(bound_args.arguments, "name")
 
-        # Handle optional resume_from parameter
+        # Handle optional parameters
         _resume_from = bound_args.arguments.get("resume_from")
+        _slack = bound_args.arguments.get("slack")
+        _email = bound_args.arguments.get("email")
 
         run_kwargs = {
             "namespace": _namespace,
             "name": _name,
             "resume_from": _resume_from,
+            "slack": _slack,
+            "email": _email,
         }
 
         pipeline_run_dict = _self.func_crd_metadata_converter(
@@ -189,6 +227,8 @@ def convert_crd_metadata_pipeline_run(
     namespace = yaml_dict["namespace"]
     pipeline_name = yaml_dict["name"]
     resume_from = yaml_dict.get("resume_from")
+    slack = yaml_dict.get("slack")
+    email = yaml_dict.get("email")
     run_name = generate_pipeline_run_name()
 
     _LOG.info(
@@ -203,13 +243,20 @@ def convert_crd_metadata_pipeline_run(
         pipeline_name=pipeline_name,
         namespace=namespace,
         resume_from=resume_from,
+        slack=slack,
+        email=email,
     )
 
     return {"pipeline_run": pipeline_run}
 
 
 def generate_pipeline_run_object(
-    run_name: str, pipeline_name: str, namespace: str, resume_from: Optional[str] = None
+    run_name: str,
+    pipeline_name: str,
+    namespace: str,
+    resume_from: Optional[str] = None,
+    slack: Optional[str] = None,
+    email: Optional[str] = None,
 ) -> dict:
     """Generate PipelineRun object as dictionary.
 
@@ -219,6 +266,8 @@ def generate_pipeline_run_object(
         namespace: Kubernetes namespace
         resume_from: Optional resume specification in format
             "pipeline_run_name:step_name"
+        slack: Comma-separated Slack destinations for notifications
+        email: Comma-separated email addresses for notifications
 
     Returns:
         dict: Configured pipeline run object as dictionary
@@ -252,8 +301,48 @@ def generate_pipeline_run_object(
         else:
             _LOG.warning("Failed to parse resume_from: %r", resume_from)
 
+    # Add notifications if --slack or --email provided
+    notifications = _build_notifications(slack=slack, email=email)
+    if notifications:
+        pipeline_run_dict["spec"]["notifications"] = notifications
+
     _LOG.info("Generated pipeline run object: %s", run_name)
     return pipeline_run_dict
+
+
+_NOTIFICATION_EVENT_TYPES = [
+    "EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED",
+    "EVENT_TYPE_PIPELINE_RUN_STATE_FAILED",
+    "EVENT_TYPE_PIPELINE_RUN_STATE_KILLED",
+]
+
+
+def _build_notifications(
+    slack: Optional[str] = None, email: Optional[str] = None
+) -> list[dict]:
+    """Build notification entries from --slack and --email flag values."""
+    notifications: list[dict] = []
+    if slack:
+        destinations = [s.strip() for s in slack.split(",")]
+        notifications.append(
+            {
+                "notificationType": "NOTIFICATION_TYPE_SLACK",
+                "eventTypes": _NOTIFICATION_EVENT_TYPES,
+                "resourceType": "RESOURCE_TYPE_PIPELINE_RUN",
+                "slackDestinations": destinations,
+            }
+        )
+    if email:
+        addresses = [e.strip() for e in email.split(",")]
+        notifications.append(
+            {
+                "notificationType": "NOTIFICATION_TYPE_EMAIL",
+                "eventTypes": _NOTIFICATION_EVENT_TYPES,
+                "resourceType": "RESOURCE_TYPE_PIPELINE_RUN",
+                "emails": addresses,
+            }
+        )
+    return notifications
 
 
 def parse_resume_from(resume_from: str, namespace: str) -> dict:
