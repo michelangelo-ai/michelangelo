@@ -12,7 +12,10 @@ from __future__ import annotations
 
 import michelangelo.uniflow.core as uniflow
 from examples.pipelines.california_housing_xgb.feature_prep import feature_prep
-from examples.pipelines.california_housing_xgb.preprocess import PreprocessResult, preprocess
+from examples.pipelines.california_housing_xgb.preprocess import (
+    PreprocessResult,
+    preprocess,
+)
 from examples.pipelines.california_housing_xgb.push import push_step
 from examples.pipelines.california_housing_xgb.train import TrainResult, train
 from michelangelo.uniflow.plugins.ray import RayTask

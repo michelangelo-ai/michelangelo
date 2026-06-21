@@ -65,7 +65,8 @@ def push_step(
     - **Remote** (``AWS_ENDPOINT_URL`` set): ``MinioStorageBackend`` — model and
       eval report are uploaded directly; datasets are serialised to Parquet and
       uploaded via ``S3Sink``.
-    - **Local** (``AWS_ENDPOINT_URL`` unset): ``LocalStorageBackend`` — model and eval report are
+    - **Local** (``AWS_ENDPOINT_URL`` unset): ``LocalStorageBackend`` —
+      model and eval report are
       copied to a temp directory; datasets are written as Parquet via
       ``LocalFileSink``.
 
@@ -85,7 +86,6 @@ def push_step(
     import glob
     import os
     import tempfile
-
     from urllib.parse import urlparse
 
     s3_endpoint = os.environ.get("AWS_ENDPOINT_URL", "")
@@ -177,12 +177,16 @@ def push_step(
         bucket = (
             os.environ.get("AWS_S3_BUCKET")
             or (
-                os.environ.get("MA_FILE_SYSTEM") or os.environ.get("UF_STORAGE_URL", "s3://default")
-            ).removeprefix("s3://").split("/")[0]
+                os.environ.get("MA_FILE_SYSTEM")
+                or os.environ.get("UF_STORAGE_URL", "s3://default")
+            )
+            .removeprefix("s3://")
+            .split("/")[0]
         )
         if not bucket:
             raise OSError(
-                "Could not determine storage bucket. Set AWS_S3_BUCKET or MA_FILE_SYSTEM."
+                "Could not determine storage bucket. "
+                "Set AWS_S3_BUCKET or MA_FILE_SYSTEM."
             )
         from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
         from michelangelo.workflow.schema.sinks.s3 import S3SinkConfig
