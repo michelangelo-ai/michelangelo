@@ -226,6 +226,37 @@ Example:
 ma pipeline run --namespace="my-project" --name="bert-cola-test" --resume_from=run-1759873504-b93b7f612:train
 ```
 
+##### Notification Arguments
+
+You can attach notification rules directly to a pipeline run so you're alerted when it reaches a terminal state. This is useful for one-off runs where you want a quick "ping me when it's done" without editing YAML specs.
+
+- `--notify-slack` — Slack destination (channel or @user). Repeatable for multiple destinations.
+- `--notify-email` — Email address. Repeatable for multiple recipients.
+- `--notify-on` — Event type to trigger on: `SUCCEEDED`, `FAILED`, `KILLED`, or `SKIPPED`. Repeatable. Defaults to all four when omitted. Applies to all destinations (per-destination filtering is not yet supported — use YAML specs for that).
+
+Syntax:
+
+```bash
+ma pipeline run -n "<namespace>" --name="<pipeline_name>" \
+  --notify-slack "<channel_or_user>" \
+  --notify-email "<email_address>" \
+  --notify-on <EVENT_TYPE>
+```
+
+Example:
+
+```bash
+# Notify a Slack channel and two email addresses on failure or success
+ma pipeline run -n "my-project" --name="bert-cola-test" \
+  --notify-slack "#ml-alerts" \
+  --notify-email alice@example.com \
+  --notify-email oncall@example.com \
+  --notify-on FAILED \
+  --notify-on SUCCEEDED
+```
+
+For advanced notification configuration (per-destination event filtering, trigger run notifications, or standing notification rules), see [Pipeline Notifications](../ml-pipelines/notifications.md).
+
 #### DEV RUN - Execute a pipeline in DEV mode
 
 The DEV RUN command is used to run a pipeline without registering it. This command is to allow users to quickly iterate on their pipelines. The dev-run command supports an `--env` flag for passing environment variables, which are injected into the pipeline's execution environment.

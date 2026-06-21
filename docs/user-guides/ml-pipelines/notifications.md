@@ -38,6 +38,22 @@ notifications:
 
 That's it! When you apply this spec with `ma apply -f your-spec.yaml`, Michelangelo will send you an email each time the run reaches one of those states.
 
+### CLI Shorthand
+
+For one-off runs, you can skip the YAML and attach notifications directly from the command line:
+
+```bash
+ma pipeline run -n my-project --name training-pipeline \
+  --notify-email you@example.com \
+  --notify-slack "#ml-alerts" \
+  --notify-on FAILED \
+  --notify-on SUCCEEDED
+```
+
+The `--notify-on` filter applies to **all** destinations. For per-destination event filtering (e.g., Slack on every status, email only on failure), use the YAML spec approach below instead.
+
+See the [CLI Reference](../reference/cli.md#notification-arguments) for full flag details.
+
 Want Slack notifications instead? Swap the type and destination:
 
 ```yaml

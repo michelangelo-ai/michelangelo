@@ -135,6 +135,7 @@ def add_function_signature(crd: CRD) -> None:
                         ],
                         "help": (
                             "Event type to notify on. Can be repeated. "
+                            "Applies to all destinations. "
                             "Default: SUCCEEDED FAILED KILLED SKIPPED"
                         ),
                     },
