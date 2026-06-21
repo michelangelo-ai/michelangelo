@@ -83,6 +83,38 @@ ma project get --namespace="my-ml-project" --name="my-ml-project"
 
 This will display the project's metadata and spec if the project was created successfully.
 
+## Working example
+
+The repository includes a ready-to-use project configuration for sandbox testing. From the `python/` directory:
+
+```bash
+ma project apply -f examples/config/project.yaml
+ma project get --namespace="ma-examples" --name="ma-examples"
+```
+
+The config file (`python/examples/config/project.yaml`):
+
+```yaml
+apiVersion: michelangelo.api/v2
+kind: Project
+metadata:
+  name: ma-examples
+  namespace: ma-examples
+spec:
+  description: "Michelangelo Examples"
+  owner:
+    owningTeam: "00000000-0000-0000-0000-000000000001"
+    owners:
+      - sally.lee
+    ownerGroups:
+      - ml-platform-team
+  tier: 4
+  gitRepo: https://github.com/michelangelo-ai/michelangelo
+  rootDir: python/examples
+```
+
+> **Sandbox note:** `owningTeam` must be a valid UUID. The sandbox does not validate against a real identity registry, so any well-formed UUID works. In production, use your team's actual UUID.
+
 ## Project YAML reference
 
 ### Required fields
