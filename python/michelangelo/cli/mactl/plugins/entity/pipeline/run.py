@@ -96,7 +96,7 @@ def add_function_signature(crd: CRD) -> None:
                         "default": None,
                         "help": (
                             "Slack destination (channel or @user) for run "
-                            "notifications. Can be repeated."
+                            "notifications. Repeatable or comma-separated."
                         ),
                     },
                 },
@@ -112,7 +112,8 @@ def add_function_signature(crd: CRD) -> None:
                         "action": "append",
                         "default": None,
                         "help": (
-                            "Email address for run notifications. Can be repeated."
+                            "Email address for run notifications. "
+                            "Repeatable or comma-separated."
                         ),
                     },
                 },
@@ -127,16 +128,10 @@ def add_function_signature(crd: CRD) -> None:
                         "type": str,
                         "action": "append",
                         "default": None,
-                        "choices": [
-                            "SUCCEEDED",
-                            "FAILED",
-                            "KILLED",
-                            "SKIPPED",
-                        ],
                         "help": (
-                            "Event type to notify on. Can be repeated. "
-                            "Applies to all destinations. "
-                            "Default: SUCCEEDED FAILED KILLED SKIPPED"
+                            "Event type to notify on: SUCCEEDED, FAILED, "
+                            "KILLED, SKIPPED. Repeatable or comma-separated. "
+                            "Applies to all destinations. Default: all"
                         ),
                     },
                 },
@@ -353,26 +348,41 @@ _NOTIFY_ON_MAP = {
 _DEFAULT_NOTIFY_ON = list(_NOTIFY_ON_MAP.values())
 
 
+def _split_csv(values: Optional[list[str]]) -> list[str]:
+    """Flatten comma-separated values into a single list, stripping whitespace."""
+    if not values:
+        return []
+    return [item.strip() for raw in values for item in raw.split(",") if item.strip()]
+
+
 def _build_notifications(
     notify_slack: Optional[list[str]] = None,
     notify_email: Optional[list[str]] = None,
     notify_on: Optional[list[str]] = None,
 ) -> list[dict]:
     """Build notification entries from notification flags."""
-    slack_destinations = [s for s in (notify_slack or []) if s.strip()]
-    email_addresses = [e for e in (notify_email or []) if e.strip()]
+    slack_destinations = _split_csv(notify_slack)
+    email_addresses = _split_csv(notify_email)
+    event_keys = _split_csv(notify_on)
 
     if not slack_destinations and not email_addresses:
-        if notify_on:
+        if event_keys:
             _LOG.warning(
                 "--notify-on specified without --notify-slack or --notify-email; "
                 "no notifications will be sent"
             )
         return []
 
-    event_types = (
-        [_NOTIFY_ON_MAP[e] for e in notify_on] if notify_on else _DEFAULT_NOTIFY_ON
-    )
+    if event_keys:
+        invalid = [e for e in event_keys if e not in _NOTIFY_ON_MAP]
+        if invalid:
+            raise ValueError(
+                f"Invalid --notify-on values: {invalid}. "
+                f"Valid choices: {list(_NOTIFY_ON_MAP)}"
+            )
+        event_types = [_NOTIFY_ON_MAP[e] for e in event_keys]
+    else:
+        event_types = _DEFAULT_NOTIFY_ON
 
     notifications: list[dict] = []
     if slack_destinations:

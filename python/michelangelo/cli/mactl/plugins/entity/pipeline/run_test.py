@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 from michelangelo.cli.mactl.plugins.entity.pipeline.run import (
     _build_notifications,
+    _split_csv,
     convert_crd_metadata_pipeline_run,
     generate_pipeline_run_name,
     generate_pipeline_run_object,
@@ -462,3 +463,56 @@ class PipelineRunTest(TestCase):
         self.assertEqual(result, [])
         mock_log.warning.assert_called_once()
         self.assertIn("--notify-on", mock_log.warning.call_args[0][0])
+
+    # ------------------------------------------------------------------
+    # Comma-separated value tests
+    # ------------------------------------------------------------------
+
+    def test_split_csv_basic(self):
+        """Test _split_csv splits comma-separated values."""
+        self.assertEqual(_split_csv(["a,b,c"]), ["a", "b", "c"])
+
+    def test_split_csv_mixed_repeat_and_csv(self):
+        """Test _split_csv handles mix of repeated and comma-separated."""
+        self.assertEqual(_split_csv(["a", "b,c"]), ["a", "b", "c"])
+
+    def test_split_csv_strips_whitespace(self):
+        """Test _split_csv strips whitespace around values."""
+        self.assertEqual(_split_csv(["a , b"]), ["a", "b"])
+
+    def test_split_csv_filters_empty(self):
+        """Test _split_csv filters empty segments."""
+        self.assertEqual(_split_csv(["a,,b", ""]), ["a", "b"])
+
+    def test_split_csv_none(self):
+        """Test _split_csv returns empty list for None."""
+        self.assertEqual(_split_csv(None), [])
+
+    def test_build_notifications_csv_email(self):
+        """Test _build_notifications with comma-separated emails."""
+        result = _build_notifications(notify_email=["a@x.com,b@x.com"])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["emails"], ["a@x.com", "b@x.com"])
+
+    def test_build_notifications_csv_notify_on(self):
+        """Test _build_notifications with comma-separated --notify-on."""
+        result = _build_notifications(
+            notify_slack=["#alerts"],
+            notify_on=["SUCCEEDED,FAILED"],
+        )
+        self.assertEqual(
+            result[0]["eventTypes"],
+            [
+                "EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED",
+                "EVENT_TYPE_PIPELINE_RUN_STATE_FAILED",
+            ],
+        )
+
+    def test_build_notifications_invalid_notify_on_raises(self):
+        """Test _build_notifications raises on invalid --notify-on value."""
+        with self.assertRaises(ValueError) as ctx:
+            _build_notifications(
+                notify_slack=["#alerts"],
+                notify_on=["INVALID"],
+            )
+        self.assertIn("INVALID", str(ctx.exception))
