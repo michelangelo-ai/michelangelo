@@ -86,7 +86,14 @@ def push_step(
     import os
     import tempfile
 
-    endpoint = os.environ.get("MINIO_ENDPOINT")
+    from urllib.parse import urlparse
+
+    aws_url = os.environ.get("AWS_ENDPOINT_URL", "")
+    parsed = urlparse(aws_url) if aws_url else None
+    endpoint = parsed.netloc if parsed else None
+    secure = parsed.scheme == "https" if parsed else False
+    access_key = os.environ.get("AWS_ACCESS_KEY_ID", "")
+    secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
 
     # ── Locate XGBoost checkpoint ────────────────────────────────────────────
     # In a remote run, train_result.path is an S3 path (e.g.
@@ -99,9 +106,9 @@ def push_step(
 
         _mc = Minio(
             endpoint,
-            access_key=os.environ.get("MINIO_ACCESS_KEY", ""),
-            secret_key=os.environ.get("MINIO_SECRET_KEY", ""),
-            secure=os.environ.get("MINIO_SECURE", "true").lower() != "false",
+            access_key=access_key,
+            secret_key=secret_key,
+            secure=secure,
         )
         # Normalize: strip s3:// scheme if present
         s3_path = raw_path.removeprefix("s3://")
@@ -149,9 +156,8 @@ def push_step(
     pr.validation_data.load_pandas_dataframe()
 
     # ── Storage backend ───────────────────────────────────────────────────────
-    # MINIO_* env vars → MinIO / S3-compatible (remote runs).
-    # Unset → local temp directory (development and CI runs).
-    # Separate from the UniFlow checkpoint store (configured via --storage-url).
+    # AWS_ENDPOINT_URL set → MinIO / S3-compatible remote storage.
+    # Unset → local temp directory (development and CI).
     #
     # To use a different backend (GCS, Azure Blob, HDFS, …), subclass
     # StorageBackend and implement upload() / download():
@@ -162,25 +168,27 @@ def push_step(
     #       def upload(self, local_path: str, destination_key: str) -> str: ...
     #       def download(self, uri: str, local_path: str) -> None: ...
     if endpoint:
-        _required_minio = ("MINIO_BUCKET", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY")
-        missing = [k for k in _required_minio if k not in os.environ]
-        if missing:
+        # Bucket: AWS_S3_BUCKET → parsed from MA_FILE_SYSTEM/UF_STORAGE_URL.
+        bucket = (
+            os.environ.get("AWS_S3_BUCKET")
+            or (
+                os.environ.get("MA_FILE_SYSTEM") or os.environ.get("UF_STORAGE_URL", "s3://default")
+            ).removeprefix("s3://").split("/")[0]
+        )
+        if not bucket:
             raise OSError(
-                f"MINIO_ENDPOINT is set but required variables are missing: {missing}. "
-                "Set all MINIO_* variables or unset MINIO_ENDPOINT "
-                "to use local storage."
+                "Could not determine storage bucket. Set AWS_S3_BUCKET or MA_FILE_SYSTEM."
             )
         from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
         from michelangelo.workflow.schema.sinks.s3 import S3SinkConfig
         from michelangelo.workflow.tasks.functions.sinks import S3Sink
 
-        bucket = os.environ["MINIO_BUCKET"]
         storage_backend = MinioStorageBackend(
             endpoint=endpoint,
             bucket=bucket,
-            access_key=os.environ["MINIO_ACCESS_KEY"],
-            secret_key=os.environ["MINIO_SECRET_KEY"],
-            secure=os.environ.get("MINIO_SECURE", "true").lower() != "false",
+            access_key=access_key,
+            secret_key=secret_key,
+            secure=secure,
             create_bucket_if_missing=True,
         )
         log.info(
