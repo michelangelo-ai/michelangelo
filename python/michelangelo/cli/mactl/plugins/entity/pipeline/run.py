@@ -112,8 +112,7 @@ def add_function_signature(crd: CRD) -> None:
                         "action": "append",
                         "default": None,
                         "help": (
-                            "Email address for run notifications. "
-                            "Can be repeated."
+                            "Email address for run notifications. Can be repeated."
                         ),
                     },
                 },
@@ -343,19 +342,14 @@ def generate_pipeline_run_object(
     return pipeline_run_dict
 
 
-_DEFAULT_NOTIFY_ON = [
-    "EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED",
-    "EVENT_TYPE_PIPELINE_RUN_STATE_FAILED",
-    "EVENT_TYPE_PIPELINE_RUN_STATE_KILLED",
-    "EVENT_TYPE_PIPELINE_RUN_STATE_SKIPPED",
-]
-
 _NOTIFY_ON_MAP = {
     "SUCCEEDED": "EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED",
     "FAILED": "EVENT_TYPE_PIPELINE_RUN_STATE_FAILED",
     "KILLED": "EVENT_TYPE_PIPELINE_RUN_STATE_KILLED",
     "SKIPPED": "EVENT_TYPE_PIPELINE_RUN_STATE_SKIPPED",
 }
+
+_DEFAULT_NOTIFY_ON = list(_NOTIFY_ON_MAP.values())
 
 
 def _build_notifications(
@@ -364,7 +358,15 @@ def _build_notifications(
     notify_on: Optional[list[str]] = None,
 ) -> list[dict]:
     """Build notification entries from notification flags."""
-    if not notify_slack and not notify_email:
+    slack_destinations = [s for s in (notify_slack or []) if s.strip()]
+    email_addresses = [e for e in (notify_email or []) if e.strip()]
+
+    if not slack_destinations and not email_addresses:
+        if notify_on:
+            _LOG.warning(
+                "--notify-on specified without --notify-slack or --notify-email; "
+                "no notifications will be sent"
+            )
         return []
 
     event_types = (
@@ -372,22 +374,22 @@ def _build_notifications(
     )
 
     notifications: list[dict] = []
-    if notify_slack:
+    if slack_destinations:
         notifications.append(
             {
                 "notificationType": "NOTIFICATION_TYPE_SLACK",
                 "eventTypes": event_types,
                 "resourceType": "RESOURCE_TYPE_PIPELINE_RUN",
-                "slackDestinations": notify_slack,
+                "slackDestinations": slack_destinations,
             }
         )
-    if notify_email:
+    if email_addresses:
         notifications.append(
             {
                 "notificationType": "NOTIFICATION_TYPE_EMAIL",
                 "eventTypes": event_types,
                 "resourceType": "RESOURCE_TYPE_PIPELINE_RUN",
-                "emails": notify_email,
+                "emails": email_addresses,
             }
         )
     return notifications

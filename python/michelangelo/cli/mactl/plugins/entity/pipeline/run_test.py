@@ -443,3 +443,22 @@ class PipelineRunTest(TestCase):
         )
 
         self.assertNotIn("notifications", result["spec"])
+
+    def test_build_notifications_empty_string_destinations_filtered(self):
+        """Test that empty-string destinations are filtered out."""
+        result = _build_notifications(notify_slack=["", " ", "#valid"])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["slackDestinations"], ["#valid"])
+
+    def test_build_notifications_all_empty_destinations(self):
+        """Test that all-empty destinations produce no notifications."""
+        result = _build_notifications(notify_slack=["", "  "])
+        self.assertEqual(result, [])
+
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run._LOG")
+    def test_build_notifications_notify_on_without_destinations_warns(self, mock_log):
+        """Test that --notify-on without destinations logs a warning."""
+        result = _build_notifications(notify_on=["FAILED"])
+        self.assertEqual(result, [])
+        mock_log.warning.assert_called_once()
+        self.assertIn("--notify-on", mock_log.warning.call_args[0][0])
