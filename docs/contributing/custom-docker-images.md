@@ -2,8 +2,126 @@
 
 > **Who is this for?** This guide is for **contributors** developing Michelangelo's core platform services (API server, controller manager, worker). If you're building ML pipelines using the Michelangelo SDK, you don't need custom Docker images -- the default sandbox images work out of the box.
 
-This guide explains how to build and publish custom Docker images for a feature branch using the dev release workflow, update sandbox manifests to reference those images, and run the sandbox to test your changes.
+This guide explains two ways to build and test custom images:
 
+- **[Option A — Local build](#option-a--local-build-no-github-push-required)**: build on your machine, import directly into k3d. Fast iteration loop — no GitHub push or CI required.
+- **[Option B — CI build](#option-b--ci-build-via-github-actions)**: push your branch, let GitHub Actions build multi-arch images and push them to GHCR, then point the sandbox at those images.
+
+---
+
+## Option A — Local build (no GitHub push required)
+
+Use this option when you want a fast feedback loop or are not ready to push your branch.
+
+### Prerequisites
+
+- Docker with BuildKit enabled (Docker Desktop ≥ 4.x)
+- `k3d` — a sandbox cluster must already exist or you will create one in step 5
+- The bazel-managed Go 1.24 binary (downloaded automatically on the first `bazel build`):
+  ```bash
+  # Locate it after any bazel build has run
+  find /private/var/tmp/_bazel_$(whoami) -name "go" -path "*/rules_go~~go_sdk~*/bin/go" 2>/dev/null | head -1
+  ```
+  Set a shell variable for convenience:
+  ```bash
+  export GOBIN=$(find /private/var/tmp/_bazel_$(whoami) -name "go" -path "*/rules_go~~go_sdk~*/bin/go" 2>/dev/null | head -1)
+  ```
+
+### Step 1: Build the binaries
+
+Run all three builds in parallel from the repo root. The binaries must target `linux/arm64` (Apple Silicon) or `linux/amd64` (Intel/CI).
+
+```bash
+cd go
+
+# Apple Silicon (arm64)
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 $GOBIN build -o ../apiserver     ./cmd/apiserver     &
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 $GOBIN build -o ../controllermgr ./cmd/controllermgr &
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 $GOBIN build -o ../worker        ./cmd/worker        &
+wait && echo "All builds done"
+```
+
+> **Why `CGO_ENABLED=0`?** The distroless base image has no C runtime. Disabling CGO produces a fully static binary that works without it.
+
+### Step 2: Build the Docker images
+
+```bash
+cd ..   # repo root
+
+for svc in apiserver controllermgr worker; do
+  docker build --platform linux/arm64 \
+    -f docker/service.Dockerfile \
+    --build-arg BINARY_PATH=$svc \
+    --build-arg CONFIG_PATH=go/cmd/$svc/config \
+    -t ghcr.io/michelangelo-ai/$svc:local-dev \
+    --quiet . && echo "$svc image: OK" &
+done
+wait && echo "All images built"
+```
+
+### Step 3: Delete and recreate the sandbox
+
+```bash
+cd python
+poetry run ma sandbox delete
+poetry run ma sandbox create --workflow cadence   # or --workflow temporal
+```
+
+### Step 4: Import images into k3d
+
+```bash
+k3d image import \
+  ghcr.io/michelangelo-ai/apiserver:local-dev \
+  ghcr.io/michelangelo-ai/controllermgr:local-dev \
+  ghcr.io/michelangelo-ai/worker:local-dev \
+  -c michelangelo-sandbox
+```
+
+### Step 5: Point deployments at the local images
+
+```bash
+kubectl set image deployment/michelangelo-apiserver    apiserver=ghcr.io/michelangelo-ai/apiserver:local-dev
+kubectl set image deployment/michelangelo-controllermgr app=ghcr.io/michelangelo-ai/controllermgr:local-dev
+kubectl set image deployment/michelangelo-worker        app=ghcr.io/michelangelo-ai/worker:local-dev
+```
+
+### Step 6: Verify
+
+```bash
+kubectl rollout status deployment/michelangelo-apiserver \
+  deployment/michelangelo-controllermgr \
+  deployment/michelangelo-worker
+kubectl get pods -l app.kubernetes.io/instance=michelangelo
+```
+
+All three pods should reach `Running`. Confirm the image is the local build:
+
+```bash
+kubectl describe pod -l app.kubernetes.io/component=apiserver | grep Image:
+```
+
+### Iterating on changes
+
+After each code change, rebuild only the affected binary and image, then re-import and restart that one pod:
+
+```bash
+# Example: rebuilding only the worker
+cd go && GOOS=linux GOARCH=arm64 CGO_ENABLED=0 $GOBIN build -o ../worker ./cmd/worker
+cd ..
+docker build --platform linux/arm64 -f docker/service.Dockerfile \
+  --build-arg BINARY_PATH=worker \
+  --build-arg CONFIG_PATH=go/cmd/worker/config \
+  -t ghcr.io/michelangelo-ai/worker:local-dev --quiet .
+k3d image import ghcr.io/michelangelo-ai/worker:local-dev -c michelangelo-sandbox
+kubectl rollout restart deployment/michelangelo-worker
+kubectl rollout status  deployment/michelangelo-worker
+```
+
+---
+
+## Option B — CI build via GitHub Actions
+
+Use this option when your branch is ready to share, you need multi-arch images (`linux/amd64` + `linux/arm64`), or you want a stable image tag to share with teammates.
 
 ### 1) Create or switch to your feature branch
 ```bash
