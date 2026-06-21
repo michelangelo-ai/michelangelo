@@ -98,9 +98,8 @@ securityContext:
 # (mysql:3306, root/root). The cadence and cadence_visibility databases are
 # auto-created by the schema-server Job.
 #
-# The frontend Service stays ClusterIP (upstream chart hardcodes it).
-# In-cluster consumers use michelangelo-cadence-frontend:7833.
-# Host access for the cadence CLI uses kubectl port-forward in sandbox.py.
+# The Cadence frontend Service stays ClusterIP (upstream chart hardcodes it).
+# Host access for the cadence CLI works via k3d port mapping to NodePort.
 # -----------------------------------------------------------------------------
 cadence:
   enabled: true

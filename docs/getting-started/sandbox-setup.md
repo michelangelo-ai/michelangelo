@@ -99,7 +99,7 @@ ma sandbox create
 ma sandbox demo pipeline
 ```
 
-> **Tip:** If you prefer not to activate the venv, you can prefix each command with `poetry run` (e.g., `poetry run ma sandbox create`). `ma sandbox create` automatically port-forwards the API server (`localhost:15566`) so the `ma` CLI works immediately after setup.
+> **Tip:** If you prefer not to activate the venv, you can prefix each command with `poetry run` (e.g., `poetry run ma sandbox create`). The sandbox exposes the API server on `localhost:15566` via NodePort so the `ma` CLI works immediately after setup.
 
 ### Choosing a workflow engine
 
@@ -212,17 +212,16 @@ For the full story on local vs. remote execution, building Docker images, config
 
 ### `ma` CLI commands fail with `connection attempt timed out`
 
-The `ma` CLI connects to the API server over gRPC/HTTP2. The k3d NodePort load balancer does not reliably forward HTTP2 traffic, so direct connections to `localhost:15566` time out even though TCP connects successfully.
+The `ma` CLI connects to the API server over gRPC at `localhost:15566`. The sandbox maps this port via k3d NodePort so it works out of the box after `ma sandbox create`.
 
-**Fix:** port-forward the API server service before running any `ma` commands:
+If `ma` commands time out, verify the NodePort mapping is active:
 
 ```bash
-kubectl port-forward svc/michelangelo-apiserver 15566:15566 &
+kubectl get svc michelangelo-apiserver -o jsonpath='{.spec.type}'
+# Should print "NodePort"
 ```
 
-Run this once after `ma sandbox create` (or `ma sandbox start`). To make it persistent across terminal sessions, add it to a background script or use a terminal multiplexer (tmux, screen).
-
-The default CLI configuration (`~/.ma/config.toml`) uses `address = "127.0.0.1:15566"`, which works correctly once the port-forward is running.
+The default CLI configuration (`~/.ma/config.toml`) uses `address = "127.0.0.1:15566"`.
 
 ### `ModuleNotFoundError: No module named 'grpc_reflection'`
 
