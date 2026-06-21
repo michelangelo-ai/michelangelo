@@ -336,33 +336,21 @@ class PipelineRunTest(TestCase):
 
     def test_build_notifications_slack(self):
         """Test _build_notifications with Slack destinations."""
-        result = _build_notifications(
-            notify_slack=["@sally.lee", "#ml-alerts"]
-        )
+        result = _build_notifications(notify_slack=["@sally.lee", "#ml-alerts"])
 
         self.assertEqual(len(result), 1)
-        self.assertEqual(
-            result[0]["notificationType"], "NOTIFICATION_TYPE_SLACK"
-        )
-        self.assertEqual(
-            result[0]["slackDestinations"], ["@sally.lee", "#ml-alerts"]
-        )
-        self.assertEqual(
-            result[0]["resourceType"], "RESOURCE_TYPE_PIPELINE_RUN"
-        )
+        self.assertEqual(result[0]["notificationType"], "NOTIFICATION_TYPE_SLACK")
+        self.assertEqual(result[0]["slackDestinations"], ["@sally.lee", "#ml-alerts"])
+        self.assertEqual(result[0]["resourceType"], "RESOURCE_TYPE_PIPELINE_RUN")
         # All 4 event types by default
         self.assertEqual(len(result[0]["eventTypes"]), 4)
 
     def test_build_notifications_email(self):
         """Test _build_notifications with email addresses."""
-        result = _build_notifications(
-            notify_email=["a@x.com", "b@x.com"]
-        )
+        result = _build_notifications(notify_email=["a@x.com", "b@x.com"])
 
         self.assertEqual(len(result), 1)
-        self.assertEqual(
-            result[0]["notificationType"], "NOTIFICATION_TYPE_EMAIL"
-        )
+        self.assertEqual(result[0]["notificationType"], "NOTIFICATION_TYPE_EMAIL")
         self.assertEqual(result[0]["emails"], ["a@x.com", "b@x.com"])
 
     def test_build_notifications_both(self):
@@ -414,9 +402,7 @@ class PipelineRunTest(TestCase):
         )
 
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.get_user_name")
-    def test_generate_pipeline_run_object_with_notifications(
-        self, mock_get_user_name
-    ):
+    def test_generate_pipeline_run_object_with_notifications(self, mock_get_user_name):
         """Test pipeline run object includes notifications."""
         mock_get_user_name.return_value = "test-user"
 
@@ -434,12 +420,9 @@ class PipelineRunTest(TestCase):
         self.assertEqual(len(notifs), 2)
 
         slack_notif = next(
-            n for n in notifs
-            if n["notificationType"] == "NOTIFICATION_TYPE_SLACK"
+            n for n in notifs if n["notificationType"] == "NOTIFICATION_TYPE_SLACK"
         )
-        self.assertEqual(
-            slack_notif["slackDestinations"], ["@sally.lee", "#ml-team"]
-        )
+        self.assertEqual(slack_notif["slackDestinations"], ["@sally.lee", "#ml-team"])
         self.assertEqual(
             slack_notif["eventTypes"],
             [
@@ -449,9 +432,7 @@ class PipelineRunTest(TestCase):
         )
 
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.get_user_name")
-    def test_generate_pipeline_run_object_no_notifications(
-        self, mock_get_user_name
-    ):
+    def test_generate_pipeline_run_object_no_notifications(self, mock_get_user_name):
         """Test pipeline run object has no notifications field when flags absent."""
         mock_get_user_name.return_value = "test-user"
 
