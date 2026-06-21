@@ -85,35 +85,58 @@ def add_function_signature(crd: CRD) -> None:
                 },
                 {
                     "func_signature": Parameter(
-                        "slack",
+                        "notify_slack",
                         Parameter.POSITIONAL_OR_KEYWORD,
                         default=None,
                     ),
-                    "args": ["--slack"],
+                    "args": ["--notify-slack"],
                     "kwargs": {
                         "type": str,
-                        "required": False,
+                        "action": "append",
                         "default": None,
                         "help": (
-                            "Comma-separated Slack destinations (channels or "
-                            "@users) for run notifications"
+                            "Slack destination (channel or @user) for run "
+                            "notifications. Can be repeated."
                         ),
                     },
                 },
                 {
                     "func_signature": Parameter(
-                        "email",
+                        "notify_email",
                         Parameter.POSITIONAL_OR_KEYWORD,
                         default=None,
                     ),
-                    "args": ["--email"],
+                    "args": ["--notify-email"],
                     "kwargs": {
                         "type": str,
-                        "required": False,
+                        "action": "append",
                         "default": None,
                         "help": (
-                            "Comma-separated email addresses for run "
-                            "notifications"
+                            "Email address for run notifications. "
+                            "Can be repeated."
+                        ),
+                    },
+                },
+                {
+                    "func_signature": Parameter(
+                        "notify_on",
+                        Parameter.POSITIONAL_OR_KEYWORD,
+                        default=None,
+                    ),
+                    "args": ["--notify-on"],
+                    "kwargs": {
+                        "type": str,
+                        "action": "append",
+                        "default": None,
+                        "choices": [
+                            "SUCCEEDED",
+                            "FAILED",
+                            "KILLED",
+                            "SKIPPED",
+                        ],
+                        "help": (
+                            "Event type to notify on. Can be repeated. "
+                            "Default: SUCCEEDED FAILED KILLED SKIPPED"
                         ),
                     },
                 },
@@ -164,15 +187,17 @@ def generate_run(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = 
 
         # Handle optional parameters
         _resume_from = bound_args.arguments.get("resume_from")
-        _slack = bound_args.arguments.get("slack")
-        _email = bound_args.arguments.get("email")
+        _notify_slack = bound_args.arguments.get("notify_slack")
+        _notify_email = bound_args.arguments.get("notify_email")
+        _notify_on = bound_args.arguments.get("notify_on")
 
         run_kwargs = {
             "namespace": _namespace,
             "name": _name,
             "resume_from": _resume_from,
-            "slack": _slack,
-            "email": _email,
+            "notify_slack": _notify_slack,
+            "notify_email": _notify_email,
+            "notify_on": _notify_on,
         }
 
         pipeline_run_dict = _self.func_crd_metadata_converter(
@@ -227,8 +252,9 @@ def convert_crd_metadata_pipeline_run(
     namespace = yaml_dict["namespace"]
     pipeline_name = yaml_dict["name"]
     resume_from = yaml_dict.get("resume_from")
-    slack = yaml_dict.get("slack")
-    email = yaml_dict.get("email")
+    notify_slack = yaml_dict.get("notify_slack")
+    notify_email = yaml_dict.get("notify_email")
+    notify_on = yaml_dict.get("notify_on")
     run_name = generate_pipeline_run_name()
 
     _LOG.info(
@@ -243,8 +269,9 @@ def convert_crd_metadata_pipeline_run(
         pipeline_name=pipeline_name,
         namespace=namespace,
         resume_from=resume_from,
-        slack=slack,
-        email=email,
+        notify_slack=notify_slack,
+        notify_email=notify_email,
+        notify_on=notify_on,
     )
 
     return {"pipeline_run": pipeline_run}
@@ -255,8 +282,9 @@ def generate_pipeline_run_object(
     pipeline_name: str,
     namespace: str,
     resume_from: Optional[str] = None,
-    slack: Optional[str] = None,
-    email: Optional[str] = None,
+    notify_slack: Optional[list[str]] = None,
+    notify_email: Optional[list[str]] = None,
+    notify_on: Optional[list[str]] = None,
 ) -> dict:
     """Generate PipelineRun object as dictionary.
 
@@ -266,8 +294,9 @@ def generate_pipeline_run_object(
         namespace: Kubernetes namespace
         resume_from: Optional resume specification in format
             "pipeline_run_name:step_name"
-        slack: Comma-separated Slack destinations for notifications
-        email: Comma-separated email addresses for notifications
+        notify_slack: Slack destinations for notifications
+        notify_email: Email addresses for notifications
+        notify_on: Event types to notify on (defaults to all)
 
     Returns:
         dict: Configured pipeline run object as dictionary
@@ -302,7 +331,11 @@ def generate_pipeline_run_object(
             _LOG.warning("Failed to parse resume_from: %r", resume_from)
 
     # Add notifications if --slack or --email provided
-    notifications = _build_notifications(slack=slack, email=email)
+    notifications = _build_notifications(
+        notify_slack=notify_slack,
+        notify_email=notify_email,
+        notify_on=notify_on,
+    )
     if notifications:
         pipeline_run_dict["spec"]["notifications"] = notifications
 
@@ -310,36 +343,51 @@ def generate_pipeline_run_object(
     return pipeline_run_dict
 
 
-_NOTIFICATION_EVENT_TYPES = [
+_DEFAULT_NOTIFY_ON = [
     "EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED",
     "EVENT_TYPE_PIPELINE_RUN_STATE_FAILED",
     "EVENT_TYPE_PIPELINE_RUN_STATE_KILLED",
+    "EVENT_TYPE_PIPELINE_RUN_STATE_SKIPPED",
 ]
+
+_NOTIFY_ON_MAP = {
+    "SUCCEEDED": "EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED",
+    "FAILED": "EVENT_TYPE_PIPELINE_RUN_STATE_FAILED",
+    "KILLED": "EVENT_TYPE_PIPELINE_RUN_STATE_KILLED",
+    "SKIPPED": "EVENT_TYPE_PIPELINE_RUN_STATE_SKIPPED",
+}
 
 
 def _build_notifications(
-    slack: Optional[str] = None, email: Optional[str] = None
+    notify_slack: Optional[list[str]] = None,
+    notify_email: Optional[list[str]] = None,
+    notify_on: Optional[list[str]] = None,
 ) -> list[dict]:
-    """Build notification entries from --slack and --email flag values."""
+    """Build notification entries from notification flags."""
+    if not notify_slack and not notify_email:
+        return []
+
+    event_types = (
+        [_NOTIFY_ON_MAP[e] for e in notify_on] if notify_on else _DEFAULT_NOTIFY_ON
+    )
+
     notifications: list[dict] = []
-    if slack:
-        destinations = [s.strip() for s in slack.split(",")]
+    if notify_slack:
         notifications.append(
             {
                 "notificationType": "NOTIFICATION_TYPE_SLACK",
-                "eventTypes": _NOTIFICATION_EVENT_TYPES,
+                "eventTypes": event_types,
                 "resourceType": "RESOURCE_TYPE_PIPELINE_RUN",
-                "slackDestinations": destinations,
+                "slackDestinations": notify_slack,
             }
         )
-    if email:
-        addresses = [e.strip() for e in email.split(",")]
+    if notify_email:
         notifications.append(
             {
                 "notificationType": "NOTIFICATION_TYPE_EMAIL",
-                "eventTypes": _NOTIFICATION_EVENT_TYPES,
+                "eventTypes": event_types,
                 "resourceType": "RESOURCE_TYPE_PIPELINE_RUN",
-                "emails": addresses,
+                "emails": notify_email,
             }
         )
     return notifications
