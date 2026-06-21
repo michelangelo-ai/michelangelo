@@ -62,10 +62,10 @@ def push_step(
 
     All four artifacts share the same storage backend:
 
-    - **Remote** (``MINIO_ENDPOINT`` set): ``MinioStorageBackend`` — model and
+    - **Remote** (``AWS_ENDPOINT_URL`` set): ``MinioStorageBackend`` — model and
       eval report are uploaded directly; datasets are serialised to Parquet and
       uploaded via ``S3Sink``.
-    - **Local** (default): ``LocalStorageBackend`` — model and eval report are
+    - **Local** (``AWS_ENDPOINT_URL`` unset): ``LocalStorageBackend`` — model and eval report are
       copied to a temp directory; datasets are written as Parquet via
       ``LocalFileSink``.
 
@@ -88,8 +88,8 @@ def push_step(
 
     from urllib.parse import urlparse
 
-    aws_url = os.environ.get("AWS_ENDPOINT_URL", "")
-    parsed = urlparse(aws_url) if aws_url else None
+    s3_endpoint = os.environ.get("AWS_ENDPOINT_URL", "")
+    parsed = urlparse(s3_endpoint) if s3_endpoint else None
     endpoint = parsed.netloc if parsed else None
     secure = parsed.scheme == "https" if parsed else False
     access_key = os.environ.get("AWS_ACCESS_KEY_ID", "")

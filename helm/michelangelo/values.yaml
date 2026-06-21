@@ -135,7 +135,7 @@ apiserver:
 
   # Apiserver-specific config knobs. Defaults match the source sandbox YAML.
   metadataStorage:
-    enable: false
+    enable: true
   crdSync:
     enableUpdate: true
 

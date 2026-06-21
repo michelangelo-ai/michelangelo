@@ -185,7 +185,7 @@ Then run it:
 
 ```bash
 cd michelangelo/python
-PYTHONPATH=. poetry run python examples/california_housing_xgb/california_housing_xgb.py
+PYTHONPATH=. poetry run python examples/pipelines/california_housing_xgb/california_housing_xgb.py
 ```
 
 Local runs execute everything in your Python interpreter with zero infrastructure setup. This is the fastest way to iterate on your workflow logic.
@@ -204,7 +204,7 @@ k3d image import my-workflow:latest -c michelangelo-sandbox
 ### Run with remote execution
 
 ```bash
-PYTHONPATH=. poetry run python examples/california_housing_xgb/california_housing_xgb.py remote-run \
+PYTHONPATH=. poetry run python examples/pipelines/california_housing_xgb/california_housing_xgb.py remote-run \
   --image docker.io/library/my-workflow:latest \
   --storage-url s3://my-bucket/workflows \
   --yes
@@ -217,32 +217,56 @@ Remote runs execute workflow code in a Cadence/Temporal worker and task code in 
 
 To manage your workflow through MA Studio and the `ma` CLI, register it as a pipeline.
 
+### Create a project
+
+Pipelines belong to a project. Create one first using the example project config:
+
+```bash
+ma project apply -f examples/config/project.yaml
+```
+
+This creates the `ma-examples` project with its namespace. The project config at
+`examples/config/project.yaml` defines ownership, tier, and repository metadata.
+For details on project configuration, see
+[Project Management for ML Pipelines](./project-management-for-ml-pipelines.md).
+
 ### Create pipeline.yaml
+
+Create a pipeline manifest that references your workflow. The `michelangelo/uniflow-image`
+annotation specifies the Docker image that runs your task code in Kubernetes:
 
 ```yaml
 apiVersion: michelangelo.api/v2
 kind: Pipeline
 metadata:
-  namespace: my-project  # Your project name
-  name: california-housing-xgb
+  namespace: "ma-examples"
+  name: "california-housing-xgb"
   annotations:
-    michelangelo/uniflow-image: ghcr.io/michelangelo-ai/examples:main
+    michelangelo/uniflow-image: docker.io/library/my-workflow:latest # Example: ghcr.io/michelangelo-ai/examples:main
 spec:
-  type: PIPELINE_TYPE_TRAIN
+  type: "PIPELINE_TYPE_TRAIN"
   manifest:
-    filePath: examples.california_housing_xgb.california_housing_xgb
+    filePath: examples.pipelines.california_housing_xgb.california_housing_xgb
 ```
+
+The California Housing XGBoost example includes this manifest at
+`examples/pipelines/california_housing_xgb/pipeline.yaml`.
+
+> **Sandbox tip:** when testing locally with a k3d sandbox, change the image
+> to your locally-built image (e.g. `docker.io/library/my-workflow:latest`)
+> and import it into the cluster with `k3d image import`. The `ghcr.io` image
+> is for CI and production deployments.
 
 ### Register the pipeline
 
 ```bash
-ma pipeline apply -f pipeline.yaml
+ma pipeline apply -f examples/pipelines/california_housing_xgb/pipeline.yaml
 ```
 
 ### Run the registered pipeline
 
 ```bash
-ma pipeline run --namespace my-project --name california-housing-xgb
+ma pipeline run --namespace ma-examples --name california-housing-xgb
 ```
 
 ## Workflow constraints
@@ -315,7 +339,7 @@ def train_workflow(dataset_cols: str):
 
 ## Complete example
 
-See the full California Housing XGBoost example at [`python/examples/california_housing_xgb/`](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/california_housing_xgb). This example demonstrates:
+See the full California Housing XGBoost example at [`python/examples/pipelines/california_housing_xgb/`](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/pipelines/california_housing_xgb). This example demonstrates:
 
 * **Heterogeneous workflow**: Ray tasks for data prep and training, Spark task for preprocessing
 * **Task caching**: Reuse feature preparation results across runs
