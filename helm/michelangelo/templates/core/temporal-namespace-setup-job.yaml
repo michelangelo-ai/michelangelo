@@ -1,0 +1,48 @@
+{{- if and .Values.temporal.enabled (eq .Values.workflow.engine "temporal") }}
+{{- $endpoint := required "workflow.endpoint is required" .Values.workflow.endpoint }}
+{{- $domain := .Values.workflow.domain | default "default" }}
+{{- $frontendHost := $endpoint | regexFind "^[^:]+" }}
+{{- $frontendPort := "7233" }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "temporal-namespace-setup") }}
+  labels:
+    {{- include "michelangelo.componentLabels" (dict "context" . "component" "temporal-namespace-setup") | nindent 4 }}
+    app.kubernetes.io/name: temporal
+    app.kubernetes.io/component: schema
+spec:
+  backoffLimit: 10
+  template:
+    metadata:
+      labels:
+        {{- include "michelangelo.componentLabels" (dict "context" . "component" "temporal-namespace-setup") | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-for-temporal-frontend
+          image: busybox
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z {{ $frontendHost }} {{ $frontendPort }}; do
+                echo "waiting for temporal frontend {{ $frontendHost }}:{{ $frontendPort }}..."; sleep 2;
+              done
+      containers:
+        - name: register-namespace
+          image: "{{ .Values.temporal.admintools.image.repository }}:{{ .Values.temporal.admintools.image.tag }}"
+          imagePullPolicy: {{ .Values.temporal.admintools.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              if tctl --address {{ $endpoint }} --namespace {{ $domain }} namespace describe 2>&1 | grep -q "Name:"; then
+                echo "Namespace '{{ $domain }}' already exists — skipping registration."
+                exit 0
+              fi
+              tctl --address {{ $endpoint }} --namespace {{ $domain }} namespace register \
+                --retention 7 \
+                --description "Default Michelangelo namespace (auto-registered by Helm)"
+              echo "Namespace '{{ $domain }}' registered."
+{{- end }}
