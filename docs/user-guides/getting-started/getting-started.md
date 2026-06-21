@@ -252,10 +252,11 @@ spec:
 The California Housing XGBoost example includes this manifest at
 `examples/pipelines/california_housing_xgb/pipeline.yaml`.
 
-> **Sandbox tip:** when testing locally with a k3d sandbox, change the image
-> to your locally-built image (e.g. `docker.io/library/my-workflow:latest`)
-> and import it into the cluster with `k3d image import`. The `ghcr.io` image
-> is for CI and production deployments.
+> **Sandbox tip:** the `michelangelo/uniflow-image` annotation controls which
+> Docker image runs your tasks. For a k3d sandbox, build the image from Step 4
+> (`docker build -t my-workflow:latest -f ./examples/Dockerfile .`) and import
+> it with `k3d image import`. The `ghcr.io/michelangelo-ai/examples:main`
+> image is published by CI for production deployments.
 
 ### Register the pipeline
 

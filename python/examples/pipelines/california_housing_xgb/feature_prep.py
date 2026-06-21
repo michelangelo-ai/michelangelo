@@ -27,7 +27,7 @@ __all__ = ["feature_prep"]
         worker_memory="4Gi",
         worker_instances=0,
     ),
-    cache_enabled=False,
+    cache_enabled=False,  # off for tutorial simplicity; enable in production
 )
 def feature_prep(
     columns: list[str],

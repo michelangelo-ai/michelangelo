@@ -133,9 +133,9 @@ apiserver:
     qps: 300
     burst: 600
 
-  # Apiserver-specific config knobs. Defaults match the source sandbox YAML.
+  # Apiserver-specific config knobs. 
   metadataStorage:
-    enable: true
+    enable: false
   crdSync:
     enableUpdate: true
 
@@ -342,7 +342,7 @@ controllermgr:
 
   # Metadata storage knobs (ingester). Defaults match the source sandbox YAML.
   metadataStorage:
-    enable: true
+    enable: false
     deletionDelay: 10s
     enableResourceVersionCache: false
 

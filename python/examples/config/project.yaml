@@ -8,9 +8,9 @@ spec:
   owner:
     owningTeam: "00000000-0000-0000-0000-000000000001"
     owners:
-      - sally.lee
+      - your-username
     ownerGroups:
-      - ml-platform-team
+      - your-team
   tier: 4
   gitRepo: https://github.com/michelangelo-ai/michelangelo
   rootDir: python/examples

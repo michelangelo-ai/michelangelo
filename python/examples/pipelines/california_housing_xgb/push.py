@@ -91,6 +91,11 @@ def push_step(
     s3_endpoint = os.environ.get("AWS_ENDPOINT_URL", "")
     parsed = urlparse(s3_endpoint) if s3_endpoint else None
     endpoint = parsed.netloc if parsed else None
+    if s3_endpoint and not endpoint:
+        raise ValueError(
+            f"AWS_ENDPOINT_URL={s3_endpoint!r} is missing a scheme. "
+            "Use a full URL like http://minio:9091"
+        )
     secure = parsed.scheme == "https" if parsed else False
     access_key = os.environ.get("AWS_ACCESS_KEY_ID", "")
     secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY", "")

@@ -43,7 +43,7 @@ class PreprocessResult:
         executor_memory="2G",
         executor_instances=1,
     ),
-    cache_enabled=False,
+    cache_enabled=False,  # off for tutorial simplicity; enable in production
 )
 def preprocess(
     cast_float_columns: list[str],
