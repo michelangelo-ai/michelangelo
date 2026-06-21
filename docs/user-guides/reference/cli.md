@@ -230,9 +230,9 @@ ma pipeline run --namespace="my-project" --name="bert-cola-test" --resume_from=r
 
 You can attach notification rules directly to a pipeline run so you're alerted when it reaches a terminal state. This is useful for one-off runs where you want a quick "ping me when it's done" without editing YAML specs.
 
-- `--notify-slack` — Slack destination (channel or @user). Repeatable for multiple destinations.
-- `--notify-email` — Email address. Repeatable for multiple recipients.
-- `--notify-on` — Event type to trigger on: `SUCCEEDED`, `FAILED`, `KILLED`, or `SKIPPED`. Repeatable. Defaults to all four when omitted. Applies to all destinations (per-destination filtering is not yet supported — use YAML specs for that).
+- `--notify-slack` — Slack destination (channel or @user). Repeatable or comma-separated.
+- `--notify-email` — Email address. Repeatable or comma-separated.
+- `--notify-on` — Event type to trigger on: `SUCCEEDED`, `FAILED`, `KILLED`, or `SKIPPED`. Repeatable or comma-separated. Defaults to all four when omitted. Applies to all destinations (per-destination filtering is not yet supported — use YAML specs for that).
 
 Syntax:
 
@@ -249,10 +249,8 @@ Example:
 # Notify a Slack channel and two email addresses on failure or success
 ma pipeline run -n "my-project" --name="bert-cola-test" \
   --notify-slack "#ml-alerts" \
-  --notify-email alice@example.com \
-  --notify-email oncall@example.com \
-  --notify-on FAILED \
-  --notify-on SUCCEEDED
+  --notify-email alice@example.com,oncall@example.com \
+  --notify-on FAILED,SUCCEEDED
 ```
 
 For advanced notification configuration (per-destination event filtering, trigger run notifications, or standing notification rules), see [Pipeline Notifications](../ml-pipelines/notifications.md).

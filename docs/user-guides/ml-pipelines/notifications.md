@@ -44,10 +44,9 @@ For one-off runs, you can skip the YAML and attach notifications directly from t
 
 ```bash
 ma pipeline run -n my-project --name training-pipeline \
-  --notify-email you@example.com \
+  --notify-email you@example.com,oncall@example.com \
   --notify-slack "#ml-alerts" \
-  --notify-on FAILED \
-  --notify-on SUCCEEDED
+  --notify-on FAILED,SUCCEEDED
 ```
 
 The `--notify-on` filter applies to **all** destinations. For per-destination event filtering (e.g., Slack on every status, email only on failure), use the YAML spec approach below instead.
