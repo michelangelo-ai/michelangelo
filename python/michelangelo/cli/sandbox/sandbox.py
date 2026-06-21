@@ -906,6 +906,20 @@ def _deploy_services(ns: argparse.Namespace):
             stderr=subprocess.DEVNULL,
         )
 
+    # Forward the apiserver gRPC port so the `ma` CLI can reach it.
+    # The k3d NodePort load balancer does not reliably forward gRPC/HTTP2
+    # traffic, so a direct port-forward is required for CLI commands.
+    subprocess.Popen(
+        [
+            "kubectl",
+            "port-forward",
+            "svc/michelangelo-apiserver",
+            "15566:15566",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
     # Create separate compute cluster if requested
     create_compute_cluster = getattr(ns, "create_compute_cluster", False)
     compute_cluster_name = getattr(
@@ -1175,6 +1189,30 @@ def _delete(ns: argparse.Namespace):
 def _start(ns: argparse.Namespace):
     assert ns
     _exec("k3d", "cluster", "start", _michelangelo_sandbox_kube_cluster_name)
+
+    # Re-establish port-forwards after cluster restart — they don't survive
+    # a k3d stop/start cycle.
+    subprocess.Popen(
+        [
+            "kubectl",
+            "port-forward",
+            "svc/michelangelo-apiserver",
+            "15566:15566",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    subprocess.Popen(
+        [
+            "kubectl",
+            "port-forward",
+            "svc/michelangelo-cadence-frontend",
+            "7833:7833",
+            "7933:7933",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 def _stop(ns: argparse.Namespace):

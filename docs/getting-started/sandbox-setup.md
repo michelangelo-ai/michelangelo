@@ -99,7 +99,7 @@ ma sandbox create
 ma sandbox demo pipeline
 ```
 
-> **Tip:** If you prefer not to activate the venv, you can prefix each command with `poetry run` (e.g., `poetry run ma sandbox create`).
+> **Tip:** If you prefer not to activate the venv, you can prefix each command with `poetry run` (e.g., `poetry run ma sandbox create`). `ma sandbox create` automatically port-forwards the API server (`localhost:15566`) so the `ma` CLI works immediately after setup.
 
 ### Choosing a workflow engine
 
@@ -210,6 +210,20 @@ For the full story on local vs. remote execution, building Docker images, config
 
 ## Troubleshooting
 
+### `ma` CLI commands fail with `connection attempt timed out`
+
+The `ma` CLI connects to the API server over gRPC/HTTP2. The k3d NodePort load balancer does not reliably forward HTTP2 traffic, so direct connections to `localhost:15566` time out even though TCP connects successfully.
+
+**Fix:** port-forward the API server service before running any `ma` commands:
+
+```bash
+kubectl port-forward svc/michelangelo-apiserver 15566:15566 &
+```
+
+Run this once after `ma sandbox create` (or `ma sandbox start`). To make it persistent across terminal sessions, add it to a background script or use a terminal multiplexer (tmux, screen).
+
+The default CLI configuration (`~/.ma/config.toml`) uses `address = "127.0.0.1:15566"`, which works correctly once the port-forward is running.
+
 ### `ModuleNotFoundError: No module named 'grpc_reflection'`
 
 This error occurs when Python dependencies aren't fully installed. Fix it by reinstalling from the `python/` directory:
@@ -305,5 +319,5 @@ Add those exports to your `~/.zshrc` to make them permanent.
 ## What's next?
 
 - **Build your first pipeline** -- Follow [Getting Started with ML Pipelines](../user-guides/getting-started/getting-started.md) to create a training workflow (~30 min)
-- **Explore example projects** -- Try [California Housing XGBoost](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/california_housing_xgb), [BERT Text Classification](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/bert_cola), or [GPT Fine-tuning](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/gpt_oss_20b_finetune)
+- **Explore example projects** -- Try [California Housing XGBoost](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/pipelines/california_housing_xgb), [BERT Text Classification](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/bert_cola), or [GPT Fine-tuning](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/gpt_oss_20b_finetune)
 - **Learn the CLI** -- See the [CLI Reference](../user-guides/reference/cli.md) for managing pipelines and projects

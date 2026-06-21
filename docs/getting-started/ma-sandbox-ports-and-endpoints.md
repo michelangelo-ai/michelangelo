@@ -14,11 +14,11 @@ The most common URLs you'll open after the sandbox is up:
 
 | Service | URL | Default credentials |
 |---|---|---|
-| Michelangelo UI | http://localhost:8090 | none |
+| MA Studio UI | http://localhost:8090 | none |
 | MinIO Console | http://localhost:9090 | `minioadmin` / `minioadmin` |
 | Cadence Web (default) | http://localhost:8088 | none |
 | Temporal Web (with `--workflow temporal`) | http://localhost:8080 | none |
-| Grafana | http://localhost:3000 | none (anonymous access) |
+| Grafana | http://localhost:3000 | `admin` / `admin` |
 | Prometheus | http://localhost:9092 | none |
 | MLflow Tracking (with `--include-experimental mlflow`) | http://localhost:5001 | none |
 | Ray Dashboard (with `--create-compute-cluster`) | http://localhost:8265 | none |
@@ -37,7 +37,7 @@ These mappings are created automatically by `ma sandbox create`:
 
 | Service | Host port | NodePort | In-cluster service | Container port | What it's for |
 |---|---:|---:|---|---:|---|
-| Michelangelo UI | 8090 | 30011 | `michelangelo-ui` | 8090 | Web UI — your main entry point |
+| MA Studio UI | 8090 | 30011 | `michelangelo-ui` | 8090 | Web UI — your main entry point |
 | Michelangelo API Server | 15566 | 30009 | `michelangelo-apiserver` | 15566 | gRPC API (YARPC) for SDK and CLI clients |
 | Envoy (gRPC-web proxy) | 8081 | 30010 | `michelangelo-envoy` | 8081 | gRPC-web → gRPC bridge used by the UI |
 | Cadence Web | 8088 | 30004 | `michelangelo-cadence-web` | 8088 | Inspect, retry, and debug Cadence workflow runs |
