@@ -1,7 +1,7 @@
 -- ==============================================================================
 -- Michelangelo Ingester - Complete Database Schema
 -- ==============================================================================
--- This schema includes ALL 13 CRDs watched by the ingester
+-- This schema includes ALL 15 CRDs watched by the ingester
 -- Safe for production and sandbox (idempotent with IF NOT EXISTS)
 -- Generated based on protobuf GetIndexedKeyValuePairs() methods
 -- ==============================================================================
@@ -563,6 +563,82 @@ CREATE TABLE IF NOT EXISTS `trigger_run_annotations` (
     `value` TEXT,
     PRIMARY KEY (`id`),
     KEY `triggerrun_annotations_uid` (`obj_uid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ==============================================================================
+-- 14. CACHED_OUTPUT
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS `cached_output` (
+    `uid` VARCHAR(255) NOT NULL,
+    `group_ver` VARCHAR(255) NOT NULL,
+    `namespace` VARCHAR(255) NOT NULL,
+    `name` VARCHAR(255) NOT NULL,
+    `res_version` BIGINT UNSIGNED NOT NULL,
+    `create_time` DATETIME NOT NULL,
+    `update_time` DATETIME,
+    `delete_time` DATETIME,
+    `proto` MEDIUMBLOB,
+    `json` JSON,
+    PRIMARY KEY (`uid`),
+    KEY `cached_output_namespace_name` (`namespace`, `name`),
+    KEY `cached_output_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `cached_output_labels` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `obj_uid` VARCHAR(255) NOT NULL,
+    `key` VARCHAR(255) NOT NULL,
+    `value` VARCHAR(63),
+    PRIMARY KEY (`id`),
+    KEY `cached_output_labels_uid` (`obj_uid`),
+    KEY `cached_output_labels_key_value` (`key`, `value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `cached_output_annotations` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `obj_uid` VARCHAR(255) NOT NULL,
+    `key` VARCHAR(255) NOT NULL,
+    `value` TEXT,
+    PRIMARY KEY (`id`),
+    KEY `cached_output_annotations_uid` (`obj_uid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ==============================================================================
+-- 15. EVALUATION_REPORT
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS `evaluation_report` (
+    `uid` VARCHAR(255) NOT NULL,
+    `group_ver` VARCHAR(255) NOT NULL,
+    `namespace` VARCHAR(255) NOT NULL,
+    `name` VARCHAR(255) NOT NULL,
+    `res_version` BIGINT UNSIGNED NOT NULL,
+    `create_time` DATETIME NOT NULL,
+    `update_time` DATETIME,
+    `delete_time` DATETIME,
+    `proto` MEDIUMBLOB,
+    `json` JSON,
+    PRIMARY KEY (`uid`),
+    KEY `evaluation_report_namespace_name` (`namespace`, `name`),
+    KEY `evaluation_report_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `evaluation_report_labels` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `obj_uid` VARCHAR(255) NOT NULL,
+    `key` VARCHAR(255) NOT NULL,
+    `value` VARCHAR(63),
+    PRIMARY KEY (`id`),
+    KEY `evaluation_report_labels_uid` (`obj_uid`),
+    KEY `evaluation_report_labels_key_value` (`key`, `value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `evaluation_report_annotations` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `obj_uid` VARCHAR(255) NOT NULL,
+    `key` VARCHAR(255) NOT NULL,
+    `value` TEXT,
+    PRIMARY KEY (`id`),
+    KEY `evaluation_report_annotations_uid` (`obj_uid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ==============================================================================

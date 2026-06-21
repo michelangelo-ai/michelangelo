@@ -40,9 +40,9 @@ data:
                             max_age: "1728000"
                             expose_headers: "grpc-status,grpc-message"
                     http_filters:
-                      - name: envoy.filters.http.connect_grpc_bridge
+                      - name: envoy.filters.http.grpc_web
                         typed_config:
-                          "@type": type.googleapis.com/envoy.extensions.filters.http.connect_grpc_bridge.v3.FilterConfig
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_web.v3.GrpcWeb
                       - name: envoy.filters.http.cors
                         typed_config:
                           "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
