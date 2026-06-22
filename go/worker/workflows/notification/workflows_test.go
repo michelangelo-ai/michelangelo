@@ -198,35 +198,13 @@ func TestNotificationHelperFunctions(t *testing.T) {
 	})
 }
 
-// TestSendPipelineRunNotification_EndToEnd calls wf.SendPipelineRunNotification
-// directly to verify the nil guard, event-type matching, and errors.Join fan-out
-// behaviour without a real Cadence/Temporal workflow engine.
+// TestSendPipelineRunNotification_NilGuard verifies that SendPipelineRunNotification
+// returns an error for nil request or nil PipelineRun without panicking.
 //
-// RecordingSink and FailingSink are used as sinks so that no real activity
-// execution is required. The workflow is constructed with a nil backend so that
-// workflow.WithBackend is skipped and the function falls through to the fan-out
-// loop, where it calls sink.Notify directly (not via workflow.ExecuteActivity).
-func TestSendPipelineRunNotification_EndToEnd(t *testing.T) {
-	makePR := func(state v2pb.PipelineRunState, eventTypes []v2pb.Notification_EventType) *v2pb.PipelineRun {
-		return &v2pb.PipelineRun{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "e2e-run",
-				Namespace: "e2e-ns",
-			},
-			Spec: v2pb.PipelineRunSpec{
-				Notifications: []*v2pb.Notification{
-					{
-						EventTypes: eventTypes,
-						Emails:     []string{"test@example.com"},
-					},
-				},
-			},
-			Status: v2pb.PipelineRunStatus{
-				State: state,
-			},
-		}
-	}
-
+// Fan-out behaviour (event-type matching, sink dispatch, error propagation) is
+// tested in TestSendPipelineRunNotification_FanOut, which exercises the logic
+// directly without requiring a workflow.Context.
+func TestSendPipelineRunNotification_NilGuard(t *testing.T) {
 	t.Run("nil req returns error", func(t *testing.T) {
 		wf := NewWorkflow(nil, nil, nil)
 		err := wf.SendPipelineRunNotification(nil, nil)
@@ -237,60 +215,6 @@ func TestSendPipelineRunNotification_EndToEnd(t *testing.T) {
 		wf := NewWorkflow(nil, nil, nil)
 		err := wf.SendPipelineRunNotification(nil, &types.PipelineRunNotificationRequest{})
 		assert.ErrorContains(t, err, "nil")
-	})
-
-	t.Run("matching eventType dispatches to all sinks", func(t *testing.T) {
-		rec := &RecordingSink{}
-		wf := NewWorkflow(nil, nil, []Sink{rec})
-
-		req := &types.PipelineRunNotificationRequest{
-			PipelineRun: makePR(
-				v2pb.PIPELINE_RUN_STATE_SUCCEEDED,
-				[]v2pb.Notification_EventType{v2pb.EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED},
-			),
-			StudioBaseURL: "https://ml.example.com/studio/",
-			SenderEmail:   "noreply@example.com",
-		}
-
-		err := wf.SendPipelineRunNotification(nil, req)
-		assert.NoError(t, err)
-		assert.Len(t, rec.Calls, 1, "RecordingSink should have been called once")
-		assert.Equal(t, "e2e-run", rec.Calls[0].Msg.Metadata["run_name"])
-	})
-
-	t.Run("non-matching eventType dispatches nothing", func(t *testing.T) {
-		rec := &RecordingSink{}
-		wf := NewWorkflow(nil, nil, []Sink{rec})
-
-		// PipelineRun is FAILED but notification is configured for SUCCEEDED only.
-		req := &types.PipelineRunNotificationRequest{
-			PipelineRun: makePR(
-				v2pb.PIPELINE_RUN_STATE_FAILED,
-				[]v2pb.Notification_EventType{v2pb.EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED},
-			),
-		}
-
-		err := wf.SendPipelineRunNotification(nil, req)
-		assert.NoError(t, err)
-		assert.Empty(t, rec.Calls, "RecordingSink should not have been called for non-matching event")
-	})
-
-	t.Run("FailingSink error propagated via errors.Join", func(t *testing.T) {
-		fail := &FailingSink{Err: errors.New("transport unavailable")}
-		rec := &RecordingSink{}
-		wf := NewWorkflow(nil, nil, []Sink{fail, rec})
-
-		req := &types.PipelineRunNotificationRequest{
-			PipelineRun: makePR(
-				v2pb.PIPELINE_RUN_STATE_SUCCEEDED,
-				[]v2pb.Notification_EventType{v2pb.EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED},
-			),
-		}
-
-		err := wf.SendPipelineRunNotification(nil, req)
-		assert.ErrorContains(t, err, "transport unavailable")
-		// RecordingSink still receives the notification despite FailingSink error.
-		assert.Len(t, rec.Calls, 1, "RecordingSink should be called even when FailingSink fails")
 	})
 }
 
