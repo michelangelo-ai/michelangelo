@@ -16,6 +16,7 @@ import (
 const (
 	errTypeDurationOverflow = "duration_overflow"
 	errTypeSchemaMismatch   = "schema_mismatch"
+	errTypeEnumMismatch     = "enum_mismatch"
 	errTypeListFailure      = "list_failure"
 	errTypeWatchFailure     = "watch_failure"
 )
@@ -86,6 +87,12 @@ func classifyError(errMsg string) errorClass {
 	if strings.Contains(errMsg, "proto:") || strings.Contains(errMsg, "unknown field") ||
 		strings.Contains(errMsg, "wireType") {
 		return errorClass{errTypeSchemaMismatch, crdType, true}
+	}
+	// Enum version skew: CRD has a string enum value the binary doesn't know.
+	// Generated proto UnmarshalJSON returns "invalid DataType: <value>" when
+	// the enum string is not in the *_value map (proto-go/api/v2/*.pb.go).
+	if strings.Contains(errMsg, "invalid DataType") {
+		return errorClass{errTypeEnumMismatch, crdType, true}
 	}
 	if strings.Contains(errMsg, "failed to list") {
 		return errorClass{errTypeListFailure, crdType, true}

@@ -67,6 +67,20 @@ func TestClassifyError(t *testing.T) {
 			wantBlock: true,
 		},
 		{
+			name:      "enum_mismatch_unknown_value",
+			errMsg:    `failed to list *v2.Deployment: invalid DataType: TARGET_TYPE_STREAMING`,
+			wantType:  errTypeEnumMismatch,
+			wantCRD:   "*v2.Deployment",
+			wantBlock: true,
+		},
+		{
+			name:      "enum_mismatch_pipeline_type",
+			errMsg:    `failed to list *v2.Pipeline: invalid DataType: PIPELINE_TYPE_CUSTOM`,
+			wantType:  errTypeEnumMismatch,
+			wantCRD:   "*v2.Pipeline",
+			wantBlock: true,
+		},
+		{
 			name:      "watch_failure_generic",
 			errMsg:    "connection reset by peer",
 			wantType:  errTypeWatchFailure,
