@@ -60,6 +60,7 @@ func (r *Registry) IncrementCounter(name string, tags map[string]string) {
 			getTagValueOrDefault(tags, "resource_type"),
 			getTagValueOrDefault(tags, "namespace"),
 			getTagValueOrDefault(tags, "error_type"),
+			getTagValueOrDefault(tags, "blocking"),
 		)
 	}
 }
