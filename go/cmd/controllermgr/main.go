@@ -6,7 +6,6 @@ import (
 	"go.uber.org/fx"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/uber-go/tally"
@@ -129,9 +128,7 @@ func options() fx.Option {
 		cluster.Module,
 		client.Module,
 		fx.Invoke(func(logger logr.Logger) {
-			alertingLogger := controllermgr.NewAlertingLogger(logger)
-			ctrl.SetLogger(alertingLogger)
-			klog.SetLoggerWithOptions(alertingLogger, klog.ContextualLogger(true))
+			ctrl.SetLogger(logger)
 		}),
 	)
 }

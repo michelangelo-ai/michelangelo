@@ -3,7 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
-        "alerting_logger.go",
+        "reflector_monitor.go",
         "config.go",
         "module.go",
     ],
@@ -17,7 +17,9 @@ go_library(
         "@com_github_uber_go_tally//:go_default_library",
         "@io_k8s_apimachinery//pkg/runtime:go_default_library",
         "@io_k8s_client_go//dynamic:go_default_library",
+        "@io_k8s_client_go//tools/cache:go_default_library",
         "@io_k8s_sigs_controller_runtime//:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/cache:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/manager:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/metrics/server:go_default_library",
@@ -28,10 +30,9 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["alerting_logger_test.go"],
+    srcs = ["reflector_monitor_test.go"],
     embed = [":go_default_library"],
     deps = [
-        "@com_github_go_logr_logr//:go_default_library",
         "@com_github_go_logr_logr//testr:go_default_library",
     ],
 )
