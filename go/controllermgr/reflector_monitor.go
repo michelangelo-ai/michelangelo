@@ -89,9 +89,11 @@ func classifyError(errMsg string) errorClass {
 		return errorClass{errTypeSchemaMismatch, crdType, true}
 	}
 	// Enum version skew: CRD has a string enum value the binary doesn't know.
-	// Generated proto UnmarshalJSON returns "invalid DataType: <value>" when
-	// the enum string is not in the *_value map (proto-go/api/v2/*.pb.go).
-	if strings.Contains(errMsg, "invalid DataType") {
+	// Two error formats depending on the deserialization path:
+	// - apiserver/reflector: "unknown value \"X\" for enum pkg.EnumType"
+	// - generated UnmarshalJSON: "invalid DataType: X"
+	if strings.Contains(errMsg, "unknown value") && strings.Contains(errMsg, "for enum") ||
+		strings.Contains(errMsg, "invalid DataType") {
 		return errorClass{errTypeEnumMismatch, crdType, true}
 	}
 	if strings.Contains(errMsg, "failed to list") {
