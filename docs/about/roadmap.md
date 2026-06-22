@@ -13,9 +13,9 @@ The OSS release is staged so each version makes a specific, scoped promise rathe
 
 | Version | Target | Focus |
 |---|---|---|
-| **0.4.0** | July 2026 | Release management + core pipeline platform — UniFlow, Ray/ Spark integration, pipeline/run/trigger management, MA commands, MA Studio |
+| **0.4.0** | July 2026 | Release management + core pipeline platform — UniFlow, Ray/Spark integration, pipeline/run/trigger management, Michelangelo CLI, Michelangelo Studio |
 | **0.5.0** | Q3 2026 | End-to-end LLM model management — Foundation Model fine-tuning, model registry, offline inference, progressive serving |
-| **TBD** | H2 FY26 | Agent Infrastructure |
+| **TBD** | H2 2026 | Agent Infrastructure |
 
 ## Versioning Policy
 
@@ -29,20 +29,20 @@ Michelangelo follows [Semantic Versioning 2.0.0](https://semver.org/) with stabi
 
 ## Available Now
 
-These capabilities are shipped and available in the current release.
+These capabilities are shipped and available in the current release. Individual guides are the source of truth for detailed feature availability.
 
 **Project & Pipeline Management**
 - Project creation and lifecycle management
-- Pipeline authoring in K3s CRD YAML, Python, and Uniflow
+- Pipeline authoring in YAML and UniFlow (Python DSL)
 - Revision management and versioning
-- Overridable parameters via S3/GCS URLs
-- Auto-flip triggers on main branch merge
+- Overridable parameters via blobstore URL
+- Pipeline deletion with cascade cleanup (Pipeline → PipelineRun, TriggerRun)
 
 **Pipeline Execution**
 - Pipeline run execution
-- Trigger-based runs (cron, interval, and batch rerun)
+- Trigger-based runs (cron schedule)
 - Backfill runs
-- Batch rerun
+- Pipeline notifications (email and Slack on run outcomes)
 
 **Distributed Training**
 - Ray job launch and management
@@ -52,9 +52,8 @@ These capabilities are shipped and available in the current release.
 
 **Model Serving**
 - Inference server creation
-- Deployment rollout strategies (Blast, Rolling, Zonal, Shadow/A-B)
-- Endpoint traffic splitting and shadow routing
-- Training insights
+- Rolling deployment strategy
+- Traffic routing
 
 **Infrastructure & Compute**
 - Compute cluster registration
@@ -65,6 +64,7 @@ These capabilities are shipped and available in the current release.
 - Revision-gated state transitions
 - Condition engine pattern
 - Federated multi-cluster status sync
+- Finalizer-based cascade deletion
 
 ## In Progress
 
@@ -73,25 +73,24 @@ These features are actively being built and will land in upcoming releases.
 **Pipeline Management**
 - Draft-based authoring workflow
 - Dev/Prod environment labels derived from git branch
-- Pipeline deletion
+- Auto-flip triggers (automatic revision switching on new revision)
+- Interval and batch rerun trigger types
 
 **Model Deployment**
+- Deployment rollout strategies (Blast, Zonal, Shadow/A-B)
+- Endpoint traffic splitting and shadow routing
 - Automatic rollback on alert firing
 - Decommission workflow with no-traffic validation gate
 
 **Generative AI & LLM**
-- GenAI service deployment: first-class support for deploying and managing LLM-backed inference 
+- GenAI service deployment: first-class support for deploying and managing LLM-backed inference
 
 **Evaluation & Reporting**
 - Experiment reports
 
 **Alerting & Monitoring**
-- Alert-triggered auto rollback
 - Dashboard management via OSS Grafana operator
 - Prometheus-based alerting for decommission gating
-
-**Automation**
-- Finalizer-based cascade deletion (Pipeline → Revisions; FeatureGroup → Datasets)
 
 ## On the Radar
 
@@ -117,7 +116,6 @@ These are planned capabilities we are working towards adding down the road.
 - Resource usage metrics emission
 
 **Model Deployment**
-- Lockdown self-healing: detect and auto-remediate cluster lockdown conditions
 - Traffic routing via Istio/Envoy OSS gateway
 - Compute lockdown detection
 - Global endpoint name uniqueness (cross-namespace validation)
