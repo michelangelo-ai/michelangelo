@@ -2,9 +2,11 @@ package controllermgr
 
 import (
 	"errors"
+	"io"
 	"testing"
 
 	"github.com/go-logr/logr/testr"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func TestClassifyError(t *testing.T) {
@@ -78,6 +80,20 @@ func TestClassifyError(t *testing.T) {
 			wantCRD:   "unknown",
 			wantBlock: false,
 		},
+		{
+			name:      "ordering_duration_beats_list",
+			errMsg:    `failed to list *v2.Deployment: bad Duration: time: invalid duration "999s"`,
+			wantType:  errTypeDurationOverflow,
+			wantCRD:   "*v2.Deployment",
+			wantBlock: true,
+		},
+		{
+			name:      "watch_failure_with_crd_type",
+			errMsg:    "Failed to watch *v2.Deployment: connection reset",
+			wantType:  errTypeWatchFailure,
+			wantCRD:   "*v2.Deployment",
+			wantBlock: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -117,7 +133,24 @@ func TestExtractCRDTypeFromMessage(t *testing.T) {
 	}
 }
 
-func TestWatchErrorHandler(t *testing.T) {
+// TestMetricCollectorRegisters verifies the cr_reflector_errors_total counter
+// is well-formed and can be registered in an isolated registry.
+func TestMetricCollectorRegisters(t *testing.T) {
+	reg := prometheus.NewRegistry()
+	c := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "cr_reflector_errors_total",
+			Help: "Total number of reflector errors when listing or watching CRs",
+		},
+		[]string{"crd_type", "error_type", "blocking"},
+	)
+	if err := reg.Register(c); err != nil {
+		t.Fatalf("failed to register metric: %v", err)
+	}
+	c.WithLabelValues("*v2.Deployment", "duration_overflow", "true").Inc()
+}
+
+func TestWatchErrorHandler_DurationOverflow(t *testing.T) {
 	base := testr.New(t)
 	handler := NewWatchErrorHandler(base)
 
@@ -150,4 +183,22 @@ func TestWatchErrorHandler_WatchFailure(t *testing.T) {
 	handler := NewWatchErrorHandler(base)
 
 	handler(nil, errors.New("connection reset by peer"))
+}
+
+// TestWatchErrorHandler_EOF verifies that io.EOF (normal watch close) is
+// delegated to the default handler without emitting a metric.
+func TestWatchErrorHandler_EOF(t *testing.T) {
+	base := testr.New(t)
+	handler := NewWatchErrorHandler(base)
+
+	handler(nil, io.EOF)
+}
+
+// TestWatchErrorHandler_UnexpectedEOF verifies that io.ErrUnexpectedEOF
+// is delegated to the default handler without emitting a metric.
+func TestWatchErrorHandler_UnexpectedEOF(t *testing.T) {
+	base := testr.New(t)
+	handler := NewWatchErrorHandler(base)
+
+	handler(nil, io.ErrUnexpectedEOF)
 }

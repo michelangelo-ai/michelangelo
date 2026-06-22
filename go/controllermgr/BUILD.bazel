@@ -15,6 +15,7 @@ go_library(
         "//go/kubeproto/metrics:go_default_library",
         "@com_github_go_logr_logr//:go_default_library",
         "@com_github_uber_go_tally//:go_default_library",
+        "@io_k8s_apimachinery//pkg/api/errors:go_default_library",
         "@io_k8s_apimachinery//pkg/runtime:go_default_library",
         "@io_k8s_client_go//dynamic:go_default_library",
         "@io_k8s_client_go//tools/cache:go_default_library",
@@ -34,5 +35,6 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "@com_github_go_logr_logr//testr:go_default_library",
+        "@com_github_prometheus_client_golang//prometheus:go_default_library",
     ],
 )
