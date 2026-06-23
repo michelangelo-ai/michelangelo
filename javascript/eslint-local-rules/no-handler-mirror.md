@@ -1,4 +1,4 @@
-# no-event-handler-prefix
+# no-handler-mirror
 
 ## What this rule enforces
 
