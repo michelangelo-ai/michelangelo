@@ -19,7 +19,7 @@ def is_state_dict(model: Any) -> bool:
         True if the object is a dict whose values are all tensors, False
         otherwise.
     """
-    return isinstance(model, dict) and all(
+    return isinstance(model, dict) and len(model) > 0 and all(
         isinstance(value, torch.Tensor) for value in model.values()
     )
 

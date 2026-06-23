@@ -18,6 +18,8 @@ import torch
 import yaml
 
 
+# NOTE: This function is mirrored in the user_model.py.tmpl template.
+# Keep both implementations in sync when making changes.
 def _instantiate(cfg: Any) -> Any:
     """Recursively instantiate a nested ``_target_`` config.
 

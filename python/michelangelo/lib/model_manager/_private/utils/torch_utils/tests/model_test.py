@@ -18,7 +18,7 @@ class IsStateDictTest(TestCase):
         self.assertTrue(is_state_dict({"w": torch.zeros(2), "b": torch.zeros(1)}))
 
     def test_empty_dict(self):
-        self.assertTrue(is_state_dict({}))
+        self.assertFalse(is_state_dict({}))
 
     def test_non_tensor_value(self):
         self.assertFalse(is_state_dict({"w": torch.zeros(2), "x": 5}))

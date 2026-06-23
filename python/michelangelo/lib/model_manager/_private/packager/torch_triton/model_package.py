@@ -36,7 +36,7 @@ from michelangelo.lib.model_manager._private.packager.torch_triton.onnx_conversi
     convert_to_onnx,
 )
 from michelangelo.lib.model_manager._private.packager.torch_triton.raw_model_package import (  # noqa: E501
-    _convert_to_state_dict,
+    convert_to_state_dict,
 )
 from michelangelo.lib.model_manager._private.packager.torch_triton.torchscript_conversion import (  # noqa: E501
     _convert_to_torchscript,
@@ -75,7 +75,9 @@ def _download_and_prepare_state_dict(
         Path to the final state_dict model file.
 
     Raises:
-        Exception: If the downloaded artifact is not a valid raw model.
+        ValueError: If the downloaded artifact is not a valid raw model.
+        RuntimeError: If the downloaded artifact is not a valid raw model.
+        FileNotFoundError: If the model file does not exist.
     """
     target_model_path = os.path.join(model_version_dir, MODEL_PT_FILE_NAME)
     download_assets(model_path, target_model_path, model_path_source_type)
@@ -84,7 +86,7 @@ def _download_and_prepare_state_dict(
     if not is_valid:
         raise error
 
-    _convert_to_state_dict(target_model_path)
+    convert_to_state_dict(target_model_path)
 
     model_subdir = os.path.join(model_version_dir, "model")
     os.makedirs(model_subdir, exist_ok=True)
@@ -317,7 +319,9 @@ def _build_torchscript_backend(
         hyperparameters: Constructor kwargs for state_dict sources.
 
     Raises:
-        Exception: If the downloaded artifact is not a valid deployable model.
+        ValueError: If the downloaded artifact is not a valid deployable model.
+        RuntimeError: If the downloaded artifact is not a valid deployable model.
+        FileNotFoundError: If the model file does not exist.
     """
     target_model_path = os.path.join(model_version_dir, MODEL_PT_FILE_NAME)
     download_assets(model_path, target_model_path, model_path_source_type)
@@ -354,7 +358,7 @@ def generate_model_package_content(
         model_path: For pytorch and python backends, the .pt artifact path
             (state_dict or full pickled nn.Module). For onnxruntime, a .onnx
             file or a PyTorch artifact (.pt/.pth) to export.
-        model_name: The name of the model in MA Studio.
+        model_name: The name of the model in the Triton model repository.
         model_revision: The revision of the model.
         model_schema: The schema for config.pbtxt, ONNX export, and python
             backend wrappers.

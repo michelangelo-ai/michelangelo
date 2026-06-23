@@ -8,6 +8,7 @@ import shutil
 from typing import Any
 
 import numpy as np
+import onnx
 import torch
 
 from michelangelo._internal.utils.reflection_utils import get_module_attr
@@ -17,7 +18,7 @@ from michelangelo.lib.model_manager._private.packager.torch_triton.validation im
 from michelangelo.lib.model_manager._private.utils.torch_utils import is_state_dict
 from michelangelo.lib.model_manager.schema import ModelSchema
 
-OPSET_VERSION = 14
+OPSET_VERSION = 17
 
 _logger = logging.getLogger(__name__)
 
@@ -178,13 +179,13 @@ def convert_to_onnx(
         FileNotFoundError: If source_model_path does not exist.
         ValueError: If sample_data is missing for a PyTorch source.
     """
+    if not os.path.exists(source_model_path):
+        raise FileNotFoundError(f"File does not exist: {source_model_path}")
+
     is_onnx, _ = validate_deployable_onnx_file(source_model_path)
     if is_onnx:
         shutil.copy2(source_model_path, dest_onnx_path)
         return
-
-    if not os.path.exists(source_model_path):
-        raise FileNotFoundError(f"File does not exist: {source_model_path}")
 
     input_names = [item.name for item in model_schema.input_schema]
     output_names = [item.name for item in model_schema.output_schema]
@@ -223,3 +224,6 @@ def convert_to_onnx(
         dynamic_axes=dynamic_axes or None,
         do_constant_folding=True,
     )
+
+    exported_model = onnx.load(dest_onnx_path)
+    onnx.checker.check_model(exported_model)

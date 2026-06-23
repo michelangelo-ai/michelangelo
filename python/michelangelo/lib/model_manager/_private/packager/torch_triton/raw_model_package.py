@@ -38,11 +38,12 @@ from michelangelo.lib.model_manager._private.utils.asset_utils import download_a
 from michelangelo.lib.model_manager._private.utils.spec_utils import (
     collect_nested_class_paths,
 )
+from michelangelo.lib.model_manager._private.utils.torch_utils import is_state_dict
 from michelangelo.lib.model_manager.constants import StorageType
 from michelangelo.lib.model_manager.schema import ModelSchema
 
 
-def _convert_to_state_dict(model_path: str) -> None:
+def convert_to_state_dict(model_path: str) -> None:
     """Convert a model file to state_dict format in place.
 
     If the file already holds a state_dict it is left unchanged. Otherwise a
@@ -60,7 +61,7 @@ def _convert_to_state_dict(model_path: str) -> None:
 
     try:
         state_dict = torch.load(model_path, map_location="cpu", weights_only=True)
-        if isinstance(state_dict, dict):
+        if is_state_dict(state_dict):
             return
     except Exception:
         pass
@@ -195,7 +196,7 @@ def generate_raw_model_package_content(
     if not is_valid:
         raise error
 
-    _convert_to_state_dict(model_file_path)
+    convert_to_state_dict(model_file_path)
 
     defs_path = os.path.join(root_path, "defs")
 

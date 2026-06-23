@@ -37,7 +37,7 @@ class TorchTritonPackager:
     """Packager for PyTorch models targeting NVIDIA Triton Inference Server.
 
     This class packages PyTorch models into formats suitable for deployment on
-    Triton Inference Server through Michelangelo Studio. It generates the
+    Triton Inference Server. It generates the
     required configuration files, bundles dependencies, and organizes model
     artifacts according to Triton's directory structure.
 
@@ -87,13 +87,12 @@ class TorchTritonPackager:
                 ``.pt`` file.
             model_schema: The schema defining the model's input and output
                 features, including their names, data types, and shapes.
-            model_name: The name to use for the model in Michelangelo Studio.
+            model_name: The name to use for the model in the Triton model repository.
                 If not specified, a placeholder name is used.
             dest_model_path: The directory path where the model package should
                 be saved. If not specified, a temporary directory will be
                 created and its path returned.
-            model_revision: The revision number for the model in Michelangelo
-                Studio. Defaults to ``"0"``.
+            model_revision: The revision of the model. Defaults to ``"0"``.
             model_path_source_type: The storage backend type where the model
                 artifacts are located. Should be a value from StorageType
                 (e.g., StorageType.LOCAL). Defaults to StorageType.LOCAL.
@@ -125,6 +124,21 @@ class TorchTritonPackager:
                 with one of these prefixes will be included in the package. If
                 None (default) or empty, all imported modules are included.
 
+        Example::
+
+            packager = TorchTritonPackager()
+            package_path = packager.create_model_package(
+                model_path="model.pt",
+                model_schema=ModelSchema(
+                    input_schema=[
+                        ModelSchemaItem(name="x", data_type=DataType.FLOAT, shape=[10]),
+                    ],
+                    output_schema=[
+                        ModelSchemaItem(name="y", data_type=DataType.FLOAT, shape=[1]),
+                    ],
+                ),
+            )
+
         Returns:
             The absolute path to the generated model package directory.
 
@@ -134,7 +148,7 @@ class TorchTritonPackager:
                 for the Python backend.
         """
         if not model_path:
-            raise ValueError("model_path is required")
+            raise ValueError("model_path is required: provide a path to a .pt, .pth, or .onnx model file")
 
         if not model_schema:
             raise ValueError("model_schema is required")
@@ -189,7 +203,7 @@ class TorchTritonPackager:
         model_path: str,
         model_class: str,
         model_schema: ModelSchema,
-        sample_data: list[dict[str, ndarray]],
+        sample_data: Optional[list[dict[str, ndarray]]] = None,
         dest_model_path: Optional[str] = None,
         model_path_source_type: Optional[str] = StorageType.LOCAL,
         requirements: Optional[Union[list[str], str]] = None,
@@ -208,9 +222,10 @@ class TorchTritonPackager:
                 the forward function and any custom logic.
             model_schema: The schema defining the model's input, palette
                 (feature store), and output features.
-            sample_data: A list of sample inputs for testing the model's
+            sample_data: An optional list of sample inputs for testing the model's
                 forward function. Each item should be a dictionary mapping
-                input feature names to numpy arrays.
+                input feature names to numpy arrays. If not provided, model
+                validation with sample data is skipped.
             dest_model_path: The directory path where the model package should
                 be saved. If not specified, a temporary directory will be
                 created and its path returned.
@@ -236,6 +251,25 @@ class TorchTritonPackager:
             transform_feature_stats: Optional feature statistics used by the
                 transform, stored with the model package.
 
+        Example::
+
+            import numpy as np
+
+            packager = TorchTritonPackager()
+            package_path = packager.create_raw_model_package(
+                model_path="model.pt",
+                model_class="my_package.models.MyModel",
+                model_schema=ModelSchema(
+                    input_schema=[
+                        ModelSchemaItem(name="x", data_type=DataType.FLOAT, shape=[10]),
+                    ],
+                    output_schema=[
+                        ModelSchemaItem(name="y", data_type=DataType.FLOAT, shape=[1]),
+                    ],
+                ),
+                sample_data=[{"x": np.random.randn(10).astype(np.float32)}],
+            )
+
         Returns:
             The absolute path to the generated raw model package directory.
 
@@ -244,7 +278,7 @@ class TorchTritonPackager:
                 is missing.
         """
         if not model_path:
-            raise ValueError("model_path is required")
+            raise ValueError("model_path is required: provide a path to a .pt or .pth model file")
 
         if not model_class:
             raise ValueError("model_class is required")
