@@ -29,7 +29,9 @@ from michelangelo.lib.trainer.torch.utils import (  # noqa: E402
 class _FakeConfig:
     """Minimal ``config`` stand-in for a Hugging Face model."""
 
-    def __init__(self, hidden_size, num_hidden_layers, num_attention_heads, torch_dtype):
+    def __init__(
+        self, hidden_size, num_hidden_layers, num_attention_heads, torch_dtype
+    ):
         """Store the attributes the estimator reads off ``model.config``."""
         self.hidden_size = hidden_size
         self.num_hidden_layers = num_hidden_layers
@@ -125,7 +127,12 @@ class TestEstimateActivationMemoryNonTransformer:
 
     def test_empty_dims_returns_zero(self):
         """No captured layers means zero activation memory."""
-        assert estimate_activation_memory_non_transformer({}, batch_size=8, bytes_per_value=4) == 0
+        assert (
+            estimate_activation_memory_non_transformer(
+                {}, batch_size=8, bytes_per_value=4
+            )
+            == 0
+        )
 
     def test_single_layer_matches_formula(self):
         """A single layer's memory equals ``batch * last_dim * bytes / 1MiB``."""

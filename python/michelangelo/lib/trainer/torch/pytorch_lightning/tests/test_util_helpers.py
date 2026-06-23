@@ -110,7 +110,9 @@ class TestLoadWeightsFromPath:
         state_dict = {"w": object()}
 
         with (
-            patch(f"{_UTIL_MODULE}.url_to_fs", return_value=(fake_fs, "remote/path.pt")) as u2fs,
+            patch(
+                f"{_UTIL_MODULE}.url_to_fs", return_value=(fake_fs, "remote/path.pt")
+            ) as u2fs,
             patch(f"{_UTIL_MODULE}.torch.load", return_value=state_dict) as tload,
         ):
             _load_weights_from_path(model, "s3://bucket/path.pt")
@@ -139,9 +141,7 @@ class TestLoadWeightsFromPath:
         ):
             _load_weights_from_path(dst, "file:///tmp/p.pt")
 
-        for (n1, p1), (n2, p2) in zip(
-            src.named_parameters(), dst.named_parameters()
-        ):
+        for (n1, p1), (n2, p2) in zip(src.named_parameters(), dst.named_parameters()):
             assert n1 == n2
             assert torch.equal(p1, p2)
 
