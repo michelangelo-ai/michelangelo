@@ -17,6 +17,9 @@ from michelangelo.lib.model_manager._private.packager.custom_triton.model_class 
 from michelangelo.lib.model_manager._private.packager.custom_triton.model_py import (
     generate_model_py_content,
 )
+from michelangelo.lib.model_manager._private.packager.torch_triton.model_loader import (
+    serialize_torch_python_loader,
+)
 from michelangelo.lib.model_manager._private.packager.template_renderer import (
     TritonTemplateRenderer,
 )
@@ -49,6 +52,7 @@ from michelangelo.lib.model_manager._private.packager.torch_triton.validation im
     validate_raw_model_file,
 )
 from michelangelo.lib.model_manager._private.utils.asset_utils import download_assets
+from michelangelo.lib.model_manager._private.serde.data import dump_model_data
 from michelangelo.lib.model_manager._private.utils.spec_utils import (
     collect_nested_class_paths,
 )
@@ -253,6 +257,7 @@ def _build_python_backend(
     content["0"].update(
         _generate_python_backend_wrappers(gen, model_version_dir, model_schema)
     )
+    serialize_torch_python_loader(model_version_dir, include_import_prefixes)
     content["0"]["model"] = {MODEL_PT_FILE_NAME: f"file://{final_model_path}"}
 
 
@@ -433,5 +438,15 @@ def generate_model_package_content(
             model_class,
             hyperparameters,
         )
+
+    if sample_data is not None:
+        batched = [
+            {
+                k: v.detach().cpu().numpy() if hasattr(v, "detach") else v
+                for k, v in sample.items()
+            }
+            for sample in sample_data
+        ]
+        content.setdefault("metadata", {})["sample_data.json"] = dump_model_data(batched)
 
     return content
