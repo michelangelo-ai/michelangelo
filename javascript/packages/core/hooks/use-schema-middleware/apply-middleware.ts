@@ -18,7 +18,8 @@ export function applyMiddleware<T extends object>(
   const sourceObject = options?.sourceFromObject ?? clone;
 
   for (const op of schema.operations) {
-    if (op.subTypes && !op.subTypes.includes(get(clone, schema.subTypePath!) as string)) { // cast: lodash.get returns any; subTypePath points to a string discriminant field
+    // cast: lodash.get returns any; subTypePath points to a string discriminant field
+    if (op.subTypes && !op.subTypes.includes(get(clone, schema.subTypePath!) as string)) {
       continue;
     }
 

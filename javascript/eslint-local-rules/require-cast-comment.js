@@ -3,8 +3,7 @@ const rule = {
   meta: {
     type: 'suggestion',
     docs: {
-      description:
-        "Require a '// cast:' comment explaining every type assertion",
+      description: "Require a '// cast:' comment explaining every type assertion",
       recommended: true,
       url: 'https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/eslint-local-rules/require-cast-comment.md',
     },

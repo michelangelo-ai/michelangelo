@@ -96,6 +96,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
     error: props.error,
     loading: props.loading || isResetting,
     hasFiltersApplied:
+      // cast: globalFilter state is typed as unknown; tanstack-table stores it as the value passed to setGlobalFilter, which is always string here
       (table.getState().globalFilter as string)?.length > 0 ||
       (table.getState().columnFilters?.length ?? 0) > 0,
     filteredLength: table.getRowModel().rows.length,
@@ -125,7 +126,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
         }}
       >
         <TableActionBar<T>
-          globalFilter={table.getState().globalFilter as string}
+          globalFilter={table.getState().globalFilter as string} // cast: globalFilter is unknown; always string when set via setGlobalFilter
           setGlobalFilter={table.setGlobalFilter}
           columnFilters={table.getState().columnFilters}
           setColumnFilters={table.setColumnFilters}
@@ -138,7 +139,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
 
         <div
           className={css({ overflow: 'auto', position: 'relative' })}
-          ref={tableRef as React.RefObject<HTMLDivElement>}
+          ref={tableRef as React.RefObject<HTMLDivElement>} // cast: useScrollRatio returns RefObject<Element>; div is the concrete element type here
           onScroll={handleScrollRatioUpdate}
         >
           <StyledTable>

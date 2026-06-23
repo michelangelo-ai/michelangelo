@@ -67,26 +67,29 @@ export function SelectField<V = string | number>({
     if (!currentValue || (Array.isArray(currentValue) && currentValue.length === 0)) return;
 
     if (multi) {
-      const values = currentValue as V[];
+      const values = currentValue as V[]; // cast: field value is V | V[]; multi mode always produces an array
       const validValues = values.filter((v) => findByValue(v));
       if (validValues.length !== values.length) {
         input.onChange(validValues);
       }
+      // cast: field value is V | V[]; single-value mode narrows it to V for lookup
     } else if (!findByValue(currentValue as V)) {
-      input.onChange('' as V | V[]);
+      input.onChange('' as V | V[]); // cast: empty string clears the field; satisfies V | V[] for onChange
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [findByValue, isLoading]);
 
   const handleCommitSelection = (params: OnChangeParams) => {
-    const selected = params.value as Array<{ id: string }>;
+    const selected = params.value as Array<{ id: string }>; // cast: BaseUI value is readonly Value[]; we know the shape is { id: string }
 
     if (multi) {
+      // cast: BaseUI item id is a serialized string key; V is the original option id type
       input.onChange(selected.map((item) => findByKey(item.id)?.id ?? (item.id as V)));
     } else if (selected.length > 0) {
+      // cast: BaseUI item id is a serialized string key; V is the original option id type
       input.onChange(findByKey(selected[0].id)?.id ?? (selected[0].id as V));
     } else {
-      input.onChange('' as V | V[]);
+      input.onChange('' as V | V[]); // cast: empty string clears the field; satisfies V | V[] for onChange
     }
   };
 

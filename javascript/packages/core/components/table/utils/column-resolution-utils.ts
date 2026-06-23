@@ -44,7 +44,8 @@ export function resolveColumnForRow<T extends TableData = TableData>(
 ): ColumnConfig<T> {
   // TODO: #277 generalize typeMeta.kind access in a type-safe way
   // @ts-expect-error - typeMeta may not exist on generic type T, but we handle it safely with optional chaining
-  const kind = (row?.typeMeta?.kind as string) ?? ''; // eslint-disable-line @typescript-eslint/no-unsafe-member-access // cast: typeMeta.kind is not on the generic T; we access it dynamically and default to '' if absent
+  // cast: typeMeta.kind is not on the generic T; we access it dynamically and default to '' if absent
+  const kind = (row?.typeMeta?.kind as string) ?? ''; // eslint-disable-line @typescript-eslint/no-unsafe-member-access
 
   // Remove the typeMeta.kind property from the column to avoid infinite recursion
   // if the resolved column is passed to resolveColumnForRow again

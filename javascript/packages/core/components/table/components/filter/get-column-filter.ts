@@ -12,7 +12,9 @@ import type { ColumnFilterProps } from './types';
 export function getColumnFilter<T extends TableData = TableData>(
   columnType: string
 ): ComponentType<ColumnFilterProps<T>> {
-  switch (columnType as CellType) { // cast: columnType is a string from column config; compared against CellType enum values for known types
+  switch (
+    columnType as CellType // cast: columnType is a string from column config; compared against CellType enum values for known types
+  ) {
     case CellType.DATE:
       return DatetimeFilter;
     default:
