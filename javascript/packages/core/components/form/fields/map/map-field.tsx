@@ -84,7 +84,6 @@ export function MapField({
     [input]
   );
 
-
   const duplicateKeys = new Set(
     rows.map((r) => r.key).filter((k, i, arr) => k && arr.indexOf(k) !== i)
   );

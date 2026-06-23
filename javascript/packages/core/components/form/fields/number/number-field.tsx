@@ -32,7 +32,6 @@ export const NumberField: React.FC<BaseFieldProps<number | undefined>> = ({
     parse,
   });
 
-
   return (
     <FormControl
       label={label}

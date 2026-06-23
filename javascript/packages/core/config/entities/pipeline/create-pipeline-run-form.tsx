@@ -8,7 +8,10 @@ import type { ActionComponentProps } from '#core/components/actions/types';
 import type { Pipeline } from '#core/config/entities/pipeline/types';
 import type { PipelineRun } from '#core/config/entities/run/types';
 
-export const CreatePipelineRunForm = ({ record, onClose: handleDialogClose }: ActionComponentProps<Pipeline>) => {
+export const CreatePipelineRunForm = ({
+  record,
+  onClose: handleDialogClose,
+}: ActionComponentProps<Pipeline>) => {
   const { projectId } = useStudioParams('base');
 
   const createPipelineRunMutation = useStudioMutation<PipelineRun, PipelineRun>({

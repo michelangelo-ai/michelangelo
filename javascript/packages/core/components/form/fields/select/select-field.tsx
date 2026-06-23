@@ -104,7 +104,6 @@ export function SelectField<V = string | number>({
     return items;
   }, [input.value, findByKey, creatable]);
 
-
   return (
     <FormControl
       label={label}

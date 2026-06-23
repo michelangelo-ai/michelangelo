@@ -20,7 +20,12 @@ export function ArrayFormGroup({
   tooltip,
   collapsible,
 }: ArrayFormGroupProps) {
-  const { entries, add: handleAddItem, remove, isRemovable } = useArrayField(rootFieldPath, {
+  const {
+    entries,
+    add: handleAddItem,
+    remove,
+    isRemovable,
+  } = useArrayField(rootFieldPath, {
     minItems,
     readOnly,
   });

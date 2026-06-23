@@ -21,7 +21,12 @@ export function ArrayFormRow({
   addLabel = 'Add more',
 }: ArrayFormRowProps) {
   const [css, theme] = useStyletron();
-  const { entries, add: handleAddItem, remove, isRemovable } = useArrayField(rootFieldPath, {
+  const {
+    entries,
+    add: handleAddItem,
+    remove,
+    isRemovable,
+  } = useArrayField(rootFieldPath, {
     minItems,
     readOnly,
   });

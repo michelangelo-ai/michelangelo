@@ -45,7 +45,6 @@ export const InlineRadioField: React.FC<RadioFieldProps> = ({
     [input, isBoolean]
   );
 
-
   if (readOnly) {
     return (
       <FormControl

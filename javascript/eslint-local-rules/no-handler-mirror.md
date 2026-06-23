@@ -36,13 +36,13 @@ This rule works in tandem with `react/jsx-handler-names`, which requires all han
 
 Name the **effect**, not the trigger. The `handle` prefix is required (enforced by `react/jsx-handler-names`), and the suffix should describe what the handler does to application state.
 
-| Context | Instead of | Use |
-|---------|-----------|-----|
+| Context                                 | Instead of     | Use                     |
+| --------------------------------------- | -------------- | ----------------------- |
 | Radio coerces DOM string to typed value | `handleChange` | `handleSelectionChange` |
 | Select maps option objects to typed IDs | `handleChange` | `handleCommitSelection` |
-| Checkbox stops propagation + toggles | `handleChange` | `handleToggleSelection` |
-| Form submit that also closes the dialog | `handleSubmit` | `handleFormSubmit` |
-| Row delete on click | `handleClick` | `handleRowDelete` |
+| Checkbox stops propagation + toggles    | `handleChange` | `handleToggleSelection` |
+| Form submit that also closes the dialog | `handleSubmit` | `handleFormSubmit`      |
+| Row delete on click                     | `handleClick`  | `handleRowDelete`       |
 
 The name should answer "what does this function do to the application state?" — not "what event is it responding to?"
 

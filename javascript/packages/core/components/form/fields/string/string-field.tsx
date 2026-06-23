@@ -31,7 +31,6 @@ export const StringField: React.FC<BaseFieldProps<string>> = ({
     parse,
   });
 
-
   return (
     <FormControl
       label={label}
