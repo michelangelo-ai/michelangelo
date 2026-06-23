@@ -101,28 +101,28 @@ describe('CollapsibleBox', () => {
 
   it('calls onToggle when provided in uncontrolled mode', async () => {
     const user = userEvent.setup();
-    const handleCollapsibleToggle = vi.fn();
+    const onToggle = vi.fn();
 
     render(
-      <CollapsibleBox title="Toggle Test" onToggle={handleCollapsibleToggle}>
+      <CollapsibleBox title="Toggle Test" onToggle={onToggle}>
         Content
       </CollapsibleBox>,
       buildWrapper([getBaseProviderWrapper()])
     );
 
     await user.click(screen.getByRole('button'));
-    expect(handleCollapsibleToggle).toHaveBeenCalledWith(true);
+    expect(onToggle).toHaveBeenCalledWith(true);
 
     await user.click(screen.getByRole('button'));
-    expect(handleCollapsibleToggle).toHaveBeenCalledWith(false);
+    expect(onToggle).toHaveBeenCalledWith(false);
   });
 
   it('starts with defaultExpanded state in uncontrolled mode', async () => {
     const user = userEvent.setup();
-    const handleCollapsibleToggle = vi.fn();
+    const onToggle = vi.fn();
 
     render(
-      <CollapsibleBox title="Test" defaultExpanded={true} onToggle={handleCollapsibleToggle}>
+      <CollapsibleBox title="Test" defaultExpanded={true} onToggle={onToggle}>
         Content
       </CollapsibleBox>,
       buildWrapper([getBaseProviderWrapper()])
@@ -131,15 +131,15 @@ describe('CollapsibleBox', () => {
     expect(screen.getByRole('button', { expanded: true })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button'));
-    expect(handleCollapsibleToggle).toHaveBeenCalledWith(false);
+    expect(onToggle).toHaveBeenCalledWith(false);
   });
 
   it('uses expanded prop to control state in controlled mode', async () => {
     const user = userEvent.setup();
-    const handleCollapsibleToggle = vi.fn();
+    const onToggle = vi.fn();
 
     const { rerender } = render(
-      <CollapsibleBox title="Controlled Test" expanded={false} onToggle={handleCollapsibleToggle}>
+      <CollapsibleBox title="Controlled Test" expanded={false} onToggle={onToggle}>
         Content
       </CollapsibleBox>,
       buildWrapper([getBaseProviderWrapper()])
@@ -148,11 +148,11 @@ describe('CollapsibleBox', () => {
     expect(screen.getByRole('button', { expanded: false })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button'));
-    expect(handleCollapsibleToggle).toHaveBeenCalledWith(true);
+    expect(onToggle).toHaveBeenCalledWith(true);
     expect(screen.getByRole('button', { expanded: false })).toBeInTheDocument();
 
     rerender(
-      <CollapsibleBox title="Controlled Test" expanded={true} onToggle={handleCollapsibleToggle}>
+      <CollapsibleBox title="Controlled Test" expanded={true} onToggle={onToggle}>
         Content
       </CollapsibleBox>
     );
@@ -176,10 +176,10 @@ describe('CollapsibleBox', () => {
 
   it('does not toggle when disabled', async () => {
     const user = userEvent.setup();
-    const handleCollapsibleToggle = vi.fn();
+    const onToggle = vi.fn();
 
     render(
-      <CollapsibleBox title="Disabled Test" disabled={true} onToggle={handleCollapsibleToggle}>
+      <CollapsibleBox title="Disabled Test" disabled={true} onToggle={onToggle}>
         Content
       </CollapsibleBox>,
       buildWrapper([getBaseProviderWrapper()])
@@ -187,7 +187,7 @@ describe('CollapsibleBox', () => {
 
     await user.click(screen.getByRole('button', { expanded: false }));
 
-    expect(handleCollapsibleToggle).not.toHaveBeenCalled();
+    expect(onToggle).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { expanded: false })).toBeInTheDocument();
   });
 

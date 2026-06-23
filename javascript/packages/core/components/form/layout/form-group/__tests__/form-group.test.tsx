@@ -92,16 +92,16 @@ describe('FormGroup', () => {
 
   it('invokes onToggle callback when toggled', async () => {
     const user = userEvent.setup();
-    const handleGroupToggle = vi.fn();
+    const onToggle = vi.fn();
 
     render(
-      <FormGroup title="Toggle" collapsible expanded={false} onToggle={handleGroupToggle}>
+      <FormGroup title="Toggle" collapsible expanded={false} onToggle={onToggle}>
         <div>Content</div>
       </FormGroup>,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
     );
 
     await user.click(screen.getByRole('button'));
-    expect(handleGroupToggle).toHaveBeenCalledWith(true);
+    expect(onToggle).toHaveBeenCalledWith(true);
   });
 });

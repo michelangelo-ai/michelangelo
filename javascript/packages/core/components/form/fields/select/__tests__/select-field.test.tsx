@@ -283,10 +283,9 @@ describe('SelectField', () => {
 
   it('focuses on failed submit when form has focusOnError enabled', async () => {
     const user = userEvent.setup();
-    const handleFormSubmit = vi.fn();
 
     render(
-      <Form onSubmit={handleFormSubmit} focusOnError>
+      <Form onSubmit={vi.fn()} focusOnError>
         <SelectField name="priority" label="Priority" options={options} required />
         <button type="submit">Submit</button>
       </Form>,

@@ -68,14 +68,14 @@ export function ActionsPopover<T extends Data>({
           },
         }}
         {...popoverProps}
-        content={({ close: handleMenuClose }) => (
+        content={({ close }) => (
           <ActionMenu
             actions={items}
             onSelectAction={(action) => {
               action.onClick();
-              handleMenuClose();
+              close();
             }}
-            onClose={handleMenuClose}
+            onClose={close}
           />
         )}
         onClose={handleScrollEnable}
