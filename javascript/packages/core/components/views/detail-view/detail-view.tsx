@@ -16,7 +16,6 @@ export function DetailView({
   titleEnhancer,
 }: DetailViewProps) {
   const [css, theme] = useStyletron();
-  const handleNavigateBack = onGoBack;
 
   return (
     <div className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale800 })}>

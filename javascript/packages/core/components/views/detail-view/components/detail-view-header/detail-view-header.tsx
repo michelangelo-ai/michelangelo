@@ -24,7 +24,6 @@ export function DetailViewHeader({
 }: DetailViewHeaderProps) {
   const [css, theme] = useStyletron();
   const resolve = useInterpolationResolver();
-  const handleNavigateBack = onGoBack;
   const resolvedActions = useMemo(
     () => (actions ? (resolve(actions, { page: record }) as ActionConfig[]) : undefined),
     [resolve, actions, record]

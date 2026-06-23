@@ -23,8 +23,6 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
     await createPipelineRunMutation.mutateAsync(values);
   };
 
-  const handleDialogClose = onClose;
-
   const initialValues = {
     metadata: {
       name: `run${generateSuffix({ withDate: true })}`,
