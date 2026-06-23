@@ -264,6 +264,9 @@ func TestSendPipelineRunNotification_FanOut(t *testing.T) {
 			msg := Message{
 				Subject: types.GenerateSubject(matchingPR),
 				Body:    types.GenerateBody(matchingPR, "", wf.phaseResolver),
+				FormattedBodies: map[string]string{
+					FormatSlackMrkdwn: types.GenerateText(matchingPR, v2pb.NOTIFICATION_TYPE_SLACK, "", wf.phaseResolver),
+				},
 			}
 			_ = rec.Notify(nil, nil, notif, msg)
 		}
