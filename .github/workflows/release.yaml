@@ -38,3 +38,36 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: python/dist/*.whl
+
+  helm-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Log in to GHCR
+        run: |
+          helm registry login ghcr.io \
+            -u ${{ github.actor }} \
+            -p ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Package Helm chart
+        run: |
+          helm package helm/michelangelo \
+            --version ${{ steps.version.outputs.VERSION }} \
+            --app-version ${{ steps.version.outputs.VERSION }}
+
+      - name: Push chart to OCI registry
+        run: |
+          helm push \
+            michelangelo-${{ steps.version.outputs.VERSION }}.tgz \
+            oci://ghcr.io/michelangelo-ai/michelangelo/charts
