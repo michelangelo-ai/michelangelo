@@ -37,5 +37,7 @@ Read the template from `.github/pull_request_template.md` and use it as the exac
 - **Why?** — The motivation: bug, user need, cleanup, requirement.
 - **How did you test it?** — Commands run, manual steps, or "no functional changes".
 - **Potential risks** — Anything that could break in production. Default to "None" for docs/chore changes.
+- **Breaking Changes** — Check applicable boxes: API (Go/Python), Proto (enums/fields), Helm (values), Config/deployment (env vars/ports). Check "No breaking changes" if none apply. If any breaking change is checked, use `BREAKING CHANGE:` footer or `!` suffix in the commit.
+- **Migration guide** — Required if any breaking change box is checked. Describe step-by-step upgrade instructions with before/after examples. Delete section if no breaking changes.
 - **Release notes** — Only notable if it's a schema change, migration, or config change. Otherwise "N/A".
 - **Documentation Changes** — Note any doc updates or "N/A".
