@@ -32,6 +32,13 @@ jobs:
       - run: |
           poetry build -f wheel
       #----------------------------------------------
+      #  Publish to PyPI
+      #----------------------------------------------
+      - name: Configure PyPI token
+        run: poetry config pypi-token.pypi ${{ secrets.PYPI_API_TOKEN }}
+      - name: Publish to PyPI
+        run: poetry publish --no-interaction
+      #----------------------------------------------
       #  Upload the wheel file to the release
       #----------------------------------------------
       - uses: softprops/action-gh-release@v2
