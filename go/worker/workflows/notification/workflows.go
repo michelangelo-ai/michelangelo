@@ -7,7 +7,6 @@ import (
 
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	"github.com/michelangelo-ai/michelangelo/go/base/notification/types"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.uber.org/zap"
 )
 
@@ -87,10 +86,7 @@ func (wf *Workflow) SendPipelineRunNotification(ctx workflow.Context, req *types
 	msg := Message{
 		Subject: types.GenerateSubject(pipelineRun),
 		Body:    types.GenerateBody(pipelineRun, req.StudioBaseURL, wf.phaseResolver),
-		FormattedBodies: map[string]string{
-			v2pb.NOTIFICATION_TYPE_SLACK.String(): types.GenerateText(pipelineRun, v2pb.NOTIFICATION_TYPE_SLACK, req.StudioBaseURL, wf.phaseResolver),
-		},
-		SendAs: req.SenderEmail,
+		SendAs:  req.SenderEmail,
 	}
 
 	for _, notif := range pipelineRun.Spec.Notifications {

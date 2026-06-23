@@ -27,19 +27,17 @@ type Sink interface {
 
 // Message is the channel-agnostic notification payload passed to every Sink.
 //
-// Body is a universal plain-text fallback suitable for any channel. Each Sink
-// checks FormattedBodies for a channel-specific override (e.g. Slack mrkdwn)
-// and falls back to Body when none exists. To add a new channel, implement
-// Sink — no changes to Message are required.
+// Body is a universal plain-text fallback suitable for any channel. HTMLBody
+// provides a rich alternative for channels that support HTML (e.g. email, Teams).
+// To add a new channel, implement Sink — no changes to Message are required.
 type Message struct {
 	// Subject is a short summary line (e.g. email subject).
 	Subject string
 	// Body is the plain-text notification body, suitable for any channel.
 	Body string
-	// FormattedBodies holds optional channel-specific body overrides keyed by
-	// notification type name (e.g. "NOTIFICATION_TYPE_SLACK"). Sinks that
-	// support rich formatting check this map first and fall back to Body.
-	FormattedBodies map[string]string
+	// HTMLBody is an optional HTML-formatted body for channels that support it.
+	// Sinks that support HTML use this when non-empty, falling back to Body.
+	HTMLBody string
 	// SendAs is the sender identity for channels that support it (e.g. email From address).
 	SendAs string
 }
@@ -52,20 +50,25 @@ type Message struct {
 type EmailSink struct{}
 
 // Notify sends an email to all addresses listed in notif.Emails.
+// Uses HTMLBody when available, falling back to Body as plain text.
 // Returns nil immediately when Emails is empty.
 func (s *EmailSink) Notify(ctx workflow.Context, _ *zap.Logger, notif *v2pb.Notification, msg Message) error {
 	if len(notif.Emails) == 0 {
 		return nil
 	}
+	req := &notificationActivities.SendMessageToEmailActivityRequest{
+		To:      notif.Emails,
+		Subject: msg.Subject,
+		Text:    msg.Body,
+		SendAs:  msg.SendAs,
+	}
+	if msg.HTMLBody != "" {
+		req.HTML = msg.HTMLBody
+	}
 	return workflow.ExecuteActivity(
 		workflow.WithActivityOptions(ctx, workflowActivityOpts),
 		notificationActivities.SendMessageToEmailActivity,
-		&notificationActivities.SendMessageToEmailActivityRequest{
-			To:      notif.Emails,
-			Subject: msg.Subject,
-			Text:    msg.Body,
-			SendAs:  msg.SendAs,
-		}).Get(ctx, nil)
+		req).Get(ctx, nil)
 }
 
 // SlackSink delivers notifications to Slack channels.
@@ -79,10 +82,6 @@ type SlackSink struct{}
 // Errors from individual channels are accumulated with errors.Join so that a
 // failure on one channel does not suppress delivery to others.
 func (s *SlackSink) Notify(ctx workflow.Context, logger *zap.Logger, notif *v2pb.Notification, msg Message) error {
-	text := msg.Body
-	if override, ok := msg.FormattedBodies[v2pb.NOTIFICATION_TYPE_SLACK.String()]; ok && override != "" {
-		text = override
-	}
 	var errs error
 	for _, channel := range notif.SlackDestinations {
 		err := workflow.ExecuteActivity(
@@ -90,7 +89,7 @@ func (s *SlackSink) Notify(ctx workflow.Context, logger *zap.Logger, notif *v2pb
 			notificationActivities.SendMessageToSlackActivity,
 			&notificationActivities.SendMessageToSlackActivityRequest{
 				Channel: channel,
-				Text:    text,
+				Text:    msg.Body,
 			}).Get(ctx, nil)
 		if err != nil {
 			if logger != nil {
