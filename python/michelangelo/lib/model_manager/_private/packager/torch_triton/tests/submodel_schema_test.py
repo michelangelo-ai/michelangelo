@@ -4,7 +4,7 @@ from unittest import TestCase
 
 import torch
 
-from michelangelo.lib.model_manager._private.schema.torch.submodel_schema import (
+from michelangelo.lib.model_manager._private.packager.torch_triton.submodel_schema import (
     capture_submodel_schemas,
     write_submodel_schemas,
 )

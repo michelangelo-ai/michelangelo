@@ -11,11 +11,9 @@ import yaml
 from michelangelo.lib.model_manager._private.constants.triton_backend_type import (
     TritonBackendType,
 )
-from michelangelo.lib.model_manager._private.packager.custom_triton.model_class import (
-    serialize_model_class,
-)
-from michelangelo.lib.model_manager._private.packager.custom_triton.model_py import (
+from michelangelo.lib.model_manager._private.packager.common import (
     generate_model_py_content,
+    serialize_model_class,
 )
 from michelangelo.lib.model_manager._private.packager.torch_triton.model_loader import (
     serialize_torch_python_loader,
@@ -56,6 +54,7 @@ from michelangelo.lib.model_manager._private.serde.data import dump_model_data
 from michelangelo.lib.model_manager._private.utils.spec_utils import (
     collect_nested_class_paths,
 )
+from michelangelo.lib.model_manager._private.utils.torch_utils import tensor_to_numpy
 from michelangelo.lib.model_manager.constants import StorageType
 from michelangelo.lib.model_manager.schema import ModelSchema
 
@@ -441,10 +440,7 @@ def generate_model_package_content(
 
     if sample_data is not None:
         batched = [
-            {
-                k: v.detach().cpu().numpy() if hasattr(v, "detach") else v
-                for k, v in sample.items()
-            }
+            {k: tensor_to_numpy(v) for k, v in sample.items()}
             for sample in sample_data
         ]
         content.setdefault("metadata", {})["sample_data.json"] = dump_model_data(batched)

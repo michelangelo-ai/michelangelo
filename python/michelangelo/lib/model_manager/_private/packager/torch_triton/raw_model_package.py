@@ -11,11 +11,9 @@ import torch
 import yaml
 from numpy import ndarray
 
-from michelangelo.lib.model_manager._private.packager.custom_triton.model_class import (
-    serialize_model_class,
-)
-from michelangelo.lib.model_manager._private.packager.custom_triton.requirements_txt import (  # noqa: E501
+from michelangelo.lib.model_manager._private.packager.common import (
     generate_requirements_txt,
+    serialize_model_class,
 )
 from michelangelo.lib.model_manager._private.packager.torch_triton.constants import (
     MODEL_CLASS_FILE_NAME,

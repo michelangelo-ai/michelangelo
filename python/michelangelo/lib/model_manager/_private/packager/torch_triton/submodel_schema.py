@@ -68,9 +68,21 @@ def _schema_item(fact: dict) -> ModelSchemaItem:
     )
 
 
-def _forward_param_names(module: torch.nn.Module) -> list[str]:
+def get_forward_param_names(module: torch.nn.Module) -> list[str]:
+    """Return the named, non-variadic parameters of forward after self.
+
+    The class's unbound forward is inspected so that self is present in the
+    signature, keeping inspection consistent across Python versions.
+
+    Args:
+        module: The model whose forward signature is inspected.
+
+    Returns:
+        Ordered parameter names excluding self and *args/**kwargs.
+    """
     try:
-        sig = inspect.signature(module.forward)
+        forward_fn = inspect.unwrap(type(module).forward)
+        sig = inspect.signature(forward_fn)
     except (ValueError, TypeError):
         return []
     return [
@@ -186,7 +198,7 @@ def capture_submodel_schemas(
         captured[name] = {"inputs": None, "outputs": None}
 
     def _make_hook(hname: str, hchild: torch.nn.Module):
-        param_names = _forward_param_names(hchild)
+        param_names = get_forward_param_names(hchild)
         return_names = _return_names(hchild)
 
         def hook(_module, inputs, output):

@@ -16,7 +16,7 @@ from typing import Union
 import torch
 import yaml
 
-from michelangelo.lib.model_manager._private.utils.spec_utils.spec import _instantiate
+from michelangelo.lib.model_manager._private.utils.spec_utils.spec import instantiate
 
 
 @contextlib.contextmanager
@@ -116,7 +116,7 @@ def _load_torch_python_deployable_model(
     skeleton = _load_skeleton(version_dir)
 
     if "_target_" in skeleton:
-        model = _instantiate(skeleton)
+        model = instantiate(skeleton)
     else:
         model = model_cls(**(skeleton or {}))
 

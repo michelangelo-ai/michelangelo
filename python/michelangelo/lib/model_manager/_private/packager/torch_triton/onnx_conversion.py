@@ -11,11 +11,13 @@ import numpy as np
 import onnx
 import torch
 
-from michelangelo._internal.utils.reflection_utils import get_module_attr
 from michelangelo.lib.model_manager._private.packager.torch_triton.validation import (
     validate_deployable_onnx_file,
 )
-from michelangelo.lib.model_manager._private.utils.torch_utils import is_state_dict
+from michelangelo.lib.model_manager._private.utils.torch_utils import (
+    is_state_dict,
+    load_model_from_state_dict,
+)
 from michelangelo.lib.model_manager.schema import ModelSchema
 
 OPSET_VERSION = 17
@@ -117,9 +119,7 @@ def _load_torch_model(
                 raise ValueError(
                     "model_class is required when model_path contains a state_dict"
                 )
-            model_fn = get_module_attr(model_class)
-            model = model_fn(**(hyperparameters or {}))
-            model.load_state_dict(loaded_model)
+            model = load_model_from_state_dict(loaded_model, model_class, hyperparameters)
         else:
             model = loaded_model
 

@@ -7,8 +7,10 @@ import os
 import pytorch_lightning as pl
 import torch
 
-from michelangelo._internal.utils.reflection_utils import get_module_attr
-from michelangelo.lib.model_manager._private.utils.torch_utils import is_state_dict
+from michelangelo.lib.model_manager._private.utils.torch_utils import (
+    is_state_dict,
+    load_model_from_state_dict,
+)
 
 
 def _convert_to_torchscript(
@@ -51,9 +53,7 @@ def _convert_to_torchscript(
             raise ValueError(
                 "model_class is required when the artifact is a state dict."
             )
-        model_fn = get_module_attr(model_class)
-        model = model_fn(**(hyperparameters or {}))
-        model.load_state_dict(loaded_model)
+        model = load_model_from_state_dict(loaded_model, model_class, hyperparameters)
     else:
         model = loaded_model
     model.eval()

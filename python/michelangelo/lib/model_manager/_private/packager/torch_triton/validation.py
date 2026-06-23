@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 import os
 from typing import Any, Union
 
@@ -15,8 +14,9 @@ from michelangelo.lib.model_manager._private.packager.torch_triton.constants imp
     MODEL_CLASS_FILE_NAME,
     RAW_SUBMODEL_SCHEMAS_FILE,
 )
-from michelangelo.lib.model_manager._private.schema.torch import (
+from michelangelo.lib.model_manager._private.packager.torch_triton.submodel_schema import (
     capture_submodel_schemas,
+    get_forward_param_names,
     write_submodel_schemas,
 )
 from michelangelo.lib.model_manager._private.utils.data_utils import (
@@ -289,29 +289,6 @@ def _add_batch_dimension(
     return tensor
 
 
-def _get_forward_params(module: torch.nn.Module) -> list[str]:
-    """Return the named, non-variadic parameters of forward after self.
-
-    The class's unbound forward is inspected so that self is present in the
-    signature, keeping inspection consistent across Python versions.
-
-    Args:
-        module: The model whose forward signature is inspected.
-
-    Returns:
-        Ordered parameter names excluding self and *args/**kwargs.
-    """
-    forward_fn = inspect.unwrap(type(module).forward)
-    sig = inspect.signature(forward_fn)
-    return [
-        name
-        for name, param in sig.parameters.items()
-        if name != "self"
-        and param.kind != inspect.Parameter.VAR_POSITIONAL
-        and param.kind != inspect.Parameter.VAR_KEYWORD
-    ]
-
-
 def _invoke_model(model: torch.nn.Module, batch_dict: dict[str, Any]) -> Any:
     """Call a model with batched inputs, handling both calling conventions.
 
@@ -326,7 +303,7 @@ def _invoke_model(model: torch.nn.Module, batch_dict: dict[str, Any]) -> Any:
     Returns:
         The model's raw output.
     """
-    params = _get_forward_params(model)
+    params = get_forward_param_names(model)
     if len(params) > 1:
         return model(**batch_dict)
 
