@@ -99,6 +99,11 @@ message Trigger {
 
   // defines an upper bound on how many pipelines may run in parallel
   int32 max_concurrency = 5;
+
+  // proxy_user is the service account identity for pipeline runs spawned by this
+  // trigger. When set, spawned TriggerRuns will have Actor.proxy_user
+  // auto-populated with this value.
+  string proxy_user = 7;
 }
 
 // TriggerRunSpec defines the specification for executing a pipeline trigger.
