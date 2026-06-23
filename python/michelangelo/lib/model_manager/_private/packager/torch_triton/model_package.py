@@ -406,10 +406,6 @@ def generate_model_package_content(
 
     content: dict = {DEPLOYABLE_CONFIG_FILE_NAME: config_pbtxt, "0": {}}
 
-    _SUPPORTED_BACKENDS = {TritonBackendType.PYTHON, TritonBackendType.TORCH, TritonBackendType.ONNX}
-    if backend not in _SUPPORTED_BACKENDS:
-        raise ValueError(f"Unsupported backend: {backend!r}. Must be one of: {_SUPPORTED_BACKENDS}")
-
     if backend == TritonBackendType.PYTHON:
         _build_python_backend(
             gen,

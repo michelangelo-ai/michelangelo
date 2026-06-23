@@ -19,9 +19,6 @@ import yaml
 from michelangelo.lib.model_manager._private.utils.spec_utils.spec import instantiate
 
 
-# NOTE: instantiate is mirrored in the user_model.py.tmpl template.
-# Keep both implementations in sync when making changes.
-
 def _load_skeleton(package_path: str) -> dict:
     """Load the constructor skeleton for the model class.
 

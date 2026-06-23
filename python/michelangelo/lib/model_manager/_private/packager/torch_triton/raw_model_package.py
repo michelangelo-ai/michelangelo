@@ -214,12 +214,19 @@ def generate_raw_model_package_content(
         requirements = ["torch"]
     elif isinstance(requirements, list) and "torch" not in requirements:
         requirements = [*requirements, "torch"]
+    elif isinstance(requirements, str):
+        # File-based requirements — append torch if not already present.
+        with open(requirements) as f:
+            content = f.read()
+        if "torch" not in content.split():
+            requirements = [line.strip() for line in content.splitlines() if line.strip()] + ["torch"]
 
-    metadata_content = {
+    metadata_content: dict = {
         RAW_TYPE_FILE_NAME: generate_type_yaml(),
         RAW_SCHEMA_FILE_NAME: schema_to_yaml(model_schema),
-        RAW_SAMPLE_DATA_FILE_NAME: dump_model_data(sample_data),
     }
+    if sample_data is not None:
+        metadata_content[RAW_SAMPLE_DATA_FILE_NAME] = dump_model_data(sample_data)
 
     if hyperparameters:
         skeleton = (

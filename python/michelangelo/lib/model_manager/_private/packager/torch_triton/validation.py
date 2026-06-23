@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import inspect
 from typing import Any, Union
 
 import onnx
@@ -304,7 +305,15 @@ def _invoke_model(model: torch.nn.Module, batch_dict: dict[str, Any]) -> Any:
         The model's raw output.
     """
     params = get_forward_param_names(model)
-    has_kwargs = any(p == "**kwargs" for p in params)
+    # Check if forward accepts **kwargs by inspecting the unbound signature.
+    try:
+        sig = inspect.signature(inspect.unwrap(type(model).forward))
+        has_kwargs = any(
+            p.kind == inspect.Parameter.VAR_KEYWORD
+            for p in sig.parameters.values()
+        )
+    except (ValueError, TypeError):
+        has_kwargs = False
     if has_kwargs or set(batch_dict.keys()).issubset(set(params)):
         return model(**batch_dict)
     return model(batch_dict)
@@ -390,6 +399,14 @@ def _collect_outputs(
         output_field_name = schema_item.name if schema_item else "output"
         return {
             output_field_name: _remove_batch_size_dimension(output, schema_item)
+        }
+
+    if isinstance(output, dict):
+        return {
+            k: _remove_batch_size_dimension(v, next(
+                (item for item in model_schema.output_schema if item.name == k), None
+            )) if isinstance(v, torch.Tensor) else v
+            for k, v in output.items()
         }
 
     if isinstance(output, (list, tuple)):

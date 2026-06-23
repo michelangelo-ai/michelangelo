@@ -113,7 +113,7 @@ class Model():
             else:
                 output = self.model(**tensor_inputs)
 
-        output_names = {{ output_names }}
+        output_names = {{ output_names | tojson }}
 
         if isinstance(output, dict):
             results = {}
