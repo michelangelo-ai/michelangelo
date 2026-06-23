@@ -8,7 +8,6 @@ logger / callback resolution helpers. Public APIs live in
 from __future__ import annotations
 
 import hashlib
-import importlib
 import logging
 import os
 import re
@@ -35,21 +34,12 @@ from ray.train.lightning import (
     RayLightningEnvironment,
 )
 
+from michelangelo._internal.utils.reflection_utils import get_module_attr
+from michelangelo.lib._internal.errors import UserInputError
 from michelangelo.lib.trainer.torch.pytorch_lightning._private.callbacks import (
     RayTrainReportCallback,
     RayTrainReportPerNodeCallback,
 )
-
-
-class UserInputError(Exception):
-    """Raised when a user-supplied input or path causes training to fail."""
-
-
-def _get_module_attr(module_attr: str) -> Any:
-    """Resolve a dotted ``module.attribute`` path to the attribute object."""
-    module_def, _, attr_def = module_attr.rpartition(".")
-    module = importlib.import_module(module_def)
-    return getattr(module, attr_def)
 
 
 # Plugin types accepted by the PyTorch Lightning Trainer.
@@ -255,7 +245,7 @@ def _resolve_plugins(
         result = []
     elif isinstance(plugins, str):
         # Create the plugin instances from the provided plugins function
-        plugins_fn = _get_module_attr(plugins)
+        plugins_fn = get_module_attr(plugins)
         plugin_instances = plugins_fn(**plugin_kwargs)
         result = (
             list(plugin_instances)
@@ -311,7 +301,7 @@ def _resolve_logger(
             )
         return list(logger)
     if isinstance(logger, str):
-        logger_fn = _get_module_attr(logger)
+        logger_fn = get_module_attr(logger)
         result = logger_fn(**(logger_kwargs or {}))
         return list(result) if isinstance(result, (list, tuple)) else result
     if logger is not None:
@@ -363,7 +353,7 @@ def _resolve_callbacks(
 
     if isinstance(callbacks, str):
         # Import the callable and invoke it — may be a Callback class or a factory returning one or more.
-        fn = _get_module_attr(callbacks)
+        fn = get_module_attr(callbacks)
         result = fn(**callback_kwargs)
         if isinstance(result, (list, tuple)):
             for obj in result:

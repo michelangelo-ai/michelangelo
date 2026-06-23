@@ -1,8 +1,4 @@
-"""Numpy padding utilities used by the data-collate helpers.
-
-Kept private to the trainer package; callers should use
-:mod:`michelangelo.lib.trainer.torch.data_collate_functions`.
-"""
+"""Numpy padding and dtype utilities shared across michelangelo.lib."""
 
 from __future__ import annotations
 
@@ -18,7 +14,16 @@ BOOL_SENTINEL = False
 
 
 def sentinel_for_numpy_dtype(dtype: np.dtype) -> float | int | str | bytes | bool:
-    """Return the type-native sentinel value for *dtype*."""
+    """Return the type-native sentinel value for *dtype*.
+
+    Float dtypes use NaN; signed integers int32 and int64 use ``INT32_SENTINEL``.
+    int8 and int16 raise ``ValueError`` (``INT32_SENTINEL`` does not fit); pass an
+    explicit ``pad_value`` to :func:`pad_ragged_tensor` or cast to a wider dtype first.
+    Other integer dtypes (e.g. unsigned) raise ``ValueError``.
+    Unicode and object dtypes use :data:`STRING_SENTINEL`; bytes use
+    :data:`BYTES_SENTINEL`; bool uses :data:`BOOL_SENTINEL`.
+    Raises ``ValueError`` for unsupported dtypes (e.g. void).
+    """
     if np.issubdtype(dtype, np.floating):
         return FLOAT_SENTINEL
     if np.issubdtype(dtype, np.integer):
