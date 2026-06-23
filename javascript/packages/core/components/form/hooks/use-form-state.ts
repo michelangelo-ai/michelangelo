@@ -44,8 +44,7 @@ export function useFormState<FieldValues extends FormData = FormData>(
     : undefined;
 
   const formState = useReactFinalFormState({
-    // cast: react-final-form's subscription type is a specific mapped type; Record<string, boolean> is the runtime shape
-    subscription: reactFinalFormSubscription as Record<string, boolean>,
+    subscription: reactFinalFormSubscription,
   });
 
   // cast: narrowing the assembled object to our parameterized FormState return type
@@ -58,8 +57,8 @@ export function useFormState<FieldValues extends FormData = FormData>(
     hasValidationErrors: formState.hasValidationErrors,
     // cast: react-final-form types errors/submitErrors/touched as specific internal types; we expose them as plain records
     errors: formState.errors as Record<string, unknown> | undefined,
-    submitErrors: formState.submitErrors as Record<string, unknown> | undefined, // cast: react-final-form internal type; exposed as plain Record
-    touched: formState.touched as Record<string, boolean> | undefined, // cast: react-final-form internal type; exposed as plain Record
+    submitErrors: formState.submitErrors,
+    touched: formState.touched,
     modifiedSinceLastSubmit: formState.modifiedSinceLastSubmit,
   } as FormState<FieldValues> | Partial<FormState<FieldValues>>;
 }

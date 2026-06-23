@@ -17,7 +17,8 @@ export function useFormErrorList(): ErrorEntry[] {
     touched: true,
   });
 
-  const formLevelError = submitErrors?.[FORM_ERROR] as Error | undefined; // cast: react-final-form types FORM_ERROR value as unknown; it's always an Error when set
+  const rawFormLevelError = submitErrors?.[FORM_ERROR];
+  const formLevelError = rawFormLevelError instanceof Error ? rawFormLevelError : undefined;
   const formLevelEntry: ErrorEntry[] = formLevelError
     ? [{ fieldPath: FORM_ERROR, errorMessage: String(formLevelError) }]
     : [];

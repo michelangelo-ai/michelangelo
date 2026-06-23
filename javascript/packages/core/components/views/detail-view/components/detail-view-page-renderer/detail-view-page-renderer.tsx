@@ -3,11 +3,6 @@ import React from 'react';
 import { Execution } from '#core/components/views/execution/execution';
 import { DetailViewTablePage } from './pages/detail-view-table-page/detail-view-table-page';
 
-import type {
-  CustomDetailPageConfig,
-  ExecutionDetailPageConfig,
-  TableDetailPageConfig,
-} from '#core/components/views/detail-view/types/detail-view-schema-types';
 import type { PageRendererProps } from './types';
 
 export function DetailViewPageRenderer<T extends object = object>({
@@ -17,13 +12,13 @@ export function DetailViewPageRenderer<T extends object = object>({
 }: PageRendererProps<T>) {
   switch (page.type) {
     case 'custom':
-      return React.createElement((page as CustomDetailPageConfig).component, { data, isLoading }); // cast: type discriminant ensures page is CustomDetailPageConfig in this case branch
+      return React.createElement(page.component, { data, isLoading });
 
     case 'execution':
-      return <Execution schema={page as ExecutionDetailPageConfig} data={data ?? {}} />; // cast: type discriminant ensures page is ExecutionDetailPageConfig in this case branch
+      return <Execution schema={page} data={data ?? {}} />;
 
     case 'table': {
-      const tablePage = page as TableDetailPageConfig<T>; // cast: type discriminant ensures page is TableDetailPageConfig in this case branch
+      const tablePage = page;
       return (
         <DetailViewTablePage<T>
           isDetailViewLoading={isLoading}
@@ -35,6 +30,7 @@ export function DetailViewPageRenderer<T extends object = object>({
     }
 
     default:
-      return <div>Page type '{page.type}' not yet supported</div>;
+      // cast: page is never in the type-safe path; runtime guard for unknown page types from external config
+      return <div>Page type &apos;{(page as { type: string }).type}&apos; not yet supported</div>;
   }
 }

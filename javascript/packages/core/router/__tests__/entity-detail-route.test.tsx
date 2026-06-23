@@ -192,7 +192,8 @@ describe('EntityDetailRoute', () => {
                 type: 'detail',
                 metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
                 pages: [
-                  { id: 'unknown-type', label: 'Unknown Type', type: 'some-unknown-type' },
+                  // as-cast: testing runtime behavior with an unknown page type; not representable in the type-safe union
+                  { id: 'unknown-type', label: 'Unknown Type', type: 'some-unknown-type' } as never,
                   {
                     id: 'execution',
                     label: 'Execution',

@@ -80,7 +80,7 @@ export function SelectField<V = string | number>({
   }, [findByValue, isLoading]);
 
   const handleCommitSelection = (params: OnChangeParams) => {
-    const selected = params.value as Array<{ id: string }>; // cast: BaseUI value is readonly Value[]; we know the shape is { id: string }
+    const selected = params.value as Array<{ id: string }>; // cast: BaseUI OnChangeParams.value is ReadonlyArray<Option> where id is string | number | undefined; our options always produce string keys so we narrow here
 
     if (multi) {
       // cast: BaseUI item id is a serialized string key; V is the original option id type

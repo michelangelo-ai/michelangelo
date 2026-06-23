@@ -3,15 +3,11 @@ import type { TableConfig } from '#core/components/views/types';
 import type { QueryConfig } from '#core/types/query-types';
 
 export type DetailPageConfig<T extends object = object> =
-  | BaseDetailPageConfig
   | ExecutionDetailPageConfig<T>
   | TableDetailPageConfig<T>
   | CustomDetailPageConfig<T>;
 
 interface BaseDetailPageConfig {
-  /** Type of page content to render */
-  type: string;
-
   /** Unique identifier for the page, used for entityTab param in the URL */
   id: string;
 
