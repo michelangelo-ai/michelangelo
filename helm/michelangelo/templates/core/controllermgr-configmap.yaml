@@ -65,6 +65,7 @@ data:
       transport: grpc
       domain: {{ .Values.workflow.domain | default "default" | quote }}
       provider: Temporal
+      taskList: default
       {{- with .Values.controllermgr.workflowClient.executionUrlFormat }}
       executionUrlFormat: {{ . | quote }}
       {{- end }}
