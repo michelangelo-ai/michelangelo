@@ -1,11 +1,26 @@
 """Shared serialization helpers used by multiple backend packagers."""
 
 import os
+import shutil
 from typing import Optional, Union
 
-from michelangelo.lib.model_manager._private.packager.custom_triton.model_interface import (  # noqa: E501
-    serialize_model_interface,
+import michelangelo.lib.model_manager.interface.custom_model as custom_model
+
+_INTERFACE_MODULE_PATH = os.path.join(
+    "michelangelo", "lib", "model_manager", "interface", "custom_model.py"
 )
+
+
+def serialize_model_interface(target_dir: str) -> None:
+    """Serialize the custom_model interface into the target dir.
+
+    Args:
+        target_dir: the target dir to serialize the model interface
+    """
+    target_path = os.path.join(target_dir, _INTERFACE_MODULE_PATH)
+    if not os.path.exists(target_path):
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        shutil.copyfile(custom_model.__file__, target_path)
 from michelangelo.lib.model_manager._private.packager.template_renderer import (
     TritonTemplateRenderer,
 )

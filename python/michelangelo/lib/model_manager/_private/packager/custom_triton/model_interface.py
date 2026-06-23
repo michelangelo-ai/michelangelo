@@ -1,30 +1,12 @@
-"""Serialize the model interface to the target dir."""
-
-import os
-import shutil
+"""Validate and serialize the model interface."""
 
 import michelangelo.lib.model_manager.interface.custom_model as custom_model
 from michelangelo._internal.utils.reflection_utils import get_module_attr
-
-module_path = os.path.join(
-    "michelangelo", "lib", "model_manager", "interface", "custom_model.py"
+from michelangelo.lib.model_manager._private.packager.common.serialization import (
+    serialize_model_interface,
 )
 
-
-def serialize_model_interface(target_dir: str):
-    """Serialize the model interface to the target dir.
-
-    Args:
-        target_dir: the target dir to serialize the model interface
-
-    Returns:
-        None
-    """
-    target_path = os.path.join(target_dir, module_path)
-
-    if not os.path.exists(target_path):
-        os.makedirs(os.path.dirname(target_path), exist_ok=True)
-        shutil.copyfile(custom_model.__file__, target_path)
+__all__ = ["serialize_model_interface", "validate_model_class"]
 
 
 def validate_model_class(model_class: str) -> tuple[bool, Exception]:
