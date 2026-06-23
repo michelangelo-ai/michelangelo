@@ -25,7 +25,6 @@ export function ArrayFormGroup({
     readOnly,
   });
   const addLabel = addLabelProp ?? (groupLabel ? `Add ${groupLabel.toLowerCase()}` : 'Add more');
-  const handleAddItem = add;
 
   return (
     <>

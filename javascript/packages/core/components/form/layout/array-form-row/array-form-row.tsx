@@ -25,7 +25,6 @@ export function ArrayFormRow({
     minItems,
     readOnly,
   });
-  const handleAddItem = add;
 
   return (
     <>

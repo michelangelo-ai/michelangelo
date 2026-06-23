@@ -20,7 +20,6 @@ export function TaskFlow<TTaskRecord extends object = object>({
     overrides?.SubTaskListRenderer ?? overrides?.TaskListRenderer,
     TaskListRenderer
   );
-  const handleTaskScroll = onTaskClick;
 
   return (
     <>

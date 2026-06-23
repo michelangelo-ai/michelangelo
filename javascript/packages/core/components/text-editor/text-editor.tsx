@@ -15,7 +15,6 @@ export function TextEditor({
   const [css] = useStyletron();
 
   const extensions = language === 'json' ? [json()] : [];
-  const handleEditorChange = onChange;
 
   const themeExtension = EditorView.theme({
     '&': {
