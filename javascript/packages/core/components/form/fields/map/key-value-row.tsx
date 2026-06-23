@@ -29,12 +29,12 @@ export function KeyValueRow({
   keyError,
   onChange,
   onDelete,
-  onFocus: handleInputFocus,
+  onFocus,
   onBlur,
 }: KeyValueRowProps) {
   const [css, theme] = useStyletron();
 
-  const handleRowCommit = row.key && row.value ? onBlur : undefined;
+  const handleBlurIfFilled = row.key && row.value ? onBlur : undefined;
 
   return (
     <div
@@ -48,8 +48,8 @@ export function KeyValueRow({
       <Input
         value={row.key}
         onChange={(e) => onChange({ ...row, key: e.currentTarget.value })}
-        onFocus={handleInputFocus}
-        onBlur={handleRowCommit}
+        onFocus={onFocus}
+      onBlur={handleBlurIfFilled}
         placeholder={keyConfig?.placeholder ?? 'Key'}
         // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- false is a valid value, so || is needed to fall through to keyConfig?.readOnly
         readOnly={readOnly || keyConfig?.readOnly}
@@ -66,8 +66,8 @@ export function KeyValueRow({
       <Input
         value={row.value}
         onChange={(e) => onChange({ ...row, value: e.currentTarget.value })}
-        onFocus={handleInputFocus}
-        onBlur={handleRowCommit}
+        onFocus={onFocus}
+      onBlur={handleBlurIfFilled}
         placeholder={valueConfig?.placeholder ?? 'Value'}
         readOnly={readOnly}
         disabled={disabled}

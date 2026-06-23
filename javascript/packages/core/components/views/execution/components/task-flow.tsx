@@ -9,7 +9,7 @@ import type { TaskFlowProps } from './types';
 
 export function TaskFlow<TTaskRecord extends object = object>({
   matrix,
-  onTaskClick: handleScrollToTask,
+  onTaskClick,
   overrides,
 }: TaskFlowProps<TTaskRecord>) {
   const [TaskListRendererComponent, taskListRendererProps] = getOverrides(
@@ -32,7 +32,7 @@ export function TaskFlow<TTaskRecord extends object = object>({
             <TaskFlowContainer>
               <Renderer
                 taskList={item.taskList}
-                onTaskClick={handleScrollToTask}
+                onTaskClick={onTaskClick}
                 parent={item.parent}
                 {...rendererProps}
               />

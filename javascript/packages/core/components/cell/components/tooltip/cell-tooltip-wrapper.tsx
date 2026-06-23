@@ -7,7 +7,7 @@ import { ClickableContainer } from './styled-components';
 import type { TooltipWrapperProps } from './types';
 
 export function CellTooltipWrapper(props: TooltipWrapperProps) {
-  const { actionHandler: handleActionExecute, children, content } = props;
+  const { actionHandler, children, content } = props;
   const [, theme] = useStyletron();
 
   return (
@@ -18,9 +18,9 @@ export function CellTooltipWrapper(props: TooltipWrapperProps) {
       placement={PLACEMENT.top}
       accessibilityType={ACCESSIBILITY_TYPE.tooltip}
       content={
-        <ClickableContainer onClick={handleActionExecute}>
+        <ClickableContainer onClick={actionHandler}>
           {content}
-          {!!handleActionExecute && <Icon name="chevronRight" size={theme.sizing.scale650} />}
+          {!!actionHandler && <Icon name="chevronRight" size={theme.sizing.scale650} />}
         </ClickableContainer>
       }
     >

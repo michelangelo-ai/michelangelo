@@ -26,13 +26,40 @@ const rule = {
   },
 
   create(context) {
+    function isParamInScope(name, scope) {
+      let s = scope;
+      while (s) {
+        for (const v of s.variables) {
+          if (v.name === name && v.defs.length > 0 && v.defs[0].type === 'Parameter') return true;
+        }
+        s = s.upper;
+      }
+      return false;
+    }
+
+    function extractIdentifiers(node) {
+      if (!node) return [];
+      if (node.type === 'Identifier') return [node.name];
+      if (node.type === 'LogicalExpression') return [...extractIdentifiers(node.left), ...extractIdentifiers(node.right)];
+      if (node.type === 'MemberExpression') return extractIdentifiers(node.object);
+      if (node.type === 'ChainExpression') return extractIdentifiers(node.expression);
+      return [];
+    }
+
     function isPassThroughProp(identifierNode) {
       const name = identifierNode.name;
       let scope = context.sourceCode.getScope(identifierNode);
       while (scope) {
         for (const variable of scope.variables) {
           if (variable.name === name) {
-            return variable.defs.length > 0 && variable.defs[0].type === 'Parameter';
+            if (variable.defs.length === 0) return false;
+            const def = variable.defs[0];
+            if (def.type === 'Parameter') return true;
+            if (def.type === 'Variable' && def.node.init) {
+              const identifiers = extractIdentifiers(def.node.init);
+              if (identifiers.some((id) => isParamInScope(id, scope))) return true;
+            }
+            return false;
           }
         }
         scope = scope.upper;

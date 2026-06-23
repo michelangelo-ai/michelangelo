@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 
 import { createTask } from '#core/components/views/execution/components/task-details/__fixtures__/task-details-fixtures';
-import { buildTaskScrollId, scrollToTask } from '../scroll-to-task';
+import { buildTaskScrollId, handleScrollToTask } from '../scroll-to-task';
 
 // Mock DOM and window methods
 const mockScrollTo = vi.fn();
@@ -42,7 +42,7 @@ describe('scroll-to-task', () => {
     });
   });
 
-  describe('scrollToTask', () => {
+  describe('handleScrollToTask', () => {
     it('should scroll to task with default offset', () => {
       const task = createTask({ name: 'Test Task' });
       const mockElement = { getBoundingClientRect: mockGetBoundingClientRect };
@@ -50,7 +50,7 @@ describe('scroll-to-task', () => {
       mockGetElementById.mockReturnValue(mockElement);
       mockGetBoundingClientRect.mockReturnValue({ top: 200 });
 
-      scrollToTask(task);
+      handleScrollToTask(task);
 
       expect(mockGetElementById).toHaveBeenCalledWith('task-Test Task');
       expect(mockScrollTo).toHaveBeenCalledWith({
@@ -64,7 +64,7 @@ describe('scroll-to-task', () => {
 
       mockGetElementById.mockReturnValue(null);
 
-      scrollToTask(task);
+      handleScrollToTask(task);
 
       expect(mockGetElementById).toHaveBeenCalledWith('task-Missing Task');
       expect(mockScrollTo).not.toHaveBeenCalled();

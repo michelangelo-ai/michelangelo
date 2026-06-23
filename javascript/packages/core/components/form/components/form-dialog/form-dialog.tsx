@@ -37,7 +37,7 @@ import type { FormDialogProps } from './types';
  */
 export const FormDialog = <FieldValues extends FormData = FormData>({
   isOpen,
-  onDismiss: handleDialogDismiss,
+  onDismiss,
   heading,
   size = SIZE.large,
   onSubmit,
@@ -50,7 +50,7 @@ export const FormDialog = <FieldValues extends FormData = FormData>({
   const handleFormSubmit = async (values: FieldValues) => {
     try {
       await onSubmit(values);
-      handleDialogDismiss(); // Auto-close on successful submit
+      onDismiss(); // Auto-close on successful submit
     } catch (error: unknown) {
       return { [FORM_ERROR]: error };
     }
@@ -64,7 +64,7 @@ export const FormDialog = <FieldValues extends FormData = FormData>({
       render={(formElement) => (
         <Dialog
           isOpen={isOpen}
-          onDismiss={handleDialogDismiss}
+          onDismiss={onDismiss}
           heading={heading}
           size={size}
           placement={PLACEMENT.topCenter}
@@ -73,7 +73,7 @@ export const FormDialog = <FieldValues extends FormData = FormData>({
             dismissiveAction: (
               <Button
                 kind={KIND.tertiary}
-                onClick={handleDialogDismiss}
+                onClick={onDismiss}
                 overrides={{
                   BaseButton: {
                     style: {

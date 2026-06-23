@@ -20,12 +20,7 @@ export function ArrayFormGroup({
   tooltip,
   collapsible,
 }: ArrayFormGroupProps) {
-  const {
-    entries,
-    add: handleAddItem,
-    remove,
-    isRemovable,
-  } = useArrayField(rootFieldPath, {
+  const { entries, handleItemAdd, remove, isRemovable } = useArrayField(rootFieldPath, {
     minItems,
     readOnly,
   });
@@ -66,7 +61,7 @@ export function ArrayFormGroup({
           </FormGroup>
         </RepeatedLayoutProvider>
       ))}
-      {!readOnly && <AddButton label={addLabel} shape={SHAPE.pill} onClick={handleAddItem} />}
+      {!readOnly && <AddButton label={addLabel} shape={SHAPE.pill} onClick={handleItemAdd} />}
     </>
   );
 }

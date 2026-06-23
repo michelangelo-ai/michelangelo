@@ -3,12 +3,12 @@ import { useEffect, useRef, useState } from 'react';
 export function useScrollRatio<T>(visibleColumns: T[]): {
   scrollRatio: number;
   tableRef: React.RefObject<HTMLElement | null>;
-  updateScrollRatio: () => void;
+  handleScrollRatioUpdate: () => void;
 } {
   const [scrollRatio, setScrollRatio] = useState(-1);
   const tableRef = useRef<HTMLElement>(null);
 
-  const updateScrollRatio = () => {
+  const handleScrollRatioUpdate = () => {
     const element = tableRef.current;
     if (!element) return;
 
@@ -26,13 +26,13 @@ export function useScrollRatio<T>(visibleColumns: T[]): {
     const element = tableRef.current;
     if (!element) return;
 
-    updateScrollRatio();
+    handleScrollRatioUpdate();
 
-    const resizeObserver = new ResizeObserver(updateScrollRatio);
+    const resizeObserver = new ResizeObserver(handleScrollRatioUpdate);
     resizeObserver.observe(element);
 
     return () => resizeObserver.disconnect();
   }, [visibleColumns]);
 
-  return { scrollRatio, tableRef, updateScrollRatio };
+  return { scrollRatio, tableRef, handleScrollRatioUpdate };
 }

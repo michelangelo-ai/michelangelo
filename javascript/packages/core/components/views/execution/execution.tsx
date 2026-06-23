@@ -11,7 +11,7 @@ import { TaskContentStack } from './styled-components';
 import { buildTaskList } from './utils/build-task-list';
 import { buildTaskMatrix } from './utils/build-task-matrix';
 import { determineExecutionState } from './utils/determine-execution-state';
-import { scrollToTask } from './utils/scroll-to-task';
+import { handleScrollToTask } from './utils/scroll-to-task';
 
 import type { ExecutionDetailViewSchema, ExecutionOverrides } from './types';
 
@@ -61,7 +61,7 @@ export function Execution<
           <TaskFlow
             matrix={matrix}
             onTaskClick={(clickedTask) => {
-              scrollToTask(clickedTask);
+              handleScrollToTask(clickedTask);
             }}
             overrides={{
               TaskListRenderer: overrides?.TaskListRenderer,

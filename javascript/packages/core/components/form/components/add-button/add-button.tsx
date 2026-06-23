@@ -17,12 +17,12 @@ import type { AddButtonProps } from './types';
  *
  * @example
  * ```tsx
- * const { add } = useArrayField('items');
+ * const { handleItemAdd } = useArrayField('items');
  *
  * <AddButton onClick={add} label="Add item" />
  * ```
  */
-export function AddButton({ label = 'Add more', shape, onClick: handleItemAdd }: AddButtonProps) {
+export function AddButton({ label = 'Add more', shape, onClick }: AddButtonProps) {
   const [, theme] = useStyletron();
 
   return (
@@ -37,7 +37,7 @@ export function AddButton({ label = 'Add more', shape, onClick: handleItemAdd }:
       overrides={{
         BaseButton: { style: { marginBottom: theme.sizing.scale600, width: '260px' } },
       }}
-      onClick={handleItemAdd}
+      onClick={onClick}
     >
       {label}
     </Button>

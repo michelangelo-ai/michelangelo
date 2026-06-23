@@ -8,7 +8,7 @@ describe('useScrollRatio', () => {
 
     expect(result.current.scrollRatio).toBe(-1);
     expect(result.current.tableRef.current).toBe(null);
-    expect(typeof result.current.updateScrollRatio).toBe('function');
+    expect(typeof result.current.handleScrollRatioUpdate).toBe('function');
   });
 
   it('should calculate scroll ratio correctly', () => {
@@ -22,7 +22,7 @@ describe('useScrollRatio', () => {
     result.current.tableRef.current = mockElement;
 
     act(() => {
-      result.current.updateScrollRatio();
+      result.current.handleScrollRatioUpdate();
     });
 
     expect(result.current.scrollRatio).toBe(0.5);
@@ -39,7 +39,7 @@ describe('useScrollRatio', () => {
     result.current.tableRef.current = mockElement;
 
     act(() => {
-      result.current.updateScrollRatio();
+      result.current.handleScrollRatioUpdate();
     });
 
     expect(result.current.scrollRatio).toBe(1);
@@ -56,7 +56,7 @@ describe('useScrollRatio', () => {
     result.current.tableRef.current = mockElement;
 
     act(() => {
-      result.current.updateScrollRatio();
+      result.current.handleScrollRatioUpdate();
     });
 
     expect(result.current.scrollRatio).toBe(-1);
@@ -73,7 +73,7 @@ describe('useScrollRatio', () => {
     result.current.tableRef.current = mockElement;
 
     act(() => {
-      result.current.updateScrollRatio();
+      result.current.handleScrollRatioUpdate();
     });
 
     expect(result.current.scrollRatio).toBe(0.25);
@@ -90,7 +90,7 @@ describe('useScrollRatio', () => {
     result.current.tableRef.current = mockElement;
 
     act(() => {
-      result.current.updateScrollRatio();
+      result.current.handleScrollRatioUpdate();
     });
 
     expect(result.current.scrollRatio).toBe(0.34);

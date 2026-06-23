@@ -7,7 +7,7 @@ import type { TableActionBarProps } from './types';
 
 export function TableActionBar<T>({
   globalFilter,
-  setGlobalFilter: handleGlobalFilterUpdate,
+  setGlobalFilter,
   columnFilters,
   setColumnFilters,
   preFilteredRows,
@@ -18,7 +18,7 @@ export function TableActionBar<T>({
     <Container>
       <ActionsContainer>
         {configuration.enableSearch && (
-          <TableSearchInput value={globalFilter} onChange={handleGlobalFilterUpdate} />
+          <TableSearchInput value={globalFilter} onChange={setGlobalFilter} />
         )}
 
         {configuration.enableFilters && filterableColumns.length > 0 && (

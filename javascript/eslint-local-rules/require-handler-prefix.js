@@ -25,6 +25,26 @@ const rule = {
   },
 
   create(context) {
+    function isParamInScope(name, scope) {
+      let s = scope;
+      while (s) {
+        for (const v of s.variables) {
+          if (v.name === name && v.defs.length > 0 && v.defs[0].type === 'Parameter') return true;
+        }
+        s = s.upper;
+      }
+      return false;
+    }
+
+    function extractIdentifiers(node) {
+      if (!node) return [];
+      if (node.type === 'Identifier') return [node.name];
+      if (node.type === 'LogicalExpression') return [...extractIdentifiers(node.left), ...extractIdentifiers(node.right)];
+      if (node.type === 'MemberExpression') return extractIdentifiers(node.object);
+      if (node.type === 'ChainExpression') return extractIdentifiers(node.expression);
+      return [];
+    }
+
     function isPassThroughProp(identifierNode) {
       const name = identifierNode.name;
       let scope = context.sourceCode.getScope(identifierNode);
@@ -35,23 +55,11 @@ const rule = {
             const def = variable.defs[0];
             // Direct parameter destructuring: ({ onClose }) => ...
             if (def.type === 'Parameter') return true;
-            // Indirect: const { onClose } = props where props is a parameter.
-            // Covers forwardRef's (props, ref) => { const { onClose } = props } pattern.
-            if (def.type === 'Variable' && def.node.init?.type === 'Identifier') {
-              const sourceName = def.node.init.name;
-              let innerScope = scope;
-              while (innerScope) {
-                for (const v of innerScope.variables) {
-                  if (
-                    v.name === sourceName &&
-                    v.defs.length > 0 &&
-                    v.defs[0].type === 'Parameter'
-                  ) {
-                    return true;
-                  }
-                }
-                innerScope = innerScope.upper;
-              }
+            // Indirect: const { onClose } = <expr involving a parameter>.
+            // Handles: props, props ?? {}, props?.foo, etc.
+            if (def.type === 'Variable' && def.node.init) {
+              const identifiers = extractIdentifiers(def.node.init);
+              if (identifiers.some((id) => isParamInScope(id, scope))) return true;
             }
             return false;
           }

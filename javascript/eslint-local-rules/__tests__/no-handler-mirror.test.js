@@ -53,6 +53,10 @@ tester.run('no-handler-mirror', rule, {
       name: 'handle + descriptive suffix — handleCommitSelection is valid for onChange',
       code: `const C = () => <Select onChange={handleCommitSelection} />;`,
     },
+    {
+      name: 'prop forwarded via body destructuring from parameter',
+      code: `const C = (props) => { const { onClick } = props; return <Button onClick={onClick} />; }`,
+    },
   ],
 
   invalid: [
@@ -79,11 +83,6 @@ tester.run('no-handler-mirror', rule, {
     {
       name: 'onSubmit={onSubmit} — locally-declared var that mirrors prop',
       code: `const onSubmit = () => {}; const C = () => <Form onSubmit={onSubmit} />;`,
-      errors: [{ messageId: 'noHandlerMirror' }],
-    },
-    {
-      name: 'known limitation — destructured member expression pass-through',
-      code: `const C = (props) => { const { onClick } = props; return <Button onClick={onClick} />; }`,
       errors: [{ messageId: 'noHandlerMirror' }],
     },
   ],

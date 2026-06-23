@@ -42,11 +42,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
     initialState,
   });
 
-  const {
-    scrollRatio,
-    tableRef,
-    updateScrollRatio: handleScrollRatioUpdate,
-  } = useScrollRatio(columns);
+  const { scrollRatio, tableRef, handleScrollRatioUpdate } = useScrollRatio(columns);
 
   const table = useReactTable<T>({
     data: props.data,

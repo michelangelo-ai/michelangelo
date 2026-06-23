@@ -13,7 +13,7 @@ import type { FieldRegistry, FormData, FormProps } from './types';
 const focusOnErrorDecorator = createFocusOnErrorDecorator();
 
 export const Form = <FieldValues extends FormData = FormData>({
-  onSubmit: handleFormSubmit,
+  onSubmit,
   initialValues,
   id,
   children,
@@ -28,7 +28,7 @@ export const Form = <FieldValues extends FormData = FormData>({
   return (
     <FormContext.Provider value={formContextValue}>
       <FinalForm
-        onSubmit={handleFormSubmit}
+        onSubmit={onSubmit}
         initialValues={initialValues}
         mutators={{ ...arrayMutators }}
         decorators={focusOnError ? [focusOnErrorDecorator] : undefined}

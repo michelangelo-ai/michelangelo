@@ -42,6 +42,10 @@ tester.run('require-handler-prefix', rule, {
       code: `const toggleMenu = () => {}; const C = () => <Button label={toggleMenu} />;`,
     },
     {
+      name: 'passthrough via nullish coalescing (props ?? {})',
+      code: `function getWrapper(props) { const { onSubmit = () => {} } = props ?? {}; return <Form onSubmit={onSubmit} />; }`,
+    },
+    {
       name: 'indirect passthrough via props object (forwardRef pattern)',
       code: `const C = forwardRef((props, ref) => { const { onClose } = props; return <Modal onEsc={onClose} />; });`,
     },
