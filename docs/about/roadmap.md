@@ -35,30 +35,27 @@ These capabilities are shipped and available in the current release. Individual 
 - Project creation and lifecycle management
 - Pipeline authoring in YAML and UniFlow (Python DSL)
 - Revision management and versioning
-- Overridable parameters via blobstore URL
 - Pipeline deletion with cascade cleanup (Pipeline → PipelineRun, TriggerRun)
 
 **Pipeline Execution**
 - Pipeline run execution
 - Trigger-based runs (cron schedule)
 - Backfill runs
-- Pipeline notifications (email and Slack on run outcomes)
+- Pipeline notifications (email and Slack via custom action setup)
 
 **Distributed Training**
 - Ray job launch and management
-- Spark job launch on Kubernetes
 - Persistent Ray clusters via RayCluster CRD
 - Federated multi-cluster dispatch
 
 **Model Serving**
-- Inference server creation
+- Inference server creation (Triton backend)
 - Rolling deployment strategy
 - Traffic routing
 
 **Infrastructure & Compute**
 - Compute cluster registration
-- Resource pool selection
-- Storage management via S3/GCS
+- Storage management via S3/MinIO
 
 **Automation & Self-Healing**
 - Revision-gated state transitions
@@ -66,48 +63,31 @@ These capabilities are shipped and available in the current release. Individual 
 - Federated multi-cluster status sync
 - Finalizer-based cascade deletion
 
-## In Progress
+## Planned
 
-These features are actively being built and will land in upcoming releases.
+These are capabilities we intend to build. Items closer to the top of each section are nearer-term.
 
 **Pipeline Management**
 - Draft-based authoring workflow
 - Dev/Prod environment labels derived from git branch
 - Auto-flip triggers (automatic revision switching on new revision)
 - Interval and batch rerun trigger types
+- Overridable parameters via blobstore URL
+- Concurrent update protection via optimistic locking
+- Canvas release version validation
+- Block dev-branch runs in production (safety gate enforcement)
 
 **Model Deployment**
 - Deployment rollout strategies (Blast, Zonal, Shadow/A-B)
 - Endpoint traffic splitting and shadow routing
 - Automatic rollback on alert firing
 - Decommission workflow with no-traffic validation gate
-
-**Generative AI & LLM**
-- GenAI service deployment: first-class support for deploying and managing LLM-backed inference
-
-**Evaluation & Reporting**
-- Experiment reports
-
-**Alerting & Monitoring**
-- Dashboard management via OSS Grafana operator
-- Prometheus-based alerting for decommission gating
-
-## On the Radar
-
-These are planned capabilities we are working towards adding down the road.
-
-**Project Management**
-- Team ownership via OSS ownership model (CODEOWNERS)
-- Cloud zone annotations for multi-cloud routing
-- Git repository migration allowlist
-- Routing affinity inheritance (parent-to-child annotation propagation)
-
-**Pipeline Authoring & Execution**
-- Concurrent update protection via optimistic locking
-- Canvas release version validation
-- Block dev-branch runs in production (safety gate enforcement)
+- Traffic routing via Istio/Envoy OSS gateway
+- Compute lockdown detection
+- Global endpoint name uniqueness (cross-namespace validation)
 
 **Distributed Training**
+- Spark job launch on Kubernetes
 - GPU SKU normalization and validation via ConfigMap
 - mTLS injection via cert-manager or OSS SPIFFE
 - Prometheus ConfigMap auto-creation per job
@@ -115,10 +95,16 @@ These are planned capabilities we are working towards adding down the road.
 - Spark obsolescence enforcement (7-day auto-kill for runaway jobs)
 - Resource usage metrics emission
 
-**Model Deployment**
-- Traffic routing via Istio/Envoy OSS gateway
-- Compute lockdown detection
-- Global endpoint name uniqueness (cross-namespace validation)
+**Generative AI & LLM**
+- GenAI service deployment: first-class support for deploying and managing LLM-backed inference
+- AI agent management with declarative agent definitions and LLM registry
+- Prompt template management
+- Guardrail policies (input/output safety filtering, bias detection)
+
+**Infrastructure & Compute**
+- GCS storage support
+- Resource pool selection
+- Vector dataset management for embedding and RAG/similarity search
 
 **Feature Store**
 - Feature and feature group management
@@ -130,21 +116,22 @@ These are planned capabilities we are working towards adding down the road.
 - Lineage event tracking on create/delete via OpenLineage
 - Cascading deletion (FeatureGroup → Dataset)
 
-**Generative AI & LLM**
-- AI agent management with declarative agent definitions and LLM registry
-- Prompt template management
-- Guardrail policies (input/output safety filtering, bias detection)
-
 **Evaluation & Reporting**
+- Experiment reports
 - Structured evaluation reports
 - Model cards
 
 **Alerting & Monitoring**
+- Dashboard management via OSS Grafana operator
+- Prometheus-based alerting for decommission gating
 - Alert CRD management
 - Default cron schedules by alert type
 
-**Infrastructure & Compute**
-- Vector dataset management for embedding and RAG/similarity search
+**Project Management**
+- Team ownership via OSS ownership model (CODEOWNERS)
+- Cloud zone annotations for multi-cloud routing
+- Git repository migration allowlist
+- Routing affinity inheritance (parent-to-child annotation propagation)
 
 **Automation & Self-Healing**
 - Lockdown self-healing: detect and auto-remediate cluster lockdown conditions
