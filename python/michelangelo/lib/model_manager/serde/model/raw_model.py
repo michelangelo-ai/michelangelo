@@ -8,6 +8,9 @@ from michelangelo.lib.model_manager._private.serde.model import (
     get_raw_model_type,
     load_custom_raw_model,
 )
+from michelangelo.lib.model_manager._private.serde.loader.torch_model_loader import (
+    load_torch_raw_model,
+)
 from michelangelo.lib.model_manager.constants import RawModelType
 from michelangelo.lib.model_manager.interface.custom_model import Model
 
@@ -27,6 +30,9 @@ def load_raw_model(model_path: str) -> Union[Model, torch.nn.Module]:
 
     if raw_model_type == RawModelType.CUSTOM_PYTHON:
         return load_custom_raw_model(model_path)
+
+    if raw_model_type == RawModelType.TORCH:
+        return load_torch_raw_model(model_path)
 
     raise NotImplementedError(
         f"The loader for {raw_model_type} model is not supported yet. "

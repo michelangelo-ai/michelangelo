@@ -17,6 +17,8 @@ def serialize_model_class(
     target_dir: str,
     model_file_name: str,
     include_import_prefixes: Optional[list[str]] = None,
+    serialize_interface: bool = True,
+    write_txt_file: bool = True,
 ):
     """Serialize the model class to the target dir.
 
@@ -34,9 +36,14 @@ def serialize_model_class(
             the model class
         include_import_prefixes (Optional): only serialize the imported
             modules with the given prefixes,
-            e.g. ['uber', 'data.michelangelo'] only imports starting
-            with 'uber' or 'data.michelangelo' will be saved in the
+            e.g. ['mypackage', 'data.myproject'] only imports starting
+            with those prefixes will be saved in the
             model package. If not specified, save all imports
+        serialize_interface: if True (default), serialize the model
+            interface into the target dir. If False, skip interface
+            serialization.
+        write_txt_file: if True (default), write the text file containing
+            the import path of the model class. If False, skip writing it.
 
     Returns:
         None
@@ -51,8 +58,10 @@ def serialize_model_class(
     save_module_files(files, target_dir)
 
     # create the model class file
-    with open(os.path.join(target_dir, model_file_name), "w") as f:
-        f.write(model_class)
+    if write_txt_file:
+        with open(os.path.join(target_dir, model_file_name), "w") as f:
+            f.write(model_class)
 
     # serialize the model interface
-    serialize_model_interface(target_dir)
+    if serialize_interface:
+        serialize_model_interface(target_dir)
