@@ -65,17 +65,18 @@ def convert_to_state_dict(model_path: str) -> None:
         pass
 
     try:
-        obj = torch.load(model_path, map_location="cpu", weights_only=False)
-        if hasattr(obj, "state_dict"):
-            torch.save(obj.state_dict(), model_path)
-        else:
-            raise ValueError(
-                f"File does not contain a convertible model: {model_path}"
-            )
+        obj = torch.load(model_path, map_location="cpu", weights_only=False)  # weights_only=False: need full nn.Module
     except Exception as e:
         raise ValueError(
             f"File does not contain a convertible model: {model_path}"
         ) from e
+
+    if hasattr(obj, "state_dict"):
+        torch.save(obj.state_dict(), model_path)
+    else:
+        raise ValueError(
+            f"File does not contain a convertible model: {model_path}"
+        )
 
 
 def _serialize_nested_classes(
