@@ -32,19 +32,7 @@ This rule works in tandem with `require-handler-prefix`, which requires all loca
 <Child onClick={props.onClick} />
 ```
 
-## Naming guidance
-
-Name the **effect**, not the trigger. The `handle` prefix is required (enforced by `require-handler-prefix`), and the suffix should describe what the handler does to application state.
-
-| Context                                 | Instead of     | Use                     |
-| --------------------------------------- | -------------- | ----------------------- |
-| Radio coerces DOM string to typed value | `handleChange` | `handleSelectionChange` |
-| Select maps option objects to typed IDs | `handleChange` | `handleCommitSelection` |
-| Checkbox stops propagation + toggles    | `handleChange` | `handleToggleSelection` |
-| Form submit that also closes the dialog | `handleSubmit` | `handleFormSubmit`      |
-| Row delete on click                     | `handleClick`  | `handleRowDelete`       |
-
-The name should answer "what does this function do to the application state?" — not "what event is it responding to?"
+Name the **effect**, not the trigger — the suffix should describe what the handler does, not what event fired it.
 
 ## Prop forwarding
 
