@@ -33,7 +33,7 @@ These capabilities are shipped and available in the current release. Individual 
 
 **Project & Pipeline Management**
 - Project creation and lifecycle management
-- Pipeline authoring in YAML and UniFlow (Python DSL)
+- Pipeline authoring via UniFlow (Python DSL) with YAML-based configuration
 - Revision management and versioning
 - Pipeline deletion with cascade cleanup (Pipeline → PipelineRun, TriggerRun)
 
@@ -55,7 +55,7 @@ These capabilities are shipped and available in the current release. Individual 
 
 **Infrastructure & Compute**
 - Compute cluster registration
-- Storage management via S3/MinIO
+- Storage management via any S3-compatible object store
 
 **Automation & Self-Healing**
 - Revision-gated state transitions
