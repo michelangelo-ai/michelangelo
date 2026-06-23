@@ -33,8 +33,9 @@ func TestNewWorkflow(t *testing.T) {
 	})
 }
 
-// via the shared types package (it must not be defined locally to avoid the
-// layering violation where the controller imports the worker package).
+// TestWorkflowConstants verifies that the workflow name is defined in the shared
+// types package (it must not be defined locally to avoid the layering violation
+// where the controller imports the worker package).
 func TestWorkflowConstants(t *testing.T) {
 	assert.Equal(t, "io.michelangelo.notification.PipelineRunFanout", types.PipelineRunNotificationWorkflowName)
 	assert.NotZero(t, workflowActivityOpts.ScheduleToStartTimeout)
@@ -261,14 +262,10 @@ func TestSendPipelineRunNotification_FanOut(t *testing.T) {
 				continue
 			}
 			msg := Message{
-				Subject:   types.GenerateSubject(matchingPR),
-				EmailText: types.GenerateText(matchingPR, v2pb.NOTIFICATION_TYPE_EMAIL, "", wf.phaseResolver),
-				SlackText: types.GenerateText(matchingPR, v2pb.NOTIFICATION_TYPE_SLACK, "", wf.phaseResolver),
-				Metadata: map[string]any{
-					"run_name":  matchingPR.Name,
-					"namespace": matchingPR.Namespace,
-					"state":     matchingPR.Status.State.String(),
-					"log_url":   matchingPR.Status.LogUrl,
+				Subject: types.GenerateSubject(matchingPR),
+				Body:    types.GenerateBody(matchingPR, "", wf.phaseResolver),
+				FormattedBodies: map[string]string{
+					v2pb.NOTIFICATION_TYPE_SLACK.String(): types.GenerateText(matchingPR, v2pb.NOTIFICATION_TYPE_SLACK, "", wf.phaseResolver),
 				},
 			}
 			_ = rec.Notify(nil, nil, notif, msg)
@@ -277,7 +274,7 @@ func TestSendPipelineRunNotification_FanOut(t *testing.T) {
 		// Only the SUCCEEDED notification matches; FAILED should be skipped.
 		assert.Len(t, rec.Calls, 1)
 		assert.Equal(t, matchingPR.Spec.Notifications[0], rec.Calls[0].Notif)
-		assert.Equal(t, "fanout-run", rec.Calls[0].Msg.Metadata["run_name"])
+		assert.Contains(t, rec.Calls[0].Msg.Body, "fanout-run")
 	})
 
 	t.Run("FailingSink error is non-nil", func(t *testing.T) {

@@ -15,6 +15,12 @@ var workflowActivityOpts = workflow.ActivityOptions{
 	ScheduleToStartTimeout: 1 * time.Minute,
 	StartToCloseTimeout:    30 * time.Minute,
 	HeartbeatTimeout:       1 * time.Minute,
+	RetryPolicy: &workflow.RetryPolicy{
+		InitialInterval:    1 * time.Second,
+		BackoffCoefficient: 2.0,
+		MaximumInterval:    30 * time.Second,
+		MaximumAttempts:    3,
+	},
 }
 
 // Workflow holds workflow-level dependencies injected at worker registration time.
@@ -78,22 +84,18 @@ func (wf *Workflow) SendPipelineRunNotification(ctx workflow.Context, req *types
 	pipelineRun := req.PipelineRun
 	var errs error
 
+	msg := Message{
+		Subject: types.GenerateSubject(pipelineRun),
+		Body:    types.GenerateBody(pipelineRun, req.StudioBaseURL, wf.phaseResolver),
+		FormattedBodies: map[string]string{
+			v2pb.NOTIFICATION_TYPE_SLACK.String(): types.GenerateText(pipelineRun, v2pb.NOTIFICATION_TYPE_SLACK, req.StudioBaseURL, wf.phaseResolver),
+		},
+		SendAs: req.SenderEmail,
+	}
+
 	for _, notif := range pipelineRun.Spec.Notifications {
 		if !types.ContainsEventType(notif.EventTypes, pipelineRun.Status.State) {
 			continue
-		}
-
-		msg := Message{
-			Subject:   types.GenerateSubject(pipelineRun),
-			EmailText: types.GenerateText(pipelineRun, v2pb.NOTIFICATION_TYPE_EMAIL, req.StudioBaseURL, wf.phaseResolver),
-			SlackText: types.GenerateText(pipelineRun, v2pb.NOTIFICATION_TYPE_SLACK, req.StudioBaseURL, wf.phaseResolver),
-			SendAs:    req.SenderEmail,
-			Metadata: map[string]any{
-				"run_name":  pipelineRun.Name,
-				"namespace": pipelineRun.Namespace,
-				"state":     pipelineRun.Status.State.String(),
-				"log_url":   pipelineRun.Status.LogUrl,
-			},
 		}
 
 		for _, sink := range wf.sinks {

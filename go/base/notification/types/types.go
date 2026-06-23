@@ -127,18 +127,10 @@ func GenerateSubject(pipelineRun *v2pb.PipelineRun) string {
 	return fmt.Sprintf("Pipeline Run (%s) state: %s", pipelineRun.Name, state)
 }
 
-// GenerateText returns the notification body for email or Slack.
-//
-// textType must be v2pb.NOTIFICATION_TYPE_EMAIL or v2pb.NOTIFICATION_TYPE_SLACK.
-//
-// studioBaseURL is the base URL of the platform UI used to build a deep link.
-// A trailing slash is added automatically if missing. Pass an empty string to
-// omit the link entirely.
-//
-// phaseResolver maps the pipeline type label value to a UI path segment.
-// Pass nil to use DefaultPhaseResolver. Implement PhaseResolver to customize
-// path segments for non-standard or operator-defined pipeline types.
-func GenerateText(pipelineRun *v2pb.PipelineRun, textType v2pb.Notification_NotificationType, studioBaseURL string, phaseResolver PhaseResolver) string {
+// GenerateBody returns a channel-agnostic plain-text notification body suitable
+// for any delivery channel. Channel-specific formatting (e.g. Slack mrkdwn)
+// should use GenerateText with the appropriate notification type instead.
+func GenerateBody(pipelineRun *v2pb.PipelineRun, studioBaseURL string, phaseResolver PhaseResolver) string {
 	if phaseResolver == nil {
 		phaseResolver = DefaultPhaseResolver
 	}
@@ -154,18 +146,6 @@ func GenerateText(pipelineRun *v2pb.PipelineRun, textType v2pb.Notification_Noti
 		studioLink = fmt.Sprintf("%s%s/%s/runs/%s", base, pipelineRun.Namespace, phase, pipelineRun.Name)
 	}
 
-	if textType == v2pb.NOTIFICATION_TYPE_SLACK {
-		text := fmt.Sprintf("%s:\n- Name: %s\n- Project: %s\n- State: %s\n- Pipeline Type: %s\n",
-			GenerateSubject(pipelineRun), pipelineRun.Name, pipelineRun.Namespace, state, pipelineTypeStr)
-		if studioLink != "" {
-			text += fmt.Sprintf("- <%s|Studio URL>\n", studioLink)
-		}
-		if pipelineManifestType == pipelineManifestTypeASL && pipelineRun.Status.LogUrl != "" {
-			text += fmt.Sprintf("- <%s|Workflow Log URL>\n", pipelineRun.Status.LogUrl)
-		}
-		return text
-	}
-
 	text := fmt.Sprintf("Pipeline Run Status Update:\n- Name: %s\n- Project: %s\n- State: %s\n- Pipeline Type: %s\n",
 		pipelineRun.Name, pipelineRun.Namespace, state, pipelineTypeStr)
 	if studioLink != "" {
@@ -173,6 +153,51 @@ func GenerateText(pipelineRun *v2pb.PipelineRun, textType v2pb.Notification_Noti
 	}
 	if pipelineManifestType == pipelineManifestTypeASL && pipelineRun.Status.LogUrl != "" {
 		text += fmt.Sprintf("- Workflow Log URL: %s\n", pipelineRun.Status.LogUrl)
+	}
+	return text
+}
+
+// GenerateText returns a channel-specific notification body.
+//
+// textType must be v2pb.NOTIFICATION_TYPE_EMAIL or v2pb.NOTIFICATION_TYPE_SLACK.
+// For EMAIL, this delegates to GenerateBody (plain text). For SLACK, it produces
+// Slack mrkdwn with clickable <url|label> links.
+//
+// studioBaseURL is the base URL of the platform UI used to build a deep link.
+// A trailing slash is added automatically if missing. Pass an empty string to
+// omit the link entirely.
+//
+// phaseResolver maps the pipeline type label value to a UI path segment.
+// Pass nil to use DefaultPhaseResolver. Implement PhaseResolver to customize
+// path segments for non-standard or operator-defined pipeline types.
+func GenerateText(pipelineRun *v2pb.PipelineRun, textType v2pb.Notification_NotificationType, studioBaseURL string, phaseResolver PhaseResolver) string {
+	// Non-SLACK types (including EMAIL and INVALID) get the plain-text body.
+	if textType != v2pb.NOTIFICATION_TYPE_SLACK {
+		return GenerateBody(pipelineRun, studioBaseURL, phaseResolver)
+	}
+
+	if phaseResolver == nil {
+		phaseResolver = DefaultPhaseResolver
+	}
+	pipelineType := pipelineRun.Labels[sourcePipelineTypeLabelName]
+	pipelineManifestType := pipelineRun.Labels[sourcePipelineManifestTypeLabelName]
+	state := strings.TrimPrefix(pipelineRun.Status.State.String(), "PIPELINE_RUN_STATE_")
+	pipelineTypeStr := strings.TrimPrefix(pipelineType, "PIPELINE_TYPE_")
+
+	var studioLink string
+	if studioBaseURL != "" {
+		base := strings.TrimRight(studioBaseURL, "/") + "/"
+		phase := phaseResolver(pipelineType)
+		studioLink = fmt.Sprintf("%s%s/%s/runs/%s", base, pipelineRun.Namespace, phase, pipelineRun.Name)
+	}
+
+	text := fmt.Sprintf("%s:\n- Name: %s\n- Project: %s\n- State: %s\n- Pipeline Type: %s\n",
+		GenerateSubject(pipelineRun), pipelineRun.Name, pipelineRun.Namespace, state, pipelineTypeStr)
+	if studioLink != "" {
+		text += fmt.Sprintf("- <%s|Studio URL>\n", studioLink)
+	}
+	if pipelineManifestType == pipelineManifestTypeASL && pipelineRun.Status.LogUrl != "" {
+		text += fmt.Sprintf("- <%s|Workflow Log URL>\n", pipelineRun.Status.LogUrl)
 	}
 	return text
 }
