@@ -12,7 +12,7 @@ import logging
 import os
 import re
 from tempfile import TemporaryDirectory
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any, Union
 
 import pytorch_lightning as pl
 import ray
@@ -40,6 +40,12 @@ from michelangelo.lib.trainer.torch.pytorch_lightning._private.callbacks import 
     RayTrainReportCallback,
     RayTrainReportPerNodeCallback,
 )
+
+if TYPE_CHECKING:
+    from michelangelo.lib.trainer.torch.pytorch_lightning.schema import (
+        TrainingObserver,
+    )
+
 
 # Plugin types accepted by the PyTorch Lightning Trainer.
 # See: https://github.com/Lightning-AI/pytorch-lightning/blob/2129fdf3622e39ba46be4e1139af408e7e951cf3/src/lightning/pytorch/trainer/trainer.py#L126
@@ -324,7 +330,7 @@ def _resolve_callbacks(
     callback_kwargs: dict[str, Any] | None = None,
     per_node_callback_kwargs: dict[str, Any] | None = None,
     strategy: Strategy | None = None,
-    training_observer: Any | None = None,
+    training_observer: TrainingObserver | None = None,
 ) -> tuple[list[Callback], bool]:
     """Build callback list for the Lightning Trainer.
 

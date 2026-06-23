@@ -177,9 +177,11 @@ class LightningTrainer(TorchTrainer):
         # Pop out train and val data since we have to pass them into datasets parameter of TorchTrainer.
         train_data = train_loop_config.pop("train_data")
         val_data = train_loop_config.pop("val_data")
-        # Pop training_observer — Protocol instances can't survive asdict(); we
-        # store it on self for driver-side use and re-inject the original object
-        # into train_loop_config so it reaches the worker callbacks.
+        # Pop training_observer — Protocol instances can't survive asdict()
+        # because it recursively converts nested objects. We store the original
+        # object on self for driver-side use and re-inject it into
+        # train_loop_config so it reaches the worker callbacks via Ray
+        # serialization (which pickles the config dict to worker processes).
         self._training_observer = trainer_param.training_observer
         train_loop_config.pop("training_observer", None)
         if self._training_observer is not None:
@@ -229,7 +231,7 @@ class LightningTrainer(TorchTrainer):
         if self._training_observer is not None:
             self._training_observer.on_result(
                 metrics=result.metrics,
-                checkpoint_path=result.checkpoint.path,
+                checkpoint_path=result.checkpoint.path if result.checkpoint else None,
             )
 
         return {

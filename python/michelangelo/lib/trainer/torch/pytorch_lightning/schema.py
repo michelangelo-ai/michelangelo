@@ -12,33 +12,53 @@ class TrainingObserver(Protocol):
     """Protocol for observing training events.
 
     Implement this protocol to receive notifications when training completes
-    or checkpoints are saved. Implementations used with per-epoch observation
-    (``on_checkpoint_saved``) must be picklable, since they are shipped to Ray
-    Train workers.
+    or checkpoints are saved.
+
+    **Picklability:** Implementations must be picklable when using per-epoch
+    observation (``on_checkpoint_saved``), because Ray serializes the training
+    config — including the observer — to worker processes. Avoid storing
+    non-picklable objects (open file handles, DB connections, lambdas) as
+    instance attributes.
+
+    **Worker-side behavior:** ``on_checkpoint_saved`` is called on **every**
+    Ray worker (all ranks), not just rank 0. Implementations should be
+    idempotent or guard on rank internally if side effects (DB writes,
+    HTTP calls) should only happen once.
 
     Example::
 
+        from michelangelo.lib.trainer.torch.pytorch_lightning import (
+            LightningTrainer,
+            LightningTrainerParam,
+            TrainingObserver,
+        )
+
         class MyObserver:
-            def on_result(self, metrics: dict[str, Any], checkpoint_path: str) -> None:
+            def on_result(self, metrics: dict[str, Any], checkpoint_path: str | None) -> None:
                 print(f"Training done: {metrics}")
 
             def on_checkpoint_saved(
-                self, epoch: int, step: int, metrics: dict[str, float], checkpoint_path: str,
+                self, epoch: int, step: int, metrics: dict[str, Any], checkpoint_path: str,
             ) -> None:
                 print(f"Checkpoint at epoch {epoch}")
 
         trainer = LightningTrainer(
-            trainer_param=LightningTrainerParam(..., training_observer=MyObserver()),
-            ...
+            trainer_param=LightningTrainerParam(
+                create_model_fn=my_model_factory,
+                train_data=train_ds,
+                val_data=val_ds,
+                training_observer=MyObserver(),
+            ),
         )
     """
 
-    def on_result(self, metrics: dict[str, Any], checkpoint_path: str) -> None:
+    def on_result(self, metrics: dict[str, Any], checkpoint_path: str | None) -> None:
         """Called on the driver after training completes successfully.
 
         Args:
             metrics: Final training metrics dict.
-            checkpoint_path: Path to the final checkpoint.
+            checkpoint_path: Path to the final checkpoint, or ``None`` if no
+                checkpoint was saved.
         """
         ...
 
@@ -46,10 +66,14 @@ class TrainingObserver(Protocol):
         self,
         epoch: int,
         step: int,
-        metrics: dict[str, float],
+        metrics: dict[str, Any],
         checkpoint_path: str,
     ) -> None:
         """Called on each worker after a checkpoint is saved and reported.
+
+        Note: this is called on **all** workers, not just rank 0.
+        The ``checkpoint_path`` is a local temporary path that may be
+        cleaned up shortly after this method returns.
 
         Args:
             epoch: Current training epoch.

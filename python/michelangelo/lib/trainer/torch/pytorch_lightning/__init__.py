@@ -31,6 +31,7 @@ from michelangelo.lib.trainer.torch.pytorch_lightning.schema import (
     IncrementalTrainingSpec,
     LearningMode,
     ModelSpec,
+    TrainingObserver,
     TrainingType,
     TransferLearningSpec,
 )
@@ -43,6 +44,7 @@ __all__ = [
     "LightningTrainerParam",
     "LightningTrainerWithStateDict",
     "ModelSpec",
+    "TrainingObserver",
     "TrainingType",
     "TransferLearningSpec",
 ]
