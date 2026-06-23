@@ -3,6 +3,7 @@ import js from '@eslint/js';
 
 import noBarrelExports from './eslint-local-rules/no-barrel-exports.js';
 import noHandlerMirror from './eslint-local-rules/no-handler-mirror.js';
+import requireHandlerPrefix from './eslint-local-rules/require-handler-prefix.js';
 import filenameMatchesExport from './eslint-local-rules/filename-matches-export.js';
 import noFixtureConstants from './eslint-local-rules/no-fixture-constants.js';
 import noModuleScopeTestSetup from './eslint-local-rules/no-module-scope-test-setup.js';
@@ -32,7 +33,7 @@ const sharedRules = {
   'react/no-multi-comp': ['error', { ignoreStateless: false }],
   'react/no-unstable-nested-components': ['error', { allowAsProps: true }],
   'react/jsx-no-constructed-context-values': 'error',
-  'react/jsx-handler-names': ['error', { checkLocalVariables: true, checkInlineFunction: false }],
+
   'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
   'simple-import-sort/imports': [
     'error',
@@ -222,6 +223,7 @@ export default [
         rules: {
           'no-barrel-exports': noBarrelExports,
           'no-handler-mirror': noHandlerMirror,
+          'require-handler-prefix': requireHandlerPrefix,
           'filename-matches-export': filenameMatchesExport,
           'types-in-types-file': typesInTypesFile,
         },
@@ -230,6 +232,7 @@ export default [
     rules: {
       'local/no-barrel-exports': 'error',
       'local/no-handler-mirror': 'error',
+      'local/require-handler-prefix': 'error',
       'local/filename-matches-export': 'error',
       'local/types-in-types-file': 'error',
     },

@@ -118,9 +118,7 @@ export function SelectField<V = string | number>({
         value={baseUIValue}
         options={baseUIOptions}
         onChange={handleCommitSelection}
-        // eslint-disable-next-line react/jsx-handler-names -- react-final-form input wiring
         onBlur={input.onBlur}
-        // eslint-disable-next-line react/jsx-handler-names -- react-final-form input wiring
         onFocus={input.onFocus}
         placeholder={!disabled && !readOnly ? placeholder : ''}
         disabled={disabled}

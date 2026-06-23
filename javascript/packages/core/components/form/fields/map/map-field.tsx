@@ -128,9 +128,7 @@ export function MapField({
             }
             onChange={handleRowChange}
             onDelete={handleRemove}
-            // eslint-disable-next-line react/jsx-handler-names -- react-final-form input wiring
             onFocus={input.onFocus}
-            // eslint-disable-next-line react/jsx-handler-names -- react-final-form input wiring
             onBlur={input.onBlur}
           />
         ))}

@@ -49,9 +49,7 @@ export const TextareaField: React.FC<TextareaFieldProps> = ({
         name={input.name}
         value={input.value ?? ''}
         onChange={(e) => input.onChange(e.currentTarget.value)}
-        // eslint-disable-next-line react/jsx-handler-names -- react-final-form input wiring
         onBlur={input.onBlur}
-        // eslint-disable-next-line react/jsx-handler-names -- react-final-form input wiring
         onFocus={input.onFocus}
         placeholder={placeholder}
         readOnly={readOnly}

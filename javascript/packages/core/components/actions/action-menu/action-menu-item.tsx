@@ -39,7 +39,7 @@ export const ActionMenuItem = forwardRef<HTMLLIElement, ActionMenuItemProps>((pr
   const {
     item: action,
     onSelectAction,
-    onClose: handleTooltipDismiss,
+    onClose,
     hoveredItem,
     setHoveredItem,
     keyboardActive,
@@ -92,10 +92,8 @@ export const ActionMenuItem = forwardRef<HTMLLIElement, ActionMenuItemProps>((pr
           preventOverflow: { enabled: true, boundariesElement: 'window', padding: 8 },
         },
       }}
-      onEsc={handleTooltipDismiss}
-      // eslint-disable-next-line react/jsx-handler-names -- delay props accept numbers, not functions
+      onEsc={onClose}
       onMouseEnterDelay={0}
-      // eslint-disable-next-line react/jsx-handler-names -- delay props accept numbers, not functions
       onMouseLeaveDelay={0}
       // Entering mouse mode: track this item as hovered and disable the keyboard
       // path so the previously arrow-key-highlighted item's tooltip hides.

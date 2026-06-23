@@ -26,11 +26,7 @@ type Props<T extends Data> = {
   onClose: () => void;
 };
 
-export function ConfirmDispatcher<T extends Data>({
-  action,
-  record,
-  onClose: handleDialogDismiss,
-}: Props<T>) {
+export function ConfirmDispatcher<T extends Data>({ action, record, onClose }: Props<T>) {
   const navigate = useNavigate();
   const { applyMiddleware } = useSchemaMiddleware(
     action.operation.type === 'mutation' ? (action.operation.middleware ?? null) : null
@@ -55,7 +51,7 @@ export function ConfirmDispatcher<T extends Data>({
   return (
     <ConfirmDialog
       isOpen
-      onDismiss={handleDialogDismiss}
+      onDismiss={onClose}
       onConfirm={handleActionExecute}
       heading={modal.header.title}
       confirmLabel={modal.button.label}

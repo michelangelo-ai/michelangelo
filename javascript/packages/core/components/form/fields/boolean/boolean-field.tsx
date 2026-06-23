@@ -51,11 +51,8 @@ export const BooleanField: React.FC<BooleanFieldProps> = ({
     >
       <Checkbox
         checked={input.value ?? false}
-        // eslint-disable-next-line react/jsx-handler-names -- conditional: undefined when readOnly, handleCheckedChange otherwise
         onChange={readOnly ? undefined : handleCheckedChange}
-        // eslint-disable-next-line react/jsx-handler-names -- react-final-form input wiring
         onBlur={input.onBlur}
-        // eslint-disable-next-line react/jsx-handler-names -- react-final-form input wiring
         onFocus={input.onFocus}
         disabled={disabled}
         checkmarkType={toggle ? STYLE_TYPE.toggle_round : STYLE_TYPE.default}

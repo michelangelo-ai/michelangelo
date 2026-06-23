@@ -86,9 +86,7 @@ export const InlineRadioField: React.FC<RadioFieldProps> = ({
         align={align}
         disabled={disabled}
         onChange={handleSelectionChange}
-        // eslint-disable-next-line react/jsx-handler-names -- react-final-form input wiring
         onBlur={input.onBlur}
-        // eslint-disable-next-line react/jsx-handler-names -- react-final-form input wiring
         onFocus={input.onFocus}
         overrides={{
           RadioGroupRoot: {

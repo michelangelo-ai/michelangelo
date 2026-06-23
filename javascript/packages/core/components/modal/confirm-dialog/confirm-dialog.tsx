@@ -30,7 +30,7 @@ import type { ConfirmDialogProps } from './types';
  */
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   isOpen,
-  onDismiss: handleDialogDismiss,
+  onDismiss,
   heading,
   onConfirm,
   confirmLabel = 'Confirm',
@@ -53,7 +53,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     setIsLoading(true);
     try {
       await onConfirm();
-      handleDialogDismiss(); // Auto-close on success
+      onDismiss(); // Auto-close on success
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
       setIsLoading(false);
@@ -63,7 +63,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   return (
     <Dialog
       isOpen={isOpen}
-      onDismiss={handleDialogDismiss}
+      onDismiss={onDismiss}
       heading={heading}
       size={size}
       placement={PLACEMENT.topCenter}
@@ -88,7 +88,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           </Button>
         ),
         dismissiveAction: (
-          <Button kind={KIND.tertiary} onClick={handleDialogDismiss} disabled={isLoading}>
+          <Button kind={KIND.tertiary} onClick={onDismiss} disabled={isLoading}>
             Cancel
           </Button>
         ),

@@ -47,9 +47,7 @@ export const NumberField: React.FC<BaseFieldProps<number | undefined>> = ({
         value={input.value == null ? '' : String(input.value)}
         name={input.name}
         onChange={(e) => input.onChange(parseNumber(e.currentTarget.value))}
-        // eslint-disable-next-line react/jsx-handler-names -- react-final-form input wiring
         onBlur={input.onBlur}
-        // eslint-disable-next-line react/jsx-handler-names -- react-final-form input wiring
         onFocus={input.onFocus}
         placeholder={placeholder}
         readOnly={readOnly}

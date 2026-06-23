@@ -4,7 +4,7 @@
 
 Event handler names passed as JSX props must add context beyond the event type. A name that merely mirrors the prop tells the reader nothing about what is being handled.
 
-This rule works in tandem with `react/jsx-handler-names`, which requires all handlers to begin with `handle`. Together they enforce: the name must carry the `handle` prefix **and** go beyond repeating the event type.
+This rule works in tandem with `require-handler-prefix`, which requires all locally defined handlers to begin with `handle`. Together they enforce: the name must carry the `handle` prefix **and** go beyond repeating the event type.
 
 ## Flagged patterns
 
@@ -34,7 +34,7 @@ This rule works in tandem with `react/jsx-handler-names`, which requires all han
 
 ## Naming guidance
 
-Name the **effect**, not the trigger. The `handle` prefix is required (enforced by `react/jsx-handler-names`), and the suffix should describe what the handler does to application state.
+Name the **effect**, not the trigger. The `handle` prefix is required (enforced by `require-handler-prefix`), and the suffix should describe what the handler does to application state.
 
 | Context                                 | Instead of     | Use                     |
 | --------------------------------------- | -------------- | ----------------------- |
