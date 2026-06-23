@@ -49,6 +49,7 @@ from michelangelo.lib.trainer.torch.pytorch_lightning._private.util import (
 if TYPE_CHECKING:
     from michelangelo.lib.trainer.torch.pytorch_lightning.schema import (
         IncrementalTrainingSpec,
+        TrainingObserver,
         TransferLearningSpec,
     )
 
@@ -114,6 +115,10 @@ class LightningTrainerParam:
             run.
         initial_weights_path: Optional path to a state dict file (local, ``s3://``,
             ``gs://``, etc.); loaded on rank 0 and broadcast to other workers.
+        training_observer: Optional :class:`~schema.TrainingObserver` that receives
+            ``on_result`` (driver-side, after training) and ``on_checkpoint_saved``
+            (worker-side, per epoch/step). Must be picklable if per-epoch
+            observation is needed.
     """
 
     create_model_fn: Callable
@@ -132,6 +137,7 @@ class LightningTrainerParam:
     transfer_learning_spec: TransferLearningSpec | None = None
     incremental_training_spec: IncrementalTrainingSpec | None = None
     initial_weights_path: str | None = None
+    training_observer: TrainingObserver | None = None
 
     def __post_init__(self):
         """Apply default ``num_epochs`` and warn on the deprecated field usage."""
@@ -171,6 +177,13 @@ class LightningTrainer(TorchTrainer):
         # Pop out train and val data since we have to pass them into datasets parameter of TorchTrainer.
         train_data = train_loop_config.pop("train_data")
         val_data = train_loop_config.pop("val_data")
+        # Pop training_observer — Protocol instances can't survive asdict(); we
+        # store it on self for driver-side use and re-inject the original object
+        # into train_loop_config so it reaches the worker callbacks.
+        self._training_observer = trainer_param.training_observer
+        train_loop_config.pop("training_observer", None)
+        if self._training_observer is not None:
+            train_loop_config["training_observer"] = self._training_observer
 
         super().__init__(
             train_loop_per_worker=_train_loop_per_worker,
@@ -212,6 +225,13 @@ class LightningTrainer(TorchTrainer):
         result.metrics.pop("config", None)
         # Keep the checkpoint object for subclasses that need it (e.g., LightningTrainerWithStateDict)
         self.checkpoint = result.checkpoint
+
+        if self._training_observer is not None:
+            self._training_observer.on_result(
+                metrics=result.metrics,
+                checkpoint_path=result.checkpoint.path,
+            )
+
         return {
             CHECKPOINT_PATH_KEY: result.checkpoint.path,
             "path": result.path,

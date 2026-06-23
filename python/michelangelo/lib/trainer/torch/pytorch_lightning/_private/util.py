@@ -335,6 +335,7 @@ def _resolve_callbacks(
     callback_kwargs: dict[str, Any] | None = None,
     per_node_callback_kwargs: dict[str, Any] | None = None,
     strategy: Strategy | None = None,
+    training_observer: Any | None = None,
 ) -> tuple[list[Callback], bool]:
     """Build callback list for the Lightning Trainer.
 
@@ -400,10 +401,14 @@ def _resolve_callbacks(
     if _use_per_node:
         per_node_callback_kwargs = per_node_callback_kwargs or {}
         resolved_callbacks.append(
-            RayTrainReportPerNodeCallback(**per_node_callback_kwargs)
+            RayTrainReportPerNodeCallback(
+                **per_node_callback_kwargs, training_observer=training_observer
+            )
         )
     else:
-        resolved_callbacks.append(RayTrainReportCallback())
+        resolved_callbacks.append(
+            RayTrainReportCallback(training_observer=training_observer)
+        )
 
     return resolved_callbacks, has_model_checkpoint
 
@@ -528,6 +533,7 @@ def _train_loop_per_worker(train_loop_config):
         trainer_kwargs.pop("callback_kwargs", None),
         trainer_kwargs.pop(CALLBACK_REPORT_PER_NODE, None),
         strategy,
+        training_observer=train_loop_config.get("training_observer"),
     )
 
     # Update trainer_kwargs with the resolved arguments for the Lightning Trainer.

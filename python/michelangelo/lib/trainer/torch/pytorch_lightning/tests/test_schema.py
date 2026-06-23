@@ -27,10 +27,40 @@ from michelangelo.lib.trainer.torch.pytorch_lightning.schema import (
     IncrementalTrainingSpec,
     LearningMode,
     ModelSpec,
+    TrainingObserver,
     TrainingType,
     TransferLearningMetadata,
     TransferLearningSpec,
 )
+
+# -----------------------------------------------------------------------------
+# TrainingObserver Protocol
+# -----------------------------------------------------------------------------
+
+
+class TestTrainingObserver:
+    """``TrainingObserver`` is a runtime-checkable protocol."""
+
+    def test_runtime_checkable_with_matching_class(self):
+        """A plain class implementing both methods satisfies the protocol."""
+
+        class _Obs:
+            def on_result(self, metrics, checkpoint_path):
+                pass
+
+            def on_checkpoint_saved(self, epoch, step, metrics, checkpoint_path):
+                pass
+
+        assert isinstance(_Obs(), TrainingObserver)
+
+    def test_runtime_checkable_rejects_incomplete_class(self):
+        """A class missing a method does not satisfy the protocol."""
+
+        class _Partial:
+            def on_result(self, metrics, checkpoint_path):
+                pass
+
+        assert not isinstance(_Partial(), TrainingObserver)
 
 # -----------------------------------------------------------------------------
 # Enums

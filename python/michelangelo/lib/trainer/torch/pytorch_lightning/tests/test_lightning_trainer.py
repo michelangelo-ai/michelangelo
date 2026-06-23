@@ -111,6 +111,17 @@ class TestLightningTrainerParam:
         assert param.incremental_training_spec is None
         assert param.initial_weights_path is None
 
+    def test_training_observer_defaults_to_none(self):
+        """``training_observer`` defaults to ``None`` when omitted."""
+        param = _make_param()
+        assert param.training_observer is None
+
+    def test_training_observer_stored(self):
+        """``training_observer`` is stored when provided."""
+        observer = MagicMock(name="observer")
+        param = _make_param(training_observer=observer)
+        assert param.training_observer is observer
+
     def test_lightning_kwargs_factory_isolates_instances(self):
         """Default-factory dict must not be shared across instances."""
         a = _make_param()
@@ -230,6 +241,36 @@ class TestLightningTrainerInit:
             second_id = mock_super.call_args.kwargs["train_loop_config"]["run_id"]
         assert first_id != second_id
 
+    def test_init_observer_popped_from_asdict_and_reinjected(self):
+        """Observer is popped from asdict output and re-injected as the original object."""
+        observer = MagicMock(name="observer")
+        param = _make_param(training_observer=observer)
+
+        with patch(
+            "michelangelo.lib.trainer.torch.pytorch_lightning."
+            "lightning_trainer.TorchTrainer.__init__",
+            return_value=None,
+        ) as mock_super:
+            trainer = LightningTrainer(trainer_param=param)
+
+        assert trainer._training_observer is observer
+        loop_cfg = mock_super.call_args.kwargs["train_loop_config"]
+        assert loop_cfg["training_observer"] is observer
+
+    def test_init_no_observer_leaves_config_clean(self):
+        """Without an observer, training_observer is not in train_loop_config."""
+        param = _make_param()
+        with patch(
+            "michelangelo.lib.trainer.torch.pytorch_lightning."
+            "lightning_trainer.TorchTrainer.__init__",
+            return_value=None,
+        ) as mock_super:
+            trainer = LightningTrainer(trainer_param=param)
+
+        assert trainer._training_observer is None
+        loop_cfg = mock_super.call_args.kwargs["train_loop_config"]
+        assert "training_observer" not in loop_cfg
+
 
 class TestLightningTrainerTrain:
     """``LightningTrainer.train()`` result-shaping and error handling."""
@@ -294,6 +335,45 @@ class TestLightningTrainerTrain:
 
         assert trainer.run_config is new_run
         assert trainer.scaling_config is new_scaling
+
+    def test_train_calls_observer_on_result(self):
+        """Observer's ``on_result`` is called after successful training."""
+        observer = MagicMock(name="observer")
+        param = _make_param(training_observer=observer)
+        with patch(
+            "michelangelo.lib.trainer.torch.pytorch_lightning."
+            "lightning_trainer.TorchTrainer.__init__",
+            return_value=None,
+        ):
+            trainer = LightningTrainer(trainer_param=param)
+
+        result = MagicMock()
+        result.error = None
+        result.checkpoint.path = "/ckpt"
+        result.path = "/run"
+        result.metrics = {"loss": 0.1}
+
+        with patch.object(trainer, "fit", return_value=result):
+            trainer.train()
+
+        observer.on_result.assert_called_once_with(
+            metrics=result.metrics, checkpoint_path="/ckpt"
+        )
+
+    def test_train_no_observer_does_not_raise(self):
+        """Training without observer works without errors."""
+        trainer = self._build()
+
+        result = MagicMock()
+        result.error = None
+        result.checkpoint.path = "/c"
+        result.path = "/r"
+        result.metrics = {}
+
+        with patch.object(trainer, "fit", return_value=result):
+            summary = trainer.train()
+
+        assert summary[CHECKPOINT_PATH_KEY] == "/c"
 
 
 # -----------------------------------------------------------------------------

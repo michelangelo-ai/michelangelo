@@ -4,6 +4,60 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any, Protocol, runtime_checkable
+
+
+@runtime_checkable
+class TrainingObserver(Protocol):
+    """Protocol for observing training events.
+
+    Implement this protocol to receive notifications when training completes
+    or checkpoints are saved. Implementations used with per-epoch observation
+    (``on_checkpoint_saved``) must be picklable, since they are shipped to Ray
+    Train workers.
+
+    Example::
+
+        class MyObserver:
+            def on_result(self, metrics: dict[str, Any], checkpoint_path: str) -> None:
+                print(f"Training done: {metrics}")
+
+            def on_checkpoint_saved(
+                self, epoch: int, step: int, metrics: dict[str, float], checkpoint_path: str,
+            ) -> None:
+                print(f"Checkpoint at epoch {epoch}")
+
+        trainer = LightningTrainer(
+            trainer_param=LightningTrainerParam(..., training_observer=MyObserver()),
+            ...
+        )
+    """
+
+    def on_result(self, metrics: dict[str, Any], checkpoint_path: str) -> None:
+        """Called on the driver after training completes successfully.
+
+        Args:
+            metrics: Final training metrics dict.
+            checkpoint_path: Path to the final checkpoint.
+        """
+        ...
+
+    def on_checkpoint_saved(
+        self,
+        epoch: int,
+        step: int,
+        metrics: dict[str, float],
+        checkpoint_path: str,
+    ) -> None:
+        """Called on each worker after a checkpoint is saved and reported.
+
+        Args:
+            epoch: Current training epoch.
+            step: Current global step.
+            metrics: Metrics dict reported with the checkpoint.
+            checkpoint_path: Local path where the checkpoint was saved.
+        """
+        ...
 
 
 class TrainingType(Enum):
