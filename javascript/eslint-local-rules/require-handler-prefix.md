@@ -7,11 +7,11 @@ Locally defined functions passed as handlers to `on*` JSX props must use the `ha
 ```tsx
 // ✗ Bad — toggleMenu doesn't signal it's an event handler
 const toggleMenu = () => setOpen(true);
-<Button onClick={toggleMenu} />
+<Button onClick={toggleMenu} />;
 
 // ✓ Good — handleMenuOpen makes the role clear
 const handleMenuOpen = () => setOpen(true);
-<Button onClick={handleMenuOpen} />
+<Button onClick={handleMenuOpen} />;
 ```
 
 ## Why
@@ -27,7 +27,7 @@ The `handle*` prefix is the React convention for event handler implementations. 
 function FilterOption({ onClick }: Props) {
   return <Button onClick={onClick} />;
 }
-<FilterOption onClick={handleFilterChange} />
+<FilterOption onClick={handleFilterChange} />;
 ```
 
 This includes props destructured from a `props` object in `forwardRef` components:

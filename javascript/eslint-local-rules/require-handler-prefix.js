@@ -12,8 +12,7 @@ const rule = {
   meta: {
     type: 'suggestion',
     docs: {
-      description:
-        'Require handle* prefix for locally-defined functions passed to on* event props',
+      description: 'Require handle* prefix for locally-defined functions passed to on* event props',
       recommended: true,
       url: 'https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/eslint-local-rules/require-handler-prefix.md',
     },
