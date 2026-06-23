@@ -115,7 +115,7 @@ def validate_pytorch_model_file(
         if error := _validate_file_basics(model_path):
             return False, error
 
-        model = torch.load(model_path, map_location="cpu", weights_only=False)
+        model = torch.load(model_path, map_location="cpu", weights_only=False)  # weights_only=False: artifact may be a full nn.Module, not a state_dict
         if not is_state_dict(model) and not isinstance(model, torch.nn.Module):
             return False, ValueError(
                 "File must contain a PyTorch nn.Module or state_dict"
@@ -304,13 +304,10 @@ def _invoke_model(model: torch.nn.Module, batch_dict: dict[str, Any]) -> Any:
         The model's raw output.
     """
     params = get_forward_param_names(model)
-    if len(params) > 1:
+    has_kwargs = any(p == "**kwargs" for p in params)
+    if has_kwargs or set(batch_dict.keys()).issubset(set(params)):
         return model(**batch_dict)
-
-    try:
-        return model(batch_dict)
-    except TypeError:
-        return model(**batch_dict)
+    return model(batch_dict)
 
 
 def _remove_batch_size_dimension(
@@ -428,7 +425,7 @@ def _collect_outputs(
                 )
         return output_dict
 
-    return output
+    raise TypeError(f"Unsupported model output type: {type(output).__name__}")
 
 
 def _test_model_predictions(
@@ -471,7 +468,7 @@ def _test_model_predictions(
             output = _collect_outputs(output, model_schema)
     except Exception as e:
         raise RuntimeError(
-            f"Error when test prediction with the model. Error: {e}"
+            f"Error during test prediction with the model. Error: {e}"
         ) from e
 
     is_valid, err = validate_output_data(output)

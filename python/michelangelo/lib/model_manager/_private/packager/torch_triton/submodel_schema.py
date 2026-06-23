@@ -46,11 +46,13 @@ _SKIP_TYPES = (
 
 
 def _strip_batch(shape: list[int]) -> list[int]:
+    """Remove the batch dimension and return per-sample shape, defaulting to [1] for scalars."""
     per_sample = shape[1:]
     return per_sample if per_sample else [1]
 
 
 def _schema_item(fact: dict) -> ModelSchemaItem:
+    """Build a ModelSchemaItem from a tensor fact dict with dtype/shape/name keys."""
     dtype_str = fact.get("dtype", "")
     try:
         dtype = (
@@ -95,6 +97,7 @@ def get_forward_param_names(module: torch.nn.Module) -> list[str]:
 
 
 def _return_names(module: torch.nn.Module) -> Optional[list[Optional[str]]]:
+    """Extract variable names from the first return statement of forward() via AST."""
     try:
         tree = ast.parse(textwrap.dedent(inspect.getsource(module.forward)))
     except (OSError, TypeError, SyntaxError, IndentationError):

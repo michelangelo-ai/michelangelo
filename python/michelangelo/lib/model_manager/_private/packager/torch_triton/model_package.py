@@ -242,6 +242,8 @@ def _build_python_backend(
         hyperparameters: Constructor kwargs for the model class.
         include_import_prefixes: Import prefixes to serialize.
     """
+    if not model_class:
+        raise ValueError("model_class is required when using the 'python' backend")
     final_model_path = _download_and_prepare_state_dict(
         model_path, model_version_dir, model_path_source_type
     )
@@ -403,6 +405,10 @@ def generate_model_package_content(
     os.makedirs(model_version_dir, exist_ok=True)
 
     content: dict = {DEPLOYABLE_CONFIG_FILE_NAME: config_pbtxt, "0": {}}
+
+    _SUPPORTED_BACKENDS = {TritonBackendType.PYTHON, TritonBackendType.TORCH, TritonBackendType.TENSORRT, TritonBackendType.ONNX}
+    if backend not in _SUPPORTED_BACKENDS:
+        raise ValueError(f"Unsupported backend: {backend!r}. Must be one of: {_SUPPORTED_BACKENDS}")
 
     if backend == TritonBackendType.PYTHON:
         _build_python_backend(

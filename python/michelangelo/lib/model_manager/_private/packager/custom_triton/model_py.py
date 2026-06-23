@@ -1,19 +1,7 @@
 """Generate model.py file content for Triton deployment."""
 
-from michelangelo.lib.model_manager._private.packager.template_renderer import (
-    TritonTemplateRenderer,
+from michelangelo.lib.model_manager._private.packager.common.serialization import (
+    generate_model_py_content,
 )
 
-
-def generate_model_py_content(
-    gen: TritonTemplateRenderer,
-) -> str:
-    """Generate the model.py file content.
-
-    Args:
-        gen: The TritonTemplateRenderer instance
-
-    Returns:
-        The model.py file content
-    """
-    return gen.render("model.py.tmpl")
+__all__ = ["generate_model_py_content"]

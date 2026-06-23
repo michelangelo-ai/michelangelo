@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import os
 
-import pytorch_lightning as pl
+try:
+    import pytorch_lightning as pl
+    _PL_MODULE = pl.LightningModule
+except ImportError:
+    _PL_MODULE = None
 import torch
 
 from michelangelo.lib.model_manager._private.utils.torch_utils import (
@@ -59,7 +63,7 @@ def _convert_to_torchscript(
     model.eval()
 
     try:
-        if isinstance(model, pl.LightningModule):
+        if _PL_MODULE is not None and isinstance(model, _PL_MODULE):
             scripted = model.to_torchscript(method="script")
             torch.jit.save(scripted, model_path)
         else:

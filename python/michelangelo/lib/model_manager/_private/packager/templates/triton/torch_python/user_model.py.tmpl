@@ -85,6 +85,7 @@ def _forward_accepts_dict(model, input_schema):
 
 
 class Model():
+    """Triton Python backend model that loads and runs a packaged PyTorch model."""
     def __init__(self):
         self.model_path = os.path.dirname(os.path.realpath(__file__))
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -95,6 +96,10 @@ class Model():
         self._takes_dict = _forward_accepts_dict(self.model, input_schema)
 
     def execute(self, inputs):
+        """Run inference on a dict of numpy inputs and return a dict of numpy outputs.
+
+        Converts inputs to tensors, calls the model, and converts outputs back to numpy.
+        """
         tensor_inputs = {}
         for name, value in inputs.items():
             if isinstance(value, np.ndarray):

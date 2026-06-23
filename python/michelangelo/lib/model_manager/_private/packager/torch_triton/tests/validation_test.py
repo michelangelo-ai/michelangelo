@@ -4,19 +4,26 @@ import os
 import tempfile
 from unittest import TestCase
 
+import pytest
 import torch
 
 from michelangelo.lib.model_manager._private.packager.torch_triton.tests.fixtures.simple_model import (  # noqa: E501
+    SimpleModel,
     save_scripted_model,
     save_state_dict,
 )
 from michelangelo.lib.model_manager._private.packager.torch_triton.validation import (
+    _collect_outputs,
     _has_batch_dimension,
     validate_deployable_onnx_file,
     validate_model_class,
     validate_state_dict_file,
     validate_torchscript_file,
 )
+from michelangelo.lib.model_manager._private.packager.torch_triton.raw_model_package import (  # noqa: E501
+    convert_to_state_dict,
+)
+from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
 
 _MODEL_CLASS = (
     "michelangelo.lib.model_manager._private.packager.torch_triton."
@@ -230,3 +237,82 @@ class HasBatchDimensionTest(TestCase):
         tensor = torch.tensor(1.0)
 
         self.assertFalse(_has_batch_dimension(tensor, expected_shape=[4]))
+
+
+# ---------------------------------------------------------------------------
+# T2: _collect_outputs raises TypeError for unsupported output type
+# ---------------------------------------------------------------------------
+
+_SCHEMA = ModelSchema(
+    input_schema=[ModelSchemaItem(name="x", data_type=DataType.FLOAT, shape=[4])],
+    output_schema=[ModelSchemaItem(name="y", data_type=DataType.FLOAT, shape=[2])],
+)
+
+
+def test_collect_outputs_unsupported_type_raises_type_error():
+    with pytest.raises(TypeError, match="Unsupported model output type"):
+        _collect_outputs("not a tensor", _SCHEMA)
+
+
+# ---------------------------------------------------------------------------
+# T3: convert_to_state_dict converts a full nn.Module to state_dict in place
+# ---------------------------------------------------------------------------
+
+
+def test_convert_to_state_dict_from_nn_module():
+    model = SimpleModel()
+    expected = model.state_dict()
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "model.pt")
+        torch.save(model, path)
+
+        convert_to_state_dict(path)
+
+        loaded = torch.load(path, map_location="cpu", weights_only=True)
+        assert isinstance(loaded, dict)
+        assert set(loaded.keys()) == set(expected.keys())
+
+
+# ---------------------------------------------------------------------------
+# T1: _build_python_backend produces expected file structure
+# ---------------------------------------------------------------------------
+
+
+def test_build_python_backend_file_structure():
+    from michelangelo.lib.model_manager._private.packager.torch_triton.model_package import (  # noqa: E501
+        generate_model_package_content,
+    )
+    from michelangelo.lib.model_manager._private.packager.template_renderer import (
+        TritonTemplateRenderer,
+    )
+
+    _MODEL_CLASS = (
+        "michelangelo.lib.model_manager._private.packager.torch_triton."
+        "tests.fixtures.simple_model.SimpleModel"
+    )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        model_path = os.path.join(tmp, "model.pt")
+        save_state_dict(model_path)
+
+        root_path = os.path.join(tmp, "pkg")
+        os.makedirs(root_path)
+
+        gen = TritonTemplateRenderer()
+        content = generate_model_package_content(
+            gen=gen,
+            model_path=model_path,
+            model_name="test_model",
+            model_revision="1",
+            model_schema=_SCHEMA,
+            backend="python",
+            model_class=_MODEL_CLASS,
+            root_path=root_path,
+        )
+
+        version_dir = os.path.join(root_path, "0")
+        assert os.path.isfile(os.path.join(version_dir, "model", "model.pt"))
+        assert os.path.isfile(os.path.join(version_dir, "model_class.txt"))
+        assert "config.pbtxt" in content
+        assert "user_model.py" in content["0"]
