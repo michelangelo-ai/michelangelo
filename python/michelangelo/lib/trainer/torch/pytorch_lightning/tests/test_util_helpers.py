@@ -104,7 +104,7 @@ class TestLoadWeightsFromPath:
     """Download + load of a remote/local state-dict file."""
 
     def test_downloads_and_loads_state_dict(self):
-        """fsspec downloads the file, ``torch.load`` reads it, model loads it."""
+        """Fsspec downloads the file, ``torch.load`` reads it, model loads it."""
         model = MagicMock()
         fake_fs = MagicMock()
         state_dict = {"w": object()}

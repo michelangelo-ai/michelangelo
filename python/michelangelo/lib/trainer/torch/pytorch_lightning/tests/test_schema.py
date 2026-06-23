@@ -22,7 +22,7 @@ pytest.importorskip("ray")
 pytest.importorskip("torch")
 pytest.importorskip("pytorch_lightning")
 
-from michelangelo.lib.trainer.torch.pytorch_lightning.schema import (  # noqa: E402
+from michelangelo.lib.trainer.torch.pytorch_lightning.schema import (
     IncrementalTrainingMetadata,
     IncrementalTrainingSpec,
     LearningMode,

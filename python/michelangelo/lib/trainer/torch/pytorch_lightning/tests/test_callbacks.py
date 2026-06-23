@@ -24,10 +24,7 @@ pytest.importorskip("ray")
 pytest.importorskip("torch")
 pytest.importorskip("pytorch_lightning")
 
-from michelangelo.lib.trainer.torch.pytorch_lightning._private import (  # noqa: E402
-    callbacks as callbacks_mod,
-)
-from michelangelo.lib.trainer.torch.pytorch_lightning._private.callbacks import (  # noqa: E402
+from michelangelo.lib.trainer.torch.pytorch_lightning._private.callbacks import (
     RayTrainReportCallback,
     RayTrainReportPerNodeCallback,
 )
