@@ -491,7 +491,7 @@ def validate_raw_model_package(
 
     When sample_data and model_schema are both provided, a forward pass is run
     to validate outputs and per-submodel schemas are written to the package's
-    metadata directory.
+    metadata directory as ``submodel_schemas.yaml``.
 
     Args:
         package_path: Path to the raw model package.
