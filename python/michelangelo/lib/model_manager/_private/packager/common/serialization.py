@@ -6,6 +6,14 @@ from typing import Optional, Union
 
 import michelangelo.lib.model_manager.interface.custom_model as custom_model
 
+from michelangelo.lib.model_manager._private.packager.template_renderer import (
+    TritonTemplateRenderer,
+)
+from michelangelo.lib.model_manager._private.utils.module_finder import (
+    find_dependency_files,
+)
+from michelangelo.lib.model_manager._private.utils.module_utils import save_module_files
+
 _INTERFACE_MODULE_PATH = os.path.join(
     "michelangelo", "lib", "model_manager", "interface", "custom_model.py"
 )
@@ -21,13 +29,6 @@ def serialize_model_interface(target_dir: str) -> None:
     if not os.path.exists(target_path):
         os.makedirs(os.path.dirname(target_path), exist_ok=True)
         shutil.copyfile(custom_model.__file__, target_path)
-from michelangelo.lib.model_manager._private.packager.template_renderer import (
-    TritonTemplateRenderer,
-)
-from michelangelo.lib.model_manager._private.utils.module_finder import (
-    find_dependency_files,
-)
-from michelangelo.lib.model_manager._private.utils.module_utils import save_module_files
 
 
 def serialize_model_class(
