@@ -130,8 +130,9 @@ def add_function_signature(crd: CRD) -> None:
                         "default": None,
                         "help": (
                             "Event type to notify on: SUCCEEDED, FAILED, "
-                            "KILLED, SKIPPED. Repeatable or comma-separated. "
-                            "Applies to all destinations. Default: all"
+                            "KILLED, SKIPPED, STARTED. Repeatable or comma-separated. "
+                            "Applies to all destinations. Default: SUCCEEDED, FAILED, "
+                            "KILLED, SKIPPED (terminal states)"
                         ),
                     },
                 },
@@ -343,9 +344,15 @@ _NOTIFY_ON_MAP = {
     "FAILED": "EVENT_TYPE_PIPELINE_RUN_STATE_FAILED",
     "KILLED": "EVENT_TYPE_PIPELINE_RUN_STATE_KILLED",
     "SKIPPED": "EVENT_TYPE_PIPELINE_RUN_STATE_SKIPPED",
+    "STARTED": "EVENT_TYPE_PIPELINE_RUN_STATE_STARTED",
 }
 
-_DEFAULT_NOTIFY_ON = list(_NOTIFY_ON_MAP.values())
+_DEFAULT_NOTIFY_ON = [
+    "EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED",
+    "EVENT_TYPE_PIPELINE_RUN_STATE_FAILED",
+    "EVENT_TYPE_PIPELINE_RUN_STATE_KILLED",
+    "EVENT_TYPE_PIPELINE_RUN_STATE_SKIPPED",
+]
 
 
 def _split_csv(values: Optional[list[str]]) -> list[str]:

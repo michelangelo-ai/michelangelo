@@ -105,6 +105,7 @@ Choose events based on the `resourceType` you're watching.
 | `EVENT_TYPE_PIPELINE_RUN_STATE_FAILED` | Run failed |
 | `EVENT_TYPE_PIPELINE_RUN_STATE_KILLED` | Run was manually stopped |
 | `EVENT_TYPE_PIPELINE_RUN_STATE_SKIPPED` | Run was skipped (e.g., by a trigger concurrency policy) |
+| `EVENT_TYPE_PIPELINE_RUN_STATE_STARTED` | Run started executing (opt-in via `--notify-on STARTED`) |
 
 #### Trigger Run Events (`RESOURCE_TYPE_TRIGGER_RUN`)
 

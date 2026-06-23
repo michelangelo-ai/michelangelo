@@ -402,6 +402,46 @@ class PipelineRunTest(TestCase):
             ["EVENT_TYPE_PIPELINE_RUN_STATE_FAILED"],
         )
 
+    def test_build_notifications_started_event(self):
+        """Test _build_notifications with STARTED event type."""
+        result = _build_notifications(
+            notify_slack=["#alerts"],
+            notify_on=["STARTED"],
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(
+            result[0]["eventTypes"],
+            ["EVENT_TYPE_PIPELINE_RUN_STATE_STARTED"],
+        )
+
+    def test_build_notifications_started_with_terminal_events(self):
+        """Test _build_notifications with STARTED combined with terminal events."""
+        result = _build_notifications(
+            notify_email=["oncall@example.com"],
+            notify_on=["STARTED", "FAILED", "SUCCEEDED"],
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(
+            result[0]["eventTypes"],
+            [
+                "EVENT_TYPE_PIPELINE_RUN_STATE_STARTED",
+                "EVENT_TYPE_PIPELINE_RUN_STATE_FAILED",
+                "EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED",
+            ],
+        )
+
+    def test_build_notifications_defaults_exclude_started(self):
+        """Test that default event types do not include STARTED."""
+        result = _build_notifications(notify_slack=["#alerts"])
+        self.assertEqual(len(result), 1)
+        self.assertNotIn(
+            "EVENT_TYPE_PIPELINE_RUN_STATE_STARTED",
+            result[0]["eventTypes"],
+        )
+        self.assertEqual(len(result[0]["eventTypes"]), 4)
+
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.get_user_name")
     def test_generate_pipeline_run_object_with_notifications(self, mock_get_user_name):
         """Test pipeline run object includes notifications."""

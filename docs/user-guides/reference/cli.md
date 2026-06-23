@@ -232,7 +232,7 @@ You can attach notification rules directly to a pipeline run so you're alerted w
 
 - `--notify-slack` — Slack destination (channel or @user). Repeatable or comma-separated.
 - `--notify-email` — Email address. Repeatable or comma-separated.
-- `--notify-on` — Event type to trigger on: `SUCCEEDED`, `FAILED`, `KILLED`, or `SKIPPED`. Repeatable or comma-separated. Defaults to all four when omitted. Applies to all destinations (per-destination filtering is not yet supported — use YAML specs for that).
+- `--notify-on` — Event type to trigger on: `SUCCEEDED`, `FAILED`, `KILLED`, `SKIPPED`, or `STARTED`. Repeatable or comma-separated. Defaults to the four terminal states (`SUCCEEDED`, `FAILED`, `KILLED`, `SKIPPED`) when omitted; `STARTED` is opt-in. Applies to all destinations (per-destination filtering is not yet supported — use YAML specs for that).
 
 Syntax:
 
