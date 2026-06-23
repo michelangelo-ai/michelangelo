@@ -117,11 +117,16 @@ These are capabilities we intend to build. Items closer to the top of each secti
 - Cascading deletion (FeatureGroup → Dataset)
 
 **Evaluation & Reporting**
+- Model explainability (TreeSHAP, Integrated Gradients, Permutation Feature Importance, KernelSHAP)
 - Experiment reports
 - Structured evaluation reports
 - Model cards
 
 **Alerting & Monitoring**
+- Near-real-time feature drift monitoring (Wasserstein, KL divergence, PSI)
+- Feature consistency monitoring (online vs. offline skew detection)
+- Batch feature drift detection
+- Auto-generated drift and availability alerts
 - Dashboard management via OSS Grafana operator
 - Prometheus-based alerting for decommission gating
 - Alert CRD management
