@@ -2,6 +2,7 @@
 
 import os
 import tempfile
+from typing import Optional
 from unittest import TestCase
 
 import torch
@@ -18,7 +19,7 @@ def _make_deployable_package(
     tmp_dir: str,
     model_class_str: str,
     state_dict: dict,
-    skeleton: dict | None = None,
+    skeleton: Optional[dict] = None,
 ) -> str:
     """Build a minimal Triton python-backend package under tmp_dir."""
     version_dir = os.path.join(tmp_dir, "0")
