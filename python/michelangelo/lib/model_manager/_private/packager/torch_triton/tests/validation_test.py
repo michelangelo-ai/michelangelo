@@ -309,6 +309,7 @@ def test_build_python_backend_file_structure():
             backend="python",
             model_class=_MODEL_CLASS,
             root_path=root_path,
+            include_import_prefixes=["michelangelo"],
         )
 
         version_dir = os.path.join(root_path, "0")
