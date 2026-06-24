@@ -2,6 +2,8 @@
 
 from unittest import TestCase
 
+import torch
+
 from michelangelo.lib.model_manager._private.utils.spec_utils.spec import (
     collect_nested_class_paths,
     instantiate,
@@ -69,18 +71,12 @@ class InstantiateTest(TestCase):
 
     def test_flat_spec_instantiated(self):
         """A flat _target_ spec instantiates the class."""
-        import torch
-
         spec = {"_target_": "torch.nn.Linear", "in_features": 4, "out_features": 2}
         model = instantiate(spec)
         self.assertIsInstance(model, torch.nn.Linear)
 
     def test_nested_spec_instantiated_recursively(self):
         """Nested _target_ specs are recursively instantiated."""
-        spec = {
-            "_target_": "torch.nn.Sequential",
-            "args": [],
-        }
         # Just verify it doesn't raise and returns an object
         # Use a simple non-nested case to avoid Sequential's *args API
         import torch
@@ -91,9 +87,6 @@ class InstantiateTest(TestCase):
 
     def test_list_values_with_nested_specs(self):
         """List values containing specs are instantiated."""
-        spec = {
-            "_target_": "torch.nn.ReLU",
-            "inplace": False,
-        }
+        spec = {"_target_": "torch.nn.ReLU", "inplace": False}
         result = instantiate(spec)
         self.assertIsInstance(result, torch.nn.ReLU)

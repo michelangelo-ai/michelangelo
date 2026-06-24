@@ -5,11 +5,10 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
-from typing import Union
+from typing import TYPE_CHECKING
 
 import torch
 import yaml
-from numpy import ndarray
 
 from michelangelo.lib.model_manager._private.packager.common import (
     generate_requirements_txt,
@@ -38,7 +37,11 @@ from michelangelo.lib.model_manager._private.utils.spec_utils import (
 )
 from michelangelo.lib.model_manager._private.utils.torch_utils import is_state_dict
 from michelangelo.lib.model_manager.constants import StorageType
-from michelangelo.lib.model_manager.schema import ModelSchema
+
+if TYPE_CHECKING:
+    from numpy import ndarray
+
+    from michelangelo.lib.model_manager.schema import ModelSchema
 
 
 def convert_to_state_dict(model_path: str) -> None:
@@ -123,7 +126,7 @@ def generate_raw_model_package_content(
     model_schema: ModelSchema,
     sample_data: list[dict[str, ndarray]],
     model_path_source_type: str | None = StorageType.LOCAL,
-    requirements: Union[list[str], str] | None = None,
+    requirements: list[str] | str | None = None,
     root_path: str | None = None,
     include_import_prefixes: list[str] | None = None,
     hyperparameters: dict | None = None,

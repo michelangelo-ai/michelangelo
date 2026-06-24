@@ -11,7 +11,6 @@ import contextlib
 import json
 import os
 import sys
-from typing import Union
 
 import torch
 import yaml
@@ -26,10 +25,8 @@ def _sys_path(directory: str):
     try:
         yield
     finally:
-        try:
+        with contextlib.suppress(ValueError):
             sys.path.remove(directory)
-        except ValueError:
-            pass
 
 
 def _import_model_class(version_dir: str, model_class_str: str) -> type:
@@ -84,7 +81,7 @@ def _load_skeleton(version_dir: str) -> dict:
 
 def _load_torch_python_deployable_model(
     model_path: str,
-    device: Union[str, "torch.device"] = "cpu",
+    device: str | torch.device = "cpu",
 ) -> torch.nn.Module:
     """Load a torch Python-backend deployable model from a Triton package.
 

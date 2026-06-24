@@ -67,9 +67,11 @@ class ImportModelClassTest(TestCase):
 
     def test_empty_string_raises_value_error(self):
         """An empty model_class_str raises ValueError."""
-        with tempfile.TemporaryDirectory() as tmp:
-            with self.assertRaisesRegex(ValueError, "model_class.txt is empty"):
-                _import_model_class(tmp, "")
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self.assertRaisesRegex(ValueError, "model_class.txt is empty"),
+        ):
+            _import_model_class(tmp, "")
 
     def test_valid_class_imported(self):
         """A valid dotted class name is imported correctly."""
@@ -82,7 +84,7 @@ class LoadSkeletonTest(TestCase):
     """Tests for _load_skeleton."""
 
     def test_no_file_returns_empty_dict(self):
-        """Returns an empty dict when neither skeleton.yaml nor hyperparameters.json exist."""
+        """Returns empty dict when no skeleton or hyperparameters file exists."""
         with tempfile.TemporaryDirectory() as tmp:
             version_dir = os.path.join(tmp, "0")
             os.makedirs(version_dir)

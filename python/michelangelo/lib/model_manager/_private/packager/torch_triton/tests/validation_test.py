@@ -7,6 +7,9 @@ from unittest import TestCase
 import pytest
 import torch
 
+from michelangelo.lib.model_manager._private.packager.torch_triton.raw_model_package import (  # noqa: E501
+    convert_to_state_dict,
+)
 from michelangelo.lib.model_manager._private.packager.torch_triton.tests.fixtures.simple_model import (  # noqa: E501
     SimpleModel,
     save_scripted_model,
@@ -19,9 +22,6 @@ from michelangelo.lib.model_manager._private.packager.torch_triton.validation im
     validate_model_class,
     validate_state_dict_file,
     validate_torchscript_file,
-)
-from michelangelo.lib.model_manager._private.packager.torch_triton.raw_model_package import (  # noqa: E501
-    convert_to_state_dict,
 )
 from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
 
@@ -250,6 +250,7 @@ _SCHEMA = ModelSchema(
 
 
 def test_collect_outputs_unsupported_type_raises_type_error():
+    """Unsupported output type raises TypeError."""
     with pytest.raises(TypeError, match="Unsupported model output type"):
         _collect_outputs("not a tensor", _SCHEMA)
 
@@ -260,6 +261,7 @@ def test_collect_outputs_unsupported_type_raises_type_error():
 
 
 def test_convert_to_state_dict_from_nn_module():
+    """A full nn.Module is converted to state_dict in place."""
     model = SimpleModel()
     expected = model.state_dict()
 
@@ -280,14 +282,15 @@ def test_convert_to_state_dict_from_nn_module():
 
 
 def test_build_python_backend_file_structure():
-    from michelangelo.lib.model_manager._private.packager.torch_triton.model_package import (  # noqa: E501
-        generate_model_package_content,
-    )
+    """Python backend generates expected file structure."""
     from michelangelo.lib.model_manager._private.packager.template_renderer import (
         TritonTemplateRenderer,
     )
+    from michelangelo.lib.model_manager._private.packager.torch_triton.model_package import (  # noqa: E501
+        generate_model_package_content,
+    )
 
-    _MODEL_CLASS = (
+    model_class_str = (
         "michelangelo.lib.model_manager._private.packager.torch_triton."
         "tests.fixtures.simple_model.SimpleModel"
     )
@@ -307,7 +310,7 @@ def test_build_python_backend_file_structure():
             model_revision="1",
             model_schema=_SCHEMA,
             backend="python",
-            model_class=_MODEL_CLASS,
+            model_class=model_class_str,
             root_path=root_path,
             include_import_prefixes=["michelangelo"],
         )
@@ -325,9 +328,8 @@ def test_build_python_backend_file_structure():
 
 import numpy as np  # noqa: E402
 
-from michelangelo.lib.model_manager._private.packager.torch_triton.validation import (  # noqa: E402,E501
+from michelangelo.lib.model_manager._private.packager.torch_triton.validation import (  # noqa: E402
     _build_batch_inputs,
-    _collect_outputs,
     _invoke_model,
     _load_model_class,
     _remove_batch_size_dimension,
@@ -337,7 +339,6 @@ from michelangelo.lib.model_manager._private.packager.torch_triton.validation im
     validate_raw_model_file,
     validate_raw_model_package,
 )
-
 
 _MODEL_CLASS_STR = (
     "michelangelo.lib.model_manager._private.packager.torch_triton."
@@ -382,7 +383,7 @@ class ValidatePytorchModelFileTest(TestCase):
             self.assertIsNone(error)
 
     def test_require_state_dict_fails_for_plain_module(self):
-        """A full module without state_dict method fails when require_state_dict=True."""
+        """A full module without state_dict method fails when require_state_dict=True."""  # noqa: E501
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "model.pt")
             # Save a module — it has state_dict, so use a tensor instead

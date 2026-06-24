@@ -40,12 +40,14 @@ class LoadTorchRawModelTest(TestCase):
     """Tests for load_torch_raw_model."""
 
     def test_missing_model_class_raises(self):
+        """A missing model_class.txt raises ValueError."""
         with tempfile.TemporaryDirectory() as tmp:
             _LoaderPackage(tmp)
             with self.assertRaisesRegex(ValueError, "Missing model_class.txt"):
                 load_torch_raw_model(tmp)
 
     def test_empty_model_class_raises(self):
+        """An empty model_class.txt raises ValueError."""
         with tempfile.TemporaryDirectory() as tmp:
             pkg = _LoaderPackage(tmp)
             pkg.write_model_class("")
@@ -53,6 +55,7 @@ class LoadTorchRawModelTest(TestCase):
                 load_torch_raw_model(tmp)
 
     def test_invalid_model_class_raises(self):
+        """An invalid (non-dotted) class name raises ValueError."""
         with tempfile.TemporaryDirectory() as tmp:
             pkg = _LoaderPackage(tmp)
             pkg.write_model_class("Linear")
@@ -60,6 +63,7 @@ class LoadTorchRawModelTest(TestCase):
                 load_torch_raw_model(tmp)
 
     def test_missing_weights_raises(self):
+        """Missing model weights raises FileNotFoundError."""
         with tempfile.TemporaryDirectory() as tmp:
             pkg = _LoaderPackage(tmp)
             pkg.write_model_class("torch.nn.Linear")
@@ -68,6 +72,7 @@ class LoadTorchRawModelTest(TestCase):
                 load_torch_raw_model(tmp)
 
     def test_loads_with_plain_skeleton(self):
+        """Loads model from plain skeleton kwargs."""
         with tempfile.TemporaryDirectory() as tmp:
             pkg = _LoaderPackage(tmp)
             pkg.write_model_class("torch.nn.Linear")
@@ -79,6 +84,7 @@ class LoadTorchRawModelTest(TestCase):
             self.assertFalse(model.training)
 
     def test_loads_with_target_spec(self):
+        """Loads model from _target_ spec skeleton."""
         with tempfile.TemporaryDirectory() as tmp:
             pkg = _LoaderPackage(tmp)
             pkg.write_model_class("torch.nn.Linear")
@@ -91,6 +97,7 @@ class LoadTorchRawModelTest(TestCase):
             self.assertIsInstance(model, torch.nn.Linear)
 
     def test_loads_with_hyperparameters_fallback(self):
+        """Falls back to hyperparameters.json when skeleton.yaml absent."""
         with tempfile.TemporaryDirectory() as tmp:
             pkg = _LoaderPackage(tmp)
             pkg.write_model_class("torch.nn.Linear")
@@ -101,6 +108,7 @@ class LoadTorchRawModelTest(TestCase):
             self.assertIsInstance(model, torch.nn.Linear)
 
     def test_state_dict_mismatch_raises(self):
+        """A mismatched state dict raises RuntimeError."""
         with tempfile.TemporaryDirectory() as tmp:
             pkg = _LoaderPackage(tmp)
             pkg.write_model_class("torch.nn.Linear")

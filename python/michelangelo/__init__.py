@@ -6,7 +6,7 @@
 ``__file__`` defined and to remain compatible with downstream consumers
 that previously treated this as a regular package.
 
-Bazel / PEX consumers that bundle the wheel alongside separately-generated
+Bazel / PEP consumers that bundle the wheel alongside separately-generated
 proto stubs (e.g. from local IDL trees) need cross-``sys.path`` merging to
 import ``michelangelo.api.*``.
 """

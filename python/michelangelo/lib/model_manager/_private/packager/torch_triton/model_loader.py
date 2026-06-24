@@ -7,7 +7,7 @@ without requiring the full michelangelo library to be installed there.
 
 from __future__ import annotations
 
-from michelangelo.lib.model_manager._private.serde.loader.torch_deployable_model_loader import (
+from michelangelo.lib.model_manager._private.serde.loader.torch_deployable_model_loader import (  # noqa: E501
     _load_torch_python_deployable_model,
 )
 from michelangelo.lib.model_manager._private.utils.module_finder import (

@@ -88,10 +88,8 @@ class RawModelTest(TestCase):
     def test_load_torch_raw_model(self):
         """Test loading a torch raw model package via load_raw_model."""
         import torch
-        import yaml
 
         from michelangelo.lib.model_manager._private.packager.torch_triton.tests.fixtures.simple_model import (  # noqa: E501
-            SimpleModel,
             save_state_dict,
         )
 

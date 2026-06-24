@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from michelangelo.lib.model_manager._private.packager.template_renderer import (
-    TritonTemplateRenderer,
-)
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from michelangelo.lib.model_manager._private.packager.template_renderer import (
+        TritonTemplateRenderer,
+    )
 
 
 def generate_torch_python_user_model_content(

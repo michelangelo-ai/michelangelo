@@ -16,7 +16,7 @@ import inspect
 import logging
 import os
 import textwrap
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 import torch
 import yaml
@@ -46,7 +46,7 @@ _SKIP_TYPES = (
 
 
 def _strip_batch(shape: list[int]) -> list[int]:
-    """Remove the batch dimension and return per-sample shape, defaulting to [1] for scalars."""
+    """Remove the batch dimension and return per-sample shape, defaulting to [1] for scalars."""  # noqa: E501
     per_sample = shape[1:]
     return per_sample if per_sample else [1]
 
@@ -94,7 +94,7 @@ def get_forward_param_names(module: torch.nn.Module) -> list[str]:
     ]
 
 
-def _return_names(module: torch.nn.Module) -> Optional[list[Optional[str]]]:
+def _return_names(module: torch.nn.Module) -> list[str | None] | None:
     """Extract variable names from the first return statement of forward() via AST."""
     try:
         tree = ast.parse(textwrap.dedent(inspect.getsource(module.forward)))
@@ -111,7 +111,7 @@ def _return_names(module: torch.nn.Module) -> Optional[list[Optional[str]]]:
     return None
 
 
-def _tensor_facts(obj: Any, param_name: Optional[str] = None) -> list[dict]:
+def _tensor_facts(obj: Any, param_name: str | None = None) -> list[dict]:
     """Recursively extract {name?, shape, dtype} records from tensor objects."""
     if isinstance(obj, torch.Tensor):
         fact: dict = {"shape": _strip_batch(list(obj.shape)), "dtype": str(obj.dtype)}
@@ -126,9 +126,7 @@ def _tensor_facts(obj: Any, param_name: Optional[str] = None) -> list[dict]:
     return []
 
 
-def _output_facts(
-    output: Any, return_names: Optional[list[Optional[str]]]
-) -> list[dict]:
+def _output_facts(output: Any, return_names: list[str | None] | None) -> list[dict]:
     """Build output fact records, enriched with AST-recovered names."""
     if isinstance(output, dict) or (
         hasattr(output, "_asdict") and callable(getattr(output, "_asdict", None))
@@ -213,7 +211,7 @@ def capture_submodel_schemas(
                     )
                 ]
                 captured[hname]["outputs"] = _output_facts(output, return_names)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 # A hook failure must never break packaging -- skip this
                 # submodel.
                 _logger.debug(

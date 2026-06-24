@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import tempfile
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
@@ -14,12 +14,6 @@ from michelangelo.lib.model_manager._private.constants.triton_backend_type impor
 from michelangelo.lib.model_manager._private.packager.common import (
     generate_model_py_content,
     serialize_model_class,
-)
-from michelangelo.lib.model_manager._private.packager.torch_triton.model_loader import (
-    serialize_torch_python_loader,
-)
-from michelangelo.lib.model_manager._private.packager.template_renderer import (
-    TritonTemplateRenderer,
 )
 from michelangelo.lib.model_manager._private.packager.torch_triton.config_pbtxt import (
     generate_config_pbtxt_content,
@@ -32,6 +26,9 @@ from michelangelo.lib.model_manager._private.packager.torch_triton.constants imp
     DEPLOYABLE_USER_MODEL_PY_FILE_NAME,
     MODEL_CLASS_FILE_NAME,
     MODEL_PT_FILE_NAME,
+)
+from michelangelo.lib.model_manager._private.packager.torch_triton.model_loader import (
+    serialize_torch_python_loader,
 )
 from michelangelo.lib.model_manager._private.packager.torch_triton.onnx_conversion import (  # noqa: E501
     convert_to_onnx,
@@ -49,14 +46,19 @@ from michelangelo.lib.model_manager._private.packager.torch_triton.validation im
     validate_deployable_model_file,
     validate_raw_model_file,
 )
-from michelangelo.lib.model_manager._private.utils.asset_utils import download_assets
 from michelangelo.lib.model_manager._private.serde.data import dump_model_data
+from michelangelo.lib.model_manager._private.utils.asset_utils import download_assets
 from michelangelo.lib.model_manager._private.utils.spec_utils import (
     collect_nested_class_paths,
 )
 from michelangelo.lib.model_manager._private.utils.torch_utils import tensor_to_numpy
 from michelangelo.lib.model_manager.constants import StorageType
-from michelangelo.lib.model_manager.schema import ModelSchema
+
+if TYPE_CHECKING:
+    from michelangelo.lib.model_manager._private.packager.template_renderer import (
+        TritonTemplateRenderer,
+    )
+    from michelangelo.lib.model_manager.schema import ModelSchema
 
 
 def _download_and_prepare_state_dict(

@@ -6,13 +6,12 @@ from unittest import TestCase
 
 import torch
 
-from michelangelo.lib.model_manager._private.packager.torch_triton.raw_model_package import (
+from michelangelo.lib.model_manager._private.packager.torch_triton.raw_model_package import (  # noqa: E501
     _serialize_nested_classes,
     convert_to_state_dict,
     generate_raw_model_package_content,
 )
 from michelangelo.lib.model_manager._private.packager.torch_triton.tests.fixtures.simple_model import (  # noqa: E501
-    SimpleModel,
     save_full_model,
     save_state_dict,
 )
@@ -42,7 +41,7 @@ class ConvertToStateDictTest(TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "model.pt")
             save_state_dict(path)
-            mtime_before = os.path.getmtime(path)
+            os.path.getmtime(path)
 
             convert_to_state_dict(path)
 
@@ -163,7 +162,7 @@ class GenerateRawModelPackageContentTest(TestCase):
             self.assertIn("torch", req_content)
 
     def test_torch_added_to_list_requirements(self):
-        """torch is appended when not already in the list requirements."""
+        """Torch is appended when not already in the list requirements."""
         with tempfile.TemporaryDirectory() as tmp:
             model_path = os.path.join(tmp, "model.pt")
             save_state_dict(model_path)

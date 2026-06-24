@@ -149,7 +149,7 @@ class TorchTritonPackager:
         """
         if not model_path:
             raise ValueError(
-                "model_path is required: provide a path to a .pt, .pth, or .onnx model file"
+                "model_path is required: provide a path to a .pt, .pth, or .onnx file"
             )
 
         if not model_schema:

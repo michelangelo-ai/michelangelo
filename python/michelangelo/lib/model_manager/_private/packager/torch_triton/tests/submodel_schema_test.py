@@ -4,7 +4,7 @@ from unittest import TestCase
 
 import torch
 
-from michelangelo.lib.model_manager._private.packager.torch_triton.submodel_schema import (
+from michelangelo.lib.model_manager._private.packager.torch_triton.submodel_schema import (  # noqa: E501
     capture_submodel_schemas,
     write_submodel_schemas,
 )
@@ -25,6 +25,7 @@ class CaptureSubmodelSchemasTest(TestCase):
     """Tests for capture_submodel_schemas."""
 
     def test_captures_each_submodel(self):
+        """Captures each submodel."""
         model = _TwoLayer().eval()
         x = torch.zeros(8, 4)
         with torch.no_grad():
@@ -41,6 +42,7 @@ class CaptureSubmodelSchemasTest(TestCase):
         self.assertEqual(fc1.output_schema[0].shape, [3])
 
     def test_hook_failure_does_not_propagate(self):
+        """Hook failure does not propagate."""
         model = _TwoLayer().eval()
 
         def boom():
@@ -54,6 +56,7 @@ class WriteSubmodelSchemasTest(TestCase):
     """Tests for write_submodel_schemas."""
 
     def test_empty_schemas_writes_nothing(self, tmp_path=None):
+        """Empty schemas writes nothing."""
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -65,6 +68,7 @@ class WriteSubmodelSchemasTest(TestCase):
             )
 
     def test_writes_yaml(self):
+        """Writes yaml."""
         import os
         import tempfile
 

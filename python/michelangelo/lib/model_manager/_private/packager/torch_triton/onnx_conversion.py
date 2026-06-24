@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import onnx
@@ -18,7 +18,9 @@ from michelangelo.lib.model_manager._private.utils.torch_utils import (
     is_state_dict,
     load_model_from_state_dict,
 )
-from michelangelo.lib.model_manager.schema import ModelSchema
+
+if TYPE_CHECKING:
+    from michelangelo.lib.model_manager.schema import ModelSchema
 
 OPSET_VERSION = 17
 

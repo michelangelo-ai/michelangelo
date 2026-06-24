@@ -105,7 +105,7 @@ class TorchTritonPackagerTest(TestCase):
             "michelangelo.lib.model_manager._private.packager.torch_triton."
             "tests.fixtures.simple_model.NotAModule"
         )
-        with self.assertRaises(Exception):
+        with self.assertRaises(TypeError):
             self.packager.create_raw_model_package(
                 model_path="model.pt",
                 model_class=not_a_module_class,
@@ -156,7 +156,7 @@ class TorchTritonPackagerTest(TestCase):
             model_path = os.path.join(tmp, "model.pt")
             save_state_dict(model_path)
 
-            with self.assertRaises(Exception):
+            with self.assertRaises(ValueError):
                 self.packager.create_model_package(
                     model_path=model_path,
                     model_schema=bad_schema,
@@ -172,7 +172,7 @@ class TorchTritonPackagerTest(TestCase):
             model_path = os.path.join(tmp, "model.pt")
             save_state_dict(model_path)
 
-            with self.assertRaises(Exception):
+            with self.assertRaises(TypeError):
                 self.packager.create_model_package(
                     model_path=model_path,
                     model_schema=self.schema,

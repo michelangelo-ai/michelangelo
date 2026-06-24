@@ -4,12 +4,12 @@ from typing import Union
 
 import torch
 
+from michelangelo.lib.model_manager._private.serde.loader.torch_model_loader import (
+    load_torch_raw_model,
+)
 from michelangelo.lib.model_manager._private.serde.model import (
     get_raw_model_type,
     load_custom_raw_model,
-)
-from michelangelo.lib.model_manager._private.serde.loader.torch_model_loader import (
-    load_torch_raw_model,
 )
 from michelangelo.lib.model_manager.constants import RawModelType
 from michelangelo.lib.model_manager.interface.custom_model import Model

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any
 
 import onnx
 import torch
@@ -14,7 +14,7 @@ from michelangelo.lib.model_manager._private.packager.torch_triton.constants imp
     MODEL_CLASS_FILE_NAME,
     RAW_SUBMODEL_SCHEMAS_FILE,
 )
-from michelangelo.lib.model_manager._private.packager.torch_triton.submodel_schema import (
+from michelangelo.lib.model_manager._private.packager.torch_triton.submodel_schema import (  # noqa: E501
     capture_submodel_schemas,
     get_forward_param_names,
     write_submodel_schemas,
@@ -24,8 +24,10 @@ from michelangelo.lib.model_manager._private.utils.data_utils import (
     validate_output_data_with_model_schema,
 )
 from michelangelo.lib.model_manager._private.utils.torch_utils import is_state_dict
-from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem
 from michelangelo.lib.model_manager.serde.model import load_raw_model
+
+if TYPE_CHECKING:
+    from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem
 
 
 def _validate_file_basics(
@@ -435,7 +437,7 @@ def _collect_outputs(output: Any, model_schema: ModelSchema) -> dict[str, ndarra
 
 def _test_model_predictions(
     package_path: str,
-    sample_data: Union[list[dict[str, ndarray]], dict[str, ndarray]],
+    sample_data: list[dict[str, ndarray]] | dict[str, ndarray],
     model_schema: ModelSchema,
 ) -> dict | None:
     """Run a forward pass with sample data and validate the outputs.
@@ -489,7 +491,7 @@ def _test_model_predictions(
 
 def validate_raw_model_package(
     package_path: str,
-    sample_data: Union[list[dict[str, ndarray]], dict[str, ndarray]] | None = None,
+    sample_data: list[dict[str, ndarray]] | dict[str, ndarray] | None = None,
     model_schema: ModelSchema | None = None,
 ) -> None:
     """Validate a PyTorch raw model package.

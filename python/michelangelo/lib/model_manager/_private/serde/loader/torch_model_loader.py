@@ -88,10 +88,7 @@ def load_torch_raw_model(package_path: str) -> torch.nn.Module:
     model_cls = getattr(module, class_name)
 
     skeleton = _load_skeleton(package_path)
-    if "_target_" in skeleton:
-        model = instantiate(skeleton)
-    else:
-        model = model_cls(**skeleton)
+    model = instantiate(skeleton) if "_target_" in skeleton else model_cls(**skeleton)
 
     model_file = os.path.join(package_path, "model", "model.pt")
     if not os.path.exists(model_file):

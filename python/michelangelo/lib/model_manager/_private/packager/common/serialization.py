@@ -5,7 +5,6 @@ import shutil
 from typing import Optional, Union
 
 import michelangelo.lib.model_manager.interface.custom_model as custom_model
-
 from michelangelo.lib.model_manager._private.packager.template_renderer import (
     TritonTemplateRenderer,
 )
