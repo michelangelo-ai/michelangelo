@@ -1,6 +1,6 @@
 import { AppNavBar } from 'baseui/app-nav-bar';
 import { SnackbarProvider } from 'baseui/snackbar';
-import { LayersManager } from 'baseui/layer'
+import { LayersManager } from 'baseui/layer';
 
 import { Link } from '#core/components/link/link';
 import { ErrorProvider } from '#core/providers/error-provider/error-provider';

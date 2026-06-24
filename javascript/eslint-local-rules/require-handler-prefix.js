@@ -39,7 +39,8 @@ const rule = {
     function extractIdentifiers(node) {
       if (!node) return [];
       if (node.type === 'Identifier') return [node.name];
-      if (node.type === 'LogicalExpression') return [...extractIdentifiers(node.left), ...extractIdentifiers(node.right)];
+      if (node.type === 'LogicalExpression')
+        return [...extractIdentifiers(node.left), ...extractIdentifiers(node.right)];
       if (node.type === 'MemberExpression') return extractIdentifiers(node.object);
       if (node.type === 'ChainExpression') return extractIdentifiers(node.expression);
       return [];

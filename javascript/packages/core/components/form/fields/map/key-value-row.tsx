@@ -49,7 +49,7 @@ export function KeyValueRow({
         value={row.key}
         onChange={(e) => onChange({ ...row, key: e.currentTarget.value })}
         onFocus={onFocus}
-      onBlur={handleBlurIfFilled}
+        onBlur={handleBlurIfFilled}
         placeholder={keyConfig?.placeholder ?? 'Key'}
         // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- false is a valid value, so || is needed to fall through to keyConfig?.readOnly
         readOnly={readOnly || keyConfig?.readOnly}
@@ -67,7 +67,7 @@ export function KeyValueRow({
         value={row.value}
         onChange={(e) => onChange({ ...row, value: e.currentTarget.value })}
         onFocus={onFocus}
-      onBlur={handleBlurIfFilled}
+        onBlur={handleBlurIfFilled}
         placeholder={valueConfig?.placeholder ?? 'Value'}
         readOnly={readOnly}
         disabled={disabled}
