@@ -29,6 +29,7 @@ There are other easy ways to help support the project and show your appreciation
 - [Creating a Pull Request](#creating-a-pull-request)
   - [Before Creating a Pull Request](#before-creating-a-pull-request)
   - [How Do I Submit a Good Pull Request?](#how-do-i-submit-a-good-pull-request)
+- [Deprecation Policy](#deprecation-policy)
 
 <a id="code-of-conduct"></a>
 ## Code of Conduct
@@ -238,4 +239,51 @@ If you want to fix a bug or propose a new feature you’ll do this through creat
 * **Use comments in the code** that you provide to give us more context to any code based submissions.
 
 Thanks for contributing into our project.
+
+<a id="deprecation-policy"></a>
+## Deprecation Policy
+
+Deprecated APIs, configuration keys, and behaviors must emit warnings for **at least 2 minor releases** before removal. This gives downstream users a predictable migration window.
+
+### Process
+
+1. **Deprecate** — Add a runtime warning and a `BREAKING CHANGE:` footer in the commit message. Update docs to mark the item as deprecated.
+2. **Mark** — The deprecated item appears in the BREAKING CHANGES section of the next release's changelog. Migration guidance is included in the release notes.
+3. **Remove** — No earlier than 2 minor releases after step 1. The removal commit also carries a `BREAKING CHANGE:` footer.
+
+### Per-component examples
+
+**Go** — Add a `// Deprecated:` godoc comment and log a warning on first use:
+```go
+// Deprecated: Use NewClientV2 instead. Will be removed in v0.5.0.
+func NewClient(cfg Config) *Client { ... }
+```
+
+**Python** — Use `warnings.warn` with `DeprecationWarning`:
+```python
+import warnings
+warnings.warn(
+    "michelangelo.v1.Client is deprecated; use michelangelo.v2.Client instead. "
+    "Removal planned for v0.5.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+```
+
+**Proto** — Mark the field or enum value with `[deprecated = true]` and add a comment:
+```protobuf
+// Deprecated: use PIPELINE_STATE_RUNNING instead. Removal in v0.5.0.
+PIPELINE_STATE_ACTIVE = 1 [deprecated = true];
+```
+
+**Helm** — Document the deprecation in `values.yaml` comments and the chart's NOTES.txt:
+```yaml
+# DEPRECATED: use 'server.resources' instead. Will be removed in v0.5.0.
+resources: {}
+```
+
+### Reference
+
+- See [UPGRADING.md](./UPGRADING.md) for examples of past migrations.
+- See the [Versioning Policy](./docs/about/roadmap.md#versioning-policy) for stability level guarantees.
 
