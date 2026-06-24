@@ -98,3 +98,84 @@ class TorchTritonPackagerTest(TestCase):
                 model_schema=self.schema,
                 sample_data=[],
             )
+
+    def test_raw_model_package_invalid_model_class_raises(self):
+        """create_raw_model_package rejects an invalid model_class."""
+        not_a_module_class = (
+            "michelangelo.lib.model_manager._private.packager.torch_triton."
+            "tests.fixtures.simple_model.NotAModule"
+        )
+        with self.assertRaises(Exception):
+            self.packager.create_raw_model_package(
+                model_path="model.pt",
+                model_class=not_a_module_class,
+                model_schema=self.schema,
+            )
+
+    def test_raw_model_package_missing_schema_raises_value_error(self):
+        """create_raw_model_package rejects a missing model_schema."""
+        model_class = (
+            "michelangelo.lib.model_manager._private.packager.torch_triton."
+            "tests.fixtures.simple_model.SimpleModel"
+        )
+        with self.assertRaisesRegex(ValueError, "model_schema is required"):
+            self.packager.create_raw_model_package(
+                model_path="model.pt",
+                model_class=model_class,
+                model_schema=None,
+            )
+
+    def test_create_raw_model_package_success(self):
+        """create_raw_model_package returns a valid package directory."""
+        model_class = (
+            "michelangelo.lib.model_manager._private.packager.torch_triton."
+            "tests.fixtures.simple_model.SimpleModel"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.pt")
+            save_state_dict(model_path)
+            dest = os.path.join(tmp, "pkg")
+
+            result = self.packager.create_raw_model_package(
+                model_path=model_path,
+                model_class=model_class,
+                model_schema=self.schema,
+                dest_model_path=dest,
+                include_import_prefixes=["michelangelo"],
+            )
+
+            self.assertTrue(os.path.isdir(result))
+            self.assertTrue(os.path.isfile(os.path.join(result, "model", "model.pt")))
+
+    def test_create_model_package_invalid_schema_raises(self):
+        """create_model_package raises when schema is invalid."""
+        from michelangelo.lib.model_manager.schema import ModelSchema
+
+        bad_schema = ModelSchema(input_schema=[], output_schema=[])
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.pt")
+            save_state_dict(model_path)
+
+            with self.assertRaises(Exception):
+                self.packager.create_model_package(
+                    model_path=model_path,
+                    model_schema=bad_schema,
+                )
+
+    def test_create_model_package_python_backend_invalid_class_raises(self):
+        """Python backend with invalid model_class raises."""
+        not_a_module = (
+            "michelangelo.lib.model_manager._private.packager.torch_triton."
+            "tests.fixtures.simple_model.NotAModule"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.pt")
+            save_state_dict(model_path)
+
+            with self.assertRaises(Exception):
+                self.packager.create_model_package(
+                    model_path=model_path,
+                    model_schema=self.schema,
+                    backend="python",
+                    model_class=not_a_module,
+                )

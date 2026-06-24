@@ -109,3 +109,29 @@ class LoadTorchRawModelTest(TestCase):
 
             with self.assertRaisesRegex(RuntimeError, "Failed to load state_dict"):
                 load_torch_raw_model(tmp)
+
+    def test_loads_from_metadata_hyperparameters_yaml(self):
+        """Falls back to metadata/hyperparameters.yaml for the skeleton."""
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg = _LoaderPackage(tmp)
+            pkg.write_model_class("torch.nn.Linear")
+            # Write to metadata/hyperparameters.yaml instead of skeleton.yaml
+            os.makedirs(os.path.join(tmp, "metadata"))
+            with open(os.path.join(tmp, "metadata", "hyperparameters.yaml"), "w") as f:
+                yaml.dump({"in_features": 4, "out_features": 2}, f)
+            pkg.write_weights(torch.nn.Linear(4, 2).state_dict())
+
+            model = load_torch_raw_model(tmp)
+            self.assertIsInstance(model, torch.nn.Linear)
+
+    def test_non_dict_state_dict_raises_type_error(self):
+        """A model file that is not a state_dict raises TypeError."""
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg = _LoaderPackage(tmp)
+            pkg.write_model_class("torch.nn.Linear")
+            pkg.write_skeleton({"in_features": 4, "out_features": 2})
+            # Save a tensor instead of a state_dict
+            torch.save(torch.tensor([1.0, 2.0]), os.path.join(tmp, "model", "model.pt"))
+
+            with self.assertRaisesRegex(TypeError, "Expected state_dict format"):
+                load_torch_raw_model(tmp)

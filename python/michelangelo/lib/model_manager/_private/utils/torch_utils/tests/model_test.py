@@ -47,3 +47,27 @@ class TorchDtypeToDataTypeTest(TestCase):
     def test_unsupported_dtype_raises(self):
         with self.assertRaisesRegex(ValueError, "Cannot convert torch.dtype"):
             torch_dtype_to_data_type(torch.float16)
+
+
+class TensorToNumpyTest(TestCase):
+    """Tests for tensor_to_numpy."""
+
+    def test_tensor_converted_to_numpy(self):
+        """A torch.Tensor is detached and converted to numpy."""
+        from michelangelo.lib.model_manager._private.utils.torch_utils.model import (
+            tensor_to_numpy,
+        )
+        import numpy as np
+
+        t = torch.tensor([1.0, 2.0, 3.0])
+        result = tensor_to_numpy(t)
+        self.assertIsInstance(result, np.ndarray)
+
+    def test_non_tensor_passed_through(self):
+        """A non-tensor value is returned unchanged."""
+        from michelangelo.lib.model_manager._private.utils.torch_utils.model import (
+            tensor_to_numpy,
+        )
+
+        self.assertEqual(tensor_to_numpy(42), 42)
+        self.assertEqual(tensor_to_numpy("hello"), "hello")

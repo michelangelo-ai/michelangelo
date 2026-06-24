@@ -317,3 +317,319 @@ def test_build_python_backend_file_structure():
         assert os.path.isfile(os.path.join(version_dir, "model_class.txt"))
         assert "config.pbtxt" in content
         assert "user_model.py" in content["0"]
+
+
+# ---------------------------------------------------------------------------
+# Additional validation coverage
+# ---------------------------------------------------------------------------
+
+import numpy as np  # noqa: E402
+
+from michelangelo.lib.model_manager._private.packager.torch_triton.validation import (  # noqa: E402,E501
+    _build_batch_inputs,
+    _collect_outputs,
+    _invoke_model,
+    _load_model_class,
+    _remove_batch_size_dimension,
+    _validate_package_structure,
+    validate_deployable_model_file,
+    validate_pytorch_model_file,
+    validate_raw_model_file,
+    validate_raw_model_package,
+)
+
+
+_MODEL_CLASS_STR = (
+    "michelangelo.lib.model_manager._private.packager.torch_triton."
+    "tests.fixtures.simple_model.SimpleModel"
+)
+
+
+def _make_raw_package(tmp_dir: str) -> str:
+    """Build a minimal valid raw model package under tmp_dir."""
+    for d in ["metadata", "model", "defs", "dependencies"]:
+        os.makedirs(os.path.join(tmp_dir, d))
+    save_state_dict(os.path.join(tmp_dir, "model", "model.pt"))
+    defs_path = os.path.join(tmp_dir, "defs", "model_class.txt")
+    with open(defs_path, "w") as f:
+        f.write(_MODEL_CLASS_STR)
+    return tmp_dir
+
+
+class ValidatePytorchModelFileTest(TestCase):
+    """Tests for validate_pytorch_model_file."""
+
+    def test_full_model_is_valid(self):
+        """A pickled full nn.Module passes validation."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "model.pt")
+            torch.save(SimpleModel(), path)
+
+            is_valid, error = validate_pytorch_model_file(path)
+
+            self.assertTrue(is_valid)
+            self.assertIsNone(error)
+
+    def test_state_dict_is_valid(self):
+        """A state_dict file is valid for validate_pytorch_model_file."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "model.pt")
+            save_state_dict(path)
+
+            is_valid, error = validate_pytorch_model_file(path)
+
+            self.assertTrue(is_valid)
+            self.assertIsNone(error)
+
+    def test_require_state_dict_fails_for_plain_module(self):
+        """A full module without state_dict method fails when require_state_dict=True."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "model.pt")
+            # Save a module — it has state_dict, so use a tensor instead
+            torch.save(torch.tensor([1.0, 2.0]), path)
+
+            is_valid, error = validate_pytorch_model_file(
+                path, require_state_dict=False
+            )
+            # Tensor is not an nn.Module or state_dict — should fail
+            self.assertFalse(is_valid)
+
+
+class ValidateDeployableModelFileTest(TestCase):
+    """Tests for validate_deployable_model_file."""
+
+    def test_torchscript_is_valid(self):
+        """A TorchScript model is accepted."""
+        from michelangelo.lib.model_manager._private.packager.torch_triton.tests.fixtures.simple_model import (  # noqa: E501
+            save_scripted_model,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "model.pt")
+            save_scripted_model(path)
+
+            is_valid, error = validate_deployable_model_file(path)
+
+            self.assertTrue(is_valid)
+            self.assertIsNone(error)
+
+    def test_full_pytorch_model_is_valid(self):
+        """A full nn.Module is accepted for deployment."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "model.pt")
+            torch.save(SimpleModel(), path)
+
+            is_valid, error = validate_deployable_model_file(path)
+
+            self.assertTrue(is_valid)
+            self.assertIsNone(error)
+
+
+class ValidateRawModelFileTest(TestCase):
+    """Tests for validate_raw_model_file."""
+
+    def test_full_model_with_state_dict_method_is_valid(self):
+        """A full nn.Module (which has state_dict) passes raw validation."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "model.pt")
+            torch.save(SimpleModel(), path)
+
+            is_valid, error = validate_raw_model_file(path)
+
+            self.assertTrue(is_valid)
+            self.assertIsNone(error)
+
+
+class ValidatePackageStructureTest(TestCase):
+    """Tests for _validate_package_structure."""
+
+    def test_missing_package_raises_file_not_found(self):
+        """A nonexistent package path raises FileNotFoundError."""
+        with self.assertRaises(FileNotFoundError):
+            _validate_package_structure("/nonexistent/package")
+
+    def test_missing_required_dir_raises_file_not_found(self):
+        """A package missing a required subdirectory raises FileNotFoundError."""
+        with tempfile.TemporaryDirectory() as tmp:
+            # Only create metadata, model, defs — missing dependencies
+            for d in ["metadata", "model", "defs"]:
+                os.makedirs(os.path.join(tmp, d))
+
+            with self.assertRaises(FileNotFoundError):
+                _validate_package_structure(tmp)
+
+    def test_missing_pt_file_raises_file_not_found(self):
+        """A package with no .pt file in model dir raises FileNotFoundError."""
+        with tempfile.TemporaryDirectory() as tmp:
+            for d in ["metadata", "model", "defs", "dependencies"]:
+                os.makedirs(os.path.join(tmp, d))
+
+            with self.assertRaises(FileNotFoundError):
+                _validate_package_structure(tmp)
+
+    def test_valid_package_returns_model_path(self):
+        """A valid package returns the path to the .pt file."""
+        with tempfile.TemporaryDirectory() as tmp:
+            _make_raw_package(tmp)
+
+            result = _validate_package_structure(tmp)
+
+            self.assertTrue(result.endswith("model.pt"))
+            self.assertTrue(os.path.isfile(result))
+
+
+class LoadModelClassTest(TestCase):
+    """Tests for _load_model_class."""
+
+    def test_loads_model_class(self):
+        """_load_model_class returns the class from model_class.txt."""
+        with tempfile.TemporaryDirectory() as tmp:
+            _make_raw_package(tmp)
+
+            cls = _load_model_class(tmp)
+
+            self.assertTrue(issubclass(cls, torch.nn.Module))
+
+
+class InvokeModelTest(TestCase):
+    """Tests for _invoke_model."""
+
+    def test_kwargs_calling_convention(self):
+        """A model whose forward takes named params is called with **kwargs."""
+        model = SimpleModel()
+        model.eval()
+        batch = {"x": torch.randn(1, 4)}
+
+        with torch.no_grad():
+            result = _invoke_model(model, batch)
+
+        self.assertIsInstance(result, torch.Tensor)
+        self.assertEqual(result.shape, (1, 2))
+
+    def test_single_dict_calling_convention(self):
+        """A model whose forward takes a single mapping is called with positional."""
+
+        class DictInputModel(torch.nn.Module):
+            """Model that takes a dict as forward input."""
+
+            def forward(self, inputs):
+                """Forward pass."""
+                return inputs["x"]
+
+        model = DictInputModel()
+        batch = {"x": torch.randn(1, 4)}
+
+        result = _invoke_model(model, batch)
+
+        self.assertTrue(torch.allclose(result, batch["x"]))
+
+
+class RemoveBatchSizeDimensionTest(TestCase):
+    """Tests for _remove_batch_size_dimension."""
+
+    def test_removes_batch_dim_from_tensor(self):
+        """Batch dimension is squeezed and converted to numpy."""
+        output = torch.randn(1, 2)
+        schema_item = ModelSchemaItem(name="y", data_type=DataType.FLOAT, shape=[2])
+
+        result = _remove_batch_size_dimension(output, schema_item)
+
+        self.assertEqual(result.shape, (2,))
+
+    def test_scalar_reshaped_to_1d(self):
+        """A scalar output is reshaped to 1-D when schema has dimensions."""
+        output = torch.tensor([[1.5]])  # shape [1, 1] -> squeeze(0) -> [1]
+        schema_item = ModelSchemaItem(name="y", data_type=DataType.FLOAT, shape=[1])
+
+        result = _remove_batch_size_dimension(output, schema_item)
+
+        self.assertEqual(result.ndim, 1)
+
+
+class BuildBatchInputsTest(TestCase):
+    """Tests for _build_batch_inputs."""
+
+    def test_numpy_input_converted_to_batched_tensor(self):
+        """A numpy array input is converted to a batched tensor."""
+        data = {"x": np.ones((4,), dtype=np.float32)}
+        result = _build_batch_inputs(data, _SCHEMA)
+
+        self.assertIn("x", result)
+        self.assertEqual(result["x"].shape[0], 1)
+
+    def test_torch_tensor_input_accepted(self):
+        """A torch.Tensor input is accepted directly."""
+        data = {"x": torch.ones(1, 4)}
+        result = _build_batch_inputs(data, _SCHEMA)
+
+        self.assertIn("x", result)
+
+    def test_unsupported_type_raises_type_error(self):
+        """An unsupported input type raises TypeError."""
+        data = {"x": "not an array"}
+
+        with self.assertRaisesRegex(TypeError, "Unsupported input type"):
+            _build_batch_inputs(data, _SCHEMA)
+
+
+class CollectOutputsTest(TestCase):
+    """Tests for _collect_outputs."""
+
+    def test_single_tensor_output(self):
+        """A single tensor output maps to the schema's output name."""
+        output = torch.randn(1, 2)
+        result = _collect_outputs(output, _SCHEMA)
+
+        self.assertIn("y", result)
+
+    def test_dict_output(self):
+        """A dict output is passed through with batch dim removed."""
+        output = {"y": torch.randn(1, 2)}
+        result = _collect_outputs(output, _SCHEMA)
+
+        self.assertIn("y", result)
+
+    def test_list_output(self):
+        """A list output maps elements to schema output names."""
+        output = [torch.randn(1, 2)]
+        result = _collect_outputs(output, _SCHEMA)
+
+        self.assertIn("y", result)
+
+    def test_named_tuple_output(self):
+        """A named tuple output is handled via _asdict."""
+        from collections import namedtuple
+
+        Output = namedtuple("Output", ["y"])
+        output = Output(y=torch.randn(1, 2))
+        result = _collect_outputs(output, _SCHEMA)
+
+        self.assertIn("y", result)
+
+    def test_unsupported_type_raises_type_error(self):
+        """An unsupported output type raises TypeError."""
+        with self.assertRaisesRegex(TypeError, "Unsupported model output type"):
+            _collect_outputs("not a tensor", _SCHEMA)
+
+
+class ValidateRawModelPackageTest(TestCase):
+    """Tests for validate_raw_model_package."""
+
+    def test_valid_package_passes_without_sample_data(self):
+        """A valid package without sample data passes validation."""
+        with tempfile.TemporaryDirectory() as tmp:
+            _make_raw_package(tmp)
+
+            # Should not raise
+            validate_raw_model_package(tmp)
+
+    def test_valid_package_with_sample_data(self):
+        """A valid package with sample data passes full validation."""
+        with tempfile.TemporaryDirectory() as tmp:
+            _make_raw_package(tmp)
+            sample_data = [{"x": np.random.randn(4).astype(np.float32)}]
+
+            # Should not raise
+            validate_raw_model_package(
+                tmp, sample_data=sample_data, model_schema=_SCHEMA
+            )
