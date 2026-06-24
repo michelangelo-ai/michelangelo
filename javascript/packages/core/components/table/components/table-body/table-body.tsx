@@ -30,60 +30,57 @@ export const TableBody = <T extends TableData = TableData>({
 
   return (
     <StyledTableBody>
-      {rows.map((row) => {
-        const handleRowSelectionChange = row.onToggleSelection ?? (() => undefined);
-        return (
-          <React.Fragment key={row.id}>
-            <StickySidesTableBodyRow
-              enableStickySides={enableStickySides}
-              enableRowSelection={enableRowSelection}
-              lastColumnIndex={lastVisibleColumnIndex}
-              scrollRatio={scrollRatio}
-              role="row"
-            >
-              {enableRowSelection && (
-                <StyledTableBodyCell className={css(getSelectionColumnCellStyles(theme))}>
-                  <TableSelectionColumn
-                    canSelect={row.canSelect ?? false}
-                    isSelected={row.isSelected ?? false}
-                    onToggleSelection={handleRowSelectionChange}
-                  />
-                </StyledTableBodyCell>
-              )}
-
-              {row.cells
-                .filter((cell) => cell.isVisible)
-                .map((cell, cellIndex) => (
-                  <StyledTableBodyCell
-                    key={cell.id}
-                    $columnNumber={cellIndex}
-                    $enableRowSelection={enableRowSelection}
-                  >
-                    {cell.content}
-                  </StyledTableBodyCell>
-                ))}
-
-              <StyledTableBodyCell>
-                <StyledActionCell>
-                  {actions && React.createElement(actions, { row })}
-                </StyledActionCell>
+      {rows.map((row) => (
+        <React.Fragment key={row.id}>
+          <StickySidesTableBodyRow
+            enableStickySides={enableStickySides}
+            enableRowSelection={enableRowSelection}
+            lastColumnIndex={lastVisibleColumnIndex}
+            scrollRatio={scrollRatio}
+            role="row"
+          >
+            {enableRowSelection && (
+              <StyledTableBodyCell className={css(getSelectionColumnCellStyles(theme))}>
+                <TableSelectionColumn
+                  canSelect={row.canSelect ?? false}
+                  isSelected={row.isSelected ?? false}
+                  onToggleSelection={row.onToggleSelection ?? (() => undefined)}
+                />
               </StyledTableBodyCell>
-            </StickySidesTableBodyRow>
-
-            {subRow && row.isExpanded && (
-              <StyledTableBodyRow>
-                <StyledTableBodyCell
-                  colSpan={
-                    row.cells.filter((cell) => cell.isVisible).length + (enableRowSelection ? 2 : 1)
-                  }
-                >
-                  {React.createElement(subRow, { row })}
-                </StyledTableBodyCell>
-              </StyledTableBodyRow>
             )}
-          </React.Fragment>
-        );
-      })}
+
+            {row.cells
+              .filter((cell) => cell.isVisible)
+              .map((cell, cellIndex) => (
+                <StyledTableBodyCell
+                  key={cell.id}
+                  $columnNumber={cellIndex}
+                  $enableRowSelection={enableRowSelection}
+                >
+                  {cell.content}
+                </StyledTableBodyCell>
+              ))}
+
+            <StyledTableBodyCell>
+              <StyledActionCell>
+                {actions && React.createElement(actions, { row })}
+              </StyledActionCell>
+            </StyledTableBodyCell>
+          </StickySidesTableBodyRow>
+
+          {subRow && row.isExpanded && (
+            <StyledTableBodyRow>
+              <StyledTableBodyCell
+                colSpan={
+                  row.cells.filter((cell) => cell.isVisible).length + (enableRowSelection ? 2 : 1)
+                }
+              >
+                {React.createElement(subRow, { row })}
+              </StyledTableBodyCell>
+            </StyledTableBodyRow>
+          )}
+        </React.Fragment>
+      ))}
     </StyledTableBody>
   );
 };

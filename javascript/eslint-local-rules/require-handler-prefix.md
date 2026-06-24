@@ -30,17 +30,26 @@ function FilterOption({ onClick }: Props) {
 <FilterOption onClick={handleFilterChange} />;
 ```
 
-This includes props destructured from a `props` object in `forwardRef` components:
+**Test files** — this rule does not apply to test files. Mocks are often named after the prop they stand in for (`const onToggle = vi.fn()`) to make the connection to the component interface explicit.
+
+## Fixing violations
+
+**Rename at the source.** If a locally defined function is being passed as a handler, give it a `handle*` name where it is defined — in the function declaration, or in the hook that returns it. A local alias (`const handleSave = save`) adds indirection without information.
+
+**Use member expressions for render-prop callbacks.** The rule does not check member expressions. When a handler comes from a data object or render prop, reference it directly rather than assigning it to a local variable:
 
 ```tsx
-// ✓ Exempt — onClose is forwarded from props
-const C = forwardRef((props, ref) => {
-  const { onClose } = props;
-  return <Modal onEsc={onClose} />;
-});
+// ✗ Creates a needless alias the rule flags
+const handleSortChange = column.onToggleSort;
+<Cell onClick={handleSortChange} />;
+
+// ✓ Reference directly — rule doesn't check member expressions
+<Cell onClick={column.onToggleSort} />;
 ```
 
-**Test files** — this rule does not apply to test files. Mocks are often named after the prop they stand in for (`const onToggle = vi.fn()`) to make the connection to the component interface explicit.
+## When to disable
+
+Disable only when the handler comes from external code you cannot rename and cannot reference as a member expression — for example, a third-party hook that returns `on*`-named callbacks. Add a comment explaining why renaming is not possible.
 
 ## Relationship to no-handler-mirror
 

@@ -20,7 +20,6 @@ export function TableCellContent<T extends TableData = TableData>({
 
   // Handle grouped cells or expandable rows - show expand/collapse controls with cell content
   if (cell.getIsGrouped() || (row.getCanExpand() && columnIndex === 0)) {
-    const handleRowExpansionChange = row.getToggleExpandedHandler();
     return (
       <div
         className={css({
@@ -29,7 +28,7 @@ export function TableCellContent<T extends TableData = TableData>({
           cursor: 'pointer',
           gap: theme.sizing.scale600,
         })}
-        onClick={handleRowExpansionChange}
+        onClick={row.getToggleExpandedHandler()}
       >
         <TableExpandIcon expanded={row.getIsExpanded()} />
         {flexRender(cell.column.columnDef.cell, cell.getContext())}
