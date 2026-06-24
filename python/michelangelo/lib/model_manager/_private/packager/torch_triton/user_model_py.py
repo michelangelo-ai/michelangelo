@@ -21,6 +21,4 @@ def generate_torch_python_user_model_content(
     Returns:
         The user_model.py file content.
     """
-    return gen.render(
-        "torch_python/user_model.py.tmpl", {"output_names": output_names}
-    )
+    return gen.render("torch_python/user_model.py.tmpl", {"output_names": output_names})

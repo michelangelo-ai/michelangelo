@@ -6,6 +6,7 @@ import os
 
 try:
     import pytorch_lightning as pl
+
     _PL_MODULE = pl.LightningModule
 except ImportError:
     _PL_MODULE = None

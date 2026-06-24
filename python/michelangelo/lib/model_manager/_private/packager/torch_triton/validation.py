@@ -46,9 +46,7 @@ def _validate_file_basics(
     if os.path.isdir(file_path):
         return ValueError(f"Path is not a file: {file_path}")
     if not file_path.endswith(allowed_extensions):
-        return ValueError(
-            f"File must have {allowed_extensions} extension: {file_path}"
-        )
+        return ValueError(f"File must have {allowed_extensions} extension: {file_path}")
     if os.path.getsize(file_path) == 0:
         return ValueError(f"File is empty: {file_path}")
     return None
@@ -115,16 +113,16 @@ def validate_pytorch_model_file(
         if error := _validate_file_basics(model_path):
             return False, error
 
-        model = torch.load(model_path, map_location="cpu", weights_only=False)  # weights_only=False: artifact may be a full nn.Module, not a state_dict
+        model = torch.load(
+            model_path, map_location="cpu", weights_only=False
+        )  # weights_only=False: artifact may be a full nn.Module, not a state_dict
         if not is_state_dict(model) and not isinstance(model, torch.nn.Module):
             return False, ValueError(
                 "File must contain a PyTorch nn.Module or state_dict"
             )
 
         if require_state_dict and not hasattr(model, "state_dict"):
-            return False, ValueError(
-                "PyTorch model does not have state_dict method"
-            )
+            return False, ValueError("PyTorch model does not have state_dict method")
     except Exception as e:
         return False, RuntimeError(f"Cannot load as PyTorch model: {e}")
     else:
@@ -245,9 +243,7 @@ def _load_model_class(package_path: str) -> Any:
     return get_module_attr(model_class)
 
 
-def _has_batch_dimension(
-    tensor: torch.Tensor, expected_shape: list[int]
-) -> bool:
+def _has_batch_dimension(tensor: torch.Tensor, expected_shape: list[int]) -> bool:
     """Check whether a tensor already carries a leading batch dimension.
 
     A tensor is treated as batched when it has exactly one more dimension than
@@ -367,9 +363,7 @@ def _build_batch_inputs(
     return batch_dict
 
 
-def _collect_outputs(
-    output: Any, model_schema: ModelSchema
-) -> dict[str, ndarray]:
+def _collect_outputs(output: Any, model_schema: ModelSchema) -> dict[str, ndarray]:
     """Normalize a model's raw output into a name -> numpy array mapping.
 
     Handles a single tensor, a named tuple, and a plain list/tuple, mapping each
@@ -387,15 +381,19 @@ def _collect_outputs(
             model_schema.output_schema[0] if model_schema.output_schema else None
         )
         output_field_name = schema_item.name if schema_item else "output"
-        return {
-            output_field_name: _remove_batch_size_dimension(output, schema_item)
-        }
+        return {output_field_name: _remove_batch_size_dimension(output, schema_item)}
 
     if isinstance(output, dict):
         return {
-            k: _remove_batch_size_dimension(v, next(
-                (item for item in model_schema.output_schema if item.name == k), None
-            )) if isinstance(v, torch.Tensor) else v
+            k: _remove_batch_size_dimension(
+                v,
+                next(
+                    (item for item in model_schema.output_schema if item.name == k),
+                    None,
+                ),
+            )
+            if isinstance(v, torch.Tensor)
+            else v
             for k, v in output.items()
         }
 
@@ -513,9 +511,7 @@ def validate_raw_model_package(
 
     is_valid, error = validate_raw_model_file(pt_file_path)
     if not is_valid:
-        raise RuntimeError(
-            f"Invalid raw model file {pt_file_path}: {error}"
-        ) from error
+        raise RuntimeError(f"Invalid raw model file {pt_file_path}: {error}") from error
 
     if sample_data and model_schema:
         submodel_schemas = _test_model_predictions(

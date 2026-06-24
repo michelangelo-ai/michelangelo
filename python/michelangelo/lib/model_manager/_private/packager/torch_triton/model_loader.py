@@ -10,7 +10,9 @@ from __future__ import annotations
 from michelangelo.lib.model_manager._private.serde.loader.torch_deployable_model_loader import (
     _load_torch_python_deployable_model,
 )
-from michelangelo.lib.model_manager._private.utils.module_finder import find_dependency_files
+from michelangelo.lib.model_manager._private.utils.module_finder import (
+    find_dependency_files,
+)
 from michelangelo.lib.model_manager._private.utils.module_utils import save_module_files
 
 

@@ -148,7 +148,9 @@ class TorchTritonPackager:
                 for the Python backend.
         """
         if not model_path:
-            raise ValueError("model_path is required: provide a path to a .pt, .pth, or .onnx model file")
+            raise ValueError(
+                "model_path is required: provide a path to a .pt, .pth, or .onnx model file"
+            )
 
         if not model_schema:
             raise ValueError("model_schema is required")
@@ -278,7 +280,9 @@ class TorchTritonPackager:
                 is missing.
         """
         if not model_path:
-            raise ValueError("model_path is required: provide a path to a .pt or .pth model file")
+            raise ValueError(
+                "model_path is required: provide a path to a .pt or .pth model file"
+            )
 
         if not model_class:
             raise ValueError("model_class is required")

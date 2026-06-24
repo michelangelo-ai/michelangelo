@@ -55,9 +55,7 @@ def _schema_item(fact: dict) -> ModelSchemaItem:
     """Build a ModelSchemaItem from a tensor fact dict with dtype/shape/name keys."""
     dtype_str = fact.get("dtype", "")
     try:
-        dtype = (
-            getattr(torch, dtype_str.replace("torch.", "")) if dtype_str else None
-        )
+        dtype = getattr(torch, dtype_str.replace("torch.", "")) if dtype_str else None
         data_type = (
             torch_dtype_to_data_type(dtype) if dtype is not None else DataType.FLOAT
         )
@@ -159,9 +157,7 @@ def _output_facts(
                 # multiple facts come from a nested dict/NamedTuple and already
                 # carry their own names.
                 ast_name = (
-                    return_names[i]
-                    if return_names and i < len(return_names)
-                    else None
+                    return_names[i] if return_names and i < len(return_names) else None
                 )
                 inner[0]["name"] = ast_name or f"output_{i}"
             facts.extend(inner)
@@ -193,9 +189,7 @@ def capture_submodel_schemas(
     """
     captured: dict = {}
     registered = [
-        (n, c)
-        for n, c in model.named_modules()
-        if n and not isinstance(c, _SKIP_TYPES)
+        (n, c) for n, c in model.named_modules() if n and not isinstance(c, _SKIP_TYPES)
     ]
     for name, _ in registered:
         captured[name] = {"inputs": None, "outputs": None}

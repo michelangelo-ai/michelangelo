@@ -55,6 +55,7 @@ def _import_model_class(version_dir: str, model_class_str: str) -> type:
     module_def, _, class_name = model_class_str.rpartition(".")
     with _sys_path(version_dir):
         import importlib
+
         module = importlib.import_module(module_def)
     return getattr(module, class_name)
 
@@ -70,7 +71,10 @@ def _load_skeleton(version_dir: str) -> dict:
     """
     for path, loader in [
         (os.path.join(version_dir, "skeleton.yaml"), lambda f: yaml.safe_load(f) or {}),
-        (os.path.join(version_dir, "hyperparameters.json"), lambda f: json.load(f) or {}),
+        (
+            os.path.join(version_dir, "hyperparameters.json"),
+            lambda f: json.load(f) or {},
+        ),
     ]:
         if os.path.exists(path):
             with open(path) as f:

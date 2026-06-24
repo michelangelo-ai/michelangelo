@@ -65,7 +65,9 @@ def convert_to_state_dict(model_path: str) -> None:
         pass
 
     try:
-        obj = torch.load(model_path, map_location="cpu", weights_only=False)  # weights_only=False: need full nn.Module
+        obj = torch.load(
+            model_path, map_location="cpu", weights_only=False
+        )  # weights_only=False: need full nn.Module
     except Exception as e:
         raise ValueError(
             f"File does not contain a convertible model: {model_path}"
@@ -74,9 +76,7 @@ def convert_to_state_dict(model_path: str) -> None:
     if hasattr(obj, "state_dict"):
         torch.save(obj.state_dict(), model_path)
     else:
-        raise ValueError(
-            f"File does not contain a convertible model: {model_path}"
-        )
+        raise ValueError(f"File does not contain a convertible model: {model_path}")
 
 
 def _serialize_nested_classes(
@@ -185,9 +185,7 @@ def generate_raw_model_package_content(
                 raise ValueError(
                     f"Multiple .pt files found in {downloaded_model}: {pt_files}"
                 )
-            shutil.move(
-                os.path.join(downloaded_model, pt_files[0]), model_file_path
-            )
+            shutil.move(os.path.join(downloaded_model, pt_files[0]), model_file_path)
         else:
             shutil.move(downloaded_model, model_file_path)
 
@@ -219,7 +217,9 @@ def generate_raw_model_package_content(
         with open(requirements) as f:
             content = f.read()
         if "torch" not in content.split():
-            requirements = [line.strip() for line in content.splitlines() if line.strip()] + ["torch"]
+            requirements = [
+                line.strip() for line in content.splitlines() if line.strip()
+            ] + ["torch"]
 
     metadata_content: dict = {
         RAW_TYPE_FILE_NAME: generate_type_yaml(),

@@ -203,9 +203,7 @@ def _generate_python_backend_wrappers(
         f.write(model_py_content)
 
     output_names = [item.name for item in model_schema.output_schema]
-    user_model_py_content = generate_torch_python_user_model_content(
-        gen, output_names
-    )
+    user_model_py_content = generate_torch_python_user_model_content(gen, output_names)
     user_model_py_path = os.path.join(
         model_version_dir, DEPLOYABLE_USER_MODEL_PY_FILE_NAME
     )
@@ -442,9 +440,10 @@ def generate_model_package_content(
 
     if sample_data is not None:
         batched = [
-            {k: tensor_to_numpy(v) for k, v in sample.items()}
-            for sample in sample_data
+            {k: tensor_to_numpy(v) for k, v in sample.items()} for sample in sample_data
         ]
-        content.setdefault("metadata", {})["sample_data.json"] = dump_model_data(batched)
+        content.setdefault("metadata", {})["sample_data.json"] = dump_model_data(
+            batched
+        )
 
     return content

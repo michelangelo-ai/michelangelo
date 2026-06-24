@@ -114,6 +114,4 @@ class OnnxConversionTest(TestCase):
             dest = os.path.join(temp_dir, "model.onnx")
 
             with self.assertRaises(FileNotFoundError):
-                convert_to_onnx(
-                    source, dest, self.schema, sample_data=self.sample_data
-                )
+                convert_to_onnx(source, dest, self.schema, sample_data=self.sample_data)

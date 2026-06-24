@@ -119,7 +119,9 @@ def _load_torch_model(
                 raise ValueError(
                     "model_class is required when model_path contains a state_dict"
                 )
-            model = load_model_from_state_dict(loaded_model, model_class, hyperparameters)
+            model = load_model_from_state_dict(
+                loaded_model, model_class, hyperparameters
+            )
         else:
             model = loaded_model
 
