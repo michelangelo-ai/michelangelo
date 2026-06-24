@@ -5336,7 +5336,7 @@ description = "NVIDIA Collective Communication Library (NCCL) Runtime"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and (platform_machine == \"x86_64\" or extra == \"example\") and platform_machine != \"aarch64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "platform_system == \"Linux\" and platform_machine != \"aarch64\" and (platform_machine == \"x86_64\" or extra == \"example\") and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
 files = [
     {file = "nvidia_nccl_cu12-2.21.5-py3-none-manylinux2014_x86_64.whl", hash = "sha256:8579076d30a8c24988834445f8d633c697d42397e92ffc3f63fa26766d25e0a0"},
 ]
@@ -11058,4 +11058,4 @@ vllm = ["accelerate", "datasets", "einops", "numpy", "pandas", "pyarrow", "pytor
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9.0"
-content-hash = "ed00a4fbec84981ebc397ea720c3275967805959d5e3837135574715ca781632"
+content-hash = "99dcccba0341d5d36976c40efb50f4d6974bde66d8ddbecaa9e94d152054e1f5"
