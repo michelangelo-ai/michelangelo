@@ -18,10 +18,16 @@ export function useFormErrorList(): ErrorEntry[] {
   });
 
   const rawFormLevelError = submitErrors?.[FORM_ERROR];
-  const formLevelError = rawFormLevelError instanceof Error ? rawFormLevelError : undefined;
-  const formLevelEntry: ErrorEntry[] = formLevelError
-    ? [{ fieldPath: FORM_ERROR, errorMessage: String(formLevelError) }]
-    : [];
+  let formLevelErrorMessage: string | undefined;
+  if (rawFormLevelError instanceof Error) {
+    formLevelErrorMessage = rawFormLevelError.message;
+  } else if (typeof rawFormLevelError === 'string') {
+    formLevelErrorMessage = rawFormLevelError;
+  }
+  const formLevelEntry: ErrorEntry[] =
+    formLevelErrorMessage != null
+      ? [{ fieldPath: FORM_ERROR, errorMessage: formLevelErrorMessage }]
+      : [];
 
   if (!errors) return formLevelEntry;
 
