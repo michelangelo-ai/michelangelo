@@ -20,6 +20,9 @@ def get_imports(module: ModuleType) -> list[str]:
     """
     filepath = inspect.getfile(module)
 
+    if not filepath.endswith(".py"):
+        return []
+
     with open(filepath) as file:
         tree = ast.parse(file.read(), filename=filepath)
 
