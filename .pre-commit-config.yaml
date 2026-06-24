@@ -17,3 +17,9 @@ repos:
         language: system
         files: ^javascript/
         pass_filenames: false
+      - id: eslint
+        name: eslint
+        entry: bash -c 'cd javascript && yarn lint --fix --quiet'
+        language: system
+        files: ^javascript/
+        pass_filenames: false
