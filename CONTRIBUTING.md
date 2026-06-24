@@ -217,6 +217,34 @@ Add a `BREAKING CHANGE:` line in the commit footer (after a blank line separatin
 2. Trigger a **major** version bump when the change ships in a release.
 
 <a id="creating-a-pull-request"></a>
+## Versioning & Tag Format
+
+All release artifacts share the same **Major.Minor** version number. Patch versions may differ when a component-specific fix ships independently.
+
+### Git tag format
+
+| Release type | Tag example | Notes |
+|---|---|---|
+| Stable | `v0.3.0` | Standard SemVer — `vMAJOR.MINOR.PATCH` |
+| Release candidate | `v0.3.0-rc.1` | Pre-release suffix per SemVer §9 |
+| Nightly | `v0.3.0-nightly.20260624` | Date-stamped; not manually created |
+
+### PEP 440 mapping (Python / PyPI)
+
+Git tags use SemVer, but PyPI requires [PEP 440](https://peps.python.org/pep-0440/). The release pipeline translates automatically:
+
+| Git tag | PyPI version |
+|---|---|
+| `v0.3.0` | `0.3.0` |
+| `v0.3.0-rc.1` | `0.3.0rc1` |
+| `v0.3.0-nightly.20260624` | `0.3.0.dev20260624` |
+
+### Rules
+
+- Tags are only created on **release branches** (`release/vX.Y`), never directly on `main`.
+- All artifacts (Python, npm, Go, Helm, containers) receive the same Major.Minor from the tag.
+- See the [Versioning Policy](./docs/about/roadmap.md#versioning-policy) for stability level guarantees (stable, beta, alpha).
+
 ## Creating a Pull Request
 
 If you want to fix a bug or propose a new feature you’ll do this through creating a Pull Request.
