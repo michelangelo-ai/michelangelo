@@ -51,7 +51,7 @@ class OnnxConversionTest(TestCase):
             dest_path,
             input_names=["x"],
             output_names=["y"],
-            opset_version=14,
+            opset_version=17,
         )
 
     def test_already_onnx_is_copied(self):
