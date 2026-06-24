@@ -51,3 +51,4 @@ const rule = {
 };
 
 export default rule;
+const x = 1
