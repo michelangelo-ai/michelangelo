@@ -50,14 +50,14 @@ This eliminates ambiguous word boundaries in the middle of names.
 
 ## Exemptions (auto-detected)
 
-| Case                        | Example                              | Why exempt                          |
-| --------------------------- | ------------------------------------ | ----------------------------------- |
-| `index.tsx`                 | entry points                         | intentionally multi-export          |
-| Files with `styled` in name | `styled-components.tsx`              | multi-component styled collections  |
-| Only lowercase exports      | `helpers.tsx` exporting `formatDate` | utility files, not components       |
-| Only `ALL_CAPS` exports     | `icons.tsx` exporting `ICONS`        | constant maps                       |
-| Type-only exports           | `export type { Foo }`                | `exportKind === 'type'` not counted |
-| Non-hook `.ts` files        | `string-utils.ts`                    | only `use-*.ts` files are checked   |
+| Case                        | Example                              | Why exempt                                   |
+| --------------------------- | ------------------------------------ | -------------------------------------------- |
+| `index.tsx`                 | entry points                         | intentionally multi-export                   |
+| Files with `styled` in name | `styled-components.tsx`              | multi-component styled collections           |
+| Only lowercase exports      | `helpers.tsx` exporting `formatDate` | utility files, not components                |
+| Only `ALL_CAPS` exports     | `icons.tsx` exporting `ICONS`        | constant maps                                |
+| Type-only exports           | `export type { Foo }`                | `exportKind === 'type'` not counted          |
+| Non-hook `.ts` files        | `string-utils.ts`                    | only `.tsx` and `use-*.ts` files are checked |
 
 ## File vs export — which to rename?
 
