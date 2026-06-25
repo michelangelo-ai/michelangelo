@@ -354,6 +354,8 @@ def _make_raw_package(tmp_dir: str) -> str:
     defs_path = os.path.join(tmp_dir, "defs", "model_class.txt")
     with open(defs_path, "w") as f:
         f.write(_MODEL_CLASS_STR)
+    with open(os.path.join(tmp_dir, "metadata", "type.yaml"), "w") as f:
+        f.write("type: torch\n")
     return tmp_dir
 
 
