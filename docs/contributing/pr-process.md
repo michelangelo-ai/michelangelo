@@ -82,3 +82,18 @@ After merge, delete your branch.
 ## Stacked PRs
 
 If your change is large, consider splitting it into sequential PRs where each builds on the previous. Open them in order, set the base branch of PR 2 to PR 1's branch, and update the base to `main` after each merge. This makes review faster and reduces merge conflicts.
+
+## Code Review Guarantee for Approved RFCs
+
+If you are submitting code Pull Requests that implement a formally approved Track 2 RFC, your PR is protected by our **Code Review Guarantee**:
+
+* **Focused Evaluations:** Core maintainers will evaluate your code PR strictly for code quality, architectural adherence, style guides, and test coverage.
+* **No Reopened Debates:** Core design, framework choices, and structural layout debates will not be reopened during the code review stage because they were already settled during the RFC design phase.
+
+### Exception: Unavoidable Post-Acceptance Design Blocks
+
+In rare instances where an insurmountable architectural blocker is discovered *during* code implementation (like an unforeseen security risk or an unexpected engine performance degradation), the assigned Shepherd is empowered to pause implementation. The Shepherd will coordinate with the Core Architecture Panel to execute one of three explicit paths:
+
+1. **Minor Amendment:** A quick, documented tweak to the existing RFC text so implementation can safely resume.
+2. **Major Withdrawal:** The flaw is critical; the RFC is marked "Withdrawn," code PRs are paused, and a new design cycle must start.
+3. **Deferment:** The RFC remains accepted, but implementation is blocked until an underlying platform dependency is resolved elsewhere.
