@@ -99,7 +99,6 @@ class WriteSubmodelSchemasTest(TestCase):
             self.assertEqual(data["fc1"]["input_schema"][0]["data_type"], "float")
 
 
-
 class TensorFactsTest(TestCase):
     """Tests for _tensor_facts."""
 
