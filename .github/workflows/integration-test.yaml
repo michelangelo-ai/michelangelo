@@ -2,7 +2,7 @@ name: Integration tests
 
 on:
   workflow_run:
-    workflows: ["Build examples Docker image"]
+    workflows: ["Build examples Docker image", "Nightly Build"]
     types: [completed]
   workflow_dispatch:
     inputs:
