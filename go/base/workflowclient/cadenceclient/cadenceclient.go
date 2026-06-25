@@ -305,3 +305,9 @@ func (c *CadenceClient) DeleteTrigger(ctx context.Context, workflowID string, ru
 func (c *CadenceClient) UpdateTrigger(_ context.Context, _ string, _ string, _ *bool) error {
 	return nil
 }
+
+// UpdateScheduleArgs is a no-op for Cadence (schedule action args are a Temporal feature).
+// Returns nil to indicate success - the operation is silently skipped.
+func (c *CadenceClient) UpdateScheduleArgs(_ context.Context, _ string, _ []interface{}) error {
+	return nil
+}
