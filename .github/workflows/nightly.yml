@@ -1,0 +1,302 @@
+name: Nightly Build
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # 02:00 UTC daily
+  workflow_dispatch: {}
+
+env:
+  REGISTRY: ghcr.io
+  NIGHTLY_TAG: nightly-${{ github.run_id }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Gate: skip the entire pipeline when main has no new commits since yesterday
+  # ---------------------------------------------------------------------------
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.check.outputs.has_changes }}
+      date_tag: ${{ steps.check.outputs.date_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for new commits in the last 25 hours
+        id: check
+        run: |
+          DATE_TAG=$(date -u +%Y%m%d)
+          echo "date_tag=$DATE_TAG" >> "$GITHUB_OUTPUT"
+
+          RECENT=$(git log --since="25 hours ago" --oneline | head -1)
+          if [ -n "$RECENT" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "New commits found (or manual dispatch), proceeding with nightly build."
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No new commits in the last 25 hours, skipping nightly build."
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Python nightly — publish pre-release wheel to PyPI
+  # ---------------------------------------------------------------------------
+  python-nightly:
+    needs: check-changes
+    if: needs.check-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ./python
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python and Poetry
+        uses: ./.github/actions/setup-python-poetry
+        with:
+          working-directory: './python'
+
+      - name: Set nightly version
+        run: |
+          DATE_TAG="${{ needs.check-changes.outputs.date_tag }}"
+          BASE_VERSION=$(poetry version -s | sed 's/\.dev.*//')
+          NIGHTLY_VERSION="${BASE_VERSION}.dev${DATE_TAG}"
+          poetry version "$NIGHTLY_VERSION"
+          echo "Publishing Python nightly: $NIGHTLY_VERSION"
+
+      - name: Build wheel
+        run: poetry build -f wheel
+
+      - name: Configure PyPI token
+        run: poetry config pypi-token.pypi ${{ secrets.PYPI_API_TOKEN }}
+
+      - name: Publish to PyPI (pre-release)
+        run: poetry publish --no-interaction
+
+  # ---------------------------------------------------------------------------
+  # Go service container nightlies
+  # ---------------------------------------------------------------------------
+  container-nightly:
+    needs: check-changes
+    if: needs.check-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        service: [controllermgr, worker, apiserver]
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@v4
+
+      - name: Cache Bazel Outputs
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel
+          key: bazel-nightly-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
+          restore-keys: bazel-nightly-${{ runner.os }}-
+
+      - name: Build ${{ matrix.service }} binary
+        run: |
+          ./tools/bazel build //go/cmd/${{ matrix.service }}
+          cp bazel-bin/go/cmd/${{ matrix.service }}/${{ matrix.service }}_/${{ matrix.service }} ${{ matrix.service }}
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/michelangelo-ai/${{ matrix.service }}
+          tags: |
+            type=raw,value=nightly-${{ needs.check-changes.outputs.date_tag }}
+            type=raw,value=nightly
+          labels: |
+            org.opencontainers.image.pre-release=true
+
+      - name: Build & Push Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/service.Dockerfile
+          build-args: |
+            BINARY_PATH=${{ matrix.service }}
+            CONFIG_PATH=go/cmd/${{ matrix.service }}/config
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+
+  # ---------------------------------------------------------------------------
+  # UI container nightly
+  # ---------------------------------------------------------------------------
+  ui-nightly:
+    needs: check-changes
+    if: needs.check-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@v4
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/michelangelo-ai/ui
+          tags: |
+            type=raw,value=nightly-${{ needs.check-changes.outputs.date_tag }}
+            type=raw,value=nightly
+          labels: |
+            org.opencontainers.image.pre-release=true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.1
+          cache: 'yarn'
+          cache-dependency-path: javascript/yarn.lock
+
+      - name: Set up buf CLI
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build UI Assets
+        run: |
+          cd javascript
+          yarn setup
+          yarn workspace @michelangelo/app build
+        env:
+          WORKSPACE_ROOT: ${{ github.workspace }}
+
+      - name: Build & Push UI Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/ui-prebuilt.Dockerfile
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+
+  # ---------------------------------------------------------------------------
+  # Helm chart nightly — push OCI artifact
+  # ---------------------------------------------------------------------------
+  helm-nightly:
+    needs: check-changes
+    if: needs.check-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: '3.17.0'
+
+      - name: Login to OCI Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ${{ env.REGISTRY }} -u ${{ github.repository_owner }} --password-stdin
+
+      - name: Set nightly chart version
+        run: |
+          DATE_TAG="${{ needs.check-changes.outputs.date_tag }}"
+          sed -i "s/^version:.*/version: 0.3.0-nightly.${DATE_TAG}/" helm/michelangelo/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"0.3.0-nightly.${DATE_TAG}\"/" helm/michelangelo/Chart.yaml
+
+      - name: Add Helm repos
+        run: |
+          helm repo add cadence-workflow https://cadence-workflow.github.io/cadence-charts
+          helm repo add temporal https://go.temporal.io/helm-charts
+          helm repo update
+
+      - name: Build chart dependencies
+        run: helm dependency update helm/michelangelo
+
+      - name: Package chart
+        run: helm package helm/michelangelo -d /tmp/helm-pkg
+
+      - name: Push chart to OCI registry
+        run: helm push /tmp/helm-pkg/michelangelo-*.tgz oci://${{ env.REGISTRY }}/michelangelo-ai/charts
+
+  # ---------------------------------------------------------------------------
+  # npm nightly — publish with nightly dist-tag
+  # ---------------------------------------------------------------------------
+  npm-nightly:
+    needs: check-changes
+    if: needs.check-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ./javascript
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.1
+          cache: 'yarn'
+          cache-dependency-path: javascript/yarn.lock
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Set up buf CLI
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies
+        run: yarn setup
+
+      - name: Set nightly version
+        run: |
+          DATE_TAG="${{ needs.check-changes.outputs.date_tag }}"
+          NIGHTLY_VERSION="0.3.0-nightly.${DATE_TAG}"
+          cd packages/core && npm version "$NIGHTLY_VERSION" --no-git-tag-version && cd ../..
+          cd packages/rpc  && npm version "$NIGHTLY_VERSION" --no-git-tag-version && cd ../..
+          echo "Publishing npm nightly: $NIGHTLY_VERSION"
+
+      - name: Build packages
+        run: |
+          yarn workspace @michelangelo/core build
+          yarn workspace @michelangelo/rpc build
+
+      - name: Publish @michelangelo/core
+        run: cd packages/core && npm publish --tag nightly --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @michelangelo/rpc
+        run: cd packages/rpc && npm publish --tag nightly --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
