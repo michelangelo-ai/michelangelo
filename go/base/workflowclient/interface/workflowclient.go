@@ -120,8 +120,4 @@ type WorkflowClient interface {
 	// cron update to avoid race conditions between separate Update and Pause/Unpause calls.
 	// Only supported for Temporal. Returns an error for Cadence.
 	UpdateTrigger(ctx context.Context, workflowID string, newCronSchedule string, paused *bool) error
-	// UpdateScheduleArgs replaces the workflow action args stored in a recurring trigger's schedule.
-	// Used to propagate spec changes (e.g. notification settings) that are encoded in the workflow
-	// input and are not covered by UpdateTrigger. Only supported for Temporal; no-op for Cadence.
-	UpdateScheduleArgs(ctx context.Context, workflowID string, args []interface{}) error
 }

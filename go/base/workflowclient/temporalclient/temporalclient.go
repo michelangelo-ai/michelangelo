@@ -436,25 +436,3 @@ func (c *TemporalClient) UpdateTrigger(ctx context.Context, workflowID string, n
 		},
 	})
 }
-
-// UpdateScheduleArgs replaces the workflow action args stored in a Temporal schedule.
-// This propagates spec changes (e.g. updated notification settings) that are encoded in
-// the workflow input rather than the schedule spec. The schedule's cron expression and
-// paused state are left untouched.
-func (c *TemporalClient) UpdateScheduleArgs(ctx context.Context, workflowID string, args []interface{}) error {
-	scheduleID := scheduleIDForWorkflow(workflowID)
-	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
-
-	return handle.Update(ctx, temporalClient.ScheduleUpdateOptions{
-		DoUpdate: func(input temporalClient.ScheduleUpdateInput) (*temporalClient.ScheduleUpdate, error) {
-			action, ok := input.Description.Schedule.Action.(*temporalClient.ScheduleWorkflowAction)
-			if !ok {
-				return nil, fmt.Errorf("unexpected schedule action type for workflowID %s", workflowID)
-			}
-			action.Args = args
-			return &temporalClient.ScheduleUpdate{
-				Schedule: &input.Description.Schedule,
-			}, nil
-		},
-	})
-}

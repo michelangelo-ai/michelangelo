@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	gogoproto "github.com/gogo/protobuf/proto"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -122,7 +121,6 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 				CronSchedule: &v2pb.CronSchedule{Cron: opt.CronSchedule},
 			},
 		},
-		ActualNotifications: triggerRun.Spec.Notifications,
 	}, nil
 }
 
@@ -323,51 +321,6 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun, a
 		return newStatus, actionHandled, nil
 	}
 
-	// Detect and sync notification drift independently of cron drift.
-	// Notifications are encoded in the schedule's workflow action args, so we update
-	// them via UpdateScheduleArgs when spec.notifications diverges from status.actual_notifications.
-	desiredNotifs := triggerRun.Spec.Notifications
-	actualNotifs := triggerRun.Status.ActualNotifications
-	if !notificationsEqual(desiredNotifs, actualNotifs) {
-		log.Info("notification drift detected, updating schedule args",
-			"desiredCount", len(desiredNotifs),
-			"actualCount", len(actualNotifs))
-
-		wid := generateWorkflowID(triggerRun)
-		err := c.WorkflowClient.UpdateScheduleArgs(ctx, wid, []interface{}{CreateTriggerRequest{TriggerRun: triggerRun}})
-		if err != nil {
-			log.Error(err, "failed to update schedule args with new notifications",
-				"workflowId", wid)
-			return v2pb.TriggerRunStatus{
-					ErrorMessage: err.Error(),
-					State:        triggerRun.Status.State,
-				}, false, fmt.Errorf("update notifications for %s/%s: %w",
-					triggerRun.Namespace, triggerRun.Name, err)
-		}
-
-		log.Info("successfully updated schedule args with new notifications",
-			"workflowId", wid,
-			"notificationCount", len(desiredNotifs))
-
-		newStatus := triggerRun.Status
-		newStatus.ActualNotifications = desiredNotifs
-		return newStatus, false, nil
-	}
-
 	// No drift, return current status unchanged
 	return triggerRun.Status, false, nil
-}
-
-// notificationsEqual reports whether two notification slices are identical.
-// Order matters: notifications are compared positionally.
-func notificationsEqual(a, b []*v2pb.Notification) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if !gogoproto.Equal(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
 }

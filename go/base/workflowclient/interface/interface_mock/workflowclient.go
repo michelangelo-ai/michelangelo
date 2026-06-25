@@ -283,20 +283,6 @@ func (mr *MockWorkflowClientMockRecorder) UpdateTrigger(ctx, workflowID, newCron
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTrigger", reflect.TypeOf((*MockWorkflowClient)(nil).UpdateTrigger), ctx, workflowID, newCronSchedule, paused)
 }
 
-// UpdateScheduleArgs mocks base method.
-func (m *MockWorkflowClient) UpdateScheduleArgs(ctx context.Context, workflowID string, args []interface{}) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateScheduleArgs", ctx, workflowID, args)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// UpdateScheduleArgs indicates an expected call of UpdateScheduleArgs.
-func (mr *MockWorkflowClientMockRecorder) UpdateScheduleArgs(ctx, workflowID, args interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateScheduleArgs", reflect.TypeOf((*MockWorkflowClient)(nil).UpdateScheduleArgs), ctx, workflowID, args)
-}
-
 // GetTriggerSchedule mocks base method.
 func (m *MockWorkflowClient) GetTriggerSchedule(ctx context.Context, workflowID string) (string, error) {
 	m.ctrl.T.Helper()

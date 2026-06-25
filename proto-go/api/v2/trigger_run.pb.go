@@ -555,7 +555,6 @@ type TriggerRunStatus struct {
 	ErrorMessage        string          `protobuf:"bytes,3,opt,name=error_message,json=errorMessage,proto3" json:"errorMessage,omitempty"`
 	LogUrl              string          `protobuf:"bytes,4,opt,name=log_url,json=logUrl,proto3" json:"logUrl,omitempty"`
 	ActualTrigger       *Trigger        `protobuf:"bytes,5,opt,name=actual_trigger,json=actualTrigger,proto3" json:"actualTrigger,omitempty"`
-	ActualNotifications []*Notification `protobuf:"bytes,6,rep,name=actual_notifications,json=actualNotifications,proto3" json:"actualNotifications,omitempty"`
 }
 
 func (m *TriggerRunStatus) Reset()      { *m = TriggerRunStatus{} }
@@ -621,13 +620,6 @@ func (m *TriggerRunStatus) GetLogUrl() string {
 func (m *TriggerRunStatus) GetActualTrigger() *Trigger {
 	if m != nil {
 		return m.ActualTrigger
-	}
-	return nil
-}
-
-func (m *TriggerRunStatus) GetActualNotifications() []*Notification {
-	if m != nil {
-		return m.ActualNotifications
 	}
 	return nil
 }
@@ -972,9 +964,6 @@ func (this *TriggerRunStatus) GoString() string {
 	s = append(s, "LogUrl: "+fmt.Sprintf("%#v", this.LogUrl)+",\n")
 	if this.ActualTrigger != nil {
 		s = append(s, "ActualTrigger: "+fmt.Sprintf("%#v", this.ActualTrigger)+",\n")
-	}
-	if this.ActualNotifications != nil {
-		s = append(s, "ActualNotifications: "+fmt.Sprintf("%#v", this.ActualNotifications)+",\n")
 	}
 	s = append(s, "}")
 	return strings.Join(s, "")
@@ -1453,20 +1442,6 @@ func (m *TriggerRunStatus) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if len(m.ActualNotifications) > 0 {
-		for iNdEx := len(m.ActualNotifications) - 1; iNdEx >= 0; iNdEx-- {
-			{
-				size, err := m.ActualNotifications[iNdEx].MarshalToSizedBuffer(dAtA[:i])
-				if err != nil {
-					return 0, err
-				}
-				i -= size
-				i = encodeVarintTriggerRun(dAtA, i, uint64(size))
-			}
-			i--
-			dAtA[i] = 0x32
-		}
-	}
 	if m.ActualTrigger != nil {
 		{
 			size, err := m.ActualTrigger.MarshalToSizedBuffer(dAtA[:i])
@@ -1767,12 +1742,6 @@ func (m *TriggerRunStatus) Size() (n int) {
 		l = m.ActualTrigger.Size()
 		n += 1 + l + sovTriggerRun(uint64(l))
 	}
-	if len(m.ActualNotifications) > 0 {
-		for _, e := range m.ActualNotifications {
-			l = e.Size()
-			n += 1 + l + sovTriggerRun(uint64(l))
-		}
-	}
 	return n
 }
 
@@ -1919,7 +1888,6 @@ func (this *TriggerRunStatus) String() string {
 		`ErrorMessage:` + fmt.Sprintf("%v", this.ErrorMessage) + `,`,
 		`LogUrl:` + fmt.Sprintf("%v", this.LogUrl) + `,`,
 		`ActualTrigger:` + strings.Replace(this.ActualTrigger.String(), "Trigger", "Trigger", 1) + `,`,
-		`ActualNotifications:` + fmt.Sprintf("%v", this.ActualNotifications) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -3292,40 +3260,6 @@ func (m *TriggerRunStatus) Unmarshal(dAtA []byte) error {
 				m.ActualTrigger = &Trigger{}
 			}
 			if err := m.ActualTrigger.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
-		case 6:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ActualNotifications", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowTriggerRun
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthTriggerRun
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthTriggerRun
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.ActualNotifications = append(m.ActualNotifications, &Notification{})
-			if err := m.ActualNotifications[len(m.ActualNotifications)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
