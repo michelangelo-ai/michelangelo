@@ -1,0 +1,281 @@
+{
+  "rayCluster": {
+    "typeMeta": {
+      "kind": "RayCluster",
+      "apiVersion": "michelangelo.api/v2"
+    },
+    "metadata": {
+      "name": "test-crash-loop",
+      "generateName": "",
+      "namespace": "default",
+      "selfLink": "",
+      "uid": "745b8c05-41e9-4de3-b3d1-4163ae8eb458",
+      "resourceVersion": "7967",
+      "generation": "1",
+      "creationTimestamp": {
+        "seconds": "1782372568",
+        "nanos": 0
+      },
+      "labels": {
+        "michelangelo/SpecUpdateTimestamp": "1782372568879554",
+        "michelangelo/UpdateTimestamp": "1782372568879554",
+        "michelangelo/cluster-affinity": "michelangelo-compute-0"
+      }
+    },
+    "spec": {
+      "user": {
+        "name": "test_user"
+      },
+      "rayVersion": "2.3.1",
+      "head": {
+        "serviceType": "ClusterIP",
+        "pod": {
+          "metadata": {
+            "name": "",
+            "generateName": "",
+            "namespace": "",
+            "selfLink": "",
+            "uid": "",
+            "resourceVersion": "",
+            "generation": "0",
+            "creationTimestamp": {}
+          },
+          "spec": {
+            "containers": [
+              {
+                "name": "head",
+                "image": "docker.io/library/examples:latest",
+                "command": [
+                  "/bin/sh",
+                  "-c",
+                  "echo crashing && exit 1"
+                ],
+                "workingDir": "",
+                "env": [
+                  {
+                    "name": "UF_REMOTE_RUN",
+                    "value": "1"
+                  },
+                  {
+                    "name": "RAY_DEDUP_LOGS",
+                    "value": "0"
+                  },
+                  {
+                    "name": "PYTHONPATH",
+                    "value": "/app"
+                  },
+                  {
+                    "name": "MA_NAMESPACE",
+                    "value": "default"
+                  },
+                  {
+                    "name": "IMAGE_PULL_POLICY",
+                    "value": "IfNotPresent"
+                  }
+                ],
+                "resources": {
+                  "limits": {
+                    "memory": {
+                      "string": "2Gi"
+                    }
+                  },
+                  "requests": {
+                    "cpu": {
+                      "string": "1"
+                    },
+                    "memory": {
+                      "string": "2Gi"
+                    }
+                  }
+                },
+                "terminationMessagePath": "",
+                "imagePullPolicy": "IfNotPresent",
+                "stdin": false,
+                "stdinOnce": false,
+                "tty": false,
+                "envFrom": [
+                  {
+                    "prefix": "",
+                    "configMapRef": {
+                      "localObjectReference": {
+                        "name": "michelangelo-config"
+                      }
+                    }
+                  }
+                ],
+                "terminationMessagePolicy": ""
+              }
+            ],
+            "restartPolicy": "",
+            "dnsPolicy": "",
+            "serviceAccountName": "",
+            "serviceAccount": "",
+            "nodeName": "",
+            "hostNetwork": false,
+            "hostPID": false,
+            "hostIPC": false,
+            "hostname": "",
+            "subdomain": "",
+            "schedulerName": "",
+            "priorityClassName": ""
+          }
+        },
+        "rayStartParams": {
+          "block": "true",
+          "dashboard-host": "0.0.0.0"
+        }
+      },
+      "workers": [
+        {
+          "pod": {
+            "metadata": {
+              "name": "",
+              "generateName": "",
+              "namespace": "",
+              "selfLink": "",
+              "uid": "",
+              "resourceVersion": "",
+              "generation": "0",
+              "creationTimestamp": {}
+            },
+            "spec": {
+              "containers": [
+                {
+                  "name": "worker",
+                  "image": "docker.io/library/examples:latest",
+                  "workingDir": "",
+                  "env": [
+                    {
+                      "name": "UF_REMOTE_RUN",
+                      "value": "1"
+                    },
+                    {
+                      "name": "RAY_DEDUP_LOGS",
+                      "value": "0"
+                    },
+                    {
+                      "name": "PYTHONPATH",
+                      "value": "/app"
+                    },
+                    {
+                      "name": "MA_NAMESPACE",
+                      "value": "default"
+                    },
+                    {
+                      "name": "IMAGE_PULL_POLICY",
+                      "value": "IfNotPresent"
+                    }
+                  ],
+                  "resources": {
+                    "limits": {
+                      "memory": {
+                        "string": "2Gi"
+                      }
+                    },
+                    "requests": {
+                      "cpu": {
+                        "string": "1"
+                      },
+                      "memory": {
+                        "string": "2Gi"
+                      }
+                    }
+                  },
+                  "terminationMessagePath": "",
+                  "imagePullPolicy": "IfNotPresent",
+                  "stdin": false,
+                  "stdinOnce": false,
+                  "tty": false,
+                  "envFrom": [
+                    {
+                      "prefix": "",
+                      "configMapRef": {
+                        "localObjectReference": {
+                          "name": "michelangelo-config"
+                        }
+                      }
+                    }
+                  ],
+                  "terminationMessagePolicy": ""
+                }
+              ],
+              "restartPolicy": "Never",
+              "dnsPolicy": "",
+              "serviceAccountName": "",
+              "serviceAccount": "",
+              "nodeName": "",
+              "hostNetwork": false,
+              "hostPID": false,
+              "hostIPC": false,
+              "hostname": "",
+              "subdomain": "",
+              "schedulerName": "",
+              "priorityClassName": ""
+            }
+          },
+          "minInstances": 1,
+          "maxInstances": 1,
+          "nodeType": "worker-group-1",
+          "rayStartParams": {
+            "block": "true",
+            "dashboard-host": "0.0.0.0"
+          }
+        }
+      ]
+    },
+    "status": {
+      "state": "RAY_CLUSTER_STATE_TERMINATED",
+      "assignment": {
+        "cluster": "michelangelo-sandbox"
+      },
+      "statusConditions": [
+        {
+          "type": "Enqueued",
+          "status": "CONDITION_STATUS_TRUE",
+          "reason": "AddedToSchedulerQueue",
+          "lastUpdatedTimestamp": "1782372568",
+          "observedGeneration": "1"
+        },
+        {
+          "type": "Scheduled",
+          "status": "CONDITION_STATUS_TRUE",
+          "reason": "ClusterMatched",
+          "lastUpdatedTimestamp": "1782372568"
+        },
+        {
+          "type": "Launched",
+          "status": "CONDITION_STATUS_TRUE",
+          "reason": "ClusterCreated",
+          "lastUpdatedTimestamp": "1782372568",
+          "observedGeneration": "1"
+        },
+        {
+          "type": "Succeeded",
+          "status": "CONDITION_STATUS_FALSE",
+          "reason": "ContainersNotReady",
+          "lastUpdatedTimestamp": "1782372578",
+          "observedGeneration": "1"
+        },
+        {
+          "type": "Killing",
+          "status": "CONDITION_STATUS_FALSE",
+          "lastUpdatedTimestamp": "1782372578"
+        },
+        {
+          "type": "Killed",
+          "status": "CONDITION_STATUS_TRUE",
+          "lastUpdatedTimestamp": "1782372578",
+          "observedGeneration": "1"
+        }
+      ],
+      "podErrors": [
+        {
+          "name": "HeadPodReady",
+          "reason": "ContainersNotReady",
+          "message": "containers with unready status: [head]"
+        }
+      ],
+      "logUrl": "http://localhost:9090/browser/ray-history/log/test-crash-loop_default/"
+    }
+  }
+}

@@ -920,6 +920,213 @@ func TestReconcilerReconcile(t *testing.T) {
 				assert.Equal(t, apipb.CONDITION_STATUS_TRUE, killedCond.Status)
 			},
 		},
+		{
+			name: "Cluster UNKNOWN with terminal pod errors escalated to FAILED",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       rayClusterName,
+						Namespace:  testNamespace,
+						Generation: 1,
+					},
+					Spec: createRayClusterSpec(),
+					Status: v2pb.RayClusterStatus{
+						State: v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+						StatusConditions: []*apipb.Condition{
+							{
+								Type:   EnqueuedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   ScheduledCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   LaunchedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+						},
+						Assignment: &v2pb.AssignmentInfo{
+							Cluster: assignedCluster,
+						},
+					},
+				}
+				objects = append(objects, cluster)
+				return objects
+			},
+			setupMocks: func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {
+				mcc.addCluster(assignedCluster, &v2pb.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: assignedCluster,
+					},
+				})
+				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
+					&matypes.JobClusterStatus{
+						Ray: &v2pb.RayClusterStatus{
+							State: v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+							PodErrors: []*v2pb.PodErrors{
+								{
+									Name:    "HeadPodReady",
+									Reason:  "CrashLoopBackOff",
+									Message: "container ray-head is crashing",
+								},
+							},
+						},
+						Reason: "CrashLoopBackOff",
+					}, nil)
+			},
+			expectedState:   v2pb.RAY_CLUSTER_STATE_FAILED,
+			expectedMessage: "",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, requeueAfter, res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
+				var succeededCond *apipb.Condition
+				for _, cond := range cluster.Status.StatusConditions {
+					if cond.Type == SucceededCondition {
+						succeededCond = cond
+						break
+					}
+				}
+				assert.NotNil(t, succeededCond, "SucceededCondition should exist")
+				assert.Equal(t, apipb.CONDITION_STATUS_FALSE, succeededCond.Status)
+				assert.Equal(t, "CrashLoopBackOff", succeededCond.Reason)
+				assert.Len(t, cluster.Status.PodErrors, 1)
+				assert.Equal(t, "CrashLoopBackOff", cluster.Status.PodErrors[0].Reason)
+			},
+		},
+		{
+			name: "Cluster UNKNOWN with non-terminal pod errors populates PodErrors but stays UNKNOWN",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       rayClusterName,
+						Namespace:  testNamespace,
+						Generation: 1,
+					},
+					Spec: createRayClusterSpec(),
+					Status: v2pb.RayClusterStatus{
+						State: v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+						StatusConditions: []*apipb.Condition{
+							{
+								Type:   EnqueuedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   ScheduledCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   LaunchedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+						},
+						Assignment: &v2pb.AssignmentInfo{
+							Cluster: assignedCluster,
+						},
+					},
+				}
+				objects = append(objects, cluster)
+				return objects
+			},
+			setupMocks: func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {
+				mcc.addCluster(assignedCluster, &v2pb.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: assignedCluster,
+					},
+				})
+				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
+					&matypes.JobClusterStatus{
+						Ray: &v2pb.RayClusterStatus{
+							State: v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+							PodErrors: []*v2pb.PodErrors{
+								{
+									Name:    "HeadPodReady",
+									Reason:  "ContainersNotReady",
+									Message: "containers with unready status: [head]",
+								},
+							},
+						},
+						Reason: "ContainersNotReady",
+					}, nil)
+			},
+			expectedState:   v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+			expectedMessage: "",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, requeueAfter, res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
+				assert.Len(t, cluster.Status.PodErrors, 1)
+				assert.Equal(t, "ContainersNotReady", cluster.Status.PodErrors[0].Reason)
+			},
+		},
+		{
+			name: "Cluster UNKNOWN without terminal pod errors continues monitoring",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       rayClusterName,
+						Namespace:  testNamespace,
+						Generation: 1,
+					},
+					Spec: createRayClusterSpec(),
+					Status: v2pb.RayClusterStatus{
+						State: v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+						StatusConditions: []*apipb.Condition{
+							{
+								Type:   EnqueuedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   ScheduledCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   LaunchedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+						},
+						Assignment: &v2pb.AssignmentInfo{
+							Cluster: assignedCluster,
+						},
+					},
+				}
+				objects = append(objects, cluster)
+				return objects
+			},
+			setupMocks: func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {
+				mcc.addCluster(assignedCluster, &v2pb.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: assignedCluster,
+					},
+				})
+				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
+					&matypes.JobClusterStatus{
+						Ray: &v2pb.RayClusterStatus{
+							State: v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+						},
+					}, nil)
+			},
+			expectedState:   v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+			expectedMessage: "",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, requeueAfter, res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
+				for _, cond := range cluster.Status.StatusConditions {
+					if cond.Type == SucceededCondition {
+						assert.Equal(t, apipb.CONDITION_STATUS_UNKNOWN, cond.Status,
+							"SucceededCondition should stay UNKNOWN when no terminal errors")
+					}
+				}
+			},
+		},
 	}
 
 	for _, tc := range tests {
