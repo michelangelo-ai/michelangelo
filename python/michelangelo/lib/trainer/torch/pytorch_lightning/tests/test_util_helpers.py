@@ -14,7 +14,6 @@ helpers run without a Ray cluster or remote storage.
 
 from __future__ import annotations
 
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest

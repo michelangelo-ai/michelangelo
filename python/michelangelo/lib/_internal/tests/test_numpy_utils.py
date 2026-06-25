@@ -91,9 +91,7 @@ class TestPadRaggedTensor:
         np.testing.assert_array_equal(result, arr)
 
     def test_pads_1d_ragged_to_2d(self):
-        arr = np.array(
-            [np.array([1.0, 2.0]), np.array([3.0])], dtype=object
-        )
+        arr = np.array([np.array([1.0, 2.0]), np.array([3.0])], dtype=object)
         result = pad_ragged_tensor(arr)
         assert result.shape == (2, 2)
         assert result[0, 0] == 1.0

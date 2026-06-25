@@ -50,7 +50,9 @@ def _make_trainer(current_epoch=0, global_step=0, metrics=None):
     return trainer
 
 
-def _new_default_callback(local_rank=0, world_rank=0, tmpdir_prefix="/tmp/ckpt", training_observer=None):
+def _new_default_callback(
+    local_rank=0, world_rank=0, tmpdir_prefix="/tmp/ckpt", training_observer=None
+):
     """Construct a ``RayTrainReportCallback`` without running base ``__init__``."""
     cb = object.__new__(RayTrainReportCallback)
     cb.tmpdir_prefix = tmpdir_prefix
