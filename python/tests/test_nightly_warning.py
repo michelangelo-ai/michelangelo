@@ -1,3 +1,5 @@
+"""Tests for michelangelo._nightly_warning."""
+
 import warnings
 from unittest import mock
 
@@ -5,6 +7,7 @@ from michelangelo._nightly_warning import _check_nightly
 
 
 class TestNightlyWarning:
+    """Verify nightly build warning behavior."""
     def test_warns_on_dev_version(self):
         with mock.patch("importlib.metadata.version", return_value="0.3.0.dev20260625"):
             with warnings.catch_warnings(record=True) as w:
