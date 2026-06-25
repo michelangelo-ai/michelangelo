@@ -12,3 +12,5 @@ import ``michelangelo.api.*``.
 """
 
 __path__ = __import__("pkgutil").extend_path(__path__, __name__)
+
+import michelangelo._nightly_warning  # noqa: F401, E402
