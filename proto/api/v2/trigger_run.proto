@@ -262,6 +262,12 @@ message TriggerRunStatus {
   // log_url for the trigger_run
   string log_url = 4;
 
+  // actual_notifications stores the notification configuration that is currently active in the
+  // workflow engine (encoded in the schedule's workflow action args).
+  // Used to detect drift between the desired notifications (spec.notifications) and what is
+  // actually running, so the controller can sync changes made after creation.
+  repeated Notification actual_notifications = 6;
+
   // actual_trigger stores the trigger configuration that is currently active in the workflow engine.
   // This field is used to detect drift between the desired trigger (spec.trigger) and the actual
   // trigger running in the workflow engine.

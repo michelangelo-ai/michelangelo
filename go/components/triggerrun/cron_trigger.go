@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	gogoproto "github.com/gogo/protobuf/proto"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -121,6 +122,7 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 				CronSchedule: &v2pb.CronSchedule{Cron: opt.CronSchedule},
 			},
 		},
+		ActualNotifications: triggerRun.Spec.Notifications,
 	}, nil
 }
 
@@ -204,20 +206,21 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun, a
 		Name:      triggerRun.Name,
 	})
 
-	// Get desired cron schedule from spec
 	desiredCron := triggerRun.Spec.Trigger.GetCronSchedule().GetCron()
 	if desiredCron == "" {
 		log.Info("no cron schedule in spec, skipping update")
 		return triggerRun.Status, false, nil
 	}
 
-	// Get actual cron schedule from status
 	var actualCron string
 	if triggerRun.Status.ActualTrigger != nil && triggerRun.Status.ActualTrigger.GetCronSchedule() != nil {
 		actualCron = triggerRun.Status.ActualTrigger.GetCronSchedule().GetCron()
 	}
 
-	// Determine if we need to set paused state atomically with the cron update
+	cronDrifted := actualCron != desiredCron
+	notifDrifted := !notificationsEqual(triggerRun.Spec.Notifications, triggerRun.Status.ActualNotifications)
+
+	// Determine if we need to set paused state atomically with the update
 	var paused *bool
 	actionHandled := false
 	if action == v2pb.TRIGGER_RUN_ACTION_PAUSE {
@@ -228,18 +231,35 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun, a
 		paused = &p
 	}
 
-	// Compare and update if different
-	if actualCron != desiredCron {
-		log.Info("cron schedule drift detected, updating workflow engine schedule",
+	if !cronDrifted && !notifDrifted && paused == nil {
+		return triggerRun.Status, false, nil
+	}
+
+	wid := generateWorkflowID(triggerRun)
+
+	// Pass updated args when notifications drifted so the schedule's workflow
+	// input is refreshed in the same atomic handle.Update() call.
+	var args []interface{}
+	if notifDrifted {
+		args = []interface{}{CreateTriggerRequest{TriggerRun: triggerRun}}
+	}
+
+	// cronToUpdate is empty when only notifications/paused changed — UpdateTrigger
+	// skips the cron spec update in that case.
+	cronToUpdate := ""
+	if cronDrifted {
+		cronToUpdate = desiredCron
+	}
+
+	if cronDrifted || notifDrifted || paused != nil {
+		log.Info("drift detected, updating workflow engine schedule",
+			"cronDrifted", cronDrifted,
+			"notifDrifted", notifDrifted,
 			"desiredCron", desiredCron,
 			"actualCron", actualCron,
 			"atomicPaused", paused)
 
-		// Get workflow ID
-		wid := generateWorkflowID(triggerRun)
-
-		// Try to update the schedule in workflow engine (with optional pause state)
-		err := c.WorkflowClient.UpdateTrigger(ctx, wid, desiredCron, paused)
+		err := c.WorkflowClient.UpdateTrigger(ctx, wid, cronToUpdate, paused, args)
 		if err != nil {
 			// If schedule doesn't exist (e.g., manually deleted), recreate it
 			if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "NotFound") {
@@ -247,11 +267,10 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun, a
 					"workflowId", wid,
 					"desiredCron", desiredCron)
 
-				// Recreate the schedule by calling StartWorkflow (which uses createScheduleForCron)
 				opt := clientInterface.StartWorkflowOptions{
 					ID:                              wid,
 					TaskList:                        "trigger_run",
-					ExecutionStartToCloseTimeout:    time.Hour * 24 * 365, // 1 year
+					ExecutionStartToCloseTimeout:    time.Hour * 24 * 365,
 					DecisionTaskStartToCloseTimeout: 30 * time.Second,
 					CronSchedule:                    desiredCron,
 				}
@@ -273,41 +292,43 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun, a
 					"execution_id", exec.ID,
 					"newCron", desiredCron)
 
-				// Update status with the new actual trigger
 				newStatus := triggerRun.Status
 				newStatus.ActualTrigger = &v2pb.Trigger{
 					TriggerType: &v2pb.Trigger_CronSchedule{
 						CronSchedule: &v2pb.CronSchedule{Cron: desiredCron},
 					},
 				}
+				newStatus.ActualNotifications = triggerRun.Spec.Notifications
 				return newStatus, false, nil
 			}
 
-			// Other errors - return as failure
-			log.Error(err, "failed to update trigger schedule in workflow engine",
+			log.Error(err, "failed to update trigger in workflow engine",
 				"workflowId", wid,
 				"desiredCron", desiredCron)
 			return v2pb.TriggerRunStatus{
 					ErrorMessage: err.Error(),
 					State:        triggerRun.Status.State,
-				}, false, fmt.Errorf("update trigger schedule for %s/%s: %w",
+				}, false, fmt.Errorf("update trigger for %s/%s: %w",
 					triggerRun.Namespace, triggerRun.Name, err)
 		}
 
-		log.Info("successfully updated trigger schedule",
+		log.Info("successfully updated trigger",
 			"workflowId", wid,
 			"newCron", desiredCron,
 			"atomicPaused", paused)
 
-		// Update status with the new actual trigger
 		newStatus := triggerRun.Status
-		newStatus.ActualTrigger = &v2pb.Trigger{
-			TriggerType: &v2pb.Trigger_CronSchedule{
-				CronSchedule: &v2pb.CronSchedule{Cron: desiredCron},
-			},
+		if cronDrifted {
+			newStatus.ActualTrigger = &v2pb.Trigger{
+				TriggerType: &v2pb.Trigger_CronSchedule{
+					CronSchedule: &v2pb.CronSchedule{Cron: desiredCron},
+				},
+			}
+		}
+		if notifDrifted {
+			newStatus.ActualNotifications = triggerRun.Spec.Notifications
 		}
 
-		// If pause/resume was applied atomically, update state accordingly
 		if paused != nil {
 			actionHandled = true
 			if *paused {
@@ -321,6 +342,19 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun, a
 		return newStatus, actionHandled, nil
 	}
 
-	// No drift, return current status unchanged
 	return triggerRun.Status, false, nil
+}
+
+// notificationsEqual reports whether two notification slices are identical.
+// Order matters: notifications are compared positionally.
+func notificationsEqual(a, b []*v2pb.Notification) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !gogoproto.Equal(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
