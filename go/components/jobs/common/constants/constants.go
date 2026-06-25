@@ -293,11 +293,11 @@ const (
 
 // RayCluster String to CRD State Mapping
 var RayClusterStrStateToCRDStateMapping = map[string]v2pb.RayClusterState{
-	"":                       v2pb.RAY_CLUSTER_STATE_UNKNOWN,
-	"unhealthy":              v2pb.RAY_CLUSTER_STATE_UNHEALTHY,
-	string(rayv1.Failed):     v2pb.RAY_CLUSTER_STATE_FAILED,
-	string(rayv1.Ready):      v2pb.RAY_CLUSTER_STATE_READY,
-	string(rayv1.Suspended):  v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+	"":                      v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+	"unhealthy":             v2pb.RAY_CLUSTER_STATE_UNHEALTHY,
+	string(rayv1.Failed):    v2pb.RAY_CLUSTER_STATE_FAILED,
+	string(rayv1.Ready):     v2pb.RAY_CLUSTER_STATE_READY,
+	string(rayv1.Suspended): v2pb.RAY_CLUSTER_STATE_UNKNOWN,
 }
 
 // RayJobStatus captures the lifecycle states reported for Ray jobs by the Ray operator.
