@@ -22,6 +22,14 @@ _MODEL_CLASS = (
 )
 
 
+class _UnscriptableModel(torch.nn.Module):
+    """Model that cannot be TorchScript compiled due to list() on a tensor."""
+
+    def forward(self, x: torch.Tensor) -> list:
+        """Forward pass."""
+        return list(x)  # list(tensor) is not TorchScript-compatible
+
+
 class TorchScriptConversionTest(TestCase):
     """Test cases for ``_convert_to_torchscript``."""
 
@@ -102,18 +110,8 @@ class TorchScriptConversionTest(TestCase):
 
     def test_non_convertible_model_raises_type_error(self):
         """A model that cannot be scripted raises TypeError."""
-        import tempfile
-
-        # A lambda cannot be scripted
-        class UnscriptableModel(torch.nn.Module):
-            """Model that cannot be TorchScript compiled."""
-
-            def forward(self, x):
-                """Forward pass using a Python builtin incompatible with script."""
-                return list(x)  # list(tensor) is not TorchScript-compatible
-
         with tempfile.TemporaryDirectory() as tmp:
             model_path = os.path.join(tmp, "model.pt")
-            torch.save(UnscriptableModel(), model_path)
+            torch.save(_UnscriptableModel(), model_path)
             with self.assertRaises(TypeError):
                 _convert_to_torchscript(model_path)
