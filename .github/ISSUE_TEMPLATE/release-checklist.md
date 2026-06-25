@@ -17,9 +17,12 @@ assignees: ''
   - [ ] `helm/michelangelo/Chart.yaml` (both `version` and `appVersion`)
 - [ ] `CHANGELOG.md` updated via `git cliff`
 - [ ] Release notes drafted (follows three-layer template: summary, categorized changes, compatibility matrix)
-- [ ] Migration guide written (if breaking changes)
+- [ ] Breaking changes reviewed and documented:
+  - [ ] All `BREAKING CHANGE:` commits identified in changelog
+  - [ ] Migration guide written for each breaking change
+  - [ ] `UPGRADING.md` updated with migration steps
+  - [ ] Deprecation warnings added for items being removed (see [Deprecation Policy](../../CONTRIBUTING.md#deprecation-policy))
 - [ ] Compatibility matrix updated in release notes
-- [ ] `UPGRADING.md` updated (if breaking changes)
 
 ## Release Candidate
 

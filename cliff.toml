@@ -9,6 +9,15 @@ body = """
 {% else %}\
     ## [Unreleased]
 {% endif %}\
+{% raw %}\n{% endraw %}\
+{% set breaking_commits = commits | filter(attribute="breaking", value=true) %}\
+{% if breaking_commits | length > 0 %}\
+    ### ⚠ Breaking Changes\n
+    {% for commit in breaking_commits %}\
+        - {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | upper_first }}\
+            {% if commit.breaking_description %} — {{ commit.breaking_description }}{% endif %}\n
+    {% endfor %}\n
+{% endif %}\
 {% for group, commits in commits | group_by(attribute="group") %}
     ### {{ group }}\n
     {% for commit in commits %}
