@@ -115,3 +115,35 @@ class OnnxConversionTest(TestCase):
 
             with self.assertRaises(FileNotFoundError):
                 convert_to_onnx(source, dest, self.schema, sample_data=self.sample_data)
+
+    def test_state_dict_without_model_class_raises_value_error(self):
+        """A state_dict source without model_class raises ValueError."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = os.path.join(temp_dir, "model.pt")
+            dest = os.path.join(temp_dir, "model.onnx")
+            save_state_dict(source)
+
+            with self.assertRaises(ValueError):
+                convert_to_onnx(source, dest, self.schema, sample_data=self.sample_data)
+
+    def test_named_tuple_output_names_detected(self):
+        """A model returning a namedtuple has output names auto-detected."""
+        from collections import namedtuple
+
+        Output = namedtuple("Output", ["logits"])
+
+        class NamedTupleModel(torch.nn.Module):
+            """Model returning a namedtuple."""
+
+            def forward(self, x):
+                """Forward."""
+                return Output(logits=x[:, :2])
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model = NamedTupleModel()
+            source = os.path.join(temp_dir, "model.pt")
+            dest = os.path.join(temp_dir, "model.onnx")
+            torch.save(model, source)
+
+            convert_to_onnx(source, dest, self.schema, sample_data=self.sample_data)
+            self.assertTrue(os.path.exists(dest))
