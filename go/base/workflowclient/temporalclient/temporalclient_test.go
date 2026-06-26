@@ -790,7 +790,7 @@ func TestUpdateTrigger(t *testing.T) {
 			mockScheduleHandle := temporalMocks.NewScheduleHandle(t)
 			client := &TemporalClient{Client: mockClient}
 			testCase.setupMock(mockClient, mockScheduleClient, mockScheduleHandle)
-			err := client.UpdateTrigger(context.Background(), workflowID, newCronSchedule, testCase.paused)
+			err := client.UpdateTrigger(context.Background(), workflowID, newCronSchedule, testCase.paused, nil)
 			if testCase.errMsg != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), testCase.errMsg)
