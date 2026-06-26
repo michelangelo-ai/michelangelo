@@ -46,6 +46,63 @@ jobs:
           tag_name: ${{ github.ref_name }}
           files: python/dist/*.whl
 
+  build-go-binaries:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [apiserver, worker, controllermgr]
+        os: [linux, darwin]
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: go/go.sum
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: '0'
+          BIN: ${{ matrix.service }}-${{ matrix.os }}-${{ matrix.arch }}
+        run: go build -o "$BIN" ./go/cmd/${{ matrix.service }}
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.service }}-${{ matrix.os }}-${{ matrix.arch }}
+          path: ${{ matrix.service }}-${{ matrix.os }}-${{ matrix.arch }}
+          retention-days: 1
+
+  upload-binaries:
+    needs: build-go-binaries
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: binaries
+          merge-multiple: true
+
+      - name: Generate SHA-256 checksums
+        run: |
+          cd binaries
+          sha256sum ./* > checksums-sha256.txt
+
+      - name: Attach binaries and checksums to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            binaries/*
+            binaries/checksums-sha256.txt
+
   helm-publish:
     runs-on: ubuntu-latest
     permissions:
