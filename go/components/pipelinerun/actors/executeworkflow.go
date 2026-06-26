@@ -379,15 +379,23 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 	logger.Info("workflow run ID is not empty, checking workflow status")
 	workflowExecution, err := a.workflowClient.GetWorkflowExecutionInfo(ctx, pipelineRun.Status.WorkflowId, pipelineRun.Status.WorkflowRunId)
 	if err != nil {
-		return nil, fmt.Errorf("get workflow execution info for pipeline run %s/%s (workflow %s, run %s): %w",
-			pipelineRun.Namespace, pipelineRun.Name, pipelineRun.Status.WorkflowId, pipelineRun.Status.WorkflowRunId, err)
+		// Treat connectivity errors as transient: keep the current step state and requeue
+		// rather than propagating the error which would cause the engine to mark the run FAILED.
+		logger.Warn("failed to get workflow execution info, will retry on next reconcile",
+			zap.String("workflowId", pipelineRun.Status.WorkflowId),
+			zap.String("runId", pipelineRun.Status.WorkflowRunId),
+			zap.Error(err))
+		return newCondition, nil
 	}
 
 	// Query and update task-level status for all workflow states
 	taskSteps, queryErr := a.constructPipelineRunStepInfo(ctx, pipelineRun)
 	if queryErr != nil {
-		logger.Error("failed to query task progress", zap.Error(queryErr))
-		return nil, queryErr
+		// Task progress query failures are transient (e.g. Temporal connectivity loss or
+		// query handler not yet registered). Log and continue — substep info is optional;
+		// the authoritative workflow state comes from GetWorkflowExecutionInfo above.
+		// Returning an error here would cause the engine to mark the run FAILED.
+		logger.Warn("failed to query task progress, skipping substep update", zap.Error(queryErr))
 	} else if len(taskSteps) > 0 {
 		executeWorkflowStep.SubSteps = taskSteps
 	}

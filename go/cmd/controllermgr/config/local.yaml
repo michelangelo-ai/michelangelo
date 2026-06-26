@@ -1,0 +1,13 @@
+metadataStorage:
+  enableMetadataStorage: ${ENABLE_METADATA_STORAGE:false}
+
+controllermgr:
+  watchNamespace: ${WATCH_NAMESPACE:}
+
+mysql:
+  host: ${MYSQL_HOST:localhost}
+  port: ${MYSQL_PORT:30001}
+  user: ${MYSQL_USER:root}
+  password: ${MYSQL_PASSWORD:root}
+  database: ${MYSQL_DATABASE:michelangelo}
+  enabled: ${MYSQL_ENABLED:false}

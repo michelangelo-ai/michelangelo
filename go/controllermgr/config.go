@@ -15,6 +15,7 @@ type (
 		HealthProbeBindAddress string `yaml:"healthProbeBindAddress"`
 		LeaderElection         bool   `yaml:"leaderElection"`
 		LeaderElectionID       string `yaml:"leaderElectionID"`
+		WatchNamespace         string `yaml:"watchNamespace"`
 	}
 )
 

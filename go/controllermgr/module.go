@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/uber-go/tally"
@@ -71,13 +72,21 @@ func create(p params) (result, error) {
 		panic(fmt.Errorf("failed to create dynamic client: %w", err))
 	}
 
-	mgr, err := ctrl.NewManager(restConf, ctrl.Options{
+	opts := ctrl.Options{
 		Scheme:                 p.Scheme,
 		Metrics:                server.Options{BindAddress: p.Config.MetricsBindAddress},
 		HealthProbeBindAddress: p.Config.HealthProbeBindAddress,
 		LeaderElection:         p.Config.LeaderElection,
 		LeaderElectionID:       p.Config.LeaderElectionID,
-	})
+	}
+	if p.Config.WatchNamespace != "" {
+		opts.Cache = cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				p.Config.WatchNamespace: {},
+			},
+		}
+	}
+	mgr, err := ctrl.NewManager(restConf, opts)
 	if err != nil {
 		return result{}, err
 	}
