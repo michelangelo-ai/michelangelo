@@ -40,8 +40,7 @@ function toPlainObject(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(toPlainObject);
 
   const result: Record<string, unknown> = {};
-  // cast: value is unknown but we've narrowed to non-null object above; Object.entries requires Record<string, unknown>
-  for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+  for (const [key, val] of Object.entries(value)) {
     if (key === '$typeName' || key === '$unknown') continue;
     result[key] = toPlainObject(val);
   }

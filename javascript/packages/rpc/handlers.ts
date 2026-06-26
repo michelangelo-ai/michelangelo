@@ -6,68 +6,33 @@ import type { ExtractUnaryRpc } from './types';
 
 let handlersPromise: Promise<Awaited<ReturnType<typeof createHandlers>>> | null = null;
 
+function unary<Fn>(fn: Fn): ExtractUnaryRpc<Fn> {
+  return fn as unknown as ExtractUnaryRpc<Fn>; // cast: ConnectRPC service methods have streaming overloads; extracts the unary Promise-returning signature
+}
+
 async function createHandlers() {
   const services = await getServices();
 
   return {
-    // cast: ConnectRPC generates service methods with proto-specific overloads; ExtractUnaryRpc extracts the generic unary call signature
-    ListDeployment: services.DeploymentService.listDeployment as ExtractUnaryRpc<
-      typeof services.DeploymentService.listDeployment
-    >,
-    // cast: ConnectRPC generates service methods with proto-specific overloads; ExtractUnaryRpc extracts the generic unary call signature
-    GetDeployment: services.DeploymentService.getDeployment as ExtractUnaryRpc<
-      typeof services.DeploymentService.getDeployment
-    >,
-    // cast: ConnectRPC generates service methods with proto-specific overloads; ExtractUnaryRpc extracts the generic unary call signature
-    ListInferenceServer: services.InferenceServerService.listInferenceServer as ExtractUnaryRpc<
-      typeof services.InferenceServerService.listInferenceServer
-    >,
-    // cast: ConnectRPC generates service methods with proto-specific overloads; ExtractUnaryRpc extracts the generic unary call signature
-    GetInferenceServer: services.InferenceServerService.getInferenceServer as ExtractUnaryRpc<
-      typeof services.InferenceServerService.getInferenceServer
-    >,
-    // cast: ConnectRPC generates service methods with proto-specific overloads; ExtractUnaryRpc extracts the generic unary call signature
-    ListProject: services.ProjectService.listProject as ExtractUnaryRpc<
-      typeof services.ProjectService.listProject
-    >,
-    // cast: ConnectRPC generates service methods with proto-specific overloads; ExtractUnaryRpc extracts the generic unary call signature
-    GetProject: services.ProjectService.getProject as ExtractUnaryRpc<
-      typeof services.ProjectService.getProject
-    >,
-    // cast: ConnectRPC generates service methods with proto-specific overloads; ExtractUnaryRpc extracts the generic unary call signature
-    GetPipeline: services.PipelineService.getPipeline as ExtractUnaryRpc<
-      typeof services.PipelineService.getPipeline
-    >,
-    // cast: ConnectRPC generates service methods with proto-specific overloads; ExtractUnaryRpc extracts the generic unary call signature
-    ListPipeline: services.PipelineService.listPipeline as ExtractUnaryRpc<
-      typeof services.PipelineService.listPipeline
-    >,
-    // cast: ConnectRPC generates service methods with proto-specific overloads; ExtractUnaryRpc extracts the generic unary call signature
-    ListPipelineRun: services.PipelineRunService.listPipelineRun as ExtractUnaryRpc<
-      typeof services.PipelineRunService.listPipelineRun
-    >,
-    // cast: ConnectRPC generates service methods with proto-specific overloads; ExtractUnaryRpc extracts the generic unary call signature
-    GetPipelineRun: services.PipelineRunService.getPipelineRun as ExtractUnaryRpc<
-      typeof services.PipelineRunService.getPipelineRun
-    >,
-    // cast: ConnectRPC generates service methods with proto-specific overloads; ExtractUnaryRpc extracts the generic unary call signature
-    ListTriggerRun: services.TriggerRunService.listTriggerRun as ExtractUnaryRpc<
-      typeof services.TriggerRunService.listTriggerRun
-    >,
-    // cast: ConnectRPC generates service methods with proto-specific overloads; ExtractUnaryRpc extracts the generic unary call signature
-    GetTriggerRun: services.TriggerRunService.getTriggerRun as ExtractUnaryRpc<
-      typeof services.TriggerRunService.getTriggerRun
-    >,
+    ListDeployment: unary(services.DeploymentService.listDeployment),
+    GetDeployment: unary(services.DeploymentService.getDeployment),
+    ListInferenceServer: unary(services.InferenceServerService.listInferenceServer),
+    GetInferenceServer: unary(services.InferenceServerService.getInferenceServer),
+    ListProject: unary(services.ProjectService.listProject),
+    GetProject: unary(services.ProjectService.getProject),
+    GetPipeline: unary(services.PipelineService.getPipeline),
+    ListPipeline: unary(services.PipelineService.listPipeline),
+    ListPipelineRun: unary(services.PipelineRunService.listPipelineRun),
+    GetPipelineRun: unary(services.PipelineRunService.getPipelineRun),
+    ListTriggerRun: unary(services.TriggerRunService.listTriggerRun),
+    GetTriggerRun: unary(services.TriggerRunService.getTriggerRun),
     UpdateTriggerRun: (record: TriggerRun) =>
       services.TriggerRunService.updateTriggerRun({ triggerRun: record }),
     CreatePipelineRun: (record: PipelineRun) =>
       services.PipelineRunService.createPipelineRun({ pipelineRun: record }),
     UpdatePipelineRun: (record: PipelineRun) =>
       services.PipelineRunService.updatePipelineRun({ pipelineRun: record }),
-    // cast: ConnectRPC generates service methods with proto-specific overloads; ExtractUnaryRpc extracts the generic unary call signature
-    ListModel: services.ModelService.listModel as ExtractUnaryRpc<
-      typeof services.ModelService.listModel
-    >,
+    ListModel: unary(services.ModelService.listModel),
   } as const;
 }
 

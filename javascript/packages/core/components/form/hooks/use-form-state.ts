@@ -43,16 +43,15 @@ export function useFormState<FieldValues extends FormData = FormData>(
       }
     : undefined;
 
-  const formState = useReactFinalFormState({
+  const formState = useReactFinalFormState<FieldValues>({
     subscription: reactFinalFormSubscription,
   });
 
-  // cast: narrowing the assembled object to our parameterized FormState return type
   return {
     submitting: formState.submitting,
-    submitError: formState.submitError as unknown, // cast: react-final-form types submitError as its own internal type; we expose as unknown to avoid coupling
-    // cast: react-final-form types values as its internal FormValues generic; FieldValues is our parameterized narrowing
-    values: formState.values as FieldValues | undefined,
+    // cast: react-final-form types submitError as any; always string when set by onSubmit handlers
+    submitError: formState.submitError as string | undefined,
+    values: formState.values,
     submitFailed: formState.submitFailed,
     hasValidationErrors: formState.hasValidationErrors,
     // cast: react-final-form types errors/submitErrors/touched as specific internal types; we expose them as plain records
@@ -60,5 +59,5 @@ export function useFormState<FieldValues extends FormData = FormData>(
     submitErrors: formState.submitErrors,
     touched: formState.touched,
     modifiedSinceLastSubmit: formState.modifiedSinceLastSubmit,
-  } as FormState<FieldValues> | Partial<FormState<FieldValues>>;
+  };
 }

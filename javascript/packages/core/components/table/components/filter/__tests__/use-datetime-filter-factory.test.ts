@@ -196,10 +196,9 @@ describe('Datetime Filter', () => {
         exclude: false,
       };
 
-      // @ts-expect-error testing null/undefined edge cases
-      expect(filterFn(nullRow, 'createdAt', filterValue)).toBe(false);
-      // @ts-expect-error testing null/undefined edge cases
-      expect(filterFn(undefinedRow, 'createdAt', filterValue)).toBe(false);
+      // cast: Row<{ createdAt: null|undefined }> not assignable to Row<unknown> under strict mode; testing runtime null/undefined handling
+      expect(filterFn(nullRow as never, 'createdAt', filterValue)).toBe(false);
+      expect(filterFn(undefinedRow as never, 'createdAt', filterValue)).toBe(false);
     });
 
     it('should not filter rows with invalid date values', () => {

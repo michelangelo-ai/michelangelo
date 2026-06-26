@@ -17,17 +17,12 @@ export function useFormErrorList(): ErrorEntry[] {
     touched: true,
   });
 
-  const rawFormLevelError = submitErrors?.[FORM_ERROR];
-  let formLevelErrorMessage: string | undefined;
-  if (rawFormLevelError instanceof Error) {
-    formLevelErrorMessage = rawFormLevelError.message;
-  } else if (typeof rawFormLevelError === 'string') {
-    formLevelErrorMessage = rawFormLevelError;
-  }
-  const formLevelEntry: ErrorEntry[] =
-    formLevelErrorMessage != null
-      ? [{ fieldPath: FORM_ERROR, errorMessage: formLevelErrorMessage }]
-      : [];
+  const formLevelError = submitErrors?.[FORM_ERROR] as string | Error | undefined; // cast: final-form types FORM_ERROR as unknown; callers pass string | Error
+  const formLevelErrorMessage =
+    formLevelError instanceof Error ? formLevelError.message : formLevelError;
+  const formLevelEntry: ErrorEntry[] = formLevelErrorMessage
+    ? [{ fieldPath: FORM_ERROR, errorMessage: formLevelErrorMessage }]
+    : [];
 
   if (!errors) return formLevelEntry;
 

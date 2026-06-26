@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 
-export function useScrollRatio<T>(visibleColumns: T[]): {
+export function useScrollRatio<E extends HTMLElement = HTMLElement>(
+  visibleColumns: unknown[]
+): {
   scrollRatio: number;
-  tableRef: React.RefObject<HTMLElement | null>;
+  tableRef: React.RefObject<E | null>;
   handleScrollRatioUpdate: () => void;
 } {
   const [scrollRatio, setScrollRatio] = useState(-1);
-  const tableRef = useRef<HTMLElement>(null);
+  const tableRef = useRef<E>(null);
 
   const handleScrollRatioUpdate = () => {
     const element = tableRef.current;

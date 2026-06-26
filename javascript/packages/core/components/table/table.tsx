@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   getCoreRowModel,
   getExpandedRowModel,
@@ -42,7 +41,8 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
     initialState,
   });
 
-  const { scrollRatio, tableRef, handleScrollRatioUpdate } = useScrollRatio(columns);
+  const { scrollRatio, tableRef, handleScrollRatioUpdate } =
+    useScrollRatio<HTMLDivElement>(columns);
 
   const table = useReactTable<T>({
     data: props.data,
@@ -139,7 +139,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
 
         <div
           className={css({ overflow: 'auto', position: 'relative' })}
-          ref={tableRef as React.RefObject<HTMLDivElement>} // cast: useScrollRatio returns RefObject<Element>; div is the concrete element type here
+          ref={tableRef}
           onScroll={handleScrollRatioUpdate}
         >
           <StyledTable>

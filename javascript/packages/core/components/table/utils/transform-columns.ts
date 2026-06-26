@@ -23,7 +23,7 @@ export function transformColumns<T extends TableData = TableData>(
     VisibilityCapability
 > {
   return columns.map((column) => {
-    const columnConfig = column.columnDef.meta as ColumnConfig<T>; // cast: tanstack-table types meta as unknown; always ColumnConfig<T> per our column definition setup
+    const columnConfig = column.columnDef.meta! as ColumnConfig<T>; // cast: tanstack-table types meta as unknown; always ColumnConfig<T> per our column definition setup
     const label = columnConfig.label ?? column.id;
 
     return {

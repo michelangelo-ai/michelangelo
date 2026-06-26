@@ -53,7 +53,7 @@ export function useColumnTransformer<T extends TableData = TableData>(
         cell: (props: CellContext<T, unknown>) => (
           <TableCell<T>
             // cast: tanstack stores columnDef.meta as unknown; always ColumnConfig when built via useColumnTransformer
-            column={props.column.columnDef.meta as ColumnConfig}
+            column={props.column.columnDef.meta! as ColumnConfig}
             row={transformRows<T>([props.row])[0]}
             // cast: tanstack types row.original as unknown; it is always a plain record object
             record={props.row.original as object}
@@ -66,7 +66,7 @@ export function useColumnTransformer<T extends TableData = TableData>(
           column.aggregatedCell ? (
             <column.aggregatedCell
               // cast: tanstack stores columnDef.meta as unknown; always ColumnConfig when built via useColumnTransformer
-              column={props.column.columnDef.meta as ColumnConfig<T>}
+              column={props.column.columnDef.meta! as ColumnConfig<T>}
               // cast: tanstack types row.original as unknown; it is always a plain record object
               record={props.row.original as object}
               value={props.getValue<T>()}
@@ -74,7 +74,7 @@ export function useColumnTransformer<T extends TableData = TableData>(
           ) : (
             <TableCell<T>
               // cast: tanstack stores columnDef.meta as unknown; always ColumnConfig when built via useColumnTransformer
-              column={props.column.columnDef.meta as ColumnConfig}
+              column={props.column.columnDef.meta! as ColumnConfig}
               row={transformRows<T>([props.row])[0]}
               // cast: tanstack types row.original as unknown; it is always a plain record object
               record={props.row.original as object}
