@@ -47,6 +47,7 @@ if TYPE_CHECKING:
     )
 
 
+
 # Plugin types accepted by the PyTorch Lightning Trainer.
 # See: https://github.com/Lightning-AI/pytorch-lightning/blob/2129fdf3622e39ba46be4e1139af408e7e951cf3/src/lightning/pytorch/trainer/trainer.py#L126
 _PLUGIN_INPUT = Union[Precision, ClusterEnvironment, CheckpointIO, LayerSync]
