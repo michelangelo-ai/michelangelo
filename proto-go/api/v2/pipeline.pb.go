@@ -3371,6 +3371,8 @@ spec:
                                 x-kubernetes-preserve-unknown-fields: true
                             type: object
                           type: object
+                        proxyUser:
+                          type: string
                       type: object
                     type: object
                   type:
