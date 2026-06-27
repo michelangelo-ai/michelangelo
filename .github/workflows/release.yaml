@@ -67,6 +67,12 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
+      - name: Add Helm dependency repos
+        run: |
+          helm repo add cadence https://cadence-workflow.github.io/cadence-charts
+          helm repo add temporal https://go.temporal.io/helm-charts
+          helm repo update
+
       - name: Build Helm dependencies
         run: helm dependency build helm/michelangelo
 
