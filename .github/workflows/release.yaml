@@ -3,8 +3,15 @@ name: build-release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      test_version:
+        description: 'Test version (e.g. 0.0.0-test.1)'
+        required: false
+        default: '0.0.0-test.1'
 jobs:
   build-upload:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -65,7 +72,12 @@ jobs:
 
       - name: Extract version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ inputs.test_version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Add Helm dependency repos
         run: |
@@ -83,6 +95,7 @@ jobs:
             --app-version ${{ steps.version.outputs.VERSION }}
 
       - name: Push chart to OCI registry
+        if: github.event_name == 'push'
         run: |
           helm push \
             michelangelo-${{ steps.version.outputs.VERSION }}.tgz \
