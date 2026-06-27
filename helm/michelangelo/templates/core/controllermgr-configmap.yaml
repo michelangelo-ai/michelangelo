@@ -47,7 +47,7 @@ data:
       {{- end }}
 
     pipeline:
-      revisioningEnabled: {{ .Values.controllermgr.pipeline.revisioningEnabled }}
+      revisioningEnabled: {{ dig "pipeline" "revisioningEnabled" false .Values.controllermgr }}
 
     workflowClient:
       {{- if eq .Values.workflow.engine "cadence" }}
