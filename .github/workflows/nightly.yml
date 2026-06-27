@@ -288,10 +288,10 @@ jobs:
 
       - name: Build packages
         run: |
-          yarn workspace @michelangelo/core build
+          yarn workspace @michelangelo-ai/core build
           yarn workspace @michelangelo/rpc build
 
-      - name: Publish @michelangelo/core
+      - name: Publish @michelangelo-ai/core
         run: cd packages/core && npm publish --tag nightly --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
