@@ -19,6 +19,12 @@ on:
           Defaults to "main". Use a feature branch to test unreleased fixture changes.
         required: false
         default: "main"
+      git_ref:
+        description: >
+          Branch or ref of michelangelo-ai/michelangelo used for pipeline manifests (GIT_REF).
+          Defaults to "main". Set to your feature branch when testing pipeline YAML changes.
+        required: false
+        default: "main"
   workflow_call:
     inputs:
       image_tag:
@@ -28,6 +34,11 @@ on:
         default: "latest"
       integration_test_ref:
         description: "Branch or ref of michelangelo-ai/integration-test to check out"
+        required: false
+        type: string
+        default: "main"
+      git_ref:
+        description: "Branch or ref of michelangelo-ai/michelangelo used for pipeline manifests (GIT_REF)"
         required: false
         type: string
         default: "main"
@@ -93,7 +104,7 @@ jobs:
         working-directory: ${{ github.workspace }}/integration-test
         env:
           MA_API_SERVER: localhost:15566
-          GIT_REF: main
+          GIT_REF: ${{ inputs.git_ref || 'main' }}
           PYTHONPATH: ${{ github.workspace }}/integration-test
 
       - name: Run API MySQL backend tests
@@ -104,7 +115,7 @@ jobs:
         working-directory: ${{ github.workspace }}/integration-test
         env:
           MA_API_SERVER: localhost:15566
-          GIT_REF: main
+          GIT_REF: ${{ inputs.git_ref || 'main' }}
           PYTHONPATH: ${{ github.workspace }}/integration-test
 
       - name: Wait for worker to connect to Cadence
