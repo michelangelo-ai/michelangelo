@@ -13,6 +13,12 @@ on:
           Defaults to "latest" (built from main).
         required: false
         default: "latest"
+      integration_test_ref:
+        description: >
+          Branch or ref of michelangelo-ai/integration-test to check out.
+          Defaults to "main". Use a feature branch to test unreleased fixture changes.
+        required: false
+        default: "main"
   workflow_call:
     inputs:
       image_tag:
@@ -20,6 +26,11 @@ on:
         required: false
         type: string
         default: "latest"
+      integration_test_ref:
+        description: "Branch or ref of michelangelo-ai/integration-test to check out"
+        required: false
+        type: string
+        default: "main"
   schedule:
     - cron: "0 3 * * *"   # 03:00 UTC every day
 
@@ -67,7 +78,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: michelangelo-ai/integration-test
-          ref: main
+          ref: ${{ inputs.integration_test_ref || 'main' }}
           token: ${{ secrets.CR_PAT }}
           path: integration-test
 
