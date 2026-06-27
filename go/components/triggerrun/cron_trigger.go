@@ -3,7 +3,6 @@ package triggerrun
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -251,98 +250,53 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun, a
 		cronToUpdate = desiredCron
 	}
 
-	if cronDrifted || notifDrifted || paused != nil {
-		log.Info("drift detected, updating workflow engine schedule",
-			"cronDrifted", cronDrifted,
-			"notifDrifted", notifDrifted,
-			"desiredCron", desiredCron,
-			"actualCron", actualCron,
-			"atomicPaused", paused)
+	log.Info("drift detected, updating workflow engine schedule",
+		"cronDrifted", cronDrifted,
+		"notifDrifted", notifDrifted,
+		"desiredCron", desiredCron,
+		"actualCron", actualCron,
+		"atomicPaused", paused)
 
-		err := c.WorkflowClient.UpdateTrigger(ctx, wid, cronToUpdate, paused, args)
-		if err != nil {
-			// If schedule doesn't exist (e.g., manually deleted), recreate it
-			if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "NotFound") {
-				log.Info("schedule not found, recreating via StartWorkflow",
-					"workflowId", wid,
-					"desiredCron", desiredCron)
-
-				opt := clientInterface.StartWorkflowOptions{
-					ID:                              wid,
-					TaskList:                        "trigger_run",
-					ExecutionStartToCloseTimeout:    time.Hour * 24 * 365,
-					DecisionTaskStartToCloseTimeout: 30 * time.Second,
-					CronSchedule:                    desiredCron,
-				}
-				exec, createErr := c.WorkflowClient.StartWorkflow(
-					ctx, opt, "trigger.CronTrigger", CreateTriggerRequest{TriggerRun: triggerRun})
-				if createErr != nil {
-					log.Error(createErr, "failed to recreate schedule",
-						"workflowId", wid,
-						"desiredCron", desiredCron)
-					return v2pb.TriggerRunStatus{
-							ErrorMessage: createErr.Error(),
-							State:        triggerRun.Status.State,
-						}, false, fmt.Errorf("recreate schedule for %s/%s: %w",
-							triggerRun.Namespace, triggerRun.Name, createErr)
-				}
-
-				log.Info("successfully recreated schedule via StartWorkflow",
-					"workflowId", wid,
-					"execution_id", exec.ID,
-					"newCron", desiredCron)
-
-				newStatus := triggerRun.Status
-				newStatus.ActualTrigger = &v2pb.Trigger{
-					TriggerType: &v2pb.Trigger_CronSchedule{
-						CronSchedule: &v2pb.CronSchedule{Cron: desiredCron},
-					},
-				}
-				newStatus.ActualNotifications = triggerRun.Spec.Notifications
-				return newStatus, false, nil
-			}
-
-			log.Error(err, "failed to update trigger in workflow engine",
-				"workflowId", wid,
-				"desiredCron", desiredCron)
-			return v2pb.TriggerRunStatus{
-					ErrorMessage: err.Error(),
-					State:        triggerRun.Status.State,
-				}, false, fmt.Errorf("update trigger for %s/%s: %w",
-					triggerRun.Namespace, triggerRun.Name, err)
-		}
-
-		log.Info("successfully updated trigger",
+	err := c.WorkflowClient.UpdateTrigger(ctx, wid, cronToUpdate, paused, args)
+	if err != nil {
+		log.Error(err, "failed to update trigger in workflow engine",
 			"workflowId", wid,
-			"newCron", desiredCron,
-			"atomicPaused", paused)
-
-		newStatus := triggerRun.Status
-		if cronDrifted {
-			newStatus.ActualTrigger = &v2pb.Trigger{
-				TriggerType: &v2pb.Trigger_CronSchedule{
-					CronSchedule: &v2pb.CronSchedule{Cron: desiredCron},
-				},
-			}
-		}
-		if notifDrifted {
-			newStatus.ActualNotifications = triggerRun.Spec.Notifications
-		}
-
-		if paused != nil {
-			actionHandled = true
-			if *paused {
-				newStatus.State = v2pb.TRIGGER_RUN_STATE_PAUSED
-			} else {
-				newStatus.State = v2pb.TRIGGER_RUN_STATE_RUNNING
-			}
-			newStatus.ErrorMessage = ""
-		}
-
-		return newStatus, actionHandled, nil
+			"desiredCron", desiredCron)
+		return v2pb.TriggerRunStatus{
+				ErrorMessage: err.Error(),
+				State:        triggerRun.Status.State,
+			}, false, fmt.Errorf("update trigger for %s/%s: %w",
+				triggerRun.Namespace, triggerRun.Name, err)
 	}
 
-	return triggerRun.Status, false, nil
+	log.Info("successfully updated trigger",
+		"workflowId", wid,
+		"newCron", desiredCron,
+		"atomicPaused", paused)
+
+	newStatus := triggerRun.Status
+	if cronDrifted {
+		newStatus.ActualTrigger = &v2pb.Trigger{
+			TriggerType: &v2pb.Trigger_CronSchedule{
+				CronSchedule: &v2pb.CronSchedule{Cron: desiredCron},
+			},
+		}
+	}
+	if notifDrifted {
+		newStatus.ActualNotifications = triggerRun.Spec.Notifications
+	}
+
+	if paused != nil {
+		actionHandled = true
+		if *paused {
+			newStatus.State = v2pb.TRIGGER_RUN_STATE_PAUSED
+		} else {
+			newStatus.State = v2pb.TRIGGER_RUN_STATE_RUNNING
+		}
+		newStatus.ErrorMessage = ""
+	}
+
+	return newStatus, actionHandled, nil
 }
 
 // notificationsEqual reports whether two notification slices are identical.
