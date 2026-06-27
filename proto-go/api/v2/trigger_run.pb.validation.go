@@ -449,6 +449,28 @@ var triggerRunStatusValidateExt func(*TriggerRunStatus, string) error
 func (this *TriggerRunStatus) Validate(prefix string) error {
 
 	{
+		v := this.GetActualNotifications()
+		for i, v := range v {
+			n := `actual_notifications[` + strconv.Itoa(i) + `]`
+
+			var i interface{}
+			if reflect.ValueOf(v).Kind() == reflect.Ptr {
+				i = reflect.ValueOf(v).Interface()
+				if reflect.ValueOf(v).IsNil() {
+					i = nil
+				}
+			} else {
+				i = reflect.ValueOf(&v).Interface()
+			}
+			validate, hasValidate := i.(interface{ Validate(string) error })
+			if hasValidate {
+				if err := validate.Validate(prefix + n + "."); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	{
 		v := this.GetActualTrigger()
 		n := `actual_trigger`
 		var i interface{}
