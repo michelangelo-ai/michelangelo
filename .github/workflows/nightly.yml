@@ -61,14 +61,20 @@ jobs:
           working-directory: './python'
 
       - name: Set nightly version
+        env:
+          POETRY_DYNAMIC_VERSIONING_BYPASS: "0.0.0"
         run: |
           DATE_TAG="${{ needs.check-changes.outputs.date_tag }}"
-          BASE_VERSION=$(poetry version -s | sed 's/\.dev.*//')
+          BASE_VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
           NIGHTLY_VERSION="${BASE_VERSION}.dev${DATE_TAG}"
           poetry version "$NIGHTLY_VERSION"
+          echo "nightly_version=$NIGHTLY_VERSION" >> "$GITHUB_OUTPUT"
           echo "Publishing Python nightly: $NIGHTLY_VERSION"
+        id: version
 
       - name: Build wheel
+        env:
+          POETRY_DYNAMIC_VERSIONING_BYPASS: ${{ steps.version.outputs.nightly_version }}
         run: poetry build -f wheel
 
       - name: Configure PyPI token
