@@ -104,6 +104,11 @@ jobs:
         working-directory: ${{ github.workspace }}/integration-test
         env:
           MA_API_SERVER: localhost:15566
+          # GIT_REF tells the controllermgr which branch of michelangelo to fetch
+          # pipeline manifest YAMLs from. No-op for current tests (pipeline CRUD
+          # has no state_check so the YAML is never fetched); becomes meaningful
+          # when lifecycle tests that wait for PIPELINE_STATE_READY are added and
+          # pipelines/integration_tests/ YAMLs exist in the repo.
           GIT_REF: ${{ inputs.git_ref || 'main' }}
           PYTHONPATH: ${{ github.workspace }}/integration-test
 
