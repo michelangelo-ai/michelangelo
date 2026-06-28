@@ -31,7 +31,7 @@ jobs:
       - name: Delete old nightly image versions (${{ matrix.package }})
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DRY_RUN: ${{ inputs.dry_run != false }}
+          DRY_RUN: ${{ inputs.dry_run == true }}
         run: |
           CUTOFF=$(date -u -d "${{ env.CUTOFF_DAYS }} days ago" +%s)
           DELETED=()
@@ -96,7 +96,7 @@ jobs:
       - name: Delete old nightly pre-releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DRY_RUN: ${{ inputs.dry_run != false }}
+          DRY_RUN: ${{ inputs.dry_run == true }}
           GH_REPO: ${{ github.repository }}
         run: |
           CUTOFF=$(date -u -d "${{ env.CUTOFF_DAYS }} days ago" +%s)
@@ -146,7 +146,7 @@ jobs:
       - name: Deprecate old nightly npm versions
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          DRY_RUN: ${{ inputs.dry_run != false }}
+          DRY_RUN: ${{ inputs.dry_run == true }}
         run: |
           # PyPI note: PyPI does not support version deletion; nightly Python
           # packages are published with a .devYYYYMMDD pre-release suffix and
