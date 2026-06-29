@@ -150,6 +150,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return r.handleDeletionAnnotation(ctx, log, object)
 	}
 
+	// Ensure MetadataStoragePrimaryKey annotation is set so the metadata storage PK
+	// remains stable across cluster migrations. Return early on first write; the Update
+	// triggers a new reconcile that will proceed to upsert with the annotation in place.
+	if updated, err := r.ensureMetadataStoragePrimaryKey(ctx, object); err != nil {
+		log.Error(err, "Failed to set MetadataStoragePrimaryKey annotation")
+		return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
+	} else if updated {
+		return ctrl.Result{}, nil
+	}
+
 	// Check if object is immutable (either by kind or annotation)
 	if isImmutable(object) || isImmutableKind(object) {
 		return r.handleImmutableObject(ctx, log, object)
@@ -426,4 +436,24 @@ func isImmutableKind(object client.Object) bool {
 		return ik.IsImmutableKind()
 	}
 	return false
+}
+
+// ensureMetadataStoragePrimaryKey sets MetadataStoragePrimaryKeyAnnotation to the object's
+// UID when the annotation is absent, then patches the object in k8s. Returns true if the
+// annotation was added so the caller can return early and let the next reconcile proceed
+// with the annotation already in place.
+func (r *Reconciler) ensureMetadataStoragePrimaryKey(ctx context.Context, object client.Object) (bool, error) {
+	annotations := object.GetAnnotations()
+	if _, ok := annotations[api.MetadataStoragePrimaryKeyAnnotation]; ok {
+		return false, nil
+	}
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+	annotations[api.MetadataStoragePrimaryKeyAnnotation] = string(object.GetUID())
+	object.SetAnnotations(annotations)
+	if err := r.Update(ctx, object); err != nil {
+		return false, err
+	}
+	return true, nil
 }

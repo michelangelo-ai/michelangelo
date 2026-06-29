@@ -2,6 +2,7 @@ package ingester
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -89,6 +90,9 @@ func TestReconciler_HandleSync(t *testing.T) {
 			Namespace:  "default",
 			UID:        types.UID("test-uid"),
 			Finalizers: []string{api.IngesterFinalizer},
+			Annotations: map[string]string{
+				api.MetadataStoragePrimaryKeyAnnotation: "test-uid",
+			},
 		},
 	}
 
@@ -144,6 +148,9 @@ func TestReconciler_HandleSync_UpsertsWithFinalizer(t *testing.T) {
 			Namespace:  "default",
 			UID:        types.UID("test-uid"),
 			Finalizers: []string{api.IngesterFinalizer},
+			Annotations: map[string]string{
+				api.MetadataStoragePrimaryKeyAnnotation: "test-uid",
+			},
 		},
 	}
 
@@ -320,6 +327,9 @@ func TestReconciler_HandleImmutableKind(t *testing.T) {
 			Namespace:  "default",
 			UID:        types.UID("test-uid"),
 			Finalizers: []string{api.IngesterFinalizer},
+			Annotations: map[string]string{
+				api.MetadataStoragePrimaryKeyAnnotation: "test-uid",
+			},
 		},
 		Spec: v2.ModelSpec{
 			Description: "Test immutable kind model",
@@ -381,7 +391,8 @@ func TestReconciler_HandleImmutableObject(t *testing.T) {
 			Namespace: "default",
 			UID:       types.UID("test-uid"),
 			Annotations: map[string]string{
-				api.ImmutableAnnotation: "true",
+				api.ImmutableAnnotation:                 "true",
+				api.MetadataStoragePrimaryKeyAnnotation: "test-uid",
 			},
 			Finalizers: []string{api.IngesterFinalizer},
 		},
@@ -756,4 +767,118 @@ func TestReconciler_HandleDeletionAnnotation_HonorsPropagationPolicy(t *testing.
 	assert.Equal(t, metav1.DeletePropagationForeground, *capturedOpts.PropagationPolicy)
 
 	mockStorage.AssertCalled(t, "Delete", mock.Anything, mock.Anything, "default", "test-model")
+}
+
+// TestReconciler_SetsMetadataStoragePrimaryKey_WhenAbsent verifies that on first reconcile
+// of a new object (no MetadataStoragePrimaryKeyAnnotation), the ingester patches the
+// annotation to the object's UID and returns early without calling Upsert. The watch on the
+// updated object triggers a second reconcile that proceeds to upsert.
+func TestReconciler_SetsMetadataStoragePrimaryKey_WhenAbsent(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = v2.AddToScheme(scheme)
+
+	deployment := &v2.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test-deployment",
+			Namespace:  "default",
+			UID:        types.UID("original-uid"),
+			Finalizers: []string{api.IngesterFinalizer},
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(deployment).Build()
+	mockStorage := new(MockMetadataStorage)
+
+	reconciler := NewReconciler(
+		fakeClient, logr.Discard(), scheme, &v2.Deployment{}, mockStorage,
+		WithConfig(Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second}),
+	)
+
+	req := ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-deployment", Namespace: "default"}}
+	result, err := reconciler.Reconcile(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, ctrl.Result{}, result)
+
+	// Upsert must NOT be called on the first pass (returned early after patching).
+	mockStorage.AssertNotCalled(t, "Upsert")
+
+	// Annotation must be persisted to k8s with the object's UID as value.
+	updated := &v2.Deployment{}
+	require.NoError(t, fakeClient.Get(context.Background(), types.NamespacedName{Name: "test-deployment", Namespace: "default"}, updated))
+	assert.Equal(t, "original-uid", updated.GetAnnotations()[api.MetadataStoragePrimaryKeyAnnotation])
+}
+
+// TestReconciler_SkipsMetadataStoragePrimaryKey_WhenPresent verifies that when the
+// annotation is already set (second reconcile or migrated resource), the ingester skips
+// the patch and proceeds directly to upsert.
+func TestReconciler_SkipsMetadataStoragePrimaryKey_WhenPresent(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = v2.AddToScheme(scheme)
+
+	deployment := &v2.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test-deployment",
+			Namespace:  "default",
+			UID:        types.UID("new-uid"),
+			Finalizers: []string{api.IngesterFinalizer},
+			Annotations: map[string]string{
+				api.MetadataStoragePrimaryKeyAnnotation: "original-uid",
+			},
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(deployment).Build()
+	mockStorage := new(MockMetadataStorage)
+	mockStorage.On("Upsert", mock.Anything, mock.Anything, false, mock.Anything).Return(nil)
+
+	reconciler := NewReconciler(
+		fakeClient, logr.Discard(), scheme, &v2.Deployment{}, mockStorage,
+		WithConfig(Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second}),
+	)
+
+	req := ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-deployment", Namespace: "default"}}
+	result, err := reconciler.Reconcile(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, ctrl.Result{}, result)
+
+	// Upsert must be called (annotation already present, no patch needed).
+	mockStorage.AssertCalled(t, "Upsert", mock.Anything, mock.Anything, false, mock.Anything)
+}
+
+// TestReconciler_MetadataStoragePrimaryKey_UpdateError verifies that a k8s Update failure
+// while setting the annotation is surfaced as an error and triggers a requeue.
+func TestReconciler_MetadataStoragePrimaryKey_UpdateError(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = v2.AddToScheme(scheme)
+
+	deployment := &v2.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test-deployment",
+			Namespace:  "default",
+			UID:        types.UID("original-uid"),
+			Finalizers: []string{api.IngesterFinalizer},
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(deployment).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+				return fmt.Errorf("simulated update failure")
+			},
+		}).
+		Build()
+	mockStorage := new(MockMetadataStorage)
+
+	reconciler := NewReconciler(
+		fakeClient, logr.Discard(), scheme, &v2.Deployment{}, mockStorage,
+		WithConfig(Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second}),
+	)
+
+	req := ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-deployment", Namespace: "default"}}
+	result, err := reconciler.Reconcile(context.Background(), req)
+	require.Error(t, err)
+	assert.Equal(t, 30*time.Second, result.RequeueAfter)
+	mockStorage.AssertNotCalled(t, "Upsert")
 }
