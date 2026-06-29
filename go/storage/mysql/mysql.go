@@ -13,6 +13,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	proto "github.com/gogo/protobuf/proto"
 	gogotypes "github.com/gogo/protobuf/types"
+	api "github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -1108,7 +1109,7 @@ func (m *mysqlMetadataStorage) fullUpsert(ctx context.Context, tx *sql.Tx, table
 	// This enables stable identity across cluster migrations
 	primaryKey := string(metaObj.GetUID())
 	if annotations := metaObj.GetAnnotations(); annotations != nil {
-		if storagePK, exists := annotations["michelangelo/MetadataStoragePrimaryKey"]; exists && storagePK != "" {
+		if storagePK, exists := annotations[api.MetadataStoragePrimaryKeyAnnotation]; exists && storagePK != "" {
 			primaryKey = storagePK
 		}
 	}
