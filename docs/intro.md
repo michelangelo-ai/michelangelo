@@ -31,6 +31,7 @@ Understand what the platform does, how it compares to your current stack, and wh
 
 - **[Overview](./getting-started/overview.md)** — What Michelangelo is, how it works, and how familiar tools map to it
 - **[Core Concepts](./getting-started/core-concepts-and-key-terms.md)** — Projects, workflows, tasks, and the key terms you'll encounter
+- **[Roadmap](./getting-started/roadmap.md)** — Release milestones, what's available now, and what's planned
 
 ### I want to build my first pipeline
 

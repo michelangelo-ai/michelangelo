@@ -244,7 +244,7 @@ Git tags use SemVer, but PyPI requires [PEP 440](https://peps.python.org/pep-044
 
 - Tags are only created on **release branches** (`release/vX.Y`), never directly on `main`.
 - All artifacts (Python, npm, Go, Helm, containers) receive the same Major.Minor from the tag.
-- See the [Versioning Policy](./docs/about/roadmap.md#versioning-policy) for stability level guarantees (stable, beta, alpha).
+- See the [Versioning Policy](./docs/getting-started/roadmap.md#versioning-policy) for stability level guarantees (stable, beta, alpha).
 
 ## Creating a Pull Request
 
@@ -313,5 +313,5 @@ resources: {}
 ### Reference
 
 - See [UPGRADING.md](./UPGRADING.md) for examples of past migrations.
-- See the [Versioning Policy](./docs/about/roadmap.md#versioning-policy) for stability level guarantees.
+- See the [Versioning Policy](./docs/getting-started/roadmap.md#versioning-policy) for stability level guarantees.
 
