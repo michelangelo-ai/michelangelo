@@ -1,5 +1,5 @@
 /**
- * Mirrors generated types from @michelangelo/rpc trigger_run_pb.
+ * Mirrors generated types from @michelangelo-ai/rpc trigger_run_pb.
  * Update alongside proto/api/v2/trigger_run.proto.
  */
 

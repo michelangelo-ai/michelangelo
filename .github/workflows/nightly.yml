@@ -297,7 +297,7 @@ jobs:
       - name: Build packages
         run: |
           yarn workspace @michelangelo-ai/core build
-          yarn workspace @michelangelo/rpc build
+          yarn workspace @michelangelo-ai/rpc build
 
       - name: Publish @michelangelo-ai/core
         run: cd packages/core && npm publish --tag nightly --access public
@@ -305,7 +305,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_LEGACY_PEER_DEPS: 'true'
 
-      - name: Publish @michelangelo/rpc
+      - name: Publish @michelangelo-ai/rpc
         run: cd packages/rpc && npm publish --tag nightly --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

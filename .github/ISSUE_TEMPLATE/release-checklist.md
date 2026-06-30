@@ -32,7 +32,7 @@ assignees: ''
   - [ ] Python wheel on PyPI (PEP 440: `0.3.0rc1`)
   - [ ] Go service containers on ghcr.io
   - [ ] UI container on ghcr.io
-  - [ ] npm packages (`@michelangelo/core`, `@michelangelo/rpc`)
+  - [ ] npm packages (`@michelangelo-ai/core`, `@michelangelo-ai/rpc`)
   - [ ] Helm OCI chart on ghcr.io
 - [ ] RC announcement posted (GitHub Discussions or relevant channel)
 - [ ] Soak period complete (minimum 1 week for minor releases)
