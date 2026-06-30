@@ -1,0 +1,517 @@
+"""Configuration dataclasses for the tabular_trainer workflow task.
+
+These classes are the canonical configuration schema for ``train_tabular()``
+and its backends. Mirrors the structure of ``michelangelo.workflow.schema.pusher``
+— plain ``@dataclass`` with ``__post_init__`` validation; no Pydantic dependency.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from enum import Enum
+
+from michelangelo.workflow.schema.exceptions import ConfigurationError
+
+__all__ = [
+    "BatchIterConfig",
+    "CheckpointConfig",
+    "CheckpointScoreOrder",
+    "ColumnConfig",
+    "CometConfig",
+    "CustomTrainerConfig",
+    "DataloadingConfig",
+    "IncrementalTrainingModeConfig",
+    "LightningTrainerConfig",
+    "LightningTrainerKwargs",
+    "ParquetReadConfig",
+    "ScalingConfig",
+    "TabularTrainerConfig",
+    "TransferLearningSpecConfig",
+]
+
+
+class CheckpointScoreOrder(str, Enum):
+    """Sort order for checkpoint scoring.
+
+    Attributes:
+        MAX: Keep the checkpoint with the highest metric value.
+        MIN: Keep the checkpoint with the lowest metric value.
+
+    Example:
+        >>> CheckpointScoreOrder.MAX.value
+        'max'
+    """
+
+    MAX = "max"
+    MIN = "min"
+
+
+class IncrementalTrainingModeConfig(str, Enum):
+    """Incremental training mode for tabular_trainer.
+
+    Attributes:
+        NONE: No incremental training; train from scratch.
+        BASELINE: Use the initial model as a warm-start baseline and mark
+            the result as incrementally trained.
+
+    Example:
+        >>> IncrementalTrainingModeConfig.BASELINE.value
+        'BASELINE'
+    """
+
+    NONE = "NONE"
+    BASELINE = "BASELINE"
+
+
+@dataclass
+class ColumnConfig:
+    """Schema descriptor for a single model input, output, or label column.
+
+    Attributes:
+        data_type: PyTorch dtype string, e.g. ``"torch.float32"``.
+        shape: Tensor shape *excluding* the batch dimension, e.g.
+            ``[128]`` for a 128-element embedding. Defaults to ``[]``
+            (scalar).
+
+    Example:
+        >>> ColumnConfig(data_type="torch.float32", shape=[128])
+        ColumnConfig(data_type='torch.float32', shape=[128])
+    """
+
+    data_type: str
+    shape: list[int] = field(default_factory=list)
+
+
+@dataclass
+class CometConfig:
+    """Comet ML experiment tracking configuration.
+
+    All four fields are required when ``comet`` is set on
+    ``LightningTrainerConfig``.
+
+    Attributes:
+        api_key: Comet API key.
+        workspace: Comet workspace name.
+        project_name: Comet project name.
+        experiment_name: Comet experiment name.
+
+    Example:
+        >>> cfg = CometConfig(
+        ...     api_key="key",
+        ...     workspace="ws",
+        ...     project_name="proj",
+        ...     experiment_name="exp",
+        ... )
+    """
+
+    api_key: str
+    workspace: str
+    project_name: str
+    experiment_name: str
+
+
+@dataclass
+class ScalingConfig:
+    """Ray Train scaling configuration for distributed training.
+
+    Attributes:
+        cpu_per_worker: Number of CPU cores allocated per Ray Train worker.
+            Defaults to ``1``.
+
+    Example:
+        >>> ScalingConfig(cpu_per_worker=4)
+        ScalingConfig(cpu_per_worker=4)
+    """
+
+    cpu_per_worker: int = 1
+
+
+@dataclass
+class CheckpointConfig:
+    """Checkpoint retention and scoring configuration.
+
+    Mirrors ``ray.train.CheckpointConfig`` field-for-field with two additions
+    for future mid-epoch checkpointing (``save_every_n_steps``,
+    ``random_seed``). Both additions are gated in the dispatcher — setting
+    ``save_every_n_steps`` raises ``NotImplementedError`` at runtime until
+    the mid-epoch checkpoint planner is ported.
+
+    Attributes:
+        num_to_keep: Maximum number of checkpoints to retain. ``None`` keeps
+            all checkpoints; ``1`` (default) keeps only the best.
+        checkpoint_score_attribute: Metric key used to rank checkpoints.
+            ``None`` uses the last reported checkpoint.
+        checkpoint_score_order: Whether to maximise or minimise the score
+            attribute. Defaults to ``MAX``.
+        save_every_n_steps: Enable mid-epoch checkpointing every N global
+            steps. Must be ``>= 1`` when set. Currently gated — raises
+            ``NotImplementedError`` in the dispatcher.
+        random_seed: Optional shuffle seed for chunk-based mid-epoch reads.
+            Currently gated with ``save_every_n_steps``.
+
+    Raises:
+        ConfigurationError: If ``save_every_n_steps`` is set to a value
+            less than 1.
+
+    Example:
+        >>> CheckpointConfig(num_to_keep=3, checkpoint_score_attribute="val_loss",
+        ...                   checkpoint_score_order=CheckpointScoreOrder.MIN)
+        CheckpointConfig(num_to_keep=3, ...)
+    """
+
+    num_to_keep: int = 1
+    checkpoint_score_attribute: str | None = None
+    checkpoint_score_order: CheckpointScoreOrder = CheckpointScoreOrder.MAX
+    save_every_n_steps: int | None = None
+    random_seed: int | None = None
+
+    def __post_init__(self) -> None:
+        """Validate save_every_n_steps is a positive integer when set."""
+        if self.save_every_n_steps is not None and self.save_every_n_steps < 1:
+            raise ConfigurationError(
+                f"save_every_n_steps must be >= 1, got {self.save_every_n_steps}."
+            )
+
+
+@dataclass
+class ParquetReadConfig:
+    """Subset of ``ray.data.read_parquet`` kwargs forwarded at read time.
+
+    Only resource and schema-related knobs are exposed. Column projection is
+    derived automatically from ``input_columns``, ``labels``, and
+    ``metadata_columns`` — do not include ``columns`` here.
+
+    Attributes:
+        num_cpus: CPUs to reserve per parallel read worker.
+        num_gpus: GPUs to reserve per parallel read worker.
+        memory: Heap memory in bytes per read worker.
+        concurrency: Maximum number of concurrent Ray read tasks.
+        override_num_blocks: Override the number of output blocks.
+        shuffle: Set to ``"files"`` to randomly shuffle input file order.
+        tensor_column_schema: Column name → ``{"dtype": ..., "shape": ...}``
+            for serialised tensor columns.
+        arrow_parquet_args: Additional kwargs forwarded to PyArrow's reader.
+
+    Example:
+        >>> ParquetReadConfig(num_cpus=2, shuffle="files")
+        ParquetReadConfig(num_cpus=2, ...)
+    """
+
+    num_cpus: float | None = None
+    num_gpus: float | None = None
+    memory: int | None = None
+    concurrency: int | None = None
+    override_num_blocks: int | None = None
+    shuffle: str | None = None
+    tensor_column_schema: dict | None = None
+    arrow_parquet_args: dict | None = None
+
+
+@dataclass
+class BatchIterConfig:
+    """Configuration for ``ray.data.Dataset.iter_torch_batches``.
+
+    Attributes:
+        batch_size: Number of samples per batch. Required.
+        num_shuffle_batches: Number of batches to buffer for local
+            shuffling. ``0`` disables local shuffle.
+        collate_fn: Dotted import path to a collate function. When set,
+            the function is resolved at training time via ``get_module_attr``
+            and passed as ``collate_fn`` to ``iter_torch_batches``.
+
+    Example:
+        >>> BatchIterConfig(batch_size=64, num_shuffle_batches=4)
+        BatchIterConfig(batch_size=64, num_shuffle_batches=4, collate_fn=None)
+    """
+
+    batch_size: int
+    num_shuffle_batches: int = 0
+    collate_fn: str | None = None
+
+
+@dataclass
+class DataloadingConfig:
+    """Container for data reading and batch iteration settings.
+
+    Attributes:
+        parquet_read_config: kwargs forwarded to ``ray.data.read_parquet``.
+        batch_iter_config: Batch size, shuffle, and collate settings.
+
+    Example:
+        >>> DataloadingConfig(batch_iter_config=BatchIterConfig(batch_size=32))
+        DataloadingConfig(...)
+    """
+
+    parquet_read_config: ParquetReadConfig | None = None
+    batch_iter_config: BatchIterConfig | None = None
+
+
+@dataclass
+class LightningTrainerKwargs:
+    """Passthrough kwargs for ``lightning.pytorch.Trainer.__init__``.
+
+    All fields are optional and default to ``None`` (or the Lightning
+    default). Fields forwarded verbatim to the Trainer constructor after
+    any ``_count`` → ``limit_*_batches`` merge (int counts take precedence).
+
+    The ``limit_*_batches`` / ``limit_*_batches_count`` pairs are mutually
+    exclusive: setting both raises ``ConfigurationError``.
+
+    Attributes:
+        strategy: Distributed strategy name, e.g. ``"ddp"``, ``"fsdp"``,
+            ``"deepspeed"``.
+        strategy_kwargs: Extra kwargs forwarded to the strategy constructor.
+        precision: Training precision, e.g. ``"32"``, ``"bf16-mixed"``,
+            ``"16-mixed"``.
+        logger: Dotted import path to a ``Logger`` class or factory.
+        logger_kwargs: kwargs forwarded to the logger constructor.
+        callbacks: Dotted import path to a ``Callback`` class or factory
+            returning a list of callbacks.
+        callback_kwargs: kwargs forwarded to the callback constructor.
+        fast_dev_run: Run N batches for fast debugging. ``0`` disables.
+        max_epochs: Maximum number of training epochs.
+        min_epochs: Minimum number of training epochs.
+        max_steps: Maximum number of global training steps. ``-1`` is
+            unlimited.
+        min_steps: Minimum number of global training steps.
+        max_time: Maximum wall-clock time as ``"DD:HH:MM:SS"`` string.
+        limit_train_batches: Fraction of training batches to use each epoch.
+        limit_train_batches_count: Exact number of training batches per epoch.
+        limit_val_batches: Fraction of validation batches.
+        limit_val_batches_count: Exact number of validation batches.
+        limit_test_batches: Fraction of test batches.
+        limit_test_batches_count: Exact number of test batches.
+        limit_predict_batches: Fraction of prediction batches.
+        limit_predict_batches_count: Exact number of prediction batches.
+        overfit_batches: Fraction or count of batches to overfit on.
+        val_check_interval: Validation check frequency (fraction or steps).
+        check_val_every_n_epoch: Run validation every N epochs.
+        num_sanity_val_steps: Number of sanity-check validation steps.
+        log_every_n_steps: Logging frequency in global steps.
+        enable_progress_bar: Show or hide the training progress bar.
+        enable_model_summary: Show or hide the model summary at startup.
+        accumulate_grad_batches: Gradient accumulation steps.
+        gradient_clip_val: Max gradient norm for clipping.
+        gradient_clip_algorithm: Clipping algorithm, e.g. ``"norm"``.
+        deterministic: Force deterministic CUDA ops (``"True"`` / ``"False"``
+            / ``"warn"``).
+        benchmark: Enable cuDNN auto-tuner.
+        inference_mode: Use ``torch.inference_mode`` during validation.
+        use_distributed_sampler: Wrap the sampler for distributed training.
+        detect_anomaly: Enable autograd anomaly detection.
+        barebones: Disable all non-essential Lightning features.
+        plugins: Dotted import path to a plugin class or factory.
+        plugins_kwargs: kwargs forwarded to the plugins constructor.
+        sync_batchnorm: Synchronise batch normalisation across devices.
+        reload_dataloaders_every_n_epochs: Re-create dataloaders every N
+            epochs.
+        default_root_dir: Default directory for logs and checkpoints.
+
+    Raises:
+        ConfigurationError: If both a ``limit_*_batches`` float field and
+            its corresponding ``limit_*_batches_count`` int field are set.
+
+    Example:
+        >>> LightningTrainerKwargs(max_epochs=10, precision="bf16-mixed")
+        LightningTrainerKwargs(max_epochs=10, precision='bf16-mixed', ...)
+    """
+
+    strategy: str | None = None
+    strategy_kwargs: dict | None = None
+    precision: str | None = None
+    logger: str | None = None
+    logger_kwargs: dict | None = None
+    callbacks: str | None = None
+    callback_kwargs: dict | None = None
+    fast_dev_run: int = 0
+    max_epochs: int | None = None
+    min_epochs: int | None = None
+    max_steps: int = -1
+    min_steps: int | None = None
+    max_time: str | None = None
+    limit_train_batches: float | None = None
+    limit_train_batches_count: int | None = None
+    limit_val_batches: float | None = None
+    limit_val_batches_count: int | None = None
+    limit_test_batches: float | None = None
+    limit_test_batches_count: int | None = None
+    limit_predict_batches: float | None = None
+    limit_predict_batches_count: int | None = None
+    overfit_batches: float = 0.0
+    val_check_interval: float | None = None
+    check_val_every_n_epoch: int | None = 1
+    num_sanity_val_steps: int | None = None
+    log_every_n_steps: int | None = None
+    enable_progress_bar: bool | None = None
+    enable_model_summary: bool | None = None
+    accumulate_grad_batches: int = 1
+    gradient_clip_val: float | None = None
+    gradient_clip_algorithm: str | None = None
+    deterministic: str | None = None
+    benchmark: bool | None = None
+    inference_mode: bool = True
+    use_distributed_sampler: bool = True
+    detect_anomaly: bool = False
+    barebones: bool = False
+    plugins: str | None = None
+    plugins_kwargs: dict | None = None
+    sync_batchnorm: bool = False
+    reload_dataloaders_every_n_epochs: int = 0
+    default_root_dir: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate mutually exclusive limit_*_batches pairs."""
+        pairs = [
+            ("limit_train_batches", "limit_train_batches_count"),
+            ("limit_val_batches", "limit_val_batches_count"),
+            ("limit_test_batches", "limit_test_batches_count"),
+            ("limit_predict_batches", "limit_predict_batches_count"),
+        ]
+        for float_field, count_field in pairs:
+            if (
+                getattr(self, float_field) is not None
+                and getattr(self, count_field) is not None
+            ):
+                raise ConfigurationError(
+                    f"Cannot set both '{float_field}' and"
+                    f" '{count_field}' simultaneously."
+                )
+
+
+@dataclass
+class TransferLearningSpecConfig:
+    """Placeholder config for transfer-learning spec building.
+
+    Setting this field on ``LightningTrainerConfig`` raises
+    ``NotImplementedError`` in the dispatcher until the spec builder is
+    ported from the internal SDK.
+
+    Attributes:
+        transfer_learning_spec: Opaque dict forwarded to the internal
+            spec builder. Shape is intentionally untyped until the full
+            builder is available in OSS.
+
+    Example:
+        >>> TransferLearningSpecConfig(transfer_learning_spec={"layers": 3})
+        TransferLearningSpecConfig(transfer_learning_spec={'layers': 3})
+    """
+
+    transfer_learning_spec: dict | None = None
+
+
+@dataclass
+class CustomTrainerConfig:
+    """Configuration for a custom (non-Lightning) trainer backend.
+
+    Using this config raises ``NotImplementedError`` in the dispatcher until
+    the custom Ray trainer subsystem is ported from the internal SDK.
+
+    Attributes:
+        train_class: Dotted import path to the custom trainer class.
+        train_constructor_kwargs: Optional kwargs forwarded to the trainer
+            constructor.
+
+    Example:
+        >>> CustomTrainerConfig(train_class="myproject.trainers.MyTrainer")
+        CustomTrainerConfig(train_class='myproject.trainers.MyTrainer', ...)
+    """
+
+    train_class: str
+    train_constructor_kwargs: dict | None = None
+
+
+@dataclass
+class LightningTrainerConfig:
+    """Configuration for the PyTorch Lightning training backend.
+
+    All column maps (``input_columns``, ``output_columns``, ``labels``) use
+    column name as key and ``ColumnConfig`` as value.
+    ``metadata_columns`` names columns read from Parquet for logging and
+    callbacks but excluded from the model schema.
+
+    Attributes:
+        model_class: Dotted import path to a ``LightningModule`` subclass.
+        input_columns: Feature columns fed to the model.
+        output_columns: Model output columns included in the model schema.
+        labels: Target/label columns.
+        metadata_columns: Columns read for logging; excluded from schema.
+        checkpoint_config: Checkpoint retention settings.
+        model_kwargs: Extra kwargs forwarded to ``model_class.__init__``.
+        dataloading_config: Parquet read and batch iteration settings.
+        scaling_config: Ray Train worker resource allocation.
+        lightning_trainer_kwargs: Passthrough kwargs for
+            ``lightning.pytorch.Trainer``.
+        hyperparameters: Catch-all dict for kwargs not covered by the
+            structured fields. Highly discouraged; prefer structured fields.
+        comet: Comet ML experiment tracking. ``None`` disables Comet.
+        transfer_learning_spec: Transfer-learning spec config. Setting this
+            raises ``NotImplementedError`` until the spec builder is ported.
+        incremental_training_mode: Incremental training mode config.
+
+    Example:
+        >>> from michelangelo.workflow.schema.tabular_trainer import (
+        ...     LightningTrainerConfig, ColumnConfig
+        ... )
+        >>> cfg = LightningTrainerConfig(
+        ...     model_class="myproject.models.TabularNet",
+        ...     input_columns={"age": ColumnConfig("torch.float32")},
+        ...     output_columns={"score": ColumnConfig("torch.float32")},
+        ...     labels={"clicked": ColumnConfig("torch.long")},
+        ...     metadata_columns=["user_id"],
+        ... )
+    """
+
+    model_class: str
+    input_columns: dict[str, ColumnConfig]
+    output_columns: dict[str, ColumnConfig]
+    labels: dict[str, ColumnConfig]
+    metadata_columns: list[str]
+    checkpoint_config: CheckpointConfig = field(default_factory=CheckpointConfig)
+    model_kwargs: dict | None = None
+    dataloading_config: DataloadingConfig | None = None
+    scaling_config: ScalingConfig | None = None
+    lightning_trainer_kwargs: LightningTrainerKwargs | None = None
+    hyperparameters: dict | None = None
+    comet: CometConfig | None = None
+    transfer_learning_spec: TransferLearningSpecConfig | None = None
+    incremental_training_mode: IncrementalTrainingModeConfig | None = None
+
+
+@dataclass
+class TabularTrainerConfig:
+    """Top-level config for ``train_tabular()``.
+
+    Exactly one of ``lightning`` or ``custom`` must be set.
+
+    Attributes:
+        lightning: Config for the PyTorch Lightning backend.
+        custom: Config for a custom trainer backend (raises
+            ``NotImplementedError`` until ported).
+
+    Raises:
+        ConfigurationError: If neither or both backends are set.
+
+    Example:
+        >>> cfg = TabularTrainerConfig(
+        ...     lightning=LightningTrainerConfig(
+        ...         model_class="myproject.models.Net",
+        ...         input_columns={"x": ColumnConfig("torch.float32")},
+        ...         output_columns={"y": ColumnConfig("torch.float32")},
+        ...         labels={"label": ColumnConfig("torch.long")},
+        ...         metadata_columns=[],
+        ...     )
+        ... )
+    """
+
+    lightning: LightningTrainerConfig | None = None
+    custom: CustomTrainerConfig | None = None
+
+    def __post_init__(self) -> None:
+        """Validate that exactly one backend is configured."""
+        if (self.lightning is None) == (self.custom is None):
+            raise ConfigurationError(
+                "Exactly one of 'lightning' or 'custom' must be set on "
+                "TabularTrainerConfig, got "
+                f"lightning={'set' if self.lightning else 'None'}, "
+                f"custom={'set' if self.custom else 'None'}."
+            )
