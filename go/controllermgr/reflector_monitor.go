@@ -25,6 +25,24 @@ const (
 // error messages like "failed to list *v2.Deployment: bad Duration: ...".
 var crdTypeRe = regexp.MustCompile(`(?:failed to list|Failed to watch)\s+(\*?\w+\.\w+)`)
 
+// durationErrRe matches duration parse failures regardless of the exact wording
+// used by the originating library. Two known forms:
+//   - "bad Duration" — protobuf JSON decoder (google.golang.org/protobuf)
+//   - "invalid duration" — Go standard library time.ParseDuration
+//
+// Case-insensitive so minor wording changes in either library do not silently
+// break classification.
+//
+// Duration overflow is a known failure mode caused by proto field values that
+// exceed Go's time.Duration range (~292 years). When this occurs the reflector's
+// List() call fails, the informer cache never syncs, and the controller-manager
+// enters a crash loop until the offending CR is corrected or the binary is
+// updated. Classification as duration_overflow (rather than the generic
+// list_failure that "failed to list" would produce) is intentional — it gives
+// oncall a specific actionable signal via the cr_reflector_errors_total metric.
+// See: https://github.com/michelangelo-ai/michelangelo/issues/1318
+var durationErrRe = regexp.MustCompile(`(?i)\b(bad|invalid)\s+duration\b`)
+
 // NewWatchErrorHandler returns a client-go WatchErrorHandler that classifies
 // reflector errors and emits the cr_unmarshal_errors_total metric.
 //
@@ -76,12 +94,12 @@ type errorClass struct {
 //
 // Classification is ordered most-specific-first: duration and schema errors
 // are checked before generic list/watch failures. This ordering is
-// load-bearing — a "failed to list" message containing "invalid duration"
+// load-bearing — a "failed to list" message containing a duration error
 // must classify as duration_overflow, not list_failure.
 func classifyError(errMsg string) errorClass {
 	crdType := extractCRDTypeFromMessage(errMsg)
 
-	if strings.Contains(errMsg, "invalid duration") || strings.Contains(errMsg, "bad Duration") {
+	if durationErrRe.MatchString(errMsg) {
 		return errorClass{errTypeDurationOverflow, crdType, true}
 	}
 	if strings.Contains(errMsg, "proto:") || strings.Contains(errMsg, "unknown field") ||
