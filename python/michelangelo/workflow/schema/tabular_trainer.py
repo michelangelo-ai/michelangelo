@@ -151,7 +151,8 @@ class CheckpointConfig:
 
     Raises:
         ConfigurationError: If ``save_every_n_steps`` is set to a value
-            less than 1.
+            less than 1. Set it to ``None`` (the default) to disable
+            mid-epoch checkpointing.
 
     Example:
         >>> CheckpointConfig(num_to_keep=3, checkpoint_score_attribute="val_loss",
@@ -170,6 +171,7 @@ class CheckpointConfig:
         if self.save_every_n_steps is not None and self.save_every_n_steps < 1:
             raise ConfigurationError(
                 f"save_every_n_steps must be >= 1, got {self.save_every_n_steps}."
+                " Set it to None to disable mid-epoch checkpointing."
             )
 
 
@@ -177,9 +179,14 @@ class CheckpointConfig:
 class ParquetReadConfig:
     """Subset of ``ray.data.read_parquet`` kwargs forwarded at read time.
 
-    Only resource and schema-related knobs are exposed. Column projection is
-    derived automatically from ``input_columns``, ``labels``, and
-    ``metadata_columns`` — do not include ``columns`` here.
+    This is a curated subset of the full ``ray.data.read_parquet`` API —
+    resource knobs and schema hints only. Fields that overlap with the
+    tabular_trainer's own column management (``columns``, ``paths``) and
+    Ray-version-specific placement logic are intentionally omitted. OSS
+    pins a single Ray version so the internal ``<2.50`` branch is unused.
+
+    Column projection is derived automatically from ``input_columns``,
+    ``labels``, and ``metadata_columns`` — do not include ``columns`` here.
 
     Attributes:
         num_cpus: CPUs to reserve per parallel read worker.
@@ -358,6 +365,10 @@ class LightningTrainerKwargs:
     sync_batchnorm: bool = False
     reload_dataloaders_every_n_epochs: int = 0
     default_root_dir: str | None = None
+    # Note: Lightning's ``profiler`` kwarg is intentionally omitted here.
+    # The profiler subsystem will be re-introduced in PR 5 with a pluggable
+    # upload sink via TrainingObserver. Use ``profiler=None`` (the Lightning
+    # default) until then.
 
     def __post_init__(self) -> None:
         """Validate mutually exclusive limit_*_batches pairs."""
@@ -375,6 +386,8 @@ class LightningTrainerKwargs:
                 raise ConfigurationError(
                     f"Cannot set both '{float_field}' and"
                     f" '{count_field}' simultaneously."
+                    f" Use '{float_field}' (float fraction) or"
+                    f" '{count_field}' (int count), not both."
                 )
 
 
@@ -489,16 +502,49 @@ class TabularTrainerConfig:
             ``NotImplementedError`` until ported).
 
     Raises:
-        ConfigurationError: If neither or both backends are set.
+        ConfigurationError: If neither or both backends are set. Set exactly
+            one of ``lightning`` or ``custom``.
 
     Example:
+        Minimal config — model class, columns, no optional tuning:
+
         >>> cfg = TabularTrainerConfig(
         ...     lightning=LightningTrainerConfig(
-        ...         model_class="myproject.models.Net",
-        ...         input_columns={"x": ColumnConfig("torch.float32")},
-        ...         output_columns={"y": ColumnConfig("torch.float32")},
-        ...         labels={"label": ColumnConfig("torch.long")},
-        ...         metadata_columns=[],
+        ...         model_class="myproject.models.TabularNet",
+        ...         input_columns={"age": ColumnConfig("torch.float32"),
+        ...                        "income": ColumnConfig("torch.float32")},
+        ...         output_columns={"score": ColumnConfig("torch.float32")},
+        ...         labels={"clicked": ColumnConfig("torch.long")},
+        ...         metadata_columns=["user_id"],
+        ...     )
+        ... )
+
+        Realistic config — batch size, epochs, checkpointing by val loss:
+
+        >>> cfg = TabularTrainerConfig(
+        ...     lightning=LightningTrainerConfig(
+        ...         model_class="myproject.models.TabularNet",
+        ...         input_columns={"age": ColumnConfig("torch.float32"),
+        ...                        "income": ColumnConfig("torch.float32")},
+        ...         output_columns={"score": ColumnConfig("torch.float32")},
+        ...         labels={"clicked": ColumnConfig("torch.long")},
+        ...         metadata_columns=["user_id"],
+        ...         dataloading_config=DataloadingConfig(
+        ...             batch_iter_config=BatchIterConfig(
+        ...                 batch_size=256,
+        ...                 num_shuffle_batches=4,
+        ...             ),
+        ...         ),
+        ...         checkpoint_config=CheckpointConfig(
+        ...             num_to_keep=3,
+        ...             checkpoint_score_attribute="val_loss",
+        ...             checkpoint_score_order=CheckpointScoreOrder.MIN,
+        ...         ),
+        ...         lightning_trainer_kwargs=LightningTrainerKwargs(
+        ...             max_epochs=20,
+        ...             precision="bf16-mixed",
+        ...         ),
+        ...         scaling_config=ScalingConfig(cpu_per_worker=4),
         ...     )
         ... )
     """
@@ -513,5 +559,9 @@ class TabularTrainerConfig:
                 "Exactly one of 'lightning' or 'custom' must be set on "
                 "TabularTrainerConfig, got "
                 f"lightning={'set' if self.lightning else 'None'}, "
-                f"custom={'set' if self.custom else 'None'}."
+                f"custom={'set' if self.custom else 'None'}. "
+                "Set TabularTrainerConfig(lightning=LightningTrainerConfig(...)) "
+                "for the Lightning backend or "
+                "TabularTrainerConfig(custom=CustomTrainerConfig(...)) "
+                "for a custom backend."
             )
