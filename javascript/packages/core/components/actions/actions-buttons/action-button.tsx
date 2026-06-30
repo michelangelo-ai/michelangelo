@@ -9,7 +9,7 @@ import type { ActionConfig, Data } from '#core/components/actions/types';
 
 type ActionButtonProps<T extends Data> = {
   action: ActionConfig<T>;
-  onActivate: () => void;
+  onClick: () => void;
   loading?: boolean;
   kind: ButtonProps['kind'];
   shape?: ButtonProps['shape'];
@@ -18,7 +18,7 @@ type ActionButtonProps<T extends Data> = {
 
 export function ActionButton<T extends Data>({
   action,
-  onActivate,
+  onClick,
   loading,
   kind,
   shape,
@@ -41,7 +41,7 @@ export function ActionButton<T extends Data>({
           ? () => <Icon name={action.display.icon} size={theme.sizing.scale550} color="inherit" />
           : undefined
       }
-      onClick={onActivate}
+      onClick={onClick}
     >
       {action.display.label}
     </Button>

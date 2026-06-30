@@ -50,7 +50,7 @@ export function ActionsButtons<T extends Data>({
         {primary && (
           <ActionButton
             action={primary}
-            onActivate={() => activateAction(primary)}
+            onClick={() => activateAction(primary)}
             loading={loading}
             kind={KIND.primary}
             overrides={{ Root: { style: { width: '200px' } } }}
@@ -60,7 +60,7 @@ export function ActionsButtons<T extends Data>({
           <ActionButton
             key={action.display.label}
             action={action}
-            onActivate={() => activateAction(action)}
+            onClick={() => activateAction(action)}
             loading={loading}
             kind={KIND.secondary}
             shape={SHAPE.pill}
