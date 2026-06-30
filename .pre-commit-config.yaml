@@ -23,3 +23,14 @@ repos:
         language: system
         files: ^javascript/
         pass_filenames: false
+      - id: gofmt
+        name: go formatter
+        entry: gofmt -l -w
+        language: system
+        files: ^go/.*\.go$
+      - id: go-vet
+        name: go vet
+        entry: bash -c 'cd go && go vet ./...'
+        language: system
+        files: ^go/.*\.go$
+        pass_filenames: false
