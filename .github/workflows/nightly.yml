@@ -81,6 +81,8 @@ jobs:
         run: poetry config pypi-token.pypi ${{ secrets.PYPI_API_TOKEN }}
 
       - name: Publish to PyPI (pre-release)
+        env:
+          POETRY_DYNAMIC_VERSIONING_BYPASS: ${{ steps.version.outputs.nightly_version }}
         run: poetry publish --no-interaction
 
   # ---------------------------------------------------------------------------
@@ -298,11 +300,11 @@ jobs:
           yarn workspace @michelangelo/rpc build
 
       - name: Publish @michelangelo-ai/core
-        run: cd packages/core && npm publish --tag nightly --access public
+        run: yarn workspace @michelangelo-ai/core npm publish --tag nightly --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @michelangelo/rpc
-        run: cd packages/rpc && npm publish --tag nightly --access public
+        run: yarn workspace @michelangelo/rpc npm publish --tag nightly --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
