@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"go.uber.org/zap"
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	apiutils "github.com/michelangelo-ai/michelangelo/go/api/utils"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 )

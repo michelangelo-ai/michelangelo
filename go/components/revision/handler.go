@@ -9,8 +9,8 @@ package revision
 import (
 	"context"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Handler reconciles the lifecycle of Revision CRs produced by a specific
