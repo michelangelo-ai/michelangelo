@@ -300,11 +300,11 @@ jobs:
           yarn workspace @michelangelo/rpc build
 
       - name: Publish @michelangelo-ai/core
-        run: yarn workspace @michelangelo-ai/core npm publish --tag nightly --access public
+        run: yarn workspace @michelangelo-ai/core npm publish --tag nightly --access public --legacy-peer-deps
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @michelangelo/rpc
-        run: yarn workspace @michelangelo/rpc npm publish --tag nightly --access public
+        run: yarn workspace @michelangelo/rpc npm publish --tag nightly --access public --legacy-peer-deps
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
