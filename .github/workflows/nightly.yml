@@ -290,8 +290,8 @@ jobs:
         run: |
           DATE_TAG="${{ needs.check-changes.outputs.date_tag }}"
           NIGHTLY_VERSION="0.3.0-nightly.${DATE_TAG}"
-          cd packages/core && npm version "$NIGHTLY_VERSION" --no-git-tag-version && cd ../..
-          cd packages/rpc  && npm version "$NIGHTLY_VERSION" --no-git-tag-version && cd ../..
+          jq ".version = \"$NIGHTLY_VERSION\"" packages/core/package.json > /tmp/core-pkg.json && mv /tmp/core-pkg.json packages/core/package.json
+          jq ".version = \"$NIGHTLY_VERSION\""  packages/rpc/package.json  > /tmp/rpc-pkg.json  && mv /tmp/rpc-pkg.json  packages/rpc/package.json
           echo "Publishing npm nightly: $NIGHTLY_VERSION"
 
       - name: Build packages
