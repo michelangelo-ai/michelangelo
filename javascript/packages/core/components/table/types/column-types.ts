@@ -9,6 +9,8 @@ import type { TableData } from './data-types';
 import type { TableRow } from './row-types';
 
 declare module '@tanstack/react-table' {
+  // ColumnConfig cannot be used here to eliminate meta casts: Cell<TData> is a union type,
+  // and TypeScript does not allow interfaces to extend union types; see #1417
   // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-empty-object-type
   interface ColumnMeta<TData extends TableData, TValue> {}
 }

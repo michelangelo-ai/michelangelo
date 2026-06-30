@@ -18,12 +18,12 @@ export function DatetimeFilter<TData = unknown>({
   }).renderFilter;
 
   const filterRange = [UNIFIED_API_ORIGIN_DATE, new Date()];
-  const currentFilterValue = convertStringParamsToDate(getFilterValue() as DatetimeFilterValue); // cast: tanstack-table types filter value as unknown; datetime filter is always DatetimeFilterValue here
+  const currentFilterValue = convertStringParamsToDate(getFilterValue() as DatetimeFilterValue); // cast: FilteringCapability.getFilterValue returns unknown; datetime filter is always DatetimeFilterValue here; see #1418
 
   return (
     <DatetimeFilterPanel
       data={filterRange}
-      setFilter={setFilterValue as (value: DatetimeFilterValue) => void} // cast: tanstack-table types setFilter as (value: unknown) => void; our filter accepts DatetimeFilterValue
+      setFilter={setFilterValue as (value: DatetimeFilterValue) => void} // cast: FilteringCapability.setFilterValue accepts unknown; our filter passes DatetimeFilterValue; see #1418
       close={close}
       // @ts-expect-error Michelangelo DatetimeFilterValue does not match BaseUI's FilterParameters type
       filterParams={currentFilterValue}

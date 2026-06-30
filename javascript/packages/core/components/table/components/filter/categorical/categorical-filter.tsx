@@ -24,7 +24,7 @@ export function CategoricalFilter<TData = unknown>({
   });
 
   const availableDisplayValues = Object.keys(displayValueToFilterValue);
-  const currentDisplaySelection = ((getFilterValue() as unknown[]) ?? []) // cast: tanstack-table types filter value as unknown; categorical filter values are always an array
+  const currentDisplaySelection = ((getFilterValue() as unknown[]) ?? []) // cast: FilteringCapability.getFilterValue returns unknown; categorical filter values are always an array; see #1418
     .map((value) => filterValueToDisplayValue[safeStringify(value)])
     .filter(Boolean);
 

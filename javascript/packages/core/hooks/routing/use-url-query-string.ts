@@ -34,5 +34,5 @@ import { useLocation } from 'react-router-dom-v5-compat';
 export function useUrlQueryString<T extends Record<string, string>>(): Partial<T> {
   const location = useLocation();
   const { search = '' } = location ?? {};
-  return Object.fromEntries(new URLSearchParams(search)) as Partial<T>; // cast: URLSearchParams yields string values; T constrains all values to string so the shape is safe
+  return Object.fromEntries(new URLSearchParams(search)) as Partial<T>; // cast: Object.fromEntries returns { [k: string]: string }; T constrains all values to string so the shape is safe at runtime
 }
