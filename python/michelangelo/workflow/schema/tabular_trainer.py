@@ -20,9 +20,11 @@ __all__ = [
     "CometConfig",
     "CustomTrainerConfig",
     "DataloadingConfig",
+    "ExperimentTrackerConfig",
     "IncrementalTrainingModeConfig",
     "LightningTrainerConfig",
     "LightningTrainerKwargs",
+    "MlflowConfig",
     "ParquetReadConfig",
     "ScalingConfig",
     "TabularTrainerConfig",
@@ -86,7 +88,7 @@ class ColumnConfig:
 class CometConfig:
     """Comet ML experiment tracking configuration.
 
-    All four fields are required when ``comet`` is set on
+    Pass to ``ExperimentTrackerConfig(comet=CometConfig(...))`` on
     ``LightningTrainerConfig``.
 
     Attributes:
@@ -108,6 +110,87 @@ class CometConfig:
     workspace: str
     project_name: str
     experiment_name: str
+
+
+@dataclass
+class MlflowConfig:
+    """MLflow experiment tracking configuration.
+
+    Pass to ``ExperimentTrackerConfig(mlflow=MlflowConfig(...))`` on
+    ``LightningTrainerConfig``.
+
+    Attributes:
+        tracking_uri: MLflow tracking server URI, e.g.
+            ``"http://localhost:5000"`` or ``"sqlite:///mlflow.db"``.
+        experiment_name: Name of the MLflow experiment. Created automatically
+            if it does not exist.
+        run_name: Optional display name for this training run. Auto-generated
+            when ``None``.
+        tags: Key-value string tags attached to the MLflow run.
+
+    Example:
+        >>> cfg = MlflowConfig(
+        ...     tracking_uri="http://mlflow.example.com",
+        ...     experiment_name="tabular-ctr",
+        ...     run_name="xgb-baseline",
+        ... )
+    """
+
+    tracking_uri: str
+    experiment_name: str
+    run_name: str | None = None
+    tags: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class ExperimentTrackerConfig:
+    """Experiment tracking backend configuration.
+
+    Exactly zero or one tracker may be active at a time. Set neither to
+    disable experiment tracking entirely. Setting more than one raises
+    ``ConfigurationError``.
+
+    Attributes:
+        comet: Comet ML tracker configuration.
+        mlflow: MLflow tracker configuration.
+
+    Raises:
+        ConfigurationError: If more than one tracker backend is configured.
+            Set at most one of ``comet`` or ``mlflow``.
+
+    Example — Comet ML:
+        >>> ExperimentTrackerConfig(
+        ...     comet=CometConfig(
+        ...         api_key="key", workspace="ws",
+        ...         project_name="proj", experiment_name="exp",
+        ...     )
+        ... )
+
+    Example — MLflow:
+        >>> ExperimentTrackerConfig(
+        ...     mlflow=MlflowConfig(
+        ...         tracking_uri="http://mlflow.example.com",
+        ...         experiment_name="tabular-ctr",
+        ...     )
+        ... )
+    """
+
+    comet: CometConfig | None = None
+    mlflow: MlflowConfig | None = None
+
+    def __post_init__(self) -> None:
+        """Validate that at most one tracker backend is configured."""
+        active = [
+            name
+            for name, val in [("comet", self.comet), ("mlflow", self.mlflow)]
+            if val is not None
+        ]
+        if len(active) > 1:
+            raise ConfigurationError(
+                f"At most one experiment tracker can be set, got: {active}. "
+                "Choose one of ExperimentTrackerConfig(comet=...) or "
+                "ExperimentTrackerConfig(mlflow=...)."
+            )
 
 
 @dataclass
@@ -456,7 +539,8 @@ class LightningTrainerConfig:
             ``lightning.pytorch.Trainer``.
         hyperparameters: Catch-all dict for kwargs not covered by the
             structured fields. Highly discouraged; prefer structured fields.
-        comet: Comet ML experiment tracking. ``None`` disables Comet.
+        experiment_tracker: Experiment tracking backend (Comet ML or MLflow).
+            ``None`` disables experiment tracking.
         transfer_learning_spec: Transfer-learning spec config. Setting this
             raises ``NotImplementedError`` until the spec builder is ported.
         incremental_training_mode: Incremental training mode config.
@@ -485,7 +569,7 @@ class LightningTrainerConfig:
     scaling_config: ScalingConfig | None = None
     lightning_trainer_kwargs: LightningTrainerKwargs | None = None
     hyperparameters: dict | None = None
-    comet: CometConfig | None = None
+    experiment_tracker: ExperimentTrackerConfig | None = None
     transfer_learning_spec: TransferLearningSpecConfig | None = None
     incremental_training_mode: IncrementalTrainingModeConfig | None = None
 
@@ -545,6 +629,12 @@ class TabularTrainerConfig:
         ...             precision="bf16-mixed",
         ...         ),
         ...         scaling_config=ScalingConfig(cpu_per_worker=4),
+        ...         experiment_tracker=ExperimentTrackerConfig(
+        ...             mlflow=MlflowConfig(
+        ...                 tracking_uri="http://mlflow.example.com",
+        ...                 experiment_name="tabular-ctr",
+        ...             ),
+        ...         ),
         ...     )
         ... )
     """

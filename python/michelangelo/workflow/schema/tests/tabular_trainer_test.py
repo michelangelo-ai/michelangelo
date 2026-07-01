@@ -13,9 +13,11 @@ from michelangelo.workflow.schema.tabular_trainer import (
     CometConfig,
     CustomTrainerConfig,
     DataloadingConfig,
+    ExperimentTrackerConfig,
     IncrementalTrainingModeConfig,
     LightningTrainerConfig,
     LightningTrainerKwargs,
+    MlflowConfig,
     ParquetReadConfig,
     ScalingConfig,
     TabularTrainerConfig,
@@ -348,6 +350,96 @@ class TestCustomTrainerConfig(TestCase):
 
 
 # ---------------------------------------------------------------------------
+# MlflowConfig
+# ---------------------------------------------------------------------------
+
+
+class TestMlflowConfig(TestCase):
+    """Tests for MlflowConfig dataclass."""
+
+    def test_required_fields(self):
+        """tracking_uri and experiment_name are required; rest default."""
+        cfg = MlflowConfig(
+            tracking_uri="http://mlflow.example.com",
+            experiment_name="tabular-ctr",
+        )
+        self.assertEqual(cfg.tracking_uri, "http://mlflow.example.com")
+        self.assertEqual(cfg.experiment_name, "tabular-ctr")
+        self.assertIsNone(cfg.run_name)
+        self.assertEqual(cfg.tags, {})
+
+    def test_all_fields_stored(self):
+        """It stores all optional fields when provided."""
+        cfg = MlflowConfig(
+            tracking_uri="sqlite:///mlflow.db",
+            experiment_name="exp",
+            run_name="run-1",
+            tags={"env": "prod"},
+        )
+        self.assertEqual(cfg.run_name, "run-1")
+        self.assertEqual(cfg.tags, {"env": "prod"})
+
+    def test_tags_instances_are_independent(self):
+        """Default tags dicts are not shared between instances."""
+        a = MlflowConfig(tracking_uri="u", experiment_name="e")
+        b = MlflowConfig(tracking_uri="u", experiment_name="e")
+        a.tags["key"] = "val"
+        self.assertEqual(b.tags, {})
+
+
+# ---------------------------------------------------------------------------
+# ExperimentTrackerConfig
+# ---------------------------------------------------------------------------
+
+
+class TestExperimentTrackerConfig(TestCase):
+    """Tests for ExperimentTrackerConfig validation."""
+
+    def _comet(self) -> CometConfig:
+        return CometConfig(
+            api_key="k", workspace="ws", project_name="p", experiment_name="e"
+        )
+
+    def _mlflow(self) -> MlflowConfig:
+        return MlflowConfig(
+            tracking_uri="http://mlflow.example.com", experiment_name="exp"
+        )
+
+    def test_no_tracker_ok(self):
+        """Setting neither tracker is valid (no tracking)."""
+        cfg = ExperimentTrackerConfig()
+        self.assertIsNone(cfg.comet)
+        self.assertIsNone(cfg.mlflow)
+
+    def test_comet_only_ok(self):
+        """Setting only comet is valid."""
+        comet = self._comet()
+        cfg = ExperimentTrackerConfig(comet=comet)
+        self.assertIs(cfg.comet, comet)
+        self.assertIsNone(cfg.mlflow)
+
+    def test_mlflow_only_ok(self):
+        """Setting only mlflow is valid."""
+        mlflow = self._mlflow()
+        cfg = ExperimentTrackerConfig(mlflow=mlflow)
+        self.assertIs(cfg.mlflow, mlflow)
+        self.assertIsNone(cfg.comet)
+
+    def test_both_raises(self):
+        """Setting both comet and mlflow raises ConfigurationError."""
+        with self.assertRaises(ConfigurationError):
+            ExperimentTrackerConfig(comet=self._comet(), mlflow=self._mlflow())
+
+    def test_both_error_message(self):
+        """Error message names both active trackers and suggests the fix."""
+        with self.assertRaises(ConfigurationError) as ctx:
+            ExperimentTrackerConfig(comet=self._comet(), mlflow=self._mlflow())
+        msg = str(ctx.exception)
+        self.assertIn("comet", msg)
+        self.assertIn("mlflow", msg)
+
+
+# ---------------------------------------------------------------------------
 # LightningTrainerConfig
 # ---------------------------------------------------------------------------
 
@@ -380,23 +472,26 @@ class TestLightningTrainerConfig(TestCase):
         self.assertIsNone(cfg.scaling_config)
         self.assertIsNone(cfg.lightning_trainer_kwargs)
         self.assertIsNone(cfg.hyperparameters)
-        self.assertIsNone(cfg.comet)
+        self.assertIsNone(cfg.experiment_tracker)
         self.assertIsNone(cfg.transfer_learning_spec)
         self.assertIsNone(cfg.incremental_training_mode)
 
     def test_optional_fields_stored(self):
         """It stores all optional fields when provided."""
-        comet = CometConfig(
-            api_key="k", workspace="ws", project_name="p", experiment_name="e"
+        tracker = ExperimentTrackerConfig(
+            mlflow=MlflowConfig(
+                tracking_uri="http://mlflow.example.com",
+                experiment_name="tabular-ctr",
+            )
         )
         scaling = ScalingConfig(cpu_per_worker=4)
         cfg = _minimal_lightning_config(
-            comet=comet,
+            experiment_tracker=tracker,
             scaling_config=scaling,
             hyperparameters={"lr": 0.001},
             incremental_training_mode=IncrementalTrainingModeConfig.BASELINE,
         )
-        self.assertIs(cfg.comet, comet)
+        self.assertIs(cfg.experiment_tracker, tracker)
         self.assertIs(cfg.scaling_config, scaling)
         self.assertEqual(cfg.hyperparameters, {"lr": 0.001})
         self.assertEqual(
