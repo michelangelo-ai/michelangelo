@@ -14,8 +14,6 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 const _requestTimeoutSec = 30
@@ -48,6 +46,7 @@ func NewReconciler(
 
 // Reconcile implements reconcile.Reconciler. Status is persisted when the
 // handler mutates any field in rev.Status, even if the handler returns an error.
+// Revisions without a registered handler are treated as snapshots and marked READY.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, _requestTimeoutSec*time.Second)
 	defer cancel()
@@ -63,15 +62,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	if !rev.GetDeletionTimestamp().IsZero() {
-		logger.Info("Revision is being deleted; skipping reconcile")
+		logger.Debug("revision is being deleted; skipping reconcile")
 		return ctrl.Result{}, nil
 	}
 
 	if apiutils.IsImmutable(rev) {
+		logger.Debug("revision is immutable; skipping reconcile")
 		return ctrl.Result{}, nil
 	}
 
 	if rev.Status.State == v2pb.REVISION_STATE_READY || rev.Status.State == v2pb.REVISION_STATE_ERROR {
+		logger.Info("revision in terminal state; marking immutable",
+			zap.String("state", rev.Status.State.String()))
 		apiutils.MarkImmutable(rev)
 		if err := r.Update(ctx, rev, &metav1.UpdateOptions{}); err != nil {
 			return ctrl.Result{}, fmt.Errorf("mark revision immutable %s/%s: %w", req.Namespace, req.Name, err)
@@ -80,7 +82,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	if rev.Spec.BaseType == nil {
-		logger.Info("Revision has no BaseType; skipping reconcile")
+		logger.Info("revision has no BaseType; skipping reconcile")
 		return ctrl.Result{}, nil
 	}
 
@@ -90,12 +92,21 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 	h, ok := r.handlers[key]
 	if !ok {
-		logger.Info("no handler registered for BaseType; skipping reconcile",
+		logger.Info("no handler registered for BaseType; treating as snapshot",
 			zap.String("apiVersion", key.APIVersion),
 			zap.String("kind", key.Kind),
 		)
+		rev.Status.State = v2pb.REVISION_STATE_READY
+		if err := r.UpdateStatus(ctx, rev, &metav1.UpdateOptions{}); err != nil {
+			return ctrl.Result{}, fmt.Errorf("update snapshot revision status %s/%s: %w", req.Namespace, req.Name, err)
+		}
 		return ctrl.Result{}, nil
 	}
+
+	logger.Debug("dispatching to handler",
+		zap.String("apiVersion", key.APIVersion),
+		zap.String("kind", key.Kind),
+	)
 
 	original := rev.DeepCopy()
 
@@ -106,6 +117,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	var updateErr error
 	if !reflect.DeepEqual(original.Status, rev.Status) {
+		logger.Debug("status changed; persisting update")
 		if err := r.UpdateStatus(ctx, rev, &metav1.UpdateOptions{}); err != nil {
 			updateErr = fmt.Errorf("update revision status %s/%s: %w", req.Namespace, req.Name, err)
 		}
@@ -124,19 +136,5 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.Revision{}).
-		WithEventFilter(
-			predicate.NewPredicateFuncs(func(object client.Object) bool {
-				rev, ok := object.(*v2pb.Revision)
-				if !ok {
-					return false
-				}
-				baseType := rev.Spec.GetBaseType()
-				if baseType == nil {
-					return false
-				}
-				_, exists := r.handlers[*baseType]
-				return exists
-			}),
-		).
 		Complete(r)
 }

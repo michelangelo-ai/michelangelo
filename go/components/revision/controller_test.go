@@ -127,7 +127,7 @@ func TestReconcile_BaseTypeNil(t *testing.T) {
 	require.Equal(t, ctrl.Result{}, result)
 }
 
-func TestReconcile_NoHandlerRegistered(t *testing.T) {
+func TestReconcile_NoHandlerRegistered_TreatedAsSnapshot(t *testing.T) {
 	mc := gomock.NewController(t)
 	defer mc.Finish()
 
@@ -136,6 +136,12 @@ func TestReconcile_NoHandlerRegistered(t *testing.T) {
 		Get(gomock.Any(), "test-ns", "test-rev", gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, _, _ string, _ *metav1.GetOptions, obj *v2pb.Revision) error {
 			obj.Spec.BaseType = &metav1.TypeMeta{APIVersion: "other/v1", Kind: "Other"}
+			return nil
+		})
+	mockAPI.EXPECT().
+		UpdateStatus(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, obj *v2pb.Revision, _ *metav1.UpdateOptions) error {
+			require.Equal(t, v2pb.REVISION_STATE_READY, obj.Status.State)
 			return nil
 		})
 
