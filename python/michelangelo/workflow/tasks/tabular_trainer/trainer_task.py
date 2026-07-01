@@ -10,7 +10,7 @@ import os
 import pickle
 import tempfile
 import uuid
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, Optional
 
 import torch
 
@@ -49,7 +49,7 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 
 ApplyIncrementalTrainingMetadataFn = Callable[
-    [ModelMetadata, ModelArtifact | None, IncrementalTrainingModeConfig | None],
+    [ModelMetadata, Optional[ModelArtifact], Optional[IncrementalTrainingModeConfig]],
     None,
 ]
 
