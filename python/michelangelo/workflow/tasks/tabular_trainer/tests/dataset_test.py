@@ -424,6 +424,29 @@ class TestGetSampleData(TestCase):
         )
         self.assertEqual(result[0]["x"].dtype, np.float32)
 
+    def test_object_array_ragged_strings_padded(self):
+        """Ragged stringified rows in an object array are padded (not crashed)."""
+        raw = np.array(["[1.0]", "[2.0, 3.0]"], dtype=object)
+        result = get_sample_data(
+            {"x": raw},
+            {"x": ColumnConfig("torch.float32")},
+        )
+        self.assertIsInstance(result[0]["x"], np.ndarray)
+        self.assertNotEqual(result[0]["x"].dtype, object)
+
+    def test_shape_mismatch_no_reshape_warn_and_continue(self):
+        """Shape mismatch with no valid reshape logs a warning and passes through."""
+        raw = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+        with self.assertLogs(
+            "michelangelo.workflow.tasks.tabular_trainer._dataset", level="WARNING"
+        ) as log:
+            result = get_sample_data(
+                {"x": raw},
+                {"x": ColumnConfig("torch.float32", [2, 2])},
+            )
+        self.assertIn("shape mismatch", " ".join(log.output))
+        self.assertEqual(result[0]["x"].shape, (3,))
+
     def test_only_input_columns_included(self):
         """Keys not in input_columns are excluded from the result."""
         result = get_sample_data(

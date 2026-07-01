@@ -164,7 +164,8 @@ def _pad_row(row: dict) -> dict[str, np.ndarray]:
       ``ast.literal_eval`` then padded via :func:`pad_ragged_lists`.
     - Plain ``np.ndarray``: returned unchanged.
     - Scalar ``str``: parsed with ``ast.literal_eval`` if possible.
-    - All other scalars: wrapped in a 1-D ``np.ndarray``.
+    - All other scalars: wrapped in a 0-D ``np.ndarray`` (use ``np.atleast_1d``
+      downstream if a 1-D array is required).
 
     Args:
         row: Dict from ``train_data.take(1)[0]`` with metadata columns
@@ -218,8 +219,10 @@ def collate_sample_row(
 
     Args:
         sample_row: A single raw row dict from ``train_data.take(1)[0]``.
-        data_collate_fn: Collate function configured for training. When
-            provided the sample is routed through it to match training-time
+        data_collate_fn: Collate function configured for training. Must accept
+            a ``dict[str, np.ndarray]`` (batch of 1) and return a
+            ``dict[str, torch.Tensor]`` with a leading batch dimension of 1.
+            When provided the sample is routed through it to match training-time
             behaviour.
         metadata_columns: Column names aligned with
             ``LightningTrainerConfig.metadata_columns``. Removed from the
@@ -228,6 +231,10 @@ def collate_sample_row(
     Returns:
         Dict mapping column names to numpy arrays with the batch dimension
         removed.
+
+    Raises:
+        AttributeError: If *data_collate_fn* returns values that are not
+            ``torch.Tensor`` objects (e.g. plain numpy arrays or scalars).
     """
     if data_collate_fn is not None:
         _logger.info(
@@ -281,6 +288,10 @@ def get_sample_data(
         A single-element list containing a dict of feature name → numpy array,
         suitable for passing to ``ModelMetadata._sample_data``.
 
+        If a feature is absent from *sample_data_dict* it is skipped (warning
+        logged). If the data shape does not match ``ColumnConfig.shape`` and
+        cannot be reshaped, the data is passed through as-is (warning logged).
+
     Example:
         >>> import numpy as np
         >>> data = get_sample_data(
@@ -318,7 +329,8 @@ def get_sample_data(
                 else item
                 for item in raw.flat
             ]
-            raw = np.array(parsed_items, dtype=np.float32)
+            # Use pad_ragged_lists to handle variable-length (ragged) rows.
+            raw = pad_ragged_lists(parsed_items)
 
         target_dtype = _map_torch_dtype_to_numpy(cfg.data_type)
         data = np.asarray(raw, dtype=target_dtype)
