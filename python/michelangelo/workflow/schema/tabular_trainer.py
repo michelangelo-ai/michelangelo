@@ -150,6 +150,12 @@ class ExperimentTrackerConfig:
     disable experiment tracking entirely. Setting more than one raises
     ``ConfigurationError``.
 
+    **Adding a new backend:** add a typed field here (e.g.
+    ``wandb: WandbConfig | None = None``) and a corresponding branch in
+    ``trainer_task._build_experiment_tracker``. When a second workflow task
+    (e.g. ``llm_trainer``) needs this class, extract it to
+    ``michelangelo.workflow.schema.experiment_tracker`` and import from there.
+
     Attributes:
         comet: Comet ML tracker configuration.
         mlflow: MLflow tracker configuration.
