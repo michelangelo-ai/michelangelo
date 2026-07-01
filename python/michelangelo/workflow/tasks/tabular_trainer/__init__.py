@@ -1,5 +1,6 @@
 """Tabular Lightning trainer workflow task."""
 
+from michelangelo.workflow.schema.exceptions import ConfigurationError
 from michelangelo.workflow.schema.tabular_trainer import (
     BatchIterConfig,
     CheckpointConfig,
@@ -23,12 +24,12 @@ from michelangelo.workflow.tasks.tabular_trainer.trainer_task import (
 )
 
 __all__ = [
-    # Schema
     "BatchIterConfig",
     "CheckpointConfig",
     "CheckpointScoreOrder",
     "ColumnConfig",
     "CometConfig",
+    "ConfigurationError",
     "CustomTrainerConfig",
     "DataloadingConfig",
     "ExperimentTrackerConfig",
@@ -40,6 +41,5 @@ __all__ = [
     "ScalingConfig",
     "TabularTrainerConfig",
     "TransferLearningSpecConfig",
-    # Task
     "train_tabular",
 ]

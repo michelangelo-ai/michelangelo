@@ -17,6 +17,7 @@ from michelangelo.workflow.schema.tabular_trainer import (
     DataloadingConfig,
     ExperimentTrackerConfig,
     IncrementalTrainingModeConfig,
+    MlflowConfig,
     TabularTrainerConfig,
 )
 from michelangelo.workflow.tasks.tabular_trainer.tests.fixtures import (
@@ -195,6 +196,30 @@ class TestTrainTabularGuards(TestCase):
                 storage_backend=mock_storage_backend(),
             )
 
+    def test_mlflow_config_raises_not_implemented(self):
+        """ExperimentTrackerConfig(mlflow=...) raises NotImplementedError."""
+        config = make_tabular_config(
+            experiment_tracker=ExperimentTrackerConfig(
+                mlflow=MlflowConfig(
+                    tracking_uri="http://localhost:5000",
+                    experiment_name="test-exp",
+                )
+            )
+        )
+        with (
+            self.assertRaises(NotImplementedError),
+            patch(
+                f"{_TRAINER_TASK}.get_module_attr",
+                return_value=lambda **kw: Mock(),
+            ),
+        ):
+            train_tabular(
+                config,
+                mock_train_dataset(),
+                mock_validation_dataset(),
+                storage_backend=mock_storage_backend(),
+            )
+
     def test_empty_train_dataset_raises(self):
         """Zero-row train dataset raises ConfigurationError."""
         train_ds = mock_train_dataset()
@@ -236,7 +261,6 @@ def _run_train(config=None, train_ds=None, val_ds=None, backend=None, **kwargs):
             f"{_TRAINER_TASK}.get_module_attr",
             return_value=lambda **kw: Mock(),
         ),
-        patch(f"{_TRAINER_TASK}.torch"),
         patch(f"{_TRAINER_TASK}.torch"),
         patch(f"{_TRAINER_TASK}.LightningTrainerParam"),
         patch(f"{_TRAINER_TASK}.LightningTrainerWithStateDict") as mt,

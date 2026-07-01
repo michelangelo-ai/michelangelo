@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import io
 import logging
+import os
 import pickle
 import tempfile
 import uuid
@@ -233,6 +235,17 @@ def _train_lightning(
             workspace=c.workspace,
         )
 
+    # MLflow gate — wiring not yet implemented
+    if (
+        config.experiment_tracker is not None
+        and config.experiment_tracker.mlflow is not None
+    ):
+        raise NotImplementedError(
+            "MLflow experiment tracking is not yet wired in OSS. "
+            "Remove mlflow from ExperimentTrackerConfig to proceed, "
+            "or use CometML tracking instead."
+        )
+
     # Mid-epoch checkpointing gate
     if config.checkpoint_config.save_every_n_steps is not None:
         raise NotImplementedError(
@@ -298,35 +311,39 @@ def _train_lightning(
         "precision", hp.get("precision", default_precision)
     )
 
-    # Download warm-start weights to a local temp dir
+    # Download warm-start weights, keep dir alive for the duration of training,
+    # then clean up. Uses ExitStack for conditional cleanup.
     initial_weights_path: str | None = None
-    if initial_model is not None:
-        _weights_tmp = tempfile.mkdtemp(prefix="michelangelo_weights_")
-        storage_backend.download(initial_model.path, _weights_tmp)
-        initial_weights_path = _weights_tmp
-        _logger.info("Downloaded initial weights to: %s", initial_weights_path)
+    with contextlib.ExitStack() as stack:
+        if initial_model is not None:
+            _weights_dir = stack.enter_context(
+                tempfile.TemporaryDirectory(prefix="michelangelo_weights_")
+            )
+            storage_backend.download(initial_model.path, _weights_dir)
+            initial_weights_path = os.path.join(_weights_dir, "model.pt")
+            _logger.info("Downloaded initial weights to: %s", initial_weights_path)
 
-    # Build and run trainer
-    trainer_param = LightningTrainerParam(
-        create_model_fn=create_model_fn,
-        create_model_fn_kwargs=create_model_fn_kwargs,
-        train_data=train_data,
-        val_data=validation_data,
-        batch_size=batch_size,
-        num_shuffle_batches=num_shuffle_batches,
-        data_collate_fn=data_collate_fn,
-        lightning_trainer_kwargs=lightning_trainer_kwargs,
-        comet_param=comet_param,
-        transfer_learning_spec=None,
-        initial_weights_path=initial_weights_path,
-    )
-    trainer = LightningTrainerWithStateDict(
-        trainer_param, run_config=run_config, scaling_config=scaling_config
-    )
-    trainer.train()
-    _logger.info("Training complete")
+        # Build and run trainer
+        trainer_param = LightningTrainerParam(
+            create_model_fn=create_model_fn,
+            create_model_fn_kwargs=create_model_fn_kwargs,
+            train_data=train_data,
+            val_data=validation_data,
+            batch_size=batch_size,
+            num_shuffle_batches=num_shuffle_batches,
+            data_collate_fn=data_collate_fn,
+            lightning_trainer_kwargs=lightning_trainer_kwargs,
+            comet_param=comet_param,
+            transfer_learning_spec=None,
+            initial_weights_path=initial_weights_path,
+        )
+        trainer = LightningTrainerWithStateDict(
+            trainer_param, run_config=run_config, scaling_config=scaling_config
+        )
+        trainer.train()
+        _logger.info("Training complete")
 
-    # Rebuild model and load checkpoint weights
+    # Rebuild model from Ray checkpoint (weights dir already cleaned up above)
     trained_model = create_model_fn(**create_model_fn_kwargs)
     trainer.update_model_state_dict(trained_model)
 
