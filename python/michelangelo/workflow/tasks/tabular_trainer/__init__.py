@@ -20,10 +20,12 @@ from michelangelo.workflow.schema.tabular_trainer import (
     TransferLearningSpecConfig,
 )
 from michelangelo.workflow.tasks.tabular_trainer.trainer_task import (
+    ApplyIncrementalTrainingMetadataFn,
     train_tabular,
 )
 
 __all__ = [
+    "ApplyIncrementalTrainingMetadataFn",
     "BatchIterConfig",
     "CheckpointConfig",
     "CheckpointScoreOrder",

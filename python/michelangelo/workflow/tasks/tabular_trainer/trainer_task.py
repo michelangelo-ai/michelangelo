@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import io
 import logging
 import os
@@ -71,6 +72,11 @@ def _apply_incremental_training_metadata(
     An *initial_model* with ``is_incremental_training = False`` represents
     transfer learning and starts a new independent model (no chain propagation).
 
+    When both *initial_model* is incremental **and**
+    ``incremental_training_mode == BASELINE``, the continuation branch takes
+    priority — the existing chain continues rather than restarting. The BASELINE
+    declaration is ignored in this case.
+
     Args:
         metadata: The ``ModelMetadata`` to mutate in place.
         initial_model: Optional warm-start artifact from a prior run.
@@ -91,7 +97,7 @@ def train_tabular(
     train_dataset: DatasetVariable,
     validation_dataset: DatasetVariable,
     *,
-    storage_backend: StorageBackend,
+    storage_backend: StorageBackend | None,
     initial_model: ModelArtifact | None = None,
     run_config: ray.train.RunConfig | None = None,
     scaling_config: ray.train.ScalingConfig | None = None,
@@ -122,19 +128,27 @@ def train_tabular(
         scaling_config: Optional ``ray.train.ScalingConfig``. When ``None`` a
             default is constructed from ``config.lightning.scaling_config``.
         is_local_run: When ``True``, defaults precision to ``"32"`` (Lightning's
-            default) instead of ``"bf16-mixed"``. Override by setting
-            ``lightning_trainer_kwargs.precision`` explicitly.
-        apply_incremental_training_metadata: Injectable hook for incremental
-            training metadata propagation. Defaults to
-            :func:`_apply_incremental_training_metadata`.
+            default) instead of ``"bf16-mixed"``. This only controls the
+            *default* — set ``config.lightning.lightning_trainer_kwargs.precision``
+            to override regardless of this flag.
+        apply_incremental_training_metadata: Callable matching
+            ``(ModelMetadata, ModelArtifact | None, IncrementalTrainingModeConfig
+            | None) -> None``. Called after training to stamp incremental chain
+            metadata onto the result. Defaults to the built-in
+            :func:`_apply_incremental_training_metadata`; injectable for testing.
 
     Returns:
         A ``ModelArtifact`` with ``assembled=False`` and ``deployable=False``.
         Use the assembler task to produce a serving-ready artifact.
 
     Raises:
-        ConfigurationError: If *storage_backend* is ``None``, or if the config
-            requests an unimplemented backend (custom trainer).
+        ConfigurationError: If *storage_backend* is ``None``, or if the
+            training dataset is empty.
+        NotImplementedError: If ``config.lightning.checkpoint_config
+            .save_every_n_steps`` is set, if
+            ``config.lightning.transfer_learning_spec`` is set, if
+            ``config.lightning.experiment_tracker.mlflow`` is set, or if
+            ``config.custom`` is used (custom backend not yet in OSS).
     """
     if storage_backend is None:
         raise ConfigurationError(
@@ -289,8 +303,6 @@ def _train_lightning(
     # LightningTrainerKwargs: merge, resolve _count variants, set defaults
     lightning_trainer_kwargs: dict = {}
     if config.lightning_trainer_kwargs is not None:
-        import dataclasses
-
         lightning_trainer_kwargs = {
             k: v
             for k, v in dataclasses.asdict(config.lightning_trainer_kwargs).items()
@@ -369,9 +381,7 @@ def _train_lightning(
     )
     metadata.hyperparameters = create_model_fn_kwargs
     metadata._schema = io.BytesIO(pickle.dumps(schema))
-    metadata._sample_data = io.BytesIO(
-        pickle.dumps(sample_data[:5] if sample_data else [])
-    )
+    metadata._sample_data = io.BytesIO(pickle.dumps(sample_data[:5]))
     apply_incremental_training_metadata(
         metadata, initial_model, config.incremental_training_mode
     )

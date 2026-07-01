@@ -61,7 +61,9 @@ class ModelMetadata:
             metadata.
         baseline_model_identifier: Opaque string tag identifying the original
             baseline model at the root of an incremental training chain.
-            ``None`` for non-incremental models or BASELINE-start models.
+            ``None`` for non-incremental models, and for the first run of a new
+            incremental chain (the BASELINE run itself). Set on continuation
+            runs to the identifier of the original baseline.
         _schema: Serialised input/output schema (e.g. protobuf or JSON bytes).
             Not included in ``repr`` to avoid flooding logs.
         _sample_data: Serialised sample inference payload used for smoke-testing

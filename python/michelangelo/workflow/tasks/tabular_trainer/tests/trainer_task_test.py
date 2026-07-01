@@ -87,6 +87,24 @@ class TestApplyIncrementalTrainingMetadata(TestCase):
         )
         self.assertFalse(meta.is_incremental_training)
 
+    def test_incremental_initial_model_takes_priority_over_baseline_mode(self):
+        """Continuation wins over BASELINE when initial_model is incremental.
+
+        When both initial_model.is_incremental_training is True and
+        incremental_training_mode == BASELINE, the continuation branch fires
+        first — the existing chain continues rather than restarting.
+        """
+        meta = ModelMetadata()
+        initial = make_model_artifact(
+            is_incremental_training=True,
+            baseline_model_identifier="baseline-v1",
+        )
+        _apply_incremental_training_metadata(
+            meta, initial, IncrementalTrainingModeConfig.BASELINE
+        )
+        self.assertTrue(meta.is_incremental_training)
+        self.assertEqual(meta.baseline_model_identifier, "baseline-v1")
+
 
 # ---------------------------------------------------------------------------
 # ModelMetadata.to_registry_dict — new fields
