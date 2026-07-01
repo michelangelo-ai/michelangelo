@@ -1,4 +1,4 @@
-"""Tests for michelangelo.workflow.tasks.tabular_trainer.trainer_task."""
+"""Tests for michelangelo.workflow.tasks.tabular_trainer.task."""
 
 from __future__ import annotations
 
@@ -27,14 +27,14 @@ from michelangelo.workflow.tasks.tabular_trainer.tests.fixtures import (
     mock_train_dataset,
     mock_validation_dataset,
 )
-from michelangelo.workflow.tasks.tabular_trainer.trainer_task import (
+from michelangelo.workflow.tasks.tabular_trainer.task import (
     _apply_incremental_training_metadata,
     train_tabular,
 )
 from michelangelo.workflow.variables.metadata import ModelMetadata
 from michelangelo.workflow.variables.types import ModelArtifact
 
-_TRAINER_TASK = "michelangelo.workflow.tasks.tabular_trainer.trainer_task"
+_TRAINER_TASK = "michelangelo.workflow.tasks.tabular_trainer.task"
 
 # ---------------------------------------------------------------------------
 # _apply_incremental_training_metadata

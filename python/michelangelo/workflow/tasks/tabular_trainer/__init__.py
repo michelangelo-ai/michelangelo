@@ -19,7 +19,7 @@ from michelangelo.workflow.schema.tabular_trainer import (
     TabularTrainerConfig,
     TransferLearningSpecConfig,
 )
-from michelangelo.workflow.tasks.tabular_trainer.trainer_task import (
+from michelangelo.workflow.tasks.tabular_trainer.task import (
     ApplyIncrementalTrainingMetadataFn,
     train_tabular,
 )

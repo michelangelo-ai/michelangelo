@@ -5,7 +5,7 @@ Ray-read kwargs construction. These are pure functions with no OSS-infra
 dependencies (no Ray clusters, no storage backends) so they can be tested
 without a Ray session.
 
-All public functions are imported by ``trainer_task.py`` (PR 7c). Tests live
+All public functions are imported by ``task.py`` (PR 7c). Tests live
 in ``tests/dataset_test.py``.
 """
 
