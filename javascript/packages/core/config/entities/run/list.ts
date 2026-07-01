@@ -1,3 +1,4 @@
+import { CellType } from '#core/components/cell/constants';
 import { SHARED_RUN_CELL_CONFIG } from './shared';
 
 import type { ColumnConfig } from '#core/components/table/types/column-types';
@@ -7,7 +8,16 @@ export const PIPELINE_RUN_CELL_CONFIG: ColumnConfig<object>[] = [
   {
     id: 'metadata.name',
     label: 'Name',
-    url: '/${studio.projectId}/${studio.phase}/runs/${data.metadata.name}',
+    items: [
+      {
+        id: 'metadata.name',
+        url: '/${studio.projectId}/${studio.phase}/runs/${data.metadata.name}',
+      },
+      {
+        id: 'spec.description',
+        type: CellType.DESCRIPTION,
+      },
+    ],
   },
   ...SHARED_RUN_CELL_CONFIG,
 ];

@@ -102,4 +102,39 @@ describe('CreatePipelineRunForm', () => {
     await screen.findByText(/Test error/);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
+
+  it('includes description in payload when filled in', async () => {
+    const user = userEvent.setup();
+    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+
+    render(
+      <FormWrapper />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+    await user.type(
+      screen.getByRole('textbox', { name: /description/i }),
+      'nightly evaluation run'
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        'CreatePipelineRun',
+        expect.objectContaining({
+          spec: expect.objectContaining({
+            description: 'nightly evaluation run',
+          }) as Record<string, unknown>,
+        })
+      );
+    });
+  });
 });
