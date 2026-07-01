@@ -2,7 +2,10 @@ package revision
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"reflect"
+	"time"
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
@@ -11,7 +14,11 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
+
+const _requestTimeoutSec = 30
 
 // Reconciler watches Revision CRs and dispatches to the Handler registered
 // for each revision's Spec.BaseType.
@@ -39,9 +46,12 @@ func NewReconciler(
 	}
 }
 
-// Reconcile implements reconcile.Reconciler. Status is persisted only when
-// the handler changes rev.Status.State, to avoid unnecessary writes.
+// Reconcile implements reconcile.Reconciler. Status is persisted when the
+// handler mutates any field in rev.Status, even if the handler returns an error.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	ctx, cancel := context.WithTimeout(ctx, _requestTimeoutSec*time.Second)
+	defer cancel()
+
 	logger := r.logger.With(zap.String("namespace-name", req.NamespacedName.String()))
 
 	rev := &v2pb.Revision{}
@@ -54,6 +64,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	if !rev.GetDeletionTimestamp().IsZero() {
 		logger.Info("Revision is being deleted; skipping reconcile")
+		return ctrl.Result{}, nil
+	}
+
+	if apiutils.IsImmutable(rev) {
+		return ctrl.Result{}, nil
+	}
+
+	if rev.Status.State == v2pb.REVISION_STATE_READY || rev.Status.State == v2pb.REVISION_STATE_ERROR {
+		apiutils.MarkImmutable(rev)
+		if err := r.Update(ctx, rev, &metav1.UpdateOptions{}); err != nil {
+			return ctrl.Result{}, fmt.Errorf("mark revision immutable %s/%s: %w", req.Namespace, req.Name, err)
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -77,17 +99,19 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	original := rev.DeepCopy()
 
-	if err := h.Reconcile(ctx, rev); err != nil {
-		return ctrl.Result{}, fmt.Errorf("handler reconcile for %s/%s: %w", key.APIVersion, key.Kind, err)
+	result, handlerErr := h.Reconcile(ctx, rev)
+	if handlerErr != nil {
+		handlerErr = fmt.Errorf("handler reconcile for %s/%s: %w", key.APIVersion, key.Kind, handlerErr)
 	}
 
-	if rev.Status.State != original.Status.State {
+	var updateErr error
+	if !reflect.DeepEqual(original.Status, rev.Status) {
 		if err := r.UpdateStatus(ctx, rev, &metav1.UpdateOptions{}); err != nil {
-			return ctrl.Result{}, fmt.Errorf("update revision status %s/%s: %w", req.Namespace, req.Name, err)
+			updateErr = fmt.Errorf("update revision status %s/%s: %w", req.Namespace, req.Name, err)
 		}
 	}
 
-	return ctrl.Result{}, nil
+	return result, errors.Join(handlerErr, updateErr)
 }
 
 // Register sets up the Revision controller with the controller-runtime manager.
@@ -100,5 +124,19 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.Revision{}).
+		WithEventFilter(
+			predicate.NewPredicateFuncs(func(object client.Object) bool {
+				rev, ok := object.(*v2pb.Revision)
+				if !ok {
+					return false
+				}
+				baseType := rev.Spec.GetBaseType()
+				if baseType == nil {
+					return false
+				}
+				_, exists := r.handlers[*baseType]
+				return exists
+			}),
+		).
 		Complete(r)
 }
