@@ -250,6 +250,7 @@ def _train_lightning(
         )
 
     # MLflow gate — wiring not yet implemented
+    # TODO(#1427): wire MLflow tracking into LightningTrainerParam
     if (
         config.experiment_tracker is not None
         and config.experiment_tracker.mlflow is not None
