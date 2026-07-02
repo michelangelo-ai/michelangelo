@@ -8,9 +8,6 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from michelangelo.lib.model_manager._private.constants.triton_backend_type import (
-    TritonBackendType,
-)
 from michelangelo.lib.model_manager._private.packager.common import (
     generate_model_py_content,
     serialize_model_class,
@@ -53,6 +50,9 @@ from michelangelo.lib.model_manager._private.utils.spec_utils import (
 )
 from michelangelo.lib.model_manager._private.utils.torch_utils import tensor_to_numpy
 from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager.constants.triton_backend_type import (
+    TritonBackendType,
+)
 
 if TYPE_CHECKING:
     from michelangelo.lib.model_manager._private.packager.template_renderer import (

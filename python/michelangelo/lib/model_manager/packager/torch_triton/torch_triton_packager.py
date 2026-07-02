@@ -6,9 +6,6 @@ from typing import Optional, Union
 from numpy import ndarray
 
 from michelangelo._internal.utils.file_utils import generate_folder
-from michelangelo.lib.model_manager._private.constants.triton_backend_type import (
-    TritonBackendType,
-)
 from michelangelo.lib.model_manager._private.packager.template_renderer import (
     TritonTemplateRenderer,
 )
@@ -24,6 +21,9 @@ from michelangelo.lib.model_manager._private.utils.data_utils import (
     validate_sample_data_with_model_schema,
 )
 from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager.constants.triton_backend_type import (
+    TritonBackendType,
+)
 from michelangelo.lib.model_manager.schema import ModelSchema
 
 _SUPPORTED_BACKENDS = {

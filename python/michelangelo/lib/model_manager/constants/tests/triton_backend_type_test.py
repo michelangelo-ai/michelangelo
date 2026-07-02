@@ -2,7 +2,7 @@
 
 from unittest import TestCase
 
-from michelangelo.lib.model_manager._private.constants import TritonBackendType
+from michelangelo.lib.model_manager.constants import TritonBackendType
 
 
 class TritonBackendTypeTest(TestCase):

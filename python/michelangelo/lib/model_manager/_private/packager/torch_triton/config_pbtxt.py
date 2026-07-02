@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from michelangelo.lib.model_manager._private.constants.triton_backend_type import (
+from michelangelo.lib.model_manager._private.schema.triton import convert_model_schema
+from michelangelo.lib.model_manager.constants.triton_backend_type import (
     TritonBackendType,
 )
-from michelangelo.lib.model_manager._private.schema.triton import convert_model_schema
 
 if TYPE_CHECKING:
     from michelangelo.lib.model_manager._private.packager.template_renderer import (

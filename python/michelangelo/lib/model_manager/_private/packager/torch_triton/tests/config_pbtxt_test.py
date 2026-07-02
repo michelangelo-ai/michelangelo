@@ -2,14 +2,14 @@
 
 from unittest import TestCase
 
-from michelangelo.lib.model_manager._private.constants.triton_backend_type import (
-    TritonBackendType,
-)
 from michelangelo.lib.model_manager._private.packager.template_renderer import (
     TritonTemplateRenderer,
 )
 from michelangelo.lib.model_manager._private.packager.torch_triton import (
     generate_config_pbtxt_content,
+)
+from michelangelo.lib.model_manager.constants.triton_backend_type import (
+    TritonBackendType,
 )
 from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
 
