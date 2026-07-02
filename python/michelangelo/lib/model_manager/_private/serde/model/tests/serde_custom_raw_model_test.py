@@ -67,9 +67,8 @@ class CustomRawModelTest(TestCase):
         model = load_custom_raw_model(model_path)
 
         mock_logger_info.assert_called_with(
-            "Module uber.ai.michelangelo.experimental.model_manager_playground."
-            "python_triton_model.predict not found in the system path. "
-            "Trying to load from the model package."
+            "Module sample_pkg.python_triton_model.predict not found in the "
+            "system path. Trying to load from the model package."
         )
 
         # test predict
@@ -146,9 +145,8 @@ class CustomRawModelTest(TestCase):
         )
         model = load_custom_raw_model(model_path)
         mock_logger_info.assert_called_with(
-            "Module uber.ai.michelangelo.experimental.model_manager_playground."
-            "python_triton_model_1.predict not found after appending the model "
-            "package to the system path. "
+            "Module sample_pkg.python_triton_model_1.predict not found after "
+            "appending the model package to the system path. "
             "Trying to load model after modifying the import names."
         )
 

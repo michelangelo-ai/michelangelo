@@ -2,10 +2,10 @@ from __future__ import annotations
 import os
 import numpy as np
 from michelangelo.lib.model_manager.interface.custom_model import Model
-from uber.ai.michelangelo.experimental.model_manager_playground.python_triton_model.package import (
+from sample_pkg.python_triton_model.package import (
     fn1,
 )
-from uber.ai.michelangelo.experimental.model_manager_playground.python_triton_model.folder.fn2 import (
+from sample_pkg.python_triton_model.folder.fn2 import (
     fn2,
 )
 

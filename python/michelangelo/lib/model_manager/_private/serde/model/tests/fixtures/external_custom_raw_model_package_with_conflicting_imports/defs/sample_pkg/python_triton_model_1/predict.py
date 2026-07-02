@@ -6,10 +6,10 @@ from michelangelo.lib.model_manager.interface.custom_model import Model
 from michelangelo.lib.model_manager._private.serde.model.raw_model_type import (
     dummy_type,
 )
-from uber.ai.michelangelo.experimental.model_manager_playground.python_triton_model_1.package import (
+from sample_pkg.python_triton_model_1.package import (
     fn1,
 )
-from uber.ai.michelangelo.experimental.model_manager_playground.python_triton_model_1.folder.fn2 import (
+from sample_pkg.python_triton_model_1.folder.fn2 import (
     fn2,
 )
 
