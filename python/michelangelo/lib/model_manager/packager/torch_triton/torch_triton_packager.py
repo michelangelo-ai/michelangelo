@@ -66,7 +66,7 @@ class TorchTritonPackager:
         model_schema: ModelSchema,
         model_name: Optional[str] = None,
         dest_model_path: Optional[str] = None,
-        model_revision: Optional[str] = "0",
+        model_revision: Optional[str] = None,
         model_path_source_type: Optional[str] = StorageType.LOCAL,
         sample_data: Optional[list[dict[str, ndarray]]] = None,
         model_class: Optional[str] = None,
@@ -92,7 +92,7 @@ class TorchTritonPackager:
             dest_model_path: The directory path where the model package should
                 be saved. If not specified, a temporary directory will be
                 created and its path returned.
-            model_revision: The revision of the model. Defaults to ``"0"``.
+            model_revision: The revision of the model. Defaults to ``None``.
             model_path_source_type: The storage backend type where the model
                 artifacts are located. Should be a value from StorageType
                 (e.g., StorageType.LOCAL). Defaults to StorageType.LOCAL.
