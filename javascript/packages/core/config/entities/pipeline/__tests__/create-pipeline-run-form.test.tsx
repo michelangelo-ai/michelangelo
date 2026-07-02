@@ -137,4 +137,109 @@ describe('CreatePipelineRunForm', () => {
       );
     });
   });
+
+  it('notification fields are disabled by default and enabled after toggling on', async () => {
+    const user = userEvent.setup();
+    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+
+    render(
+      <FormWrapper />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+
+    // Toggle is visible; email combobox is present but disabled
+    expect(screen.getByText('Send notifications')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: /email addresses/i })).toBeDisabled();
+
+    // Enable notifications via toggle
+    await user.click(screen.getByRole('checkbox', { name: /enabled|disabled/i }));
+
+    // Email combobox is now enabled
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /email addresses/i })).not.toBeDisabled();
+    });
+  });
+
+  it('includes notifications in payload when toggle is on and email is entered', async () => {
+    const user = userEvent.setup();
+    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+
+    render(
+      <FormWrapper />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+
+    // Enable notifications
+    await user.click(screen.getByRole('checkbox', { name: /enabled|disabled/i }));
+
+    // Type an email into the email addresses combobox and commit with Enter
+    const emailCombo = await screen.findByRole('combobox', { name: /email addresses/i });
+    await user.type(emailCombo, 'notify@example.com');
+    await user.keyboard('{Enter}');
+
+    await user.click(screen.getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        'CreatePipelineRun',
+        expect.objectContaining({
+          spec: expect.objectContaining({
+            notifications: [
+              expect.objectContaining({
+                emails: ['notify@example.com'],
+                slackDestinations: [],
+              }),
+            ],
+          }) as Record<string, unknown>,
+        })
+      );
+    });
+  });
+
+  it('shows a validation error when an invalid email address is entered', async () => {
+    const user = userEvent.setup();
+    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+
+    render(
+      <FormWrapper />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+
+    // Enable notifications
+    await user.click(screen.getByRole('checkbox', { name: /enabled|disabled/i }));
+
+    // Type an invalid email into the email addresses combobox and commit with Enter
+    const emailCombo = await screen.findByRole('combobox', { name: /email addresses/i });
+    await user.type(emailCombo, 'not-an-email');
+    await user.keyboard('{Enter}');
+
+    await screen.findByText('Enter valid email addresses, e.g. user@example.com.');
+  });
 });
