@@ -20,16 +20,16 @@ from michelangelo.workflow.schema.tabular_trainer import (
     MlflowConfig,
     TabularTrainerConfig,
 )
+from michelangelo.workflow.tasks.tabular_trainer.task import (
+    _apply_incremental_training_metadata,
+    train_tabular,
+)
 from michelangelo.workflow.tasks.tabular_trainer.tests.fixtures import (
     make_model_artifact,
     make_tabular_config,
     mock_storage_backend,
     mock_train_dataset,
     mock_validation_dataset,
-)
-from michelangelo.workflow.tasks.tabular_trainer.task import (
-    _apply_incremental_training_metadata,
-    train_tabular,
 )
 from michelangelo.workflow.variables.metadata import ModelMetadata
 from michelangelo.workflow.variables.types import ModelArtifact
