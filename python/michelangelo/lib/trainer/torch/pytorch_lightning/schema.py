@@ -135,7 +135,10 @@ class IncrementalTrainingSpec:
             fused native-transform package). Schema-only in OSS today —
             carried through for forward compatibility with internal
             Michelangelo's warm-start config shape; no OSS code currently
-            strips or consumes this prefix.
+            strips or consumes this prefix. Defaults to ``None`` here,
+            unlike internal Michelangelo's ``"predictor_module"`` default —
+            reconcile this divergence deliberately once OSS implements the
+            stripping behavior (see the PR that ports it).
     """
 
     metadata: IncrementalTrainingMetadata
@@ -174,7 +177,10 @@ class TransferLearningSpec:
             fused native-transform package). Schema-only in OSS today —
             carried through for forward compatibility with internal
             Michelangelo's warm-start config shape; no OSS code currently
-            strips or consumes this prefix.
+            strips or consumes this prefix. Defaults to ``None`` here,
+            unlike internal Michelangelo's ``"predictor_module"`` default —
+            reconcile this divergence deliberately once OSS implements the
+            stripping behavior (see the PR that ports it).
     """
 
     metadata: TransferLearningMetadata

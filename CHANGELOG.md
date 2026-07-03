@@ -18,6 +18,10 @@ All notable changes to this project will be documented in this file.
 - `MlflowConfig` is now fully supported — set
   `ExperimentTrackerConfig(tracker=MlflowConfig(...))` to log to MLflow.
   Closes GitHub issue #1427.
+- `fused_model_submodule` field on `IncrementalTrainingSpec` and
+  `TransferLearningSpec` (`lib/trainer/torch/pytorch_lightning/schema.py`),
+  restoring schema-shape parity with the internal Uber SDK. Schema-only for
+  now — no OSS code reads or acts on this field yet.
 
 ### Changed
 
