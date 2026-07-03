@@ -1,8 +1,7 @@
 """Driver-side bridge: ``ExperimentTrackerConfig`` to Lightning logger kwargs.
 
 Pure function with no OSS-infra dependencies (no Ray clusters, no storage
-backends) so it can be tested without a Ray session. Mirrors the style of
-``_dataset.py`` in this package.
+backends) so it can be tested without a Ray session.
 """
 
 from __future__ import annotations

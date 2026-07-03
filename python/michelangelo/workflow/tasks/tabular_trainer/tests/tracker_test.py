@@ -1,4 +1,4 @@
-"""Tests for michelangelo.workflow.tasks.tabular_trainer._tracker."""
+"""Tests for michelangelo.workflow.tasks.tabular_trainer._private.tracker."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from michelangelo.workflow.schema.tabular_trainer import (
     CustomTrackerConfig,
     ExperimentTrackerConfig,
 )
-from michelangelo.workflow.tasks.tabular_trainer._tracker import (
+from michelangelo.workflow.tasks.tabular_trainer._private.tracker import (
     build_tracker_logger_kwargs,
 )
 

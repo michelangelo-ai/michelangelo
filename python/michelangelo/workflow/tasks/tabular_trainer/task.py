@@ -33,7 +33,7 @@ from michelangelo.workflow.tasks.tabular_trainer._dataset import (
     get_sample_data,
     raise_lightning_trainer_config_deprecation_warnings,
 )
-from michelangelo.workflow.tasks.tabular_trainer._tracker import (
+from michelangelo.workflow.tasks.tabular_trainer._private.tracker import (
     build_tracker_logger_kwargs,
 )
 from michelangelo.workflow.variables import ModelVariable
