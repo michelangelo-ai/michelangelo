@@ -3,8 +3,14 @@ name: build-release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      test_version:
+        description: 'Test version for workflow_dispatch runs'
+        default: '0.0.0-test.1'
 jobs:
   build-upload:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -53,6 +59,9 @@ jobs:
         service: [apiserver, worker, controllermgr]
         os: [linux, darwin]
         arch: [amd64, arm64]
+    defaults:
+      run:
+        working-directory: go
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -68,8 +77,8 @@ jobs:
           GOOS: ${{ matrix.os }}
           GOARCH: ${{ matrix.arch }}
           CGO_ENABLED: '0'
-          BIN: ${{ matrix.service }}-${{ matrix.os }}-${{ matrix.arch }}
-        run: go build -o "$BIN" ./go/cmd/${{ matrix.service }}
+          BIN: ${{ github.workspace }}/${{ matrix.service }}-${{ matrix.os }}-${{ matrix.arch }}
+        run: go build -o "$BIN" ./cmd/${{ matrix.service }}
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
@@ -79,6 +88,7 @@ jobs:
           retention-days: 1
 
   upload-binaries:
+    if: github.event_name == 'push'
     needs: build-go-binaries
     runs-on: ubuntu-latest
     permissions:
@@ -99,11 +109,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: |
-            binaries/*
-            binaries/checksums-sha256.txt
+          files: binaries/*
 
   helm-publish:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       packages: write
