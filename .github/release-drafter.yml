@@ -1,0 +1,85 @@
+name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+
+categories:
+  - title: '⚠ Breaking Changes'
+    labels:
+      - 'breaking-change'
+    collapse-after: 5
+  - title: '🚀 Features'
+    labels:
+      - 'feat'
+      - 'feature'
+    collapse-after: 10
+  - title: '🐛 Bug Fixes'
+    labels:
+      - 'fix'
+      - 'bug'
+    collapse-after: 10
+  - title: '📚 Documentation'
+    labels:
+      - 'docs'
+      - 'documentation'
+    collapse-after: 5
+  - title: '🔧 CI / Build'
+    labels:
+      - 'ci'
+      - 'build'
+      - 'chore'
+    collapse-after: 5
+  - title: '🔒 Security'
+    labels:
+      - 'security'
+
+autolabeler:
+  - label: 'breaking-change'
+    title:
+      - '/^.+!:/i'
+      - '/BREAKING CHANGE/i'
+  - label: 'feat'
+    title:
+      - '/^feat(\(.+\))?:/i'
+  - label: 'fix'
+    title:
+      - '/^fix(\(.+\))?:/i'
+  - label: 'docs'
+    title:
+      - '/^docs(\(.+\))?:/i'
+  - label: 'ci'
+    title:
+      - '/^ci(\(.+\))?:/i'
+      - '/^build(\(.+\))?:/i'
+  - label: 'chore'
+    title:
+      - '/^chore(\(.+\))?:/i'
+      - '/^refactor(\(.+\))?:/i'
+      - '/^perf(\(.+\))?:/i'
+      - '/^test(\(.+\))?:/i'
+
+version-resolver:
+  major:
+    labels:
+      - 'breaking-change'
+  minor:
+    labels:
+      - 'feat'
+      - 'feature'
+  patch:
+    labels:
+      - 'fix'
+      - 'bug'
+      - 'docs'
+      - 'ci'
+      - 'chore'
+      - 'security'
+  default: patch
+
+change-template: '- $TITLE @$AUTHOR (#$NUMBER)'
+change-title-escapes: '\<*_&'
+
+template: |
+  ## What's Changed
+
+  $CHANGES
+
+  **Full Changelog**: https://github.com/michelangelo-ai/michelangelo/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
