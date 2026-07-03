@@ -7,10 +7,9 @@ and its backends. Mirrors the structure of ``michelangelo.workflow.schema.pusher
 
 from __future__ import annotations
 
-import dataclasses
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, ClassVar
 
 from michelangelo.workflow.schema.exceptions import ConfigurationError
 from michelangelo.workflow.schema.ray_data_io import (
@@ -102,9 +101,14 @@ class TrackerConfig:
     raise with a specific message; ``__post_init__`` calls it immediately
     at construction time so misconfiguration is caught before training
     starts, not minutes into a run.
+
+    ``_oss_supported`` is a ``ClassVar``, not a dataclass field: these
+    configs are serialized through the UniFlow codec (``asdict()`` then
+    ``cls(**dct)``), and a field would round-trip into the constructor as
+    an unexpected keyword argument.
     """
 
-    _oss_supported: bool = dataclasses.field(default=True, init=False, repr=False)
+    _oss_supported: ClassVar[bool] = True
 
     def __post_init__(self) -> None:
         """Fail fast at construction time for trackers not yet supported in OSS."""
@@ -168,32 +172,43 @@ class MlflowConfig(TrackerConfig):
         tags: Key-value string tags attached to the MLflow run.
 
     Raises:
-        ConfigurationError: MLflow experiment tracking is not yet wired in
-            OSS michelangelo (see GitHub issue #1427). Raised immediately at
-            construction time. Use ``CometConfig`` or ``CustomTrackerConfig``
-            instead.
+        ConfigurationError: ``MlflowConfig`` itself is not yet wired in OSS
+            michelangelo (see GitHub issue #1427). Raised immediately at
+            construction time. MLflow is usable today via
+            ``CustomTrackerConfig(factory_fn="michelangelo.lib.trainer.torch"
+            ".pytorch_lightning._private.util.build_mlflow_logger", ...)``.
 
     Example:
         Constructing this config always raises ``ConfigurationError`` until
         GitHub issue #1427 is resolved::
 
             MlflowConfig(experiment_name="tabular-ctr")
-            # ConfigurationError: MLflow experiment tracking is not yet
-            # wired in OSS michelangelo (see GitHub issue #1427)...
+            # ConfigurationError: MlflowConfig is not yet wired in OSS
+            # michelangelo (see GitHub issue #1427)...
+
+        Use MLflow today via the BYOT escape hatch instead::
+
+            CustomTrackerConfig(
+                factory_fn="michelangelo.lib.trainer.torch.pytorch_lightning"
+                "._private.util.build_mlflow_logger",
+                factory_kwargs={"experiment_name": "tabular-ctr"},
+            )
     """
 
     experiment_name: str
     tracking_uri: str | None = None
     run_name: str | None = None
     tags: dict[str, str] = field(default_factory=dict)
-    _oss_supported: bool = dataclasses.field(default=False, init=False, repr=False)
+    _oss_supported: ClassVar[bool] = False
 
     def _check_oss_supported(self) -> None:
         """Raise with a message pointing at the tracking issue and alternatives."""
         raise ConfigurationError(
-            "MLflow experiment tracking is not yet wired in OSS michelangelo "
-            "(see GitHub issue #1427). Use CometConfig or CustomTrackerConfig "
-            "instead. This will be removed once #1427 ships."
+            "MlflowConfig is not yet wired in OSS michelangelo (see GitHub "
+            "issue #1427). MLflow is usable today via CustomTrackerConfig("
+            "factory_fn='michelangelo.lib.trainer.torch.pytorch_lightning."
+            "_private.util.build_mlflow_logger', ...); this MlflowConfig "
+            "convenience wrapper will be enabled once #1427 ships."
         )
 
 
@@ -294,8 +309,8 @@ class ExperimentTrackerConfig:
         if len(legacy) > 1:
             raise ConfigurationError(
                 f"At most one tracker allowed, got: {[n for n, _ in legacy]}. "
-                "Choose one of ExperimentTrackerConfig(comet=...) or "
-                "ExperimentTrackerConfig(mlflow=...)."
+                "Use ExperimentTrackerConfig(tracker=CometConfig(...)) "
+                "(preferred) or a single legacy field."
             )
         if self.comet is not None:
             self.tracker = self.comet

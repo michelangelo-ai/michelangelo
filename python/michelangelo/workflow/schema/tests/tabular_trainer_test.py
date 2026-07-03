@@ -95,6 +95,64 @@ class TestTrackerConfig(TestCase):
         self.assertTrue(cfg._oss_supported)
 
 
+class TestTrackerConfigSerialization(TestCase):
+    """Tracker configs must round-trip through serialization.
+
+    They must round-trip through both ``dataclasses.asdict`` and the UniFlow
+    ``DataclassCodec``, since task args/kwargs are codec-encoded on the
+    driver and decoded on the worker. ``_oss_supported`` is a ``ClassVar``
+    specifically so it is excluded from both.
+    """
+
+    def test_comet_config_asdict_roundtrip(self):
+        """dataclasses.asdict()/cls(**dct) round-trips CometConfig."""
+        import dataclasses
+
+        cfg = CometConfig(
+            api_key="k", workspace="ws", project_name="proj", experiment_name="exp"
+        )
+        dct = dataclasses.asdict(cfg)
+        self.assertNotIn("_oss_supported", dct)
+        self.assertEqual(CometConfig(**dct), cfg)
+
+    def test_custom_tracker_config_asdict_roundtrip(self):
+        """dataclasses.asdict()/cls(**dct) round-trips CustomTrackerConfig."""
+        import dataclasses
+
+        cfg = CustomTrackerConfig(factory_fn="myproject.loggers.make_logger")
+        dct = dataclasses.asdict(cfg)
+        self.assertNotIn("_oss_supported", dct)
+        self.assertEqual(CustomTrackerConfig(**dct), cfg)
+
+    def test_comet_config_codec_roundtrip(self):
+        """CometConfig round-trips through the UniFlow DataclassCodec."""
+        from michelangelo.uniflow.core.codec import DataclassCodec
+
+        codec = DataclassCodec()
+        cfg = CometConfig(
+            api_key="k", workspace="ws", project_name="proj", experiment_name="exp"
+        )
+        decoded = codec.decode(codec.encode(cfg))
+        self.assertEqual(decoded, cfg)
+
+    def test_nested_experiment_tracker_config_codec_roundtrip(self):
+        """Nested tracker configs survive an outer codec round-trip.
+
+        ``ExperimentTrackerConfig(tracker=CometConfig(...))`` round-trips
+        through the codec at both levels (the outer dict encodes the nested
+        dataclass as a plain dict via ``dataclasses.asdict`` semantics).
+        """
+        from michelangelo.uniflow.core.codec import DataclassCodec
+
+        codec = DataclassCodec()
+        comet = CometConfig(
+            api_key="k", workspace="ws", project_name="proj", experiment_name="exp"
+        )
+        cfg = ExperimentTrackerConfig(tracker=comet)
+        decoded = codec.decode(codec.encode(cfg))
+        self.assertEqual(decoded.tracker, comet)
+
+
 # ---------------------------------------------------------------------------
 # CometConfig
 # ---------------------------------------------------------------------------
@@ -352,15 +410,15 @@ class TestMlflowConfig(TestCase):
             MlflowConfig(experiment_name="tabular-ctr")
 
     def test_error_message_references_issue_and_alternatives(self):
-        """Error message points at #1427 and suggests alternative trackers."""
+        """Error message points at #1427 and the CustomTrackerConfig workaround."""
         with self.assertRaises(ConfigurationError) as ctx:
             MlflowConfig(
                 experiment_name="exp", tracking_uri="http://mlflow.example.com"
             )
         msg = str(ctx.exception)
         self.assertIn("1427", msg)
-        self.assertIn("CometConfig", msg)
         self.assertIn("CustomTrackerConfig", msg)
+        self.assertIn("build_mlflow_logger", msg)
 
     def test_tracking_uri_is_optional(self):
         """tracking_uri defaults to None, independent of the OSS-support raise."""

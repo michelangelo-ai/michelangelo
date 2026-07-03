@@ -6,7 +6,15 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- To be populated.
+- `CustomTrackerConfig` on `ExperimentTrackerConfig`: bring-your-own experiment
+  tracker via a dotted-path factory function (`factory_fn`/`factory_kwargs`),
+  for trackers (W&B, Neptune, etc.) with no dedicated config class.
+- `ExperimentTrackerConfig.tracker` field, a unified entry point for
+  `CometConfig`/`MlflowConfig`/`CustomTrackerConfig` (the legacy `comet=`/
+  `mlflow=` fields still work and are promoted into `tracker` internally).
+- `build_comet_logger` / `build_mlflow_logger` factory functions in
+  `michelangelo.lib.trainer.torch.pytorch_lightning._private.util`, usable
+  as `CustomTrackerConfig.factory_fn` targets.
 
 ### Changed
 
@@ -15,6 +23,12 @@ All notable changes to this project will be documented in this file.
   retained in MySQL. Opt out per delete with `kubectl delete pipeline … --cascade=orphan`. GC deletes
   children with the controller's RBAC, and the MA Studio UI does not yet cascade. See the
   [Cascade Delete operator guide](docs/operator-guides/cascade-delete.md).
+- `MlflowConfig` now fails fast with `ConfigurationError` at construction time
+  (previously it raised `NotImplementedError` later, from inside
+  `train_tabular()`). The error message points at GitHub issue #1427 and the
+  `CustomTrackerConfig` + `build_mlflow_logger` workaround usable today.
+- `MlflowConfig.tracking_uri` is now optional (`str | None`, defaults to
+  `None`), falling back to the `MLFLOW_TRACKING_URI` environment variable.
 
 ### Fixed
 
@@ -40,6 +54,12 @@ All notable changes to this project will be documented in this file.
 
 ### Removed
 
+- **BREAKING: `CometParam` and `LightningTrainerParam.comet_param` have been
+  removed outright**, not deprecated. The original design called for a
+  deprecation cycle, but a repo-wide audit found `task.py` was the only
+  production caller and it is migrated onto the new `ExperimentTrackerConfig`
+  tracker abstraction in this same release — there is no external consumer to
+  break. Use `ExperimentTrackerConfig(tracker=CometConfig(...))` instead.
 - The `controllermgr.cascadeDelete.enable` Helm value and its associated config (cross-binary cascade
   config key, controller-manager `CascadeDeleteConfig`). Cascade is now always on and controlled by
   Kubernetes propagation policy + RBAC instead of a flag.

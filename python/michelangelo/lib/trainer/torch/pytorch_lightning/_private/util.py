@@ -8,6 +8,7 @@ logger / callback resolution helpers. Public APIs live in
 from __future__ import annotations
 
 import hashlib
+import inspect
 import logging
 import os
 import re
@@ -360,8 +361,11 @@ def _resolve_logger(
     When *logger* is a dotted import path, *run_id* is injected into the
     kwargs passed to the factory (unless already present in *logger_kwargs*)
     so factories can opt into cross-worker run correlation by declaring a
-    ``run_id: str | None = None`` parameter. Factories that don't need it
-    can omit the parameter — see ``build_comet_logger``/``build_mlflow_logger``.
+    ``run_id: str | None = None`` parameter — see
+    ``build_comet_logger``/``build_mlflow_logger``. The factory's signature
+    is inspected first, so factories that genuinely don't accept ``run_id``
+    (and don't take ``**kwargs``) are called without it instead of raising
+    ``TypeError`` for an unexpected keyword argument.
     """
     if logger_kwargs is not None and not isinstance(logger_kwargs, dict):
         raise TypeError(
@@ -385,7 +389,7 @@ def _resolve_logger(
     if isinstance(logger, str):
         logger_fn = get_module_attr(logger)
         kwargs = dict(logger_kwargs or {})
-        if run_id is not None:
+        if run_id is not None and _accepts_run_id(logger_fn):
             kwargs.setdefault("run_id", run_id)
         result = logger_fn(**kwargs)
         return list(result) if isinstance(result, (list, tuple)) else result
@@ -394,6 +398,24 @@ def _resolve_logger(
             f"logger must be a str, bool, Logger instance, list of Logger instances, or None, got {type(logger)!r}"
         )
     return None
+
+
+def _accepts_run_id(fn: Any) -> bool:
+    """Return True if calling *fn* with a ``run_id=`` kwarg would not raise.
+
+    True when *fn* declares a ``run_id`` parameter, or accepts ``**kwargs``.
+    Used to make ``run_id`` injection in :func:`_resolve_logger` opt-in for
+    custom tracker factories that don't need cross-worker correlation.
+    """
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        # Signature introspection can fail for builtins/some C extensions;
+        # fail open and let the injected run_id surface any real mismatch.
+        return True
+    return "run_id" in params or any(
+        p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()
+    )
 
 
 def _resolve_callbacks(

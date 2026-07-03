@@ -319,8 +319,11 @@ def _train_lightning(
     # dotted-path logger + kwargs, deferred to worker-side construction.
     # Never overrides a user-supplied lightning_trainer_kwargs.logger.
     tracker_kwargs = build_tracker_logger_kwargs(config.experiment_tracker)
-    if tracker_kwargs["logger"] is not None:
-        lightning_trainer_kwargs.setdefault("logger", tracker_kwargs["logger"])
+    if (
+        tracker_kwargs["logger"] is not None
+        and "logger" not in lightning_trainer_kwargs
+    ):
+        lightning_trainer_kwargs["logger"] = tracker_kwargs["logger"]
         if tracker_kwargs["logger_kwargs"]:
             lightning_trainer_kwargs.setdefault(
                 "logger_kwargs", tracker_kwargs["logger_kwargs"]

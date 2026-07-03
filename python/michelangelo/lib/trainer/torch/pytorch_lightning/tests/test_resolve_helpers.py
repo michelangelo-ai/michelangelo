@@ -22,6 +22,7 @@ from ray.train.lightning import (
 )
 
 from michelangelo.lib.trainer.torch.pytorch_lightning._private.util import (
+    _accepts_run_id,
     _resolve_callbacks,
     _resolve_logger,
     _resolve_plugins,
@@ -157,6 +158,38 @@ class _FakeLogger(Logger):
         """No-op for tests."""
 
 
+class TestAcceptsRunId:
+    """Signature inspection used to gate ``run_id`` injection."""
+
+    def test_explicit_run_id_param_accepted(self):
+        """A factory declaring ``run_id`` accepts it."""
+
+        def factory(run_id=None):
+            pass
+
+        assert _accepts_run_id(factory) is True
+
+    def test_var_keyword_accepted(self):
+        """A factory accepting ``**kwargs`` accepts ``run_id``."""
+
+        def factory(**kwargs):
+            pass
+
+        assert _accepts_run_id(factory) is True
+
+    def test_no_matching_param_rejected(self):
+        """A factory with neither ``run_id`` nor ``**kwargs`` is rejected."""
+
+        def factory(api_key):
+            pass
+
+        assert _accepts_run_id(factory) is False
+
+    def test_signature_introspection_failure_fails_open(self):
+        """If the signature can't be inspected, fail open (return True)."""
+        assert _accepts_run_id(dict) is True
+
+
 class TestResolveLogger:
     """Logger resolution covers bool, instance, list, and ``None`` paths."""
 
@@ -217,6 +250,28 @@ class TestResolveLogger:
         with patch(f"{_UTIL_MODULE}.get_module_attr", return_value=factory):
             _resolve_logger("some.factory", {"api_key": "k"})
         factory.assert_called_once_with(api_key="k")
+
+    def test_string_logger_without_run_id_param_is_not_injected(self):
+        """A factory that declares no ``run_id`` param is called without it."""
+
+        def factory(api_key: str) -> _FakeLogger:
+            return _FakeLogger()
+
+        with patch(f"{_UTIL_MODULE}.get_module_attr", return_value=factory):
+            result = _resolve_logger("some.factory", {"api_key": "k"}, run_id="run-123")
+        assert isinstance(result, _FakeLogger)
+
+    def test_string_logger_with_kwargs_param_receives_run_id(self):
+        """A factory accepting ``**kwargs`` still receives an injected run_id."""
+        calls = {}
+
+        def factory(**kwargs) -> _FakeLogger:
+            calls.update(kwargs)
+            return _FakeLogger()
+
+        with patch(f"{_UTIL_MODULE}.get_module_attr", return_value=factory):
+            _resolve_logger("some.factory", {"api_key": "k"}, run_id="run-123")
+        assert calls == {"api_key": "k", "run_id": "run-123"}
 
 
 # -----------------------------------------------------------------------------
