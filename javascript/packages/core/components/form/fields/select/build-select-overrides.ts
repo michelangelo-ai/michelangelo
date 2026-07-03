@@ -9,8 +9,8 @@ export function buildSelectOverrides(
   readOnly?: boolean
 ): SelectOverrides {
   // When rendered inside modals, dropdown options can overflow past the modal body into its backdrop.
-  // ignoreBoundary lets the dropdown escape the modal clip region; popperOptions ensures
-  // preventOverflow is registered before the hide modifier (Popper.js v1 requires this order).
+  // popperOptions ensures preventOverflow is registered before the hide modifier (Popper.js v1
+  // requires this order), so ignoreBoundary doesn't get its overflow-prevention undone by hide.
   // name is forwarded to the internal <input> so form-focus libraries (e.g. final-form-focus) can
   // match this control to its field error by name.
   const base = {

@@ -20,7 +20,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 type NotificationDetailsProps = {
   enabled: boolean;
   value: NotificationDetailsValue;
-  onChange: (value: NotificationDetailsValue) => void;
+  onNotificationDetailsChange: (value: NotificationDetailsValue) => void;
 };
 
 const toSelectValue = (items: string[]) => items.map((item) => ({ id: item, label: item }));
@@ -31,7 +31,11 @@ const fromSelectParams = (params: OnChangeParams) => params.value.map((item) => 
  * Pure UI state driven entirely by props — not react-final-form — so the
  * caller decides when and whether to merge this into a submitted payload.
  */
-export function NotificationDetails({ enabled, value, onChange }: NotificationDetailsProps) {
+export function NotificationDetails({
+  enabled,
+  value,
+  onNotificationDetailsChange,
+}: NotificationDetailsProps) {
   const [css, theme] = useStyletron();
 
   const emailError = value.emails.some((email) => !EMAIL_REGEX.test(email.trim()))
@@ -39,7 +43,7 @@ export function NotificationDetails({ enabled, value, onChange }: NotificationDe
     : undefined;
 
   const toggleEventType = (id: NotificationEventType) => {
-    onChange({
+    onNotificationDetailsChange({
       ...value,
       eventTypes: value.eventTypes.includes(id)
         ? value.eventTypes.filter((t) => t !== id)
@@ -49,12 +53,14 @@ export function NotificationDetails({ enabled, value, onChange }: NotificationDe
 
   return (
     <>
-      <FormControl label="Email addresses" caption="Use valid email addresses." error={emailError}>
+      <FormControl label="Email addresses" error={emailError}>
         <Select
           id="notificationEmails"
           value={toSelectValue(value.emails)}
           options={[]}
-          onChange={(params) => onChange({ ...value, emails: fromSelectParams(params) })}
+          onChange={(params) =>
+            onNotificationDetailsChange({ ...value, emails: fromSelectParams(params) })
+          }
           disabled={!enabled}
           multi
           creatable
@@ -70,7 +76,9 @@ export function NotificationDetails({ enabled, value, onChange }: NotificationDe
           id="notificationSlackChannels"
           value={toSelectValue(value.slackChannels)}
           options={[]}
-          onChange={(params) => onChange({ ...value, slackChannels: fromSelectParams(params) })}
+          onChange={(params) =>
+            onNotificationDetailsChange({ ...value, slackChannels: fromSelectParams(params) })
+          }
           disabled={!enabled}
           multi
           creatable

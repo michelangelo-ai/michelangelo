@@ -44,7 +44,7 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
     setNotificationEnabled(event.currentTarget.checked);
   };
 
-  const handleNotificationDetailsChange = (details: NotificationDetailsValue) => {
+  const handleRecipientsChange = (details: NotificationDetailsValue) => {
     setNotificationDetails(details);
   };
 
@@ -130,7 +130,7 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
           <NotificationDetails
             enabled={notificationEnabled}
             value={notificationDetails}
-            onChange={handleNotificationDetailsChange}
+            onNotificationDetailsChange={handleRecipientsChange}
           />
         </div>
       </FormGroup>

@@ -138,7 +138,7 @@ describe('CreatePipelineRunForm', () => {
     });
   });
 
-  it('notification fields are disabled by default and enabled after toggling on', async () => {
+  it('notification fields are disabled until the toggle is switched on, then submit includes them', async () => {
     const user = userEvent.setup();
     const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
 
@@ -156,45 +156,24 @@ describe('CreatePipelineRunForm', () => {
 
     await screen.findByRole('dialog', { name: 'Start new pipeline run' });
 
-    // Toggle is visible; email combobox is present but disabled
+    // Toggle is visible and off by default; email combobox is present but disabled.
+    // The toggle's accessible name is its own label text ("Enabled"/"Disabled"), which
+    // starts as "Disabled" since notifications default to off.
     expect(screen.getByText('Send notifications')).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: /email addresses/i })).toBeDisabled();
 
     // Enable notifications via toggle
-    await user.click(screen.getByRole('checkbox', { name: /enabled|disabled/i }));
+    await user.click(screen.getByRole('checkbox', { name: 'Disabled' }));
 
     // Email combobox is now enabled
-    await waitFor(() => {
-      expect(screen.getByRole('combobox', { name: /email addresses/i })).not.toBeDisabled();
-    });
-  });
-
-  it('includes notifications in payload when toggle is on and email is entered', async () => {
-    const user = userEvent.setup();
-    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
-
-    render(
-      <FormWrapper />,
-      buildWrapper([
-        getBaseProviderWrapper(),
-        getIconProviderWrapper(),
-        getErrorProviderWrapper(),
-        getInterpolationProviderWrapper(),
-        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
-        getServiceProviderWrapper({ request: mockRequest }),
-      ])
-    );
-
-    await screen.findByRole('dialog', { name: 'Start new pipeline run' });
-
-    // Enable notifications
-    await user.click(screen.getByRole('checkbox', { name: /enabled|disabled/i }));
-
-    // Type an email into the email addresses combobox and commit with Enter
     const emailCombo = await screen.findByRole('combobox', { name: /email addresses/i });
+    await waitFor(() => {
+      expect(emailCombo).toBeEnabled();
+    });
+
+    // Type an email and submit — payload should include the notification
     await user.type(emailCombo, 'notify@example.com');
     await user.keyboard('{Enter}');
-
     await user.click(screen.getByRole('button', { name: 'Run' }));
 
     await waitFor(() => {
@@ -233,7 +212,7 @@ describe('CreatePipelineRunForm', () => {
     await screen.findByRole('dialog', { name: 'Start new pipeline run' });
 
     // Enable notifications
-    await user.click(screen.getByRole('checkbox', { name: /enabled|disabled/i }));
+    await user.click(screen.getByRole('checkbox', { name: 'Disabled' }));
 
     // Type an invalid email into the email addresses combobox and commit with Enter
     const emailCombo = await screen.findByRole('combobox', { name: /email addresses/i });
