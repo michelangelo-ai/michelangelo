@@ -82,11 +82,7 @@ jobs:
           helm repo update
 
       - name: Build chart dependencies
-        run: |
-          helm dependency build helm/michelangelo
-          for f in helm/michelangelo/charts/*.tgz; do
-            tar xzf "$f" -C helm/michelangelo/charts/
-          done
+        run: helm dependency build helm/michelangelo
 
       - name: Lint chart
         run: helm lint helm/michelangelo
