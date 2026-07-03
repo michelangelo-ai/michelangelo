@@ -225,6 +225,7 @@ class TestIncrementalTrainingSpec:
         spec = IncrementalTrainingSpec(metadata=self._metadata())
         assert spec.load_optimizer_weights is False
         assert spec.override_incremental_training_epoch is None
+        assert spec.fused_model_submodule is None
 
     def test_overrides(self):
         """Optional fields are honored when provided."""
@@ -232,9 +233,11 @@ class TestIncrementalTrainingSpec:
             metadata=self._metadata(),
             load_optimizer_weights=True,
             override_incremental_training_epoch=5,
+            fused_model_submodule="predictor_module",
         )
         assert spec.load_optimizer_weights is True
         assert spec.override_incremental_training_epoch == 5
+        assert spec.fused_model_submodule == "predictor_module"
 
 
 # -----------------------------------------------------------------------------
@@ -286,9 +289,10 @@ class TestTransferLearningSpec:
         assert spec.metadata is meta
 
     def test_default_scalar_fields(self):
-        """``model_loader_function`` defaults to ``None``."""
+        """``model_loader_function`` and ``fused_model_submodule`` default to ``None``."""
         spec = TransferLearningSpec(metadata=self._metadata())
         assert spec.model_loader_function is None
+        assert spec.fused_model_submodule is None
 
     def test_default_list_fields_are_empty(self):
         """All four layer-name list fields default to empty lists."""
@@ -315,9 +319,11 @@ class TestTransferLearningSpec:
             layer_names_to_inherit_regex=[r"enc\..*"],
             layer_names_to_freeze=["enc.0"],
             layer_names_to_freeze_regex=[r"frozen\..*"],
+            fused_model_submodule="predictor_module",
         )
         assert spec.model_loader_function == "pkg.module.load"
         assert spec.layer_names_to_inherit == ["enc.0"]
         assert spec.layer_names_to_inherit_regex == [r"enc\..*"]
         assert spec.layer_names_to_freeze == ["enc.0"]
         assert spec.layer_names_to_freeze_regex == [r"frozen\..*"]
+        assert spec.fused_model_submodule == "predictor_module"

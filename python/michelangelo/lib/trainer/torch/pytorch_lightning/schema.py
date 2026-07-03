@@ -120,11 +120,28 @@ class IncrementalTrainingMetadata:
 
 @dataclass
 class IncrementalTrainingSpec:
-    """Consolidated specification for all incremental training configurations."""
+    """Consolidated specification for all incremental training configurations.
+
+    Attributes:
+        metadata: Baseline model and training-type metadata for this run.
+        load_optimizer_weights: Whether to restore optimizer state from the
+            baseline checkpoint in addition to model weights.
+        override_incremental_training_epoch: Explicit starting epoch for the
+            incremental run. ``None`` continues from the baseline's own epoch
+            count.
+        fused_model_submodule: Optional submodule-prefix used to select a
+            slice of a fused checkpoint's combined state dict before loading
+            it (e.g. ``"predictor_module"`` for the DL predictor half of a
+            fused native-transform package). Schema-only in OSS today —
+            carried through for forward compatibility with internal
+            Michelangelo's warm-start config shape; no OSS code currently
+            strips or consumes this prefix.
+    """
 
     metadata: IncrementalTrainingMetadata
     load_optimizer_weights: bool = False
     override_incremental_training_epoch: int | None = None
+    fused_model_submodule: str | None = None
 
 
 @dataclass
@@ -137,7 +154,28 @@ class TransferLearningMetadata:
 
 @dataclass
 class TransferLearningSpec:
-    """Consolidated specification for all transfer learning configurations."""
+    """Consolidated specification for all transfer learning configurations.
+
+    Attributes:
+        metadata: Baseline model and learning-mode metadata for this run.
+        model_loader_function: Optional dotted path to a custom function for
+            loading the baseline model, overriding the default loader.
+        layer_names_to_inherit: Exact layer names to copy weights for from
+            the baseline model.
+        layer_names_to_inherit_regex: Regex patterns matching layer names to
+            copy weights for from the baseline model.
+        layer_names_to_freeze: Exact layer names to freeze (exclude from
+            gradient updates) after loading baseline weights.
+        layer_names_to_freeze_regex: Regex patterns matching layer names to
+            freeze after loading baseline weights.
+        fused_model_submodule: Optional submodule-prefix used to select a
+            slice of a fused checkpoint's combined state dict before loading
+            it (e.g. ``"predictor_module"`` for the DL predictor half of a
+            fused native-transform package). Schema-only in OSS today —
+            carried through for forward compatibility with internal
+            Michelangelo's warm-start config shape; no OSS code currently
+            strips or consumes this prefix.
+    """
 
     metadata: TransferLearningMetadata
 
@@ -146,3 +184,4 @@ class TransferLearningSpec:
     layer_names_to_inherit_regex: list[str] = field(default_factory=list)
     layer_names_to_freeze: list[str] = field(default_factory=list)
     layer_names_to_freeze_regex: list[str] = field(default_factory=list)
+    fused_model_submodule: str | None = None
