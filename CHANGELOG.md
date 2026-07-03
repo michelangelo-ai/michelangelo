@@ -15,6 +15,9 @@ All notable changes to this project will be documented in this file.
 - `build_comet_logger` / `build_mlflow_logger` factory functions in
   `michelangelo.lib.trainer.torch.pytorch_lightning._private.util`, usable
   as `CustomTrackerConfig.factory_fn` targets.
+- `MlflowConfig` is now fully supported — set
+  `ExperimentTrackerConfig(tracker=MlflowConfig(...))` to log to MLflow.
+  Closes GitHub issue #1427.
 
 ### Changed
 
@@ -23,10 +26,6 @@ All notable changes to this project will be documented in this file.
   retained in MySQL. Opt out per delete with `kubectl delete pipeline … --cascade=orphan`. GC deletes
   children with the controller's RBAC, and the MA Studio UI does not yet cascade. See the
   [Cascade Delete operator guide](docs/operator-guides/cascade-delete.md).
-- `MlflowConfig` now fails fast with `ConfigurationError` at construction time
-  (previously it raised `NotImplementedError` later, from inside
-  `train_tabular()`). The error message points at GitHub issue #1427 and the
-  `CustomTrackerConfig` + `build_mlflow_logger` workaround usable today.
 - `MlflowConfig.tracking_uri` is now optional (`str | None`, defaults to
   `None`), falling back to the `MLFLOW_TRACKING_URI` environment variable.
 

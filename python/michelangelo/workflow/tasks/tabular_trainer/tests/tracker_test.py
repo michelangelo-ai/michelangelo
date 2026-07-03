@@ -9,6 +9,7 @@ from michelangelo.workflow.schema.tabular_trainer import (
     CometConfig,
     CustomTrackerConfig,
     ExperimentTrackerConfig,
+    MlflowConfig,
 )
 from michelangelo.workflow.tasks.tabular_trainer._private.tracker import (
     build_tracker_logger_kwargs,
@@ -16,6 +17,9 @@ from michelangelo.workflow.tasks.tabular_trainer._private.tracker import (
 
 _COMET_FACTORY = (
     "michelangelo.lib.trainer.torch.pytorch_lightning._private.util.build_comet_logger"
+)
+_MLFLOW_FACTORY = (
+    "michelangelo.lib.trainer.torch.pytorch_lightning._private.util.build_mlflow_logger"
 )
 
 
@@ -63,6 +67,34 @@ class TestBuildTrackerLoggerKwargs(TestCase):
         )
         result = build_tracker_logger_kwargs(ExperimentTrackerConfig(comet=comet))
         self.assertEqual(result["logger"], _COMET_FACTORY)
+
+    def test_mlflow_config_resolves_to_build_mlflow_logger(self):
+        """MlflowConfig maps to the build_mlflow_logger dotted path + kwargs."""
+        config = ExperimentTrackerConfig(
+            tracker=MlflowConfig(
+                experiment_name="exp",
+                tracking_uri="http://mlflow.example.com",
+                run_name="run-1",
+                tags={"team": "ctr"},
+            )
+        )
+        result = build_tracker_logger_kwargs(config)
+        self.assertEqual(result["logger"], _MLFLOW_FACTORY)
+        self.assertEqual(
+            result["logger_kwargs"],
+            {
+                "experiment_name": "exp",
+                "tracking_uri": "http://mlflow.example.com",
+                "run_name": "run-1",
+                "tags": {"team": "ctr"},
+            },
+        )
+
+    def test_legacy_mlflow_field_resolves_same_as_tracker_field(self):
+        """Legacy mlflow= promotion produces the same result as tracker=."""
+        mlflow = MlflowConfig(experiment_name="exp")
+        result = build_tracker_logger_kwargs(ExperimentTrackerConfig(mlflow=mlflow))
+        self.assertEqual(result["logger"], _MLFLOW_FACTORY)
 
     def test_custom_tracker_config_resolves_to_factory_fn(self):
         """CustomTrackerConfig maps directly to factory_fn/factory_kwargs."""

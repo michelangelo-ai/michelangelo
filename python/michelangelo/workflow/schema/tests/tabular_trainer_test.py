@@ -152,6 +152,28 @@ class TestTrackerConfigSerialization(TestCase):
         decoded = codec.decode(codec.encode(cfg))
         self.assertEqual(decoded.tracker, comet)
 
+    def test_mlflow_config_asdict_roundtrip(self):
+        """dataclasses.asdict()/cls(**dct) round-trips MlflowConfig."""
+        import dataclasses
+
+        cfg = MlflowConfig(
+            experiment_name="exp", tracking_uri="http://mlflow.example.com"
+        )
+        dct = dataclasses.asdict(cfg)
+        self.assertNotIn("_oss_supported", dct)
+        self.assertEqual(MlflowConfig(**dct), cfg)
+
+    def test_mlflow_config_codec_roundtrip(self):
+        """MlflowConfig round-trips through the UniFlow DataclassCodec."""
+        from michelangelo.uniflow.core.codec import DataclassCodec
+
+        codec = DataclassCodec()
+        cfg = MlflowConfig(
+            experiment_name="exp", tracking_uri="http://mlflow.example.com"
+        )
+        decoded = codec.decode(codec.encode(cfg))
+        self.assertEqual(decoded, cfg)
+
 
 # ---------------------------------------------------------------------------
 # CometConfig
@@ -402,28 +424,37 @@ class TestCustomTrainerConfig(TestCase):
 
 
 class TestMlflowConfig(TestCase):
-    """Tests for MlflowConfig dataclass — not yet supported in OSS."""
+    """Tests for MlflowConfig dataclass."""
 
-    def test_construction_raises_configuration_error(self):
-        """Constructing MlflowConfig always raises ConfigurationError (issue #1427)."""
-        with self.assertRaises(ConfigurationError):
-            MlflowConfig(experiment_name="tabular-ctr")
+    def test_construction_succeeds(self):
+        """Constructing MlflowConfig with just experiment_name works."""
+        cfg = MlflowConfig(experiment_name="tabular-ctr")
+        self.assertEqual(cfg.experiment_name, "tabular-ctr")
+        self.assertIsNone(cfg.tracking_uri)
+        self.assertIsNone(cfg.run_name)
+        self.assertEqual(cfg.tags, {})
 
-    def test_error_message_references_issue_and_alternatives(self):
-        """Error message points at #1427 and the CustomTrackerConfig workaround."""
-        with self.assertRaises(ConfigurationError) as ctx:
-            MlflowConfig(
-                experiment_name="exp", tracking_uri="http://mlflow.example.com"
-            )
-        msg = str(ctx.exception)
-        self.assertIn("1427", msg)
-        self.assertIn("CustomTrackerConfig", msg)
-        self.assertIn("build_mlflow_logger", msg)
+    def test_all_fields_stored(self):
+        """It stores all fields when explicitly provided."""
+        cfg = MlflowConfig(
+            experiment_name="exp",
+            tracking_uri="http://mlflow.example.com",
+            run_name="run-1",
+            tags={"team": "ctr"},
+        )
+        self.assertEqual(cfg.experiment_name, "exp")
+        self.assertEqual(cfg.tracking_uri, "http://mlflow.example.com")
+        self.assertEqual(cfg.run_name, "run-1")
+        self.assertEqual(cfg.tags, {"team": "ctr"})
 
     def test_tracking_uri_is_optional(self):
-        """tracking_uri defaults to None, independent of the OSS-support raise."""
-        with self.assertRaises(ConfigurationError):
-            MlflowConfig(experiment_name="exp")
+        """tracking_uri defaults to None."""
+        cfg = MlflowConfig(experiment_name="exp")
+        self.assertIsNone(cfg.tracking_uri)
+
+    def test_is_oss_supported(self):
+        """MlflowConfig no longer gates on OSS support (issue #1427 closed)."""
+        self.assertTrue(MlflowConfig(experiment_name="exp")._oss_supported)
 
 
 # ---------------------------------------------------------------------------
@@ -465,10 +496,12 @@ class TestExperimentTrackerConfig(TestCase):
         self.assertIs(cfg.comet, comet)
         self.assertIs(cfg.tracker, comet)
 
-    def test_legacy_mlflow_raises_at_construction(self):
-        """Legacy mlflow= raises at MlflowConfig(...) construction time."""
-        with self.assertRaises(ConfigurationError):
-            ExperimentTrackerConfig(mlflow=MlflowConfig(experiment_name="exp"))
+    def test_legacy_mlflow_promoted_to_tracker(self):
+        """Legacy mlflow= is promoted into the tracker field."""
+        mlflow = MlflowConfig(experiment_name="exp")
+        cfg = ExperimentTrackerConfig(mlflow=mlflow)
+        self.assertIs(cfg.mlflow, mlflow)
+        self.assertIs(cfg.tracker, mlflow)
 
     def test_tracker_and_legacy_mixed_raises(self):
         """Setting both tracker and a legacy field raises ConfigurationError."""
@@ -476,7 +509,7 @@ class TestExperimentTrackerConfig(TestCase):
             ExperimentTrackerConfig(tracker=self._comet(), comet=self._comet())
 
     def test_multiple_legacy_fields_raises(self):
-        """Setting both legacy fields raises (mlflow's own error surfaces first)."""
+        """Setting both legacy fields raises ConfigurationError."""
         with self.assertRaises(ConfigurationError):
             ExperimentTrackerConfig(
                 comet=self._comet(), mlflow=MlflowConfig(experiment_name="e")

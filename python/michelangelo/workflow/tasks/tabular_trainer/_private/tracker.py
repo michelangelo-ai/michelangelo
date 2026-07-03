@@ -16,6 +16,9 @@ if TYPE_CHECKING:
 _COMET_FACTORY = (
     "michelangelo.lib.trainer.torch.pytorch_lightning._private.util.build_comet_logger"
 )
+_MLFLOW_FACTORY = (
+    "michelangelo.lib.trainer.torch.pytorch_lightning._private.util.build_mlflow_logger"
+)
 
 
 def build_tracker_logger_kwargs(
@@ -41,13 +44,13 @@ def build_tracker_logger_kwargs(
         ConfigurationError: If ``config.tracker`` is a ``TrackerConfig``
             subclass not recognised here. This should not be reachable in
             practice since ``TrackerConfig.__post_init__`` already rejects
-            unsupported types (e.g. ``MlflowConfig``) at construction time;
-            this guards against future subclasses added without a
-            corresponding branch here.
+            unsupported types at construction time; this guards against
+            future subclasses added without a corresponding branch here.
     """
     from michelangelo.workflow.schema.tabular_trainer import (
         CometConfig,
         CustomTrackerConfig,
+        MlflowConfig,
     )
 
     if config is None or config.tracker is None:
@@ -67,6 +70,17 @@ def build_tracker_logger_kwargs(
             },
         }
 
+    if isinstance(tracker, MlflowConfig):
+        return {
+            "logger": _MLFLOW_FACTORY,
+            "logger_kwargs": {
+                "experiment_name": tracker.experiment_name,
+                "tracking_uri": tracker.tracking_uri,
+                "run_name": tracker.run_name,
+                "tags": tracker.tags,
+            },
+        }
+
     if isinstance(tracker, CustomTrackerConfig):
         return {
             "logger": tracker.factory_fn,
@@ -75,5 +89,5 @@ def build_tracker_logger_kwargs(
 
     raise ConfigurationError(
         f"Unsupported tracker type: {type(tracker).__name__}. "
-        "Supported: CometConfig, CustomTrackerConfig."
+        "Supported: CometConfig, MlflowConfig, CustomTrackerConfig."
     )

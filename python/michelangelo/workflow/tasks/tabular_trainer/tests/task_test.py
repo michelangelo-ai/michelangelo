@@ -200,15 +200,15 @@ class TestTrainTabularGuards(TestCase):
                 mock_validation_dataset(),
             )
 
-    def test_mlflow_config_raises_at_construction(self):
-        """MlflowConfig(...) raises ConfigurationError immediately at construction."""
-        with self.assertRaises(ConfigurationError):
-            ExperimentTrackerConfig(
-                mlflow=MlflowConfig(
-                    tracking_uri="http://localhost:5000",
-                    experiment_name="test-exp",
-                )
+    def test_mlflow_config_construction_succeeds(self):
+        """MlflowConfig(...) no longer raises at construction (issue #1427 closed)."""
+        cfg = ExperimentTrackerConfig(
+            mlflow=MlflowConfig(
+                tracking_uri="http://localhost:5000",
+                experiment_name="test-exp",
             )
+        )
+        self.assertIs(cfg.tracker, cfg.mlflow)
 
     def test_empty_train_dataset_raises(self):
         """Zero-row train dataset raises ConfigurationError."""
@@ -416,6 +416,48 @@ class TestTrainTabularLightning(TestCase):
                 "project_name": "proj",
                 "experiment_name": "exp",
                 "tags": [],
+            },
+        )
+
+    def test_mlflow_tracker_sets_logger_kwargs(self):
+        """MlflowConfig resolves to the build_mlflow_logger dotted path + kwargs."""
+        config = make_tabular_config(
+            experiment_tracker=ExperimentTrackerConfig(
+                mlflow=MlflowConfig(
+                    experiment_name="exp",
+                    tracking_uri="http://mlflow.example.com",
+                )
+            )
+        )
+        with (
+            patch(
+                f"{_TRAINER_TASK}.get_module_attr",
+                return_value=lambda **kw: Mock(),
+            ),
+            patch(f"{_TRAINER_TASK}.torch"),
+            patch(f"{_TRAINER_TASK}.LightningTrainerParam") as mp,
+            patch(f"{_TRAINER_TASK}.LightningTrainerWithStateDict") as mt,
+        ):
+            mt.return_value.train.return_value = None
+            mt.return_value.update_model_state_dict.return_value = None
+            train_tabular(
+                config,
+                mock_train_dataset(),
+                mock_validation_dataset(),
+                storage_backend=mock_storage_backend(),
+            )
+        lightning_kwargs = mp.call_args.kwargs["lightning_trainer_kwargs"]
+        self.assertEqual(
+            lightning_kwargs["logger"],
+            "michelangelo.lib.trainer.torch.pytorch_lightning._private.util.build_mlflow_logger",
+        )
+        self.assertEqual(
+            lightning_kwargs["logger_kwargs"],
+            {
+                "experiment_name": "exp",
+                "tracking_uri": "http://mlflow.example.com",
+                "run_name": None,
+                "tags": {},
             },
         )
 

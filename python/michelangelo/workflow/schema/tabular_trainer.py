@@ -157,7 +157,8 @@ class CometConfig(TrackerConfig):
 class MlflowConfig(TrackerConfig):
     """MLflow experiment tracking configuration.
 
-    Pass to ``ExperimentTrackerConfig(mlflow=MlflowConfig(...))`` on
+    Pass to ``ExperimentTrackerConfig(tracker=MlflowConfig(...))`` (or the
+    legacy ``ExperimentTrackerConfig(mlflow=MlflowConfig(...))``) on
     ``LightningTrainerConfig``.
 
     Attributes:
@@ -171,45 +172,17 @@ class MlflowConfig(TrackerConfig):
             when ``None``.
         tags: Key-value string tags attached to the MLflow run.
 
-    Raises:
-        ConfigurationError: ``MlflowConfig`` itself is not yet wired in OSS
-            michelangelo (see GitHub issue #1427). Raised immediately at
-            construction time. MLflow is usable today via
-            ``CustomTrackerConfig(factory_fn="michelangelo.lib.trainer.torch"
-            ".pytorch_lightning._private.util.build_mlflow_logger", ...)``.
-
     Example:
-        Constructing this config always raises ``ConfigurationError`` until
-        GitHub issue #1427 is resolved::
-
-            MlflowConfig(experiment_name="tabular-ctr")
-            # ConfigurationError: MlflowConfig is not yet wired in OSS
-            # michelangelo (see GitHub issue #1427)...
-
-        Use MLflow today via the BYOT escape hatch instead::
-
-            CustomTrackerConfig(
-                factory_fn="michelangelo.lib.trainer.torch.pytorch_lightning"
-                "._private.util.build_mlflow_logger",
-                factory_kwargs={"experiment_name": "tabular-ctr"},
-            )
+        >>> cfg = MlflowConfig(
+        ...     experiment_name="tabular-ctr",
+        ...     tracking_uri="http://mlflow.example.com",
+        ... )
     """
 
     experiment_name: str
     tracking_uri: str | None = None
     run_name: str | None = None
     tags: dict[str, str] = field(default_factory=dict)
-    _oss_supported: ClassVar[bool] = False
-
-    def _check_oss_supported(self) -> None:
-        """Raise with a message pointing at the tracking issue and alternatives."""
-        raise ConfigurationError(
-            "MlflowConfig is not yet wired in OSS michelangelo (see GitHub "
-            "issue #1427). MLflow is usable today via CustomTrackerConfig("
-            "factory_fn='michelangelo.lib.trainer.torch.pytorch_lightning."
-            "_private.util.build_mlflow_logger', ...); this MlflowConfig "
-            "convenience wrapper will be enabled once #1427 ships."
-        )
 
 
 @dataclass
@@ -269,14 +242,22 @@ class ExperimentTrackerConfig:
     Raises:
         ConfigurationError: If both ``tracker`` and a legacy field are set,
             if more than one legacy field is set, or if the resolved tracker
-            type sets ``_oss_supported = False`` (e.g. ``MlflowConfig``,
-            which raises when constructed regardless of this class).
+            type sets ``_oss_supported = False`` (subclasses not yet wired
+            in OSS raise when constructed regardless of this class).
 
     Example — Comet ML:
         >>> ExperimentTrackerConfig(
         ...     tracker=CometConfig(
         ...         api_key="key", workspace="ws",
         ...         project_name="proj", experiment_name="exp",
+        ...     )
+        ... )
+
+    Example — MLflow:
+        >>> ExperimentTrackerConfig(
+        ...     tracker=MlflowConfig(
+        ...         experiment_name="tabular-ctr",
+        ...         tracking_uri="http://mlflow.example.com",
         ...     )
         ... )
 
@@ -586,10 +567,9 @@ class LightningTrainerConfig:
             ``lightning.pytorch.Trainer``.
         hyperparameters: Catch-all dict for kwargs not covered by the
             structured fields. Highly discouraged; prefer structured fields.
-        experiment_tracker: Experiment tracking backend (Comet ML, or a
-            custom tracker via ``CustomTrackerConfig``). ``None`` disables
-            experiment tracking. MLflow is not yet wired in OSS — see
-            ``MlflowConfig``.
+        experiment_tracker: Experiment tracking backend (Comet ML, MLflow,
+            or a custom tracker via ``CustomTrackerConfig``). ``None``
+            disables experiment tracking.
         transfer_learning_spec: Transfer-learning spec config. Setting this
             raises ``NotImplementedError`` until the spec builder is ported.
         incremental_training_mode: Incremental training mode config.
