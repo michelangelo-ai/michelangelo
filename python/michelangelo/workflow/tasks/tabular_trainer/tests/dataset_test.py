@@ -1,4 +1,4 @@
-"""Tests for michelangelo.workflow.tasks.tabular_trainer._dataset."""
+"""Tests for michelangelo.workflow.tasks.tabular_trainer._private.dataset."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from michelangelo.workflow.schema.tabular_trainer import (
     ColumnConfig,
     LightningTrainerConfig,
 )
-from michelangelo.workflow.tasks.tabular_trainer._dataset import (
+from michelangelo.workflow.tasks.tabular_trainer._private.dataset import (
     _map_torch_dtype_to_datatype,
     _map_torch_dtype_to_numpy,
     _pad_row,
@@ -295,7 +295,7 @@ class TestCollateSampleRow(TestCase):
     def test_no_collate_fn_calls_pad_row(self):
         """Without a collate fn, _pad_row is invoked."""
         with patch(
-            "michelangelo.workflow.tasks.tabular_trainer._dataset._pad_row",
+            "michelangelo.workflow.tasks.tabular_trainer._private.dataset._pad_row",
             return_value={"x": np.array([1.0])},
         ) as mock_pad:
             result = collate_sample_row({"x": np.array([1.0])})
@@ -438,7 +438,8 @@ class TestGetSampleData(TestCase):
         """Shape mismatch with no valid reshape logs a warning and passes through."""
         raw = np.array([1.0, 2.0, 3.0], dtype=np.float32)
         with self.assertLogs(
-            "michelangelo.workflow.tasks.tabular_trainer._dataset", level="WARNING"
+            "michelangelo.workflow.tasks.tabular_trainer._private.dataset",
+            level="WARNING",
         ) as log:
             result = get_sample_data(
                 {"x": raw},

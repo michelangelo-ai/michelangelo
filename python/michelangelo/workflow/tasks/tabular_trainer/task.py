@@ -26,7 +26,7 @@ from michelangelo.workflow.schema.tabular_trainer import (
     LightningTrainerConfig,
     TabularTrainerConfig,
 )
-from michelangelo.workflow.tasks.tabular_trainer._dataset import (
+from michelangelo.workflow.tasks.tabular_trainer._private.dataset import (
     collate_sample_row,
     construct_read_kwargs,
     get_model_schema,
