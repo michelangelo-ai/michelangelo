@@ -10,6 +10,7 @@ from michelangelo.workflow.schema.tabular_trainer import (
     CheckpointScoreOrder,
     ColumnConfig,
     CometConfig,
+    CustomTrackerConfig,
     CustomTrainerConfig,
     ExperimentTrackerConfig,
     IncrementalTrainingModeConfig,
@@ -18,6 +19,7 @@ from michelangelo.workflow.schema.tabular_trainer import (
     MlflowConfig,
     ScalingConfig,
     TabularTrainerConfig,
+    TrackerConfig,
 )
 
 # ---------------------------------------------------------------------------
@@ -80,6 +82,20 @@ class TestColumnConfig(TestCase):
 
 
 # ---------------------------------------------------------------------------
+# TrackerConfig
+# ---------------------------------------------------------------------------
+
+
+class TestTrackerConfig(TestCase):
+    """Tests for the TrackerConfig base class."""
+
+    def test_default_oss_supported_true(self):
+        """Base class defaults to _oss_supported=True and does not raise."""
+        cfg = TrackerConfig()
+        self.assertTrue(cfg._oss_supported)
+
+
+# ---------------------------------------------------------------------------
 # CometConfig
 # ---------------------------------------------------------------------------
 
@@ -88,7 +104,7 @@ class TestCometConfig(TestCase):
     """Tests for CometConfig dataclass."""
 
     def test_all_fields_stored(self):
-        """It stores all four required fields."""
+        """It stores all required fields and defaults tags to an empty list."""
         cfg = CometConfig(
             api_key="k", workspace="ws", project_name="proj", experiment_name="exp"
         )
@@ -96,6 +112,62 @@ class TestCometConfig(TestCase):
         self.assertEqual(cfg.workspace, "ws")
         self.assertEqual(cfg.project_name, "proj")
         self.assertEqual(cfg.experiment_name, "exp")
+        self.assertEqual(cfg.tags, [])
+
+    def test_is_tracker_config(self):
+        """CometConfig extends TrackerConfig and is OSS-supported."""
+        cfg = CometConfig(
+            api_key="k", workspace="ws", project_name="proj", experiment_name="exp"
+        )
+        self.assertIsInstance(cfg, TrackerConfig)
+        self.assertTrue(cfg._oss_supported)
+
+    def test_tags_instances_are_independent(self):
+        """Default tags lists are not shared between instances."""
+        a = CometConfig(
+            api_key="k", workspace="w", project_name="p", experiment_name="e"
+        )
+        b = CometConfig(
+            api_key="k", workspace="w", project_name="p", experiment_name="e"
+        )
+        a.tags.append("x")
+        self.assertEqual(b.tags, [])
+
+
+# ---------------------------------------------------------------------------
+# CustomTrackerConfig
+# ---------------------------------------------------------------------------
+
+
+class TestCustomTrackerConfig(TestCase):
+    """Tests for CustomTrackerConfig (bring-your-own tracker)."""
+
+    def test_required_field(self):
+        """factory_fn is required; factory_kwargs defaults to an empty dict."""
+        cfg = CustomTrackerConfig(factory_fn="myproject.loggers.make_wandb_logger")
+        self.assertEqual(cfg.factory_fn, "myproject.loggers.make_wandb_logger")
+        self.assertEqual(cfg.factory_kwargs, {})
+
+    def test_factory_kwargs_stored(self):
+        """factory_kwargs round-trips."""
+        cfg = CustomTrackerConfig(
+            factory_fn="myproject.loggers.make_wandb_logger",
+            factory_kwargs={"project": "ctr-model"},
+        )
+        self.assertEqual(cfg.factory_kwargs, {"project": "ctr-model"})
+
+    def test_is_tracker_config(self):
+        """CustomTrackerConfig extends TrackerConfig and is OSS-supported."""
+        cfg = CustomTrackerConfig(factory_fn="myproject.loggers.make_wandb_logger")
+        self.assertIsInstance(cfg, TrackerConfig)
+        self.assertTrue(cfg._oss_supported)
+
+    def test_factory_kwargs_instances_are_independent(self):
+        """Default factory_kwargs dicts are not shared between instances."""
+        a = CustomTrackerConfig(factory_fn="f")
+        b = CustomTrackerConfig(factory_fn="f")
+        a.factory_kwargs["k"] = "v"
+        self.assertEqual(b.factory_kwargs, {})
 
 
 # ---------------------------------------------------------------------------
@@ -272,36 +344,28 @@ class TestCustomTrainerConfig(TestCase):
 
 
 class TestMlflowConfig(TestCase):
-    """Tests for MlflowConfig dataclass."""
+    """Tests for MlflowConfig dataclass — not yet supported in OSS."""
 
-    def test_required_fields(self):
-        """tracking_uri and experiment_name are required; rest default."""
-        cfg = MlflowConfig(
-            tracking_uri="http://mlflow.example.com",
-            experiment_name="tabular-ctr",
-        )
-        self.assertEqual(cfg.tracking_uri, "http://mlflow.example.com")
-        self.assertEqual(cfg.experiment_name, "tabular-ctr")
-        self.assertIsNone(cfg.run_name)
-        self.assertEqual(cfg.tags, {})
+    def test_construction_raises_configuration_error(self):
+        """Constructing MlflowConfig always raises ConfigurationError (issue #1427)."""
+        with self.assertRaises(ConfigurationError):
+            MlflowConfig(experiment_name="tabular-ctr")
 
-    def test_all_fields_stored(self):
-        """It stores all optional fields when provided."""
-        cfg = MlflowConfig(
-            tracking_uri="sqlite:///mlflow.db",
-            experiment_name="exp",
-            run_name="run-1",
-            tags={"env": "prod"},
-        )
-        self.assertEqual(cfg.run_name, "run-1")
-        self.assertEqual(cfg.tags, {"env": "prod"})
+    def test_error_message_references_issue_and_alternatives(self):
+        """Error message points at #1427 and suggests alternative trackers."""
+        with self.assertRaises(ConfigurationError) as ctx:
+            MlflowConfig(
+                experiment_name="exp", tracking_uri="http://mlflow.example.com"
+            )
+        msg = str(ctx.exception)
+        self.assertIn("1427", msg)
+        self.assertIn("CometConfig", msg)
+        self.assertIn("CustomTrackerConfig", msg)
 
-    def test_tags_instances_are_independent(self):
-        """Default tags dicts are not shared between instances."""
-        a = MlflowConfig(tracking_uri="u", experiment_name="e")
-        b = MlflowConfig(tracking_uri="u", experiment_name="e")
-        a.tags["key"] = "val"
-        self.assertEqual(b.tags, {})
+    def test_tracking_uri_is_optional(self):
+        """tracking_uri defaults to None, independent of the OSS-support raise."""
+        with self.assertRaises(ConfigurationError):
+            MlflowConfig(experiment_name="exp")
 
 
 # ---------------------------------------------------------------------------
@@ -310,50 +374,55 @@ class TestMlflowConfig(TestCase):
 
 
 class TestExperimentTrackerConfig(TestCase):
-    """Tests for ExperimentTrackerConfig validation."""
+    """Tests for ExperimentTrackerConfig validation and legacy-field promotion."""
 
     def _comet(self) -> CometConfig:
         return CometConfig(
             api_key="k", workspace="ws", project_name="p", experiment_name="e"
         )
 
-    def _mlflow(self) -> MlflowConfig:
-        return MlflowConfig(
-            tracking_uri="http://mlflow.example.com", experiment_name="exp"
-        )
-
     def test_no_tracker_ok(self):
-        """Setting neither tracker is valid (no tracking)."""
+        """Setting nothing is valid (no tracking)."""
         cfg = ExperimentTrackerConfig()
+        self.assertIsNone(cfg.tracker)
         self.assertIsNone(cfg.comet)
         self.assertIsNone(cfg.mlflow)
 
-    def test_comet_only_ok(self):
-        """Setting only comet is valid."""
+    def test_tracker_field_ok(self):
+        """Setting tracker= directly (preferred style) is valid."""
+        comet = self._comet()
+        cfg = ExperimentTrackerConfig(tracker=comet)
+        self.assertIs(cfg.tracker, comet)
+
+    def test_custom_tracker_via_tracker_field(self):
+        """CustomTrackerConfig is accepted via the tracker field."""
+        custom = CustomTrackerConfig(factory_fn="myproject.loggers.make_wandb_logger")
+        cfg = ExperimentTrackerConfig(tracker=custom)
+        self.assertIs(cfg.tracker, custom)
+
+    def test_legacy_comet_promoted_to_tracker(self):
+        """Legacy comet= is promoted into the tracker field."""
         comet = self._comet()
         cfg = ExperimentTrackerConfig(comet=comet)
         self.assertIs(cfg.comet, comet)
-        self.assertIsNone(cfg.mlflow)
+        self.assertIs(cfg.tracker, comet)
 
-    def test_mlflow_only_ok(self):
-        """Setting only mlflow is valid."""
-        mlflow = self._mlflow()
-        cfg = ExperimentTrackerConfig(mlflow=mlflow)
-        self.assertIs(cfg.mlflow, mlflow)
-        self.assertIsNone(cfg.comet)
-
-    def test_both_raises(self):
-        """Setting both comet and mlflow raises ConfigurationError."""
+    def test_legacy_mlflow_raises_at_construction(self):
+        """Legacy mlflow= raises at MlflowConfig(...) construction time."""
         with self.assertRaises(ConfigurationError):
-            ExperimentTrackerConfig(comet=self._comet(), mlflow=self._mlflow())
+            ExperimentTrackerConfig(mlflow=MlflowConfig(experiment_name="exp"))
 
-    def test_both_error_message(self):
-        """Error message names both active trackers and suggests the fix."""
-        with self.assertRaises(ConfigurationError) as ctx:
-            ExperimentTrackerConfig(comet=self._comet(), mlflow=self._mlflow())
-        msg = str(ctx.exception)
-        self.assertIn("comet", msg)
-        self.assertIn("mlflow", msg)
+    def test_tracker_and_legacy_mixed_raises(self):
+        """Setting both tracker and a legacy field raises ConfigurationError."""
+        with self.assertRaises(ConfigurationError):
+            ExperimentTrackerConfig(tracker=self._comet(), comet=self._comet())
+
+    def test_multiple_legacy_fields_raises(self):
+        """Setting both legacy fields raises (mlflow's own error surfaces first)."""
+        with self.assertRaises(ConfigurationError):
+            ExperimentTrackerConfig(
+                comet=self._comet(), mlflow=MlflowConfig(experiment_name="e")
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -396,9 +465,8 @@ class TestLightningTrainerConfig(TestCase):
     def test_optional_fields_stored(self):
         """It stores all optional fields when provided."""
         tracker = ExperimentTrackerConfig(
-            mlflow=MlflowConfig(
-                tracking_uri="http://mlflow.example.com",
-                experiment_name="tabular-ctr",
+            tracker=CometConfig(
+                api_key="k", workspace="ws", project_name="p", experiment_name="e"
             )
         )
         scaling = ScalingConfig(cpu_per_worker=4)

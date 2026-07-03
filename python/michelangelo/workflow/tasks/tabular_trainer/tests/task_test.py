@@ -13,6 +13,7 @@ from michelangelo.workflow.schema.tabular_trainer import (
     BatchIterConfig,
     CheckpointConfig,
     CometConfig,
+    CustomTrackerConfig,
     CustomTrainerConfig,
     DataloadingConfig,
     ExperimentTrackerConfig,
@@ -199,27 +200,14 @@ class TestTrainTabularGuards(TestCase):
                 mock_validation_dataset(),
             )
 
-    def test_mlflow_config_raises_not_implemented(self):
-        """ExperimentTrackerConfig(mlflow=...) raises NotImplementedError."""
-        config = make_tabular_config(
-            experiment_tracker=ExperimentTrackerConfig(
+    def test_mlflow_config_raises_at_construction(self):
+        """MlflowConfig(...) raises ConfigurationError immediately at construction."""
+        with self.assertRaises(ConfigurationError):
+            ExperimentTrackerConfig(
                 mlflow=MlflowConfig(
                     tracking_uri="http://localhost:5000",
                     experiment_name="test-exp",
                 )
-            )
-        )
-        with (
-            self.assertRaises(NotImplementedError),
-            patch(
-                f"{_TRAINER_TASK}.get_module_attr",
-                return_value=lambda **kw: Mock(),
-            ),
-        ):
-            train_tabular(
-                config,
-                mock_train_dataset(),
-                mock_validation_dataset(),
             )
 
     def test_empty_train_dataset_raises(self):
@@ -387,8 +375,8 @@ class TestTrainTabularLightning(TestCase):
                 )
         self.assertEqual(mp.call_args.kwargs.get("batch_size"), 16)
 
-    def test_comet_param_built_from_experiment_tracker(self):
-        """CometParam is constructed when experiment_tracker.comet is set."""
+    def test_comet_tracker_sets_logger_kwargs(self):
+        """CometConfig resolves to the build_comet_logger dotted path + kwargs."""
         config = make_tabular_config(
             experiment_tracker=ExperimentTrackerConfig(
                 comet=CometConfig(
@@ -404,9 +392,8 @@ class TestTrainTabularLightning(TestCase):
                 f"{_TRAINER_TASK}.get_module_attr",
                 return_value=lambda **kw: Mock(),
             ),
-            patch(f"{_TRAINER_TASK}.CometParam") as mock_comet,
             patch(f"{_TRAINER_TASK}.ModelVariable"),
-            patch(f"{_TRAINER_TASK}.LightningTrainerParam"),
+            patch(f"{_TRAINER_TASK}.LightningTrainerParam") as mp,
             patch(f"{_TRAINER_TASK}.LightningTrainerWithStateDict") as mt,
         ):
             mt.return_value.train.return_value = None
@@ -416,12 +403,56 @@ class TestTrainTabularLightning(TestCase):
                 mock_train_dataset(),
                 mock_validation_dataset(),
             )
-        mock_comet.assert_called_once_with(
-            api_key="k", project_name="proj", experiment_name="exp", workspace="ws"
+        lightning_kwargs = mp.call_args.kwargs["lightning_trainer_kwargs"]
+        self.assertEqual(
+            lightning_kwargs["logger"],
+            "michelangelo.lib.trainer.torch.pytorch_lightning._private.util.build_comet_logger",
+        )
+        self.assertEqual(
+            lightning_kwargs["logger_kwargs"],
+            {
+                "api_key": "k",
+                "workspace": "ws",
+                "project_name": "proj",
+                "experiment_name": "exp",
+                "tags": [],
+            },
         )
 
-    def test_no_comet_when_experiment_tracker_none(self):
-        """comet_param is None when experiment_tracker is not set."""
+    def test_custom_tracker_sets_logger_kwargs(self):
+        """CustomTrackerConfig resolves to its factory_fn + factory_kwargs."""
+        config = make_tabular_config(
+            experiment_tracker=ExperimentTrackerConfig(
+                tracker=CustomTrackerConfig(
+                    factory_fn="myproject.loggers.make_wandb_logger",
+                    factory_kwargs={"project": "ctr-model"},
+                )
+            )
+        )
+        with (
+            patch(
+                f"{_TRAINER_TASK}.get_module_attr",
+                return_value=lambda **kw: Mock(),
+            ),
+            patch(f"{_TRAINER_TASK}.ModelVariable"),
+            patch(f"{_TRAINER_TASK}.LightningTrainerParam") as mp,
+            patch(f"{_TRAINER_TASK}.LightningTrainerWithStateDict") as mt,
+        ):
+            mt.return_value.train.return_value = None
+            mt.return_value.update_model_state_dict.return_value = None
+            train_tabular(
+                config,
+                mock_train_dataset(),
+                mock_validation_dataset(),
+            )
+        lightning_kwargs = mp.call_args.kwargs["lightning_trainer_kwargs"]
+        self.assertEqual(
+            lightning_kwargs["logger"], "myproject.loggers.make_wandb_logger"
+        )
+        self.assertEqual(lightning_kwargs["logger_kwargs"], {"project": "ctr-model"})
+
+    def test_no_logger_when_experiment_tracker_none(self):
+        """No 'logger' key is set when experiment_tracker is unset."""
         with (
             patch(
                 f"{_TRAINER_TASK}.get_module_attr",
@@ -438,7 +469,8 @@ class TestTrainTabularLightning(TestCase):
                 mock_train_dataset(),
                 mock_validation_dataset(),
             )
-        self.assertIsNone(mp.call_args.kwargs.get("comet_param"))
+        lightning_kwargs = mp.call_args.kwargs["lightning_trainer_kwargs"]
+        self.assertNotIn("logger", lightning_kwargs)
 
     def test_initial_model_sets_weights_path(self):
         """initial_weights_path is read directly from initial_model.path.

@@ -60,30 +60,6 @@ _UNSET = object()
 
 
 @dataclass
-class CometParam:
-    """Configuration for the Comet ML logger.
-
-    Credentials are forwarded as-is to ``comet_ml``; ``api_key`` should be treated
-    as a secret. ``comet_ml`` is imported lazily inside the worker, so this
-    dataclass can be constructed even when ``comet_ml`` is not installed (the
-    import only fires when the trainer actually attaches the logger).
-
-    Attributes:
-        api_key: Comet API key for the target workspace.
-        project_name: Comet project name to log under.
-        experiment_name: Display name for the experiment in the Comet UI.
-        workspace: Comet workspace owning the project.
-        tags: Optional list of tags to attach to the experiment.
-    """
-
-    api_key: str
-    project_name: str
-    experiment_name: str
-    workspace: str
-    tags: list[str] | None = field(default_factory=list)
-
-
-@dataclass
 class LightningTrainerParam:
     """Configuration for :class:`LightningTrainer`.
 
@@ -105,8 +81,6 @@ class LightningTrainerParam:
         data_collate_fn: Optional custom collate function passed to
             ``Dataset.iter_torch_batches``; defaults to Ray Data's column-tensor
             output.
-        comet_param: Optional :class:`CometParam`; when set, a CometLogger is
-            attached on each worker.
         lightning_trainer_kwargs: Extra keyword arguments forwarded verbatim to
             ``pytorch_lightning.Trainer(...)``.
         transfer_learning_spec: Optional warm-start spec describing layer freezing
@@ -131,7 +105,6 @@ class LightningTrainerParam:
     )
     num_epochs: int | None = field(default=_UNSET)  # type: ignore[assignment]  # sentinel replaced in __post_init__
     data_collate_fn: Callable | None = None
-    comet_param: CometParam | None = None
     lightning_trainer_kwargs: dict = field(default_factory=dict)
 
     transfer_learning_spec: TransferLearningSpec | None = None

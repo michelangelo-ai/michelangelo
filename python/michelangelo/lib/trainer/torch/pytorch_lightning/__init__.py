@@ -11,18 +11,14 @@ Public surface re-exported below:
   :meth:`update_model_state_dict` for loading trained weights into a fresh
   ``torch.nn.Module``.
 * :class:`LightningTrainerParam` — dataclass holding the training
-  configuration (model factory, datasets, batch size, optional Comet config,
-  warm-start specs, etc.).
-* :class:`CometParam` — Comet ML logger configuration. Forwarded to
-  ``comet_ml`` (imported lazily, so this dataclass is safe to construct
-  without ``comet_ml`` installed).
+  configuration (model factory, datasets, batch size, optional Lightning
+  logger, warm-start specs, etc.).
 * :class:`TransferLearningSpec`, :class:`IncrementalTrainingSpec`,
   :class:`ModelSpec`, :class:`TrainingType`, :class:`LearningMode` — warm-start
   schema types consumed by the trainer.
 """
 
 from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (
-    CometParam,
     LightningTrainer,
     LightningTrainerParam,
     LightningTrainerWithStateDict,
@@ -37,7 +33,6 @@ from michelangelo.lib.trainer.torch.pytorch_lightning.schema import (
 )
 
 __all__ = [
-    "CometParam",
     "IncrementalTrainingSpec",
     "LearningMode",
     "LightningTrainer",

@@ -17,66 +17,11 @@ import pytest
 
 from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (
     CHECKPOINT_PATH_KEY,
-    CometParam,
     LightningTrainer,
     LightningTrainerParam,
     LightningTrainerWithStateDict,
     _torch_weights_only_disabled,
 )
-
-# -----------------------------------------------------------------------------
-# CometParam
-# -----------------------------------------------------------------------------
-
-
-class TestCometParam:
-    """``CometParam`` dataclass behavior."""
-
-    def test_required_fields(self):
-        """All four required fields are stored verbatim."""
-        param = CometParam(
-            api_key="secret",
-            project_name="proj",
-            experiment_name="exp",
-            workspace="ws",
-        )
-        assert param.api_key == "secret"
-        assert param.project_name == "proj"
-        assert param.experiment_name == "exp"
-        assert param.workspace == "ws"
-
-    def test_tags_default_to_empty_list(self):
-        """The default tag list is an empty list, not None."""
-        param = CometParam(
-            api_key="k",
-            project_name="p",
-            experiment_name="e",
-            workspace="w",
-        )
-        assert param.tags == []
-
-    def test_tags_default_factory_isolates_instances(self):
-        """Mutating one instance's tags must not leak into a sibling."""
-        a = CometParam(
-            api_key="k", project_name="p", experiment_name="e", workspace="w"
-        )
-        b = CometParam(
-            api_key="k", project_name="p", experiment_name="e", workspace="w"
-        )
-        a.tags.append("x")
-        assert b.tags == []
-
-    def test_tags_explicit(self):
-        """Explicit ``tags`` value is preserved."""
-        param = CometParam(
-            api_key="k",
-            project_name="p",
-            experiment_name="e",
-            workspace="w",
-            tags=["foo", "bar"],
-        )
-        assert param.tags == ["foo", "bar"]
-
 
 # -----------------------------------------------------------------------------
 # LightningTrainerParam
@@ -105,7 +50,6 @@ class TestLightningTrainerParam:
         assert param.num_shuffle_batches == 10
         assert param.num_epochs == 1  # _UNSET → 1 in __post_init__
         assert param.data_collate_fn is None
-        assert param.comet_param is None
         assert param.lightning_trainer_kwargs == {}
         assert param.transfer_learning_spec is None
         assert param.incremental_training_spec is None
@@ -149,9 +93,6 @@ class TestLightningTrainerParam:
 
     def test_passes_through_extra_fields(self):
         """Optional fields are accepted and stored as-is."""
-        comet = CometParam(
-            api_key="k", project_name="p", experiment_name="e", workspace="w"
-        )
         collate = MagicMock(name="collate")
         lightning_kwargs = {"strategy": "deepspeed"}
 
@@ -159,7 +100,6 @@ class TestLightningTrainerParam:
             batch_size=64,
             num_shuffle_batches=0,
             data_collate_fn=collate,
-            comet_param=comet,
             lightning_trainer_kwargs=lightning_kwargs,
             initial_weights_path="s3://bucket/weights.pt",
         )
@@ -167,7 +107,6 @@ class TestLightningTrainerParam:
         assert param.batch_size == 64
         assert param.num_shuffle_batches == 0
         assert param.data_collate_fn is collate
-        assert param.comet_param is comet
         assert param.lightning_trainer_kwargs is lightning_kwargs
         assert param.initial_weights_path == "s3://bucket/weights.pt"
 

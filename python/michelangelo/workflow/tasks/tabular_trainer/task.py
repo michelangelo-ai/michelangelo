@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Callable, Optional
 
 from michelangelo._internal.utils.reflection_utils.module_attr import get_module_attr
 from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (
-    CometParam,
     LightningTrainerParam,
     LightningTrainerWithStateDict,
 )
@@ -33,6 +32,9 @@ from michelangelo.workflow.tasks.tabular_trainer._dataset import (
     get_model_schema,
     get_sample_data,
     raise_lightning_trainer_config_deprecation_warnings,
+)
+from michelangelo.workflow.tasks.tabular_trainer._tracker import (
+    build_tracker_logger_kwargs,
 )
 from michelangelo.workflow.variables import ModelVariable
 from michelangelo.workflow.variables.metadata import (
@@ -170,8 +172,7 @@ def train_tabular(
             file.
         NotImplementedError: If ``config.lightning.checkpoint_config
             .save_every_n_steps`` is set, if
-            ``config.lightning.transfer_learning_spec`` is set, if
-            ``config.lightning.experiment_tracker.mlflow`` is set, or if
+            ``config.lightning.transfer_learning_spec`` is set, or if
             ``config.custom`` is used (custom backend not yet in OSS).
     """
     if config.lightning:
@@ -253,32 +254,6 @@ def _train_lightning(
         num_shuffle_batches = dl.num_shuffle_batches
         data_collate_fn = get_module_attr(dl.collate_fn) if dl.collate_fn else None
 
-    # Experiment tracking
-    comet_param: CometParam | None = None
-    if (
-        config.experiment_tracker is not None
-        and config.experiment_tracker.comet is not None
-    ):
-        c = config.experiment_tracker.comet
-        comet_param = CometParam(
-            api_key=c.api_key,
-            project_name=c.project_name,
-            experiment_name=c.experiment_name,
-            workspace=c.workspace,
-        )
-
-    # MLflow gate — wiring not yet implemented
-    # TODO(#1427): wire MLflow tracking into LightningTrainerParam
-    if (
-        config.experiment_tracker is not None
-        and config.experiment_tracker.mlflow is not None
-    ):
-        raise NotImplementedError(
-            "MLflow experiment tracking is not yet wired in OSS. "
-            "Remove mlflow from ExperimentTrackerConfig to proceed, "
-            "or use CometML tracking instead."
-        )
-
     # Mid-epoch checkpointing gate
     if config.checkpoint_config.save_every_n_steps is not None:
         raise NotImplementedError(
@@ -340,6 +315,17 @@ def _train_lightning(
         "precision", hp.get("precision", default_precision)
     )
 
+    # Experiment tracking: resolve config.experiment_tracker into a
+    # dotted-path logger + kwargs, deferred to worker-side construction.
+    # Never overrides a user-supplied lightning_trainer_kwargs.logger.
+    tracker_kwargs = build_tracker_logger_kwargs(config.experiment_tracker)
+    if tracker_kwargs["logger"] is not None:
+        lightning_trainer_kwargs.setdefault("logger", tracker_kwargs["logger"])
+        if tracker_kwargs["logger_kwargs"]:
+            lightning_trainer_kwargs.setdefault(
+                "logger_kwargs", tracker_kwargs["logger_kwargs"]
+            )
+
     # ModelArtifact.path is always a local filesystem path (per its
     # contract) to the packaged state-dict file itself — matching what
     # LightningTrainerParam.initial_weights_path expects (see
@@ -367,7 +353,6 @@ def _train_lightning(
         num_shuffle_batches=num_shuffle_batches,
         data_collate_fn=data_collate_fn,
         lightning_trainer_kwargs=lightning_trainer_kwargs,
-        comet_param=comet_param,
         transfer_learning_spec=None,
         initial_weights_path=initial_weights_path,
     )

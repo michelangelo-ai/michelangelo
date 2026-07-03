@@ -7,8 +7,10 @@ and its backends. Mirrors the structure of ``michelangelo.workflow.schema.pusher
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 from michelangelo.workflow.schema.exceptions import ConfigurationError
 from michelangelo.workflow.schema.ray_data_io import (
@@ -23,6 +25,7 @@ __all__ = [
     "CheckpointScoreOrder",
     "ColumnConfig",
     "CometConfig",
+    "CustomTrackerConfig",
     "CustomTrainerConfig",
     "DataloadingConfig",
     "ExperimentTrackerConfig",
@@ -33,6 +36,7 @@ __all__ = [
     "ParquetReadConfig",
     "ScalingConfig",
     "TabularTrainerConfig",
+    "TrackerConfig",
     "TransferLearningSpecConfig",
 ]
 
@@ -90,10 +94,36 @@ class ColumnConfig:
 
 
 @dataclass
-class CometConfig:
+class TrackerConfig:
+    """Base for all experiment tracker configurations.
+
+    Subclasses that are not yet wired in OSS set ``_oss_supported = False``
+    as a class-level default and override :meth:`_check_oss_supported` to
+    raise with a specific message; ``__post_init__`` calls it immediately
+    at construction time so misconfiguration is caught before training
+    starts, not minutes into a run.
+    """
+
+    _oss_supported: bool = dataclasses.field(default=True, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        """Fail fast at construction time for trackers not yet supported in OSS."""
+        if not self._oss_supported:
+            self._check_oss_supported()
+
+    def _check_oss_supported(self) -> None:
+        """Raise ``ConfigurationError``; subclasses override with a specific message."""
+        raise ConfigurationError(
+            f"{type(self).__name__} is not yet supported in OSS michelangelo."
+        )
+
+
+@dataclass
+class CometConfig(TrackerConfig):
     """Comet ML experiment tracking configuration.
 
-    Pass to ``ExperimentTrackerConfig(comet=CometConfig(...))`` on
+    Pass to ``ExperimentTrackerConfig(tracker=CometConfig(...))`` (or the
+    legacy ``ExperimentTrackerConfig(comet=CometConfig(...))``) on
     ``LightningTrainerConfig``.
 
     Attributes:
@@ -101,6 +131,7 @@ class CometConfig:
         workspace: Comet workspace name.
         project_name: Comet project name.
         experiment_name: Comet experiment name.
+        tags: Optional tags attached to the Comet experiment.
 
     Example:
         >>> cfg = CometConfig(
@@ -115,93 +146,161 @@ class CometConfig:
     workspace: str
     project_name: str
     experiment_name: str
+    tags: list[str] = field(default_factory=list)
 
 
 @dataclass
-class MlflowConfig:
+class MlflowConfig(TrackerConfig):
     """MLflow experiment tracking configuration.
 
     Pass to ``ExperimentTrackerConfig(mlflow=MlflowConfig(...))`` on
     ``LightningTrainerConfig``.
 
     Attributes:
-        tracking_uri: MLflow tracking server URI, e.g.
-            ``"http://localhost:5000"`` or ``"sqlite:///mlflow.db"``.
         experiment_name: Name of the MLflow experiment. Created automatically
             if it does not exist.
+        tracking_uri: MLflow tracking server URI, e.g.
+            ``"http://localhost:5000"`` or ``"sqlite:///mlflow.db"``. Falls
+            back to the ``MLFLOW_TRACKING_URI`` environment variable when
+            ``None``.
         run_name: Optional display name for this training run. Auto-generated
             when ``None``.
         tags: Key-value string tags attached to the MLflow run.
 
+    Raises:
+        ConfigurationError: MLflow experiment tracking is not yet wired in
+            OSS michelangelo (see GitHub issue #1427). Raised immediately at
+            construction time. Use ``CometConfig`` or ``CustomTrackerConfig``
+            instead.
+
     Example:
-        >>> cfg = MlflowConfig(
-        ...     tracking_uri="http://mlflow.example.com",
-        ...     experiment_name="tabular-ctr",
-        ...     run_name="xgb-baseline",
-        ... )
+        Constructing this config always raises ``ConfigurationError`` until
+        GitHub issue #1427 is resolved::
+
+            MlflowConfig(experiment_name="tabular-ctr")
+            # ConfigurationError: MLflow experiment tracking is not yet
+            # wired in OSS michelangelo (see GitHub issue #1427)...
     """
 
-    tracking_uri: str
     experiment_name: str
+    tracking_uri: str | None = None
     run_name: str | None = None
     tags: dict[str, str] = field(default_factory=dict)
+    _oss_supported: bool = dataclasses.field(default=False, init=False, repr=False)
+
+    def _check_oss_supported(self) -> None:
+        """Raise with a message pointing at the tracking issue and alternatives."""
+        raise ConfigurationError(
+            "MLflow experiment tracking is not yet wired in OSS michelangelo "
+            "(see GitHub issue #1427). Use CometConfig or CustomTrackerConfig "
+            "instead. This will be removed once #1427 ships."
+        )
+
+
+@dataclass
+class CustomTrackerConfig(TrackerConfig):
+    """Bring-your-own experiment tracker via a dotted-path factory function.
+
+    ``factory_fn`` is a dotted import path to a callable that returns a
+    ``lightning.pytorch.loggers.Logger`` or ``list[Logger]``. The factory is
+    called inside the Ray Train worker with ``**factory_kwargs`` plus an
+    optional ``run_id: str | None`` kwarg for distributed correlation.
+    Factories that want per-worker run correlation should accept
+    ``run_id=None`` as an optional kwarg; factories that don't need it can
+    omit the parameter entirely.
+
+    Attributes:
+        factory_fn: Dotted import path to the logger factory callable.
+        factory_kwargs: Kwargs forwarded to the factory (excluding ``run_id``,
+            which is injected automatically when the factory accepts it).
+
+    Example — Weights & Biases:
+        >>> # myproject/loggers.py
+        >>> def make_wandb_logger(project, run_name, run_id=None):
+        ...     from lightning.pytorch.loggers import WandbLogger
+        ...     return WandbLogger(project=project, name=run_name, id=run_id)
+        >>> CustomTrackerConfig(
+        ...     factory_fn="myproject.loggers.make_wandb_logger",
+        ...     factory_kwargs={"project": "ctr-model", "run_name": "xgb-v3"},
+        ... )
+        CustomTrackerConfig(factory_fn='myproject.loggers.make_wandb_logger', ...)
+    """
+
+    factory_fn: str
+    factory_kwargs: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class ExperimentTrackerConfig:
     """Experiment tracking backend configuration.
 
-    Exactly zero or one tracker may be active at a time. Set neither to
-    disable experiment tracking entirely. Setting more than one raises
-    ``ConfigurationError``.
+    Two styles accepted, mutually exclusive:
 
-    **Adding a new backend:** add a typed field here (e.g.
-    ``wandb: WandbConfig | None = None``) and a corresponding branch in
-    ``trainer_task._build_experiment_tracker``. When a second workflow task
-    (e.g. ``llm_trainer``) needs this class, extract it to
-    ``michelangelo.workflow.schema.experiment_tracker`` and import from there.
+    - **New style** (preferred): ``tracker=CometConfig(...)`` or
+      ``tracker=CustomTrackerConfig(...)``.
+    - **Legacy style**: ``comet=CometConfig(...)`` or
+      ``mlflow=MlflowConfig(...)`` — promoted to ``tracker`` in
+      ``__post_init__``. All existing configs continue to work unchanged.
+
+    **Adding a new backend:** define a ``TrackerConfig`` subclass and pass
+    it via ``tracker=``. No changes to this class are required — see
+    ``CustomTrackerConfig`` for the bring-your-own-tracker escape hatch.
 
     Attributes:
-        comet: Comet ML tracker configuration.
-        mlflow: MLflow tracker configuration.
+        tracker: Unified tracker config field (preferred).
+        comet: Legacy Comet ML tracker configuration field.
+        mlflow: Legacy MLflow tracker configuration field.
 
     Raises:
-        ConfigurationError: If more than one tracker backend is configured.
-            Set at most one of ``comet`` or ``mlflow``.
+        ConfigurationError: If both ``tracker`` and a legacy field are set,
+            if more than one legacy field is set, or if the resolved tracker
+            type sets ``_oss_supported = False`` (e.g. ``MlflowConfig``,
+            which raises when constructed regardless of this class).
 
     Example — Comet ML:
         >>> ExperimentTrackerConfig(
-        ...     comet=CometConfig(
+        ...     tracker=CometConfig(
         ...         api_key="key", workspace="ws",
         ...         project_name="proj", experiment_name="exp",
         ...     )
         ... )
 
-    Example — MLflow:
+    Example — bring-your-own tracker:
         >>> ExperimentTrackerConfig(
-        ...     mlflow=MlflowConfig(
-        ...         tracking_uri="http://mlflow.example.com",
-        ...         experiment_name="tabular-ctr",
+        ...     tracker=CustomTrackerConfig(
+        ...         factory_fn="myproject.loggers.make_wandb_logger",
+        ...         factory_kwargs={"project": "ctr-model"},
         ...     )
         ... )
     """
 
+    tracker: TrackerConfig | None = None
     comet: CometConfig | None = None
     mlflow: MlflowConfig | None = None
 
     def __post_init__(self) -> None:
-        """Validate that at most one tracker backend is configured."""
-        active = [
-            name
+        """Validate exclusivity and promote legacy fields into ``tracker``."""
+        legacy = [
+            (name, val)
             for name, val in [("comet", self.comet), ("mlflow", self.mlflow)]
             if val is not None
         ]
-        if len(active) > 1:
+        if self.tracker is not None and legacy:
             raise ConfigurationError(
-                f"At most one experiment tracker can be set, got: {active}. "
+                f"Cannot set both 'tracker' and legacy fields "
+                f"{[n for n, _ in legacy]}. "
+                "Use ExperimentTrackerConfig(tracker=...) alone."
+            )
+        if len(legacy) > 1:
+            raise ConfigurationError(
+                f"At most one tracker allowed, got: {[n for n, _ in legacy]}. "
                 "Choose one of ExperimentTrackerConfig(comet=...) or "
                 "ExperimentTrackerConfig(mlflow=...)."
             )
+        if self.comet is not None:
+            self.tracker = self.comet
+        elif self.mlflow is not None:
+            self.tracker = self.mlflow
 
 
 @dataclass
@@ -472,8 +571,10 @@ class LightningTrainerConfig:
             ``lightning.pytorch.Trainer``.
         hyperparameters: Catch-all dict for kwargs not covered by the
             structured fields. Highly discouraged; prefer structured fields.
-        experiment_tracker: Experiment tracking backend (Comet ML or MLflow).
-            ``None`` disables experiment tracking.
+        experiment_tracker: Experiment tracking backend (Comet ML, or a
+            custom tracker via ``CustomTrackerConfig``). ``None`` disables
+            experiment tracking. MLflow is not yet wired in OSS — see
+            ``MlflowConfig``.
         transfer_learning_spec: Transfer-learning spec config. Setting this
             raises ``NotImplementedError`` until the spec builder is ported.
         incremental_training_mode: Incremental training mode config.
@@ -563,9 +664,9 @@ class TabularTrainerConfig:
         ...         ),
         ...         scaling_config=ScalingConfig(cpu_per_worker=4),
         ...         experiment_tracker=ExperimentTrackerConfig(
-        ...             mlflow=MlflowConfig(
-        ...                 tracking_uri="http://mlflow.example.com",
-        ...                 experiment_name="tabular-ctr",
+        ...             tracker=CometConfig(
+        ...                 api_key="key", workspace="ws",
+        ...                 project_name="tabular-ctr", experiment_name="xgb-v3",
         ...             ),
         ...         ),
         ...     )
