@@ -145,3 +145,18 @@ jobs:
           helm push \
             michelangelo-${{ steps.version.outputs.VERSION }}.tgz \
             oci://ghcr.io/michelangelo-ai/michelangelo/charts
+
+  notify-on-failure:
+    needs: [build-upload, build-go-binaries, upload-binaries, helm-publish]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Slack on failure
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          channel-id: '#michelangelo-releases'
+          slack-message: |
+            :x: *${{ github.workflow }}* failed for ${{ github.ref_name }}
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
