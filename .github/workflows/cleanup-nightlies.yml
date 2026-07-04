@@ -185,3 +185,21 @@ jobs:
             echo "Deprecated ${#DEPRECATED[@]} version(s):" >> "$GITHUB_STEP_SUMMARY"
             for v in "${DEPRECATED[@]}"; do echo "- $v" >> "$GITHUB_STEP_SUMMARY"; done
           fi
+
+  # ---------------------------------------------------------------------------
+  # Notify Slack when any cleanup job fails
+  # ---------------------------------------------------------------------------
+  notify-on-failure:
+    needs: [cleanup-containers, cleanup-releases, cleanup-npm]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Slack on failure
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          channel-id: '#michelangelo-releases'
+          slack-message: |
+            :x: *${{ github.workflow }}* failed
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
