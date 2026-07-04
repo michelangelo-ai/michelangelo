@@ -116,3 +116,21 @@ jobs:
             echo "| Node.js | 18, 20 | ${NODE_RESULT} |"
             echo "| Helm | 3.13.0, 3.14.0, 3.15.0 | ${HELM_RESULT} |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # Notify Slack when any compatibility matrix job fails
+  # ---------------------------------------------------------------------------
+  notify-on-failure:
+    needs: [python-compat, node-compat, helm-compat]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Slack on failure
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          channel-id: '#michelangelo-releases'
+          slack-message: |
+            :x: *${{ github.workflow }}* failed
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
