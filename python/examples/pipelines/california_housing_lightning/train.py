@@ -9,10 +9,12 @@ example's bespoke XGBoost training loop.
 from __future__ import annotations
 
 import logging
-import os
 from typing import TYPE_CHECKING
 
 import michelangelo.uniflow.core as uniflow
+from examples.pipelines.california_housing_lightning._backend import (
+    resolve_storage_backend,
+)
 from michelangelo.uniflow.plugins.ray import RayTask
 from michelangelo.workflow.schema.tabular_trainer import (
     BatchIterConfig,
@@ -36,52 +38,6 @@ log = logging.getLogger(__name__)
 __all__ = ["train"]
 
 LABEL_COLUMN = "target"
-
-
-def _resolve_storage_backend():
-    """Select MinIO (remote) or a local temp directory.
-
-    Matches the ``california_housing_xgb`` example's ``push.py``
-    storage-backend selection: ``AWS_ENDPOINT_URL`` set -> MinIO/S3-compatible
-    remote storage; unset -> local filesystem (development and CI).
-    """
-    import tempfile
-    from urllib.parse import urlparse
-
-    s3_endpoint = os.environ.get("AWS_ENDPOINT_URL", "")
-    if s3_endpoint:
-        parsed = urlparse(s3_endpoint)
-        endpoint = parsed.netloc
-        if not endpoint:
-            raise ValueError(
-                f"AWS_ENDPOINT_URL={s3_endpoint!r} is missing a scheme. "
-                "Use a full URL like http://minio:9091"
-            )
-        from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
-
-        bucket = (
-            os.environ.get("AWS_S3_BUCKET")
-            or (
-                os.environ.get("MA_FILE_SYSTEM")
-                or os.environ.get("UF_STORAGE_URL", "s3://default")
-            )
-            .removeprefix("s3://")
-            .split("/")[0]
-        )
-        return MinioStorageBackend(
-            endpoint=endpoint,
-            bucket=bucket,
-            access_key=os.environ.get("AWS_ACCESS_KEY_ID", ""),
-            secret_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
-            secure=parsed.scheme == "https",
-            create_bucket_if_missing=True,
-        )
-
-    from michelangelo.lib.artifact_manager.storage_backend import LocalStorageBackend
-
-    local_dir = tempfile.mkdtemp(prefix="california_lightning_train_")
-    log.info("train: using LocalStorageBackend (local/CI) -> %s", local_dir)
-    return LocalStorageBackend(local_dir)
 
 
 @uniflow.task(
@@ -113,7 +69,7 @@ def train(
         type expected by the pusher -- ``train_tabular()`` uploads the model
         itself and returns a ``ModelArtifact`` directly.
     """
-    storage_backend = _resolve_storage_backend()
+    storage_backend, _ = resolve_storage_backend("california_lightning_train_")
 
     config = TabularTrainerConfig(
         lightning=LightningTrainerConfig(

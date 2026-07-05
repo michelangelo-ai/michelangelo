@@ -17,6 +17,9 @@ import logging
 from typing import TYPE_CHECKING
 
 import michelangelo.uniflow.core as uniflow
+from examples.pipelines.california_housing_lightning._backend import (
+    resolve_storage_backend,
+)
 from michelangelo.uniflow.plugins.spark import SparkTask
 from michelangelo.workflow.schema.pusher import (
     DatasetPluginConfig,
@@ -70,76 +73,27 @@ def push_step(
         List of ``PusherResult``, one per artifact pushed.
     """
     import os
-    import tempfile
 
-    s3_endpoint = os.environ.get("AWS_ENDPOINT_URL", "")
-    from urllib.parse import urlparse
-
-    parsed = urlparse(s3_endpoint) if s3_endpoint else None
-    endpoint = parsed.netloc if parsed else None
-    if s3_endpoint and not endpoint:
-        raise ValueError(
-            f"AWS_ENDPOINT_URL={s3_endpoint!r} is missing a scheme. "
-            "Use a full URL like http://minio:9091"
-        )
-    secure = parsed.scheme == "https" if parsed else False
-    access_key = os.environ.get("AWS_ACCESS_KEY_ID", "")
-    secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+    storage_backend, is_remote = resolve_storage_backend("california_lightning_push_")
 
     _run_id = os.path.basename(model_artifact.path.rstrip("/"))
 
     pr.train_data.load_pandas_dataframe()
     pr.validation_data.load_pandas_dataframe()
 
-    if endpoint:
-        bucket = (
-            os.environ.get("AWS_S3_BUCKET")
-            or (
-                os.environ.get("MA_FILE_SYSTEM")
-                or os.environ.get("UF_STORAGE_URL", "s3://default")
-            )
-            .removeprefix("s3://")
-            .split("/")[0]
-        )
-        if not bucket:
-            raise OSError(
-                "Could not determine storage bucket. "
-                "Set AWS_S3_BUCKET or MA_FILE_SYSTEM."
-            )
-        from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
+    if is_remote:
         from michelangelo.workflow.schema.sinks.s3 import S3SinkConfig
         from michelangelo.workflow.tasks.functions.sinks import S3Sink
-
-        storage_backend = MinioStorageBackend(
-            endpoint=endpoint,
-            bucket=bucket,
-            access_key=access_key,
-            secret_key=secret_key,
-            secure=secure,
-            create_bucket_if_missing=True,
-        )
-        log.info(
-            "push_step: using MinioStorageBackend (remote) -> %s",
-            storage_backend.get_storage_location(),
-        )
 
         def _dataset_config(key: str) -> DatasetPluginConfig:
             return DatasetPluginConfig(
                 sinks=[S3Sink(S3SinkConfig(key, storage_backend=storage_backend))]
             )
     else:
-        from michelangelo.lib.artifact_manager.storage_backend import (
-            LocalStorageBackend,
-        )
         from michelangelo.workflow.schema.sinks.local import LocalFileSinkConfig
         from michelangelo.workflow.tasks.functions.sinks import LocalFileSink
 
-        _local_dir = tempfile.mkdtemp(prefix="california_lightning_push_")
-        storage_backend = LocalStorageBackend(_local_dir)
-        log.info(
-            "push_step: using LocalStorageBackend (local/CI) -> %s",
-            storage_backend.get_storage_location(),
-        )
+        _local_dir = storage_backend.get_storage_location()
 
         def _dataset_config(key: str) -> DatasetPluginConfig:  # type: ignore[misc]
             return DatasetPluginConfig(
