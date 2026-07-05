@@ -106,6 +106,14 @@ RUN ls -alF ./
 RUN poetry config virtualenvs.create false
 RUN poetry install -E example
 
+# poetry.lock marks importlib_resources as needed only under a compound
+# extra=="example" + python_version marker, but `poetry install -E example`
+# does not actually install it here even though it is a real transitive
+# runtime dependency of matplotlib (pulled in by torchmetrics's plotting
+# utilities, which pytorch_lightning imports at module load on Python 3.9).
+# Installing explicitly until the lockfile resolution is fixed upstream.
+RUN python3 -m pip install importlib_resources
+
 # Activate Poetry's virtual environment by default
 ENV PATH="/app/.venv/bin:$PATH"
 
