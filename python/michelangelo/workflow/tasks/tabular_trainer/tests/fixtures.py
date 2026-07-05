@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, Mock
 
 import numpy as np
 
+from michelangelo.lib.artifact_manager.storage_backend import StorageBackend
 from michelangelo.workflow.schema.tabular_trainer import (
     ColumnConfig,
     LightningTrainerConfig,
@@ -51,9 +52,29 @@ def mock_validation_dataset() -> Mock:
 
 
 def mock_storage_backend() -> Mock:
-    """Return a Mock ``StorageBackend`` that records calls."""
-    backend = MagicMock()
+    """Return a Mock ``StorageBackend`` that records calls.
+
+    Spec'd against ``StorageBackend`` so it only exposes the base interface
+    (``upload``/``download``/``get_storage_location``) -- unlike a bare
+    ``MagicMock()``, attribute access for methods not on the base class (e.g.
+    ``to_ray_storage_target``, implemented only by object-store backends like
+    ``MinioStorageBackend``) raises ``AttributeError``, matching a real
+    ``StorageBackend`` instance and keeping the ``getattr(..., None)``
+    duck-typing check in ``task.py`` honest.
+    """
+    backend = MagicMock(spec=StorageBackend)
     backend.upload.return_value = "s3://bucket/models/abc123"
+    return backend
+
+
+def mock_ray_storage_backend() -> Mock:
+    """Return a Mock storage backend that also implements ``to_ray_storage_target``.
+
+    Simulates ``MinioStorageBackend``-like backends for testing the
+    multi-node-safe ``RunConfig`` default in ``train_tabular``.
+    """
+    backend = mock_storage_backend()
+    backend.to_ray_storage_target = Mock(return_value=("bucket/ray_train", Mock()))
     return backend
 
 

@@ -27,6 +27,7 @@ from michelangelo.workflow.tasks.tabular_trainer.task import (
 from michelangelo.workflow.tasks.tabular_trainer.tests.fixtures import (
     make_model_artifact,
     make_tabular_config,
+    mock_ray_storage_backend,
     mock_storage_backend,
     mock_train_dataset,
     mock_validation_dataset,
@@ -514,6 +515,54 @@ class TestTrainTabularLightning(TestCase):
         mock_collate.assert_called_once()
         _, _, meta_cols = mock_collate.call_args[0]
         self.assertIn("user_id", meta_cols)
+
+
+# ---------------------------------------------------------------------------
+# train_tabular — default RunConfig storage
+# ---------------------------------------------------------------------------
+
+
+class TestTrainTabularDefaultRunConfig(TestCase):
+    """Tests for the default RunConfig storage chosen when run_config is None."""
+
+    def test_remote_run_uses_backend_ray_storage_target(self):
+        """A non-local run with a to_ray_storage_target()-capable backend uses it."""
+        backend = mock_ray_storage_backend()
+        _, _, mt = _run_train(backend=backend, is_local_run=False)
+        run_config = mt.call_args.kwargs["run_config"]
+        backend.to_ray_storage_target.assert_called_once()
+        self.assertEqual(run_config.storage_path, "bucket/ray_train")
+        self.assertIs(
+            run_config.storage_filesystem,
+            backend.to_ray_storage_target.return_value[1],
+        )
+
+    def test_local_run_uses_tempdir_even_with_ray_storage_backend(self):
+        """is_local_run=True uses a local tempdir even with a capable backend."""
+        backend = mock_ray_storage_backend()
+        _, _, mt = _run_train(backend=backend, is_local_run=True)
+        run_config = mt.call_args.kwargs["run_config"]
+        backend.to_ray_storage_target.assert_not_called()
+        self.assertIsNone(run_config.storage_filesystem)
+        self.assertTrue(run_config.storage_path)
+
+    def test_remote_run_without_ray_storage_support_uses_tempdir(self):
+        """A backend without to_ray_storage_target() falls back to a local tempdir."""
+        backend = mock_storage_backend()
+        _, _, mt = _run_train(backend=backend, is_local_run=False)
+        run_config = mt.call_args.kwargs["run_config"]
+        self.assertIsNone(run_config.storage_filesystem)
+        self.assertTrue(run_config.storage_path)
+
+    def test_explicit_run_config_not_overridden(self):
+        """An explicitly-passed run_config is forwarded as-is."""
+        import ray.train
+
+        explicit = ray.train.RunConfig(storage_path="/explicit/path")
+        backend = mock_ray_storage_backend()
+        _, _, mt = _run_train(backend=backend, is_local_run=False, run_config=explicit)
+        backend.to_ray_storage_target.assert_not_called()
+        self.assertIs(mt.call_args.kwargs["run_config"], explicit)
 
 
 # ---------------------------------------------------------------------------

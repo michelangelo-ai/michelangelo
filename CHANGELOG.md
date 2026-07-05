@@ -18,7 +18,12 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- To be populated.
+- `train_tabular()` no longer defaults `RunConfig.storage_path` to a local
+  tempdir on non-local runs. When `storage_backend` supports it (e.g.
+  `MinioStorageBackend`), the default `RunConfig` now points
+  `storage_path`/`storage_filesystem` at that backend's bucket, so worker
+  pods on a multi-node Ray cluster can share checkpoint storage with the
+  head pod. `is_local_run=True` still uses a local tempdir.
 
 ### Removed
 

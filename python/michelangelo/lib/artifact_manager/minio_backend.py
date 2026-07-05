@@ -42,9 +42,13 @@ import shutil
 import sys
 import tarfile
 import tempfile
+from typing import TYPE_CHECKING
 
 from michelangelo.lib.artifact_manager.storage_backend import StorageBackend
 from michelangelo.lib.exceptions import ConfigurationError
+
+if TYPE_CHECKING:
+    import pyarrow.fs
 
 _logger = logging.getLogger(__name__)
 
@@ -187,6 +191,10 @@ class MinioStorageBackend(StorageBackend):
                 "Install it with: pip install 'michelangelo[minio]'"
             ) from exc
         self._bucket = bucket
+        self._endpoint = endpoint
+        self._access_key = access_key
+        self._secret_key = secret_key
+        self._secure = secure
         self._S3Error = S3Error
         self._client = Minio(
             endpoint,
@@ -294,6 +302,43 @@ class MinioStorageBackend(StorageBackend):
             configured bucket. Useful for logging and debugging.
         """
         return f"s3://{self._bucket}"
+
+    def to_ray_storage_target(
+        self, path_prefix: str = "ray_train"
+    ) -> tuple[str, pyarrow.fs.FileSystem]:
+        """Build a Ray Train-compatible ``(storage_path, storage_filesystem)`` pair.
+
+        Points Ray Train's distributed checkpointing at this backend's bucket
+        instead of the local filesystem, so worker pods on a multi-node cluster
+        can read/write the same storage location as the head pod. Duck-typed —
+        callers should use ``getattr(backend, "to_ray_storage_target", None)``
+        since ``StorageBackend`` does not declare this method; backends without
+        object storage (e.g. ``LocalStorageBackend``) have no need for it.
+
+        Args:
+            path_prefix: Key prefix under the bucket to use as the Ray Train
+                storage root. Defaults to ``"ray_train"``.
+
+        Returns:
+            A ``(storage_path, storage_filesystem)`` tuple suitable for
+            ``ray.train.RunConfig(storage_path=..., storage_filesystem=...)``.
+            ``storage_path`` is a filesystem-relative path
+            (``"{bucket}/{path_prefix}"``, no ``s3://`` scheme), matching what
+            ``storage_filesystem`` expects.
+
+        Raises:
+            ImportError: If ``pyarrow`` is not installed.
+        """
+        import pyarrow.fs
+
+        storage_filesystem = pyarrow.fs.S3FileSystem(
+            access_key=self._access_key,
+            secret_key=self._secret_key,
+            endpoint_override=self._endpoint,
+            scheme="https" if self._secure else "http",
+        )
+        storage_path = f"{self._bucket}/{path_prefix}"
+        return storage_path, storage_filesystem
 
     # ── Private helpers ──────────────────────────────────────────────────────
 
