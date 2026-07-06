@@ -64,7 +64,7 @@ export function NotificationDetails({
           disabled={!enabled}
           multi
           creatable
-          placeholder="user@example.com"
+          placeholder="e.g. user@example.com"
         />
       </FormControl>
 
