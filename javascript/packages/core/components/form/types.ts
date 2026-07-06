@@ -1,3 +1,4 @@
+import type { FORM_ERROR } from 'final-form';
 import type { DeepPartial } from '#core/types/utility-types';
 
 export type FormData = Record<string, unknown>;
@@ -71,6 +72,12 @@ export interface FormInstance {
   fieldRegistry: FieldRegistry;
 }
 
+/**
+ * `FormDialog`'s submit handler is the only place that populates `FORM_ERROR`,
+ * and it always normalizes caught errors to `Error` before returning them.
+ */
+export type SubmitErrors = { [FORM_ERROR]?: Error } & Record<string, unknown>;
+
 export interface FormState<FieldValues extends FormData = FormData> {
   submitting: boolean;
   submitError?: string;
@@ -78,7 +85,7 @@ export interface FormState<FieldValues extends FormData = FormData> {
   submitFailed?: boolean;
   hasValidationErrors?: boolean;
   errors?: Record<string, unknown>;
-  submitErrors?: Record<string, unknown>;
+  submitErrors?: SubmitErrors;
   touched?: Record<string, boolean>;
   modifiedSinceLastSubmit?: boolean;
 }

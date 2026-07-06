@@ -34,9 +34,7 @@ export function applyMiddleware<T extends object>(
       set(clone, op.destination, op.transformation(sourceValue));
     } else if (isNil(sourceValue) && 'default' in op) {
       const defaultVal =
-        typeof op.default === 'function'
-          ? (op.default as (args: { studio: StudioParamsBase }) => unknown)({ studio: context! }) // cast: op.default is typed as unknown when it's a function; callers must pass the studio context shape
-          : op.default;
+        typeof op.default === 'function' ? op.default({ studio: context! }) : op.default;
       set(clone, op.destination, defaultVal);
     }
   }

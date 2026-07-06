@@ -21,7 +21,7 @@ import type { InterpolationContext } from './types';
 export function interpolate<T, U extends StudioParamsView = 'base'>(
   input: string | ((params: InterpolationContext<U>) => T)
 ): T {
-  // cast: FunctionInterpolation/StringInterpolation are Interpolation subclasses; callers use the return value as T via the config schema type
+  // cast: FunctionInterpolation/StringInterpolation are Interpolation subclasses; callers use the return value as T via the config schema type; see #1424
   return (
     typeof input === 'function' ? new FunctionInterpolation(input) : new StringInterpolation(input)
   ) as T;

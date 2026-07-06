@@ -52,7 +52,7 @@ export const FormDialog = <FieldValues extends FormData = FormData>({
       await onSubmit(values);
       onDismiss(); // Auto-close on successful submit
     } catch (error: unknown) {
-      return { [FORM_ERROR]: error };
+      return { [FORM_ERROR]: error instanceof Error ? error : new Error(String(error)) };
     }
   };
 

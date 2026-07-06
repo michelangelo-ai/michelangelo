@@ -17,9 +17,8 @@ export function useFormErrorList(): ErrorEntry[] {
     touched: true,
   });
 
-  const formLevelError = submitErrors?.[FORM_ERROR] as string | Error | undefined; // cast: final-form types FORM_ERROR as unknown; callers pass string | Error
-  const formLevelErrorMessage =
-    formLevelError instanceof Error ? formLevelError.message : formLevelError;
+  const formLevelError = submitErrors?.[FORM_ERROR];
+  const formLevelErrorMessage = formLevelError?.message;
   const formLevelEntry: ErrorEntry[] = formLevelErrorMessage
     ? [{ fieldPath: FORM_ERROR, errorMessage: formLevelErrorMessage }]
     : [];

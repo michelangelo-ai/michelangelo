@@ -25,7 +25,7 @@ export function DetailViewHeader({
   const [css, theme] = useStyletron();
   const resolve = useInterpolationResolver();
   const resolvedActions = useMemo(
-    () => (actions ? (resolve(actions, { page: record }) as ActionConfig[]) : undefined), // cast: resolver returns unknown; always ActionConfig[] after interpolation
+    () => (actions ? (resolve(actions, { page: record }) as ActionConfig[]) : undefined), // cast: resolver returns unknown; always ActionConfig[] after interpolation; see #1424
     [resolve, actions, record]
   );
 

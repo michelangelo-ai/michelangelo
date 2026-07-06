@@ -1,3 +1,5 @@
+import type { StudioParamsBase } from '#core/hooks/routing/use-studio-params/types';
+
 export type MiddlewareOperation = {
   source?: string;
   destination: string;
@@ -5,7 +7,7 @@ export type MiddlewareOperation = {
    * Value to set when `source` is absent or resolves to nil.
    * Can be a function `({ studio }) => value` to derive the default from routing context.
    */
-  default?: unknown;
+  default?: ((context: { studio: StudioParamsBase }) => unknown) | string | number | boolean | null;
   /**
    * Function applied to the source value before writing to `destination`.
    * Use `'unset'` to delete the destination path from the record entirely.

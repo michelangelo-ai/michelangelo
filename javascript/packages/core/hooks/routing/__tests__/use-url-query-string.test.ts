@@ -19,7 +19,7 @@ describe('useUrlQueryString', () => {
   describe('with single query parameter', () => {
     it('parses single parameter correctly', () => {
       const { result } = renderHook(
-        () => useUrlQueryString<{ revisionId: string }>(),
+        () => useUrlQueryString(),
         buildWrapper([
           getRouterWrapper({
             location: '/ma/ma-customer-sandbox/train/pipelines?revisionId=123',
@@ -34,7 +34,7 @@ describe('useUrlQueryString', () => {
   describe('with multiple query parameters', () => {
     it('parses multiple parameters correctly', () => {
       const { result } = renderHook(
-        () => useUrlQueryString<{ revisionId: string; status: string }>(),
+        () => useUrlQueryString(),
         buildWrapper([
           getRouterWrapper({
             location: '/ma/ma-customer-sandbox/train/pipelines?revisionId=123&status=active',
@@ -52,11 +52,7 @@ describe('useUrlQueryString', () => {
   describe('with encoded query parameters', () => {
     it('decodes parameters correctly', () => {
       const { result } = renderHook(
-        () =>
-          useUrlQueryString<{
-            filter: string;
-            search: string;
-          }>(),
+        () => useUrlQueryString(),
         buildWrapper([
           getRouterWrapper({
             location: '/ma/project?filter=status%3Dactive&search=test%20query',
@@ -74,10 +70,7 @@ describe('useUrlQueryString', () => {
   describe('with duplicate query parameters', () => {
     it('uses last value for duplicate parameters', () => {
       const { result } = renderHook(
-        () =>
-          useUrlQueryString<{
-            tag: string;
-          }>(),
+        () => useUrlQueryString(),
         buildWrapper([
           getRouterWrapper({
             location: '/ma/project?tag=v1&tag=v2',
@@ -94,11 +87,7 @@ describe('useUrlQueryString', () => {
   describe('with empty query parameter value', () => {
     it('handles empty values correctly', () => {
       const { result } = renderHook(
-        () =>
-          useUrlQueryString<{
-            empty: string;
-            normal: string;
-          }>(),
+        () => useUrlQueryString(),
         buildWrapper([
           getRouterWrapper({
             location: '/ma/project?empty=&normal=value',

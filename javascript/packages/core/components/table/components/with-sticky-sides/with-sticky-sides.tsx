@@ -68,7 +68,7 @@ export function withStickySides<P extends object>(
             [config.stickySide]: `${config.position}px !important`,
           };
 
-          // cast: React.Children.map yields ReactNode; we know each sticky cell child is a ReactElement
+          // cast: child is narrowed to ReactElement<Record<string, unknown>> by isValidElement guard above
           return React.cloneElement(child, {
             className: `${css(stickyStyles)} ${css(buildShadowStyles(config.shadowSide, scrollRatio))}`,
             'data-testid': `sticky-cell-${config.stickySide}-sticky`,

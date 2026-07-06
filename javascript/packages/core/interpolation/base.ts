@@ -29,7 +29,7 @@ export abstract class Interpolation<
     if (params.initialValues) this.cachedInitialValues = params.initialValues;
 
     try {
-      // cast: assembled context may be Partial<InterpolationContext<U>>; callers must provide required fields for the concrete interpolator
+      // cast: assembled context may be Partial<InterpolationContext<U>>; callers must provide required fields for the concrete interpolator; see #1424
       return this.execute({
         ...params,
         page: this.cachedPage,
