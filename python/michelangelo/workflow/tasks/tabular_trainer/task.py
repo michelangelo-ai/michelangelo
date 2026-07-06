@@ -2,17 +2,12 @@
 
 from __future__ import annotations
 
-import contextlib
 import dataclasses
 import io
 import logging
 import os
 import pickle
-import tempfile
-import uuid
 from typing import TYPE_CHECKING, Callable, Optional
-
-import torch
 
 from michelangelo._internal.utils.reflection_utils.module_attr import get_module_attr
 from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (
@@ -33,6 +28,7 @@ from michelangelo.workflow.tasks.tabular_trainer._dataset import (
     get_sample_data,
     raise_lightning_trainer_config_deprecation_warnings,
 )
+from michelangelo.workflow.variables import ModelVariable
 from michelangelo.workflow.variables.metadata import (
     TRAINING_FRAMEWORK_LIGHTNING,
     ModelMetadata,
@@ -43,7 +39,6 @@ if TYPE_CHECKING:
     import ray
     import ray.train
 
-    from michelangelo.lib.artifact_manager.storage_backend import StorageBackend
     from michelangelo.workflow.variables._private.dataset import DatasetVariable
 
 _logger = logging.getLogger(__name__)
@@ -97,7 +92,6 @@ def train_tabular(
     train_dataset: DatasetVariable,
     validation_dataset: DatasetVariable,
     *,
-    storage_backend: StorageBackend | None,
     initial_model: ModelArtifact | None = None,
     run_config: ray.train.RunConfig | None = None,
     scaling_config: ray.train.ScalingConfig | None = None,
@@ -105,23 +99,26 @@ def train_tabular(
     apply_incremental_training_metadata: (
         ApplyIncrementalTrainingMetadataFn
     ) = _apply_incremental_training_metadata,
-) -> ModelArtifact:
-    """Run tabular training and return a packaged ``ModelArtifact``.
+) -> ModelVariable:
+    """Run tabular training and return the trained model as a ``ModelVariable``.
 
     Dispatches to the lightning or custom backend based on *config*. The
-    resulting torch model is serialised to a temp dir and uploaded via
-    *storage_backend*; the returned artifact's ``path`` is the upload URI.
+    trained model is an intra-pipeline intermediate, not a registry-ready
+    artifact — it is handed off as a ``ModelVariable`` (persisted under
+    ``UF_STORAGE_URL``, the same convention ``DatasetVariable`` uses) for a
+    downstream assembler/pusher task to package and push. Uploading into the
+    consolidated model manager/artifact store is the pusher's job, not the
+    trainer's.
 
     Args:
         config: ``TabularTrainerConfig`` — exactly one of ``lightning`` or
             ``custom`` must be set.
         train_dataset: Training dataset variable.
         validation_dataset: Validation dataset variable.
-        storage_backend: Backend used to upload the trained model and to
-            download warm-start weights for *initial_model* (if provided).
-            Raises ``ConfigurationError`` when ``None``.
-        initial_model: Optional warm-start artifact. Weights are downloaded to
-            a local temp dir before training begins; the local path is passed to
+        initial_model: Optional warm-start artifact. ``ModelArtifact.path``
+            is always a local filesystem path (per its contract), so the
+            weights are read directly from ``initial_model.path`` — no
+            storage backend is involved. The path is passed to
             ``LightningTrainerParam.initial_weights_path``.
         run_config: Optional ``ray.train.RunConfig``. When ``None``, a default
             is built by
@@ -143,30 +140,23 @@ def train_tabular(
             :func:`_apply_incremental_training_metadata`; injectable for testing.
 
     Returns:
-        A ``ModelArtifact`` with ``assembled=False`` and ``deployable=False``.
-        Use the assembler task to produce a serving-ready artifact.
+        A ``ModelVariable`` wrapping the trained model, with
+        ``metadata.assembled=False`` and ``metadata.deployable=False``. Use
+        the assembler task to produce a serving-ready ``ModelArtifact``.
 
     Raises:
-        ConfigurationError: If *storage_backend* is ``None``, or if the
-            training dataset is empty.
+        ConfigurationError: If the training dataset is empty.
         NotImplementedError: If ``config.lightning.checkpoint_config
             .save_every_n_steps`` is set, if
             ``config.lightning.transfer_learning_spec`` is set, if
             ``config.lightning.experiment_tracker.mlflow`` is set, or if
             ``config.custom`` is used (custom backend not yet in OSS).
     """
-    if storage_backend is None:
-        raise ConfigurationError(
-            "storage_backend is required for train_tabular. "
-            "Provide a StorageBackend instance (e.g. MinioStorageBackend)."
-        )
-
     if config.lightning:
         return _train_lightning(
             config.lightning,
             train_dataset,
             validation_dataset,
-            storage_backend=storage_backend,
             initial_model=initial_model,
             run_config=run_config,
             scaling_config=scaling_config,
@@ -186,13 +176,12 @@ def _train_lightning(
     train_dataset: DatasetVariable,
     validation_dataset: DatasetVariable,
     *,
-    storage_backend: StorageBackend,
     initial_model: ModelArtifact | None,
     run_config: ray.train.RunConfig | None,
     scaling_config: ray.train.ScalingConfig | None,
     is_local_run: bool,
     apply_incremental_training_metadata: ApplyIncrementalTrainingMetadataFn,
-) -> ModelArtifact:
+) -> ModelVariable:
     """Lightning + Ray Train implementation of :func:`train_tabular`."""
     import ray.train
 
@@ -302,8 +291,7 @@ def _train_lightning(
 
     # RunConfig: use injected or build a default via the shared UniFlow helper,
     # which points Ray Train's distributed checkpointing at UF_STORAGE_URL
-    # (falling back to a local tempdir if unset) instead of each task
-    # re-deriving storage from its own storage_backend parameter.
+    # (falling back to a local tempdir if unset).
     if run_config is None:
         run_config = create_run_config(checkpoint_config=checkpoint_config)
 
@@ -330,39 +318,35 @@ def _train_lightning(
         "precision", hp.get("precision", default_precision)
     )
 
-    # Download warm-start weights, keep dir alive for the duration of training,
-    # then clean up. Uses ExitStack for conditional cleanup.
+    # ModelArtifact.path is always a local filesystem path (per its
+    # contract), so warm-start weights are read directly — no storage
+    # backend involved.
     initial_weights_path: str | None = None
-    with contextlib.ExitStack() as stack:
-        if initial_model is not None:
-            _weights_dir = stack.enter_context(
-                tempfile.TemporaryDirectory(prefix="michelangelo_weights_")
-            )
-            storage_backend.download(initial_model.path, _weights_dir)
-            initial_weights_path = os.path.join(_weights_dir, "model.pt")
-            _logger.info("Downloaded initial weights to: %s", initial_weights_path)
+    if initial_model is not None:
+        initial_weights_path = os.path.join(initial_model.path, "model.pt")
+        _logger.info("Using initial weights from: %s", initial_weights_path)
 
-        # Build and run trainer
-        trainer_param = LightningTrainerParam(
-            create_model_fn=create_model_fn,
-            create_model_fn_kwargs=create_model_fn_kwargs,
-            train_data=train_data,
-            val_data=validation_data,
-            batch_size=batch_size,
-            num_shuffle_batches=num_shuffle_batches,
-            data_collate_fn=data_collate_fn,
-            lightning_trainer_kwargs=lightning_trainer_kwargs,
-            comet_param=comet_param,
-            transfer_learning_spec=None,
-            initial_weights_path=initial_weights_path,
-        )
-        trainer = LightningTrainerWithStateDict(
-            trainer_param, run_config=run_config, scaling_config=scaling_config
-        )
-        trainer.train()
-        _logger.info("Training complete")
+    # Build and run trainer
+    trainer_param = LightningTrainerParam(
+        create_model_fn=create_model_fn,
+        create_model_fn_kwargs=create_model_fn_kwargs,
+        train_data=train_data,
+        val_data=validation_data,
+        batch_size=batch_size,
+        num_shuffle_batches=num_shuffle_batches,
+        data_collate_fn=data_collate_fn,
+        lightning_trainer_kwargs=lightning_trainer_kwargs,
+        comet_param=comet_param,
+        transfer_learning_spec=None,
+        initial_weights_path=initial_weights_path,
+    )
+    trainer = LightningTrainerWithStateDict(
+        trainer_param, run_config=run_config, scaling_config=scaling_config
+    )
+    trainer.train()
+    _logger.info("Training complete")
 
-    # Rebuild model from Ray checkpoint (weights dir already cleaned up above)
+    # Rebuild model from Ray checkpoint
     trained_model = create_model_fn(**create_model_fn_kwargs)
     trainer.update_model_state_dict(trained_model)
 
@@ -393,11 +377,10 @@ def _train_lightning(
         metadata, initial_model, config.incremental_training_mode
     )
 
-    # Serialise and upload model
-    with tempfile.TemporaryDirectory(prefix="michelangelo_upload_") as upload_tmp:
-        model_path = f"{upload_tmp}/model.pt"
-        torch.save(trained_model.state_dict(), model_path)
-        key = f"models/{uuid.uuid4().hex}"
-        uri = storage_backend.upload(upload_tmp, key)
-
-    return ModelArtifact(path=uri, metadata=metadata)
+    # Hand off as an intra-pipeline ModelVariable — persisted under
+    # UF_STORAGE_URL, dispatched to save_lightning_model() via
+    # metadata.training_framework. Packaging into a registry-ready
+    # ModelArtifact is the assembler's job, not the trainer's.
+    model_variable = ModelVariable(value=trained_model, metadata=metadata)
+    model_variable.save()
+    return model_variable

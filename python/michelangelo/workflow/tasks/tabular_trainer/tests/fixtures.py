@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, Mock
+from unittest.mock import Mock
 
 import numpy as np
 
-from michelangelo.lib.artifact_manager.storage_backend import StorageBackend
 from michelangelo.workflow.schema.tabular_trainer import (
     ColumnConfig,
     LightningTrainerConfig,
@@ -51,20 +50,17 @@ def mock_validation_dataset() -> Mock:
     return ds_mock
 
 
-def mock_storage_backend() -> Mock:
-    """Return a Mock ``StorageBackend`` that records calls."""
-    backend = MagicMock(spec=StorageBackend)
-    backend.upload.return_value = "s3://bucket/models/abc123"
-    return backend
-
-
 def make_model_artifact(
-    path: str = "s3://bucket/models/base",
+    path: str = "/tmp/models/base",
     *,
     is_incremental_training: bool = False,
     baseline_model_identifier: str | None = None,
 ) -> ModelArtifact:
-    """Return a ``ModelArtifact`` for use as an ``initial_model``."""
+    """Return a ``ModelArtifact`` for use as an ``initial_model``.
+
+    ``path`` is a local directory containing ``model.pt``, matching
+    ``ModelArtifact.path``'s "always local" contract.
+    """
     meta = ModelMetadata(
         training_framework="lightning",
         is_incremental_training=is_incremental_training,

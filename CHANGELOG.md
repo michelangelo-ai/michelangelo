@@ -25,6 +25,15 @@ All notable changes to this project will be documented in this file.
   same variable `DatasetVariable`/`ModelVariable` already use), so worker
   pods on a multi-node Ray cluster share checkpoint storage with the head
   pod. Falls back to a local tempdir when `UF_STORAGE_URL` is unset.
+- `train_tabular()` now returns the trained model as a `ModelVariable`
+  instead of eagerly packaging and uploading it as a `ModelArtifact`. The
+  trained model is an intra-pipeline intermediate, not a registry-ready
+  artifact — packaging and uploading into the consolidated model manager /
+  artifact store is the assembler/pusher's job. The now-unused
+  `storage_backend` parameter has been removed from `train_tabular()`;
+  warm-start weights for `initial_model` are read directly from
+  `ModelArtifact.path` (always a local filesystem path per its contract),
+  with no storage backend involved.
 
 ### Removed
 
