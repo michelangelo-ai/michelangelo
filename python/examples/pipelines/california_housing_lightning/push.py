@@ -73,10 +73,26 @@ def push_step(
         List of ``PusherResult``, one per artifact pushed.
     """
     import os
+    from dataclasses import replace
 
     storage_backend, is_remote = resolve_storage_backend("california_lightning_push_")
 
     _run_id = os.path.basename(model_artifact.path.rstrip("/"))
+
+    # ModelArtifact.path is documented as an *absolute local filesystem path*
+    # (ModelPusherPlugin re-uploads it from disk), but train_tabular() already
+    # uploaded the model through its own storage_backend and returns that
+    # backend's URI directly -- a real s3:// URI when running remotely. Pull
+    # it back down to local disk before handing it to the shared pusher.
+    if is_remote:
+        import tempfile
+
+        local_model_path = os.path.join(
+            tempfile.mkdtemp(prefix="california_lightning_push_model_"),
+            os.path.basename(model_artifact.path),
+        )
+        storage_backend.download(model_artifact.path, local_model_path)
+        model_artifact = replace(model_artifact, path=local_model_path)
 
     pr.train_data.load_pandas_dataframe()
     pr.validation_data.load_pandas_dataframe()
