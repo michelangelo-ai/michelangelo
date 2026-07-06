@@ -82,7 +82,7 @@ export function NotificationDetails({
           disabled={!enabled}
           multi
           creatable
-          placeholder="#channel or @username"
+          placeholder="e.g. #channel or @username"
         />
       </FormControl>
 
