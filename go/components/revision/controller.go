@@ -39,7 +39,7 @@ func NewReconciler(
 	}
 	return &Reconciler{
 		apiHandlerFactory: apiHandlerFactory,
-		logger:            logger,
+		logger:            logger.With(zap.String("controller", "revision")),
 		handlers:          m,
 	}
 }
