@@ -51,15 +51,19 @@ def mock_validation_dataset() -> Mock:
 
 
 def make_model_artifact(
-    path: str = "/tmp/models/base",
+    path: str = "/tmp/models/base/model.pt",
     *,
     is_incremental_training: bool = False,
     baseline_model_identifier: str | None = None,
 ) -> ModelArtifact:
     """Return a ``ModelArtifact`` for use as an ``initial_model``.
 
-    ``path`` is a local directory containing ``model.pt``, matching
-    ``ModelArtifact.path``'s "always local" contract.
+    ``path`` points directly to a local state-dict file (matching what
+    ``LightningTrainerParam.initial_weights_path`` expects and what
+    ``ModelVariable.save_lightning_model()`` writes) — not a directory.
+    The default path does not exist on disk; tests exercising the
+    ``os.path.isfile`` guard in ``_train_lightning`` should mock it or
+    pass a real file path.
     """
     meta = ModelMetadata(
         training_framework="lightning",

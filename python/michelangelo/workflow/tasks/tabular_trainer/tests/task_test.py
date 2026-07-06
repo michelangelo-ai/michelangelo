@@ -260,6 +260,7 @@ def _run_train(config=None, train_ds=None, val_ds=None, **kwargs):
             f"{_TRAINER_TASK}.get_module_attr",
             return_value=lambda **kw: Mock(),
         ),
+        patch(f"{_TRAINER_TASK}.os.path.isfile", return_value=True),
         patch(f"{_TRAINER_TASK}.ModelVariable") as mv_cls,
         patch(f"{_TRAINER_TASK}.LightningTrainerParam"),
         patch(f"{_TRAINER_TASK}.LightningTrainerWithStateDict") as mt,
@@ -442,15 +443,17 @@ class TestTrainTabularLightning(TestCase):
     def test_initial_model_sets_weights_path(self):
         """initial_weights_path is read directly from initial_model.path.
 
-        No storage backend is involved — ModelArtifact.path is always a
-        local filesystem path, per its contract.
+        No storage backend is involved — ModelArtifact.path for a lightning
+        warm-start points directly at the state-dict file, matching what
+        LightningTrainerParam.initial_weights_path expects.
         """
-        initial = make_model_artifact(path="/tmp/base")
+        initial = make_model_artifact(path="/tmp/base/model.pt")
         with (
             patch(
                 f"{_TRAINER_TASK}.get_module_attr",
                 return_value=lambda **kw: Mock(),
             ),
+            patch(f"{_TRAINER_TASK}.os.path.isfile", return_value=True),
             patch(f"{_TRAINER_TASK}.ModelVariable"),
             patch(f"{_TRAINER_TASK}.LightningTrainerParam") as mp,
             patch(f"{_TRAINER_TASK}.LightningTrainerWithStateDict") as mt,
@@ -466,6 +469,23 @@ class TestTrainTabularLightning(TestCase):
         self.assertEqual(
             mp.call_args.kwargs["initial_weights_path"], "/tmp/base/model.pt"
         )
+
+    def test_initial_model_missing_file_raises(self):
+        """A nonexistent initial_model.path raises ConfigurationError."""
+        initial = make_model_artifact(path="/tmp/definitely_does_not_exist/model.pt")
+        with (
+            self.assertRaises(ConfigurationError),
+            patch(
+                f"{_TRAINER_TASK}.get_module_attr",
+                return_value=lambda **kw: Mock(),
+            ),
+        ):
+            train_tabular(
+                make_tabular_config(),
+                mock_train_dataset(),
+                mock_validation_dataset(),
+                initial_model=initial,
+            )
 
     def test_no_initial_model_no_weights_path(self):
         """initial_weights_path is None without initial_model."""

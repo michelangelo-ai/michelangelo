@@ -1,4 +1,10 @@
-"""Dispatcher and lightning glue for the tabular trainer workflow task."""
+"""Dispatcher and lightning glue for the tabular trainer workflow task.
+
+This task never touches a storage backend — it hands off its trained model
+as an intra-pipeline ``ModelVariable``. Only a downstream packaging task
+(e.g. the pusher, see ``michelangelo.workflow.tasks.pusher``) owns uploading
+into the consolidated model manager/artifact store via a ``StorageBackend``.
+"""
 
 from __future__ import annotations
 
@@ -106,9 +112,19 @@ def train_tabular(
     trained model is an intra-pipeline intermediate, not a registry-ready
     artifact — it is handed off as a ``ModelVariable`` (persisted under
     ``UF_STORAGE_URL``, the same convention ``DatasetVariable`` uses) for a
-    downstream assembler/pusher task to package and push. Uploading into the
-    consolidated model manager/artifact store is the pusher's job, not the
-    trainer's.
+    downstream task to package and push. Uploading into the consolidated
+    model manager/artifact store is a packaging task's job, not the
+    trainer's — no such packaging ("assembler") task exists in OSS yet, so
+    today the returned ``ModelVariable`` is a stopping point for
+    programmatic use of its ``.value`` (the in-memory trained model) until
+    that task is added.
+
+    Example:
+        >>> config = TabularTrainerConfig(lightning=...)  # doctest: +SKIP
+        >>> result = train_tabular(  # doctest: +SKIP
+        ...     config, train_dataset, validation_dataset
+        ... )
+        >>> trained_model = result.value  # in-memory model  # doctest: +SKIP
 
     Args:
         config: ``TabularTrainerConfig`` — exactly one of ``lightning`` or
@@ -116,10 +132,10 @@ def train_tabular(
         train_dataset: Training dataset variable.
         validation_dataset: Validation dataset variable.
         initial_model: Optional warm-start artifact. ``ModelArtifact.path``
-            is always a local filesystem path (per its contract), so the
-            weights are read directly from ``initial_model.path`` — no
-            storage backend is involved. The path is passed to
-            ``LightningTrainerParam.initial_weights_path``.
+            must point directly to a local state-dict file (e.g. as written
+            by ``ModelVariable.save_lightning_model()``) — not a directory.
+            No storage backend is involved; the path is passed straight
+            through to ``LightningTrainerParam.initial_weights_path``.
         run_config: Optional ``ray.train.RunConfig``. When ``None``, a default
             is built by
             :func:`michelangelo.uniflow.plugins.ray.run_config.create_run_config`,
@@ -141,11 +157,17 @@ def train_tabular(
 
     Returns:
         A ``ModelVariable`` wrapping the trained model, with
-        ``metadata.assembled=False`` and ``metadata.deployable=False``. Use
-        the assembler task to produce a serving-ready ``ModelArtifact``.
+        ``metadata.assembled=False`` and ``metadata.deployable=False``.
+        There is no OSS packaging ("assembler") task yet to turn this into
+        a serving-ready ``ModelArtifact`` — until one exists, use
+        ``result.value`` for the in-memory model directly, or
+        ``result.save()``/``ModelVariable(path=..., metadata=...)`` to
+        persist/reload it across tasks.
 
     Raises:
-        ConfigurationError: If the training dataset is empty.
+        ConfigurationError: If the training dataset is empty, or if
+            *initial_model* is provided but ``initial_model.path`` is not a
+            file.
         NotImplementedError: If ``config.lightning.checkpoint_config
             .save_every_n_steps`` is set, if
             ``config.lightning.transfer_learning_spec`` is set, if
@@ -319,11 +341,20 @@ def _train_lightning(
     )
 
     # ModelArtifact.path is always a local filesystem path (per its
-    # contract), so warm-start weights are read directly — no storage
-    # backend involved.
+    # contract) to the packaged state-dict file itself — matching what
+    # LightningTrainerParam.initial_weights_path expects (see
+    # lightning_trainer.py). No storage backend is involved; weights are
+    # read directly.
     initial_weights_path: str | None = None
     if initial_model is not None:
-        initial_weights_path = os.path.join(initial_model.path, "model.pt")
+        if not os.path.isfile(initial_model.path):
+            raise ConfigurationError(
+                f"initial_model.path {initial_model.path!r} is not a file. "
+                "ModelArtifact.path for a lightning warm-start must point "
+                "directly to the state-dict file (e.g. as written by "
+                "ModelVariable.save_lightning_model())."
+            )
+        initial_weights_path = initial_model.path
         _logger.info("Using initial weights from: %s", initial_weights_path)
 
     # Build and run trainer
