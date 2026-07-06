@@ -123,14 +123,13 @@ def train_tabular(
         initial_model: Optional warm-start artifact. Weights are downloaded to
             a local temp dir before training begins; the local path is passed to
             ``LightningTrainerParam.initial_weights_path``.
-        run_config: Optional ``ray.train.RunConfig``. When ``None`` and
-            ``is_local_run`` is ``False``, a default is constructed pointing
-            ``storage_path``/``storage_filesystem`` at *storage_backend*
-            (if it implements ``to_ray_storage_target()``, e.g.
-            ``MinioStorageBackend``) so worker pods on a multi-node cluster
-            share the same checkpoint storage as the head pod. Otherwise
-            (``is_local_run=True``, or a backend without object storage) a
-            local temp dir is used, matching single-process local runs.
+        run_config: Optional ``ray.train.RunConfig``. When ``None``, a default
+            is built by
+            :func:`michelangelo.uniflow.plugins.ray.run_config.create_run_config`,
+            which points ``storage_path``/``storage_filesystem`` at
+            ``UF_STORAGE_URL`` so worker pods on a multi-node cluster share
+            the same checkpoint storage as the head pod. Falls back to a
+            local temp dir when ``UF_STORAGE_URL`` is unset (e.g. local runs).
         scaling_config: Optional ``ray.train.ScalingConfig``. When ``None`` a
             default is constructed from ``config.lightning.scaling_config``.
         is_local_run: When ``True``, defaults precision to ``"32"`` (Lightning's
@@ -196,6 +195,8 @@ def _train_lightning(
 ) -> ModelArtifact:
     """Lightning + Ray Train implementation of :func:`train_tabular`."""
     import ray.train
+
+    from michelangelo.uniflow.plugins.ray.run_config import create_run_config
 
     _logger.info("Starting lightning trainer")
 
@@ -299,27 +300,12 @@ def _train_lightning(
         else:
             scaling_config = ray.train.ScalingConfig(num_workers=1)
 
-    # RunConfig: use injected or build a default. On a real (non-local) run,
-    # point Ray Train's distributed checkpointing at the same object-store
-    # backend used for the final model upload -- a local tempdir is only
-    # visible to the head pod and breaks worker-pod checkpoint sharing on a
-    # multi-node cluster. Duck-typed since StorageBackend does not declare
-    # to_ray_storage_target(); only object-store backends implement it.
+    # RunConfig: use injected or build a default via the shared UniFlow helper,
+    # which points Ray Train's distributed checkpointing at UF_STORAGE_URL
+    # (falling back to a local tempdir if unset) instead of each task
+    # re-deriving storage from its own storage_backend parameter.
     if run_config is None:
-        to_ray_storage_target = getattr(storage_backend, "to_ray_storage_target", None)
-        if to_ray_storage_target is not None and not is_local_run:
-            storage_path, storage_filesystem = to_ray_storage_target()
-            run_config = ray.train.RunConfig(
-                checkpoint_config=checkpoint_config,
-                storage_path=storage_path,
-                storage_filesystem=storage_filesystem,
-            )
-        else:
-            _tmp_storage = tempfile.mkdtemp(prefix="michelangelo_train_")
-            run_config = ray.train.RunConfig(
-                checkpoint_config=checkpoint_config,
-                storage_path=_tmp_storage,
-            )
+        run_config = create_run_config(checkpoint_config=checkpoint_config)
 
     # LightningTrainerKwargs: merge, resolve _count variants, set defaults
     lightning_trainer_kwargs: dict = {}

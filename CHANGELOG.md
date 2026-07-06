@@ -19,11 +19,12 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - `train_tabular()` no longer defaults `RunConfig.storage_path` to a local
-  tempdir on non-local runs. When `storage_backend` supports it (e.g.
-  `MinioStorageBackend`), the default `RunConfig` now points
-  `storage_path`/`storage_filesystem` at that backend's bucket, so worker
-  pods on a multi-node Ray cluster can share checkpoint storage with the
-  head pod. `is_local_run=True` still uses a local tempdir.
+  tempdir. The default `RunConfig` is now built by the shared
+  `michelangelo.uniflow.plugins.ray.create_run_config()` helper, which
+  resolves `storage_path`/`storage_filesystem` from `UF_STORAGE_URL` (the
+  same variable `DatasetVariable`/`ModelVariable` already use), so worker
+  pods on a multi-node Ray cluster share checkpoint storage with the head
+  pod. Falls back to a local tempdir when `UF_STORAGE_URL` is unset.
 
 ### Removed
 
