@@ -8,6 +8,7 @@ import { StringField } from '#core/components/form/fields/string/string-field';
 import { TextareaField } from '#core/components/form/fields/textarea/textarea-field';
 import { FormGroup } from '#core/components/form/layout/form-group/form-group';
 import { NotificationDetails } from '#core/config/entities/pipeline/notification-details';
+import { getEmailValidationError } from '#core/config/entities/pipeline/notification-validation';
 import { ALL_NOTIFICATION_EVENT_TYPES } from '#core/config/entities/run/types';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioMutation } from '#core/hooks/use-studio-mutation';
@@ -54,6 +55,13 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
     }
 
     const { emails, slackChannels, eventTypes } = notificationDetails;
+
+    if (notificationEnabled) {
+      const emailError = getEmailValidationError(emails);
+      if (emailError) {
+        throw new Error(emailError);
+      }
+    }
 
     const payload: PipelineRun = {
       ...values,

@@ -220,5 +220,12 @@ describe('CreatePipelineRunForm', () => {
     await user.keyboard('{Enter}');
 
     await screen.findByText('Enter valid email addresses, e.g. user@example.com.');
+
+    // Submitting with the invalid email must not call the API or close the dialog.
+    await user.click(screen.getByRole('button', { name: 'Run' }));
+
+    await screen.findAllByText('Enter valid email addresses, e.g. user@example.com.');
+    expect(mockRequest).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });

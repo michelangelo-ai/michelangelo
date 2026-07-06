@@ -3,6 +3,7 @@ import { Checkbox } from 'baseui/checkbox';
 import { Select } from 'baseui/select';
 
 import { FormControl } from '#core/components/form/components/form-control';
+import { getEmailValidationError } from '#core/config/entities/pipeline/notification-validation';
 
 import type { OnChangeParams } from 'baseui/select';
 import type { NotificationDetailsValue } from '#core/config/entities/pipeline/types';
@@ -14,8 +15,6 @@ const EVENT_TYPE_OPTIONS: Array<{ id: NotificationEventType; label: string }> = 
   { id: 'EVENT_TYPE_PIPELINE_RUN_STATE_KILLED', label: 'Killed' },
   { id: 'EVENT_TYPE_PIPELINE_RUN_STATE_SKIPPED', label: 'Skipped' },
 ];
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type NotificationDetailsProps = {
   enabled: boolean;
@@ -38,9 +37,7 @@ export function NotificationDetails({
 }: NotificationDetailsProps) {
   const [css, theme] = useStyletron();
 
-  const emailError = value.emails.some((email) => !EMAIL_REGEX.test(email.trim()))
-    ? 'Enter valid email addresses, e.g. user@example.com.'
-    : undefined;
+  const emailError = getEmailValidationError(value.emails);
 
   const toggleEventType = (id: NotificationEventType) => {
     onNotificationDetailsChange({
