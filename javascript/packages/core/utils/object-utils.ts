@@ -45,6 +45,12 @@ export function toFlatDotPathMap(
  * Returns the provided default when the accessor resolves to nullish, and returns
  * undefined when the accessor is not callable or path-like.
  */
+export function getObjectValue<K>(obj: unknown, accessor: Accessor<unknown, K>, defaultValue: K): K;
+export function getObjectValue<K>(
+  obj: unknown,
+  accessor: Accessor<unknown, K>,
+  defaultValue?: K
+): K | undefined;
 export function getObjectValue<K>(
   obj: unknown,
   accessor: Accessor<unknown, K>,

@@ -7,7 +7,7 @@ import { TaskListRenderer } from './task-list-renderer';
 
 import type { TaskFlowProps } from './types';
 
-export function TaskFlow<TTaskRecord extends Record<string, unknown> = Record<string, unknown>>({
+export function TaskFlow<TTaskRecord extends object = object>({
   matrix,
   onTaskClick,
   overrides,

@@ -11,9 +11,7 @@ import type { Task } from '../types';
  * @param parent - Optional parent task for context
  * @returns Array of matrix rows with parent and taskList
  */
-export function buildTaskMatrix<
-  TTaskRecord extends Record<string, unknown> = Record<string, unknown>,
->(
+export function buildTaskMatrix<TTaskRecord extends object = object>(
   taskList: Task<TTaskRecord>[],
   parent?: Task<TTaskRecord>
 ): { parent?: Task<TTaskRecord>; taskList: Task<TTaskRecord>[] }[] {

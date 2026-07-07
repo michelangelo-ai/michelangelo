@@ -28,11 +28,7 @@ export const DEPLOYMENT_DETAIL_CONFIG: DetailViewConfig = {
       },
       tasks: {
         accessor: (data: {
-          status?: {
-            stage?: number;
-            conditions?: Record<string, unknown>[];
-            conditionsSnapshot?: Record<string, unknown>[];
-          };
+          status?: { stage?: number; conditions?: object[]; conditionsSnapshot?: object[] };
         }) => {
           const conditions =
             data?.status?.stage === DEPLOYMENT_STAGE.ROLLOUT_FAILED

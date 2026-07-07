@@ -20,7 +20,7 @@ import type { ExecutionDetailViewSchema, Task } from '../types';
  * // Returns: [{ name: 'Build', state: 'SUCCESS', focused: false, subTasks: [...] }]
  * ```
  */
-export function buildTaskList<TData extends object, TTaskRecord extends Record<string, unknown>>(
+export function buildTaskList<TData extends object, TTaskRecord extends object>(
   schema: ExecutionDetailViewSchema<TData, TTaskRecord>,
   data: TData
 ): Task<TTaskRecord>[] {
@@ -44,7 +44,7 @@ export function buildTaskList<TData extends object, TTaskRecord extends Record<s
       name: (primaryHeading?.trim() ? primaryHeading : fallbackName)!,
       state: schema.tasks.stateBuilder(taskRecord, taskIndex, siblingTasks, data),
       subTasks: subTasksAccessor
-        ? getObjectValue(taskRecord, subTasksAccessor, [])!.map(buildTask)
+        ? getObjectValue(taskRecord, subTasksAccessor, []).map(buildTask)
         : [],
       record: taskRecord,
       focused:
@@ -53,6 +53,6 @@ export function buildTaskList<TData extends object, TTaskRecord extends Record<s
     };
   }
 
-  const taskArray = getObjectValue(data, accessor, [])!;
+  const taskArray = getObjectValue(data, accessor, []);
   return taskArray.map(buildTask);
 }

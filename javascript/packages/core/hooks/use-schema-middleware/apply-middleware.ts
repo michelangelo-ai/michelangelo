@@ -19,7 +19,7 @@ export function applyMiddleware<T extends object>(
   const sourceObject = options?.sourceFromObject ?? clone;
 
   for (const op of schema.operations) {
-    const subType = getObjectValue<string>(clone, schema.subTypePath!) ?? '';
+    const subType = getObjectValue(clone, schema.subTypePath!, '');
     if (op.subTypes && !op.subTypes.includes(subType)) {
       continue;
     }

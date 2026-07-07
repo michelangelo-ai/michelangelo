@@ -20,9 +20,7 @@ export function usePersistedTableState<StateType>(
   defaultValue: StateType
 ): [StateType, Dispatch<SetStateAction<StateType>>] {
   const settings = getAllTableUserSettings();
-  const [state, setState] = useState<StateType>(
-    getObjectValue<StateType>(settings, id, defaultValue) ?? defaultValue
-  );
+  const [state, setState] = useState<StateType>(getObjectValue(settings, id, defaultValue));
 
   const updateAndPersistState = (updater: SetStateAction<StateType>) => {
     const newStateValue = updater instanceof Function ? updater(state) : updater;
