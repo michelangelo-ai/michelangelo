@@ -33,7 +33,7 @@ export function useStudioParams<T extends StudioParamsView = 'unregistered'>(
 
   return React.useMemo(() => {
     if (!params.phase) {
-      // cast: no-phase path always returns project-scoped params; mapped type can't be satisfied without cast from the concrete shape
+      // cast: mapped type can't be satisfied without a cast from this concrete shape; whether the no-phase path is reachable for every T (e.g. 'detail', which requires entityTab) is unverified; see #1459
       return {
         ...queryParams,
         revisionId: params.revisionId,

@@ -21,6 +21,7 @@ export function usePersistedTableState<StateType>(
 ): [StateType, Dispatch<SetStateAction<StateType>>] {
   const settings = getAllTableUserSettings();
   const [state, setState] = useState<StateType>(
+    // getObjectValue's return type doesn't narrow away `| undefined` even when defaultValue is passed; the `?? defaultValue` re-applies it only to satisfy the type checker; see #1454
     getObjectValue(settings, id, defaultValue) ?? defaultValue
   );
 

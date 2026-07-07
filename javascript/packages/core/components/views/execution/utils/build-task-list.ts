@@ -43,6 +43,7 @@ export function buildTaskList<TData extends object, TTaskRecord extends object>(
     return {
       name: (primaryHeading?.trim() ? primaryHeading : fallbackName)!,
       state: schema.tasks.stateBuilder(taskRecord, taskIndex, siblingTasks, data),
+      // getObjectValue's return type doesn't narrow away `| undefined` even when a defaultValue is passed; see #1454
       subTasks: subTasksAccessor
         ? getObjectValue(taskRecord, subTasksAccessor, [])!.map(buildTask)
         : [],
@@ -53,6 +54,7 @@ export function buildTaskList<TData extends object, TTaskRecord extends object>(
     };
   }
 
+  // getObjectValue's return type doesn't narrow away `| undefined` even when a defaultValue is passed; see #1454
   const taskArray = getObjectValue(data, accessor, [])!;
   return taskArray.map(buildTask);
 }
