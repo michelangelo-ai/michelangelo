@@ -296,7 +296,7 @@ class APIRegistryClient(ModelRegistryClient):
             if _is_valid_k8s_label_value(v):
                 model.metadata.labels[k] = v
             else:
-                _logger.info(
+                _logger.warning(
                     "register_model(%r): label %r=%r is not a valid Kubernetes "
                     "label value (max %d chars, alphanumeric/-/_/. only) — "
                     "storing under the %r annotation instead.",
