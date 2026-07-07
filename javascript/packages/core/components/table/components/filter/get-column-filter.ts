@@ -13,7 +13,7 @@ export function getColumnFilter<T extends TableData = TableData>(
   columnType: string
 ): ComponentType<ColumnFilterProps<T>> {
   switch (
-    columnType as CellType // cast: columnType is a string from column config; compared against CellType enum values for known types
+    columnType as CellType // cast: columnType is a plain string; asserting CellType so case labels compare against the enum's known values
   ) {
     case CellType.DATE:
       return DatetimeFilter;

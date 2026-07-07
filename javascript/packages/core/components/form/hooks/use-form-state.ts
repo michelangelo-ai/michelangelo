@@ -49,13 +49,12 @@ export function useFormState<FieldValues extends FormData = FormData>(
 
   return {
     submitting: formState.submitting,
-    // cast: react-final-form types submitError as any; always string when set by onSubmit handlers
-    submitError: formState.submitError as string | undefined,
+    // cast: react-final-form types submitError as any; matches SubmitErrors[FORM_ERROR]'s string | Error shape
+    submitError: formState.submitError as string | Error | undefined,
     values: formState.values,
     submitFailed: formState.submitFailed,
     hasValidationErrors: formState.hasValidationErrors,
-    // cast: react-final-form types errors/submitErrors/touched as specific internal types; we expose them as plain records
-    errors: formState.errors as Record<string, unknown> | undefined,
+    errors: formState.errors,
     submitErrors: formState.submitErrors,
     touched: formState.touched,
     modifiedSinceLastSubmit: formState.modifiedSinceLastSubmit,

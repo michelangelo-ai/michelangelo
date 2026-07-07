@@ -18,7 +18,7 @@ export function DatetimeFilter<TData = unknown>({
   }).renderFilter;
 
   const filterRange = [UNIFIED_API_ORIGIN_DATE, new Date()];
-  const currentFilterValue = convertStringParamsToDate(getFilterValue() as DatetimeFilterValue); // cast: FilteringCapability.getFilterValue returns unknown; datetime filter is always DatetimeFilterValue here; see #1418
+  const currentFilterValue = convertStringParamsToDate(getFilterValue() as DatetimeFilterValue); // cast: FilteringCapability.getFilterValue returns unknown; datetime filter is always DatetimeFilterValue here; see #1418, #1464
 
   return (
     <DatetimeFilterPanel

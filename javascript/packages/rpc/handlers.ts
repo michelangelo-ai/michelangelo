@@ -7,7 +7,7 @@ import type { ExtractUnaryRpc } from './types';
 let handlersPromise: Promise<Awaited<ReturnType<typeof createHandlers>>> | null = null;
 
 function unary<Fn>(fn: Fn): ExtractUnaryRpc<Fn> {
-  return fn as unknown as ExtractUnaryRpc<Fn>; // cast: ConnectRPC service methods have streaming overloads; extracts the unary Promise-returning signature
+  return fn as unknown as ExtractUnaryRpc<Fn>; // cast: TS can't resolve ExtractUnaryRpc's conditional type against the unconstrained generic Fn from within this function; fn always satisfies it at call sites
 }
 
 async function createHandlers() {

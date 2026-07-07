@@ -30,7 +30,7 @@ export function toFlatDotPathMap(
     }
 
     if (value !== null && typeof value === 'object') {
-      Object.assign(result, toFlatDotPathMap(value as Record<string, unknown>, path)); // cast: value passed the typeof object check; safe to treat as Record for recursive flattening
+      Object.assign(result, toFlatDotPathMap(value as Record<string, unknown>, path)); // cast: typeof 'object' narrows to the opaque built-in object type, not Record<string, unknown>; see #1456
     } else {
       result[path] = value;
     }

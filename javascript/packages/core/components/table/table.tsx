@@ -96,8 +96,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
     error: props.error,
     loading: props.loading || isResetting,
     hasFiltersApplied:
-      // cast: globalFilter state is typed as unknown; tanstack-table stores it as the value passed to setGlobalFilter, which is always string here
-      (table.getState().globalFilter as string)?.length > 0 ||
+      (table.getState().globalFilter as string)?.length > 0 || // cast: TanStack types globalFilter as any; always string, the value passed to setGlobalFilter
       (table.getState().columnFilters?.length ?? 0) > 0,
     filteredLength: table.getRowModel().rows.length,
     columnsLength: columns.length,
@@ -126,7 +125,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
         }}
       >
         <TableActionBar<T>
-          globalFilter={table.getState().globalFilter as string} // cast: globalFilter is unknown; always string when set via setGlobalFilter
+          globalFilter={table.getState().globalFilter as string} // cast: TanStack types globalFilter as any; always string, the value passed to setGlobalFilter
           setGlobalFilter={table.setGlobalFilter}
           columnFilters={table.getState().columnFilters}
           setColumnFilters={table.setColumnFilters}

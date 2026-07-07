@@ -49,5 +49,5 @@ export function resolveColumnForRow<T extends TableData = TableData>(
 
   // Remove the typeMeta.kind property from the column to avoid infinite recursion
   // if the resolved column is passed to resolveColumnForRow again
-  return kind in column ? ({ ...omit(column, kind), ...column[kind] } as ColumnConfig<T>) : column; // cast: merged column spread satisfies ColumnConfig<T>; TypeScript can't verify the dynamic spread type
+  return kind in column ? ({ ...omit(column, kind), ...column[kind] } as ColumnConfig<T>) : column; // cast: does not actually verify the merged spread matches ColumnConfig<T>; see #277
 }

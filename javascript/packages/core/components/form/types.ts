@@ -81,7 +81,7 @@ export type SubmitErrors = { [FORM_ERROR]?: string | Error } & Record<string, un
 
 export interface FormState<FieldValues extends FormData = FormData> {
   submitting: boolean;
-  submitError?: string;
+  submitError?: string | Error;
   values?: FieldValues;
   submitFailed?: boolean;
   hasValidationErrors?: boolean;

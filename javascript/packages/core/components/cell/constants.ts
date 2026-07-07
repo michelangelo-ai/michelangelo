@@ -97,7 +97,7 @@ export const CELL_RENDERERS: Record<string, CellRenderer<unknown>> = {
   [CellType.LINK]: LinkCell,
   [CellType.MULTI]: MultiCell,
   [CellType.REPEATED_ITEMS]: MultiCell,
-  [CellType.RETRY]: RetryCell as CellRenderer<string>, // cast: registry is typed CellRenderer<unknown>; RetryCell expects string value; see #1419
+  [CellType.RETRY]: RetryCell,
   [CellType.STATE]: StateCell as CellRenderer<string>, // cast: registry is typed CellRenderer<unknown>; StateCell expects string value; see #1419
   [CellType.TAG]: TagCell,
   [CellType.TYPE]: TypeCell,

@@ -24,7 +24,7 @@ export function useFilterDisplayMapping<TData>({
       const rawValue = getCellValueForColumn(column, row, column.id);
       if (rawValue == null) return;
 
-      const displayValue = cellToString({ value: rawValue, record: row.record as object, column }); // cast: TableData = unknown by convention; row.record is always a plain object; see #1416
+      const displayValue = cellToString({ value: rawValue, record: row.record as object, column }); // cast: TData is unconstrained here (and in CategoricalFilter's own generic) rather than extending object; row.record is always a plain object; see #1416
 
       // Preserve empty strings as valid filter options when cellToString returns null/undefined
       const finalDisplayValue = displayValue == null && rawValue === '' ? '' : displayValue;
