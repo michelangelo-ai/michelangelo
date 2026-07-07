@@ -37,9 +37,13 @@ calls `xgboost.train()` directly, this example's `train.py` is a thin
 `@uniflow.task` wrapper around
 `michelangelo.workflow.tasks.tabular_trainer.task.train_tabular()` — the
 shared Lightning + Ray Train dispatcher also covered by
-`workflow/tasks/tabular_trainer/tests/`. `train_tabular()` returns a
-`ModelArtifact` directly (already the type `push_step` expects), rather than
-a raw checkpoint path.
+`workflow/tasks/tabular_trainer/tests/`. `train_tabular()` builds its own
+multi-node-safe `RunConfig` internally and returns a `ModelVariable`
+pointing at the uploaded checkpoint, rather than a raw checkpoint path or an
+assembled `ModelArtifact`. `push.py` downloads that checkpoint locally (via
+`fsspec.core.url_to_fs()`) and wraps it in a `ModelArtifact` before handing
+it to `ModelPusherPlugin`, since no OSS "assembler" task exists yet to do
+that conversion automatically.
 
 ### `TorchRegressionModel` — the model to plug in
 
@@ -86,10 +90,68 @@ Without `AWS_ENDPOINT_URL`, `train` and `push_step` both use
 `LocalStorageBackend`, writing the model checkpoint and datasets to local
 temp directories (no external services required).
 
-## Remote Run / k3d sandbox
+## Remote Run
 
-Same pattern as `california_housing_xgb` — see
-[its README](../california_housing_xgb/README.md#remote-run) for the full
-`remote-run` command and environment variable reference. Substitute
-`california_housing_lightning` for `california_housing_xgb` in the image
-build and `--file` paths.
+Pass environment variables via `--environ` flags — they are serialized into the
+Cadence/Temporal workflow and injected into every task's runtime environment,
+reaching remote workers. Shell `export` statements before the command only
+affect the local launcher and do not propagate.
+
+```bash
+cd michelangelo-ai/michelangelo/python
+JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home \
+PYTHONPATH=. poetry run python examples/pipelines/california_housing_lightning/california_housing_lightning.py \
+  remote-run \
+  --image docker.io/library/my-workflow:latest \
+  --storage-url s3://your-bucket/workflows \
+  --environ AWS_ENDPOINT_URL=http://your-minio-endpoint:9000 \
+  --environ AWS_ACCESS_KEY_ID=your-access-key \
+  --environ AWS_SECRET_ACCESS_KEY=your-secret-key \
+  --environ REGISTRY_ENDPOINT=your-apiserver-host:15566 \
+  --yes
+```
+
+### k3d sandbox
+
+```bash
+cd michelangelo-ai/michelangelo/python
+JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home \
+PYTHONPATH=. poetry run python examples/pipelines/california_housing_lightning/california_housing_lightning.py \
+  remote-run \
+  --image docker.io/library/my-workflow:latest \
+  --storage-url s3://michelangelo/workflows \
+  --environ AWS_ENDPOINT_URL=http://minio:9091 \
+  --environ AWS_ACCESS_KEY_ID=minioadmin \
+  --environ AWS_SECRET_ACCESS_KEY=minioadmin \
+  --environ REGISTRY_ENDPOINT=michelangelo-apiserver:15566 \
+  --yes
+```
+
+Before running, rebuild and import the image into the cluster:
+
+```bash
+docker build -t my-workflow:latest -f examples/Dockerfile .
+k3d image import my-workflow:latest -c michelangelo-sandbox
+kubectl delete cachedoutputs --all   # clear stale cached task outputs
+```
+
+### Environment variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `AWS_ENDPOINT_URL` | No | — | S3-compatible endpoint URL (include scheme, e.g. `http://minio:9091`). Unset → local storage |
+| `AWS_ACCESS_KEY_ID` | If `AWS_ENDPOINT_URL` set | — | Access key ID |
+| `AWS_SECRET_ACCESS_KEY` | If `AWS_ENDPOINT_URL` set | — | Secret access key |
+| `AWS_S3_BUCKET` | No | Parsed from `MA_FILE_SYSTEM` or `UF_STORAGE_URL` | Target bucket name |
+| `REGISTRY_ENDPOINT` | No | — | Model registry gRPC endpoint (`host:port`). Unset → in-memory only |
+| `REGISTRY_INSECURE` | No | `true` | Set `false` to enable TLS for the registry connection |
+| `REGISTRY_NAMESPACE` | No | `MA_NAMESPACE` (the pipeline's own namespace), else `default` | Model registry namespace |
+
+> **Sandbox note:** in a k3d sandbox, `AWS_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`,
+> and `AWS_SECRET_ACCESS_KEY` are automatically injected into Ray/Spark pods
+> via the `michelangelo-config` ConfigMap — no `--environ` flags needed for
+> `ma pipeline run`. For `remote-run`, pass them explicitly with `--environ`.
+> The apiserver Service and this example's task pods run in the same
+> namespace by default, so `REGISTRY_ENDPOINT` can use the short in-cluster
+> DNS name (`michelangelo-apiserver:15566`) rather than the full
+> `michelangelo-apiserver.<namespace>.svc.cluster.local:15566` form.
