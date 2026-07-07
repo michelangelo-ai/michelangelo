@@ -233,6 +233,25 @@ function App() {
 }
 ```
 
+### Top Nav Links (Docs/Help)
+
+The top nav bar's **Docs** and **Help** links default to Michelangelo's own documentation site. Point them at your own pages instead:
+
+```tsx
+const dependencies = {
+  links: {
+    docsUrl: 'https://docs.your-company.com/michelangelo',
+    helpUrl: 'https://your-company.slack.com/archives/C0123456',
+  },
+};
+
+function App() {
+  return <MichelangeloStudio dependencies={dependencies} />
+}
+```
+
+Both fields are optional — set only the one you want to override, and the other keeps pointing at the Michelangelo OSS docs.
+
 ## Troubleshooting
 
 **API connectivity issues:**
