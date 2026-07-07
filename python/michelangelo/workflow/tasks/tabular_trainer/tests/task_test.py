@@ -434,7 +434,7 @@ class TestTrainTabularLightning(TestCase):
                 f"{_TRAINER_TASK}.get_module_attr",
                 return_value=lambda **kw: Mock(),
             ),
-            patch(f"{_TRAINER_TASK}.torch"),
+            patch(f"{_TRAINER_TASK}.ModelVariable"),
             patch(f"{_TRAINER_TASK}.LightningTrainerParam") as mp,
             patch(f"{_TRAINER_TASK}.LightningTrainerWithStateDict") as mt,
         ):
@@ -444,7 +444,6 @@ class TestTrainTabularLightning(TestCase):
                 config,
                 mock_train_dataset(),
                 mock_validation_dataset(),
-                storage_backend=mock_storage_backend(),
             )
         lightning_kwargs = mp.call_args.kwargs["lightning_trainer_kwargs"]
         self.assertEqual(
