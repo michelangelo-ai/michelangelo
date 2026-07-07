@@ -256,7 +256,9 @@ def push_step(
         )
         registry_client = APIRegistryClient(
             svc=_api_client.ModelService,
-            namespace=os.environ.get("REGISTRY_NAMESPACE", "default"),
+            namespace=os.environ.get(
+                "REGISTRY_NAMESPACE", os.environ.get("MA_NAMESPACE", "default")
+            ),
         )
         log.info("push_step: using APIRegistryClient at %s", registry_endpoint)
     else:

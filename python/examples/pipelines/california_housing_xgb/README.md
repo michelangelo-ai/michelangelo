@@ -191,7 +191,7 @@ kubectl delete cachedoutputs --all   # clear stale cached task outputs
 | `AWS_S3_BUCKET` | No | Parsed from `MA_FILE_SYSTEM` or `UF_STORAGE_URL` | Target bucket name |
 | `REGISTRY_ENDPOINT` | No | — | Model registry gRPC endpoint (`host:port`). Unset → in-memory only |
 | `REGISTRY_INSECURE` | No | `true` | Set `false` to enable TLS for the registry connection |
-| `REGISTRY_NAMESPACE` | No | `default` | Model registry namespace |
+| `REGISTRY_NAMESPACE` | No | `MA_NAMESPACE` (the pipeline's own namespace), else `default` | Model registry namespace |
 
 > **Sandbox note:** in a k3d sandbox, `AWS_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`,
 > and `AWS_SECRET_ACCESS_KEY` are automatically injected into Ray/Spark pods
