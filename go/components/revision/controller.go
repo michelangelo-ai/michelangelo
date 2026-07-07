@@ -14,6 +14,8 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 const _requestTimeoutSec = 30
@@ -46,7 +48,6 @@ func NewReconciler(
 
 // Reconcile implements reconcile.Reconciler. Status is persisted when the
 // handler mutates any field in rev.Status, even if the handler returns an error.
-// Revisions without a registered handler are treated as snapshots and marked READY.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, _requestTimeoutSec*time.Second)
 	defer cancel()
@@ -92,14 +93,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 	h, ok := r.handlers[key]
 	if !ok {
-		logger.Info("no handler registered for BaseType; treating as snapshot",
+		logger.Debug("no handler registered for BaseType; skipping reconcile",
 			zap.String("apiVersion", key.APIVersion),
 			zap.String("kind", key.Kind),
 		)
-		rev.Status.State = v2pb.REVISION_STATE_READY
-		if err := r.UpdateStatus(ctx, rev, &metav1.UpdateOptions{}); err != nil {
-			return ctrl.Result{}, fmt.Errorf("update snapshot revision status %s/%s: %w", req.Namespace, req.Name, err)
-		}
 		return ctrl.Result{}, nil
 	}
 
@@ -136,5 +133,17 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.Revision{}).
+		WithEventFilter(predicate.NewPredicateFuncs(func(object client.Object) bool {
+			rev, ok := object.(*v2pb.Revision)
+			if !ok || rev.Spec.BaseType == nil {
+				return false
+			}
+			key := metav1.TypeMeta{
+				APIVersion: rev.Spec.BaseType.APIVersion,
+				Kind:       rev.Spec.BaseType.Kind,
+			}
+			_, ok = r.handlers[key]
+			return ok
+		})).
 		Complete(r)
 }
