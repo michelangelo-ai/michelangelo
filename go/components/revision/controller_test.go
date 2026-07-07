@@ -127,7 +127,7 @@ func TestReconcile_BaseTypeNil(t *testing.T) {
 	require.Equal(t, ctrl.Result{}, result)
 }
 
-func TestReconcile_NoHandlerRegistered_TreatedAsSnapshot(t *testing.T) {
+func TestReconcile_NoHandlerRegistered_NoOp(t *testing.T) {
 	mc := gomock.NewController(t)
 	defer mc.Finish()
 
@@ -138,12 +138,7 @@ func TestReconcile_NoHandlerRegistered_TreatedAsSnapshot(t *testing.T) {
 			obj.Spec.BaseType = &metav1.TypeMeta{APIVersion: "other/v1", Kind: "Other"}
 			return nil
 		})
-	mockAPI.EXPECT().
-		UpdateStatus(gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, obj *v2pb.Revision, _ *metav1.UpdateOptions) error {
-			require.Equal(t, v2pb.REVISION_STATE_READY, obj.Status.State)
-			return nil
-		})
+	// No UpdateStatus call expected — unregistered BaseType leaves status unchanged.
 
 	r := newTestReconciler(t, mockAPI)
 	result, err := r.Reconcile(context.Background(), ctrl.Request{
