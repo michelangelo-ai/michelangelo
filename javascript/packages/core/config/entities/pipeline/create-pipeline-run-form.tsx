@@ -9,7 +9,10 @@ import { TextareaField } from '#core/components/form/fields/textarea/textarea-fi
 import { FormGroup } from '#core/components/form/layout/form-group/form-group';
 import { NotificationDetails } from '#core/config/entities/pipeline/notification-details';
 import { getEmailValidationError } from '#core/config/entities/pipeline/notification-validation';
-import { ALL_NOTIFICATION_EVENT_TYPES } from '#core/config/entities/run/types';
+import {
+  ALL_NOTIFICATION_EVENT_TYPES,
+  NOTIFICATION_EVENT_TYPES,
+} from '#core/config/entities/run/types';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioMutation } from '#core/hooks/use-studio-mutation';
 import { generateSuffix } from '#core/utils/name-utils';
@@ -18,13 +21,9 @@ import type { ActionComponentProps } from '#core/components/actions/types';
 import type { NotificationDetailsValue, Pipeline } from '#core/config/entities/pipeline/types';
 import type { NotificationEventType, PipelineRun } from '#core/config/entities/run/types';
 
-// Proto enum Notification.EventType numeric values (notification.proto).
-const EVENT_TYPE_TO_NUMBER: Record<NotificationEventType, number> = {
-  EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED: 1,
-  EVENT_TYPE_PIPELINE_RUN_STATE_KILLED: 2,
-  EVENT_TYPE_PIPELINE_RUN_STATE_FAILED: 3,
-  EVENT_TYPE_PIPELINE_RUN_STATE_SKIPPED: 4,
-};
+const EVENT_TYPE_TO_PROTO_VALUE: Record<NotificationEventType, number> = Object.fromEntries(
+  NOTIFICATION_EVENT_TYPES.map(({ id, protoValue }) => [id, protoValue])
+) as Record<NotificationEventType, number>;
 
 export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<Pipeline>) => {
   const [css, theme] = useStyletron();
@@ -73,7 +72,7 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
                 {
                   emails,
                   slackDestinations: slackChannels,
-                  eventTypes: eventTypes.map((t) => EVENT_TYPE_TO_NUMBER[t]),
+                  eventTypes: eventTypes.map((t) => EVENT_TYPE_TO_PROTO_VALUE[t]),
                 },
               ],
             }

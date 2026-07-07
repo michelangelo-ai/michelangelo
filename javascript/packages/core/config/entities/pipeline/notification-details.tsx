@@ -4,17 +4,11 @@ import { Select } from 'baseui/select';
 
 import { FormControl } from '#core/components/form/components/form-control';
 import { getEmailValidationError } from '#core/config/entities/pipeline/notification-validation';
+import { NOTIFICATION_EVENT_TYPES } from '#core/config/entities/run/types';
 
 import type { OnChangeParams } from 'baseui/select';
 import type { NotificationDetailsValue } from '#core/config/entities/pipeline/types';
 import type { NotificationEventType } from '#core/config/entities/run/types';
-
-const EVENT_TYPE_OPTIONS: Array<{ id: NotificationEventType; label: string }> = [
-  { id: 'EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED', label: 'Succeeded' },
-  { id: 'EVENT_TYPE_PIPELINE_RUN_STATE_FAILED', label: 'Failed' },
-  { id: 'EVENT_TYPE_PIPELINE_RUN_STATE_KILLED', label: 'Killed' },
-  { id: 'EVENT_TYPE_PIPELINE_RUN_STATE_SKIPPED', label: 'Skipped' },
-];
 
 type NotificationDetailsProps = {
   enabled: boolean;
@@ -88,7 +82,7 @@ export function NotificationDetails({
         caption="At least one state must be selected to receive notifications."
       >
         <div className={css({ display: 'flex', flexWrap: 'wrap', gap: theme.sizing.scale600 })}>
-          {EVENT_TYPE_OPTIONS.map((option) => (
+          {NOTIFICATION_EVENT_TYPES.map((option) => (
             <Checkbox
               key={option.id}
               checked={value.eventTypes.includes(option.id)}
