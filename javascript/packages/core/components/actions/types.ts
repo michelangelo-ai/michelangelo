@@ -53,8 +53,6 @@ export type MutationActionConfig = {
   type: 'mutation';
   mutation: MutationConfig;
   middleware?: MiddlewareSchema;
-  /** Side-effects to run after the mutation succeeds (in order). */
-  successOperations?: SuccessOperation[];
 };
 
 /**

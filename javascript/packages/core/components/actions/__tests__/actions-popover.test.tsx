@@ -577,8 +577,10 @@ describe('ActionsPopover', () => {
             display: { label: 'Kill' },
             operation: {
               type: 'mutation',
-              mutation: { mutationName: 'UpdateTriggerRun' },
-              successOperations: [{ type: 'toast', message: 'Trigger killed' }],
+              mutation: {
+                mutationName: 'UpdateTriggerRun',
+                successOperations: [{ type: 'toast', message: 'Trigger killed' }],
+              },
             },
             modal: {
               type: 'confirm',
@@ -621,8 +623,10 @@ describe('ActionsPopover', () => {
             display: { label: 'Kill' },
             operation: {
               type: 'mutation',
-              mutation: { mutationName: 'UpdateTriggerRun' },
-              successOperations: [{ type: 'toast', message: 'Should not appear' }],
+              mutation: {
+                mutationName: 'UpdateTriggerRun',
+                successOperations: [{ type: 'toast', message: 'Should not appear' }],
+              },
             },
             modal: {
               type: 'confirm',

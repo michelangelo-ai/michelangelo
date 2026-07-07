@@ -32,21 +32,23 @@ export const TRIGGER_ENTITY_CONFIG: PhaseEntityConfig = {
       ],
       operation: {
         type: 'mutation',
-        mutation: { mutationName: 'UpdateTriggerRun' },
+        mutation: {
+          mutationName: 'UpdateTriggerRun',
+          // status.state is set by a controller after the spec change is reconciled.
+          // Auto-invalidation runs immediately and refetches stale state; this delayed
+          // re-invalidation gives the backend time to process the kill so the next
+          // refetch shows PENDING_KILL / KILLED.
+          successOperations: [
+            {
+              type: 'invalidate',
+              targets: ['GetTriggerRun', 'ListTriggerRun'],
+              delayMs: 2000,
+            },
+          ],
+        },
         middleware: {
           operations: [{ destination: 'spec.action', default: TriggerRunAction.KILL }],
         },
-        // status.state is set by a controller after the spec change is reconciled.
-        // Auto-invalidation runs immediately and refetches stale state; this delayed
-        // re-invalidation gives the backend time to process the kill so the next
-        // refetch shows PENDING_KILL / KILLED.
-        successOperations: [
-          {
-            type: 'invalidate',
-            targets: ['GetTriggerRun', 'ListTriggerRun'],
-            delayMs: 2000,
-          },
-        ],
       },
       modal: {
         type: 'confirm',

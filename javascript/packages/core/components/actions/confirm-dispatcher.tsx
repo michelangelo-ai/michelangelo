@@ -7,7 +7,6 @@ import { Markdown } from '#core/components/markdown/markdown';
 import { ConfirmDialog } from '#core/components/modal/confirm-dialog/confirm-dialog';
 import { useSchemaMiddleware } from '#core/hooks/use-schema-middleware/use-schema-middleware';
 import { useStudioMutation } from '#core/hooks/use-studio-mutation';
-import { useSuccessOperations } from './use-success-operations';
 
 import type {
   ActionConfig,
@@ -34,14 +33,10 @@ export function ConfirmDispatcher<T extends Data>({ action, record, onClose }: P
   const mutation = useStudioMutation<unknown, T>(
     action.operation.type === 'mutation' ? action.operation.mutation : null
   );
-  const runSuccessOperations = useSuccessOperations(
-    action.operation.type === 'mutation' ? action.operation.successOperations : undefined
-  );
 
   const handleActionExecute = async () => {
     if (action.operation.type === 'mutation') {
-      const response = await mutation.mutateAsync(applyMiddleware(record));
-      runSuccessOperations(response);
+      await mutation.mutateAsync(applyMiddleware(record));
     } else {
       navigate(action.operation.route);
     }
