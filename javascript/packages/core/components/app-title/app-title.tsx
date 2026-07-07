@@ -1,12 +1,7 @@
 import { Link } from 'react-router-dom-v5-compat';
-import { styled } from 'baseui';
+import { useStyletron } from 'baseui';
 
 import type { ReactNode } from 'react';
-
-const StyledAppTitle = styled(Link, {
-  color: 'inherit',
-  textDecoration: 'none',
-});
 
 type AppTitleProps = {
   children: ReactNode;
@@ -21,5 +16,11 @@ type AppTitleProps = {
  * style. This component only adds navigation, inheriting whatever styling the parent provides.
  */
 export function AppTitle({ children }: AppTitleProps) {
-  return <StyledAppTitle to="/">{children}</StyledAppTitle>;
+  const [css] = useStyletron();
+
+  return (
+    <Link to="/" className={css({ color: 'inherit', textDecoration: 'none' })}>
+      {children}
+    </Link>
+  );
 }

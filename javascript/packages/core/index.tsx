@@ -1,17 +1,14 @@
-import { AppNavBar } from 'baseui/app-nav-bar';
 import { LayersManager } from 'baseui/layer';
 import { SnackbarProvider } from 'baseui/snackbar';
 
-import { AppTitle } from '#core/components/app-title/app-title';
-import { TopBarNavButton } from '#core/components/top-bar-nav-button/top-bar-nav-button';
-import { useTopBarLinks } from '#core/hooks/use-top-bar-links/use-top-bar-links';
+import { TopBar } from '#core/components/top-bar/top-bar';
 import { ErrorProvider } from '#core/providers/error-provider/error-provider';
 import { IconProvider } from '#core/providers/icon-provider/icon-provider';
 import { ServiceProvider } from '#core/providers/service-provider/service-provider';
 import { Router } from '#core/router/router';
 import { ThemeProvider } from '#core/themes/theme-provider';
 
-import type { TopBarLinks } from '#core/hooks/use-top-bar-links/types';
+import type { TopBarLinks } from '#core/constants/types';
 import type { ErrorContextValue } from '#core/providers/error-provider/types';
 import type { IconProviderContext } from '#core/providers/icon-provider/types';
 import type { ServiceContextType } from '#core/providers/service-provider/types';
@@ -30,8 +27,6 @@ type Props = {
 };
 
 export function CoreApp({ dependencies }: Props) {
-  const { mainItems, handleMainItemSelect } = useTopBarLinks(dependencies.links);
-
   return (
     <ThemeProvider icons={dependencies.theme.icons}>
       <LayersManager zIndex={200}>
@@ -39,12 +34,7 @@ export function CoreApp({ dependencies }: Props) {
           <ServiceProvider {...dependencies.service}>
             <ErrorProvider {...dependencies.error}>
               <IconProvider icons={dependencies.theme.icons}>
-                <AppNavBar
-                  title={<AppTitle>Michelangelo Studio</AppTitle>}
-                  mainItems={mainItems}
-                  onMainItemSelect={handleMainItemSelect}
-                  mapItemToNode={TopBarNavButton}
-                />
+                <TopBar links={dependencies.links} />
                 <Router />
               </IconProvider>
             </ErrorProvider>
@@ -57,7 +47,7 @@ export function CoreApp({ dependencies }: Props) {
 
 export { useStudioQuery } from '#core/hooks/use-studio-query';
 export { ServiceProvider } from '#core/providers/service-provider/service-provider';
-export type { TopBarLinks } from '#core/hooks/use-top-bar-links/types';
+export type { TopBarLink, TopBarLinks } from '#core/constants/types';
 
 export { useCellToString } from '#core/components/cell/use-cell-to-string';
 export { cellTooltipHoc } from '#core/components/cell/components/tooltip/cell-tooltip-hoc';

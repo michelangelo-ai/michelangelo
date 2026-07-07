@@ -235,14 +235,26 @@ function App() {
 
 ### Top Nav Links (Docs/Help)
 
-The top nav bar's **Docs** and **Help** links default to Michelangelo's own documentation site. Point them at your own pages instead:
+The top nav bar shows a configurable list of links — **Docs** and **Help** by default, both
+pointing at Michelangelo's own documentation site. Pass your own `links` list to replace them:
 
 ```tsx
+import { normalizeConnectError, request } from '@michelangelo-ai/rpc';
+
 const dependencies = {
-  links: {
-    docsUrl: 'https://docs.your-company.com/michelangelo',
-    helpUrl: 'https://your-company.slack.com/archives/C0123456',
+  error: {
+    normalizeError: normalizeConnectError,
   },
+  service: {
+    request,
+  },
+  theme: {
+    icons: customIcons,
+  },
+  links: [
+    { label: 'Docs', url: 'https://docs.your-company.com/michelangelo' },
+    { label: 'Help', url: 'https://your-company.slack.com/archives/C0123456' },
+  ],
 };
 
 function App() {
@@ -250,7 +262,9 @@ function App() {
 }
 ```
 
-Both fields are optional — set only the one you want to override, and the other keeps pointing at the Michelangelo OSS docs.
+`links` is optional — omit it to keep the Michelangelo OSS Docs/Help defaults. If you do pass a
+list, it **replaces the defaults entirely**: add, rename, or drop entries freely, it isn't
+limited to a fixed Docs/Help pair.
 
 ## Troubleshooting
 
