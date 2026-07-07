@@ -96,7 +96,7 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
     );
   }
 
-  // cast: service response is typed as unknown; keyed access by service name produces the entity data object
+  // cast: PhaseEntityConfig carries no entity type generic, so the runtime-selected service key's value is assumed to be the entity object; related to #1425
   const entityData = data?.[entityConfig!.service] as Record<string, unknown> | undefined;
   const resolvedDetailViewConfig = resolver(detailViewConfig, { page: entityData });
   return (

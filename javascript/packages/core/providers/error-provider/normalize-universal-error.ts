@@ -38,7 +38,7 @@ export function normalizeUniversalError(error: unknown): ApplicationError {
   }
 
   if (typeof error === 'object' && error !== null) {
-    const errorObj = error as Record<string, unknown>; // cast: error passed the typeof object check; narrowing to Record for property access
+    const errorObj = error as Record<string, unknown>; // cast: typeof 'object' narrows to the opaque built-in object type, not Record<string, unknown>; see #1456
 
     if (errorObj.message) {
       return new ApplicationError(safeStringify(errorObj.message), GrpcStatusCode.UNKNOWN, {
