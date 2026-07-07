@@ -128,6 +128,58 @@ class TestAPIRegistryClientRegisterModel(TestCase):
         created_model = svc.create_model.call_args[0][0]
         self.assertEqual(created_model.metadata.labels["fw"], "xgboost")
 
+    def test_oversized_label_value_demoted_to_metadata_annotation(self):
+        """A label value over 63 chars is moved to the metadata annotation.
+
+        Regression test: ModelMetadata.to_registry_dict() commonly emits a
+        fully-qualified Python class path (e.g. `model_class`) that exceeds
+        Kubernetes' 63-character label-value limit. Writing it straight to
+        model.metadata.labels made create_model()/update_model() fail with
+        INVALID_ARGUMENT against a real apiserver.
+        """
+        svc = _mock_svc()
+        long_value = (
+            "examples.pipelines.california_housing_lightning.model.TorchRegressionModel"
+        )
+        self.assertGreater(len(long_value), 63)
+        _client(svc).register_model(
+            "m", "s3://b/raw", labels={"model_class": long_value, "fw": "lightning"}
+        )
+        created_model = svc.create_model.call_args[0][0]
+        self.assertNotIn("model_class", created_model.metadata.labels)
+        self.assertEqual(created_model.metadata.labels["fw"], "lightning")
+        annotation = json.loads(
+            created_model.metadata.annotations[METADATA_ANNOTATION_KEY]
+        )
+        self.assertEqual(annotation["model_class"], long_value)
+
+    def test_label_value_with_invalid_characters_demoted_to_metadata_annotation(self):
+        """A label value with disallowed characters is moved to the annotation."""
+        svc = _mock_svc()
+        _client(svc).register_model("m", "s3://b/raw", labels={"note": "50% faster!"})
+        created_model = svc.create_model.call_args[0][0]
+        self.assertNotIn("note", created_model.metadata.labels)
+        annotation = json.loads(
+            created_model.metadata.annotations[METADATA_ANNOTATION_KEY]
+        )
+        self.assertEqual(annotation["note"], "50% faster!")
+
+    def test_demoted_label_does_not_override_explicit_metadata(self):
+        """An explicit metadata key wins over a same-named demoted label."""
+        svc = _mock_svc()
+        long_value = "a" * 64
+        _client(svc).register_model(
+            "m",
+            "s3://b/raw",
+            labels={"model_class": long_value},
+            metadata={"model_class": "explicit-value"},
+        )
+        created_model = svc.create_model.call_args[0][0]
+        annotation = json.loads(
+            created_model.metadata.annotations[METADATA_ANNOTATION_KEY]
+        )
+        self.assertEqual(annotation["model_class"], "explicit-value")
+
     def test_metadata_stored_as_annotation(self):
         """Metadata is JSON-encoded under the michelangelo.io/metadata annotation."""
         svc = _mock_svc()
