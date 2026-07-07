@@ -9,13 +9,9 @@ example's bespoke XGBoost training loop.
 from __future__ import annotations
 
 import logging
-import os
 from typing import TYPE_CHECKING
 
 import michelangelo.uniflow.core as uniflow
-from examples.pipelines.california_housing_lightning._backend import (
-    resolve_storage_backend,
-)
 from michelangelo.uniflow.plugins.ray import RayTask
 from michelangelo.workflow.schema.tabular_trainer import (
     BatchIterConfig,
@@ -32,7 +28,7 @@ if TYPE_CHECKING:
     from examples.pipelines.california_housing_lightning.preprocess import (
         PreprocessResult,
     )
-    from michelangelo.workflow.variables.types import ModelArtifact
+    from michelangelo.workflow.variables import ModelVariable
 
 log = logging.getLogger(__name__)
 
@@ -55,7 +51,7 @@ LABEL_COLUMN = "target"
 def train(
     pr: PreprocessResult,
     feature_columns: list[str],
-) -> ModelArtifact:
+) -> ModelVariable:
     """Train a Lightning regression model using Ray Train.
 
     Args:
@@ -65,33 +61,15 @@ def train(
             label column).
 
     Returns:
-        ModelArtifact pointing at the uploaded model checkpoint. Unlike the
-        sibling xgb example's ``train()``, this is already the final artifact
-        type expected by the pusher -- ``train_tabular()`` uploads the model
-        itself and returns a ``ModelArtifact`` directly.
+        ModelVariable wrapping the trained model as an intra-pipeline
+        intermediate. ``train_tabular()`` persists it under
+        ``UF_STORAGE_URL`` and, for its own distributed checkpointing on a
+        multi-node cluster, defaults ``run_config`` to the same location via
+        ``michelangelo.uniflow.plugins.ray.run_config.create_run_config()`` --
+        no manual storage-backend or RunConfig plumbing needed here. There is
+        no OSS "assembler" task yet to turn this into a registry-ready
+        ``ModelArtifact``, so ``push_step`` does that conversion itself.
     """
-    storage_backend, is_remote = resolve_storage_backend("california_lightning_train_")
-
-    # train_tabular() defaults to a local-tempdir storage_path for Ray Train's
-    # own distributed checkpointing when no run_config is given -- fine for a
-    # single-process local run, but broken on a real multi-node cluster since
-    # worker pods can't see the head pod's local filesystem. Point it at the
-    # same MinIO/S3 backend used for the final model upload when running
-    # remotely, namespaced by MA_PIPELINE_RUN_NAME (set by the platform on
-    # every task pod) so concurrent runs don't clobber each other's checkpoints.
-    run_config = None
-    if is_remote:
-        import ray.train
-
-        from michelangelo.uniflow.plugins.ray.io import resolve_fs
-
-        bucket = storage_backend.get_storage_location().removeprefix("s3://")
-        run_id = os.environ.get("MA_PIPELINE_RUN_NAME", "local")
-        run_config = ray.train.RunConfig(
-            storage_path=f"{bucket}/ray_train_runs/{run_id}",
-            storage_filesystem=resolve_fs("s3"),
-        )
-
     config = TabularTrainerConfig(
         lightning=LightningTrainerConfig(
             model_class=(
@@ -126,10 +104,4 @@ def train(
         )
     )
 
-    return train_tabular(
-        config,
-        pr.train_data,
-        pr.validation_data,
-        storage_backend=storage_backend,
-        run_config=run_config,
-    )
+    return train_tabular(config, pr.train_data, pr.validation_data)

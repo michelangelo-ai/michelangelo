@@ -1,14 +1,16 @@
 """Pusher step for the California Housing Lightning workflow.
 
 Pushes the trained model and preprocessed train/validation datasets to
-storage and registry in a single Spark task. Simpler than the sibling xgb
-example's ``push.py``: ``train_tabular()`` already returns a ``ModelArtifact``
-(the final artifact type the pusher expects), so there is no raw-checkpoint
-glob/MinIO-listing step needed to locate it.
+storage and registry in a single Spark task. ``train_tabular()`` hands off
+its trained model as an intra-pipeline ``ModelVariable`` (there is no OSS
+"assembler" task yet to package it into a registry-ready ``ModelArtifact``),
+so ``push_step`` does that conversion itself (download the state-dict file,
+wrap it as a local ``ModelArtifact``) before handing off to the shared
+``ModelPusherPlugin``.
 
 Unlike xgb's ``TrainResult``, ``train_tabular()`` does not return training
-metrics on its ``ModelArtifact`` (no eval-metrics dict), so this pusher omits
-the ``eval_report`` plugin that the xgb example pushes.
+metrics (no eval-metrics dict), so this pusher omits the ``eval_report``
+plugin that the xgb example pushes.
 """
 
 from __future__ import annotations
@@ -28,13 +30,17 @@ from michelangelo.workflow.schema.pusher import (
     PusherPluginConfig,
 )
 from michelangelo.workflow.tasks.pusher import push
-from michelangelo.workflow.variables.types import AssembledModel, PusherResult
+from michelangelo.workflow.variables.types import (
+    AssembledModel,
+    ModelArtifact,
+    PusherResult,
+)
 
 if TYPE_CHECKING:
     from examples.pipelines.california_housing_lightning.preprocess import (
         PreprocessResult,
     )
-    from michelangelo.workflow.variables.types import ModelArtifact
+    from michelangelo.workflow.variables import ModelVariable
 
 log = logging.getLogger(__name__)
 
@@ -52,47 +58,51 @@ __all__ = ["push_step"]
 )
 def push_step(
     pr: PreprocessResult,
-    model_artifact: ModelArtifact,
+    model_variable: ModelVariable,
 ) -> list[PusherResult]:
     """Push the trained model and preprocessed datasets in a single Spark step.
 
     Pushes three artifacts using a single storage backend selected at runtime:
 
-    - **model** -- the Lightning checkpoint, already an assembled
-      ``ModelArtifact`` from ``train_tabular()``, via ``ModelPusherPlugin``.
+    - **model** -- the Lightning checkpoint, converted from the
+      intra-pipeline ``ModelVariable`` returned by ``train_tabular()`` into a
+      local ``ModelArtifact``, via ``ModelPusherPlugin``.
     - **train_data** / **validation_data** -- preprocessed datasets via
       ``DatasetPusherPlugin`` + ``S3Sink`` (remote) or ``LocalFileSink`` (local/CI).
 
     Args:
         pr: Result of the ``preprocess`` task, holding preprocessed training
             and validation ``DatasetVariable`` handles.
-        model_artifact: Result of the ``train`` task -- an already-assembled
-            ``ModelArtifact`` pointing at the uploaded Lightning checkpoint.
+        model_variable: Result of the ``train`` task -- a ``ModelVariable``
+            wrapping the trained Lightning model, persisted under
+            ``UF_STORAGE_URL``.
 
     Returns:
         List of ``PusherResult``, one per artifact pushed.
     """
     import os
-    from dataclasses import replace
+    import tempfile
+
+    import fsspec
 
     storage_backend, is_remote = resolve_storage_backend("california_lightning_push_")
 
-    _run_id = os.path.basename(model_artifact.path.rstrip("/"))
+    _run_id = os.path.basename(model_variable.path.rstrip("/"))
 
-    # ModelArtifact.path is documented as an *absolute local filesystem path*
-    # (ModelPusherPlugin re-uploads it from disk), but train_tabular() already
-    # uploaded the model through its own storage_backend and returns that
-    # backend's URI directly -- a real s3:// URI when running remotely. Pull
-    # it back down to local disk before handing it to the shared pusher.
-    if is_remote:
-        import tempfile
-
-        local_model_path = os.path.join(
-            tempfile.mkdtemp(prefix="california_lightning_push_model_"),
-            os.path.basename(model_artifact.path),
-        )
-        storage_backend.download(model_artifact.path, local_model_path)
-        model_artifact = replace(model_artifact, path=local_model_path)
+    # train_tabular() no longer packages/uploads the model itself -- it hands
+    # off an intra-pipeline ModelVariable persisted under UF_STORAGE_URL, and
+    # there is no OSS "assembler" task yet to turn that into a registry-ready
+    # ModelArtifact. Pull the state-dict file it already wrote (via
+    # save_lightning_model()) down to local disk with the same fsspec
+    # mechanism ModelVariable itself uses, then wrap it as a ModelArtifact --
+    # the local-file contract ModelPusherPlugin expects.
+    local_model_dir = tempfile.mkdtemp(prefix="california_lightning_push_model_")
+    local_model_path = os.path.join(local_model_dir, "model.pt")
+    fs, remote_model_path = fsspec.core.url_to_fs(model_variable.path)
+    fs.get(remote_model_path, local_model_path)
+    model_artifact = ModelArtifact(
+        path=local_model_path, metadata=model_variable.metadata
+    )
 
     pr.train_data.load_pandas_dataframe()
     pr.validation_data.load_pandas_dataframe()
