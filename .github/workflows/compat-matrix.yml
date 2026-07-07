@@ -128,7 +128,7 @@ jobs:
       - name: Notify Slack on failure
         uses: slackapi/slack-github-action@v1.27.0
         with:
-          channel-id: '#michelangelo-releases'
+          channel-id: 'C0BER0RCQ8P'
           slack-message: |
             :x: *${{ github.workflow }}* failed
             Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
