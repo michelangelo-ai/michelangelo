@@ -40,7 +40,7 @@ export type StateStyleConfig = {
  */
 export type ExecutionDetailViewSchema<
   TData extends object = object,
-  TTaskRecord extends object = object,
+  TTaskRecord extends Record<string, unknown> = Record<string, unknown>,
 > = {
   type: 'execution';
 
@@ -174,7 +174,7 @@ export type ExecutionDetailViewSchema<
  *
  * @template TTaskRecord - The shape of the original raw task record
  */
-export type Task<TTaskRecord extends object = object> = {
+export type Task<TTaskRecord extends Record<string, unknown> = Record<string, unknown>> = {
   /** Display name extracted from the raw task record */
   name: string;
   /** Standardized execution state from TASK_STATE constants */
@@ -204,7 +204,9 @@ export type Task<TTaskRecord extends object = object> = {
  * };
  * ```
  */
-export type ExecutionOverrides<TTaskRecord extends object = object> = {
+export type ExecutionOverrides<
+  TTaskRecord extends Record<string, unknown> = Record<string, unknown>,
+> = {
   TaskListRenderer?: {
     component?: ComponentType<TaskListRendererProps<TTaskRecord>>;
     props?: Partial<TaskListRendererProps<TTaskRecord>>;

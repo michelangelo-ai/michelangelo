@@ -15,7 +15,7 @@ export function TableSelectionProvider<T extends TableData = TableData>({
   value,
 }: TableSelectionProviderProps<T>) {
   return (
-    // cast: T extends TableData; context is typed without the generic to avoid provider/consumer coupling
+    // cast: TableSelectionContext is fixed at T = TableData at module load; Table<T> renders many different T, so each Provider must downcast its value
     <TableSelectionContext.Provider value={value as TableSelectionContextType}>
       {children}
     </TableSelectionContext.Provider>

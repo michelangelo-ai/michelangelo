@@ -1,6 +1,8 @@
-import { get, merge } from 'lodash';
+import { merge } from 'lodash';
 import YAML from 'yaml';
 import { YAMLError } from 'yaml/util';
+
+import { getObjectValue } from '#core/utils/object-utils';
 
 import type { MiddlewareSchema } from './types';
 
@@ -8,7 +10,7 @@ export function applyScaffold<T extends object>(data: T, schema: MiddlewareSchem
   if (!schema.scaffold && !schema.scaffoldBySubType) return data;
 
   if (schema.scaffoldBySubType) {
-    const subType = get(data, schema.subTypePath!) as string; // cast: lodash.get returns any; subTypePath points to a string discriminant field
+    const subType = getObjectValue<string>(data, schema.subTypePath!) ?? '';
     return merge({}, parseYaml(schema.scaffoldBySubType[subType]), data);
   }
 

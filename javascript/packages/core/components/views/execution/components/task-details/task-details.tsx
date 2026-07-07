@@ -15,7 +15,7 @@ import type { TaskDetailsProps } from './types';
  * @param metadata - Optional metadata field configurations for rich display
  * @param bodySchema - Optional body content schema for leaf tasks
  */
-export function TaskDetails<TTaskRecord extends object = object>(
+export function TaskDetails<TTaskRecord extends Record<string, unknown> = Record<string, unknown>>(
   props: TaskDetailsProps<TTaskRecord>
 ) {
   const { task, metadata, bodySchema, overrides } = props;

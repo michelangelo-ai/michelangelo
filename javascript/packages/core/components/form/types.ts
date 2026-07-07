@@ -73,10 +73,11 @@ export interface FormInstance {
 }
 
 /**
- * `FormDialog`'s submit handler is the only place that populates `FORM_ERROR`,
- * and it always normalizes caught errors to `Error` before returning them.
+ * `FORM_ERROR` is final-form's own convention for form-level submission errors:
+ * any `onSubmit` can return `{ [FORM_ERROR]: ... }` directly (typically a string
+ * message), while `FormDialog`'s submit handler normalizes caught exceptions to `Error`.
  */
-export type SubmitErrors = { [FORM_ERROR]?: Error } & Record<string, unknown>;
+export type SubmitErrors = { [FORM_ERROR]?: string | Error } & Record<string, unknown>;
 
 export interface FormState<FieldValues extends FormData = FormData> {
   submitting: boolean;

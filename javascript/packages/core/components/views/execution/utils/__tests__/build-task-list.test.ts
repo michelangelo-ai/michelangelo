@@ -79,7 +79,7 @@ describe('buildTaskList', () => {
   it('should handle function accessor for task heading', () => {
     const schemaWithFunctionAccessor = buildSchema({
       tasks: {
-        accessor: (data: { steps: object[] }) => data.steps,
+        accessor: (data: { steps: Record<string, unknown>[] }) => data.steps,
         header: {
           heading: (record: { name: string }) => `Custom: ${record.name}`,
         },

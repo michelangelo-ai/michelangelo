@@ -9,10 +9,9 @@ import type { TaskListRendererProps } from './types';
  * Default task list renderer for execution views.
  * Renders tasks as horizontal step cards with indicators between them.
  */
-export function TaskListRenderer<TTaskRecord extends object = object>({
-  taskList,
-  onTaskClick,
-}: TaskListRendererProps<TTaskRecord>) {
+export function TaskListRenderer<
+  TTaskRecord extends Record<string, unknown> = Record<string, unknown>,
+>({ taskList, onTaskClick }: TaskListRendererProps<TTaskRecord>) {
   return (
     <>
       {taskList.map((task, taskIndex) => (

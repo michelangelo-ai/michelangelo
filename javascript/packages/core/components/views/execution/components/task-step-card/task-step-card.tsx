@@ -6,7 +6,7 @@ import { TaskStepCardContainer, TaskStepName } from './styled-components';
 
 import type { TaskStepCardProps } from './types';
 
-export function TaskStepCard<TTaskRecord extends object = object>(
+export function TaskStepCard<TTaskRecord extends Record<string, unknown> = Record<string, unknown>>(
   props: TaskStepCardProps<TTaskRecord>
 ) {
   const { task, onClick } = props;

@@ -1,5 +1,3 @@
-import { get } from 'lodash';
-
 import { getObjectValue } from '#core/utils/object-utils';
 import { TASK_STATE } from '../constants';
 
@@ -22,7 +20,7 @@ import type { ExecutionDetailViewSchema, Task } from '../types';
  * // Returns: [{ name: 'Build', state: 'SUCCESS', focused: false, subTasks: [...] }]
  * ```
  */
-export function buildTaskList<TData extends object, TTaskRecord extends object>(
+export function buildTaskList<TData extends object, TTaskRecord extends Record<string, unknown>>(
   schema: ExecutionDetailViewSchema<TData, TTaskRecord>,
   data: TData
 ): Task<TTaskRecord>[] {
@@ -40,7 +38,7 @@ export function buildTaskList<TData extends object, TTaskRecord extends object>(
     });
 
     const primaryHeading = getObjectValue(taskRecord, tasks.header.heading);
-    const fallbackName = get(taskRecord, 'name');
+    const fallbackName = getObjectValue<string>(taskRecord, 'name');
 
     return {
       name: (primaryHeading?.trim() ? primaryHeading : fallbackName)!,

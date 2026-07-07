@@ -9,7 +9,9 @@ import type { TaskHeaderProps } from './types';
 /**
  * Task header component showing icon, name, and metadata.
  */
-export function TaskHeader<TTaskRecord extends object>(props: TaskHeaderProps<TTaskRecord>) {
+export function TaskHeader<TTaskRecord extends Record<string, unknown>>(
+  props: TaskHeaderProps<TTaskRecord>
+) {
   const [css, theme] = useStyletron();
   const { task, id, metadata } = props;
   const { name, state } = task;
@@ -29,10 +31,7 @@ export function TaskHeader<TTaskRecord extends object>(props: TaskHeaderProps<TT
           {name}
         </div>
       </div>
-      {metadata && (
-        // cast: task.record is typed as unknown from the execution schema; always a plain record at runtime
-        <Row items={metadata} record={task.record as Record<string, unknown>} />
-      )}
+      {metadata && <Row items={metadata} record={task.record} />}
     </TaskContentStack>
   );
 }

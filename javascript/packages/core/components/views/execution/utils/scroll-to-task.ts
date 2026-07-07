@@ -4,7 +4,9 @@ import type { Task } from '../types';
  * Builds a unique scroll ID for a task based on its name.
  * Used to create DOM IDs for navigation targeting.
  */
-export function buildTaskScrollId<TTaskRecord extends object>(task: Task<TTaskRecord>): string {
+export function buildTaskScrollId<TTaskRecord extends Record<string, unknown>>(
+  task: Task<TTaskRecord>
+): string {
   return `task-${task.name}`;
 }
 
@@ -15,7 +17,9 @@ export function buildTaskScrollId<TTaskRecord extends object>(task: Task<TTaskRe
  * @param task - The task to scroll to
  * @param options - Configuration for scroll behavior
  */
-export function handleScrollToTask<TTaskRecord extends object>(task: Task<TTaskRecord>): void {
+export function handleScrollToTask<TTaskRecord extends Record<string, unknown>>(
+  task: Task<TTaskRecord>
+): void {
   const element = document.getElementById(buildTaskScrollId(task));
 
   if (!element) {

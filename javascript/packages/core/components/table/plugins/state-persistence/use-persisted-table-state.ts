@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { get } from 'lodash';
 
+import { getObjectValue } from '#core/utils/object-utils';
 import { getAllTableUserSettings, updateUserTableSettings } from './utils';
 
 import type { Dispatch, SetStateAction } from 'react';
@@ -20,8 +20,9 @@ export function usePersistedTableState<StateType>(
   defaultValue: StateType
 ): [StateType, Dispatch<SetStateAction<StateType>>] {
   const settings = getAllTableUserSettings();
-  // lodash.get can return Partial<StateType> so we need to cast to StateType
-  const [state, setState] = useState<StateType>(get(settings, id, defaultValue) as StateType); // cast: lodash.get returns any; defaultValue guarantees StateType shape when key is absent
+  const [state, setState] = useState<StateType>(
+    getObjectValue<StateType>(settings, id, defaultValue) ?? defaultValue
+  );
 
   const updateAndPersistState = (updater: SetStateAction<StateType>) => {
     const newStateValue = updater instanceof Function ? updater(state) : updater;

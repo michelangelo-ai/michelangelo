@@ -1,5 +1,6 @@
 import { cloneDeep, get, isNil, set, unset } from 'lodash';
 
+import { getObjectValue } from '#core/utils/object-utils';
 import { applyScaffold } from './apply-scaffold';
 
 import type { StudioParamsBase } from '#core/hooks/routing/use-studio-params/types';
@@ -18,8 +19,8 @@ export function applyMiddleware<T extends object>(
   const sourceObject = options?.sourceFromObject ?? clone;
 
   for (const op of schema.operations) {
-    // cast: lodash.get returns any; subTypePath points to a string discriminant field
-    if (op.subTypes && !op.subTypes.includes(get(clone, schema.subTypePath!) as string)) {
+    const subType = getObjectValue<string>(clone, schema.subTypePath!) ?? '';
+    if (op.subTypes && !op.subTypes.includes(subType)) {
       continue;
     }
 

@@ -17,7 +17,7 @@ import type { ExecutionDetailViewSchema, ExecutionOverrides } from './types';
 
 export function Execution<
   TData extends object = object,
-  TTaskRecord extends object = object,
+  TTaskRecord extends Record<string, unknown> = Record<string, unknown>,
 >(props: {
   schema: ExecutionDetailViewSchema<TData, TTaskRecord>;
   data: TData;

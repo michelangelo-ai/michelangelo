@@ -14,7 +14,9 @@ import { TaskDetails } from './task-details';
 
 import type { TaskBodyProps } from './types';
 
-export function TaskBody<TTaskRecord extends object>(props: TaskBodyProps<TTaskRecord>) {
+export function TaskBody<TTaskRecord extends Record<string, unknown>>(
+  props: TaskBodyProps<TTaskRecord>
+) {
   const [css, theme] = useStyletron();
   const { task, bodySchema, overrides, metadata } = props;
   const { subTasks } = task;
@@ -77,14 +79,7 @@ export function TaskBody<TTaskRecord extends object>(props: TaskBodyProps<TTaskR
 
           if (schema.type === 'metadata') {
             const { cells } = schema;
-            return (
-              <TaskBodyMetadata
-                key={index}
-                label={label}
-                value={task.record as Record<string, unknown>} // cast: task.record is typed as unknown from the execution schema; always a plain record at runtime
-                cells={cells}
-              />
-            );
+            return <TaskBodyMetadata key={index} label={label} value={task.record} cells={cells} />;
           }
 
           return null;
