@@ -86,18 +86,18 @@ describe('useStudioMutation', () => {
     expect(await screen.findByText('Pipeline run created')).toBeInTheDocument();
   });
 
-  test('clientOptions.onSuccess fully replaces default successOperations', async () => {
+  test('clientOptions.onSuccess runs alongside default successOperations', async () => {
     const mockResponse = { id: 'test-id' };
     const onSuccess = vi.fn();
     const mockRequest = createQueryMockRouter({
       CreatePipelineRun: mockResponse,
     });
 
-    const { result } = renderHook(
+    renderHook(
       () =>
         useStudioMutation({
           mutationName: 'CreatePipelineRun',
-          successOperations: [{ type: 'toast', message: 'Should not appear' }],
+          successOperations: [{ type: 'toast', message: 'Pipeline run created' }],
           clientOptions: { onSuccess },
         }),
       buildWrapper([
@@ -106,14 +106,10 @@ describe('useStudioMutation', () => {
         getServiceProviderWrapper({ request: mockRequest }),
         getSnackbarProviderWrapper(),
       ])
-    );
+    ).result.current.mutate({ name: 'test-run' });
 
-    result.current.mutate({ name: 'test-run' });
-
-    await waitFor(() => {
-      expect(onSuccess).toHaveBeenCalledWith(mockResponse);
-    });
-    expect(screen.queryByText('Should not appear')).not.toBeInTheDocument();
+    expect(await screen.findByText('Pipeline run created')).toBeInTheDocument();
+    expect(onSuccess).toHaveBeenCalledWith(mockResponse);
   });
 
   test('passes onSuccess callback with response data', async () => {

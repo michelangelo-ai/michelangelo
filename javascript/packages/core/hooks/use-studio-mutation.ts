@@ -25,10 +25,10 @@ export const useStudioMutation = <TData, TVariables extends Record<string, unkno
         throw normalizeError(error)!;
       }
     },
-    onSuccess: (data) =>
-      config?.clientOptions?.onSuccess
-        ? config.clientOptions.onSuccess(data)
-        : runSuccessOperations(data),
+    onSuccess: (data) => {
+      runSuccessOperations(data);
+      config?.clientOptions?.onSuccess?.(data);
+    },
     onError: config?.clientOptions?.onError
       ? (error) => config.clientOptions!.onError!(error)
       : undefined,
