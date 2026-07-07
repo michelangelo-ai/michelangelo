@@ -44,7 +44,7 @@ export function buildTaskList<TData extends object, TTaskRecord extends object>(
       name: (primaryHeading?.trim() ? primaryHeading : fallbackName)!,
       state: schema.tasks.stateBuilder(taskRecord, taskIndex, siblingTasks, data),
       subTasks: subTasksAccessor
-        ? getObjectValue(taskRecord, subTasksAccessor, []).map(buildTask)
+        ? getObjectValue(taskRecord, subTasksAccessor, [])!.map(buildTask)
         : [],
       record: taskRecord,
       focused:
@@ -53,6 +53,6 @@ export function buildTaskList<TData extends object, TTaskRecord extends object>(
     };
   }
 
-  const taskArray = getObjectValue(data, accessor, []);
+  const taskArray = getObjectValue(data, accessor, [])!;
   return taskArray.map(buildTask);
 }

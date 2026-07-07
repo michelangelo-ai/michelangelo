@@ -10,7 +10,7 @@ export function applyScaffold<T extends object>(data: T, schema: MiddlewareSchem
   if (!schema.scaffold && !schema.scaffoldBySubType) return data;
 
   if (schema.scaffoldBySubType) {
-    const subType = getObjectValue(data, schema.subTypePath!, '');
+    const subType = getObjectValue<string>(data, schema.subTypePath!) ?? '';
     return merge({}, parseYaml(schema.scaffoldBySubType[subType]), data);
   }
 
