@@ -2,44 +2,48 @@
 
 ## What this rule enforces
 
-Every `as` type assertion must carry a `// cast: <reason>` comment — on the same line, or anywhere in the unbroken `//` comment block on the line(s) immediately above. `as const` and `as unknown` are exempt, since neither narrows a type in a way that can be wrong.
+Every `as` type assertion must carry a `// cast: <reason>` comment, in the unbroken `//` comment block on the line(s) immediately above it. `as const` and `as unknown` are exempt, since neither narrows a type in a way that can be wrong.
 
 ```ts
 // ✗ Bad — no justification, can't tell if this is safe or a bug waiting to happen
 const value = response as UserRecord;
 
 // ✓ Good — states why the assertion is safe
-const value = response as UserRecord; // cast: response.json() returns any; shape is asserted, not validated
+// cast: response.json() returns any; shape is asserted, not validated
+const value = response as UserRecord;
 ```
 
 ## Why a comment, not a ban
 
-An `as` assertion turns off the type checker for that value. That's sometimes the right call — no ban would survive contact with real code, since libraries and runtime boundaries are imprecise in ways TypeScript can't express. But type assertions can be escape hatches for real issues, and their justification can lose context over time as the surrounding code changes. An unexplained cast reads the same whether it's genuinely unavoidable or quietly wrong, and nothing forces the author to say which. Requiring a comment doesn't fix casts — it forces a decision at the point of use, one a reviewer can actually evaluate instead of taking on faith.
+This isn't about eliminating every `as` — sometimes the fully type-safe version of some code is harder to follow, not easier, and a cast with a reason is the more maintainable outcome. It's about understanding: an unexplained cast reads the same whether it's a real workaround or a bug, and that's exactly the context that erodes as the surrounding code changes. The comment is what's left once the reasoning in your head is gone.
 
-## Work through these in order before writing the comment
+## If this just failed your push
 
-1. **Can the cast be removed outright?** Check it against the type checker, not just against what looks plausible — an existing typed overload, a missing null check, or a stale API shape often make a cast unnecessary. If it's not needed, delete it. Don't justify what you can delete.
-2. **Can the underlying issue be fixed cheaply?** If the cast is propping up a real type mismatch, fix the type instead of re-justifying the cast. A cast hiding a bug is worse than the bug, since it also disables the compiler in that spot from then on.
-3. **Is this a real gap in foundational code you can't fix right now?** This is the case to watch for. If the cast exists because of a limitation upstream — a type that's too loose, a generic that isn't threaded through, a design decision out of scope for what you're doing — don't paper over it with a confident-sounding comment. File a tracked issue describing the actual gap and reference it in the comment (`// cast: ...; see #1234`). Deferring the fix is fine. Deferring it silently is not.
-4. **Is this a genuine, permanent boundary?** Some casts will never go away: a third-party library types something looser than it behaves, or TypeScript can't express the relationship (e.g., it can't correlate a generic against itself from inside its own implementation). Say so plainly — that's the one case where the comment is the whole fix, not a placeholder for one.
+Work through these before writing `// cast:`:
 
-## Write what's actually known, not what sounds reassuring
+1. **Can it go away?** Check against the type checker, not against what looks plausible — a missing null check, a stale type, or an existing overload often means the cast can just be deleted.
+2. **Is this a real gap in code you're not touching right now?** File a tracked issue and reference it (`see #1234`). Deferring the fix is fine; deferring it without a paper trail isn't.
+3. **Is this a permanent boundary?** A third-party library's looser types, or something TypeScript genuinely can't express — say so plainly. That's the one case where the comment alone is the fix.
 
-"Always returns X" and "verified above" are claims — write them only if you checked, not because they're the words that make a cast look settled.
+## Back it with evidence
+
+"Always returns X" and "verified above" are claims — worth writing only if you checked. The strongest version of a comment links something checkable: this repo's tracking issue for a deferred gap, or an upstream TypeScript/library GitHub issue if the cast exists because of a bug or limitation someone else already filed.
 
 ```ts
-// ✗ Bad — asserts a guarantee that was never checked
-const entityData = data[key] as Record<string, unknown>; // cast: always the entity object
+// ✗ Bad — a bare assertion, no way to check it
+// cast: always the entity object
+const entityData = data[key] as Record<string, unknown>;
 
-// ✓ Good — states what's actually known, and defers what isn't
-const entityData = data[key] as Record<string, unknown>; // cast: config carries no generic for this key's shape; see #1425
+// ✓ Good — links the actual limitation
+// cast: config carries no generic for this key's shape; see #1425
+const entityData = data[key] as Record<string, unknown>;
 ```
 
-A comment that turns out to be wrong is worse than an unexplained cast — it misleads the next reader instead of just leaving a gap they'd know to check.
+If there's no issue to link, that's usually a sign one should be filed.
 
-## Multi-line comments
+## Comments can span multiple lines
 
-If the reason doesn't fit on one line under the project's `printWidth`, wrap it into a leading comment block instead of cramming everything onto one line:
+The block above the assertion can be as long as it needs to be — wrap it like any other comment instead of cramming the reason onto one line:
 
 ```ts
 // cast: our ColumnMeta augmentation is an empty interface (TS can't have it extend the
@@ -47,9 +51,10 @@ If the reason doesn't fit on one line under the project's `printWidth`, wrap it 
 column: cell.column.columnDef.meta! as ColumnConfig<T>,
 ```
 
-The `cast:` marker can appear anywhere in the unbroken block directly above the assertion — it doesn't have to be on the line touching the code. A blank line still breaks the connection to the assertion below it.
+The `cast:` marker can appear anywhere in the unbroken block — it doesn't have to be on the line touching the code. A blank line breaks the connection to the assertion below it, so the block has to be contiguous.
 
 ## What NOT to include
 
+- A trailing same-line comment (`foo as Bar; // cast: ...`) — the rule only looks above the assertion, not beside it.
 - Filler that states a cast exists without saying why ("type assertion needed here").
 - A comment on `as const` or `as unknown` — the rule doesn't require one, and it wouldn't add information either.

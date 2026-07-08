@@ -19,9 +19,6 @@ tester.run('require-cast-comment', rule, {
     // as unknown — widening, no comment needed
     { code: 'const x = foo as unknown;' },
 
-    // Comment on the same line
-    { code: 'const x = foo as Bar; // cast: Bar is the only concrete type here' },
-
     // Comment on the line above
     {
       code: `// cast: narrowing from union — checked by caller
@@ -42,8 +39,11 @@ const x = foo as Bar;`,
 const x = foo as Bar;`,
     },
 
-    // Double assertion: inner is unknown (safe), outer has comment
-    { code: 'const x = (foo as unknown as Bar); // cast: required for generic override' },
+    // Double assertion: inner is unknown (safe), outer has a leading comment
+    {
+      code: `// cast: required for generic override
+const x = (foo as unknown as Bar);`,
+    },
 
     // as const on object literal
     { code: 'const cfg = { a: 1 } as const;' },
@@ -66,6 +66,12 @@ const x = foo as Bar;`,
     {
       code: 'doSomething(value as SpecificType);',
       errors: [{ messageId: 'missingCastComment', data: { type: 'SpecificType' } }],
+    },
+
+    // Trailing same-line comment no longer counts — must be a leading block
+    {
+      code: 'const x = foo as Bar; // cast: Bar is the only concrete type here',
+      errors: [{ messageId: 'missingCastComment', data: { type: 'Bar' } }],
     },
 
     // Unrelated comment on preceding line doesn't count

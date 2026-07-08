@@ -9,7 +9,7 @@ const rule = {
     },
     messages: {
       missingCastComment:
-        "Type assertion 'as {{ type }}' requires a '// cast:' comment. Add '// cast: <reason>' on the same line, or anywhere in the unbroken comment block on the line(s) above.",
+        "Type assertion 'as {{ type }}' requires a '// cast:' comment. Add '// cast: <reason>' anywhere in the unbroken comment block on the line(s) above.",
     },
     schema: [],
   },
@@ -40,9 +40,6 @@ const rule = {
     function hasCastComment(node) {
       const lines = src.getText().split('\n');
       const line = node.loc.start.line; // 1-indexed
-
-      // Same line
-      if (lines[line - 1]?.includes('// cast:')) return true;
 
       // Contiguous block of `//` comment lines immediately above — a blank
       // line or a non-comment line breaks the chain.
