@@ -68,7 +68,7 @@ const x = (foo as unknown as Bar);`,
       errors: [{ messageId: 'missingCastComment', data: { type: 'SpecificType' } }],
     },
 
-    // Trailing same-line comment no longer counts — must be a leading block
+    // Trailing same-line comment doesn't count — must be a leading block
     {
       code: 'const x = foo as Bar; // cast: Bar is the only concrete type here',
       errors: [{ messageId: 'missingCastComment', data: { type: 'Bar' } }],
