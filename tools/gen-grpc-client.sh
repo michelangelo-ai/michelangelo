@@ -109,7 +109,7 @@ buf generate --template "${TMP_DIR}/buf.gen.yaml" "${TMP_DIR}" -o "${TMP_DIR}"
 # build a FileDescriptorSet so Envoy's grpc_json_transcoder filter can
 # transcode JSON<->binary proto without any Go-side jsonpb involvement
 mkdir -p "${WORKSPACE_ROOT}/helm/michelangelo/files"
-buf build "${TMP_DIR}" -o "${WORKSPACE_ROOT}/helm/michelangelo/files/descriptors.pb"
+buf build "${TMP_DIR}" --exclude-source-info -o "${WORKSPACE_ROOT}/helm/michelangelo/files/descriptors.pb"
 
 # copy generated code to requesting client directories
 IFS=',' read -ra CLIENT_ARRAY <<< "$CLIENTS"

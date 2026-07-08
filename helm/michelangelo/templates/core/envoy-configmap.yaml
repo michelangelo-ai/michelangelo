@@ -43,7 +43,7 @@ data:
                       - name: envoy.filters.http.grpc_json_transcoder
                         typed_config:
                           "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_json_transcoder.v3.GrpcJsonTranscoder
-                          proto_descriptor: "/etc/envoy/descriptors.pb"
+                          proto_descriptor: "/etc/envoy-descriptors/descriptors.pb"
                           services:
                             - "michelangelo.api.v2.CachedOutputService"
                             - "michelangelo.api.v2.ClusterService"

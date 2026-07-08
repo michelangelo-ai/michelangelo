@@ -42,7 +42,7 @@ spec:
             - name: config
               mountPath: /etc/envoy
             - name: descriptors
-              mountPath: /etc/envoy/descriptors.pb
+              mountPath: /etc/envoy-descriptors/descriptors.pb
               subPath: descriptors.pb
           {{- with (or .Values.envoy.resources .Values.resources) }}
           resources:
