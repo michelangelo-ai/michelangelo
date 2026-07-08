@@ -1,32 +1,17 @@
 import { ApplicationError, GrpcStatusCode } from '@michelangelo-ai/core';
 
-import { GrpcTranscoderError } from './transport';
+import { GrpcTranscoderError } from './grpc-transcoder-error';
 
 import type { ErrorNormalizer } from '@michelangelo-ai/core';
 
-/**
- * Normalizes errors thrown by the fetch transport (see transport.ts) to
- * ApplicationError format.
- *
- * @param error - The error to normalize
- * @returns ApplicationError if it's a transcoder error, null otherwise
- *
- * @example
- * ```ts
- * // Usage in error provider
- * const errorProvider = (
- *   <ErrorProvider normalizeError={normalizeConnectError}>
- *     {children}
- *   </ErrorProvider>
- * );
- * ```
- */
-export const normalizeConnectError: ErrorNormalizer = (error: unknown): ApplicationError | null => {
+export const normalizeTranscoderError: ErrorNormalizer = (
+  error: unknown
+): ApplicationError | null => {
   if (!(error instanceof GrpcTranscoderError)) {
     return null;
   }
 
-  return new ApplicationError(error.message, mapTranscoderCodeToGrpc(error.code), {
+  return new ApplicationError(error.message, mapGrpcCode(error.code), {
     source: 'grpc-transcoder',
     meta: {
       details: error.details,
@@ -35,11 +20,7 @@ export const normalizeConnectError: ErrorNormalizer = (error: unknown): Applicat
   });
 };
 
-/**
- * Maps grpc_json_transcoder status codes to gRPC status codes.
- * Envoy surfaces the same numeric codes as gRPC, so we can map directly.
- */
-function mapTranscoderCodeToGrpc(code: number): GrpcStatusCode {
+function mapGrpcCode(code: number): GrpcStatusCode {
   switch (code) {
     case 0:
       return GrpcStatusCode.OK;

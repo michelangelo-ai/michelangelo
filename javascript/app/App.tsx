@@ -1,6 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom-v5-compat';
 import { CoreApp } from '@michelangelo-ai/core';
-import { normalizeConnectError, request } from '@michelangelo-ai/rpc';
+import { normalizeTranscoderError, request } from '@michelangelo-ai/rpc';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Client as Styletron } from 'styletron-engine-atomic';
 import { Provider as StyletronProvider } from 'styletron-react';
@@ -9,7 +9,7 @@ import { ICONS } from './icons/icons';
 
 const dependencies = {
   error: {
-    normalizeError: normalizeConnectError,
+    normalizeError: normalizeTranscoderError,
   },
   theme: {
     icons: ICONS,

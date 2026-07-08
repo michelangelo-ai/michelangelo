@@ -1,0 +1,34 @@
+import { toTranscoderError } from './grpc-transcoder-error';
+
+import type { FetchTransport, FetchTransportOptions } from './types';
+
+const STATIC_HEADERS: Record<string, string> = {
+  'context-Ttl-Ms': '10000',
+  'grpc-timeout': '1000000m',
+  'Rpc-Caller': 'ma-studio',
+  'Rpc-Service': 'ma-apiserver',
+  'Rpc-Encoding': 'proto',
+};
+
+export function createFetchTransport(options: FetchTransportOptions): FetchTransport {
+  const baseUrl = options.baseUrl.replace(/\/+$/, '');
+  const headers = { ...STATIC_HEADERS, ...options.headers };
+
+  return {
+    async callUnary(serviceName, methodName, request) {
+      const response = await fetch(`${baseUrl}/${serviceName}/${methodName}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify(request),
+      });
+
+      const body: unknown = await response.json().catch(() => null);
+
+      if (response.status < 200 || response.status >= 300) {
+        throw toTranscoderError(response, body);
+      }
+
+      return body;
+    },
+  };
+}
