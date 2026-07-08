@@ -1,5 +1,3 @@
-import type { NotificationEventType } from '#core/config/entities/run/types';
-
 export interface Pipeline {
   metadata: {
     name: string;
@@ -12,9 +10,13 @@ export interface Pipeline {
   };
 }
 
-/** Notification recipient state for CreatePipelineRunForm, held as local React state. */
-export type NotificationDetailsValue = {
-  emails: string[];
-  slackChannels: string[];
-  eventTypes: NotificationEventType[];
+/**
+ * `notificationEmails`/`notificationSlackChannels` aren't real `PipelineRun` fields — they're
+ * registered by `MultiInputField` (inside `NotificationDetails`) purely so Form's built-in
+ * validation gating gates submission on an invalid email, matching the Field API used
+ * everywhere else in this form instead of a hand-rolled check in the submit handler.
+ */
+export type NotificationFormFields = {
+  notificationEmails?: string[];
+  notificationSlackChannels?: string[];
 };

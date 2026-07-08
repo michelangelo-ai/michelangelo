@@ -156,23 +156,23 @@ describe('CreatePipelineRunForm', () => {
 
     await screen.findByRole('dialog', { name: 'Start new pipeline run' });
 
-    // Toggle is visible and off by default; email combobox is present but disabled.
+    // Toggle is visible and off by default; email input is present but disabled.
     // The toggle's accessible name is its own label text ("Enabled"/"Disabled"), which
     // starts as "Disabled" since notifications default to off.
     expect(screen.getByText('Send notifications')).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: /email addresses/i })).toBeDisabled();
+    expect(screen.getByRole('textbox', { name: /email addresses/i })).toBeDisabled();
 
     // Enable notifications via toggle
     await user.click(screen.getByRole('checkbox', { name: 'Disabled' }));
 
-    // Email combobox is now enabled
-    const emailCombo = await screen.findByRole('combobox', { name: /email addresses/i });
+    // Email input is now enabled
+    const emailInput = await screen.findByRole('textbox', { name: /email addresses/i });
     await waitFor(() => {
-      expect(emailCombo).toBeEnabled();
+      expect(emailInput).toBeEnabled();
     });
 
     // Type an email and submit — payload should include the notification
-    await user.type(emailCombo, 'notify@example.com');
+    await user.type(emailInput, 'notify@example.com');
     await user.keyboard('{Enter}');
     await user.click(screen.getByRole('button', { name: 'Run' }));
 
@@ -216,12 +216,12 @@ describe('CreatePipelineRunForm', () => {
     // Enable notifications
     await user.click(screen.getByRole('checkbox', { name: 'Disabled' }));
 
-    // Type an invalid email into the email addresses combobox and commit with Enter
-    const emailCombo = await screen.findByRole('combobox', { name: /email addresses/i });
-    await user.type(emailCombo, 'not-an-email');
+    // Type an invalid email into the email addresses input and commit with Enter
+    const emailInput = await screen.findByRole('textbox', { name: /email addresses/i });
+    await user.type(emailInput, 'not-an-email');
     await user.keyboard('{Enter}');
 
-    await screen.findByText('Enter valid email addresses, e.g. user@example.com.');
+    await screen.findAllByText('Enter valid email addresses, e.g. user@example.com.');
 
     // Submitting with the invalid email must not call the API or close the dialog.
     await user.click(screen.getByRole('button', { name: 'Run' }));

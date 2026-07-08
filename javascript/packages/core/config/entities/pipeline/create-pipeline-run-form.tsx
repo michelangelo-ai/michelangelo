@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useStyletron } from 'baseui';
 import { Checkbox, LABEL_PLACEMENT, STYLE_TYPE } from 'baseui/checkbox';
 
 import { FormControl } from '#core/components/form/components/form-control';
@@ -8,7 +7,6 @@ import { StringField } from '#core/components/form/fields/string/string-field';
 import { TextareaField } from '#core/components/form/fields/textarea/textarea-field';
 import { FormGroup } from '#core/components/form/layout/form-group/form-group';
 import { NotificationDetails } from '#core/config/entities/pipeline/notification-details';
-import { getEmailValidationError } from '#core/config/entities/pipeline/notification-validation';
 import {
   ALL_NOTIFICATION_EVENT_TYPES,
   NOTIFICATION_EVENT_TYPES,
@@ -18,7 +16,7 @@ import { useStudioMutation } from '#core/hooks/use-studio-mutation';
 import { generateSuffix } from '#core/utils/name-utils';
 
 import type { ActionComponentProps } from '#core/components/actions/types';
-import type { NotificationDetailsValue, Pipeline } from '#core/config/entities/pipeline/types';
+import type { NotificationFormFields, Pipeline } from '#core/config/entities/pipeline/types';
 import type { NotificationEventType, PipelineRun } from '#core/config/entities/run/types';
 
 const EVENT_TYPE_TO_PROTO_VALUE: Record<NotificationEventType, number> = Object.fromEntries(
@@ -26,15 +24,12 @@ const EVENT_TYPE_TO_PROTO_VALUE: Record<NotificationEventType, number> = Object.
 ) as Record<NotificationEventType, number>;
 
 export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<Pipeline>) => {
-  const [css, theme] = useStyletron();
   const { projectId } = useStudioParams('base');
 
   const [notificationEnabled, setNotificationEnabled] = useState(false);
-  const [notificationDetails, setNotificationDetails] = useState<NotificationDetailsValue>({
-    emails: [],
-    slackChannels: [],
-    eventTypes: [...ALL_NOTIFICATION_EVENT_TYPES],
-  });
+  const [eventTypes, setEventTypes] = useState<NotificationEventType[]>([
+    ...ALL_NOTIFICATION_EVENT_TYPES,
+  ]);
 
   const createPipelineRunMutation = useStudioMutation<PipelineRun, PipelineRun>({
     mutationName: 'CreatePipelineRun',
@@ -44,34 +39,28 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
     setNotificationEnabled(event.currentTarget.checked);
   };
 
-  const handleRecipientsChange = (details: NotificationDetailsValue) => {
-    setNotificationDetails(details);
+  const handleEventTypeSelectionChange = (types: NotificationEventType[]) => {
+    setEventTypes(types);
   };
 
-  const handleRunSubmit = async (values: PipelineRun) => {
+  const handleRunSubmit = async (values: PipelineRun & NotificationFormFields) => {
     if (createPipelineRunMutation.isPending) {
       return;
     }
 
-    const { emails, slackChannels, eventTypes } = notificationDetails;
-
-    if (notificationEnabled) {
-      const emailError = getEmailValidationError(emails);
-      if (emailError) {
-        throw new Error(emailError);
-      }
-    }
+    const { notificationEmails = [], notificationSlackChannels = [], ...pipelineRun } = values;
 
     const payload: PipelineRun = {
-      ...values,
+      ...pipelineRun,
       spec: {
-        ...values.spec,
-        ...(notificationEnabled && (emails.length > 0 || slackChannels.length > 0)
+        ...pipelineRun.spec,
+        ...(notificationEnabled &&
+        (notificationEmails.length > 0 || notificationSlackChannels.length > 0)
           ? {
               notifications: [
                 {
-                  emails,
-                  slackDestinations: slackChannels,
+                  emails: notificationEmails,
+                  slackDestinations: notificationSlackChannels,
                   eventTypes: eventTypes.map((t) => EVENT_TYPE_TO_PROTO_VALUE[t]),
                 },
               ],
@@ -100,7 +89,7 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
   };
 
   return (
-    <FormDialog<PipelineRun>
+    <FormDialog<PipelineRun & NotificationFormFields>
       isOpen
       onDismiss={onClose}
       heading="Start new pipeline run"
@@ -121,25 +110,21 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
         title="Set Up Notifications"
         description="Receive an alert when this run completes, fails, or is killed."
       >
-        <div
-          className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale600 })}
-        >
-          <FormControl label="Send notifications">
-            <Checkbox
-              checked={notificationEnabled}
-              onChange={handleNotificationEnabledChange}
-              checkmarkType={STYLE_TYPE.toggle_round}
-              labelPlacement={LABEL_PLACEMENT.right}
-            >
-              {notificationEnabled ? 'Enabled' : 'Disabled'}
-            </Checkbox>
-          </FormControl>
-          <NotificationDetails
-            enabled={notificationEnabled}
-            value={notificationDetails}
-            onNotificationDetailsChange={handleRecipientsChange}
-          />
-        </div>
+        <FormControl label="Send notifications">
+          <Checkbox
+            checked={notificationEnabled}
+            onChange={handleNotificationEnabledChange}
+            checkmarkType={STYLE_TYPE.toggle_round}
+            labelPlacement={LABEL_PLACEMENT.right}
+          >
+            {notificationEnabled ? 'Enabled' : 'Disabled'}
+          </Checkbox>
+        </FormControl>
+        <NotificationDetails
+          enabled={notificationEnabled}
+          eventTypes={eventTypes}
+          onEventTypesChange={handleEventTypeSelectionChange}
+        />
       </FormGroup>
     </FormDialog>
   );
