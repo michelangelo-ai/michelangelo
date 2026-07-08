@@ -1,3 +1,4 @@
+//go:generate mamockgen Client
 package job
 
 import (
@@ -36,4 +37,18 @@ type Client interface {
 	// - A string containing the error message (if the job failed).
 	// - An error if the status retrieval fails.
 	GetJobStatus(ctx context.Context, logger logr.Logger, job *v2pb.SparkJob) (*string, string, string, error)
+
+	// DeleteJob terminates a running Spark job by deleting its underlying
+	// SparkApplication. Deleting the SparkApplication instructs the Spark
+	// Operator to tear down the driver and executor pods.
+	//
+	// Parameters:
+	// - ctx: The context for managing request deadlines and cancellations.
+	// - log: A logger instance for logging information.
+	// - job: A pointer to a SparkJob object identifying the job to delete.
+	//
+	// Returns:
+	// - An error if deletion fails. Callers should treat a not-found error as
+	//   success, since it means the SparkApplication is already gone.
+	DeleteJob(ctx context.Context, log logr.Logger, job *v2pb.SparkJob) error
 }

@@ -27,6 +27,9 @@ describe('withStickySides integration tests', () => {
       </StickySidesRow>
     );
 
+    // No semantic query can distinguish "is this cell sticky" — the HOC sets
+    // data-testid as the only marker of sticky identity on otherwise generic <td> elements.
+    // eslint-disable-next-line testing-library/no-test-id-queries
     expect(screen.queryByTestId(/^sticky-cell-/)).not.toBeInTheDocument();
   });
 
@@ -46,8 +49,11 @@ describe('withStickySides integration tests', () => {
       </StickySidesRow>
     );
 
-    // Should have sticky: selection (0) + first data (1) + config (3)
+    // No semantic query can distinguish sticky-left from sticky-right — the HOC
+    // injects data-testid as the sole marker of sticky side on generic <td> elements.
+    // eslint-disable-next-line testing-library/no-test-id-queries
     expect(screen.getAllByTestId('sticky-cell-left-sticky')).toHaveLength(2);
+    // eslint-disable-next-line testing-library/no-test-id-queries
     expect(screen.getAllByTestId('sticky-cell-right-sticky')).toHaveLength(1);
   });
 
@@ -66,8 +72,11 @@ describe('withStickySides integration tests', () => {
       </StickySidesRow>
     );
 
-    // Should have sticky: first data (0) + config (2)
+    // No semantic query can distinguish sticky-left from sticky-right — the HOC
+    // injects data-testid as the sole marker of sticky side on generic <td> elements.
+    // eslint-disable-next-line testing-library/no-test-id-queries
     expect(screen.getAllByTestId('sticky-cell-left-sticky')).toHaveLength(1);
+    // eslint-disable-next-line testing-library/no-test-id-queries
     expect(screen.getAllByTestId('sticky-cell-right-sticky')).toHaveLength(1);
   });
 

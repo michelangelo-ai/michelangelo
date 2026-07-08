@@ -6,6 +6,7 @@ Before configuring any tool below, complete [Experiment Tracking Setup](../exper
 
 | Guide | Description |
 |-------|-------------|
+| [Comet ML](cometml.md) | Connect to Comet ML's experiment tracking — network setup, API key injection, PyTorch Lightning / Ray Train / HuggingFace Transformers / custom training loop patterns, distributed experiment coordination, and Comet ML vs Michelangelo model registry comparison|
 | [MLflow](mlflow.md) | Connect a self-hosted or Databricks-managed MLflow Tracking Server — network setup, auth, and MLflow vs Michelangelo registry comparison |
 
 ## Next Steps

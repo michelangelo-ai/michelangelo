@@ -5,11 +5,11 @@ import { vi } from 'vitest';
 import { CellType } from '#core/components/cell/constants';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
-import { ActiveFilterTagList } from '../table-active-filter-tag-list';
+import { TableActiveFilterTagList } from '../table-active-filter-tag-list';
 
 import type { FilterableColumn } from '#core/components/table/components/table-action-bar/types';
 
-describe('ActiveFilterTagList', () => {
+describe('TableActiveFilterTagList', () => {
   test('renders nothing when no columns have active filters', () => {
     const columns: FilterableColumn[] = [
       {
@@ -36,7 +36,7 @@ describe('ActiveFilterTagList', () => {
     ];
 
     render(
-      <ActiveFilterTagList filterableColumns={columns} preFilteredRows={[]} />,
+      <TableActiveFilterTagList filterableColumns={columns} preFilteredRows={[]} />,
       buildWrapper([getBaseProviderWrapper()])
     );
 
@@ -75,7 +75,7 @@ describe('ActiveFilterTagList', () => {
     ];
 
     render(
-      <ActiveFilterTagList filterableColumns={columns} preFilteredRows={[]} />,
+      <TableActiveFilterTagList filterableColumns={columns} preFilteredRows={[]} />,
       buildWrapper([getBaseProviderWrapper()])
     );
 
@@ -89,7 +89,7 @@ describe('ActiveFilterTagList', () => {
     const setFilterMock = vi.fn();
 
     render(
-      <ActiveFilterTagList
+      <TableActiveFilterTagList
         filterableColumns={[
           {
             id: 'testCol1',
@@ -114,7 +114,7 @@ describe('ActiveFilterTagList', () => {
     const user = userEvent.setup();
 
     render(
-      <ActiveFilterTagList
+      <TableActiveFilterTagList
         filterableColumns={[
           {
             id: 'testCol1',

@@ -23,7 +23,9 @@ workflow-engine:
     - domain: default
       taskList: trigger_run
     - domain: default
-      taskList: pipeline_run
+      taskList: pipeline_run  # Deprecated: will be removed in a future release. Kept for backward compatibility with currently deployed systems.
+    - domain: default
+      taskList: notification_worker
   client:
     domain: default
 

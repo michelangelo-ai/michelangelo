@@ -5,6 +5,7 @@ A command line interface to interact with the Michelangelo API server via gRPC.
 
 import importlib
 import logging
+import pkgutil
 import re
 import sys
 from argparse import ArgumentParser, Namespace
@@ -117,9 +118,82 @@ def read_module_from_file(
     if plugin_module is None:
         _LOG.error("Failed to create plugin module for %r", spec)
         return
-    spec.loader.exec_module(plugin_module)  # type: ignore[attr-defined]
+    try:
+        spec.loader.exec_module(plugin_module)  # type: ignore[attr-defined]
+    except Exception as e:
+        _LOG.error(
+            "Failed to load plugin %r (skipped): %s", plugin_main, e, exc_info=True
+        )
+        return None
     _LOG.info("Loaded plugin module: %r", plugin_module)
     return plugin_module
+
+
+def read_module_from_package(crd_name: str, package_name: str) -> Union[object, None]:
+    """Read and load a plugin module via the import system, not by file path.
+
+    Looks for ``{package_name}.entity.{crd_name}.main`` and returns it on
+    success.
+
+    Why prefer this over :func:`read_module_from_file`:
+
+    * Works inside PEX / zipimport bundles (no ``Path.exists()`` filesystem
+      check on a synthetic zip path).
+    * The loaded module has a real ``__package__``, so relative imports
+      (``from . import apply``, ``from ...git_validation import X``) work
+      inside the plugin.
+    * Plugins do not have to know their own absolute module name —
+      consumers register the parent package once and discovery walks it.
+    """
+    module_name = f"{package_name}.entity.{crd_name}.main"
+    _LOG.info("Importing plugin module: %r", module_name)
+    try:
+        return importlib.import_module(module_name)
+    except ModuleNotFoundError as e:
+        # The whole point of multi-package discovery is that not every
+        # registered package contains every CRD. Log and move on.
+        _LOG.debug("Plugin module %r not found: %s", module_name, e)
+        return None
+    except Exception as e:
+        _LOG.error(
+            "Failed to import plugin module %r (skipped): %s",
+            module_name,
+            e,
+            exc_info=True,
+        )
+        return None
+
+
+def _iter_entity_names_in_package(package_name: str) -> list[str]:
+    """Yield entity names from ``{package_name}.entity`` via the import system.
+
+    PEX/zipimport-safe: uses :func:`pkgutil.iter_modules` rather than
+    :func:`Path.iterdir`. Returns an empty list if the entity subpackage does
+    not exist or cannot be imported.
+    """
+    entity_pkg_name = f"{package_name}.entity"
+    try:
+        entity_pkg = importlib.import_module(entity_pkg_name)
+    except ModuleNotFoundError:
+        _LOG.debug("Entity subpackage not found: %r", entity_pkg_name)
+        return []
+    except Exception as e:
+        _LOG.error(
+            "Failed to import entity subpackage %r (skipped): %s",
+            entity_pkg_name,
+            e,
+            exc_info=True,
+        )
+        return []
+
+    paths = getattr(entity_pkg, "__path__", None)
+    if not paths:
+        return []
+    return [
+        name
+        for _, name, is_pkg in pkgutil.iter_modules(paths)
+        if is_pkg and not name.startswith("__")
+    ]
 
 
 def read_plugins(crd: CRD, channel: Channel) -> None:
@@ -335,8 +409,14 @@ def apply_module_overrides() -> None:
 def discover_all_plugins() -> dict[str, list[object]]:
     """Discover and import all entity plugins early.
 
-    Scans all plugin directories and imports all entity plugin modules,
-    but does NOT apply them yet (lazy application).
+    Scans both filesystem-based plugin directories (``[plugin.dirs]``) and
+    importable plugin packages (``[plugin.packages]``) and imports all entity
+    plugin modules, but does NOT apply them yet (lazy application).
+
+    Prefer ``[plugin.packages]`` for plugins that ship inside a Python wheel
+    or PEX: the import-based loader gives plugins a real ``__package__`` and
+    works inside zipimport bundles. ``[plugin.dirs]`` remains supported for
+    free-form on-disk plugins.
 
     Returns:
         dict[str, list[object]]: Plugin registry mapping entity names to modules
@@ -349,6 +429,7 @@ def discover_all_plugins() -> dict[str, list[object]]:
 
     registry: dict[str, list[object]] = {}
     plugin_dirs = [str(DEFAULT_DIR_PLUGINS), *_CONFIG.get("plugin", {}).get("dirs", [])]
+    plugin_packages = _CONFIG.get("plugin", {}).get("packages", [])
 
     for plugin_dir_path in plugin_dirs:
         plugin_dir = Path(plugin_dir_path)
@@ -381,6 +462,25 @@ def discover_all_plugins() -> dict[str, list[object]]:
                 registry[entity_name].append(plugin_module)
                 _LOG.info("Registered plugin for entity '%s'", entity_name)
 
+    for package_name in plugin_packages:
+        _LOG.debug("Scanning plugin package: %r", package_name)
+        for entity_name in _iter_entity_names_in_package(package_name):
+            _LOG.debug("Found entity plugin: %s (from %s)", entity_name, package_name)
+            plugin_module = read_module_from_package(entity_name, package_name)
+            if plugin_module is None:
+                _LOG.warning(
+                    "Skipped entity '%s' from package %r — main.py failed to load",
+                    entity_name,
+                    package_name,
+                )
+                continue
+            registry.setdefault(entity_name, []).append(plugin_module)
+            _LOG.info(
+                "Registered plugin for entity '%s' from package %r",
+                entity_name,
+                package_name,
+            )
+
     _LOG.info(
         "Plugin discovery complete. Found plugins for %d entities: %s",
         len(registry),
@@ -411,7 +511,15 @@ def apply_entity_plugins(
     for i, plugin in enumerate(plugins):
         _LOG.debug("Applying entity plugin #%d: %r", i, plugin)
         if hasattr(plugin, "apply_plugins"):
-            plugin.apply_plugins(crd, channel)
+            try:
+                plugin.apply_plugins(crd, channel)
+            except Exception as e:
+                _LOG.error(
+                    "Plugin %r apply_plugins failed (skipped): %s",
+                    plugin,
+                    e,
+                    exc_info=True,
+                )
         else:
             _LOG.debug(
                 "Plugin module %r has no 'apply_plugins' function (skipped)", plugin
@@ -449,7 +557,15 @@ def apply_command_plugins(
     for i, plugin in enumerate(plugins):
         _LOG.debug("Applying command plugin #%d: %r", i, plugin)
         if hasattr(plugin, "apply_plugin_command"):
-            plugin.apply_plugin_command(crd, action, crds, channel)
+            try:
+                plugin.apply_plugin_command(crd, action, crds, channel)
+            except Exception as e:
+                _LOG.error(
+                    "Plugin %r apply_plugin_command failed (skipped): %s",
+                    plugin,
+                    e,
+                    exc_info=True,
+                )
         else:
             _LOG.debug(
                 "Plugin module %r has no 'apply_plugin_command' function (skipped)",

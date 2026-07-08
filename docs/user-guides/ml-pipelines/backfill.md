@@ -84,4 +84,4 @@ ma pipeline dev-run -f pipeline.yaml \
 
 - [Pipeline Running Modes](./pipeline-running-modes.md) — understand when to use dev run vs pipeline run
 - [Pipeline Management](./pipeline-management.md) — register, run, and monitor pipelines
-- [UniFlow Reference](./type-system.md) — type system and workflow primitives
+- [UniFlow Reference](../reference/type-system.md) — type system and workflow primitives

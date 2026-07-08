@@ -49,6 +49,14 @@ _API_SERVICE_ENV_VAR = "MA_API_SERVER_NAME"
 _DEFAULT_MA_API_SERVER_NAME = "ma-apiserver"
 _channel = None
 
+# Standard channel options applied to every gRPC channel created by this SDK.
+# Shared here so client.py and any sink that opens its own channel use the same policy.
+_CHANNEL_OPTIONS = [
+    ("grpc.service_config", json.dumps(_DEFAULT_SERVICE_CONFIG)),
+    ("grpc.max_send_message_length", _MAX_MESSAGE_LENGTH),
+    ("grpc.max_receive_message_length", _MAX_MESSAGE_LENGTH),
+]
+
 
 class HeaderProvider(ABC):
     """HeaderProvider appends or updates gRPC request headers before each gRPC call.

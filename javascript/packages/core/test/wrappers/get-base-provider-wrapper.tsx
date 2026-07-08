@@ -3,7 +3,7 @@
 import { Client as Styletron } from 'styletron-engine-atomic';
 import { Provider as StyletronProvider } from 'styletron-react';
 
-import { ThemeProvider } from '#core/themes/provider';
+import { ThemeProvider } from '#core/themes/theme-provider';
 
 import type { WrapperComponentProps } from './types';
 

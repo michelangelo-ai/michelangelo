@@ -5,10 +5,16 @@ from __future__ import annotations
 import os
 import shutil
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import ray
 import ray.train.lightning
 from ray.train import Checkpoint
+
+if TYPE_CHECKING:
+    from michelangelo.lib.trainer.torch.pytorch_lightning.schema import (
+        TrainingObserver,
+    )
 
 
 class RayTrainReportCallback(ray.train.lightning.RayTrainReportCallback):
@@ -21,9 +27,10 @@ class RayTrainReportCallback(ray.train.lightning.RayTrainReportCallback):
         https://docs.ray.io/en/latest/_modules/ray/train/lightning/_lightning_utils.html#RayTrainReportCallback.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, training_observer: TrainingObserver | None = None) -> None:
         super().__init__()
         self.world_rank = ray.train.get_context().get_world_rank()
+        self._training_observer = training_observer
 
     def on_train_epoch_end(self, trainer, pl_module) -> None:
         # Creates a checkpoint dir with fixed name
@@ -50,6 +57,14 @@ class RayTrainReportCallback(ray.train.lightning.RayTrainReportCallback):
         else:
             ray.train.report(metrics=metrics, checkpoint=None)
 
+        if self._training_observer is not None:
+            self._training_observer.on_checkpoint_saved(
+                epoch=trainer.current_epoch,
+                step=trainer.global_step,
+                metrics=metrics,
+                checkpoint_path=ckpt_path,
+            )
+
         # Add a barrier to ensure all workers finished reporting here
         trainer.strategy.barrier()
 
@@ -67,14 +82,19 @@ class RayTrainReportPerNodeCallback(RayTrainReportCallback):
     in addition to epoch-based checkpointing.
     """
 
-    def __init__(self, step_checkpoint_frequency: int = 0) -> None:
+    def __init__(
+        self,
+        step_checkpoint_frequency: int = 0,
+        training_observer: TrainingObserver | None = None,
+    ) -> None:
         """Initialize the callback.
 
         Args:
             step_checkpoint_frequency: How often to create checkpoints during
                 training steps. Set to 0 to disable step-wise checkpointing.
+            training_observer: Optional observer notified on checkpoint saves.
         """
-        super().__init__()
+        super().__init__(training_observer=training_observer)
         self.step_checkpoint_frequency = step_checkpoint_frequency
         self.last_step_checkpoint = 0
 
@@ -132,6 +152,14 @@ class RayTrainReportPerNodeCallback(RayTrainReportCallback):
             ray.train.report(metrics=metrics, checkpoint=checkpoint)
         else:
             ray.train.report(metrics=metrics, checkpoint=None)
+
+        if self._training_observer is not None:
+            self._training_observer.on_checkpoint_saved(
+                epoch=trainer.current_epoch,
+                step=trainer.global_step,
+                metrics=metrics,
+                checkpoint_path=ckpt_path,
+            )
 
         # Ensure all workers finished reporting and cleanup
         trainer.strategy.barrier()

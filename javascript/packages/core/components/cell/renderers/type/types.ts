@@ -1,6 +1,6 @@
 import type { SharedCell } from '#core/components/cell/types';
 
-export type TypeCellConfig = SharedCell<string> & {
+export type TypeCellConfig<TRecord = unknown> = SharedCell<TRecord, string> & {
   /**
    * @description A map of type values to their display text
    */

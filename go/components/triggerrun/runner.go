@@ -79,6 +79,11 @@ type Runner interface {
 	// and updates the workflow engine if they differ. For recurring triggers (cron/interval),
 	// this updates the schedule. For one-time triggers (backfill/batch rerun), this is a no-op.
 	//
-	// Returns current TriggerRunStatus. Does not change the state.
-	Update(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error)
+	// The action parameter allows folding pause/resume into the same atomic update as a cron
+	// change, avoiding race conditions between separate Update and Pause/Unpause API calls.
+	// When action is PAUSE or RESUME and there is a cron drift, both are applied atomically.
+	// Returns true in the second return value if the action was handled atomically.
+	//
+	// Returns current TriggerRunStatus. Does not change the state unless action was applied.
+	Update(ctx context.Context, triggerRun *v2pb.TriggerRun, action v2pb.TriggerRunAction) (v2pb.TriggerRunStatus, bool, error)
 }

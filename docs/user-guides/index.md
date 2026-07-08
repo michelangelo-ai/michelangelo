@@ -1,89 +1,55 @@
 # Michelangelo User Guides
 
-This guide provides you step by step how to build, train, and deploy machine learning models at scale using Michelangelo's unified ML platform.
+Build, train, and deploy machine learning models at scale using Michelangelo's unified ML platform.
 
-## **Getting Started: Your First ML Workflow**
+## Getting Started
 
-New to Michelangelo? Follow this step-by-step path to build your first end-to-end ML pipeline:
+New to Michelangelo? Follow this path:
 
-### **1. Understand ML Pipelines (Start Here)**
-Before diving into specific tasks, understand how Michelangelo orchestrates ML workflows:
-* [**ML Pipelines Overview**](./ml-pipelines/index.md) - Learn about tasks, workflows, and pipelines
-* [**Getting Started with Pipelines**](./ml-pipelines/getting-started.md) - Build your first pipeline in 30 minutes
-
-### **2. Prepare Your Data**
-Get your data ready for training:
-* [**Prepare Your Data**](./prepare-your-data.md) - Load, clean, and split datasets using Ray and Spark
-
-### **3. Train Your Model**
-Develop and train your ML model:
-* [**Train and Register a Model**](./train-and-register-a-model.md) - Train locally or at scale with distributed computing
-
-### **4. Manage Your Models**
-Version and organize trained models:
-* [**Model Registry Guide**](./model-registry-guide.md) - Version, track, and manage trained models
-
-### **5. Deploy Your Model**
-Serve predictions in production:
-* [**Deploy a Model**](./deploy-a-model.md) - Bind a registered model to an inference server and validate predictions
+1. **[Getting Started with Pipelines](./getting-started/getting-started.md)** — Build your first pipeline in 30 minutes
+2. **[Prepare Your Data](./getting-started/prepare-your-data.md)** — Load, clean, and split datasets using Ray and Spark
+3. **[Train & Deploy Models](./train-and-deploy-models/train-and-register-a-model.md)** — Train locally or at scale, then register and serve
 
 ---
 
-## **Quick Navigation**
+## Quick Navigation
 
-### **Core Concepts**
+### ML Pipelines
 
-| Concept | Learn About It |
-| ----- | ----- |
-| **How to build a pipeline** | [ML Pipelines Overview](./ml-pipelines/index.md) |
-| **When to use each execution mode** | [Pipeline Running Modes](./ml-pipelines/pipeline-running-modes.md) |
-| **How caching and resumability work** | [Caching and Resume](./ml-pipelines/cache-and-pipelinerun-resume-form.md) |
-| **How to iterate rapidly** | [File Sync Testing](./ml-pipelines/file-sync-testing-flow-runbook.md) |
+| Guide | Description |
+|-------|-------------|
+| [ML Pipelines Overview](./ml-pipelines/index.md) | Tasks, workflows, pipelines, and the Uniflow framework |
+| [Running Uniflow Pipelines](./ml-pipelines/running-uniflow.md) | Run pipelines locally and remotely |
+| [Pipeline Running Modes](./ml-pipelines/pipeline-running-modes.md) | Local Run, Remote Run, Pipeline Dev Run, and Pipeline Run |
+| [Project Management](./getting-started/project-management-for-ml-pipelines.md) | Organize pipelines, models, and resources into projects |
+| [Pipeline Management](./ml-pipelines/pipeline-management.md) | Create, update, and manage pipelines |
+| [Set Up Triggers](./ml-pipelines/set-up-triggers.md) | Schedule pipelines on a cron schedule |
+| [Backfill Pipelines](./ml-pipelines/backfill.md) | Reprocess historical data windows |
+| [Pipeline Notifications](./ml-pipelines/notifications.md) | Email and Slack alerts on pipeline run outcomes |
 
-### **Specific Tasks**
+### Train & Deploy Models
 
-* [Prepare your data](./prepare-your-data.md)
-* [Train a model](./train-and-register-a-model.md)
-* [Manage your models](./model-registry-guide.md)
-* [Deploy a model](./deploy-a-model.md)
+| Guide | Description |
+|-------|-------------|
+| [Train and Register a Model](./train-and-deploy-models/train-and-register-a-model.md) | Train at scale and register artifacts |
+| [Model Registry Guide](./train-and-deploy-models/model-registry-guide.md) | Version, track, and manage trained models |
+| [Deploy a Model](./train-and-deploy-models/deploy-a-model.md) | Bind a registered model to an inference server |
 
-### **Advanced Topics**
+### Reference
 
-* [Set Up Pipeline Triggers](./set-up-triggers.md) - Schedule pipelines to run automatically
-* [Pipeline Notifications](./notifications.md) - Get email and Slack alerts on pipeline run outcomes
-* [CLI Reference](./cli.md) - Command-line tools for pipeline and project management
-* [Project Management](./project-management-for-ml-pipelines.md) - Create and manage MA Studio projects
-
----
-
-## **Learning by Examples**
-
-Choose a tutorial based on your ML domain:
-
-### **Traditional Machine Learning**
-
-| Example | Description | Techniques |
-| ----- | ----- | ----- |
-| [**Boston Housing Regression**](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/boston_housing_xgb) | Predict house prices using tabular data with XGBoost | Feature engineering, distributed training |
-
-### **Natural Language Processing**
-
-| Example | Description | Techniques |
-| ----- | ----- | ----- |
-| [**BERT Text Classification**](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/bert_cola) | Classify text using pre-trained transformer models | Fine-tuning, distributed GPU training |
-| [**GPT Fine-tuning**](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/gpt_oss_20b_finetune) | Train large language models with LoRA adapters | Memory optimization, multi-GPU scaling |
-
-### **Recommendation Systems**
-
-| Example | Description | Techniques |
-| ----- | ----- | ----- |
-| [**Amazon Books Recommendation**](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/amazon_books_qwen) | Build dual-encoder recommendation system | Embedding learning, similarity search |
+| Guide | Description |
+|-------|-------------|
+| [Type System](./reference/type-system.md) | Uniflow data types and serialization |
+| [Data Passing and References](./reference/reference-system.md) | How data flows between pipeline tasks |
+| [CLI Reference](./reference/cli.md) | Command-line tools for pipeline and project management |
 
 ---
 
-## What's next?
+## Examples
 
-- **New to ML Pipelines?** Start with the [ML Pipelines Overview](./ml-pipelines/index.md), then follow [Getting Started with Pipelines](./ml-pipelines/getting-started.md)
-- **Have your pipeline running?** Learn about [Pipeline Running Modes](./ml-pipelines/pipeline-running-modes.md) and [Caching and Resume](./ml-pipelines/cache-and-pipelinerun-resume-form.md)
-- **Ready for production?** Set up [Pipeline Triggers](./set-up-triggers.md) for automated scheduling
-- **Ready to serve predictions?** Deploy your registered model — see [Deploy a Model](./deploy-a-model.md)
+| Example | Description |
+|---------|-------------|
+| [California Housing Regression](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/pipelines/california_housing_xgb) | Predict house prices with XGBoost |
+| [BERT Text Classification](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/bert_cola) | Classify text with pre-trained transformers |
+| [GPT Fine-tuning](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/gpt_oss_20b_finetune) | Fine-tune large language models with LoRA |
+| [Amazon Books Recommendation](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/amazon_books_qwen) | Dual-encoder recommendation system |

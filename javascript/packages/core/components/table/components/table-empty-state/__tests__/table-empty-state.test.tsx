@@ -39,7 +39,7 @@ describe('TableEmptyState', () => {
     render(<TableEmptyState emptyState={emptyState} />);
 
     expect(screen.getByRole('heading', { name: 'Empty table' })).toBeInTheDocument();
-    expect(screen.getByTestId('empty-icon')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Circle Exclamation Mark icon' })).toBeInTheDocument();
   });
 
   it('should render with all props provided', () => {
@@ -57,6 +57,6 @@ describe('TableEmptyState', () => {
 
     expect(screen.getByRole('heading', { name: 'No data' })).toBeInTheDocument();
     expect(screen.getByText('No data is present.')).toBeInTheDocument();
-    expect(screen.getByTestId('complete-icon')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Circle Exclamation Mark icon' })).toBeInTheDocument();
   });
 });

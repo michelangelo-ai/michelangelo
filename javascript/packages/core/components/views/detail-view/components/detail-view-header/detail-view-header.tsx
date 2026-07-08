@@ -15,6 +15,7 @@ import type { DetailViewHeaderProps } from './types';
 export function DetailViewHeader({
   subtitle,
   title,
+  titleEnhancer,
   onGoBack,
   children,
   actions,
@@ -35,7 +36,7 @@ export function DetailViewHeader({
           display: 'flex',
           gap: theme.sizing.scale800,
           justifyContent: 'flex-start',
-          alignItems: 'center',
+          alignItems: 'flex-end',
         })}
       >
         <h5 className={css({ margin: 0, maxWidth: '50%' })}>
@@ -80,6 +81,7 @@ export function DetailViewHeader({
             </div>
           </div>
         </h5>
+        {titleEnhancer}
         {resolvedActions && (
           <div className={css({ marginLeft: 'auto', flexShrink: 0 })}>
             <ActionsButtons actions={resolvedActions} record={record ?? {}} loading={loading} />

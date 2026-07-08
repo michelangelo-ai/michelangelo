@@ -33,7 +33,7 @@ export function TableFilterOptionList<T extends TableData = TableData>({
       >
         Select column to filter
       </div>
-      <ListContainer>
+      <ListContainer role="listbox">
         {filterableColumns.map((column) => (
           <TableFilterOption
             key={column.id}

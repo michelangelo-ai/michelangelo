@@ -1,4 +1,4 @@
-import { ActiveFilterTagList } from './components/table-active-filter-tag-list/table-active-filter-tag-list';
+import { TableActiveFilterTagList } from './components/table-active-filter-tag-list/table-active-filter-tag-list';
 import { TableFilterMenu } from './components/table-filter-menu/table-filter-menu';
 import { TableSearchInput } from './components/table-search-input/table-search-input';
 import { ActionsContainer, Container, TrailingContentContainer } from './styled-components';
@@ -38,7 +38,7 @@ export function TableActionBar<T>({
       </ActionsContainer>
 
       {configuration.enableFilters && filterableColumns.length > 0 && (
-        <ActiveFilterTagList
+        <TableActiveFilterTagList
           filterableColumns={filterableColumns}
           preFilteredRows={preFilteredRows}
         />

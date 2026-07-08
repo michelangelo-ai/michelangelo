@@ -3371,6 +3371,8 @@ spec:
                                 x-kubernetes-preserve-unknown-fields: true
                             type: object
                           type: object
+                        proxyUser:
+                          type: string
                       type: object
                     type: object
                   type:
@@ -3404,6 +3406,8 @@ spec:
                         - EVENT_TYPE_TRIGGER_RUN_STATE_SUCCEEDED
                         - EVENT_TYPE_PIPELINE_STATE_READY
                         - EVENT_TYPE_PIPELINE_STATE_ERROR
+                        - EVENT_TYPE_PIPELINE_RUN_STATE_RUNNING
+                        - EVENT_TYPE_PIPELINE_RUN_STATE_STARTED
                         type: string
                       type: array
                     notificationType:

@@ -8,6 +8,21 @@ title: Welcome
 
 Michelangelo is an end-to-end ML platform for building, deploying, and managing machine learning models. Born at Uber — where it powers **25,000+ model trainings per month** and **~30 million predictions per second** — now open source.
 
+## Why Michelangelo
+
+Most ML teams spend more engineering time on infrastructure than on models. Training pipelines break in production. Feature logic gets duplicated across teams. Serving containers are hand-rolled for each project. Stitching together a training framework, an experiment tracker, an orchestrator, and a custom serving layer works until it doesn't — and when it breaks, it's your problem to fix.
+
+Michelangelo exists so you don't have to build that stack from scratch. It covers the full ML lifecycle — data preparation, training, evaluation, deployment, and monitoring — in a single system that has been running in production at Uber's scale for eight years. A complete platform, battle-tested across thousands of models, now available for any team to adopt.
+
+**Michelangelo is worth considering if:**
+- Your ML team is spending more time on infrastructure than on models
+- You're managing a patchwork of tools with brittle integrations between them
+- You want a platform that handles classic ML, deep learning, and generative AI workflows without switching systems
+- You're building or inheriting an ML platform and want a proven foundation rather than starting from scratch
+- You want to contribute to — or build on — an open-source ML platform with real production history behind it
+
+The platform is modular: adopt the full stack or integrate individual components (feature store, model registry, serving) into your existing infrastructure. It's designed to be extended, not to lock you in.
+
 ## Get started
 
 ### I'm evaluating Michelangelo
@@ -16,14 +31,15 @@ Understand what the platform does, how it compares to your current stack, and wh
 
 - **[Overview](./getting-started/overview.md)** — What Michelangelo is, how it works, and how familiar tools map to it
 - **[Core Concepts](./getting-started/core-concepts-and-key-terms.md)** — Projects, workflows, tasks, and the key terms you'll encounter
+- **[Roadmap](./getting-started/roadmap.md)** — Release milestones, what's available now, and what's planned
 
 ### I want to build my first pipeline
 
 Get a local environment running and build an end-to-end ML pipeline.
 
 - **[Sandbox Setup](./getting-started/sandbox-setup.md)** — Set up a local Michelangelo cluster (~20 min)
-- **[Getting Started with Pipelines](./user-guides/ml-pipelines/getting-started.md)** — Build your first pipeline from scratch (~30 min)
-- **[Example Projects](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples)** — Boston Housing, BERT text classification, GPT fine-tuning, and more
+- **[Getting Started with Pipelines](./user-guides/getting-started/getting-started.md)** — Build your first pipeline from scratch (~30 min)
+- **[Example Projects](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples)** — California Housing, BERT text classification, GPT fine-tuning, and more
 
 ### I'm deploying or operating the platform
 
@@ -57,5 +73,13 @@ Understanding scope helps you decide if Michelangelo is the right tool.
 ## Quick links
 
 - [GitHub Repository](https://github.com/michelangelo-ai/michelangelo)
-- [CLI Reference](./user-guides/cli.md)
+- [CLI Reference](./user-guides/reference/cli.md)
 - [ML Pipelines Overview](./user-guides/ml-pipelines/index.md)
+
+## Support & Community
+
+Connect with the Michelangelo core team and developer community through our dedicated channels:
+
+- **[GitHub Discussions](https://github.com/michelangelo-ai/michelangelo/discussions):** Our primary channel for general Q&A, troubleshooting, technical support, and sharing ideas.
+- **[Slack Workspace](https://michelangelo-ai.slack.com/):** For real-time chat, networking, and focused conversations with other developers in the ecosystem.
+- **[Email](mailto:michelangelo-oss@uber.com):** For private, sensitive, or 1-on-1 inquiries that cannot be discussed publicly (for example, security disclosures or enterprise partnerships).

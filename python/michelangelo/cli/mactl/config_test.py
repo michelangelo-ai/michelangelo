@@ -95,6 +95,51 @@ class ApplyEnvOverridesTest(TestCase):
         self.assertEqual(result["address"], "env-address:9999")
 
     @patch("michelangelo.cli.mactl.config.getenv")
+    def test_apply_env_overrides_mactl_rpc_service(self, mock_getenv):
+        """Test env override for MACTL_RPC_SERVICE."""
+
+        def getenv_side_effect(key, default=None):
+            if key == "MACTL_RPC_SERVICE":
+                return "michelangelo-apiserver-staging"
+            return None
+
+        mock_getenv.side_effect = getenv_side_effect
+
+        config = {
+            "address": "default",
+            "metadata": {"rpc-service": "ma-apiserver"},
+        }
+        result = _apply_env_overrides(config)
+
+        self.assertEqual(
+            result["metadata"]["rpc-service"], "michelangelo-apiserver-staging"
+        )
+
+    @patch("michelangelo.cli.mactl.config.getenv")
+    def test_apply_env_overrides_mactl_address_and_rpc_service(self, mock_getenv):
+        """MACTL_ADDRESS and MACTL_RPC_SERVICE apply independently."""
+
+        def getenv_side_effect(key, default=None):
+            env_map = {
+                "MACTL_ADDRESS": "env-address:9999",
+                "MACTL_RPC_SERVICE": "michelangelo-apiserver-dev-3",
+            }
+            return env_map.get(key)
+
+        mock_getenv.side_effect = getenv_side_effect
+
+        config = {
+            "address": "default",
+            "metadata": {"rpc-service": "ma-apiserver"},
+        }
+        result = _apply_env_overrides(config)
+
+        self.assertEqual(result["address"], "env-address:9999")
+        self.assertEqual(
+            result["metadata"]["rpc-service"], "michelangelo-apiserver-dev-3"
+        )
+
+    @patch("michelangelo.cli.mactl.config.getenv")
     def test_apply_env_overrides_mactl_use_tls(self, mock_getenv):
         """Test env override for MACTL_USE_TLS."""
 

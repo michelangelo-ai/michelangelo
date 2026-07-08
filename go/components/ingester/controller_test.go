@@ -19,6 +19,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 // MockMetadataStorage is a mock implementation of storage.MetadataStorage
@@ -645,4 +646,114 @@ func TestHandleDeletionAnnotation_CorrectTypeMeta(t *testing.T) {
 	require.NotNil(t, capturedTypeMeta)
 	assert.Equal(t, "Model", capturedTypeMeta.Kind, "Kind must come from scheme, not empty GetObjectKind()")
 	assert.NotEmpty(t, capturedTypeMeta.APIVersion, "APIVersion must come from scheme")
+}
+
+// TestDeleteOptionsFromAnnotations verifies the annotation -> []client.DeleteOption
+// mapping that threads the caller's delete propagation policy through to the real K8s
+// delete. Asserting DeleteOptions through the fake client is awkward, so the mapping is
+// unit-tested directly by applying the returned options onto a client.DeleteOptions.
+func TestDeleteOptionsFromAnnotations(t *testing.T) {
+	foreground := metav1.DeletePropagationForeground
+
+	tests := []struct {
+		name        string
+		annotations map[string]string
+		wantPolicy  *metav1.DeletionPropagation
+	}{
+		{
+			name:        "nil annotations",
+			annotations: nil,
+			wantPolicy:  nil,
+		},
+		{
+			name:        "no propagation annotation",
+			annotations: map[string]string{api.DeletingAnnotation: "true"},
+			wantPolicy:  nil,
+		},
+		{
+			name:        "empty propagation annotation",
+			annotations: map[string]string{api.DeletePropagationAnnotation: ""},
+			wantPolicy:  nil,
+		},
+		{
+			name:        "foreground propagation",
+			annotations: map[string]string{api.DeletePropagationAnnotation: string(foreground)},
+			wantPolicy:  &foreground,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			obj := &v2.Model{ObjectMeta: metav1.ObjectMeta{Annotations: tc.annotations}}
+			opts := deleteOptionsFromAnnotations(obj)
+
+			applied := (&client.DeleteOptions{}).ApplyOptions(opts)
+			if tc.wantPolicy == nil {
+				assert.Empty(t, opts)
+				assert.Nil(t, applied.PropagationPolicy)
+				return
+			}
+			require.Len(t, opts, 1)
+			require.NotNil(t, applied.PropagationPolicy)
+			assert.Equal(t, *tc.wantPolicy, *applied.PropagationPolicy)
+		})
+	}
+}
+
+// TestReconciler_HandleDeletionAnnotation_HonorsPropagationPolicy verifies the end-to-end
+// path: an object carrying michelangelo/Deleting=true plus michelangelo/DeletePropagation=
+// Foreground causes the ingester to issue the real K8s delete with Foreground propagation.
+// A client interceptor captures the DeleteOptions actually passed to the fake client.
+func TestReconciler_HandleDeletionAnnotation_HonorsPropagationPolicy(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = v2.AddToScheme(scheme)
+
+	model := &v2.Model{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-model",
+			Namespace: "default",
+			UID:       types.UID("test-uid"),
+			Annotations: map[string]string{
+				api.DeletingAnnotation:          "true",
+				api.DeletePropagationAnnotation: string(metav1.DeletePropagationForeground),
+			},
+			Finalizers: []string{api.IngesterFinalizer},
+		},
+	}
+
+	var capturedOpts *client.DeleteOptions
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(model).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+				capturedOpts = (&client.DeleteOptions{}).ApplyOptions(opts)
+				return c.Delete(ctx, obj, opts...)
+			},
+		}).
+		Build()
+
+	mockStorage := new(MockMetadataStorage)
+	mockStorage.On("Delete", mock.Anything, mock.Anything, "default", "test-model").Return(nil)
+
+	reconciler := NewReconciler(
+		fakeClient,
+		logr.Discard(),
+		scheme,
+		&v2.Model{},
+		mockStorage,
+		WithConfig(Config{ConcurrentReconciles: 1, RequeuePeriod: 30 * time.Second}),
+	)
+
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: "test-model", Namespace: "default"},
+	})
+	require.NoError(t, err)
+
+	// The real K8s delete must have been issued with the caller's Foreground policy.
+	require.NotNil(t, capturedOpts, "Delete should have been issued")
+	require.NotNil(t, capturedOpts.PropagationPolicy, "PropagationPolicy must be threaded from the annotation")
+	assert.Equal(t, metav1.DeletePropagationForeground, *capturedOpts.PropagationPolicy)
+
+	mockStorage.AssertCalled(t, "Delete", mock.Anything, mock.Anything, "default", "test-model")
 }

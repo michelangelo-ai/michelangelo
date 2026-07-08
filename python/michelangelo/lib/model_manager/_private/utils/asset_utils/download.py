@@ -16,8 +16,7 @@ def download_assets(
     Args:
         src: The path of the source
         des: The destination path to store the assets.
-        source_type: The source type of the source path,
-            either 'hdfs', 'terrablob' or 'local'
+        source_type: The source type of the source path, 'local'
     """
     if source_type == StorageType.LOCAL and src != des:
         if os.path.isdir(src):

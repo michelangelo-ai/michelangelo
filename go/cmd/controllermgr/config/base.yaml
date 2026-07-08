@@ -23,8 +23,20 @@ ingester:
   concurrentReconciles: 1
   requeuePeriod: 30s
 
+pipeline:
+  revisioningEnabled: false
+
 pipelineRun:
   # ttlDays: 0  # 0 disables TTL eviction; set e.g. 30 to evict runs older than 30 days
+
+# Notification configuration for PipelineRun state-change workflows.
+# To use a custom worker task list, change taskList here and in helm values.yaml,
+# and register the notification workflow/activities on that task list in your
+# cmd/worker/main.go. Set taskList to "" to disable notifications entirely.
+notification:
+  taskList: notification_worker
+  studioBaseURL: ${NOTIFICATION_STUDIO_BASE_URL:""}
+  senderEmail: ${NOTIFICATION_SENDER_EMAIL:""}
 
 controllers:
   rayCluster:

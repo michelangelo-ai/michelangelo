@@ -36,6 +36,8 @@ images:
   pullPolicy: IfNotPresent
 
 apiserver:
+  metadataStorage:
+    enable: true
   service:
     type: NodePort
     nodePort: 30009
@@ -62,6 +64,8 @@ affinity: {}
 # (minio:9091) and the chart-managed object-storage-credentials Secret.
 # The collector image is pulled from GHCR automatically (no local build needed).
 controllermgr:
+  metadataStorage:
+    enable: true
   jobs:
     k8sengine:
       mapper:
@@ -94,9 +98,8 @@ securityContext:
 # (mysql:3306, root/root). The cadence and cadence_visibility databases are
 # auto-created by the schema-server Job.
 #
-# The frontend Service stays ClusterIP (upstream chart hardcodes it).
-# In-cluster consumers use michelangelo-cadence-frontend:7833.
-# Host access for the cadence CLI uses kubectl port-forward in sandbox.py.
+# The Cadence frontend Service stays ClusterIP (upstream chart hardcodes it).
+# Host access for the cadence CLI works via k3d port mapping to NodePort.
 # -----------------------------------------------------------------------------
 cadence:
   enabled: true
@@ -121,6 +124,8 @@ cadence:
     enabled: false
   postgresql:
     enabled: false
+  kafka:
+    enabled: false
 
   # Cadence Web UI exposed via NodePort 30004 → host port 8088.
   web:
@@ -128,6 +133,40 @@ cadence:
     service:
       type: NodePort
       nodePort: 30004
+
+  # Dynamic config overrides.
+  #
+  # The upstream Cadence helm subchart ships a minimal dynamicconfig that only
+  # sets retention + visibility store. It does NOT enable strongly-consistent
+  # queries, which Cadence's default is "off".
+  #
+  # The michelangelo controller hardcodes QueryConsistencyLevelStrong when
+  # querying the `task_progress` workflow handler on every reconcile loop
+  # (cadenceclient.go). Without this flag, every query fails with:
+  #   BadRequestError: cluster or domain does not enable strongly consistent
+  #   query but strongly consistent query was requested
+  # This leaves PipelineRun.status.steps[].subSteps[].activityId always empty,
+  # so the Retry button never appears even for terminated runs.
+  #
+  # The previous (pre-2026-05-13) sandbox used ubercadence/server:auto-setup,
+  # whose bundled development.yaml enables this by default. The helm migration
+  # silently dropped it.
+  #
+  # Key names must be exact: history.EnableConsistentQuery (capital E, history.
+  # prefix). Wrong prefix (system.) or wrong case are silently ignored.
+  dynamicConfig:
+    values:
+      system.minRetentionDays:
+        - value: 0
+          constraints: {}
+      system.writeVisibilityStoreName:
+        - value: "db"
+      system.readVisibilityStoreName:
+        - value: "db"
+      history.EnableConsistentQuery:
+        - value: true
+      history.EnableConsistentQueryByDomain:
+        - value: true
 
 # -----------------------------------------------------------------------------
 # Temporal subchart — bundled workflow engine for --workflow temporal.

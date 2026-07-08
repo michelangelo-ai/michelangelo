@@ -15,7 +15,7 @@ export function buildTaskScrollId<TTaskRecord extends object>(task: Task<TTaskRe
  * @param task - The task to scroll to
  * @param options - Configuration for scroll behavior
  */
-export function scrollToTask<TTaskRecord extends object>(task: Task<TTaskRecord>): void {
+export function handleScrollToTask<TTaskRecord extends object>(task: Task<TTaskRecord>): void {
   const element = document.getElementById(buildTaskScrollId(task));
 
   if (!element) {

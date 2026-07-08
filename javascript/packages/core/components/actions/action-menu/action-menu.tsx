@@ -1,20 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { StatefulMenu } from 'baseui/menu';
 
 import { ActionMenuItem } from './action-menu-item';
 
 import type { Theme } from 'baseui';
-import type {
-  ActionConfig,
-  ComponentActionConfig,
-  Data,
-  SelectedAction,
-} from '#core/components/actions/types';
+import type { ResolvedActionItem } from '#core/components/actions/types';
 
 type ActionMenuProps = {
-  actions: ActionConfig[];
-  record: Data;
-  onSelectAction: (action: SelectedAction) => void;
+  actions: ResolvedActionItem[];
+  onSelectAction: (action: ResolvedActionItem) => void;
   onClose?: () => void;
 };
 
@@ -32,20 +26,9 @@ type ActionMenuProps = {
  *   the auto-highlight on focus. Set to `true` on any keydown inside the
  *   menu, reset to `false` on mouse enter.
  */
-export function ActionMenu(props: ActionMenuProps) {
+export function ActionMenu({ actions, onSelectAction, onClose }: ActionMenuProps) {
   const [hoveredItem, setHoveredItem] = useState<object | null>(null);
   const [keyboardActive, setKeyboardActive] = useState(false);
-
-  // ActionConfig.disabled is a rule array; StatefulMenu expects a boolean item.disabled.
-  // Pre-compute here and carry the message forward for ActionMenuItem's tooltip.
-  const items = useMemo(
-    () =>
-      props.actions.map((action) => {
-        const disabledRule = action.disabled?.find((rule) => rule.condition);
-        return { ...action, disabled: !!disabledRule, disabledMessage: disabledRule?.message };
-      }),
-    [props.actions]
-  );
 
   return (
     // Wrapper div: onKeyDown fires via bubbling AFTER StatefulMenu's arrow-key
@@ -58,17 +41,16 @@ export function ActionMenu(props: ActionMenuProps) {
       }}
     >
       <StatefulMenu
-        items={items}
-        onItemSelect={({ item: action }: { item: ComponentActionConfig }) => {
-          props.onSelectAction({ component: action.component, record: props.record });
+        items={actions}
+        onItemSelect={({ item }: { item: ResolvedActionItem }) => {
+          if (!item.disabled) onSelectAction(item);
         }}
         overrides={{
           Option: {
             component: ActionMenuItem,
             props: {
-              record: props.record,
-              onSelectAction: props.onSelectAction,
-              onClose: props.onClose,
+              onSelectAction,
+              onClose,
               hoveredItem,
               setHoveredItem,
               keyboardActive,

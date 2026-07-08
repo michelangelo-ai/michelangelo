@@ -1,12 +1,13 @@
 import { AppNavBar } from 'baseui/app-nav-bar';
 import { LayersManager } from 'baseui/layer';
+import { SnackbarProvider } from 'baseui/snackbar';
 
 import { Link } from '#core/components/link/link';
 import { ErrorProvider } from '#core/providers/error-provider/error-provider';
 import { IconProvider } from '#core/providers/icon-provider/icon-provider';
 import { ServiceProvider } from '#core/providers/service-provider/service-provider';
 import { Router } from '#core/router/router';
-import { ThemeProvider } from '#core/themes/provider';
+import { ThemeProvider } from '#core/themes/theme-provider';
 
 import type { ErrorContextValue } from '#core/providers/error-provider/types';
 import type { IconProviderContext } from '#core/providers/icon-provider/types';
@@ -27,23 +28,25 @@ export function CoreApp({ dependencies }: Props) {
   return (
     <ThemeProvider icons={dependencies.theme.icons}>
       <LayersManager zIndex={200}>
-        <ServiceProvider {...dependencies.service}>
-          <ErrorProvider {...dependencies.error}>
-            <IconProvider icons={dependencies.theme.icons}>
-              <AppNavBar
-                title={
-                  <Link
-                    href="/"
-                    overrides={{ Link: { style: { ':hover': { textDecoration: 'unset' } } } }}
-                  >
-                    Michelangelo Studio
-                  </Link>
-                }
-              />
-              <Router />
-            </IconProvider>
-          </ErrorProvider>
-        </ServiceProvider>
+        <SnackbarProvider>
+          <ServiceProvider {...dependencies.service}>
+            <ErrorProvider {...dependencies.error}>
+              <IconProvider icons={dependencies.theme.icons}>
+                <AppNavBar
+                  title={
+                    <Link
+                      href="/"
+                      overrides={{ Link: { style: { ':hover': { textDecoration: 'unset' } } } }}
+                    >
+                      Michelangelo Studio
+                    </Link>
+                  }
+                />
+                <Router />
+              </IconProvider>
+            </ErrorProvider>
+          </ServiceProvider>
+        </SnackbarProvider>
       </LayersManager>
     </ThemeProvider>
   );
@@ -53,7 +56,7 @@ export { useStudioQuery } from '#core/hooks/use-studio-query';
 export { ServiceProvider } from '#core/providers/service-provider/service-provider';
 
 export { useCellToString } from '#core/components/cell/use-cell-to-string';
-export { cellTooltipHOC } from '#core/components/cell/components/tooltip/cell-tooltip-hoc';
+export { cellTooltipHoc } from '#core/components/cell/components/tooltip/cell-tooltip-hoc';
 export { DefaultCellRenderer } from '#core/components/cell/renderers/default-cell-renderer';
 export { useGetCellRenderer } from '#core/components/cell/use-get-cell-renderer';
 export * from '#core/components/cell/types';
@@ -98,7 +101,7 @@ export { UserProvider } from '#core/providers/user-provider/user-provider';
 
 export { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 export * from '#core/hooks/routing/use-studio-params/types';
-export { useURLQueryString } from '#core/hooks/routing/use-url-query-string';
+export { useUrlQueryString } from '#core/hooks/routing/use-url-query-string';
 
 export * from '#core/utils/object-utils';
 export * from '#core/utils/string-utils';
@@ -196,6 +199,9 @@ export { FormBanner } from '#core/components/form/layout/form-banner/form-banner
 export { FormStep } from '#core/components/form/layout/form-step/form-step';
 export { ArrayFormRow } from '#core/components/form/layout/array-form-row/array-form-row';
 export { ArrayFormGroup } from '#core/components/form/layout/array-form-group/array-form-group';
+
+// Actions
+export * from '#core/components/actions/types';
 
 // Detail View
 export { DetailView } from '#core/components/views/detail-view/detail-view';

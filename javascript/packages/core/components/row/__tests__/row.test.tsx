@@ -14,6 +14,7 @@ describe('Row', () => {
         loading={true}
       />
     );
+    // eslint-disable-next-line testing-library/no-test-id-queries -- Skeleton has no accessible role
     const skeletons = screen.getAllByTestId('loading');
     expect(skeletons).toHaveLength(3);
   });
@@ -64,6 +65,7 @@ describe('Row', () => {
     };
 
     render(<Row items={[{ id: 'name', label: 'Name' }]} overrides={overrides} />);
+    // eslint-disable-next-line testing-library/no-test-id-queries -- generic div, no accessible identity
     expect(screen.getByTestId('custom-container')).toBeInTheDocument();
   });
 

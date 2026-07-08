@@ -13,6 +13,7 @@ export function DetailView({
   actions,
   record,
   loading,
+  titleEnhancer,
 }: DetailViewProps) {
   const [css, theme] = useStyletron();
 
@@ -21,6 +22,7 @@ export function DetailView({
       <DetailViewHeader
         title={title}
         subtitle={subtitle}
+        titleEnhancer={titleEnhancer}
         onGoBack={onGoBack}
         actions={actions}
         record={record}

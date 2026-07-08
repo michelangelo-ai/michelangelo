@@ -9,7 +9,7 @@ export default defineConfig({
       TZ: 'UTC',
     },
     coverage: {
-      exclude: ['packages/core/components/views/sandbox/**'],
+      exclude: ['packages/core/components/views/sandbox/**', 'packages/rpc/gen/**'],
     },
     projects: [
       {

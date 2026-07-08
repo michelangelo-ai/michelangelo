@@ -34,7 +34,7 @@ export const BooleanField: React.FC<BooleanFieldProps> = ({
     parse,
   });
 
-  const handleChange = (event: React.FormEvent<HTMLInputElement>) => {
+  const handleCheckedChange = (event: React.FormEvent<HTMLInputElement>) => {
     input.onChange(event.currentTarget.checked);
   };
 
@@ -51,7 +51,7 @@ export const BooleanField: React.FC<BooleanFieldProps> = ({
     >
       <Checkbox
         checked={input.value ?? false}
-        onChange={readOnly ? undefined : handleChange}
+        onChange={readOnly ? undefined : handleCheckedChange}
         onBlur={input.onBlur}
         onFocus={input.onFocus}
         disabled={disabled}

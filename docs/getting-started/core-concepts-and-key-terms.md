@@ -261,7 +261,7 @@ def process_data(dataset_ref: Ref) -> Ref:
     return processed_ref
 ```
 
-See [Data Type Examples](../user-guides/ml-pipelines/type-system.md#appendix-uniflow-data-type-examples) for detailed examples of each type.
+See [Data Type Examples](../user-guides/reference/type-system.md#appendix-uniflow-data-type-examples) for detailed examples of each type.
 
 ---
 
@@ -401,6 +401,6 @@ def training_pipeline(dataset_id: str):
 
 ## What's next?
 
-- **Ready to start building?** [Set up your local sandbox](./sandbox-setup.md) and then follow [Getting Started with Pipelines](../user-guides/ml-pipelines/getting-started.md)
-- **Want to see complete examples?** Browse [end-to-end tutorials](../user-guides/index.md#learning-by-examples) for XGBoost, BERT, GPT fine-tuning, and recommendation systems
-- **Interested in the CLI?** See the [CLI Reference](../user-guides/cli.md) for pipeline and project management commands
+- **Ready to start building?** [Set up your local sandbox](./sandbox-setup.md) and then follow [Getting Started with Pipelines](../user-guides/getting-started/getting-started.md)
+- **Want to see complete examples?** Browse [end-to-end tutorials](../user-guides/index.md#examples) for XGBoost, BERT, GPT fine-tuning, and recommendation systems
+- **Interested in the CLI?** See the [CLI Reference](../user-guides/reference/cli.md) for pipeline and project management commands

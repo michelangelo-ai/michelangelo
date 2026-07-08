@@ -9,9 +9,17 @@ import (
 	interface_mock "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface/interface_mock"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+func TestNewPipelineRunNotifier_TaskListEmpty(t *testing.T) {
+	logger := zap.NewNop()
+	notifier, err := NewPipelineRunNotifier(Config{}, nil, logger)
+	assert.NoError(t, err)
+	assert.Nil(t, notifier, "empty TaskList should return nil notifier, not an error")
+}
 
 func TestPipelineRunNotifier_NotifyOnStateChange(t *testing.T) {
 	tests := []struct {
@@ -58,7 +66,7 @@ func TestPipelineRunNotifier_NotifyOnStateChange(t *testing.T) {
 						{
 							NotificationType: v2pb.NOTIFICATION_TYPE_EMAIL,
 							EventTypes:       []v2pb.Notification_EventType{v2pb.EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED},
-							Emails:           []string{"test@uber.com"},
+							Emails:           []string{"test@example.com"},
 						},
 					},
 				},
@@ -121,7 +129,7 @@ func TestPipelineRunNotifier_NotifyOnStateChange(t *testing.T) {
 			expectedError: false,
 		},
 		{
-			name: "Workflow error - should not fail reconciliation",
+			name: "Workflow start error is returned to caller",
 			oldPipelineRun: &v2pb.PipelineRun{
 				Status: v2pb.PipelineRunStatus{
 					State: v2pb.PIPELINE_RUN_STATE_RUNNING,
@@ -137,7 +145,7 @@ func TestPipelineRunNotifier_NotifyOnStateChange(t *testing.T) {
 						{
 							NotificationType: v2pb.NOTIFICATION_TYPE_EMAIL,
 							EventTypes:       []v2pb.Notification_EventType{v2pb.EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED},
-							Emails:           []string{"test@uber.com"},
+							Emails:           []string{"test@example.com"},
 						},
 					},
 				},
@@ -146,7 +154,7 @@ func TestPipelineRunNotifier_NotifyOnStateChange(t *testing.T) {
 				},
 			},
 			shouldNotify:  true,
-			expectedError: false, // Should not propagate workflow errors
+			expectedError: true, // Error is returned; caller (reconciler) decides whether to block.
 			workflowError: assert.AnError,
 		},
 	}
@@ -169,16 +177,17 @@ func TestPipelineRunNotifier_NotifyOnStateChange(t *testing.T) {
 
 			// Create notifier with mock workflow client
 			logger := zap.NewNop() // Use no-op logger for tests
-			notifier := NewPipelineRunNotifier(mockClient, logger)
+			notifier, err := NewPipelineRunNotifier(Config{TaskList: "notification-worker"}, mockClient, logger)
+			require.NoError(t, err)
 
 			// Execute the method under test
-			err := notifier.NotifyOnStateChange(context.Background(), tt.oldPipelineRun, tt.newPipelineRun)
+			notifyErr := notifier.NotifyOnStateChange(context.Background(), tt.oldPipelineRun, tt.newPipelineRun)
 
 			// Verify results
 			if tt.expectedError {
-				assert.Error(t, err)
+				assert.Error(t, notifyErr)
 			} else {
-				assert.NoError(t, err)
+				assert.NoError(t, notifyErr)
 			}
 		})
 	}
@@ -217,7 +226,7 @@ func TestPipelineRunNotifier_ShouldNotify(t *testing.T) {
 					Notifications: []*v2pb.Notification{
 						{
 							EventTypes: []v2pb.Notification_EventType{v2pb.EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED},
-							Emails:     []string{"test@uber.com"},
+							Emails:     []string{"test@example.com"},
 						},
 					},
 				},
@@ -247,7 +256,8 @@ func TestPipelineRunNotifier_ShouldNotify(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create notifier (workflow client not used in shouldNotify)
 			logger := zap.NewNop()
-			notifier := NewPipelineRunNotifier(nil, logger)
+			notifier, err := NewPipelineRunNotifier(Config{TaskList: "test-task-list"}, nil, logger)
+			require.NoError(t, err)
 
 			result := notifier.shouldNotify(tt.oldPipelineRun, tt.newPipelineRun, logger)
 			assert.Equal(t, tt.expected, result)

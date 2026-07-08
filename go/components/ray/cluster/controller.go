@@ -582,6 +582,10 @@ func (r *Reconciler) applyRayClusterStatus(
 		rayCluster.Status.LogUrl = clusterStatus.Ray.LogUrl
 	}
 
+	if len(clusterStatus.Ray.PodErrors) > 0 {
+		rayCluster.Status.PodErrors = clusterStatus.Ray.PodErrors
+	}
+
 	// Extract reason for condition updates
 	reasonStr := clusterStatus.Reason
 	// Handle state-specific logic and condition updates
@@ -630,9 +634,27 @@ func (r *Reconciler) applyRayClusterStatus(
 		})
 
 	case v2pb.RAY_CLUSTER_STATE_UNKNOWN:
-		logger.Info("cluster state is unknown, will continue monitoring",
-			"state", newState,
-			"reason", reasonStr)
+		if jobsutils.HasTerminalPodErrors(clusterStatus.Ray.PodErrors) {
+			logger.Error(nil, "cluster state is unknown with terminal pod errors, marking as failed",
+				"state", newState,
+				"reason", reasonStr,
+				"podErrors", clusterStatus.Ray.PodErrors,
+			)
+			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
+			if reasonStr == "" {
+				reasonStr = "ClusterFailedWithPodErrors"
+			}
+			jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
+				Status:     apipb.CONDITION_STATUS_FALSE,
+				Generation: rayCluster.Generation,
+				Reason:     reasonStr,
+			})
+		} else {
+			logger.Info("cluster state is unknown, will continue monitoring",
+				"state", newState,
+				"reason", reasonStr,
+				"podErrors", clusterStatus.Ray.PodErrors)
+		}
 
 	default:
 		logger.Info("cluster in transitional state, continuing to monitor",

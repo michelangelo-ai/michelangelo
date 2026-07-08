@@ -24,6 +24,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/michelangelo-ai/michelangelo/go/api"
 	blobStorageClientMock "github.com/michelangelo-ai/michelangelo/go/base/blobstore/blobstore_mocks"
 	defaultEngine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
 	clientInterfaces "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
@@ -32,6 +33,7 @@ import (
 	pipelinerunutils "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/actors/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/notification"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/plugin"
+	"github.com/michelangelo-ai/michelangelo/go/storage"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -824,7 +826,8 @@ func setUpReconciler(
 		ConfigProvider: createMockConfigProvider(),
 	})
 	// Create a mock notifier to avoid nil pointer dereference
-	mockNotifier := notification.NewPipelineRunNotifier(mockWorkflowClient, logger)
+	mockNotifier, err := notification.NewPipelineRunNotifier(notification.Config{TaskList: "notification-worker"}, mockWorkflowClient, logger)
+	require.NoError(t, err)
 
 	reconciler := &Reconciler{
 		Handler:  handler,
@@ -832,6 +835,7 @@ func setUpReconciler(
 		plugin:   plugin,
 		engine:   defaultEngine.NewDefaultEngine[*v2pb.PipelineRun](logger),
 		notifier: mockNotifier,
+		scheme:   scheme,
 	}
 
 	return reconciler
@@ -850,4 +854,253 @@ func createMockConfigProvider() uberconfig.Provider {
 
 	provider, _ := uberconfig.NewStaticProvider(configMap)
 	return provider
+}
+
+func TestMarkImmutableIfExpired(t *testing.T) {
+	now := time.Now()
+	twoDaysAgo := metav1.NewTime(now.Add(-48 * time.Hour))
+	oneDayAgo := metav1.NewTime(now.Add(-24 * time.Hour))
+
+	tests := []struct {
+		name                      string
+		pipelineRun               *v2.PipelineRun
+		ttlDays                   int
+		expectedImmutable         bool
+		expectedRequeue           bool
+		expectedRequeueAfterRange struct{ min, max time.Duration }
+	}{
+		{
+			name: "TTL not elapsed - should requeue",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "test-pr",
+					Namespace:         "test-ns",
+					CreationTimestamp: oneDayAgo,
+				},
+				Status: v2.PipelineRunStatus{
+					State:   v2.PIPELINE_RUN_STATE_SUCCEEDED,
+					EndTime: &pbtypes.Timestamp{Seconds: oneDayAgo.Unix()},
+				},
+			},
+			ttlDays:           2, // TTL is 2 days, but only 1 day has passed
+			expectedImmutable: false,
+			expectedRequeue:   true,
+			expectedRequeueAfterRange: struct{ min, max time.Duration }{
+				min: 23*time.Hour + 59*time.Minute, // ~1 day remaining
+				max: 24*time.Hour + 1*time.Minute,
+			},
+		},
+		{
+			name: "TTL elapsed - should mark immutable",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "test-pr",
+					Namespace:         "test-ns",
+					CreationTimestamp: twoDaysAgo,
+				},
+				Status: v2.PipelineRunStatus{
+					State:   v2.PIPELINE_RUN_STATE_SUCCEEDED,
+					EndTime: &pbtypes.Timestamp{Seconds: twoDaysAgo.Unix()},
+				},
+			},
+			ttlDays:           1, // TTL is 1 day, but 2 days have passed
+			expectedImmutable: true,
+			expectedRequeue:   false,
+		},
+		{
+			name: "TTL elapsed - already immutable",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "test-pr",
+					Namespace:         "test-ns",
+					CreationTimestamp: twoDaysAgo,
+					Annotations: map[string]string{
+						api.ImmutableAnnotation: "true",
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					State:   v2.PIPELINE_RUN_STATE_SUCCEEDED,
+					EndTime: &pbtypes.Timestamp{Seconds: twoDaysAgo.Unix()},
+				},
+			},
+			ttlDays:           1,
+			expectedImmutable: true,
+			expectedRequeue:   false,
+		},
+		{
+			name: "No EndTime - falls back to creation timestamp",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "test-pr",
+					Namespace:         "test-ns",
+					CreationTimestamp: twoDaysAgo,
+				},
+				Status: v2.PipelineRunStatus{
+					State: v2.PIPELINE_RUN_STATE_SUCCEEDED,
+					// EndTime is nil
+				},
+			},
+			ttlDays:           1, // TTL is 1 day, creation was 2 days ago
+			expectedImmutable: true,
+			expectedRequeue:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := zaptest.NewLogger(t)
+			scheme := runtime.NewScheme()
+			err := v2.AddToScheme(scheme)
+			require.NoError(t, err)
+
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(tt.pipelineRun).
+				WithStatusSubresource(&v2.PipelineRun{}).
+				Build()
+
+			handler := apiHandler.NewFakeAPIHandler(k8sClient)
+
+			reconciler := &Reconciler{
+				Handler: handler,
+				logger:  logger,
+				config: Config{
+					TTLDays: tt.ttlDays,
+				},
+				engine: defaultEngine.NewDefaultEngine[*v2pb.PipelineRun](logger),
+			}
+
+			requeueAfter, done := reconciler.markImmutableIfExpired(
+				context.Background(),
+				logger,
+				tt.pipelineRun,
+			)
+
+			// Check requeue behavior
+			if tt.expectedRequeue {
+				require.False(t, done, "Expected not done (should requeue)")
+				require.Greater(t, requeueAfter, tt.expectedRequeueAfterRange.min, "Requeue time too short")
+				require.Less(t, requeueAfter, tt.expectedRequeueAfterRange.max, "Requeue time too long")
+			} else {
+				require.True(t, done, "Expected done (should not requeue)")
+				require.Equal(t, time.Duration(0), requeueAfter, "Expected no requeue delay")
+			}
+
+			// Check if immutable annotation was set correctly
+			updatedPR := &v2.PipelineRun{}
+			err = k8sClient.Get(context.Background(), types.NamespacedName{
+				Name:      tt.pipelineRun.Name,
+				Namespace: tt.pipelineRun.Namespace,
+			}, updatedPR)
+			require.NoError(t, err)
+
+			annotations := updatedPR.GetAnnotations()
+			if tt.expectedImmutable {
+				require.Equal(t, "true", annotations[api.ImmutableAnnotation], "Expected immutable annotation to be set")
+			} else {
+				require.NotEqual(t, "true", annotations[api.ImmutableAnnotation], "Expected immutable annotation to not be set")
+			}
+		})
+	}
+}
+
+func TestReconcileTTLWithMetadataStorageDisabled(t *testing.T) {
+	now := time.Now()
+	threeDaysAgo := metav1.NewTime(now.Add(-72 * time.Hour))
+
+	tests := []struct {
+		name                  string
+		metadataStorageConfig storage.MetadataStorageConfig
+		ttlDays               int
+		shouldMarkImmutable   bool
+	}{
+		{
+			name: "Metadata storage enabled - TTL should work",
+			metadataStorageConfig: storage.MetadataStorageConfig{
+				EnableMetadataStorage: true,
+			},
+			ttlDays:             1,
+			shouldMarkImmutable: true,
+		},
+		{
+			name: "Metadata storage disabled - TTL should be skipped",
+			metadataStorageConfig: storage.MetadataStorageConfig{
+				EnableMetadataStorage: false,
+			},
+			ttlDays:             1,
+			shouldMarkImmutable: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pipelineRun := &v2.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "test-pr-ttl",
+					Namespace:         "test-ns",
+					CreationTimestamp: threeDaysAgo,
+				},
+				Status: v2.PipelineRunStatus{
+					State:   v2.PIPELINE_RUN_STATE_SUCCEEDED,
+					EndTime: &pbtypes.Timestamp{Seconds: threeDaysAgo.Unix()},
+				},
+			}
+
+			logger := zaptest.NewLogger(t)
+			scheme := runtime.NewScheme()
+			err := v2.AddToScheme(scheme)
+			require.NoError(t, err)
+
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(pipelineRun).
+				WithStatusSubresource(&v2.PipelineRun{}).
+				Build()
+
+			handler := apiHandler.NewFakeAPIHandler(k8sClient)
+
+			reconciler := &Reconciler{
+				Handler: handler,
+				logger:  logger,
+				config: Config{
+					TTLDays: tt.ttlDays,
+				},
+				metadataStorageEnabled: storage.EnableMetadataStorage(&tt.metadataStorageConfig),
+				engine:                 defaultEngine.NewDefaultEngine[*v2pb.PipelineRun](logger),
+				// Empty actors list: engine immediately returns terminal+satisfied,
+				// exercising the TTL branch without requiring workflow/blob dependencies.
+				plugin:   &plugin.Plugin{},
+				notifier: nil,
+			}
+
+			result, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      pipelineRun.Name,
+					Namespace: pipelineRun.Namespace,
+				},
+			})
+			require.NoError(t, err)
+
+			// Verify the result
+			updatedPR := &v2.PipelineRun{}
+			err = k8sClient.Get(context.Background(), types.NamespacedName{
+				Name:      pipelineRun.Name,
+				Namespace: pipelineRun.Namespace,
+			}, updatedPR)
+			require.NoError(t, err)
+
+			annotations := updatedPR.GetAnnotations()
+			if tt.shouldMarkImmutable {
+				require.Equal(t, "true", annotations[api.ImmutableAnnotation],
+					"Expected immutable annotation when metadata storage is enabled")
+				require.Equal(t, time.Duration(0), result.RequeueAfter,
+					"Should not requeue after marking immutable")
+			} else {
+				require.NotEqual(t, "true", annotations[api.ImmutableAnnotation],
+					"Expected NO immutable annotation when metadata storage is disabled (prevents data loss)")
+				require.Equal(t, time.Duration(0), result.RequeueAfter,
+					"Should not requeue when TTL is skipped")
+			}
+		})
+	}
 }

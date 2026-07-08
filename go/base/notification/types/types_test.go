@@ -44,10 +44,16 @@ func TestContainsEventType(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:       "Running state - no notification",
+			name:       "Running state without started event type returns false",
 			eventTypes: []v2pb.Notification_EventType{v2pb.EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED},
 			state:      v2pb.PIPELINE_RUN_STATE_RUNNING,
 			expected:   false,
+		},
+		{
+			name:       "Running state with started event type returns true",
+			eventTypes: []v2pb.Notification_EventType{v2pb.EVENT_TYPE_PIPELINE_RUN_STATE_STARTED},
+			state:      v2pb.PIPELINE_RUN_STATE_RUNNING,
+			expected:   true,
 		},
 	}
 
@@ -75,7 +81,7 @@ func TestGenerateSubject(t *testing.T) {
 					State: v2pb.PIPELINE_RUN_STATE_SUCCEEDED,
 				},
 			},
-			expected: "Pipeline Run (my-pipeline-run) has completed with state SUCCEEDED",
+			expected: "Pipeline Run (my-pipeline-run) state: SUCCEEDED",
 		},
 		{
 			name: "Pipeline run with failed state",
@@ -87,7 +93,7 @@ func TestGenerateSubject(t *testing.T) {
 					State: v2pb.PIPELINE_RUN_STATE_FAILED,
 				},
 			},
-			expected: "Pipeline Run (failed-pipeline) has completed with state FAILED",
+			expected: "Pipeline Run (failed-pipeline) state: FAILED",
 		},
 	}
 
@@ -100,36 +106,72 @@ func TestGenerateSubject(t *testing.T) {
 }
 
 func TestGenerateText(t *testing.T) {
+	const testStudioURL = "https://ml.example.com/studio/"
+
 	pipelineRun := &v2pb.PipelineRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-run",
 			Namespace: "test-project",
 			Labels: map[string]string{
-				"michelangelo/SourcePipelineType":            "PIPELINE_TYPE_TRAIN",
-				"pipeline.michelangelo/PipelineManifestType": "PIPELINE_MANIFEST_TYPE_ASL",
+				sourcePipelineTypeLabelName:         "PIPELINE_TYPE_TRAIN",
+				sourcePipelineManifestTypeLabelName: "PIPELINE_MANIFEST_TYPE_ASL",
 			},
 		},
 		Status: v2pb.PipelineRunStatus{
 			State:  v2pb.PIPELINE_RUN_STATE_SUCCEEDED,
-			LogUrl: "https://cadence.example.com/run/123",
+			LogUrl: "https://workflow.example.com/run/123",
 		},
 	}
 
-	emailText := GenerateText(pipelineRun, "email")
+	emailText := GenerateText(pipelineRun, v2pb.NOTIFICATION_TYPE_EMAIL, testStudioURL, nil)
 	assert.Contains(t, emailText, "test-run")
 	assert.Contains(t, emailText, "test-project")
 	assert.Contains(t, emailText, "SUCCEEDED")
 	assert.Contains(t, emailText, "TRAIN")
-	assert.Contains(t, emailText, "michelangelo-studio.uberinternal.com")
-	assert.Contains(t, emailText, "https://cadence.example.com/run/123")
+	assert.Contains(t, emailText, testStudioURL)
+	assert.Contains(t, emailText, "https://workflow.example.com/run/123")
 
-	slackText := GenerateText(pipelineRun, "slack")
+	slackText := GenerateText(pipelineRun, v2pb.NOTIFICATION_TYPE_SLACK, testStudioURL, nil)
 	assert.Contains(t, slackText, "test-run")
 	assert.Contains(t, slackText, "test-project")
 	assert.Contains(t, slackText, "SUCCEEDED")
 	assert.Contains(t, slackText, "TRAIN")
-	assert.Contains(t, slackText, "<https://michelangelo-studio.uberinternal.com")
-	assert.Contains(t, slackText, "<https://cadence.example.com/run/123|Cadence Log URL>")
+	assert.Contains(t, slackText, testStudioURL)
+	assert.Contains(t, slackText, "<https://workflow.example.com/run/123|Workflow Log URL>")
+
+	// No studio link when studioBaseURL is empty.
+	noLinkText := GenerateText(pipelineRun, v2pb.NOTIFICATION_TYPE_EMAIL, "", nil)
+	assert.NotContains(t, noLinkText, "Studio URL")
+
+	// StudioBaseURL without trailing slash produces the same link as with one.
+	withSlash := GenerateText(pipelineRun, v2pb.NOTIFICATION_TYPE_EMAIL, "https://ml.example.com/studio/", nil)
+	withoutSlash := GenerateText(pipelineRun, v2pb.NOTIFICATION_TYPE_EMAIL, "https://ml.example.com/studio", nil)
+	assert.Equal(t, withSlash, withoutSlash)
+
+	// Custom phase resolver is honoured.
+	customText := GenerateText(pipelineRun, v2pb.NOTIFICATION_TYPE_EMAIL, testStudioURL, func(_ string) string { return "custom-phase" })
+	assert.Contains(t, customText, "custom-phase")
+}
+
+func TestDefaultPhaseResolver(t *testing.T) {
+	tests := []struct {
+		pipelineType string
+		want         string
+	}{
+		{"PIPELINE_TYPE_TRAIN", "train"},
+		{"PIPELINE_TYPE_EVAL", "train"},
+		{"PIPELINE_TYPE_SCORER", "deploy"},
+		{"PIPELINE_TYPE_PREDICTION", "deploy"},
+		{"PIPELINE_TYPE_RETRAIN", "retrain"},
+		{"PIPELINE_TYPE_DATA_PREP", "data"},
+		{"PIPELINE_TYPE_EMBEDDING_GENERATION", "genai-data"},
+		{"PIPELINE_TYPE_TRAIN_LLM", "genai-finetune"},
+		{"PIPELINE_TYPE_EVAL_PROMPT", "genai-prompt"},
+		{"UNKNOWN_TYPE", "pipeline"},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, DefaultPhaseResolver(tt.pipelineType), tt.pipelineType)
+	}
 }
 
 func TestCropPipelineRun(t *testing.T) {
@@ -159,16 +201,15 @@ func TestCropPipelineRun(t *testing.T) {
 					Notifications: []*v2pb.Notification{
 						{
 							NotificationType: v2pb.NOTIFICATION_TYPE_EMAIL,
-							Emails:           []string{"test@uber.com"},
+							Emails:           []string{"test@example.com"},
 						},
 					},
 				},
 				Status: v2pb.PipelineRunStatus{
 					State:        v2pb.PIPELINE_RUN_STATE_SUCCEEDED,
-					LogUrl:       "https://cadence.example.com/run/123",
+					LogUrl:       "https://workflow.example.com/run/123",
 					ErrorMessage: "",
 					Code:         0,
-					// These fields should be present in full status but not in cropped
 					Conditions: []*apipb.Condition{
 						{Type: "SourcePipeline", Status: apipb.CONDITION_STATUS_TRUE},
 					},
@@ -191,18 +232,12 @@ func TestCropPipelineRun(t *testing.T) {
 			assert.Equal(t, tt.pipelineRun.Name, result.Name)
 			assert.Equal(t, tt.pipelineRun.Namespace, result.Namespace)
 			assert.Equal(t, tt.pipelineRun.Labels, result.Labels)
-
-			// Spec should be preserved completely (including notifications)
 			assert.Equal(t, tt.pipelineRun.Spec, result.Spec)
-
-			// Status should contain only essential fields
 			assert.Equal(t, tt.pipelineRun.Status.State, result.Status.State)
 			assert.Equal(t, tt.pipelineRun.Status.LogUrl, result.Status.LogUrl)
 			assert.Equal(t, tt.pipelineRun.Status.ErrorMessage, result.Status.ErrorMessage)
 			assert.Equal(t, tt.pipelineRun.Status.Code, result.Status.Code)
 			assert.Equal(t, tt.pipelineRun.Status.EndTime, result.Status.EndTime)
-
-			// Verify that verbose fields are not included
 			assert.Nil(t, result.Status.Conditions)
 		})
 	}

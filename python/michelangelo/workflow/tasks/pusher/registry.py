@@ -9,17 +9,19 @@ if TYPE_CHECKING:
 
 from michelangelo.workflow.schema.exceptions import ConfigurationError
 
+__all__ = ["PluginRegistry", "default_registry"]
+
 
 class PluginRegistry:
     """Registry mapping plugin names to their implementation class and artifact type.
 
     The open source library ships a ``default_registry`` pre-populated with
-    the three built-in plugins (populated by ``plugins/__init__.py``). Provider
-    layers call ``extend()`` to create a child registry and register their own
+    the three built-in plugins (populated by ``plugins/__init__.py``). Downstream
+    packages call ``extend()`` to create a child registry and register their own
     plugins without mutating the shared default.
 
     Lookups fall through to the parent registry when a name is not found
-    locally, forming a chain: provider registry → ``default_registry``.
+    locally, forming a chain: child registry → ``default_registry``.
 
     Args:
         parent: Optional parent registry to inherit registrations from. When
@@ -40,14 +42,16 @@ class PluginRegistry:
 
     def __init__(self, parent: PluginRegistry | None = None) -> None:
         """Initialise with an optional parent registry."""
-        self._registry: dict[str, tuple[type[PusherPluginBase], type | None]] = {}
+        self._registry: dict[
+            str, tuple[type[PusherPluginBase], type | tuple[type, ...] | None]
+        ] = {}
         self._parent = parent
 
     def register(
         self,
         name: str,
         plugin_class: type[PusherPluginBase],
-        artifact_type: type | None = None,
+        artifact_type: type | tuple[type, ...] | None = None,
     ) -> None:
         """Register a plugin under a given name.
 
@@ -59,10 +63,11 @@ class PluginRegistry:
             name: Plugin identifier used in ``PusherPluginConfig`` as the
                 typed field name or as the ``plugin_name`` extension value.
             plugin_class: Concrete subclass of ``PusherPluginBase``.
-            artifact_type: Expected Python type of the artifact value. When
-                provided, ``push()`` validates ``isinstance(artifact,
-                artifact_type)`` before invoking the plugin. Pass ``None``
-                for config-only plugins.
+            artifact_type: Expected Python type (or tuple of types) of the
+                artifact value. When provided, ``push()`` validates
+                ``isinstance(artifact, artifact_type)`` before invoking the
+                plugin. Pass ``None`` for config-only plugins or when the
+                plugin accepts any artifact type.
 
         Raises:
             ValueError: If ``name`` is already registered in this instance.
@@ -80,7 +85,9 @@ class PluginRegistry:
             )
         self._registry[name] = (plugin_class, artifact_type)
 
-    def get(self, name: str) -> tuple[type[PusherPluginBase], type | None]:
+    def get(
+        self, name: str
+    ) -> tuple[type[PusherPluginBase], type | tuple[type, ...] | None]:
         """Look up a plugin by name, falling through to the parent if needed.
 
         Args:

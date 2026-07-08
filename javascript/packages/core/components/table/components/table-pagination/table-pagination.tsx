@@ -49,7 +49,10 @@ export function TablePagination(props: TablePaginationProps) {
   );
 }
 
-export function LoadingButton() {
+// Extracted to reduce nesting in BasePagination overrides. Not substantial enough
+// to warrant a separate file.
+// eslint-disable-next-line react/no-multi-comp
+function LoadingButton() {
   return (
     <Button isLoading={true} kind={KIND.tertiary}>
       Next

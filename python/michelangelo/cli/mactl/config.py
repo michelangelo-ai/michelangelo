@@ -32,6 +32,7 @@ DEFAULT_CONFIG = {
     },
     "plugin": {
         "dirs": [],
+        "packages": [],
         "modules": {},
     },
 }
@@ -69,6 +70,9 @@ def _apply_env_overrides(config: dict) -> dict:
     if getenv("MACTL_ADDRESS"):
         result["address"] = getenv("MACTL_ADDRESS")
 
+    if getenv("MACTL_RPC_SERVICE"):
+        result["metadata"]["rpc-service"] = getenv("MACTL_RPC_SERVICE")
+
     if getenv("MACTL_USE_TLS"):
         use_tls_str = getenv("MACTL_USE_TLS")
         result["use_tls"] = use_tls_str.lower() in ("true", "1", "yes", "y")
@@ -90,7 +94,7 @@ def load_config() -> dict:
     """Load complete configuration as dictionary with layered merging.
 
     Priority (highest to lowest):
-    1. Environment variables (MACTL_ADDRESS, MACTL_USE_TLS, AWS_*)
+    1. Environment variables (MACTL_ADDRESS, MACTL_RPC_SERVICE, MACTL_USE_TLS, AWS_*)
     2. ~/.ma/user_config.toml (user overrides)
     3. ~/.ma/config.toml (project defaults)
     4. Built-in DEFAULT_CONFIG

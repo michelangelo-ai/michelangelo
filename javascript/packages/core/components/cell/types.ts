@@ -18,10 +18,16 @@ import type { TypeCellConfig } from './renderers/type/types';
  * @see {@link LinkCellConfig}
  * @see {@link MultiCellConfig}
  */
-export type Cell<T = unknown> = SharedCell<T> &
-  (DescriptionCellConfig | LinkCellConfig | MultiCellConfig | StateCellConfig | TypeCellConfig);
+export type Cell<TRecord = unknown, TValue = unknown> = SharedCell<TRecord, TValue> &
+  (
+    | DescriptionCellConfig<TRecord>
+    | LinkCellConfig<TRecord>
+    | MultiCellConfig
+    | StateCellConfig<TRecord>
+    | TypeCellConfig<TRecord>
+  );
 
-export interface SharedCell<T = unknown> {
+export interface SharedCell<TRecord = unknown, TValue = unknown> {
   /**
    * @description Unique identifier for the column
    * If no accessor is provided, this id will be used to access the data
@@ -34,7 +40,7 @@ export interface SharedCell<T = unknown> {
    * @example 'spec.content.metadata.name'
    * @example (row) => `Revision ${row?.spec?.revisionId}`,
    */
-  accessor?: Accessor<unknown>;
+  accessor?: Accessor<TRecord, TValue>;
 
   /**
    * @description Label to be displayed in the table header
@@ -84,7 +90,7 @@ export interface SharedCell<T = unknown> {
    * @default
    * @see src/components/cell/renderers/default/column-renderer.tsx
    */
-  Cell?: CellRenderer<T>;
+  Cell?: CellRenderer<TValue>;
 
   /**
    * @description Style overrides to be applied to each cell
@@ -124,7 +130,7 @@ export type CellTooltip = {
  */
 export type CellStyleFunction = (args: { record: unknown; theme: Theme }) => StyleObject;
 
-export type CellRenderer<T, CellConfig = SharedCell<T>> = {
+export type CellRenderer<T, CellConfig = SharedCell<unknown, T>> = {
   (props: CellRendererProps<T, CellConfig>): ReactNode | null;
 
   /**
@@ -134,7 +140,7 @@ export type CellRenderer<T, CellConfig = SharedCell<T>> = {
   toString?: (props: CellRendererProps<T, CellConfig>) => string;
 };
 
-export interface CellRendererProps<T = unknown, CellConfig = SharedCell<T>> {
+export interface CellRendererProps<T = unknown, CellConfig = SharedCell<unknown, T>> {
   column: CellConfig;
 
   /**

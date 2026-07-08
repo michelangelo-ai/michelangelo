@@ -44,7 +44,11 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           editUrl: 'https://github.com/michelangelo-ai/michelangelo/tree/main/website/',
         },
-        blog: false,
+        blog: {
+          showReadingTime: false,
+          blogSidebarCount: 0,
+          postsPerPage: 'ALL',
+        },
         theme: {
           customCss: './src/css/custom.css',
         },
@@ -71,6 +75,11 @@ const config: Config = {
           sidebarId: 'docsSidebar',
           position: 'left',
           label: 'Docs',
+        },
+        {
+          to: '/blog',
+          label: 'Blog',
+          position: 'left',
         },
         {
           href: 'https://github.com/michelangelo-ai/michelangelo',

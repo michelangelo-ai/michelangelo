@@ -23,7 +23,7 @@ export interface TaskBodyStructSchema extends SharedTaskBodySchema {
    * @example 'spec.content.metadata.name'
    * @example (task) => task.input
    */
-  accessor: Accessor<object>;
+  accessor: Accessor<unknown, object>;
 }
 
 export interface TaskBodyTextareaSchema extends SharedTaskBodySchema {
@@ -38,7 +38,7 @@ export interface TaskBodyTextareaSchema extends SharedTaskBodySchema {
    * @example 'spec.content.metadata.name'
    * @example (task) => task.input
    */
-  accessor: Accessor<string>;
+  accessor: Accessor<unknown, string>;
 }
 
 export interface TaskBodyMetadataSchema extends SharedTaskBodySchema {

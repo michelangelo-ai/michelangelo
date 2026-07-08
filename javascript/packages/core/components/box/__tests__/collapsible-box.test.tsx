@@ -192,14 +192,12 @@ describe('CollapsibleBox', () => {
   });
 
   it('applies overrides to elements', () => {
-    const testId = 'test-container';
-
     render(
       <CollapsibleBox
         title="Override Test"
         overrides={{
           Container: {
-            props: { 'data-testid': testId },
+            props: { 'data-testid': 'test-container' },
           },
           HeaderTitle: {
             props: { 'data-testid': 'test-title' },
@@ -211,7 +209,8 @@ describe('CollapsibleBox', () => {
       buildWrapper([getBaseProviderWrapper()])
     );
 
-    expect(screen.getByTestId(testId)).toBeInTheDocument();
-    expect(screen.getByTestId('test-title')).toHaveTextContent('Override Test');
+    // eslint-disable-next-line testing-library/no-test-id-queries -- generic div, no accessible identity
+    expect(screen.getByTestId('test-container')).toBeInTheDocument();
+    expect(screen.getByText('Override Test')).toBeInTheDocument();
   });
 });

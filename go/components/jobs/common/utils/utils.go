@@ -157,3 +157,27 @@ func UpdateStatusWithRetries(ctx context.Context, handler api.Handler, job clien
 func IsRegionalCluster(cluster *v2pb.Cluster) bool {
 	return cluster != nil && cluster.Spec.GetZone() == ""
 }
+
+var terminalPodErrorReasons = map[string]bool{
+	// KubeRay condition-level reasons (from HeadPodReady / ReplicaFailure)
+	"HeadPodNotFound":       true,
+	"FailedCreateHeadPod":   true,
+	"FailedCreateWorkerPod": true,
+	// Kubernetes container-level reasons (if KubeRay exposes them in future versions)
+	"ImagePullBackOff":           true,
+	"CrashLoopBackOff":           true,
+	"OOMKilled":                  true,
+	"CreateContainerConfigError": true,
+	"CreateContainerError":       true,
+	"ErrImagePull":               true,
+	"RunContainerError":          true,
+}
+
+func HasTerminalPodErrors(podErrors []*v2pb.PodErrors) bool {
+	for _, pe := range podErrors {
+		if terminalPodErrorReasons[pe.Reason] {
+			return true
+		}
+	}
+	return false
+}

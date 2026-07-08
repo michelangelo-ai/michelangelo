@@ -36,9 +36,16 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
 
+      - name: Set up buf CLI
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Install dependencies
         working-directory: ./javascript
-        run: yarn install --frozen-lockfile
+        run: yarn setup
+        env:
+          WORKSPACE_ROOT: ${{ github.workspace }}
 
       - name: Run tests with coverage
         working-directory: ./javascript

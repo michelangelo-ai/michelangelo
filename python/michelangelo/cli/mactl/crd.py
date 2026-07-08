@@ -22,6 +22,7 @@ from grpc import (
 from yaml import YAMLError
 from yaml import safe_load as yaml_safe_load
 
+from michelangelo.cli.mactl.apply_hooks import run_pre_apply_checks
 from michelangelo.cli.mactl.grpc_tools import (
     get_message_class_by_name,
     get_methods_from_service,
@@ -233,6 +234,18 @@ def crd_method_call(crd_method_info, request_input: Message) -> Message:
     return response
 
 
+def _resolve_name_arg(arguments: dict) -> str:
+    """Merge positional `name` and --name flag (`name_flag`) for the get action.
+
+    Positional takes precedence; either may be empty. The `--name` flag is
+    bound to a separate dest to avoid an argparse override that silently
+    blanks the positional value.
+    """
+    positional = arguments.get("name") or ""
+    flag = arguments.get("name_flag") or ""
+    return positional or flag
+
+
 def _get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
     """Raw CRD GET implementation - returns message instance without printing."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
@@ -254,8 +267,9 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
     _self: CRD = bound_args.arguments["self"]
+    name = _resolve_name_arg(bound_args.arguments)
 
-    if "name" not in bound_args.arguments or not bound_args.arguments["name"]:
+    if not name:
         _LOG.debug("No name argument passed. List CRD in the namespace.")
         _self.generate_list(crd_method_info.channel)
         return _self.list(
@@ -264,7 +278,8 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
         )
 
     call_res = _self._get(
-        **{k: v for k, v in bound_args.arguments.items() if k != "self"}
+        namespace=get_single_arg(bound_args.arguments, "namespace"),
+        name=name,
     )
     print(call_res)
     return call_res
@@ -411,6 +426,7 @@ def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> M
 
 def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
     """Default common CRD member method implementation for APPLY method."""
+    run_pre_apply_checks(crd_method_info.crd_full_name)
     _LOG.info("Bound arguments: %r", bound_args.arguments)
     _self: CRD = bound_args.arguments["self"]
     _LOG.info("Start apply_func for %r", _self.full_name)
@@ -527,16 +543,6 @@ class CRD:
                 "help": "Get an Entity or list all entities in the namespace",
                 "args": [
                     {
-                        "args": ["name"],
-                        "kwargs": {
-                            "nargs": "?",
-                            "type": str,
-                            "help": (
-                                "Name of the resource (can be configured with --name)"
-                            ),
-                        },
-                    },
-                    {
                         "func_signature": Parameter(
                             "namespace", Parameter.POSITIONAL_OR_KEYWORD
                         ),
@@ -553,12 +559,32 @@ class CRD:
                             Parameter.POSITIONAL_OR_KEYWORD,
                             default="",
                         ),
+                        "args": ["name"],
+                        "kwargs": {
+                            "nargs": "?",
+                            "type": str,
+                            "default": "",
+                            "help": (
+                                "Name of the resource (can also be supplied as "
+                                "--name; omit both to list all)"
+                            ),
+                        },
+                    },
+                    {
+                        "func_signature": Parameter(
+                            "name_flag",
+                            Parameter.POSITIONAL_OR_KEYWORD,
+                            default="",
+                        ),
                         "args": ["--name"],
                         "kwargs": {
-                            "dest": "name",
+                            "dest": "name_flag",
                             "type": str,
+                            "default": "",
                             "required": False,
-                            "help": "Name of the resource",
+                            "help": (
+                                "Name of the resource (alternative to positional)"
+                            ),
                         },
                     },
                     {

@@ -93,6 +93,19 @@ The controller manager uses `controller-runtime` metrics — these are standard 
 | `workqueue_depth` | Work items queued, by `name` label (one per controller) | Count |
 | `workqueue_retries_total` | Work item retries — elevated value indicates persistent failures | Count |
 
+### Cascade Delete
+
+Always emitted by the controller manager — see the [Cascade Delete](../cascade-delete.md) guide for the feature overview.
+
+| Metric | Description | Unit |
+|--------|-------------|------|
+| `cascade_owner_ref_backfill_total` | ownerReference backfills performed, by `kind` | Count |
+| `cascade_child_drain_duration_seconds` | Time a child spent draining (histogram), by `kind` | Seconds |
+| `cascade_child_drain_timeout_total` | Children whose drain exceeded the 24h safety timeout, by `kind` | Count |
+| `cascade_child_drain_active` | Number of children currently draining (gauge), by `kind` | Count |
+
+The `kind` label is a stable dashboard/alerting **contract**: its value is always exactly `pipeline_run` or `trigger_run`. Build queries and alerts against those two values.
+
 ---
 
 ## Alerting Rules
@@ -170,6 +183,19 @@ groups:
       summary: "Inference 5xx error rate above 1%"
       description: >
         {{ $value | humanizePercentage }} of inference requests are returning 5xx errors.
+
+  # Cascade delete: safety timeout force-completed a child's drain
+  - alert: CascadeChildDrainTimeout
+    expr: increase(cascade_child_drain_timeout_total[1h]) > 0
+    for: 0m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Cascade delete safety timeout fired"
+      description: >
+        {{ $value }} child resource(s) were force-killed because their drain
+        did not complete within 24 hours. Investigate why the drain was wedged:
+        kubectl -n ma-system logs deployment/michelangelo-controllermgr | grep -i "cascade\|force"
 ```
 
 ---

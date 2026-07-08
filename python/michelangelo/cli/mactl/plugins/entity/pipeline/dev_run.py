@@ -221,6 +221,10 @@ def generate_dev_run(
             timeout=30,
         )
         _LOG.info("Stub method completed (%r): %r", type(response), response)
+        # Print the response so users see the created PipelineRun even at the
+        # default WARNING log level (matches behavior of `mactl pipelinerun`
+        # and `ma pipeline {apply,create,get,run}`).
+        print(response)
         return response
 
     dev_run_func.__signature__ = func_signature  # type: ignore[attr-defined]

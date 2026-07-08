@@ -40,17 +40,23 @@ class ModelArtifact:
 class AssembledModel:
     """A trained model transmitted between workflow tasks.
 
-    Both artifacts must be fully packaged before passing to the pusher.
+    ``raw_model`` is required. ``deployable_model`` is optional — omit it for
+    models that are not packaged for serving (e.g. research checkpoints or
+    models where ``ModelMetadata.deployable`` is ``False``). When absent,
+    the pusher skips the deployable upload and sets
+    ``ModelPushResult.deployable_artifact_uri`` to ``None``.
+
     Packaging is the assembler's responsibility. The pusher only uploads and
     registers pre-packaged artifacts.
 
     Attributes:
         raw_model: Raw model package (weights + sample data) intended for
             offline validation and reproducibility.
-        deployable_model: Serving-ready bundle (e.g. Triton config + weights)
-            intended for deployment to a model server.
+        deployable_model: Optional serving-ready bundle (e.g. Triton config +
+            weights) intended for deployment to a model server. ``None`` when
+            the model has not been packaged for serving.
 
-    Example:
+    Example (with deployable):
         >>> artifact = ModelArtifact(path="/tmp/model.ubj")
         >>> assembled = AssembledModel(
         ...     raw_model=artifact,
@@ -58,10 +64,15 @@ class AssembledModel:
         ... )
         >>> assembled.raw_model.path
         '/tmp/model.ubj'
+
+    Example (raw only):
+        >>> assembled = AssembledModel(raw_model=ModelArtifact(path="/tmp/model.ubj"))
+        >>> assembled.deployable_model is None
+        True
     """
 
     raw_model: ModelArtifact
-    deployable_model: ModelArtifact
+    deployable_model: ModelArtifact | None = None
 
 
 @dataclass

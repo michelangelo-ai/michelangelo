@@ -4,8 +4,90 @@
  */
 
 /* ============================================
+   Brand Fonts (UberMove / UberMoveText)
+   ============================================ */
+
+@font-face {
+  font-family: 'UberMove';
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+  src: url('https://tb-static.uber.com/prod/uber-static/UberMove-Light.woff2') format('woff2'),
+    url('https://tb-static.uber.com/prod/uber-static/UberMove-Light.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'UberMove';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url('https://tb-static.uber.com/prod/uber-static/UberMove-Regular.woff2') format('woff2'),
+    url('https://tb-static.uber.com/prod/uber-static/UberMove-Regular.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'UberMove';
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: url('https://tb-static.uber.com/prod/uber-static/UberMove-Medium.woff2') format('woff2'),
+    url('https://tb-static.uber.com/prod/uber-static/UberMove-Medium.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'UberMove';
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url('https://tb-static.uber.com/prod/uber-static/UberMove-Bold.woff2') format('woff2'),
+    url('https://tb-static.uber.com/prod/uber-static/UberMove-Bold.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'UberMoveText';
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+  src: url('https://tb-static.uber.com/prod/uber-static/UberMoveText-Light.woff2') format('woff2'),
+    url('https://tb-static.uber.com/prod/uber-static/UberMoveText-Light.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'UberMoveText';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url('https://tb-static.uber.com/prod/uber-static/UberMoveText-Regular.woff2') format('woff2'),
+    url('https://tb-static.uber.com/prod/uber-static/UberMoveText-Regular.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'UberMoveText';
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: url('https://tb-static.uber.com/prod/uber-static/UberMoveText-Medium.woff2') format('woff2'),
+    url('https://tb-static.uber.com/prod/uber-static/UberMoveText-Medium.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'UberMoveText';
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url('https://tb-static.uber.com/prod/uber-static/UberMoveText-Bold.woff2') format('woff2'),
+    url('https://tb-static.uber.com/prod/uber-static/UberMoveText-Bold.woff') format('woff');
+}
+
+/* ============================================
    CSS Variables & Theme
    ============================================ */
+
+html,
+body {
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+}
 
 :root {
   /* Uber brand colors */
@@ -22,8 +104,10 @@
   --ifm-font-color-base: #000000;
 
   /* Typography */
-  --ifm-font-family-base: system-ui, -apple-system, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
+  --ifm-font-family-base: 'UberMoveText', system-ui, -apple-system, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --ifm-heading-font-family: 'UberMove', 'UberMoveText', system-ui, -apple-system,
+    'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --ifm-font-family-monospace: 'SF Mono', SFMono-Regular, ui-monospace, Menlo,
     Monaco, Consolas, 'Liberation Mono', monospace;
   --ifm-heading-font-weight: 600;
@@ -49,14 +133,9 @@
   --custom-border-color: #e8e8e8;
   --uber-light-gray: #f3f3f3;
 
-  /* Landing page variables - Light mode */
-  --landing-bg: #fafafa;
-  --landing-gradient-1: rgba(37, 99, 235, 0.5);
-  --landing-gradient-2: rgba(124, 58, 237, 0.5);
-  --landing-gradient-3: rgba(219, 39, 119, 0.4);
+  /* Landing page accent (Uber blue) */
   --landing-accent: #276ef1;
-  --landing-gradient-text-1: #276ef1;
-  --landing-gradient-text-2: #7c3aed;
+  --landing-hero-bg: #ffffff;
 }
 
 [data-theme='dark'] {
@@ -82,14 +161,9 @@
   --custom-content-background: #000000;
   --custom-border-color: #333333;
 
-  /* Landing page variables - Dark mode */
-  --landing-bg: #000000;
-  --landing-gradient-1: rgba(74, 135, 243, 0.4);
-  --landing-gradient-2: rgba(124, 58, 237, 0.4);
-  --landing-gradient-3: rgba(236, 72, 153, 0.3);
-  --landing-accent: #4a87f3;
-  --landing-gradient-text-1: #4a87f3;
-  --landing-gradient-text-2: #a78bfa;
+  /* Landing page accent (Uber blue) */
+  --landing-accent: #276ef1;
+  --landing-hero-bg: #000000;
 }
 
 /* ============================================
@@ -102,14 +176,17 @@
 }
 
 .navbar__title {
-  font-weight: 600;
+  font-family: var(--ifm-heading-font-family);
+  font-size: 1.5rem;
+  font-weight: 400;
   color: #ffffff;
 }
 
 .navbar__link {
+  font-family: var(--ifm-heading-font-family);
   font-weight: 500;
   border-radius: 9999px;
-  padding: 0.5rem 1rem;
+  padding: 0.25rem 0.75rem;
   transition: background-color 0.15s ease, color 0.15s ease;
   color: #ffffff;
 }

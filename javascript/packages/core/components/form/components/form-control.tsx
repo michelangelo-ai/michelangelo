@@ -5,6 +5,7 @@ import { FormControl as BaseFormControl } from 'baseui/form-control';
 import { Markdown } from '#core/components/markdown/markdown';
 import { TruncatedText } from '#core/components/truncated-text/truncated-text';
 import { Label } from './label/label';
+import { LabelEndEnhancerContent } from './label/label-end-enhancer-content';
 
 import type { FormControlProps } from './types';
 
@@ -63,28 +64,5 @@ export const FormControl: React.FC<FormControlProps> = ({
         {children}
       </BaseFormControl>
     </div>
-  );
-};
-
-const LabelEndEnhancerContent: React.FC<Pick<FormControlProps, 'counter' | 'labelEndEnhancer'>> = ({
-  counter,
-  labelEndEnhancer,
-}) => {
-  const [css, theme] = useStyletron();
-
-  return (
-    <>
-      {counter && (
-        <span
-          className={css({
-            ...theme.typography.font100,
-            color: theme.colors.contentPrimary,
-          })}
-        >
-          {counter.length}/{counter.maxLength}
-        </span>
-      )}
-      {labelEndEnhancer}
-    </>
   );
 };

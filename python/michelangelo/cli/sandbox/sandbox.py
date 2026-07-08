@@ -891,21 +891,6 @@ def _deploy_services(ns: argparse.Namespace):
     if ns.workflow == "cadence":
         _create_cadence_domain(links)
 
-    if ns.workflow == "cadence":
-        # Forward Cadence frontend ports to localhost so host-side cadence CLI
-        # can reach the in-cluster Service (ClusterIP, not NodePort in chart).
-        subprocess.Popen(
-            [
-                "kubectl",
-                "port-forward",
-                "svc/michelangelo-cadence-frontend",
-                "7833:7833",
-                "7933:7933",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-
     # Create separate compute cluster if requested
     create_compute_cluster = getattr(ns, "create_compute_cluster", False)
     compute_cluster_name = getattr(

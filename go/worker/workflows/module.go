@@ -1,14 +1,14 @@
 package workflows
 
 import (
-	"github.com/michelangelo-ai/michelangelo/go/worker/workflows/notification"
+	"go.uber.org/fx"
+
 	"github.com/michelangelo-ai/michelangelo/go/worker/workflows/ray"
 	"github.com/michelangelo-ai/michelangelo/go/worker/workflows/trigger"
-	"go.uber.org/fx"
 )
 
+// Module provides workflow registrations for the shared worker binary.
 var Module = fx.Options(
 	ray.Module,
 	trigger.Module,
-	notification.Module,
 )

@@ -1,0 +1,16 @@
+apiVersion: michelangelo.api/v2
+kind: Project
+metadata:
+  name: ma-examples
+  namespace: ma-examples
+spec:
+  description: "Michelangelo Examples"
+  owner:
+    owningTeam: "00000000-0000-0000-0000-000000000001"
+    owners:
+      - your-username
+    ownerGroups:
+      - your-team
+  tier: 4
+  gitRepo: https://github.com/michelangelo-ai/michelangelo
+  rootDir: python/examples

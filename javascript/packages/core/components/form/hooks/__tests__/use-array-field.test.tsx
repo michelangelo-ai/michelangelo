@@ -8,7 +8,7 @@ import { getFormProviderWrapper } from '#core/test/wrappers/get-form-provider-wr
 
 it('remove does not drop below minItems even when called directly without an isRemovable check', async () => {
   function CustomArrayField() {
-    const { entries, add, remove } = useArrayField('items', { minItems: 2 });
+    const { entries, handleItemAdd, remove } = useArrayField('items', { minItems: 2 });
     return (
       <div>
         {entries.map(({ id }, index) => (
@@ -23,7 +23,7 @@ it('remove does not drop below minItems even when called directly without an isR
             </button>
           </div>
         ))}
-        <button type="button" onClick={add}>
+        <button type="button" onClick={handleItemAdd}>
           Add
         </button>
       </div>

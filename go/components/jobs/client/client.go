@@ -19,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
+	k8sptr "k8s.io/utils/ptr"
 
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -399,6 +400,24 @@ func (c *Client) CreateJob(
 		if err != nil {
 			return fmt.Errorf("map global to local err:%w", err)
 		}
+
+		// Fetch the remote RayCluster to get its UID for ownerReference.
+		// When the RayCluster is later deleted, K8s GC cascade-deletes all owned RayJobs.
+		clusterNamespace, clusterName := c.mapper.GetLocalName(jobClusterObject)
+		remoteCluster := &rayv1.RayCluster{}
+		err = c.helper.GetResource(ctx, cs.Ray, constants.KubeRayResource, clusterNamespace, clusterName, remoteCluster)
+		if err != nil {
+			return fmt.Errorf("get remote ray cluster for owner ref: %w", err)
+		}
+		kubeRayJobTyped := kubeRayJob.(*rayv1.RayJob)
+		kubeRayJobTyped.OwnerReferences = []metav1.OwnerReference{{
+			APIVersion: "ray.io/v1",
+			Kind:       "RayCluster",
+			Name:       remoteCluster.Name,
+			UID:        remoteCluster.UID,
+			Controller: k8sptr.To(true),
+		}}
+
 		// always use mapper's local namespace/name to avoid inconsistencies
 		localNamespace, _ := c.mapper.GetLocalName(jobObject)
 		err = c.helper.CreateResource(

@@ -9,6 +9,8 @@ from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
 from michelangelo.cli.mactl.plugins.entity.pipeline.run import (
+    _build_notifications,
+    _split_csv,
     convert_crd_metadata_pipeline_run,
     generate_pipeline_run_name,
     generate_pipeline_run_object,
@@ -188,6 +190,9 @@ class PipelineRunTest(TestCase):
             pipeline_name="test-pipeline",
             namespace="test-ns",
             resume_from=None,
+            notify_slack=None,
+            notify_email=None,
+            notify_on=None,
         )
 
     @patch(
@@ -219,6 +224,9 @@ class PipelineRunTest(TestCase):
             pipeline_name="test-pipeline",
             namespace="test-ns",
             resume_from="previous-run:step-1",
+            notify_slack=None,
+            notify_email=None,
+            notify_on=None,
         )
 
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.get_service_name")
@@ -322,3 +330,229 @@ class PipelineRunTest(TestCase):
         with patch("builtins.print") as mock_print:
             mock_crd.run(namespace="test-ns", name="test-pipeline")
             mock_print.assert_called_once_with(mock_response)
+
+    # ------------------------------------------------------------------
+    # Notification tests
+    # ------------------------------------------------------------------
+
+    def test_build_notifications_slack(self):
+        """Test _build_notifications with Slack destinations."""
+        result = _build_notifications(notify_slack=["@sally.lee", "#ml-alerts"])
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["notificationType"], "NOTIFICATION_TYPE_SLACK")
+        self.assertEqual(result[0]["slackDestinations"], ["@sally.lee", "#ml-alerts"])
+        self.assertEqual(result[0]["resourceType"], "RESOURCE_TYPE_PIPELINE_RUN")
+        # All 4 event types by default
+        self.assertEqual(len(result[0]["eventTypes"]), 4)
+
+    def test_build_notifications_email(self):
+        """Test _build_notifications with email addresses."""
+        result = _build_notifications(notify_email=["a@x.com", "b@x.com"])
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["notificationType"], "NOTIFICATION_TYPE_EMAIL")
+        self.assertEqual(result[0]["emails"], ["a@x.com", "b@x.com"])
+
+    def test_build_notifications_both(self):
+        """Test _build_notifications with both Slack and email."""
+        result = _build_notifications(
+            notify_slack=["@user"],
+            notify_email=["user@example.com"],
+        )
+
+        self.assertEqual(len(result), 2)
+        types = {n["notificationType"] for n in result}
+        self.assertEqual(
+            types,
+            {"NOTIFICATION_TYPE_SLACK", "NOTIFICATION_TYPE_EMAIL"},
+        )
+
+    def test_build_notifications_none(self):
+        """Test _build_notifications with no flags returns empty list."""
+        result = _build_notifications()
+        self.assertEqual(result, [])
+
+    def test_build_notifications_custom_notify_on(self):
+        """Test _build_notifications with custom --notify-on event types."""
+        result = _build_notifications(
+            notify_slack=["#alerts"],
+            notify_on=["FAILED", "KILLED"],
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(
+            result[0]["eventTypes"],
+            [
+                "EVENT_TYPE_PIPELINE_RUN_STATE_FAILED",
+                "EVENT_TYPE_PIPELINE_RUN_STATE_KILLED",
+            ],
+        )
+
+    def test_build_notifications_single_notify_on(self):
+        """Test _build_notifications with a single --notify-on value."""
+        result = _build_notifications(
+            notify_email=["oncall@example.com"],
+            notify_on=["FAILED"],
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(
+            result[0]["eventTypes"],
+            ["EVENT_TYPE_PIPELINE_RUN_STATE_FAILED"],
+        )
+
+    def test_build_notifications_started_event(self):
+        """Test _build_notifications with STARTED event type."""
+        result = _build_notifications(
+            notify_slack=["#alerts"],
+            notify_on=["STARTED"],
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(
+            result[0]["eventTypes"],
+            ["EVENT_TYPE_PIPELINE_RUN_STATE_STARTED"],
+        )
+
+    def test_build_notifications_started_with_terminal_events(self):
+        """Test _build_notifications with STARTED combined with terminal events."""
+        result = _build_notifications(
+            notify_email=["oncall@example.com"],
+            notify_on=["STARTED", "FAILED", "SUCCEEDED"],
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(
+            result[0]["eventTypes"],
+            [
+                "EVENT_TYPE_PIPELINE_RUN_STATE_STARTED",
+                "EVENT_TYPE_PIPELINE_RUN_STATE_FAILED",
+                "EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED",
+            ],
+        )
+
+    def test_build_notifications_defaults_exclude_started(self):
+        """Test that default event types do not include STARTED."""
+        result = _build_notifications(notify_slack=["#alerts"])
+        self.assertEqual(len(result), 1)
+        self.assertNotIn(
+            "EVENT_TYPE_PIPELINE_RUN_STATE_STARTED",
+            result[0]["eventTypes"],
+        )
+        self.assertEqual(len(result[0]["eventTypes"]), 4)
+
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.get_user_name")
+    def test_generate_pipeline_run_object_with_notifications(self, mock_get_user_name):
+        """Test pipeline run object includes notifications."""
+        mock_get_user_name.return_value = "test-user"
+
+        result = generate_pipeline_run_object(
+            run_name="run-123",
+            pipeline_name="test-pipeline",
+            namespace="test-ns",
+            notify_slack=["@sally.lee", "#ml-team"],
+            notify_email=["oncall@example.com"],
+            notify_on=["FAILED", "SUCCEEDED"],
+        )
+
+        self.assertIn("notifications", result["spec"])
+        notifs = result["spec"]["notifications"]
+        self.assertEqual(len(notifs), 2)
+
+        slack_notif = next(
+            n for n in notifs if n["notificationType"] == "NOTIFICATION_TYPE_SLACK"
+        )
+        self.assertEqual(slack_notif["slackDestinations"], ["@sally.lee", "#ml-team"])
+        self.assertEqual(
+            slack_notif["eventTypes"],
+            [
+                "EVENT_TYPE_PIPELINE_RUN_STATE_FAILED",
+                "EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED",
+            ],
+        )
+
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.get_user_name")
+    def test_generate_pipeline_run_object_no_notifications(self, mock_get_user_name):
+        """Test pipeline run object has no notifications field when flags absent."""
+        mock_get_user_name.return_value = "test-user"
+
+        result = generate_pipeline_run_object(
+            run_name="run-123",
+            pipeline_name="test-pipeline",
+            namespace="test-ns",
+        )
+
+        self.assertNotIn("notifications", result["spec"])
+
+    def test_build_notifications_empty_string_destinations_filtered(self):
+        """Test that empty-string destinations are filtered out."""
+        result = _build_notifications(notify_slack=["", " ", "#valid"])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["slackDestinations"], ["#valid"])
+
+    def test_build_notifications_all_empty_destinations(self):
+        """Test that all-empty destinations produce no notifications."""
+        result = _build_notifications(notify_slack=["", "  "])
+        self.assertEqual(result, [])
+
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run._LOG")
+    def test_build_notifications_notify_on_without_destinations_warns(self, mock_log):
+        """Test that --notify-on without destinations logs a warning."""
+        result = _build_notifications(notify_on=["FAILED"])
+        self.assertEqual(result, [])
+        mock_log.warning.assert_called_once()
+        self.assertIn("--notify-on", mock_log.warning.call_args[0][0])
+
+    # ------------------------------------------------------------------
+    # Comma-separated value tests
+    # ------------------------------------------------------------------
+
+    def test_split_csv_basic(self):
+        """Test _split_csv splits comma-separated values."""
+        self.assertEqual(_split_csv(["a,b,c"]), ["a", "b", "c"])
+
+    def test_split_csv_mixed_repeat_and_csv(self):
+        """Test _split_csv handles mix of repeated and comma-separated."""
+        self.assertEqual(_split_csv(["a", "b,c"]), ["a", "b", "c"])
+
+    def test_split_csv_strips_whitespace(self):
+        """Test _split_csv strips whitespace around values."""
+        self.assertEqual(_split_csv(["a , b"]), ["a", "b"])
+
+    def test_split_csv_filters_empty(self):
+        """Test _split_csv filters empty segments."""
+        self.assertEqual(_split_csv(["a,,b", ""]), ["a", "b"])
+
+    def test_split_csv_none(self):
+        """Test _split_csv returns empty list for None."""
+        self.assertEqual(_split_csv(None), [])
+
+    def test_build_notifications_csv_email(self):
+        """Test _build_notifications with comma-separated emails."""
+        result = _build_notifications(notify_email=["a@x.com,b@x.com"])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["emails"], ["a@x.com", "b@x.com"])
+
+    def test_build_notifications_csv_notify_on(self):
+        """Test _build_notifications with comma-separated --notify-on."""
+        result = _build_notifications(
+            notify_slack=["#alerts"],
+            notify_on=["SUCCEEDED,FAILED"],
+        )
+        self.assertEqual(
+            result[0]["eventTypes"],
+            [
+                "EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED",
+                "EVENT_TYPE_PIPELINE_RUN_STATE_FAILED",
+            ],
+        )
+
+    def test_build_notifications_invalid_notify_on_raises(self):
+        """Test _build_notifications raises on invalid --notify-on value."""
+        with self.assertRaises(ValueError) as ctx:
+            _build_notifications(
+                notify_slack=["#alerts"],
+                notify_on=["INVALID"],
+            )
+        self.assertIn("INVALID", str(ctx.exception))

@@ -72,7 +72,9 @@ func TestMapper_MapGlobalJobToLocal(t *testing.T) {
 						"ray.io/cluster":      rayCluster.Name,
 						"rayClusterNamespace": RayLocalNamespace,
 					},
-					SubmitterPodTemplate: submitterPod,
+					TTLSecondsAfterFinished:  int32(300),
+					ShutdownAfterJobFinishes: true,
+					SubmitterPodTemplate:     submitterPod,
 				},
 			},
 		},
@@ -318,6 +320,161 @@ func TestMapper_MapLocalJobStatusToGlobal(t *testing.T) {
 			require.NotNil(t, js.Ray)
 			assert.Equal(t, tt.expectStatus, js.Ray.JobStatus)
 			assert.Equal(t, tt.expectMsg, js.Ray.Message)
+		})
+	}
+}
+
+func TestMapLocalClusterStatusToGlobal_WithConditions(t *testing.T) {
+	m := Mapper{}
+
+	tests := []struct {
+		name            string
+		kubeRayState    rayv1.ClusterState
+		statusReason    string
+		conditions      []metav1.Condition
+		expectState     v2pb.RayClusterState
+		expectPodErrors int
+		expectReason    string
+	}{
+		{
+			name:         "no conditions uses deprecated Status.Reason",
+			kubeRayState: rayv1.Ready,
+			statusReason: "AllReady",
+			expectState:  v2pb.RAY_CLUSTER_STATE_READY,
+			expectReason: "AllReady",
+		},
+		{
+			name:         "HeadPodReady=False with CrashLoopBackOff",
+			kubeRayState: "",
+			conditions: []metav1.Condition{
+				{
+					Type:    string(rayv1.HeadPodReady),
+					Status:  metav1.ConditionFalse,
+					Reason:  "CrashLoopBackOff",
+					Message: "container ray-head is crashing",
+				},
+			},
+			expectState:     v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+			expectPodErrors: 1,
+			expectReason:    "CrashLoopBackOff",
+		},
+		{
+			name:         "ReplicaFailure=True with FailedCreateHeadPod",
+			kubeRayState: "",
+			conditions: []metav1.Condition{
+				{
+					Type:    string(rayv1.RayClusterReplicaFailure),
+					Status:  metav1.ConditionTrue,
+					Reason:  "FailedCreateHeadPod",
+					Message: "quota exceeded",
+				},
+			},
+			expectState:     v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+			expectPodErrors: 1,
+			expectReason:    "FailedCreateHeadPod",
+		},
+		{
+			name:         "HeadPodReady=False with RayClusterPodsProvisioning is not a failure",
+			kubeRayState: "",
+			conditions: []metav1.Condition{
+				{
+					Type:    string(rayv1.HeadPodReady),
+					Status:  metav1.ConditionFalse,
+					Reason:  rayv1.RayClusterPodsProvisioning,
+					Message: "pods are being created",
+				},
+			},
+			expectState:     v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+			expectPodErrors: 0,
+			expectReason:    "",
+		},
+		{
+			name:         "Suspended state maps to UNKNOWN",
+			kubeRayState: rayv1.Suspended,
+			expectState:  v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+		},
+		{
+			name:         "condition reason takes priority over deprecated Status.Reason",
+			kubeRayState: "",
+			statusReason: "DeprecatedReason",
+			conditions: []metav1.Condition{
+				{
+					Type:    string(rayv1.HeadPodReady),
+					Status:  metav1.ConditionFalse,
+					Reason:  "ImagePullBackOff",
+					Message: "cannot pull image",
+				},
+			},
+			expectState:     v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+			expectPodErrors: 1,
+			expectReason:    "ImagePullBackOff",
+		},
+		{
+			name:         "ReplicaFailure reason has priority over HeadPodReady reason",
+			kubeRayState: "",
+			conditions: []metav1.Condition{
+				{
+					Type:   string(rayv1.HeadPodReady),
+					Status: metav1.ConditionFalse,
+					Reason: "CrashLoopBackOff",
+				},
+				{
+					Type:   string(rayv1.RayClusterReplicaFailure),
+					Status: metav1.ConditionTrue,
+					Reason: "FailedCreateWorkerPod",
+				},
+			},
+			expectState:     v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+			expectPodErrors: 2,
+			expectReason:    "FailedCreateWorkerPod",
+		},
+		{
+			name:         "HeadPodReady=False with ContainersNotReady (actual KubeRay reason)",
+			kubeRayState: "",
+			conditions: []metav1.Condition{
+				{
+					Type:    string(rayv1.HeadPodReady),
+					Status:  metav1.ConditionFalse,
+					Reason:  "ContainersNotReady",
+					Message: "containers with unready status: [head]",
+				},
+			},
+			expectState:     v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+			expectPodErrors: 1,
+			expectReason:    "ContainersNotReady",
+		},
+		{
+			name:         "HeadPodReady=True is not a failure",
+			kubeRayState: rayv1.Ready,
+			conditions: []metav1.Condition{
+				{
+					Type:   string(rayv1.HeadPodReady),
+					Status: metav1.ConditionTrue,
+					Reason: rayv1.HeadPodRunningAndReady,
+				},
+			},
+			expectState:     v2pb.RAY_CLUSTER_STATE_READY,
+			expectPodErrors: 0,
+			expectReason:    "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rayCluster := &rayv1.RayCluster{
+				Status: rayv1.RayClusterStatus{
+					State:      tt.kubeRayState,
+					Reason:     tt.statusReason,
+					Conditions: tt.conditions,
+				},
+			}
+			result, err := m.MapLocalClusterStatusToGlobal(rayCluster)
+			require.NoError(t, err)
+			require.NotNil(t, result.Ray)
+
+			assert.Equal(t, tt.expectState, result.Ray.State)
+			assert.Len(t, result.Ray.PodErrors, tt.expectPodErrors)
+			assert.Equal(t, tt.expectReason, result.Reason)
 		})
 	}
 }

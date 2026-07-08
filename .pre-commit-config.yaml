@@ -13,7 +13,24 @@ repos:
         types: [python]
       - id: prettier
         name: prettier formatter
-        entry: bash -c 'cd javascript && yarn prettier --write "$@"' --
+        entry: bash -c 'cd javascript && yarn prettier --write --log-level warn .'
         language: system
-        types_or: [ts, tsx, javascript, jsx, json, css, yaml, markdown]
-        pass_filenames: true
+        files: ^javascript/
+        pass_filenames: false
+      - id: eslint
+        name: eslint
+        entry: bash -c 'cd javascript && yarn lint --fix --quiet'
+        language: system
+        files: ^javascript/
+        pass_filenames: false
+      - id: gofmt
+        name: go formatter
+        entry: gofmt -l -w
+        language: system
+        files: ^go/.*\.go$
+      - id: go-vet
+        name: go vet
+        entry: bash -c 'cd go && go vet ./...'
+        language: system
+        files: ^go/.*\.go$
+        pass_filenames: false

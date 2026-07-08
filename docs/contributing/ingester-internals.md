@@ -537,6 +537,41 @@ With 13 CRDs and `concurrentReconciles: 1`, there are 13 independent work queues
 | `directUpdate` not implemented | Low | Optimistic concurrency update path placeholder. |
 | No schema migration support | Medium | Schema init Job is create-only. `ALTER TABLE` for new columns requires manual intervention. |
 
+## Cascade Delete: Retain Strategy
+
+When a Pipeline is [cascade-deleted](../operator-guides/cascade-delete.md), its PipelineRuns and TriggerRuns are removed via Kubernetes foreground garbage collection. These kinds use a **retain strategy** — the ingester must preserve their final state in MySQL before allowing the CR to be removed from etcd.
+
+Whether a kind retains on cascade is **not** a feature flag and the ingester hard-codes no kind names. Instead an injected per-kind **`RetainPolicy`** (`cascadedelete.RetainPolicy`) tells the ingester whether to retain a given kind's final state on a non-apiserver delete. The opt-in set is supplied at the controller-manager composition root — currently `{PipelineRun, TriggerRun}` via `cascadedelete.NewStaticRetainPolicy("PipelineRun", "TriggerRun")`. Kinds that do not opt in keep their existing deletion behavior.
+
+### How it works
+
+During a cascade deletion, each opted-in run carries two finalizers:
+
+1. A **drain finalizer** (`pipelineruns.michelangelo.uber.com/drain` or `triggerruns.michelangelo.uber.com/drain`) — owned by the child's business controller, blocks removal until the in-flight workflow is cancelled.
+2. The **ingester finalizer** (`michelangelo/Ingester`) — owned by the ingester, blocks removal until MySQL is updated.
+
+The ingester's `handleCascadeDeletion` path runs only for kinds the injected `RetainPolicy` opts in, and works as follows:
+
+- **While a non-ingester finalizer (the drain finalizer) is present**: the ingester keeps its own finalizer in place and refreshes MySQL with the CR's current state on every reconcile. This ensures MySQL reflects the latest status (e.g., transitioning from `RUNNING` to `KILLED`) as the drain progresses.
+- **Once the drain finalizer is removed**: the workflow has been cleanly terminated. The ingester upserts the final CR state into MySQL, removes its own finalizer, and the CR is deleted from etcd.
+
+For kinds the `RetainPolicy` does **not** opt in, `handleCascadeDeletion` is a no-op and the ingester simply removes its finalizer as before.
+
+### No independent timeout
+
+The ingester enforces no timeout of its own; it waits for the drain finalizer's lifecycle. A wedged drain is unblocked by the **child's own** [24-hour safety timeout](../operator-guides/cascade-delete.md#safety-timeout) — keyed off that child's `deletionTimestamp` — not by any Pipeline-level clock and not by the ingester.
+
+## Adding a cascade child kind
+
+The cascade machinery lives in the `go/cascadedelete` package and is consumed by thin, per-kind adapters. The scope is **deliberately** `Pipeline → {PipelineRun, TriggerRun}` only — the Pipeline controller itself carries zero cascade code. If you ever need to add a new child kind, do all of the following:
+
+1. **Implement a `cascadedelete.DrainTarget` adapter** for the new kind in its controller. The adapter wraps a single fetched child and persists via the controller's `api.Handler` (not `client.Client`); the shared driver `cascadedelete.RunDrainStep` calls its five methods (`RequestCancel`, `Progress`, `MarkKilled`, `ForceKill`, `CompleteDrain`), reading the run's terminal/started state from the `DrainState` you pass it. Drive the drain from the controller's `Reconcile` when a `deletionTimestamp` is set.
+2. **Add the kind's local constants** in that controller package — `drainFinalizer` (the byte-exact finalizer string, e.g. `<kind>s.michelangelo.uber.com/drain`) and `metricKind` (the metric label value). These CRD-specific facts must **not** live in `go/cascadedelete`.
+3. **Register the API hook** to stamp the Pipeline ownerReference at creation (via `cascadedelete.StampOwnerRefOnCreate`) — the canonical, permanent path. As a transitional migration for objects predating the hook, also stamp the ownerReference in the controller during reconciliation. Install the drain finalizer **before** the ownerRef stamp.
+4. **Add the kind to the `RetainPolicy` provider** in `go/cmd/controllermgr/main.go` — extend `cascadedelete.NewStaticRetainPolicy("PipelineRun", "TriggerRun", …)` so the ingester retains the new kind's final state in MySQL on cascade. Kind names live only at this composition root, never in `go/cascadedelete` or the ingester.
+
+Keep `go/cascadedelete` free of concrete kind names and of the strings `pipeline`/`trigger` (enforced by a CI grep gate); per-kind specifics belong in the consumers, and the *set* of retain kinds belongs in the controller-manager composition root.
+
 ---
 
 ## Next Steps

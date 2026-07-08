@@ -291,6 +291,11 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 			tmpObj.SetAnnotations(annotation)
 		}
 		annotation[api.DeletingAnnotation] = "true"
+		// Record the caller's propagation policy so the ingester can honor it when it
+		// issues the real K8s delete (e.g. Foreground for cascade deletion).
+		if opts != nil && opts.PropagationPolicy != nil {
+			annotation[api.DeletePropagationAnnotation] = string(*opts.PropagationPolicy)
+		}
 
 		err = handler.k8sHandler.Update(ctx, tmpObj, &metav1.UpdateOptions{})
 		return surfaceGrpcError(err, "delete", objMeta.GetNamespace(), objMeta.GetName())

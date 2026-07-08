@@ -191,10 +191,10 @@ export type PhaseEntityState = 'active' | 'disabled';
  * const accessor: Accessor = 'users[0].name';
  * accessor({ users: [{ name: 'John' }] }); // 'John'
  *
- * const accessor: Accessor<string> = (object) => object.name;
+ * const accessor: Accessor<{ name: string }, string> = (object) => object.name;
  * accessor({ name: 'John' }); // 'John'
  * ```
  */
-export type Accessor<K = unknown> = AccessorFn<K> | string;
+export type Accessor<TIn = unknown, TOut = unknown> = AccessorFn<TIn, TOut> | string;
 
-export type AccessorFn<T = unknown> = (object: unknown) => T | undefined;
+export type AccessorFn<TIn = unknown, TOut = unknown> = (object: TIn) => TOut | undefined;

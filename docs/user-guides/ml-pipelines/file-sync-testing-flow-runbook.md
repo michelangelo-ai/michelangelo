@@ -1,4 +1,4 @@
-# File sync
+# File Sync
 
 ## What you'll learn
 
@@ -123,5 +123,5 @@ File sync only includes files tracked by Git. If you added new files, make sure 
 ## Next Steps
 
 - **Cache results between runs** — See [Uniflow caching and pipeline run resume](./cache-and-pipelinerun-resume-form.md) to skip unchanged steps and resume failed runs
-- **Run on a schedule** — See [Set Up Triggers](../set-up-triggers.md) to automate pipeline execution with cron triggers
-- **Build and register your model** — Once your code is validated, follow the [Model Registry Guide](../model-registry-guide.md) to package and version your model
+- **Run on a schedule** — See [Set Up Triggers](./set-up-triggers.md) to automate pipeline execution with cron triggers
+- **Build and register your model** — Once your code is validated, follow the [Model Registry Guide](../train-and-deploy-models/model-registry-guide.md) to package and version your model

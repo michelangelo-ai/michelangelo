@@ -50,9 +50,10 @@ export COMET_TAGS=demo,movielens,smoke            # optional, comma-separated
 python -m examples.movielens.train
 ```
 
-`train.py` reads these and builds a `CometParam`, which `LightningTrainer`
-forwards through to `_get_comet_logger`. With Comet enabled you'll see a
-"Comet experiment URL: ..." line in the worker logs.
+`train.py` reads these and resolves them into `build_comet_logger` factory
+kwargs, forwarded through `LightningTrainerParam.lightning_trainer_kwargs` so
+the `CometLogger` is constructed inside the Ray Train worker. With Comet
+enabled you'll see a "Comet experiment URL: ..." line in the worker logs.
 
 ### MLflow
 

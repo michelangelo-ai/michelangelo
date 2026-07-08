@@ -47,7 +47,7 @@ export function toFlatDotPathMap(
  */
 export function getObjectValue<K>(
   obj: unknown,
-  accessor: Accessor<K>,
+  accessor: Accessor<unknown, K>,
   defaultValue?: K
 ): K | undefined {
   if (typeof accessor === 'function') {

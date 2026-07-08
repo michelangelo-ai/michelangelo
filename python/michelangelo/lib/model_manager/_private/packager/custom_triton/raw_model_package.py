@@ -53,7 +53,7 @@ def generate_raw_model_package_content(
         sample_data: the sample data for the model. A list of input data
             for the predict function.
         model_path_source_type: the source type of the model path,
-            e.g. 'hdfs', 'terrablob', default is 'hdfs'
+            e.g. a value from StorageType. Default is StorageType.LOCAL.
         requirements: the requirements of the model, which can be one of the following:
             - a list of requirements
             - a path to the requirements.txt file

@@ -44,14 +44,14 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
     },
   });
 
-  const navigateToTab = React.useCallback(
+  const handleTabNavigation = React.useCallback(
     (tabId: string, options?: { replace?: boolean }) => {
       navigate(`/${projectId}/${phase}/${entity}/${entityId}/${tabId}`, options);
     },
     [navigate, projectId, phase, entity, entityId]
   );
 
-  const returnToEntityList = () => {
+  const handleReturnToEntityList = () => {
     navigate(`/${projectId}/${phase}/${entity}`);
   };
 
@@ -69,12 +69,12 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
 
     if (!entityTab) {
       // No tab specified - redirect to first tab
-      navigateToTab(firstTabId, { replace: true });
+      handleTabNavigation(firstTabId, { replace: true });
     } else if (!validTabIds.includes(entityTab)) {
       // Invalid tab - redirect to first tab
-      navigateToTab(firstTabId, { replace: true });
+      handleTabNavigation(firstTabId, { replace: true });
     }
-  }, [entityTab, detailViewConfig, isLoading, error, navigateToTab]);
+  }, [entityTab, detailViewConfig, isLoading, error, handleTabNavigation]);
 
   if (error) {
     return (
@@ -102,7 +102,7 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
     <DetailView
       subtitle={entityConfig!.name}
       title={entityId}
-      onGoBack={returnToEntityList}
+      onGoBack={handleReturnToEntityList}
       actions={entityConfig!.actions}
       record={entityData}
       loading={isLoading}
@@ -117,7 +117,7 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
           content: <DetailViewPageRenderer page={page} data={entityData} isLoading={isLoading} />,
         }))}
         activeTabId={entityTab}
-        onTabSelect={navigateToTab}
+        onTabSelect={handleTabNavigation}
       />
     </DetailView>
   );

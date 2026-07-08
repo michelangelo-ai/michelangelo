@@ -2,11 +2,11 @@
 
 This is a working summary of the architectural direction for `@michelangelo-ai/core`. It describes where the package is going — not every section reflects current state in full.
 
-For coding conventions, see `CLAUDE.md` in this directory and in `javascript/`.
+For coding conventions, see `CLAUDE.md` in this directory and in `<repo-root>/javascript/`.
 
 ## 1. Domain model
 
-Studio organizes around three concepts. Most of this document — and most configuration — is expressed in terms of them.
+Studio organizes around three concepts.
 
 - **Project** — the top-level workspace; everything else is typically scoped to one. Maps to `:projectId` in the URL and to `namespace` in API requests.
 - **Phase** — a stage in the ML lifecycle (e.g. `data`, `train`, `deploy`). Phases group related entity types.

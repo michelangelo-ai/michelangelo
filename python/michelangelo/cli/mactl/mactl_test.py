@@ -16,6 +16,7 @@ from michelangelo.cli.mactl.mactl import (
     ADDRESS,
     DEFAULT_DIR_PLUGINS,
     _is_service_name,
+    _iter_entity_names_in_package,
     add_plugin_dirs_to_syspath,
     apply_command_plugins,
     apply_entity_plugins,
@@ -27,6 +28,7 @@ from michelangelo.cli.mactl.mactl import (
     handle_crd_action_help,
     pre_parse_args,
     read_module_from_file,
+    read_module_from_package,
     read_plugin_command,
     read_plugin_modules,
     read_plugins,
@@ -535,6 +537,35 @@ class ReadModuleFromFileTest(TestCase):
             # Verify returns None
             self.assertIsNone(result)
 
+    def test_returns_none_when_plugin_raises_import_error(self):
+        """Resilience: a broken plugin (ImportError on exec) is skipped, not raised."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            plugin_dir = Path(tmpdir) / "entity" / "broken_entity"
+            plugin_dir.mkdir(parents=True)
+            (plugin_dir / "main.py").write_text(
+                "import this_module_definitely_does_not_exist_12345\n"
+            )
+
+            with patch("michelangelo.cli.mactl.mactl._LOG") as mock_log:
+                result = read_module_from_file("broken_entity", Path(tmpdir))
+
+            self.assertIsNone(result)
+            mock_log.error.assert_called_once()
+            self.assertTrue(mock_log.error.call_args.kwargs.get("exc_info"))
+
+    def test_returns_none_when_plugin_raises_at_top_level(self):
+        """Resilience: any top-level exception in a plugin is contained."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            plugin_dir = Path(tmpdir) / "entity" / "raises_entity"
+            plugin_dir.mkdir(parents=True)
+            (plugin_dir / "main.py").write_text(
+                "raise RuntimeError('plugin top-level boom')\n"
+            )
+
+            result = read_module_from_file("raises_entity", Path(tmpdir))
+
+            self.assertIsNone(result)
+
 
 class DiscoverCrdsTest(TestCase):
     """Tests for discover_crds function."""
@@ -975,6 +1006,295 @@ class DiscoverAllPluginsTest(TestCase):
         self.assertEqual(registry, {})
 
 
+def _write_pkg_plugin(
+    root: Path, package_name: str, entity_name: str, body: str
+) -> None:
+    """Helper: lay out an importable plugin package on disk for tests.
+
+    Creates ``{root}/{package_name}/__init__.py``,
+    ``{package_name}/entity/__init__.py``,
+    ``{package_name}/entity/{entity_name}/__init__.py``,
+    ``{package_name}/entity/{entity_name}/main.py`` (containing ``body``).
+    Caller is responsible for inserting ``root`` into ``sys.path``.
+    """
+    pkg_parts = package_name.split(".")
+    cur = root
+    for part in pkg_parts:
+        cur = cur / part
+        cur.mkdir(parents=True, exist_ok=True)
+        (cur / "__init__.py").write_text("")
+    entity_pkg = cur / "entity"
+    entity_pkg.mkdir(parents=True, exist_ok=True)
+    (entity_pkg / "__init__.py").write_text("")
+    crd_pkg = entity_pkg / entity_name
+    crd_pkg.mkdir(parents=True, exist_ok=True)
+    (crd_pkg / "__init__.py").write_text("")
+    (crd_pkg / "main.py").write_text(body)
+
+
+class ReadModuleFromPackageTest(TestCase):
+    """Tests for read_module_from_package function."""
+
+    def test_returns_module_when_import_succeeds(self):
+        """Core: imports `{pkg}.entity.{crd}.main` and returns it."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            _write_pkg_plugin(
+                Path(tmpdir),
+                "rmp_ok_pkg",
+                "test_entity",
+                "marker = 'from-package'",
+            )
+            sys.path.insert(0, tmpdir)
+            try:
+                result = read_module_from_package("test_entity", "rmp_ok_pkg")
+            finally:
+                sys.path.remove(tmpdir)
+                # Clean importlib cache so other tests aren't polluted.
+                for k in list(sys.modules):
+                    if k.startswith("rmp_ok_pkg"):
+                        del sys.modules[k]
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.marker, "from-package")
+
+    def test_returns_none_when_package_missing(self):
+        """Edge: unknown package name returns None, does not raise."""
+        result = read_module_from_package(
+            "test_entity", "this_pkg_does_not_exist_zzz_12345"
+        )
+        self.assertIsNone(result)
+
+    def test_returns_none_when_main_module_missing(self):
+        """Edge: existing package but no entity/<crd>/main.py returns None."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Make the package importable but omit the entity subpackage.
+            pkg_dir = Path(tmpdir) / "rmp_empty_pkg"
+            pkg_dir.mkdir()
+            (pkg_dir / "__init__.py").write_text("")
+            sys.path.insert(0, tmpdir)
+            try:
+                result = read_module_from_package("missing_entity", "rmp_empty_pkg")
+            finally:
+                sys.path.remove(tmpdir)
+                sys.modules.pop("rmp_empty_pkg", None)
+
+        self.assertIsNone(result)
+
+    def test_returns_none_when_plugin_main_raises(self):
+        """Resilience: a plugin whose main.py raises is skipped, not propagated."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            _write_pkg_plugin(
+                Path(tmpdir),
+                "rmp_broken_pkg",
+                "broken_entity",
+                "raise RuntimeError('plugin boom')",
+            )
+            sys.path.insert(0, tmpdir)
+            try:
+                result = read_module_from_package("broken_entity", "rmp_broken_pkg")
+            finally:
+                sys.path.remove(tmpdir)
+                for k in list(sys.modules):
+                    if k.startswith("rmp_broken_pkg"):
+                        del sys.modules[k]
+
+        self.assertIsNone(result)
+
+    def test_relative_imports_inside_plugin_work(self):
+        """Regression: package-loaded plugin's relative imports resolve correctly.
+
+        ``read_module_from_file`` cannot deliver this because spec_from_file_location
+        leaves ``__package__`` unset.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            _write_pkg_plugin(
+                Path(tmpdir),
+                "rmp_relimport_pkg",
+                "test_entity",
+                "from . import sibling\nresolved = sibling.value",
+            )
+            sibling = (
+                Path(tmpdir)
+                / "rmp_relimport_pkg"
+                / "entity"
+                / "test_entity"
+                / "sibling.py"
+            )
+            sibling.write_text("value = 'sibling-loaded-via-relative-import'")
+            sys.path.insert(0, tmpdir)
+            try:
+                result = read_module_from_package("test_entity", "rmp_relimport_pkg")
+            finally:
+                sys.path.remove(tmpdir)
+                for k in list(sys.modules):
+                    if k.startswith("rmp_relimport_pkg"):
+                        del sys.modules[k]
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.resolved, "sibling-loaded-via-relative-import")
+
+
+class IterEntityNamesInPackageTest(TestCase):
+    """Tests for _iter_entity_names_in_package helper."""
+
+    def test_lists_entity_subpackages(self):
+        """Core: returns entity names that are subpackages of `{pkg}.entity`."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            _write_pkg_plugin(Path(tmpdir), "ien_pkg", "alpha", "")
+            _write_pkg_plugin(Path(tmpdir), "ien_pkg", "beta", "")
+            # Also drop a non-package file that should be ignored.
+            non_pkg_file = Path(tmpdir) / "ien_pkg" / "entity" / "stray_file.py"
+            non_pkg_file.write_text("# not a subpackage")
+            sys.path.insert(0, tmpdir)
+            try:
+                names = _iter_entity_names_in_package("ien_pkg")
+            finally:
+                sys.path.remove(tmpdir)
+                for k in list(sys.modules):
+                    if k.startswith("ien_pkg"):
+                        del sys.modules[k]
+
+        self.assertEqual(sorted(names), ["alpha", "beta"])
+
+    def test_returns_empty_when_package_missing(self):
+        """Edge: unknown package returns []."""
+        names = _iter_entity_names_in_package("this_pkg_does_not_exist_zzz_67890")
+        self.assertEqual(names, [])
+
+    def test_returns_empty_when_entity_subpackage_missing(self):
+        """Edge: package exists but has no `entity` subpackage."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pkg_dir = Path(tmpdir) / "ien_no_entity_pkg"
+            pkg_dir.mkdir()
+            (pkg_dir / "__init__.py").write_text("")
+            sys.path.insert(0, tmpdir)
+            try:
+                names = _iter_entity_names_in_package("ien_no_entity_pkg")
+            finally:
+                sys.path.remove(tmpdir)
+                sys.modules.pop("ien_no_entity_pkg", None)
+
+        self.assertEqual(names, [])
+
+    def test_returns_empty_when_entity_import_raises_unexpected_error(self):
+        """Resilience: entity subpackage whose code raises is skipped, not raised."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pkg_dir = Path(tmpdir) / "ien_boom_pkg"
+            pkg_dir.mkdir()
+            (pkg_dir / "__init__.py").write_text("")
+            entity_pkg = pkg_dir / "entity"
+            entity_pkg.mkdir()
+            entity_pkg.joinpath("__init__.py").write_text(
+                "raise RuntimeError('entity boom')"
+            )
+            sys.path.insert(0, tmpdir)
+            try:
+                names = _iter_entity_names_in_package("ien_boom_pkg")
+            finally:
+                sys.path.remove(tmpdir)
+                for k in list(sys.modules):
+                    if k.startswith("ien_boom_pkg"):
+                        del sys.modules[k]
+
+        self.assertEqual(names, [])
+
+    def test_returns_empty_when_entity_has_no_path_attr(self):
+        """Edge: `{pkg}.entity` resolves to a single-file module (no `__path__`)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pkg_dir = Path(tmpdir) / "ien_nopath_pkg"
+            pkg_dir.mkdir()
+            (pkg_dir / "__init__.py").write_text("")
+            # `entity` is a single .py module, not a subpackage — no iter
+            (pkg_dir / "entity.py").write_text("# not a package")
+            sys.path.insert(0, tmpdir)
+            try:
+                names = _iter_entity_names_in_package("ien_nopath_pkg")
+            finally:
+                sys.path.remove(tmpdir)
+                for k in list(sys.modules):
+                    if k.startswith("ien_nopath_pkg"):
+                        del sys.modules[k]
+
+        self.assertEqual(names, [])
+
+
+class DiscoverAllPluginsFromPackagesTest(TestCase):
+    """Tests covering the [plugin.packages] discovery path of discover_all_plugins."""
+
+    def test_discovers_plugins_from_configured_packages(self):
+        """Core: configured packages are scanned and their entity plugins registered."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            _write_pkg_plugin(Path(tmpdir), "daps_one_pkg", "pipeline", "loaded = True")
+            sys.path.insert(0, tmpdir)
+            try:
+                with (
+                    patch(
+                        "michelangelo.cli.mactl.mactl._CONFIG",
+                        {"plugin": {"dirs": [], "packages": ["daps_one_pkg"]}},
+                    ),
+                    patch(
+                        "michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS",
+                        Path("/nonexistent"),
+                    ),
+                ):
+                    registry = discover_all_plugins()
+            finally:
+                sys.path.remove(tmpdir)
+                for k in list(sys.modules):
+                    if k.startswith("daps_one_pkg"):
+                        del sys.modules[k]
+
+        self.assertIn("pipeline", registry)
+        self.assertEqual(len(registry["pipeline"]), 1)
+        self.assertTrue(registry["pipeline"][0].loaded)
+
+    def test_dirs_and_packages_accumulate(self):
+        """Edge: registry combines hits from `[plugin.dirs]` and `[plugin.packages]`."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            _write_pkg_plugin(
+                Path(tmpdir), "daps_two_pkg", "pipeline", "from_package = True"
+            )
+            sys.path.insert(0, tmpdir)
+            try:
+                with (
+                    patch(
+                        "michelangelo.cli.mactl.mactl._CONFIG",
+                        {
+                            "plugin": {
+                                "dirs": [str(PLUGIN_TEST_DIR / "plugins_1")],
+                                "packages": ["daps_two_pkg"],
+                            }
+                        },
+                    ),
+                    patch(
+                        "michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS",
+                        Path("/nonexistent"),
+                    ),
+                ):
+                    registry = discover_all_plugins()
+            finally:
+                sys.path.remove(tmpdir)
+                for k in list(sys.modules):
+                    if k.startswith("daps_two_pkg"):
+                        del sys.modules[k]
+
+        # One from the dir fixture, one from the package fixture.
+        self.assertIn("pipeline", registry)
+        self.assertEqual(len(registry["pipeline"]), 2)
+
+    def test_returns_empty_when_packages_key_missing(self):
+        """Edge: no `packages` key behaves identically to packages = []."""
+        with (
+            patch("michelangelo.cli.mactl.mactl._CONFIG", {"plugin": {"dirs": []}}),
+            patch(
+                "michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS", Path("/nonexistent")
+            ),
+        ):
+            registry = discover_all_plugins()
+
+        self.assertEqual(registry, {})
+
+
 class ApplyEntityPluginsTest(TestCase):
     """Tests for apply_entity_plugins function."""
 
@@ -1007,6 +1327,22 @@ class ApplyEntityPluginsTest(TestCase):
 
         apply_entity_plugins(mock_crd, MagicMock(), {"pipeline": [mock_plugin]})
         # no exception raised, plugin silently skipped
+
+    def test_one_failing_plugin_does_not_block_others(self):
+        """Resilience: a failing apply_plugins is logged and others still run."""
+        mock_crd = MagicMock()
+        mock_crd.name = "pipeline"
+        bad = MagicMock(spec=["apply_plugins"])
+        bad.apply_plugins.side_effect = RuntimeError("boom")
+        good = MagicMock(spec=["apply_plugins"])
+
+        with patch("michelangelo.cli.mactl.mactl._LOG") as mock_log:
+            apply_entity_plugins(mock_crd, MagicMock(), {"pipeline": [bad, good]})
+
+        bad.apply_plugins.assert_called_once()
+        good.apply_plugins.assert_called_once()
+        mock_log.error.assert_called_once()
+        self.assertTrue(mock_log.error.call_args.kwargs.get("exc_info"))
 
 
 class ApplyCommandPluginsTest(TestCase):
@@ -1050,6 +1386,24 @@ class ApplyCommandPluginsTest(TestCase):
             mock_crd, "create", {}, MagicMock(), {"pipeline": [mock_plugin]}
         )
         # no exception raised, plugin silently skipped
+
+    def test_one_failing_plugin_does_not_block_others(self):
+        """Resilience: a failing apply_plugin_command is logged and others still run."""
+        mock_crd = MagicMock()
+        mock_crd.name = "pipeline"
+        bad = MagicMock(spec=["apply_plugin_command"])
+        bad.apply_plugin_command.side_effect = RuntimeError("boom")
+        good = MagicMock(spec=["apply_plugin_command"])
+
+        with patch("michelangelo.cli.mactl.mactl._LOG") as mock_log:
+            apply_command_plugins(
+                mock_crd, "create", {}, MagicMock(), {"pipeline": [bad, good]}
+            )
+
+        bad.apply_plugin_command.assert_called_once()
+        good.apply_plugin_command.assert_called_once()
+        mock_log.error.assert_called_once()
+        self.assertTrue(mock_log.error.call_args.kwargs.get("exc_info"))
 
 
 class AddPluginDirsToSyspathTest(TestCase):

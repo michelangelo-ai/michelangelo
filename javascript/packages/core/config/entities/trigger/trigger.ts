@@ -2,8 +2,7 @@ import { ActionHierarchy } from '#core/components/actions/types';
 import { interpolate } from '#core/interpolation/interpolate';
 import { TRIGGER_DETAIL_CONFIG } from './detail';
 import { TRIGGER_LIST_CONFIG } from './list';
-import { KillTriggerRunForm } from './trigger-run-action-form';
-import { TriggerRunState } from './types';
+import { TriggerRunAction, TriggerRunState } from './types';
 
 import type { PhaseEntityConfig } from '#core/types/common/studio-types';
 import type { TriggerRun } from './types';
@@ -22,7 +21,6 @@ export const TRIGGER_ENTITY_CONFIG: PhaseEntityConfig = {
   actions: [
     {
       display: { label: 'Kill', icon: 'stopCircle' },
-      component: KillTriggerRunForm,
       hierarchy: interpolate(({ data }) =>
         isKillable(data) ? ActionHierarchy.SECONDARY : ActionHierarchy.TERTIARY
       ),
@@ -32,6 +30,33 @@ export const TRIGGER_ENTITY_CONFIG: PhaseEntityConfig = {
           message: 'Only running or paused trigger runs can be killed',
         },
       ],
+      operation: {
+        type: 'mutation',
+        mutation: { mutationName: 'UpdateTriggerRun' },
+        middleware: {
+          operations: [{ destination: 'spec.action', default: TriggerRunAction.KILL }],
+        },
+        // status.state is set by a controller after the spec change is reconciled.
+        // Auto-invalidation runs immediately and refetches stale state; this delayed
+        // re-invalidation gives the backend time to process the kill so the next
+        // refetch shows PENDING_KILL / KILLED.
+        successOperations: [
+          {
+            type: 'invalidate',
+            targets: ['GetTriggerRun', 'ListTriggerRun'],
+            delayMs: 2000,
+          },
+        ],
+      },
+      modal: {
+        type: 'confirm',
+        header: { title: 'Kill Trigger Run' },
+        body: interpolate(
+          ({ data }) =>
+            `Kill run **${(data as TriggerRun).metadata.name}** in pipeline **${(data as TriggerRun).spec.pipeline.name}**? This action cannot be undone.`
+        ),
+        button: { label: 'Kill' },
+      },
     },
   ],
 };

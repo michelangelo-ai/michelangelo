@@ -36,7 +36,7 @@ export function PhaseEntityView<T extends object = object>({
   const currentEntityIndex = entities.findIndex((entity) => entity.id === currentEntity);
   const activeKey = currentEntityIndex >= 0 ? currentEntityIndex.toString() : '0';
 
-  const routeToEntity = ({ activeKey }: { activeKey: React.Key }) => {
+  const handleEntityTabChange = ({ activeKey }: { activeKey: React.Key }) => {
     const selectedEntity = entities[Number(activeKey)];
     if (selectedEntity) {
       navigate(`/${projectId}/${phaseConfig.id}/${selectedEntity.id}`);
@@ -77,7 +77,7 @@ export function PhaseEntityView<T extends object = object>({
       />
       <Tabs
         activeKey={activeKey}
-        onChange={routeToEntity}
+        onChange={handleEntityTabChange}
         overrides={{
           Root: {
             style: ({ $theme }: { $theme: Theme }) => ({

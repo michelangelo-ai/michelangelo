@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"os"
 
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	"github.com/go-logr/logr"
 	"github.com/uber-go/tally"
 	"go.uber.org/fx"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -38,6 +40,7 @@ type (
 		fx.In
 		Config Config          // Configuration parameters for the controller manager.
 		Scheme *runtime.Scheme // Kubernetes runtime scheme used by the manager.
+		Logger logr.Logger     // Logger for the watch error handler.
 	}
 
 	result struct {
@@ -77,6 +80,9 @@ func create(p params) (result, error) {
 		HealthProbeBindAddress: p.Config.HealthProbeBindAddress,
 		LeaderElection:         p.Config.LeaderElection,
 		LeaderElectionID:       p.Config.LeaderElectionID,
+		Cache: cache.Options{
+			DefaultWatchErrorHandler: NewWatchErrorHandler(p.Logger),
+		},
 	})
 	if err != nil {
 		return result{}, err

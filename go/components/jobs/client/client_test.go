@@ -700,8 +700,8 @@ func TestCreateJob(t *testing.T) {
 			getClientSetError: errors.New("dummy error"),
 		},
 		{
-			msg:       "ray job create failure - encoding is not allowed for this codec",
-			wantError: "create ray job err:encoding is not allowed for this codec: *versioning.codec",
+			msg:       "ray job create failure - remote cluster GET fails with empty name",
+			wantError: "get remote ray cluster for owner ref: resource name may not be empty",
 			jobInput: &v2pb.RayJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "test",

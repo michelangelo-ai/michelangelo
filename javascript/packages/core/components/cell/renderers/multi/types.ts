@@ -1,6 +1,6 @@
 import type { Cell, SharedCell } from '#core/components/cell/types';
 
-export type MultiCellConfig = SharedCell<unknown> & {
+export type MultiCellConfig = SharedCell & {
   /**
    * @description Used to render the cell with multiple lines with different values
    * e.g. First line with Pipeline name and second line with revision identifier

@@ -3,7 +3,7 @@ import { useStyletron } from 'baseui';
 import { Box } from '#core/components/box/box';
 import { TaskContentStack } from '#core/components/views/execution/styled-components';
 import { buildTaskMatrix } from '#core/components/views/execution/utils/build-task-matrix';
-import { scrollToTask } from '#core/components/views/execution/utils/scroll-to-task';
+import { handleScrollToTask } from '#core/components/views/execution/utils/scroll-to-task';
 import { useInterpolationResolver } from '#core/interpolation/use-interpolation-resolver';
 import { getObjectValue } from '#core/utils/object-utils';
 import { TaskFlow } from '../task-flow';
@@ -27,7 +27,7 @@ export function TaskBody<TTaskRecord extends object>(props: TaskBodyProps<TTaskR
         <Box>
           <TaskFlow
             matrix={matrix}
-            onTaskClick={scrollToTask}
+            onTaskClick={handleScrollToTask}
             overrides={{
               TaskListRenderer: overrides?.TaskListRenderer,
               SubTaskListRenderer: overrides?.SubTaskListRenderer,

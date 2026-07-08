@@ -65,5 +65,5 @@ If your editor can't resolve the `michelangelo` import:
 
 ## What's next?
 
-- **Ready to build?** [Set up your local sandbox](./sandbox-setup.md) and follow [Getting Started with Pipelines](../user-guides/ml-pipelines/getting-started.md)
+- **Ready to build?** [Set up your local sandbox](./sandbox-setup.md) and follow [Getting Started with Pipelines](../user-guides/getting-started/getting-started.md)
 - **Contributing to Michelangelo's Go backend?** See [Go and Bazel Development Setup](../contributing/dev-environment.md)

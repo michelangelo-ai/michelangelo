@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom-v5-compat';
 import { useStyletron } from 'baseui';
 import { Button, KIND, SHAPE, SIZE } from 'baseui/button';
 import { PLACEMENT, StatefulPopover } from 'baseui/popover';
 
 import { Icon } from '#core/components/icon/icon';
+import { ActionDispatcher } from './action-dispatcher';
 import { ActionMenu } from './action-menu/action-menu';
+import { useResolvedActionItems } from './use-resolved-action-items';
 
 import type { ButtonProps } from 'baseui/button';
 import type { BasePopoverProps } from 'baseui/popover';
-import type { ComponentType } from 'react';
-import type { ActionComponentProps, ActionConfig, Data } from './types';
+import type { ActionConfig, Data } from './types';
 
 type ActionsPopoverProps<T extends Data> = {
   actions: ActionConfig<T>[];
@@ -25,18 +27,24 @@ export function ActionsPopover<T extends Data>({
   popoverProps,
 }: ActionsPopoverProps<T>) {
   const scrollDisabledRef = useRef(false);
-  const [activeAction, setActiveAction] = useState<{
-    component: ComponentType<ActionComponentProps>;
-    record: Data;
-  } | null>(null);
+  const [activeAction, setActiveAction] = useState<ActionConfig<T> | null>(null);
+  const navigate = useNavigate();
   const [, theme] = useStyletron();
 
-  const disableScroll = () => {
+  const items = useResolvedActionItems(actions, (action) => {
+    if (action.modal) {
+      setActiveAction(action);
+    } else if (action.operation?.type === 'route') {
+      navigate(action.operation.route);
+    }
+  });
+
+  const handleScrollDisable = () => {
     document.body.style.overflow = 'hidden';
     scrollDisabledRef.current = true;
   };
 
-  const enableScroll = () => {
+  const handleScrollEnable = () => {
     document.body.style.overflow = '';
     scrollDisabledRef.current = false;
   };
@@ -48,8 +56,6 @@ export function ActionsPopover<T extends Data>({
       }
     };
   }, []);
-
-  const ActiveComponent = activeAction?.component;
 
   return (
     <>
@@ -64,17 +70,16 @@ export function ActionsPopover<T extends Data>({
         {...popoverProps}
         content={({ close }) => (
           <ActionMenu
-            actions={actions as ActionConfig[]}
-            record={record}
+            actions={items}
             onSelectAction={(action) => {
-              setActiveAction(action);
+              action.onClick();
               close();
             }}
             onClose={close}
           />
         )}
-        onClose={enableScroll}
-        onOpen={disableScroll}
+        onClose={handleScrollEnable}
+        onOpen={handleScrollDisable}
       >
         <Button
           kind={KIND.tertiary}
@@ -92,10 +97,10 @@ export function ActionsPopover<T extends Data>({
           <Icon name="overflowMenu" />
         </Button>
       </StatefulPopover>
-      {ActiveComponent && (
-        <ActiveComponent
-          record={activeAction.record}
-          isOpen
+      {activeAction && (
+        <ActionDispatcher
+          action={activeAction}
+          record={record}
           onClose={() => setActiveAction(null)}
         />
       )}

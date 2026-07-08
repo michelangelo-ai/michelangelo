@@ -14,6 +14,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/trigger/parameter"
 	api "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	"github.com/robfig/cron"
 	"go.uber.org/zap"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -230,8 +231,12 @@ func runPipeline(ctx workflow.Context, triggerRun *v2pb.TriggerRun, param parame
 	paramID := param.GetParameterID()
 	executionTimestamp := param.GetExecutionTimestamp(logicalTs)
 
+	// Compute the previous scheduled time from the trigger's schedule so the pipeline
+	// run can determine the gap to process via os.environ["LAST_SCHEDULE_TIMESTAMP"].
+	lastTs := prevScheduledTime(triggerRun.Spec.Trigger, executionTimestamp)
+
 	// Generate pipeline run request
-	createRequest, err := generatePipelineRunRequest(triggerRun, paramID, name, executionTimestamp)
+	createRequest, err := generatePipelineRunRequest(triggerRun, paramID, name, executionTimestamp, lastTs)
 	if err != nil {
 		log.Error("failed to generate pipeline run request",
 			zap.String("operation", "run_pipeline"),
@@ -293,6 +298,7 @@ func runPipelineAsync(ctx workflow.Context, triggerRun *v2pb.TriggerRun, param p
 // generatePipelineRunRequest generates a pipeline run request due to trigger run, parameter id and execution timestamp
 func generatePipelineRunRequest(
 	triggerRun *v2pb.TriggerRun, paramID string, pipelineRunName string, ts time.Time,
+	lastTs *time.Time,
 ) (v2pb.CreatePipelineRunRequest, error) {
 	labels := map[string]string{
 		PipelineRunExecutionTimestampLabel: fmt.Sprintf("%d", ts.Unix()),
@@ -320,6 +326,17 @@ func generatePipelineRunRequest(
 		} else {
 			return v2pb.CreatePipelineRunRequest{}, fmt.Errorf("invalid parameter id: %s", paramID)
 		}
+	}
+	if lastTs != nil {
+		if pbStruct == nil {
+			pbStruct = &pbtypes.Struct{Fields: make(map[string]*pbtypes.Value)}
+		}
+		if pbStruct.Fields["environ"] == nil {
+			pbStruct.Fields["environ"] = utils.NewStructValue(&pbtypes.Struct{Fields: make(map[string]*pbtypes.Value)})
+		}
+		pbStruct.Fields["environ"].GetStructValue().Fields["LAST_SCHEDULE_TIMESTAMP"] = utils.NewStringValue(
+			fmt.Sprintf("%d", lastTs.Unix()),
+		)
 	}
 	pr := &v2pb.PipelineRun{
 		ObjectMeta: v1.ObjectMeta{
@@ -423,4 +440,76 @@ func generateRandomString(length int) string {
 		return fmt.Sprintf("%d", time.Now().UnixNano())[:length]
 	}
 	return hex.EncodeToString(bytes)[:length]
+}
+
+// prevScheduledTime returns the scheduled fire time immediately before executionTimestamp
+// according to the trigger's schedule configuration.
+//
+// IMPORTANT — this is NOT the actual last-run timestamp from history.
+// It is a purely deterministic value derived from the schedule interval:
+//
+//	LAST_SCHEDULE_TIMESTAMP = executionTimestamp - cron_interval
+//
+// Rationale: the trigger workflow does not query historical pipeline runs.
+// Instead it uses the schedule's own periodicity as the authoritative interval,
+// so the value is stable, reproducible on replay, and requires no I/O.
+// This means:
+//   - If a run was skipped or failed, the gap will still be exactly one interval.
+//   - The value is what would have been scheduled, not what actually ran.
+//   - Consumers (pipeline workflows) should treat it as "start of the window
+//     this run is responsible for", not "timestamp of the previous successful run".
+//
+// For IntervalSchedule: lastTs = executionTimestamp - interval (exact subtraction).
+// For CronSchedule: lastTs = the previous cron firing time computed by advancing
+//
+//	Next() from two estimated periods before executionTimestamp.
+//
+// For BatchRerun or unknown schedule types: returns nil (no meaningful interval).
+func prevScheduledTime(t *v2pb.Trigger, executionTimestamp time.Time) *time.Time {
+	if t == nil {
+		return nil
+	}
+
+	switch s := t.TriggerType.(type) {
+	case *v2pb.Trigger_IntervalSchedule:
+		if s.IntervalSchedule == nil || s.IntervalSchedule.Interval == nil {
+			return nil
+		}
+		interval := time.Duration(s.IntervalSchedule.Interval.Seconds)*time.Second +
+			time.Duration(s.IntervalSchedule.Interval.Nanos)
+		if interval <= 0 {
+			return nil
+		}
+		prev := executionTimestamp.Add(-interval)
+		return &prev
+
+	case *v2pb.Trigger_CronSchedule:
+		if s.CronSchedule == nil || s.CronSchedule.Cron == "" {
+			return nil
+		}
+		schedule, err := cron.ParseStandard(s.CronSchedule.Cron)
+		if err != nil {
+			return nil
+		}
+		// Estimate the cron period by computing the next firing after executionTimestamp,
+		// then start searching from two estimated periods back — this gives us an O(1)
+		// search that needs at most 2-3 Next() calls in the common case.
+		approxPeriod := schedule.Next(executionTimestamp).Sub(executionTimestamp)
+		candidate := schedule.Next(executionTimestamp.Add(-2 * approxPeriod))
+		if !candidate.Before(executionTimestamp) {
+			return nil
+		}
+		prev := candidate
+		for {
+			next := schedule.Next(prev)
+			if !next.Before(executionTimestamp) {
+				break
+			}
+			prev = next
+		}
+		return &prev
+
+	default:
+		return nil
+	}
 }

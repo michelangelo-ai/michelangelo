@@ -6,7 +6,7 @@ import { CellContainer } from '#core/components/cell/styled-components';
 import { useGetCellRenderer } from '#core/components/cell/use-get-cell-renderer';
 import { useInterpolationResolver } from '#core/interpolation/use-interpolation-resolver';
 import { resolveColumnForRow } from '../../utils/column-resolution-utils';
-import { columnTooltipHOC } from './column-tooltip-hoc';
+import { columnTooltipHoc } from './column-tooltip-hoc';
 import { getResponsiveColumnWidth } from './get-responsive-column-width';
 
 import type { TableCellProps } from './types';
@@ -21,7 +21,7 @@ export const TableCell = <T = unknown,>(props: TableCellProps<T>) => {
   const getCellRenderer = useGetCellRenderer();
   const ColumnRenderer = getCellRenderer({ column, record, value });
   const Component = column.tooltip
-    ? columnTooltipHOC<T>(ColumnRenderer, row, columnFilterValue, setColumnFilterValue)
+    ? columnTooltipHoc<T>(ColumnRenderer, row, columnFilterValue, setColumnFilterValue)
     : ColumnRenderer;
 
   return (

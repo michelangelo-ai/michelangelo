@@ -1,7 +1,7 @@
 import React from 'react';
 import { useParams } from 'react-router-dom-v5-compat';
 
-import { useURLQueryString } from '#core/hooks/routing/use-url-query-string';
+import { useUrlQueryString } from '#core/hooks/routing/use-url-query-string';
 import { Phase } from '#core/types/common/studio-types';
 import { VIEW_TYPE_TO_PARAMS } from './constants';
 import { normalizeEntityParam } from './normalize-entity-param';
@@ -29,7 +29,7 @@ export function useStudioParams<T extends StudioParamsView = 'unregistered'>(
   viewType: T
 ): ViewTypeToParamType<T> {
   const params: Partial<RouteParams> = useParams();
-  const queryParams = useURLQueryString<QueryParams>();
+  const queryParams = useUrlQueryString<QueryParams>();
 
   return React.useMemo(() => {
     if (!params.phase) {

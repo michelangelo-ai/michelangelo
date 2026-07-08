@@ -860,3 +860,66 @@ func TestUpdateDryRun(t *testing.T) {
 		assert.Equal(t, v2pb.PROJECT_STATE_READY, updatedProject.Status.State)
 	})
 }
+
+// TestDeletePropagationPolicy verifies that on the metadata-storage-enabled delete path,
+// a mutable object is not deleted directly; instead the caller's propagation policy is
+// recorded as the DeletePropagationAnnotation (alongside DeletingAnnotation) so the
+// ingester can honor it when it issues the real K8s delete (unblocking foreground cascade).
+func TestDeletePropagationPolicy(t *testing.T) {
+	k8sClient, err := setupK8s()
+	assert.NoError(t, err)
+
+	mockMetadataStorage, mockBlobStorage := setupMocks(t)
+
+	config := storage.MetadataStorageConfig{
+		EnableMetadataStorage:      true,
+		DeletionDelay:              0,
+		EnableResourceVersionCache: false,
+	}
+
+	builder := NewAPIHandlerBuilder().
+		WithK8sClient(k8sClient).
+		WithMetadataStorage(mockMetadataStorage, config).
+		WithBlobStorage(mockBlobStorage).
+		WithZapLogger(zap.Must(zap.NewDevelopment())).
+		WithMetrics(tally.NoopScope)
+	handler, err := builder.Build()
+	assert.NoError(t, err)
+
+	// Create a mutable object (RayJob, no immutable annotation) directly in K8s.
+	testJob := &v2pb.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "test-propagation-job",
+		},
+		Spec: v2pb.RayJobSpec{
+			JobId: "test-propagation-job",
+		},
+	}
+	err = k8sClient.Create(context.Background(), testJob)
+	assert.NoError(t, err)
+
+	// Delete with a Foreground propagation policy.
+	foreground := metav1.DeletePropagationForeground
+	deleteJob := &v2pb.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "test-propagation-job",
+		},
+	}
+	err = handler.Delete(context.Background(), deleteJob, &metav1.DeleteOptions{
+		PropagationPolicy: &foreground,
+	})
+	assert.NoError(t, err)
+
+	// The object is still in K8s, now annotated for the ingester to delete with the policy.
+	retrievedJob := &v2pb.RayJob{}
+	err = k8sClient.Get(context.Background(), ctrlRTClient.ObjectKey{
+		Namespace: "default",
+		Name:      "test-propagation-job",
+	}, retrievedJob)
+	assert.NoError(t, err)
+	annotations := retrievedJob.GetAnnotations()
+	assert.Equal(t, "true", annotations[api.DeletingAnnotation])
+	assert.Equal(t, string(foreground), annotations[api.DeletePropagationAnnotation])
+}

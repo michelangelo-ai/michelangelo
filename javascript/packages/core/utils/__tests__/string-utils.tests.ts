@@ -1,6 +1,7 @@
 import {
   capitalizeFirstLetter,
-  isAbsoluteURL,
+  isAbsoluteUrl,
+  isNavigableUrl,
   safeStringify,
   sentenceCaseEnumValue,
 } from '../string-utils';
@@ -19,26 +20,45 @@ describe('capitalizeFirstLetter', () => {
   });
 });
 
-describe('isAbsoluteURL', () => {
+describe('isAbsoluteUrl', () => {
   it('should return true if the string is a valid absolute URL', () => {
-    expect(isAbsoluteURL('https://www.google.com')).toBe(true);
+    expect(isAbsoluteUrl('https://www.google.com')).toBe(true);
   });
 
   it('should return false if the string is not a valid absolute URL without a protocol', () => {
-    expect(isAbsoluteURL('www.google.com')).toBe(false);
+    expect(isAbsoluteUrl('www.google.com')).toBe(false);
   });
 
   it('should return true if the string is a valid absolute URL with a protocol', () => {
-    expect(isAbsoluteURL('http://www.google.com')).toBe(true);
+    expect(isAbsoluteUrl('http://www.google.com')).toBe(true);
   });
 
   it('should return true for localhost URLs with protocol', () => {
-    expect(isAbsoluteURL('http://localhost:3000')).toBe(true);
-    expect(isAbsoluteURL('https://localhost')).toBe(true);
+    expect(isAbsoluteUrl('http://localhost:3000')).toBe(true);
+    expect(isAbsoluteUrl('https://localhost')).toBe(true);
   });
 
   it('should return false if the string is not a valid absolute URL', () => {
-    expect(isAbsoluteURL('something')).toBe(false);
+    expect(isAbsoluteUrl('something')).toBe(false);
+  });
+});
+
+describe('isNavigableUrl', () => {
+  it('should return true for absolute URLs', () => {
+    expect(isNavigableUrl('https://www.google.com')).toBe(true);
+    expect(isNavigableUrl('http://localhost:3000')).toBe(true);
+  });
+
+  it('should return true for root-relative paths', () => {
+    expect(isNavigableUrl('/pipelines/my-pipeline')).toBe(true);
+    expect(isNavigableUrl('/namespace/models/foo')).toBe(true);
+    expect(isNavigableUrl('/')).toBe(true);
+  });
+
+  it('should return false for non-URL strings', () => {
+    expect(isNavigableUrl('not_a_url')).toBe(false);
+    expect(isNavigableUrl('www.google.com')).toBe(false);
+    expect(isNavigableUrl('')).toBe(false);
   });
 });
 

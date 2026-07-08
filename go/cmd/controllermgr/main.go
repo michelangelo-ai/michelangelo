@@ -15,6 +15,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/workflowclient"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
+	"github.com/michelangelo-ai/michelangelo/go/cascadedelete"
 	"github.com/michelangelo-ai/michelangelo/go/components/common/routing/gatewayapi"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment"
 	deploymentOSSPlugin "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss"
@@ -37,6 +38,13 @@ import (
 )
 
 const serverName = "ma-controllermgr"
+
+// cascadeRetainKinds is the set of CRD kinds whose final state is retained in MySQL
+// when removed by a non-apiserver delete (cascade GC, kubectl, GitOps). These are the
+// Pipeline's children; the scope is deliberately Pipeline-only. It is injected as a
+// cascadedelete.RetainPolicy. Keep this in sync with the kinds that implement the cascade
+// DrainTarget adapter (see go/components/{pipelinerun,triggerrun}).
+var cascadeRetainKinds = []string{"PipelineRun", "TriggerRun"}
 
 // scheme provides a Kubernetes runtime.Scheme object.
 //
@@ -102,6 +110,13 @@ func options() fx.Option {
 		pipeline.Module,
 		pipelinerun.Module,
 		controllermgr.Module,
+		// Cascade-delete wiring (CRD-aware binary): supply the per-kind retain opt-in
+		// (the kind names live here, not in go/cascadedelete or the ingester) and register
+		// the cascade metrics with the controller-runtime registry.
+		fx.Provide(func() cascadedelete.RetainPolicy {
+			return cascadedelete.NewStaticRetainPolicy(cascadeRetainKinds...)
+		}),
+		fx.Invoke(cascadedelete.RegisterMetrics),
 		deploymentOSSPlugin.Module,
 		deployment.Module,
 		backends.Module,

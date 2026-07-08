@@ -58,6 +58,7 @@ Michelangelo is designed to run alongside existing ML infrastructure. The guides
 | Guide | Description |
 |-------|-------------|
 | [Experiment Tracking Setup](experiment-tracking.md) | Make an experiment tracking server reachable from task pods — network, ConfigMap injection, auth, and operator/user boundary |
+| [Notification Delivery Setup](notifications.md) | Wire in email and Slack delivery for PipelineRun state-change notifications — task queue config, activity implementation, and verification |
 | [Browse all integrations](integrations/index.md) | MLflow and other third-party integration guides |
 
 ## Operations
@@ -66,6 +67,7 @@ Michelangelo is designed to run alongside existing ML infrastructure. The guides
 |-------|-------------|
 | [Monitoring & Observability](operations/monitoring.md) | Prometheus scrape config, key metrics, alerting rules, Grafana dashboards, structured logging |
 | [Compliance](operations/compliance.md) | SOC 2, GDPR, and HIPAA configuration |
+| [Cascade Delete](cascade-delete.md) | Pipeline cascade delete (on by default) — propagation policy, RBAC, lifecycle, drain finalizers, per-child safety timeout, and metrics |
 | [Troubleshooting](operations/troubleshooting.md) | Common failure modes and `kubectl` diagnostic commands |
 
 ## Architecture & Reference

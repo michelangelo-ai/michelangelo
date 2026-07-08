@@ -12,7 +12,7 @@ import type { Theme } from 'baseui';
 import type { ColumnConfig } from '#core/components/table/types/column-types';
 import type { ActiveFilterTagProps } from './types';
 
-export function ActiveFilterTag<TData = unknown>(props: ActiveFilterTagProps<TData>) {
+export function TableActiveFilterTag<TData = unknown>(props: ActiveFilterTagProps<TData>) {
   const { column, preFilteredRows } = props;
   const [css, theme] = useStyletron();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -25,11 +25,11 @@ export function ActiveFilterTag<TData = unknown>(props: ActiveFilterTagProps<TDa
     label: column.label,
   } satisfies ColumnConfig<TData>);
 
-  const showTooltipAfterDelay = () => {
+  const handleTooltipDelayStart = () => {
     setDelayHandler(setTimeout(() => setShowTooltip(true), 1000));
   };
 
-  const hideTooltipImmediately = () => {
+  const handleTooltipHide = () => {
     if (delayHandler) {
       clearTimeout(delayHandler);
     }
@@ -77,8 +77,8 @@ export function ActiveFilterTag<TData = unknown>(props: ActiveFilterTagProps<TDa
           )}
           placement={PLACEMENT.top}
           isOpen={showTooltip}
-          onMouseEnter={showTooltipAfterDelay}
-          onMouseLeave={hideTooltipImmediately}
+          onMouseEnter={handleTooltipDelayStart}
+          onMouseLeave={handleTooltipHide}
           showArrow={true}
         >
           <TruncatedText>{filter.getFilterSummary(column.getFilterValue())}</TruncatedText>

@@ -15,7 +15,7 @@ export const PIPELINE_ENTITY_CONFIG: PhaseEntityConfig = {
     {
       display: { label: 'Run', icon: 'playerPlay' },
       hierarchy: ActionHierarchy.PRIMARY,
-      component: CreatePipelineRunForm,
+      modal: { type: 'custom', component: CreatePipelineRunForm },
     },
   ],
 };

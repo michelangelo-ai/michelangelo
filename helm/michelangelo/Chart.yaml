@@ -7,8 +7,8 @@ description: |
   and RBAC — into any Kubernetes cluster. Bring your own metadata storage,
   object storage, and workflow engine (Cadence or Temporal).
 type: application
-version: 0.1.0
-appVersion: "0.2.1"
+version: 0.3.0
+appVersion: "0.3.0"
 kubeVersion: ">=1.27.0-0"
 
 dependencies:

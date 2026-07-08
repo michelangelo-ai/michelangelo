@@ -52,7 +52,6 @@ import (
 	defaultengine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/base/pluginmanager"
-	"github.com/michelangelo-ai/michelangelo/go/base/revision"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/logging"
 	protoapi "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -90,7 +89,6 @@ type Reconciler struct {
 	recorder          record.EventRecorder
 	registrar         pluginmanager.Registrar[plugins.Plugin]
 	engine            conditionInterfaces.Engine[*v2pb.Deployment]
-	revisionManager   revision.Manager
 	scope             tally.Scope
 	apiHandlerFactory apiHandler.Factory
 	auditLogEmitter   logging.AuditLog
@@ -102,7 +100,6 @@ func NewReconciler(apiHandlerFactory apiHandler.Factory, registrar pluginmanager
 		apiHandlerFactory: apiHandlerFactory,
 		registrar:         registrar,
 		engine:            defaultengine.NewDefaultEngine[*v2pb.Deployment](createEngineLogger()),
-		revisionManager:   revision.NewNoOpManager(),
 		scope:             tally.NoopScope,
 		auditLogEmitter:   &logging.DummyAuditLog{},
 	}
@@ -279,16 +276,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 		log.Info(message)
 		deployment.Status.Stage = stage
 		terminal := r.handleStageTransition(ctx, metrics, deployment, err)
-		// TODO(#534): Enable these once revision codes are migrated:
-		// - Either implement UpsertDeploymentRevision properly with full error handling
-		// - Or permanently remove revision management infrastructure if not needed
-		// - See issue #534 for discussion
-		// upsertErr := UpsertDeploymentRevision(ctx, deployment, r.RevisionManager)
-		// if upsertErr != nil {
-		//	log.Info(fmt.Sprintf("fail to upsert deployment revision. Proceeding with deployment. Error: %+v", upsertErr))
-		// }
-		// Make sure that we only set the conditions to nil after the upserting the revision, so we keep track of the
-		// latest set of conditions to render.
+		// TODO(#534): Deployment revision upsert + cleanup not yet wired up.
 		if terminal {
 			// Guard clause: extracted to handleTerminalTransition() to keep this block
 			// at ≤2 levels of nesting. Previously this was 4 levels deep:
@@ -319,14 +307,8 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 		// resource is deleted before any new user action, that new user action will fail.
 		controllerutil.RemoveFinalizer(deployment, _deploymentCleanedUpFinalizer)
 
-		// We only want to delete all revisions when the deployment is marked for deletion.
-		if !deployment.GetDeletionTimestamp().IsZero() {
-			err = r.revisionManager.DeleteAllRevisions(ctx, deployment.GetNamespace(), deployment.GetName(), "Deployment")
-			if err != nil {
-				log.Error(err, "Failed to delete all revisions for deployment. This is not critical. "+
-					"Note that if a revision with the same name is recreated, the deployment history may be inaccurate.")
-			}
-		}
+		// TODO(#534): Revision cleanup for deployments is not yet wired up.
+		// See issue #534 for the decision on deployment revision management.
 
 		return ctrl.Result{}, nil
 	}

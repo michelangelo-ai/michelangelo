@@ -12,9 +12,10 @@ data:
     -- ==============================================================================
     -- Michelangelo Ingester - Complete Database Schema
     -- ==============================================================================
-    -- This schema includes ALL 14 CRDs watched by the ingester
-    -- Safe for production and sandbox (idempotent with IF NOT EXISTS)
-    -- Generated based on protobuf GetIndexedKeyValuePairs() methods
+    -- This schema includes ALL 15 CRDs watched by the ingester
+    -- Table names are snake_case matching utils.ToSnakeCase(Kind).
+    -- Safe for production and sandbox (idempotent with IF NOT EXISTS).
+    -- Generated based on protobuf GetIndexedKeyValuePairs() methods.
     -- ==============================================================================
 
     CREATE DATABASE IF NOT EXISTS michelangelo;
@@ -23,7 +24,7 @@ data:
     -- ==============================================================================
     -- 1. CACHED_OUTPUT
     -- ==============================================================================
-    CREATE TABLE IF NOT EXISTS `cachedoutput` (
+    CREATE TABLE IF NOT EXISTS `cached_output` (
         `uid` VARCHAR(255) NOT NULL,
         `group_ver` VARCHAR(255) NOT NULL,
         `namespace` VARCHAR(255) NOT NULL,
@@ -35,27 +36,27 @@ data:
         `proto` MEDIUMBLOB,
         `json` JSON,
         PRIMARY KEY (`uid`),
-        KEY `cachedoutput_namespace_name` (`namespace`, `name`),
-        KEY `cachedoutput_create_time` (`create_time`)
+        KEY `cached_output_namespace_name` (`namespace`, `name`),
+        KEY `cached_output_create_time` (`create_time`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-    CREATE TABLE IF NOT EXISTS `cachedoutput_labels` (
+    CREATE TABLE IF NOT EXISTS `cached_output_labels` (
         `id` BIGINT NOT NULL AUTO_INCREMENT,
         `obj_uid` VARCHAR(255) NOT NULL,
         `key` VARCHAR(255) NOT NULL,
         `value` VARCHAR(63),
         PRIMARY KEY (`id`),
-        KEY `cachedoutput_labels_uid` (`obj_uid`),
-        KEY `cachedoutput_labels_key_value` (`key`, `value`)
+        KEY `cached_output_labels_uid` (`obj_uid`),
+        KEY `cached_output_labels_key_value` (`key`, `value`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-    CREATE TABLE IF NOT EXISTS `cachedoutput_annotations` (
+    CREATE TABLE IF NOT EXISTS `cached_output_annotations` (
         `id` BIGINT NOT NULL AUTO_INCREMENT,
         `obj_uid` VARCHAR(255) NOT NULL,
         `key` VARCHAR(255) NOT NULL,
         `value` TEXT,
         PRIMARY KEY (`id`),
-        KEY `cachedoutput_annotations_uid` (`obj_uid`)
+        KEY `cached_output_annotations_uid` (`obj_uid`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
     -- ==============================================================================
@@ -134,8 +135,8 @@ data:
         `json` JSON,
         `model_family_name` VARCHAR(255),
         PRIMARY KEY (`uid`),
-        KEY `modelfamily_namespace_name` (`namespace`, `name`),
-        KEY `modelfamily_create_time` (`create_time`)
+        KEY `model_family_namespace_name` (`namespace`, `name`),
+        KEY `model_family_create_time` (`create_time`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     CREATE TABLE IF NOT EXISTS `model_family_labels` (
@@ -144,8 +145,8 @@ data:
         `key` VARCHAR(255) NOT NULL,
         `value` VARCHAR(63),
         PRIMARY KEY (`id`),
-        KEY `modelfamily_labels_uid` (`obj_uid`),
-        KEY `modelfamily_labels_key_value` (`key`, `value`)
+        KEY `model_family_labels_uid` (`obj_uid`),
+        KEY `model_family_labels_key_value` (`key`, `value`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     CREATE TABLE IF NOT EXISTS `model_family_annotations` (
@@ -154,7 +155,7 @@ data:
         `key` VARCHAR(255) NOT NULL,
         `value` TEXT,
         PRIMARY KEY (`id`),
-        KEY `modelfamily_annotations_uid` (`obj_uid`)
+        KEY `model_family_annotations_uid` (`obj_uid`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     -- ==============================================================================
@@ -223,10 +224,10 @@ data:
         `end_time` DATETIME,
         `exception_type` VARCHAR(255),
         PRIMARY KEY (`uid`),
-        KEY `pipelinerun_namespace_name` (`namespace`, `name`),
-        KEY `pipelinerun_create_time` (`create_time`),
-        KEY `pipelinerun_pipeline` (`pipeline_namespace`, `pipeline_name`),
-        KEY `pipelinerun_state` (`state`)
+        KEY `pipeline_run_namespace_name` (`namespace`, `name`),
+        KEY `pipeline_run_create_time` (`create_time`),
+        KEY `pipeline_run_pipeline` (`pipeline_namespace`, `pipeline_name`),
+        KEY `pipeline_run_state` (`state`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     CREATE TABLE IF NOT EXISTS `pipeline_run_labels` (
@@ -235,8 +236,8 @@ data:
         `key` VARCHAR(255) NOT NULL,
         `value` VARCHAR(63),
         PRIMARY KEY (`id`),
-        KEY `pipelinerun_labels_uid` (`obj_uid`),
-        KEY `pipelinerun_labels_key_value` (`key`, `value`)
+        KEY `pipeline_run_labels_uid` (`obj_uid`),
+        KEY `pipeline_run_labels_key_value` (`key`, `value`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     CREATE TABLE IF NOT EXISTS `pipeline_run_annotations` (
@@ -245,7 +246,7 @@ data:
         `key` VARCHAR(255) NOT NULL,
         `value` TEXT,
         PRIMARY KEY (`id`),
-        KEY `pipelinerun_annotations_uid` (`obj_uid`)
+        KEY `pipeline_run_annotations_uid` (`obj_uid`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     -- ==============================================================================
@@ -308,9 +309,9 @@ data:
         `json` JSON,
         `state` VARCHAR(255),
         PRIMARY KEY (`uid`),
-        KEY `inferenceserver_namespace_name` (`namespace`, `name`),
-        KEY `inferenceserver_create_time` (`create_time`),
-        KEY `inferenceserver_state` (`state`)
+        KEY `inference_server_namespace_name` (`namespace`, `name`),
+        KEY `inference_server_create_time` (`create_time`),
+        KEY `inference_server_state` (`state`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     CREATE TABLE IF NOT EXISTS `inference_server_labels` (
@@ -319,8 +320,8 @@ data:
         `key` VARCHAR(255) NOT NULL,
         `value` VARCHAR(63),
         PRIMARY KEY (`id`),
-        KEY `inferenceserver_labels_uid` (`obj_uid`),
-        KEY `inferenceserver_labels_key_value` (`key`, `value`)
+        KEY `inference_server_labels_uid` (`obj_uid`),
+        KEY `inference_server_labels_key_value` (`key`, `value`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     CREATE TABLE IF NOT EXISTS `inference_server_annotations` (
@@ -329,7 +330,7 @@ data:
         `key` VARCHAR(255) NOT NULL,
         `value` TEXT,
         PRIMARY KEY (`id`),
-        KEY `inferenceserver_annotations_uid` (`obj_uid`)
+        KEY `inference_server_annotations_uid` (`obj_uid`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     -- ==============================================================================
@@ -469,8 +470,8 @@ data:
         `proto` MEDIUMBLOB,
         `json` JSON,
         PRIMARY KEY (`uid`),
-        KEY `raycluster_namespace_name` (`namespace`, `name`),
-        KEY `raycluster_create_time` (`create_time`)
+        KEY `ray_cluster_namespace_name` (`namespace`, `name`),
+        KEY `ray_cluster_create_time` (`create_time`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     CREATE TABLE IF NOT EXISTS `ray_cluster_labels` (
@@ -479,8 +480,8 @@ data:
         `key` VARCHAR(255) NOT NULL,
         `value` VARCHAR(63),
         PRIMARY KEY (`id`),
-        KEY `raycluster_labels_uid` (`obj_uid`),
-        KEY `raycluster_labels_key_value` (`key`, `value`)
+        KEY `ray_cluster_labels_uid` (`obj_uid`),
+        KEY `ray_cluster_labels_key_value` (`key`, `value`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     CREATE TABLE IF NOT EXISTS `ray_cluster_annotations` (
@@ -489,7 +490,7 @@ data:
         `key` VARCHAR(255) NOT NULL,
         `value` TEXT,
         PRIMARY KEY (`id`),
-        KEY `raycluster_annotations_uid` (`obj_uid`)
+        KEY `ray_cluster_annotations_uid` (`obj_uid`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     -- ==============================================================================
@@ -507,8 +508,8 @@ data:
         `proto` MEDIUMBLOB,
         `json` JSON,
         PRIMARY KEY (`uid`),
-        KEY `rayjob_namespace_name` (`namespace`, `name`),
-        KEY `rayjob_create_time` (`create_time`)
+        KEY `ray_job_namespace_name` (`namespace`, `name`),
+        KEY `ray_job_create_time` (`create_time`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     CREATE TABLE IF NOT EXISTS `ray_job_labels` (
@@ -517,8 +518,8 @@ data:
         `key` VARCHAR(255) NOT NULL,
         `value` VARCHAR(63),
         PRIMARY KEY (`id`),
-        KEY `rayjob_labels_uid` (`obj_uid`),
-        KEY `rayjob_labels_key_value` (`key`, `value`)
+        KEY `ray_job_labels_uid` (`obj_uid`),
+        KEY `ray_job_labels_key_value` (`key`, `value`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     CREATE TABLE IF NOT EXISTS `ray_job_annotations` (
@@ -527,7 +528,7 @@ data:
         `key` VARCHAR(255) NOT NULL,
         `value` TEXT,
         PRIMARY KEY (`id`),
-        KEY `rayjob_annotations_uid` (`obj_uid`)
+        KEY `ray_job_annotations_uid` (`obj_uid`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     -- ==============================================================================
@@ -545,8 +546,8 @@ data:
         `proto` MEDIUMBLOB,
         `json` JSON,
         PRIMARY KEY (`uid`),
-        KEY `sparkjob_namespace_name` (`namespace`, `name`),
-        KEY `sparkjob_create_time` (`create_time`)
+        KEY `spark_job_namespace_name` (`namespace`, `name`),
+        KEY `spark_job_create_time` (`create_time`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     CREATE TABLE IF NOT EXISTS `spark_job_labels` (
@@ -555,8 +556,8 @@ data:
         `key` VARCHAR(255) NOT NULL,
         `value` VARCHAR(63),
         PRIMARY KEY (`id`),
-        KEY `sparkjob_labels_uid` (`obj_uid`),
-        KEY `sparkjob_labels_key_value` (`key`, `value`)
+        KEY `spark_job_labels_uid` (`obj_uid`),
+        KEY `spark_job_labels_key_value` (`key`, `value`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     CREATE TABLE IF NOT EXISTS `spark_job_annotations` (
@@ -565,7 +566,7 @@ data:
         `key` VARCHAR(255) NOT NULL,
         `value` TEXT,
         PRIMARY KEY (`id`),
-        KEY `sparkjob_annotations_uid` (`obj_uid`)
+        KEY `spark_job_annotations_uid` (`obj_uid`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     -- ==============================================================================
@@ -589,10 +590,10 @@ data:
         `state` VARCHAR(255),
         `auto_flip` VARCHAR(255),
         PRIMARY KEY (`uid`),
-        KEY `triggerrun_namespace_name` (`namespace`, `name`),
-        KEY `triggerrun_create_time` (`create_time`),
-        KEY `triggerrun_pipeline` (`pipeline_namespace`, `pipeline_name`),
-        KEY `triggerrun_state` (`state`)
+        KEY `trigger_run_namespace_name` (`namespace`, `name`),
+        KEY `trigger_run_create_time` (`create_time`),
+        KEY `trigger_run_pipeline` (`pipeline_namespace`, `pipeline_name`),
+        KEY `trigger_run_state` (`state`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     CREATE TABLE IF NOT EXISTS `trigger_run_labels` (
@@ -601,8 +602,8 @@ data:
         `key` VARCHAR(255) NOT NULL,
         `value` VARCHAR(63),
         PRIMARY KEY (`id`),
-        KEY `triggerrun_labels_uid` (`obj_uid`),
-        KEY `triggerrun_labels_key_value` (`key`, `value`)
+        KEY `trigger_run_labels_uid` (`obj_uid`),
+        KEY `trigger_run_labels_key_value` (`key`, `value`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
     CREATE TABLE IF NOT EXISTS `trigger_run_annotations` (
@@ -611,9 +612,47 @@ data:
         `key` VARCHAR(255) NOT NULL,
         `value` TEXT,
         PRIMARY KEY (`id`),
-        KEY `triggerrun_annotations_uid` (`obj_uid`)
+        KEY `trigger_run_annotations_uid` (`obj_uid`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     
+    -- ==============================================================================
+    -- 14. EVALUATION_REPORT
+    -- ==============================================================================
+    CREATE TABLE IF NOT EXISTS `evaluation_report` (
+        `uid` VARCHAR(255) NOT NULL,
+        `group_ver` VARCHAR(255) NOT NULL,
+        `namespace` VARCHAR(255) NOT NULL,
+        `name` VARCHAR(255) NOT NULL,
+        `res_version` BIGINT UNSIGNED NOT NULL,
+        `create_time` DATETIME NOT NULL,
+        `update_time` DATETIME,
+        `delete_time` DATETIME,
+        `proto` MEDIUMBLOB,
+        `json` JSON,
+        PRIMARY KEY (`uid`),
+        KEY `evaluation_report_namespace_name` (`namespace`, `name`),
+        KEY `evaluation_report_create_time` (`create_time`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE IF NOT EXISTS `evaluation_report_labels` (
+        `id` BIGINT NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key` VARCHAR(255) NOT NULL,
+        `value` VARCHAR(63),
+        PRIMARY KEY (`id`),
+        KEY `evaluation_report_labels_uid` (`obj_uid`),
+        KEY `evaluation_report_labels_key_value` (`key`, `value`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE IF NOT EXISTS `evaluation_report_annotations` (
+        `id` BIGINT NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key` VARCHAR(255) NOT NULL,
+        `value` TEXT,
+        PRIMARY KEY (`id`),
+        KEY `evaluation_report_annotations_uid` (`obj_uid`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
     -- ==============================================================================
     -- SUMMARY
     -- ==============================================================================
@@ -636,7 +675,7 @@ metadata:
   labels:
     component: schema-init
   annotations:
-    description: "Initializes MySQL schema for Michelangelo ingester - ALL 13 CRDs"
+    description: "Initializes MySQL schema for Michelangelo ingester - ALL 15 CRDs"
 spec:
   # Keep completed job for 24 hours for debugging
   ttlSecondsAfterFinished: 86400
@@ -694,7 +733,7 @@ spec:
             - |
               echo "========================================="
               echo "Ingester Schema Initialization"
-              echo "Initializing ALL 13 CRD tables"
+              echo "Initializing ALL 15 CRD tables"
               echo "========================================="
               echo ""
               echo "MySQL Host: ${MYSQL_HOST}"
@@ -714,22 +753,22 @@ spec:
                 TABLE_COUNT=$(mysql -h ${MYSQL_HOST} -P ${MYSQL_PORT} -u ${MYSQL_USER} -p${MYSQL_PASSWORD} ${MYSQL_DATABASE} \
                   -sN -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${MYSQL_DATABASE}' AND table_name NOT LIKE '%_labels' AND table_name NOT LIKE '%_annotations';")
                 
-                echo "Main tables created: $TABLE_COUNT / 13"
-                
+                echo "Main tables created: $TABLE_COUNT / 15"
+
                 echo ""
                 echo "Tables created:"
                 mysql -h ${MYSQL_HOST} -P ${MYSQL_PORT} -u ${MYSQL_USER} -p${MYSQL_PASSWORD} ${MYSQL_DATABASE} \
                   -e "SHOW TABLES;" | grep -v "Tables_in\|_labels\|_annotations" | sed 's/^/  - /'
-                
-                if [ "$TABLE_COUNT" -eq "13" ]; then
+
+                if [ "$TABLE_COUNT" -eq "15" ]; then
                   echo ""
                   echo "========================================="
-                  echo "✓ All 13 CRD tables ready!"
+                  echo "✓ All 15 CRD tables ready!"
                   echo "========================================="
                   exit 0
                 else
                   echo ""
-                  echo "⚠ Warning: Expected 13 tables but found $TABLE_COUNT"
+                  echo "⚠ Warning: Expected 15 tables but found $TABLE_COUNT"
                   exit 0
                 fi
               else

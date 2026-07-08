@@ -21,7 +21,7 @@ export function ArrayFormRow({
   addLabel = 'Add more',
 }: ArrayFormRowProps) {
   const [css, theme] = useStyletron();
-  const { entries, add, remove, isRemovable } = useArrayField(rootFieldPath, {
+  const { entries, handleItemAdd, remove, isRemovable } = useArrayField(rootFieldPath, {
     minItems,
     readOnly,
   });
@@ -62,7 +62,7 @@ export function ArrayFormRow({
           </RepeatedLayoutProvider>
         );
       })}
-      {!readOnly && <AddButton label={addLabel} onClick={add} />}
+      {!readOnly && <AddButton label={addLabel} onClick={handleItemAdd} />}
     </>
   );
 }

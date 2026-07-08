@@ -96,7 +96,9 @@ workflow:
   taskLists:
     - default
     - trigger_run
+    # Deprecated: will be removed in a future release. Kept for backward compatibility with currently deployed systems.
     - pipeline_run
+    - notification_worker
 
 # -----------------------------------------------------------------------------
 # Container images. Override to pin a version or use a mirror.
@@ -133,7 +135,7 @@ apiserver:
     qps: 300
     burst: 600
 
-  # Apiserver-specific config knobs. Defaults match the source sandbox YAML.
+  # Apiserver-specific config knobs. 
   metadataStorage:
     enable: false
   crdSync:
@@ -316,6 +318,26 @@ worker:
   resources: {}
 
 # -----------------------------------------------------------------------------
+# notification — PipelineRun state-change notification config.
+#
+# The notification workflow runs inside the shared worker binary on the
+# "notification_worker" task list (already included in workflow.taskLists).
+# Set studioBaseURL and senderEmail to enable deep links and outgoing email.
+# -----------------------------------------------------------------------------
+notification:
+  # taskList routes notifications to the worker that handles them. Override only
+  # if you register notification activities on a different task list in your fork.
+  taskList: notification_worker
+
+  # Base URL of the platform UI, used to build deep links in notifications.
+  # Trailing slash is optional — normalized automatically. Leave empty to omit links.
+  # Example: "https://ml.mycompany.com/studio/"
+  studioBaseURL: ""
+
+  # From address for outgoing email notifications.
+  senderEmail: ""
+
+# -----------------------------------------------------------------------------
 # controllermgr — Kubernetes controller manager for Michelangelo CRDs.
 # -----------------------------------------------------------------------------
 controllermgr:
@@ -355,6 +377,12 @@ controllermgr:
       Deployment: 3
       Pipeline: 3
       Revision: 3
+
+  pipeline:
+    # When true, the controller snapshots a Revision CR on every successful
+    # READY reconcile. Disabled by default; enable for deployments with a
+    # revision store (see revision.Manager).
+    revisioningEnabled: false
 
   # Workflow client extras (controllermgr-only).
   workflowClient:

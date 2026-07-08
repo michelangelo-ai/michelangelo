@@ -65,6 +65,28 @@ class StorageBackend(ABC):
             ValueError: If the URI format is not recognised by this backend.
         """
 
+    def get_storage_location(self) -> str | None:
+        """Return a human-readable storage location for logging and debugging.
+
+        Subclasses override this to expose their root storage location
+        (e.g. the base directory for local backends, the ``s3://bucket``
+        URI for S3-compatible backends). The default implementation returns
+        ``None`` when the location is not knowable without a network call.
+
+        Returns:
+            A short, human-readable string identifying the storage root, or
+            ``None`` if the backend does not have a meaningful static location.
+
+        Example::
+
+            backend = LocalStorageBackend("/tmp/artifacts")
+            print(backend.get_storage_location())  # "/tmp/artifacts"
+
+            minio = MinioStorageBackend(endpoint="...", bucket="my-bucket", ...)
+            print(minio.get_storage_location())  # "s3://my-bucket"
+        """
+        return None
+
 
 class LocalStorageBackend(StorageBackend):
     """StorageBackend backed by the local filesystem.
@@ -150,3 +172,11 @@ class LocalStorageBackend(StorageBackend):
             shutil.copytree(uri, local_path, dirs_exist_ok=True)
         else:
             shutil.copy2(uri, local_path)
+
+    def get_storage_location(self) -> str:
+        """Return the root directory used by this backend.
+
+        Returns:
+            Absolute path of the ``base_dir`` passed at construction.
+        """
+        return self._base_dir

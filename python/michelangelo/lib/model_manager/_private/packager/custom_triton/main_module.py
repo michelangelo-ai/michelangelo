@@ -26,8 +26,8 @@ def serialize_main_module(
         target_dir: the target dir to serialize the main module
         include_import_prefixes (Optional): only serialize the imported
             modules with the given prefixes,
-            e.g. ['uber', 'data.michelangelo'] only imports starting
-            with 'uber' or 'data.michelangelo' will be saved in the
+            e.g. ['mypkg', 'mypkg.submodule'] only imports starting
+            with 'mypkg' or 'mypkg.submodule' will be saved in the
             model package. If not specified, save all imports
     """
     main_module = sys.modules["__main__"]
@@ -41,8 +41,7 @@ def serialize_main_module(
             "in an interactive shell or Jupyter notebook. "
             "Please remove dependencies on the __main__ module "
             "and add them to the model class instead. "
-            "or run this code in a Python script. "
-            "Refer to https://engwiki.uberinternal.com/display/TE0MICHELANGELO/Best+Practices+When+Packaging+the+Model#BestPracticesWhenPackagingtheModel-WhenPackagingaModelinJupyterNotebook"
+            "or run this code in a Python script."
         )
         _logger.warning(msg)
         print(msg)  # Print to stdout to make sure notebook users see this message

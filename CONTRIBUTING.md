@@ -25,9 +25,11 @@ There are other easy ways to help support the project and show your appreciation
 - [Reporting Bugs](#reporting-bugs)
   - [Before Submitting a Bug Report](#before-submitting-a-bug-report)
   - [How Do I Submit a Good Bug Report?](#how-do-i-submit-a-good-bug-report)
+- [Commit Messages](#commit-messages)
 - [Creating a Pull Request](#creating-a-pull-request)
   - [Before Creating a Pull Request](#before-creating-a-pull-request)
   - [How Do I Submit a Good Pull Request?](#how-do-i-submit-a-good-pull-request)
+- [Deprecation Policy](#deprecation-policy)
 
 <a id="code-of-conduct"></a>
 ## Code of Conduct
@@ -60,6 +62,19 @@ The project maintainers will then take care of the issue as soon as possible and
 When contributing to any Uber Open Source project, you agree that you have authored 100% of the content and that you have the necessary rights to that content and that the content you contribute may be provided under the project license. 
 
 You’re required to sign our [Contributor License Agreement](https://cla-assistant.io/michelangelo-ai) to confirm this and you’ll be prompted to do this when submitting your first contribution.
+
+## Our Contribution Tracks
+
+To keep our development moving fast while protecting the stability of the platform, Michelangelo uses a **Dual-Track Pipeline**. Before you open an issue or write any code, please match your goal to the correct track:
+
+* **Track 1: Maintenance:** For everyday bug fixes, code optimizations, testing improvements, or documentation updates. (This repo handles Track 1 entirely via standard Issues and Pull Requests).
+* **Track 2: Evolution:** For major architectural changes, public API modifications, new core modules, or substantial new framework dependencies. (These require a design proposal in our dedicated enhancements repository *before* any code is written here).
+
+*Note on Ecosystem Tools:* Backward-compatible updates, minor version bumps, and bug fixes to deployment configurations (like Helm charts) fall under Track 1. Breaking changes or entirely new deployment patterns belong in Track 2.
+
+## Working on Track 1: Maintenance (Standard PR Loop)
+
+If your contribution falls under Track 1, you will operate entirely within this repository using the standard sequence: **Open an Issue ➔ Submit a Pull Request ➔ Review & Merge**.
 
 <a id="enhancements-and-features"></a>
 ## Enhancements and Features
@@ -123,7 +138,127 @@ We use GitHub issues to track bugs. If you run into an issue with the project:
 * A project maintainer will try to reproduce the issue with your provided steps. If there are no reproduction steps, or no obvious way to reproduce the issue, we’ll request these details but the bug won’t be addressed until they are provided.
 * If the team is able to reproduce the issue, it will be tagged and the issue will be queued to be implemented.
 
+<a id="commit-messages"></a>
+## Commit Messages
+
+This project uses the [Conventional Commits](https://www.conventionalcommits.org/) specification. All commits to the repository must follow this format. Commit messages feed the automated changelog generation (via git-cliff) and drive semantic version bumps in the release pipeline.
+
+### Format
+
+```
+type(scope): short description
+
+Optional longer body explaining the motivation or detail.
+
+BREAKING CHANGE: description of the breaking change (if applicable)
+```
+
+- **type** — required; describes the kind of change (see table below)
+- **scope** — optional; identifies the component affected (see table below)
+- **short description** — required; imperative mood, no capital first letter, no trailing period, ≤72 chars total for the subject line
+- **body** — optional; separated from the subject by a blank line
+- **BREAKING CHANGE footer** — required when the change breaks backwards compatibility
+
+### Allowed types
+
+| Type | When to use |
+|---|---|
+| `feat` | A new feature visible to users or downstream consumers |
+| `fix` | A bug fix |
+| `docs` | Documentation changes only |
+| `ci` | CI/CD pipeline or workflow changes |
+| `chore` | Build process or tooling changes with no production code change |
+| `refactor` | Code change that neither fixes a bug nor adds a feature |
+| `test` | Adding or updating tests |
+| `perf` | Performance improvement |
+
+### Allowed scopes
+
+| Scope | Component |
+|---|---|
+| `python` | Python SDK / PyPI package |
+| `helm` | Helm chart |
+| `ci` | CI workflows and scripts |
+| `npm` | npm / JavaScript package |
+| `ui` | UI container |
+| `go` | Go services / containers |
+
+Scope may be omitted when a change is truly cross-cutting and does not belong to a single component.
+
+### Examples
+
+Simple feature:
+```
+feat(python): add async client support
+```
+
+Bug fix with scope:
+```
+fix(helm): correct default resource limits
+```
+
+Cross-cutting docs change (no scope):
+```
+docs: update quickstart guide
+```
+
+CI change:
+```
+ci(go): pin golangci-lint to v1.57.2
+```
+
+Tooling update (no scope):
+```
+chore: bump dev dependencies
+```
+
+Feature with a breaking change:
+```
+feat(python): remove deprecated v1 API
+
+The v1 client module has been removed to reduce maintenance burden.
+Migrate all callers to the v2 client before upgrading.
+
+BREAKING CHANGE: The `michelangelo.v1` module is no longer available.
+Replace all imports of `michelangelo.v1` with `michelangelo.v2`.
+```
+
+### BREAKING CHANGE convention
+
+Add a `BREAKING CHANGE:` line in the commit footer (after a blank line separating it from the body) to signal a backwards-incompatible change. The release tooling will:
+
+1. Include the commit in the **BREAKING CHANGES** section of the generated changelog.
+2. Trigger a **major** version bump when the change ships in a release.
+
 <a id="creating-a-pull-request"></a>
+## Versioning & Tag Format
+
+All release artifacts share the same **Major.Minor** version number. Patch versions may differ when a component-specific fix ships independently.
+
+### Git tag format
+
+| Release type | Tag example | Notes |
+|---|---|---|
+| Stable | `v0.3.0` | Standard SemVer — `vMAJOR.MINOR.PATCH` |
+| Release candidate | `v0.3.0-rc.1` | Pre-release suffix per SemVer §9 |
+| Nightly | `v0.3.0-nightly.20260624` | Date-stamped; not manually created |
+
+### PEP 440 mapping (Python / PyPI)
+
+Git tags use SemVer, but PyPI requires [PEP 440](https://peps.python.org/pep-0440/). The release pipeline translates automatically:
+
+| Git tag | PyPI version |
+|---|---|
+| `v0.3.0` | `0.3.0` |
+| `v0.3.0-rc.1` | `0.3.0rc1` |
+| `v0.3.0-nightly.20260624` | `0.3.0.dev20260624` |
+
+### Rules
+
+- Tags are only created on **release branches** (`release/vX.Y`), never directly on `main`.
+- All artifacts (Python, npm, Go, Helm, containers) receive the same Major.Minor from the tag.
+- See the [Versioning Policy](./docs/getting-started/roadmap.md#versioning-policy) for stability level guarantees (stable, beta, alpha).
+
 ## Creating a Pull Request
 
 If you want to fix a bug or propose a new feature you’ll do this through creating a Pull Request.
@@ -145,4 +280,69 @@ If you want to fix a bug or propose a new feature you’ll do this through creat
 * **Use comments in the code** that you provide to give us more context to any code based submissions.
 
 Thanks for contributing into our project.
+
+## Working on Track 2: Evolution (The RFC Process)
+
+If your proposal falls under Track 2, **please do not open a standard issue or code PR in this repository first**. Large features must secure architectural design consensus before code implementation begins.
+
+1. Head over to the [Michelangelo Enhancements Repository](https://github.com/michelangelo-ai/enhancements).
+2. Review the review SLAs, lifecycle stages, and copy the baseline design template (`rfcs/20260101-template.md`) to open a proposal Pull Request there.
+
+### Implementing an Approved RFC
+
+Once the enhancements process marks your proposal as **Accepted**, you will return here to implement the code under an operational agreement:
+
+* **Tracking & Targeting:** Your assigned Shepherd will open a dedicated tracking issue in this repository to map individual code PRs and target them to an upcoming release milestone branch (e.g., `release-0.2`).
+* **The Code Review Guarantee:** Subsequent code PRs are evaluated strictly for code quality, style, and test coverage. Core design, framework choices, and structural layout debates are locked and will not be reopened during code review because they were already settled during the RFC design phase.
+
+### Handling Unexpected Design Blocks
+
+If an insurmountable architectural blocker (such as a critical performance regression or unforeseen security flaw) is uncovered *during* implementation, the Shepherd will pause the PRs. The Shepherd will sync with the Core Architecture Panel to choose a path forward via minor amendment, formal withdrawal, or temporary deferment.
+
+<a id="deprecation-policy"></a>
+## Deprecation Policy
+
+Deprecated APIs, configuration keys, and behaviors must emit warnings for **at least 2 minor releases** before removal. This gives downstream users a predictable migration window.
+
+### Process
+
+1. **Deprecate** — Add a runtime warning and a `BREAKING CHANGE:` footer in the commit message. Update docs to mark the item as deprecated.
+2. **Mark** — The deprecated item appears in the BREAKING CHANGES section of the next release's changelog. Migration guidance is included in the release notes.
+3. **Remove** — No earlier than 2 minor releases after step 1. The removal commit also carries a `BREAKING CHANGE:` footer.
+
+### Per-component examples
+
+**Go** — Add a `// Deprecated:` godoc comment and log a warning on first use:
+```go
+// Deprecated: Use NewClientV2 instead. Will be removed in v0.5.0.
+func NewClient(cfg Config) *Client { ... }
+```
+
+**Python** — Use `warnings.warn` with `DeprecationWarning`:
+```python
+import warnings
+warnings.warn(
+    "michelangelo.v1.Client is deprecated; use michelangelo.v2.Client instead. "
+    "Removal planned for v0.5.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+```
+
+**Proto** — Mark the field or enum value with `[deprecated = true]` and add a comment:
+```protobuf
+// Deprecated: use PIPELINE_STATE_RUNNING instead. Removal in v0.5.0.
+PIPELINE_STATE_ACTIVE = 1 [deprecated = true];
+```
+
+**Helm** — Document the deprecation in `values.yaml` comments and the chart's NOTES.txt:
+```yaml
+# DEPRECATED: use 'server.resources' instead. Will be removed in v0.5.0.
+resources: {}
+```
+
+### Reference
+
+- See [UPGRADING.md](./UPGRADING.md) for examples of past migrations.
+- See the [Versioning Policy](./docs/getting-started/roadmap.md#versioning-policy) for stability level guarantees.
 

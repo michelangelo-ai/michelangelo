@@ -8,22 +8,26 @@ import type { ApplicationError } from '#core/types/error-types';
 import type { MutationConfig } from '#core/types/query-types';
 
 export const useStudioMutation = <TData, TVariables extends Record<string, unknown>>(
-  config: MutationConfig
+  config: MutationConfig | null
 ): UseMutationResult<TData, ApplicationError, TVariables> => {
-  const { mutationName, clientOptions } = config;
   const { request } = useServiceProvider();
   const normalizeError = useErrorNormalizer();
 
   return useMutation<TData, ApplicationError, TVariables>({
     mutationFn: async (variables: TVariables) => {
+      if (!config) throw new Error('useStudioMutation called without config');
       try {
-        return (await request(mutationName, variables)) as Promise<TData>;
+        return (await request(config.mutationName, variables)) as Promise<TData>;
       } catch (error) {
         console.error('mutation error', error);
         throw normalizeError(error)!;
       }
     },
-    onSuccess: clientOptions?.onSuccess ? (data) => clientOptions.onSuccess!(data) : undefined,
-    onError: clientOptions?.onError ? (error) => clientOptions.onError!(error) : undefined,
+    onSuccess: config?.clientOptions?.onSuccess
+      ? (data) => config.clientOptions!.onSuccess!(data)
+      : undefined,
+    onError: config?.clientOptions?.onError
+      ? (error) => config.clientOptions!.onError!(error)
+      : undefined,
   });
 };

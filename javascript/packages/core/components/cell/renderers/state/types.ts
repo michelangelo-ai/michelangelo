@@ -1,7 +1,7 @@
 import type { SharedCell } from '#core/components/cell/types';
 import type { TagColor } from '#core/components/tag/types';
 
-export type StateCellConfig = SharedCell<string> & {
+export type StateCellConfig<TRecord = unknown> = SharedCell<TRecord, string> & {
   /**
    * @description A map of state values to their display text
    * @example

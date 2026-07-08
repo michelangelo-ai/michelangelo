@@ -1,7 +1,7 @@
 import { Link as RouterLink } from 'react-router-dom-v5-compat';
 import { getOverrides } from 'baseui';
 
-import { isAbsoluteURL } from '#core/utils/string-utils';
+import { isAbsoluteUrl } from '#core/utils/string-utils';
 import { StyledLink } from './styled-components';
 import { StyledExternalLinkIcon } from './styled-components';
 
@@ -58,7 +58,7 @@ export function Link(props: LinkProps) {
     StyledExternalLinkIcon
   );
 
-  return isAbsoluteURL(href) ? (
+  return isAbsoluteUrl(href) ? (
     <Link
       $external
       href={href}

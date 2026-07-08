@@ -74,6 +74,15 @@ func killWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Log
 	return triggerRun.Status, nil
 }
 
+// ForceKillWorkflow tears down a TriggerRun's workflow and schedule without
+// persisting status, for the cascade safety-timeout path. It deletes the trigger
+// (not just terminates it) so no schedule stays armed; idempotent, and returns
+// nil when nothing is running.
+func ForceKillWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Logger, workflowClient clientInterface.WorkflowClient) error {
+	_, err := killWorkflow(ctx, triggerRun, log, workflowClient)
+	return err
+}
+
 // getRecurringRunWorkflowStatus retrieves workflow status for recurring triggers (cron/interval).
 //
 // This function checks for open workflow executions and maps workflow states to

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from michelangelo.workflow.variables._private.dataset import DatasetVariable
+from michelangelo.workflow.variables._private.model import ModelVariable
 from michelangelo.workflow.variables.metadata import ModelMetadata
 from michelangelo.workflow.variables.types import (
     AssembledModel,
@@ -15,5 +16,6 @@ __all__ = [
     "DatasetVariable",
     "ModelArtifact",
     "ModelMetadata",
+    "ModelVariable",
     "PusherResult",
 ]

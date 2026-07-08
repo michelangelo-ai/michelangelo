@@ -15,5 +15,12 @@ from michelangelo.workflow.schema.sinks.hive import HiveSinkConfig
 from michelangelo.workflow.schema.sinks.local import LocalFileSinkConfig
 from michelangelo.workflow.schema.sinks.memory import InMemorySinkConfig
 from michelangelo.workflow.schema.sinks.result import SinkResult
+from michelangelo.workflow.schema.sinks.s3 import S3SinkConfig
 
-__all__ = ["HiveSinkConfig", "InMemorySinkConfig", "LocalFileSinkConfig", "SinkResult"]
+__all__ = [
+    "HiveSinkConfig",
+    "InMemorySinkConfig",
+    "LocalFileSinkConfig",
+    "S3SinkConfig",
+    "SinkResult",
+]

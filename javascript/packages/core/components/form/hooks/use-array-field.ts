@@ -11,7 +11,7 @@ import type { ArrayFieldOptions } from '#core/components/form/types';
  * `key` prop and an `indexedFieldPath` for constructing nested field names. Guaranteed to have at
  * least `minItems` entries after the initial effect runs.
  *
- * - `add`: Pushes one new empty item to the array.
+ * - `handleItemAdd`: Pushes one new empty item to the array.
  *
  * - `remove`: Removes an item from the array.
  *
@@ -19,7 +19,7 @@ import type { ArrayFieldOptions } from '#core/components/form/types';
  *
  * @example
  * ```tsx
- * const { entries, add, remove, isRemovable } = useArrayField('contacts', { minItems: 1 });
+ * const { entries, handleItemAdd, remove, isRemovable } = useArrayField('contacts', { minItems: 1 });
  *
  * return (
  *   <>
@@ -29,7 +29,7 @@ import type { ArrayFieldOptions } from '#core/components/form/types';
  *         {isRemovable && <button onClick={() => remove(index)}>Remove</button>}
  *       </div>
  *     ))}
- *     <button onClick={add}>Add more</button>
+ *     <button onClick={handleItemAdd}>Add more</button>
  *   </>
  * );
  * ```
@@ -56,7 +56,7 @@ export function useArrayField(
 
   const isRemovable = (fields.length ?? 0) > minItems && !readOnly;
 
-  const add = () => {
+  const handleItemAdd = () => {
     entryIds.current.push(crypto.randomUUID());
     fields.push({});
   };
@@ -72,7 +72,7 @@ export function useArrayField(
       id: entryIds.current[index],
       indexedFieldPath,
     })),
-    add,
+    handleItemAdd,
     remove,
     isRemovable,
   };

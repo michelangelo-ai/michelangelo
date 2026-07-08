@@ -1,4 +1,4 @@
-import { parseISOString } from './time-utils';
+import { parseIsoString } from './time-utils';
 
 const SUFFIX_DELIMITER = '-';
 const UUID_SUFFIX_LENGTH = 8;
@@ -23,7 +23,7 @@ export const generateSuffix = (config: { withDate: boolean } = { withDate: false
 
   if (config.withDate) {
     const isoString = new Date().toISOString();
-    const parsed = parseISOString(isoString);
+    const parsed = parseIsoString(isoString);
 
     if (!parsed) {
       console.warn('Date.toISOString() returned an invalid ISO string', isoString);

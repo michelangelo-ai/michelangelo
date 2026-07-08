@@ -52,7 +52,7 @@ type TemporalClientFactory interface {
 type DefaultTemporalClientFactory struct{}
 
 func (f DefaultTemporalClientFactory) NewTemporalClient(opts tempclient.Options) (tempclient.Client, error) {
-	return tempclient.Dial(opts)
+	return tempclient.NewLazyClient(opts)
 }
 
 // CadenceClientFactory creates Cadence clients.

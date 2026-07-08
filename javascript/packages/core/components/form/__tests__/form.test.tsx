@@ -235,10 +235,10 @@ describe('Form', () => {
           id="wrapped-form"
           onSubmit={onSubmit}
           render={(formElement) => (
-            <div data-testid="wrapper">
-              <div data-testid="header">Header Content</div>
+            <div>
+              <div>Header Content</div>
               {formElement}
-              <div data-testid="footer">Footer Content</div>
+              <div>Footer Content</div>
             </div>
           )}
         >
@@ -248,9 +248,8 @@ describe('Form', () => {
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
 
-      expect(screen.getByTestId('wrapper')).toBeInTheDocument();
-      expect(screen.getByTestId('header')).toHaveTextContent('Header Content');
-      expect(screen.getByTestId('footer')).toHaveTextContent('Footer Content');
+      expect(screen.getByText('Header Content')).toBeInTheDocument();
+      expect(screen.getByText('Footer Content')).toBeInTheDocument();
       expect(screen.getByLabelText('Email')).toBeInTheDocument();
 
       await user.type(screen.getByLabelText('Email'), 'test@example.com');
@@ -438,12 +437,12 @@ describe('Form', () => {
 
     it('renders custom footer ReactNode directly', () => {
       render(
-        <Form onSubmit={vi.fn()} footer={<div data-testid="custom-footer">Custom</div>}>
+        <Form onSubmit={vi.fn()} footer={<div>Custom</div>}>
           <StringField name="email" label="Email" />
         </Form>,
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
-      expect(screen.getByTestId('custom-footer')).toBeInTheDocument();
+      expect(screen.getByText('Custom')).toBeInTheDocument();
     });
 
     describe('Repeated layouts', () => {

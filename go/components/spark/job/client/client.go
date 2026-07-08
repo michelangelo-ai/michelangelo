@@ -2,8 +2,10 @@ package client
 
 import (
 	"context"
+	"strings"
 
 	"github.com/go-logr/logr"
+	constants "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	"github.com/michelangelo-ai/michelangelo/go/components/spark/job"
 	sparkv1beta2 "github.com/michelangelo-ai/michelangelo/go/thirdparty/k8s-crds/apis/sparkoperator.k8s.io/v1beta2"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -26,6 +28,23 @@ type SparkClient struct {
 
 // Compile-time assertion that SparkClient implements job.Client interface.
 var _ job.Client = &SparkClient{}
+
+// sparkApplicationType infers the Spark Operator SparkApplicationType from a
+// SparkJob's main_application_file, since SparkJobSpec has no dedicated
+// language field. Falls back to JavaApplicationType (functionally identical
+// to Scala for the operator's dispatch, since both are JVM entrypoints
+// invoked via --class) when the extension doesn't identify a Python or R
+// script.
+func sparkApplicationType(mainApplicationFile string) sparkv1beta2.SparkApplicationType {
+	switch {
+	case strings.HasSuffix(mainApplicationFile, ".py"):
+		return sparkv1beta2.PythonApplicationType
+	case strings.HasSuffix(mainApplicationFile, ".R"), strings.HasSuffix(mainApplicationFile, ".r"):
+		return sparkv1beta2.RApplicationType
+	default:
+		return sparkv1beta2.JavaApplicationType
+	}
+}
 
 // CreateJob creates a new SparkApplication from a SparkJob specification.
 //
@@ -50,7 +69,7 @@ func (r SparkClient) CreateJob(ctx context.Context, log logr.Logger, job *v2pb.S
 			Namespace: job.Namespace,
 		},
 		Spec: sparkv1beta2.SparkApplicationSpec{
-			Type:                sparkv1beta2.PythonApplicationType,
+			Type:                sparkApplicationType(spec.MainApplicationFile),
 			SparkVersion:        spec.SparkVersion,
 			Mode:                sparkv1beta2.ClusterMode,
 			Image:               &spec.Driver.Pod.Image,
@@ -133,6 +152,31 @@ func (r SparkClient) GetJobStatus(ctx context.Context, logger logr.Logger, job *
 
 	stateStr := string(state)
 	return &stateStr, url, errorMessage, nil
+}
+
+// DeleteJob terminates a running Spark job by deleting its SparkApplication.
+//
+// Deleting the SparkApplication custom resource instructs the Spark Operator to
+// tear down the driver and executor pods, terminating the underlying workload.
+//
+// Returns an error if the deletion fails. Callers should treat a not-found error
+// as success, since it means the SparkApplication has already been removed.
+func (r SparkClient) DeleteJob(ctx context.Context, log logr.Logger, job *v2pb.SparkJob) error {
+	opts := metav1.DeleteOptions{}
+	err := r.K8sClient.Delete().
+		Namespace(job.Namespace).
+		Resource(constants.KubeSparkResource).
+		Name(job.Name).
+		Body(&opts).
+		Do(ctx).
+		Error()
+	if err != nil {
+		log.Error(err, "Failed to delete SparkApplication")
+		return err
+	}
+
+	log.Info("Deleted SparkApplication", "name", job.Name, "namespace", job.Namespace)
+	return nil
 }
 
 // toSparkPodSpec converts a Michelangelo PodSpec to Spark Operator SparkPodSpec.

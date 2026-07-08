@@ -43,7 +43,7 @@ export function SelectField<V = string | number>({
     parse,
   });
 
-  const { baseUIOptions, findByValue, findByKey } = useMemo(() => {
+  const { baseUiOptions, findByValue, findByKey } = useMemo(() => {
     const map = new Map<string, SelectOption<V>>();
     const adapted = options.map((opt) => {
       const key = serializeKey(opt.id);
@@ -51,7 +51,7 @@ export function SelectField<V = string | number>({
       return { id: key, label: opt.label, disabled: opt.disabled };
     });
     return {
-      baseUIOptions: adapted,
+      baseUiOptions: adapted,
       findByValue: (v: V) => map.get(serializeKey(v)),
       findByKey: (key: string) => map.get(key),
     };
@@ -78,7 +78,7 @@ export function SelectField<V = string | number>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [findByValue, isLoading]);
 
-  const handleChange = (params: OnChangeParams) => {
+  const handleCommitSelection = (params: OnChangeParams) => {
     const selected = params.value as Array<{ id: string }>;
 
     if (multi) {
@@ -90,7 +90,7 @@ export function SelectField<V = string | number>({
     }
   };
 
-  const baseUIValue = useMemo(() => {
+  const baseUiValue = useMemo(() => {
     const items: Array<{ id: string; label: string; disabled?: boolean }> = [];
     for (const item of formatSelectedValue(input.value)) {
       const key = serializeKey(item);
@@ -115,9 +115,9 @@ export function SelectField<V = string | number>({
     >
       <Select
         id={name}
-        value={baseUIValue}
-        options={baseUIOptions}
-        onChange={handleChange}
+        value={baseUiValue}
+        options={baseUiOptions}
+        onChange={handleCommitSelection}
         onBlur={input.onBlur}
         onFocus={input.onFocus}
         placeholder={!disabled && !readOnly ? placeholder : ''}

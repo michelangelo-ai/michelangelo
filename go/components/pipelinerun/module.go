@@ -6,8 +6,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
+	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/notification"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/plugin"
+	"github.com/michelangelo-ai/michelangelo/go/storage"
 	"go.uber.org/zap"
 )
 
@@ -36,8 +38,10 @@ func register(
 	apiHandlerFactory apiHandler.Factory,
 	logger *zap.Logger,
 	p *plugin.Plugin,
+	workflowClient clientInterface.WorkflowClient,
 	notifier *notification.PipelineRunNotifier,
 	cfg Config,
+	metadataStorageConfig storage.MetadataStorageConfig,
 ) error {
-	return NewReconciler(p, logger, apiHandlerFactory, notifier, cfg).Register(mgr)
+	return NewReconciler(p, workflowClient, logger, apiHandlerFactory, notifier, cfg, metadataStorageConfig).Register(mgr)
 }

@@ -39,7 +39,7 @@ export function CategoricalFilter<TData = unknown>({
     return isSelectedA ? -1 : 1;
   });
 
-  const handleFilterChange = ({
+  const applyFilterSelection = ({
     selection,
     exclude,
   }: {
@@ -62,7 +62,7 @@ export function CategoricalFilter<TData = unknown>({
   return (
     <CategoricalFilterPanel
       data={sortedDisplayValues}
-      setFilter={handleFilterChange}
+      setFilter={applyFilterSelection}
       close={close}
       filterParams={{
         description: '',

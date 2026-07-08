@@ -5,9 +5,14 @@ import { useStyletron } from 'baseui';
 
 import type { TextEditorProps } from './types';
 
-export function TextEditor(props: TextEditorProps) {
+export function TextEditor({
+  value,
+  language,
+  readOnly = false,
+  height = '300px',
+  onChange,
+}: TextEditorProps) {
   const [css] = useStyletron();
-  const { value, language, readOnly = false, height = '300px', onChange } = props;
 
   const extensions = language === 'json' ? [json()] : [];
 

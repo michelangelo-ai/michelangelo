@@ -1,13 +1,15 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom-v5-compat';
 import { useStyletron } from 'baseui';
-import { Button, KIND, SHAPE, SIZE } from 'baseui/button';
+import { KIND, SHAPE } from 'baseui/button';
 import { PLACEMENT } from 'baseui/popover';
 
+import { ActionDispatcher } from '#core/components/actions/action-dispatcher';
 import { ActionsPopover } from '#core/components/actions/actions-popover';
-import { Icon } from '#core/components/icon/icon';
+import { ActionButton } from './action-button';
 import { partitionActions } from './utils';
 
-import type { ActionConfig, Data, SelectedAction } from '#core/components/actions/types';
+import type { ActionConfig, Data } from '#core/components/actions/types';
 
 type ActionsButtonsProps<T extends Data = Data> = {
   actions: ActionConfig<T>[];
@@ -27,56 +29,42 @@ export function ActionsButtons<T extends Data>({
   loading,
 }: ActionsButtonsProps<T>) {
   const [css, theme] = useStyletron();
-  const [selectedAction, setSelectedAction] = useState<SelectedAction | null>(null);
+  const [activeAction, setActiveAction] = useState<ActionConfig<T> | null>(null);
+  const navigate = useNavigate();
 
   if (actions.length === 0) return null;
 
   const { primary, secondary, tertiary } = partitionActions(actions);
-  const ActiveComponent = selectedAction?.component;
+
+  const activateAction = (action: ActionConfig<T>) => {
+    if (action.modal) {
+      setActiveAction(action);
+    } else if (action.operation?.type === 'route') {
+      navigate(action.operation.route);
+    }
+  };
 
   return (
     <>
       <div className={css({ display: 'flex', gap: theme.sizing.scale300 })}>
         {primary && (
-          <Button
+          <ActionButton
+            action={primary}
+            onClick={() => activateAction(primary)}
+            loading={loading}
             kind={KIND.primary}
-            size={SIZE.compact}
-            isLoading={loading}
             overrides={{ Root: { style: { width: '200px' } } }}
-            startEnhancer={
-              primary.display.icon
-                ? () => (
-                    <Icon
-                      name={primary.display.icon}
-                      size={theme.sizing.scale550}
-                      color="inherit"
-                    />
-                  )
-                : undefined
-            }
-            onClick={() => setSelectedAction({ component: primary.component, record })}
-          >
-            {primary.display.label}
-          </Button>
+          />
         )}
         {secondary.map((action) => (
-          <Button
+          <ActionButton
             key={action.display.label}
+            action={action}
+            onClick={() => activateAction(action)}
+            loading={loading}
             kind={KIND.secondary}
             shape={SHAPE.pill}
-            size={SIZE.compact}
-            isLoading={loading}
-            startEnhancer={
-              action.display.icon
-                ? () => (
-                    <Icon name={action.display.icon} size={theme.sizing.scale550} color="inherit" />
-                  )
-                : undefined
-            }
-            onClick={() => setSelectedAction({ component: action.component, record })}
-          >
-            {action.display.label}
-          </Button>
+          />
         ))}
         {tertiary.length > 0 && (
           <ActionsPopover
@@ -86,11 +74,11 @@ export function ActionsButtons<T extends Data>({
           />
         )}
       </div>
-      {selectedAction && ActiveComponent && (
-        <ActiveComponent
-          record={selectedAction.record}
-          isOpen
-          onClose={() => setSelectedAction(null)}
+      {activeAction && (
+        <ActionDispatcher
+          action={activeAction}
+          record={record}
+          onClose={() => setActiveAction(null)}
         />
       )}
     </>

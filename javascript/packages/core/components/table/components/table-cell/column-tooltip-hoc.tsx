@@ -45,13 +45,13 @@ import type { TableCellProps } from './types';
  * }
  * ```
  */
-export function columnTooltipHOC<T = unknown>(
+export function columnTooltipHoc<T = unknown>(
   Component: CellRenderer<T>,
   row: TableRow<T>,
   columnFilterValue?: TableCellProps['columnFilterValue'],
   setColumnFilterValue?: TableCellProps['setColumnFilterValue']
 ): CellRenderer<T> {
-  return function ColumnTooltipHOC(props: TooltipHOCProps<T>) {
+  return function ColumnTooltipHoc(props: TooltipHOCProps<T>) {
     const { column, value } = props;
     const { action } = column.tooltip;
 

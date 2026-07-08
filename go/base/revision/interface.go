@@ -3,29 +3,29 @@ package revision
 import (
 	"context"
 
-	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	"go.uber.org/yarpc"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// Manager handles revision operations
+// Manager handles the Revision CR lifecycle with immutability semantics.
+// Controllers that produce revisions depend on this interface rather than
+// calling the API handler directly.
+//
+// UpsertRevision follows the controller-runtime caller-owns-type pattern:
+// callers build a fully populated Revision (in whatever API version they use)
+// and pass it as a client.Object. The Manager handles the get-or-create state
+// machine without inspecting version-specific fields.
 type Manager interface {
-	UpsertRevision(ctx context.Context, deployment *v2pb.Deployment) error
-	DeleteAllRevisions(ctx context.Context, namespace, name, resourceType string) error
+	// UpsertRevision creates or updates a Revision. The caller builds the
+	// complete Revision object; the Manager orchestrates the state machine
+	// (get existing, create if absent, check immutability, update if mutable).
+	// Returns (true, nil) on create or update, (false, nil) on dedup (an
+	// existing immutable Revision with the same name already exists).
+	UpsertRevision(ctx context.Context, rev client.Object, opts UpsertOpts, options ...yarpc.CallOption) (bool, error)
 }
 
-// NoOpManager is a revision manager that does nothing
-type NoOpManager struct{}
-
-// NewNoOpManager creates a new no-op revision manager
-func NewNoOpManager() Manager {
-	return &NoOpManager{}
-}
-
-// UpsertRevision does nothing and returns success
-func (m *NoOpManager) UpsertRevision(ctx context.Context, deployment *v2pb.Deployment) error {
-	return nil
-}
-
-// DeleteAllRevisions does nothing and returns success
-func (m *NoOpManager) DeleteAllRevisions(ctx context.Context, namespace, name, resourceType string) error {
-	return nil
+// UpsertOpts carries state-machine knobs for UpsertRevision. The Revision
+// content itself lives in the client.Object the caller passes directly.
+type UpsertOpts struct {
+	Immutable bool
 }

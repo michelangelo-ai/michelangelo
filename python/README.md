@@ -40,6 +40,7 @@ pip install michelangelo[plugin]
 | Extra | What it includes | When to use it |
 |-------|-----------------|----------------|
 | `michelangelo[plugin]` | Ray, PySpark | You want to run tasks on distributed Ray or Spark clusters |
+| `michelangelo[ray-polars]` | Ray, Polars | You read Ray Datasets with nested list/struct columns (Polars fallback for [ray#61675](https://github.com/ray-project/ray/issues/61675)) |
 | `michelangelo[vllm]` | vLLM, Ray, PyTorch, Transformers | You're serving or fine-tuning large language models |
 | `michelangelo[example]` | All ML libraries for examples | You want to run the included example projects |
 | `michelangelo[dev]` | pytest, ruff, pre-commit, Ray | You're contributing to Michelangelo itself |
@@ -98,10 +99,27 @@ def process_data(df):
     return df
 ```
 
+### I/O Plugins
+
+Michelangelo provides typed I/O handlers for passing data between tasks. The
+handler is selected automatically based on the Python type of the value being
+written.
+
+| Plugin | Type handled | Import |
+|--------|-------------|--------|
+| `RayDatasetIO` | `ray.data.Dataset` | `from michelangelo.uniflow.plugins.ray import RayDatasetIO` |
+| `PandasIO` | `pandas.DataFrame` | `from michelangelo.uniflow.plugins.pandas import PandasIO` |
+| `SparkIO` | `pyspark.sql.DataFrame` | `from michelangelo.uniflow.plugins.spark import SparkIO` |
+| `ProtoIO` | `google.protobuf.message.Message` | `from michelangelo.uniflow.plugins.proto import ProtoIO` |
+
+`ProtoIO` serialises protobuf messages as JSON (via `google.protobuf.json_format`)
+and stores the message type in the metadata dict for automatic reconstruction on
+read. `protobuf` is a core dependency — no extra install required.
+
 For complete working examples, see the [examples directory](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples), including:
 
 - [BERT fine-tuning on CoLA](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/bert_cola) — Text classification with distributed GPU training
-- [XGBoost on Boston Housing](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/boston_housing_xgb) — Tabular regression with distributed training
+- [XGBoost on California Housing](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/california_housing_xgb) — Tabular regression with distributed training
 - [GPT fine-tuning with LoRA](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/gpt_oss_20b_finetune) — Large language model fine-tuning
 
 ## Using the Python API Client
@@ -129,8 +147,67 @@ APIClient.ProjectService.create_project(proj)
 Set the API server address via environment variable:
 
 ```bash
-export MICHELANGELO_API_SERVER="localhost:12345"
+export MA_API_SERVER="localhost:12345"
 ```
+
+## Publishing Evaluation Reports
+
+Evaluation reports capture structured metric charts produced by a training run.
+If you've used MLflow or W&B, here's the conceptual mapping:
+
+| Michelangelo | MLflow | W&B |
+|---|---|---|
+| `metadata.namespace` | Experiment name | entity / project |
+| `metadata.name` | Run name | Run name |
+| Chart with one data point | `log_metric(key, value)` | `wandb.log({key: value})` |
+
+**Push a report via `APIClientEvalReportSink`:**
+
+```python
+import os
+os.environ["MA_API_SERVER"] = "localhost:50051"
+
+from michelangelo.api.v2 import APIClient
+from michelangelo.gen.api.v2.evaluation_report_pb2 import (
+    EvaluationReport,
+    EvaluationReportSpec,
+)
+from michelangelo.workflow.tasks.functions.eval_report_sinks import (
+    APIClientEvalReportSink,
+)
+
+report = EvaluationReport(spec=EvaluationReportSpec(title="Q1 Eval"))
+report.metadata.namespace = "my-project"  # analogous to MLflow experiment
+report.metadata.name = "q1-eval"
+
+APIClient.set_caller("my-trainer")
+sink = APIClientEvalReportSink()
+sink.write(report)
+```
+
+**Target a different endpoint** (e.g. multi-region, per-worker isolation):
+
+```python
+from michelangelo.api.v2 import APIClient
+from michelangelo.workflow.tasks.functions.eval_report_sinks import APIClientEvalReportSink
+
+client = APIClient(endpoint="other-server:50051", caller="my-trainer")
+sink = APIClientEvalReportSink(svc=client.EvaluationReportService)
+sink.write(report)
+client.close()
+```
+
+**Convert to a flat metrics dict for MLflow / W&B / Comet:**
+
+```python
+from michelangelo.workflow.tasks.functions.eval_report_sinks import flatten_report_to_metrics
+import mlflow
+
+mlflow.log_metrics(flatten_report_to_metrics(report))
+```
+
+For structured pipeline integration see `EvalReportPluginConfig` in the
+[ML Pipelines docs](https://michelangelo-ai.org/docs/user-guides/ml-pipelines).
 
 ## Documentation
 
@@ -138,8 +215,8 @@ Full documentation is available at **[michelangelo-ai.org/docs](https://michelan
 
 - [User Guides](https://michelangelo-ai.org/docs/user-guides) — Step-by-step guides for data preparation, training, and deployment
 - [ML Pipelines](https://michelangelo-ai.org/docs/user-guides/ml-pipelines) — Deep dive into the Uniflow pipeline framework
-- [Set Up Triggers](https://michelangelo-ai.org/docs/user-guides/set-up-triggers) — Automate pipeline execution with cron and backfill triggers
-- [CLI Reference](https://michelangelo-ai.org/docs/user-guides/cli) — Full command-line interface documentation
+- [Set Up Triggers](https://michelangelo-ai.org/docs/user-guides/ml-pipelines/set-up-triggers) — Automate pipeline execution with cron and backfill triggers
+- [CLI Reference](https://michelangelo-ai.org/docs/user-guides/reference/cli) — Full command-line interface documentation
 
 ## Contributing
 

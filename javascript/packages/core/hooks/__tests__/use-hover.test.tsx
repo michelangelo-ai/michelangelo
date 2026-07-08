@@ -34,7 +34,8 @@ describe('useHover', () => {
     const user = userEvent.setup();
     render(<TestHoverComponent />);
 
-    const target = screen.getByTestId('hover-target');
+    const target = screen.getByText('Hover me');
+    // eslint-disable-next-line testing-library/no-test-id-queries -- plain div, element identity needed to read textContent across state changes
     const status = screen.getByTestId('hover-status');
 
     expect(status.textContent).toBe('not-hovered');

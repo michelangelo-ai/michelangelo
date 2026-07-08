@@ -17,6 +17,11 @@ export function TableColumnConfigurationButton<T extends TableData = TableData>(
   setColumnVisibility,
 }: TableColumnConfigurationButtonProps<T>) {
   const [css, theme] = useStyletron();
+  const handleColumnListChange = createColumnListChangeHandler(
+    columns,
+    setColumnOrder,
+    setColumnVisibility
+  );
 
   return (
     <StatefulPopover
@@ -52,7 +57,7 @@ export function TableColumnConfigurationButton<T extends TableData = TableData>(
                 ),
               },
             }}
-            onChange={createColumnListChangeHandler(columns, setColumnOrder, setColumnVisibility)}
+            onChange={handleColumnListChange}
             // @ts-expect-error Items are expected to be React Nodes, but we set them as objects
             // and with the help of overrides, we render them as React Nodes
 

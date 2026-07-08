@@ -8,12 +8,12 @@ logger / callback resolution helpers. Public APIs live in
 from __future__ import annotations
 
 import hashlib
-import importlib
+import inspect
 import logging
 import os
 import re
 from tempfile import TemporaryDirectory
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any, Union
 
 import pytorch_lightning as pl
 import ray
@@ -35,21 +35,17 @@ from ray.train.lightning import (
     RayLightningEnvironment,
 )
 
+from michelangelo._internal.utils.reflection_utils import get_module_attr
+from michelangelo.lib._internal.errors import UserInputError
 from michelangelo.lib.trainer.torch.pytorch_lightning._private.callbacks import (
     RayTrainReportCallback,
     RayTrainReportPerNodeCallback,
 )
 
-
-class UserInputError(Exception):
-    """Raised when a user-supplied input or path causes training to fail."""
-
-
-def _get_module_attr(module_attr: str) -> Any:
-    """Resolve a dotted ``module.attribute`` path to the attribute object."""
-    module_def, _, attr_def = module_attr.rpartition(".")
-    module = importlib.import_module(module_def)
-    return getattr(module, attr_def)
+if TYPE_CHECKING:
+    from michelangelo.lib.trainer.torch.pytorch_lightning.schema import (
+        TrainingObserver,
+    )
 
 
 # Plugin types accepted by the PyTorch Lightning Trainer.
@@ -159,7 +155,7 @@ def _get_comet_logger(
     instance to the shared experiment key derived from ``run_id``.
 
     ``comet_ml`` is imported lazily so the trainer can be imported without it
-    installed; only callers that actually pass a ``comet_param`` need it.
+    installed; only callers that actually build a Comet logger need it.
     """
     import comet_ml
 
@@ -196,6 +192,81 @@ def _get_comet_logger(
     if ray.train.get_context().get_world_rank() == 0:
         _logger.info("Comet experiment URL: %s", comet_logger.experiment.url)
     return comet_logger
+
+
+def build_comet_logger(
+    api_key: str,
+    workspace: str,
+    project_name: str,
+    experiment_name: str,
+    tags: list[str] | None = None,
+    run_id: str | None = None,
+) -> CometLogger:
+    """Build a ``CometLogger`` inside a Ray Train worker.
+
+    Dotted-path factory target for ``LightningTrainerKwargs.logger``,
+    resolved by :func:`_resolve_logger`. ``run_id`` is injected automatically
+    when set on the driver, providing cross-worker experiment correlation.
+
+    Args:
+        api_key: Comet API key.
+        workspace: Comet workspace name.
+        project_name: Comet project name.
+        experiment_name: Comet experiment name.
+        tags: Optional tags attached to the Comet experiment.
+        run_id: Cross-worker correlation id; required for the barrier-based
+            rank-0 experiment creation in :func:`_get_comet_logger`.
+
+    Returns:
+        A ``CometLogger`` attached to the shared experiment for this run.
+    """
+    return _get_comet_logger(
+        run_id=run_id or "",
+        api_key=api_key,
+        workspace=workspace,
+        project_name=project_name,
+        experiment_name=experiment_name,
+        tags=tags,
+    )
+
+
+def build_mlflow_logger(
+    experiment_name: str,
+    tracking_uri: str | None = None,
+    run_name: str | None = None,
+    tags: dict[str, str] | None = None,
+    run_id: str | None = None,
+) -> Logger:
+    """Build an ``MLFlowLogger`` for a Ray Train worker.
+
+    Dotted-path factory target for ``LightningTrainerKwargs.logger``.
+    Unlike Comet, MLflow's client is process-safe and requires no
+    distributed barrier — each worker constructs its logger independently.
+    ``run_id`` lets all workers attach to the same MLflow run for per-rank
+    metric correlation; when ``None``, Lightning's default (rank-0-only
+    logging) applies.
+
+    Args:
+        experiment_name: Name of the MLflow experiment. Created
+            automatically if it does not exist.
+        tracking_uri: MLflow tracking server URI. Falls back to the
+            ``MLFLOW_TRACKING_URI`` environment variable when ``None``.
+        run_name: Optional display name for this training run.
+        tags: Key-value string tags attached to the MLflow run.
+        run_id: Cross-worker correlation id for shared-run logging.
+
+    Returns:
+        An ``MLFlowLogger`` instance.
+    """
+    from pytorch_lightning.loggers import MLFlowLogger
+
+    return MLFlowLogger(
+        experiment_name=experiment_name,
+        tracking_uri=tracking_uri,
+        run_name=run_name,
+        tags=tags or {},
+        run_id=run_id,
+    )
 
 
 def _resolve_strategy(
@@ -255,7 +326,7 @@ def _resolve_plugins(
         result = []
     elif isinstance(plugins, str):
         # Create the plugin instances from the provided plugins function
-        plugins_fn = _get_module_attr(plugins)
+        plugins_fn = get_module_attr(plugins)
         plugin_instances = plugins_fn(**plugin_kwargs)
         result = (
             list(plugin_instances)
@@ -283,10 +354,19 @@ def _resolve_plugins(
 def _resolve_logger(
     logger: str | bool | Logger | list[Logger] | None = None,
     logger_kwargs: dict[str, Any] | None = None,
-    comet_param: dict[str, Any] | None = None,
     run_id: str | None = None,
 ) -> bool | Logger | list[Logger] | None:
-    """Resolve the logger for the Lightning Trainer."""
+    """Resolve the logger for the Lightning Trainer.
+
+    When *logger* is a dotted import path, *run_id* is injected into the
+    kwargs passed to the factory (unless already present in *logger_kwargs*)
+    so factories can opt into cross-worker run correlation by declaring a
+    ``run_id: str | None = None`` parameter — see
+    ``build_comet_logger``/``build_mlflow_logger``. The factory's signature
+    is inspected first, so factories that genuinely don't accept ``run_id``
+    (and don't take ``**kwargs``) are called without it instead of raising
+    ``TypeError`` for an unexpected keyword argument.
+    """
     if logger_kwargs is not None and not isinstance(logger_kwargs, dict):
         raise TypeError(
             f"logger_kwargs must be a dict or None, got {type(logger_kwargs)!r}"
@@ -294,10 +374,6 @@ def _resolve_logger(
     if logger_kwargs is not None and not isinstance(logger, str):
         raise TypeError(
             "logger_kwargs can only be used when logger is a str import path"
-        )
-    if comet_param is not None and not isinstance(comet_param, dict):
-        raise TypeError(
-            f"comet_param must be a dict or None, got {type(comet_param)!r}"
         )
 
     if isinstance(logger, bool):
@@ -311,23 +387,35 @@ def _resolve_logger(
             )
         return list(logger)
     if isinstance(logger, str):
-        logger_fn = _get_module_attr(logger)
-        result = logger_fn(**(logger_kwargs or {}))
+        logger_fn = get_module_attr(logger)
+        kwargs = dict(logger_kwargs or {})
+        if run_id is not None and _accepts_run_id(logger_fn):
+            kwargs.setdefault("run_id", run_id)
+        result = logger_fn(**kwargs)
         return list(result) if isinstance(result, (list, tuple)) else result
     if logger is not None:
         raise TypeError(
             f"logger must be a str, bool, Logger instance, list of Logger instances, or None, got {type(logger)!r}"
         )
-    if comet_param and run_id:
-        return _get_comet_logger(
-            run_id,
-            api_key=comet_param["api_key"],
-            workspace=comet_param["workspace"],
-            project_name=comet_param["project_name"],
-            experiment_name=comet_param["experiment_name"],
-            tags=comet_param.get("tags"),
-        )
     return None
+
+
+def _accepts_run_id(fn: Any) -> bool:
+    """Return True if calling *fn* with a ``run_id=`` kwarg would not raise.
+
+    True when *fn* declares a ``run_id`` parameter, or accepts ``**kwargs``.
+    Used to make ``run_id`` injection in :func:`_resolve_logger` opt-in for
+    custom tracker factories that don't need cross-worker correlation.
+    """
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        # Signature introspection can fail for builtins/some C extensions;
+        # fail open and let the injected run_id surface any real mismatch.
+        return True
+    return "run_id" in params or any(
+        p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()
+    )
 
 
 def _resolve_callbacks(
@@ -335,6 +423,7 @@ def _resolve_callbacks(
     callback_kwargs: dict[str, Any] | None = None,
     per_node_callback_kwargs: dict[str, Any] | None = None,
     strategy: Strategy | None = None,
+    training_observer: TrainingObserver | None = None,
 ) -> tuple[list[Callback], bool]:
     """Build callback list for the Lightning Trainer.
 
@@ -362,7 +451,7 @@ def _resolve_callbacks(
 
     if isinstance(callbacks, str):
         # Import the callable and invoke it — may be a Callback class or a factory returning one or more.
-        fn = _get_module_attr(callbacks)
+        fn = get_module_attr(callbacks)
         result = fn(**callback_kwargs)
         if isinstance(result, (list, tuple)):
             for obj in result:
@@ -400,10 +489,14 @@ def _resolve_callbacks(
     if _use_per_node:
         per_node_callback_kwargs = per_node_callback_kwargs or {}
         resolved_callbacks.append(
-            RayTrainReportPerNodeCallback(**per_node_callback_kwargs)
+            RayTrainReportPerNodeCallback(
+                **per_node_callback_kwargs, training_observer=training_observer
+            )
         )
     else:
-        resolved_callbacks.append(RayTrainReportCallback())
+        resolved_callbacks.append(
+            RayTrainReportCallback(training_observer=training_observer)
+        )
 
     return resolved_callbacks, has_model_checkpoint
 
@@ -520,7 +613,6 @@ def _train_loop_per_worker(train_loop_config):
     logger = _resolve_logger(
         trainer_kwargs.pop("logger", None),
         trainer_kwargs.pop("logger_kwargs", None),
-        train_loop_config.get("comet_param"),
         train_loop_config.get("run_id"),
     )
     callbacks, has_model_checkpoint = _resolve_callbacks(
@@ -528,6 +620,7 @@ def _train_loop_per_worker(train_loop_config):
         trainer_kwargs.pop("callback_kwargs", None),
         trainer_kwargs.pop(CALLBACK_REPORT_PER_NODE, None),
         strategy,
+        training_observer=train_loop_config.get("training_observer"),
     )
 
     # Update trainer_kwargs with the resolved arguments for the Lightning Trainer.

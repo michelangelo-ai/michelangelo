@@ -29,29 +29,34 @@ class TestModelPluginConfig(TestCase):
     """Tests for ModelPluginConfig defaults and field storage."""
 
     def test_defaults(self):
-        """It defaults model_name and description to None and extra_metadata to {}."""
+        """model_name, description, run_id default to None; labels, metadata to {}."""
         cfg = ModelPluginConfig()
         self.assertIsNone(cfg.model_name)
         self.assertIsNone(cfg.description)
-        self.assertEqual(cfg.extra_metadata, {})
+        self.assertIsNone(cfg.run_id)
+        self.assertEqual(cfg.labels, {})
+        self.assertEqual(cfg.metadata, {})
 
-    def test_extra_metadata_instances_are_independent(self):
-        """It creates a separate extra_metadata dict for each instance."""
+    def test_labels_instances_are_independent(self):
+        """It creates a separate labels dict for each instance."""
         a = ModelPluginConfig()
         b = ModelPluginConfig()
-        a.extra_metadata["k"] = "v"
-        self.assertEqual(b.extra_metadata, {})
+        a.labels["k"] = "v"
+        self.assertEqual(b.labels, {})
 
     def test_stores_provided_values(self):
-        """It stores model_name, description, and extra_metadata."""
+        """It stores model_name, description, labels (str values only), and run_id."""
         cfg = ModelPluginConfig(
             model_name="clf",
             description="A classifier",
-            extra_metadata={"framework": "xgboost"},
+            labels={"framework": "xgboost", "owner": "ml-platform"},
+            run_id="run-abc123",
         )
         self.assertEqual(cfg.model_name, "clf")
         self.assertEqual(cfg.description, "A classifier")
-        self.assertEqual(cfg.extra_metadata["framework"], "xgboost")
+        self.assertEqual(cfg.labels["framework"], "xgboost")
+        self.assertEqual(cfg.labels["owner"], "ml-platform")
+        self.assertEqual(cfg.run_id, "run-abc123")
 
 
 class TestDatasetPluginConfig(TestCase):

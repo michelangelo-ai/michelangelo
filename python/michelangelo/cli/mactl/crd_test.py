@@ -294,6 +294,60 @@ class GetFuncImplTest(TestCase):
         mock_crd._get.assert_called_once_with(namespace="ns", name="proj")
         self.assertEqual(result, mock_response)
 
+    def test_get_func_impl_with_name_flag_calls_get(self):
+        """`--name X` (dest=name_flag) routes through _get just like positional."""
+        mock_crd = Mock()
+        mock_response = Mock()
+        mock_crd._get.return_value = mock_response
+
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Get",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        result = get_func_impl(
+            crd_method_info,
+            Mock(
+                arguments={
+                    "self": mock_crd,
+                    "namespace": "ns",
+                    "name": "",
+                    "name_flag": "proj",
+                }
+            ),
+        )
+
+        mock_crd._get.assert_called_once_with(namespace="ns", name="proj")
+        self.assertEqual(result, mock_response)
+
+    def test_get_func_impl_positional_overrides_name_flag(self):
+        """Positional `name` wins when both are supplied."""
+        mock_crd = Mock()
+        mock_crd._get.return_value = Mock()
+
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Get",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        get_func_impl(
+            crd_method_info,
+            Mock(
+                arguments={
+                    "self": mock_crd,
+                    "namespace": "ns",
+                    "name": "from-positional",
+                    "name_flag": "from-flag",
+                }
+            ),
+        )
+
+        mock_crd._get.assert_called_once_with(namespace="ns", name="from-positional")
+
     def test_get_func_impl_without_name_calls_list(self):
         """Test get_func_impl without name calls list with limit."""
         mock_crd = Mock()
@@ -314,7 +368,8 @@ class GetFuncImplTest(TestCase):
                 arguments={
                     "self": mock_crd,
                     "namespace": "ns",
-                    "name": None,
+                    "name": "",
+                    "name_flag": "",
                     "limit": 50,
                 }
             ),
@@ -378,6 +433,64 @@ class ApplyFuncImplTest(TestCase):
 
         mock_crd._get.assert_called_once_with("ns", "name")
         mock_crd.read_yaml_and_update_crd_request.assert_called_once()
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.get_crd_namespace_and_name_from_yaml")
+    def test_apply_func_impl_invokes_pre_apply_hook(self, mock_get_ns: MagicMock, _):
+        """apply_func_impl runs registered pre-apply checks with the CRD full name."""
+        from michelangelo.cli.mactl import apply_hooks
+
+        received: list[str] = []
+        apply_hooks._pre_apply_checks.clear()
+        apply_hooks.register_pre_apply_check(received.append)
+        self.addCleanup(apply_hooks._pre_apply_checks.clear)
+
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Apply",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        mock_crd = Mock()
+        mock_crd.full_name = "test.Service"
+        mock_crd._get.return_value = Mock()
+        mock_crd.read_yaml_and_update_crd_request.return_value = Mock()
+        mock_get_ns.return_value = ("ns", "name")
+
+        apply_func_impl(
+            crd_method_info, Mock(arguments={"self": mock_crd, "file": "f.yaml"})
+        )
+
+        self.assertEqual(received, ["test.Service"])
+
+    def test_apply_func_impl_pre_apply_hook_can_abort(self):
+        """A raising pre-apply check halts apply_func_impl before any gRPC call."""
+        from michelangelo.cli.mactl import apply_hooks
+
+        def reject(_: str) -> None:
+            raise RuntimeError("blocked by hook")
+
+        apply_hooks._pre_apply_checks.clear()
+        apply_hooks.register_pre_apply_check(reject)
+        self.addCleanup(apply_hooks._pre_apply_checks.clear)
+
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Apply",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        mock_crd = Mock()
+
+        with self.assertRaisesRegex(RuntimeError, "blocked by hook"):
+            apply_func_impl(
+                crd_method_info,
+                Mock(arguments={"self": mock_crd, "file": "f.yaml"}),
+            )
+
+        mock_crd._get.assert_not_called()
 
 
 class CreateFuncImplTest(TestCase):
@@ -546,6 +659,31 @@ class GenerateGetTest(TestCase):
         crd.generate_get(mock_channel)
 
         result = crd.get(namespace="test-ns", name="test-name")
+
+        self.assertEqual(result, mock_response)
+        call_args = mock_crd_method_call_kwargs.call_args
+        self.assertEqual(call_args.kwargs["namespace"], "test-ns")
+        self.assertEqual(call_args.kwargs["name"], "test-name")
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
+    @patch.object(CRD, "_extract_method_info")
+    def test_generate_get_execution_via_name_flag(
+        self, mock_extract_method_info, mock_crd_method_call_kwargs
+    ):
+        """Generated `get` resolves the --name flag (dest=name_flag) like positional.
+
+        Exercises the full bind_signature path with `name=""` and `name_flag="X"`,
+        the binding state that argparse produces when the user supplies --name only.
+        """
+        mock_channel = Mock()
+        mock_extract_method_info.return_value = ("GetTestCrd", Mock, Mock)
+        mock_response = Mock()
+        mock_crd_method_call_kwargs.return_value = mock_response
+
+        crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.generate_get(mock_channel)
+
+        result = crd.get(namespace="test-ns", name_flag="test-name")
 
         self.assertEqual(result, mock_response)
         call_args = mock_crd_method_call_kwargs.call_args

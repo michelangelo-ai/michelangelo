@@ -5,7 +5,7 @@ import { ACCESSIBILITY_TYPE, PLACEMENT, Tooltip } from 'baseui/tooltip';
 import { Icon } from '#core/components/icon/icon';
 
 import type { MenuAdapterProps } from 'baseui/list';
-import type { ComponentActionConfig, Data, SelectedAction } from '#core/components/actions/types';
+import type { ResolvedActionItem } from '#core/components/actions/types';
 
 /**
  * Props for ActionMenuItem, combining BaseUI's MenuAdapter props with
@@ -16,20 +16,13 @@ import type { ComponentActionConfig, Data, SelectedAction } from '#core/componen
  * are passed from ActionMenu through the override's `props` field.
  */
 type ActionMenuItemProps = {
-  /**
-   * Item is the action configuration defined for a specific action in
-   * the ActionMenu list, passed as `item` per baseui MenuAdapter props.
-   */
-  item: Omit<ComponentActionConfig, 'disabled'> & {
-    disabled: boolean;
-    disabledMessage: string | undefined;
-  };
-  record: Data;
-  onSelectAction: (action: SelectedAction) => void;
+  /** Named `item` to match BaseUI's MenuAdapter injection. */
+  item: ResolvedActionItem;
+  onSelectAction: (action: ResolvedActionItem) => void;
   onClose?: () => void;
   /**
-   * The action currently under the mouse cursor, or null.
-   * Compared by object identity against `action` to derive `isHovered`.
+   * The item currently under the mouse cursor, or null.
+   * Compared by object identity against `item` to derive `isHovered`.
    */
   hoveredItem: object | null;
   setHoveredItem: (item: object | null) => void;
@@ -45,7 +38,6 @@ type ActionMenuItemProps = {
 export const ActionMenuItem = forwardRef<HTMLLIElement, ActionMenuItemProps>((props, ref) => {
   const {
     item: action,
-    record,
     onSelectAction,
     onClose,
     hoveredItem,
@@ -55,6 +47,7 @@ export const ActionMenuItem = forwardRef<HTMLLIElement, ActionMenuItemProps>((pr
     ...baseMenuProps
   } = props;
   const isHovered = hoveredItem === action;
+  const handleActionSelect = action.disabled ? undefined : () => onSelectAction(action);
 
   const menuItem = (
     <MenuAdapter
@@ -75,9 +68,7 @@ export const ActionMenuItem = forwardRef<HTMLLIElement, ActionMenuItemProps>((pr
       // Opacity dims the entire item (icon + text) uniformly.
       overrides={{ Root: { style: { height: '44px', opacity: action.disabled ? 0.4 : 1 } } }}
       $disabled={action.disabled}
-      onClick={
-        action.disabled ? undefined : () => onSelectAction({ component: action.component, record })
-      }
+      onClick={handleActionSelect}
     >
       <ListItemLabel>{action.display.label}</ListItemLabel>
     </MenuAdapter>

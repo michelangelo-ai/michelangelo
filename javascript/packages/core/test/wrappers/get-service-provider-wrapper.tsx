@@ -4,6 +4,7 @@ import { vi } from 'vitest';
 
 import { ServiceProvider } from '#core/providers/service-provider/service-provider';
 
+import type React from 'react';
 import type { ServiceContextType } from '#core/providers/service-provider/types';
 import type { WrapperComponentProps } from './types';
 
@@ -42,6 +43,13 @@ import type { WrapperComponentProps } from './types';
  * ```
  */
 export function getServiceProviderWrapper(serviceProvider: Partial<ServiceContextType>) {
+  return createServiceProviderTestContext(serviceProvider).wrapper;
+}
+
+export function createServiceProviderTestContext(serviceProvider: Partial<ServiceContextType>): {
+  handles: { queryClient: QueryClient };
+  wrapper: ({ children }: WrapperComponentProps) => React.JSX.Element;
+} {
   const mockRequest = vi.fn();
   const base = {
     request: mockRequest,
@@ -56,14 +64,19 @@ export function getServiceProviderWrapper(serviceProvider: Partial<ServiceContex
     },
   });
 
-  return function ServiceProviderWrapper({ children }: WrapperComponentProps) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        <ServiceProvider {...base} {...serviceProvider}>
-          {children}
-        </ServiceProvider>
-      </QueryClientProvider>
-    );
+  return {
+    handles: { queryClient },
+    wrapper: function ServiceProviderWrapper({
+      children,
+    }: WrapperComponentProps): React.JSX.Element {
+      return (
+        <QueryClientProvider client={queryClient}>
+          <ServiceProvider {...base} {...serviceProvider}>
+            {children}
+          </ServiceProvider>
+        </QueryClientProvider>
+      );
+    },
   };
 }
 

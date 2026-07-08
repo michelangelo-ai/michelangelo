@@ -1,4 +1,4 @@
-# Pipeline management
+# Pipeline Management
 
 In general, there are two categories of Michelangelo pipelines: those that leverage the **standard workflows** and those that depend on user-created **custom workflows**.
 
@@ -43,7 +43,7 @@ The custom workflows are fully customized Uniflow workflows.
 
 ## Pipeline creation
 
-An MA Studio project is required before creating pipelines. Please refer to [Project Management](../project-management-for-ml-pipelines.md) for project creation.
+An MA Studio project is required before creating pipelines. Please refer to [Project Management](../getting-started/project-management-for-ml-pipelines.md) for project creation.
 
 ### Pipeline creation for standard workflows
 
@@ -89,7 +89,7 @@ task_configs:
       source:
         dataset:
           namespace: my-project
-          name: boston-housing
+          name: california-housing
       split:
         ratio:
           train_ratio: 0.8
@@ -278,3 +278,25 @@ ma pipeline run -n <namespace> --revision <pipeline_revision_name>
 ```bash
 ma pipeline run -n my-project --revision pipeline-simple-custom-train-511e3b3be42f
 ```
+
+## Deleting a Pipeline
+
+Delete a Pipeline by namespace and name:
+
+```bash
+ma pipeline delete -n my-project --name simple-custom-train
+```
+
+The CLI will display a confirmation prompt before proceeding. Pass `--yes` to skip the prompt:
+
+```bash
+ma pipeline delete -n my-project --name simple-custom-train --yes
+```
+
+Deleting a Pipeline cascades to its child runs (PipelineRuns and TriggerRuns) by default.
+
+:::warning
+This operation is irreversible. All child PipelineRuns (including in-flight runs) and TriggerRuns will be terminated and permanently deleted. Make sure no critical runs are in progress before confirming. To delete the Pipeline but keep its runs, use `kubectl delete pipeline <name> -n <namespace> --cascade=orphan` instead.
+:::
+
+For propagation-policy and RBAC details, monitoring, and troubleshooting, see the [Cascade Delete operator guide](../../operator-guides/cascade-delete.md).

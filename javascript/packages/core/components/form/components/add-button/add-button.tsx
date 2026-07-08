@@ -17,7 +17,7 @@ import type { AddButtonProps } from './types';
  *
  * @example
  * ```tsx
- * const { add } = useArrayField('items');
+ * const { handleItemAdd } = useArrayField('items');
  *
  * <AddButton onClick={add} label="Add item" />
  * ```

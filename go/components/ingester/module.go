@@ -3,6 +3,7 @@ package ingester
 import (
 	"fmt"
 
+	"github.com/michelangelo-ai/michelangelo/go/cascadedelete"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.uber.org/fx"
@@ -23,6 +24,7 @@ type registerParams struct {
 	Scheme          *runtime.Scheme
 	MetadataStorage storage.MetadataStorage `optional:"true"`
 	Config          Config                  `optional:"true"`
+	RetainPolicy    cascadedelete.RetainPolicy
 	Logger          *zap.Logger
 }
 
@@ -63,6 +65,7 @@ func register(p registerParams) error {
 			clientObj,
 			p.MetadataStorage,
 			WithConfig(controllerConfig),
+			WithRetainPolicy(p.RetainPolicy),
 		)
 
 		if err := reconciler.SetupWithManager(p.Manager); err != nil {
