@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { useStyletron } from 'baseui';
 import { Input } from 'baseui/input';
 
 import { FormControl } from '#core/components/form/components/form-control';
 import { useField } from '#core/components/form/hooks/use-field';
 import { Tag } from '#core/components/tag/tag';
+import { TagList } from './styled-components';
 
 import type { KeyboardEvent } from 'react';
 import type { MultiInputFieldProps } from './types';
@@ -35,7 +35,6 @@ export function MultiInputField({
   caption,
   labelEndEnhancer,
 }: MultiInputFieldProps) {
-  const [css, theme] = useStyletron();
   const { input, meta } = useField<string[]>(name, {
     required,
     validate,
@@ -92,14 +91,7 @@ export function MultiInputField({
         />
       </FormControl>
       {values.length > 0 && (
-        <div
-          className={css({
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: theme.sizing.scale300,
-            marginTop: theme.sizing.scale300,
-          })}
-        >
+        <TagList>
           {values.map((value) => (
             <Tag
               key={value}
@@ -109,7 +101,7 @@ export function MultiInputField({
               {value}
             </Tag>
           ))}
-        </div>
+        </TagList>
       )}
     </>
   );
