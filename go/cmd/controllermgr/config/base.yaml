@@ -56,7 +56,7 @@ jobs:
         pathPrefix: log
         region: us-east-1
         credentialsSecret: minio-credentials
-        collectorImage: kuberay-collector:v0.1.0
+        collectorImage: ghcr.io/michelangelo-ai/kuberay-collector:main
         s3DisableSSL: true
         # logURLFormat is a Go text/template that builds the human-browsable
         # log URL. Available vars: {{.Bucket}}, {{.PathPrefix}}, {{.ClusterName}},

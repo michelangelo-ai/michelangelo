@@ -1007,6 +1007,46 @@ def _create_kuberay_operator(helm_existing_repos):
         "20m",
     )
 
+    _import_kuberay_images()
+
+
+_KUBERAY_IMAGES = [
+    "ghcr.io/michelangelo-ai/kuberay-collector:main",
+    "ghcr.io/michelangelo-ai/kuberay-historyserver:main",
+]
+
+
+def _import_kuberay_images():
+    """Pull kuberay images from GHCR and import them into k3d.
+
+    Non-fatal: prints a warning on failure since the collector sidecar and
+    history server are optional for basic sandbox usage.
+    """
+    for image in _KUBERAY_IMAGES:
+        print(f"Importing {image} into k3d...")
+        pull = subprocess.run(
+            ["docker", "pull", image],
+            capture_output=True,
+        )
+        if pull.returncode != 0:
+            print(f"Warning: could not pull {image}. Skipping.")
+            continue
+        result = subprocess.run(
+            [
+                "k3d",
+                "image",
+                "import",
+                image,
+                "-c",
+                _michelangelo_sandbox_kube_cluster_name,
+            ],
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            print(f"Warning: could not import {image} into k3d.")
+        else:
+            print(f"Successfully imported {image} into k3d.")
+
 
 def _create_cadence_domain(links):
     """Register the Cadence domain, treating 'already exists' as success.
@@ -1182,6 +1222,7 @@ def _ensure_credentials_secret():
     for secret_name, yaml_file in [
         ("object-storage-credentials", "object-storage-credentials.yaml"),
         ("aws-credentials", "aws-credentials.yaml"),
+        ("minio-credentials", "minio-credentials.yaml"),
     ]:
         exists = (
             subprocess.run(
@@ -1253,16 +1294,13 @@ def _kube_apply(path: Path):
 
 def _kube_wait(pods: bool = True, jobs: bool = True, timeout: int = 600):
     if pods:
-        # Wait for all non-job pods to be ready, excluding history-server which
-        # requires a custom-built image (kuberay-historyserver) not available on
-        # Docker Hub. Build it with scripts/kuberay/build-kuberay-images.sh first.
         _exec(
             "kubectl",
             "wait",
             "--for=condition=ready",
             "pod",
             "-l",
-            "app,app!=history-server",
+            "app",
             f"--timeout={timeout}s",
         )
     if jobs:
