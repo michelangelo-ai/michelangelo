@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"strings"
 
 	"github.com/go-logr/logr"
 	constants "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
@@ -28,6 +29,23 @@ type SparkClient struct {
 // Compile-time assertion that SparkClient implements job.Client interface.
 var _ job.Client = &SparkClient{}
 
+// sparkApplicationType infers the Spark Operator SparkApplicationType from a
+// SparkJob's main_application_file, since SparkJobSpec has no dedicated
+// language field. Falls back to JavaApplicationType (functionally identical
+// to Scala for the operator's dispatch, since both are JVM entrypoints
+// invoked via --class) when the extension doesn't identify a Python or R
+// script.
+func sparkApplicationType(mainApplicationFile string) sparkv1beta2.SparkApplicationType {
+	switch {
+	case strings.HasSuffix(mainApplicationFile, ".py"):
+		return sparkv1beta2.PythonApplicationType
+	case strings.HasSuffix(mainApplicationFile, ".R"), strings.HasSuffix(mainApplicationFile, ".r"):
+		return sparkv1beta2.RApplicationType
+	default:
+		return sparkv1beta2.JavaApplicationType
+	}
+}
+
 // CreateJob creates a new SparkApplication from a SparkJob specification.
 //
 // This method:
@@ -51,7 +69,7 @@ func (r SparkClient) CreateJob(ctx context.Context, log logr.Logger, job *v2pb.S
 			Namespace: job.Namespace,
 		},
 		Spec: sparkv1beta2.SparkApplicationSpec{
-			Type:                sparkv1beta2.PythonApplicationType,
+			Type:                sparkApplicationType(spec.MainApplicationFile),
 			SparkVersion:        spec.SparkVersion,
 			Mode:                sparkv1beta2.ClusterMode,
 			Image:               &spec.Driver.Pod.Image,
