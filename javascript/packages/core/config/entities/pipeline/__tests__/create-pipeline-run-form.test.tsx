@@ -186,7 +186,7 @@ describe('CreatePipelineRunForm', () => {
                 emails: ['notify@example.com'],
                 slackDestinations: [],
                 // Default selection covers every trigger condition (see NOTIFICATION_EVENT_TYPES).
-                eventTypes: [1, 2, 3, 4],
+                eventTypes: [11, 1, 2, 3, 4],
               }),
             ],
           }) as Record<string, unknown>,

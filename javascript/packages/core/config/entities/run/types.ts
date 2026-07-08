@@ -5,6 +5,7 @@
  * entry here — the id list, UI options, and proto-value lookup all derive from it.
  */
 export const NOTIFICATION_EVENT_TYPES = [
+  { id: 'EVENT_TYPE_PIPELINE_RUN_STATE_STARTED', label: 'Started', protoValue: 11 },
   { id: 'EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED', label: 'Succeeded', protoValue: 1 },
   { id: 'EVENT_TYPE_PIPELINE_RUN_STATE_KILLED', label: 'Killed', protoValue: 2 },
   { id: 'EVENT_TYPE_PIPELINE_RUN_STATE_FAILED', label: 'Failed', protoValue: 3 },
