@@ -8,6 +8,10 @@ Common questions about getting started, data, training, deployment, monitoring, 
 
 ## Getting Started
 
+**Q: How do I get help or support?**
+
+A: See the [Support & Community](./support.md) page for all channels — GitHub Discussions for Q&A, Slack for real-time chat, and email for private inquiries. For bugs, [open a GitHub issue](https://github.com/michelangelo-ai/michelangelo/issues/new/choose).
+
 **Q: Do I need to learn a new framework to use Michelangelo?**
 
 A: No. If you're using the UI, it's entirely point-and-click. If you're coding, Michelangelo uses familiar tools:

@@ -74,3 +74,4 @@ Understanding scope helps you decide if Michelangelo is the right tool.
 - [GitHub Repository](https://github.com/michelangelo-ai/michelangelo)
 - [CLI Reference](./user-guides/reference/cli.md)
 - [ML Pipelines Overview](./user-guides/ml-pipelines/index.md)
+- [Support & Community](./getting-started/support.md)
