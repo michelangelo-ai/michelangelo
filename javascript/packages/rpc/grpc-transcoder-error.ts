@@ -1,12 +1,10 @@
 import type { GoogleRpcStatus } from './types';
 
 function isGoogleRpcStatus(value: unknown): value is GoogleRpcStatus {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as GoogleRpcStatus).code === 'number' &&
-    typeof (value as GoogleRpcStatus).message === 'string'
-  );
+  if (typeof value !== 'object' || value === null) return false;
+  // cast: narrowing unknown to check shape
+  const candidate = value as GoogleRpcStatus;
+  return typeof candidate.code === 'number' && typeof candidate.message === 'string';
 }
 
 export class GrpcTranscoderError extends Error {

@@ -1,6 +1,7 @@
 import type {
   DescMethodUnary,
   DescService,
+  JsonValue,
   Message,
   MessageInitShape,
   MessageShape,
@@ -40,7 +41,7 @@ export interface FetchTransport {
    * Calls a unary RPC through Envoy's grpc_json_transcoder by POSTing JSON to
    * `/{serviceName}/{methodName}` and returning the parsed JSON response.
    */
-  callUnary(serviceName: string, methodName: string, request: unknown): Promise<unknown>;
+  callUnary(serviceName: string, methodName: string, request: unknown): Promise<JsonValue>;
 }
 
 /**

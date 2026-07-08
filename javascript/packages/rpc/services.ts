@@ -11,7 +11,7 @@ import { ProjectService } from './gen/michelangelo/api/v2/project_svc_pb';
 import { TriggerRunService } from './gen/michelangelo/api/v2/trigger_run_svc_pb';
 import { getRuntimeConfig } from './runtime-config';
 
-import type { DescService, JsonValue } from '@bufbuild/protobuf';
+import type { DescService } from '@bufbuild/protobuf';
 import type { FetchTransport, ServiceClient, Services } from './types';
 
 const typeRegistry = createRegistry(TypedStructSchema);
@@ -35,10 +35,11 @@ function createServiceClient<T extends DescService>(
       const message = create(method.input, request);
       const requestJson = toJson(method.input, message, { registry: typeRegistry });
       const responseJson = await transport.callUnary(service.typeName, method.name, requestJson);
-      return fromJson(method.output, responseJson as JsonValue, { registry: typeRegistry });
+      return fromJson(method.output, responseJson, { registry: typeRegistry });
     };
   }
 
+  // cast: dynamic method construction can't be statically typed
   return client as ServiceClient<T>;
 }
 

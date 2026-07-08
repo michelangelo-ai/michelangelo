@@ -1,5 +1,6 @@
 import { toTranscoderError } from './grpc-transcoder-error';
 
+import type { JsonValue } from '@bufbuild/protobuf';
 import type { FetchTransport, FetchTransportOptions } from './types';
 
 const STATIC_HEADERS: Record<string, string> = {
@@ -22,7 +23,8 @@ export function createFetchTransport(options: FetchTransportOptions): FetchTrans
         body: JSON.stringify(request),
       });
 
-      const body: unknown = await response.json().catch(() => null);
+      // cast: response.json() returns Promise<any> per DOM types
+      const body = (await response.json().catch(() => null)) as JsonValue | null;
 
       if (response.status < 200 || response.status >= 300) {
         throw toTranscoderError(response, body);
