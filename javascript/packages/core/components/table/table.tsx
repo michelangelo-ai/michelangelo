@@ -96,7 +96,9 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
     error: props.error,
     loading: props.loading || isResetting,
     hasFiltersApplied:
-      (table.getState().globalFilter as string)?.length > 0 || // cast: TanStack types globalFilter as any; always string, the value passed to setGlobalFilter
+      // cast: TanStack types globalFilter as any; always string, the value passed to
+      // setGlobalFilter
+      (table.getState().globalFilter as string)?.length > 0 ||
       (table.getState().columnFilters?.length ?? 0) > 0,
     filteredLength: table.getRowModel().rows.length,
     columnsLength: columns.length,
@@ -125,7 +127,9 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
         }}
       >
         <TableActionBar<T>
-          globalFilter={table.getState().globalFilter as string} // cast: TanStack types globalFilter as any; always string, the value passed to setGlobalFilter
+          // cast: TanStack types globalFilter as any; always string, the value passed to
+          // setGlobalFilter
+          globalFilter={table.getState().globalFilter as string}
           setGlobalFilter={table.setGlobalFilter}
           columnFilters={table.getState().columnFilters}
           setColumnFilters={table.setColumnFilters}

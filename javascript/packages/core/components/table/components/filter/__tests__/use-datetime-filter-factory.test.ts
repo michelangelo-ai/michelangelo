@@ -196,7 +196,8 @@ describe('Datetime Filter', () => {
         exclude: false,
       };
 
-      // cast: Row<{ createdAt: null|undefined }> not assignable to Row<unknown> under strict mode; testing runtime null/undefined handling
+      // cast: Row<{ createdAt: null|undefined }> not assignable to Row<unknown> under strict mode;
+      // testing runtime null/undefined handling
       expect(filterFn(nullRow as never, 'createdAt', filterValue)).toBe(false);
       expect(filterFn(undefinedRow as never, 'createdAt', filterValue)).toBe(false);
     });

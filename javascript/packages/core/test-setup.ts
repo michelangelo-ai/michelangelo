@@ -9,7 +9,8 @@ import '@testing-library/jest-dom';
  * {@link https://github.com/testing-library/user-event/issues/1115}
  */
 vi.stubGlobal('jest', {
-  // cast: bind() returns any without strictBindCallApply; narrowed to the concrete signature for the jest stub shape
+  // cast: bind() returns any without strictBindCallApply; narrowed to the concrete signature for
+  // the jest stub shape
   advanceTimersByTime: vi.advanceTimersByTime.bind(vi) as (ms: number) => void,
 });
 

@@ -49,7 +49,8 @@ export function useFormState<FieldValues extends FormData = FormData>(
 
   return {
     submitting: formState.submitting,
-    // cast: react-final-form types submitError as any; matches SubmitErrors[FORM_ERROR]'s string | Error shape
+    // cast: react-final-form types submitError as any; matches SubmitErrors[FORM_ERROR]'s string |
+    // Error shape
     submitError: formState.submitError as string | Error | undefined,
     values: formState.values,
     submitFailed: formState.submitFailed,

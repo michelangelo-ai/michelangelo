@@ -80,7 +80,8 @@ export const useStudioQuery = <TData>(args: {
     queryKey: [queryName, { ...serviceOptions, namespace }],
     queryFn: async () => {
       try {
-        return (await request(queryName, { ...serviceOptions, namespace })) as TData; // cast: service request returns unknown; TData is the caller-declared response type
+        // cast: service request returns unknown; TData is the caller-declared response type
+        return (await request(queryName, { ...serviceOptions, namespace })) as TData;
       } catch (error) {
         console.error('error', error);
         throw normalizeError(error)!;

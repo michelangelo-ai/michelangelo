@@ -21,7 +21,9 @@ const DEPLOYMENT_COLUMNS: ColumnConfig<object>[] = [
     label: 'Type',
     type: CellType.TAG,
     accessor: (data: unknown) => {
-      const type = (data as { spec?: { definition?: { type?: string } } })?.spec?.definition?.type; // cast: accessor receives unknown data; narrowing to expected proto shape for property access; see #1425
+      // cast: accessor receives unknown data; narrowing to expected proto shape for property
+      // access; see #1425
+      const type = (data as { spec?: { definition?: { type?: string } } })?.spec?.definition?.type;
       if (!type) return null;
       if (type === 'TARGET_TYPE_OFFLINE') return 'Offline';
       if (type === 'TARGET_TYPE_MOBILE') return 'Mobile';
@@ -34,7 +36,9 @@ const DEPLOYMENT_COLUMNS: ColumnConfig<object>[] = [
     label: 'Target',
     type: CellType.TEXT,
     accessor: (data: unknown) => {
-      const target = (data as { spec?: { target?: { case?: string; value?: { name?: string } } } }) // cast: accessor receives unknown data; narrowing to expected proto shape for property access; see #1425
+      // cast: accessor receives unknown data; narrowing to expected proto shape for property
+      // access; see #1425
+      const target = (data as { spec?: { target?: { case?: string; value?: { name?: string } } } })
         ?.spec?.target;
       if (target?.case === 'inferenceServer') return target.value?.name ?? null;
       return null;

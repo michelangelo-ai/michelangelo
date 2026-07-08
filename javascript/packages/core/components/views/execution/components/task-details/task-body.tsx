@@ -81,7 +81,9 @@ export function TaskBody<TTaskRecord extends object>(props: TaskBodyProps<TTaskR
               <TaskBodyMetadata
                 key={index}
                 label={label}
-                value={task.record as Record<string, unknown>} // cast: TTaskRecord extends object lacks an index signature; always a plain record at runtime; see #1443
+                // cast: TTaskRecord extends object lacks an index signature; always a plain record
+                // at runtime; see #1443
+                value={task.record as Record<string, unknown>}
                 cells={cells}
               />
             );

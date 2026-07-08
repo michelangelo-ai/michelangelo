@@ -24,11 +24,13 @@ export async function request<RpcId extends keyof RpcHandlerType>(
   args: OmitTypeName<Parameters<RpcHandlerType[RpcId]>[0]>
 ): Promise<OmitTypeName<Awaited<ReturnType<RpcHandlerType[RpcId]>>>> {
   const handlers = await getRpcHandlers();
-  // cast: dynamic key lookup on handlers loses the specific RPC signature; we know RpcId is a valid key with matching handler shape
+  // cast: dynamic key lookup on handlers loses the specific RPC signature; we know RpcId is a valid
+  // key with matching handler shape
   const handler = handlers[rpcId] as (a: unknown) => Promise<unknown>;
   // cast: handler returns unknown via dynamic dispatch; RpcId determines the concrete return type
   const response = (await handler(args)) as Awaited<ReturnType<RpcHandlerType[RpcId]>>;
-  // cast: toPlainObject returns unknown; RpcId determines the proto shape after stripping $typeName fields
+  // cast: toPlainObject returns unknown; RpcId determines the proto shape after stripping $typeName
+  // fields
   return toPlainObject(response) as OmitTypeName<Awaited<ReturnType<RpcHandlerType[RpcId]>>>;
 }
 

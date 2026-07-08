@@ -41,7 +41,9 @@ export function withStickySides<P extends object>(
     const isContainerHovered = useHover(hoverContainerRef);
 
     if (!enableStickySides) {
-      return <Component {...(componentProps as P)}>{children}</Component>; // cast: TypeScript cannot simplify Omit<P & WithStickySidesProps, keyof WithStickySidesProps> back to P after rest destructuring
+      // cast: TypeScript cannot simplify Omit<P & WithStickySidesProps, keyof WithStickySidesProps>
+      // back to P after rest destructuring
+      return <Component {...(componentProps as P)}>{children}</Component>;
     }
 
     const backgroundColor =
@@ -50,14 +52,17 @@ export function withStickySides<P extends object>(
         : theme.colors.tableHeadBackgroundColor;
 
     const sharedStickyStyles = {
-      position: 'sticky !important' as 'sticky', // cast: CSS-in-JS requires the literal 'sticky'; the !important suffix makes the string not assignable without cast
+      // cast: CSS-in-JS requires the literal 'sticky'; the !important suffix makes the string not
+      // assignable without cast
+      position: 'sticky !important' as 'sticky',
       backgroundColor: `${backgroundColor} !important`,
     };
 
     const stickyConfigs = getTableStickyConfigs(enableRowSelection, lastColumnIndex);
 
     return (
-      // cast: TypeScript cannot simplify Omit<P & WithStickySidesProps, keyof WithStickySidesProps> back to P after rest destructuring
+      // cast: TypeScript cannot simplify Omit<P & WithStickySidesProps, keyof WithStickySidesProps>
+      // back to P after rest destructuring
       <Component {...(componentProps as P)} ref={hoverContainerRef}>
         {React.Children.map(children, (child, index) => {
           const config = stickyConfigs[index];
@@ -68,7 +73,8 @@ export function withStickySides<P extends object>(
             [config.stickySide]: `${config.position}px !important`,
           };
 
-          // cast: child is narrowed to ReactElement<Record<string, unknown>> by isValidElement guard above
+          // cast: child is narrowed to ReactElement<Record<string, unknown>> by isValidElement
+          // guard above
           return React.cloneElement(child, {
             className: `${css(stickyStyles)} ${css(buildShadowStyles(config.shadowSide, scrollRatio))}`,
             'data-testid': `sticky-cell-${config.stickySide}-sticky`,

@@ -67,29 +67,38 @@ export function SelectField<V = string | number>({
     if (!currentValue || (Array.isArray(currentValue) && currentValue.length === 0)) return;
 
     if (multi) {
-      const values = currentValue as V[]; // cast: field value is V | V[]; holds within SelectField's own write path, but nothing enforces it against a non-array initialValues for a multi field; see #1462
+      // cast: field value is V | V[]; holds within SelectField's own write path, but nothing
+      // enforces it against a non-array initialValues for a multi field; see #1462
+      const values = currentValue as V[];
       const validValues = values.filter((v) => findByValue(v));
       if (validValues.length !== values.length) {
         input.onChange(validValues);
       }
-      // cast: field value is V | V[]; holds within SelectField's own write path, but not enforced against externally-supplied initialValues; see #1462
+      // cast: field value is V | V[]; holds within SelectField's own write path, but not enforced
+      // against externally-supplied initialValues; see #1462
     } else if (!findByValue(currentValue as V)) {
-      input.onChange('' as V | V[]); // cast: empty string clears the field; satisfies V | V[] for onChange
+      // cast: empty string clears the field; satisfies V | V[] for onChange
+      input.onChange('' as V | V[]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [findByValue, isLoading]);
 
   const handleCommitSelection = (params: OnChangeParams) => {
-    const selected = params.value as Array<{ id: string }>; // cast: BaseUI OnChangeParams.value is ReadonlyArray<Option> where id is string | number | undefined; our options always produce string keys so we narrow here
+    // cast: BaseUI OnChangeParams.value is ReadonlyArray<Option> where id is string | number |
+    // undefined; our options always produce string keys so we narrow here
+    const selected = params.value as Array<{ id: string }>;
 
     if (multi) {
-      // cast: BaseUI item id is a serialized string key; V is the original option id type; the ?? fallback trusts the raw id as V, only correct when V is instantiated as string; see #1462
+      // cast: BaseUI item id is a serialized string key; V is the original option id type; the ??
+      // fallback trusts the raw id as V, only correct when V is instantiated as string; see #1462
       input.onChange(selected.map((item) => findByKey(item.id)?.id ?? (item.id as V)));
     } else if (selected.length > 0) {
-      // cast: BaseUI item id is a serialized string key; V is the original option id type; the ?? fallback trusts the raw id as V, only correct when V is instantiated as string; see #1462
+      // cast: BaseUI item id is a serialized string key; V is the original option id type; the ??
+      // fallback trusts the raw id as V, only correct when V is instantiated as string; see #1462
       input.onChange(findByKey(selected[0].id)?.id ?? (selected[0].id as V));
     } else {
-      input.onChange('' as V | V[]); // cast: empty string clears the field; satisfies V | V[] for onChange
+      // cast: empty string clears the field; satisfies V | V[] for onChange
+      input.onChange('' as V | V[]);
     }
   };
 

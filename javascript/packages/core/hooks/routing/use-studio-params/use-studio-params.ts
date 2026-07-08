@@ -33,7 +33,9 @@ export function useStudioParams<T extends StudioParamsView = 'unregistered'>(
 
   return React.useMemo(() => {
     if (!params.phase) {
-      // cast: mapped type can't be satisfied without a cast from this concrete shape; whether the no-phase path is reachable for every T (e.g. 'detail', which requires entityTab) is unverified; see #1459
+      // cast: mapped type can't be satisfied without a cast from this concrete shape; whether the
+      // no-phase path is reachable for every T (e.g. 'detail', which requires entityTab) is
+      // unverified; see #1459
       return {
         ...queryParams,
         revisionId: params.revisionId,
@@ -45,6 +47,8 @@ export function useStudioParams<T extends StudioParamsView = 'unregistered'>(
     }
 
     const transformer = VIEW_TYPE_TO_PARAMS[viewType];
-    return transformer(normalizeEntityParam(params), queryParams) as ViewTypeToParamType<T>; // cast: transformer is selected by viewType; return value always matches ViewTypeToParamType<T> at runtime
+    // cast: transformer is selected by viewType; return value always matches ViewTypeToParamType<T>
+    // at runtime
+    return transformer(normalizeEntityParam(params), queryParams) as ViewTypeToParamType<T>;
   }, [params, queryParams, viewType]);
 }

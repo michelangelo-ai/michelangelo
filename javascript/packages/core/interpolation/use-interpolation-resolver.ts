@@ -83,7 +83,8 @@ export function useInterpolationResolver() {
         ...injectedContext,
       };
 
-      // cast: resolveInterpolations returns unknown; T is the caller-declared schema type after all interpolations are resolved; see #1424
+      // cast: resolveInterpolations returns unknown; T is the caller-declared schema type after all
+      // interpolations are resolved; see #1424
       return resolveInterpolations({
         variable,
         params: { ...minimumInterpolationData, ...input },

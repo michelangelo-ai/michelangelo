@@ -8,7 +8,9 @@ import type { PhaseEntityConfig } from '#core/types/common/studio-types';
 import type { TriggerRun } from './types';
 
 const isKillable = (record: unknown) => {
-  const state = (record as TriggerRun).status?.state; // cast: record is unknown from the action predicate context; always TriggerRun in this entity config; see #1425
+  // cast: record is unknown from the action predicate context; always TriggerRun in this entity
+  // config; see #1425
+  const state = (record as TriggerRun).status?.state;
   return state === TriggerRunState.RUNNING || state === TriggerRunState.PAUSED;
 };
 
@@ -55,7 +57,9 @@ export const TRIGGER_ENTITY_CONFIG: PhaseEntityConfig = {
         header: { title: 'Kill Trigger Run' },
         body: interpolate(
           ({ data }) =>
-            `Kill run **${(data as TriggerRun).metadata.name}** in pipeline **${(data as TriggerRun).spec.pipeline.name}**? This action cannot be undone.` // cast: data is unknown from interpolation context; always TriggerRun in this entity config; see #1425
+            // cast: data is unknown from interpolation context; always TriggerRun in this entity
+            // config; see #1425
+            `Kill run **${(data as TriggerRun).metadata.name}** in pipeline **${(data as TriggerRun).spec.pipeline.name}**? This action cannot be undone.`
         ),
         button: { label: 'Kill' },
       },

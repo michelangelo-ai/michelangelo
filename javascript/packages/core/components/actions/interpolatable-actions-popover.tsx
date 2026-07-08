@@ -25,7 +25,8 @@ export function InterpolatableActionsPopover({
 }: InterpolatableActionsPopoverProps) {
   const resolve = useInterpolationResolver();
   const resolved = useMemo(
-    () => resolve(actions, { row: record }) as ActionConfig[], // cast: resolver returns unknown; always ActionConfig[] after interpolation; see #1424
+    // cast: resolver returns unknown; always ActionConfig[] after interpolation; see #1424
+    () => resolve(actions, { row: record }) as ActionConfig[],
     [resolve, actions, record]
   );
 

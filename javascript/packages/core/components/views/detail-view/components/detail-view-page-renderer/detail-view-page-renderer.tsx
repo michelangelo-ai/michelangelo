@@ -30,7 +30,8 @@ export function DetailViewPageRenderer<T extends object = object>({
     }
 
     default:
-      // cast: page is never in the type-safe path; runtime guard for unknown page types from external config
+      // cast: page is never in the type-safe path; runtime guard for unknown page types from
+      // external config
       return <div>Page type &apos;{(page as { type: string }).type}&apos; not yet supported</div>;
   }
 }

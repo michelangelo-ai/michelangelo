@@ -34,5 +34,7 @@ import { useLocation } from 'react-router-dom-v5-compat';
 export function useUrlQueryString<T extends Record<string, string>>(): Partial<T> {
   const location = useLocation();
   const { search = '' } = location ?? {};
-  return Object.fromEntries(new URLSearchParams(search)) as Partial<T>; // cast: Object.fromEntries returns { [k: string]: string }; Partial<T> cannot be satisfied for a generic T without assertion
+  // cast: Object.fromEntries returns { [k: string]: string }; Partial<T> cannot be satisfied for a
+  // generic T without assertion
+  return Object.fromEntries(new URLSearchParams(search)) as Partial<T>;
 }

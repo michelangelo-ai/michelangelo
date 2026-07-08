@@ -28,6 +28,20 @@ tester.run('require-cast-comment', rule, {
 const x = foo as Bar;`,
     },
 
+    // Multi-line // comment block — marker on the first line
+    {
+      code: `// cast: narrowing from union
+// checked by caller at the call site
+const x = foo as Bar;`,
+    },
+
+    // Multi-line // comment block — marker on a later line, not the one touching the code
+    {
+      code: `// this narrows a union down to one member
+// cast: checked by caller before this point
+const x = foo as Bar;`,
+    },
+
     // Double assertion: inner is unknown (safe), outer has comment
     { code: 'const x = (foo as unknown as Bar); // cast: required for generic override' },
 
@@ -61,10 +75,27 @@ const x = foo as Bar;`,
       errors: [{ messageId: 'missingCastComment', data: { type: 'Bar' } }],
     },
 
+    // Multi-line comment block with no cast marker anywhere
+    {
+      code: `// this narrows a union down to one member
+// checked by caller before this point
+const x = foo as Bar;`,
+      errors: [{ messageId: 'missingCastComment', data: { type: 'Bar' } }],
+    },
+
     // Comment too far above (blank line separates)
     {
       code: `// cast: reason
 
+const x = foo as Bar;`,
+      errors: [{ messageId: 'missingCastComment', data: { type: 'Bar' } }],
+    },
+
+    // Blank line inside what looks like a comment block still breaks the chain
+    {
+      code: `// cast: reason
+
+// unrelated comment
 const x = foo as Bar;`,
       errors: [{ messageId: 'missingCastComment', data: { type: 'Bar' } }],
     },

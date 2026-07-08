@@ -9,7 +9,7 @@ const rule = {
     },
     messages: {
       missingCastComment:
-        "Type assertion 'as {{ type }}' requires a '// cast:' comment. Add '// cast: <reason>' on the same line or the line above.",
+        "Type assertion 'as {{ type }}' requires a '// cast:' comment. Add '// cast: <reason>' on the same line, or anywhere in the unbroken comment block on the line(s) above.",
     },
     schema: [],
   },
@@ -31,6 +31,12 @@ const rule = {
       return false;
     }
 
+    function commentHasCastMarker(rawLine) {
+      const trimmed = rawLine.trim();
+      if (!trimmed.startsWith('//')) return null; // not a comment line — caller stops walking
+      return trimmed.replace(/^\/\/\s*/, '').startsWith('cast:');
+    }
+
     function hasCastComment(node) {
       const lines = src.getText().split('\n');
       const line = node.loc.start.line; // 1-indexed
@@ -38,9 +44,12 @@ const rule = {
       // Same line
       if (lines[line - 1]?.includes('// cast:')) return true;
 
-      // Line immediately above — blank lines break the connection
-      if (line >= 2) {
-        return lines[line - 2].trim().startsWith('// cast:');
+      // Contiguous block of `//` comment lines immediately above — a blank
+      // line or a non-comment line breaks the chain.
+      for (let i = line - 2; i >= 0; i--) {
+        const result = commentHasCastMarker(lines[i]);
+        if (result === null) break;
+        if (result) return true;
       }
 
       return false;
