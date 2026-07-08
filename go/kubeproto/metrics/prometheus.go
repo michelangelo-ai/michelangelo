@@ -6,26 +6,23 @@ import (
 )
 
 var (
-	// CR-related metrics
-	crUnmarshalErrors = prometheus.NewCounterVec(
+	crReflectorErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "cr_unmarshal_errors_total",
-			Help: "Total number of CR unmarshal errors",
+			Name: "cr_reflector_errors_total",
+			Help: "Total number of reflector errors when listing or watching CRs",
 		},
-		[]string{"crd_type", "namespace", "error_type"},
+		[]string{"crd_type", "error_type", "blocking"},
 	)
 )
 
 // RegisterMetrics registers all metrics with the controller-runtime metrics registry
 func RegisterMetrics() {
 	metrics.Registry.MustRegister(
-		crUnmarshalErrors,
+		crReflectorErrors,
 	)
 }
 
-// Metric accessor functions for direct use by controllers
-
-// IncCRUnmarshalError increments the CRD unmarshal error counter
-func IncCRUnmarshalError(crdType, namespace, errorType string) {
-	crUnmarshalErrors.WithLabelValues(crdType, namespace, errorType).Inc()
+// IncCRUnmarshalError increments the CRD reflector error counter
+func IncCRUnmarshalError(crdType, errorType, blocking string) {
+	crReflectorErrors.WithLabelValues(crdType, errorType, blocking).Inc()
 }

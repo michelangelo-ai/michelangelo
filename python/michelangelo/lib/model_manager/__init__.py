@@ -12,6 +12,9 @@ Public API::
     from michelangelo.lib.model_manager.packager.custom_triton import (
         CustomTritonPackager,
     )
+    from michelangelo.lib.model_manager.packager.torch_triton import (
+        TorchTritonPackager,
+    )
     from michelangelo.lib.model_manager.registry import (
         InMemoryRegistryClient, ModelRegistryClient, RegisteredModel,
     )

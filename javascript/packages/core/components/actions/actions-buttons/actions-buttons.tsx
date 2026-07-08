@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom-v5-compat';
 import { useStyletron } from 'baseui';
-import { Button, KIND, SHAPE, SIZE } from 'baseui/button';
+import { KIND, SHAPE } from 'baseui/button';
 import { PLACEMENT } from 'baseui/popover';
 
 import { ActionDispatcher } from '#core/components/actions/action-dispatcher';
 import { ActionsPopover } from '#core/components/actions/actions-popover';
-import { Icon } from '#core/components/icon/icon';
+import { ActionButton } from './action-button';
 import { partitionActions } from './utils';
 
 import type { ActionConfig, Data } from '#core/components/actions/types';
@@ -48,45 +48,23 @@ export function ActionsButtons<T extends Data>({
     <>
       <div className={css({ display: 'flex', gap: theme.sizing.scale300 })}>
         {primary && (
-          <Button
-            kind={KIND.primary}
-            size={SIZE.compact}
-            isLoading={loading}
-            overrides={{ Root: { style: { width: '200px' } } }}
-            startEnhancer={
-              primary.display.icon
-                ? () => (
-                    <Icon
-                      name={primary.display.icon}
-                      size={theme.sizing.scale550}
-                      color="inherit"
-                    />
-                  )
-                : undefined
-            }
+          <ActionButton
+            action={primary}
             onClick={() => activateAction(primary)}
-          >
-            {primary.display.label}
-          </Button>
+            loading={loading}
+            kind={KIND.primary}
+            overrides={{ Root: { style: { width: '200px' } } }}
+          />
         )}
         {secondary.map((action) => (
-          <Button
+          <ActionButton
             key={action.display.label}
+            action={action}
+            onClick={() => activateAction(action)}
+            loading={loading}
             kind={KIND.secondary}
             shape={SHAPE.pill}
-            size={SIZE.compact}
-            isLoading={loading}
-            startEnhancer={
-              action.display.icon
-                ? () => (
-                    <Icon name={action.display.icon} size={theme.sizing.scale550} color="inherit" />
-                  )
-                : undefined
-            }
-            onClick={() => activateAction(action)}
-          >
-            {action.display.label}
-          </Button>
+          />
         ))}
         {tertiary.length > 0 && (
           <ActionsPopover

@@ -114,10 +114,11 @@ type WorkflowClient interface {
 	// DeleteTrigger deletes a recurring trigger and terminates any running execution.
 	// workflowID identifies the trigger; runID is the currently running execution (empty if none).
 	DeleteTrigger(ctx context.Context, workflowID string, runID string) error
-	// UpdateTrigger updates the cron schedule and optionally the paused state of a recurring trigger
-	// in a single atomic operation. workflowID identifies the trigger; newCronSchedule is the new
-	// cron expression; paused, when non-nil, sets the schedule's paused state atomically with the
-	// cron update to avoid race conditions between separate Update and Pause/Unpause calls.
-	// Only supported for Temporal. Returns an error for Cadence.
-	UpdateTrigger(ctx context.Context, workflowID string, newCronSchedule string, paused *bool) error
+	// UpdateTrigger updates the cron schedule, optionally the paused state, and optionally the
+	// workflow action args of a recurring trigger in a single atomic operation.
+	// workflowID identifies the trigger; newCronSchedule is the new cron expression (empty = no
+	// cron change); paused, when non-nil, sets the schedule's paused state atomically; args, when
+	// non-nil, replaces the schedule action's workflow input (used to propagate spec changes such
+	// as updated notification settings). Only supported for Temporal. Returns nil for Cadence.
+	UpdateTrigger(ctx context.Context, workflowID string, newCronSchedule string, paused *bool, args []interface{}) error
 }

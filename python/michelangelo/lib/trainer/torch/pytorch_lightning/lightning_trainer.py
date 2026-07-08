@@ -49,6 +49,7 @@ from michelangelo.lib.trainer.torch.pytorch_lightning._private.util import (
 if TYPE_CHECKING:
     from michelangelo.lib.trainer.torch.pytorch_lightning.schema import (
         IncrementalTrainingSpec,
+        TrainingObserver,
         TransferLearningSpec,
     )
 
@@ -56,30 +57,6 @@ _logger = logging.getLogger(__name__)
 CHECKPOINT_NAME = ray.train.lightning.RayTrainReportCallback.CHECKPOINT_NAME
 CHECKPOINT_PATH_KEY = "checkpoint_path"
 _UNSET = object()
-
-
-@dataclass
-class CometParam:
-    """Configuration for the Comet ML logger.
-
-    Credentials are forwarded as-is to ``comet_ml``; ``api_key`` should be treated
-    as a secret. ``comet_ml`` is imported lazily inside the worker, so this
-    dataclass can be constructed even when ``comet_ml`` is not installed (the
-    import only fires when the trainer actually attaches the logger).
-
-    Attributes:
-        api_key: Comet API key for the target workspace.
-        project_name: Comet project name to log under.
-        experiment_name: Display name for the experiment in the Comet UI.
-        workspace: Comet workspace owning the project.
-        tags: Optional list of tags to attach to the experiment.
-    """
-
-    api_key: str
-    project_name: str
-    experiment_name: str
-    workspace: str
-    tags: list[str] | None = field(default_factory=list)
 
 
 @dataclass
@@ -104,8 +81,6 @@ class LightningTrainerParam:
         data_collate_fn: Optional custom collate function passed to
             ``Dataset.iter_torch_batches``; defaults to Ray Data's column-tensor
             output.
-        comet_param: Optional :class:`CometParam`; when set, a CometLogger is
-            attached on each worker.
         lightning_trainer_kwargs: Extra keyword arguments forwarded verbatim to
             ``pytorch_lightning.Trainer(...)``.
         transfer_learning_spec: Optional warm-start spec describing layer freezing
@@ -114,6 +89,10 @@ class LightningTrainerParam:
             run.
         initial_weights_path: Optional path to a state dict file (local, ``s3://``,
             ``gs://``, etc.); loaded on rank 0 and broadcast to other workers.
+        training_observer: Optional :class:`~schema.TrainingObserver` that receives
+            ``on_result`` (driver-side, after training) and ``on_checkpoint_saved``
+            (worker-side, per epoch/step). Must be picklable if per-epoch
+            observation is needed.
     """
 
     create_model_fn: Callable
@@ -126,12 +105,12 @@ class LightningTrainerParam:
     )
     num_epochs: int | None = field(default=_UNSET)  # type: ignore[assignment]  # sentinel replaced in __post_init__
     data_collate_fn: Callable | None = None
-    comet_param: CometParam | None = None
     lightning_trainer_kwargs: dict = field(default_factory=dict)
 
     transfer_learning_spec: TransferLearningSpec | None = None
     incremental_training_spec: IncrementalTrainingSpec | None = None
     initial_weights_path: str | None = None
+    training_observer: TrainingObserver | None = None
 
     def __post_init__(self):
         """Apply default ``num_epochs`` and warn on the deprecated field usage."""
@@ -171,6 +150,15 @@ class LightningTrainer(TorchTrainer):
         # Pop out train and val data since we have to pass them into datasets parameter of TorchTrainer.
         train_data = train_loop_config.pop("train_data")
         val_data = train_loop_config.pop("val_data")
+        # Pop training_observer — Protocol instances can't survive asdict()
+        # because it recursively converts nested objects. We store the original
+        # object on self for driver-side use and re-inject it into
+        # train_loop_config so it reaches the worker callbacks via Ray
+        # serialization (which pickles the config dict to worker processes).
+        self._training_observer = trainer_param.training_observer
+        train_loop_config.pop("training_observer", None)
+        if self._training_observer is not None:
+            train_loop_config["training_observer"] = self._training_observer
 
         super().__init__(
             train_loop_per_worker=_train_loop_per_worker,
@@ -212,6 +200,13 @@ class LightningTrainer(TorchTrainer):
         result.metrics.pop("config", None)
         # Keep the checkpoint object for subclasses that need it (e.g., LightningTrainerWithStateDict)
         self.checkpoint = result.checkpoint
+
+        if self._training_observer is not None:
+            self._training_observer.on_result(
+                metrics=result.metrics,
+                checkpoint_path=result.checkpoint.path if result.checkpoint else None,
+            )
+
         return {
             CHECKPOINT_PATH_KEY: result.checkpoint.path,
             "path": result.path,

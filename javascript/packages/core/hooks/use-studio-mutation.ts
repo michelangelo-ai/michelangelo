@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 
+import { useSuccessOperations } from '#core/components/actions/use-success-operations';
 import { useErrorNormalizer } from '#core/providers/error-provider/use-error-normalizer';
 import { useServiceProvider } from '#core/providers/service-provider/use-service-provider';
 
@@ -12,6 +13,7 @@ export const useStudioMutation = <TData, TVariables extends Record<string, unkno
 ): UseMutationResult<TData, ApplicationError, TVariables> => {
   const { request } = useServiceProvider();
   const normalizeError = useErrorNormalizer();
+  const runSuccessOperations = useSuccessOperations(config?.successOperations);
 
   return useMutation<TData, ApplicationError, TVariables>({
     mutationFn: async (variables: TVariables) => {
@@ -23,9 +25,10 @@ export const useStudioMutation = <TData, TVariables extends Record<string, unkno
         throw normalizeError(error)!;
       }
     },
-    onSuccess: config?.clientOptions?.onSuccess
-      ? (data) => config.clientOptions!.onSuccess!(data)
-      : undefined,
+    onSuccess: (data) => {
+      runSuccessOperations(data);
+      config?.clientOptions?.onSuccess?.(data);
+    },
     onError: config?.clientOptions?.onError
       ? (error) => config.clientOptions!.onError!(error)
       : undefined,

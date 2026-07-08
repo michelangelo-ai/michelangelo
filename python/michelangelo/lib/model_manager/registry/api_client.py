@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import TYPE_CHECKING, Any
 
 import grpc
@@ -62,6 +63,24 @@ METADATA_ANNOTATION_KEY = "michelangelo.io/metadata"
 """Annotation key under which free-form metadata is JSON-serialised."""
 
 _MAX_REGISTER_RETRIES = 3
+
+_K8S_LABEL_VALUE_MAX_LENGTH = 63
+_K8S_LABEL_VALUE_RE = re.compile(r"^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$")
+
+
+def _is_valid_k8s_label_value(value: str) -> bool:
+    """Return ``True`` if *value* satisfies Kubernetes' label-value rules.
+
+    At most 63 characters, and either empty or starting/ending with an
+    alphanumeric character with dashes, underscores, dots, and alphanumerics
+    in between (see
+    https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set).
+    """
+    return (
+        len(value) <= _K8S_LABEL_VALUE_MAX_LENGTH
+        and _K8S_LABEL_VALUE_RE.match(value) is not None
+    )
+
 
 __all__ = ["METADATA_ANNOTATION_KEY", "APIRegistryClient"]
 
@@ -262,8 +281,33 @@ class APIRegistryClient(ModelRegistryClient):
             model.spec.deployable_artifact_uri.append(deployable_artifact_uri)
         if description:
             model.spec.description = description
+
+        # Kubernetes label values are capped at 63 characters and restricted
+        # to alphanumerics/dashes/underscores/dots. Callers built on top of
+        # ModelMetadata.to_registry_dict() (e.g. `model_class`, a fully
+        # qualified Python import path) commonly exceed this, and
+        # InMemoryRegistryClient never enforces it, so the violation is only
+        # ever caught here, against a real apiserver. Demote any offending
+        # value into the metadata annotation instead of erroring — the
+        # information is preserved (JSON has no such length limit), it's
+        # just no longer filterable as a label.
+        extra_metadata: dict[str, Any] = dict(metadata or {})
         for k, v in (labels or {}).items():
-            model.metadata.labels[k] = v
+            if _is_valid_k8s_label_value(v):
+                model.metadata.labels[k] = v
+            else:
+                _logger.warning(
+                    "register_model(%r): label %r=%r is not a valid Kubernetes "
+                    "label value (max %d chars, alphanumeric/-/_/. only) — "
+                    "storing under the %r annotation instead.",
+                    name,
+                    k,
+                    v,
+                    _K8S_LABEL_VALUE_MAX_LENGTH,
+                    METADATA_ANNOTATION_KEY,
+                )
+                extra_metadata.setdefault(k, v)
+        metadata = extra_metadata
         if metadata:
             model.metadata.annotations[METADATA_ANNOTATION_KEY] = json.dumps(
                 dict(metadata)

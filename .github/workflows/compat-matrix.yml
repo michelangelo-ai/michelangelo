@@ -1,0 +1,136 @@
+name: Compatibility Matrix
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-compat:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python and Poetry
+        uses: ./.github/actions/setup-python-poetry
+        with:
+          python-version: ${{ matrix.python-version }}
+          working-directory: './python'
+
+      - name: Run tests
+        working-directory: ./python
+        run: poetry run pytest
+
+  node-compat:
+    name: Node.js ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18, 20]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'yarn'
+          cache-dependency-path: javascript/yarn.lock
+
+      - name: Install dependencies
+        working-directory: ./javascript
+        run: yarn install --frozen-lockfile
+
+      - name: Run tests
+        working-directory: ./javascript
+        run: yarn test
+
+  helm-compat:
+    name: Helm ${{ matrix.helm-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        helm-version: ['3.13.0', '3.14.0', '3.15.0']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: ${{ matrix.helm-version }}
+
+      - name: Add Helm repos
+        run: |
+          helm repo add cadence-workflow https://cadence-workflow.github.io/cadence-charts
+          helm repo add temporal https://go.temporal.io/helm-charts
+          helm repo update
+
+      - name: Build chart dependencies
+        run: helm dependency build helm/michelangelo
+
+      - name: Lint chart
+        run: helm lint helm/michelangelo
+
+      - name: Template chart
+        run: |
+          helm template michelangelo helm/michelangelo \
+            -f helm/michelangelo/values-k3d.yaml \
+            --debug \
+            > /dev/null
+
+  summary:
+    name: Compatibility Summary
+    runs-on: ubuntu-latest
+    needs: [python-compat, node-compat, helm-compat]
+    if: always()
+
+    steps:
+      - name: Write summary table
+        env:
+          PYTHON_RESULT: ${{ needs.python-compat.result }}
+          NODE_RESULT: ${{ needs.node-compat.result }}
+          HELM_RESULT: ${{ needs.helm-compat.result }}
+        run: |
+          {
+            echo "## Compatibility Matrix Results"
+            echo ""
+            echo "| Component | Versions | Status |"
+            echo "|-----------|----------|--------|"
+            echo "| Python | 3.9, 3.10, 3.11, 3.12 | ${PYTHON_RESULT} |"
+            echo "| Node.js | 18, 20 | ${NODE_RESULT} |"
+            echo "| Helm | 3.13.0, 3.14.0, 3.15.0 | ${HELM_RESULT} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # Notify Slack when any compatibility matrix job fails
+  # ---------------------------------------------------------------------------
+  notify-on-failure:
+    needs: [python-compat, node-compat, helm-compat]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Slack on failure
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          channel-id: 'C0BER0RCQ8P'
+          slack-message: |
+            :x: *${{ github.workflow }}* failed
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}

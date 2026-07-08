@@ -50,13 +50,16 @@ def _make_trainer(current_epoch=0, global_step=0, metrics=None):
     return trainer
 
 
-def _new_default_callback(local_rank=0, world_rank=0, tmpdir_prefix="/tmp/ckpt"):
+def _new_default_callback(
+    local_rank=0, world_rank=0, tmpdir_prefix="/tmp/ckpt", training_observer=None
+):
     """Construct a ``RayTrainReportCallback`` without running base ``__init__``."""
     cb = object.__new__(RayTrainReportCallback)
     cb.tmpdir_prefix = tmpdir_prefix
     cb.CHECKPOINT_NAME = "checkpoint.ckpt"
     cb.local_rank = local_rank
     cb.world_rank = world_rank
+    cb._training_observer = training_observer
     return cb
 
 
@@ -64,6 +67,7 @@ def _new_per_node_callback(
     local_rank=0,
     step_checkpoint_frequency=0,
     tmpdir_prefix="/tmp/ckpt",
+    training_observer=None,
 ):
     """Construct a ``RayTrainReportPerNodeCallback`` without base ``__init__``."""
     cb = object.__new__(RayTrainReportPerNodeCallback)
@@ -72,6 +76,7 @@ def _new_per_node_callback(
     cb.local_rank = local_rank
     cb.step_checkpoint_frequency = step_checkpoint_frequency
     cb.last_step_checkpoint = 0
+    cb._training_observer = training_observer
     return cb
 
 
@@ -313,3 +318,58 @@ class TestPerNodeCreateAndReportCheckpoint:
             _make_trainer(), "epoch_0", is_step_checkpoint=False
         )
         patched_io["rmtree"].assert_not_called()
+
+
+# -----------------------------------------------------------------------------
+# TrainingObserver integration
+# -----------------------------------------------------------------------------
+
+
+class TestObserverInDefaultCallback:
+    """Observer calls in ``RayTrainReportCallback.on_train_epoch_end``."""
+
+    def test_observer_called_after_report(self, patched_io):
+        """``on_checkpoint_saved`` is called with epoch, step, metrics, and path."""
+        observer = MagicMock()
+        cb = _new_default_callback(world_rank=0, training_observer=observer)
+        trainer = _make_trainer(
+            current_epoch=3, global_step=30, metrics={"loss": _make_metric(0.2)}
+        )
+        cb.on_train_epoch_end(trainer, MagicMock())
+
+        observer.on_checkpoint_saved.assert_called_once()
+        kwargs = observer.on_checkpoint_saved.call_args.kwargs
+        assert kwargs["epoch"] == 3
+        assert kwargs["step"] == 30
+        assert kwargs["metrics"]["loss"] == 0.2
+        assert "checkpoint_path" in kwargs
+
+    def test_no_observer_does_not_raise(self, patched_io):
+        """``None`` observer (default) works without errors."""
+        cb = _new_default_callback(world_rank=0, training_observer=None)
+        cb.on_train_epoch_end(_make_trainer(), MagicMock())
+
+
+class TestObserverInPerNodeCallback:
+    """Observer calls in ``RayTrainReportPerNodeCallback._create_and_report_checkpoint``."""
+
+    def test_observer_called_after_checkpoint(self, patched_io):
+        """``on_checkpoint_saved`` fires in the per-node path."""
+        observer = MagicMock()
+        cb = _new_per_node_callback(local_rank=0, training_observer=observer)
+        trainer = _make_trainer(
+            current_epoch=1, global_step=10, metrics={"acc": _make_metric(0.95)}
+        )
+        cb._create_and_report_checkpoint(trainer, "epoch_1", is_step_checkpoint=False)
+
+        observer.on_checkpoint_saved.assert_called_once()
+        kwargs = observer.on_checkpoint_saved.call_args.kwargs
+        assert kwargs["epoch"] == 1
+        assert kwargs["step"] == 10
+
+    def test_no_observer_does_not_raise(self, patched_io):
+        """``None`` observer works without errors in per-node path."""
+        cb = _new_per_node_callback(local_rank=0, training_observer=None)
+        cb._create_and_report_checkpoint(
+            _make_trainer(), "epoch_0", is_step_checkpoint=False
+        )

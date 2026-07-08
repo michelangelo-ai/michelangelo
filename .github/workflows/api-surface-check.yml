@@ -1,0 +1,300 @@
+name: API Surface Check
+
+on:
+  pull_request:
+    branches: [main, 'release/v*']
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Detect which areas changed — gates the three check jobs
+  # ---------------------------------------------------------------------------
+  filter:
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      proto: ${{ steps.filter.outputs.proto }}
+      helm: ${{ steps.filter.outputs.helm }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            go:
+              - 'go/**'
+            proto:
+              - 'proto/**'
+            helm:
+              - 'helm/**'
+
+  # ---------------------------------------------------------------------------
+  # Go API surface — detect removed or changed exported symbols
+  # ---------------------------------------------------------------------------
+  go-api-check:
+    name: Go API Surface (advisory)
+    needs: filter
+    if: needs.filter.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          path: head
+          fetch-depth: 0
+
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+          path: base
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: head/go/go.mod
+          cache-dependency-path: head/go/go.sum
+
+      - name: Install go-apidiff
+        run: go install golang.org/x/exp/cmd/apidiff@latest
+
+      - name: Export base API
+        working-directory: base/go
+        run: |
+          go list ./... 2>/dev/null | while read -r pkg; do
+            apidiff -incompatible -export "$pkg" 2>/dev/null || true
+          done > /tmp/base-api.txt || true
+
+      - name: Run apidiff against PR head
+        id: apidiff
+        working-directory: head/go
+        run: |
+          output=""
+          breaking=false
+          pkgs=$(go list ./... 2>/dev/null || true)
+          for pkg in $pkgs; do
+            result=$(apidiff -incompatible "github.com/michelangelo-ai/michelangelo/go${pkg#github.com/michelangelo-ai/michelangelo/go}" 2>/dev/null || true)
+            if [ -n "$result" ]; then
+              output="${output}\n**${pkg}**\n\`\`\`\n${result}\n\`\`\`\n"
+              breaking=true
+            fi
+          done
+          echo "breaking=$breaking" >> "$GITHUB_OUTPUT"
+          {
+            echo "APIDIFF_OUTPUT<<APIDIFF_EOF"
+            printf '%b' "$output"
+            echo "APIDIFF_EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Check for acknowledged breaking changes
+        id: ack-check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          commits=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/commits \
+            --jq '.[].commit.message' 2>/dev/null || true)
+          if echo "$commits" | grep -q "BREAKING CHANGE:"; then
+            echo "acknowledged=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "acknowledged=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post Go API diff comment
+        if: steps.apidiff.outputs.breaking == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = process.env.APIDIFF_OUTPUT || '(none)';
+            const ack = '${{ steps.ack-check.outputs.acknowledged }}' === 'true';
+            const ackNote = ack
+              ? '\n\n> **BREAKING CHANGE acknowledged** — a commit on this PR contains `BREAKING CHANGE:` in its message.'
+              : '\n\n> No `BREAKING CHANGE:` commit message found. If this is intentional, add `BREAKING CHANGE: <reason>` to a commit message.';
+            const body = [
+              '### Go API Surface Check (advisory)',
+              '',
+              'Potentially breaking changes detected in exported Go API:',
+              '',
+              output,
+              ackNote,
+              '',
+              '_This check is advisory and does not block merge._',
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body,
+            });
+
+  # ---------------------------------------------------------------------------
+  # Proto breaking changes — buf breaking
+  # ---------------------------------------------------------------------------
+  proto-check:
+    name: Proto Breaking Changes (advisory)
+    needs: filter
+    if: needs.filter.outputs.proto == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run buf breaking check
+        id: buf-breaking
+        run: |
+          # Filter dep-resolution noise (k8s.io and other external types not in BSR config).
+          # Actual breaking change violations have a different message format.
+          output=$(buf breaking --against ".git#branch=${{ github.base_ref }}" 2>&1 \
+            | grep -v "imported file does not exist\|cannot find.*in this scope" || true)
+          echo "HAS_OUTPUT=$([ -n "$output" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          {
+            echo "BUF_OUTPUT<<BUF_EOF"
+            echo "$output"
+            echo "BUF_EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Check for acknowledged breaking changes
+        id: ack-check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          commits=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/commits \
+            --jq '.[].commit.message' 2>/dev/null || true)
+          if echo "$commits" | grep -q "BREAKING CHANGE:"; then
+            echo "acknowledged=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "acknowledged=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post proto breaking change comment
+        if: steps.buf-breaking.outputs.HAS_OUTPUT == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = process.env.BUF_OUTPUT || '(none)';
+            const ack = '${{ steps.ack-check.outputs.acknowledged }}' === 'true';
+            const ackNote = ack
+              ? '\n\n> **BREAKING CHANGE acknowledged** — a commit on this PR contains `BREAKING CHANGE:` in its message.'
+              : '\n\n> No `BREAKING CHANGE:` commit message found. If this is intentional, add `BREAKING CHANGE: <reason>` to a commit message.';
+            const body = [
+              '### Proto Breaking Change Check (advisory)',
+              '',
+              'buf detected potential breaking changes in proto definitions:',
+              '',
+              '```',
+              output.substring(0, 4000),
+              '```',
+              ackNote,
+              '',
+              '_This check is advisory and does not block merge._',
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body,
+            });
+
+  # ---------------------------------------------------------------------------
+  # Helm values — detect removed or renamed top-level keys
+  # ---------------------------------------------------------------------------
+  helm-values-check:
+    name: Helm Values Key Diff (advisory)
+    needs: filter
+    if: needs.filter.outputs.helm == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          path: head
+
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+          path: base
+
+      - name: Install yq
+        run: |
+          wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          chmod +x /usr/local/bin/yq
+
+      - name: Diff top-level Helm values keys
+        id: helm-diff
+        run: |
+          base_keys=$(yq 'keys | .[]' base/helm/michelangelo/values.yaml 2>/dev/null | sort || true)
+          head_keys=$(yq 'keys | .[]' head/helm/michelangelo/values.yaml 2>/dev/null | sort || true)
+          removed=$(comm -23 <(echo "$base_keys") <(echo "$head_keys") || true)
+          echo "HAS_REMOVED=$([ -n "$removed" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          {
+            echo "REMOVED_KEYS<<HELM_EOF"
+            echo "$removed"
+            echo "HELM_EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Check for acknowledged breaking changes
+        id: ack-check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          commits=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/commits \
+            --jq '.[].commit.message' 2>/dev/null || true)
+          if echo "$commits" | grep -q "BREAKING CHANGE:"; then
+            echo "acknowledged=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "acknowledged=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post Helm values diff comment
+        if: steps.helm-diff.outputs.HAS_REMOVED == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const removed = process.env.REMOVED_KEYS || '(none)';
+            const ack = '${{ steps.ack-check.outputs.acknowledged }}' === 'true';
+            const ackNote = ack
+              ? '\n\n> **BREAKING CHANGE acknowledged** — a commit on this PR contains `BREAKING CHANGE:` in its message.'
+              : '\n\n> No `BREAKING CHANGE:` commit message found. If this is intentional, add `BREAKING CHANGE: <reason>` to a commit message.';
+            const body = [
+              '### Helm Values Key Diff (advisory)',
+              '',
+              'The following top-level keys were removed or renamed in `helm/michelangelo/values.yaml`:',
+              '',
+              '```',
+              removed,
+              '```',
+              '',
+              'Removing or renaming top-level Helm values is a breaking change for existing installations.',
+              ackNote,
+              '',
+              '_This check is advisory and does not block merge._',
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body,
+            });

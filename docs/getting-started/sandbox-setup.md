@@ -10,7 +10,7 @@ This guide walks you through setting up a local Michelangelo environment on your
 
 **What you'll have at the end:** a running sandbox cluster and a successful demo pipeline run, ready for you to build your own workflows on top of.
 
-**Time estimate:** ~20 minutes (assuming prerequisites are installed; first-time pulls of container images can add 5–10 minutes).
+**Time estimate:** 30–60 minutes on first run (image pulls for all services can take 20–40 minutes depending on your connection). Subsequent recreates with cached images typically take 5–10 minutes.
 
 **Supported platforms:** macOS (Apple Silicon and Intel) and Linux. Windows is not officially supported, but WSL2 with Docker Desktop should work for most steps.
 
@@ -31,13 +31,17 @@ Before you begin, make sure you have the following installed. Install commands b
 
 | Tool | Install (macOS) | Install (Linux) | Verify |
 |------|-----------------|-----------------|--------|
-| **Docker** | [Docker Desktop](https://docs.docker.com/get-started/get-docker) or [Colima](https://github.com/abiosoft/colima) | [Docker Engine](https://docs.docker.com/engine/install/) | `docker --version` |
+| **Docker** | [Docker Desktop](https://docs.docker.com/get-started/get-docker) or [Colima](https://github.com/abiosoft/colima) | [Docker Engine](https://docs.docker.com/engine/install/) | `docker info` |
 | **kubectl** | `brew install kubectl` | [official guide](https://kubernetes.io/docs/tasks/tools/#kubectl) | `kubectl version --client` |
 | **k3d** | `brew install k3d` | [official guide](https://k3d.io/#installation) | `k3d --version` |
 | **Helm** | `brew install helm` | [official guide](https://helm.sh/docs/intro/install/) | `helm version` |
-| **Python 3.9+** | [python.org](https://www.python.org/downloads/) or `brew install python@3.11` | distro package manager (e.g., `apt install python3`) | `python3 --version` |
+| **Python 3.11 or 3.12** | [python.org](https://www.python.org/downloads/) or `brew install python@3.11` | distro package manager (e.g., `apt install python3.11`) | `python3 --version` |
 | **Poetry** | `curl -sSL https://install.python-poetry.org \| python3 -` | same as macOS | `poetry --version` |
 | **temporal** *(Temporal only)* | `brew install temporal` | [official guide](https://docs.temporal.io/cli#install) | `temporal --version` |
+
+> **Python version note:** Python 3.11 or 3.12 is strongly recommended. Python 3.13+ may fail during `poetry install` because pre-built wheels for some ML dependencies are not yet available for newer interpreter versions.
+
+> **Docker daemon note:** `docker info` (the verify command above) requires the Docker daemon to be running — unlike `docker --version`, which only checks the binary. If `docker info` fails, start Docker Desktop or Colima before continuing.
 
 ### Colima resource requirements (macOS only)
 
@@ -86,20 +90,26 @@ poetry install
 
 ## Quick start
 
-Once prerequisites and Python dependencies are installed, the sandbox is three commands away:
+Once prerequisites and Python dependencies are installed:
 
 ```bash
 # 1. Activate the Poetry virtual environment (from <repo-root>/python)
 source .venv/bin/activate
 
-# 2. Create the sandbox (~10–15 min on first run)
+# 2. Build local-only images required by the sandbox
+cd <repo-root>
+bash scripts/kuberay/build-kuberay-images.sh
+
+# 3. Create the sandbox (30–60 min on first run; images are cached after)
 ma sandbox create
 
-# 3. Verify everything works by running the demo pipeline
+# 4. Verify everything works by running the demo pipeline
 ma sandbox demo pipeline
 ```
 
-> **Tip:** If you prefer not to activate the venv, you can prefix each command with `poetry run` (e.g., `poetry run ma sandbox create`). The sandbox exposes the API server on `localhost:15566` via NodePort so the `ma` CLI works immediately after setup.
+> **Tip:** If you prefer not to activate the venv, prefix each `ma` command with `poetry run` (e.g., `poetry run ma sandbox create`). If you see `zsh: command not found: ma`, you either skipped step 1 or need to use `poetry run`. See [troubleshooting](#command-not-found-ma) below.
+
+> **Note on image pull times:** During `ma sandbox create`, several pods will sit in `ContainerCreating` for several minutes while images are pulled (some images are 500–800 MB). This is normal. The relevant question is whether pods are making progress — check with `kubectl get pods -w` and look for status transitions. Only act if a pod stays in `ImagePullBackOff` or `CrashLoopBackOff` for more than a few minutes.
 
 ### Choosing a workflow engine
 
@@ -113,7 +123,7 @@ When `ma sandbox create` completes, all Michelangelo services start in your k3d 
 kubectl get pods
 ```
 
-You should see roughly 10–15 pods (the exact count depends on which engine you chose and any `--exclude` flags). All pods should reach `Running` status within 2–3 minutes; some pods may briefly show `ContainerCreating` or `Init` while images pull.
+You should see roughly 10–15 pods (the exact count depends on which engine you chose and any `--exclude` flags). On first run, pods may spend 5–10 minutes in `ContainerCreating` while images are pulled — this is expected. All pods should eventually reach `Running` status; if any remain in `ContainerCreating` beyond 15 minutes, check the pod events with `kubectl describe pod <pod-name>`.
 
 Then open the **Michelangelo UI at [http://localhost:8090](http://localhost:8090)** — if the dashboard loads, your sandbox is healthy. See [Sandbox Ports and Endpoints](./ma-sandbox-ports-and-endpoints.md) for the full list of services and their URLs.
 
@@ -131,6 +141,8 @@ The typical sandbox workflow:
 
 ```
 create → (develop) → stop → start → (develop) → delete
+           ↓ (if create fails partway)
+          sync → (develop) → ...
 ```
 
 ### Create
@@ -160,6 +172,16 @@ ma sandbox create --workflow temporal
 ma sandbox create --exclude ui --create-compute-cluster
 ```
 
+### Sync
+
+```bash
+ma sandbox sync
+```
+
+Redeploys services into an existing cluster, skipping cluster creation and image import. Use this to recover from a partially failed `create` — for example, if operator deployments timed out but the cluster itself was created successfully.
+
+If `ma sandbox create` fails and you see `Failed to create cluster ... already exists` when you try again, run `ma sandbox sync` instead. See [Recovering from a failed create](#recovering-from-a-failed-create) below.
+
 ### Stop / Start
 
 Pause and resume your sandbox without losing state:
@@ -188,6 +210,29 @@ ma sandbox demo inference   # sets up demo inference server
 
 ---
 
+## Recovering from a failed create
+
+If `ma sandbox create` fails partway through — for example, with a Helm timeout on `kuberay-operator` or `spark-operator` — the k3d cluster may already exist even though not all services deployed successfully.
+
+Running `ma sandbox create` again will fail with `Failed to create cluster ... because a cluster with that name already exists`.
+
+**Do not delete and recreate** — that discards the cluster and costs another full image-pull cycle. Instead, use `sync`:
+
+```bash
+ma sandbox sync
+```
+
+`sync` redeploys services into the existing cluster without recreating it or re-importing images. In most cases this resolves transient operator timeouts without the 30–60 minute penalty of a fresh `create`.
+
+If `sync` doesn't resolve the issue, check pod events with `kubectl describe pod <pod-name>` to understand what failed, then delete and recreate as a last resort:
+
+```bash
+ma sandbox delete
+ma sandbox create
+```
+
+---
+
 ## Smoke test: run the BERT CoLA example
 
 After `ma sandbox demo pipeline` succeeds, you've already proven the sandbox works end to end. If you'd like to run a real example workflow against it before moving on, the BERT CoLA text-classification example is a quick way to confirm local execution works:
@@ -210,6 +255,71 @@ For the full story on local vs. remote execution, building Docker images, config
 
 ## Troubleshooting
 
+### `command not found: ma`
+
+You either skipped the venv activation step or the Poetry environment isn't active in your current shell. Two options:
+
+```bash
+# Option 1: activate the venv (from <repo-root>/python)
+source .venv/bin/activate
+
+# Option 2: prefix each command with poetry run
+poetry run ma sandbox create
+```
+
+If neither works, run `poetry install` from `<repo-root>/python` first to make sure the environment was created.
+
+### `Failed to create cluster ... already exists`
+
+The k3d cluster was created but `ma sandbox create` failed before all services deployed. **Do not delete and recreate** — use `sync` to redeploy services into the existing cluster without re-importing images:
+
+```bash
+ma sandbox sync
+```
+
+See [Recovering from a failed create](#recovering-from-a-failed-create) for the full recovery flow.
+
+### `history-server` stuck in `ImagePullBackOff`
+
+The `kuberay-historyserver` image is not available in any public registry — it must be built locally before running `ma sandbox create`. If you skipped the build step:
+
+```bash
+cd <repo-root>
+bash scripts/kuberay/build-kuberay-images.sh
+ma sandbox sync   # redeploy without recreating the cluster
+```
+
+### `Progress deadline exceeded` from operator installs
+
+During `ma sandbox create`, Helm deploys operators (kuberay, spark) with a timeout. On slow connections or underpowered machines, the timeout can fire before the operator pod finishes pulling its image — even though the deployment will succeed on its own a few minutes later.
+
+This is a **first-run phenomenon** caused by large image pulls racing against Helm's deadline. On subsequent `create` or `sync` runs with cached images, operator deployments complete well within the timeout.
+
+If you see `Progress deadline exceeded` in the output, verify that the operators are still coming up:
+
+```bash
+kubectl get pods -A
+```
+
+Within a few minutes of the Helm error, you should see the operator deployments transition to `Running`. If they do, the sandbox is healthy despite the error message — run `ma sandbox sync` to finish deploying any remaining services. Only proceed to `ma sandbox delete` if pods are stuck in `ImagePullBackOff` or `CrashLoopBackOff` with no sign of progress.
+
+### Grafana pod in `CrashLoopBackOff`
+
+Grafana's sandbox configuration installs dashboard plugins at startup by fetching them from an external source. On restricted, proxied, or intermittent network connections this fetch can fail, causing a crash loop.
+
+Check if this is the cause:
+
+```bash
+kubectl logs <grafana-pod-name> | grep -i "plugin\|install\|GF_INSTALL"
+```
+
+If plugin installation is the failure point, you can exclude Grafana from the sandbox and proceed without it:
+
+```bash
+ma sandbox sync --exclude grafana
+```
+
+Grafana is used for metrics dashboards and is not required for pipeline execution or the Michelangelo UI.
 ### `ma` CLI commands fail with `connection attempt timed out`
 
 The `ma` CLI connects to the API server over gRPC at `localhost:15566`. The sandbox maps this port via k3d NodePort so it works out of the box after `ma sandbox create`.
@@ -249,7 +359,7 @@ kubectl describe pod <pod-name> | grep -A 5 "Events"
 
 Common causes:
 - **Network issues**: Ensure Docker can reach `ghcr.io` (try `docker pull ghcr.io/michelangelo-ai/worker:latest`)
-- **Image doesn't exist**: Verify the image tag matches what's available in the registry
+- **Local-only image not built**: If `history-server` is the failing pod, see [`history-server` stuck in `ImagePullBackOff`](#history-server-stuck-in-imagepullbackoff) above
 
 ### Worker crashes with `Namespace default is not found` (Temporal only)
 

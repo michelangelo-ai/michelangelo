@@ -47,7 +47,7 @@ data:
       {{- end }}
 
     pipeline:
-      revisioningEnabled: {{ .Values.controllermgr.pipeline.revisioningEnabled }}
+      revisioningEnabled: {{ dig "pipeline" "revisioningEnabled" false .Values.controllermgr }}
 
     workflowClient:
       {{- if eq .Values.workflow.engine "cadence" }}
@@ -92,11 +92,12 @@ data:
     {{- end }}
 
     notification:
-      taskList: {{ .Values.notification.taskList | default "" | quote }}
-      {{- with .Values.notification.studioBaseURL }}
+      {{- $notif := default dict .Values.notification }}
+      taskList: {{ index $notif "taskList" | default "" | quote }}
+      {{- with index $notif "studioBaseURL" }}
       studioBaseURL: {{ . | quote }}
       {{- end }}
-      {{- with .Values.notification.senderEmail }}
+      {{- with index $notif "senderEmail" }}
       senderEmail: {{ . | quote }}
       {{- end }}
 {{- end }}

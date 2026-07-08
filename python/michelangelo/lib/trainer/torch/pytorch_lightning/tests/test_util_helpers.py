@@ -1,9 +1,12 @@
 """Tests for untested helpers in ``_private/util.py``.
 
 Covers the helpers not exercised by ``test_resolve_helpers.py``:
-``_apply_layer_freeze`` (substring / regex layer freezing), ``_load_weights_from_path``
-(fsspec download + ``torch.load`` + ``load_state_dict``), ``_get_module_attr``
-(dotted-path import helper), and the ``UserInputError`` exception class.
+``_apply_layer_freeze`` (substring / regex layer freezing) and
+``_load_weights_from_path`` (fsspec download + ``torch.load`` + ``load_state_dict``).
+
+``UserInputError`` tests live in ``michelangelo/lib/_internal/tests/test_errors.py``.
+``get_module_attr`` tests live in
+``michelangelo/_internal/utils/reflection_utils/tests/module_attr_test.py``.
 
 ``ray.train.get_context`` and the fsspec / ``torch.load`` I/O are mocked so the
 helpers run without a Ray cluster or remote storage.
@@ -11,8 +14,6 @@ helpers run without a Ray cluster or remote storage.
 
 from __future__ import annotations
 
-import math
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -25,9 +26,7 @@ nn = pytest.importorskip("torch.nn")
 pytest.importorskip("pytorch_lightning")
 
 from michelangelo.lib.trainer.torch.pytorch_lightning._private.util import (  # noqa: E402
-    UserInputError,
     _apply_layer_freeze,
-    _get_module_attr,
     _load_weights_from_path,
 )
 
@@ -42,57 +41,6 @@ class _TwoLayerNet(nn.Module):
         super().__init__()
         self.encoder = nn.Linear(4, 4)
         self.decoder = nn.Linear(4, 2)
-
-
-# -----------------------------------------------------------------------------
-# UserInputError
-# -----------------------------------------------------------------------------
-
-
-class TestUserInputError:
-    """The ``UserInputError`` exception class."""
-
-    def test_is_exception_subclass(self):
-        """``UserInputError`` derives from ``Exception``."""
-        assert issubclass(UserInputError, Exception)
-
-    def test_can_be_raised_and_carries_message(self):
-        """It can be raised and preserves its message."""
-        with pytest.raises(UserInputError, match="bad path"):
-            raise UserInputError("bad path")
-
-
-# -----------------------------------------------------------------------------
-# _get_module_attr
-# -----------------------------------------------------------------------------
-
-
-class TestGetModuleAttr:
-    """Dotted ``module.attribute`` resolution."""
-
-    def test_resolves_function(self):
-        """A dotted path to a function returns the function object."""
-        assert _get_module_attr("os.path.join") is os.path.join
-
-    def test_resolves_constant(self):
-        """A dotted path to a module constant returns its value."""
-        assert _get_module_attr("math.pi") == math.pi
-
-    def test_resolves_class(self):
-        """A dotted path to a class returns the class object."""
-        from collections import OrderedDict
-
-        assert _get_module_attr("collections.OrderedDict") is OrderedDict
-
-    def test_missing_attribute_raises(self):
-        """A non-existent attribute raises ``AttributeError``."""
-        with pytest.raises(AttributeError):
-            _get_module_attr("math.definitely_not_here")
-
-    def test_missing_module_raises(self):
-        """A non-importable module raises ``ModuleNotFoundError``."""
-        with pytest.raises(ModuleNotFoundError):
-            _get_module_attr("no_such_module_xyz.attr")
 
 
 # -----------------------------------------------------------------------------

@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 import torch
 
-from michelangelo.lib.trainer.torch._numpy_utils import (
+from michelangelo.lib._internal.numpy_utils import (
     FLOAT_SENTINEL,
     INT32_SENTINEL,
 )

@@ -22,10 +22,13 @@ from ray.train.lightning import (
 )
 
 from michelangelo.lib.trainer.torch.pytorch_lightning._private.util import (
+    _accepts_run_id,
     _resolve_callbacks,
     _resolve_logger,
     _resolve_plugins,
     _resolve_strategy,
+    build_comet_logger,
+    build_mlflow_logger,
 )
 
 _UTIL_MODULE = "michelangelo.lib.trainer.torch.pytorch_lightning._private.util"
@@ -155,6 +158,38 @@ class _FakeLogger(Logger):
         """No-op for tests."""
 
 
+class TestAcceptsRunId:
+    """Signature inspection used to gate ``run_id`` injection."""
+
+    def test_explicit_run_id_param_accepted(self):
+        """A factory declaring ``run_id`` accepts it."""
+
+        def factory(run_id=None):
+            pass
+
+        assert _accepts_run_id(factory) is True
+
+    def test_var_keyword_accepted(self):
+        """A factory accepting ``**kwargs`` accepts ``run_id``."""
+
+        def factory(**kwargs):
+            pass
+
+        assert _accepts_run_id(factory) is True
+
+    def test_no_matching_param_rejected(self):
+        """A factory with neither ``run_id`` nor ``**kwargs`` is rejected."""
+
+        def factory(api_key):
+            pass
+
+        assert _accepts_run_id(factory) is False
+
+    def test_signature_introspection_failure_fails_open(self):
+        """If the signature can't be inspected, fail open (return True)."""
+        assert _accepts_run_id(dict) is True
+
+
 class TestResolveLogger:
     """Logger resolution covers bool, instance, list, and ``None`` paths."""
 
@@ -184,8 +219,8 @@ class TestResolveLogger:
         with pytest.raises(TypeError, match="logger must be"):
             _resolve_logger(123)
 
-    def test_none_with_no_comet_returns_none(self):
-        """``None`` input + no ``comet_param`` falls back to ``None``."""
+    def test_none_with_no_logger_returns_none(self):
+        """``None`` input falls back to ``None`` (tracking disabled)."""
         assert _resolve_logger(None) is None
 
     def test_logger_kwargs_requires_string_logger(self):
@@ -193,10 +228,121 @@ class TestResolveLogger:
         with pytest.raises(TypeError, match="logger_kwargs can only be used"):
             _resolve_logger(True, logger_kwargs={"x": 1})
 
-    def test_invalid_comet_param_type_raises(self):
-        """``comet_param`` must be a dict when set."""
-        with pytest.raises(TypeError, match="comet_param must be"):
-            _resolve_logger(None, comet_param="not-a-dict")
+    def test_string_logger_injects_run_id(self):
+        """A string-path logger factory receives run_id when the driver sets one."""
+        factory = MagicMock(return_value=_FakeLogger())
+        with patch(f"{_UTIL_MODULE}.get_module_attr", return_value=factory):
+            _resolve_logger("some.factory", {"api_key": "k"}, run_id="run-123")
+        factory.assert_called_once_with(api_key="k", run_id="run-123")
+
+    def test_string_logger_does_not_override_explicit_run_id(self):
+        """An explicit run_id in logger_kwargs is not overwritten by the driver's run_id."""
+        factory = MagicMock(return_value=_FakeLogger())
+        with patch(f"{_UTIL_MODULE}.get_module_attr", return_value=factory):
+            _resolve_logger(
+                "some.factory", {"run_id": "explicit"}, run_id="driver-run-id"
+            )
+        factory.assert_called_once_with(run_id="explicit")
+
+    def test_string_logger_without_run_id_omits_it(self):
+        """When the driver has no run_id, it is not injected into kwargs."""
+        factory = MagicMock(return_value=_FakeLogger())
+        with patch(f"{_UTIL_MODULE}.get_module_attr", return_value=factory):
+            _resolve_logger("some.factory", {"api_key": "k"})
+        factory.assert_called_once_with(api_key="k")
+
+    def test_string_logger_without_run_id_param_is_not_injected(self):
+        """A factory that declares no ``run_id`` param is called without it."""
+
+        def factory(api_key: str) -> _FakeLogger:
+            return _FakeLogger()
+
+        with patch(f"{_UTIL_MODULE}.get_module_attr", return_value=factory):
+            result = _resolve_logger("some.factory", {"api_key": "k"}, run_id="run-123")
+        assert isinstance(result, _FakeLogger)
+
+    def test_string_logger_with_kwargs_param_receives_run_id(self):
+        """A factory accepting ``**kwargs`` still receives an injected run_id."""
+        calls = {}
+
+        def factory(**kwargs) -> _FakeLogger:
+            calls.update(kwargs)
+            return _FakeLogger()
+
+        with patch(f"{_UTIL_MODULE}.get_module_attr", return_value=factory):
+            _resolve_logger("some.factory", {"api_key": "k"}, run_id="run-123")
+        assert calls == {"api_key": "k", "run_id": "run-123"}
+
+
+# -----------------------------------------------------------------------------
+# build_comet_logger / build_mlflow_logger
+# -----------------------------------------------------------------------------
+
+
+class TestBuildCometLogger:
+    """``build_comet_logger`` delegates to ``_get_comet_logger`` with run_id."""
+
+    def test_delegates_to_get_comet_logger(self):
+        """All kwargs are forwarded, with run_id defaulting to an empty string."""
+        sentinel = _FakeLogger()
+        with patch(
+            f"{_UTIL_MODULE}._get_comet_logger", return_value=sentinel
+        ) as mock_get:
+            result = build_comet_logger(
+                api_key="k",
+                workspace="ws",
+                project_name="proj",
+                experiment_name="exp",
+                tags=["a"],
+                run_id="run-1",
+            )
+        assert result is sentinel
+        mock_get.assert_called_once_with(
+            run_id="run-1",
+            api_key="k",
+            workspace="ws",
+            project_name="proj",
+            experiment_name="exp",
+            tags=["a"],
+        )
+
+    def test_run_id_defaults_to_empty_string(self):
+        """When run_id is None, an empty string is passed through (rank-0 barrier still works)."""
+        with patch(
+            f"{_UTIL_MODULE}._get_comet_logger", return_value=_FakeLogger()
+        ) as mock_get:
+            build_comet_logger(
+                api_key="k", workspace="ws", project_name="p", experiment_name="e"
+            )
+        assert mock_get.call_args.kwargs["run_id"] == ""
+
+
+class TestBuildMlflowLogger:
+    """``build_mlflow_logger`` constructs an ``MLFlowLogger``."""
+
+    def test_constructs_mlflow_logger_with_kwargs(self):
+        """All kwargs are forwarded to MLFlowLogger, including run_id for correlation."""
+        with patch("pytorch_lightning.loggers.MLFlowLogger") as mock_cls:
+            build_mlflow_logger(
+                experiment_name="exp",
+                tracking_uri="http://mlflow.example.com",
+                run_name="run-1",
+                tags={"env": "prod"},
+                run_id="run-123",
+            )
+        mock_cls.assert_called_once_with(
+            experiment_name="exp",
+            tracking_uri="http://mlflow.example.com",
+            run_name="run-1",
+            tags={"env": "prod"},
+            run_id="run-123",
+        )
+
+    def test_defaults_tags_to_empty_dict(self):
+        """tags=None is normalized to an empty dict."""
+        with patch("pytorch_lightning.loggers.MLFlowLogger") as mock_cls:
+            build_mlflow_logger(experiment_name="exp")
+        assert mock_cls.call_args.kwargs["tags"] == {}
 
 
 # -----------------------------------------------------------------------------

@@ -17,66 +17,11 @@ import pytest
 
 from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (
     CHECKPOINT_PATH_KEY,
-    CometParam,
     LightningTrainer,
     LightningTrainerParam,
     LightningTrainerWithStateDict,
     _torch_weights_only_disabled,
 )
-
-# -----------------------------------------------------------------------------
-# CometParam
-# -----------------------------------------------------------------------------
-
-
-class TestCometParam:
-    """``CometParam`` dataclass behavior."""
-
-    def test_required_fields(self):
-        """All four required fields are stored verbatim."""
-        param = CometParam(
-            api_key="secret",
-            project_name="proj",
-            experiment_name="exp",
-            workspace="ws",
-        )
-        assert param.api_key == "secret"
-        assert param.project_name == "proj"
-        assert param.experiment_name == "exp"
-        assert param.workspace == "ws"
-
-    def test_tags_default_to_empty_list(self):
-        """The default tag list is an empty list, not None."""
-        param = CometParam(
-            api_key="k",
-            project_name="p",
-            experiment_name="e",
-            workspace="w",
-        )
-        assert param.tags == []
-
-    def test_tags_default_factory_isolates_instances(self):
-        """Mutating one instance's tags must not leak into a sibling."""
-        a = CometParam(
-            api_key="k", project_name="p", experiment_name="e", workspace="w"
-        )
-        b = CometParam(
-            api_key="k", project_name="p", experiment_name="e", workspace="w"
-        )
-        a.tags.append("x")
-        assert b.tags == []
-
-    def test_tags_explicit(self):
-        """Explicit ``tags`` value is preserved."""
-        param = CometParam(
-            api_key="k",
-            project_name="p",
-            experiment_name="e",
-            workspace="w",
-            tags=["foo", "bar"],
-        )
-        assert param.tags == ["foo", "bar"]
-
 
 # -----------------------------------------------------------------------------
 # LightningTrainerParam
@@ -105,11 +50,21 @@ class TestLightningTrainerParam:
         assert param.num_shuffle_batches == 10
         assert param.num_epochs == 1  # _UNSET → 1 in __post_init__
         assert param.data_collate_fn is None
-        assert param.comet_param is None
         assert param.lightning_trainer_kwargs == {}
         assert param.transfer_learning_spec is None
         assert param.incremental_training_spec is None
         assert param.initial_weights_path is None
+
+    def test_training_observer_defaults_to_none(self):
+        """``training_observer`` defaults to ``None`` when omitted."""
+        param = _make_param()
+        assert param.training_observer is None
+
+    def test_training_observer_stored(self):
+        """``training_observer`` is stored when provided."""
+        observer = MagicMock(name="observer")
+        param = _make_param(training_observer=observer)
+        assert param.training_observer is observer
 
     def test_lightning_kwargs_factory_isolates_instances(self):
         """Default-factory dict must not be shared across instances."""
@@ -138,9 +93,6 @@ class TestLightningTrainerParam:
 
     def test_passes_through_extra_fields(self):
         """Optional fields are accepted and stored as-is."""
-        comet = CometParam(
-            api_key="k", project_name="p", experiment_name="e", workspace="w"
-        )
         collate = MagicMock(name="collate")
         lightning_kwargs = {"strategy": "deepspeed"}
 
@@ -148,7 +100,6 @@ class TestLightningTrainerParam:
             batch_size=64,
             num_shuffle_batches=0,
             data_collate_fn=collate,
-            comet_param=comet,
             lightning_trainer_kwargs=lightning_kwargs,
             initial_weights_path="s3://bucket/weights.pt",
         )
@@ -156,7 +107,6 @@ class TestLightningTrainerParam:
         assert param.batch_size == 64
         assert param.num_shuffle_batches == 0
         assert param.data_collate_fn is collate
-        assert param.comet_param is comet
         assert param.lightning_trainer_kwargs is lightning_kwargs
         assert param.initial_weights_path == "s3://bucket/weights.pt"
 
@@ -230,6 +180,36 @@ class TestLightningTrainerInit:
             second_id = mock_super.call_args.kwargs["train_loop_config"]["run_id"]
         assert first_id != second_id
 
+    def test_init_observer_popped_from_asdict_and_reinjected(self):
+        """Observer is popped from asdict output and re-injected as the original object."""
+        observer = MagicMock(name="observer")
+        param = _make_param(training_observer=observer)
+
+        with patch(
+            "michelangelo.lib.trainer.torch.pytorch_lightning."
+            "lightning_trainer.TorchTrainer.__init__",
+            return_value=None,
+        ) as mock_super:
+            trainer = LightningTrainer(trainer_param=param)
+
+        assert trainer._training_observer is observer
+        loop_cfg = mock_super.call_args.kwargs["train_loop_config"]
+        assert loop_cfg["training_observer"] is observer
+
+    def test_init_no_observer_leaves_config_clean(self):
+        """Without an observer, training_observer is not in train_loop_config."""
+        param = _make_param()
+        with patch(
+            "michelangelo.lib.trainer.torch.pytorch_lightning."
+            "lightning_trainer.TorchTrainer.__init__",
+            return_value=None,
+        ) as mock_super:
+            trainer = LightningTrainer(trainer_param=param)
+
+        assert trainer._training_observer is None
+        loop_cfg = mock_super.call_args.kwargs["train_loop_config"]
+        assert "training_observer" not in loop_cfg
+
 
 class TestLightningTrainerTrain:
     """``LightningTrainer.train()`` result-shaping and error handling."""
@@ -294,6 +274,45 @@ class TestLightningTrainerTrain:
 
         assert trainer.run_config is new_run
         assert trainer.scaling_config is new_scaling
+
+    def test_train_calls_observer_on_result(self):
+        """Observer's ``on_result`` is called after successful training."""
+        observer = MagicMock(name="observer")
+        param = _make_param(training_observer=observer)
+        with patch(
+            "michelangelo.lib.trainer.torch.pytorch_lightning."
+            "lightning_trainer.TorchTrainer.__init__",
+            return_value=None,
+        ):
+            trainer = LightningTrainer(trainer_param=param)
+
+        result = MagicMock()
+        result.error = None
+        result.checkpoint.path = "/ckpt"
+        result.path = "/run"
+        result.metrics = {"loss": 0.1}
+
+        with patch.object(trainer, "fit", return_value=result):
+            trainer.train()
+
+        observer.on_result.assert_called_once_with(
+            metrics=result.metrics, checkpoint_path="/ckpt"
+        )
+
+    def test_train_no_observer_does_not_raise(self):
+        """Training without observer works without errors."""
+        trainer = self._build()
+
+        result = MagicMock()
+        result.error = None
+        result.checkpoint.path = "/c"
+        result.path = "/r"
+        result.metrics = {}
+
+        with patch.object(trainer, "fit", return_value=result):
+            summary = trainer.train()
+
+        assert summary[CHECKPOINT_PATH_KEY] == "/c"
 
 
 # -----------------------------------------------------------------------------

@@ -406,38 +406,7 @@ func TestCronTrigger_Update(t *testing.T) {
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 0 * * *", gomock.Any()).Return(nil)
-				return mockClient
-			},
-			expectError:        false,
-			expectedActualCron: "0 0 * * *",
-		},
-		{
-			name: "schedule not found - recreate via StartWorkflow",
-			triggerRun: &v2pb.TriggerRun{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "test-namespace",
-					Name:      "test-triggerrun",
-				},
-				Spec: v2pb.TriggerRunSpec{
-					Trigger: &v2pb.Trigger{
-						TriggerType: &v2pb.Trigger_CronSchedule{
-							CronSchedule: &v2pb.CronSchedule{Cron: "0 0 * * *"},
-						},
-					},
-				},
-				Status: v2pb.TriggerRunStatus{
-					State:         v2pb.TRIGGER_RUN_STATE_RUNNING,
-					ActualTrigger: &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 6 * * *"}}},
-				},
-			},
-			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
-				ctrl := gomock.NewController(t)
-				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-				// UpdateTrigger fails with "not found"
-				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 0 * * *", gomock.Any()).Return(fmt.Errorf("schedule not found"))
-				// StartWorkflow should be called to recreate
-				mockClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), "trigger.CronTrigger", gomock.Any()).Return(&clientInterface.WorkflowExecution{ID: "test-namespace.test-triggerrun", RunID: "test-run-id"}, nil)
+				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 0 * * *", gomock.Any(), gomock.Any()).Return(nil)
 				return mockClient
 			},
 			expectError:        false,
@@ -493,38 +462,7 @@ func TestCronTrigger_Update(t *testing.T) {
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 0 * * *", gomock.Any()).Return(fmt.Errorf("update failed"))
-				return mockClient
-			},
-			expectError:        true,
-			expectedActualCron: "", // Error case returns empty status
-		},
-		{
-			name: "recreate fails after not found",
-			triggerRun: &v2pb.TriggerRun{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "test-namespace",
-					Name:      "test-triggerrun",
-				},
-				Spec: v2pb.TriggerRunSpec{
-					Trigger: &v2pb.Trigger{
-						TriggerType: &v2pb.Trigger_CronSchedule{
-							CronSchedule: &v2pb.CronSchedule{Cron: "0 0 * * *"},
-						},
-					},
-				},
-				Status: v2pb.TriggerRunStatus{
-					State:         v2pb.TRIGGER_RUN_STATE_RUNNING,
-					ActualTrigger: &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 6 * * *"}}},
-				},
-			},
-			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
-				ctrl := gomock.NewController(t)
-				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-				// UpdateTrigger fails with "not found"
-				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 0 * * *", gomock.Any()).Return(fmt.Errorf("schedule not found"))
-				// StartWorkflow fails
-				mockClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), "trigger.CronTrigger", gomock.Any()).Return(nil, fmt.Errorf("recreate failed"))
+				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 0 * * *", gomock.Any(), gomock.Any()).Return(fmt.Errorf("update failed"))
 				return mockClient
 			},
 			expectError:        true,

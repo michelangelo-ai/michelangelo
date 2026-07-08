@@ -63,6 +63,19 @@ When contributing to any Uber Open Source project, you agree that you have autho
 
 You’re required to sign our [Contributor License Agreement](https://cla-assistant.io/michelangelo-ai) to confirm this and you’ll be prompted to do this when submitting your first contribution.
 
+## Our Contribution Tracks
+
+To keep our development moving fast while protecting the stability of the platform, Michelangelo uses a **Dual-Track Pipeline**. Before you open an issue or write any code, please match your goal to the correct track:
+
+* **Track 1: Maintenance:** For everyday bug fixes, code optimizations, testing improvements, or documentation updates. (This repo handles Track 1 entirely via standard Issues and Pull Requests).
+* **Track 2: Evolution:** For major architectural changes, public API modifications, new core modules, or substantial new framework dependencies. (These require a design proposal in our dedicated enhancements repository *before* any code is written here).
+
+*Note on Ecosystem Tools:* Backward-compatible updates, minor version bumps, and bug fixes to deployment configurations (like Helm charts) fall under Track 1. Breaking changes or entirely new deployment patterns belong in Track 2.
+
+## Working on Track 1: Maintenance (Standard PR Loop)
+
+If your contribution falls under Track 1, you will operate entirely within this repository using the standard sequence: **Open an Issue ➔ Submit a Pull Request ➔ Review & Merge**.
+
 <a id="enhancements-and-features"></a>
 ## Enhancements and Features
 
@@ -244,7 +257,7 @@ Git tags use SemVer, but PyPI requires [PEP 440](https://peps.python.org/pep-044
 
 - Tags are only created on **release branches** (`release/vX.Y`), never directly on `main`.
 - All artifacts (Python, npm, Go, Helm, containers) receive the same Major.Minor from the tag.
-- See the [Versioning Policy](./docs/about/roadmap.md#versioning-policy) for stability level guarantees (stable, beta, alpha).
+- See the [Versioning Policy](./docs/getting-started/roadmap.md#versioning-policy) for stability level guarantees (stable, beta, alpha).
 
 ## Creating a Pull Request
 
@@ -267,6 +280,24 @@ If you want to fix a bug or propose a new feature you’ll do this through creat
 * **Use comments in the code** that you provide to give us more context to any code based submissions.
 
 Thanks for contributing into our project.
+
+## Working on Track 2: Evolution (The RFC Process)
+
+If your proposal falls under Track 2, **please do not open a standard issue or code PR in this repository first**. Large features must secure architectural design consensus before code implementation begins.
+
+1. Head over to the [Michelangelo Enhancements Repository](https://github.com/michelangelo-ai/enhancements).
+2. Review the review SLAs, lifecycle stages, and copy the baseline design template (`rfcs/20260101-template.md`) to open a proposal Pull Request there.
+
+### Implementing an Approved RFC
+
+Once the enhancements process marks your proposal as **Accepted**, you will return here to implement the code under an operational agreement:
+
+* **Tracking & Targeting:** Your assigned Shepherd will open a dedicated tracking issue in this repository to map individual code PRs and target them to an upcoming release milestone branch (e.g., `release-0.2`).
+* **The Code Review Guarantee:** Subsequent code PRs are evaluated strictly for code quality, style, and test coverage. Core design, framework choices, and structural layout debates are locked and will not be reopened during code review because they were already settled during the RFC design phase.
+
+### Handling Unexpected Design Blocks
+
+If an insurmountable architectural blocker (such as a critical performance regression or unforeseen security flaw) is uncovered *during* implementation, the Shepherd will pause the PRs. The Shepherd will sync with the Core Architecture Panel to choose a path forward via minor amendment, formal withdrawal, or temporary deferment.
 
 <a id="deprecation-policy"></a>
 ## Deprecation Policy
@@ -313,5 +344,5 @@ resources: {}
 ### Reference
 
 - See [UPGRADING.md](./UPGRADING.md) for examples of past migrations.
-- See the [Versioning Policy](./docs/about/roadmap.md#versioning-policy) for stability level guarantees.
+- See the [Versioning Policy](./docs/getting-started/roadmap.md#versioning-policy) for stability level guarantees.
 

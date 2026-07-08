@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, screen, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 
 import { GrpcStatusCode } from '#core/constants/grpc-status-codes';
@@ -10,6 +10,7 @@ import {
   createQueryMockRouter,
   getServiceProviderWrapper,
 } from '#core/test/wrappers/get-service-provider-wrapper';
+import { getSnackbarProviderWrapper } from '#core/test/wrappers/get-snackbar-provider-wrapper';
 import { ApplicationError } from '#core/types/error-types';
 
 import type { ErrorNormalizer } from '#core/types/error-types';
@@ -27,6 +28,7 @@ describe('useStudioMutation', () => {
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/ma-dev-test' }),
         getServiceProviderWrapper({ request: mockRequest }),
+        getSnackbarProviderWrapper(),
       ])
     );
 
@@ -49,6 +51,7 @@ describe('useStudioMutation', () => {
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/ma-dev-test' }),
         getServiceProviderWrapper({ request: mockRequest }),
+        getSnackbarProviderWrapper(),
       ])
     );
 
@@ -58,6 +61,55 @@ describe('useStudioMutation', () => {
       expect(result.current.data).toEqual(mockResponse);
       expect(result.current.isSuccess).toBe(true);
     });
+  });
+
+  test('runs successOperations by default on success', async () => {
+    const mockResponse = { id: 'test-id' };
+    const mockRequest = createQueryMockRouter({
+      CreatePipelineRun: mockResponse,
+    });
+
+    renderHook(
+      () =>
+        useStudioMutation({
+          mutationName: 'CreatePipelineRun',
+          successOperations: [{ type: 'toast', message: 'Pipeline run created' }],
+        }),
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper(),
+        getServiceProviderWrapper({ request: mockRequest }),
+        getSnackbarProviderWrapper(),
+      ])
+    ).result.current.mutate({ name: 'test-run' });
+
+    expect(await screen.findByText('Pipeline run created')).toBeInTheDocument();
+  });
+
+  test('clientOptions.onSuccess runs alongside default successOperations', async () => {
+    const mockResponse = { id: 'test-id' };
+    const onSuccess = vi.fn();
+    const mockRequest = createQueryMockRouter({
+      CreatePipelineRun: mockResponse,
+    });
+
+    renderHook(
+      () =>
+        useStudioMutation({
+          mutationName: 'CreatePipelineRun',
+          successOperations: [{ type: 'toast', message: 'Pipeline run created' }],
+          clientOptions: { onSuccess },
+        }),
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper(),
+        getServiceProviderWrapper({ request: mockRequest }),
+        getSnackbarProviderWrapper(),
+      ])
+    ).result.current.mutate({ name: 'test-run' });
+
+    expect(await screen.findByText('Pipeline run created')).toBeInTheDocument();
+    expect(onSuccess).toHaveBeenCalledWith(mockResponse);
   });
 
   test('passes onSuccess callback with response data', async () => {
@@ -77,6 +129,7 @@ describe('useStudioMutation', () => {
         getErrorProviderWrapper(),
         getRouterWrapper(),
         getServiceProviderWrapper({ request: mockRequest }),
+        getSnackbarProviderWrapper(),
       ])
     );
 
@@ -104,6 +157,7 @@ describe('useStudioMutation', () => {
         getErrorProviderWrapper(),
         getRouterWrapper(),
         getServiceProviderWrapper({ request: mockRequest }),
+        getSnackbarProviderWrapper(),
       ])
     );
 
@@ -141,6 +195,7 @@ describe('useStudioMutation', () => {
         getErrorProviderWrapper({ normalizeError: customNormalizer }),
         getRouterWrapper(),
         getServiceProviderWrapper({ request: mockRequest }),
+        getSnackbarProviderWrapper(),
       ])
     );
 

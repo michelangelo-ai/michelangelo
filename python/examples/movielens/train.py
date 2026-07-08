@@ -29,7 +29,6 @@ import ray
 from examples.movielens.data import load_movielens_100k
 from examples.movielens.model import create_ncf_model
 from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (
-    CometParam,
     LightningTrainer,
     LightningTrainerParam,
 )
@@ -44,13 +43,20 @@ _STORAGE_DIR = "/tmp/movielens_runs"
 _DEFAULT_COMET_PROJECT = "michelangelo-movielens-demo"
 _DEFAULT_COMET_EXPERIMENT = "ncf-movielens100k"
 _DEFAULT_MLFLOW_EXPERIMENT = "ncf-movielens100k"
+_COMET_LOGGER_FACTORY = (
+    "michelangelo.lib.trainer.torch.pytorch_lightning._private.util.build_comet_logger"
+)
 
 
-def _build_comet_param() -> CometParam | None:
-    """Build a CometParam from env vars, or return None to skip Comet logging.
+def _build_comet_logger_kwargs() -> dict | None:
+    """Build build_comet_logger kwargs from env vars, or None to skip Comet logging.
 
     Both COMET_API_KEY and COMET_WORKSPACE must be set to enable Comet. The
-    other fields fall back to module defaults if unset.
+    other fields fall back to module defaults if unset. Returned as a plain
+    dict (rather than a constructed Logger) so the actual CometLogger is
+    built inside the Ray Train worker via the dotted-path factory —
+    required for the rank-0-creates/others-attach barrier pattern in
+    ``build_comet_logger``.
     """
     api_key = os.environ.get("COMET_API_KEY")
     workspace = os.environ.get("COMET_WORKSPACE")
@@ -58,15 +64,15 @@ def _build_comet_param() -> CometParam | None:
         return None
     tags_env = os.environ.get("COMET_TAGS", "").strip()
     tags = [t.strip() for t in tags_env.split(",") if t.strip()] or None
-    return CometParam(
-        api_key=api_key,
-        workspace=workspace,
-        project_name=os.environ.get("COMET_PROJECT_NAME", _DEFAULT_COMET_PROJECT),
-        experiment_name=os.environ.get(
+    return {
+        "api_key": api_key,
+        "workspace": workspace,
+        "project_name": os.environ.get("COMET_PROJECT_NAME", _DEFAULT_COMET_PROJECT),
+        "experiment_name": os.environ.get(
             "COMET_EXPERIMENT_NAME", _DEFAULT_COMET_EXPERIMENT
         ),
-        tags=tags,
-    )
+        "tags": tags,
+    }
 
 
 def _parse_mlflow_tags(tags_env: str) -> dict | None:
@@ -113,14 +119,14 @@ def main() -> dict:
     splits = load_movielens_100k()
 
     # Pick at most one tracking backend. Comet wins if both env-sets are present.
-    comet_param = _build_comet_param()
+    comet_logger_kwargs = _build_comet_logger_kwargs()
     mlflow_logger = None
-    if comet_param is not None:
+    if comet_logger_kwargs is not None:
         log.info(
             "Comet logging enabled (workspace=%s project=%s experiment=%s)",
-            comet_param.workspace,
-            comet_param.project_name,
-            comet_param.experiment_name,
+            comet_logger_kwargs["workspace"],
+            comet_logger_kwargs["project_name"],
+            comet_logger_kwargs["experiment_name"],
         )
         if os.environ.get("MLFLOW_TRACKING_URI"):
             log.info(
@@ -152,7 +158,13 @@ def main() -> dict:
         # accelerator to CPU keeps this example working on macOS.
         "accelerator": "cpu",
     }
-    if mlflow_logger is not None:
+    if comet_logger_kwargs is not None:
+        # Dotted-path factory: the CometLogger is constructed inside the Ray
+        # Train worker (required for the rank-0-creates/others-attach
+        # barrier pattern in build_comet_logger).
+        lightning_trainer_kwargs["logger"] = _COMET_LOGGER_FACTORY
+        lightning_trainer_kwargs["logger_kwargs"] = comet_logger_kwargs
+    elif mlflow_logger is not None:
         # _resolve_logger accepts a pre-built Logger instance and forwards it
         # to the Lightning Trainer unchanged.
         lightning_trainer_kwargs["logger"] = mlflow_logger
@@ -170,7 +182,6 @@ def main() -> dict:
         val_data=splits.val,
         batch_size=256,
         num_shuffle_batches=10,
-        comet_param=comet_param,
         lightning_trainer_kwargs=lightning_trainer_kwargs,
     )
 

@@ -834,6 +834,76 @@ describe('EntityDetailRoute', () => {
     expect(await screen.findByRole('button', { name: 'Resume' })).toBeInTheDocument();
   });
 
+  test('disables an entity-level action button based on the record and displays the message on hover', async () => {
+    const user = userEvent.setup();
+    const StubDialog = () => <div role="dialog">Stub</div>;
+
+    const testPhases = {
+      train: buildPhase({
+        id: 'train',
+        entities: [
+          buildEntity({
+            actions: [
+              {
+                display: { label: 'Run', icon: 'playerPlay' },
+                modal: { type: 'custom', component: StubDialog },
+                hierarchy: ActionHierarchy.PRIMARY,
+                disabled: [
+                  {
+                    condition: interpolate(({ data }) => {
+                      const record = data as { status?: { state?: string } } | undefined;
+                      return record?.status?.state === 'RUNNING';
+                    }),
+                    message: 'Pipeline is already running',
+                  },
+                ],
+              },
+            ],
+            views: [
+              {
+                type: 'detail',
+                metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
+                pages: [
+                  {
+                    id: 'execution',
+                    label: 'Execution',
+                    ...buildExecutionSchema(),
+                  },
+                ],
+              },
+            ],
+          }),
+        ],
+      }),
+    };
+
+    const mockRequest = vi.fn().mockResolvedValue({
+      pipelineRun: {
+        metadata: { creationTimestamp: { seconds: 1640995200 } },
+        status: { state: 'RUNNING', steps: [] },
+      },
+    });
+
+    render(
+      <EntityDetailRoute phases={testPhases} />,
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({ location: '/myproject/train/runs/run-123' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    await screen.findByText('Running');
+    const runButton = screen.getByRole('button', { name: 'Run' });
+    expect(runButton).toBeDisabled();
+
+    await user.click(runButton);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await user.hover(runButton);
+    expect(await screen.findByText('Pipeline is already running')).toBeInTheDocument();
+  });
+
   describe('page navigation', () => {
     const detailPhases = {
       train: buildPhase({

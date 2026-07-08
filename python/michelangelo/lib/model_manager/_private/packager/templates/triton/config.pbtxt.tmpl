@@ -2,7 +2,7 @@
 name: "{{model_name}}"
 {% endif -%}
 backend: "{{backend}}"
-max_batch_size: 256
+max_batch_size: {{max_batch_size}}
 {%- if enable_dynamic_batching %}
 dynamic_batching: {
 {%- if preferred_batch_size %}

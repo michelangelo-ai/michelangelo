@@ -72,3 +72,78 @@ func TestBasicUtilityFunctions(t *testing.T) {
 		assert.Equal(t, "spark-namespace", sparkJob.ObjectMeta.Namespace)
 	})
 }
+
+func TestHasTerminalPodErrors(t *testing.T) {
+	tests := []struct {
+		name     string
+		errors   []*v2pb.PodErrors
+		expected bool
+	}{
+		{
+			name:     "nil errors",
+			errors:   nil,
+			expected: false,
+		},
+		{
+			name:     "empty errors",
+			errors:   []*v2pb.PodErrors{},
+			expected: false,
+		},
+		{
+			name: "non-terminal reason",
+			errors: []*v2pb.PodErrors{
+				{Reason: "RayClusterPodsProvisioning"},
+			},
+			expected: false,
+		},
+		{
+			name: "ContainersNotReady is not immediately terminal",
+			errors: []*v2pb.PodErrors{
+				{Reason: "ContainersNotReady", Message: "containers with unready status: [head]"},
+			},
+			expected: false,
+		},
+		{
+			name: "CrashLoopBackOff is terminal",
+			errors: []*v2pb.PodErrors{
+				{Reason: "CrashLoopBackOff", Message: "container crashing"},
+			},
+			expected: true,
+		},
+		{
+			name: "ImagePullBackOff is terminal",
+			errors: []*v2pb.PodErrors{
+				{Reason: "ImagePullBackOff", Message: "cannot pull image"},
+			},
+			expected: true,
+		},
+		{
+			name: "FailedCreateHeadPod is terminal",
+			errors: []*v2pb.PodErrors{
+				{Reason: "FailedCreateHeadPod", Message: "quota exceeded"},
+			},
+			expected: true,
+		},
+		{
+			name: "OOMKilled is terminal",
+			errors: []*v2pb.PodErrors{
+				{Reason: "OOMKilled"},
+			},
+			expected: true,
+		},
+		{
+			name: "mixed errors with one terminal",
+			errors: []*v2pb.PodErrors{
+				{Reason: "SomeTransientReason"},
+				{Reason: "ErrImagePull", Message: "image not found"},
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, HasTerminalPodErrors(tt.errors))
+		})
+	}
+}

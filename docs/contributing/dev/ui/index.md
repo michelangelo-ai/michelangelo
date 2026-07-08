@@ -33,7 +33,7 @@ javascript/
 │   ├── core/               # Core UI components and utilities
 │   │   └── package.json    # @uber/michelangelo-core
 │   └── rpc/                # RPC client and error handling
-│       └── package.json    # @michelangelo/rpc
+│       └── package.json    # @michelangelo-ai/rpc
 └── package.json            # Workspace root
 ```
 
@@ -51,7 +51,7 @@ javascript/
 - Type definitions
 - Test utilities
 
-**@michelangelo/rpc**: RPC client and error handling. Contains:
+**@michelangelo-ai/rpc**: RPC client and error handling. Contains:
 - Connect RPC client configuration
 - Error normalization for Connect errors
 
@@ -80,7 +80,7 @@ yarn build
 Build order:
 1. Generate gRPC client code (`yarn generate`)
 2. Build `@uber/michelangelo-core`
-3. Build `@michelangelo/rpc`
+3. Build `@michelangelo-ai/rpc`
 4. Build `@michelangelo/app`
 
 ### Scripts
@@ -105,7 +105,7 @@ The codebase uses TypeScript path aliases:
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { Phase } from '#core/types/common/studio-types';
 
-// In @michelangelo/rpc
+// In @michelangelo-ai/rpc
 import { normalizeConnectError } from '#rpc/normalize-connect-error';
 ```
 

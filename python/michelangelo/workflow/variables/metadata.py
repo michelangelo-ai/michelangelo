@@ -55,6 +55,15 @@ class ModelMetadata:
         deployable: ``True`` when the model has been packaged into a
             serving-ready format (e.g. Triton config + weights). The pusher
             sets ``deployable_artifact_uri`` only when this is ``True``.
+        is_incremental_training: ``True`` when this model was produced by an
+            incremental training run (BASELINE or continuation of an existing
+            incremental chain). Used by downstream tasks to propagate chain
+            metadata.
+        baseline_model_identifier: Opaque string tag identifying the original
+            baseline model at the root of an incremental training chain.
+            ``None`` for non-incremental models, and for the first run of a new
+            incremental chain (the BASELINE run itself). Set on continuation
+            runs to the identifier of the original baseline.
         _schema: Serialised input/output schema (e.g. protobuf or JSON bytes).
             Not included in ``repr`` to avoid flooding logs.
         _sample_data: Serialised sample inference payload used for smoke-testing
@@ -79,6 +88,8 @@ class ModelMetadata:
     model_class: str | None = None
     assembled: bool = False
     deployable: bool = False
+    is_incremental_training: bool = False
+    baseline_model_identifier: str | None = None
     _schema: BytesIO | None = field(default=None, repr=False)
     _sample_data: BytesIO | None = field(default=None, repr=False)
     _hyperparameters: BytesIO | None = field(default=None, repr=False)
@@ -115,4 +126,7 @@ class ModelMetadata:
             result["model_class"] = self.model_class
         result["assembled"] = str(self.assembled).lower()
         result["deployable"] = str(self.deployable).lower()
+        result["is_incremental_training"] = str(self.is_incremental_training).lower()
+        if self.baseline_model_identifier is not None:
+            result["baseline_model_identifier"] = self.baseline_model_identifier
         return result

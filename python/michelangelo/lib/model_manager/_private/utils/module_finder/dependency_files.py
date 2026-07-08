@@ -77,7 +77,7 @@ def find_dependency_files_internal(
 
     try:
         package = importlib.import_module(module_name)
-    except (ImportError, TypeError):
+    except (ImportError, TypeError, SystemExit):
         return None
 
     # if the module is a package
@@ -88,7 +88,7 @@ def find_dependency_files_internal(
             try:
                 sub_module = importlib.import_module(full_name)
                 files[full_name] = inspect.getfile(sub_module)
-            except (ImportError, TypeError):
+            except (ImportError, TypeError, SystemExit):
                 pass
 
             init_file = os.path.join(importer.path, "__init__.py")

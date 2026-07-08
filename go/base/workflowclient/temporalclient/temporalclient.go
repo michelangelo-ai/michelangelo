@@ -405,21 +405,25 @@ func (c *TemporalClient) DeleteTrigger(ctx context.Context, workflowID string, r
 	return c.Client.TerminateWorkflow(ctx, workflowID, runID, "trigger killed")
 }
 
-// UpdateTrigger updates the cron schedule and optionally the paused state of a recurring trigger
-// in a single atomic Temporal schedule.Update() call.
-func (c *TemporalClient) UpdateTrigger(ctx context.Context, workflowID string, newCronSchedule string, paused *bool) error {
+// UpdateTrigger updates the cron schedule, optionally the paused state, and optionally the
+// workflow action args of a recurring trigger in a single atomic Temporal schedule.Update() call.
+// Passing an empty newCronSchedule skips the cron update. Passing nil for paused skips the
+// paused-state change. Passing nil for args skips the action-args update.
+func (c *TemporalClient) UpdateTrigger(ctx context.Context, workflowID string, newCronSchedule string, paused *bool, args []interface{}) error {
 	scheduleID := scheduleIDForWorkflow(workflowID)
 	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
 
 	return handle.Update(ctx, temporalClient.ScheduleUpdateOptions{
 		DoUpdate: func(input temporalClient.ScheduleUpdateInput) (*temporalClient.ScheduleUpdate, error) {
-			input.Description.Schedule.Spec.CronExpressions = []string{newCronSchedule}
-			// Temporal's server converts CronExpressions into StructuredCalendar entries
-			// stored in Calendars. When we read back the schedule, Calendars contains the
-			// old server-generated entries. We must clear them so the new CronExpressions
-			// don't merge with stale Calendars, which would cause both old and new
-			// schedules to fire.
-			input.Description.Schedule.Spec.Calendars = nil
+			if newCronSchedule != "" {
+				input.Description.Schedule.Spec.CronExpressions = []string{newCronSchedule}
+				// Temporal's server converts CronExpressions into StructuredCalendar entries
+				// stored in Calendars. When we read back the schedule, Calendars contains the
+				// old server-generated entries. We must clear them so the new CronExpressions
+				// don't merge with stale Calendars, which would cause both old and new
+				// schedules to fire.
+				input.Description.Schedule.Spec.Calendars = nil
+			}
 
 			if paused != nil {
 				input.Description.Schedule.State.Paused = *paused
@@ -428,6 +432,14 @@ func (c *TemporalClient) UpdateTrigger(ctx context.Context, workflowID string, n
 				} else {
 					input.Description.Schedule.State.Note = "unpaused by michelangelo"
 				}
+			}
+
+			if args != nil {
+				action, ok := input.Description.Schedule.Action.(*temporalClient.ScheduleWorkflowAction)
+				if !ok {
+					return nil, fmt.Errorf("unexpected schedule action type for workflowID %s", workflowID)
+				}
+				action.Args = args
 			}
 
 			return &temporalClient.ScheduleUpdate{

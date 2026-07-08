@@ -58,8 +58,8 @@ func (r *Registry) IncrementCounter(name string, tags map[string]string) {
 	case "cr_unmarshal_errors":
 		IncCRUnmarshalError(
 			getTagValueOrDefault(tags, "resource_type"),
-			getTagValueOrDefault(tags, "namespace"),
 			getTagValueOrDefault(tags, "error_type"),
+			getTagValueOrDefault(tags, "blocking"),
 		)
 	}
 }

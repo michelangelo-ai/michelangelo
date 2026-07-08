@@ -60,7 +60,9 @@ func (m Mapper) mapRay(rayJob *v2pb.RayJob, jobClusterObject runtime.Object, clu
 				"ray.io/cluster":      rayCluster.Name,
 				"rayClusterNamespace": RayLocalNamespace,
 			},
-			Entrypoint: rayJob.Spec.Entrypoint,
+			Entrypoint:               rayJob.Spec.Entrypoint,
+			TTLSecondsAfterFinished:  int32(300),
+			ShutdownAfterJobFinishes: true,
 			// kuberay 1.0 only support SubmitterPodTemplate for configuration submitter pod
 			// We need to allow user to configure the submitter pod template via ray task configuration
 			// Note: Add support for v1.2.2 kuberay once we upgrade to newer version
@@ -367,14 +369,61 @@ func getRayClusterStateFromKubeRayState(kubeRayState rayv1.ClusterState) v2pb.Ra
 		return v2pb.RAY_CLUSTER_STATE_READY
 	case rayv1.Failed:
 		return v2pb.RAY_CLUSTER_STATE_FAILED
-	case rayv1.Unhealthy:
+	case "unhealthy":
 		return v2pb.RAY_CLUSTER_STATE_UNHEALTHY
+	case rayv1.Suspended:
+		return v2pb.RAY_CLUSTER_STATE_UNKNOWN
 	case "": // Empty state means unknown
 		return v2pb.RAY_CLUSTER_STATE_UNKNOWN
 	default:
 		// For any future states we don't recognize, default to unknown
 		return v2pb.RAY_CLUSTER_STATE_UNKNOWN
 	}
+}
+
+func isFailureCondition(cond metav1.Condition) bool {
+	switch rayv1.RayClusterConditionType(cond.Type) {
+	case rayv1.HeadPodReady:
+		return cond.Status == metav1.ConditionFalse &&
+			cond.Reason != "" &&
+			cond.Reason != rayv1.RayClusterPodsProvisioning
+	case rayv1.RayClusterReplicaFailure:
+		return cond.Status == metav1.ConditionTrue
+	default:
+		return false
+	}
+}
+
+func extractPodErrorsFromConditions(conditions []metav1.Condition) []*v2pb.PodErrors {
+	var podErrors []*v2pb.PodErrors
+	for _, cond := range conditions {
+		if !isFailureCondition(cond) {
+			continue
+		}
+		podErrors = append(podErrors, &v2pb.PodErrors{
+			Name:    cond.Type,
+			Reason:  cond.Reason,
+			Message: cond.Message,
+		})
+	}
+	return podErrors
+}
+
+func deriveReasonFromConditions(conditions []metav1.Condition) string {
+	for _, cond := range conditions {
+		if rayv1.RayClusterConditionType(cond.Type) == rayv1.RayClusterReplicaFailure &&
+			cond.Status == metav1.ConditionTrue && cond.Reason != "" {
+			return cond.Reason
+		}
+	}
+	for _, cond := range conditions {
+		if rayv1.RayClusterConditionType(cond.Type) == rayv1.HeadPodReady &&
+			cond.Status == metav1.ConditionFalse && cond.Reason != "" &&
+			cond.Reason != rayv1.RayClusterPodsProvisioning {
+			return cond.Reason
+		}
+	}
+	return ""
 }
 
 // convertRayV1ClusterStatusToV2 converts a KubeRay v1 RayCluster status to our internal v2pb.RayClusterStatus
@@ -394,6 +443,10 @@ func convertRayV1ClusterStatusToV2(rayV1Cluster *rayv1.RayCluster) *v2pb.RayClus
 		status.HeadNode = &v2pb.RayHeadNodeInfo{
 			Ip: rayV1Cluster.Status.Head.PodIP,
 		}
+	}
+
+	if len(rayV1Cluster.Status.Conditions) > 0 {
+		status.PodErrors = extractPodErrorsFromConditions(rayV1Cluster.Status.Conditions)
 	}
 
 	return status
@@ -430,7 +483,7 @@ func mapV1RayJobStatusToMAState(status rayv1.JobStatus, deploymentStatus rayv1.J
 	}
 
 	switch deploymentStatus {
-	case rayv1.JobDeploymentStatusWaitForK8sJob, rayv1.JobDeploymentStatusWaitForDashboardReady, rayv1.JobDeploymentStatusWaitForDashboard, rayv1.JobDeploymentStatusInitializing:
+	case rayv1.JobDeploymentStatusInitializing, rayv1.JobDeploymentStatusWaiting:
 		return v2pb.RAY_JOB_STATE_INITIALIZING
 	}
 

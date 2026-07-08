@@ -1,5 +1,6 @@
 import { FormDialog } from '#core/components/form/components/form-dialog/form-dialog';
 import { StringField } from '#core/components/form/fields/string/string-field';
+import { TextareaField } from '#core/components/form/fields/textarea/textarea-field';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioMutation } from '#core/hooks/use-studio-mutation';
 import { generateSuffix } from '#core/utils/name-utils';
@@ -23,7 +24,7 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
     await createPipelineRunMutation.mutateAsync(values);
   };
 
-  const initialValues = {
+  const initialValues: PipelineRun = {
     metadata: {
       name: `run${generateSuffix({ withDate: true })}`,
       namespace: projectId,
@@ -49,6 +50,13 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
       initialValues={initialValues}
     >
       <StringField name="spec.pipeline.name" label="Pipeline to run" readOnly />
+
+      <TextareaField
+        name="spec.description"
+        label="Description"
+        placeholder="Enter a description for this run…"
+        description="Optional. Helps identify this run in the pipeline run list."
+      />
     </FormDialog>
   );
 };

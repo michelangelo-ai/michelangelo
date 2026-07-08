@@ -76,8 +76,8 @@ from michelangelo.workflow.tasks.pusher.plugins import (
     PartialRegistrationError,
     RegistrationResult,
 )
-from michelangelo.workflow.tasks.pusher.pusher import push
 from michelangelo.workflow.tasks.pusher.registry import PluginRegistry, default_registry
+from michelangelo.workflow.tasks.pusher.task import push
 from michelangelo.workflow.variables.types import PusherResult
 
 __all__ = [
