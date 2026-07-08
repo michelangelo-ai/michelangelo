@@ -12,8 +12,7 @@
     "vite": "6.2.0"
   },
   "dependencies": {
-    "@connectrpc/connect": "^2.0.2",
-    "@connectrpc/connect-web": "^2.0.2",
+    "@bufbuild/protobuf": "^2.2.5",
     "@michelangelo-ai/core": "*"
   },
   "exports": {

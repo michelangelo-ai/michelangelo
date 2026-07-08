@@ -40,9 +40,31 @@ data:
                             max_age: "1728000"
                             expose_headers: "grpc-status,grpc-message"
                     http_filters:
-                      - name: envoy.filters.http.connect_grpc_bridge
+                      - name: envoy.filters.http.grpc_json_transcoder
                         typed_config:
-                          "@type": type.googleapis.com/envoy.extensions.filters.http.connect_grpc_bridge.v3.FilterConfig
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_json_transcoder.v3.GrpcJsonTranscoder
+                          proto_descriptor: "/etc/envoy/descriptors.pb"
+                          services:
+                            - "michelangelo.api.v2.CachedOutputService"
+                            - "michelangelo.api.v2.ClusterService"
+                            - "michelangelo.api.v2.DeploymentService"
+                            - "michelangelo.api.v2.EvaluationReportService"
+                            - "michelangelo.api.v2.InferenceServerService"
+                            - "michelangelo.api.v2.ModelFamilyService"
+                            - "michelangelo.api.v2.ModelService"
+                            - "michelangelo.api.v2.PipelineRunService"
+                            - "michelangelo.api.v2.PipelineService"
+                            - "michelangelo.api.v2.ProjectService"
+                            - "michelangelo.api.v2.RayClusterService"
+                            - "michelangelo.api.v2.RayJobService"
+                            - "michelangelo.api.v2.RevisionService"
+                            - "michelangelo.api.v2.SparkJobService"
+                            - "michelangelo.api.v2.TriggerRunService"
+                          auto_mapping: true
+                          match_incoming_request_route: true
+                          convert_grpc_status: true
+                          print_options:
+                            preserve_proto_field_names: false
                       - name: envoy.filters.http.cors
                         typed_config:
                           "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors

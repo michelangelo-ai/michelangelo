@@ -1,13 +1,15 @@
-import { ConnectError } from '@connectrpc/connect';
 import { ApplicationError, GrpcStatusCode } from '@michelangelo-ai/core';
+
+import { GrpcTranscoderError } from './transport';
 
 import type { ErrorNormalizer } from '@michelangelo-ai/core';
 
 /**
- * Normalizes Connect RPC errors to ApplicationError format
+ * Normalizes errors thrown by the fetch transport (see transport.ts) to
+ * ApplicationError format.
  *
  * @param error - The error to normalize
- * @returns ApplicationError if it's a Connect error, null otherwise
+ * @returns ApplicationError if it's a transcoder error, null otherwise
  *
  * @example
  * ```ts
@@ -20,27 +22,24 @@ import type { ErrorNormalizer } from '@michelangelo-ai/core';
  * ```
  */
 export const normalizeConnectError: ErrorNormalizer = (error: unknown): ApplicationError | null => {
-  if (!(error instanceof ConnectError)) {
+  if (!(error instanceof GrpcTranscoderError)) {
     return null;
   }
 
-  return new ApplicationError(error.message, mapConnectCodeToGrpc(error.code), {
-    source: 'connect-rpc',
+  return new ApplicationError(error.message, mapTranscoderCodeToGrpc(error.code), {
+    source: 'grpc-transcoder',
     meta: {
-      connectErrorName: error.name,
       details: error.details,
-      metadata: error.metadata,
     },
-    cause: error.cause ?? error,
+    cause: error,
   });
 };
 
 /**
- * Maps Connect RPC status codes to gRPC status codes
- * Connect uses the same numeric codes as gRPC
+ * Maps grpc_json_transcoder status codes to gRPC status codes.
+ * Envoy surfaces the same numeric codes as gRPC, so we can map directly.
  */
-function mapConnectCodeToGrpc(code: number): GrpcStatusCode {
-  // Connect uses the same numeric codes as gRPC, so we can map directly
+function mapTranscoderCodeToGrpc(code: number): GrpcStatusCode {
   switch (code) {
     case 0:
       return GrpcStatusCode.OK;

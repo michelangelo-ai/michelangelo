@@ -10,13 +10,7 @@ export default defineConfig({
       formats: ['es'],
     },
     rollupOptions: {
-      external: [
-        'react',
-        '@bufbuild/protobuf',
-        '@connectrpc/connect',
-        '@connectrpc/connect-web',
-        '@tanstack/react-query',
-      ],
+      external: ['react', '@bufbuild/protobuf', '@tanstack/react-query'],
     },
     outDir: 'dist',
     emptyOutDir: true,

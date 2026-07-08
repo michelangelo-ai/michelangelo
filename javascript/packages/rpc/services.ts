@@ -1,6 +1,4 @@
-import { createRegistry } from '@bufbuild/protobuf';
-import { createClient } from '@connectrpc/connect';
-import { createConnectTransport } from '@connectrpc/connect-web';
+import { create, createRegistry, fromJson, toJson } from '@bufbuild/protobuf';
 
 import { TypedStructSchema } from './gen/michelangelo/api/typed_struct_pb';
 import { DeploymentService } from './gen/michelangelo/api/v2/deployment_svc_pb';
@@ -11,42 +9,54 @@ import { PipelineService } from './gen/michelangelo/api/v2/pipeline_svc_pb';
 import { ProjectService } from './gen/michelangelo/api/v2/project_svc_pb';
 import { TriggerRunService } from './gen/michelangelo/api/v2/trigger_run_svc_pb';
 import { getRuntimeConfig } from './runtime-config';
+import { createFetchTransport } from './transport';
+
+import type { DescService, JsonValue } from '@bufbuild/protobuf';
+import type { FetchTransport, ServiceClient, Services } from './types';
 
 const typeRegistry = createRegistry(TypedStructSchema);
 
-import type { Interceptor } from '@connectrpc/connect';
-import type { Services } from './types';
+/**
+ * Builds a service client whose methods JSON-encode the request, POST it
+ * through the fetch transport, and decode the JSON response back into a
+ * protobuf-es message. Envoy's grpc_json_transcoder handles the JSON<->binary
+ * conversion on the wire, so this client only ever sees JSON.
+ */
+function createServiceClient<T extends DescService>(
+  service: T,
+  transport: FetchTransport
+): ServiceClient<T> {
+  const client: Record<string, (request: Record<string, unknown>) => Promise<unknown>> = {};
 
-// This interceptor is used to set the headers for the RPC request to
-// be compatible with the Michelangelo API yarpc server.
-const callerInterceptor: Interceptor = (next) => async (req) => {
-  req.header.set('context-Ttl-Ms', '10000');
-  req.header.set('grpc-timeout', '1000000m');
-  req.header.set('Rpc-Caller', 'ma-studio');
-  req.header.set('Rpc-Service', 'ma-apiserver');
+  for (const method of service.methods) {
+    if (method.methodKind !== 'unary') continue;
 
-  return await next(req);
-};
+    client[method.localName] = async (request) => {
+      const message = create(method.input, request);
+      const requestJson = toJson(method.input, message, { registry: typeRegistry });
+      const responseJson = await transport.callUnary(service.typeName, method.name, requestJson);
+      return fromJson(method.output, responseJson as JsonValue, { registry: typeRegistry });
+    };
+  }
+
+  return client as ServiceClient<T>;
+}
 
 let servicesPromise: Promise<Services> | null = null;
 
 async function createServices(): Promise<Services> {
   const { apiBaseUrl } = await getRuntimeConfig();
 
-  const transport = createConnectTransport({
-    baseUrl: apiBaseUrl,
-    interceptors: [callerInterceptor],
-    jsonOptions: { registry: typeRegistry },
-  });
+  const transport = createFetchTransport({ baseUrl: apiBaseUrl });
 
   return {
-    DeploymentService: createClient(DeploymentService, transport),
-    InferenceServerService: createClient(InferenceServerService, transport),
-    ProjectService: createClient(ProjectService, transport),
-    PipelineService: createClient(PipelineService, transport),
-    PipelineRunService: createClient(PipelineRunService, transport),
-    TriggerRunService: createClient(TriggerRunService, transport),
-    ModelService: createClient(ModelService, transport),
+    DeploymentService: createServiceClient(DeploymentService, transport),
+    InferenceServerService: createServiceClient(InferenceServerService, transport),
+    ProjectService: createServiceClient(ProjectService, transport),
+    PipelineService: createServiceClient(PipelineService, transport),
+    PipelineRunService: createServiceClient(PipelineRunService, transport),
+    TriggerRunService: createServiceClient(TriggerRunService, transport),
+    ModelService: createServiceClient(ModelService, transport),
   } as const;
 }
 

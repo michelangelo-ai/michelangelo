@@ -1,5 +1,10 @@
-import type { Message } from '@bufbuild/protobuf';
-import type { createClient } from '@connectrpc/connect';
+import type {
+  DescMethodUnary,
+  DescService,
+  Message,
+  MessageInitShape,
+  MessageShape,
+} from '@bufbuild/protobuf';
 import type { DeploymentService } from './gen/michelangelo/api/v2/deployment_svc_pb';
 import type { InferenceServerService } from './gen/michelangelo/api/v2/inference_server_svc_pb';
 import type { ModelService } from './gen/michelangelo/api/v2/model_svc_pb';
@@ -13,14 +18,49 @@ export interface RuntimeConfig {
   apiBaseUrl: string;
 }
 
+/**
+ * Shape of a `google.rpc.Status` error body, as produced by Envoy's
+ * grpc_json_transcoder filter when a unary RPC returns a non-OK gRPC status.
+ */
+export interface GoogleRpcStatus {
+  code: number;
+  message: string;
+  details?: unknown[];
+}
+
+export interface FetchTransportOptions {
+  /** Base URL of the Envoy-fronted API server, e.g. `https://api.example.com`. */
+  baseUrl: string;
+  /** Additional headers to send with every request, merged over the static defaults. */
+  headers?: Record<string, string>;
+}
+
+export interface FetchTransport {
+  /**
+   * Calls a unary RPC through Envoy's grpc_json_transcoder by POSTing JSON to
+   * `/{serviceName}/{methodName}` and returning the parsed JSON response.
+   */
+  callUnary(serviceName: string, methodName: string, request: unknown): Promise<unknown>;
+}
+
+/**
+ * Maps a service's generated method descriptors to a client object shaped
+ * like Connect's `Client<T>` — one async function per unary RPC.
+ */
+export type ServiceClient<T extends DescService> = {
+  [K in keyof T['method']]: T['method'][K] extends DescMethodUnary<infer I, infer O>
+    ? (request: MessageInitShape<I>) => Promise<MessageShape<O>>
+    : never;
+};
+
 export type Services = {
-  DeploymentService: ReturnType<typeof createClient<typeof DeploymentService>>;
-  InferenceServerService: ReturnType<typeof createClient<typeof InferenceServerService>>;
-  ProjectService: ReturnType<typeof createClient<typeof ProjectService>>;
-  PipelineService: ReturnType<typeof createClient<typeof PipelineService>>;
-  PipelineRunService: ReturnType<typeof createClient<typeof PipelineRunService>>;
-  TriggerRunService: ReturnType<typeof createClient<typeof TriggerRunService>>;
-  ModelService: ReturnType<typeof createClient<typeof ModelService>>;
+  DeploymentService: ServiceClient<typeof DeploymentService>;
+  InferenceServerService: ServiceClient<typeof InferenceServerService>;
+  ProjectService: ServiceClient<typeof ProjectService>;
+  PipelineService: ServiceClient<typeof PipelineService>;
+  PipelineRunService: ServiceClient<typeof PipelineRunService>;
+  TriggerRunService: ServiceClient<typeof TriggerRunService>;
+  ModelService: ServiceClient<typeof ModelService>;
 };
 
 /**

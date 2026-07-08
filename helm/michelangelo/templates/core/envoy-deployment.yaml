@@ -41,6 +41,9 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /etc/envoy
+            - name: descriptors
+              mountPath: /etc/envoy/descriptors.pb
+              subPath: descriptors.pb
           {{- with (or .Values.envoy.resources .Values.resources) }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -49,6 +52,9 @@ spec:
         - name: config
           configMap:
             name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "envoy-config") }}
+        - name: descriptors
+          configMap:
+            name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "envoy-descriptors") }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

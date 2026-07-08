@@ -1,0 +1,14 @@
+{{- if .Values.envoy.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "envoy-descriptors") }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "michelangelo.componentLabels" (dict "context" . "component" "envoy") | nindent 4 }}
+binaryData:
+  # FileDescriptorSet consumed by the grpc_json_transcoder filter (envoy-configmap.yaml)
+  # so it can transcode JSON<->binary proto without any Go-side jsonpb involvement.
+  # Regenerate with tools/gen-grpc-client.sh.
+  descriptors.pb: {{ .Files.Get "files/descriptors.pb" | b64enc }}
+{{- end }}

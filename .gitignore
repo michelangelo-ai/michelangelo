@@ -326,6 +326,9 @@ datasets/
 models/
 checkpoints/
 
+# FileDescriptorSet for Envoy's grpc_json_transcoder filter (tools/gen-grpc-client.sh)
+!helm/michelangelo/files/descriptors.pb
+
 # Temporary download directories
 /tmp/
 */tmp/
