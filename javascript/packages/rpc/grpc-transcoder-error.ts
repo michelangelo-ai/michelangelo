@@ -1,12 +1,5 @@
 import type { GoogleRpcStatus } from './types';
 
-function isGoogleRpcStatus(value: unknown): value is GoogleRpcStatus {
-  if (typeof value !== 'object' || value === null) return false;
-  // cast: narrowing unknown to check shape
-  const candidate = value as GoogleRpcStatus;
-  return typeof candidate.code === 'number' && typeof candidate.message === 'string';
-}
-
 export class GrpcTranscoderError extends Error {
   readonly code: number;
   readonly details: unknown[];
@@ -37,6 +30,13 @@ export function toTranscoderError(response: Response, body: unknown): GrpcTransc
     response.statusText || `Request failed with status ${response.status}`,
     2
   );
+}
+
+function isGoogleRpcStatus(value: unknown): value is GoogleRpcStatus {
+  if (typeof value !== 'object' || value === null) return false;
+  // cast: narrowing unknown to check shape
+  const candidate = value as GoogleRpcStatus;
+  return typeof candidate.code === 'number' && typeof candidate.message === 'string';
 }
 
 // grpc-message headers are percent-encoded per the gRPC HTTP/2 spec.

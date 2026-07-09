@@ -4,6 +4,16 @@ import { GrpcTranscoderError } from './grpc-transcoder-error';
 
 import type { ErrorNormalizer } from '@michelangelo-ai/core';
 
+/**
+ * Normalizes errors thrown by the fetch transport into ApplicationError format.
+ *
+ * @example
+ * ```ts
+ * <ErrorProvider normalizeError={normalizeTranscoderError}>
+ *   {children}
+ * </ErrorProvider>
+ * ```
+ */
 export const normalizeTranscoderError: ErrorNormalizer = (
   error: unknown
 ): ApplicationError | null => {
