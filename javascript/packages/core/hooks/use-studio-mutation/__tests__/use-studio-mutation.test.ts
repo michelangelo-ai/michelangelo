@@ -39,6 +39,70 @@ describe('useStudioMutation', () => {
     });
   });
 
+  test('applies config.middleware to variables before calling request', async () => {
+    const mockResponse = { id: 'test-id' };
+    const mockRequest = createQueryMockRouter({
+      CreatePipelineRun: mockResponse,
+    });
+
+    const { result } = renderHook(
+      () =>
+        useStudioMutation({
+          mutationName: 'CreatePipelineRun',
+          middleware: { operations: [{ destination: 'spec.action', default: 'KILL' }] },
+        }),
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper(),
+        getServiceProviderWrapper({ request: mockRequest }),
+        getSnackbarProviderWrapper(),
+      ])
+    );
+
+    result.current.mutate({ name: 'test-run' });
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        'CreatePipelineRun',
+        expect.objectContaining({ spec: { action: 'KILL' } })
+      );
+    });
+  });
+
+  test('reads middleware source from sourceFromObject when provided', async () => {
+    const mockResponse = { id: 'test-id' };
+    const mockRequest = createQueryMockRouter({
+      CreatePipelineRun: mockResponse,
+    });
+
+    const { result } = renderHook(
+      () =>
+        useStudioMutation({
+          mutationName: 'CreatePipelineRun',
+          middleware: {
+            operations: [
+              { source: 'name', destination: 'metadata.name', transformation: (v) => v },
+            ],
+          },
+        }),
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper(),
+        getServiceProviderWrapper({ request: mockRequest }),
+        getSnackbarProviderWrapper(),
+      ])
+    );
+
+    result.current.mutate({ metadata: {} }, { sourceFromObject: { name: 'from-source' } });
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        'CreatePipelineRun',
+        expect.objectContaining({ metadata: { name: 'from-source' } })
+      );
+    });
+  });
+
   test('returns mutation response data', async () => {
     const mockResponse = { id: 'test-id', name: 'test-pipeline-run' };
     const mockRequest = createQueryMockRouter({
