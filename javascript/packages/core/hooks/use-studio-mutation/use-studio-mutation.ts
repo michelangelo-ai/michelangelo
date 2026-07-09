@@ -9,20 +9,20 @@ import type { ApplicationError } from '#core/types/error-types';
 import type { MutationConfig } from '#core/types/query-types';
 import type { UseStudioMutationResult } from './types';
 
-export const useStudioMutation = <TData, TVariables extends Record<string, unknown>>(
+export const useStudioMutation = <TResponse, TPayload extends Record<string, unknown>>(
   config: MutationConfig | null
-): UseStudioMutationResult<TData, TVariables> => {
+): UseStudioMutationResult<TResponse, TPayload> => {
   const { request } = useServiceProvider();
   const normalizeError = useErrorNormalizer();
   const runSuccessOperations = useSuccessOperations(config?.successOperations);
   const { applyMiddleware } = useSchemaMiddleware(config?.middleware);
 
-  const mutation = useMutation<TData, ApplicationError, TVariables>({
-    mutationFn: async (variables: TVariables) => {
+  const mutation = useMutation<TResponse, ApplicationError, TPayload>({
+    mutationFn: async (payload: TPayload) => {
       if (!config) throw new Error('useStudioMutation called without config');
       try {
-        // cast: service request returns unknown; TData is the caller-declared response type
-        return (await request(config.mutationName, variables)) as TData;
+        // cast: service request returns unknown; TResponse is the caller-declared response type
+        return (await request(config.mutationName, payload)) as TResponse;
       } catch (error) {
         console.error('mutation error', error);
         throw normalizeError(error)!;
@@ -38,12 +38,14 @@ export const useStudioMutation = <TData, TVariables extends Record<string, unkno
   });
 
   return {
-    ...mutation,
-    mutate: (variables, options) =>
-      mutation.mutate(applyMiddleware(variables, { sourceFromObject: options?.sourceFromObject })),
-    mutateAsync: (variables, options) =>
+    isPending: mutation.isPending,
+    error: mutation.error,
+    data: mutation.data,
+    mutate: (payload, options) =>
+      mutation.mutate(applyMiddleware(payload, { sourceFromObject: options?.sourceFromObject })),
+    mutateAsync: (payload, options) =>
       mutation.mutateAsync(
-        applyMiddleware(variables, { sourceFromObject: options?.sourceFromObject })
+        applyMiddleware(payload, { sourceFromObject: options?.sourceFromObject })
       ),
   };
 };

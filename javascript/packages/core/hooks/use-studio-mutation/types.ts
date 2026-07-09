@@ -1,15 +1,14 @@
-import type { UseMutationResult } from '@tanstack/react-query';
 import type { ApplicationError } from '#core/types/error-types';
 
-export type StudioMutateOptions<TVariables> = {
-  /** Read middleware `source` paths from this object instead of the submitted variables. */
-  sourceFromObject?: TVariables;
+export type StudioMutateOptions<TPayload> = {
+  /** Read middleware `source` paths from this object instead of the submitted payload. */
+  sourceFromObject?: TPayload;
 };
 
-export type UseStudioMutationResult<TData, TVariables extends Record<string, unknown>> = Omit<
-  UseMutationResult<TData, ApplicationError, TVariables>,
-  'mutate' | 'mutateAsync'
-> & {
-  mutate: (variables: TVariables, options?: StudioMutateOptions<TVariables>) => void;
-  mutateAsync: (variables: TVariables, options?: StudioMutateOptions<TVariables>) => Promise<TData>;
+export type UseStudioMutationResult<TResponse, TPayload extends Record<string, unknown>> = {
+  isPending: boolean;
+  error: ApplicationError | null;
+  data: TResponse | undefined;
+  mutate: (payload: TPayload, options?: StudioMutateOptions<TPayload>) => void;
+  mutateAsync: (payload: TPayload, options?: StudioMutateOptions<TPayload>) => Promise<TResponse>;
 };

@@ -123,7 +123,7 @@ describe('useStudioMutation', () => {
 
     await waitFor(() => {
       expect(result.current.data).toEqual(mockResponse);
-      expect(result.current.isSuccess).toBe(true);
+      expect(result.current.isPending).toBe(false);
     });
   });
 
