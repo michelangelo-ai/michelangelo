@@ -29,38 +29,6 @@ user-invocable: false
 - Keep tests flat when individual test names provide enough context
 - Prefer `expect(fn(args)).toEqual(result)` over assigning to intermediate variables
 
-## Querying Elements
-
-Query priority: `getByRole` → `getByLabelText` → `getByText` → `getByTestId`
-
-**Only use `getByTestId` if the element has no semantic role** (spinners, skeletons, custom visual elements) **or is a mock component**. Every other use of `getByTestId` is a bug — fix it by using an accessible query or by adding `aria-label`/`role` to the component under test.
-
-```typescript
-// ❌ Wrong — element has a role
-screen.getByTestId('submit-button');
-// ✅ Fix
-screen.getByRole('button', { name: /submit/i });
-
-// ❌ Wrong — element has text content
-screen.getByTestId('error-message');
-// ✅ Fix
-screen.getByText(/something went wrong/i);
-
-// ✅ Correct — spinner has no semantic role
-screen.queryByTestId('loading-spinner');
-
-// ✅ Correct — testId is on the mock itself, not the real component.
-// The real MetricChart has no accessible role worth testing here;
-// the test cares only that the parent rendered it with the right name.
-vi.mock('../MetricChart', () => ({
-  MetricChart: ({ name }: { name: string }) => (
-    <div data-testid={`metric-chart-${name}`} />
-  ),
-}));
-// ...
-screen.getByTestId('metric-chart-accuracy');
-```
-
 ## Anti-Patterns
 
 - ❌ Testing implementation details (`container.firstChild`, verifying props passed to children)

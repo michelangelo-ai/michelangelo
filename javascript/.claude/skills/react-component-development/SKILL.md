@@ -35,20 +35,6 @@ export const TaskSeparator = styled('div', ({ $theme }) => ({
 - ❌ `Container`, `Card`, `Wrapper` (collide everywhere)
 - ✅ `TaskSeparator`, `ExecutionMatrix`, `PipelineHeader`
 
-## Event Handler Naming
-
-Name handlers by intent, not by event type:
-
-```typescript
-// ❌
-const handleOnMouseEnter = () => {};
-const handleOnClick = () => {};
-
-// ✅
-const showTooltipAfterDelay = () => {};
-const toggleMenu = () => {};
-```
-
 ## Component Props Naming
 
 - `Props` — single component in the file

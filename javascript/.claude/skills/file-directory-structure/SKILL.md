@@ -31,12 +31,9 @@ user-invocable: false
 
 ## Naming
 
-- **Files**: kebab-case, `.tsx` for JSX, `.ts` otherwise
-- **Components**: PascalCase in code, kebab-case filename
 - **Variables**: camelCase
 - **Constants**: UPPER_SNAKE_CASE
 
 ## Anti-Patterns
 
-- ❌ Default exports — use named exports for all modules
 - ❌ Generic filenames without namespace (`action-button.tsx` vs `table-action-button.tsx`)
