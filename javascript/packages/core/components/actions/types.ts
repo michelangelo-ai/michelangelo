@@ -1,7 +1,6 @@
 import type { BannerProps } from 'baseui/banner';
 import type { Size as DialogSize } from 'baseui/dialog';
 import type { ComponentType, ReactNode } from 'react';
-import type { MiddlewareSchema } from '#core/hooks/use-schema-middleware/types';
 import type { DeepInterpolatable } from '#core/interpolation/types';
 import type { MutationConfig } from '#core/types/query-types';
 
@@ -48,11 +47,10 @@ export type ActionConfigBase = {
   disabled?: DisabledRule[];
 };
 
-/** Action that fires a mutation against the API, with optional middleware to shape the record first. */
+/** Action that fires a mutation against the API. Configure `mutation.middleware` to shape the record first. */
 export type MutationActionConfig = {
   type: 'mutation';
   mutation: MutationConfig;
-  middleware?: MiddlewareSchema;
 };
 
 /**

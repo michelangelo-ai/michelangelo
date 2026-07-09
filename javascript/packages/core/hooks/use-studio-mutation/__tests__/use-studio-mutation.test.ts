@@ -2,7 +2,7 @@ import { renderHook, screen, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 
 import { GrpcStatusCode } from '#core/constants/grpc-status-codes';
-import { useStudioMutation } from '#core/hooks/use-studio-mutation';
+import { useStudioMutation } from '#core/hooks/use-studio-mutation/use-studio-mutation';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';

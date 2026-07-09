@@ -6,7 +6,7 @@ import { Textarea } from 'baseui/textarea';
 
 import { Dialog } from '#core/components/dialog/dialog';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
-import { useStudioMutation } from '#core/hooks/use-studio-mutation';
+import { useStudioMutation } from '#core/hooks/use-studio-mutation/use-studio-mutation';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 
 import type { CellRendererProps } from '#core/components/cell/types';

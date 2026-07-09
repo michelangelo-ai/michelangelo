@@ -5,8 +5,7 @@ import { Banner } from '#core/components/banner/banner';
 import { Icon } from '#core/components/icon/icon';
 import { Markdown } from '#core/components/markdown/markdown';
 import { ConfirmDialog } from '#core/components/modal/confirm-dialog/confirm-dialog';
-import { useSchemaMiddleware } from '#core/hooks/use-schema-middleware/use-schema-middleware';
-import { useStudioMutation } from '#core/hooks/use-studio-mutation';
+import { useStudioMutation } from '#core/hooks/use-studio-mutation/use-studio-mutation';
 
 import type {
   ActionConfig,
@@ -27,16 +26,13 @@ type Props<T extends Data> = {
 
 export function ConfirmDispatcher<T extends Data>({ action, record, onClose }: Props<T>) {
   const navigate = useNavigate();
-  const { applyMiddleware } = useSchemaMiddleware(
-    action.operation.type === 'mutation' ? (action.operation.middleware ?? null) : null
-  );
   const mutation = useStudioMutation<unknown, T>(
     action.operation.type === 'mutation' ? action.operation.mutation : null
   );
 
   const handleActionExecute = async () => {
     if (action.operation.type === 'mutation') {
-      await mutation.mutateAsync(applyMiddleware(record));
+      await mutation.mutateAsync(record);
     } else {
       navigate(action.operation.route);
     }

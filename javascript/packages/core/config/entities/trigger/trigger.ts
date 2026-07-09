@@ -47,9 +47,9 @@ export const TRIGGER_ENTITY_CONFIG: PhaseEntityConfig = {
               delayMs: 2000,
             },
           ],
-        },
-        middleware: {
-          operations: [{ destination: 'spec.action', default: TriggerRunAction.KILL }],
+          middleware: {
+            operations: [{ destination: 'spec.action', default: TriggerRunAction.KILL }],
+          },
         },
       },
       modal: {
