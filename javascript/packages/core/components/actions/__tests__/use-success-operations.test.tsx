@@ -339,4 +339,27 @@ describe('useSuccessOperations', () => {
       expect(await screen.findByText('Pipeline training-v2 created')).toBeInTheDocument();
     });
   });
+
+  describe('route', () => {
+    it('navigates without showing a toast', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <UseSuccessOperationsTestHarness
+          operations={[{ type: 'route', route: '/pipelines/run-1' }]}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getRouterWrapper({ location: '/start' }),
+          createServiceProviderTestContext({ request: vi.fn() }).wrapper,
+          getSnackbarProviderWrapper(),
+          getIconProviderWrapper(),
+        ])
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Run success operations' }));
+
+      expect(screen.getByText(/Current pathname: \/pipelines\/run-1/)).toBeInTheDocument();
+    });
+  });
 });

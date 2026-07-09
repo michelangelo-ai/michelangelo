@@ -61,7 +61,7 @@ export type MutationActionConfig = {
  * Use `invalidate` to refresh related queries explicitly after a mutation
  * succeeds, either broadly by query name or narrowly by name + args.
  */
-export type SuccessOperation = InvalidateOperation | ToastOperation;
+export type SuccessOperation = InvalidateOperation | ToastOperation | RouteSuccessOperation;
 
 export type InvalidateOperation = {
   type: 'invalidate';
@@ -91,6 +91,12 @@ export type ToastOperation = {
 };
 
 export type RouteActionConfig = {
+  type: 'route';
+  route: string;
+};
+
+/** Navigates without showing a toast. Use {@link ToastOperation.action} instead when the navigation should be user-initiated. */
+export type RouteSuccessOperation = {
   type: 'route';
   route: string;
 };

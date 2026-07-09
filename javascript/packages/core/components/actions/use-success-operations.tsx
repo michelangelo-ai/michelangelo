@@ -42,6 +42,8 @@ export function useSuccessOperations(operations?: SuccessOperation[]) {
           }
         } else if (op.type === 'toast') {
           enqueue(buildToastPayload(op, navigate, dequeue));
+        } else if (op.type === 'route') {
+          navigate(op.route);
         }
       }
     },
