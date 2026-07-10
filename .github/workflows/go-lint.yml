@@ -2,7 +2,7 @@ name: Go Lint & TODO Tracking
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, 'release/v*']
     paths:
       - 'go/**/*.go'
       - 'go/.golangci.yml'

@@ -2,7 +2,7 @@ name: Python Ruff Lint & Format
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, 'release/v*']
     paths:
       - 'python/**'
       - '.github/workflows/lint.yaml'

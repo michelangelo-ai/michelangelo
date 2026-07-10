@@ -3,13 +3,13 @@ name: Bazel Test
 # Trigger the workflow on push and pull request events for the main branch
 on:
   push:
-    branches: [main]
+    branches: [main, 'release/v*']
     paths-ignore:
       - 'docs/**'
       - 'website/**'
       - 'javascript/**'
   pull_request:
-    branches: [main]
+    branches: [main, 'release/v*']
     paths-ignore:
       - 'docs/**'
       - 'website/**'
