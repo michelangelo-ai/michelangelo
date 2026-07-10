@@ -73,9 +73,11 @@ function resolveTableState(
   };
 
   if (disablePagination) {
-    // cast: baseState.pagination only allows { pageSize? }, so this can produce a pagination object
-    // missing pageIndex despite the asserted shape; see #1460
-    return baseState as Partial<ControlledTableState>;
+    // Strip pagination — InputTableState.pagination only allows { pageSize? } (no pageIndex),
+    // so passing it through would leak a partial shape that callers assume is complete
+    const { pagination: _pagination, setPagination: _setPagination, ...rest } = baseState;
+    // cast: spread of non-pagination InputTableState fields
+    return rest as Partial<ControlledTableState>;
   }
 
   const requestedPageSize = baseState?.pagination?.pageSize;
