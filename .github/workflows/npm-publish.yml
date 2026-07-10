@@ -3,6 +3,11 @@ name: Publish @michelangelo-ai/core to npm
 on:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      ref:
+        description: 'Branch/tag/SHA to publish from (defaults to the calling workflow ref)'
+        required: false
+        type: string
   push:
     branches: [main]
     paths:
@@ -18,6 +23,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.ref || github.ref }}
           fetch-depth: 2
 
       - name: Check if core package.json version changed
@@ -45,6 +51,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
