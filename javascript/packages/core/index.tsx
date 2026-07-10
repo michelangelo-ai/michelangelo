@@ -1,14 +1,14 @@
-import { AppNavBar } from 'baseui/app-nav-bar';
 import { LayersManager } from 'baseui/layer';
 import { SnackbarProvider } from 'baseui/snackbar';
 
-import { Link } from '#core/components/link/link';
+import { NavigationBar } from '#core/components/navigation-bar/navigation-bar';
 import { ErrorProvider } from '#core/providers/error-provider/error-provider';
 import { IconProvider } from '#core/providers/icon-provider/icon-provider';
 import { ServiceProvider } from '#core/providers/service-provider/service-provider';
 import { Router } from '#core/router/router';
 import { ThemeProvider } from '#core/themes/theme-provider';
 
+import type { NavigationLink } from '#core/components/navigation-bar/types';
 import type { ErrorContextValue } from '#core/providers/error-provider/types';
 import type { IconProviderContext } from '#core/providers/icon-provider/types';
 import type { ServiceContextType } from '#core/providers/service-provider/types';
@@ -21,6 +21,9 @@ type Props = {
     error: ErrorContextValue;
     service: ServiceContextType;
     theme: IconProviderContext;
+    navigationBar?: {
+      links?: NavigationLink[];
+    };
   };
 };
 
@@ -32,16 +35,7 @@ export function CoreApp({ dependencies }: Props) {
           <ServiceProvider {...dependencies.service}>
             <ErrorProvider {...dependencies.error}>
               <IconProvider icons={dependencies.theme.icons}>
-                <AppNavBar
-                  title={
-                    <Link
-                      href="/"
-                      overrides={{ Link: { style: { ':hover': { textDecoration: 'unset' } } } }}
-                    >
-                      Michelangelo Studio
-                    </Link>
-                  }
-                />
+                <NavigationBar links={dependencies.navigationBar?.links} />
                 <Router />
               </IconProvider>
             </ErrorProvider>
@@ -211,3 +205,7 @@ export type {
   DetailViewTab,
   DetailViewPagesProps,
 } from '#core/components/views/detail-view/types/detail-view-component-types';
+
+// Navigation Bar
+export { NavigationBar } from '#core/components/navigation-bar/navigation-bar';
+export type { NavigationLink } from '#core/components/navigation-bar/types';
