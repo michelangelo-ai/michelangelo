@@ -205,7 +205,3 @@ export type {
   DetailViewTab,
   DetailViewPagesProps,
 } from '#core/components/views/detail-view/types/detail-view-component-types';
-
-// Navigation Bar
-export { NavigationBar } from '#core/components/navigation-bar/navigation-bar';
-export type { NavigationLink } from '#core/components/navigation-bar/types';

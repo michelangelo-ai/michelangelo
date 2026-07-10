@@ -3,28 +3,19 @@ import { Button, KIND, SIZE } from 'baseui/button';
 
 import { Link } from '#core/components/link/link';
 
-import type { NavItem } from 'baseui/app-nav-bar';
 import type { Theme } from 'baseui/theme';
-import type { NavigationLink } from './types';
+import type { LinkNavItem, NavigationLink } from './types';
 
 type Props = {
   links?: NavigationLink[];
 };
 
 export function NavigationBar({ links }: Props) {
-  const mainItems: NavItem[] =
+  const mainItems: LinkNavItem[] =
     links?.map((link) => ({
       label: link.label,
       info: { href: link.href },
     })) ?? [];
-
-  const handleNavigationLinkSelect = (item: NavItem) => {
-    // cast: NavItem.info is typed as `any` in BaseUI
-    const info = item.info as { href: string } | undefined;
-    if (info?.href) {
-      window.open(info.href, '_blank', 'noopener,noreferrer');
-    }
-  };
 
   return (
     <AppNavBar
@@ -34,28 +25,30 @@ export function NavigationBar({ links }: Props) {
         </Link>
       }
       mainItems={mainItems}
-      onMainItemSelect={handleNavigationLinkSelect}
-      mapItemToNode={(item) => (
-        <Button
-          kind={KIND.tertiary}
-          size={SIZE.compact}
-          overrides={{
-            BaseButton: {
-              style: ({ $theme }: { $theme: Theme }) => ({
-                display: 'flex',
-                alignItems: 'flex-start',
-                whiteSpace: 'nowrap',
-                backgroundColor: 'transparent',
-                ':hover': {
-                  backgroundColor: $theme.colors.backgroundSecondary,
+      mapItemToNode={(item) => {
+        // cast: see LinkNavItem's doc comment in types.ts
+        const { href } = (item as LinkNavItem).info;
+        return (
+          <Button
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            kind={KIND.tertiary}
+            size={SIZE.compact}
+            overrides={{
+              BaseButton: {
+                style: {
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  whiteSpace: 'nowrap',
                 },
-              }),
-            },
-          }}
-        >
-          {item.label}
-        </Button>
-      )}
+              },
+            }}
+          >
+            {item.label}
+          </Button>
+        );
+      }}
       overrides={{
         AppName: { style: { whiteSpace: 'nowrap' } },
         PrimaryMenuContainer: {

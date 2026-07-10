@@ -7,12 +7,6 @@ import { Provider as StyletronProvider } from 'styletron-react';
 
 import { ICONS } from './icons/icons';
 
-import type { NavigationLink } from '@michelangelo-ai/core';
-
-const NAVIGATION_LINKS: NavigationLink[] = [
-  { label: 'Docs', href: 'https://michelangelo-ai.github.io/michelangelo/' },
-];
-
 const dependencies = {
   error: {
     normalizeError: normalizeTranscoderError,
@@ -24,7 +18,7 @@ const dependencies = {
     request,
   },
   navigationBar: {
-    links: NAVIGATION_LINKS,
+    links: [{ label: 'Docs', href: 'https://michelangelo-ai.github.io/michelangelo/' }],
   },
 };
 
