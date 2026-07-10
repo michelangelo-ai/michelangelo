@@ -1,5 +1,6 @@
 import { isArray, values } from 'lodash';
 
+import { isRecord } from '#core/utils/object-utils';
 import { isInterpolation } from './is-interpolation';
 
 /**
@@ -37,7 +38,7 @@ export function hasInterpolationProperty(value: unknown): boolean {
 
   if (isArray(value)) return value.some(hasInterpolationProperty);
 
-  if (typeof value === 'object' && value !== null) {
+  if (isRecord(value)) {
     return values(value).some(hasInterpolationProperty);
   }
 

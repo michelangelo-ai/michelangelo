@@ -1,7 +1,7 @@
 import { isValidElement } from 'react';
 import { mapValues } from 'lodash';
 
-import { getObjectSymbols } from '#core/utils/object-utils';
+import { getObjectSymbols, isRecord } from '#core/utils/object-utils';
 import { Interpolation } from './base';
 import { StringInterpolation } from './string-interpolation';
 
@@ -64,7 +64,7 @@ export function resolveInterpolations(args: {
     );
   }
 
-  if (typeof variable === 'object' && variable !== null) {
+  if (isRecord(variable)) {
     const symbols = getObjectSymbols(variable);
     const mappedValues = mapValues(variable, (value, key) => {
       try {

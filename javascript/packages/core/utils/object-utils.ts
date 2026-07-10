@@ -2,6 +2,10 @@ import { get } from 'lodash';
 
 import type { Accessor } from '#core/types/common/studio-types';
 
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 /**
  * Recursively flattens a nested object into a flat map with dot-notation keys.
  * Numeric keys (array indices) are formatted with bracket notation.
@@ -29,10 +33,8 @@ export function toFlatDotPathMap(
       path = `${prefix}.${key}`;
     }
 
-    if (value !== null && typeof value === 'object') {
-      // cast: typeof 'object' narrows to the opaque built-in object type, not Record<string,
-      // unknown>; see #1456
-      Object.assign(result, toFlatDotPathMap(value as Record<string, unknown>, path));
+    if (isRecord(value)) {
+      Object.assign(result, toFlatDotPathMap(value, path));
     } else {
       result[path] = value;
     }

@@ -1,5 +1,6 @@
 import { GrpcStatusCode } from '#core/constants/grpc-status-codes';
 import { ApplicationError } from '#core/types/error-types';
+import { isRecord } from '#core/utils/object-utils';
 import { safeStringify } from '#core/utils/string-utils';
 
 /**
@@ -37,13 +38,9 @@ export function normalizeUniversalError(error: unknown): ApplicationError {
     });
   }
 
-  if (typeof error === 'object' && error !== null) {
-    // cast: typeof 'object' narrows to the opaque built-in object type, not Record<string,
-    // unknown>; see #1456
-    const errorObj = error as Record<string, unknown>;
-
-    if (errorObj.message) {
-      return new ApplicationError(safeStringify(errorObj.message), GrpcStatusCode.UNKNOWN, {
+  if (isRecord(error)) {
+    if (error.message) {
+      return new ApplicationError(safeStringify(error.message), GrpcStatusCode.UNKNOWN, {
         cause: error,
         source: 'unknown',
       });

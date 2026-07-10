@@ -1,5 +1,6 @@
 import { isNil, mapValues } from 'lodash';
 
+import { isRecord } from '#core/utils/object-utils';
 import { isInterpolation } from './is-interpolation';
 
 /**
@@ -39,7 +40,7 @@ export function clearUnresolvedInterpolations<T extends object>(input: T): T {
 
     if (isInterpolation(value)) return undefined;
 
-    if (typeof value === 'object' && value !== null) return clearUnresolvedInterpolations(value);
+    if (isRecord(value)) return clearUnresolvedInterpolations(value);
 
     return value;
   }) as T;
