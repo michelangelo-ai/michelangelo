@@ -17,7 +17,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
  * @returns { 'items[0].name': 'item1', 'items[1].name': 'item2' }
  */
 export function toFlatDotPathMap(
-  obj: Record<string, unknown>,
+  obj: Record<string, unknown> | unknown[],
   prefix = ''
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {};
@@ -34,8 +34,7 @@ export function toFlatDotPathMap(
     }
 
     if (Array.isArray(value) || isRecord(value)) {
-      // cast: arrays are indexed by Object.entries as { '0': v0, '1': v1, ... }
-      Object.assign(result, toFlatDotPathMap(value as Record<string, unknown>, path));
+      Object.assign(result, toFlatDotPathMap(value, path));
     } else {
       result[path] = value;
     }
