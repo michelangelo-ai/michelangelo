@@ -1,0 +1,115 @@
+name: Release Promote
+
+# Promote the latest RC on a release branch to the final release: verify CI
+# is green, strip the RC suffix, tag the final version, publish npm, and
+# mark the merge-back PR ready for review.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Final release version being promoted, no prerelease suffix (e.g. 0.4.0)'
+        required: true
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Compute branch and tag
+        id: vars
+        run: |
+          VERSION="${{ inputs.version }}"
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "ERROR: version must be a plain X.Y.Z SemVer, got '$VERSION'"
+            exit 1
+          fi
+          MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
+          BRANCH="release/v${MAJOR_MINOR}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out release branch
+        run: git checkout -B "${{ steps.vars.outputs.branch }}" "origin/${{ steps.vars.outputs.branch }}"
+
+      - name: Validate CI is green on release branch
+        run: |
+          SHA=$(git rev-parse HEAD)
+          STATES=$(gh api "repos/${{ github.repository }}/commits/$SHA/check-runs" --jq '.check_runs[] | select(.status != "completed" or .conclusion != "success") | .name')
+          if [ -n "$STATES" ]; then
+            echo "ERROR: the following checks are not green on ${{ steps.vars.outputs.branch }}@$SHA:"
+            echo "$STATES"
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Strip RC suffix and set final version
+        run: |
+          bash scripts/version-bump.sh "${{ steps.vars.outputs.version }}"
+          git add -A
+          git commit -m "chore: release ${{ steps.vars.outputs.version }}"
+          git push origin "${{ steps.vars.outputs.branch }}"
+
+      - name: Tag final release
+        run: |
+          git tag "${{ steps.vars.outputs.tag }}"
+          git push origin "${{ steps.vars.outputs.tag }}"
+
+      - name: Mark merge-back PR ready for review
+        run: |
+          PR_NUMBER=$(gh pr list --head "${{ steps.vars.outputs.branch }}" --base main --state open --json number --jq '.[0].number')
+          if [ -z "$PR_NUMBER" ]; then
+            echo "WARNING: no open merge-back PR found for ${{ steps.vars.outputs.branch }} -> main"
+          else
+            gh pr ready "$PR_NUMBER"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on tracking issue
+        run: |
+          ISSUE_NUMBER=$(gh issue list --search "in:title \"Release v${{ steps.vars.outputs.version }}\"" --state open --json number,title \
+            --jq '.[] | select(.title == "Release v${{ steps.vars.outputs.version }}") | .number' | head -1)
+          if [ -z "$ISSUE_NUMBER" ]; then
+            echo "WARNING: no open tracking issue found for Release v${{ steps.vars.outputs.version }}"
+          else
+            gh issue comment "$ISSUE_NUMBER" \
+              --body "Promoted to final: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.vars.outputs.tag }}. Artifact publish run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-npm:
+    needs: promote
+    uses: ./.github/workflows/npm-publish.yml
+    secrets: inherit
+
+  notify-on-failure:
+    needs: [promote, publish-npm]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Slack on failure
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          channel-id: 'C0BER0RCQ8P'
+          slack-message: |
+            :x: *${{ github.workflow }}* failed promoting v${{ inputs.version }}
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
