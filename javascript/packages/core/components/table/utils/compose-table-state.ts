@@ -32,10 +32,17 @@ export function composeTableState(combinedState: InputTableState): {
   initialState: Partial<TableState>;
   state: Partial<ControlledTableState>;
 } {
-  const state = {};
-  const initialState = {};
+  const state: Partial<ControlledTableState> = {};
+  const initialState: Partial<TableState> = {};
 
-  Object.entries(STATE_NAME_TO_STATE_SETTER_NAME).forEach(([propertyName, setterName]) => {
+  // cast: Object.keys widens to string; single cast here instead of per-assignment
+  const stateKeys = Object.keys(
+    STATE_NAME_TO_STATE_SETTER_NAME
+  ) as (keyof typeof STATE_NAME_TO_STATE_SETTER_NAME)[];
+
+  for (const propertyName of stateKeys) {
+    const setterName = STATE_NAME_TO_STATE_SETTER_NAME[propertyName];
+
     if (setterName in combinedState) {
       if (!(propertyName in combinedState)) {
         console.warn(
@@ -43,17 +50,16 @@ export function composeTableState(combinedState: InputTableState): {
         );
       }
 
-      // cast: does not actually verify per-key correctness; see #1453
-      state[propertyName] = combinedState[propertyName] as TableState[keyof TableState];
-      // cast: does not actually verify per-key correctness; see #1453
-      state[setterName] = combinedState[
-        setterName
-      ] as ControlledTableState[keyof ControlledTableState];
+      // cast: TS correlated-union limitation (microsoft/TypeScript#30581) — propertyName
+      // is a state key but TS can't narrow the value type to match the specific key
+      (state as Record<string, unknown>)[propertyName] = combinedState[propertyName];
+      // cast: same correlated-union limitation for the setter assignment
+      (state as Record<string, unknown>)[setterName] = combinedState[setterName];
     } else if (propertyName in combinedState) {
-      // cast: does not actually verify per-key correctness; see #1453
-      initialState[propertyName] = combinedState[propertyName] as TableState[keyof TableState];
+      // cast: same correlated-union limitation for initial state assignment
+      (initialState as Record<string, unknown>)[propertyName] = combinedState[propertyName];
     }
-  });
+  }
 
   return { initialState, state };
 }
