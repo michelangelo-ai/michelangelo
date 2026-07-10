@@ -33,8 +33,9 @@ export function toFlatDotPathMap(
       path = `${prefix}.${key}`;
     }
 
-    if (isRecord(value)) {
-      Object.assign(result, toFlatDotPathMap(value, path));
+    if (Array.isArray(value) || isRecord(value)) {
+      // cast: arrays are indexed by Object.entries as { '0': v0, '1': v1, ... }
+      Object.assign(result, toFlatDotPathMap(value as Record<string, unknown>, path));
     } else {
       result[path] = value;
     }
