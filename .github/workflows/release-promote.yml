@@ -17,6 +17,8 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+    outputs:
+      branch: ${{ steps.vars.outputs.branch }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -49,7 +51,7 @@ jobs:
       - name: Validate CI is green on release branch
         run: |
           SHA=$(git rev-parse HEAD)
-          STATES=$(gh api "repos/${{ github.repository }}/commits/$SHA/check-runs" --jq '.check_runs[] | select(.status != "completed" or .conclusion != "success") | .name')
+          STATES=$(gh api --paginate "repos/${{ github.repository }}/commits/$SHA/check-runs" --jq '.check_runs[] | select(.status != "completed" or (.conclusion != "success" and .conclusion != "skipped" and .conclusion != "neutral")) | .name')
           if [ -n "$STATES" ]; then
             echo "ERROR: the following checks are not green on ${{ steps.vars.outputs.branch }}@$SHA:"
             echo "$STATES"
@@ -96,7 +98,12 @@ jobs:
 
   publish-npm:
     needs: promote
+    permissions:
+      contents: read
+      id-token: write
     uses: ./.github/workflows/npm-publish.yml
+    with:
+      ref: ${{ needs.promote.outputs.branch }}
     secrets: inherit
 
   notify-on-failure:
