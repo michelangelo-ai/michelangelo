@@ -1,0 +1,144 @@
+name: Release Cut
+
+# Cut a release branch (first RC) or tag an additional RC on an existing
+# release branch (after cherry-picked fixes have already been merged to it).
+on:
+  workflow_dispatch:
+    inputs:
+      base_ref:
+        description: 'Branch/commit to cut the release branch from (only used for rc_number 1)'
+        required: false
+        default: 'main'
+      version:
+        description: 'Final release version, no prerelease suffix (e.g. 0.4.0)'
+        required: true
+      rc_number:
+        description: 'RC number to cut (1 for a new release branch, >1 for an additional RC on an existing branch)'
+        required: false
+        default: '1'
+
+jobs:
+  cut:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Compute branch, RC version, and tag
+        id: vars
+        run: |
+          VERSION="${{ inputs.version }}"
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "ERROR: version must be a plain X.Y.Z SemVer, got '$VERSION'"
+            exit 1
+          fi
+          MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
+          BRANCH="release/v${MAJOR_MINOR}"
+          RC_NUMBER="${{ inputs.rc_number }}"
+          RC_VERSION="${VERSION}-rc.${RC_NUMBER}"
+          TAG="v${RC_VERSION}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "rc_version=$RC_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create release branch (first RC)
+        if: inputs.rc_number == '1'
+        run: |
+          git checkout -b "${{ steps.vars.outputs.branch }}" "origin/${{ inputs.base_ref }}"
+          git push origin "${{ steps.vars.outputs.branch }}"
+
+      - name: Check out existing release branch (additional RC)
+        if: inputs.rc_number != '1'
+        run: |
+          if ! git ls-remote --exit-code --heads origin "${{ steps.vars.outputs.branch }}" > /dev/null; then
+            echo "ERROR: ${{ steps.vars.outputs.branch }} does not exist. rc_number > 1 requires an existing release branch."
+            exit 1
+          fi
+          git checkout -B "${{ steps.vars.outputs.branch }}" "origin/${{ steps.vars.outputs.branch }}"
+
+      - name: Bump versions to RC
+        run: |
+          bash scripts/version-bump.sh "${{ steps.vars.outputs.rc_version }}"
+          git add -A
+          git commit -m "chore: bump version to ${{ steps.vars.outputs.rc_version }}"
+          git push origin "${{ steps.vars.outputs.branch }}"
+
+      - name: Tag release candidate
+        run: |
+          git tag "${{ steps.vars.outputs.tag }}"
+          git push origin "${{ steps.vars.outputs.tag }}"
+
+      - name: Find existing tracking issue
+        id: find_issue
+        run: |
+          ISSUE_NUMBER=$(gh issue list --search "in:title \"Release v${{ steps.vars.outputs.version }}\"" --state open --json number,title \
+            --jq '.[] | select(.title == "Release v${{ steps.vars.outputs.version }}") | .number' | head -1)
+          echo "number=$ISSUE_NUMBER" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create tracking issue (first RC)
+        if: inputs.rc_number == '1'
+        id: create_issue
+        run: |
+          BODY=$(awk '/^---$/{c++; next} c>=2' .github/ISSUE_TEMPLATE/release-checklist.md \
+            | sed "s/vX\.Y\.Z/v${{ steps.vars.outputs.version }}/g")
+          URL=$(gh issue create \
+            --title "Release v${{ steps.vars.outputs.version }}" \
+            --label release \
+            --body "$BODY")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on tracking issue (additional RC)
+        if: inputs.rc_number != '1'
+        run: |
+          if [ -z "${{ steps.find_issue.outputs.number }}" ]; then
+            echo "ERROR: no open tracking issue found for Release v${{ steps.vars.outputs.version }}"
+            exit 1
+          fi
+          gh issue comment "${{ steps.find_issue.outputs.number }}" \
+            --body "Tagged \`${{ steps.vars.outputs.tag }}\`: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.vars.outputs.tag }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Open draft merge-back PR (first RC)
+        if: inputs.rc_number == '1'
+        run: |
+          gh pr create \
+            --base "${{ inputs.base_ref }}" \
+            --head "${{ steps.vars.outputs.branch }}" \
+            --draft \
+            --title "Merge back ${{ steps.vars.outputs.branch }} to ${{ inputs.base_ref }}" \
+            --body "Merge-back for the v${{ steps.vars.outputs.version }} release. Tracking issue: ${{ steps.create_issue.outputs.url }}. Marked ready for review once the release is promoted to final."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  notify-on-failure:
+    needs: cut
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Slack on failure
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          channel-id: 'C0BER0RCQ8P'
+          slack-message: |
+            :x: *${{ github.workflow }}* failed cutting v${{ inputs.version }}-rc.${{ inputs.rc_number }}
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
