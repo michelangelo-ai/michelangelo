@@ -7,7 +7,7 @@ VERSION_FILES=(
   "python/pyproject.toml"
   "javascript/packages/core/package.json"
   "javascript/packages/rpc/package.json"
-  "website/package.json"
+  "javascript/app/package.json"
   "helm/michelangelo/Chart.yaml"
 )
 
@@ -94,7 +94,7 @@ set_version() {
   printf "  %-50s → %s\n" "python/pyproject.toml" "$new_version"
 
   # JSON package files
-  for file in javascript/packages/core/package.json javascript/packages/rpc/package.json website/package.json; do
+  for file in javascript/packages/core/package.json javascript/packages/rpc/package.json javascript/app/package.json; do
     sed -i.bak "s/\"version\": \"[^\"]*\"/\"version\": \"$new_version\"/" "$REPO_ROOT/$file"
     rm -f "$REPO_ROOT/$file.bak"
     printf "  %-50s → %s\n" "$file" "$new_version"

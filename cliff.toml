@@ -41,6 +41,7 @@ topo_order = false
 sort_commits = "oldest"
 
 commit_preprocessors = [
+    { pattern = "(?s)\\n.*", replace = "" },
     { pattern = "\\.$", replace = "" },
 ]
 
