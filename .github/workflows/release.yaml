@@ -27,10 +27,30 @@ jobs:
         with:
           working-directory: './python'
       #----------------------------------------------
+      #  Normalize the git tag to a PEP 440 version
+      #  (poetry-dynamic-versioning enforces PEP 440, so
+      #  SemVer pre-release tags like v0.4.0-rc.1 must be
+      #  converted to 0.4.0rc1 before build/publish)
+      #----------------------------------------------
+      - name: Normalize version for PyPI (PEP 440)
+        id: pep440
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          if [[ "$TAG" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-rc\.([0-9]+)$ ]]; then
+            VERSION="${BASH_REMATCH[1]}rc${BASH_REMATCH[2]}"
+          else
+            VERSION="$TAG"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Set poetry version
+        run: poetry version "${{ steps.pep440.outputs.version }}"
+      #----------------------------------------------
       #  Build the wheel file
       #----------------------------------------------
       - run: |
           poetry build -f wheel
+        env:
+          POETRY_DYNAMIC_VERSIONING_BYPASS: ${{ steps.pep440.outputs.version }}
       #----------------------------------------------
       #  Publish to PyPI
       #----------------------------------------------
@@ -38,6 +58,8 @@ jobs:
         run: poetry config pypi-token.pypi ${{ secrets.PYPI_API_TOKEN }}
       - name: Publish to PyPI
         run: poetry publish --no-interaction
+        env:
+          POETRY_DYNAMIC_VERSIONING_BYPASS: ${{ steps.pep440.outputs.version }}
       #----------------------------------------------
       #  Upload the wheel file to the release
       #----------------------------------------------
