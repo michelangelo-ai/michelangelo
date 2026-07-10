@@ -91,7 +91,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create tracking issue (first RC)
-        if: inputs.rc_number == '1'
+        if: inputs.rc_number == '1' && steps.find_issue.outputs.number == ''
         id: create_issue
         run: |
           BODY=$(awk '/^---$/{c++; next} c>=2' .github/ISSUE_TEMPLATE/release-checklist.md \
@@ -119,12 +119,20 @@ jobs:
       - name: Open draft merge-back PR (first RC)
         if: inputs.rc_number == '1'
         run: |
+          if gh pr list --head "${{ steps.vars.outputs.branch }}" --base "${{ inputs.base_ref }}" --state open --json number --jq '.[0].number' | grep -q .; then
+            echo "Merge-back PR already exists for ${{ steps.vars.outputs.branch }} -> ${{ inputs.base_ref }}, skipping creation."
+            exit 0
+          fi
+          ISSUE_REF="${{ steps.create_issue.outputs.url }}"
+          if [ -z "$ISSUE_REF" ]; then
+            ISSUE_REF="#${{ steps.find_issue.outputs.number }}"
+          fi
           gh pr create \
             --base "${{ inputs.base_ref }}" \
             --head "${{ steps.vars.outputs.branch }}" \
             --draft \
             --title "Merge back ${{ steps.vars.outputs.branch }} to ${{ inputs.base_ref }}" \
-            --body "Merge-back for the v${{ steps.vars.outputs.version }} release. Tracking issue: ${{ steps.create_issue.outputs.url }}. Marked ready for review once the release is promoted to final."
+            --body "Merge-back for the v${{ steps.vars.outputs.version }} release. Tracking issue: $ISSUE_REF. Marked ready for review once the release is promoted to final."
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
