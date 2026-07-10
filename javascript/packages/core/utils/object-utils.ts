@@ -2,6 +2,10 @@ import { get } from 'lodash';
 
 import type { Accessor } from '#core/types/common/studio-types';
 
+/**
+ * Excludes arrays and null, unlike a plain `typeof x === 'object'` check.
+ * Use to narrow `unknown` before accessing properties by key.
+ */
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

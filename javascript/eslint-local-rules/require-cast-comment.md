@@ -21,7 +21,7 @@ This isn't about eliminating every `as` — sometimes the fully type-safe versio
 
 Work through these before writing `// cast:`:
 
-1. **Can it go away?** Assume the assertion isn't necessary and try to remove it
+1. **Can it go away?** Assume the assertion isn't necessary and try to remove it. Check `utils/` for type guards (e.g. `isRecord`) that narrow the type without a cast.
 2. **Is this a real gap in code you're not touching right now?** File a tracked issue and reference it (`see #1234`).
 3. **Is this a permanent boundary?** A third-party library's looser types, or something TypeScript genuinely can't express — say so plainly.
 
