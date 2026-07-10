@@ -11,7 +11,6 @@ import type { PageSizeOption } from '../components/table-pagination/types';
 import type { TableData } from '../types/data-types';
 import type {
   ControlledTableState,
-  ControlledTableStateNoPagination,
   InputTableState,
   TableProps,
   TablePropsResolved,
@@ -77,7 +76,8 @@ function resolveTableState(
     // Strip pagination — InputTableState.pagination only allows { pageSize? } (no pageIndex),
     // so passing it through would leak a partial shape that callers assume is complete
     const { pagination: _pagination, setPagination: _setPagination, ...rest } = baseState;
-    const noPaginationState: Partial<ControlledTableStateNoPagination> = rest;
+    const noPaginationState: Partial<Omit<ControlledTableState, 'pagination' | 'setPagination'>> =
+      rest;
     return noPaginationState;
   }
 
