@@ -23,9 +23,7 @@ export function transformColumns<T extends TableData = TableData>(
     VisibilityCapability
 > {
   return columns.map((column) => {
-    // cast: our ColumnMeta augmentation is an empty interface (TS can't have it extend the
-    // Cell<TData> union); always ColumnConfig<T> per our column definition setup; see #1417
-    const columnConfig = column.columnDef.meta! as ColumnConfig<T>;
+    const columnConfig = column.columnDef.meta!;
     const label = columnConfig.label ?? column.id;
 
     return {

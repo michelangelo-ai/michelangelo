@@ -2,17 +2,40 @@ import '@tanstack/react-table'; //or vue, svelte, solid, qwik, etc.
 
 import type { AggregationFnOption, SortingFnOption } from '@tanstack/react-table';
 import type { ComponentType, ReactNode } from 'react';
-import type { Cell, CellRendererProps, CellTooltip } from '#core/components/cell/types';
+import type {
+  Cell,
+  CellRenderer,
+  CellRendererProps,
+  CellTooltip,
+  SharedCell,
+} from '#core/components/cell/types';
+import type { Accessor } from '#core/types/common/studio-types';
 import type { DistributiveOmit } from '#core/types/utility-types';
 import type { FilterMode } from '../components/filter/types';
 import type { TableData } from './data-types';
 import type { TableRow } from './row-types';
 
 declare module '@tanstack/react-table' {
-  // ColumnConfig cannot be used here to eliminate meta casts: Cell<TData> is a union type,
-  // and TypeScript does not allow interfaces to extend union types; see #1417
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-empty-object-type
-  interface ColumnMeta<TData extends TableData, TValue> {}
+  // ColumnConfig cannot extend ColumnMeta directly because Cell<TData> is a union type
+  // (TypeScript does not allow interfaces to extend union types). Instead, all ColumnConfig
+  // fields are listed explicitly here so column.columnDef.meta is typed without a cast.
+  interface ColumnMeta<TData extends TableData, TValue> {
+    id: string;
+    accessor?: Accessor<TData, TValue>;
+    label?: string;
+    type?: string;
+    icon?: string;
+    endEnhancer?: SharedCell['endEnhancer'];
+    Cell?: CellRenderer<TValue>;
+    style?: SharedCell['style'];
+    filterMode?: FilterMode;
+    enableSorting?: boolean;
+    enableGrouping?: boolean;
+    aggregationFn?: AggregationFnOption<TData>;
+    aggregatedCell?: ComponentType<CellRendererProps<TData, ColumnConfig<TData>>>;
+    sortingFn?: SortingFnOption<TData>;
+    tooltip?: ColumnTooltip<TData>;
+  }
 }
 
 export type ColumnConfig<TData = TableData> = DistributiveOmit<Cell<TData>, 'tooltip'> & {
