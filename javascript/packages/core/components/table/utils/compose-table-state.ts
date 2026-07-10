@@ -35,7 +35,14 @@ export function composeTableState(combinedState: InputTableState): {
   const state = {};
   const initialState = {};
 
-  Object.entries(STATE_NAME_TO_STATE_SETTER_NAME).forEach(([propertyName, setterName]) => {
+  // cast: Object.keys returns string[]; single boundary cast to preserve key types
+  const stateKeys = Object.keys(
+    STATE_NAME_TO_STATE_SETTER_NAME
+  ) as (keyof typeof STATE_NAME_TO_STATE_SETTER_NAME)[];
+
+  for (const propertyName of stateKeys) {
+    const setterName = STATE_NAME_TO_STATE_SETTER_NAME[propertyName];
+
     if (setterName in combinedState) {
       if (!(propertyName in combinedState)) {
         console.warn(
@@ -43,15 +50,12 @@ export function composeTableState(combinedState: InputTableState): {
         );
       }
 
-      // cast: Object.entries widens propertyName to string, so combinedState[propertyName]
-      // is implicit any — bound it to the union of valid state value types
-      state[propertyName] = combinedState[propertyName] as TableState[keyof TableState];
+      state[propertyName] = combinedState[propertyName];
       state[setterName] = combinedState[setterName];
     } else if (propertyName in combinedState) {
-      // cast: same Object.entries key-widening as above
-      initialState[propertyName] = combinedState[propertyName] as TableState[keyof TableState];
+      initialState[propertyName] = combinedState[propertyName];
     }
-  });
+  }
 
   return { initialState, state };
 }
