@@ -259,6 +259,50 @@ Git tags use SemVer, but PyPI requires [PEP 440](https://peps.python.org/pep-044
 - All artifacts (Python, npm, Go, Helm, containers) receive the same Major.Minor from the tag.
 - See the [Versioning Policy](./docs/getting-started/roadmap.md#versioning-policy) for stability level guarantees (stable, beta, alpha).
 
+## How to Release
+
+Releases are semi-automated via two `workflow_dispatch` GitHub Actions workflows. Both live under **Actions → [workflow name] → Run workflow** and must be dispatched with the relevant branch selected in the UI.
+
+| Workflow | Purpose | Key inputs |
+|---|---|---|
+| [`release-cut.yml`](.github/workflows/release-cut.yml) | Cut a release branch and tag a release candidate | `base_ref` (default `main`), `version` (e.g. `0.4.0`), `rc_number` (default `1`) |
+| [`release-promote.yml`](.github/workflows/release-promote.yml) | Promote the latest RC to the final release | `version` (e.g. `0.4.0`) |
+
+### What each workflow does automatically
+
+`release-cut.yml`, dispatched with `rc_number: 1`:
+- Creates `release/vX.Y` from `base_ref`.
+- Bumps all component versions to `X.Y.Z-rc.1` via `scripts/version-bump.sh` and commits.
+- Tags `vX.Y.Z-rc.1`, which triggers `release.yaml` to publish RC artifacts (PyPI, Go binaries, Helm chart).
+- Opens a tracking issue from the [release checklist template](.github/ISSUE_TEMPLATE/release-checklist.md).
+- Opens a **draft** merge-back PR (`release/vX.Y` → `base_ref`) that stays open through the soak period.
+
+`release-promote.yml`, dispatched once the RC has soaked and no P0/P1 issues were found:
+- Verifies all CI checks are green on the release branch's current HEAD (fails closed otherwise).
+- Strips the RC suffix via `scripts/version-bump.sh` and commits the final version.
+- Tags `vX.Y.Z`, triggering `release.yaml`'s full artifact publish, and publishes npm packages via `npm-publish.yml`.
+- Marks the merge-back PR ready for review.
+- Comments on the tracking issue with links to the release and publish run.
+
+### What a maintainer still does by hand
+
+- Judge whether the soak period (minimum 1 week for minor releases) is over and whether any reported issues are release-blocking.
+- Review and merge the merge-back PR once it's marked ready.
+- Approve cherry-pick PRs (see below) and decide whether a fix warrants another RC before promoting.
+- Post the release announcement (GitHub Discussions, blog post for major releases).
+
+### Fixing issues found during soak (additional RCs)
+
+If soak testing finds a problem with an RC:
+1. Fix it on `main` as a normal PR.
+2. Cherry-pick the fix's commit to `release/vX.Y` via a normal PR against the release branch.
+3. Once merged, dispatch `release-cut.yml` again with the same `version` and `rc_number` incremented (e.g. `2`). This re-bumps and re-tags the existing branch without recreating it or duplicating the tracking issue — it comments on the existing one instead.
+4. Repeat the soak period for the new RC.
+
+### Patch releases
+
+For a fix to an already-released version, skip the RC flow: cherry-pick the fix to the release branch, update `CHANGELOG.md`, and tag `vX.Y.Z` directly — `release.yaml` publishes the patch the same way it does a final release.
+
 ## Creating a Pull Request
 
 If you want to fix a bug or propose a new feature you’ll do this through creating a Pull Request.
