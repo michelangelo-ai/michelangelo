@@ -32,17 +32,10 @@ export function composeTableState(combinedState: InputTableState): {
   initialState: Partial<TableState>;
   state: Partial<ControlledTableState>;
 } {
-  const state: Partial<ControlledTableState> = {};
-  const initialState: Partial<TableState> = {};
+  const state = {};
+  const initialState = {};
 
-  // cast: Object.keys widens to string; single cast here instead of per-assignment
-  const stateKeys = Object.keys(
-    STATE_NAME_TO_STATE_SETTER_NAME
-  ) as (keyof typeof STATE_NAME_TO_STATE_SETTER_NAME)[];
-
-  for (const propertyName of stateKeys) {
-    const setterName = STATE_NAME_TO_STATE_SETTER_NAME[propertyName];
-
+  Object.entries(STATE_NAME_TO_STATE_SETTER_NAME).forEach(([propertyName, setterName]) => {
     if (setterName in combinedState) {
       if (!(propertyName in combinedState)) {
         console.warn(
@@ -50,16 +43,15 @@ export function composeTableState(combinedState: InputTableState): {
         );
       }
 
-      // cast: TS correlated-union limitation (microsoft/TypeScript#30581) — propertyName
-      // is a state key but TS can't narrow the value type to match the specific key
-      (state as Record<string, unknown>)[propertyName] = combinedState[propertyName];
-      // cast: same correlated-union limitation for the setter assignment
-      (state as Record<string, unknown>)[setterName] = combinedState[setterName];
+      // cast: Object.entries widens propertyName to string, so combinedState[propertyName]
+      // is implicit any — bound it to the union of valid state value types
+      state[propertyName] = combinedState[propertyName] as TableState[keyof TableState];
+      state[setterName] = combinedState[setterName];
     } else if (propertyName in combinedState) {
-      // cast: same correlated-union limitation for initial state assignment
-      (initialState as Record<string, unknown>)[propertyName] = combinedState[propertyName];
+      // cast: same Object.entries key-widening as above
+      initialState[propertyName] = combinedState[propertyName] as TableState[keyof TableState];
     }
-  }
+  });
 
   return { initialState, state };
 }
