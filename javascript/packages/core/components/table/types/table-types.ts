@@ -318,6 +318,16 @@ export type ControlledTableState = TableState & {
 };
 
 /**
+ * Controlled table state with pagination fields removed, for tables that
+ * have pagination disabled and therefore never surface `pagination` or
+ * `setPagination`.
+ */
+export type ControlledTableStateNoPagination = Omit<
+  ControlledTableState,
+  'pagination' | 'setPagination'
+>;
+
+/**
  * Table state that users can provide as input to control table behavior.
  *
  * Excludes `pageIndex` from pagination state to prevent users from being
