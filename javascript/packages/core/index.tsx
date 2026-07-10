@@ -5,13 +5,16 @@ import { NavigationBar } from '#core/components/navigation-bar/navigation-bar';
 import { ErrorProvider } from '#core/providers/error-provider/error-provider';
 import { IconProvider } from '#core/providers/icon-provider/icon-provider';
 import { ServiceProvider } from '#core/providers/service-provider/service-provider';
+import { UserProvider } from '#core/providers/user-provider/user-provider';
 import { Router } from '#core/router/router';
 import { ThemeProvider } from '#core/themes/theme-provider';
+import { TimeZone } from '#core/types/time-types';
 
-import type { NavigationLink } from '#core/components/navigation-bar/types';
+import type { NavigationLink, UserMenuItem } from '#core/components/navigation-bar/types';
 import type { ErrorContextValue } from '#core/providers/error-provider/types';
 import type { IconProviderContext } from '#core/providers/icon-provider/types';
 import type { ServiceContextType } from '#core/providers/service-provider/types';
+import type { UserContextType } from '#core/providers/user-provider/types';
 
 import '#core/styles/main.css';
 // TODO: Relocate the Props interface once the contents of the
@@ -23,7 +26,9 @@ type Props = {
     theme: IconProviderContext;
     navigationBar?: {
       links?: NavigationLink[];
+      userMenuItems?: UserMenuItem[];
     };
+    user?: UserContextType;
   };
 };
 
@@ -35,8 +40,13 @@ export function CoreApp({ dependencies }: Props) {
           <ServiceProvider {...dependencies.service}>
             <ErrorProvider {...dependencies.error}>
               <IconProvider icons={dependencies.theme.icons}>
-                <NavigationBar links={dependencies.navigationBar?.links} />
-                <Router />
+                <UserProvider {...(dependencies.user ?? { timeZone: TimeZone.Local })}>
+                  <NavigationBar
+                    links={dependencies.navigationBar?.links}
+                    userMenuItems={dependencies.navigationBar?.userMenuItems}
+                  />
+                  <Router />
+                </UserProvider>
               </IconProvider>
             </ErrorProvider>
           </ServiceProvider>
@@ -90,8 +100,6 @@ export { IconProvider } from '#core/providers/icon-provider/icon-provider';
 export * from '#core/providers/icon-provider/types';
 
 export { ThemeProvider };
-
-export { UserProvider } from '#core/providers/user-provider/user-provider';
 
 export { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 export * from '#core/hooks/routing/use-studio-params/types';
@@ -205,3 +213,13 @@ export type {
   DetailViewTab,
   DetailViewPagesProps,
 } from '#core/components/views/detail-view/types/detail-view-component-types';
+
+// Navigation Bar
+export { NavigationBar } from '#core/components/navigation-bar/navigation-bar';
+export type { NavigationLink, UserMenuItem } from '#core/components/navigation-bar/types';
+
+// User Provider
+export { UserProvider } from '#core/providers/user-provider/user-provider';
+export { useUserProvider } from '#core/providers/user-provider/use-user-provider';
+export type { UserContextType } from '#core/providers/user-provider/types';
+export { UserRole } from '#core/providers/user-provider/types';

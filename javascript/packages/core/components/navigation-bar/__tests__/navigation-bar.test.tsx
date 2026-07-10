@@ -1,19 +1,24 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
 
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
+import { getUserProviderWrapper } from '#core/test/wrappers/get-user-provider-wrapper';
 import { NavigationBar } from '../navigation-bar';
 
-import type { NavigationLink } from '../types';
+import type { NavigationLink, UserMenuItem } from '../types';
 
 describe('NavigationBar', () => {
   // AppNavBar renders both its desktop and mobile menu variants at once and switches
   // between them with a `matchMedia` query, which jsdom doesn't implement — the inactive
   // variant reports as hidden to the accessibility tree, so role queries need `hidden: true`.
   it('renders the title as a link to the app root', () => {
-    render(<NavigationBar />, buildWrapper([getBaseProviderWrapper(), getRouterWrapper()]));
+    render(
+      <NavigationBar />,
+      buildWrapper([getBaseProviderWrapper(), getRouterWrapper(), getUserProviderWrapper()])
+    );
 
     const titleLinks = screen.getAllByRole('link', {
       name: 'Michelangelo Studio',
@@ -31,7 +36,7 @@ describe('NavigationBar', () => {
 
     render(
       <NavigationBar links={links} />,
-      buildWrapper([getBaseProviderWrapper(), getRouterWrapper()])
+      buildWrapper([getBaseProviderWrapper(), getRouterWrapper(), getUserProviderWrapper()])
     );
 
     const docsLinks = screen.getAllByRole('link', { name: 'Docs', hidden: true });
@@ -48,7 +53,7 @@ describe('NavigationBar', () => {
 
     render(
       <NavigationBar links={links} />,
-      buildWrapper([getBaseProviderWrapper(), getRouterWrapper()])
+      buildWrapper([getBaseProviderWrapper(), getRouterWrapper(), getUserProviderWrapper()])
     );
 
     const docsLinks = screen.getAllByRole('link', { name: 'Docs', hidden: true });
@@ -57,5 +62,41 @@ describe('NavigationBar', () => {
       expect(link).toHaveAttribute('target', '_blank');
       expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
     });
+  });
+
+  it('renders user initials when user context and menu items are provided', () => {
+    const userMenuItems: UserMenuItem[] = [{ label: 'Settings', onClick: vi.fn() }];
+
+    render(
+      <NavigationBar userMenuItems={userMenuItems} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getRouterWrapper(),
+        getUserProviderWrapper({ name: 'Test User', email: 'test@example.com' }),
+      ])
+    );
+
+    expect(screen.getAllByText('TU').length).toBeGreaterThan(0);
+  });
+
+  it('fires onClick when a user menu item is selected', async () => {
+    const handleClick = vi.fn();
+    const userMenuItems: UserMenuItem[] = [{ label: 'Settings', onClick: handleClick }];
+
+    render(
+      <NavigationBar userMenuItems={userMenuItems} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getRouterWrapper(),
+        getUserProviderWrapper({ name: 'Test User', email: 'test@example.com' }),
+      ])
+    );
+
+    await userEvent.click(screen.getAllByText('TU')[0]);
+
+    const settingsItems = screen.getAllByText('Settings');
+    await userEvent.click(settingsItems[0]);
+
+    expect(handleClick).toHaveBeenCalled();
   });
 });

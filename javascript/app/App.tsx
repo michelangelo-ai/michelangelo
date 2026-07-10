@@ -1,11 +1,29 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom-v5-compat';
-import { CoreApp } from '@michelangelo-ai/core';
+import { CoreApp, TimeZone, UserRole } from '@michelangelo-ai/core';
 import { normalizeTranscoderError, request } from '@michelangelo-ai/rpc';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Client as Styletron } from 'styletron-engine-atomic';
 import { Provider as StyletronProvider } from 'styletron-react';
 
 import { ICONS } from './icons/icons';
+
+import type { NavigationLink, UserMenuItem } from '@michelangelo-ai/core';
+
+const NAVIGATION_LINKS: NavigationLink[] = [
+  { label: 'Docs', href: 'https://michelangelo-ai.github.io/michelangelo/' },
+];
+
+const DEV_USER = {
+  name: 'Local Developer',
+  email: 'dev@localhost',
+  role: UserRole.Admin,
+  timeZone: TimeZone.Local,
+};
+
+const USER_MENU_ITEMS: UserMenuItem[] = [
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  { label: 'Sign out', onClick: () => {} },
+];
 
 const dependencies = {
   error: {
@@ -18,8 +36,10 @@ const dependencies = {
     request,
   },
   navigationBar: {
-    links: [{ label: 'Docs', href: 'https://michelangelo-ai.github.io/michelangelo/' }],
+    links: NAVIGATION_LINKS,
+    userMenuItems: USER_MENU_ITEMS,
   },
+  user: DEV_USER,
 };
 
 const engine = new Styletron();
