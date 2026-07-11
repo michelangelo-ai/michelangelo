@@ -24,6 +24,7 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+      actions: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -80,6 +81,17 @@ jobs:
         run: |
           git tag "${{ steps.vars.outputs.tag }}"
           git push origin "${{ steps.vars.outputs.tag }}"
+
+      - name: Trigger artifact publish for the RC tag
+        run: |
+          gh workflow run release.yaml --ref "${{ steps.vars.outputs.tag }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Ensure the release tracking label exists
+        run: gh label create release --color ededed --description "Release tracking issue" --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Find existing tracking issue
         id: find_issue

@@ -17,6 +17,7 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+      actions: write
     outputs:
       branch: ${{ steps.vars.outputs.branch }}
     steps:
@@ -71,6 +72,12 @@ jobs:
         run: |
           git tag "${{ steps.vars.outputs.tag }}"
           git push origin "${{ steps.vars.outputs.tag }}"
+
+      - name: Trigger artifact publish for the final tag
+        run: |
+          gh workflow run release.yaml --ref "${{ steps.vars.outputs.tag }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Mark merge-back PR ready for review
         run: |
