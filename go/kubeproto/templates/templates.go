@@ -77,6 +77,24 @@ func (m *{{.Name}}) GetIndexedKeyValuePairs() ([]storage.IndexedField){
 	var indexedFields []storage.IndexedField
 `))
 
+// CRDGetContentIndexedFieldsHeader is a template for the
+// GetContentIndexedKeyValuePairs() function signature. It is generated only for
+// revisioned base types (those with resource.revisioned_in entries) and returns
+// the per-wrapper-kind content index columns.
+var CRDGetContentIndexedFieldsHeader = template.Must(template.New("crdGetContentIndexedFieldsHeader").Parse(`
+func (m *{{.Name}}) GetContentIndexedKeyValuePairs() map[string][]storage.IndexedField {
+	result := make(map[string][]storage.IndexedField)
+`))
+
+// CRDContentIndexFieldSpecsHeader is a template for the ContentIndexFieldSpecs()
+// function signature. Generated for revisioned base types; the function returns
+// one content sidecar descriptor (wrapper GVK, table, uid column, path->column
+// map) per wrapper kind.
+var CRDContentIndexFieldSpecsHeader = template.Must(template.New("crdContentIndexFieldSpecsHeader").Parse(`
+func (m *{{.Name}}) ContentIndexFieldSpecs() []storage.ContentIndexFieldSpec {
+	return []storage.ContentIndexFieldSpec{
+`))
+
 // CRDIndexesPathToKeyMapHeader is a template for generating CRDIndexesPathToKeyMap for a CRD.
 var CRDIndexesPathToKeyMapHeader = template.Must(template.New("crdIndexesPathToKeyMapHeader").Parse(`
 func init() {
@@ -150,3 +168,12 @@ var mysqlLabelAnnotationTables string
 
 // CRDMySQLLabelAnnotationTable is a template of a CRD's label and annotation table schema.
 var CRDMySQLLabelAnnotationTable = template.Must(template.New("MySQLLabelAnnotationTable").Parse(mysqlLabelAnnotationTables))
+
+//go:embed mysql_unmarshalled_table.tmpl
+var mysqlUnmarshalledTable string
+
+// CRDMySQLUnmarshalledTable is the header of a content_index sidecar
+// ("*_unmarshalled") table: the table name and the foreign-key column back to
+// the wrapper CRD's uid. The indexed columns, primary key, and per-column
+// indexes are appended by protoc-gen-sql from the parsed content_index fields.
+var CRDMySQLUnmarshalledTable = template.Must(template.New("MySQLUnmarshalledTable").Parse(mysqlUnmarshalledTable))
