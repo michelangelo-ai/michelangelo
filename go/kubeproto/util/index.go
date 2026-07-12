@@ -90,78 +90,84 @@ func ParseIndexedFields(crdRootMsg *protogen.Message, crdOptions *pboptions.Opti
 		}
 		indexedKeys[key] = true
 
-		parsedGoPaths, field, leafMsg := validateIndex(key, path, crdRootMsg)
+		newIndexedField := buildIndexedField(key, path, typeOverride, crdRootMsg)
 
-		newIndexedField := IndexedField{}
-		newIndexedField.Key = key
-		newIndexedField.GoPaths = parsedGoPaths
-		newIndexedField.ProtoPath = path
-
-		if leafMsg == nil {
-			// primitive type field
-			// If type_override is specified, use the specified type.
-			if typeOverride != "" {
-				newIndexedField.Type = typeOverride
-			} else {
-				switch field.Desc.Kind() {
-				case protoreflect.StringKind:
-					newIndexedField.Type = "VARCHAR(255)"
-				case protoreflect.Int32Kind, protoreflect.Fixed32Kind, protoreflect.Sint32Kind:
-					newIndexedField.Type = "INT"
-				case protoreflect.Int64Kind, protoreflect.Fixed64Kind, protoreflect.Sint64Kind:
-					newIndexedField.Type = "BIGINT"
-				case protoreflect.EnumKind:
-					newIndexedField.Type = "VARCHAR(255)"
-					newIndexedField.Flag |= IndexFlagEnum
-				case protoreflect.BoolKind:
-					newIndexedField.Type = "BOOLEAN"
-				default:
-					logger.Panicf("Invalid index annotation. Unsupported primitive type: %v, key: %v, path: %v",
-						field.Desc.Kind(), key, path)
-				}
+		for _, subField := range newIndexedField.SubFields {
+			if _, found := indexedKeys[subField.Key]; found {
+				logger.Panicf("Invalid index annotation. Duplicated key. key: %v, path: %v, subKey: %v",
+					key, path, subField.Key)
 			}
-
-			newIndexedField.Flag |= IndexFlagPrimitive
-		} else {
-			switch leafMsg.Desc.FullName() {
-			case "michelangelo.api.ResourceIdentifier":
-				newIndexedField.Flag |= IndexFlagCompositeKey
-				newIndexedField.SubFields = append(newIndexedField.SubFields,
-					IndexedSubField{Key: buildSubKey(key, "namespace"), GoPath: "Namespace",
-						ProtoPath: buildSubKeyProtoPath(path, "namespace"), Type: "VARCHAR(255)"})
-				newIndexedField.SubFields = append(newIndexedField.SubFields,
-					IndexedSubField{Key: buildSubKey(key, "name"), GoPath: "Name",
-						ProtoPath: buildSubKeyProtoPath(path, "name"), Type: "VARCHAR(255)"})
-			case "michelangelo.api.v2beta1.UserInfo", "michelangelo.api.v2.UserInfo":
-				newIndexedField.SubFields = append(newIndexedField.SubFields,
-					IndexedSubField{Key: buildSubKey(key, "name"), GoPath: "Name",
-						ProtoPath: buildSubKeyProtoPath(path, "name"), Type: "VARCHAR(255)"})
-				newIndexedField.SubFields = append(newIndexedField.SubFields,
-					IndexedSubField{Key: buildSubKey(key, "proxy_user"), GoPath: "ProxyUser",
-						ProtoPath: buildSubKeyProtoPath(path, "proxy_user"), Type: "VARCHAR(255)"})
-			case "google.protobuf.Timestamp":
-				newIndexedField.Type = "DATETIME"
-				newIndexedField.Flag |= IndexFlagPrimitive
-			case "k8s.io.apimachinery.pkg.apis.meta.v1.Time":
-				newIndexedField.Type = "DATETIME"
-				newIndexedField.Flag |= IndexFlagPrimitive
-			default:
-				logger.Panicf("Invalid index annotation. Unsupported message type: %v. key: %v, path: %v",
-					leafMsg.Desc.FullName(), key, path)
-			}
-
-			for _, subField := range newIndexedField.SubFields {
-				if _, found := indexedKeys[subField.Key]; found {
-					logger.Panicf("Invalid index annotation. Duplicated key. key: %v, path: %v, subKey: %v",
-						key, path, subField.Key)
-				}
-				indexedKeys[subField.Key] = true
-			}
+			indexedKeys[subField.Key] = true
 		}
 		indexedFields[i] = newIndexedField
 	}
 
 	return indexedFields
+}
+
+// buildIndexedField resolves a single (key, path) against rootMsg and returns the
+// fully-typed IndexedField (primitive type, enum flag, or composite message
+// subfields).
+func buildIndexedField(key, path, typeOverride string, rootMsg *protogen.Message) IndexedField {
+	parsedGoPaths, field, leafMsg := validateIndex(key, path, rootMsg)
+
+	newIndexedField := IndexedField{Key: key, GoPaths: parsedGoPaths, ProtoPath: path}
+
+	if leafMsg == nil {
+		// primitive type field
+		// If type_override is specified, use the specified type.
+		if typeOverride != "" {
+			newIndexedField.Type = typeOverride
+		} else {
+			switch field.Desc.Kind() {
+			case protoreflect.StringKind:
+				newIndexedField.Type = "VARCHAR(255)"
+			case protoreflect.Int32Kind, protoreflect.Fixed32Kind, protoreflect.Sint32Kind:
+				newIndexedField.Type = "INT"
+			case protoreflect.Int64Kind, protoreflect.Fixed64Kind, protoreflect.Sint64Kind:
+				newIndexedField.Type = "BIGINT"
+			case protoreflect.EnumKind:
+				newIndexedField.Type = "VARCHAR(255)"
+				newIndexedField.Flag |= IndexFlagEnum
+			case protoreflect.BoolKind:
+				newIndexedField.Type = "BOOLEAN"
+			default:
+				logger.Panicf("Invalid index annotation. Unsupported primitive type: %v, key: %v, path: %v",
+					field.Desc.Kind(), key, path)
+			}
+		}
+
+		newIndexedField.Flag |= IndexFlagPrimitive
+	} else {
+		switch leafMsg.Desc.FullName() {
+		case "michelangelo.api.ResourceIdentifier":
+			newIndexedField.Flag |= IndexFlagCompositeKey
+			newIndexedField.SubFields = append(newIndexedField.SubFields,
+				IndexedSubField{Key: buildSubKey(key, "namespace"), GoPath: "Namespace",
+					ProtoPath: buildSubKeyProtoPath(path, "namespace"), Type: "VARCHAR(255)"})
+			newIndexedField.SubFields = append(newIndexedField.SubFields,
+				IndexedSubField{Key: buildSubKey(key, "name"), GoPath: "Name",
+					ProtoPath: buildSubKeyProtoPath(path, "name"), Type: "VARCHAR(255)"})
+		case "michelangelo.api.v2beta1.UserInfo", "michelangelo.api.v2.UserInfo":
+			newIndexedField.SubFields = append(newIndexedField.SubFields,
+				IndexedSubField{Key: buildSubKey(key, "name"), GoPath: "Name",
+					ProtoPath: buildSubKeyProtoPath(path, "name"), Type: "VARCHAR(255)"})
+			newIndexedField.SubFields = append(newIndexedField.SubFields,
+				IndexedSubField{Key: buildSubKey(key, "proxy_user"), GoPath: "ProxyUser",
+					ProtoPath: buildSubKeyProtoPath(path, "proxy_user"), Type: "VARCHAR(255)"})
+		case "google.protobuf.Timestamp":
+			newIndexedField.Type = "DATETIME"
+			newIndexedField.Flag |= IndexFlagPrimitive
+		case "k8s.io.apimachinery.pkg.apis.meta.v1.Time":
+			newIndexedField.Type = "DATETIME"
+			newIndexedField.Flag |= IndexFlagPrimitive
+		default:
+			logger.Panicf("Invalid index annotation. Unsupported message type: %v. key: %v, path: %v",
+				leafMsg.Desc.FullName(), key, path)
+		}
+	}
+
+	return newIndexedField
 }
 
 func validateIndex(key, fullPath string, curMsg *protogen.Message) ([]string, *protogen.Field, *protogen.Message) {
