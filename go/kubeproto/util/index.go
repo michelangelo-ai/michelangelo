@@ -105,6 +105,67 @@ func ParseIndexedFields(crdRootMsg *protogen.Message, crdOptions *pboptions.Opti
 	return indexedFields
 }
 
+// WrapperContentIndex holds the content sidecar columns for one wrapper kind,
+// parsed from a base CRD's resource.revisioned_in[].content_index annotations.
+type WrapperContentIndex struct {
+	// Kind is the wrapper CRD kind this sidecar belongs to, e.g. "revision".
+	Kind string
+	// Fields are the content columns, resolved against the base CRD message.
+	// Keys/paths are independent of the base index set.
+	Fields []IndexedField
+}
+
+// ParseContentIndexedFields parses a revisioned base CRD's
+// resource.revisioned_in[].content_index[] annotations into per-wrapper
+// IndexedField lists. Each content_index.path is resolved against the base CRD
+// message itself (which is what the wrapper stores at spec.content). Each wrapper
+// may declare a different subset of columns.
+func ParseContentIndexedFields(crdRootMsg *protogen.Message, crdOptions *pboptions.Options) []WrapperContentIndex {
+	wrapperCount := int(crdOptions.Int64("resource.len(revisioned_in)"))
+	if wrapperCount == 0 {
+		return nil
+	}
+	wrappers := make([]WrapperContentIndex, 0, wrapperCount)
+	for wrapperIdx := 0; wrapperIdx < wrapperCount; wrapperIdx++ {
+		wrapperPrefix := "resource.revisioned_in[" + strconv.Itoa(wrapperIdx) + "]"
+		kind := crdOptions.String(wrapperPrefix + ".kind")
+		if kind == "" {
+			logger.Panicf("Invalid revisioned_in annotation. kind is not specified at index %d", wrapperIdx)
+		}
+
+		fieldCount := int(crdOptions.Int64(wrapperPrefix + ".len(content_index)"))
+		fields := make([]IndexedField, 0, fieldCount)
+		// Keys must be unique within a single wrapper's sidecar table.
+		seenKeys := make(map[string]bool)
+		for fieldIdx := 0; fieldIdx < fieldCount; fieldIdx++ {
+			contentIndexPrefix := wrapperPrefix + ".content_index[" + strconv.Itoa(fieldIdx) + "]"
+			key := crdOptions.String(contentIndexPrefix + ".key")
+			path := crdOptions.String(contentIndexPrefix + ".path")
+
+			if key == "" || path == "" {
+				logger.Panicf("Invalid content_index annotation. Either key or path is not specified. "+
+					"kind: %v, key: %v, path: %v", kind, key, path)
+			}
+			if seenKeys[key] {
+				logger.Panicf("Invalid content_index annotation. Duplicated key. kind: %v, key: %v", kind, key)
+			}
+			seenKeys[key] = true
+
+			field := buildIndexedField(key, path, "", crdRootMsg)
+			for _, subField := range field.SubFields {
+				if seenKeys[subField.Key] {
+					logger.Panicf("Invalid content_index annotation. Duplicated key. kind: %v, key: %v, subKey: %v",
+						kind, key, subField.Key)
+				}
+				seenKeys[subField.Key] = true
+			}
+			fields = append(fields, field)
+		}
+		wrappers = append(wrappers, WrapperContentIndex{Kind: kind, Fields: fields})
+	}
+	return wrappers
+}
+
 // buildIndexedField resolves a single (key, path) against rootMsg and returns the
 // fully-typed IndexedField (primitive type, enum flag, or composite message
 // subfields).

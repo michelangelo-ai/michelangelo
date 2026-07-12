@@ -24,6 +24,7 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
 
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/groupinfo"
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/tags"
@@ -201,7 +202,8 @@ func genCRD(crdBuf *bytes.Buffer, filename string, name string, protoComments *p
 //     generate deep copy functions, add controller-tools markers, and register the type to k8s runtime scheme
 //  5. If the input file contains michelangelo.api.k8s_api_group_name option, generate group-version info for k8s runtime
 func updateGoFile(gofile *plugingo.CodeGeneratorResponse_File, protofile *protogen.File,
-	extTypes *protoregistry.Types, gInfo *groupinfo.GroupInfo, processedGoPackageList *map[string]bool) {
+	extTypes *protoregistry.Types, gInfo *groupinfo.GroupInfo, processedGoPackageList *map[string]bool,
+	allProtoMsgs map[string]*protogen.Message) {
 	dstFile, err := decorator.Parse(*gofile.Content)
 	if err != nil {
 		logger.Panicf("failed to parse gogoproto generated file %v: %v", gofile.GetName(), err)
@@ -304,6 +306,7 @@ func updateGoFile(gofile *plugingo.CodeGeneratorResponse_File, protofile *protog
 						genCRD(&crdFunctionsBuf, fileName, typeName, &protoMsg.Comments, options)
 						if options.Bool("has_resource") {
 							genCRDIndexedFields(typeName, protoMsg, &crdFunctionsBuf, options, gInfo)
+							genCRDContentIndexedFields(typeName, protoMsg, &crdFunctionsBuf, options, gInfo, allProtoMsgs, extTypes)
 							genImmutability(typeName, &crdFunctionsBuf, options)
 							genCRDObject(typeName, gInfo, &crdFunctionsBuf)
 							genCRDBlobFields(typeName, protoMsg, &crdFunctionsBuf, extTypes)
@@ -373,6 +376,35 @@ func genCRDIndexedFields(crdName string, crdRootMsg *protogen.Message, crdBuf *b
 	}{crdName}
 	templates.CRDGetIndexedFieldsHeader.Execute(crdBuf, typeInfo)
 
+	emitIndexedFieldExtraction(crdBuf, indexedFields)
+	crdBuf.Write([]byte("\treturn indexedFields\n}\n\n"))
+
+	// Generate IndexesPathToKeyMap for this gvk
+	typeInfo2 := struct {
+		Group   string
+		Version string
+		Kind    string
+	}{groupInfo.Name, groupInfo.Version, crdName}
+	templates.CRDIndexesPathToKeyMapHeader.Execute(crdBuf, typeInfo2)
+
+	for _, field := range indexedFields {
+		if field.HasFlag(util.IndexFlagPrimitive) {
+			crdBuf.Write([]byte("\tIndexesPathToKeyMap[gvk][\"" + field.ProtoPath + "\"] = \"" + field.Key + "\"\n"))
+		} else {
+			for _, subField := range field.SubFields {
+				crdBuf.Write([]byte("\tIndexesPathToKeyMap[gvk][\"" + subField.ProtoPath + "\"] = \"" + subField.Key + "\"\n"))
+			}
+		}
+	}
+
+	crdBuf.Write([]byte("}\n\n"))
+}
+
+// emitIndexedFieldExtraction writes the per-field extraction statements that
+// populate a local `indexedFields []storage.IndexedField` slice from `m`. It is
+// shared by GetIndexedKeyValuePairs (base table) and GetContentIndexedKeyValuePairs
+// (content sidecars) so enum/composite/nil-check conventions live in one place.
+func emitIndexedFieldExtraction(crdBuf *bytes.Buffer, indexedFields []util.IndexedField) {
 	declareVar := false
 	for _, field := range indexedFields {
 		// generate clause that check the message path
@@ -434,27 +466,115 @@ func genCRDIndexedFields(crdName string, crdRootMsg *protogen.Message, crdBuf *b
 			crdBuf.Write([]byte("\t}\n\n"))
 		}
 	}
-	crdBuf.Write([]byte("\treturn indexedFields\n}\n\n"))
+}
 
-	// Generate IndexesPathToKeyMap for this gvk
-	typeInfo2 := struct {
-		Group   string
-		Version string
-		Kind    string
-	}{groupInfo.Name, groupInfo.Version, crdName}
-	templates.CRDIndexesPathToKeyMapHeader.Execute(crdBuf, typeInfo2)
+// wrapperContentPath is where every content-wrapper CRD (Revision, Draft)
+// stores its wrapped base resource as a google.protobuf.Any.
+const wrapperContentPath = "spec.content"
 
-	for _, field := range indexedFields {
-		if field.HasFlag(util.IndexFlagPrimitive) {
-			crdBuf.Write([]byte("\tIndexesPathToKeyMap[gvk][\"" + field.ProtoPath + "\"] = \"" + field.Key + "\"\n"))
-		} else {
-			for _, subField := range field.SubFields {
-				crdBuf.Write([]byte("\tIndexesPathToKeyMap[gvk][\"" + subField.ProtoPath + "\"] = \"" + subField.Key + "\"\n"))
-			}
-		}
+// genCRDContentIndexedFields generates two methods for a revisioned base type
+// (one declaring resource.revisioned_in):
+//
+//   - GetContentIndexedKeyValuePairs: per wrapper kind, the extracted column
+//     values for this object.
+//   - ContentIndexFieldSpecs: per wrapper kind, the wrapper GVK, sidecar table,
+//     uid column, and path->column map, with the wrapper kind resolved and
+//     validated against allProtoMsgs.
+//
+// Generated only when the type declares content_index entries, so only those
+// types implement storage.ContentIndexable / storage.ContentIndexDescribable.
+func genCRDContentIndexedFields(crdName string, crdRootMsg *protogen.Message, crdBuf *bytes.Buffer,
+	crdOptions *pboptions.Options, gInfo *groupinfo.GroupInfo, allProtoMsgs map[string]*protogen.Message,
+	extTypes *protoregistry.Types) {
+	wrappers := util.ParseContentIndexedFields(crdRootMsg, crdOptions)
+	if len(wrappers) == 0 {
+		return
 	}
 
-	crdBuf.Write([]byte("}\n\n"))
+	typeInfo := struct {
+		Name string
+	}{crdName}
+	templates.CRDGetContentIndexedFieldsHeader.Execute(crdBuf, typeInfo)
+
+	for _, wrapper := range wrappers {
+		crdBuf.Write([]byte("\t{\n"))
+		crdBuf.Write([]byte("\tvar indexedFields []storage.IndexedField\n"))
+		emitIndexedFieldExtraction(crdBuf, wrapper.Fields)
+		crdBuf.Write([]byte("\tresult[\"" + wrapper.Kind + "\"] = indexedFields\n"))
+		crdBuf.Write([]byte("\t}\n\n"))
+	}
+
+	crdBuf.Write([]byte("\treturn result\n}\n\n"))
+
+	tableBaseName := utils.ToSnakeCase(crdName)
+	templates.CRDContentIndexFieldSpecsHeader.Execute(crdBuf, typeInfo)
+	for _, wrapper := range wrappers {
+		wrapperKindKind := resolveWrapperKind(crdName, wrapper.Kind, allProtoMsgs, extTypes)
+		table := tableBaseName + "_" + wrapper.Kind + "_unmarshalled"
+		uidCol := wrapper.Kind + "_uid"
+
+		crdBuf.Write([]byte("\t\t{\n"))
+		crdBuf.Write([]byte("\t\t\tWrapperGVK: schema.GroupVersionKind{Group: \"" + gInfo.Name + "\", Version: \"" +
+			gInfo.Version + "\", Kind: \"" + wrapperKindKind + "\"},\n"))
+		crdBuf.Write([]byte("\t\t\tWrapperKind: \"" + wrapper.Kind + "\",\n"))
+		crdBuf.Write([]byte("\t\t\tContentPath: \"" + wrapperContentPath + "\",\n"))
+		crdBuf.Write([]byte("\t\t\tBaseKind: \"" + crdName + "\",\n"))
+		crdBuf.Write([]byte("\t\t\tTable: \"" + table + "\",\n"))
+		crdBuf.Write([]byte("\t\t\tUIDCol: \"" + uidCol + "\",\n"))
+		crdBuf.Write([]byte("\t\t\tFields: []storage.ContentIndexField{\n"))
+		for _, field := range wrapper.Fields {
+			if field.Flag&util.IndexFlagPrimitive != 0 {
+				crdBuf.Write([]byte("\t\t\t\t{Path: \"" + wrapperContentPath + "." + field.ProtoPath + "\", Column: \"" +
+					field.Key + "\"},\n"))
+			} else {
+				for _, subField := range field.SubFields {
+					crdBuf.Write([]byte("\t\t\t\t{Path: \"" + wrapperContentPath + "." + subField.ProtoPath + "\", Column: \"" +
+						subField.Key + "\"},\n"))
+				}
+			}
+		}
+		crdBuf.Write([]byte("\t\t\t},\n"))
+		crdBuf.Write([]byte("\t\t},\n"))
+	}
+	crdBuf.Write([]byte("\t}\n}\n\n"))
+}
+
+// resolveWrapperKind converts a revisioned_in kind string (e.g. "revision")
+// to the wrapper CRD's Kind ("Revision") and validates, at codegen time,
+// that a message by that name actually exists in this compile unit and
+// is itself a CRD resource (has_resource).
+func resolveWrapperKind(baseCrdName, kind string, allProtoMsgs map[string]*protogen.Message,
+	extTypes *protoregistry.Types) string {
+	if kind == "" {
+		logger.Panicf("Invalid revisioned_in annotation on %v: kind is empty", baseCrdName)
+	}
+	wrapperKind := snakeToPascalCase(kind)
+
+	wrapperMsg, ok := allProtoMsgs[wrapperKind]
+	if !ok {
+		logger.Panicf("Invalid revisioned_in annotation on %v: kind %q does not resolve to any message "+
+			"named %q in this compile unit", baseCrdName, kind, wrapperKind)
+	}
+	wrapperOptions, err := pboptions.ReadOptions(extTypes, wrapperMsg.Desc.Options().(*descriptorpb.MessageOptions))
+	if err != nil {
+		logger.Panicf("Invalid revisioned_in annotation on %v: failed to read options of wrapper message %v: %v",
+			baseCrdName, wrapperKind, err)
+	}
+	if wrapperOptions == nil || !wrapperOptions.Bool("has_resource") {
+		logger.Panicf("Invalid revisioned_in annotation on %v: kind %q resolves to message %v, which is not "+
+			"a CRD resource (missing michelangelo.api.resource)", baseCrdName, kind, wrapperKind)
+	}
+	return wrapperKind
+}
+
+func snakeToPascalCase(s string) string {
+	parts := strings.Split(s, "_")
+	for i, p := range parts {
+		if p != "" {
+			parts[i] = strings.ToUpper(p[:1]) + p[1:]
+		}
+	}
+	return strings.Join(parts, "")
 }
 
 func findBlobFields(curMsg *protogen.Message, pathPrefix string, blobFields *[]string,
@@ -564,6 +684,17 @@ func generate(reqData []byte) *plugingo.CodeGeneratorResponse {
 	// Load group info
 	gInfoMap := groupinfo.Load(gen, extTypes)
 
+	// Every CRD message across the files being generated in this invocation,
+	// keyed by Go/proto name (e.g. "Revision"). A base type's revisioned_in[].kind
+	// (e.g. "revision") is validated against this set at codegen time.
+	allProtoMsgs := make(map[string]*protogen.Message)
+	for _, f := range gen.Files {
+		if !f.Generate {
+			continue
+		}
+		loadProtoMsgs(f.Messages, &allProtoMsgs)
+	}
+
 	processedGoPackageList := make(map[string]bool)
 	for _, f := range gen.Files {
 		// skip the proto file that don't need to generate go code,
@@ -576,7 +707,7 @@ func generate(reqData []byte) *plugingo.CodeGeneratorResponse {
 			logger.Panicln(fmt.Sprintf("Failed to derive API group version info for protobuf package: %v. "+
 				"Make sure to define groupversion_info.proto for the API group.", f.Desc.Package()))
 		}
-		updateGoFile(gofiles[f.Proto.GetName()], f, extTypes, gInfo, &processedGoPackageList)
+		updateGoFile(gofiles[f.Proto.GetName()], f, extTypes, gInfo, &processedGoPackageList, allProtoMsgs)
 	}
 	return resp
 }

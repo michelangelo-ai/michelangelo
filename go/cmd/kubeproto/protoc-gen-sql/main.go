@@ -82,7 +82,57 @@ func generateSQLSchema(crdRootMsg *protogen.Message, crdOptions *pboptions.Optio
 	buf.Write([]byte("\n);"))
 
 	templates.CRDMySQLLabelAnnotationTable.Execute(&buf, typeInfo)
+
+	// If this CRD is a revisioned base type (resource.revisioned_in is non-empty),
+	// emit one sidecar "<base>_<wrapper>_unmarshalled" table per wrapper kind it
+	// opts into. The wrapper kind resolves to a wrapper CRD by convention
+	// (e.g. "revision" -> keyed on revision_uid; the wrapped resource lives at
+	// spec.content).
+	for _, wrapper := range util.ParseContentIndexedFields(crdRootMsg, crdOptions) {
+		emitUnmarshalledTable(&buf, crdTableName, wrapper.Fields, wrapper.Kind)
+	}
 	return buf.Bytes()
+}
+
+// emitUnmarshalledTable writes one content sidecar table for a (base, wrapper)
+// pair, with a column per content_index field:
+//
+//	CREATE TABLE `<base>_<wrapper>_unmarshalled` (
+//	    `<wrapper>_uid`  VARCHAR(255) NOT NULL,
+//	    `<key>`      <type>, ...
+//	    PRIMARY KEY (`<wrapper>_uid`),
+//	    KEY `..._<key>` (`<key>`), ...
+//	);
+func emitUnmarshalledTable(buf *bytes.Buffer, baseTableName string, fields []util.IndexedField, wrapperKind string) {
+	tableName := baseTableName + "_" + wrapperKind + "_unmarshalled"
+	uidColumn := wrapperKind + "_uid"
+
+	templates.CRDMySQLUnmarshalledTable.Execute(buf, struct {
+		TableName string
+		UIDColumn string
+	}{tableName, uidColumn})
+
+	for _, field := range fields {
+		if field.Flag&util.IndexFlagPrimitive != 0 {
+			buf.Write([]byte("    `" + field.Key + "`    " + field.Type + ",\n"))
+		} else {
+			for _, subField := range field.SubFields {
+				buf.Write([]byte("    `" + subField.Key + "`    " + subField.Type + ",\n"))
+			}
+		}
+	}
+
+	buf.Write([]byte("    PRIMARY KEY (`" + uidColumn + "`)"))
+	for _, field := range fields {
+		if field.Flag&util.IndexFlagPrimitive != 0 {
+			buf.Write([]byte(",\n    KEY    `" + getIndexName(tableName, field.Key) + "` (`" + field.Key + "`)"))
+		} else {
+			for _, subField := range field.SubFields {
+				buf.Write([]byte(",\n    KEY    `" + getIndexName(tableName, subField.Key) + "` (`" + subField.Key + "`)"))
+			}
+		}
+	}
+	buf.Write([]byte("\n);\n"))
 }
 
 func generateSQL(reqData []byte) *pluginpb.CodeGeneratorResponse {
@@ -109,7 +159,7 @@ func generateSQL(reqData []byte) *pluginpb.CodeGeneratorResponse {
 			}
 
 			if options.Bool("has_resource") {
-				buf = generateSQLSchema(msg, options)
+				buf = append(buf, generateSQLSchema(msg, options)...)
 			}
 		}
 
