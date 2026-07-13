@@ -17,6 +17,7 @@ on:
 jobs:
   publish:
     strategy:
+      fail-fast: false
       matrix:
         package: [core, rpc]
     runs-on: ubuntu-latest
@@ -83,6 +84,11 @@ jobs:
         run: |
           cd javascript/packages/${{ matrix.package }}
           VERSION=$(node -p "require('./package.json').version")
+          PKG=$(node -p "require('./package.json').name")
+          if npm view "$PKG@$VERSION" version > /dev/null 2>&1; then
+            echo "$PKG@$VERSION is already published, skipping."
+            exit 0
+          fi
           if echo "$VERSION" | grep -q -- '-'; then
             npm publish --provenance --access public --tag rc
           else
