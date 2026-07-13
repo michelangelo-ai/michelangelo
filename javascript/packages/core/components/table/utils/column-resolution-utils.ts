@@ -41,7 +41,7 @@ import type { TableData } from '#core/components/table/types/data-types';
 export function resolveColumnForRow<T extends TableData = TableData>(
   column: ColumnConfig<T>,
   // TableData = unknown makes T extends TableData unconstrained; row: T causes TS2345
-  // when callers pass record: object. Restore row: T once TableData = Record<string, unknown>
+  // when callers pass record: object. Restore row: T once TableData = Record<string, unknown>; see #1416
   row: unknown
 ): ColumnConfig<T> {
   // TODO: #277 generalize typeMeta.kind access in a type-safe way
