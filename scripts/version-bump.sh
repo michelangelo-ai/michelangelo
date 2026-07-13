@@ -100,6 +100,23 @@ set_version() {
     printf "  %-50s → %s\n" "$file" "$new_version"
   done
 
+  # Pin internal @michelangelo-ai/* workspace deps to the exact new version.
+  # A bare "*" range never matches a prerelease version under node-semver, so
+  # yarn's workspace resolver falls back to the npm registry and fails when
+  # the version being bumped to has a -rc./-nightly. suffix. Pinning keeps
+  # local resolution working regardless of prerelease suffixes.
+  sed -i.bak \
+    -e "s/\"@michelangelo-ai\/rpc\": \"[^\"]*\"/\"@michelangelo-ai\/rpc\": \"$new_version\"/" \
+    -e "s/\"@michelangelo-ai\/core\": \"[^\"]*\"/\"@michelangelo-ai\/core\": \"$new_version\"/" \
+    "$REPO_ROOT/javascript/app/package.json"
+  rm -f "$REPO_ROOT/javascript/app/package.json.bak"
+  printf "  %-50s → %s\n" "javascript/app/package.json (internal deps)" "$new_version"
+
+  sed -i.bak "s/\"@michelangelo-ai\/core\": \"[^\"]*\"/\"@michelangelo-ai\/core\": \"$new_version\"/" \
+    "$REPO_ROOT/javascript/packages/rpc/package.json"
+  rm -f "$REPO_ROOT/javascript/packages/rpc/package.json.bak"
+  printf "  %-50s → %s\n" "javascript/packages/rpc/package.json (internal deps)" "$new_version"
+
   # Helm Chart.yaml — version and appVersion
   sed -i.bak "s/^version: .*/version: $new_version/" "$REPO_ROOT/helm/michelangelo/Chart.yaml"
   sed -i.bak "s/^appVersion: .*/appVersion: \"$new_version\"/" "$REPO_ROOT/helm/michelangelo/Chart.yaml"
