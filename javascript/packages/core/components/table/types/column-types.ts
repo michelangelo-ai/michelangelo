@@ -1,6 +1,6 @@
 import '@tanstack/react-table'; //or vue, svelte, solid, qwik, etc.
 
-import type { AggregationFnOption, SortingFnOption } from '@tanstack/react-table';
+import type { AggregationFnOption, ColumnMeta, SortingFnOption } from '@tanstack/react-table';
 import type { ComponentType, ReactNode } from 'react';
 import type {
   Cell,
@@ -112,6 +112,10 @@ export type ColumnConfig<TData = TableData> = DistributiveOmit<Cell<TData>, 'too
    */
   tooltip?: ColumnTooltip<TData>;
 };
+
+/** @internal Fails with TS2344 if ColumnMeta diverges from ColumnConfig.
+ * Add missing fields to the ColumnMeta interface above to restore the check. */
+export type CheckColumnMetaSync<T extends ColumnConfig = ColumnMeta<TableData, unknown>> = T;
 
 /**
  * Base column properties extracted from ColumnConfig for rendering.
