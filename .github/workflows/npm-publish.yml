@@ -82,4 +82,9 @@ jobs:
         if: steps.check.outputs.changed == 'true'
         run: |
           cd javascript/packages/${{ matrix.package }}
-          npm publish --provenance --access public
+          VERSION=$(node -p "require('./package.json').version")
+          if echo "$VERSION" | grep -q -- '-'; then
+            npm publish --provenance --access public --tag rc
+          else
+            npm publish --provenance --access public
+          fi
