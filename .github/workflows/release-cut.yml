@@ -88,6 +88,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Trigger changelog generation for the RC tag
+        run: |
+          gh workflow run changelog.yml --ref "${{ steps.vars.outputs.tag }}" -f tag="${{ steps.vars.outputs.tag }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Ensure the release tracking label exists
         run: gh label create release --color ededed --description "Release tracking issue" --force
         env:
