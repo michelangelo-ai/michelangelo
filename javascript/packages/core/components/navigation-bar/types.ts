@@ -7,9 +7,3 @@ export type NavigationLink = {
 
 /** BaseUI types `mainItems`/`mapItemToNode` against the generic `NavItem` (`info: any`); these are always the entries built from `NavigationLink`s. */
 export type LinkNavItem = Omit<NavItem, 'info'> & { info: { href: string } };
-
-export type UserMenuItem = {
-  label: string;
-  icon?: React.ReactNode;
-  onClick: () => void;
-};

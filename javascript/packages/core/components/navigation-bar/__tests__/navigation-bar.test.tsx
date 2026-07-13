@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
@@ -8,7 +8,7 @@ import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { getUserProviderWrapper } from '#core/test/wrappers/get-user-provider-wrapper';
 import { NavigationBar } from '../navigation-bar';
 
-import type { NavigationLink, UserMenuItem } from '../types';
+import type { NavigationLink } from '../types';
 
 describe('NavigationBar', () => {
   // AppNavBar renders both its desktop and mobile menu variants at once and switches
@@ -64,11 +64,9 @@ describe('NavigationBar', () => {
     });
   });
 
-  it('renders user initials when user context and menu items are provided', () => {
-    const userMenuItems: UserMenuItem[] = [{ label: 'Settings', onClick: vi.fn() }];
-
+  it('renders user initials from the user provider', () => {
     render(
-      <NavigationBar userMenuItems={userMenuItems} />,
+      <NavigationBar />,
       buildWrapper([
         getBaseProviderWrapper(),
         getRouterWrapper(),
@@ -79,12 +77,9 @@ describe('NavigationBar', () => {
     expect(screen.getAllByText('TU').length).toBeGreaterThan(0);
   });
 
-  it('fires onClick when a user menu item is selected', async () => {
-    const handleClick = vi.fn();
-    const userMenuItems: UserMenuItem[] = [{ label: 'Settings', onClick: handleClick }];
-
+  it('shows the hardcoded Sign out menu item', async () => {
     render(
-      <NavigationBar userMenuItems={userMenuItems} />,
+      <NavigationBar />,
       buildWrapper([
         getBaseProviderWrapper(),
         getRouterWrapper(),
@@ -94,9 +89,6 @@ describe('NavigationBar', () => {
 
     await userEvent.click(screen.getAllByText('TU')[0]);
 
-    const settingsItems = screen.getAllByText('Settings');
-    await userEvent.click(settingsItems[0]);
-
-    expect(handleClick).toHaveBeenCalled();
+    expect(screen.getAllByText('Sign out').length).toBeGreaterThan(0);
   });
 });

@@ -10,7 +10,7 @@ import { Router } from '#core/router/router';
 import { ThemeProvider } from '#core/themes/theme-provider';
 import { TimeZone } from '#core/types/time-types';
 
-import type { NavigationLink, UserMenuItem } from '#core/components/navigation-bar/types';
+import type { NavigationLink } from '#core/components/navigation-bar/types';
 import type { ErrorContextValue } from '#core/providers/error-provider/types';
 import type { IconProviderContext } from '#core/providers/icon-provider/types';
 import type { ServiceContextType } from '#core/providers/service-provider/types';
@@ -26,7 +26,6 @@ type Props = {
     theme: IconProviderContext;
     navigationBar?: {
       links?: NavigationLink[];
-      userMenuItems?: UserMenuItem[];
     };
     user?: UserContextType;
   };
@@ -41,10 +40,7 @@ export function CoreApp({ dependencies }: Props) {
             <ErrorProvider {...dependencies.error}>
               <IconProvider icons={dependencies.theme.icons}>
                 <UserProvider {...(dependencies.user ?? { timeZone: TimeZone.Local })}>
-                  <NavigationBar
-                    links={dependencies.navigationBar?.links}
-                    userMenuItems={dependencies.navigationBar?.userMenuItems}
-                  />
+                  <NavigationBar links={dependencies.navigationBar?.links} />
                   <Router />
                 </UserProvider>
               </IconProvider>
@@ -216,7 +212,7 @@ export type {
 
 // Navigation Bar
 export { NavigationBar } from '#core/components/navigation-bar/navigation-bar';
-export type { NavigationLink, UserMenuItem } from '#core/components/navigation-bar/types';
+export type { NavigationLink } from '#core/components/navigation-bar/types';
 
 // User Provider
 export { UserProvider } from '#core/providers/user-provider/user-provider';

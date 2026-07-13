@@ -7,7 +7,7 @@ import { Provider as StyletronProvider } from 'styletron-react';
 
 import { ICONS } from './icons/icons';
 
-import type { NavigationLink, UserMenuItem } from '@michelangelo-ai/core';
+import type { NavigationLink } from '@michelangelo-ai/core';
 
 const NAVIGATION_LINKS: NavigationLink[] = [
   { label: 'Docs', href: 'https://michelangelo-ai.github.io/michelangelo/' },
@@ -19,11 +19,6 @@ const DEV_USER = {
   role: UserRole.Admin,
   timeZone: TimeZone.Local,
 };
-
-const USER_MENU_ITEMS: UserMenuItem[] = [
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
-  { label: 'Sign out', onClick: () => {} },
-];
 
 const dependencies = {
   error: {
@@ -37,7 +32,6 @@ const dependencies = {
   },
   navigationBar: {
     links: NAVIGATION_LINKS,
-    userMenuItems: USER_MENU_ITEMS,
   },
   user: DEV_USER,
 };

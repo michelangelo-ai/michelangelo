@@ -7,14 +7,15 @@ import { StableUserMenuButton } from './stable-user-menu-button';
 
 import type { NavItem } from 'baseui/app-nav-bar';
 import type { Theme } from 'baseui/theme';
-import type { LinkNavItem, NavigationLink, UserMenuItem } from './types';
+import type { LinkNavItem, NavigationLink } from './types';
 
 type Props = {
   links?: NavigationLink[];
-  userMenuItems?: UserMenuItem[];
 };
 
-export function NavigationBar({ links, userMenuItems }: Props) {
+const USER_MENU_ITEMS: NavItem[] = [{ label: 'Sign out' }];
+
+export function NavigationBar({ links }: Props) {
   const user = useUserProvider();
 
   const mainItems: LinkNavItem[] =
@@ -22,18 +23,6 @@ export function NavigationBar({ links, userMenuItems }: Props) {
       label: link.label,
       info: { href: link.href },
     })) ?? [];
-
-  const userItems: NavItem[] =
-    userMenuItems?.map((item) => ({
-      label: item.label,
-      info: { onClick: item.onClick, icon: item.icon },
-    })) ?? [];
-
-  const handleUserMenuItemSelect = (item: NavItem) => {
-    // cast: NavItem.info is typed as `any` in BaseUI
-    const info = item.info as { onClick?: () => void } | undefined;
-    info?.onClick?.();
-  };
 
   return (
     <AppNavBar
@@ -44,11 +33,12 @@ export function NavigationBar({ links, userMenuItems }: Props) {
       }
       mainItems={mainItems}
       mapItemToNode={(item) => {
-        // cast: see LinkNavItem in types.ts
-        const { href } = (item as LinkNavItem).info;
+        // cast: NavItem.info is typed as `any` in BaseUI; mainItems always carry LinkNavItem shape
+        const info = (item as LinkNavItem).info;
+        if (!info?.href) return <>{item.label}</>;
         return (
           <Button
-            href={href}
+            href={info.href}
             target="_blank"
             rel="noopener noreferrer"
             kind={KIND.tertiary}
@@ -70,8 +60,7 @@ export function NavigationBar({ links, userMenuItems }: Props) {
       username={user.name}
       usernameSubtitle={user.email}
       userImgUrl={user.avatarUrl}
-      userItems={userItems}
-      onUserItemSelect={handleUserMenuItemSelect}
+      userItems={USER_MENU_ITEMS}
       overrides={{
         Root: { style: { position: 'relative' as const } },
         AppName: { style: { whiteSpace: 'nowrap' } },
