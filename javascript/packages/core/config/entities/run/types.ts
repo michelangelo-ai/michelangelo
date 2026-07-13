@@ -4,7 +4,8 @@ export type PipelineRun = {
     namespace: string;
   };
   spec: {
-    actor: {
+    /** Populated server-side from the `x-user-name` request header, not set by the client. */
+    actor?: {
       name: string;
     };
     pipeline: {

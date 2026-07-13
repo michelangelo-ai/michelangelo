@@ -1,3 +1,6 @@
+import { create } from '@bufbuild/protobuf';
+
+import { UserInfoSchema } from './gen/michelangelo/api/v2/user_pb';
 import { getServices } from './services';
 
 import type { PipelineRun } from './gen/michelangelo/api/v2/pipeline_run_pb';
@@ -28,12 +31,17 @@ async function createHandlers() {
     GetPipelineRun: unary(services.PipelineRunService.getPipelineRun),
     ListTriggerRun: unary(services.TriggerRunService.listTriggerRun),
     GetTriggerRun: unary(services.TriggerRunService.getTriggerRun),
-    UpdateTriggerRun: (record: TriggerRun) =>
-      services.TriggerRunService.updateTriggerRun({ triggerRun: record }),
-    CreatePipelineRun: (record: PipelineRun) =>
-      services.PipelineRunService.createPipelineRun({ pipelineRun: record }),
-    UpdatePipelineRun: (record: PipelineRun) =>
-      services.PipelineRunService.updatePipelineRun({ pipelineRun: record }),
+    UpdateTriggerRun: (record: TriggerRun, headers?: Record<string, string>) =>
+      services.TriggerRunService.updateTriggerRun({ triggerRun: record }, headers),
+    CreatePipelineRun: (record: PipelineRun, headers?: Record<string, string>) => {
+      const actorName = headers?.['x-user-name'];
+      if (actorName && record.spec) {
+        record.spec.actor = create(UserInfoSchema, { name: actorName });
+      }
+      return services.PipelineRunService.createPipelineRun({ pipelineRun: record }, headers);
+    },
+    UpdatePipelineRun: (record: PipelineRun, headers?: Record<string, string>) =>
+      services.PipelineRunService.updatePipelineRun({ pipelineRun: record }, headers),
     ListModel: unary(services.ModelService.listModel),
   } as const;
 }

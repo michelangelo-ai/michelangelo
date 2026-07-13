@@ -10,6 +10,7 @@ import type { OmitTypeName, RpcHandlerType } from './types';
  *
  * @param rpcId - The ID of the RPC handler to call.
  * @param args - The arguments to pass to the RPC handler.
+ * @param headers - Optional HTTP headers to send with the request (e.g. user identity).
  * @returns A promise that resolves to the RPC response as a plain object.
  *
  * @example
@@ -21,14 +22,15 @@ import type { OmitTypeName, RpcHandlerType } from './types';
  */
 export async function request<RpcId extends keyof RpcHandlerType>(
   rpcId: RpcId,
-  args: OmitTypeName<Parameters<RpcHandlerType[RpcId]>[0]>
+  args: OmitTypeName<Parameters<RpcHandlerType[RpcId]>[0]>,
+  headers?: Record<string, string>
 ): Promise<OmitTypeName<Awaited<ReturnType<RpcHandlerType[RpcId]>>>> {
   const handlers = await getRpcHandlers();
   // cast: dynamic key lookup on handlers loses the specific RPC signature; we know RpcId is a valid
   // key with matching handler shape
-  const handler = handlers[rpcId] as (a: unknown) => Promise<unknown>;
+  const handler = handlers[rpcId] as (a: unknown, h?: Record<string, string>) => Promise<unknown>;
   // cast: handler returns unknown via dynamic dispatch; RpcId determines the concrete return type
-  const response = (await handler(args)) as Awaited<ReturnType<RpcHandlerType[RpcId]>>;
+  const response = (await handler(args, headers)) as Awaited<ReturnType<RpcHandlerType[RpcId]>>;
   // cast: toPlainObject returns unknown; RpcId determines the proto shape after stripping $typeName
   // fields
   return toPlainObject(response) as OmitTypeName<Awaited<ReturnType<RpcHandlerType[RpcId]>>>;

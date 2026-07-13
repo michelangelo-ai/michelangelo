@@ -16,10 +16,10 @@ export function createFetchTransport(options: FetchTransportOptions): FetchTrans
   };
 
   return {
-    async callUnary(serviceName, methodName, request) {
+    async callUnary(serviceName, methodName, request, perRequestHeaders) {
       const response = await fetch(`${baseUrl}/${serviceName}/${methodName}`, {
         method: 'POST',
-        headers,
+        headers: perRequestHeaders ? { ...headers, ...perRequestHeaders } : headers,
         body: JSON.stringify(request),
       });
 

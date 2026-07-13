@@ -26,15 +26,23 @@ function createServiceClient<T extends DescService>(
   service: T,
   transport: FetchTransport
 ): ServiceClient<T> {
-  const client: Record<string, (request: Record<string, unknown>) => Promise<unknown>> = {};
+  const client: Record<
+    string,
+    (request: Record<string, unknown>, headers?: Record<string, string>) => Promise<unknown>
+  > = {};
 
   for (const method of service.methods) {
     if (method.methodKind !== 'unary') continue;
 
-    client[method.localName] = async (request) => {
+    client[method.localName] = async (request, headers) => {
       const message = create(method.input, request);
       const requestJson = toJson(method.input, message, { registry: typeRegistry });
-      const responseJson = await transport.callUnary(service.typeName, method.name, requestJson);
+      const responseJson = await transport.callUnary(
+        service.typeName,
+        method.name,
+        requestJson,
+        headers
+      );
       return fromJson(method.output, responseJson, { registry: typeRegistry });
     };
   }

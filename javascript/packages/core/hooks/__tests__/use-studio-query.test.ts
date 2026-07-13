@@ -7,6 +7,7 @@ import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { getServiceProviderWrapper } from '#core/test/wrappers/get-service-provider-wrapper';
+import { getUserProviderWrapper } from '#core/test/wrappers/get-user-provider-wrapper';
 import { ApplicationError } from '#core/types/error-types';
 
 import type { ErrorNormalizer } from '#core/types/error-types';
@@ -119,7 +120,8 @@ describe('useStudioQuery', () => {
       await waitFor(() => {
         expect(mockRequest).toHaveBeenCalledWith(
           'GetDataset',
-          expect.objectContaining({ namespace: 'ma-dev-test' })
+          expect.objectContaining({ namespace: 'ma-dev-test' }),
+          {}
         );
       });
     });
@@ -141,7 +143,8 @@ describe('useStudioQuery', () => {
       await waitFor(() => {
         expect(mockRequest).toHaveBeenCalledWith(
           'GetDataset',
-          expect.objectContaining({ namespace: 'provided-namespace' })
+          expect.objectContaining({ namespace: 'provided-namespace' }),
+          {}
         );
       });
     });
@@ -191,10 +194,14 @@ describe('useStudioQuery', () => {
       );
 
       await waitFor(() => {
-        expect(mockRequest).toHaveBeenCalledWith('GetDataset', {
-          filter: 'active',
-          namespace: 'ma-dev-test',
-        });
+        expect(mockRequest).toHaveBeenCalledWith(
+          'GetDataset',
+          {
+            filter: 'active',
+            namespace: 'ma-dev-test',
+          },
+          {}
+        );
       });
     });
   });
@@ -237,6 +244,27 @@ describe('useStudioQuery', () => {
       const error = result.current.error!;
       expect(error.message).toEqual('RPC request failed');
       expect(error.source).toEqual('custom-normalizer');
+    });
+  });
+
+  test('passes user identity as request headers when user context is provided', async () => {
+    mockRequest.mockResolvedValue({});
+
+    renderHook(
+      () => useStudioQuery({ queryName: 'GetDataset', serviceOptions: {} }),
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+        getUserProviderWrapper({ name: 'Jane Doe', email: 'jane@example.com' }),
+      ])
+    );
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith('GetDataset', expect.any(Object), {
+        'x-user-name': 'Jane Doe',
+        'x-user-email': 'jane@example.com',
+      });
     });
   });
 });

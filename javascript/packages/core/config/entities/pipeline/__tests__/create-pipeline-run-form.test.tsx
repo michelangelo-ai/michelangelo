@@ -59,15 +59,13 @@ describe('CreatePipelineRunForm', () => {
             namespace: 'ma-dev-test',
           }) as Record<string, unknown>,
           spec: expect.objectContaining({
-            actor: {
-              name: 'mastudio-user',
-            },
             pipeline: {
               name: 'test-pipeline',
               namespace: 'ma-dev-test',
             },
           }) as Record<string, unknown>,
-        })
+        }),
+        {}
       );
     });
 
@@ -133,7 +131,8 @@ describe('CreatePipelineRunForm', () => {
           spec: expect.objectContaining({
             description: 'nightly evaluation run',
           }) as Record<string, unknown>,
-        })
+        }),
+        {}
       );
     });
   });

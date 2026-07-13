@@ -41,7 +41,12 @@ export interface FetchTransport {
    * Calls a unary RPC through Envoy's grpc_json_transcoder by POSTing JSON to
    * `/{serviceName}/{methodName}` and returning the parsed JSON response.
    */
-  callUnary(serviceName: string, methodName: string, request: unknown): Promise<JsonValue>;
+  callUnary(
+    serviceName: string,
+    methodName: string,
+    request: unknown,
+    headers?: Record<string, string>
+  ): Promise<JsonValue>;
 }
 
 /**
@@ -50,7 +55,7 @@ export interface FetchTransport {
  */
 export type ServiceClient<T extends DescService> = {
   [K in keyof T['method']]: T['method'][K] extends DescMethodUnary<infer I, infer O>
-    ? (request: MessageInitShape<I>) => Promise<MessageShape<O>>
+    ? (request: MessageInitShape<I>, headers?: Record<string, string>) => Promise<MessageShape<O>>
     : never;
 };
 
@@ -85,8 +90,11 @@ export type RpcHandlerType = Awaited<ReturnType<typeof getRpcHandlers>>;
  * // => (args: { projectId: string }) => Promise<Project>
  * ```
  */
-export type ExtractUnaryRpc<T> = T extends (args: Record<string, unknown>) => Promise<infer R>
-  ? (args: Record<string, unknown>) => Promise<R>
+export type ExtractUnaryRpc<T> = T extends (
+  args: Record<string, unknown>,
+  headers?: Record<string, string>
+) => Promise<infer R>
+  ? (args: Record<string, unknown>, headers?: Record<string, string>) => Promise<R>
   : never;
 
 /**

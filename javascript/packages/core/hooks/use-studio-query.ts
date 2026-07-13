@@ -4,6 +4,7 @@ import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studi
 import { useInterpolationResolver } from '#core/interpolation/use-interpolation-resolver';
 import { useErrorNormalizer } from '#core/providers/error-provider/use-error-normalizer';
 import { useServiceProvider } from '#core/providers/service-provider/use-service-provider';
+import { useUserRequestHeaders } from '#core/providers/user-provider/use-user-request-headers';
 
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { ApplicationError } from '#core/types/error-types';
@@ -70,6 +71,7 @@ export const useStudioQuery = <TData>(args: {
   const { request } = useServiceProvider();
   const normalizeError = useErrorNormalizer();
   const resolver = useInterpolationResolver();
+  const userHeaders = useUserRequestHeaders();
 
   const serviceOptions = resolver(args.serviceOptions);
   // A CR's namespace is the projectId, but the serviceOptions may provide a different namespace
@@ -81,7 +83,7 @@ export const useStudioQuery = <TData>(args: {
     queryFn: async () => {
       try {
         // cast: service request returns unknown; TData is the caller-declared response type
-        return (await request(queryName, { ...serviceOptions, namespace })) as TData;
+        return (await request(queryName, { ...serviceOptions, namespace }, userHeaders)) as TData;
       } catch (error) {
         console.error('error', error);
         throw normalizeError(error)!;

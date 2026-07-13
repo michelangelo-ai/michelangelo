@@ -443,7 +443,7 @@ describe('ActionsPopover', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Kill it' }));
 
     await waitFor(() => {
-      expect(mockRequest).toHaveBeenCalledWith('UpdateTriggerRun', { id: 'run-1' });
+      expect(mockRequest).toHaveBeenCalledWith('UpdateTriggerRun', { id: 'run-1' }, {});
     });
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

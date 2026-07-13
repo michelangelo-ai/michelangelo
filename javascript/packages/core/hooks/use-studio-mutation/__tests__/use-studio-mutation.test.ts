@@ -11,6 +11,7 @@ import {
   getServiceProviderWrapper,
 } from '#core/test/wrappers/get-service-provider-wrapper';
 import { getSnackbarProviderWrapper } from '#core/test/wrappers/get-snackbar-provider-wrapper';
+import { getUserProviderWrapper } from '#core/test/wrappers/get-user-provider-wrapper';
 import { ApplicationError } from '#core/types/error-types';
 
 import type { ErrorNormalizer } from '#core/types/error-types';
@@ -35,7 +36,7 @@ describe('useStudioMutation', () => {
     result.current.mutate({ name: 'test-run' });
 
     await waitFor(() => {
-      expect(mockRequest).toHaveBeenCalledWith('CreatePipelineRun', { name: 'test-run' });
+      expect(mockRequest).toHaveBeenCalledWith('CreatePipelineRun', { name: 'test-run' }, {});
     });
   });
 
@@ -64,7 +65,8 @@ describe('useStudioMutation', () => {
     await waitFor(() => {
       expect(mockRequest).toHaveBeenCalledWith(
         'CreatePipelineRun',
-        expect.objectContaining({ spec: { action: 'KILL' } })
+        expect.objectContaining({ spec: { action: 'KILL' } }),
+        {}
       );
     });
   });
@@ -98,7 +100,8 @@ describe('useStudioMutation', () => {
     await waitFor(() => {
       expect(mockRequest).toHaveBeenCalledWith(
         'CreatePipelineRun',
-        expect.objectContaining({ metadata: { name: 'from-source' } })
+        expect.objectContaining({ metadata: { name: 'from-source' } }),
+        {}
       );
     });
   });
@@ -272,5 +275,31 @@ describe('useStudioMutation', () => {
     const error = result.current.error!;
     expect(error.message).toEqual('Pipeline run creation failed');
     expect(error.source).toEqual('mutation-normalizer');
+  });
+
+  test('passes user identity as request headers when user context is provided', async () => {
+    const mockRequest = createQueryMockRouter({
+      CreatePipelineRun: { id: 'test-id' },
+    });
+
+    const { result } = renderHook(
+      () => useStudioMutation({ mutationName: 'CreatePipelineRun' }),
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper(),
+        getServiceProviderWrapper({ request: mockRequest }),
+        getSnackbarProviderWrapper(),
+        getUserProviderWrapper({ name: 'Jane Doe', email: 'jane@example.com' }),
+      ])
+    );
+
+    result.current.mutate({ name: 'test-run' });
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith('CreatePipelineRun', expect.any(Object), {
+        'x-user-name': 'Jane Doe',
+        'x-user-email': 'jane@example.com',
+      });
+    });
   });
 });

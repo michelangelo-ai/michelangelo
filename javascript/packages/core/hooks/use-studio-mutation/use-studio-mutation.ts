@@ -4,6 +4,7 @@ import { useSuccessOperations } from '#core/components/actions/use-success-opera
 import { useSchemaMiddleware } from '#core/hooks/use-schema-middleware/use-schema-middleware';
 import { useErrorNormalizer } from '#core/providers/error-provider/use-error-normalizer';
 import { useServiceProvider } from '#core/providers/service-provider/use-service-provider';
+import { useUserRequestHeaders } from '#core/providers/user-provider/use-user-request-headers';
 
 import type { ApplicationError } from '#core/types/error-types';
 import type { MutationConfig } from '#core/types/query-types';
@@ -16,13 +17,14 @@ export const useStudioMutation = <TResponse, TPayload extends Record<string, unk
   const normalizeError = useErrorNormalizer();
   const runSuccessOperations = useSuccessOperations(config?.successOperations);
   const { applyMiddleware } = useSchemaMiddleware(config?.middleware);
+  const userHeaders = useUserRequestHeaders();
 
   const mutation = useMutation<TResponse, ApplicationError, TPayload>({
     mutationFn: async (payload: TPayload) => {
       if (!config) throw new Error('useStudioMutation called without config');
       try {
         // cast: service request returns unknown; TResponse is the caller-declared response type
-        return (await request(config.mutationName, payload)) as TResponse;
+        return (await request(config.mutationName, payload, userHeaders)) as TResponse;
       } catch (error) {
         console.error('mutation error', error);
         throw normalizeError(error)!;

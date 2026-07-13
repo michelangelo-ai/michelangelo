@@ -102,7 +102,7 @@ export function createServiceProviderTestContext(serviceProvider: Partial<Servic
 export function createQueryMockRouter(
   responses: Record<string, object | Error>
 ): ServiceContextType['request'] {
-  return vi.fn((queryName: string, args: object) => {
+  return vi.fn((queryName: string, args: object, _headers?: Record<string, string>) => {
     if (args) {
       for (const [responseKey, response] of Object.entries(responses)) {
         if (isEqual(parseArgsFromKey(responseKey), { queryName, args })) {

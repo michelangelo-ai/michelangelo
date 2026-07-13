@@ -8,5 +8,5 @@
  * return types are unknown.
  */
 export type ServiceContextType = {
-  request: (requestId: string, args: unknown) => Promise<unknown>;
+  request: (requestId: string, args: unknown, headers?: Record<string, string>) => Promise<unknown>;
 };

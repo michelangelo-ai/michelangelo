@@ -78,7 +78,8 @@ describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
           spec: expect.objectContaining({
             action: TriggerRunAction.KILL,
           }) as Record<string, unknown>,
-        })
+        }),
+        {}
       );
     });
   });

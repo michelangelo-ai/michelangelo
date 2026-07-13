@@ -72,7 +72,8 @@ describe('RetryCell', () => {
     await waitFor(() => {
       expect(mockRequest).toHaveBeenCalledWith(
         'GetPipelineRun',
-        expect.objectContaining({ namespace: 'test-project', name: 'test-run' })
+        expect.objectContaining({ namespace: 'test-project', name: 'test-run' }),
+        {}
       );
     });
 
@@ -132,7 +133,8 @@ describe('RetryCell', () => {
               reason: 'Manual retry from UI',
             },
           }) as Record<string, unknown>,
-        })
+        }),
+        {}
       );
     });
 
@@ -185,7 +187,8 @@ describe('RetryCell', () => {
               reason: 'Pipeline failed due to OOM',
             }) as Record<string, unknown>,
           }) as Record<string, unknown>,
-        })
+        }),
+        {}
       );
     });
   });

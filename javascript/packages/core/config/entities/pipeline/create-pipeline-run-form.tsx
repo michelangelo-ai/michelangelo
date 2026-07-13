@@ -30,9 +30,6 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
       namespace: projectId,
     },
     spec: {
-      actor: {
-        name: 'mastudio-user',
-      },
       pipeline: {
         name: record?.metadata?.name ?? '',
         namespace: projectId,
