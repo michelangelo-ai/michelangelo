@@ -40,7 +40,7 @@ import type { TableData } from '#core/components/table/types/data-types';
  */
 export function resolveColumnForRow<T extends TableData = TableData>(
   column: ColumnConfig<T>,
-  row: T
+  row: unknown
 ): ColumnConfig<T> {
   // TODO: #277 generalize typeMeta.kind access in a type-safe way
   // @ts-expect-error - typeMeta may not exist on generic type T, but we handle it safely with optional chaining
