@@ -64,7 +64,7 @@ describe('NavigationBar', () => {
     });
   });
 
-  it('renders user initials from the user provider', () => {
+  it('renders user identity from the user provider', () => {
     render(
       <NavigationBar />,
       buildWrapper([
@@ -77,7 +77,7 @@ describe('NavigationBar', () => {
     expect(screen.getAllByText('TU').length).toBeGreaterThan(0);
   });
 
-  it('shows the hardcoded Sign out menu item', async () => {
+  it('shows the Sign out menu item when the user menu is opened', async () => {
     render(
       <NavigationBar />,
       buildWrapper([
@@ -89,6 +89,6 @@ describe('NavigationBar', () => {
 
     await userEvent.click(screen.getAllByText('TU')[0]);
 
-    expect(screen.getAllByText('Sign out').length).toBeGreaterThan(0);
+    expect(screen.getByRole('option', { name: 'Sign out' })).toBeInTheDocument();
   });
 });

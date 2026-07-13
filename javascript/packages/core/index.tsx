@@ -211,11 +211,7 @@ export type {
 } from '#core/components/views/detail-view/types/detail-view-component-types';
 
 // Navigation Bar
-export { NavigationBar } from '#core/components/navigation-bar/navigation-bar';
 export type { NavigationLink } from '#core/components/navigation-bar/types';
 
 // User Provider
-export { UserProvider } from '#core/providers/user-provider/user-provider';
-export { useUserProvider } from '#core/providers/user-provider/use-user-provider';
-export type { UserContextType } from '#core/providers/user-provider/types';
 export { UserRole } from '#core/providers/user-provider/types';
