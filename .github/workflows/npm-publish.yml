@@ -70,6 +70,12 @@ jobs:
         if: steps.check.outputs.changed == 'true'
         run: |
           cd javascript
+          # rpc imports core's built dist/ output at build time. Each matrix
+          # instance is an isolated runner, so core's own "publish (core)" job
+          # never populates it here -- build core first whenever it's needed.
+          if [ "${{ matrix.package }}" = "rpc" ]; then
+            yarn workspace @michelangelo-ai/core build
+          fi
           yarn workspace @michelangelo-ai/${{ matrix.package }} build
 
       - name: Publish to npm
