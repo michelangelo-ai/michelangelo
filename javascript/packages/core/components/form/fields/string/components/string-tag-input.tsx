@@ -1,4 +1,5 @@
 import { forwardRef } from 'react';
+import { useStyletron } from 'baseui';
 import { DeleteAlt } from 'baseui/icon';
 import { ADJOINED, SIZE, StyledInput } from 'baseui/input';
 import { StyledClearIcon, StyledIconsContainer, StyledValueContainer } from 'baseui/select';
@@ -20,6 +21,7 @@ export const StringTagInput = forwardRef<HTMLInputElement, StringTagInputProps>(
       valueList,
       ...restProps
     } = props;
+    const [, theme] = useStyletron();
 
     const handleClearInput = () => {
       clear();
@@ -36,7 +38,7 @@ export const StringTagInput = forwardRef<HTMLInputElement, StringTagInputProps>(
 
     return (
       <>
-        <StyledValueContainer $multi={true}>
+        <StyledValueContainer $multi={true} $style={{ gap: theme.sizing.scale100 }}>
           {valueList.map((value, index) => (
             <StringTag
               key={index}

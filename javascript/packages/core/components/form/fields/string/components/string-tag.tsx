@@ -1,31 +1,28 @@
 import { useState } from 'react';
+import { useStyletron } from 'baseui';
 import { ADJOINED, SIZE, StyledInput } from 'baseui/input';
 
 import { Icon } from '#core/components/icon/icon';
 import { TAG_BEHAVIOR, TAG_HIERARCHY } from '#core/components/tag/constants';
 import { Tag } from '#core/components/tag/tag';
 
+import type { Theme } from 'baseui';
 import type { KeyboardEvent } from 'react';
 import type { StringTagProps } from './types';
 
-// Tighter sizing than the shared Tag's default, to suit a compact tag-input list.
-// Longhand properties (not `margin`/`padding` shorthand) to match getTagOverrides' own longhand
-// Root override — mixing shorthand and longhand for the same property in one style object is
-// unsupported by styletron's atomic rendering and resolves by CSS class insertion order, not
-// object key order.
-const TAG_ROOT_STYLE = {
-  marginTop: '2px',
-  marginRight: '2px',
-  marginBottom: '2px',
-  marginLeft: '2px',
-  paddingTop: '4px',
-  paddingRight: '6px',
-  paddingBottom: '4px',
-  paddingLeft: '6px',
-};
+// Tighter padding than the shared Tag's default, to suit a compact tag-input list. Spacing
+// between tags is handled by the container's `gap` (see StringTagInput) rather than margin here,
+// since Tag's own overrides always win margin conflicts on this property when merged.
+const getTagRootStyle = (theme: Theme) => ({
+  paddingTop: theme.sizing.scale100,
+  paddingRight: theme.sizing.scale200,
+  paddingBottom: theme.sizing.scale100,
+  paddingLeft: theme.sizing.scale200,
+});
 
 export function StringTag(props: StringTagProps) {
   const { closeable, index, onRemove, readOnly, updateValue, value: initialValue } = props;
+  const [, theme] = useStyletron();
 
   const [editing, setEditing] = useState(false);
   const [localValue, setLocalValue] = useState(initialValue);
@@ -53,9 +50,11 @@ export function StringTag(props: StringTagProps) {
         overrides={{
           ActionIcon: {
             component: Icon,
-            props: { name: 'check', onMouseDown: persistEditedValue },
+            // Matches the size baseui's own small Tag action icon (e.g. the remove icon)
+            // renders at, so the confirm icon doesn't look oversized next to it.
+            props: { name: 'check', onMouseDown: persistEditedValue, size: theme.sizing.scale500 },
           },
-          Root: { style: TAG_ROOT_STYLE },
+          Root: { style: getTagRootStyle(theme) },
         }}
         behavior={TAG_BEHAVIOR.selection}
         hierarchy={TAG_HIERARCHY.secondary}
@@ -80,7 +79,7 @@ export function StringTag(props: StringTagProps) {
       closeable={closeable}
       onActionClick={onRemove}
       onClick={() => setEditing(true)}
-      overrides={{ Root: { style: TAG_ROOT_STYLE } }}
+      overrides={{ Root: { style: getTagRootStyle(theme) } }}
       hierarchy={TAG_HIERARCHY.primary}
     >
       {initialValue}
