@@ -3,6 +3,10 @@
   "license": "Apache-2.0",
   "type": "module",
   "version": "0.4.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michelangelo-ai/michelangelo"
+  },
   "scripts": {
     "build": "vite build",
     "test": "cd ../../ && yarn test:rpc"
