@@ -52,10 +52,7 @@ export function useColumnTransformer<T extends TableData = TableData>(
         header: column.label,
         cell: (props: CellContext<T, unknown>) => (
           <TableCell<T>
-            // cast: ColumnMeta<T, unknown> is not assignable to ColumnConfig when T is generic
-            // — TypeScript cannot verify union-type assignability for unresolved type parameters;
-            // safe at runtime because meta is set from ColumnConfig<T> in the meta: column mapping
-            column={props.column.columnDef.meta! as ColumnConfig}
+            column={props.column.columnDef.meta!}
             row={transformRows<T>([props.row])[0]}
             // cast: TableData = unknown by convention; row.original is always a plain record
             // object; see #1416
@@ -68,10 +65,7 @@ export function useColumnTransformer<T extends TableData = TableData>(
         aggregatedCell: (props: CellContext<T, unknown>) =>
           column.aggregatedCell ? (
             <column.aggregatedCell
-              // cast: ColumnMeta<T, unknown> is not assignable to ColumnConfig when T is generic
-              // — TypeScript cannot verify union-type assignability for unresolved type parameters;
-              // safe at runtime because meta is set from ColumnConfig<T> in the meta: column mapping
-              column={props.column.columnDef.meta! as ColumnConfig<T>}
+              column={props.column.columnDef.meta!}
               // cast: TableData = unknown by convention; row.original is always a plain record
               // object; see #1416
               record={props.row.original as object}
@@ -79,10 +73,7 @@ export function useColumnTransformer<T extends TableData = TableData>(
             />
           ) : (
             <TableCell<T>
-              // cast: ColumnMeta<T, unknown> is not assignable to ColumnConfig when T is generic
-              // — TypeScript cannot verify union-type assignability for unresolved type parameters;
-              // safe at runtime because meta is set from ColumnConfig<T> in the meta: column mapping
-              column={props.column.columnDef.meta! as ColumnConfig}
+              column={props.column.columnDef.meta!}
               row={transformRows<T>([props.row])[0]}
               // cast: TableData = unknown by convention; row.original is always a plain record
               // object; see #1416

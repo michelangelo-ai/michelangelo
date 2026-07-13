@@ -5,7 +5,7 @@ import type { TableData } from '#core/components/table/types/data-types';
 import type { TableRow } from '#core/components/table/types/row-types';
 
 export interface TableCellProps<T extends TableData = TableData>
-  extends CellRendererProps<T, ColumnConfig> {
+  extends CellRendererProps<T, ColumnConfig<T>> {
   columnFilterValue?: unknown;
   row: TableRow<T>;
   setColumnFilterValue?: (value: unknown) => void;
