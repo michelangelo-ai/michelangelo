@@ -210,8 +210,5 @@ export type {
   DetailViewPagesProps,
 } from '#core/components/views/detail-view/types/detail-view-component-types';
 
-// Navigation Bar
-export type { NavigationLink } from '#core/components/navigation-bar/types';
-
 // User Provider
 export { UserRole } from '#core/providers/user-provider/types';

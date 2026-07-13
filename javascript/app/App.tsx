@@ -7,12 +7,6 @@ import { Provider as StyletronProvider } from 'styletron-react';
 
 import { ICONS } from './icons/icons';
 
-import type { NavigationLink } from '@michelangelo-ai/core';
-
-const NAVIGATION_LINKS: NavigationLink[] = [
-  { label: 'Docs', href: 'https://michelangelo-ai.github.io/michelangelo/' },
-];
-
 const DEV_USER = {
   name: 'Local Developer',
   email: 'dev@localhost',
@@ -31,7 +25,7 @@ const dependencies = {
     request,
   },
   navigationBar: {
-    links: NAVIGATION_LINKS,
+    links: [{ label: 'Docs', href: 'https://michelangelo-ai.github.io/michelangelo/' }],
   },
   user: DEV_USER,
 };
