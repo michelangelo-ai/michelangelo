@@ -96,6 +96,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Trigger container image publish for the RC tag
+        run: |
+          gh workflow run ui-release.yml --ref "${{ steps.vars.outputs.tag }}"
+          gh workflow run dev-release.yml --ref "${{ steps.vars.outputs.tag }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Ensure the release tracking label exists
         run: gh label create release --color ededed --description "Release tracking issue" --force
         env:

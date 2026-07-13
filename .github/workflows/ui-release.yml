@@ -65,6 +65,16 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Compute bare version for tag pushes
+        id: bare_version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            echo "is_tag=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_tag=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Extract Docker Metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -77,6 +87,7 @@ jobs:
             type=ref,event=tag
             type=ref,prefix=pr-,event=pr
             type=raw,value=v${{ needs.check-version-change.outputs.new-version }},enable={{is_default_branch}}
+            type=raw,value=${{ steps.bare_version.outputs.version }},enable=${{ steps.bare_version.outputs.is_tag }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

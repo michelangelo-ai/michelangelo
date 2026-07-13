@@ -95,6 +95,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Trigger container image publish for the final tag
+        run: |
+          gh workflow run ui-release.yml --ref "${{ steps.vars.outputs.tag }}"
+          gh workflow run dev-release.yml --ref "${{ steps.vars.outputs.tag }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Mark merge-back PR ready for review
         run: |
           PR_NUMBER=$(gh pr list --head "${{ steps.vars.outputs.branch }}" --base main --state open --json number --jq '.[0].number')
