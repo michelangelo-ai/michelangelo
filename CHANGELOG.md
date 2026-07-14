@@ -230,10 +230,15 @@ All notable changes to this project will be documented in this file.
   storage backend is involved, and a missing file now raises
   `ConfigurationError` eagerly instead of failing deep inside Ray Train.
 - `RayTrainReportCallback.__init__` now explicitly sets `self.local_rank`
-  alongside `self.world_rank` instead of relying on the implicit assignment
-  in the upstream Ray base class `__init__`, guarding `on_train_epoch_end()`
-  and `RayTrainReportPerNodeCallback` against an `AttributeError` if that
-  upstream behavior ever changes.
+  alongside `self.world_rank` instead of relying on an implicit side-effect
+  assignment in the upstream Ray base class `__init__`. On `ray>=2.56` that
+  upstream side-effect is gone, so `on_train_epoch_end()` (and every
+  `RayTrainReportPerNodeCallback` checkpoint path) raised
+  `AttributeError: 'RayTrainReportCallback' object has no attribute 'local_rank'`
+  during real training. The `ray` dependency is declared without an upper
+  bound, so a fresh install resolves to the latest Ray and hits this live;
+  reading `local_rank` from the public `ray.train.get_context()` API fixes it
+  independent of the Ray version.
 
 ### Removed
 
