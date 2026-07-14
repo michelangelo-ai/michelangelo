@@ -5,7 +5,6 @@ import type { DescriptionCellConfig } from '#core/components/cell/renderers/desc
 import type { LinkCellConfig } from '#core/components/cell/renderers/link/types';
 import type { MultiCellConfig } from '#core/components/cell/renderers/multi/types';
 import type { Accessor } from '#core/types/common/studio-types';
-import type { CellType } from './constants';
 import type { StateCellConfig } from './renderers/state/types';
 import type { TypeCellConfig } from './renderers/type/types';
 
@@ -184,20 +183,7 @@ export type CellToStringParams<T = unknown, CellConfig = SharedCell> = Pick<
   'column' | 'value'
 >;
 
-type CellTypeValueMap = {
-  [CellType.BOOLEAN]: boolean;
-  [CellType.DATE]: string;
-  [CellType.DESCRIPTION]: string;
-  [CellType.LINK]: string;
-  [CellType.MULTI]: unknown;
-  [CellType.REPEATED_ITEMS]: unknown;
-  [CellType.RETRY]: string;
-  [CellType.STATE]: string;
-  [CellType.TAG]: string;
-  [CellType.TYPE]: string;
-  [CellType.TEXT]: string;
-};
-
-export type CellRendererRegistry = {
-  [K in keyof CellTypeValueMap]: CellRenderer<CellTypeValueMap[K]>;
-};
+// CellRendererRegistry is defined in constants.ts because it is typeof CELL_RENDERERS —
+// the type is the implementation. Defining it here would require importing the value,
+// creating a circular dependency. Re-exported so consumers can import from either module.
+export type { CellRendererRegistry } from './constants';

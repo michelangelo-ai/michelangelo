@@ -9,8 +9,6 @@ import { TagCell } from './renderers/tag/tag-cell';
 import { TextCell } from './renderers/text/text-cell';
 import { TypeCell } from './renderers/type/type-cell';
 
-import type { CellRendererRegistry } from './types';
-
 export enum CellType {
   /**
    * @description Renders a gray **Tag** with formatted text
@@ -102,4 +100,10 @@ export const CELL_RENDERERS = {
   [CellType.TAG]: TagCell,
   [CellType.TYPE]: TypeCell,
   [CellType.TEXT]: TextCell,
-} satisfies Partial<CellRendererRegistry>;
+};
+
+// Defined here rather than types.ts because it is typeof CELL_RENDERERS — the type is
+// the implementation. Defining it elsewhere would require importing the value, creating
+// a circular dependency. Re-exported from types.ts for consumers who import from there.
+// eslint-disable-next-line local/types-in-types-file
+export type CellRendererRegistry = typeof CELL_RENDERERS;
