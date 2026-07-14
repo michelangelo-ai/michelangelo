@@ -30,6 +30,7 @@ class RayTrainReportCallback(ray.train.lightning.RayTrainReportCallback):
     def __init__(self, training_observer: TrainingObserver | None = None) -> None:
         super().__init__()
         self.world_rank = ray.train.get_context().get_world_rank()
+        self.local_rank = ray.train.get_context().get_local_rank()
         self._training_observer = training_observer
 
     def on_train_epoch_end(self, trainer, pl_module) -> None:

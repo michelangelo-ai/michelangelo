@@ -229,6 +229,11 @@ All notable changes to this project will be documented in this file.
   what `LightningTrainerParam.initial_weights_path` always expected. No
   storage backend is involved, and a missing file now raises
   `ConfigurationError` eagerly instead of failing deep inside Ray Train.
+- `RayTrainReportCallback.__init__` now explicitly sets `self.local_rank`
+  alongside `self.world_rank` instead of relying on the implicit assignment
+  in the upstream Ray base class `__init__`, guarding `on_train_epoch_end()`
+  and `RayTrainReportPerNodeCallback` against an `AttributeError` if that
+  upstream behavior ever changes.
 
 ### Removed
 

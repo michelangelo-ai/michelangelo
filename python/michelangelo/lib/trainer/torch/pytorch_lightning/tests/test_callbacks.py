@@ -103,7 +103,7 @@ def patched_io():
 
 
 class TestRayTrainReportCallbackInit:
-    """``RayTrainReportCallback.__init__`` captures the world rank."""
+    """``RayTrainReportCallback.__init__`` captures the world and local rank."""
 
     def test_init_sets_world_rank_from_context(self):
         """``__init__`` records the world rank from the Ray Train context."""
@@ -116,6 +116,43 @@ class TestRayTrainReportCallbackInit:
             ray_mod.train.get_context.return_value.get_world_rank.return_value = 3
             cb = RayTrainReportCallback()
         assert cb.world_rank == 3
+
+    def test_init_sets_local_rank_from_context(self):
+        """``__init__`` explicitly records the local rank from the Ray Train context.
+
+        This guards against relying solely on the base class assignment.
+        """
+        with (
+            patch.object(
+                RayTrainReportCallback.__bases__[0], "__init__", return_value=None
+            ),
+            patch(f"{_CALLBACKS_MODULE}.ray") as ray_mod,
+        ):
+            ray_mod.train.get_context.return_value.get_local_rank.return_value = 2
+            cb = RayTrainReportCallback()
+        assert cb.local_rank == 2
+
+    def test_on_train_epoch_end_does_not_raise_attributeerror(self):
+        """Ensure ``local_rank`` is available before ``on_train_epoch_end`` runs.
+
+        The base ``__init__`` is stubbed out since it requires a live Ray
+        Train session, mirroring how the rest of this module builds callbacks.
+        """
+        with (
+            patch.object(
+                RayTrainReportCallback.__bases__[0], "__init__", return_value=None
+            ),
+            patch(f"{_CALLBACKS_MODULE}.ray") as ray_mod,
+            patch(f"{_CALLBACKS_MODULE}.os.makedirs"),
+            patch(f"{_CALLBACKS_MODULE}.shutil.rmtree"),
+            patch(f"{_CALLBACKS_MODULE}.Checkpoint"),
+        ):
+            ray_mod.train.get_context.return_value.get_world_rank.return_value = 0
+            ray_mod.train.get_context.return_value.get_local_rank.return_value = 0
+            cb = RayTrainReportCallback()
+            cb.tmpdir_prefix = "/tmp/ckpt"
+            cb.CHECKPOINT_NAME = "checkpoint.ckpt"
+            cb.on_train_epoch_end(_make_trainer(), MagicMock())
 
 
 # -----------------------------------------------------------------------------
@@ -202,6 +239,27 @@ class TestRayTrainReportPerNodeCallbackInit:
         with patch.object(RayTrainReportCallback, "__init__", return_value=None):
             cb = RayTrainReportPerNodeCallback(step_checkpoint_frequency=10)
         assert cb.step_checkpoint_frequency == 10
+
+    def test_on_train_epoch_end_does_not_raise_attributeerror(self):
+        """Ensure ``local_rank`` set by the real ``__init__`` chain reaches on_train_epoch_end.
+
+        Exercises the per-node reporting path (``_create_and_report_checkpoint``).
+        """
+        with (
+            patch.object(
+                RayTrainReportCallback.__bases__[0], "__init__", return_value=None
+            ),
+            patch(f"{_CALLBACKS_MODULE}.ray") as ray_mod,
+            patch(f"{_CALLBACKS_MODULE}.os.makedirs"),
+            patch(f"{_CALLBACKS_MODULE}.shutil.rmtree"),
+            patch(f"{_CALLBACKS_MODULE}.Checkpoint"),
+        ):
+            ray_mod.train.get_context.return_value.get_world_rank.return_value = 0
+            ray_mod.train.get_context.return_value.get_local_rank.return_value = 0
+            cb = RayTrainReportPerNodeCallback()
+            cb.tmpdir_prefix = "/tmp/ckpt"
+            cb.CHECKPOINT_NAME = "checkpoint.ckpt"
+            cb.on_train_epoch_end(_make_trainer(current_epoch=1), MagicMock())
 
 
 # -----------------------------------------------------------------------------
