@@ -6,7 +6,11 @@ import { Link } from '#core/components/link/link';
 import { useCellProvider } from '#core/providers/cell-provider/use-cell-provider';
 import { CellType } from './constants';
 
-import type { CellRenderer, CellRendererProps } from '#core/components/cell/types';
+import type {
+  CellRenderer,
+  CellRendererProps,
+  CellRendererRegistry,
+} from '#core/components/cell/types';
 
 /**
  * Returns a function that resolves the appropriate cell renderer based on column
@@ -73,7 +77,9 @@ export function useGetCellRenderer(): (args: CellRendererProps<unknown>) => Cell
     }
 
     if (columnType && columnType in CELL_RENDERERS) {
-      return CELL_RENDERERS[columnType];
+      // cast: registry lookup narrows value to a specific CellRenderer<T>; caller
+      // works with CellRenderer<unknown> and passes unknown values at runtime
+      return CELL_RENDERERS[columnType as keyof CellRendererRegistry] as CellRenderer<unknown>;
     }
 
     if (typeof value === 'string' && isURL(value, { require_protocol: true, require_tld: false })) {

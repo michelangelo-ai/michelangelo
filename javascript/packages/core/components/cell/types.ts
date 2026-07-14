@@ -5,6 +5,7 @@ import type { DescriptionCellConfig } from '#core/components/cell/renderers/desc
 import type { LinkCellConfig } from '#core/components/cell/renderers/link/types';
 import type { MultiCellConfig } from '#core/components/cell/renderers/multi/types';
 import type { Accessor } from '#core/types/common/studio-types';
+import type { CellType } from './constants';
 import type { StateCellConfig } from './renderers/state/types';
 import type { TypeCellConfig } from './renderers/type/types';
 
@@ -182,3 +183,21 @@ export type CellToStringParams<T = unknown, CellConfig = SharedCell> = Pick<
   CellRendererProps<T, CellConfig>,
   'column' | 'value'
 >;
+
+type CellTypeValueMap = {
+  [CellType.BOOLEAN]: boolean;
+  [CellType.DATE]: string;
+  [CellType.DESCRIPTION]: string;
+  [CellType.LINK]: string;
+  [CellType.MULTI]: unknown;
+  [CellType.REPEATED_ITEMS]: unknown;
+  [CellType.RETRY]: string;
+  [CellType.STATE]: string;
+  [CellType.TAG]: string;
+  [CellType.TYPE]: string;
+  [CellType.TEXT]: string;
+};
+
+export type CellRendererRegistry = {
+  [K in keyof CellTypeValueMap]: CellRenderer<CellTypeValueMap[K]>;
+};
