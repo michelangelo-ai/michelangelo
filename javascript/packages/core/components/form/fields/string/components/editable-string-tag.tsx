@@ -7,9 +7,9 @@ import { TAG_BEHAVIOR, TAG_HIERARCHY } from '#core/components/tag/constants';
 import { Tag } from '#core/components/tag/tag';
 
 import type { KeyboardEvent } from 'react';
-import type { StringTagProps } from './types';
+import type { EditableStringTagProps } from './types';
 
-export function StringTag(props: StringTagProps) {
+export function EditableStringTag(props: EditableStringTagProps) {
   const { closeable, index, onRemove, readOnly, updateValue, value: initialValue } = props;
   const [, theme] = useStyletron();
 

@@ -4,7 +4,7 @@ import { DeleteAlt } from 'baseui/icon';
 import { ADJOINED, SIZE, StyledInput } from 'baseui/input';
 import { StyledClearIcon, StyledIconsContainer, StyledValueContainer } from 'baseui/select';
 
-import { StringTag } from './string-tag';
+import { EditableStringTag } from './editable-string-tag';
 
 import type { FocusEvent, MouseEvent } from 'react';
 import type { StringTagInputProps } from './types';
@@ -53,7 +53,7 @@ export const StringTagInput = forwardRef<HTMLInputElement, StringTagInputProps>(
           onClick={handleContainerClick}
         >
           {valueList.map((tagValue, index) => (
-            <StringTag
+            <EditableStringTag
               key={index}
               value={tagValue}
               index={index}

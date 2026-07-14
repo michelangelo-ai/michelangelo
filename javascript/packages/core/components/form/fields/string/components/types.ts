@@ -12,7 +12,7 @@ export interface StringTagInputProps extends SharedInputProps {
   valueList: string[];
 }
 
-export interface StringTagProps {
+export interface EditableStringTagProps {
   closeable: boolean;
   index: number;
   onRemove: () => void;
