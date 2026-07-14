@@ -22,7 +22,6 @@
     "@tanstack/react-table": "^8.21.3",
     "@types/pluralize": "^0.0.33",
     "@uiw/react-codemirror": "^4.21.23",
-    "baseui": "15.0.0",
     "final-form": "4.20.10",
     "final-form-arrays": "^1.1.2",
     "final-form-focus": "^1.1.2",
@@ -53,6 +52,7 @@
   },
   "peerDependencies": {
     "@tanstack/react-query": "^5.0.0",
+    "baseui": "^18.0.0",
     "react-router-dom": "^5.3.4",
     "react-router-dom-v5-compat": "^6.29.0",
     "styletron-engine-atomic": "^1.0.0",

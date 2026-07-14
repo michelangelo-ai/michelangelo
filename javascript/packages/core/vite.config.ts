@@ -23,6 +23,7 @@ export default defineConfig({
         'styletron-react',
         'styletron-engine-atomic',
         '@tanstack/react-query',
+        /^baseui(\/.*)?$/,
       ],
     },
     commonjsOptions: {
