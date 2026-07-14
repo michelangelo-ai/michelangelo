@@ -264,7 +264,35 @@ describe('useGetCellRenderer', () => {
       expect(screen.queryByText('Badge: test value')).not.toBeInTheDocument();
     });
 
-    it('should prioritize provider custom renderers over built-in renderers', () => {
+    it('should use provider renderers for custom (non-built-in) cell types', () => {
+      const CUSTOM_TYPE = 'CUSTOM_TYPE';
+      const CustomRenderer: CellRenderer<string> = (props: CellRendererProps<string>) => (
+        <div data-testid="custom-renderer">Custom: {props.value}</div>
+      );
+
+      const renderers = {
+        [CUSTOM_TYPE]: CustomRenderer,
+      };
+
+      const props: CellRendererProps<string> = {
+        column: { id: 'test', type: CUSTOM_TYPE },
+        record: {},
+        value: 'test value',
+      };
+
+      render(
+        <TestCellRenderer props={props} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getCellProviderWrapper({ renderers }),
+        ])
+      );
+
+      expect(screen.getByText('Custom: test value')).toBeInTheDocument();
+    });
+
+    it('should not allow provider renderers to override built-in renderers', () => {
       const CustomTextRenderer: CellRenderer<string> = (props: CellRendererProps<string>) => (
         <div data-testid="custom-text">Custom Text: {props.value}</div>
       );
@@ -288,7 +316,7 @@ describe('useGetCellRenderer', () => {
         ])
       );
 
-      expect(screen.getByText('Custom Text: test value')).toBeInTheDocument();
+      expect(screen.queryByText('Custom Text: test value')).not.toBeInTheDocument();
     });
 
     it('should work with empty renderers', () => {
