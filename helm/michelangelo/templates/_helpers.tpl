@@ -105,3 +105,13 @@ Schema-init volume name (used by apiserver Deployment + ConfigMap).
 {{- define "michelangelo.schemaInitConfigMapName" -}}
 {{- printf "%s-schema-init" (include "michelangelo.fullname" .) | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
+
+{{/*
+Build a "repository:tag" image reference for a first-party service, falling
+back to the chart's own appVersion when no tag override is set. Call with a
+dict of {repository, tag, Chart}, e.g.:
+  {{ include "michelangelo.image" (dict "repository" .Values.images.apiserver.repository "tag" .Values.images.apiserver.tag "Chart" .Chart) }}
+*/}}
+{{- define "michelangelo.image" -}}
+{{- printf "%s:%s" .repository (.tag | default .Chart.AppVersion) -}}
+{{- end -}}

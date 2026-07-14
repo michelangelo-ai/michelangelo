@@ -101,13 +101,28 @@ workflow:
     - notification_worker
 
 # -----------------------------------------------------------------------------
-# Container images. Override to pin a version or use a mirror.
+# Container images.
+#
+# apiserver/worker/ui/controllermgr are built and published together on every
+# chart release. Their `tag` defaults to "" here, which falls back to this
+# chart's own .Chart.AppVersion (see templates/_helpers.tpl's "michelangelo.image")
+# -- so installing chart version X.Y.Z pulls the matching X.Y.Z images without
+# any override needed. Set `tag` explicitly to pin a different version or use
+# a floating tag (e.g. "main" for local development -- see values-k3d.yaml).
 # -----------------------------------------------------------------------------
 images:
-  apiserver:        ghcr.io/michelangelo-ai/apiserver:main
-  worker:           ghcr.io/michelangelo-ai/worker:main
-  ui:               ghcr.io/michelangelo-ai/ui:main
-  controllermgr:    ghcr.io/michelangelo-ai/controllermgr:main
+  apiserver:
+    repository: ghcr.io/michelangelo-ai/apiserver
+    tag: ""
+  worker:
+    repository: ghcr.io/michelangelo-ai/worker
+    tag: ""
+  ui:
+    repository: ghcr.io/michelangelo-ai/ui
+    tag: ""
+  controllermgr:
+    repository: ghcr.io/michelangelo-ai/controllermgr
+    tag: ""
   envoy:            envoyproxy/envoy:v1.29-latest
   kuberayCollector: ghcr.io/michelangelo-ai/kuberay-collector:main
 

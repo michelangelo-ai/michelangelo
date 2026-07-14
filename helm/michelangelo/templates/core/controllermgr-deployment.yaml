@@ -29,7 +29,7 @@ spec:
       {{- end }}
       containers:
         - name: app
-          image: {{ .Values.images.controllermgr }}
+          image: {{ include "michelangelo.image" (dict "repository" .Values.images.controllermgr.repository "tag" .Values.images.controllermgr.tag "Chart" .Chart) }}
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           {{- with .Values.securityContext }}
           securityContext:

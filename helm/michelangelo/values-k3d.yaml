@@ -34,6 +34,17 @@ workflow:
 
 images:
   pullPolicy: IfNotPresent
+  # Sandbox tracks main, not a pinned release — base values.yaml defaults
+  # these to the chart's own appVersion, which would resolve to a released
+  # tag that hasn't been built for local dev.
+  apiserver:
+    tag: main
+  worker:
+    tag: main
+  ui:
+    tag: main
+  controllermgr:
+    tag: main
 
 apiserver:
   metadataStorage:

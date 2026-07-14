@@ -27,7 +27,7 @@ spec:
       {{- end }}
       containers:
         - name: ui
-          image: {{ .Values.images.ui }}
+          image: {{ include "michelangelo.image" (dict "repository" .Values.images.ui.repository "tag" .Values.images.ui.tag "Chart" .Chart) }}
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           {{- with .Values.securityContext }}
           securityContext:
