@@ -9,8 +9,10 @@ import type { CellRenderer } from '#core/components/cell/types';
 export type CellContextType = {
   /**
    * @description
-   * Custom cell renderers that extend the built-in CELL_RENDERERS.
-   * These will be checked first before falling back to default behavior.
+   * Renderers for custom (application-defined) cell types that extend the
+   * built-in set. Registered renderers are used as a fallback after built-in
+   * renderers are checked, so this map cannot override a built-in CellType.
+   * To render a specific column differently, use the column-level `Cell` prop.
    *
    * @example
    * ```tsx
