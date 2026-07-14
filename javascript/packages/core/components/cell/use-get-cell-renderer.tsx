@@ -14,8 +14,8 @@ import type { CellRenderer, CellRendererProps } from '#core/components/cell/type
  *
  * The renderer resolution follows this priority order:
  * 1. Custom renderer from column.Cell if provided
- * 2. Built-in renderer from CELL_RENDERERS if type matches
- * 3. Custom renderer from CellProvider context for application-defined types
+ * 2. Renderer from CellProvider context if registered for the column type
+ * 3. Built-in renderer from CELL_RENDERERS if type matches
  * 4. Auto-detected link renderer for URL values
  * 5. Default TextCell renderer as fallback
  *
@@ -68,14 +68,14 @@ export function useGetCellRenderer(): (args: CellRendererProps<unknown>) => Cell
 
     const columnType = getType(args);
 
-    if (columnType && columnType in CELL_RENDERERS) {
-      // cast: registry lookup narrows value to a specific CellRenderer<T>; caller
-      // works with CellRenderer<unknown> and passes unknown values at runtime
-      return CELL_RENDERERS[columnType] as CellRenderer<unknown>;
-    }
-
     if (columnType && cellContext?.renderers[columnType]) {
       return cellContext.renderers[columnType];
+    }
+
+    if (columnType && columnType in CELL_RENDERERS) {
+      // cast: registry lookup returns a specific CellRenderer<T>; caller works with
+      // CellRenderer<unknown> and passes unknown values at runtime
+      return CELL_RENDERERS[columnType] as CellRenderer<unknown>;
     }
 
     if (typeof value === 'string' && isURL(value, { require_protocol: true, require_tld: false })) {
