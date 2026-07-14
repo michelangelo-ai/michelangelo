@@ -387,6 +387,6 @@ resources: {}
 
 ### Reference
 
-- See [UPGRADING.md](./UPGRADING.md) for examples of past migrations.
+- See [CHANGELOG.md](./CHANGELOG.md) for examples of past migrations.
 - See the [Versioning Policy](./docs/getting-started/roadmap.md#versioning-policy) for stability level guarantees.
 
