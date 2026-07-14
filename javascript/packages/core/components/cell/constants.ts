@@ -90,7 +90,7 @@ export enum CellType {
   RETRY = 'RETRY',
 }
 
-export const CELL_RENDERERS: Partial<CellRendererRegistry> = {
+export const CELL_RENDERERS = {
   [CellType.BOOLEAN]: BooleanCell,
   [CellType.DATE]: DateCell,
   [CellType.DESCRIPTION]: DescriptionCell,
@@ -102,4 +102,4 @@ export const CELL_RENDERERS: Partial<CellRendererRegistry> = {
   [CellType.TAG]: TagCell,
   [CellType.TYPE]: TypeCell,
   [CellType.TEXT]: TextCell,
-};
+} satisfies Partial<CellRendererRegistry>;
