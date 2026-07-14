@@ -74,7 +74,9 @@ describe('NavigationBar', () => {
       ])
     );
 
-    expect(screen.getAllByText('TU').length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByRole('button', { name: /Test User/, hidden: true }).length
+    ).toBeGreaterThan(0);
   });
 
   it('shows the Sign out menu item when the user menu is opened', async () => {
@@ -87,7 +89,7 @@ describe('NavigationBar', () => {
       ])
     );
 
-    await userEvent.click(screen.getAllByText('TU')[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: /Test User/, hidden: true })[0]);
 
     expect(screen.getByRole('option', { name: 'Sign out' })).toBeInTheDocument();
   });
