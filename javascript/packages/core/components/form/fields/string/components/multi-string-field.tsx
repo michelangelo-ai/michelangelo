@@ -60,7 +60,7 @@ export function MultiStringField({
     setUnpersistedValue('');
   };
 
-  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+  const handleTagEntry = (event: KeyboardEvent<HTMLInputElement>) => {
     if (readOnly) return;
 
     const isPersistingValue = event.key === 'Enter' && unpersistedValue;
@@ -75,7 +75,7 @@ export function MultiStringField({
     }
   };
 
-  const persistOnBlur = () => {
+  const persistUncommitted = () => {
     if (unpersistedValue) {
       persistValue(unpersistedValue);
     }
@@ -107,12 +107,12 @@ export function MultiStringField({
             component: StringTagInput,
             props: {
               clear: clearValueList,
-              onKeyDown,
+              onKeyDown: handleTagEntry,
               readOnly,
               removeValue: removeValueAtIndex,
               updateValue: updateValueAtIndex,
               valueList,
-              persistOnBlur,
+              persistUncommitted,
             },
             style: { width: 'auto', flexGrow: 1, padding: 0 },
           },

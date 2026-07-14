@@ -14,7 +14,7 @@ export const StringTagInput = forwardRef<HTMLInputElement, StringTagInputProps>(
     const {
       clear,
       onBlur: propsOnBlur,
-      persistOnBlur,
+      persistUncommitted,
       readOnly,
       removeValue,
       updateValue,
@@ -34,7 +34,7 @@ export const StringTagInput = forwardRef<HTMLInputElement, StringTagInputProps>(
 
     const handlePersistOnBlur = (event: FocusEvent<HTMLInputElement>) => {
       propsOnBlur?.(event);
-      persistOnBlur();
+      persistUncommitted();
     };
 
     // Clicking anywhere in the tag list's empty space should focus the text input, the same way

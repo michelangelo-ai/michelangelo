@@ -4,7 +4,7 @@ import type { FocusEvent } from 'react';
 export interface StringTagInputProps extends SharedInputProps {
   clear: () => void;
   onBlur?: (event: FocusEvent<HTMLInputElement>) => void;
-  persistOnBlur: () => void;
+  persistUncommitted: () => void;
   readOnly?: boolean;
   removeValue: (index: number) => void;
   updateValue: (newValue: string, index: number) => void;
