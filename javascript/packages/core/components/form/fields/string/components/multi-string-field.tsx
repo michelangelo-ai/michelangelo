@@ -75,7 +75,7 @@ export function MultiStringField({
     }
   };
 
-  const handleBlur = () => {
+  const handlePersistValue = () => {
     input.onBlur();
     if (unpersistedValue) {
       persistValue(unpersistedValue);
@@ -108,7 +108,7 @@ export function MultiStringField({
             component: StringTagInput,
             props: {
               clear: clearValueList,
-              onBlur: handleBlur,
+              onBlur: handlePersistValue,
               onKeyDown: handleTagEntry,
               readOnly,
               removeValue: removeValueAtIndex,
