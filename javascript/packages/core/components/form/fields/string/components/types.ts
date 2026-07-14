@@ -1,10 +1,7 @@
 import type { SharedProps as SharedInputProps } from 'baseui/input';
-import type { FocusEvent } from 'react';
 
 export interface StringTagInputProps extends SharedInputProps {
   clear: () => void;
-  onBlur?: (event: FocusEvent<HTMLInputElement>) => void;
-  persistUncommitted: () => void;
   readOnly?: boolean;
   removeValue: (index: number) => void;
   updateValue: (newValue: string, index: number) => void;

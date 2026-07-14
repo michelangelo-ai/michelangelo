@@ -6,22 +6,12 @@ import { StyledClearIcon, StyledIconsContainer, StyledValueContainer } from 'bas
 
 import { EditableStringTag } from './editable-string-tag';
 
-import type { FocusEvent, MouseEvent } from 'react';
+import type { MouseEvent } from 'react';
 import type { StringTagInputProps } from './types';
 
 export const StringTagInput = forwardRef<HTMLInputElement, StringTagInputProps>(
   function StringTagInput(props, ref) {
-    const {
-      clear,
-      onBlur: propsOnBlur,
-      persistUncommitted,
-      readOnly,
-      removeValue,
-      updateValue,
-      value,
-      valueList,
-      ...restProps
-    } = props;
+    const { clear, readOnly, removeValue, updateValue, value, valueList, ...restProps } = props;
     const [, theme] = useStyletron();
 
     const handleClearInput = () => {
@@ -30,11 +20,6 @@ export const StringTagInput = forwardRef<HTMLInputElement, StringTagInputProps>(
       if (ref && typeof ref !== 'function') {
         ref.current?.focus();
       }
-    };
-
-    const handlePersistOnBlur = (event: FocusEvent<HTMLInputElement>) => {
-      propsOnBlur?.(event);
-      persistUncommitted();
     };
 
     // Clicking anywhere in the tag list's empty space should focus the text input, the same way
@@ -66,7 +51,6 @@ export const StringTagInput = forwardRef<HTMLInputElement, StringTagInputProps>(
           <StyledInput
             {...restProps}
             $adjoined={ADJOINED.none}
-            onBlur={handlePersistOnBlur}
             readOnly={readOnly}
             ref={ref}
             // Sized to the typed content (not the browser's ~20-character default) so the input
