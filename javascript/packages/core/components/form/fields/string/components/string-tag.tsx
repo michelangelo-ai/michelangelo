@@ -6,19 +6,8 @@ import { Icon } from '#core/components/icon/icon';
 import { TAG_BEHAVIOR, TAG_HIERARCHY } from '#core/components/tag/constants';
 import { Tag } from '#core/components/tag/tag';
 
-import type { Theme } from 'baseui';
 import type { KeyboardEvent } from 'react';
 import type { StringTagProps } from './types';
-
-// Tighter padding than the shared Tag's default, to suit a compact tag-input list. Spacing
-// between tags is handled by the container's `gap` (see StringTagInput) rather than margin here,
-// since Tag's own overrides always win margin conflicts on this property when merged.
-const getTagRootStyle = (theme: Theme) => ({
-  paddingTop: theme.sizing.scale100,
-  paddingRight: theme.sizing.scale200,
-  paddingBottom: theme.sizing.scale100,
-  paddingLeft: theme.sizing.scale200,
-});
 
 export function StringTag(props: StringTagProps) {
   const { closeable, index, onRemove, readOnly, updateValue, value: initialValue } = props;
@@ -54,7 +43,17 @@ export function StringTag(props: StringTagProps) {
             // renders at, so the confirm icon doesn't look oversized next to it.
             props: { name: 'check', onMouseDown: persistEditedValue, size: theme.sizing.scale500 },
           },
-          Root: { style: getTagRootStyle(theme) },
+          // Tighter padding than the shared Tag's default, to suit a compact tag-input list.
+          // Spacing between tags is handled by the container's `gap` (see StringTagInput) rather
+          // than margin here, since Tag's own overrides always win margin conflicts when merged.
+          Root: {
+            style: {
+              paddingTop: theme.sizing.scale100,
+              paddingRight: theme.sizing.scale200,
+              paddingBottom: theme.sizing.scale100,
+              paddingLeft: theme.sizing.scale200,
+            },
+          },
         }}
         behavior={TAG_BEHAVIOR.selection}
         hierarchy={TAG_HIERARCHY.secondary}
@@ -79,7 +78,19 @@ export function StringTag(props: StringTagProps) {
       closeable={closeable}
       onActionClick={onRemove}
       onClick={() => setEditing(true)}
-      overrides={{ Root: { style: getTagRootStyle(theme) } }}
+      overrides={{
+        // Tighter padding than the shared Tag's default, to suit a compact tag-input list.
+        // Spacing between tags is handled by the container's `gap` (see StringTagInput) rather
+        // than margin here, since Tag's own overrides always win margin conflicts when merged.
+        Root: {
+          style: {
+            paddingTop: theme.sizing.scale100,
+            paddingRight: theme.sizing.scale200,
+            paddingBottom: theme.sizing.scale100,
+            paddingLeft: theme.sizing.scale200,
+          },
+        },
+      }}
       hierarchy={TAG_HIERARCHY.primary}
     >
       {initialValue}
