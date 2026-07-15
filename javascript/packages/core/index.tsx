@@ -211,8 +211,8 @@ export type {
 } from '#core/components/views/detail-view/types/detail-view-component-types';
 
 // User Provider
-// UserProvider is re-exported for consumers that build their own provider tree
-// (e.g. OssProvider in studio-web). CoreApp mounts UserProvider internally via
-// dependencies.user — prefer that path for new integrations.
+// UserProvider is re-exported for consumers that build their own provider tree.
+// CoreApp mounts UserProvider internally via dependencies.user — prefer that
+// path for new integrations.
 export { UserProvider } from '#core/providers/user-provider/user-provider';
 export { UserRole } from '#core/providers/user-provider/types';
