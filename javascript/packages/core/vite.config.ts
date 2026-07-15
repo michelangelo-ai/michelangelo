@@ -5,10 +5,12 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   build: {
     lib: {
-      entry: path.resolve(__dirname, 'index.tsx'),
-      name: 'MichelangeloCore',
+      entry: {
+        'michelangelo-core': path.resolve(__dirname, 'index.tsx'),
+        primitives: path.resolve(__dirname, 'primitives.tsx'),
+      },
       formats: ['es', 'cjs'],
-      fileName: (format) => `michelangelo-core.${format === 'es' ? 'js' : 'cjs'}`,
+      fileName: (format, entryName) => `${entryName}.${format === 'es' ? 'js' : 'cjs'}`,
     },
     rollupOptions: {
       external: [

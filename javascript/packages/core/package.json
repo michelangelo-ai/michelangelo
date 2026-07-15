@@ -72,6 +72,13 @@
       "import": "./dist/michelangelo-core.js",
       "require": "./dist/michelangelo-core.cjs",
       "default": "./dist/michelangelo-core.js"
+    },
+    "./primitives": {
+      "types": "./dist/primitives.d.ts",
+      "workspace": "./primitives.tsx",
+      "import": "./dist/primitives.js",
+      "require": "./dist/primitives.cjs",
+      "default": "./dist/primitives.js"
     }
   },
   "imports": {
