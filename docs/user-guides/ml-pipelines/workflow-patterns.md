@@ -184,7 +184,7 @@ def load_two_shards(shard_a_url: str, shard_b_url: str):
 ```
 
 :::note
-In **local execution**, `concurrent_run` runs tasks sequentially (no true parallelism) — `.result()` returns immediately because the Future is already resolved. True concurrent execution happens in remote runs via the Cadence/Temporal engine.
+In **local execution**, both `concurrent_run` and `concurrent_batch_run` run tasks sequentially (no true parallelism) — Futures are pre-resolved and `.result()` / `.get()` return immediately. True concurrent execution happens in remote runs via the Cadence/Temporal engine.
 :::
 
 ---
@@ -225,17 +225,25 @@ def parallel_calibration(data_url: str, learning_rates: list[float]):
 
 | Call | What it does |
 |---|---|
-| `concurrent_run(fn, *args)` | Start one task; returns a `Future` |
+| `concurrent_run(fn, *args, **kwargs)` | Start one task; returns a `Future` |
 | `future.result()` | Block until done, return the result |
+| `future.done()` | Return `True` if the task has already finished |
 | `new_callable(fn, *args)` | Create a deferred call (doesn't execute yet) |
-| `concurrent_batch_run(callables, max_concurrency=N)` | Run all with at most N active at once; returns `BatchFuture` |
-| `batch_future.get()` | Block until all finish; return results as a list in order |
+| `concurrent_batch_run(callables, max_concurrency=N)` | Run all with at most N active at once; returns `BatchFuture`. Pass `max_concurrency=None` (the default) for unlimited concurrency |
+| `batch_future.get()` | Block until all finish; return results as a list in submission order |
+| `batch_future.is_ready()` | Return `True` if all tasks in the batch have finished |
+| `batch_future.get_futures()` | Return the individual `Future` objects for fine-grained control |
 
 ### Windowed batches
 
 Use this when you want to process results after each window before starting the next:
 
 ```python
+@uniflow.task(config=RayTask(head_cpu=1, head_memory="4Gi"))
+def run_query(query: str, datasource: str) -> list:
+    ...
+
+
 @uniflow.workflow()
 def windowed_processing(queries: list[str], datasource: str, window_size: int = 2):
     results = []
@@ -344,14 +352,15 @@ def pipeline(data_url: str, epochs: int):
 
 | Method | When to use |
 |---|---|
-| `DatasetVariable.create(value)` | Wrap a pandas DataFrame, PySpark DataFrame, or Ray Dataset |
-| `dv.save_pandas_dataframe()` | Persist as Parquet via PyArrow |
-| `dv.save_spark_dataframe()` | Persist via Spark |
-| `dv.save_ray_dataset()` | Persist via Ray |
-| `dv.load_pandas_dataframe()` | Load from storage into a pandas DataFrame |
-| `dv.load_spark_dataframe()` | Load from storage into a PySpark DataFrame |
-| `dv.load_ray_dataset()` | Load from storage into a Ray Dataset |
-| `dv.value` | Access the in-memory value after `create()` or a `load_*()` call |
+| `DatasetVariable.create(value, path=None)` | Wrap a pandas DataFrame, PySpark DataFrame, or Ray Dataset. Pass `path` to override the auto-generated storage path |
+| `dv.save()` | Persist to storage — auto-dispatches based on the value type (pandas → PyArrow Parquet, Spark → SparkIO, Ray → RayDatasetIO) |
+| `dv.save_pandas_dataframe()` | Persist as Parquet via PyArrow (explicit pandas path) |
+| `dv.save_spark_dataframe()` | Persist via Spark (explicit Spark path) |
+| `dv.save_ray_dataset()` | Persist via Ray (explicit Ray path) |
+| `dv.load_pandas_dataframe()` | Load from storage as a pandas DataFrame |
+| `dv.load_spark_dataframe()` | Load from storage as a PySpark DataFrame |
+| `dv.load_ray_dataset()` | Load from storage as a Ray Dataset |
+| `dv.value` | Lazy-loading property — returns the in-memory value, loading from storage if needed. Auto-detects the runtime (Spark session active → Spark; Ray initialized → Ray; fallback → pandas). Call an explicit `load_*()` first when you need a specific backend regardless of runtime context |
 
 ---
 
