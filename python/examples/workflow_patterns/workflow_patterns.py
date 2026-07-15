@@ -1,4 +1,4 @@
-"""Uniflow workflow patterns: sequential, branching, loops, concurrent, and DatasetVariable.
+r"""Uniflow workflow patterns: sequential, branching, loops, concurrent, datasets.
 
 Demonstrates every core Uniflow orchestration pattern in a single runnable
 file. The example builds a toy multi-shard data pipeline that generates
@@ -12,8 +12,8 @@ Run from ``python/`` (the OSS Poetry root):
 
 For remote execution on a Michelangelo cluster:
 
-    python -m examples.workflow_patterns.workflow_patterns remote-run \\
-        --project ma-examples \\
+    python -m examples.workflow_patterns.workflow_patterns remote-run \
+        --project ma-examples \
         --image ghcr.io/michelangelo-ai/examples:main
 
 Starlark / workflow-function restrictions (applies to remote execution via
@@ -32,7 +32,11 @@ from __future__ import annotations
 import michelangelo.uniflow.core as uniflow
 from michelangelo.uniflow.core.lib.concurrent import (
     batch_run as concurrent_batch_run,
+)
+from michelangelo.uniflow.core.lib.concurrent import (
     new_callable,
+)
+from michelangelo.uniflow.core.lib.concurrent import (
     run as concurrent_run,
 )
 from michelangelo.uniflow.plugins.ray import RayTask
@@ -72,8 +76,6 @@ def generate_shard(shard_id: int, n_rows: int = 500) -> DatasetVariable:
 @uniflow.task(config=RayTask(head_cpu=1, head_memory="2Gi"))
 def normalize_shard(shard: DatasetVariable) -> DatasetVariable:
     """Z-score normalize ``feature_a`` and ``feature_b`` in-place."""
-    import pandas as pd
-
     shard.load_pandas_dataframe()
     df = shard.value.copy()
     for col in ["feature_a", "feature_b"]:
@@ -88,8 +90,6 @@ def normalize_shard(shard: DatasetVariable) -> DatasetVariable:
 @uniflow.task(config=RayTask(head_cpu=1, head_memory="2Gi"))
 def compute_stats(shard: DatasetVariable) -> dict:
     """Return summary statistics for the shard (row count and label balance)."""
-    import pandas as pd
-
     shard.load_pandas_dataframe()
     df = shard.value
     return {
@@ -106,8 +106,6 @@ def evaluate_threshold(shard: DatasetVariable, threshold: float) -> dict:
     Returns precision (fraction of predictions matching labels) and the
     threshold so results can be ranked after the batch completes.
     """
-    import pandas as pd
-
     shard.load_pandas_dataframe()
     df = shard.value
     predictions = (df["score"] >= threshold).astype(int)
@@ -149,14 +147,13 @@ def pipeline(
     Pattern 5 — Parallel batch execution (new_callable + concurrent_batch_run)
     Pattern 6 — DatasetVariable for cross-task data passing
     """
-
     # ------------------------------------------------------------------
     # Pattern 1: Sequential task calls
     # ------------------------------------------------------------------
     # Calling a task directly blocks the workflow until it completes.
     # Output is automatically checkpointed so the run can resume if it
     # fails mid-flight.
-    baseline = generate_shard(0)          # DatasetVariable returned by task
+    baseline = generate_shard(0)  # DatasetVariable returned by task
     baseline_stats = compute_stats(baseline)  # receives the DatasetVariable
 
     # ------------------------------------------------------------------
@@ -178,7 +175,7 @@ def pipeline(
     normalized_shards = []
     for i in range(n_shards):
         raw = generate_shard(i, n_rows)
-        norm = normalize_shard(raw)        # DatasetVariable passes through
+        norm = normalize_shard(raw)  # DatasetVariable passes through
         normalized_shards.append(norm)
 
     # ------------------------------------------------------------------
@@ -206,7 +203,7 @@ def pipeline(
     # Normalize the concurrently-generated shards and add them to the pool
     norm_a = normalize_shard(raw_a)
     norm_b = normalize_shard(raw_b)
-    all_shards = normalized_shards + [norm_a, norm_b]
+    all_shards = [*normalized_shards, norm_a, norm_b]
 
     # ------------------------------------------------------------------
     # Pattern 5: Parallel batch execution
@@ -223,7 +220,7 @@ def pipeline(
         for t in thresholds
     ]
     batch_future = concurrent_batch_run(callables, max_concurrency=3)
-    calibration_results = batch_future.get()   # list in submission order
+    calibration_results = batch_future.get()  # list in submission order
 
     # ------------------------------------------------------------------
     # Pattern 6: DatasetVariable — cross-task data sharing (recap)
