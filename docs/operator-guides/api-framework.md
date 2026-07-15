@@ -6,13 +6,6 @@ The Michelangelo API Framework abstracts Kubernetes CRDs through a gRPC API serv
 
 **Prerequisites**: Familiarity with Kubernetes CRDs, gRPC, and the Michelangelo control plane (see [Platform Setup](setup/platform-setup.md)).
 
-<!--
-## Getting Started
-See the [Tutorial](docs/tutorial.md) for step-by-step instructions to
-start a local Michelangelo deployment and how to train and deploy an
-example ML model locally.
--->
-
 ## Architecture
 
 Michelangelo defines the APIs using Protobuf as the IDL and the
