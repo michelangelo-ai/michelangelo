@@ -262,11 +262,17 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun, a
 		log.Error(err, "failed to update trigger in workflow engine",
 			"workflowId", wid,
 			"desiredCron", desiredCron)
-		return v2pb.TriggerRunStatus{
-				ErrorMessage: err.Error(),
-				State:        triggerRun.Status.State,
-			}, false, fmt.Errorf("update trigger for %s/%s: %w",
-				triggerRun.Namespace, triggerRun.Name, err)
+		// Update ActualNotifications even on failure to prevent infinite retry loops
+		// when the workflow is in a bad state (e.g. signal limit exceeded).
+		// We still return the error to surface it in status, but mark notifications
+		// as synced to avoid repeated doomed update attempts.
+		errorStatus := triggerRun.Status
+		if notifDrifted {
+			errorStatus.ActualNotifications = triggerRun.Spec.Notifications
+		}
+		errorStatus.ErrorMessage = err.Error()
+		return errorStatus, false, fmt.Errorf("update trigger for %s/%s: %w",
+			triggerRun.Namespace, triggerRun.Name, err)
 	}
 
 	log.Info("successfully updated trigger",

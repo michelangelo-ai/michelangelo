@@ -334,8 +334,14 @@ StateMachine:
 		status, actionHandled, err := runner.Update(ctx, triggerRun, actionToPerform)
 		if err != nil {
 			log.Error(err, "failed to sync trigger spec to workflow engine")
+			// Even on error, merge the returned status to preserve fields like
+			// ActualNotifications that were synced despite the update failure.
+			// This prevents infinite retry loops when workflows hit signal limits.
 			triggerRun.Status.ErrorMessage = err.Error()
 			triggerRun.Status.State = status.State
+			if status.ActualNotifications != nil {
+				triggerRun.Status.ActualNotifications = status.ActualNotifications
+			}
 			break StateMachine
 		}
 		triggerRun.Status = status
