@@ -6,6 +6,8 @@ synthetic data, normalises it, and sweeps over decision thresholds in parallel.
 
 Run from ``python/`` (the OSS Poetry root):
 
+    # Install required extras (ray and pandas are needed)
+    poetry install --extras "example"
     python -m examples.workflow_patterns.workflow_patterns
 
 For remote execution on a Michelangelo cluster:
@@ -14,7 +16,9 @@ For remote execution on a Michelangelo cluster:
         --project ma-examples \\
         --image ghcr.io/michelangelo-ai/examples:main
 
-Starlark / workflow-function restrictions (applies to ``@uniflow.workflow``):
+Starlark / workflow-function restrictions (applies to remote execution via
+Cadence/Temporal — not enforced in local runs, but follow them to keep the
+workflow portable):
   - No standard-library imports (put imports inside ``@uniflow.task`` bodies)
   - No f-strings — use ``"{}".format(x)`` instead
   - No ``is`` / ``is not`` comparisons — use ``==`` / ``!=``
@@ -68,6 +72,8 @@ def generate_shard(shard_id: int, n_rows: int = 500) -> DatasetVariable:
 @uniflow.task(config=RayTask(head_cpu=1, head_memory="2Gi"))
 def normalize_shard(shard: DatasetVariable) -> DatasetVariable:
     """Z-score normalize ``feature_a`` and ``feature_b`` in-place."""
+    import pandas as pd
+
     shard.load_pandas_dataframe()
     df = shard.value.copy()
     for col in ["feature_a", "feature_b"]:
@@ -82,6 +88,8 @@ def normalize_shard(shard: DatasetVariable) -> DatasetVariable:
 @uniflow.task(config=RayTask(head_cpu=1, head_memory="2Gi"))
 def compute_stats(shard: DatasetVariable) -> dict:
     """Return summary statistics for the shard (row count and label balance)."""
+    import pandas as pd
+
     shard.load_pandas_dataframe()
     df = shard.value
     return {
@@ -98,6 +106,8 @@ def evaluate_threshold(shard: DatasetVariable, threshold: float) -> dict:
     Returns precision (fraction of predictions matching labels) and the
     threshold so results can be ranked after the batch completes.
     """
+    import pandas as pd
+
     shard.load_pandas_dataframe()
     df = shard.value
     predictions = (df["score"] >= threshold).astype(int)
@@ -119,10 +129,9 @@ def pick_best_threshold(calibration_results: list) -> dict:
 # ---------------------------------------------------------------------------
 # Workflow
 #
-# Workflow bodies run in the Cadence/Temporal Starlark interpreter, which
-# enforces deterministic, replayable execution. Standard Python control flow
-# (if/else, for, while) works, but standard-library imports and several
-# syntax features are not available (see module docstring).
+# In local runs, the workflow body is plain Python. In remote runs via
+# Cadence/Temporal it is transpiled to Starlark for deterministic replay —
+# follow the restrictions in the module docstring to keep it portable.
 # ---------------------------------------------------------------------------
 
 
@@ -154,10 +163,10 @@ def pipeline(
     # Pattern 2: If/else branching
     # ------------------------------------------------------------------
     # Standard Python if/else works in workflows.  The condition is
-    # evaluated at runtime by the Starlark interpreter.
-    # Note: no f-strings — use .format() for string interpolation.
+    # evaluated at runtime.
+    # Note: no f-strings in remote mode — use .format() for string interpolation.
     n_rows = 500
-    if large_dataset == True:
+    if large_dataset:
         n_rows = 5000
 
     # ------------------------------------------------------------------
@@ -192,10 +201,12 @@ def pipeline(
     # In remote mode tasks run in parallel on separate Ray clusters.
     future_a = concurrent_run(generate_shard, 100, n_rows)
     future_b = concurrent_run(generate_shard, 101, n_rows)
-    shard_a = future_a.result()
-    shard_b = future_b.result()
-    stats_a = compute_stats(shard_a)
-    stats_b = compute_stats(shard_b)
+    raw_a = future_a.result()
+    raw_b = future_b.result()
+    # Normalize the concurrently-generated shards and add them to the pool
+    norm_a = normalize_shard(raw_a)
+    norm_b = normalize_shard(raw_b)
+    all_shards = normalized_shards + [norm_a, norm_b]
 
     # ------------------------------------------------------------------
     # Pattern 5: Parallel batch execution
@@ -204,9 +215,11 @@ def pipeline(
     # concurrent_batch_run(callables, max_concurrency=N) submits all
     # callables and runs up to N at a time. batch_future.get() blocks
     # until all complete and returns results in submission order.
+    # Sweep thresholds across all shards (for-loop shards + fan-out shards).
     thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
     callables = [
-        new_callable(evaluate_threshold, normalized_shards[0], t)
+        new_callable(evaluate_threshold, shard, t)
+        for shard in all_shards
         for t in thresholds
     ]
     batch_future = concurrent_batch_run(callables, max_concurrency=3)
@@ -228,11 +241,11 @@ def pipeline(
     #   shard.load_pandas_dataframe()  # or load_ray_dataset(), load_spark_dataframe()
     #   df = shard.value
     #
-    # See generate_shard / normalize_shard / compute_stats above for
+    # See generate_shard / normalize_shard / evaluate_threshold above for
     # the complete producer-consumer implementation.
 
     result = pick_best_threshold(calibration_results)
-    return result
+    return {"best_threshold": result, "baseline_stats": baseline_stats}
 
 
 # ---------------------------------------------------------------------------

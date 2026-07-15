@@ -7,17 +7,17 @@ Runnable reference for every core Uniflow orchestration pattern: sequential task
 | Pattern | Where in the code |
 |---|---|
 | **Sequential tasks** | `baseline = generate_shard(0)` → `baseline_stats = compute_stats(baseline)` |
-| **If/else branching** | `if large_dataset == True: n_rows = 5000` |
+| **If/else branching** | `if large_dataset: n_rows = 5000` |
 | **For loop** | `for i in range(n_shards): raw = generate_shard(i, n_rows)` |
-| **Concurrent run (fan-out/fan-in)** | `future_a = concurrent_run(generate_shard, 100)` → `shard_a = future_a.result()` |
-| **Parallel batch** | `new_callable` + `concurrent_batch_run(callables, max_concurrency=3)` |
-| **DatasetVariable** | `generate_shard` → `normalize_shard` → `compute_stats` via `DatasetVariable` |
+| **Concurrent run (fan-out/fan-in)** | `future_a = concurrent_run(generate_shard, 100)` → `raw_a = future_a.result()` |
+| **Parallel batch** | `new_callable` + `concurrent_batch_run(callables, max_concurrency=3)` across all shards |
+| **DatasetVariable** | `generate_shard` → `normalize_shard` → `evaluate_threshold` via `DatasetVariable` |
 
-## Starlark restrictions (workflow functions only)
+## Starlark restrictions (remote execution)
 
-`@uniflow.workflow` functions run in the Cadence/Temporal Starlark interpreter for deterministic, replayable execution. `@uniflow.task` functions are unrestricted Python.
+In remote runs via Cadence/Temporal, the `@uniflow.workflow` body is transpiled to Starlark for deterministic, replayable execution. `@uniflow.task` functions are always unrestricted Python. Local runs don't enforce these restrictions, but follow them to keep the workflow portable:
 
-| Not allowed in `@workflow` | Use instead |
+| Not allowed in `@workflow` (remote) | Use instead |
 |---|---|
 | `import` statements | Put imports inside `@uniflow.task` bodies |
 | f-strings (`f"..."`) | `"{}".format(x)` |
@@ -30,6 +30,7 @@ Runnable reference for every core Uniflow orchestration pattern: sequential task
 From the `python/` directory:
 
 ```bash
+# ray and pandas are required — the "example" extra pulls them in
 poetry install --extras "example"
 python -m examples.workflow_patterns.workflow_patterns
 ```
