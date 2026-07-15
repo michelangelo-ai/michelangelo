@@ -510,7 +510,7 @@ func genCRDContentIndexedFields(crdName string, crdRootMsg *protogen.Message, cr
 	templates.CRDContentIndexFieldSpecsHeader.Execute(crdBuf, typeInfo)
 	for _, wrapper := range wrappers {
 		wrapperKindKind := resolveWrapperKind(crdName, wrapper.Kind, allProtoMsgs, extTypes)
-		table := tableBaseName + "_" + wrapper.Kind + "_unmarshalled"
+		table := tableBaseName + "_" + wrapper.Kind + "_unmarshaled"
 		uidCol := wrapper.Kind + "_uid"
 
 		crdBuf.Write([]byte("\t\t{\n"))

@@ -140,7 +140,7 @@ type ContentIndexFieldSpec struct {
 	ContentPath string
 	// BaseKind is the wrapped base type's kind, e.g. "Pipeline".
 	BaseKind string
-	// Table is the sidecar table, e.g. "pipeline_revision_unmarshalled".
+	// Table is the sidecar table, e.g. "pipeline_revision_unmarshaled".
 	Table string
 	// UIDCol is the sidecar's FK column back to the wrapper uid, e.g. "revision_uid".
 	UIDCol string

@@ -84,30 +84,30 @@ func generateSQLSchema(crdRootMsg *protogen.Message, crdOptions *pboptions.Optio
 	templates.CRDMySQLLabelAnnotationTable.Execute(&buf, typeInfo)
 
 	// If this CRD is a revisioned base type (resource.revisioned_in is non-empty),
-	// emit one sidecar "<base>_<wrapper>_unmarshalled" table per wrapper kind it
+	// emit one sidecar "<base>_<wrapper>_unmarshaled" table per wrapper kind it
 	// opts into. The wrapper kind resolves to a wrapper CRD by convention
 	// (e.g. "revision" -> keyed on revision_uid; the wrapped resource lives at
 	// spec.content).
 	for _, wrapper := range util.ParseContentIndexedFields(crdRootMsg, crdOptions) {
-		emitUnmarshalledTable(&buf, crdTableName, wrapper.Fields, wrapper.Kind)
+		emitUnmarshaledTable(&buf, crdTableName, wrapper.Fields, wrapper.Kind)
 	}
 	return buf.Bytes()
 }
 
-// emitUnmarshalledTable writes one content sidecar table for a (base, wrapper)
+// emitUnmarshaledTable writes one content sidecar table for a (base, wrapper)
 // pair, with a column per content_index field:
 //
-//	CREATE TABLE `<base>_<wrapper>_unmarshalled` (
+//	CREATE TABLE `<base>_<wrapper>_unmarshaled` (
 //	    `<wrapper>_uid`  VARCHAR(255) NOT NULL,
 //	    `<key>`      <type>, ...
 //	    PRIMARY KEY (`<wrapper>_uid`),
 //	    KEY `..._<key>` (`<key>`), ...
 //	);
-func emitUnmarshalledTable(buf *bytes.Buffer, baseTableName string, fields []util.IndexedField, wrapperKind string) {
-	tableName := baseTableName + "_" + wrapperKind + "_unmarshalled"
+func emitUnmarshaledTable(buf *bytes.Buffer, baseTableName string, fields []util.IndexedField, wrapperKind string) {
+	tableName := baseTableName + "_" + wrapperKind + "_unmarshaled"
 	uidColumn := wrapperKind + "_uid"
 
-	templates.CRDMySQLUnmarshalledTable.Execute(buf, struct {
+	templates.CRDMySQLUnmarshaledTable.Execute(buf, struct {
 		TableName string
 		UIDColumn string
 	}{tableName, uidColumn})
