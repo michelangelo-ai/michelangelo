@@ -27,6 +27,22 @@ class TestGitInfo:
         assert git_info.commit_hash == "abc123"
         assert git_info.is_clean is True
         assert git_info.is_on_main is True
+        assert git_info.clean_reason == "ok"
+        assert git_info.clean_details == ""
+
+    def test_git_info_with_reason_and_details(self):
+        """Test GitInfo dataclass accepts new clean_reason/clean_details fields."""
+        git_info = GitInfo(
+            repo="https://github.com/org/repo.git",
+            branch_name="feature",
+            commit_hash="abc123",
+            is_clean=False,
+            is_on_main=False,
+            clean_reason="not_pushed",
+            clean_details="fatal: The upstream branch of ...",
+        )
+        assert git_info.clean_reason == "not_pushed"
+        assert git_info.clean_details == "fatal: The upstream branch of ..."
 
 
 class TestGitValidator:
@@ -193,7 +209,7 @@ class TestGitValidator:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("MACTL_IGNORE_GIT_CLEAN_CHECK", None)
             validator = GitValidator()
-            assert validator._is_clean("/path/to/repo") is True
+            assert validator._is_clean("/path/to/repo") == (True, "ok", "")
 
         assert mock_run.call_count == 2
         mock_run.assert_any_call(
@@ -213,7 +229,7 @@ class TestGitValidator:
 
     @patch("subprocess.run")
     def test_is_clean_uncommitted_changes(self, mock_run):
-        """Test workspace is not clean when uncommitted changes exist."""
+        """Test uncommitted branch returns reason='uncommitted' with porcelain."""
         mock_run.return_value = MagicMock(
             stdout=" M file.txt\n", stderr="", returncode=0
         )
@@ -221,8 +237,11 @@ class TestGitValidator:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("MACTL_IGNORE_GIT_CLEAN_CHECK", None)
             validator = GitValidator()
-            assert validator._is_clean("/path/to/repo") is False
+            clean, reason, details = validator._is_clean("/path/to/repo")
 
+        assert clean is False
+        assert reason == "uncommitted"
+        assert details == " M file.txt\n"
         mock_run.assert_called_once_with(
             ["git", "status", "--porcelain"],
             capture_output=True,
@@ -233,27 +252,44 @@ class TestGitValidator:
 
     @patch("subprocess.run")
     def test_is_clean_unpushed_commits(self, mock_run):
-        """Test workspace is not clean when unpushed commits exist."""
+        """Test unpushed-commits branch returns reason='not_pushed' with git stderr."""
+        push_stderr = "To github.com:org/repo.git\n   abc123..def456  main -> main"
         mock_run.side_effect = [
             MagicMock(stdout="", stderr="", returncode=0),
-            MagicMock(
-                stdout="",
-                stderr="To github.com:org/repo.git\n   abc123..def456  main -> main",
-                returncode=0,
-            ),
+            MagicMock(stdout="", stderr=push_stderr, returncode=0),
         ]
 
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("MACTL_IGNORE_GIT_CLEAN_CHECK", None)
             validator = GitValidator()
-            assert validator._is_clean("/path/to/repo") is False
+            clean, reason, details = validator._is_clean("/path/to/repo")
+
+        assert clean is False
+        assert reason == "not_pushed"
+        assert push_stderr in details
+
+    @patch("subprocess.run")
+    def test_is_clean_git_status_error(self, mock_run):
+        """Test git-error branch returns reason='git_error' with exception stderr."""
+        mock_run.side_effect = subprocess.CalledProcessError(
+            128, "git", stderr="fatal: not a git repository"
+        )
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("MACTL_IGNORE_GIT_CLEAN_CHECK", None)
+            validator = GitValidator()
+            clean, reason, details = validator._is_clean("/path/to/repo")
+
+        assert clean is False
+        assert reason == "git_error"
+        assert details == "fatal: not a git repository"
 
     @patch("subprocess.run")
     def test_is_clean_bypass_env(self, mock_run):
         """Test clean check bypassed when MACTL_IGNORE_GIT_CLEAN_CHECK=true."""
         with patch.dict(os.environ, {"MACTL_IGNORE_GIT_CLEAN_CHECK": "true"}):
             validator = GitValidator()
-            assert validator._is_clean("/path/to/repo") is True
+            assert validator._is_clean("/path/to/repo") == (True, "ok", "")
             mock_run.assert_not_called()
 
     def test_is_on_main_in_buildkite(self):
@@ -374,7 +410,7 @@ class TestGitValidator:
         """Test bypass env var is case insensitive."""
         with patch.dict(os.environ, {"MACTL_IGNORE_GIT_CLEAN_CHECK": "TRUE"}):
             validator = GitValidator()
-            assert validator._is_clean("/path/to/repo") is True
+            assert validator._is_clean("/path/to/repo") == (True, "ok", "")
             mock_run.assert_not_called()
 
     @patch("subprocess.run")
@@ -475,6 +511,8 @@ class TestGitValidatorIntegration:
         git_info = validator.get_git_info(workspace_root=temp_git_repo)
 
         assert git_info.is_clean is False
+        assert git_info.clean_reason == "not_pushed"
+        assert git_info.clean_details
 
     def test_integration_bypass_clean_check(self, temp_git_repo):
         """Test bypass clean check in integration test."""

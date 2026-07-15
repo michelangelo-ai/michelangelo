@@ -21,6 +21,11 @@ class GitInfo:
         commit_hash: Current commit SHA
         is_clean: Whether workspace is clean (no uncommitted changes, all pushed)
         is_on_main: Whether current branch is main/master
+        clean_reason: Machine-readable classification of the clean check outcome:
+            "ok" (clean), "uncommitted" (git status non-empty),
+            "not_pushed" (git push -n rejected), or "git_error" (subprocess raised).
+        clean_details: Raw combined stdout+stderr from the git command that
+            determined ``clean_reason`` — safe to surface to the user verbatim.
     """
 
     repo: str
@@ -28,6 +33,8 @@ class GitInfo:
     commit_hash: str
     is_clean: bool
     is_on_main: bool
+    clean_reason: str = "ok"
+    clean_details: str = ""
 
 
 class GitValidator:
@@ -83,12 +90,15 @@ class GitValidator:
             )
 
         branch = self._get_branch_name(root)
+        clean, reason, details = self._is_clean(root)
         return GitInfo(
             repo=self._get_repo_url(root),
             branch_name=branch,
             commit_hash=self._get_commit_hash(root),
-            is_clean=self._is_clean(root),
+            is_clean=clean,
             is_on_main=self._is_on_main(branch),
+            clean_reason=reason,
+            clean_details=details,
         )
 
     def _detect_workspace_root(self) -> str:
@@ -220,7 +230,7 @@ class GitValidator:
         """
         return os.environ.get("BUILDKITE", "").lower() == "true"
 
-    def _is_clean(self, root: str) -> bool:
+    def _is_clean(self, root: str) -> tuple[bool, str, str]:
         """Check if git workspace is clean.
 
         A workspace is clean if:
@@ -231,10 +241,16 @@ class GitValidator:
             root: Workspace root path.
 
         Returns:
-            True if workspace is clean, False otherwise.
+            Tuple ``(clean, reason, details)``:
+              * ``clean`` — True iff both checks pass.
+              * ``reason`` — one of ``"ok"``, ``"uncommitted"``, ``"not_pushed"``,
+                ``"git_error"``.
+              * ``details`` — raw git stdout/stderr for the failing step, or an
+                empty string when clean. Callers should surface ``details``
+                verbatim so the user sees git's own diagnostic.
         """
         if os.environ.get(self.bypass_env, "").lower() == "true":
-            return True
+            return True, "ok", ""
 
         try:
             result = subprocess.run(
@@ -245,9 +261,9 @@ class GitValidator:
                 check=True,
             )
             if result.stdout.strip():
-                return False
-        except subprocess.CalledProcessError:
-            return False
+                return False, "uncommitted", result.stdout
+        except subprocess.CalledProcessError as e:
+            return False, "git_error", (e.stderr or "").strip()
 
         result = subprocess.run(
             ["git", "push", "-n"],
@@ -257,7 +273,9 @@ class GitValidator:
             check=False,
         )
         output = result.stdout + result.stderr
-        return "Everything up-to-date" in output
+        if "Everything up-to-date" in output:
+            return True, "ok", ""
+        return False, "not_pushed", output
 
     def _is_on_main(self, branch_name: str) -> bool:
         """Check if branch is a main branch.
