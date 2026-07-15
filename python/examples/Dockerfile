@@ -8,11 +8,14 @@
 FROM nvidia/cuda:12.8.0-base-ubuntu22.04
 
 # Install all system dependencies in a single layer.
-# --mount=type=cache persists the apt cache across builds so packages are not
-# re-downloaded on every run. sharing=locked prevents cache corruption when
-# two platform builds run concurrently on the same runner.
+# --mount=type=cache persists the apt package download cache across builds.
+# We wipe /var/lib/apt/lists/* before updating so that stale package lists
+# from a previous build (especially across branches) never cause exit-100
+# failures on apt-get install. The download cache in /var/cache/apt is still
+# preserved so individual .deb files are not re-fetched on every run.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -rf /var/lib/apt/lists/* && \
     apt-get update && apt-get install -y --no-install-recommends \
     curl \
     software-properties-common \
