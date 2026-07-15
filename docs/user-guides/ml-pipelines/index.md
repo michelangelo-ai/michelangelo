@@ -117,7 +117,7 @@ Start with the [Getting started](../getting-started/getting-started.md) guide to
 | [**Getting Started**](../getting-started/getting-started.md) | Build and run your first pipeline end-to-end |
 | [**Pipeline Running Modes**](./pipeline-running-modes.md) | Understand Local, Remote, Dev, and Pipeline run modes |
 | [**Pipeline Management**](./pipeline-management.md) | Create and manage standard and custom pipelines |
-| [**Concurrent and Parallel Tasks**](./concurrent-and-parallel-tasks.md) | Run tasks concurrently, fan out with bounded parallelism, and share datasets across runtimes |
+| [**Workflow Patterns**](./workflow-patterns.md) | Sequence, branch, loop, run tasks in parallel, and share datasets across runtimes |
 | [**Running Uniflow Pipelines**](./running-uniflow.md) | Environment setup, execution, and debugging |
 | [**Caching and Resume**](./cache-and-pipelinerun-resume-form.md) | Cache task results and resume failed runs |
 | [**File Sync**](./file-sync-testing-flow-runbook.md) | Sync local code changes to remote runs |
