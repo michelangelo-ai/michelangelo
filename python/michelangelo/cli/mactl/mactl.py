@@ -583,20 +583,44 @@ def discover_crds(channel: Channel) -> dict[str, CRD]:
 
 
 def pre_parse_args(crds: dict[str, CRD]) -> tuple[Namespace, list[str]]:
-    """Pre-parse to get namespace, entity, and remaining info."""
-    base_parser = ArgumentParser(description="MaCTL - Michelangelo CLI", add_help=False)
+    """Pre-parse to get namespace, entity, and remaining info.
+
+    Prints a help panel when the entity is omitted (`ma` / `ma -h`) instead of
+    erroring with an argparse "the following arguments are required: entity"
+    message. Program name is `ma` — matches the console-script entry point in
+    pyproject.toml.
+    """
+    base_parser = ArgumentParser(
+        prog="ma",
+        description="Ma command - Michelangelo CLI",
+        epilog='Use "ma <entity> --help" for more information about an entity.',
+    )
     base_parser.add_argument(
         "-vv",
         "--verbose",
         action="store_true",
         help="Increase verbosity level",
     )
-    entity_subparsers = base_parser.add_subparsers(dest="entity", required=True)
+    entity_subparsers = base_parser.add_subparsers(
+        dest="entity",
+        title="entities",
+        metavar="<entity>",
+    )
 
     for crd_name in crds:
-        entity_subparsers.add_parser(crd_name, add_help=False)
+        entity_subparsers.add_parser(
+            crd_name,
+            add_help=False,
+            help=f"Manage {crd_name} resources",
+        )
 
     namespace, remaining = base_parser.parse_known_args()
+    if namespace.entity is None:
+        # `ma` or `ma -h` — subparsers were optional so parse succeeded with
+        # entity=None. Print the top-level help panel and exit cleanly instead
+        # of falling through to code that assumes an entity is set.
+        base_parser.print_help()
+        sys.exit(0)
     _LOG.debug(
         "Parsed arguments -- namespace: %r / remaining: %r", namespace, remaining
     )
@@ -664,9 +688,7 @@ def main(channel: Channel, plugin_registry: dict[str, list[object]]):
         dir(crds[user_command_crd]),
     )
     func_generator = getattr(crds[user_command_crd], f"generate_{user_command_action}")
-    action_parser = ArgumentParser(
-        prog=f"mactl {user_command_crd} {user_command_action}"
-    )
+    action_parser = ArgumentParser(prog=f"ma {user_command_crd} {user_command_action}")
     func_generator(channel, action_parser)
 
     # Phase 4: Parse remaining arguments

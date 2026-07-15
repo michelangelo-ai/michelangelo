@@ -644,6 +644,53 @@ class PreParseArgsTest(TestCase):
         self.assertIn("-f", remaining)
         self.assertIn("config.yaml", remaining)
 
+    @patch("sys.argv", ["mactl"])
+    @patch("sys.stdout")
+    def test_pre_parse_args_no_entity_prints_help_and_exits(self, _mock_stdout):
+        """`ma` with no args prints help and exits 0 (not argparse error)."""
+        crds = {"pipeline": Mock(), "project": Mock()}
+        with self.assertRaises(SystemExit) as cm:
+            pre_parse_args(crds)
+        self.assertEqual(cm.exception.code, 0)
+
+    @patch("sys.argv", ["mactl", "-h"])
+    @patch("sys.stdout")
+    def test_pre_parse_args_short_help_flag_exits_zero(self, _mock_stdout):
+        """`ma -h` prints help and exits 0."""
+        crds = {"pipeline": Mock(), "project": Mock()}
+        with self.assertRaises(SystemExit) as cm:
+            pre_parse_args(crds)
+        self.assertEqual(cm.exception.code, 0)
+
+    @patch("sys.argv", ["mactl", "--help"])
+    @patch("sys.stdout")
+    def test_pre_parse_args_long_help_flag_exits_zero(self, _mock_stdout):
+        """`ma --help` prints help and exits 0."""
+        crds = {"pipeline": Mock(), "project": Mock()}
+        with self.assertRaises(SystemExit) as cm:
+            pre_parse_args(crds)
+        self.assertEqual(cm.exception.code, 0)
+
+    @patch("sys.argv", ["mactl", "unknown_entity"])
+    @patch("sys.stderr")
+    def test_pre_parse_args_unknown_entity_still_errors(self, _mock_stderr):
+        """Unknown entity name still triggers argparse's 'invalid choice' error."""
+        crds = {"pipeline": Mock(), "project": Mock()}
+        with self.assertRaises(SystemExit) as cm:
+            pre_parse_args(crds)
+        self.assertEqual(cm.exception.code, 2)
+
+    @patch("sys.argv", ["mactl"])
+    def test_pre_parse_args_prog_is_ma(self):
+        """Help output uses `ma` as the program name."""
+        crds = {"pipeline": Mock()}
+        with patch("sys.stdout") as mock_stdout, self.assertRaises(SystemExit):
+            pre_parse_args(crds)
+        written = "".join(
+            str(call.args[0]) for call in mock_stdout.write.call_args_list if call.args
+        )
+        self.assertIn("usage: ma", written)
+
 
 class HandleCrdActionHelpTest(TestCase):
     """Tests for handle_crd_action_help function."""
@@ -826,7 +873,7 @@ class MainFunctionTest(TestCase):
         )
 
         # Verify ArgumentParser was created and used
-        mock_arg_parser_class.assert_called_once_with(prog="mactl project create")
+        mock_arg_parser_class.assert_called_once_with(prog="ma project create")
         mock_crd.generate_create.assert_called_once_with(
             mock_channel, mock_parser_instance
         )
