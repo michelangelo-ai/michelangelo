@@ -62,7 +62,7 @@ jobs:
             echo "branch (or otherwise trigger CI) and re-run once checks are green."
             exit 1
           fi
-          STATES=$(gh api --paginate "repos/${{ github.repository }}/commits/$SHA/check-runs" --jq '.check_runs[] | select(.status != "completed" or (.conclusion != "success" and .conclusion != "skipped" and .conclusion != "neutral")) | .name')
+          STATES=$(gh api --paginate "repos/${{ github.repository }}/commits/$SHA/check-runs" --jq '.check_runs[] | select(.name != "promote" and .name != "publish-npm" and .name != "notify-on-failure") | select(.status != "completed" or (.conclusion != "success" and .conclusion != "skipped" and .conclusion != "neutral")) | .name')
           if [ -n "$STATES" ]; then
             echo "ERROR: the following checks are not green on ${{ steps.vars.outputs.branch }}@$SHA:"
             echo "$STATES"
