@@ -383,9 +383,24 @@ StateMachine:
 		// Stay paused if no action requested (no status change needed)
 	}
 
-	if !reflect.DeepEqual(originalTriggerRun, triggerRun) {
-		err := r.UpdateStatus(ctx, triggerRun, &metav1.UpdateOptions{})
-		if err != nil {
+	// Actions are one-time commands. Persist their reset through the main
+	// resource endpoint before updating status so a status failure cannot cause
+	// a successfully handled action to be replayed on the next reconciliation.
+	specChanged := !reflect.DeepEqual(originalTriggerRun.Spec, triggerRun.Spec)
+	statusChanged := !reflect.DeepEqual(originalTriggerRun.Status, triggerRun.Status)
+	if specChanged {
+		// The main-resource update returns the status currently stored by the
+		// status subresource, so retain the state-machine result for the separate
+		// status update below.
+		desiredStatus := triggerRun.Status
+		if err := r.Update(ctx, triggerRun, &metav1.UpdateOptions{}); err != nil {
+			log.Error(err, "Fail to update trigger run spec")
+			return ctrl.Result{}, err
+		}
+		triggerRun.Status = desiredStatus
+	}
+	if statusChanged {
+		if err := r.UpdateStatus(ctx, triggerRun, &metav1.UpdateOptions{}); err != nil {
 			log.Error(err, "Fail to update trigger run status")
 			return ctrl.Result{}, err
 		}
