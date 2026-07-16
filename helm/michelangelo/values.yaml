@@ -522,7 +522,9 @@ workloadConfig:
   # Only works when apiserver.enabled=true. Set .value to override manually.
   registryEndpoint:
     auto: true
-    # Explicit override. Takes precedence over auto when non-empty.
+    # Explicit override. Only takes effect when auto=false OR apiserver.enabled
+    # is false -- otherwise auto-derivation wins even if this is set. To force
+    # this value, set auto: false.
     # Example: "my-registry.prod.internal:15566"
     value: ""
 
