@@ -1,4 +1,9 @@
 ---
+# This file is no longer applied to the control plane -- michelangelo-config
+# there is Helm-managed (see helm/michelangelo/values-k3d.yaml's
+# workloadConfig.env). It survives only as the template
+# _create_config_in_compute_cluster() copies to registered compute clusters,
+# which aren't Helm-managed at all.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -9,8 +14,7 @@ data:
   AWS_ACCESS_KEY_ID: minioadmin
   AWS_SECRET_ACCESS_KEY: minioadmin
   AWS_ENDPOINT_URL: http://minio:9091
-  # REGISTRY_ENDPOINT is intentionally absent here -- it is patched in from
-  # helm/michelangelo/values-k3d.yaml's workloadConfig.registryEndpoint.value
-  # by sandbox.py's _sync_registry_endpoint_from_values(), so values-k3d.yaml
-  # stays the single source of truth instead of duplicating the literal here.
-
+  # REGISTRY_ENDPOINT is intentionally absent here --
+  # _create_config_in_compute_cluster() always computes and sets it
+  # dynamically (a cross-cluster NodePort address, necessarily different
+  # from the control plane's own in-cluster DNS value).

@@ -330,10 +330,6 @@ def _sync(ns: argparse.Namespace):
     _refresh_mysql_schema()
 
     _ensure_credentials_secret()
-    # Re-patch REGISTRY_ENDPOINT from values-k3d.yaml in case it changed
-    # since the cluster was created (sync doesn't re-run _deploy_services(),
-    # which is where this runs on a fresh `create`).
-    _sync_registry_endpoint_from_values()
     _helm_ensure_repos()
     helm_args = _build_helm_set_args(ns)
 
@@ -346,6 +342,12 @@ def _sync(ns: argparse.Namespace):
     release_healthy = (
         status_result.returncode == 0 and '"status":"deployed"' in status_result.stdout
     )
+
+    # Adopt any resource Helm doesn't yet own (e.g. michelangelo-config on a
+    # sandbox created before it became Helm-managed) so upgrade/install
+    # doesn't fail with "exists and cannot be imported into the release".
+    # Safe to call unconditionally -- it no-ops for anything already owned.
+    _helm_adopt_orphaned_resources(helm_args)
 
     if release_healthy:
         # Healthy release: upgrade in-place, keeping infra running.
@@ -419,6 +421,15 @@ def _sync(ns: argparse.Namespace):
         )
 
     _helm_wait(ns)
+
+    # michelangelo-config is Helm-managed (workloadConfig in values-k3d.yaml).
+    # REGISTRY_ENDPOINT and the other static keys are already correct as
+    # rendered by the helm upgrade/install above. Only the credential fields
+    # need a post-Helm patch, since they may diverge from values-k3d.yaml's
+    # static defaults on a pre-configured VM (e.g. CI) -- patch runs *after*
+    # the helm step so it isn't immediately reverted by Helm's reconciliation
+    # on the next sync.
+    _sync_config_from_secret()
 
 
 def _refresh_mysql_schema():
@@ -745,7 +756,11 @@ def _deploy_services(ns: argparse.Namespace):
         "boot.yaml",
         "mysql.yaml",  # MySQL database
         "mysql-ingester.yaml",  # Auto-generated ingester schema from protobuf
-        "michelangelo-config.yaml",
+        # michelangelo-config is Helm-managed for the control plane (see
+        # workloadConfig in values-k3d.yaml) -- not applied as a raw resource
+        # here. resources/michelangelo-config.yaml still exists on disk as
+        # the template _create_config_in_compute_cluster() copies to compute
+        # clusters, which aren't Helm-managed.
     ]
     links = []
 
@@ -863,10 +878,6 @@ def _deploy_services(ns: argparse.Namespace):
 
     # Create credentials secrets only if they don't already exist.
     _ensure_credentials_secret()
-    # Patch michelangelo-config to match the live secret values.
-    _sync_config_from_secret()
-    # Patch michelangelo-config's REGISTRY_ENDPOINT from values-k3d.yaml.
-    _sync_registry_endpoint_from_values()
 
     _assert_command(
         "helm", "Helm not found, please install it: https://helm.sh/docs/intro/install/"
@@ -893,6 +904,13 @@ def _deploy_services(ns: argparse.Namespace):
     # Must happen BEFORE domain registration — Cadence frontend only exists
     # after helm install.
     _deploy_app_services(ns)
+
+    # michelangelo-config is now Helm-managed (workloadConfig in
+    # values-k3d.yaml). REGISTRY_ENDPOINT and the other static keys are
+    # already correct as rendered by the helm install above. Only the
+    # credential fields need a post-Helm patch, since they may diverge from
+    # values-k3d.yaml's static defaults on a pre-configured VM (e.g. CI).
+    _sync_config_from_secret()
 
     if ns.workflow == "cadence":
         _create_cadence_domain(links)
@@ -1288,39 +1306,6 @@ def _sync_config_from_secret():
             "michelangelo-config",
             "--patch",
             f'{{"data":{{"AWS_ACCESS_KEY_ID":"{access_key}","AWS_SECRET_ACCESS_KEY":"{secret_key}"}}}}',
-        ],
-        check=False,
-        capture_output=True,
-    )
-
-
-def _sync_registry_endpoint_from_values():
-    """Patch michelangelo-config's REGISTRY_ENDPOINT from values-k3d.yaml.
-
-    values-k3d.yaml's workloadConfig.registryEndpoint.value is the source of
-    truth for the sandbox's model registry endpoint (not the static
-    resources/michelangelo-config.yaml, which has no REGISTRY_ENDPOINT key of
-    its own). Mirrors _sync_config_from_secret()'s pattern of patching the
-    live ConfigMap after it's applied from the static YAML.
-    """
-    with open(_values_k3d_path) as f:
-        k3d_values = yaml.safe_load(f) or {}
-    registry_endpoint = (
-        (k3d_values.get("workloadConfig") or {})
-        .get("registryEndpoint", {})
-        .get("value")
-    )
-    if not registry_endpoint:
-        return
-
-    subprocess.run(
-        [
-            "kubectl",
-            "patch",
-            "configmap",
-            "michelangelo-config",
-            "--patch",
-            f'{{"data":{{"REGISTRY_ENDPOINT":"{registry_endpoint}"}}}}',
         ],
         check=False,
         capture_output=True,

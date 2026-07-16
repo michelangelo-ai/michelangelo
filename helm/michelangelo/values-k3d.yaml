@@ -70,19 +70,38 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 
-# The Helm-rendered workload ConfigMap stays disabled for the sandbox — the
-# sandbox CLI (sandbox.py) manages the michelangelo-config ConfigMap itself via
-# kubectl, not Helm. See helm/michelangelo/templates/core/workload-configmap.yaml.
+# The sandbox's michelangelo-config ConfigMap is Helm-managed: the sandbox
+# CLI (sandbox.py) no longer kubectl-applies a static YAML for the control
+# plane. See helm/michelangelo/templates/core/workload-configmap.yaml.
 #
-# registryEndpoint.value below is still the source of truth for the sandbox's
-# REGISTRY_ENDPOINT: sandbox.py's _sync_registry_endpoint_from_values() reads
-# it directly from this file and patches it into the control-plane
-# michelangelo-config ConfigMap, so this file — not the static
-# resources/michelangelo-config.yaml — is what an operator edits to change it.
+# REGISTRY_ENDPOINT is a plain env entry here, not the special
+# registryEndpoint.auto/.value mechanism (that mechanism exists for
+# Helm-only deployments that want to auto-derive the endpoint from the
+# apiserver Service rather than hardcode it -- the sandbox is already
+# hardcoding a known value, so the extra mechanism buys nothing here and
+# only risks the auto-derivation branch firing anyway from values.yaml's
+# defaults; keeping it out of workloadConfig.env's is simplest).
+#
+# AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY below are the defaults for a fresh
+# sandbox. sandbox.py's _sync_config_from_secret() patches in whatever's
+# actually in the object-storage-credentials Secret *after* every
+# helm install/upgrade (a pre-configured VM, e.g. CI, may have different
+# real credentials) -- both it and _sync_registry_endpoint_from_values() run
+# post-Helm specifically so Helm's own reconciliation doesn't revert the
+# patch.
+#
+# resources/michelangelo-config.yaml still exists on disk, but only as the
+# template _create_config_in_compute_cluster() copies to registered compute
+# clusters, which aren't Helm-managed at all.
 workloadConfig:
-  enabled: false
-  registryEndpoint:
-    value: "michelangelo-apiserver:15566"
+  enabled: true
+  env:
+    MA_FILE_SYSTEM: "s3://default"
+    MA_FILE_SYSTEM_S3_SCHEME: "http"
+    AWS_ACCESS_KEY_ID: "minioadmin"
+    AWS_SECRET_ACCESS_KEY: "minioadmin"
+    AWS_ENDPOINT_URL: "http://minio:9091"
+    REGISTRY_ENDPOINT: "michelangelo-apiserver:15566"
 
 # Ray cluster log persistence — enabled for sandbox to wire up the KubeRay
 # History Server. The collector sidecar uses the in-cluster MinIO endpoint

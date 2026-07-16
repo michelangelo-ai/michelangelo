@@ -285,11 +285,11 @@ Most commonly set values. See `helm/michelangelo/values.yaml` for the complete l
 | `controllermgr.watchNamespace` | no | `[]` (all) | Namespaces the controller manager watches |
 | `cadence.enabled` | no | `false` | Install bundled Cadence subchart |
 | `temporal.enabled` | no | `false` | Install bundled Temporal subchart |
-| `workloadConfig.enabled` | no | `false` | Render the `michelangelo-config` ConfigMap via Helm (leave `false` if an external tool, e.g. a sandbox CLI, manages it) |
+| `workloadConfig.enabled` | no | `false` | Render the `michelangelo-config` ConfigMap via Helm (leave `false` if an external tool manages it; the sandbox CLI sets this `true`) |
 | `workloadConfig.configMapName` | no | `"michelangelo-config"` | Name of the rendered ConfigMap — must match what workload pods reference in `envFrom.configMapRef` |
-| `workloadConfig.registryEndpoint.auto` | no | `true` | Auto-derive `REGISTRY_ENDPOINT` from the apiserver Service (requires `apiserver.enabled=true`) |
-| `workloadConfig.registryEndpoint.value` | no | `""` | Explicit `REGISTRY_ENDPOINT` override; takes precedence over `auto`, and required if `auto` can't derive a value (e.g. `apiserver.enabled=false`) |
-| `workloadConfig.env` | no | `{}` | Arbitrary extra key-value pairs added to the ConfigMap |
+| `workloadConfig.env` | no | `{}` | Arbitrary key-value pairs added to the ConfigMap — including `REGISTRY_ENDPOINT`, if you'd rather set a fixed literal here than use `registryEndpoint` below. Takes precedence over `registryEndpoint` if both would produce a `REGISTRY_ENDPOINT` key |
+| `workloadConfig.registryEndpoint.auto` | no | `true` | Auto-derive `REGISTRY_ENDPOINT` from the apiserver Service (requires `apiserver.enabled=true`); ignored if `env.REGISTRY_ENDPOINT` is set |
+| `workloadConfig.registryEndpoint.value` | no | `""` | Explicit `REGISTRY_ENDPOINT` override; only takes effect when `auto=false` or `apiserver.enabled=false`, and ignored if `env.REGISTRY_ENDPOINT` is set |
 
 ¹ Required unless `existingSecret` is set.
 

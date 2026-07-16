@@ -5,16 +5,18 @@
   to inject backing-service endpoints (REGISTRY_ENDPOINT, AWS_ENDPOINT_URL,
   etc.) without requiring pipeline authors to hardcode them.
 
-  MUTUAL EXCLUSION: The sandbox CLI (sandbox.py) manages this ConfigMap via a
-  static YAML manifest (resources/michelangelo-config.yaml) and kubectl apply.
-  When using the sandbox, keep workloadConfig.enabled=false (the default in
-  values-k3d.yaml) so Helm and the CLI do not conflict over the same ConfigMap.
-  Enable this template only for Helm-only deployments where no external tool
-  manages the michelangelo-config ConfigMap.
+  The sandbox CLI (sandbox.py) enables this template (workloadConfig.enabled
+  in values-k3d.yaml) and is now the sole owner of the michelangelo-config
+  ConfigMap for the control plane -- it no longer kubectl-applies a separate
+  static manifest. sandbox.py's _sync_config_from_secret() still patches the
+  credential fields post-Helm, since those may diverge from values-k3d.yaml's
+  static defaults on a pre-configured VM (e.g. CI) and Helm can't read a live
+  Secret's value at template-render time.
 */}}
 {{- if .Values.workloadConfig.enabled }}
-{{- if and (not (and .Values.workloadConfig.registryEndpoint.auto .Values.apiserver.enabled)) (not .Values.workloadConfig.registryEndpoint.value) }}
-{{- fail "workloadConfig.enabled=true requires either (registryEndpoint.auto=true AND apiserver.enabled=true) to auto-derive REGISTRY_ENDPOINT, or registryEndpoint.value set explicitly. Otherwise no REGISTRY_ENDPOINT key would be written and pipelines would silently fall back to InMemoryRegistryClient." -}}
+{{- $hasEnvRegistryEndpoint := hasKey .Values.workloadConfig.env "REGISTRY_ENDPOINT" }}
+{{- if and (not $hasEnvRegistryEndpoint) (not (and .Values.workloadConfig.registryEndpoint.auto .Values.apiserver.enabled)) (not .Values.workloadConfig.registryEndpoint.value) }}
+{{- fail "workloadConfig.enabled=true requires REGISTRY_ENDPOINT to come from one of: workloadConfig.env.REGISTRY_ENDPOINT, (registryEndpoint.auto=true AND apiserver.enabled=true), or registryEndpoint.value set explicitly. Otherwise no REGISTRY_ENDPOINT key would be written and pipelines would silently fall back to InMemoryRegistryClient." -}}
 {{- end }}
 apiVersion: v1
 kind: ConfigMap
@@ -26,9 +28,11 @@ data:
   {{- range $key, $value := .Values.workloadConfig.env }}
   {{ $key }}: {{ $value | quote }}
   {{- end }}
+  {{- if not $hasEnvRegistryEndpoint }}
   {{- if and .Values.workloadConfig.registryEndpoint.auto .Values.apiserver.enabled }}
   REGISTRY_ENDPOINT: {{ include "michelangelo.componentFullname" (dict "context" . "component" "apiserver") }}:{{ .Values.apiserver.port }}
   {{- else if .Values.workloadConfig.registryEndpoint.value }}
   REGISTRY_ENDPOINT: {{ .Values.workloadConfig.registryEndpoint.value | quote }}
+  {{- end }}
   {{- end }}
 {{- end }}

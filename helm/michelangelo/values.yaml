@@ -510,16 +510,19 @@ commonAnnotations: {}
 # -----------------------------------------------------------------------------
 workloadConfig:
   # Enable the Helm-managed michelangelo-config ConfigMap.
-  # Set to false if you manage this ConfigMap externally (e.g. via the sandbox
-  # CLI, Terraform, or a GitOps tool).
+  # Set to false if you manage this ConfigMap externally (e.g. via Terraform
+  # or a GitOps tool). The sandbox CLI enables this (see values-k3d.yaml).
   enabled: false
 
   # Name of the ConfigMap. Must match what workload pod specs reference in
   # envFrom.configMapRef. Default: "michelangelo-config".
   configMapName: "michelangelo-config"
 
-  # Auto-derive REGISTRY_ENDPOINT from the apiserver Service DNS name and port.
-  # Only works when apiserver.enabled=true. Set .value to override manually.
+  # Auto-derive REGISTRY_ENDPOINT from the apiserver Service DNS name and
+  # port. Only works when apiserver.enabled=true. Set .value to override
+  # manually. Ignored entirely if env.REGISTRY_ENDPOINT is set below --
+  # that's simplest when you already know the literal value (e.g. the
+  # sandbox), since it needs no auto/value precedence rules to reason about.
   registryEndpoint:
     auto: true
     # Explicit override. Only takes effect when auto=false OR apiserver.enabled
@@ -528,7 +531,9 @@ workloadConfig:
     # Example: "my-registry.prod.internal:15566"
     value: ""
 
-  # Arbitrary key-value pairs to add to the ConfigMap.
+  # Arbitrary key-value pairs to add to the ConfigMap. Setting
+  # REGISTRY_ENDPOINT here (instead of via registryEndpoint above) is the
+  # simplest option when you want a fixed literal, same as any other key.
   # Example:
   #   env:
   #     MA_FILE_SYSTEM: "s3://my-bucket"
