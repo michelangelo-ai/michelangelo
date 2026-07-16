@@ -285,6 +285,11 @@ Most commonly set values. See `helm/michelangelo/values.yaml` for the complete l
 | `controllermgr.watchNamespace` | no | `[]` (all) | Namespaces the controller manager watches |
 | `cadence.enabled` | no | `false` | Install bundled Cadence subchart |
 | `temporal.enabled` | no | `false` | Install bundled Temporal subchart |
+| `workloadConfig.enabled` | no | `false` | Render the `michelangelo-config` ConfigMap via Helm (leave `false` if an external tool, e.g. a sandbox CLI, manages it) |
+| `workloadConfig.configMapName` | no | `"michelangelo-config"` | Name of the rendered ConfigMap — must match what workload pods reference in `envFrom.configMapRef` |
+| `workloadConfig.registryEndpoint.auto` | no | `true` | Auto-derive `REGISTRY_ENDPOINT` from the apiserver Service (requires `apiserver.enabled=true`) |
+| `workloadConfig.registryEndpoint.value` | no | `""` | Explicit `REGISTRY_ENDPOINT` override; takes precedence over `auto`, and required if `auto` can't derive a value (e.g. `apiserver.enabled=false`) |
+| `workloadConfig.env` | no | `{}` | Arbitrary extra key-value pairs added to the ConfigMap |
 
 ¹ Required unless `existingSecret` is set.
 
@@ -319,12 +324,13 @@ helm/michelangelo/
     ├── rbac/                      # ServiceAccount, ClusterRole, ClusterRoleBinding
     ├── tests/
     │   └── test-connection.yaml   # helm test hook
-    └── core/                      # 20 templates for the 5 services
+    └── core/                      # 21 templates for the 5 services + workload config
         ├── apiserver-{deployment,service,configmap,ingress,schema-init-configmap}.yaml
         ├── envoy-{deployment,service,configmap,ingress}.yaml
         ├── ui-{deployment,service,configmap,ingress}.yaml
         ├── worker-{deployment,configmap}.yaml
         ├── controllermgr-{deployment,service,configmap}.yaml
+        ├── workload-configmap.yaml         # optional, gated by workloadConfig.enabled
         ├── metadata-storage-secret.yaml    # resource-policy: keep
         └── object-storage-secret.yaml      # resource-policy: keep
 ```

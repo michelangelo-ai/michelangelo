@@ -70,10 +70,19 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 
-# Workload ConfigMap is managed by the sandbox CLI's static YAML, not Helm.
-# Do not enable both — see helm/michelangelo/templates/core/workload-configmap.yaml.
+# The Helm-rendered workload ConfigMap stays disabled for the sandbox — the
+# sandbox CLI (sandbox.py) manages the michelangelo-config ConfigMap itself via
+# kubectl, not Helm. See helm/michelangelo/templates/core/workload-configmap.yaml.
+#
+# registryEndpoint.value below is still the source of truth for the sandbox's
+# REGISTRY_ENDPOINT: sandbox.py's _sync_registry_endpoint_from_values() reads
+# it directly from this file and patches it into the control-plane
+# michelangelo-config ConfigMap, so this file — not the static
+# resources/michelangelo-config.yaml — is what an operator edits to change it.
 workloadConfig:
   enabled: false
+  registryEndpoint:
+    value: "michelangelo-apiserver:15566"
 
 # Ray cluster log persistence — enabled for sandbox to wire up the KubeRay
 # History Server. The collector sidecar uses the in-cluster MinIO endpoint

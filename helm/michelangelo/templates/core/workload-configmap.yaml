@@ -13,6 +13,9 @@
   manages the michelangelo-config ConfigMap.
 */}}
 {{- if .Values.workloadConfig.enabled }}
+{{- if and (not (and .Values.workloadConfig.registryEndpoint.auto .Values.apiserver.enabled)) (not .Values.workloadConfig.registryEndpoint.value) }}
+{{- fail "workloadConfig.enabled=true requires either (registryEndpoint.auto=true AND apiserver.enabled=true) to auto-derive REGISTRY_ENDPOINT, or registryEndpoint.value set explicitly. Otherwise no REGISTRY_ENDPOINT key would be written and pipelines would silently fall back to InMemoryRegistryClient." -}}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

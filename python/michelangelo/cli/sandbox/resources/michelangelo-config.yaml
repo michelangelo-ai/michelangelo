@@ -9,4 +9,7 @@ data:
   AWS_ACCESS_KEY_ID: minioadmin
   AWS_SECRET_ACCESS_KEY: minioadmin
   AWS_ENDPOINT_URL: http://minio:9091
-  REGISTRY_ENDPOINT: michelangelo-apiserver:15566
+# REGISTRY_ENDPOINT is patched in from helm/michelangelo/values-k3d.yaml's
+# workloadConfig.registryEndpoint.value by sandbox.py's
+# _sync_registry_endpoint_from_values(), so values-k3d.yaml stays the single
+# source of truth instead of duplicating the literal here.

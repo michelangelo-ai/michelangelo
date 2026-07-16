@@ -861,6 +861,8 @@ def _deploy_services(ns: argparse.Namespace):
     _ensure_credentials_secret()
     # Patch michelangelo-config to match the live secret values.
     _sync_config_from_secret()
+    # Patch michelangelo-config's REGISTRY_ENDPOINT from values-k3d.yaml.
+    _sync_registry_endpoint_from_values()
 
     _assert_command(
         "helm", "Helm not found, please install it: https://helm.sh/docs/intro/install/"
@@ -1288,6 +1290,39 @@ def _sync_config_from_secret():
     )
 
 
+def _sync_registry_endpoint_from_values():
+    """Patch michelangelo-config's REGISTRY_ENDPOINT from values-k3d.yaml.
+
+    values-k3d.yaml's workloadConfig.registryEndpoint.value is the source of
+    truth for the sandbox's model registry endpoint (not the static
+    resources/michelangelo-config.yaml, which has no REGISTRY_ENDPOINT key of
+    its own). Mirrors _sync_config_from_secret()'s pattern of patching the
+    live ConfigMap after it's applied from the static YAML.
+    """
+    with open(_values_k3d_path) as f:
+        k3d_values = yaml.safe_load(f) or {}
+    registry_endpoint = (
+        (k3d_values.get("workloadConfig") or {})
+        .get("registryEndpoint", {})
+        .get("value")
+    )
+    if not registry_endpoint:
+        return
+
+    subprocess.run(
+        [
+            "kubectl",
+            "patch",
+            "configmap",
+            "michelangelo-config",
+            "--patch",
+            f'{{"data":{{"REGISTRY_ENDPOINT":"{registry_endpoint}"}}}}',
+        ],
+        check=False,
+        capture_output=True,
+    )
+
+
 def _kube_apply(path: Path):
     _exec("kubectl", "apply", "-f", str(path))
 
@@ -1536,7 +1571,9 @@ def _create_config_in_compute_cluster(cluster_name: str):
         if apiserver_node_port is None:
             raise ValueError(
                 "values-k3d.yaml is missing apiserver.service.nodePort "
-                "(needed for REGISTRY_ENDPOINT in compute cluster)"
+                "(needed for REGISTRY_ENDPOINT in compute cluster) -- "
+                "add apiserver.service.nodePort under the apiserver section "
+                "of helm/michelangelo/values-k3d.yaml"
             )
         config_data["data"]["REGISTRY_ENDPOINT"] = (
             f"k3d-{_michelangelo_sandbox_kube_cluster_name}-agent-0:{apiserver_node_port}"
