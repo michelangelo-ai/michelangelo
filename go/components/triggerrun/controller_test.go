@@ -3,22 +3,30 @@ package triggerrun
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-logr/zapr"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	apiutils "github.com/michelangelo-ai/michelangelo/go/api/utils"
+	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
+	temporalclientpkg "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/temporalclient"
 	api "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap/zaptest"
+	temporalClient "go.temporal.io/sdk/client"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // MockRunner is a testify mock implementation for Runner interface.
@@ -108,6 +116,7 @@ func TestReconcile(t *testing.T) {
 		expectErr          bool
 		expectedErrStr     string
 		expectedStatus     v2pb.TriggerRunStatus
+		expectedAction     v2pb.TriggerRunAction
 		expectRequeue      bool
 		isImmutable        bool
 	}{
@@ -247,6 +256,27 @@ func TestReconcile(t *testing.T) {
 			expectErr:      false,
 			expectedErrStr: "",
 			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_FAILED, ErrorMessage: "execution workflow id is empty"},
+			expectRequeue:  true,
+		},
+		{
+			name:    "pause action is persisted as consumed after atomic update",
+			request: ctrl.Request{NamespacedName: types.NamespacedName{Namespace: _namespace, Name: _triggerRun.Name}},
+			initialObject: func() v2pb.TriggerRun {
+				tr := _triggerRun.DeepCopy()
+				tr.Spec.Action = v2pb.TRIGGER_RUN_ACTION_PAUSE
+				return *tr
+			}(),
+			initialStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
+			cronRunnerProvider: func() Runner {
+				mockRunner := &MockRunner{}
+				mockRunner.On("Update", mock.Anything, mock.Anything, v2pb.TRIGGER_RUN_ACTION_PAUSE).
+					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_PAUSED}, true, nil)
+				return mockRunner
+			},
+			expectErr:      false,
+			expectedErrStr: "",
+			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_PAUSED},
+			expectedAction: v2pb.TRIGGER_RUN_ACTION_NO_ACTION,
 			expectRequeue:  true,
 		},
 		{
@@ -436,6 +466,7 @@ func TestReconcile(t *testing.T) {
 			assert.NoError(t, err, test.name)
 			assert.NotNil(t, res, test.name)
 			assert.Equal(t, test.expectedStatus, tr.Status)
+			assert.Equal(t, test.expectedAction, tr.Spec.Action)
 			if test.expectRequeue {
 				assert.NotZero(t, res.RequeueAfter)
 			} else {
@@ -482,6 +513,112 @@ func TestGetRunner(t *testing.T) {
 			assert.Equal(t, test.runnerType, runnerType, test.name)
 
 		})
+	}
+}
+
+// TestWatchPredicateIgnoresStatusOnlyUpdates locks in the fix for the
+// notification-drift retry storm: a status-only write (e.g. Status.ErrorMessage
+// from a failed workflow-engine sync, with no Spec/Generation change) must not
+// re-trigger an immediate reconcile via the controller's watch, since that
+// self-triggered loop is what turned a permanently-failing Temporal call into
+// an unbounded-rate retry storm. Spec changes (Generation bump) must still be
+// observed immediately.
+func TestWatchPredicateIgnoresStatusOnlyUpdates(t *testing.T) {
+	base := _triggerRun.DeepCopy()
+	base.ObjectMeta.Generation = 5
+	base.Status = v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}
+
+	statusOnlyChange := base.DeepCopy()
+	statusOnlyChange.Status.ErrorMessage = "exceeded workflow execution limit for signal events"
+
+	specChange := base.DeepCopy()
+	specChange.ObjectMeta.Generation = 6
+
+	pred := predicate.GenerationChangedPredicate{}
+
+	assert.False(t, pred.Update(event.UpdateEvent{ObjectOld: base, ObjectNew: statusOnlyChange}),
+		"status-only update must not trigger an immediate reconcile")
+	assert.True(t, pred.Update(event.UpdateEvent{ObjectOld: base, ObjectNew: specChange}),
+		"a generation-bumping spec update must still trigger an immediate reconcile")
+}
+
+// TestSignalStormRepro is a manual repro for the STG incident where the
+// notification-drift fix (actual_notifications, see cron_trigger.go's
+// notifDrifted) caused unconditional retries against Temporal schedules that
+// had already exhausted history.maximumSignalsPerExecution, producing
+// "exceeded workflow execution limit for signal events" and an 18 calls/sec
+// storm for 3 triggers. Skipped by default; not run in CI.
+//
+// To run against a local Temporal dev server:
+//
+//	temporal server start-dev --port 17233 --ui-port 18233 \
+//	    --dynamic-config-value history.maximumSignalsPerExecution=5 --headless
+//	MA_TRIGGER_REPRO=1 go test ./components/triggerrun/... -run TestSignalStormRepro -v -timeout 120s
+func TestSignalStormRepro(t *testing.T) {
+	if os.Getenv("MA_TRIGGER_REPRO") == "" {
+		t.Skip("manual repro only; set MA_TRIGGER_REPRO=1 to run against a local Temporal dev server")
+	}
+
+	ctx := context.Background()
+	sdkClient, err := temporalClient.Dial(temporalClient.Options{
+		HostPort:  "localhost:17233",
+		Namespace: "default",
+	})
+	if err != nil {
+		t.Fatalf("dial temporal: %v", err)
+	}
+	defer sdkClient.Close()
+
+	tc := &temporalclientpkg.TemporalClient{
+		Client:   sdkClient,
+		Provider: "temporal",
+		Domain:   "default",
+	}
+
+	wid := "repro-trigger-1"
+
+	// Step 1: create the schedule exactly the way cronTrigger.Run() does.
+	_, err = tc.StartWorkflow(ctx, clientInterface.StartWorkflowOptions{
+		ID:                              wid,
+		TaskList:                        "trigger_run",
+		ExecutionStartToCloseTimeout:    time.Hour * 24 * 365,
+		DecisionTaskStartToCloseTimeout: 30 * time.Second,
+		CronSchedule:                    "* * * * *",
+	}, "trigger.CronTrigger", "initial-args")
+	if err != nil {
+		t.Fatalf("create schedule: %v", err)
+	}
+	t.Logf("created schedule for workflow id %q", wid)
+
+	// Step 2: simulate the reconcile hot-loop. notifDrifted is stuck true forever
+	// because Status.ActualNotifications is only persisted on a *successful*
+	// UpdateTrigger call (cron_trigger.go:285-287) -- so every iteration below
+	// re-sends the same "drifted" update, exactly like a real reconcile storm.
+	var (
+		calls, failures int
+		firstLimitErrAt int
+		start           = time.Now()
+	)
+	deadline := start.Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		calls++
+		err := tc.UpdateTrigger(ctx, wid, "", nil, []interface{}{"drifted-args"})
+		if err != nil {
+			failures++
+			if strings.Contains(err.Error(), "exceeded workflow execution limit for signal events") && firstLimitErrAt == 0 {
+				firstLimitErrAt = calls
+				t.Logf("call #%d: reproduced target error: %v", calls, err)
+			}
+		}
+	}
+	elapsed := time.Since(start)
+	rps := float64(calls) / elapsed.Seconds()
+
+	t.Logf("total calls=%d failures=%d elapsed=%s rps=%.1f firstLimitErrorAtCall=%d",
+		calls, failures, elapsed, rps, firstLimitErrAt)
+
+	if firstLimitErrAt == 0 {
+		t.Fatalf("did not reproduce 'exceeded workflow execution limit for signal events' within %d calls", calls)
 	}
 }
 
