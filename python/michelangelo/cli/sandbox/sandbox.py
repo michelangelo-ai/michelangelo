@@ -1523,6 +1523,25 @@ def _create_config_in_compute_cluster(cluster_name: str):
             f"http://k3d-{_michelangelo_sandbox_kube_cluster_name}-agent-0:30007"
         )
 
+    # Point workload pods at the control plane's apiserver.
+    # The apiserver Service is exposed via NodePort on the control plane agent
+    # node, reachable across the shared k3d network.  Read the NodePort value
+    # from values-k3d.yaml so it stays in sync with the Helm chart.
+    if "data" in config_data:
+        with open(_values_k3d_path) as f:
+            k3d_values = yaml.safe_load(f) or {}
+        apiserver_node_port = (
+            (k3d_values.get("apiserver") or {}).get("service", {}).get("nodePort")
+        )
+        if apiserver_node_port is None:
+            raise ValueError(
+                "values-k3d.yaml is missing apiserver.service.nodePort "
+                "(needed for REGISTRY_ENDPOINT in compute cluster)"
+            )
+        config_data["data"]["REGISTRY_ENDPOINT"] = (
+            f"k3d-{_michelangelo_sandbox_kube_cluster_name}-agent-0:{apiserver_node_port}"
+        )
+
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as temp_config:
         yaml.dump(config_data, temp_config)
         temp_config.flush()

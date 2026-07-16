@@ -1,0 +1,31 @@
+{{/*
+  Workload ConfigMap — platform-level environment variables for pipeline pods.
+
+  This ConfigMap is referenced by Ray/Spark task pods via envFrom.configMapRef
+  to inject backing-service endpoints (REGISTRY_ENDPOINT, AWS_ENDPOINT_URL,
+  etc.) without requiring pipeline authors to hardcode them.
+
+  MUTUAL EXCLUSION: The sandbox CLI (sandbox.py) manages this ConfigMap via a
+  static YAML manifest (resources/michelangelo-config.yaml) and kubectl apply.
+  When using the sandbox, keep workloadConfig.enabled=false (the default in
+  values-k3d.yaml) so Helm and the CLI do not conflict over the same ConfigMap.
+  Enable this template only for Helm-only deployments where no external tool
+  manages the michelangelo-config ConfigMap.
+*/}}
+{{- if .Values.workloadConfig.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.workloadConfig.configMapName | default "michelangelo-config" }}
+  labels:
+    {{- include "michelangelo.labels" . | nindent 4 }}
+data:
+  {{- range $key, $value := .Values.workloadConfig.env }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  {{- if and .Values.workloadConfig.registryEndpoint.auto .Values.apiserver.enabled }}
+  REGISTRY_ENDPOINT: {{ include "michelangelo.componentFullname" (dict "context" . "component" "apiserver") }}:{{ .Values.apiserver.port }}
+  {{- else if .Values.workloadConfig.registryEndpoint.value }}
+  REGISTRY_ENDPOINT: {{ .Values.workloadConfig.registryEndpoint.value | quote }}
+  {{- end }}
+{{- end }}

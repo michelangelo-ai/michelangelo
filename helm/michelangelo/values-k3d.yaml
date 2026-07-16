@@ -70,6 +70,11 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 
+# Workload ConfigMap is managed by the sandbox CLI's static YAML, not Helm.
+# Do not enable both — see helm/michelangelo/templates/core/workload-configmap.yaml.
+workloadConfig:
+  enabled: false
+
 # Ray cluster log persistence — enabled for sandbox to wire up the KubeRay
 # History Server. The collector sidecar uses the in-cluster MinIO endpoint
 # (minio:9091) and the chart-managed object-storage-credentials Secret.
