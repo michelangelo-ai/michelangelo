@@ -330,6 +330,10 @@ def _sync(ns: argparse.Namespace):
     _refresh_mysql_schema()
 
     _ensure_credentials_secret()
+    # Re-patch REGISTRY_ENDPOINT from values-k3d.yaml in case it changed
+    # since the cluster was created (sync doesn't re-run _deploy_services(),
+    # which is where this runs on a fresh `create`).
+    _sync_registry_endpoint_from_values()
     _helm_ensure_repos()
     helm_args = _build_helm_set_args(ns)
 
