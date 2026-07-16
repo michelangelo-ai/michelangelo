@@ -1,9 +1,4 @@
 ---
-# This file is no longer applied to the control plane -- michelangelo-config
-# there is Helm-managed (see helm/michelangelo/values-k3d.yaml's
-# workloadConfig.env). It survives only as the template
-# _create_config_in_compute_cluster() copies to registered compute clusters,
-# which aren't Helm-managed at all.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -14,7 +9,7 @@ data:
   AWS_ACCESS_KEY_ID: minioadmin
   AWS_SECRET_ACCESS_KEY: minioadmin
   AWS_ENDPOINT_URL: http://minio:9091
-  # REGISTRY_ENDPOINT is intentionally absent here --
-  # _create_config_in_compute_cluster() always computes and sets it
-  # dynamically (a cross-cluster NodePort address, necessarily different
-  # from the control plane's own in-cluster DNS value).
+  # Model registry endpoint for push_step-style tasks. Without this,
+  # push.py silently falls back to an in-memory, non-persisted registry
+  # client instead of registering via the real apiserver API.
+  REGISTRY_ENDPOINT: "michelangelo-apiserver:15566"

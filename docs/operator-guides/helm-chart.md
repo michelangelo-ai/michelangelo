@@ -285,9 +285,6 @@ Most commonly set values. See `helm/michelangelo/values.yaml` for the complete l
 | `controllermgr.watchNamespace` | no | `[]` (all) | Namespaces the controller manager watches |
 | `cadence.enabled` | no | `false` | Install bundled Cadence subchart |
 | `temporal.enabled` | no | `false` | Install bundled Temporal subchart |
-| `workloadConfig.enabled` | no | `false` | Render the `michelangelo-config` ConfigMap via Helm (leave `false` if an external tool manages it; the sandbox CLI sets this `true`) |
-| `workloadConfig.configMapName` | no | `"michelangelo-config"` | Name of the rendered ConfigMap — must match what workload pods reference in `envFrom.configMapRef` |
-| `workloadConfig.env` | no | `{}` | Arbitrary key-value pairs added to the ConfigMap — must include `REGISTRY_ENDPOINT` when `workloadConfig.enabled=true`, or the chart fails to render |
 
 ¹ Required unless `existingSecret` is set.
 
@@ -322,13 +319,12 @@ helm/michelangelo/
     ├── rbac/                      # ServiceAccount, ClusterRole, ClusterRoleBinding
     ├── tests/
     │   └── test-connection.yaml   # helm test hook
-    └── core/                      # 21 templates for the 5 services + workload config
+    └── core/                      # 20 templates for the 5 services
         ├── apiserver-{deployment,service,configmap,ingress,schema-init-configmap}.yaml
         ├── envoy-{deployment,service,configmap,ingress}.yaml
         ├── ui-{deployment,service,configmap,ingress}.yaml
         ├── worker-{deployment,configmap}.yaml
         ├── controllermgr-{deployment,service,configmap}.yaml
-        ├── workload-configmap.yaml         # optional, gated by workloadConfig.enabled
         ├── metadata-storage-secret.yaml    # resource-policy: keep
         └── object-storage-secret.yaml      # resource-policy: keep
 ```

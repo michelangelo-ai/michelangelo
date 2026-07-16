@@ -500,36 +500,6 @@ commonLabels: {}
 commonAnnotations: {}
 
 # -----------------------------------------------------------------------------
-# Workload config — environment variables injected into pipeline task pods
-# via the michelangelo-config ConfigMap (consumed by envFrom: configMapRef).
-#
-# This ConfigMap is the platform's injection surface for backing-service
-# endpoints, storage credentials, and other per-environment config that
-# pipeline code reads at runtime via os.environ. Pipeline authors should
-# never hardcode these values.
-# -----------------------------------------------------------------------------
-workloadConfig:
-  # Enable the Helm-managed michelangelo-config ConfigMap.
-  # Set to false if you manage this ConfigMap externally (e.g. via Terraform
-  # or a GitOps tool). The sandbox CLI enables this (see values-k3d.yaml).
-  enabled: false
-
-  # Name of the ConfigMap. Must match what workload pod specs reference in
-  # envFrom.configMapRef. Default: "michelangelo-config".
-  configMapName: "michelangelo-config"
-
-  # Arbitrary key-value pairs to add to the ConfigMap -- including
-  # REGISTRY_ENDPOINT, the model registry's endpoint (required for
-  # push_step-style tasks to register models via the real API instead of
-  # falling back to an in-memory registry client).
-  # Example:
-  #   env:
-  #     MA_FILE_SYSTEM: "s3://my-bucket"
-  #     AWS_ENDPOINT_URL: "https://s3.us-east-1.amazonaws.com"
-  #     REGISTRY_ENDPOINT: "my-registry.prod.internal:15566"
-  env: {}
-
-# -----------------------------------------------------------------------------
 # Cadence — optional bundled workflow engine.
 #
 # When enabled, the official Cadence Helm chart (cadence-workflow/cadence

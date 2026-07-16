@@ -343,12 +343,6 @@ def _sync(ns: argparse.Namespace):
         status_result.returncode == 0 and '"status":"deployed"' in status_result.stdout
     )
 
-    # Adopt any resource Helm doesn't yet own (e.g. michelangelo-config on a
-    # sandbox created before it became Helm-managed) so upgrade/install
-    # doesn't fail with "exists and cannot be imported into the release".
-    # Safe to call unconditionally -- it no-ops for anything already owned.
-    _helm_adopt_orphaned_resources(helm_args)
-
     if release_healthy:
         # Healthy release: upgrade in-place, keeping infra running.
         _exec(
@@ -421,15 +415,6 @@ def _sync(ns: argparse.Namespace):
         )
 
     _helm_wait(ns)
-
-    # michelangelo-config is Helm-managed (workloadConfig in values-k3d.yaml).
-    # REGISTRY_ENDPOINT and the other static keys are already correct as
-    # rendered by the helm upgrade/install above. Only the credential fields
-    # need a post-Helm patch, since they may diverge from values-k3d.yaml's
-    # static defaults on a pre-configured VM (e.g. CI) -- patch runs *after*
-    # the helm step so it isn't immediately reverted by Helm's reconciliation
-    # on the next sync.
-    _sync_config_from_secret()
 
 
 def _refresh_mysql_schema():
@@ -756,11 +741,7 @@ def _deploy_services(ns: argparse.Namespace):
         "boot.yaml",
         "mysql.yaml",  # MySQL database
         "mysql-ingester.yaml",  # Auto-generated ingester schema from protobuf
-        # michelangelo-config is Helm-managed for the control plane (see
-        # workloadConfig in values-k3d.yaml) -- not applied as a raw resource
-        # here. resources/michelangelo-config.yaml still exists on disk as
-        # the template _create_config_in_compute_cluster() copies to compute
-        # clusters, which aren't Helm-managed.
+        "michelangelo-config.yaml",
     ]
     links = []
 
@@ -878,6 +859,8 @@ def _deploy_services(ns: argparse.Namespace):
 
     # Create credentials secrets only if they don't already exist.
     _ensure_credentials_secret()
+    # Patch michelangelo-config to match the live secret values.
+    _sync_config_from_secret()
 
     _assert_command(
         "helm", "Helm not found, please install it: https://helm.sh/docs/intro/install/"
@@ -904,13 +887,6 @@ def _deploy_services(ns: argparse.Namespace):
     # Must happen BEFORE domain registration — Cadence frontend only exists
     # after helm install.
     _deploy_app_services(ns)
-
-    # michelangelo-config is now Helm-managed (workloadConfig in
-    # values-k3d.yaml). REGISTRY_ENDPOINT and the other static keys are
-    # already correct as rendered by the helm install above. Only the
-    # credential fields need a post-Helm patch, since they may diverge from
-    # values-k3d.yaml's static defaults on a pre-configured VM (e.g. CI).
-    _sync_config_from_secret()
 
     if ns.workflow == "cadence":
         _create_cadence_domain(links)
@@ -1545,27 +1521,6 @@ def _create_config_in_compute_cluster(cluster_name: str):
     if "data" in config_data:
         config_data["data"]["AWS_ENDPOINT_URL"] = (
             f"http://k3d-{_michelangelo_sandbox_kube_cluster_name}-agent-0:30007"
-        )
-
-    # Point workload pods at the control plane's apiserver.
-    # The apiserver Service is exposed via NodePort on the control plane agent
-    # node, reachable across the shared k3d network.  Read the NodePort value
-    # from values-k3d.yaml so it stays in sync with the Helm chart.
-    if "data" in config_data:
-        with open(_values_k3d_path) as f:
-            k3d_values = yaml.safe_load(f) or {}
-        apiserver_node_port = (
-            (k3d_values.get("apiserver") or {}).get("service", {}).get("nodePort")
-        )
-        if apiserver_node_port is None:
-            raise ValueError(
-                "values-k3d.yaml is missing apiserver.service.nodePort "
-                "(needed for REGISTRY_ENDPOINT in compute cluster) -- "
-                "add apiserver.service.nodePort under the apiserver section "
-                "of helm/michelangelo/values-k3d.yaml"
-            )
-        config_data["data"]["REGISTRY_ENDPOINT"] = (
-            f"k3d-{_michelangelo_sandbox_kube_cluster_name}-agent-0:{apiserver_node_port}"
         )
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as temp_config:

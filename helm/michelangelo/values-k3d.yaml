@@ -70,33 +70,6 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 
-# The sandbox's michelangelo-config ConfigMap is Helm-managed: the sandbox
-# CLI (sandbox.py) no longer kubectl-applies a static YAML for the control
-# plane. See helm/michelangelo/templates/core/workload-configmap.yaml.
-#
-# REGISTRY_ENDPOINT is a plain env entry here, same format as every other
-# key -- there's no separate auto-derivation mechanism to reason about.
-#
-# AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY below are the defaults for a fresh
-# sandbox. sandbox.py's _sync_config_from_secret() patches in whatever's
-# actually in the object-storage-credentials Secret *after* every
-# helm install/upgrade (a pre-configured VM, e.g. CI, may have different
-# real credentials) -- it runs post-Helm specifically so Helm's own
-# reconciliation doesn't revert the patch.
-#
-# resources/michelangelo-config.yaml still exists on disk, but only as the
-# template _create_config_in_compute_cluster() copies to registered compute
-# clusters, which aren't Helm-managed at all.
-workloadConfig:
-  enabled: true
-  env:
-    MA_FILE_SYSTEM: "s3://default"
-    MA_FILE_SYSTEM_S3_SCHEME: "http"
-    AWS_ACCESS_KEY_ID: "minioadmin"
-    AWS_SECRET_ACCESS_KEY: "minioadmin"
-    AWS_ENDPOINT_URL: "http://minio:9091"
-    REGISTRY_ENDPOINT: "michelangelo-apiserver:15566"
-
 # Ray cluster log persistence — enabled for sandbox to wire up the KubeRay
 # History Server. The collector sidecar uses the in-cluster MinIO endpoint
 # (minio:9091) and the chart-managed object-storage-credentials Secret.

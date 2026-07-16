@@ -28,7 +28,7 @@ CONTROL_PLANE_CONTEXT=my-control-plane-context  # Your kubectl context for the c
 ### 1) Configure storage in the compute cluster
 Ensure Ray pods inherit the same storage configuration used by the control plane.
 
-Create the `michelangelo-config` ConfigMap with your storage configuration and the control plane's apiserver address (so `push_step` tasks register models via the real API instead of falling back to an in-memory registry):
+Create the `michelangelo-config` ConfigMap with your storage configuration:
 
 ```bash
 cat <<EOF | kubectl --context "${COMPUTE_CONTEXT}" apply -f -
@@ -42,7 +42,6 @@ data:
   AWS_ACCESS_KEY_ID: minioadmin
   AWS_SECRET_ACCESS_KEY: minioadmin
   AWS_ENDPOINT_URL: << MINIO STORAGE URL >>
-  REGISTRY_ENDPOINT: << CONTROL PLANE APISERVER ADDRESS, e.g. michelangelo-apiserver:15566 >>
 EOF
 ```
 
