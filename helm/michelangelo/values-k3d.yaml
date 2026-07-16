@@ -74,21 +74,15 @@ affinity: {}
 # CLI (sandbox.py) no longer kubectl-applies a static YAML for the control
 # plane. See helm/michelangelo/templates/core/workload-configmap.yaml.
 #
-# REGISTRY_ENDPOINT is a plain env entry here, not the special
-# registryEndpoint.auto/.value mechanism (that mechanism exists for
-# Helm-only deployments that want to auto-derive the endpoint from the
-# apiserver Service rather than hardcode it -- the sandbox is already
-# hardcoding a known value, so the extra mechanism buys nothing here and
-# only risks the auto-derivation branch firing anyway from values.yaml's
-# defaults; keeping it out of workloadConfig.env's is simplest).
+# REGISTRY_ENDPOINT is a plain env entry here, same format as every other
+# key -- there's no separate auto-derivation mechanism to reason about.
 #
 # AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY below are the defaults for a fresh
 # sandbox. sandbox.py's _sync_config_from_secret() patches in whatever's
 # actually in the object-storage-credentials Secret *after* every
 # helm install/upgrade (a pre-configured VM, e.g. CI, may have different
-# real credentials) -- both it and _sync_registry_endpoint_from_values() run
-# post-Helm specifically so Helm's own reconciliation doesn't revert the
-# patch.
+# real credentials) -- it runs post-Helm specifically so Helm's own
+# reconciliation doesn't revert the patch.
 #
 # resources/michelangelo-config.yaml still exists on disk, but only as the
 # template _create_config_in_compute_cluster() copies to registered compute

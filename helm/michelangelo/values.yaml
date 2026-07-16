@@ -518,26 +518,15 @@ workloadConfig:
   # envFrom.configMapRef. Default: "michelangelo-config".
   configMapName: "michelangelo-config"
 
-  # Auto-derive REGISTRY_ENDPOINT from the apiserver Service DNS name and
-  # port. Only works when apiserver.enabled=true. Set .value to override
-  # manually. Ignored entirely if env.REGISTRY_ENDPOINT is set below --
-  # that's simplest when you already know the literal value (e.g. the
-  # sandbox), since it needs no auto/value precedence rules to reason about.
-  registryEndpoint:
-    auto: true
-    # Explicit override. Only takes effect when auto=false OR apiserver.enabled
-    # is false -- otherwise auto-derivation wins even if this is set. To force
-    # this value, set auto: false.
-    # Example: "my-registry.prod.internal:15566"
-    value: ""
-
-  # Arbitrary key-value pairs to add to the ConfigMap. Setting
-  # REGISTRY_ENDPOINT here (instead of via registryEndpoint above) is the
-  # simplest option when you want a fixed literal, same as any other key.
+  # Arbitrary key-value pairs to add to the ConfigMap -- including
+  # REGISTRY_ENDPOINT, the model registry's endpoint (required for
+  # push_step-style tasks to register models via the real API instead of
+  # falling back to an in-memory registry client).
   # Example:
   #   env:
   #     MA_FILE_SYSTEM: "s3://my-bucket"
   #     AWS_ENDPOINT_URL: "https://s3.us-east-1.amazonaws.com"
+  #     REGISTRY_ENDPOINT: "my-registry.prod.internal:15566"
   env: {}
 
 # -----------------------------------------------------------------------------
