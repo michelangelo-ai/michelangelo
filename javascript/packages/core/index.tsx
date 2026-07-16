@@ -53,6 +53,9 @@ export function CoreApp({ dependencies }: Props) {
 }
 
 export { useStudioQuery } from '#core/hooks/use-studio-query';
+export { useStudioMutation } from '#core/hooks/use-studio-mutation/use-studio-mutation';
+export type { UseStudioMutationResult } from '#core/hooks/use-studio-mutation/types';
+export type { MutationConfig, MutationOptions } from '#core/types/query-types';
 export { ServiceProvider } from '#core/providers/service-provider/service-provider';
 
 export { useCellToString } from '#core/components/cell/use-cell-to-string';
