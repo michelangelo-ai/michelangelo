@@ -6,8 +6,10 @@ from typing import Any
 
 import numpy as np
 
-from michelangelo.lib._internal.numpy_utils.sentinel import sentinel_for_numpy_dtype
-from michelangelo.lib._internal.numpy_utils.type import infer_dtype
+from michelangelo.lib._internal.utils.numpy_utils.sentinel import (
+    sentinel_for_numpy_dtype,
+)
+from michelangelo.lib._internal.utils.numpy_utils.type import infer_dtype
 
 
 def pad_ragged_tensor(arr: np.ndarray, pad_value: Any | None = None) -> np.ndarray:

@@ -22,7 +22,7 @@ import contextlib
 import numpy as np
 import torch
 
-from michelangelo.lib._internal.numpy_utils import (
+from michelangelo.lib._internal.utils.numpy_utils import (
     pad_ragged_tensor,
     sentinel_for_numpy_dtype,
 )
