@@ -24,8 +24,8 @@ import torch
 
 from michelangelo.lib._internal.utils.numpy_utils import (
     pad_ragged_tensor,
-    sentinel_for_numpy_dtype,
 )
+from michelangelo.lib.constants.sentinel import sentinel_for_numpy_dtype
 
 # Default dtypes for all collate paths (subclass / kwargs may override per call).
 DEFAULT_COLLATE_NUMPY_DTYPE: np.dtype = np.dtype(np.float32)

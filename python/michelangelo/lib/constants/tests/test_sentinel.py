@@ -1,11 +1,11 @@
-"""Tests for ``michelangelo.lib._internal.utils.numpy_utils.sentinel``."""
+"""Tests for ``michelangelo.lib.constants.sentinel``."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from michelangelo.lib._internal.utils.numpy_utils.sentinel import (
+from michelangelo.lib.constants.sentinel import (
     BOOL_SENTINEL,
     BYTES_SENTINEL,
     FLOAT_SENTINEL,

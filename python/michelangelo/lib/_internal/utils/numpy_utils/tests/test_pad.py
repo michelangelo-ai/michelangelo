@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from michelangelo.lib._internal.utils.numpy_utils.pad import pad_ragged_tensor
-from michelangelo.lib._internal.utils.numpy_utils.sentinel import INT32_SENTINEL
+from michelangelo.lib.constants.sentinel import INT32_SENTINEL
 
 
 class TestPadRaggedTensor:
