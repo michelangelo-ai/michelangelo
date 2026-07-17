@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 import pyarrow as pa
 import pytest
@@ -14,7 +16,7 @@ from michelangelo.lib._internal.numpy_utils import (
     STRING_SENTINEL,
     assemble_output_table,
     infer_dtype,
-    numpy_to_pyarrow_array,
+    numpy_to_pyarrow,
     pad_ragged_tensor,
     pyarrow_to_numpy,
     sentinel_for_numpy_dtype,
@@ -133,6 +135,15 @@ class TestPadRaggedTensor:
         assert result[0, 0, 0] == 1.0
         assert result[1, 0, 0] == 5.0
 
+    def test_inhomogeneous_row_raises(self):
+        # A row mixing a sequence with a scalar at the same level cannot be
+        # padded to a uniform shape: np.stack fails and the np.array(dtype=...)
+        # fallback also rejects the inhomogeneous input. Pins that this raises
+        # rather than silently producing a malformed array.
+        arr = np.array([np.array([1.0, 2.0]), np.float64(3.0)], dtype=object)
+        with pytest.raises(ValueError):
+            pad_ragged_tensor(arr)
+
 
 # -----------------------------------------------------------------------------
 # pyarrow_to_numpy
@@ -188,38 +199,74 @@ class TestPyarrowToNumpy:
         result = pyarrow_to_numpy(arr)
         assert result.shape == (2, 2)
 
+    def test_sliced_fixed_size_list_respects_offset(self):
+        # Regression: a sliced bare fixed_size_list Array shares the full
+        # underlying values buffer. Reading values without accounting for the
+        # parent offset previously raised "cannot reshape array of size ...".
+        arr = pa.array([[1, 2], [3, 4], [5, 6]], type=pa.list_(pa.int64(), 2))
+        result = pyarrow_to_numpy(arr.slice(1))
+        assert result.shape == (2, 2)
+        np.testing.assert_array_equal(result, [[3, 4], [5, 6]])
+
+    def test_sliced_fixed_size_list_length_bounded(self):
+        arr = pa.array([[1, 2], [3, 4], [5, 6]], type=pa.list_(pa.int64(), 2))
+        result = pyarrow_to_numpy(arr.slice(1, 1))
+        assert result.shape == (1, 2)
+        np.testing.assert_array_equal(result, [[3, 4]])
+
+    def test_sliced_nested_fixed_size_list_respects_offset(self):
+        arr = pa.array(
+            [[[1, 2], [3, 4]], [[5, 6], [7, 8]], [[9, 10], [11, 12]]],
+            type=pa.list_(pa.list_(pa.int64(), 2), 2),
+        )
+        result = pyarrow_to_numpy(arr.slice(1))
+        assert result.shape == (2, 2, 2)
+        np.testing.assert_array_equal(result, [[[5, 6], [7, 8]], [[9, 10], [11, 12]]])
+
+    def test_null_row_in_fixed_size_list_not_preserved(self):
+        # Documented limitation: nulls in a nested list column are not
+        # preserved. The null row materializes from its backing slots (NaN,
+        # with the int leaf promoted to float) rather than staying null. Pins
+        # the current behavior so any future change is deliberate.
+        arr = pa.array([[1, 2], None, [5, 6]], type=pa.list_(pa.int64(), 2))
+        result = pyarrow_to_numpy(arr)
+        assert result.shape == (3, 2)
+        np.testing.assert_array_equal(result[0], [1.0, 2.0])
+        np.testing.assert_array_equal(result[2], [5.0, 6.0])
+        assert np.isnan(result[1]).all()
+
 
 # -----------------------------------------------------------------------------
-# numpy_to_pyarrow_array
+# numpy_to_pyarrow
 # -----------------------------------------------------------------------------
 
 
 class TestNumpyToPyarrowArray:
     def test_1d_flat(self):
         arr = np.array([1, 2, 3], dtype=np.int64)
-        result = numpy_to_pyarrow_array(arr)
+        result = numpy_to_pyarrow(arr)
         assert result.to_pylist() == [1, 2, 3]
 
     def test_1d_target_type_prevents_promotion(self):
         arr = np.array([1, 2, 3], dtype=np.int32)
-        result = numpy_to_pyarrow_array(arr, target_type=pa.int32())
+        result = numpy_to_pyarrow(arr, target_type=pa.int32())
         assert result.type == pa.int32()
 
     def test_2d_single_column_uses_list(self):
         arr = np.array([[1], [2], [3]], dtype=np.int64)
-        result = numpy_to_pyarrow_array(arr)
+        result = numpy_to_pyarrow(arr)
         assert pa.types.is_list(result.type)
         assert result.to_pylist() == [[1], [2], [3]]
 
     def test_2d_general_uses_fixed_size_list(self):
         arr = np.array([[1, 2], [3, 4]], dtype=np.int64)
-        result = numpy_to_pyarrow_array(arr)
+        result = numpy_to_pyarrow(arr)
         assert pa.types.is_fixed_size_list(result.type)
         assert result.to_pylist() == [[1, 2], [3, 4]]
 
     def test_3d_nested_fixed_size_list(self):
         arr = np.arange(8, dtype=np.float32).reshape(2, 2, 2)
-        result = numpy_to_pyarrow_array(arr)
+        result = numpy_to_pyarrow(arr)
         assert pa.types.is_fixed_size_list(result.type)
         assert result.to_pylist() == arr.tolist()
 
@@ -227,15 +274,32 @@ class TestNumpyToPyarrowArray:
         arr = np.empty(2, dtype=object)
         arr[0] = [1, 2, 3]
         arr[1] = [4]
-        result = numpy_to_pyarrow_array(arr)
+        result = numpy_to_pyarrow(arr)
         assert result.to_pylist() == [[1, 2, 3], [4]]
 
     def test_roundtrip_nd_shape(self):
         arr = np.arange(12, dtype=np.float64).reshape(3, 2, 2)
-        table_col = numpy_to_pyarrow_array(arr)
+        table_col = numpy_to_pyarrow(arr)
         restored = pyarrow_to_numpy(table_col)
         assert restored.shape == (3, 2, 2)
         np.testing.assert_array_equal(restored, arr)
+
+    def test_fallback_logs_warning_and_chains_on_failure(self, caplog):
+        # complex dtype is unsupported by both the direct path and the
+        # tolist() fallback. The direct failure must be logged at warning (not
+        # silently at debug) and chained as __cause__ so it is not lost.
+        arr = np.arange(8, dtype=np.complex128).reshape(2, 2, 2)
+        with (
+            caplog.at_level(logging.WARNING),
+            pytest.raises(Exception) as excinfo,
+        ):
+            numpy_to_pyarrow(arr)
+        assert excinfo.value.__cause__ is not None
+        assert any(
+            "Direct PyArrow conversion failed" in rec.message
+            and rec.levelno == logging.WARNING
+            for rec in caplog.records
+        )
 
 
 # -----------------------------------------------------------------------------
@@ -279,6 +343,22 @@ class TestAssembleOutputTable:
         preds = {"score": np.array([0.1, 0.2, 0.3], dtype=np.float64)}
         result = assemble_output_table(table, preds, columns_to_keep=None)
         assert result.column_names == ["id", "feature", "score"]
+
+    def test_columns_to_keep_empty_keeps_all(self):
+        # An empty collection is falsy and keeps every column, same as None.
+        table = self._input_table()
+        preds = {"score": np.array([0.1, 0.2, 0.3], dtype=np.float64)}
+        result = assemble_output_table(table, preds, columns_to_keep=[])
+        assert result.column_names == ["id", "feature", "score"]
+
+    def test_columns_to_keep_filters_but_does_not_reorder(self):
+        # columns_to_keep selects a subset in the assembled order; it is a
+        # filter, not a reorder. Requesting ["score", "id"] still yields the
+        # assembled order ["id", "score"].
+        table = self._input_table()
+        preds = {"score": np.array([0.1, 0.2, 0.3], dtype=np.float64)}
+        result = assemble_output_table(table, preds, columns_to_keep=["score", "id"])
+        assert result.column_names == ["id", "score"]
 
     def test_extra_columns_appended(self):
         table = self._input_table()

@@ -213,7 +213,12 @@ def _try_extract_uniform_nested(
 
     if pa.types.is_fixed_size_list(data.type):
         size = data.type.list_size
-        inner = _try_extract_uniform_nested(data.values)
+        # ``data.values`` exposes the full underlying child buffer and ignores
+        # the parent array's offset, so a sliced fixed-size-list would otherwise
+        # read the wrong (and wrong-length) range. Slice to the referenced
+        # window, mirroring the variable-length list branch below.
+        values = data.values.slice(data.offset * size, len(data) * size)
+        inner = _try_extract_uniform_nested(values)
         if inner is None:
             return None
         inner_shape, flat = inner
@@ -254,6 +259,14 @@ def pyarrow_to_numpy(data: pa.ChunkedArray | pa.Array) -> np.ndarray:
     Falls back to PyArrow's ``to_numpy()`` for ragged arrays, scalar columns,
     and any type that cannot be uniformly reshaped.
 
+    Null handling: null rows in a nested list column are not preserved as
+    nulls. The flat values buffer is reshaped directly, so a null row
+    materializes from whatever backs its slots — typically NaN (with the leaf
+    dtype promoted to float) for numeric leaves. Callers that must distinguish
+    null rows should inspect the source Arrow array's validity bitmap before
+    converting. This matches the internal source's behavior and is preserved
+    intentionally.
+
     Args:
         data: A PyArrow ``ChunkedArray`` or ``Array`` to convert.
 
@@ -285,7 +298,7 @@ def pyarrow_to_numpy(data: pa.ChunkedArray | pa.Array) -> np.ndarray:
     return data.to_numpy(zero_copy_only=False)
 
 
-def numpy_to_pyarrow_array(
+def numpy_to_pyarrow(
     arr: np.ndarray,
     target_type: pa.DataType | None = None,
 ) -> pa.Array:
@@ -317,6 +330,20 @@ def numpy_to_pyarrow_array(
 
     Returns:
         A PyArrow ``Array``.
+
+    Raises:
+        Exception: Propagates the underlying PyArrow conversion error if both
+            the direct encoding and the ``tolist()`` fallback fail (e.g. an
+            unsupported leaf dtype). The direct-path error is chained as the
+            ``__cause__`` of the fallback error so neither is lost.
+
+    Examples:
+        >>> import numpy as np
+        >>> numpy_to_pyarrow(np.array([1, 2, 3], dtype=np.int64)).to_pylist()
+        [1, 2, 3]
+
+        >>> numpy_to_pyarrow(np.array([[1, 2], [3, 4]], dtype=np.int64)).to_pylist()
+        [[1, 2], [3, 4]]
     """
     try:
         if arr.ndim == 1:
@@ -340,10 +367,18 @@ def numpy_to_pyarrow_array(
             for size in reversed(arr.shape[1:]):
                 result = pa.FixedSizeListArray.from_arrays(result, size)
     except Exception as e:
-        _logger.debug(
+        # The direct path failed; fall back to per-row Python objects, which
+        # PyArrow can often infer even when the numpy dtype is unsupported. Log
+        # at warning so this (slower, correctness-sensitive) path is visible in
+        # production rather than silently masking a fast-path regression.
+        _logger.warning(
             "Direct PyArrow conversion failed: %s. Using tolist() fallback.", e
         )
-        return pa.array(arr.tolist(), type=target_type)
+        try:
+            return pa.array(arr.tolist(), type=target_type)
+        except Exception as fallback_error:
+            # Chain the original error so it is not lost if the fallback fails.
+            raise fallback_error from e
     return result
 
 
@@ -358,7 +393,7 @@ def assemble_output_table(
 
     Input columns are reused verbatim from ``input_table`` as zero-copy Arrow
     chunks — no numpy round-trip. Each prediction array is encoded to a native
-    Arrow type via :func:`numpy_to_pyarrow_array`, and any ``extra_columns``
+    Arrow type via :func:`numpy_to_pyarrow`, and any ``extra_columns``
     (e.g. constant metadata columns) are appended as already-built Arrow arrays.
 
     By default, an output that shares a name with an input column overwrites it
@@ -403,7 +438,7 @@ def assemble_output_table(
         col: input_table.column(col) for col in input_table.column_names
     }
     for col, arr in predictions.items():
-        output_arrays[col] = numpy_to_pyarrow_array(arr)
+        output_arrays[col] = numpy_to_pyarrow(arr)
     output_arrays.update(extra_columns)
 
     names = (
