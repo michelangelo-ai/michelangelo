@@ -27,7 +27,7 @@ spec:
       {{- end }}
       containers:
         - name: app
-          image: {{ include "michelangelo.image" (dict "repository" .Values.images.worker.repository "tag" .Values.images.worker.tag "Chart" .Chart) }}
+          image: {{ include "michelangelo.image" (dict "repository" .Values.images.worker.repository "tag" .Values.images.worker.tag "Chart" .Chart) | quote }}
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           {{- with .Values.securityContext }}
           securityContext:
@@ -35,7 +35,7 @@ spec:
           {{- end }}
           envFrom:
             - secretRef:
-                name: {{ .Values.objectStorage.existingSecret | default (include "michelangelo.objectStorageSecretName" .) }}
+                name: {{ .Values.objectStorage.existingSecret | default (include "michelangelo.objectStorageSecretName" .) | quote }}
           volumeMounts:
             - name: worker-config
               mountPath: /config

@@ -67,7 +67,7 @@ spec:
             - name: METADATA_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.metadataStorage.existingSecret | default (printf "%s-metadata-storage" (include "michelangelo.fullname" .)) }}
+                  name: {{ .Values.metadataStorage.existingSecret | default (printf "%s-metadata-storage" (include "michelangelo.fullname" .)) | quote }}
                   key: password
         - name: schema-init
           image: {{ if eq .Values.metadataStorage.driver "postgres" }}postgres:16{{ else }}mysql:8.0{{ end }}
@@ -100,7 +100,7 @@ spec:
             - name: METADATA_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.metadataStorage.existingSecret | default (printf "%s-metadata-storage" (include "michelangelo.fullname" .)) }}
+                  name: {{ .Values.metadataStorage.existingSecret | default (printf "%s-metadata-storage" (include "michelangelo.fullname" .)) | quote }}
                   key: password
           volumeMounts:
             - name: schema
@@ -108,7 +108,7 @@ spec:
               readOnly: true
       containers:
         - name: apiserver
-          image: {{ include "michelangelo.image" (dict "repository" .Values.images.apiserver.repository "tag" .Values.images.apiserver.tag "Chart" .Chart) }}
+          image: {{ include "michelangelo.image" (dict "repository" .Values.images.apiserver.repository "tag" .Values.images.apiserver.tag "Chart" .Chart) | quote }}
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           {{- with .Values.securityContext }}
           securityContext:
@@ -118,7 +118,7 @@ spec:
             - name: MYSQL_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.metadataStorage.existingSecret | default (printf "%s-metadata-storage" (include "michelangelo.fullname" .)) }}
+                  name: {{ .Values.metadataStorage.existingSecret | default (printf "%s-metadata-storage" (include "michelangelo.fullname" .)) | quote }}
                   key: password
           ports:
             - name: {{ if .Values.apiserver.tls.enabled }}grpcs{{ else }}grpc{{ end }}
