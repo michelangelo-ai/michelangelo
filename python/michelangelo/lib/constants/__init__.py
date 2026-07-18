@@ -11,7 +11,6 @@ from .sentinel import (
     FLOAT_SENTINEL,
     INT32_SENTINEL,
     STRING_SENTINEL,
-    sentinel_for_numpy_dtype,
 )
 
 __all__ = [
@@ -20,5 +19,4 @@ __all__ = [
     "FLOAT_SENTINEL",
     "INT32_SENTINEL",
     "STRING_SENTINEL",
-    "sentinel_for_numpy_dtype",
 ]

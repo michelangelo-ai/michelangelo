@@ -6,6 +6,9 @@ from michelangelo.lib._internal.utils.numpy_utils.pyarrow_conversion import (
     numpy_to_pyarrow,
     pyarrow_to_numpy,
 )
+from michelangelo.lib._internal.utils.numpy_utils.sentinel import (
+    sentinel_for_numpy_dtype,
+)
 from michelangelo.lib._internal.utils.numpy_utils.type import infer_dtype
 
 __all__ = [
@@ -14,4 +17,5 @@ __all__ = [
     "numpy_to_pyarrow",
     "pad_ragged_tensor",
     "pyarrow_to_numpy",
+    "sentinel_for_numpy_dtype",
 ]
