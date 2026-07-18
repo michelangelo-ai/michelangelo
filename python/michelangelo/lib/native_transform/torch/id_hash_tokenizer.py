@@ -32,12 +32,17 @@ class IDHashTokenizer(nn.Module):
 
     The layer is compatible with both TorchScript and ONNX export.
 
+    Despite the name "Hash", this performs an exact vocabulary lookup via
+    :func:`torch.bucketize` (not a hash); the name is kept for parity with the
+    internal SDK layer it was migrated from.
+
     Args:
         vocabulary: List of integer values to map to contiguous indices. Duplicate
             values are removed, preserving the index of their first occurrence.
 
     Raises:
         TypeError: If ``vocabulary`` is not a list of integers.
+        ValueError: If ``vocabulary`` is empty.
 
     Example:
         >>> tokenizer = IDHashTokenizer(vocabulary=[-10, -3, 0, 2, 4, 6])
@@ -55,6 +60,7 @@ class IDHashTokenizer(nn.Module):
 
         Raises:
             TypeError: If ``vocabulary`` is not a list of integers.
+            ValueError: If ``vocabulary`` is empty.
         """
         super().__init__()
         # Validate input vocabulary type.
@@ -62,6 +68,12 @@ class IDHashTokenizer(nn.Module):
             isinstance(v, int) for v in vocabulary
         ):
             raise TypeError("Vocabulary must be a list of integers.")
+
+        # An empty vocabulary leaves output_vocab_size == 0, which would collapse
+        # every lookup index to -1 in forward() and only fail there (potentially
+        # at serve time). Reject it up front with a clear message.
+        if not vocabulary:
+            raise ValueError("vocabulary must be non-empty.")
 
         # Deduplicate while preserving original order. If duplicates exist (e.g.
         # [10, 20, 10]), only the first occurrence is kept and its original index

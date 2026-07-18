@@ -129,6 +129,11 @@ class TestIDHashTokenizer:
         with pytest.raises(TypeError, match="list of integers"):
             IDHashTokenizer(vocabulary=[1.0, 2.0])  # type: ignore[list-item]
 
+    def test_rejects_empty_vocabulary(self) -> None:
+        """An empty vocabulary raises ``ValueError`` at construction time."""
+        with pytest.raises(ValueError, match="non-empty"):
+            IDHashTokenizer(vocabulary=[])
+
     def test_rejects_non_integer_input(self, tokenizer: IDHashTokenizer) -> None:
         """A float input tensor raises ``TypeError``."""
         with pytest.raises(TypeError, match="integer type"):
