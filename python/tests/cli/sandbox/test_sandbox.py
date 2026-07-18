@@ -403,3 +403,34 @@ current-context: test-context
             "not found" in str(c) and "skipping deletion" in str(c) for c in print_calls
         )
         self.assertTrue(skip_message_found, "Skip message should be printed")
+
+
+class ArgumentParsingTest(TestCase):
+    """Tests for CLI argument parsing."""
+
+    def _parse(self, args):
+        parser = argparse.ArgumentParser()
+        sandbox.init_arguments(parser)
+        return parser.parse_args(args)
+
+    def test_create_accepts_set_flag(self):
+        """`ma sandbox create --set` should parse into ns.helm_set, same as sync."""
+        ns = self._parse(
+            [
+                "create",
+                "--set",
+                "images.apiserver.tag=0.5.0-rc.1",
+                "--set",
+                "images.worker.tag=0.5.0-rc.1",
+            ]
+        )
+        self.assertEqual(
+            ns.helm_set,
+            ["images.apiserver.tag=0.5.0-rc.1", "images.worker.tag=0.5.0-rc.1"],
+        )
+
+    def test_create_set_defaults_to_empty(self):
+        """`ma sandbox create` without --set should default helm_set to []."""
+        ns = self._parse(["create"])
+        self.assertEqual(ns.helm_set, [])
+

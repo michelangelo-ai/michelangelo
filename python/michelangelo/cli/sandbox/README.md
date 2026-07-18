@@ -98,6 +98,20 @@ To skip Cadence, use `--workflow temporal` instead — Cadence is bundled with t
 ma sandbox create --include-experimental fluent-bit mlflow
 ```
 
+## Pinning Image Tags
+
+By default the control plane images (`apiserver`, `worker`, `ui`, `controllermgr`) track `main`. Use `--set` to pin them to a specific released version instead — for example, to validate a release candidate:
+
+```bash
+ma sandbox create \
+  --set images.apiserver.tag=0.5.0-rc.1 \
+  --set images.worker.tag=0.5.0-rc.1 \
+  --set images.ui.tag=0.5.0-rc.1 \
+  --set images.controllermgr.tag=0.5.0-rc.1
+```
+
+`--set KEY=VALUE` accepts any Helm value override and can be repeated; it's passed straight through to `helm install`/`helm upgrade`. `ma sandbox sync` supports the same flag.
+
 ## Local Service URLs
 
 | Service | URL | Notes |

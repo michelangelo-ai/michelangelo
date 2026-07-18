@@ -142,6 +142,14 @@ def init_arguments(p: argparse.ArgumentParser):
         default=[],
     )
     create_p.add_argument(
+        "--set",
+        dest="helm_set",
+        metavar="KEY=VALUE",
+        action="append",
+        default=[],
+        help="Pass arbitrary --set KEY=VALUE flags through to helm upgrade/install.",
+    )
+    create_p.add_argument(
         "--compute-cluster-name",
         default=_default_compute_kube_cluster_name,
         help=(
