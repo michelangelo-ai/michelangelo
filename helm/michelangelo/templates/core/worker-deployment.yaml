@@ -36,6 +36,11 @@ spec:
           envFrom:
             - secretRef:
                 name: {{ .Values.objectStorage.existingSecret | default (include "michelangelo.objectStorageSecretName" .) }}
+          {{- with .Values.worker.kueue.queueName }}
+          env:
+            - name: KUEUE_QUEUE_NAME
+              value: {{ . | quote }}
+          {{- end }}
           volumeMounts:
             - name: worker-config
               mountPath: /config

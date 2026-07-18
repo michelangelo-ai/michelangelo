@@ -332,6 +332,14 @@ worker:
 
   resources: {}
 
+  # Kueue integration. When queueName is non-empty, the worker sets
+  # KUEUE_QUEUE_NAME on every RayCluster it creates so Kueue can
+  # intercept and queue the workload on the compute cluster.
+  # Set via --set worker.kueue.queueName=user-queue or install Kueue
+  # with `ma sandbox sync --install-kueue`.
+  kueue:
+    queueName: ""
+
 # -----------------------------------------------------------------------------
 # notification — PipelineRun state-change notification config.
 #

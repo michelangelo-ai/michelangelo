@@ -22,6 +22,11 @@ This tool helps you create and manage a sandbox cluster directly on your machine
 """
 
 _dir = Path(__file__).parent
+_scripts_kueue_dir = _dir.parent.parent.parent.parent / "scripts" / "kueue"
+_job_demo_dir = _dir / "demo" / "job"
+_job_kueue_demo_dir = _job_demo_dir / "kueue"
+
+_KUEUE_VERSION = "v0.9.1"
 
 _michelangelo_sandbox_kube_cluster_name = "michelangelo-sandbox"
 
@@ -142,6 +147,19 @@ def init_arguments(p: argparse.ArgumentParser):
         default=[],
     )
     create_p.add_argument(
+        "--install-kueue",
+        action="store_true",
+        help="Install Kueue for job queuing on the sandbox cluster.",
+    )
+    create_p.add_argument(
+        "--set",
+        dest="helm_set",
+        action="append",
+        metavar="KEY=VALUE",
+        default=[],
+        help="Pass arbitrary --set KEY=VALUE flags through to helm upgrade/install.",
+    )
+    create_p.add_argument(
         "--compute-cluster-name",
         default=_default_compute_kube_cluster_name,
         help=(
@@ -188,6 +206,11 @@ def init_arguments(p: argparse.ArgumentParser):
         default=[],
     )
     sync_p.add_argument(
+        "--install-kueue",
+        action="store_true",
+        help="Install Kueue for job queuing on the sandbox cluster.",
+    )
+    sync_p.add_argument(
         "--set",
         dest="helm_set",
         metavar="KEY=VALUE",
@@ -204,6 +227,17 @@ def init_arguments(p: argparse.ArgumentParser):
     )
     _ = demo_sp.add_parser("pipeline", help="Create pipeline demo resources")
     _ = demo_sp.add_parser("inference", help="Create inference server demo resources")
+    job_p = demo_sp.add_parser(
+        "job",
+        help="Create two compute clusters and register them with the Michelangelo scheduler for Ray job execution.",
+    )
+    job_sp = job_p.add_subparsers(
+        dest="job_action", required=False, help="Job demo type to create"
+    )
+    _ = job_sp.add_parser(
+        "kueue",
+        help="Extend the job demo with Kueue: install Kueue on each compute cluster for local quota enforcement on Ray workloads.",
+    )
 
     delete_p = sp.add_parser("delete", help="Delete the cluster.")
     delete_p.add_argument(
@@ -728,6 +762,11 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
     if "ui" in getattr(ns, "exclude", []):
         args += ["--set", "envoy.enabled=false"]
 
+    # Kueue: inject KUEUE_QUEUE_NAME into the worker so RayClusters get the
+    # queue label and Kueue on the compute cluster admits them.
+    if "kueue" in getattr(ns, "include_experimental", []) or getattr(ns, "install_kueue", False):
+        args += ["--set", "worker.kueue.queueName=user-queue"]
+
     # Arbitrary --set passthrough from the caller (e.g. CI workflow)
     for kv in getattr(ns, "helm_set", []):
         args += ["--set", kv]
@@ -880,6 +919,9 @@ def _deploy_services(ns: argparse.Namespace):
     if "spark" not in ns.exclude:
         _create_spark_operator(helm_existing_repos)
 
+    if "kueue" in ns.include_experimental or getattr(ns, "install_kueue", False):
+        _install_kueue(helm_existing_repos, links, ns)
+
     _kube_wait(timeout=getattr(ns, "wait_timeout", 600))
 
     # Install the Michelangelo control plane (apiserver, envoy, ui, worker,
@@ -971,6 +1013,56 @@ def _create_spark_operator(helm_existing_repos):
         "--wait",
         "--timeout",
         "20m",
+    )
+
+
+def _install_kueue(helm_existing_repos, links, ns):
+    """Install Kueue on the sandbox cluster via Helm with RayCluster integration enabled."""
+    _kueue_repo = "https://charts.kueue.x-k8s.io"
+    if "kueue" not in helm_existing_repos:
+        _exec("helm", "repo", "add", "kueue", _kueue_repo)
+        _exec("helm", "repo", "update")
+
+    _exec(
+        "helm", "upgrade", "--install", "kueue", "kueue/kueue",
+        "--namespace", "kueue-system",
+        "--create-namespace",
+        "--version", _KUEUE_VERSION,
+        "--set", "manageJobsWithoutQueueName=false",
+        "--set", "integrations.frameworks={ray.io/v1/RayCluster}",
+        "--wait",
+        "--timeout", "5m",
+    )
+
+    _kube_apply(_scripts_kueue_dir / "compute-0-kueue.yaml")
+
+    if "grafana" not in ns.exclude:
+        links.append((
+            "Kueue Cluster Queue (Grafana)",
+            "http://localhost:3000/d/kueue-cluster-queue/kueue-e28094-cluster-queue-view",
+            "[Username: admin; Password: admin]",
+        ))
+
+    print("✅ Kueue installed. Set KUEUE_QUEUE_NAME=user-queue in michelangelo-config to enable job queuing.")
+
+
+def _install_kueue_on_cluster(context: str, helm_existing_repos: str = ""):
+    """Install Kueue on a compute cluster via Helm with RayCluster integration enabled."""
+    _kueue_repo = "https://charts.kueue.x-k8s.io"
+    if "kueue" not in helm_existing_repos:
+        _exec("helm", "repo", "add", "kueue", _kueue_repo)
+        _exec("helm", "repo", "update")
+
+    _exec(
+        "helm", "upgrade", "--install", "kueue", "kueue/kueue",
+        "--kube-context", context,
+        "--namespace", "kueue-system",
+        "--create-namespace",
+        "--version", _KUEUE_VERSION,
+        "--set", "manageJobsWithoutQueueName=false",
+        "--set", "integrations.frameworks={ray.io/v1/RayCluster}",
+        "--wait",
+        "--timeout", "5m",
     )
 
 
@@ -1110,7 +1202,7 @@ def _create_cadence_domain(links):
 def _create_demo_crs(ns: argparse.Namespace):
     """Create demo Custom Resources (CRs) for the sandbox environment."""
     assert ns
-    if ns.demo_action != "pipeline" and ns.demo_action != "inference":
+    if ns.demo_action not in ("pipeline", "inference", "job"):
         raise ValueError(f"Unsupported demo action: {ns.demo_action}")
 
     # Check if cluster exists
@@ -1161,6 +1253,14 @@ def _create_demo_crs(ns: argparse.Namespace):
         _create_pipeline_demo_crs()
     elif ns.demo_action == "inference":
         _create_inference_demo_crs()
+    elif ns.demo_action == "job":
+        job_action = getattr(ns, "job_action", None)
+        if job_action is None:
+            _create_job_compute_clusters()
+        elif job_action == "kueue":
+            _create_job_demo_crs()
+        else:
+            raise ValueError(f"Unsupported job demo action: {job_action}")
     else:
         raise ValueError(f"Unsupported demo action: {ns.demo_action}")
 
@@ -1289,7 +1389,7 @@ def _sync_config_from_secret():
 
 
 def _kube_apply(path: Path):
-    _exec("kubectl", "apply", "-f", str(path))
+    _exec("kubectl", "--context", f"k3d-{_michelangelo_sandbox_kube_cluster_name}", "apply", "-f", str(path))
 
 
 def _kube_wait(pods: bool = True, jobs: bool = True, timeout: int = 600):
@@ -1583,69 +1683,46 @@ def _ensure_namespace_exists(namespace: str):
 
 # Given a cluster name, create a Cluster CRD in the sandbox cluster
 def _create_compute_cluster_crd(cluster_name: str):
-    """Create a Cluster CRD for the Ray jobs cluster in the sandbox cluster."""
-    # Ensure ma-system namespace exists
+    """Apply the Cluster CR for a compute cluster into the sandbox's ma-system namespace.
+
+    Reads the template from demo/job/<cluster-name>.yaml and patches in the host and
+    port extracted from the k3d kubeconfig (those values are ephemeral and differ per run).
+    """
+    import re
+
     _ensure_namespace_exists("ma-system")
 
-    # Get kubeconfig for the Ray jobs cluster
     kubeconfig = subprocess.check_output(
         ["k3d", "kubeconfig", "get", cluster_name]
     ).decode()
-
-    # Parse the kubeconfig YAML
     kubeconfig_data = yaml.safe_load(kubeconfig)
-
-    # Extract server URL from clusters[0].cluster.server
     server_url = kubeconfig_data["clusters"][0]["cluster"]["server"]
-
-    # Extract host and port from server URL
-    # Example: "https://host.docker.internal:52910"
-    import re
 
     match = re.search(r"(https://[^:]+):(\d+)", server_url)
     if not match:
         raise ValueError(
-            f"Could not extract cluster host and port from server URL: {server_url}"
+            f"Could not extract host and port from server URL: {server_url}"
         )
     host, port = match.groups()
 
-    # Create Cluster CRD manifest
-    cluster_crd = {
-        "apiVersion": "michelangelo.api/v2",
-        "kind": "Cluster",
-        "metadata": {"name": cluster_name, "namespace": "ma-system"},
-        "spec": {
-            "kubernetes": {
-                "rest": {
-                    "host": host,
-                    "port": port,
-                    "tokenTag": f"cluster-{cluster_name}-client-token",
-                    "caDataTag": f"cluster-{cluster_name}-ca-data",
-                },
-                "skus": [],
-            }
-        },
-    }
+    template_path = _job_demo_dir / f"{cluster_name}.yaml"
+    cluster_cr = yaml.safe_load(template_path.read_text())
+    cluster_cr["spec"]["kubernetes"]["rest"]["host"] = host
+    cluster_cr["spec"]["kubernetes"]["rest"]["port"] = port
 
-    # Create a temporary file for the Cluster CRD
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as crd_file:
-        yaml.dump(cluster_crd, crd_file)
-        crd_file.flush()
-
-        # Apply the Cluster CRD to the sandbox cluster (explicitly specify context)
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as f:
+        yaml.dump(cluster_cr, f)
+        f.flush()
         _exec(
             "kubectl",
             "--context",
             f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
             "apply",
             "-f",
-            crd_file.name,
+            f.name,
         )
 
-        print(f"\nCreated Cluster CRD '{cluster_name}' in the sandbox cluster")
-        print(f"Cluster host: {host}")
-        print(f"Cluster port: {port}")
-        print(f"Server URL: {server_url}")
+    print(f"\nRegistered Cluster CR '{cluster_name}' → {host}:{port}")
 
 
 def _create_compute_cluster_secrets(cluster_name: str):
@@ -2067,6 +2144,107 @@ def _setup_istio_with_gateway_api():
     )
 
     print("✅ Istio with Gateway API setup complete")
+
+
+_demo_compute_clusters = [
+    ("michelangelo-compute-0", _job_kueue_demo_dir / "compute-cluster-0.yaml"),
+    ("michelangelo-compute-1", _job_kueue_demo_dir / "compute-cluster-1.yaml"),
+]
+
+
+def _create_job_compute_clusters():
+    """Create two compute clusters and register them with the Michelangelo scheduler.
+
+    Sets up michelangelo-compute-0 and michelangelo-compute-1 as k3d clusters,
+    installs KubeRay on each, and creates Michelangelo Cluster CRDs in ma-system.
+    """
+    try:
+        helm_existing_repos = subprocess.check_output(["helm", "repo", "list"]).decode()
+    except subprocess.CalledProcessError:
+        helm_existing_repos = ""
+
+    for cluster_name, _ in _demo_compute_clusters:
+        print(f"\n🖥️  Setting up compute cluster: {cluster_name}")
+
+        cluster_exists = subprocess.run(
+            ["k3d", "cluster", "get", cluster_name],
+            capture_output=True,
+        ).returncode == 0
+
+        if cluster_exists:
+            print(f"  Cluster {cluster_name} already exists, skipping creation.")
+        else:
+            _exec(
+                "k3d", "cluster", "create", cluster_name,
+                "--servers", "1",
+                "--agents", "2",
+                "--kubeconfig-switch-context=false",
+                "--network", f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            )
+
+            if "kuberay" not in helm_existing_repos:
+                _exec("helm", "repo", "add", "kuberay", "https://ray-project.github.io/kuberay-helm/")
+                _exec("helm", "repo", "update")
+                helm_existing_repos += "\nkuberay"
+
+            _exec(
+                "helm", "install",
+                "--kube-context", f"k3d-{cluster_name}",
+                "kuberay-operator", "kuberay/kuberay-operator",
+                "--version", "1.4.2",
+                "--namespace", "ray-system",
+                "--create-namespace",
+                "--wait",
+                "--timeout", "20m",
+            )
+
+            _create_config_in_compute_cluster(cluster_name)
+            _create_aws_credentials_in_cluster(cluster_name)
+            _apply_compute_cluster_rbac(cluster_name)
+
+        _create_compute_cluster_crd(cluster_name)
+        _create_compute_cluster_secrets(cluster_name)
+
+    cluster_names = [name for name, _ in _demo_compute_clusters]
+    print("\n✅ Compute clusters ready!")
+    print(f"  • k3d clusters: {', '.join(cluster_names)}")
+    print("  • KubeRay operator installed on each cluster")
+    print("  • Michelangelo Cluster CRDs registered in ma-system")
+    print()
+    print("Run 'ma sandbox demo job kueue' to add Kueue job scheduling on top.")
+
+
+def _create_job_demo_crs():
+    """Extend the job demo with Kueue: install on each compute cluster for local quota enforcement.
+
+    Assumes _create_job_compute_clusters() has already run (or clusters already exist).
+    After this runs:
+    - Kueue is installed on each compute cluster with RayCluster integration enabled
+    - A ClusterQueue 'cluster-queue' and LocalQueue 'user-queue' exist on each cluster
+    - Set KUEUE_QUEUE_NAME=user-queue in michelangelo-config to enable queuing
+    """
+    _create_job_compute_clusters()
+
+    try:
+        helm_existing_repos = subprocess.check_output(["helm", "repo", "list"]).decode()
+    except subprocess.CalledProcessError:
+        helm_existing_repos = ""
+
+    cluster_names = [name for name, _ in _demo_compute_clusters]
+
+    for cluster_name, kueue_yaml in _demo_compute_clusters:
+        print(f"\n📦 Installing Kueue on {cluster_name}...")
+        _install_kueue_on_cluster(f"k3d-{cluster_name}", helm_existing_repos)
+        _exec(
+            "kubectl", "--context", f"k3d-{cluster_name}",
+            "apply", "-f", str(kueue_yaml),
+        )
+
+    print("\n✅ Kueue job demo setup complete!")
+    print(f"  • Kueue installed on: {', '.join(cluster_names)}")
+    print("  • Each cluster has a ClusterQueue 'cluster-queue' and LocalQueue 'user-queue'")
+    print("  • RayCluster integration enabled — queue label is enforced on Ray workloads")
+    print("  • Set KUEUE_QUEUE_NAME=user-queue in michelangelo-config to enable queuing")
 
 
 def _create_pipeline_demo_crs():
