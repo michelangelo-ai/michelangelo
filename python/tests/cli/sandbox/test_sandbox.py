@@ -433,4 +433,3 @@ class ArgumentParsingTest(TestCase):
         """`ma sandbox create` without --set should default helm_set to []."""
         ns = self._parse(["create"])
         self.assertEqual(ns.helm_set, [])
-
