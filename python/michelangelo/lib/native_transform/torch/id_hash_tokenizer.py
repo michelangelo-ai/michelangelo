@@ -161,7 +161,7 @@ class IDHashTokenizer(nn.Module):
 
         # Step 1: Find potential mapped indices within the *sorted* vocabulary.
         # torch.bucketize returns indices in [0, len(sorted)]; a value equal to
-        # len(sorted) means the input is >= the last sorted vocabulary element.
+        # len(sorted) means the input is > the last sorted vocabulary element.
         potential_sorted_indices = torch.bucketize(
             input_ids_long, self._sorted_unique_values_tensor
         )

@@ -141,6 +141,9 @@ class TestIDHashTokenizer:
 
     def test_onnx_export(self, tokenizer: IDHashTokenizer, tmp_path) -> None:
         """The module exports to ONNX and reproduces eager output via ORT."""
+        # ``torch.onnx.export`` needs ``onnx`` and the session needs
+        # ``onnxruntime``; skip cleanly if either is missing.
+        pytest.importorskip("onnx")
         ort = pytest.importorskip("onnxruntime")
         import torch.onnx
 
