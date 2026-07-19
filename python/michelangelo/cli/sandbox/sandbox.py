@@ -28,6 +28,12 @@ _michelangelo_sandbox_kube_cluster_name = "michelangelo-sandbox"
 _cadence_domain = "default"
 _default_compute_kube_cluster_name = "michelangelo-compute-0"
 
+# Keep this in sync with IMAGE_TAG in scripts/kuberay/build-kuberay-images.sh.
+_kuberay_local_image_tag = "v0.1.0"
+_kuberay_local_historyserver_image = (
+    f"kuberay-historyserver:{_kuberay_local_image_tag}"
+)
+
 # Path to the Michelangelo Helm chart (relative to this file)
 _chart_dir = Path(__file__).parent.parent.parent.parent.parent / "helm" / "michelangelo"
 
@@ -1006,7 +1012,6 @@ def _create_kuberay_operator(helm_existing_repos):
         "--timeout",
         "20m",
     )
-
     _import_kuberay_images()
 
 
@@ -1017,10 +1022,10 @@ _KUBERAY_IMAGES = [
 
 
 def _import_kuberay_images():
-    """Pull kuberay images from GHCR and import them into k3d.
+    """Pull KubeRay images from GHCR and import them into k3d.
 
-    Non-fatal: prints a warning on failure since the collector sidecar and
-    history server are optional for basic sandbox usage.
+    If GHCR is unavailable, switch the already-deployed History Server to the
+    local image imported by scripts/kuberay/build-kuberay-images.sh.
     """
     for image in _KUBERAY_IMAGES:
         print(f"Importing {image} into k3d...")
@@ -1029,7 +1034,8 @@ def _import_kuberay_images():
             capture_output=True,
         )
         if pull.returncode != 0:
-            print(f"Warning: could not pull {image}. Skipping.")
+            print(f"Warning: could not pull {image}. Using local History Server image.")
+            _use_local_historyserver_image()
             continue
         result = subprocess.run(
             [
@@ -1043,9 +1049,40 @@ def _import_kuberay_images():
             capture_output=True,
         )
         if result.returncode != 0:
-            print(f"Warning: could not import {image} into k3d.")
+            print(
+                f"Warning: could not import {image} into k3d. "
+                "Using local History Server image."
+            )
+            _use_local_historyserver_image()
         else:
             print(f"Successfully imported {image} into k3d.")
+
+
+def _use_local_historyserver_image():
+    """Switch the History Server Deployment to the local fallback image."""
+    local_import = subprocess.run(
+        [
+            "k3d",
+            "image",
+            "import",
+            _kuberay_local_historyserver_image,
+            "-c",
+            _michelangelo_sandbox_kube_cluster_name,
+        ],
+        capture_output=True,
+    )
+    if local_import.returncode != 0:
+        print(
+            "Warning: could not import the local History Server image into k3d; "
+            "it may already be cached in the cluster."
+        )
+    _exec(
+        "kubectl",
+        "set",
+        "image",
+        "deployment/history-server",
+        f"history-server={_kuberay_local_historyserver_image}",
+    )
 
 
 def _create_cadence_domain(links):

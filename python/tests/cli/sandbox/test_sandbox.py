@@ -130,6 +130,62 @@ class CreateFunctionTest(TestCase):
         mock_create_secrets.assert_called_once_with("michelangelo-sandbox")
 
 
+class KubeRayImageImportTest(TestCase):
+    """Tests for the KubeRay import fallback."""
+
+    @patch("michelangelo.cli.sandbox.sandbox._use_local_historyserver_image")
+    @patch("michelangelo.cli.sandbox.sandbox.subprocess.run")
+    def test_uses_local_historyserver_when_ghcr_pull_fails(
+        self, mock_run, mock_use_local_image
+    ):
+        mock_run.side_effect = [Mock(returncode=1), Mock(returncode=1)]
+
+        sandbox._import_kuberay_images()
+
+        self.assertEqual(mock_use_local_image.call_count, 2)
+
+    @patch("michelangelo.cli.sandbox.sandbox._use_local_historyserver_image")
+    @patch("michelangelo.cli.sandbox.sandbox.subprocess.run")
+    def test_uses_local_historyserver_when_k3d_import_fails(
+        self, mock_run, mock_use_local_image
+    ):
+        mock_run.side_effect = [
+            Mock(returncode=0),
+            Mock(returncode=1),
+            Mock(returncode=1),
+        ]
+
+        sandbox._import_kuberay_images()
+
+        self.assertEqual(mock_use_local_image.call_count, 2)
+
+    @patch("michelangelo.cli.sandbox.sandbox._exec")
+    @patch("michelangelo.cli.sandbox.sandbox.subprocess.run")
+    def test_imports_and_sets_local_historyserver_image(self, mock_run, mock_exec):
+        mock_run.return_value = Mock(returncode=0)
+
+        sandbox._use_local_historyserver_image()
+
+        mock_run.assert_called_once_with(
+            [
+                "k3d",
+                "image",
+                "import",
+                "kuberay-historyserver:v0.1.0",
+                "-c",
+                "michelangelo-sandbox",
+            ],
+            capture_output=True,
+        )
+        mock_exec.assert_called_once_with(
+            "kubectl",
+            "set",
+            "image",
+            "deployment/history-server",
+            "history-server=kuberay-historyserver:v0.1.0",
+        )
+
+
 class ComputeClusterSetupTest(TestCase):
     """Tests for compute cluster setup functions."""
 

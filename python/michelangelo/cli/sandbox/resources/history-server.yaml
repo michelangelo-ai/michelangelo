@@ -45,7 +45,7 @@ spec:
       serviceAccountName: historyserver
       containers:
       - name: history-server
-        image: kuberay-historyserver:v0.1.0
+        image: ghcr.io/michelangelo-ai/kuberay-historyserver:main
         imagePullPolicy: IfNotPresent
         command:
         - historyserver

@@ -239,8 +239,8 @@ All notable changes to this project will be documented in this file.
   bound, so a fresh install resolves to the latest Ray and hits this live;
   reading `local_rank` from the public `ray.train.get_context()` API fixes it
   independent of the Ray version.
-- Fixed a reference mismatch on sandbox clusters where `history-server` was
-  pointing to an incorrect reference.
+- The sandbox History Server now falls back to its locally built image when
+  GHCR cannot be reached.
 
 ### Removed
 
