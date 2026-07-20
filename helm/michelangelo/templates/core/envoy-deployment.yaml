@@ -13,6 +13,9 @@ spec:
       {{- include "michelangelo.componentSelectorLabels" (dict "context" . "component" "envoy") | nindent 6 }}
   template:
     metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/core/envoy-configmap.yaml") . | sha256sum }}
+        checksum/descriptors-config: {{ include (print $.Template.BasePath "/core/envoy-descriptors-configmap.yaml") . | sha256sum }}
       labels:
         {{- include "michelangelo.componentSelectorLabels" (dict "context" . "component" "envoy") | nindent 8 }}
     spec:
