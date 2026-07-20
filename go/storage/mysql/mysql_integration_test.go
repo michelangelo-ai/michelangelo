@@ -79,10 +79,18 @@ func newIntegrationStorage(t *testing.T, db *sql.DB) *mysqlMetadataStorage {
 }
 
 // cleanupDeploymentRow removes rows created by the test so re-runs are idempotent.
-func cleanupDeploymentRow(t *testing.T, db *sql.DB, namespace, name string) {
+// It clears the main table plus the label/annotation child tables for the given uids
+// (child rows are keyed by obj_uid, not namespace/name, so they must be cleaned by uid).
+func cleanupDeploymentRow(t *testing.T, db *sql.DB, namespace, name string, uids ...string) {
 	t.Helper()
 	_, err := db.Exec("DELETE FROM deployment WHERE namespace=? AND name=?", namespace, name)
 	require.NoError(t, err)
+	for _, uid := range uids {
+		_, err = db.Exec("DELETE FROM deployment_labels WHERE obj_uid=?", uid)
+		require.NoError(t, err)
+		_, err = db.Exec("DELETE FROM deployment_annotations WHERE obj_uid=?", uid)
+		require.NoError(t, err)
+	}
 }
 
 // TestIntegration_MetadataStoragePrimaryKey_MigrationScenario exercises the full
@@ -105,7 +113,7 @@ func TestIntegration_MetadataStoragePrimaryKey_MigrationScenario(t *testing.T) {
 		newUID      = "new-cluster-uid-bbb222"
 	)
 
-	t.Cleanup(func() { cleanupDeploymentRow(t, db, namespace, name) })
+	t.Cleanup(func() { cleanupDeploymentRow(t, db, namespace, name, originalUID, newUID) })
 
 	ctx := context.Background()
 
@@ -121,6 +129,9 @@ func TestIntegration_MetadataStoragePrimaryKey_MigrationScenario(t *testing.T) {
 			UID:               types.UID(originalUID),
 			ResourceVersion:   "1",
 			CreationTimestamp: metav1.Now(),
+			Labels: map[string]string{
+				"app": "migration-test",
+			},
 			Annotations: map[string]string{
 				api.MetadataStoragePrimaryKeyAnnotation: originalUID,
 			},
@@ -153,6 +164,9 @@ func TestIntegration_MetadataStoragePrimaryKey_MigrationScenario(t *testing.T) {
 			UID:               types.UID(newUID), // new UID assigned by new cluster
 			ResourceVersion:   "1",
 			CreationTimestamp: metav1.Now(),
+			Labels: map[string]string{
+				"app": "migration-test",
+			},
 			Annotations: map[string]string{
 				// operator preserved the annotation from the original CR
 				api.MetadataStoragePrimaryKeyAnnotation: originalUID,
@@ -171,6 +185,29 @@ func TestIntegration_MetadataStoragePrimaryKey_MigrationScenario(t *testing.T) {
 			Scan(&rowCount))
 	assert.Equal(t, 1, rowCount, "still exactly one row after migration Upsert - no duplicate")
 	assert.Equal(t, originalUID, storedUID, "PK must still equal the original UID, not the new cluster UID")
+
+	// --- Step 4: Assert child rows stay keyed by the stable PK (no orphans) ---
+	// The label/annotation child tables join back to the main row on obj_uid = uid.
+	// After migration they must be keyed by the original UID (the stable PK), and there
+	// must be no rows left under the new cluster UID.
+	var childUnderOriginal, childUnderNew int
+	require.NoError(t,
+		db.QueryRowContext(ctx, "SELECT COUNT(*) FROM deployment_labels WHERE obj_uid=?", originalUID).
+			Scan(&childUnderOriginal))
+	assert.Equal(t, 1, childUnderOriginal, "label rows must be keyed by the stable PK (original UID)")
+	require.NoError(t,
+		db.QueryRowContext(ctx, "SELECT COUNT(*) FROM deployment_labels WHERE obj_uid=?", newUID).
+			Scan(&childUnderNew))
+	assert.Equal(t, 0, childUnderNew, "no label rows may be orphaned under the new cluster UID")
+
+	require.NoError(t,
+		db.QueryRowContext(ctx, "SELECT COUNT(*) FROM deployment_annotations WHERE obj_uid=?", originalUID).
+			Scan(&childUnderOriginal))
+	assert.Positive(t, childUnderOriginal, "annotation rows must be keyed by the stable PK (original UID)")
+	require.NoError(t,
+		db.QueryRowContext(ctx, "SELECT COUNT(*) FROM deployment_annotations WHERE obj_uid=?", newUID).
+			Scan(&childUnderNew))
+	assert.Equal(t, 0, childUnderNew, "no annotation rows may be orphaned under the new cluster UID")
 }
 
 // TestIntegration_MetadataStoragePrimaryKey_FallbackToUID verifies the backwards-compatible
@@ -186,7 +223,7 @@ func TestIntegration_MetadataStoragePrimaryKey_FallbackToUID(t *testing.T) {
 		uid       = "fallback-uid-ccc333"
 	)
 
-	t.Cleanup(func() { cleanupDeploymentRow(t, db, namespace, name) })
+	t.Cleanup(func() { cleanupDeploymentRow(t, db, namespace, name, uid) })
 
 	ctx := context.Background()
 
