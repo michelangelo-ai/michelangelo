@@ -22,18 +22,18 @@ jobs:
         working-directory: ./python
 
     steps:
-      - name: Checkout main branch
+      - name: Checkout base branch
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.base_ref }}
 
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 50      # Fetch 50 max commits in single PR
 
-      - name: Fetch main branch
-        run: git fetch origin main 
+      - name: Fetch base branch
+        run: git fetch origin ${{ github.base_ref }}
 
       - name: Check branch list
         run: git branch -av
