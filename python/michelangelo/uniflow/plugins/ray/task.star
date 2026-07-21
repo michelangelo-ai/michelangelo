@@ -491,7 +491,7 @@ def ray_cluster_spec(
     return {
         "metadata": {
             "generateName": "uf-ray-",
-            "namespace": "default",
+            "namespace": namespace,
             "annotations": annotations,
         },
         "spec": {

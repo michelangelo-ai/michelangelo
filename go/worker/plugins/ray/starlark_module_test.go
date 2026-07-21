@@ -48,7 +48,7 @@ func (r *Test) TestCreateClusterSuccessfully() {
 	rayCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "uf-ray-test",
-			Namespace: "default",
+			Namespace: "ma-dev-test",
 		},
 		Spec: v2pb.RayClusterSpec{
 			User: &v2pb.UserInfo{
@@ -162,8 +162,9 @@ func (r *Test) TestCreateClusterSuccessfully() {
 	err := r.env.Cadence.GetResult(&res)
 	require.NoError(err)
 	require.EqualValues(rayCluster, createClusterReq.RayCluster)
+	require.Equal("ma-dev-test", createClusterReq.RayCluster.Namespace)
 	require.EqualValues(rayCluster.Name, sensorClusterReq.Name)
-	require.EqualValues(rayCluster.Namespace, sensorClusterReq.Namespace)
+	require.Equal("ma-dev-test", sensorClusterReq.Namespace)
 	require.NotNil(res.(map[string]interface{}))
 }
 

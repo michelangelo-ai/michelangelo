@@ -4,7 +4,7 @@ def test_create_cluster():
     spec = {
         "metadata": {
             "name": "uf-ray-test",
-            "namespace": "default",
+            "namespace": "ma-dev-test",
         },
         "spec": {
             "user": {"name": "test-user"},
