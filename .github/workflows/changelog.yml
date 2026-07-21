@@ -59,23 +59,36 @@ jobs:
         run: |
           git fetch --tags -q
           CURRENT_TAG="${{ steps.tag.outputs.tag }}"
+          CURRENT_EPOCH=$(git log -1 --format=%at "$CURRENT_TAG")
 
-          # The immediately-preceding FINAL tag (excluding rc/nightly/dev),
-          # by version order -- not just any older tag. This covers patches
-          # correctly: v0.5.0 is v0.5.1's immediately-preceding tag AND a real
-          # ancestor (same release branch), so v0.5.1's changelog is scoped to
-          # v0.5.0..v0.5.1, not re-including everything since v0.4.0.
-          CANDIDATE=$( (git tag -l 'v[0-9]*' | grep -vE -- '-rc\.|-nightly\.|\.dev' ; echo "$CURRENT_TAG") \
-            | sort -V -u | grep -B1 -x "$CURRENT_TAG" | head -1)
+          # The most recent FINAL tag (excluding rc/nightly/dev) whose commit
+          # predates CURRENT_TAG's commit, chosen by commit timestamp rather
+          # than `sort -V` -- version-string sort doesn't understand semver
+          # pre-release ordering (e.g. GNU sort -V places "v0.5.0" *before*
+          # "v0.5.0-rc.2", the opposite of their real chronological order),
+          # which would misidentify the candidate whenever an RC and its
+          # eventual final tag coexist in the tag list. This covers patches
+          # correctly too: v0.5.0 is v0.5.1's most recent preceding final tag
+          # AND a real ancestor (same release branch), so v0.5.1's changelog
+          # is scoped to v0.5.0..v0.5.1, not re-including everything since
+          # v0.4.0.
+          CANDIDATE=""
+          CANDIDATE_EPOCH=0
+          for t in $(git tag -l 'v[0-9]*' | grep -vE -- '-rc\.|-nightly\.|\.dev' | grep -v -x "$CURRENT_TAG"); do
+            T_EPOCH=$(git log -1 --format=%at "$t" 2>/dev/null || echo 0)
+            if [ "$T_EPOCH" -lt "$CURRENT_EPOCH" ] && [ "$T_EPOCH" -gt "$CANDIDATE_EPOCH" ]; then
+              CANDIDATE="$t"
+              CANDIDATE_EPOCH="$T_EPOCH"
+            fi
+          done
 
-          if [ -n "$CANDIDATE" ] && [ "$CANDIDATE" != "$CURRENT_TAG" ] \
-             && git merge-base --is-ancestor "$CANDIDATE" "$CURRENT_TAG" 2>/dev/null; then
+          if [ -n "$CANDIDATE" ] && git merge-base --is-ancestor "$CANDIDATE" "$CURRENT_TAG" 2>/dev/null; then
             echo "range=${CANDIDATE}..${CURRENT_TAG}" >> "$GITHUB_OUTPUT"
-            echo "Changelog range: ${CANDIDATE} (immediately-preceding final tag) .. ${CURRENT_TAG}"
+            echo "Changelog range: ${CANDIDATE} (most recent preceding final tag) .. ${CURRENT_TAG}"
             exit 0
           fi
 
-          # The immediately-preceding tag exists but is NOT a real ancestor --
+          # The most recent preceding tag exists but is NOT a real ancestor --
           # e.g. the previous cycle's merge-back PR (release/vX.Y -> main)
           # hadn't landed by the time this release branch was cut, so its tag
           # lives on a diverged line (confirmed via
