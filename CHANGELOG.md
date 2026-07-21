@@ -2,13 +2,128 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.4.0] - 2026-07-10
+## Unreleased
+
+## [0.5.0] - 2026-07-20
+
+### Breaking Changes
+
+
+- **controller:** Pipeline delete now cascades by default (foreground propagation, no flag). The `controllermgr.cascadeDelete.enable` Helm value and associated config are removed. Opt out per-delete with `kubectl delete pipeline … --cascade=orphan`.
+
+
+- **python:** `CometParam` and `LightningTrainerParam.comet_param` removed outright. Use `ExperimentTrackerConfig(tracker=CometConfig(...))` instead.
+
+
+### Features
+
+
+- **ui:** Add multi-value tag input to StringField (#1511)
+
+
+- **sandbox:** Provision REGISTRY_ENDPOINT for pipeline task pods (#1533)
+
+
+- **ui:** Export useStudioMutation and MutationConfig from core (#1536)
+
+
+- **python:** CustomTrackerConfig on ExperimentTrackerConfig: bring-your-own experiment tracker via dotted-path factory_fn/factory_kwargs, for trackers with no dedicated config class (W&B, Neptune, etc.)
+
+
+- **python:** ExperimentTrackerConfig.tracker unified entry point for CometConfig/MlflowConfig/CustomTrackerConfig; legacy comet=/mlflow= fields still work and are promoted internally
+
+
+- **python:** MlflowConfig fully supported — use ExperimentTrackerConfig(tracker=MlflowConfig(...)) to log to MLflow. Closes #1427.
+
+
+- **python:** build_comet_logger / build_mlflow_logger factory functions in michelangelo.lib.trainer.torch.pytorch_lightning._private.util, usable as CustomTrackerConfig.factory_fn targets
 
 
 ### Bug Fixes
 
 
-- **helm,ci:** Nil pointer guards on upgrade + configurable integration-test ref (#1405)
+- **helm:** Allow x-user-email header in envoy CORS preflight (#1552, #1553)
+
+
+- **helm:** Envoy checksum annotation + missing x-user-name CORS header (#1558, #1559)
+
+
+- **scripts:** Pin internal @michelangelo-ai workspace deps on version bump (#1507)
+
+
+- **ci:** Publish npm packages when cutting an RC, not just on promote (#1508)
+
+
+- **ci:** Harden CI gate + fix changelog generation for bot-pushed tags (#1509)
+
+
+- **python:** Fall back to MA_NAMESPACE for california_housing_xgb push_step (#1447)
+
+
+- **ci:** Fix npm-publish.yml build order, prerelease tag, auth, and provenance (#1510)
+
+
+- **ci:** Trigger Go/UI container publish for RC/final tags; fix container tag format (#1513)
+
+
+- **python:** Explicitly set local_rank in RayTrainReportCallback (#1519)
+
+
+- **helm:** Tie first-party image tags to chart appVersion (#1515)
+
+
+- **ci:** Exclude release-promote's own jobs from its CI-green check (#1535)
+
+
+- **core:** Re-export UserProvider for custom provider trees (#1523)
+
+
+- Fix the trigger notification (#1534)
+
+
+- **python:** MlflowConfig.tracking_uri is now optional (str | None); falls back to MLFLOW_TRACKING_URI env var
+
+
+### Documentation
+
+
+- Fix broken UPGRADING.md link in CONTRIBUTING.md (#1520)
+
+
+- Fix broken links flagged by doc quality scanner (#1529)
+
+
+### Miscellaneous
+
+
+- Add user identity to NavigationBar (#1504)
+
+
+- Add user identity headers to RPC request contract (#1512)
+
+
+- Populate ColumnMeta augmentation to eliminate columnDef.meta casts (#1497)
+
+
+- Type CELL_RENDERERS registry with per-entry value types (#1517)
+
+
+- Docs/workflow patterns (#1527)
+
+
+- Uniflow workflow patterns runnable example (#1524)
+
+
+- Print help panel on 'ma' / 'ma -h' with prog='ma' (#1530)
+
+
+
+
+
+## [0.4.0] - 2026-07-10
+
+
+### Bug Fixes
 
 
 - **ci:** Bypass poetry-dynamic-versioning in nightly Python build (#1406)
@@ -177,77 +292,3 @@ All notable changes to this project will be documented in this file.
 
 - **ui:** Centralize mutation middleware in the mutation hook (#1482)
 
-## Unreleased
-
-### Added
-
-- `CustomTrackerConfig` on `ExperimentTrackerConfig`: bring-your-own experiment
-  tracker via a dotted-path factory function (`factory_fn`/`factory_kwargs`),
-  for trackers (W&B, Neptune, etc.) with no dedicated config class.
-- `ExperimentTrackerConfig.tracker` field, a unified entry point for
-  `CometConfig`/`MlflowConfig`/`CustomTrackerConfig` (the legacy `comet=`/
-  `mlflow=` fields still work and are promoted into `tracker` internally).
-- `build_comet_logger` / `build_mlflow_logger` factory functions in
-  `michelangelo.lib.trainer.torch.pytorch_lightning._private.util`, usable
-  as `CustomTrackerConfig.factory_fn` targets.
-- `MlflowConfig` is now fully supported — set
-  `ExperimentTrackerConfig(tracker=MlflowConfig(...))` to log to MLflow.
-  Closes GitHub issue #1427.
-- `fused_model_submodule` field on `IncrementalTrainingSpec` and
-  `TransferLearningSpec` (`lib/trainer/torch/pytorch_lightning/schema.py`),
-  restoring schema-shape parity with the internal Uber SDK. Schema-only for
-  now — no OSS code reads or acts on this field yet.
-
-### Changed
-
-- **BREAKING: Pipeline delete now cascades by default.** Deleting a Pipeline drains and deletes its
-  child PipelineRuns and TriggerRuns (foreground propagation), with no feature flag; run history is
-  retained in MySQL. Opt out per delete with `kubectl delete pipeline … --cascade=orphan`. GC deletes
-  children with the controller's RBAC, and the MA Studio UI does not yet cascade. See the
-  [Cascade Delete operator guide](docs/operator-guides/cascade-delete.md).
-- `MlflowConfig.tracking_uri` is now optional (`str | None`, defaults to
-  `None`), falling back to the `MLFLOW_TRACKING_URI` environment variable.
-
-### Fixed
-
-- `train_tabular()` no longer defaults `RunConfig.storage_path` to a local
-  tempdir. The default `RunConfig` is now built by the shared
-  `michelangelo.uniflow.plugins.ray.create_run_config()` helper, which
-  resolves `storage_path`/`storage_filesystem` from `UF_STORAGE_URL` (the
-  same variable `DatasetVariable`/`ModelVariable` already use), so worker
-  pods on a multi-node Ray cluster share checkpoint storage with the head
-  pod. Falls back to a local tempdir when `UF_STORAGE_URL` is unset.
-- `train_tabular()` now returns the trained model as a `ModelVariable`
-  instead of eagerly packaging and uploading it as a `ModelArtifact`. The
-  trained model is an intra-pipeline intermediate, not a registry-ready
-  artifact — packaging and uploading into the consolidated model manager /
-  artifact store is a downstream packaging task's job (no such task exists
-  in OSS yet). The now-unused `storage_backend` parameter has been removed
-  from `train_tabular()`; for a lightning warm-start, `initial_model.path`
-  must now point directly to the local state-dict file (e.g. as written by
-  `ModelVariable.save_lightning_model()`), not a directory — this matches
-  what `LightningTrainerParam.initial_weights_path` always expected. No
-  storage backend is involved, and a missing file now raises
-  `ConfigurationError` eagerly instead of failing deep inside Ray Train.
-- `RayTrainReportCallback.__init__` now explicitly sets `self.local_rank`
-  alongside `self.world_rank` instead of relying on an implicit side-effect
-  assignment in the upstream Ray base class `__init__`. On `ray>=2.56` that
-  upstream side-effect is gone, so `on_train_epoch_end()` (and every
-  `RayTrainReportPerNodeCallback` checkpoint path) raised
-  `AttributeError: 'RayTrainReportCallback' object has no attribute 'local_rank'`
-  during real training. The `ray` dependency is declared without an upper
-  bound, so a fresh install resolves to the latest Ray and hits this live;
-  reading `local_rank` from the public `ray.train.get_context()` API fixes it
-  independent of the Ray version.
-
-### Removed
-
-- **BREAKING: `CometParam` and `LightningTrainerParam.comet_param` have been
-  removed outright**, not deprecated. The original design called for a
-  deprecation cycle, but a repo-wide audit found `task.py` was the only
-  production caller and it is migrated onto the new `ExperimentTrackerConfig`
-  tracker abstraction in this same release — there is no external consumer to
-  break. Use `ExperimentTrackerConfig(tracker=CometConfig(...))` instead.
-- The `controllermgr.cascadeDelete.enable` Helm value and its associated config (cross-binary cascade
-  config key, controller-manager `CascadeDeleteConfig`). Cascade is now always on and controlled by
-  Kubernetes propagation policy + RBAC instead of a flag.
