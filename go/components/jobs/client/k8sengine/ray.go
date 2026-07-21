@@ -41,11 +41,7 @@ func (m Mapper) mapRay(rayJob *v2pb.RayJob, jobClusterObject runtime.Object, clu
 	if !ok {
 		return nil, fmt.Errorf("expected *v2pb.RayCluster, got %T", jobClusterObject)
 	}
-	pod := rayCluster.GetSpec().Head.GetPod()
-	submitterPod := k8sptr.Deref(pod, corev1.PodTemplateSpec{})
-	// Kubernetes Jobs require restartPolicy to be either "OnFailure" or "Never"
-	submitterPod.Spec.RestartPolicy = corev1.RestartPolicyNever
-
+	head := k8sptr.Deref(rayCluster.GetSpec().Head.GetPod(), corev1.PodTemplateSpec{})
 	kubeRayJob := &rayv1.RayJob{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       RayJobKind,
@@ -63,14 +59,72 @@ func (m Mapper) mapRay(rayJob *v2pb.RayJob, jobClusterObject runtime.Object, clu
 			Entrypoint:               rayJob.Spec.Entrypoint,
 			TTLSecondsAfterFinished:  int32(300),
 			ShutdownAfterJobFinishes: true,
-			// kuberay 1.0 only support SubmitterPodTemplate for configuration submitter pod
-			// We need to allow user to configure the submitter pod template via ray task configuration
-			// Note: Add support for v1.2.2 kuberay once we upgrade to newer version
-			SubmitterPodTemplate: &submitterPod,
+			// Right-size the submitter pod rather than cloning the head. The submitter
+			// only runs `ray job submit` against the existing cluster, so it gets modest
+			// resources and none of the head's GPU or scheduling constraints — but it
+			// still reuses the head image and pull/auth settings so it can start in the
+			// same environment. See buildSubmitterPodTemplate.
+			SubmitterPodTemplate: buildSubmitterPodTemplate(head),
 		},
 	}
 
 	return kubeRayJob, nil
+}
+
+// submitterCPURequest, submitterMemRequest, submitterCPULimit and submitterMemLimit
+// mirror KubeRay's built-in default submitter sizing (GetDefaultSubmitterContainer):
+// modest and GPU-free, since the pod only runs `ray job submit`.
+const (
+	submitterCPURequest = "500m"
+	submitterMemRequest = "200Mi"
+	submitterCPULimit   = "1"
+	submitterMemLimit   = "1Gi"
+)
+
+// buildSubmitterPodTemplate builds a right-sized submitter pod template for the RayJob.
+//
+// KubeRay can default this itself when SubmitterPodTemplate is nil, but its default
+// drops pod-level settings the submitter needs to run in the same environment as the
+// cluster it targets — most importantly the container image pull policy (KubeRay's
+// default leaves it unset, so an image tagged :latest falls back to Always and cannot
+// use a preloaded/local-only image), plus image pull secrets and the service account.
+//
+// So instead of cloning the head pod (which would reserve head-sized, possibly GPU,
+// compute) or leaving the template nil, we construct a minimal submitter that reuses
+// the head image and its pull/auth settings while keeping modest resources and none of
+// the head's GPU or scheduling constraints.
+func buildSubmitterPodTemplate(head corev1.PodTemplateSpec) *corev1.PodTemplateSpec {
+	var image string
+	var pullPolicy corev1.PullPolicy
+	if len(head.Spec.Containers) > 0 {
+		image = head.Spec.Containers[0].Image
+		pullPolicy = head.Spec.Containers[0].ImagePullPolicy
+	}
+	return &corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{
+			// Kubernetes Jobs require restartPolicy to be either "OnFailure" or "Never".
+			RestartPolicy:      corev1.RestartPolicyNever,
+			ImagePullSecrets:   head.Spec.ImagePullSecrets,
+			ServiceAccountName: head.Spec.ServiceAccountName,
+			Containers: []corev1.Container{
+				{
+					Name:            "ray-job-submitter",
+					Image:           image,
+					ImagePullPolicy: pullPolicy,
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse(submitterCPURequest),
+							corev1.ResourceMemory: resource.MustParse(submitterMemRequest),
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse(submitterCPULimit),
+							corev1.ResourceMemory: resource.MustParse(submitterMemLimit),
+						},
+					},
+				},
+			},
+		},
+	}
 }
 
 func (m Mapper) mapRayCluster(rayCluster *v2pb.RayCluster) (runtime.Object, error) {

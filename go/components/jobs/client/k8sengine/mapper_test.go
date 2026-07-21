@@ -8,6 +8,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 
@@ -17,10 +18,51 @@ import (
 func TestMapper_MapGlobalJobToLocal(t *testing.T) {
 	m := Mapper{}
 
-	headPod := &corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"role": "head"}}}
+	headPod := &corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"role": "head"}},
+		Spec: corev1.PodSpec{
+			ServiceAccountName: "ray-sa",
+			ImagePullSecrets:   []corev1.LocalObjectReference{{Name: "regcred"}},
+			Containers: []corev1.Container{{
+				Name:            "ray-head",
+				Image:           "ray:test",
+				ImagePullPolicy: corev1.PullIfNotPresent,
+				// Head-sized (and GPU) resources that must NOT leak into the submitter.
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:                    resource.MustParse("4"),
+						corev1.ResourceName("nvidia.com/gpu"): resource.MustParse("1"),
+					},
+				},
+			}},
+		},
+	}
 	workerPod := &corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"role": "worker"}}}
-	submitterPod := headPod.DeepCopy()
-	submitterPod.Spec.RestartPolicy = corev1.RestartPolicyNever
+
+	// The submitter reuses the head image + pull/auth settings but is right-sized
+	// (KubeRay-default CPU/mem, no GPU) and never inherits the head's resources.
+	submitterPod := &corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{
+			RestartPolicy:      corev1.RestartPolicyNever,
+			ServiceAccountName: "ray-sa",
+			ImagePullSecrets:   []corev1.LocalObjectReference{{Name: "regcred"}},
+			Containers: []corev1.Container{{
+				Name:            "ray-job-submitter",
+				Image:           "ray:test",
+				ImagePullPolicy: corev1.PullIfNotPresent,
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("500m"),
+						corev1.ResourceMemory: resource.MustParse("200Mi"),
+					},
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("1"),
+						corev1.ResourceMemory: resource.MustParse("1Gi"),
+					},
+				},
+			}},
+		},
+	}
 
 	rayJob := &v2pb.RayJob{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-job"},
