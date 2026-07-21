@@ -35,8 +35,8 @@ filter_unconventional = false
 split_commits = false
 protect_breaking_commits = true
 tag_pattern = "v[0-9].*"
-skip_tags = ".*\\.dev.*|.*-rc\\..*|.*-nightly\\..*"
-ignore_tags = ""
+skip_tags = ".*\\.dev.*"
+ignore_tags = ".*-rc\\..*|.*-nightly\\..*"
 topo_order = false
 sort_commits = "oldest"
 

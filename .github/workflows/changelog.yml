@@ -41,12 +41,84 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "Using tag: $TAG"
 
+      - name: Determine release branch for tag
+        id: branch
+        run: |
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*' -q
+          BASE=$(git branch -r --contains "${{ steps.tag.outputs.tag }}" \
+            | sed 's#^[* ]*origin/##' \
+            | grep -E '^release/v[0-9]' | sort -V | tail -1)
+          if [ -z "$BASE" ]; then
+            BASE="main"
+          fi
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "Using base branch: $BASE"
+
+      - name: Determine changelog range
+        id: range
+        run: |
+          git fetch --tags -q
+          CURRENT_TAG="${{ steps.tag.outputs.tag }}"
+
+          # The immediately-preceding FINAL tag (excluding rc/nightly/dev),
+          # by version order -- not just any older tag. This covers patches
+          # correctly: v0.5.0 is v0.5.1's immediately-preceding tag AND a real
+          # ancestor (same release branch), so v0.5.1's changelog is scoped to
+          # v0.5.0..v0.5.1, not re-including everything since v0.4.0.
+          CANDIDATE=$( (git tag -l 'v[0-9]*' | grep -vE -- '-rc\.|-nightly\.|\.dev' ; echo "$CURRENT_TAG") \
+            | sort -V -u | grep -B1 -x "$CURRENT_TAG" | head -1)
+
+          if [ -n "$CANDIDATE" ] && [ "$CANDIDATE" != "$CURRENT_TAG" ] \
+             && git merge-base --is-ancestor "$CANDIDATE" "$CURRENT_TAG" 2>/dev/null; then
+            echo "range=${CANDIDATE}..${CURRENT_TAG}" >> "$GITHUB_OUTPUT"
+            echo "Changelog range: ${CANDIDATE} (immediately-preceding final tag) .. ${CURRENT_TAG}"
+            exit 0
+          fi
+
+          # The immediately-preceding tag exists but is NOT a real ancestor --
+          # e.g. the previous cycle's merge-back PR (release/vX.Y -> main)
+          # hadn't landed by the time this release branch was cut, so its tag
+          # lives on a diverged line (confirmed via
+          # `git merge-base --is-ancestor v0.4.0 v0.5.0` returning false on
+          # this repo; see PR #1561 review). Do NOT keep searching further
+          # back for any older ancestor tag -- that would silently re-include
+          # an entire prior cycle's changes (e.g. landing on v0.3.1 and
+          # re-listing all of v0.4.0's content in v0.5.0's notes). Fall back
+          # instead to the fork point of the *previous release branch* off
+          # main, which is always a real ancestor since main only grows
+          # forward, and correctly scopes to "what's new since that branch
+          # point" without re-including anything already released.
+          CURRENT_BRANCH="${{ steps.branch.outputs.base }}"
+
+          if [ "$CURRENT_BRANCH" = "main" ]; then
+            echo "range=" >> "$GITHUB_OUTPUT"
+            echo "Tag is on main, not a release branch, and the preceding tag isn't an ancestor; falling back to --latest"
+            exit 0
+          fi
+
+          PREV_BRANCH=$(git branch -r --list 'origin/release/v*' \
+            | sed 's#^[* ]*origin/##' \
+            | sort -V \
+            | grep -B1 -x "$CURRENT_BRANCH" | head -1)
+
+          if [ -z "$PREV_BRANCH" ] || [ "$PREV_BRANCH" = "$CURRENT_BRANCH" ]; then
+            echo "range=" >> "$GITHUB_OUTPUT"
+            echo "No previous release branch found (first release); falling back to --latest"
+            exit 0
+          fi
+
+          START=$(git merge-base origin/main "origin/$PREV_BRANCH")
+          echo "range=${START}..${CURRENT_TAG}" >> "$GITHUB_OUTPUT"
+          echo "Changelog range: ${START} (${PREV_BRANCH}'s fork point from main) .. ${CURRENT_TAG}"
+
+
+
       - name: Generate release notes
         uses: orhun/git-cliff-action@v4
         id: cliff-latest
         with:
           config: cliff.toml
-          args: --latest --strip header
+          args: ${{ steps.range.outputs.range && format('{0} --strip header', steps.range.outputs.range) || '--latest --strip header' }}
         env:
           OUTPUT: RELEASE_NOTES.md
           GITHUB_REPO: ${{ github.repository }}
@@ -80,26 +152,12 @@ jobs:
           fi
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
-      - name: Determine base branch for tag
-        id: base-branch
-        if: steps.changelog-diff.outputs.changed == 'true'
-        run: |
-          git fetch origin '+refs/heads/*:refs/remotes/origin/*'
-          BASE=$(git branch -r --contains "${{ steps.tag.outputs.tag }}" \
-            | sed 's#^[* ]*origin/##' \
-            | grep -E '^release/v[0-9]' | sort -V | tail -1)
-          if [ -z "$BASE" ]; then
-            BASE="main"
-          fi
-          echo "base=$BASE" >> "$GITHUB_OUTPUT"
-          echo "Using base branch: $BASE"
-
       - name: Open PR to update CHANGELOG.md
         if: steps.changelog-diff.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          base: ${{ steps.base-branch.outputs.base }}
+          base: ${{ steps.branch.outputs.base }}
           commit-message: "docs: update CHANGELOG.md for ${{ steps.tag.outputs.tag }}"
           title: "docs: update CHANGELOG.md for ${{ steps.tag.outputs.tag }}"
           body: "Auto-generated by changelog.yml via git-cliff. Both `main` and release branches require PRs (org ruleset), so this can't be pushed directly."
