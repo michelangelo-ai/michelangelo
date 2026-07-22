@@ -1,12 +1,12 @@
-# Michelangelo Serving
+# Michelangelo AI Serving
 
-Michelangelo provides a unified way to deploy and serve ML models on Kubernetes. This guide covers the architecture, controller lifecycles, and core concepts that operators and contributors should understand.
+Michelangelo AI provides a unified way to deploy and serve ML models on Kubernetes. This guide covers the architecture, controller lifecycles, and core concepts that operators and contributors should understand.
 
-## **What Is Michelangelo Serving?**
+## **What Is Michelangelo AI Serving?**
 
-Michelangelo Serving is a control plane for managing ML model serving infrastructure. It handles the complete lifecycle of inference servers and model deployments, from provisioning to traffic routing to cleanup.
+Michelangelo AI Serving is a control plane for managing ML model serving infrastructure. It handles the complete lifecycle of inference servers and model deployments, from provisioning to traffic routing to cleanup.
 
-Users define *what to deploy*, and Michelangelo handles:
+Users define *what to deploy*, and Michelangelo AI handles:
 
 * Provisioning inference server infrastructure (Deployments, Services)
 * Managing model configurations
@@ -16,7 +16,7 @@ Users define *what to deploy*, and Michelangelo handles:
 
 ## **Architecture**
 
-The image below displays the Michelangelo (MA) architecture for deploying and running inference on a model.
+The image below displays the Michelangelo AI (MA) architecture for deploying and running inference on a model.
 
 ![Architecture Overview](./images/arch.png)
 
@@ -31,7 +31,7 @@ The InferenceServer controller manages the infrastructure that serves models:
 1. **Create**
    User submits an InferenceServer resource.
 2. **Provision**
-   Michelangelo provisions the inference server infrastructure.
+   Michelangelo AI provisions the inference server infrastructure.
 3. **Health Check**
    The system monitors deployment readiness and server health.
 4. **Serve**
@@ -44,7 +44,7 @@ The InferenceServer controller manages the infrastructure that serves models:
 The Deployment controller manages model rollouts to inference servers:
 
 1. **Validation**
-   Michelangelo validates the model and target server.
+   Michelangelo AI validates the model and target server.
 2. **Asset Preparation**
    Model artifacts are staged for loading.
 3. **Resource Acquisition**

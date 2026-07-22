@@ -1,6 +1,6 @@
 # Experiment Tracking Setup
 
-Michelangelo does not bundle an experiment tracking server — it connects to one you already run. This guide shows platform operators how to expose that server to task pods running inside Michelangelo's compute clusters.
+Michelangelo AI does not bundle an experiment tracking server — it connects to one you already run. This guide shows platform operators how to expose that server to task pods running inside Michelangelo AI's compute clusters.
 
 It covers network setup, ConfigMap injection, credential handling, and the boundary between what operators configure and what users do in their `@uniflow.task()` code.
 
@@ -8,10 +8,10 @@ It covers network setup, ConfigMap injection, credential handling, and the bound
 
 ## How Experiment Tracking Works with Uniflow Tasks
 
-Experiment tracking in Michelangelo follows a clear separation of concerns:
+Experiment tracking in Michelangelo AI follows a clear separation of concerns:
 
 - **Operators** configure network access and make the tracking server URI available to task pods via environment variables or ConfigMaps.
-- **Users** call their tracking server's client library inside `@uniflow.task()` functions. Michelangelo does not intercept or wrap these calls.
+- **Users** call their tracking server's client library inside `@uniflow.task()` functions. Michelangelo AI does not intercept or wrap these calls.
 
 ```text
 ┌─────────────────────────────────────────────┐
@@ -41,7 +41,7 @@ Experiment tracking in Michelangelo follows a clear separation of concerns:
 
 ## Step 1: Verify Network Reachability
 
-Task pods run inside the compute cluster namespace registered with Michelangelo (see [Register a Compute Cluster](setup/register-a-compute-cluster-to-michelangelo-control-plane.md)). Confirm that pods in that namespace can reach your tracking server.
+Task pods run inside the compute cluster namespace registered with Michelangelo AI (see [Register a Compute Cluster](setup/register-a-compute-cluster-to-michelangelo-control-plane.md)). Confirm that pods in that namespace can reach your tracking server.
 
 ```bash
 # Run a connectivity test from a pod in the compute namespace
@@ -92,7 +92,7 @@ spec:
 
 ## Step 2: Add the Tracking URI to the `michelangelo-config` ConfigMap
 
-Michelangelo injects environment variables into every task pod (Ray head, Ray workers, Spark drivers, and Spark executors) via the `michelangelo-config` ConfigMap. This ConfigMap is mounted as an `envFrom` source, so every key in it becomes an environment variable in the pod.
+Michelangelo AI injects environment variables into every task pod (Ray head, Ray workers, Spark drivers, and Spark executors) via the `michelangelo-config` ConfigMap. This ConfigMap is mounted as an `envFrom` source, so every key in it becomes an environment variable in the pod.
 
 You created this ConfigMap when you [registered the compute cluster](setup/register-a-compute-cluster-to-michelangelo-control-plane.md). Add the tracking server URI as a new key:
 
@@ -181,7 +181,7 @@ Users are responsible for:
 
 ## Multi-Cluster Environments
 
-If you have registered multiple compute clusters with Michelangelo, ensure the tracking server URI is injected consistently across all clusters. Each cluster's compute namespace needs the ConfigMap and any required NetworkPolicy entries.
+If you have registered multiple compute clusters with Michelangelo AI, ensure the tracking server URI is injected consistently across all clusters. Each cluster's compute namespace needs the ConfigMap and any required NetworkPolicy entries.
 
 You can manage this with a Kustomize overlay per cluster:
 

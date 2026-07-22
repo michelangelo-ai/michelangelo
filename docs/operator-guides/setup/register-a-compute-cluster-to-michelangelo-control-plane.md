@@ -1,11 +1,11 @@
 # Register a Compute Cluster
 
-Register an existing compute Kubernetes cluster with the Michelangelo control plane to enable running Ray jobs.
+Register an existing compute Kubernetes cluster with the Michelangelo AI control plane to enable running Ray jobs.
 
 ### Prerequisites
 - Existing Kubernetes compute cluster accessible via kubectl
 - KubeRay operator installed in the compute cluster (`ray-system` namespace)
-- Michelangelo control plane running
+- Michelangelo AI control plane running
 - Access to object storage (S3/MinIO) used by the control plane
 - RBAC manifest for service account with permissions to run Ray Jobs / Ray Clusters. 
 - Network connectivity between control plane and compute cluster (control plane must be able to reach compute cluster API server)

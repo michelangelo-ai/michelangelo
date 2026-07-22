@@ -1,6 +1,6 @@
 # Configuration API
 
-Michelangelo UI is configuration-driven, meaning common UI patterns are abstracted into configuration objects. Think of these as component APIs or contracts that cover the standard cases for ML platform interfaces.
+Michelangelo AI UI is configuration-driven, meaning common UI patterns are abstracted into configuration objects. Think of these as component APIs or contracts that cover the standard cases for ML platform interfaces.
 
 **Configuration objects are simply structured interfaces for defining UI behavior:**
 - React developers: Component props interfaces
@@ -11,7 +11,7 @@ We've identified common patterns in ML platform UIs (entity tables, detail views
 
 ## How Configuration Works
 
-Configuration in Michelangelo UI follows a hierarchy:
+Configuration in Michelangelo AI UI follows a hierarchy:
 
 **Phase → Entity → View**
 
@@ -126,7 +126,7 @@ See `javascript/packages/core/config/entities/*/list.ts` and `*/detail.ts` for c
 
 **Engineering best practice: Dual interfaces**
 
-When building new UI components for Michelangelo, provide both interfaces:
+When building new UI components for Michelangelo AI, provide both interfaces:
 
 ```typescript
 // Base component - standard React props

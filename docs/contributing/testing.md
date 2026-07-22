@@ -1,6 +1,6 @@
 # Testing Strategy
 
-Michelangelo uses a three-level test strategy. Understanding when to write each type of test — and how to run them — is the most important thing to know before opening a PR.
+Michelangelo AI uses a three-level test strategy. Understanding when to write each type of test — and how to run them — is the most important thing to know before opening a PR.
 
 ## Test Levels
 
@@ -41,9 +41,9 @@ Use `unittest.mock` or `pytest-mock` for mocking Python dependencies.
 
 ### Integration Tests (Sandbox)
 
-Integration tests validate end-to-end flows that require the Michelangelo control plane — API server, controller manager, and worker all running together.
+Integration tests validate end-to-end flows that require the Michelangelo AI control plane — API server, controller manager, and worker all running together.
 
-**Setup**: The sandbox creates a local Kubernetes cluster (k3d) with all Michelangelo components:
+**Setup**: The sandbox creates a local Kubernetes cluster (k3d) with all Michelangelo AI components:
 
 ```bash
 cd python

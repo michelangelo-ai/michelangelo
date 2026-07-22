@@ -4,7 +4,7 @@ sidebar_position: 4
 
 # Set Up Your Python IDE
 
-Get your editor configured for building ML pipelines with the Michelangelo SDK. This takes about 5 minutes if you've already run `poetry install`.
+Get your editor configured for building ML pipelines with the Michelangelo AI SDK. This takes about 5 minutes if you've already run `poetry install`.
 
 ## Prerequisites
 
@@ -15,9 +15,9 @@ cd <repo-root>/python
 poetry install
 ```
 
-This creates a `.venv` directory with all Michelangelo packages. Your IDE needs to use this environment for autocomplete and import resolution to work.
+This creates a `.venv` directory with all Michelangelo AI packages. Your IDE needs to use this environment for autocomplete and import resolution to work.
 
-> **Tip**: Replace `<repo-root>` with the path where you cloned the Michelangelo repository (e.g., `~/michelangelo`).
+> **Tip**: Replace `<repo-root>` with the path where you cloned the Michelangelo AI repository (e.g., `~/michelangelo`).
 
 ---
 
@@ -39,7 +39,7 @@ This creates a `.venv` directory with all Michelangelo packages. Your IDE needs 
 2. Go to **Settings > Project > Python Interpreter**.
 3. Click the gear icon and select **Add Interpreter > Existing**.
 4. Point to the Poetry environment (usually at `python/.venv/bin/python`).
-5. PyCharm should automatically detect imports and provide autocomplete for the Michelangelo SDK.
+5. PyCharm should automatically detect imports and provide autocomplete for the Michelangelo AI SDK.
 
 ---
 
@@ -66,4 +66,4 @@ If your editor can't resolve the `michelangelo` import:
 ## What's next?
 
 - **Ready to build?** [Set up your local sandbox](./sandbox-setup.md) and follow [Getting Started with Pipelines](../user-guides/getting-started/getting-started.md)
-- **Contributing to Michelangelo's Go backend?** See [Go and Bazel Development Setup](../contributing/dev-environment.md)
+- **Contributing to Michelangelo AI's Go backend?** See [Go and Bazel Development Setup](../contributing/dev-environment.md)

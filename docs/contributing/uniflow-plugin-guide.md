@@ -4,7 +4,7 @@ This guide walks you through the end-to-end process of building a new Uniflow pl
 
 ## Architecture Overview
 
-Uniflow is Michelangelo's workflow execution system. Users write Python workflows using `@uniflow.task` and `@uniflow.workflow` decorators. At submission time, these Python workflows are **transpiled to Starlark** — a simplified Python-like scripting language — and executed remotely on a Cadence/Temporal worker.
+Uniflow is Michelangelo AI's workflow execution system. Users write Python workflows using `@uniflow.task` and `@uniflow.workflow` decorators. At submission time, these Python workflows are **transpiled to Starlark** — a simplified Python-like scripting language — and executed remotely on a Cadence/Temporal worker.
 
 **Plugins** extend Starlark with domain-specific capabilities (creating Ray clusters, submitting Spark jobs, triggering pipeline runs, etc.). A plugin has three layers:
 

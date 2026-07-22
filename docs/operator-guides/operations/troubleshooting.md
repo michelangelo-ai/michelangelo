@@ -4,7 +4,7 @@ sidebar_position: 3
 
 # Troubleshooting
 
-This guide is for platform operators diagnosing issues with a Michelangelo deployment. All `kubectl` commands assume access to the control plane cluster.
+This guide is for platform operators diagnosing issues with a Michelangelo AI deployment. All `kubectl` commands assume access to the control plane cluster.
 
 ---
 
@@ -217,7 +217,7 @@ kubectl -n ma-system get serviceaccount michelangelo-controllermgr -o yaml \
 
 ## UI not loading or API calls failing
 
-**Symptoms**: The Michelangelo UI shows a blank page, a CORS error in the browser console, or API calls return 502/504.
+**Symptoms**: The Michelangelo AI UI shows a blank page, a CORS error in the browser console, or API calls return 502/504.
 
 **Diagnostics**:
 ```bash

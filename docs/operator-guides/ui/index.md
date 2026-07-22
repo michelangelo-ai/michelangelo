@@ -1,6 +1,6 @@
-# Michelangelo UI
+# Michelangelo AI UI
 
-Michelangelo's User Interface (UI) provides a standard, code free ML development experience. It guides users through five phases in the ML development lifecycle, from developing your first model to productionization.
+Michelangelo AI's User Interface (UI) provides a standard, code free ML development experience. It guides users through five phases in the ML development lifecycle, from developing your first model to productionization.
 
 ## Getting Started
 
@@ -10,10 +10,10 @@ Production deployment using sandbox manifests as templates for your infrastructu
 - **For: Platform operators**
 - **Use case: Full ML platform deployment with UI**
 
-→ **[Deploying Michelangelo UI](./deploying-michelangelo-ui.md)**
+→ **[Deploying Michelangelo AI UI](./deploying-michelangelo-ui.md)**
 
 ### Integrate with Existing React App
-Add Michelangelo components to your existing React application as npm dependencies that connect to your infrastructure.
+Add Michelangelo AI components to your existing React application as npm dependencies that connect to your infrastructure.
 
 - **For: Frontend developers, application teams**
 - **Use case: Separate frontend/backend infrastructure, or embedding ML capabilities in existing developer tools**
@@ -30,7 +30,7 @@ Set up a development environment for contributing to the UI codebase.
 
 ## Architecture
 
-The Michelangelo UI is built with React and communicates with the Michelangelo API server through gRPC-Web. The UI supports two main consumption methods:
+The Michelangelo AI UI is built with React and communicates with the Michelangelo AI API server through gRPC-Web. The UI supports two main consumption methods:
 
 - **Containerized deployment**: Complete UI deployed to Kubernetes clusters
 - **Component integration**: Individual React components embedded in existing applications

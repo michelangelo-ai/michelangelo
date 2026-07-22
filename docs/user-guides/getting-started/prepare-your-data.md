@@ -1,6 +1,6 @@
 # Data Preparation Guide
 
-Learn how to prepare data in Uniflow for the ML pipeline on Michelangelo using Ray's distributed processing capabilities.
+Learn how to prepare data in Uniflow for the ML pipeline on Michelangelo AI using Ray's distributed processing capabilities.
 
 ## What You'll Learn
 
@@ -52,9 +52,9 @@ train_ds = dataset.filter(lambda x: x["date"] <= "2023-01-01")
 val_ds = dataset.filter(lambda x: "2023-01-01" < x["date"] <= "2023-06-01")
 ```
 
-## DatasetVariable: Michelangelo's Dataset Abstraction
+## DatasetVariable: Michelangelo AI's Dataset Abstraction
 
-Michelangelo provides `DatasetVariable` to handle datasets across different frameworks with automatic storage and serialization.
+Michelangelo AI provides `DatasetVariable` to handle datasets across different frameworks with automatic storage and serialization.
 
 ### Flexible Dataset Usage
 

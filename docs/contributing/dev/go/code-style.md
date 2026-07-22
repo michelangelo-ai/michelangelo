@@ -4,7 +4,7 @@ sidebar_position: 2
 
 # Go Code Style Guide
 
-This guide covers Go code conventions used across the Michelangelo codebase. It complements the [error handling guide](error-handling.md) with broader patterns: package structure, interface design, logging, and test organization.
+This guide covers Go code conventions used across the Michelangelo AI codebase. It complements the [error handling guide](error-handling.md) with broader patterns: package structure, interface design, logging, and test organization.
 
 ---
 
@@ -131,7 +131,7 @@ func (r *Registry) GetBackend(backendType v2pb.BackendType) (Backend, error) {
 
 ## Logging Conventions
 
-Michelangelo uses two loggers depending on the context:
+Michelangelo AI uses two loggers depending on the context:
 
 | Logger | Package | Used in |
 |--------|---------|---------|

@@ -12,7 +12,7 @@
 
 Before you get started, make sure you have the following in place:
 
-- **Michelangelo CLI (`ma`) installed** — You'll use the CLI to register and manage your triggers. If you haven't set it up yet, see the [CLI guide](../reference/cli.md) for installation instructions.
+- **Michelangelo AI CLI (`ma`) installed** — You'll use the CLI to register and manage your triggers. If you haven't set it up yet, see the [CLI guide](../reference/cli.md) for installation instructions.
 - **A running sandbox environment with a project configured** — Triggers run inside a project (set via the `namespace` field in your YAML), so you'll need your sandbox environment up and running. Check out the [Sandbox Setup Guide](../../getting-started/sandbox-setup.md) if you need help with this.
 - **A registered pipeline with at least one revision** — Triggers are linked to a specific pipeline revision, so make sure your pipeline is registered before continuing. See [Train and Register a Model](../train-and-deploy-models/train-and-register-a-model.md) for a walkthrough.
 - **Access to MA Studio UI** *(optional)* — The Studio UI is handy for monitoring your triggers and pipeline runs, but it's not required to complete the setup.

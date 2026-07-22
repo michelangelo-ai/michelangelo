@@ -1,6 +1,6 @@
-# Building Michelangelo from Source
+# Building Michelangelo AI from Source
 
-To contribute to the Michelangelo repository, follow the instructions below to build from the main branch.
+To contribute to the Michelangelo AI repository, follow the instructions below to build from the main branch.
 
 ## Architecture for Contributors
 
@@ -8,7 +8,7 @@ Before diving into build commands, here is a map of the main subsystems and wher
 
 | Subsystem | Language | Directory | Description |
 |-----------|----------|-----------|-------------|
-| **API Server** | Go | `go/cmd/apiserver/` | Central gRPC server; CRUD for all Michelangelo resources |
+| **API Server** | Go | `go/cmd/apiserver/` | Central gRPC server; CRUD for all Michelangelo AI resources |
 | **Controller Manager** | Go | `go/cmd/controllermgr/` | Kubernetes controllers (RayCluster, SparkJob, InferenceServer, …) |
 | **Worker** | Go | `go/cmd/worker/` | Temporal/Cadence workflow and activity workers |
 | **Ingester** | Go | `go/components/ingester/` | Watches Kubernetes events and propagates state |
@@ -70,7 +70,7 @@ The Go services live under `go/cmd/` and are built with Bazel.
 
 ### API Server
 
-The unified gRPC server for all Michelangelo APIs. It provides CRUD operations for API resource types, manages resource schemas, and invokes registered API hooks.
+The unified gRPC server for all Michelangelo AI APIs. It provides CRUD operations for API resource types, manages resource schemas, and invokes registered API hooks.
 
 ```bash
 bazel run //go/cmd/apiserver
@@ -97,7 +97,7 @@ bazel run //go/cmd/worker
 
 ### Controller Manager
 
-The Kubernetes controller manager. Requires a Kubernetes config connected to a Michelangelo cluster (or a local sandbox).
+The Kubernetes controller manager. Requires a Kubernetes config connected to a Michelangelo AI cluster (or a local sandbox).
 
 ```bash
 # Create a sandbox cluster first

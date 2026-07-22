@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Overview
 
-Michelangelo is an end-to-end ML platform that manages the full model lifecycle — training, versioning, deployment, and monitoring — on Kubernetes, so ML teams can ship models without building infrastructure from scratch.
+Michelangelo AI is an end-to-end ML platform that manages the full model lifecycle — training, versioning, deployment, and monitoring — on Kubernetes, so ML teams can ship models without building infrastructure from scratch.
 
 ## Choose Your Path
 
@@ -17,7 +17,7 @@ Pick the approach that matches your workflow and expertise:
 - Need to **prototype rapidly** before investing in custom code
 
 **Quick Start**:
-1. Navigate to MA Studio (available at your Michelangelo deployment URL, or `http://localhost:8090` in the [local sandbox](./sandbox-setup.md))
+1. Navigate to MA Studio (available at your Michelangelo AI deployment URL, or `http://localhost:8090` in the [local sandbox](./sandbox-setup.md))
 2. Create a new project and define your use case
 3. Prepare your dataset using the Data Prep interface
 4. Train a model using pre-built templates
@@ -33,9 +33,9 @@ Pick the approach that matches your workflow and expertise:
 - Want to apply **software engineering practices** to ML (testing, version control, CI/CD)
 
 **Quick Start**:
-1. Install Michelangelo SDK: `pip install michelangelo`
+1. Install Michelangelo AI SDK: `pip install michelangelo`
 2. Define your workflow using Uniflow decorators (`@uniflow.task`, `@uniflow.workflow`)
-3. Submit a dev-run to the Michelangelo API server (see [Sandbox Setup](./sandbox-setup.md))
+3. Submit a dev-run to the Michelangelo AI API server (see [Sandbox Setup](./sandbox-setup.md))
 4. Monitor execution through the UI
 
 **Best for**: Custom architectures, multi-stage pipelines, A/B testing frameworks, feature engineering at scale
@@ -49,15 +49,15 @@ Many teams start with the **UI for initial experiments**, then transition to **c
 
 ## ML Workflow Mapping
 
-If you're coming from other ML platforms, here's how familiar concepts map to Michelangelo:
+If you're coming from other ML platforms, here's how familiar concepts map to Michelangelo AI:
 
-| Your Workflow | Familiar Tool | Michelangelo Equivalent |
+| Your Workflow | Familiar Tool | Michelangelo AI Equivalent |
 |---------------|---------------|-------------------------|
 | **Data Preparation** | Pandas, Spark notebooks | **MA Studio Data Prep** or **Uniflow tasks** with Ray/Spark * |
 | **Experiment Tracking** | MLflow, Weights & Biases | **Model Registry** with automatic versioning |
 | **Model Training** | Custom scripts, Kubeflow Pipelines | **MA Studio Training** (UI) or **CanvasFlex/Uniflow workflows** (code) |
 | **Hyperparameter Tuning** | Optuna, Ray Tune | **Uniflow tasks** with Ray Tune * |
-| **Model Storage** | S3 buckets, model registries | **Michelangelo Model Registry** with metadata & plugin storage |
+| **Model Storage** | S3 buckets, model registries | **Michelangelo AI Model Registry** with metadata & plugin storage |
 | **Batch Inference** | Airflow + custom scripts | **Deployment to batch endpoint** with offline inference pipeline and Ray / Triton Inference * |
 | **Online Serving** | TorchServe, TensorFlow Serving | **Deployment to inference server** with Triton Inference Server * |
 | **Monitoring** | Prometheus + Grafana | **Model Excellence Scores** + built-in monitoring * |
@@ -105,11 +105,11 @@ def training_pipeline(data_path: str):
 
 ## Architecture
 
-Machine learning at scale requires coordinating many moving parts: data preparation, experiment tracking, model training, deployment, and monitoring. Michelangelo provides an integrated ecosystem that handles all of these concerns, enabling teams to focus on building great models rather than managing infrastructure.
+Machine learning at scale requires coordinating many moving parts: data preparation, experiment tracking, model training, deployment, and monitoring. Michelangelo AI provides an integrated ecosystem that handles all of these concerns, enabling teams to focus on building great models rather than managing infrastructure.
 
-The diagram below shows how Michelangelo's components work together:
+The diagram below shows how Michelangelo AI's components work together:
 
-![Michelangelo Ecosystem Diagram](./images/michelangelo-ecosystem.png)
+![Michelangelo AI Ecosystem Diagram](./images/michelangelo-ecosystem.png)
 
 ## Frequently Asked Questions
 

@@ -7,7 +7,7 @@ sidebar_label: "Protocol Buffers"
 
 ## Overview
 
-All Michelangelo API resources are defined in `.proto` files. The gRPC API, message types, and service contracts all live here. Proto files are the source of truth for what resources exist, what fields they have, and what operations the API server supports.
+All Michelangelo AI API resources are defined in `.proto` files. The gRPC API, message types, and service contracts all live here. Proto files are the source of truth for what resources exist, what fields they have, and what operations the API server supports.
 
 ## Module Structure
 

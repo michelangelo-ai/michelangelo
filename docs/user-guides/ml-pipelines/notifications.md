@@ -1,11 +1,11 @@
 # Pipeline Notifications
 
-Stay informed about your ML pipeline outcomes without constantly checking the dashboard. Michelangelo can send you **email or Slack notifications** whenever a pipeline run succeeds, fails, gets stopped, or hits any other terminal state.
+Stay informed about your ML pipeline outcomes without constantly checking the dashboard. Michelangelo AI can send you **email or Slack notifications** whenever a pipeline run succeeds, fails, gets stopped, or hits any other terminal state.
 
 Notifications are configured directly in your resource spec YAML — just add a `notifications` block and you're set. No separate setup, no external webhook configuration, and no per-pipeline toggles to manage.
 
 :::note
-Notifications are configured through YAML specs only. The Michelangelo Studio UI does not currently support notification configuration.
+Notifications are configured through YAML specs only. The Michelangelo AI Studio UI does not currently support notification configuration.
 :::
 
 :::caution Operator Implementation Required
@@ -36,7 +36,7 @@ notifications:
       - "you@example.com"
 ```
 
-That's it! When you apply this spec with `ma apply -f your-spec.yaml`, Michelangelo will send you an email each time the run reaches one of those states.
+That's it! When you apply this spec with `ma apply -f your-spec.yaml`, Michelangelo AI will send you an email each time the run reaches one of those states.
 
 ### CLI Shorthand
 

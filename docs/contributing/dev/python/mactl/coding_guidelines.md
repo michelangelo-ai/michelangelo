@@ -1,6 +1,6 @@
 # Mactl Coding Guidelines
 
-This document outlines coding best practices when developing features for the Michelangelo mactl CLI tool.
+This document outlines coding best practices when developing features for the Michelangelo AI mactl CLI tool.
 
 ## Test File Organization
 

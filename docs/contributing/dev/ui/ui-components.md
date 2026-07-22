@@ -217,7 +217,7 @@ Available field components:
 
 ### Styletron
 
-Michelangelo UI uses [Styletron](https://styletron.org/) with [BaseUI](https://baseweb.design/) for styling:
+Michelangelo AI UI uses [Styletron](https://styletron.org/) with [BaseUI](https://baseweb.design/) for styling:
 
 ```typescript
 import { useStyletron } from 'baseui';

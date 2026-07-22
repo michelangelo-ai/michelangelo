@@ -1,6 +1,6 @@
 # Getting Started with ML Pipelines
 
-Build and run your first ML pipeline on Michelangelo in minutes. This guide walks you through a complete example -- from defining tasks and workflows to running locally and deploying remotely.
+Build and run your first ML pipeline on Michelangelo AI in minutes. This guide walks you through a complete example -- from defining tasks and workflows to running locally and deploying remotely.
 
 ## What you'll build
 
@@ -12,7 +12,7 @@ dataset_cols
             └─▶ train()   # Ray task: trains XGBoost model on the splits
 ```
 
-Each step runs as an isolated, containerized task. Michelangelo handles data passing between them, caches intermediate results, and retries on transient failures — your code stays plain Python.
+Each step runs as an isolated, containerized task. Michelangelo AI handles data passing between them, caches intermediate results, and retries on transient failures — your code stays plain Python.
 
 ## What you'll learn
 
@@ -113,7 +113,7 @@ def feature_prep(
 
 ### Choosing a task type
 
-Michelangelo supports two compute backends for tasks:
+Michelangelo AI supports two compute backends for tasks:
 
 | Task Type | Best For | Example Config |
 | --- | --- | --- |

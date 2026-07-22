@@ -1,6 +1,6 @@
-# Contributing to Michelangelo
+# Contributing to Michelangelo AI
 
-Michelangelo welcomes contributions from the community. This guide is your entry point — it explains what you can contribute, where each part of the codebase lives, and how to get started.
+Michelangelo AI welcomes contributions from the community. This guide is your entry point — it explains what you can contribute, where each part of the codebase lives, and how to get started.
 
 ## Types of Contributions
 
@@ -47,7 +47,7 @@ Understanding which directory owns which subsystem helps you find the right code
 2. **Read [TERMINOLOGY.md](TERMINOLOGY.md)** — understand the vocabulary (Task, Workflow, Pipeline, PipelineRun, etc.) before reading code
 3. **Go backend contributors**: read [Go Key Concepts and Terms](dev/go/key-concepts-and-terms.md) for the package map, key types, and patterns before making changes
 4. **Build from source** — follow [Building from Source](building-michelangelo-ai-from-source.md) to ensure your environment is working
-5. **Set up the sandbox** — `poetry run ma sandbox create` gives you a local Kubernetes cluster with all Michelangelo components running. Most integration tests and manual testing use this.
+5. **Set up the sandbox** — `poetry run ma sandbox create` gives you a local Kubernetes cluster with all Michelangelo AI components running. Most integration tests and manual testing use this.
 
 ## Finding Work
 
@@ -99,7 +99,7 @@ For changes to the Uniflow decorators, task types, or the `ma` CLI.
 → **[Python Coding Guidelines](dev/python/mactl/coding_guidelines.md)**
 
 ### UI changes
-For changes to the Michelangelo web UI.
+For changes to the Michelangelo AI web UI.
 
 → **[UI Development](dev/ui/index.md)** — component patterns, types, configuration system
 

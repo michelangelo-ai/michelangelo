@@ -1,6 +1,6 @@
 # Notification Delivery Setup
 
-Michelangelo does not bundle an email or Slack delivery service — it provides a notification workflow that calls pluggable activity functions when a PipelineRun changes state. By default those functions are no-ops that log a warning. This guide shows platform operators how to wire in real delivery by replacing the default Sink implementations.
+Michelangelo AI does not bundle an email or Slack delivery service — it provides a notification workflow that calls pluggable activity functions when a PipelineRun changes state. By default those functions are no-ops that log a warning. This guide shows platform operators how to wire in real delivery by replacing the default Sink implementations.
 
 It covers the notification flow, Helm configuration, how to implement email and Slack delivery, supported event types, and verification.
 

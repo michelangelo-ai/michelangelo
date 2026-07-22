@@ -1,8 +1,8 @@
 # SQL Key Concepts and Terms
 
-This page is the SQL reference for operators querying Michelangelo's metadata database — schema layout, indexed columns, safe query patterns, and known storage limitations. Michelangelo uses SQL for platform metadata, not for storing training datasets or feature values. The ingester syncs Kubernetes custom resources into MySQL so API and operations workflows can query metadata without depending only on etcd.
+This page is the SQL reference for operators querying Michelangelo AI's metadata database — schema layout, indexed columns, safe query patterns, and known storage limitations. Michelangelo AI uses SQL for platform metadata, not for storing training datasets or feature values. The ingester syncs Kubernetes custom resources into MySQL so API and operations workflows can query metadata without depending only on etcd.
 
-**Audience:** Platform operators running Michelangelo's ingester and metadata DB in production.
+**Audience:** Platform operators running Michelangelo AI's ingester and metadata DB in production.
 
 **Prerequisites:** The ingester must be deployed and connected to MySQL. See [Ingester Controller: Configuration and Operations](./components/ingester-configuration.md) if you haven't done this yet.
 
@@ -29,8 +29,8 @@ The three `.sql` files above are byte-identical copies of the same schema. No au
 
 | Term | Meaning |
 |------|---------|
-| Metadata storage | The optional SQL-backed store for Michelangelo custom resource metadata |
-| Ingester | Controller that watches Michelangelo CRDs and writes their metadata to MySQL |
+| Metadata storage | The optional SQL-backed store for Michelangelo AI custom resource metadata |
+| Ingester | Controller that watches Michelangelo AI CRDs and writes their metadata to MySQL |
 | CRD table | Main table for one Kubernetes custom resource kind, such as `model` or `pipelinerun` |
 | Side table | Per-kind table for labels or annotations, such as `model_labels` or `model_annotations` |
 | Extracted column | A CRD field copied into a dedicated SQL column so callers can read it without parsing the `json` payload. Extracted columns are not necessarily indexed — see [Extracted Columns and SQL Indexes](#extracted-columns-and-sql-indexes) |
@@ -221,7 +221,7 @@ ORDER BY delete_time DESC;
 ## Write Patterns
 
 :::warning
-The ingester owns writes to these tables. Application code should use the Michelangelo API or Kubernetes CRDs rather than writing SQL directly.
+The ingester owns writes to these tables. Application code should use the Michelangelo AI API or Kubernetes CRDs rather than writing SQL directly.
 :::
 
 Each ingester upsert overwrites the row's payload, timestamps, and indexed columns; labels and annotations are replaced wholesale.

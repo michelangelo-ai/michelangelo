@@ -45,7 +45,7 @@ Other top-level directories include `api/`, `auth/`, `base/`, `kubeproto/`, `log
 
 ### API Server (`go/cmd/apiserver/`)
 
-Central gRPC server that acts as the control plane API. It validates resources, stores them as Kubernetes Custom Resource Definitions (CRDs) via the Kubernetes API, and invokes registered API hooks on mutating operations. All Michelangelo resources (InferenceServer, Pipeline, RayJob, SparkJob, etc.) flow through the API server before being persisted.
+Central gRPC server that acts as the control plane API. It validates resources, stores them as Kubernetes Custom Resource Definitions (CRDs) via the Kubernetes API, and invokes registered API hooks on mutating operations. All Michelangelo AI resources (InferenceServer, Pipeline, RayJob, SparkJob, etc.) flow through the API server before being persisted.
 
 ### Controller Manager (`go/cmd/controllermgr/`)
 
@@ -135,14 +135,14 @@ For platform-wide terms (Pipeline, Workflow, Task, etc.), see [TERMINOLOGY.md](.
 |------|---------|
 | **Uniflow** | The Python-authored workflow framework. Workflows are transpiled to Starlark and executed by the worker. |
 | **Reconciler** | A Kubernetes controller that brings actual cluster state to the desired state stored in Kubernetes (etcd) and the metadata store (MySQL). Must be idempotent. |
-| **CRD** | Custom Resource Definition — Michelangelo resources (InferenceServer, Pipeline, RayJob, SparkJob, etc.) are stored as K8s CRDs. |
+| **CRD** | Custom Resource Definition — Michelangelo AI resources (InferenceServer, Pipeline, RayJob, SparkJob, etc.) are stored as K8s CRDs. |
 | **Finalizer** | A Kubernetes mechanism that prevents object deletion until a cleanup step completes. Used by the ingester to drain in-flight data before a resource is removed. |
 | **Activity** | A Cadence unit of work, corresponding to a single task step in a Uniflow workflow. Activities are retried independently on failure. |
 | **Starlark** | A deterministic, Python-like scripting language used as the intermediate representation for Uniflow workflows. Determinism guarantees replay correctness. |
 | **Plugin** | A Go package in `go/worker/plugins/` that extends the Starlark execution environment with domain-specific builtins (e.g., `ray.create_cluster`). |
 | **fx** | Dependency injection framework (`go.uber.org/fx`). Components declare their dependencies via `fx.Provide`, and the framework wires them at startup. |
 | **logr** | The logging interface from controller-runtime (`sigs.k8s.io/controller-runtime/pkg/log`). Used in some controllers (e.g., the ingester); other controllers and most components use `go.uber.org/zap`. |
-| **mamockgen** | Michelangelo's wrapper around `mockgen`. Generates Go mocks from interface definitions. Lives at `tools/mamockgen` in the repo. Invoked via `//go:generate mamockgen Backend` (also accepts multiple names, e.g., `//go:generate mamockgen Publisher Provider`). See [Using Go Mocks in Unit Tests](../../use-go-mocks-in-unit-test.md) for setup. |
+| **mamockgen** | Michelangelo AI's wrapper around `mockgen`. Generates Go mocks from interface definitions. Lives at `tools/mamockgen` in the repo. Invoked via `//go:generate mamockgen Backend` (also accepts multiple names, e.g., `//go:generate mamockgen Publisher Provider`). See [Using Go Mocks in Unit Tests](../../use-go-mocks-in-unit-test.md) for setup. |
 
 ---
 

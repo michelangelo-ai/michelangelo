@@ -1,9 +1,9 @@
-# Deploying Michelangelo UI
+# Deploying Michelangelo AI UI
 
-This guide covers how the Michelangelo UI fits into Michelangelo's Kubernetes deployments and how operators can adapt the configuration for their environments.
+This guide covers how the Michelangelo AI UI fits into Michelangelo AI's Kubernetes deployments and how operators can adapt the configuration for their environments.
 
 ### Context
-The Michelangelo UI is a React-based web application that provides a graphical interface for managing projects, pipelines, and monitoring pipeline runs in the Michelangelo ML platform.
+The Michelangelo AI UI is a React-based web application that provides a graphical interface for managing projects, pipelines, and monitoring pipeline runs in the Michelangelo AI ML platform.
 
 ### Audience
 - Platform operators looking to understand UI deployment requirements
@@ -21,8 +21,8 @@ The Michelangelo UI is a React-based web application that provides a graphical i
 ## Setup
 
 ### Prerequisites
-- Kubernetes cluster with Michelangelo API server deployed
-- Access to Michelangelo UI container image from GitHub Container Registry
+- Kubernetes cluster with Michelangelo AI API server deployed
+- Access to Michelangelo AI UI container image from GitHub Container Registry
 
 ### UI Deployment Requirements
 
@@ -39,7 +39,7 @@ Available from GitHub Container Registry at `ghcr.io/michelangelo-ai/ui`:
 - **Configuration**: Mount `config.json` at `/usr/share/nginx/html/config.json`
 - **Port**: Container serves on port 80
 
-The UI needs to know how to connect to your Michelangelo API server. This is configured through the ConfigMap mounted within the container.
+The UI needs to know how to connect to your Michelangelo AI API server. This is configured through the ConfigMap mounted within the container.
 
 - **API endpoint**: Point to your actual API server location
 

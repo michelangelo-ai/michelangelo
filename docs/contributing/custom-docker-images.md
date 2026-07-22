@@ -1,6 +1,6 @@
 # Custom Docker Images for Feature Branches and Sandbox Testing
 
-> **Who is this for?** This guide is for **contributors** developing Michelangelo's core platform services (API server, controller manager, worker). If you're building ML pipelines using the Michelangelo SDK, you don't need custom Docker images — the default sandbox images work out of the box. See the [Sandbox Setup Guide](../getting-started/sandbox-setup.md) for getting started.
+> **Who is this for?** This guide is for **contributors** developing Michelangelo AI's core platform services (API server, controller manager, worker). If you're building ML pipelines using the Michelangelo AI SDK, you don't need custom Docker images — the default sandbox images work out of the box. See the [Sandbox Setup Guide](../getting-started/sandbox-setup.md) for getting started.
 
 This guide explains two ways to build and test custom images:
 

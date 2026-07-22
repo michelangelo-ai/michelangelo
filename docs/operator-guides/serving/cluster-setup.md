@@ -1,6 +1,6 @@
 # Run Inference on a Local Sandbox
 
-Deploy a model to a Triton inference server running in a local Michelangelo sandbox cluster.
+Deploy a model to a Triton inference server running in a local Michelangelo AI sandbox cluster.
 
 ## Prerequisites
 - **Repository**: Local checkout with `$REPOROOT` pointing to the repo root
@@ -14,7 +14,7 @@ Deploy a model to a Triton inference server running in a local Michelangelo sand
 cd $REPOROOT/python
 ```
 
-2) Create the Michelangelo sandbox:
+2) Create the Michelangelo AI sandbox:
 
 ```bash
 poetry run ma sandbox create
@@ -99,7 +99,7 @@ curl -X POST http://localhost:8080/inference-server-example/bert-cola-deployment
 ```
 
 **Outcome**:
-- Sandbox cluster is running with Michelangelo controllers
+- Sandbox cluster is running with Michelangelo AI controllers
 - Triton inference server is deployed and healthy
 - Model is loaded and serving inference requests
 

@@ -1,12 +1,12 @@
 # Network & Ingress Configuration
 
-This guide covers the network configuration required to deploy Michelangelo in a Kubernetes cluster: Envoy proxy settings (CORS, cluster hostnames), Ingress setup for the API server and UI, TLS with cert-manager, and connectivity requirements for multi-cluster deployments.
+This guide covers the network configuration required to deploy Michelangelo AI in a Kubernetes cluster: Envoy proxy settings (CORS, cluster hostnames), Ingress setup for the API server and UI, TLS with cert-manager, and connectivity requirements for multi-cluster deployments.
 
 ---
 
 ## Overview
 
-Michelangelo's network surface has two external-facing entry points:
+Michelangelo AI's network surface has two external-facing entry points:
 
 | Entry Point | Default Port | Purpose |
 |-------------|-------------|---------|
@@ -272,10 +272,10 @@ spec:
 
 ## Multi-Cluster Network Topology
 
-When Michelangelo's control plane dispatches jobs to registered compute clusters, the following connectivity is required:
+When Michelangelo AI's control plane dispatches jobs to registered compute clusters, the following connectivity is required:
 
 :::warning No automatic failover
-Michelangelo does not automatically fail over if the control plane API server becomes unreachable. Task pods in compute clusters cannot report results, and new jobs cannot be dispatched. Configure alerting on the controller manager's health endpoint (`:8083/healthz`) so on-call is paged before users are impacted — see [Monitoring](../operations/monitoring.md).
+Michelangelo AI does not automatically fail over if the control plane API server becomes unreachable. Task pods in compute clusters cannot report results, and new jobs cannot be dispatched. Configure alerting on the controller manager's health endpoint (`:8083/healthz`) so on-call is paged before users are impacted — see [Monitoring](../operations/monitoring.md).
 :::
 
 ```
@@ -295,7 +295,7 @@ Control Plane Cluster                    Compute Cluster
 | Direction | Source | Destination | Port | Purpose |
 |-----------|--------|-------------|------|---------|
 | Outbound from control plane | Controller Manager | Compute cluster K8s API | 443 | Dispatching RayCluster / SparkApplication CRDs |
-| Outbound from compute | Task pods | Michelangelo API server | 443 | Worker connectivity for result reporting |
+| Outbound from compute | Task pods | Michelangelo AI API server | 443 | Worker connectivity for result reporting |
 | Outbound from compute | Task pods | S3 / object store | 443 | Artifact reads and writes |
 
 ### NetworkPolicy for Control Plane → Compute Cluster
@@ -337,7 +337,7 @@ kubectl exec -it deploy/michelangelo-controllermgr -n michelangelo -- /bin/sh
 curl -sk https://<compute-cluster-api-server>:443/healthz
 ```
 
-From a task pod in the compute cluster, verify it can reach the Michelangelo API server:
+From a task pod in the compute cluster, verify it can reach the Michelangelo AI API server:
 
 ```bash
 kubectl exec -it <task-pod> -n <compute-namespace> -- \
@@ -348,7 +348,7 @@ kubectl exec -it <task-pod> -n <compute-namespace> -- \
 
 ## Checklist
 
-Use this checklist when deploying Michelangelo to a new environment:
+Use this checklist when deploying Michelangelo AI to a new environment:
 
 - [ ] Ingress controller installed and supports HTTP/2 (for gRPC)
 - [ ] API server Ingress created with `backend-protocol: GRPC`
@@ -358,7 +358,7 @@ Use this checklist when deploying Michelangelo to a new environment:
 - [ ] Worker ConfigMap `worker.address` updated to `api.your-domain.com:443`
 - [ ] UI `config.json` `apiBaseUrl` updated to UI domain
 - [ ] Cross-cluster connectivity verified (controller manager → compute K8s API)
-- [ ] Task pod → Michelangelo API server connectivity verified
+- [ ] Task pod → Michelangelo AI API server connectivity verified
 
 ---
 

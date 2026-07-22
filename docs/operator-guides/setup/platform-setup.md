@@ -1,10 +1,10 @@
 # Platform Setup Guide
 
-This guide describes how to configure **Michelangelo server components** in Kubernetes cluster. It focuses on the **configuration surfaces** (ConfigMaps, fields, and key parameters).
+This guide describes how to configure **Michelangelo AI server components** in Kubernetes cluster. It focuses on the **configuration surfaces** (ConfigMaps, fields, and key parameters).
 
 ## Overview
 
-Michelangelo consists of four core server components:
+Michelangelo AI consists of four core server components:
 
 1. **API Server** – Central gRPC API
 2. **Controller Manager** – Kubernetes controllers
@@ -20,11 +20,11 @@ This document explains:
 * What each field means
 * How to apply changes using Kustomize overlays
 
-## Michelangelo Service architecture diagram
+## Michelangelo AI Service architecture diagram
 
-The following diagram shows the relationship between each of the services in Michelangelo eco-system.
+The following diagram shows the relationship between each of the services in Michelangelo AI eco-system.
 
-![Michelangelo Service Architecture](../images/ma-service-architecture.png)
+![Michelangelo AI Service Architecture](../images/ma-service-architecture.png)
 
 ## Server Configuration
 
@@ -181,7 +181,7 @@ You must customize domain-specific values in overlays:
 
 ## Object Store Configuration
 
-Object storage (MinIO / S3) is used by Michelangelo for artifacts and metadata.
+Object storage (MinIO / S3) is used by Michelangelo AI for artifacts and metadata.
 
 ## Controller Manager Object Store Settings
 
@@ -208,7 +208,7 @@ minio:
 
 ## Workflow Engine Configuration (Temporal/Cadence)
 
-Michelangelo uses a workflow engine (Temporal or Cadence) for orchestrating workflows. Most of your current guide examples use **Temporal**, and Cadence is used in sandbox/dev.
+Michelangelo AI uses a workflow engine (Temporal or Cadence) for orchestrating workflows. Most of your current guide examples use **Temporal**, and Cadence is used in sandbox/dev.
 
 ## Controller Manager Workflow Client
 

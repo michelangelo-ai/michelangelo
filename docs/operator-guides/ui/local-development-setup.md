@@ -1,12 +1,12 @@
 # Local Development Setup
 
-This guide covers setting up a local development environment for contributing to the Michelangelo UI codebase. The local development setup provides hot-reload capabilities, debugging tools, and integration with the Michelangelo sandbox environment for UI development and testing.
+This guide covers setting up a local development environment for contributing to the Michelangelo AI UI codebase. The local development setup provides hot-reload capabilities, debugging tools, and integration with the Michelangelo AI sandbox environment for UI development and testing.
 
 ## Key Concepts
 
 **Hot Reload**: Automatic browser refresh when code changes are detected
 **Vite**: Modern build tool providing fast development server and optimized builds
-**Sandbox Environment**: Local Kubernetes cluster with all Michelangelo components
+**Sandbox Environment**: Local Kubernetes cluster with all Michelangelo AI components
 **gRPC-Web**: Protocol enabling browser-based gRPC communication
 **Protobuf Generation**: Creating TypeScript clients from .proto files
 **Yarn Workspaces**: Monorepo management tool for handling multiple packages
@@ -46,7 +46,7 @@ npm install --global yarn
 yarn --version  # Verify installation
 ```
 
-**For full-stack development (optional):** following [Michelangelo Sandbox Getting Started](../../getting-started/sandbox-setup.md).
+**For full-stack development (optional):** following [Michelangelo AI Sandbox Getting Started](../../getting-started/sandbox-setup.md).
 
 **Note:** The sandbox is optional for UI development. You can develop UI components and pages without a running API server by mocking responses or working with static data.
 
@@ -111,4 +111,4 @@ A: Yes, you can work with mock data or specifically on data-independent function
 - [Vite Documentation](https://vitejs.dev/)
 - [Yarn Workspaces Guide](https://classic.yarnpkg.com/en/docs/workspaces/)
 - [Node Version Manager (nvm)](https://github.com/nvm-sh/nvm)
-- [Michelangelo Sandbox Documentation](../../getting-started/sandbox-setup.md)
+- [Michelangelo AI Sandbox Documentation](../../getting-started/sandbox-setup.md)

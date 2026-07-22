@@ -14,7 +14,7 @@ Run a Uniflow pipeline that schedules Ray jobs on the compute Kubernetes cluster
 cd $REPOROOT/python
 ```
 
-2) Create the Michelangelo sandbox and compute cluster:
+2) Create the Michelangelo AI sandbox and compute cluster:
 
 ```bash
 poetry run ma sandbox create --create-compute-cluster

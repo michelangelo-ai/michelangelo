@@ -1,12 +1,12 @@
 # Authentication & Identity
 
-This guide is for platform operators and cluster administrators configuring authentication for a Michelangelo deployment.
+This guide is for platform operators and cluster administrators configuring authentication for a Michelangelo AI deployment.
 
-**Prerequisites**: A running Michelangelo control plane (see [Platform Setup](./platform-setup.md)) and `kubectl` access to the `ma-system` namespace.
+**Prerequisites**: A running Michelangelo AI control plane (see [Platform Setup](./platform-setup.md)) and `kubectl` access to the `ma-system` namespace.
 
-Authentication in Michelangelo operates at two levels:
+Authentication in Michelangelo AI operates at two levels:
 
-- **User authentication** — end users authenticate to the Michelangelo API and UI via an identity provider (IdP)
+- **User authentication** — end users authenticate to the Michelangelo AI API and UI via an identity provider (IdP)
 - **Service authentication** — internal services (worker, controller manager) authenticate to each other using Kubernetes service account tokens
 
 This guide covers configuring both, plus RBAC authorization and multi-tenant isolation.
@@ -31,7 +31,7 @@ Once RBAC is enabled, users without a RoleBinding will be denied access to all r
 
 ## Connecting an Identity Provider (OIDC)
 
-Michelangelo supports any OIDC-compliant identity provider. Configure it in the API server ConfigMap:
+Michelangelo AI supports any OIDC-compliant identity provider. Configure it in the API server ConfigMap:
 
 ```yaml
 apiserver:
@@ -58,7 +58,7 @@ apiserver:
 ### Google Workspace
 
 1. In Google Cloud Console, create an **OAuth 2.0 Client ID** of type Web application
-2. Add your Michelangelo Envoy URL as an authorized redirect URI
+2. Add your Michelangelo AI Envoy URL as an authorized redirect URI
 3. Set the issuer URL:
    ```yaml
    oidc:
@@ -71,7 +71,7 @@ apiserver:
 ### Azure Active Directory
 
 1. Register a new application in the Azure portal
-2. Set the redirect URI to your Michelangelo Envoy callback URL
+2. Set the redirect URI to your Michelangelo AI Envoy callback URL
 3. Note the **Application (client) ID** and **Directory (tenant) ID**:
    ```yaml
    oidc:
@@ -105,11 +105,11 @@ apiserver:
 
 ## Multi-Factor Authentication
 
-MFA is enforced at the IdP level, not within Michelangelo. Configure MFA policies in your identity provider's admin console. Michelangelo requires users to complete the full IdP authentication flow — including MFA — before issuing a session token.
+MFA is enforced at the IdP level, not within Michelangelo AI. Configure MFA policies in your identity provider's admin console. Michelangelo AI requires users to complete the full IdP authentication flow — including MFA — before issuing a session token.
 
 ## Granting Access with RBAC
 
-After RBAC is enabled, users need a `RoleBinding` or `ClusterRoleBinding` to access Michelangelo resources.
+After RBAC is enabled, users need a `RoleBinding` or `ClusterRoleBinding` to access Michelangelo AI resources.
 
 ### Grant a user read access to a project namespace
 
@@ -173,11 +173,11 @@ spec:
           kubernetes.io/metadata.name: ma-system   # Control plane needs access
 ```
 
-This allows traffic within the team's namespace and from the Michelangelo control plane, but blocks all other namespaces.
+This allows traffic within the team's namespace and from the Michelangelo AI control plane, but blocks all other namespaces.
 
 ## Service Authentication (Internal)
 
-Michelangelo services authenticate to each other using Kubernetes service account tokens.
+Michelangelo AI services authenticate to each other using Kubernetes service account tokens.
 
 **Worker → API server**: Configured via `worker.useTLS: true` in the worker ConfigMap. The worker uses its Kubernetes pod service account token. Do not set `useTLS: false` in production.
 
@@ -192,7 +192,7 @@ worker:
 
 ## Disabling Direct Storage Access
 
-Do not allow users or services to directly access etcd or object storage (S3/MinIO) in ways that bypass the Michelangelo API. For S3 access:
+Do not allow users or services to directly access etcd or object storage (S3/MinIO) in ways that bypass the Michelangelo AI API. For S3 access:
 
 - Set `useIam: true` in the controller manager ConfigMap — this uses IAM roles attached to pods via ServiceAccount annotations, not hardcoded credentials
 - Do not grant `s3:*` to individual users; use IAM policies scoped to specific buckets and prefixes

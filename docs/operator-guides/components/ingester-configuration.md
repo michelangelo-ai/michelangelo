@@ -1,6 +1,6 @@
 # Ingester Controller: Configuration and Operations
 
-The **Ingester** is a Kubernetes controller that syncs all Michelangelo CRDs into MySQL, decoupling metadata storage from etcd. This guide covers deploying, configuring, and operating the ingester on production clusters.
+The **Ingester** is a Kubernetes controller that syncs all Michelangelo AI CRDs into MySQL, decoupling metadata storage from etcd. This guide covers deploying, configuring, and operating the ingester on production clusters.
 
 ## Architecture Overview
 
@@ -73,7 +73,7 @@ Do not enable the ingester if your deployment uses SparkJob. A pre-existing nil 
 
 ### Prerequisites
 
-- Kubernetes cluster with Michelangelo API Server
+- Kubernetes cluster with Michelangelo AI API Server
 - MySQL 5.7+ accessible from the controllermgr pod
 - Schema init Job (provides 39 MySQL tables)
 
@@ -364,5 +364,5 @@ When the ingester is correctly enabled:
 Once the ingester is running, verify steady-state behavior: all 13 CRD kinds appear in MySQL, object counts match etcd, and `update_time` advances on changes. Then:
 
 - **Monitor**: Set up alerting on requeue errors — elevated `workqueue_retries_total` for ingester controllers indicates MySQL connectivity issues. See [Monitoring](../operations/monitoring.md).
-- **Restrict deletes**: Enforce all CRD deletes through the Michelangelo API Server (not raw `kubectl delete`) to prevent orphan rows from pre-existing objects.
+- **Restrict deletes**: Enforce all CRD deletes through the Michelangelo AI API Server (not raw `kubectl delete`) to prevent orphan rows from pre-existing objects.
 - **Review internals**: See [Ingester Internals](../../contributing/ingester-internals.md) for developer documentation on extending the ingester or adding new CRD kinds.

@@ -4,11 +4,11 @@ sidebar_position: 2
 
 # Model Registry Guide
 
-Save, version, and manage trained models using Michelangelo's model packaging system.
+Save, version, and manage trained models using Michelangelo AI's model packaging system.
 
 ## Overview
 
-Michelangelo's model packager turns your trained model into self-contained, versioned artifacts ready for serving or sharing. The packager handles dependency bundling, schema validation, and Triton configuration generation automatically.
+Michelangelo AI's model packager turns your trained model into self-contained, versioned artifacts ready for serving or sharing. The packager handles dependency bundling, schema validation, and Triton configuration generation automatically.
 
 **What the model packager provides:**
 
@@ -220,7 +220,7 @@ from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPa
 | `model_path` | Yes | -- | Path to saved model artifacts |
 | `model_class` | Yes | -- | Fully qualified Python class name (e.g., `"mypackage.models.MyModel"`) |
 | `model_schema` | Yes | -- | `ModelSchema` instance defining inputs and outputs |
-| `model_name` | No | Derived from class | Display name in Michelangelo Studio |
+| `model_name` | No | Derived from class | Display name in Michelangelo AI Studio |
 | `dest_model_path` | No | Auto temp dir | Output directory for the package |
 | `model_revision` | No | `None` | Revision number for versioning |
 | `model_path_source_type` | No | `StorageType.LOCAL` | Storage backend type |

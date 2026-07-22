@@ -4,7 +4,7 @@ This guide explains the internal design of the Ingester controller for developer
 
 ## Overview
 
-The Ingester is a generic Kubernetes controller that watches all 13 Michelangelo CRDs and durably syncs them into MySQL. Its purpose is to decouple metadata storage from etcd: Michelangelo's API Server and query layer can read from MySQL (faster, richer query capabilities) rather than depending solely on etcd. One `Reconciler` instance runs per CRD kind, watching only objects of that type and upserting them into a dedicated MySQL table on every create, update, or delete event.
+The Ingester is a generic Kubernetes controller that watches all 13 Michelangelo AI CRDs and durably syncs them into MySQL. Its purpose is to decouple metadata storage from etcd: Michelangelo AI's API Server and query layer can read from MySQL (faster, richer query capabilities) rather than depending solely on etcd. One `Reconciler` instance runs per CRD kind, watching only objects of that type and upserting them into a dedicated MySQL table on every create, update, or delete event.
 
 ## Finalizer Implementation
 

@@ -7,7 +7,7 @@ sidebar_label: "Bazel Build System"
 
 ## Overview
 
-Michelangelo uses Bazel (version 7.4.1, see `.bazelversion`) for building all Go binaries, generating proto bindings, and running tests. Bazel's hermetic, reproducible builds mean that `bazel build` produces the same output regardless of what is installed on your machine — no implicit toolchain dependencies.
+Michelangelo AI uses Bazel (version 7.4.1, see `.bazelversion`) for building all Go binaries, generating proto bindings, and running tests. Bazel's hermetic, reproducible builds mean that `bazel build` produces the same output regardless of what is installed on your machine — no implicit toolchain dependencies.
 
 ## Key Files
 

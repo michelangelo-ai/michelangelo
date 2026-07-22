@@ -4,11 +4,11 @@ sidebar_position: 1
 
 # Monitoring & Observability
 
-This guide is for platform operators setting up observability for a Michelangelo deployment.
+This guide is for platform operators setting up observability for a Michelangelo AI deployment.
 
-**Prerequisites**: A running Michelangelo control plane with the controller manager deployed. Familiarity with [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator) is helpful but not required.
+**Prerequisites**: A running Michelangelo AI control plane with the controller manager deployed. Familiarity with [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator) is helpful but not required.
 
-Michelangelo components expose Prometheus metrics that integrate with a standard Kubernetes observability stack. This guide covers scrape configuration, key metrics to monitor, alerting rules, and logging configuration.
+Michelangelo AI components expose Prometheus metrics that integrate with a standard Kubernetes observability stack. This guide covers scrape configuration, key metrics to monitor, alerting rules, and logging configuration.
 
 ## Prometheus Scrape Configuration
 
@@ -51,7 +51,7 @@ The API server (port `15566`) exposes standard gRPC metrics. If you have a Prome
 
 ### Envoy Proxy
 
-Envoy can expose an admin stats interface for scraping request counts, latency histograms, and upstream error rates. The admin interface is **not enabled by default** in the Michelangelo Envoy configuration — you must add an `admin:` block to your Envoy ConfigMap to enable it. See the [Envoy admin documentation](https://www.envoyproxy.io/docs/envoy/latest/operations/admin) for setup instructions. Once enabled, add a Prometheus scrape job targeting the admin port.
+Envoy can expose an admin stats interface for scraping request counts, latency histograms, and upstream error rates. The admin interface is **not enabled by default** in the Michelangelo AI Envoy configuration — you must add an `admin:` block to your Envoy ConfigMap to enable it. See the [Envoy admin documentation](https://www.envoyproxy.io/docs/envoy/latest/operations/admin) for setup instructions. Once enabled, add a Prometheus scrape job targeting the admin port.
 
 ---
 
@@ -70,7 +70,7 @@ Envoy can expose an admin stats interface for scraping request counts, latency h
 
 ### Workflow Engine
 
-Workflow metrics are emitted by the Cadence or Temporal server, not by Michelangelo. Consult your workflow engine's documentation for its native Prometheus metrics. Michelangelo's worker-side reconcile metrics are captured under the `pipelinerun_*` counters above.
+Workflow metrics are emitted by the Cadence or Temporal server, not by Michelangelo AI. Consult your workflow engine's documentation for its native Prometheus metrics. Michelangelo AI's worker-side reconcile metrics are captured under the `pipelinerun_*` counters above.
 
 ### Model Serving (Envoy)
 
@@ -241,7 +241,7 @@ Create a Grafana dashboard with these panels to get operational visibility at a 
 
 ## Structured Logging
 
-All Michelangelo components emit structured logs. Configure log format and level in the relevant ConfigMap:
+All Michelangelo AI components emit structured logs. Configure log format and level in the relevant ConfigMap:
 
 ```yaml
 logging:

@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # UI Architecture
 
-Internal architecture reference for contributors to the Michelangelo UI codebase.
+Internal architecture reference for contributors to the Michelangelo AI UI codebase.
 
 ## Technology Stack
 

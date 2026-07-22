@@ -1,6 +1,6 @@
 # Cell Type Reference
 
-Cells are the fundamental building blocks for displaying data in Michelangelo UI. They define how individual fields are rendered across all view types: list views (table columns), detail views (metadata headers), and forms.
+Cells are the fundamental building blocks for displaying data in Michelangelo AI UI. They define how individual fields are rendered across all view types: list views (table columns), detail views (metadata headers), and forms.
 
 **Cell types are powered by the same rendering code** in `components/cell/`, with extensions registered in `components/table/components/table-cell/`.
 

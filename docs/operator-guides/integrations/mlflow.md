@@ -1,14 +1,14 @@
 # MLflow
 
-This guide explains how platform operators can connect an [MLflow Tracking Server](https://mlflow.org/docs/latest/tracking.html) to Michelangelo workloads. MLflow overlaps with two Michelangelo capabilities — experiment tracking and the model registry — so this guide covers both, along with the boundary between what operators configure and what users do in their `@uniflow.task()` code.
+This guide explains how platform operators can connect an [MLflow Tracking Server](https://mlflow.org/docs/latest/tracking.html) to Michelangelo AI workloads. MLflow overlaps with two Michelangelo AI capabilities — experiment tracking and the model registry — so this guide covers both, along with the boundary between what operators configure and what users do in their `@uniflow.task()` code.
 
-Michelangelo does not bundle an MLflow server. This guide assumes you are running a self-hosted MLflow Tracking Server or a managed endpoint (such as Databricks Managed MLflow).
+Michelangelo AI does not bundle an MLflow server. This guide assumes you are running a self-hosted MLflow Tracking Server or a managed endpoint (such as Databricks Managed MLflow).
 
 > **Before you begin:** Complete [Experiment Tracking Setup](../experiment-tracking.md) — the platform-level guide for network reachability, ConfigMap injection, and auth. This MLflow guide builds on those foundations.
 
 ---
 
-## How MLflow Works with Michelangelo
+## How MLflow Works with Michelangelo AI
 
 ```text
 ┌─────────────────────────────────────────────┐
@@ -25,7 +25,7 @@ Michelangelo does not bundle an MLflow server. This guide assumes you are runnin
 └─────────────────────────────────────────────┘
 ```
 
-Michelangelo does not intercept or wrap MLflow calls. Users call the MLflow client directly inside `@uniflow.task()` functions and configure the tracking URI themselves. The operator's job is to ensure the MLflow server is reachable from task pods.
+Michelangelo AI does not intercept or wrap MLflow calls. Users call the MLflow client directly inside `@uniflow.task()` functions and configure the tracking URI themselves. The operator's job is to ensure the MLflow server is reachable from task pods.
 
 ---
 
@@ -39,7 +39,7 @@ Michelangelo does not intercept or wrap MLflow calls. Users call the MLflow clie
 
 ## Step 1: Verify Network Reachability
 
-Task pods run inside the compute cluster namespace registered with Michelangelo. Confirm that pods in that namespace can reach your MLflow server before proceeding.
+Task pods run inside the compute cluster namespace registered with Michelangelo AI. Confirm that pods in that namespace can reach your MLflow server before proceeding.
 
 ```bash
 kubectl run mlflow-connectivity-test \
@@ -88,7 +88,7 @@ Replace `<your-pod-selector-label>` with labels that match your task pods. Check
 
 ## Step 2: Configure the Tracking URI
 
-`MLFLOW_TRACKING_URI` is a user-space configuration — it belongs in workflow code or the Ray job pod environment, not in the Michelangelo system ConfigMap. Users should set it themselves using one of these approaches.
+`MLFLOW_TRACKING_URI` is a user-space configuration — it belongs in workflow code or the Ray job pod environment, not in the Michelangelo AI system ConfigMap. Users should set it themselves using one of these approaches.
 
 ### Option A: Set in workflow code
 
@@ -182,22 +182,22 @@ Users are responsible for:
 
 ---
 
-## MLflow Model Registry vs Michelangelo Model Registry
+## MLflow Model Registry vs Michelangelo AI Model Registry
 
-MLflow includes its own model registry. Michelangelo also has a built-in model registry backed by a `Model` Kubernetes custom resource. The two are independent and can be used simultaneously.
+MLflow includes its own model registry. Michelangelo AI also has a built-in model registry backed by a `Model` Kubernetes custom resource. The two are independent and can be used simultaneously.
 
-| | MLflow Model Registry | Michelangelo Model Registry |
+| | MLflow Model Registry | Michelangelo AI Model Registry |
 |---|---|---|
 | Backed by | MLflow Tracking Server database | Kubernetes `Model` CRD + S3 |
 | Queried via | MLflow client / MLflow UI | `kubectl get models` / `ma model get` |
-| Integrates with serving | MLflow serving (`mlflow models serve`) | Michelangelo `InferenceServer` |
-| Required for Michelangelo pipelines? | No | No |
+| Integrates with serving | MLflow serving (`mlflow models serve`) | Michelangelo AI `InferenceServer` |
+| Required for Michelangelo AI pipelines? | No | No |
 
-**When to use MLflow's registry:** If your organization already uses MLflow for model governance, lineage, and stage transitions (Staging → Production), continue using it. Michelangelo does not require you to use its own registry.
+**When to use MLflow's registry:** If your organization already uses MLflow for model governance, lineage, and stage transitions (Staging → Production), continue using it. Michelangelo AI does not require you to use its own registry.
 
-**When to use Michelangelo's registry:** If you want models to be deployable via Michelangelo's `InferenceServer` (Triton, vLLM, etc.), register them in Michelangelo's registry using the `@uniflow.task()` model registration API. You can do this in addition to logging to MLflow.
+**When to use Michelangelo AI's registry:** If you want models to be deployable via Michelangelo AI's `InferenceServer` (Triton, vLLM, etc.), register them in Michelangelo AI's registry using the `@uniflow.task()` model registration API. You can do this in addition to logging to MLflow.
 
-**Using both:** Log experiments and register models to MLflow for lineage and governance, and separately register the deployable artifact to Michelangelo for serving. Both calls can live in the same task function.
+**Using both:** Log experiments and register models to MLflow for lineage and governance, and separately register the deployable artifact to Michelangelo AI for serving. Both calls can live in the same task function.
 
 ---
 
@@ -233,7 +233,7 @@ A `200 OK` response confirms task pods in that namespace can reach the MLflow se
 ## Next Steps
 
 - [Experiment Tracking Setup](../experiment-tracking.md) — platform-level setup guide: network reachability, ConfigMap injection, and auth patterns for any tracking server
-- [Model Registry](../components/model-registry.md) — Michelangelo's built-in model registry: storage configuration, RBAC, and serving integration
-- [Register a Compute Cluster](../setup/register-a-compute-cluster-to-michelangelo-control-plane.md) — how to add a Kubernetes cluster so Michelangelo can dispatch jobs to it
-- [Platform Setup](../setup/platform-setup.md) — full ConfigMap reference for all Michelangelo components
+- [Model Registry](../components/model-registry.md) — Michelangelo AI's built-in model registry: storage configuration, RBAC, and serving integration
+- [Register a Compute Cluster](../setup/register-a-compute-cluster-to-michelangelo-control-plane.md) — how to add a Kubernetes cluster so Michelangelo AI can dispatch jobs to it
+- [Platform Setup](../setup/platform-setup.md) — full ConfigMap reference for all Michelangelo AI components
 - [MLflow Documentation](https://mlflow.org/docs/latest/) — official MLflow docs for tracking, model registry, and deployment

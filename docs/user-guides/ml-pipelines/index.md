@@ -1,6 +1,6 @@
 # ML Pipelines
 
-ML Pipelines on Michelangelo let you build, run, and manage end-to-end machine learning workflows -- from data preparation to model training and evaluation. Pipelines are built with **Uniflow**, a Python-first framework that lets you define workflows using standard Python functions and run them locally or at production scale.
+ML Pipelines on Michelangelo AI let you build, run, and manage end-to-end machine learning workflows -- from data preparation to model training and evaluation. Pipelines are built with **Uniflow**, a Python-first framework that lets you define workflows using standard Python functions and run them locally or at production scale.
 
 ## What you'll learn
 
@@ -69,7 +69,7 @@ poetry run python my_workflow.py remote-run \
 | | Standard Workflows | Custom Workflows |
 | --- | --- | --- |
 | **Defined by** | YAML configuration (`pipeline_conf.yaml`) | Python code (`@workflow` + `@task`) |
-| **Managed by** | Michelangelo (pre-built workflows) | You (fully custom logic) |
+| **Managed by** | Michelangelo AI (pre-built workflows) | You (fully custom logic) |
 | **Best for** | Common ML patterns (train, predict, evaluate) | Unique or complex use cases |
 | **UI creation** | Yes | No |
 | **Flexibility** | Configurable within pre-defined structure | Unlimited |
@@ -78,7 +78,7 @@ Both types support MA Studio UI management, CLI triggers, remote execution, orch
 
 ## Running modes
 
-Michelangelo provides four running modes for different stages of development:
+Michelangelo AI provides four running modes for different stages of development:
 
 | Mode | When to Use | Provisioning Time |
 | --- | --- | --- |

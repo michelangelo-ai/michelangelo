@@ -1,6 +1,6 @@
 # CLI Reference
 
-The Michelangelo CLI (`ma`) provides a unified way to manage resources using standard Kubernetes-style commands. This guide covers all supported commands for managing Michelangelo API entities.
+The Michelangelo AI CLI (`ma`) provides a unified way to manage resources using standard Kubernetes-style commands. This guide covers all supported commands for managing Michelangelo AI API entities.
 
 ## Command summary
 
@@ -35,7 +35,7 @@ All resource types support `get`, `apply`, and `delete` (see [supported resource
 | SparkJob | `spark_job` | Job submitted to a Spark cluster | get, apply, delete |
 | CachedOutput | `cached_output` | Cached task output for pipeline resume | get, apply, delete |
 
-> **Note:** In Michelangelo, a *project* is the workspace where your pipelines, models, and triggers live. In YAML files and CLI flags, your project is identified by the `namespace` field — these refer to the same thing. See the [Project Management guide](../getting-started/project-management-for-ml-pipelines.md) for details.
+> **Note:** In Michelangelo AI, a *project* is the workspace where your pipelines, models, and triggers live. In YAML files and CLI flags, your project is identified by the `namespace` field — these refer to the same thing. See the [Project Management guide](../getting-started/project-management-for-ml-pipelines.md) for details.
 
 ## Prerequisites
 
@@ -66,7 +66,7 @@ All resource types support `get`, `apply`, and `delete` (see [supported resource
 
 ## Usage
 
-All Michelangelo API entities support the following standard operations -- GET, APPLY, and DELETE
+All Michelangelo AI API entities support the following standard operations -- GET, APPLY, and DELETE
 
 ### General syntax
 
@@ -301,9 +301,9 @@ ma pipeline dev-run -f "./examples/bert_cola/pipeline.yaml" --file-sync --storag
 
 **1. dev-run: Test Pipeline from Local File**
 
-`pipeline dev-run` command runs a pipeline directly from your committed git snapshot. Pipeline run will be controlled by Michelangelo API server and controller. This command creates a PipelineRun entity but no Pipeline entity, so you will not see the pipeline entity information in MA Studio.
+`pipeline dev-run` command runs a pipeline directly from your committed git snapshot. Pipeline run will be controlled by Michelangelo AI API server and controller. This command creates a PipelineRun entity but no Pipeline entity, so you will not see the pipeline entity information in MA Studio.
 
-**remote-run** (invoked via `python my_workflow.py remote-run`, not an `ma` command) bypasses the Michelangelo API server and submits your workflow directly to Cadence/Temporal. No Michelangelo entities are created, and pipeline status is not visible in MA Studio.
+**remote-run** (invoked via `python my_workflow.py remote-run`, not an `ma` command) bypasses the Michelangelo AI API server and submits your workflow directly to Cadence/Temporal. No Michelangelo AI entities are created, and pipeline status is not visible in MA Studio.
 
 **2. dev-run --file-sync: Test Pipeline + Uncommitted Changes**
 
@@ -311,7 +311,7 @@ Adding `--file-sync` to the `pipeline dev-run` command enables testing of uncomm
 
 **dev-run --file-sync**: Creates two tarballs: a workflow tarball (from committed code) and a file-sync tarball (containing only files changed via `git diff`). When the container starts, `sitecustomize.py` downloads the file-sync tarball and overlays changed files on top of the base code. The file-sync URL is passed via the `UF_FILE_SYNC_TARBALL_URL` environment variable.
 
-**remote-run**: Creates a workflow tarball from committed code and sends it straight to the workflow engine without creating any Michelangelo entities.
+**remote-run**: Creates a workflow tarball from committed code and sends it straight to the workflow engine without creating any Michelangelo AI entities.
 
 **remote-run --file-sync**: Creates two tarballs: a workflow tarball (base64-encoded in the Cadence CLI input) and a file-sync tarball (uploaded to S3). The S3 URL is passed as an environment variable to the container.
 
@@ -371,7 +371,7 @@ The `ma sandbox` commands manage a local K3d development environment. For prereq
 
 | Command | Description |
 |---------|-------------|
-| `ma sandbox create` | Create a K3d cluster with all Michelangelo services |
+| `ma sandbox create` | Create a K3d cluster with all Michelangelo AI services |
 | `ma sandbox create --workflow temporal` | Create with Temporal instead of Cadence |
 | `ma sandbox create --exclude ui` | Create without specific services |
 | `ma sandbox create --create-compute-cluster` | Create with a Ray compute cluster |

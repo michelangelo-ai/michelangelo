@@ -1,6 +1,6 @@
 # PR Process
 
-Contributing to Michelangelo follows a standard fork-and-PR workflow. This guide covers everything from branch creation to merge.
+Contributing to Michelangelo AI follows a standard fork-and-PR workflow. This guide covers everything from branch creation to merge.
 
 ## Before You Open a PR
 

@@ -1,11 +1,11 @@
-# Michelangelo Jobs
+# Michelangelo AI Jobs
 
-Michelangelo provides a unified way to run large-scale data processing and ML training jobs on Kubernetes, using **Ray** and **Spark** as execution engines. This guide explains *the core concepts*, how jobs run, compute is allocated, and how users interact with the system.
+Michelangelo AI provides a unified way to run large-scale data processing and ML training jobs on Kubernetes, using **Ray** and **Spark** as execution engines. This guide explains *the core concepts*, how jobs run, compute is allocated, and how users interact with the system.
 
-## **What Is a Michelangelo Job?**
+## **What Is a Michelangelo AI Job?**
 
-A Michelangelo job is any workload—training, batch inference, ETL, feature generation—that runs on a managed compute cluster.
-Users define *what to run*, and Michelangelo handles:
+A Michelangelo AI job is any workload—training, batch inference, ETL, feature generation—that runs on a managed compute cluster.
+Users define *what to run*, and Michelangelo AI handles:
 
 * Selecting a compute cluster
 * Creating the necessary Ray or Spark resources
@@ -13,11 +13,11 @@ Users define *what to run*, and Michelangelo handles:
 * Streaming logs/status
 * Cleaning up when finished
 
-You focus on the job logic; Michelangelo manages the infrastructure.
+You focus on the job logic; Michelangelo AI manages the infrastructure.
 
 ## **Architecture**
 
-The image below displays the Michelangelo (MA) architecture for running Spark and Ray batch jobs end-to-end: submission, scheduling, execution, and reporting.
+The image below displays the Michelangelo AI (MA) architecture for running Spark and Ray batch jobs end-to-end: submission, scheduling, execution, and reporting.
 
 ![Job Controller Flow](./images/job-controller-flow.png)
 
@@ -26,9 +26,9 @@ The image below displays the Michelangelo (MA) architecture for running Spark an
 The execution flow is very similar across Ray and Spark:
 
 1. **Submit**
-   Your pipeline or service submits a job request to Michelangelo.
+   Your pipeline or service submits a job request to Michelangelo AI.
 2. **Schedule & Assign**
-   Michelangelo chooses a compute cluster based on quotas, resource needs, and policies.
+   Michelangelo AI chooses a compute cluster based on quotas, resource needs, and policies.
 3. **Materialize on Compute**
    The system creates the appropriate resources in the target cluster:
    * Ray: `RayCluster` + `RayJob`
@@ -37,7 +37,7 @@ The execution flow is very similar across Ray and Spark:
    The job runs on the generated compute cluster.
    Autoscaling brings up or down workers as needed.
 5. **Monitor & Complete**
-   Michelangelo collects logs, metrics and job status.
+   Michelangelo AI collects logs, metrics and job status.
    After completion, compute resources follow retention/TTL policies.
 
 This mirrors the same control-plane to compute-plane flow seen in platforms like **Databricks** and **Kubeflow**.
@@ -56,7 +56,7 @@ A simple rule:
 
 ## **What You Need to Specify**
 
-Michelangelo abstracts away most of the details. Users only provide the essentials:
+Michelangelo AI abstracts away most of the details. Users only provide the essentials:
 
 ### **For Ray jobs**
 
@@ -74,7 +74,7 @@ Michelangelo abstracts away most of the details. Users only provide the essentia
 
 ## **Observability & Operations**
 
-Michelangelo automatically provides:
+Michelangelo AI automatically provides:
 
 * Job status and lifecycle events
 * Logs from driver/head + workers

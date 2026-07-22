@@ -4,9 +4,9 @@ sidebar_position: 3
 
 # Sandbox Setup
 
-This guide walks you through setting up a local Michelangelo environment on your laptop. The sandbox runs a fully functional cluster — API server, controller manager, workflow engine, object storage, and supporting services — entirely on your machine, so you can explore Michelangelo or develop against it without any cloud infrastructure.
+This guide walks you through setting up a local Michelangelo AI environment on your laptop. The sandbox runs a fully functional cluster — API server, controller manager, workflow engine, object storage, and supporting services — entirely on your machine, so you can explore Michelangelo AI or develop against it without any cloud infrastructure.
 
-**Who this is for:** ML engineers, platform engineers, and contributors who want to try Michelangelo locally or develop new features against it.
+**Who this is for:** ML engineers, platform engineers, and contributors who want to try Michelangelo AI locally or develop new features against it.
 
 **What you'll have at the end:** a running sandbox cluster and a successful demo pipeline run, ready for you to build your own workflows on top of.
 
@@ -16,7 +16,7 @@ This guide walks you through setting up a local Michelangelo environment on your
 
 ## Get the code
 
-Clone the Michelangelo repository to your machine:
+Clone the Michelangelo AI repository to your machine:
 
 ```bash
 git clone https://github.com/michelangelo-ai/michelangelo.git
@@ -79,7 +79,7 @@ Docker containers need to communicate with services on your host machine. Verify
 
 ### Install Python dependencies
 
-From the repository you cloned, install the Michelangelo Python packages:
+From the repository you cloned, install the Michelangelo AI Python packages:
 
 ```bash
 cd <repo-root>/python
@@ -117,7 +117,7 @@ ma sandbox demo pipeline
 
 ### Verifying success
 
-When `ma sandbox create` completes, all Michelangelo services start in your k3d cluster. Verify with:
+When `ma sandbox create` completes, all Michelangelo AI services start in your k3d cluster. Verify with:
 
 ```bash
 kubectl get pods
@@ -125,7 +125,7 @@ kubectl get pods
 
 You should see roughly 10–15 pods (the exact count depends on which engine you chose and any `--exclude` flags). On first run, pods may spend 5–10 minutes in `ContainerCreating` while images are pulled — this is expected. All pods should eventually reach `Running` status; if any remain in `ContainerCreating` beyond 15 minutes, check the pod events with `kubectl describe pod <pod-name>`.
 
-Then open the **Michelangelo UI at [http://localhost:8090](http://localhost:8090)** — if the dashboard loads, your sandbox is healthy. See [Sandbox Ports and Endpoints](./ma-sandbox-ports-and-endpoints.md) for the full list of services and their URLs.
+Then open the **Michelangelo AI UI at [http://localhost:8090](http://localhost:8090)** — if the dashboard loads, your sandbox is healthy. See [Sandbox Ports and Endpoints](./ma-sandbox-ports-and-endpoints.md) for the full list of services and their URLs.
 
 ---
 
@@ -247,7 +247,7 @@ You should see workflow logs in your terminal and, when it finishes, a trained m
 
 For the full story on local vs. remote execution, building Docker images, configuring storage, and using either workflow engine end to end, see:
 
-- [Pipeline Running Modes](../user-guides/ml-pipelines/pipeline-running-modes.md) — the four execution modes Michelangelo supports
+- [Pipeline Running Modes](../user-guides/ml-pipelines/pipeline-running-modes.md) — the four execution modes Michelangelo AI supports
 
 > **Note:** Local execution doesn't support caching, retries, or resource constraints. Use remote execution (covered in the ML Pipelines guides) for production-like behavior.
 
@@ -319,7 +319,7 @@ If plugin installation is the failure point, you can exclude Grafana from the sa
 ma sandbox sync --exclude grafana
 ```
 
-Grafana is used for metrics dashboards and is not required for pipeline execution or the Michelangelo UI.
+Grafana is used for metrics dashboards and is not required for pipeline execution or the Michelangelo AI UI.
 ### `ma` CLI commands fail with `connection attempt timed out`
 
 The `ma` CLI connects to the API server over gRPC at `localhost:15566`. The sandbox maps this port via k3d NodePort so it works out of the box after `ma sandbox create`.

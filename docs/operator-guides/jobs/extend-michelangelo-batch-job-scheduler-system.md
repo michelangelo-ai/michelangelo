@@ -1,6 +1,6 @@
 # Extend the Job Scheduler System
 
-This page describes the Michelangelo Job Scheduler architecture and how to extend it with custom backends or plugins.
+This page describes the Michelangelo AI Job Scheduler architecture and how to extend it with custom backends or plugins.
 
 ## Architecture overview
 

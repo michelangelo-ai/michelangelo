@@ -4,7 +4,7 @@ sidebar_position: 6
 
 # Sandbox Ports and Endpoints
 
-This is a quick reference for the URLs and ports your local Michelangelo sandbox exposes on `localhost`. After `ma sandbox create` finishes, use this page to find where to point your browser, your CLI, or your SDK client.
+This is a quick reference for the URLs and ports your local Michelangelo AI sandbox exposes on `localhost`. After `ma sandbox create` finishes, use this page to find where to point your browser, your CLI, or your SDK client.
 
 If you haven't set up the sandbox yet, start with [Sandbox Setup](./sandbox-setup.md) first.
 
@@ -38,7 +38,7 @@ These mappings are created automatically by `ma sandbox create`:
 | Service | Host port | NodePort | In-cluster service | Container port | What it's for |
 |---|---:|---:|---|---:|---|
 | MA Studio UI | 8090 | 30011 | `michelangelo-ui` | 8090 | Web UI — your main entry point |
-| Michelangelo API Server | 15566 | 30009 | `michelangelo-apiserver` | 15566 | gRPC API (YARPC) for SDK and CLI clients |
+| Michelangelo AI API Server | 15566 | 30009 | `michelangelo-apiserver` | 15566 | gRPC API (YARPC) for SDK and CLI clients |
 | Envoy (gRPC-web proxy) | 8081 | 30010 | `michelangelo-envoy` | 8081 | gRPC-web → gRPC bridge used by the UI |
 | Cadence Web | 8088 | 30004 | `michelangelo-cadence-web` | 8088 | Inspect, retry, and debug Cadence workflow runs |
 | Cadence Frontend (gRPC) | 7833 | 30002 | `michelangelo-cadence` | 7833 | Cadence SDK and client connections |

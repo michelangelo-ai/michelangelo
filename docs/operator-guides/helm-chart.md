@@ -3,17 +3,17 @@ sidebar_position: 2
 sidebar_label: "Helm Chart"
 ---
 
-# Install Michelangelo with Helm
+# Install Michelangelo AI with Helm
 
-The `michelangelo` Helm chart installs the Michelangelo control plane on any Kubernetes cluster — production, staging, or a local development cluster. After installation you can manage the platform with standard `helm install`, `helm upgrade`, and `helm uninstall` commands.
+The `michelangelo` Helm chart installs the Michelangelo AI control plane on any Kubernetes cluster — production, staging, or a local development cluster. After installation you can manage the platform with standard `helm install`, `helm upgrade`, and `helm uninstall` commands.
 
 This guide walks you through prerequisites, a minimal install, verification, customization, and upgrade or removal. The final sections explain the chart's design so you know what you are getting.
 
 ## Who this is for
 
-This guide is for **platform engineers and infrastructure operators** who want to run Michelangelo on a Kubernetes cluster they manage. By the end, you will have:
+This guide is for **platform engineers and infrastructure operators** who want to run Michelangelo AI on a Kubernetes cluster they manage. By the end, you will have:
 
-- A running Michelangelo control plane on your cluster
+- A running Michelangelo AI control plane on your cluster
 - A clear understanding of what the chart owns and what you must provide
 - The commands to upgrade, customize, and remove the release
 
@@ -353,7 +353,7 @@ Required values use Helm's `required` template function — `helm install` fails
 
 ### Least-privilege RBAC
 
-The chart installs a scoped `ClusterRole` covering only what `controllermgr` and `apiserver` need: CRD lifecycle, Michelangelo CRs, KubeRay/Spark CRs, namespaces (create/update/patch/delete), pods/services, configmaps/secrets, and leader-election leases. There is no `cluster-admin` grant.
+The chart installs a scoped `ClusterRole` covering only what `controllermgr` and `apiserver` need: CRD lifecycle, Michelangelo AI CRs, KubeRay/Spark CRs, namespaces (create/update/patch/delete), pods/services, configmaps/secrets, and leader-election leases. There is no `cluster-admin` grant.
 
 ### Pod security defaults
 

@@ -1,6 +1,6 @@
 # Project Management
 
-A **project** in Michelangelo is a top-level organizational unit that groups related ML pipelines, models, and resources under a single namespace. Each project typically maps to a business use case -- for example, a product recommendation system, a fraud detection pipeline, or a document classification service.
+A **project** in Michelangelo AI is a top-level organizational unit that groups related ML pipelines, models, and resources under a single namespace. Each project typically maps to a business use case -- for example, a product recommendation system, a fraud detection pipeline, or a document classification service.
 
 Projects provide:
 
@@ -15,7 +15,7 @@ A project must be created before you can register or run pipelines. See [Pipelin
 
 Before creating a project, complete the initial setup:
 
-1. **Set up the Michelangelo CLI and sandbox environment.** See the [CLI Reference - Prerequisites](../reference/cli.md#prerequisites) for installation and setup instructions.
+1. **Set up the Michelangelo AI CLI and sandbox environment.** See the [CLI Reference - Prerequisites](../reference/cli.md#prerequisites) for installation and setup instructions.
 
 2. **Verify the environment is ready:**
 

@@ -1,12 +1,12 @@
 # Pipeline Management
 
-In general, there are two categories of Michelangelo pipelines: those that leverage the **standard workflows** and those that depend on user-created **custom workflows**.
+In general, there are two categories of Michelangelo AI pipelines: those that leverage the **standard workflows** and those that depend on user-created **custom workflows**.
 
-The **standard workflows** are a set of workflows provided and managed by Michelangelo meant to address some common use cases, such as model training (for either in-house or custom models), model prediction and evaluation, and embedding generation.
+The **standard workflows** are a set of workflows provided and managed by Michelangelo AI meant to address some common use cases, such as model training (for either in-house or custom models), model prediction and evaluation, and embedding generation.
 
 The **custom workflows** are completely user-defined and can be used for some exceptional use cases that are not supported by the standard workflows.
 
-The Michelangelo team manages the tooling for building and executing the custom workflows but does not manage the workflow definitions for the custom workflows. Pipelines with both standard and custom workflows can be executed and managed in MA Studio.
+The Michelangelo AI team manages the tooling for building and executing the custom workflows but does not manage the workflow definitions for the custom workflows. Pipelines with both standard and custom workflows can be executed and managed in MA Studio.
 
 ## What you'll learn
 
@@ -35,7 +35,7 @@ The Michelangelo team manages the tooling for building and executing the custom 
 
 ## Standard workflows
 
-The standard workflows are a set of workflows provided and managed by Michelangelo meant to address some common use cases. The pipelines of these workflows are defined in a YAML format inside the pipeline_conf.yaml file.
+The standard workflows are a set of workflows provided and managed by Michelangelo AI meant to address some common use cases. The pipelines of these workflows are defined in a YAML format inside the pipeline_conf.yaml file.
 
 ## Custom workflows
 

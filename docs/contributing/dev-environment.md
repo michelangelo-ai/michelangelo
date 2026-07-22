@@ -1,6 +1,6 @@
 # Go and Bazel Development Setup
 
-This guide is for developers contributing to Michelangelo's Go backend services (API server, controller manager, worker). If you're building ML pipelines with the Python SDK, see [Python IDE Setup](../getting-started/setup-python-ide.md) instead.
+This guide is for developers contributing to Michelangelo AI's Go backend services (API server, controller manager, worker). If you're building ML pipelines with the Python SDK, see [Python IDE Setup](../getting-started/setup-python-ide.md) instead.
 
 ---
 

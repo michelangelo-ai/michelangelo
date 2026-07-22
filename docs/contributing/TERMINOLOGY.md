@@ -1,13 +1,13 @@
-# Michelangelo Terminology Guide
+# Michelangelo AI Terminology Guide
 
-This glossary defines core concepts used throughout Michelangelo documentation. Use this as the authoritative reference for consistent terminology.
+This glossary defines core concepts used throughout Michelangelo AI documentation. Use this as the authoritative reference for consistent terminology.
 
 ---
 
 ## Core Workflow Concepts
 
 ### Task
-A **task** is a discrete unit of work in a Michelangelo workflow.
+A **task** is a discrete unit of work in a Michelangelo AI workflow.
 
 - **Definition**: A Python function decorated with `@task` that performs a single, focused operation
 - **Execution**: Runs in a container on Kubernetes (using Ray or Spark)
@@ -137,7 +137,7 @@ spec:
 ## Framework & Infrastructure Concepts
 
 ### Uniflow
-**Uniflow** is the Python-first framework for defining and executing ML workflows in Michelangelo.
+**Uniflow** is the Python-first framework for defining and executing ML workflows in Michelangelo AI.
 
 - **Definition**: Decorator-based DSL (Domain-Specific Language) for workflow orchestration
 - **Core**: Provides `@task` and `@workflow` decorators
@@ -184,7 +184,7 @@ A **SparkTask** is a task execution configuration for distributed computing usin
 - **Best For**: Large-scale data preprocessing, SQL-like operations
 
 ### DatasetVariable
-A **DatasetVariable** is Michelangelo's abstraction for passing datasets between tasks.
+A **DatasetVariable** is Michelangelo AI's abstraction for passing datasets between tasks.
 
 - **Definition**: Wrapper that handles datasets in different frameworks (Ray, Pandas, Spark)
 - **Purpose**: Abstracts away framework differences; manages serialization and storage
@@ -210,7 +210,7 @@ df = train_dv.value
 ## Data & Model Concepts
 
 ### Model Registry
-The **Model Registry** is Michelangelo's model versioning and artifact management system.
+The **Model Registry** is Michelangelo AI's model versioning and artifact management system.
 
 - **Purpose**: Version, track, and manage trained models
 - **Integration**: Built on MLflow with Kubernetes Custom Resources
@@ -348,7 +348,7 @@ To understand how these concepts fit together:
 | Talking about registered, versioned deployments | Pipeline | "I registered a pipeline called training-pipeline" |
 | Discussing a single execution | PipelineRun | "The PipelineRun failed at the training step" |
 | Talking about automatic execution | Trigger / TriggerRun | "Set up a trigger to run daily at 9 AM" |
-| Referring to the overall system | Michelangelo + Uniflow | "Uniflow is the framework; Michelangelo is the platform" |
+| Referring to the overall system | Michelangelo AI + Uniflow | "Uniflow is the framework; Michelangelo AI is the platform" |
 | Selecting compute | RayTask / SparkTask | "Use RayTask for distributed ML training" |
 | Passing data between tasks | DatasetVariable | "Pass data as a DatasetVariable for automatic caching" |
 
@@ -356,7 +356,7 @@ To understand how these concepts fit together:
 
 ## Documentation Standards
 
-When writing Michelangelo documentation:
+When writing Michelangelo AI documentation:
 
 1. **Always clarify context**: If using "pipeline," specify whether you mean workflow or deployment
 2. **Use decorators consistently**: `@uniflow.task()` and `@uniflow.workflow()` in all examples
@@ -368,4 +368,4 @@ When writing Michelangelo documentation:
 
 ## Version History
 
-- **v1.0** (March 6, 2026): Initial terminology glossary created based on Michelangelo documentation audit
+- **v1.0** (March 6, 2026): Initial terminology glossary created based on Michelangelo AI documentation audit

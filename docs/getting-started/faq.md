@@ -12,9 +12,9 @@ Common questions about getting started, data, training, deployment, monitoring, 
 
 A: See the [Support & Community](./support.md) page for all channels — GitHub Discussions for Q&A, Slack for real-time chat, and email for private inquiries. For bugs, [open a GitHub issue](https://github.com/michelangelo-ai/michelangelo/issues/new/choose).
 
-**Q: Do I need to learn a new framework to use Michelangelo?**
+**Q: Do I need to learn a new framework to use Michelangelo AI?**
 
-A: No. If you're using the UI, it's entirely point-and-click. If you're coding, Michelangelo uses familiar tools:
+A: No. If you're using the UI, it's entirely point-and-click. If you're coding, Michelangelo AI uses familiar tools:
 - Python for model code (PyTorch, TensorFlow, scikit-learn, XGBoost all work)
 - Ray for distributed computing
 - Standard data formats (Parquet, CSV, JSON)
@@ -37,7 +37,7 @@ def train_model(data_path: str):
 
 A: Start small:
 1. Pick one model to migrate (not your most critical one)
-2. Use Michelangelo's data prep → training → deployment workflow
+2. Use Michelangelo AI's data prep → training → deployment workflow
 3. Compare results with your existing pipeline
 4. Gradually migrate more models as you gain confidence
 
@@ -49,11 +49,11 @@ A: Multiple sources:
 - Upload CSV/Parquet files directly to the plugged-in storage
 - Connect to data warehouses (Snowflake, BigQuery, Redshift)
 - Use Spark/Ray for large-scale data processing
-- Reference existing datasets in Michelangelo's data catalog
+- Reference existing datasets in Michelangelo AI's data catalog
 
-**Q: Can I use feature stores with Michelangelo?**
+**Q: Can I use feature stores with Michelangelo AI?**
 
-A: Yes, Michelangelo integrates with feature stores or you can manage features within the platform using the data prep pipelines and inference.
+A: Yes, Michelangelo AI integrates with feature stores or you can manage features within the platform using the data prep pipelines and inference.
 
 **Q: What data formats are supported?**
 
@@ -63,7 +63,7 @@ A: Parquet (recommended). CSV, JSON, Avro. For custom formats, use Uniflow tasks
 
 **Q: What compute resources are available?**
 
-A: Michelangelo provides:
+A: Michelangelo AI provides:
 - CPU-only instances for lightweight models
 - Single-GPU instances (V100, A100) for deep learning
 - Multi-GPU clusters for distributed training
@@ -91,7 +91,7 @@ A: Uniflow automatically:
 
 **Q: How do I monitor model performance in production?**
 
-A: Michelangelo provides:
+A: Michelangelo AI provides:
 - **Model Excellence Scores** tracking accuracy, latency, throughput
 - **Data drift detection** comparing training vs. production distributions
 - **Custom metrics** you define and track
@@ -110,7 +110,7 @@ A: Multiple approaches:
 
 ## Cost & Scaling
 
-**Q: How does Michelangelo handle scaling?**
+**Q: How does Michelangelo AI handle scaling?**
 
 A: Automatically:
 - Online inference autoscales based on request volume
@@ -119,13 +119,13 @@ A: Automatically:
 
 **Q: What if my dataset doesn't fit in memory?**
 
-A: Use Michelangelo's Ray integration for out-of-core processing. Data is streamed from storage (S3, HDFS) and processed in chunks.
+A: Use Michelangelo AI's Ray integration for out-of-core processing. Data is streamed from storage (S3, HDFS) and processed in chunks.
 
 ## Collaboration & Governance
 
 **Q: How do multiple team members collaborate?**
 
-A: Michelangelo provides:
+A: Michelangelo AI provides:
 - **Shared projects** with role-based access control (see [Project Management](../user-guides/getting-started/project-management-for-ml-pipelines.md))
 - **Model lineage** tracking from training data through deployment
 - **Versioning** for models, pipelines, and pipeline runs
@@ -135,7 +135,7 @@ For operator-side RBAC and identity-provider setup, see the [Authentication guid
 
 **Q: Is my data secure?**
 
-A: Yes. Michelangelo enforces:
+A: Yes. Michelangelo AI enforces:
 - Role-based access control (RBAC)
 - Encryption at rest and in transit
 - Audit logs for all operations
@@ -143,9 +143,9 @@ A: Yes. Michelangelo enforces:
 
 See the [Compliance Guide](../operator-guides/operations/compliance.md) for configuration steps specific to each framework.
 
-**Q: Can I use Michelangelo for regulated industries (healthcare, finance)?**
+**Q: Can I use Michelangelo AI for regulated industries (healthcare, finance)?**
 
-A: Yes, with proper configuration. Michelangelo supports:
+A: Yes, with proper configuration. Michelangelo AI supports:
 - Data residency requirements (region-specific storage)
 - Audit trails for model decisions
 - Explainability tools for model interpretability

@@ -1,8 +1,8 @@
-# Michelangelo React Library
+# Michelangelo AI React Library
 
-This guide covers integrating Michelangelo UI components into existing React applications as npm dependencies.
+This guide covers integrating Michelangelo AI UI components into existing React applications as npm dependencies.
 
-The Michelangelo React Library allows organizations to embed Michelangelo Studio capabilities within their existing web applications, maintaining their current deployment infrastructure while adding ML platform functionality.
+The Michelangelo AI React Library allows organizations to embed Michelangelo AI Studio capabilities within their existing web applications, maintaining their current deployment infrastructure while adding ML platform functionality.
 
 ## Key Concepts
 
@@ -135,7 +135,7 @@ function App() {
 
 ### API Integration Options
 
-The Michelangelo UI can integrate with your API through two approaches:
+The Michelangelo AI UI can integrate with your API through two approaches:
 
 #### Option 1: Custom Request Handler (Recommended)
 Use your existing API infrastructure:
@@ -156,7 +156,7 @@ const dependencies = {
 };
 ```
 
-#### Option 2: Michelangelo gRPC Client
+#### Option 2: Michelangelo AI gRPC Client
 Use the provided gRPC-Web client (requires Envoy proxy):
 ```tsx
 import { normalizeConnectError, request } from '@michelangelo-ai/rpc';
@@ -171,14 +171,14 @@ const dependencies = {
 };
 ```
 
-**Note:** Option 2 requires an Envoy proxy to translate HTTP requests to gRPC calls to your Michelangelo API server.
+**Note:** Option 2 requires an Envoy proxy to translate HTTP requests to gRPC calls to your Michelangelo AI API server.
 
 #### Envoy Proxy Setup (Required for @michelangelo-ai/rpc)
 
 **Port Configuration:**
 - Envoy listens on port 8081 for gRPC-Web requests
 - UI makes requests to Envoy, not directly to API server
-- Envoy forwards to your Michelangelo API server
+- Envoy forwards to your Michelangelo AI API server
 
 **CORS Configuration:**
 Envoy must allow your application's origin:
@@ -206,11 +206,11 @@ clusters:
               port_value: 8081                # Your API server port
 ```
 
-**Reference Configuration:** See complete Envoy setup in the [Deploying Michelangelo UI](./deploying-michelangelo-ui.md) guide.
+**Reference Configuration:** See complete Envoy setup in the [Deploying Michelangelo AI UI](./deploying-michelangelo-ui.md) guide.
 
 ### Icon Configuration
 
-The Michelangelo UI requires icon mapping through dependency injection.
+The Michelangelo AI UI requires icon mapping through dependency injection.
 
 ```tsx
 import YourLaunchIcon from '@your-icon-library/launch';
@@ -243,13 +243,13 @@ function App() {
 ### FAQ
 
 **Q: Can I use this with Next.js?**
-A: Michelangelo UI is intentionally un-opinionated about web frameworks. While untested, there is no reason Michelangelo UI would be incompatible with Next.js.
+A: Michelangelo AI UI is intentionally un-opinionated about web frameworks. While untested, there is no reason Michelangelo AI UI would be incompatible with Next.js.
 
 **Q: What React versions are supported?**
 A: React 18 is required.
 
 **Q: Can I customize the routing?**
-A: Yes, you can mount Michelangelo components at any route and integrate with your existing router.
+A: Yes, you can mount Michelangelo AI components at any route and integrate with your existing router.
 
 **Q: Can I use only specific components?**
-A: No, MichelangeloStudio is the only component intended for external consumption and customizable through dependency injection and configuration. If you have an unsupported use case, please submit an issue or propose a solution in PR.
+A: No, Michelangelo AIStudio is the only component intended for external consumption and customizable through dependency injection and configuration. If you have an unsupported use case, please submit an issue or propose a solution in PR.

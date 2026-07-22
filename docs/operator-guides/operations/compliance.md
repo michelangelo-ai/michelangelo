@@ -5,18 +5,18 @@ sidebar_label: "Compliance"
 
 # Compliance Guide
 
-Michelangelo supports compliance with SOC 2, GDPR, and HIPAA depending on how you deploy and configure the platform. Achieving compliance requires proper configuration of access controls, encryption, audit logging, and data handling practices described in this guide.
+Michelangelo AI supports compliance with SOC 2, GDPR, and HIPAA depending on how you deploy and configure the platform. Achieving compliance requires proper configuration of access controls, encryption, audit logging, and data handling practices described in this guide.
 
 **Audience**: Platform operators responsible for security and compliance configuration.
 
 **Prerequisites**:
-- Running Michelangelo control plane (see [Platform Setup](../setup/platform-setup.md))
+- Running Michelangelo AI control plane (see [Platform Setup](../setup/platform-setup.md))
 - Kubernetes RBAC familiarity
 - An identity provider (IdP) configured for OIDC/OAuth 2.0 (required for access control sections)
 - Cloud provider account with S3-compatible object storage
 
 :::warning
-Compliance is a shared responsibility. This guide covers Michelangelo-specific configuration. You are also responsible for ensuring your broader infrastructure, organizational processes, and legal agreements meet each framework's requirements.
+Compliance is a shared responsibility. This guide covers Michelangelo AI-specific configuration. You are also responsible for ensuring your broader infrastructure, organizational processes, and legal agreements meet each framework's requirements.
 :::
 
 ## SOC 2
@@ -25,7 +25,7 @@ SOC 2 (System and Organization Controls 2) evaluates controls across five Trust 
 
 ### Access Control
 
-Enable RBAC for all Michelangelo resources and grant least-privilege access — users should only have the permissions required for their role.
+Enable RBAC for all Michelangelo AI resources and grant least-privilege access — users should only have the permissions required for their role.
 
 ```yaml
 apiserver:
@@ -36,7 +36,7 @@ apiserver:
 - Integrate with your organization's identity provider (IdP) via OIDC/OAuth 2.0
 - Enforce multi-factor authentication (MFA) at the IdP level
 - Set session token expiry appropriate for your security policy
-- Disable any direct database or object store access that bypasses the Michelangelo API
+- Disable any direct database or object store access that bypasses the Michelangelo AI API
 
 ### Encryption
 
@@ -46,7 +46,7 @@ apiserver:
 
 ### Network Security
 
-- Deploy Michelangelo inside a private VPC with no direct public access to internal services
+- Deploy Michelangelo AI inside a private VPC with no direct public access to internal services
 - Expose only the Envoy proxy and UI to controlled network segments
 - Restrict Kubernetes API server access to authorized operators using network policies
 
@@ -59,7 +59,7 @@ apiserver:
 
 ### Audit Logging
 
-All operations through the Michelangelo API are captured in audit logs. Ensure logs are:
+All operations through the Michelangelo AI API are captured in audit logs. Ensure logs are:
 
 - Forwarded to a centralized, tamper-resistant log store (e.g., CloudWatch, Splunk, Datadog)
 - Retained for a minimum of 12 months
@@ -75,7 +75,7 @@ All operations through the Michelangelo API are captured in audit logs. Ensure l
 
 ## GDPR
 
-The General Data Protection Regulation (GDPR) applies when processing personal data of EU residents. Michelangelo can be configured to meet GDPR requirements around data residency, subject rights, and retention.
+The General Data Protection Regulation (GDPR) applies when processing personal data of EU residents. Michelangelo AI can be configured to meet GDPR requirements around data residency, subject rights, and retention.
 
 ### Data Residency
 
@@ -93,12 +93,12 @@ Ensure your Kubernetes cluster, Temporal/Cadence workflow engine, and any extern
 ### Data Minimization
 
 - Only ingest and store data fields required for the ML task
-- Use Michelangelo's data prep pipelines to strip personally identifiable information (PII) before training
+- Use Michelangelo AI's data prep pipelines to strip personally identifiable information (PII) before training
 - Avoid logging raw personal data in pipeline run outputs or model experiment metadata
 
 ### Data Subject Rights
 
-**Right to Access**: Michelangelo's audit logs and model lineage tracking let you identify which data was used to train a specific model. Use these records to respond to Data Subject Access Requests (DSARs).
+**Right to Access**: Michelangelo AI's audit logs and model lineage tracking let you identify which data was used to train a specific model. Use these records to respond to Data Subject Access Requests (DSARs).
 
 **Right to Erasure**: When a data subject requests deletion:
 1. Identify all datasets, pipeline runs, and model versions that reference their data
@@ -106,7 +106,7 @@ Ensure your Kubernetes cluster, Temporal/Cadence workflow engine, and any extern
 3. Retrain or retire affected models where the data cannot be removed post-hoc
 4. Document the erasure in your organization's records
 
-**Right to Portability**: Use Michelangelo's export capabilities to produce data in standard formats (Parquet, CSV) when a subject requests their data.
+**Right to Portability**: Use Michelangelo AI's export capabilities to produce data in standard formats (Parquet, CSV) when a subject requests their data.
 
 ### Retention Policies
 
@@ -116,11 +116,11 @@ Ensure your Kubernetes cluster, Temporal/Cadence workflow engine, and any extern
 
 ### Consent and Legal Basis
 
-Michelangelo does not manage consent records. Ensure your organization's consent management system is integrated with your data ingestion pipeline so that only data with a valid legal basis flows into Michelangelo training workflows.
+Michelangelo AI does not manage consent records. Ensure your organization's consent management system is integrated with your data ingestion pipeline so that only data with a valid legal basis flows into Michelangelo AI training workflows.
 
 ### Data Processing Agreements
 
-If you use cloud infrastructure providers (AWS, GCP, Azure) to host Michelangelo, you must have a Data Processing Agreement (DPA) in place with each provider before processing personal data on their infrastructure.
+If you use cloud infrastructure providers (AWS, GCP, Azure) to host Michelangelo AI, you must have a Data Processing Agreement (DPA) in place with each provider before processing personal data on their infrastructure.
 
 ---
 
@@ -129,17 +129,17 @@ If you use cloud infrastructure providers (AWS, GCP, Azure) to host Michelangelo
 The Health Insurance Portability and Accountability Act (HIPAA) applies when processing Protected Health Information (PHI). Compliance requires technical, administrative, and physical safeguards.
 
 :::danger
-Do not store PHI in Michelangelo unless your deployment has been reviewed by your compliance and legal teams and all safeguards below are confirmed to be in place. HIPAA violations carry significant legal and financial penalties.
+Do not store PHI in Michelangelo AI unless your deployment has been reviewed by your compliance and legal teams and all safeguards below are confirmed to be in place. HIPAA violations carry significant legal and financial penalties.
 :::
 
 ### Technical Safeguards
 
 **Access Controls**
 
-- Assign unique user IDs to every Michelangelo user — never use shared accounts
+- Assign unique user IDs to every Michelangelo AI user — never use shared accounts
 - Enable RBAC and restrict PHI-containing datasets and models to authorized users only
 - Implement automatic session timeouts at the IdP level
-- Audit all access to PHI-containing resources using Michelangelo's audit logs
+- Audit all access to PHI-containing resources using Michelangelo AI's audit logs
 
 **Encryption**
 
@@ -153,7 +153,7 @@ Do not store PHI in Michelangelo unless your deployment has been reviewed by you
 
 HIPAA requires audit logs that record access to PHI. Configure your logging pipeline to capture:
 
-- User identity and timestamp for every Michelangelo API call
+- User identity and timestamp for every Michelangelo AI API call
 - Dataset reads and writes
 - Model training runs that reference PHI datasets
 - Deployment and inference events
@@ -163,7 +163,7 @@ Forward logs to a HIPAA-eligible log management service and retain them for a mi
 **Integrity Controls**
 
 - Enable object versioning on your S3 bucket to detect unauthorized modification of artifacts
-- Use checksums provided by Michelangelo's artifact storage to verify data integrity on read
+- Use checksums provided by Michelangelo AI's artifact storage to verify data integrity on read
 - Configure S3 Object Lock (WORM mode) on audit log buckets to prevent tampering
 
 **Transmission Security**
@@ -174,7 +174,7 @@ Forward logs to a HIPAA-eligible log management service and retain them for a mi
 ### Administrative Safeguards
 
 - Designate a HIPAA Privacy Officer and Security Officer for your organization
-- Conduct annual risk assessments that explicitly include your Michelangelo deployment
+- Conduct annual risk assessments that explicitly include your Michelangelo AI deployment
 - Train all users with access to PHI-containing projects on HIPAA requirements and your organization's privacy policies
 - Establish and enforce a workforce sanctions policy for unauthorized PHI access
 
@@ -183,12 +183,12 @@ Forward logs to a HIPAA-eligible log management service and retain them for a mi
 You must have a signed BAA with:
 
 - Your cloud infrastructure provider (AWS, GCP, Azure)
-- Any third-party services integrated with Michelangelo that may process PHI
+- Any third-party services integrated with Michelangelo AI that may process PHI
 - Your managed Temporal or Cadence service provider, if applicable
 
 ### PHI Readiness Checklist
 
-Before processing PHI data in Michelangelo, verify each item:
+Before processing PHI data in Michelangelo AI, verify each item:
 
 - [ ] RBAC enabled and scoped to minimum necessary access
 - [ ] TLS enabled on all components (`useTLS: true`)
@@ -209,8 +209,8 @@ These practices improve your security posture across all three frameworks.
 ### Kubernetes Hardening
 
 - Use Kubernetes Network Policies to restrict pod-to-pod communication to only required paths
-- Apply Pod Security Standards (restricted profile) to Michelangelo workloads
-- Regularly patch Kubernetes nodes and Michelangelo component images
+- Apply Pod Security Standards (restricted profile) to Michelangelo AI workloads
+- Regularly patch Kubernetes nodes and Michelangelo AI component images
 - Store credentials in Kubernetes Secrets or an external secrets manager (HashiCorp Vault, AWS Secrets Manager) rather than in ConfigMaps
 
 ### Monitoring and Alerting
@@ -221,7 +221,7 @@ These practices improve your security posture across all three frameworks.
 
 ### Incident Response
 
-- Document an incident response runbook that covers Michelangelo-specific scenarios (unauthorized model access, artifact tampering, credential exposure)
+- Document an incident response runbook that covers Michelangelo AI-specific scenarios (unauthorized model access, artifact tampering, credential exposure)
 - Test the runbook at least annually with tabletop exercises
 - Ensure your runbook includes breach notification timelines:
   - **GDPR**: 72 hours to notify supervisory authority

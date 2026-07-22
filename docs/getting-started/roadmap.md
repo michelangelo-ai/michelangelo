@@ -5,7 +5,7 @@ sidebar_label: "Roadmap"
 
 # Roadmap
 
-Michelangelo is under active development. This page captures the current state of the platform and the direction we're headed. Things will shift as priorities evolve and the community gives feedback.
+Michelangelo AI is under active development. This page captures the current state of the platform and the direction we're headed. Things will shift as priorities evolve and the community gives feedback.
 
 ## Release Milestones
 
@@ -13,13 +13,13 @@ The OSS release is staged so each version makes a specific, scoped promise rathe
 
 | Version | Target | Focus |
 |---|---|---|
-| **0.4.0** | July 2026 | Release management + core pipeline platform — UniFlow, Ray/Spark integration, pipeline/run/trigger management, Michelangelo CLI, Michelangelo Studio |
+| **0.4.0** | July 2026 | Release management + core pipeline platform — UniFlow, Ray/Spark integration, pipeline/run/trigger management, Michelangelo AI CLI, Michelangelo AI Studio |
 | **0.5.0** | Q3 2026 | End-to-end LLM model management — Foundation Model fine-tuning, model registry, offline inference, progressive serving |
 | **TBD** | H2 2026 | Agent Infrastructure |
 
 ## Versioning Policy
 
-Michelangelo follows [Semantic Versioning 2.0.0](https://semver.org/) with stability declared per component, not per repository.
+Michelangelo AI follows [Semantic Versioning 2.0.0](https://semver.org/) with stability declared per component, not per repository.
 
 | Stability Level | Guarantee |
 |---|---|

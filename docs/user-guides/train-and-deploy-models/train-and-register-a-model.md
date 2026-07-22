@@ -4,9 +4,9 @@ sidebar_position: 1
 
 # Model Training Guide
 
-This guide explains **how to retrieve datasets for training** inside Michelangelo workflows and how to optionally scale training using **RayTask** and the **Lightning Trainer SDK**.
+This guide explains **how to retrieve datasets for training** inside Michelangelo AI workflows and how to optionally scale training using **RayTask** and the **Lightning Trainer SDK**.
 
-The focus is simplicity: **you control your training logic**, Michelangelo provides the dataset plumbing and optional distributed compute.
+The focus is simplicity: **you control your training logic**, Michelangelo AI provides the dataset plumbing and optional distributed compute.
 
 ## What You'll Learn
 
@@ -19,12 +19,12 @@ The focus is simplicity: **you control your training logic**, Michelangelo provi
 
 - **A running sandbox** — Remote training runs require a local Kubernetes cluster. Follow the [Sandbox Setup](../../getting-started/sandbox-setup.md) guide if you haven't done this yet.
 - **A prepared dataset** — Training tasks expect datasets passed as `DatasetVariable`. See [Data Preparation](../getting-started/prepare-your-data.md) for how to produce them.
-- **Python 3.11+, Poetry, and the Michelangelo SDK installed** — Run `cd python && poetry install` from the repo root.
+- **Python 3.11+, Poetry, and the Michelangelo AI SDK installed** — Run `cd python && poetry install` from the repo root.
 - **For distributed training:** A Docker image with your workflow code. See [Running Uniflow Pipelines](../ml-pipelines/running-uniflow.md) for image build steps.
 
 ## Understanding Training Inputs
 
-Michelangelo workflows pass datasets using **DatasetVariable**.
+Michelangelo AI workflows pass datasets using **DatasetVariable**.
 
 A `DatasetVariable` may contain:
 

@@ -1,6 +1,6 @@
 # Documentation Guide
 
-This guide explains how to contribute to Michelangelo's documentation site.
+This guide explains how to contribute to Michelangelo AI's documentation site.
 
 ## Quick Start
 

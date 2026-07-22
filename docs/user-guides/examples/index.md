@@ -5,7 +5,7 @@ sidebar_label: "Examples"
 
 # Examples
 
-End-to-end ML pipeline examples covering training, inference, recommendation systems, and model packaging. Each example is a complete, working workflow you can run locally or on a Michelangelo cluster.
+End-to-end ML pipeline examples covering training, inference, recommendation systems, and model packaging. Each example is a complete, working workflow you can run locally or on a Michelangelo AI cluster.
 
 All examples live in [`python/examples/`](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples).
 
@@ -50,7 +50,7 @@ poetry install --extras "trainer example"
 PYTHONPATH=. poetry run python examples/<example_dir>/<script>.py
 ```
 
-For remote execution on a Michelangelo cluster, append `remote-run`:
+For remote execution on a Michelangelo AI cluster, append `remote-run`:
 
 ```bash
 PYTHONPATH=. poetry run python examples/pipelines/california_housing_xgb/california_housing_xgb.py remote-run \
@@ -62,6 +62,6 @@ See each example's README for specific prerequisites and run instructions.
 
 ## What's Next?
 
-- **New to Michelangelo?** Start with [California Housing (XGBoost)](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/pipelines/california_housing_xgb) — it covers the full pipeline end-to-end
+- **New to Michelangelo AI?** Start with [California Housing (XGBoost)](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/pipelines/california_housing_xgb) — it covers the full pipeline end-to-end
 - **Want to understand the framework?** Read [Getting Started with Pipelines](../getting-started/getting-started.md) for a guided walkthrough
 - **Ready to deploy?** See [Deploy a Model](../train-and-deploy-models/deploy-a-model.md) after training

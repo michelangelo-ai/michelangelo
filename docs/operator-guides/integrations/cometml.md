@@ -4,9 +4,9 @@
 
 ---
 
-## How Comet ML works with Michelangelo
+## How Comet ML works with Michelangelo AI
 
-Comet calls happen inside your `@uniflow.task()` function — Michelangelo doesn't intercept them; the client talks directly to Comet from the task pod. Pick the hook for your framework (see **Integrations**), and make sure `COMET_API_KEY` is available (see **Configuring Comet ML across your environment**).
+Comet calls happen inside your `@uniflow.task()` function — Michelangelo AI doesn't intercept them; the client talks directly to Comet from the task pod. Pick the hook for your framework (see **Integrations**), and make sure `COMET_API_KEY` is available (see **Configuring Comet ML across your environment**).
 
 ```python
 import comet_ml
@@ -187,13 +187,13 @@ When one model is trained by **multiple processes**, you want **one** experiment
 
 ---
 
-## Comet ML Model Registry vs Michelangelo Model Registry
+## Comet ML Model Registry vs Michelangelo AI Model Registry
 
-Comet and Michelangelo each have their own model registry; the two are independent and can be used together.
+Comet and Michelangelo AI each have their own model registry; the two are independent and can be used together.
 
 - **Use Comet's registry** for model governance, lineage, versioning, and stage transitions tied to your tracked experiments.
-- **Use Michelangelo's registry** when you want models deployable via Michelangelo's `InferenceServer`.
-- **Use both:** register to Comet for lineage/governance, and separately register the deployable artifact to Michelangelo for serving.
+- **Use Michelangelo AI's registry** when you want models deployable via Michelangelo AI's `InferenceServer`.
+- **Use both:** register to Comet for lineage/governance, and separately register the deployable artifact to Michelangelo AI for serving.
 
 Register a model to Comet from your task — log it, then register it:
 

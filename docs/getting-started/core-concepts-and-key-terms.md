@@ -6,7 +6,7 @@ sidebar_position: 2
 
 ## Overview
 
-Michelangelo utilizes a combination of standard industry terms and product-specific naming conventions. This page provides high-level definitions for the platform's most essential and commonly used concepts. It is recommended you familiarize yourself with these concepts as you will encounter them on your ML development journey.
+Michelangelo AI utilizes a combination of standard industry terms and product-specific naming conventions. This page provides high-level definitions for the platform's most essential and commonly used concepts. It is recommended you familiarize yourself with these concepts as you will encounter them on your ML development journey.
 
 The definitions and examples listed below are organized based on frequency of usage in the documentation and priority for user understanding.
 
@@ -18,7 +18,7 @@ Need to quickly look up a term? Here's a summary of the most commonly used conce
 |------|-----------|-----------------|
 | **Project** | Business use case with trackable metrics | Organizing all ML work for a specific problem (e.g., fraud detection, churn prediction) |
 | **Model Family** | Group of related models for one use case | When multiple models solve different aspects of one business problem |
-| **Dataset** | Registered data in Michelangelo | Providing training, validation, or prediction input data |
+| **Dataset** | Registered data in Michelangelo AI | Providing training, validation, or prediction input data |
 | **Task** | Single unit of computation (function) | Building reusable, modular steps in your ML pipeline |
 | **Workflow** | Chain of tasks with dependencies | Orchestrating multi-step ML pipelines (data prep → training → evaluation) |
 | **Model & Revision** | Trained model artifact with version number | Tracking different versions of your trained models |
@@ -31,13 +31,13 @@ Need to quickly look up a term? Here's a summary of the most commonly used conce
 ---
 
 ## System Components
-These are the frameworks, interfaces, and compute engines provided by Michelangelo to facilitate development.
+These are the frameworks, interfaces, and compute engines provided by Michelangelo AI to facilitate development.
 
 ### Orchestration & Interfaces
 
 #### MA Studio (No Code UI)
 
-**MA Studio** is Michelangelo's UI environment. The standard, code-free ML development experience guides users through the different phases of the ML development lifecycle. This environment provides all the essential tools which allow ML developers to build, train, deploy, monitor, and debug your machine learning models in a single unified visual interface to boost your productivity. 
+**MA Studio** is Michelangelo AI's UI environment. The standard, code-free ML development experience guides users through the different phases of the ML development lifecycle. This environment provides all the essential tools which allow ML developers to build, train, deploy, monitor, and debug your machine learning models in a single unified visual interface to boost your productivity. 
 
 Users can use the no-code dev environment to perform standardized ML tasks without writing a single line of code, including:
 * Prepare data sources for training models or making batch predictions
@@ -98,7 +98,7 @@ if __name__ == "__main__":
 
 #### Job
 
-A batch job running a ML workload. Currently Michelangelo runs [Spark](https://spark.apache.org/docs/latest/index.html) for data processing and [Ray](https://www.ray.io/) for ML training.
+A batch job running a ML workload. Currently Michelangelo AI runs [Spark](https://spark.apache.org/docs/latest/index.html) for data processing and [Ray](https://www.ray.io/) for ML training.
 
 #### Compute Resource
 
@@ -141,15 +141,15 @@ A Model Family is a group of related ML models within a project that address dif
 
 ### Dataset
 
-A piece of data registered in Michelangelo. Users can set up data pipelines and let Michelangelo manage the dataset, or directly register the dataset in Michelangelo and manage it externally. They can use the dataset for training and evaluation.
+A piece of data registered in Michelangelo AI. Users can set up data pipelines and let Michelangelo AI manage the dataset, or directly register the dataset in Michelangelo AI and manage it externally. They can use the dataset for training and evaluation.
 
-**Familiar Equivalent**: Like registering a dataset in a data catalog (e.g., Delta Lake, Data Version Control, or AWS Glue Data Catalog). Michelangelo tracks dataset versions and lineage automatically.
+**Familiar Equivalent**: Like registering a dataset in a data catalog (e.g., Delta Lake, Data Version Control, or AWS Glue Data Catalog). Michelangelo AI tracks dataset versions and lineage automatically.
 
 ### Feature
 
 An individual measurable property or characteristic of a phenomenon, represented as an attribute in a dataset.
 
-**Familiar Equivalent**: Same as in any ML framework - a column in your training data (e.g., "age", "transaction_amount", "embedding_vector"). Can be managed in external feature stores or within Michelangelo.
+**Familiar Equivalent**: Same as in any ML framework - a column in your training data (e.g., "age", "transaction_amount", "embedding_vector"). Can be managed in external feature stores or within Michelangelo AI.
 
 ### Pipeline
 
@@ -302,7 +302,7 @@ python train_workflow.py
 
 ## How Concepts Relate
 
-Understanding how Michelangelo's concepts work together:
+Understanding how Michelangelo AI's concepts work together:
 
 ```
 Project (e.g., "Fraud Detection")
@@ -336,7 +336,7 @@ Project (e.g., "Fraud Detection")
 ### Training Your First Model
 
 1. **Create a Project** for your use case (e.g., "Customer Churn Prediction")
-2. **Register your Dataset** in Michelangelo (connect to data warehouse)
+2. **Register your Dataset** in Michelangelo AI (connect to data warehouse)
 3. **Define a Workflow** with training tasks (or use MA Studio UI for no-code approach)
 4. **Run the workflow** and track results in Model Registry
 5. **Create a Deployment** to serve predictions via an Endpoint

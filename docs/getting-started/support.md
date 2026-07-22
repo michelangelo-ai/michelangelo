@@ -5,7 +5,7 @@ sidebar_label: "Support & Community"
 
 # Support & Community
 
-Need help with Michelangelo? Connect with the core team and developer community through our dedicated channels.
+Need help with Michelangelo AI? Connect with the core team and developer community through our dedicated channels.
 
 ## Get Help
 

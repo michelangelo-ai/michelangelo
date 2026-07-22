@@ -1,6 +1,6 @@
 # Model Registry
 
-Michelangelo ships a built-in model registry — no external server required. This guide explains how operators verify the registry is healthy, configure storage and access, and integrate registered models with downstream serving and CI/CD systems.
+Michelangelo AI ships a built-in model registry — no external server required. This guide explains how operators verify the registry is healthy, configure storage and access, and integrate registered models with downstream serving and CI/CD systems.
 
 ---
 
@@ -39,7 +39,7 @@ The registry is backed by a single Kubernetes Custom Resource: `Model` (CRD name
 Before working through this guide, ensure you have completed:
 
 - **[Platform Setup](../setup/platform-setup.md#object-store-configuration)** — the Controller Manager's `minio.*` fields must point to a reachable S3-compatible object store.
-- **Compute cluster registration** — at least one compute cluster registered with the Michelangelo control plane, so Uniflow tasks have somewhere to run.
+- **Compute cluster registration** — at least one compute cluster registered with the Michelangelo AI control plane, so Uniflow tasks have somewhere to run.
 - Sufficient cluster permissions to create Roles and RoleBindings, and to inspect Custom Resource Definitions.
 
 ---
@@ -52,7 +52,7 @@ Confirm the `Model` CRD is present in the cluster before expecting any registrat
 kubectl get crd models.michelangelo.api
 ```
 
-If the CRD is missing, re-run the Michelangelo CRD installation step described in [Platform Setup](../setup/platform-setup.md).
+If the CRD is missing, re-run the Michelangelo AI CRD installation step described in [Platform Setup](../setup/platform-setup.md).
 
 You can also spot-check a namespace for any existing models:
 
@@ -86,7 +86,7 @@ Task pods produce the raw model files during registration. If task pods run unde
 
 ### Artifact URI discovery
 
-The exact S3 layout for a model's artifacts is set by your platform configuration — Michelangelo does not prescribe a fixed directory structure. Rather than hardcoding paths, read the actual locations from each `Model` resource after registration:
+The exact S3 layout for a model's artifacts is set by your platform configuration — Michelangelo AI does not prescribe a fixed directory structure. Rather than hardcoding paths, read the actual locations from each `Model` resource after registration:
 
 ```bash
 # Raw training artifact URIs (weights, checkpoints)
@@ -273,7 +273,7 @@ ma model get -n <namespace> --limit 20
 
 ## Integrating with the Serving Layer
 
-Michelangelo's `InferenceServer` resource does not reference a `Model` resource by name in its spec. The wiring from a registered model to a running server flows through `Deployment` and `Revision` resources managed by the Controller Manager, which update a `modelconfig` ConfigMap consumed by the inference backend.
+Michelangelo AI's `InferenceServer` resource does not reference a `Model` resource by name in its spec. The wiring from a registered model to a running server flows through `Deployment` and `Revision` resources managed by the Controller Manager, which update a `modelconfig` ConfigMap consumed by the inference backend.
 
 A representative `InferenceServer` manifest:
 
@@ -388,7 +388,7 @@ Model artifacts in S3 are not automatically removed when a `Model` resource is d
 
 | Symptom | Likely cause | Resolution |
 |---|---|---|
-| `error: the server doesn't have a resource type "models"` | CRD not installed | Re-run the Michelangelo CRD installation step (see [Platform Setup](../setup/platform-setup.md)) |
+| `error: the server doesn't have a resource type "models"` | CRD not installed | Re-run the Michelangelo AI CRD installation step (see [Platform Setup](../setup/platform-setup.md)) |
 | `kubectl get models` returns `No resources found` but CRD is present | No models registered yet, or wrong namespace | Confirm a registration task has run; check the namespace |
 | `spec.model_artifact_uri` empty after registration | Controller Manager lacks S3 write permissions, or the registration task failed | Check Controller Manager logs; verify IAM policy on the bucket |
 | `spec.deployable_artifact_uri` empty | Packaging step did not run or failed | Inspect the pipeline run logs for the registration task |

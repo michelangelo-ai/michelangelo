@@ -1,10 +1,10 @@
 # Integrate with Your Custom Backend
 
-This guide explains how to extend Michelangelo Inference with custom serving backends, model configuration providers, and traffic routing.
+This guide explains how to extend Michelangelo AI Inference with custom serving backends, model configuration providers, and traffic routing.
 
 ## Overview
 
-Michelangelo Inference uses a plugin-based architecture with three main extension points:
+Michelangelo AI Inference uses a plugin-based architecture with three main extension points:
 
 | Interface | Purpose | Reference Implementation |
 | --------- | ------- | ------------------------ |

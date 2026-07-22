@@ -56,7 +56,7 @@ Kubernetes resource definitions (Deployments, Services, ConfigMaps) for local sa
 
 ## Helm Chart Values
 
-The Michelangelo Helm chart lives in `helm/michelangelo/`. Key files:
+The Michelangelo AI Helm chart lives in `helm/michelangelo/`. Key files:
 
 | File | Purpose |
 |------|---------|

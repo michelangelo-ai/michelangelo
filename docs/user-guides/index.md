@@ -1,10 +1,10 @@
-# Michelangelo User Guides
+# Michelangelo AI User Guides
 
-Build, train, and deploy machine learning models at scale using Michelangelo's unified ML platform.
+Build, train, and deploy machine learning models at scale using Michelangelo AI's unified ML platform.
 
 ## Getting Started
 
-New to Michelangelo? Follow this path:
+New to Michelangelo AI? Follow this path:
 
 1. **[Getting Started with Pipelines](./getting-started/getting-started.md)** — Build your first pipeline in 30 minutes
 2. **[Prepare Your Data](./getting-started/prepare-your-data.md)** — Load, clean, and split datasets using Ray and Spark

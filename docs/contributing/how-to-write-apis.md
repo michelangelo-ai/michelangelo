@@ -1,5 +1,5 @@
 # How to Write APIs
-This guide walks through the steps for building and compiling Protocol Buffers (Protos) of ML entities in the Michelangelo using Bazel and Gazelle.
+This guide walks through the steps for building and compiling Protocol Buffers (Protos) of ML entities in the Michelangelo AI using Bazel and Gazelle.
 
 ## 1. ML Entities in Proto Files
 
