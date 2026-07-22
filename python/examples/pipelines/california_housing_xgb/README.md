@@ -1,7 +1,7 @@
 # California Housing XGBoost
 
 End-to-end ML pipeline for California Housing price prediction using XGBoost.
-Demonstrates the full Michelangelo workflow: feature preparation, Spark
+Demonstrates the full Michelangelo AI workflow: feature preparation, Spark
 preprocessing, distributed Ray training, and a pusher step that exports the
 model, evaluation report, and preprocessed datasets to storage and registry.
 
@@ -23,7 +23,7 @@ The workflow is orchestrated in `california_housing_xgb.py`, which imports each 
 
 ## Prerequisites
 
-- A Michelangelo sandbox running (`ma sandbox create`)
+- A Michelangelo AI sandbox running (`ma sandbox create`)
 - A project created: `ma project apply -f examples/config/project.yaml`
 - Python 3.9+
 - Java 17 with `JAVA_HOME` set — required for Spark. Java 21 is incompatible with PySpark 3.5 + Hadoop 3.3 (`getSubject is not supported`). On macOS: `brew install openjdk@17` then `export JAVA_HOME=$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home`

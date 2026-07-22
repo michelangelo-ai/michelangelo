@@ -176,5 +176,5 @@ def my_workflow():
 - This implementation matches the Go/Starlark version exactly in terms of parameters, return types, and behavior
 - The function is synchronous and will block until the pipeline run reaches a terminal state
 - Failed or killed pipeline runs will raise a `RuntimeError`
-- The implementation uses the Michelangelo API client (`APIClient.PipelineRunService`) to create and monitor pipeline runs
+- The implementation uses the Michelangelo AI API client (`APIClient.PipelineRunService`) to create and monitor pipeline runs
 

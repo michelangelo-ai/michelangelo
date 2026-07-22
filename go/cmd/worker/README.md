@@ -1,6 +1,6 @@
 Worker is both a [Cadence workflow worker](https://cadenceworkflow.io/docs/concepts/topology#workflow-worker), [Cadence activity worker](https://cadenceworkflow.io/docs/concepts/topology#activity-worker), and now also supports [Temporal workflows and activities](https://docs.temporal.io/workflows).
 
-It hosts a set of workflows and activities required for various tasks within the Michelangelo platform.
+It hosts a set of workflows and activities required for various tasks within the Michelangelo AI platform.
 
 ## Developer Guide
 

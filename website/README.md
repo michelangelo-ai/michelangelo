@@ -1,6 +1,6 @@
-# Michelangelo Documentation
+# Michelangelo AI Documentation
 
-This is the documentation website for Michelangelo, built with [Docusaurus](https://docusaurus.io/).
+This is the documentation website for Michelangelo AI, built with [Docusaurus](https://docusaurus.io/).
 
 ## Prerequisites
 
@@ -124,7 +124,7 @@ Syntax highlighting is available for: `go`, `python`, `bash`, `yaml`, `json`, `j
 ````md
 ```python
 def hello():
-    print("Hello, Michelangelo!")
+    print("Hello, Michelangelo AI!")
 ```
 ````
 

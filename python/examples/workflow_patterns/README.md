@@ -41,7 +41,7 @@ To run with a larger dataset:
 python -m examples.workflow_patterns.workflow_patterns --input '{"large_dataset": true}'
 ```
 
-For remote execution on a Michelangelo cluster:
+For remote execution on a Michelangelo AI cluster:
 
 ```bash
 python -m examples.workflow_patterns.workflow_patterns remote-run \

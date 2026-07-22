@@ -1,8 +1,8 @@
-# Michelangelo Helm Chart
+# Michelangelo AI Helm Chart
 
 [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/michelangelo)](https://artifacthub.io/packages/helm/michelangelo/michelangelo)
 
-The `michelangelo` Helm chart installs the Michelangelo control plane — apiserver, gRPC-Web proxy (envoy), UI, workflow worker, controller manager, CRDs, and RBAC — into any Kubernetes cluster.
+The `michelangelo` Helm chart installs the Michelangelo AI control plane — apiserver, gRPC-Web proxy (envoy), UI, workflow worker, controller manager, CRDs, and RBAC — into any Kubernetes cluster.
 
 The chart owns only the **control plane**. Infrastructure (metadata storage, object storage, workflow engine) is your responsibility — bring your own RDS / Cloud SQL, S3 / GCS, and Cadence / Temporal, or use the local development setup below.
 
@@ -22,7 +22,7 @@ The chart owns only the **control plane**. Infrastructure (metadata storage, obj
 
 ### Local development (k3d)
 
-The Michelangelo CLI provisions a local k3d cluster, MySQL, and MinIO, then installs this chart with `values-k3d.yaml` (which enables the bundled Cadence or Temporal subchart based on `--workflow`):
+The Michelangelo AI CLI provisions a local k3d cluster, MySQL, and MinIO, then installs this chart with `values-k3d.yaml` (which enables the bundled Cadence or Temporal subchart based on `--workflow`):
 
 ```bash
 pip install michelangelo
@@ -125,7 +125,7 @@ GRANT ALL PRIVILEGES ON cadence.* TO 'your_user'@'%';
 GRANT ALL PRIVILEGES ON cadence_visibility.* TO 'your_user'@'%';
 ```
 
-The Michelangelo control plane uses the `michelangelo` database — there is no conflict. You can share a single MySQL instance by setting both `metadataStorage.host` and `cadence.config.persistence.database.sql.hosts` to the same hostname.
+The Michelangelo AI control plane uses the `michelangelo` database — there is no conflict. You can share a single MySQL instance by setting both `metadataStorage.host` and `cadence.config.persistence.database.sql.hosts` to the same hostname.
 
 ### Mutual exclusivity with Temporal
 

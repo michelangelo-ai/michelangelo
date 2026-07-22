@@ -3,9 +3,9 @@
 [![codecov](https://codecov.io/gh/michelangelo-ai/michelangelo/graph/badge.svg?token=HKJDT0I6CW)](https://codecov.io/gh/michelangelo-ai/michelangelo)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11481/badge)](https://www.bestpractices.dev/projects/11481)
 
-# Michelangelo-AI
+# Michelangelo AI-AI
 
-Michelangelo-AI is an open-source platform designed to streamline the development, deployment, and monitoring of machine learning models at scale. It offers a comprehensive suite of tools and services that facilitate the entire machine learning lifecycle, from data management to model serving.
+Michelangelo AI-AI is an open-source platform designed to streamline the development, deployment, and monitoring of machine learning models at scale. It offers a comprehensive suite of tools and services that facilitate the entire machine learning lifecycle, from data management to model serving.
 
 :warning: **Beta Notice**
  This project is currently in beta. APIs and features may evolve, and breaking changes may occur as we continue to improve and stabilize the platform.
@@ -19,7 +19,7 @@ As part of our commitment to the ML community, we are open-sourcing an **end-to-
 -   **Foster innovation and trust** through collaboration with partner teams, and
 -   **Cultivate a vibrant and responsible ML culture** that empowers the community to build with confidence and speed.
 
-We are **incrementally open-sourcing Michelangelo's core capabilities**, ensuring each release is production-proven and developer-ready. The documentation on this site reflects the current set of available features and will be continuously updated as new components are added to the open-source repository.
+We are **incrementally open-sourcing Michelangelo AI's core capabilities**, ensuring each release is production-proven and developer-ready. The documentation on this site reflects the current set of available features and will be continuously updated as new components are added to the open-source repository.
 
 ## Features
 
@@ -79,7 +79,7 @@ See the [Sandbox Setup](https://michelangelo-ai.org/docs/getting-started/sandbox
 
 ## Contributing
 
-We welcome contributions to Michelangelo-AI!  
+We welcome contributions to Michelangelo AI-AI!  
 If you're interested in contributing, please read our [Contributing Guidelines](https://github.com/michelangelo-ai/michelangelo/blob/main/CONTRIBUTING.md) to get started.
 
 
@@ -90,4 +90,4 @@ This project is licensed under the [Apache 2.0 License](https://github.com/miche
 
 ## Acknowledgments
 
-Thank you to the Michelangelo Open Source team for getting this project off the ground, and thank you in advance to our contributors.
+Thank you to the Michelangelo AI Open Source team for getting this project off the ground, and thank you in advance to our contributors.

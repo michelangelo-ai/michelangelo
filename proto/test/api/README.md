@@ -1,6 +1,6 @@
 # Multi-Version CRD Support Setup Guide
 
-This guide explains how to add multi-version support for Custom Resource Definitions (CRDs) in the Michelangelo API Server. This is useful for testing API versioning, backward compatibility, and CRD conversion webhooks.
+This guide explains how to add multi-version support for Custom Resource Definitions (CRDs) in the Michelangelo AI API Server. This is useful for testing API versioning, backward compatibility, and CRD conversion webhooks.
 
 ## Overview
 

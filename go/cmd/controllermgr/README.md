@@ -2,7 +2,7 @@
 
 ## Run Locally
 
-To run the Controller Manager locally, ensure your Kubernetes configuration is connected to the existing Michelangelo Cluster. Alternatively, you can use the sandbox script to create a production-like replica of the Michelangelo Cluster locally, which will also update your Kubernetes configuration.
+To run the Controller Manager locally, ensure your Kubernetes configuration is connected to the existing Michelangelo AI Cluster. Alternatively, you can use the sandbox script to create a production-like replica of the Michelangelo AI Cluster locally, which will also update your Kubernetes configuration.
 
 1. **Create a sandbox cluster:**
 ```bash
