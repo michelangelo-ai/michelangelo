@@ -233,11 +233,11 @@ class TestConstant:
         torch.testing.assert_close(outputs["const"], torch.tensor([3.14, 3.14, 3.14]))
 
     def test_no_input_column_raises(self) -> None:
-        """An empty ``input_cols`` raises ``ValueError``."""
-        with pytest.raises(ValueError):
-            Constant(
-                input_cols=[], output_cols=["const"], constant=42, dtype=torch.int32
-            )
+        """Empty (but length-matched) columns raise for the missing shape ref."""
+        # input_cols and output_cols are both empty, so the length check passes
+        # and the empty-shape-reference guard is what fires.
+        with pytest.raises(ValueError, match="at least one input column"):
+            Constant(input_cols=[], output_cols=[], constant=42, dtype=torch.int32)
 
     def test_forward_multiple_columns(self) -> None:
         """Each output column gets its own constant-filled tensor."""
