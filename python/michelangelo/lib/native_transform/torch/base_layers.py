@@ -21,6 +21,7 @@ from michelangelo.lib.native_transform.torch.constants import DEFAULT_EPSILON
 from michelangelo.lib.native_transform.torch.utils import (
     format_inputs,
     format_outputs,
+    generate_layer_name,
     initialize_dtype,
 )
 
@@ -50,7 +51,9 @@ class TorchTransformBaseLayer(torch.nn.Module, abc.ABC):
         input_cols: Column names of the input tensors.
         output_cols: Column names of the output tensors.
         **kwargs: Additional options. ``name`` (str) sets the layer name, which
-            must be unique within a model; it defaults to ``"transform_layer"``.
+            must be unique within a model. When omitted, a unique name is
+            generated automatically from the layer's class name (e.g.
+            ``"stack_A1B2C3D4E5"``).
     """
 
     def __init__(self, input_cols: list[str], output_cols: list[str], **kwargs) -> None:
@@ -59,12 +62,16 @@ class TorchTransformBaseLayer(torch.nn.Module, abc.ABC):
         Args:
             input_cols: Column names of the input tensors.
             output_cols: Column names of the output tensors.
-            **kwargs: Additional options; ``name`` (str) sets the layer name.
+            **kwargs: Additional options; ``name`` (str) sets the layer name. When
+                omitted, a unique name is generated from the class name.
         """
         super().__init__()
         self.input_cols = input_cols
         self.output_cols = output_cols
-        self.name = kwargs.get("name", "transform_layer")
+        name = kwargs.get("name")
+        self.name = (
+            name if name is not None else generate_layer_name(self.__class__.__name__)
+        )
 
     @abc.abstractmethod
     def forward(self, inputs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
@@ -146,21 +153,27 @@ class Stack(TorchTransformBaseLayer):
     Args:
         input_cols: Column names of the input tensors.
         output_cols: Single-element list naming the stacked output column.
-        **kwargs: Additional options. ``dim`` (int) is the dimension along which
-            to stack (default ``-1``); ``name`` sets the layer name.
+        dim: The dimension along which to stack (default ``-1``).
+        **kwargs: Additional base-layer options (e.g. ``name``).
     """
 
-    def __init__(self, input_cols: list[str], output_cols: list[str], **kwargs) -> None:
+    def __init__(
+        self,
+        input_cols: list[str],
+        output_cols: list[str],
+        dim: int = -1,
+        **kwargs,
+    ) -> None:
         """Initialize the Stack layer.
 
         Args:
             input_cols: Column names of the input tensors.
             output_cols: Single-element list naming the stacked output column.
-            **kwargs: Additional options; ``dim`` (int, default ``-1``) selects
-                the new dimension, and ``name`` sets the layer name.
+            dim: The new dimension along which to stack (default ``-1``).
+            **kwargs: Additional base-layer options (e.g. ``name``).
         """
         super().__init__(input_cols, output_cols, **kwargs)
-        self.dim: int = kwargs.get("dim", -1)
+        self.dim: int = dim
 
     def forward(self, inputs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         """Stack the input columns along ``dim``.
@@ -185,12 +198,15 @@ class Cast(TorchTransformBaseLayer):
         input_cols: Column names of the input tensors.
         output_cols: Column names of the output tensors; must match the length
             of ``input_cols``.
-        dtype: Target dtype to cast to. Defaults to ``torch.int64`` when not a
-            recognized dtype or string alias.
+        dtype: Target dtype to cast to. May be a ``torch.dtype`` or a string
+            alias (e.g. ``"float32"`` or ``"torch.float32"``). Defaults to
+            ``torch.int64`` when ``None``. An unrecognized string alias raises
+            ``ValueError``.
         **kwargs: Additional base-layer options (e.g. ``name``).
 
     Raises:
-        ValueError: If ``input_cols`` and ``output_cols`` differ in length.
+        ValueError: If ``input_cols`` and ``output_cols`` differ in length, or if
+            ``dtype`` is a string that names no recognized dtype.
     """
 
     def __init__(
@@ -206,11 +222,13 @@ class Cast(TorchTransformBaseLayer):
             input_cols: Column names of the input tensors.
             output_cols: Column names of the output tensors; must match the
                 length of ``input_cols``.
-            dtype: Target dtype; defaults to ``torch.int64``.
+            dtype: Target dtype (``torch.dtype`` or string alias); defaults to
+                ``torch.int64`` when ``None``.
             **kwargs: Additional base-layer options (e.g. ``name``).
 
         Raises:
-            ValueError: If ``input_cols`` and ``output_cols`` differ in length.
+            ValueError: If ``input_cols`` and ``output_cols`` differ in length,
+                or if ``dtype`` is a string that names no recognized dtype.
         """
         if len(input_cols) != len(output_cols):
             raise ValueError(
@@ -325,10 +343,10 @@ class Divide(TorchTransformBaseLayer):
         output_cols: Column names of the quotient outputs.
         add_constant_to_divisor: Constant added to every denominator before
             division.
-        **kwargs: Additional options. ``eps`` (float) is the small value
-            substituted for a zero denominator (default
-            :data:`~michelangelo.lib.native_transform.torch.constants.DEFAULT_EPSILON`);
-            ``name`` sets the layer name.
+        eps: Small value substituted for a zero denominator to avoid division by
+            zero (default
+            :data:`~michelangelo.lib.native_transform.torch.constants.DEFAULT_EPSILON`).
+        **kwargs: Additional base-layer options (e.g. ``name``).
 
     Raises:
         ValueError: If ``input_cols`` is not even, or ``output_cols`` is not half
@@ -340,6 +358,7 @@ class Divide(TorchTransformBaseLayer):
         input_cols: list[str],
         output_cols: list[str],
         add_constant_to_divisor: float = 0.0,
+        eps: float = DEFAULT_EPSILON,
         **kwargs,
     ) -> None:
         """Initialize the Divide layer.
@@ -348,8 +367,9 @@ class Divide(TorchTransformBaseLayer):
             input_cols: Column names as ``(numerator, denominator)`` pairs.
             output_cols: Column names of the quotient outputs.
             add_constant_to_divisor: Constant added to every denominator.
-            **kwargs: Additional options; ``eps`` (float) overrides the zero-safe
-                epsilon and ``name`` sets the layer name.
+            eps: Small value substituted for a zero denominator (default
+                :data:`~michelangelo.lib.native_transform.torch.constants.DEFAULT_EPSILON`).
+            **kwargs: Additional base-layer options (e.g. ``name``).
 
         Raises:
             ValueError: If ``input_cols`` is not even, or ``output_cols`` is not
@@ -362,7 +382,7 @@ class Divide(TorchTransformBaseLayer):
                 "input columns."
             )
         self.add_constant_to_divisor = add_constant_to_divisor
-        self.eps = kwargs.get("eps", DEFAULT_EPSILON)
+        self.eps = eps
 
     def forward(self, inputs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         """Divide numerators by denominators, pairwise and zero-safe.
@@ -405,34 +425,39 @@ class LogTransform(TorchTransformBaseLayer):
         input_cols: Column names of the input tensors.
         output_cols: Column names of the output tensors; must match the length of
             ``input_cols``.
-        **kwargs: Additional options. ``add_constant`` (float) is added before
-            the logarithm to avoid ``log(0)`` (default ``1.0``); ``name`` sets
-            the layer name.
+        add_constant: Value added before the logarithm to avoid ``log(0)``
+            (default ``1.0``).
+        **kwargs: Additional base-layer options (e.g. ``name``).
 
     Raises:
         ValueError: If ``input_cols`` and ``output_cols`` differ in length.
     """
 
-    def __init__(self, input_cols: list[str], output_cols: list[str], **kwargs) -> None:
+    def __init__(
+        self,
+        input_cols: list[str],
+        output_cols: list[str],
+        add_constant: float = 1.0,
+        **kwargs,
+    ) -> None:
         """Initialize the LogTransform layer.
 
         Args:
             input_cols: Column names of the input tensors.
             output_cols: Column names of the output tensors; must match the
                 length of ``input_cols``.
-            **kwargs: Additional options; ``add_constant`` (float, default
-                ``1.0``) is added before the logarithm and ``name`` sets the
-                layer name.
+            add_constant: Value added before the logarithm (default ``1.0``).
+            **kwargs: Additional base-layer options (e.g. ``name``).
 
         Raises:
             ValueError: If ``input_cols`` and ``output_cols`` differ in length.
         """
-        super().__init__(input_cols, output_cols)
+        super().__init__(input_cols, output_cols, **kwargs)
         if len(input_cols) != len(output_cols):
             raise ValueError(
                 "Input columns and output columns must have the same length."
             )
-        self.add_constant = kwargs.get("add_constant", 1.0)
+        self.add_constant = add_constant
 
     def forward(self, inputs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         """Apply the log transform to each input column.

@@ -92,6 +92,10 @@ class TestToSnakeCase:
         """Known name/expected pairs convert correctly."""
         assert to_snake_case(name) == expected
 
+    def test_empty_string_does_not_raise(self) -> None:
+        """An empty string is returned unchanged instead of raising."""
+        assert to_snake_case("") == ""
+
 
 class TestResolveTorchDtype:
     """Resolution of dtype specs to concrete torch dtypes."""
@@ -137,9 +141,20 @@ class TestInitializeDtype:
         assert initialize_dtype("float32", torch.int32) == torch.float32
         assert initialize_dtype("int64", torch.int32) == torch.int64
 
-    def test_invalid_string_returns_none(self) -> None:
-        """An unrecognized string alias resolves to ``None``."""
-        assert initialize_dtype("invalid_dtype", torch.int32) is None
+    def test_torch_prefixed_string(self) -> None:
+        """A ``torch.``-prefixed string alias resolves like the bare alias."""
+        assert initialize_dtype("torch.float32", torch.int32) == torch.float32
+        assert initialize_dtype("torch.int64", torch.int32) == torch.int64
+
+    def test_agrees_with_resolve_torch_dtype(self) -> None:
+        """Both string families resolve identically to ``resolve_torch_dtype``."""
+        for spec in ("float32", "torch.float32", "int64", "torch.int64", "bool"):
+            assert initialize_dtype(spec, torch.int32) == resolve_torch_dtype(spec)
+
+    def test_invalid_string_raises(self) -> None:
+        """An unrecognized string alias raises ``ValueError``."""
+        with pytest.raises(ValueError, match="Unsupported dtype specification"):
+            initialize_dtype("flaot32", torch.int32)
 
     def test_falls_back_to_default(self) -> None:
         """Non-dtype, non-string inputs fall back to the default dtype."""

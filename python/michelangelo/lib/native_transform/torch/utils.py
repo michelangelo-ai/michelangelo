@@ -85,8 +85,9 @@ def to_snake_case(name: str) -> str:
     intermediate = re.sub("(.)([A-Z][a-z0-9]+)", r"\1_\2", name)
     insecure = re.sub("([a-z])([A-Z])", r"\1_\2", intermediate).lower()
     # A leading underscore (from a private class name) is not a valid scope
-    # name, so prefix it with "private".
-    if insecure[0] != "_":
+    # name, so prefix it with "private". An empty string has no leading
+    # underscore, so it is returned unchanged.
+    if not insecure or insecure[0] != "_":
         return insecure
     return "private" + insecure
 
@@ -131,26 +132,35 @@ def resolve_torch_dtype(dtype_spec: torch.dtype | str) -> torch.dtype | str:
 
 def initialize_dtype(
     raw_dtype: torch.dtype | str | None, default_dtype: torch.dtype | None
-) -> torch.dtype | None:
+) -> torch.dtype | str | None:
     """Resolve a layer's dtype argument, falling back to a default.
+
+    String inputs are resolved through :func:`resolve_torch_dtype`, so the two
+    functions agree on every string: both the ``"torch."``-prefixed class names
+    (e.g. ``"torch.float32"``) and the bare aliases (e.g. ``"float32"``) are
+    recognized, and an unrecognized string raises ``ValueError`` rather than
+    silently resolving to ``None``.
 
     Args:
         raw_dtype: The dtype value from a layer spec. May be a ``torch.dtype``, a
-            string alias (e.g. ``"float32"``), or ``None``.
+            string alias (e.g. ``"float32"`` or ``"torch.float32"``), or
+            ``None``.
         default_dtype: The dtype to return when ``raw_dtype`` is neither a
-            ``torch.dtype`` nor a string.
+            ``torch.dtype`` nor a string (e.g. ``None``).
 
     Returns:
-        The resolved ``torch.dtype``. When ``raw_dtype`` is an unrecognized
-        string alias, ``None`` is returned (the caller decides how to handle an
-        unresolved dtype).
+        The resolved ``torch.dtype`` for a dtype or recognized string, ``"string"``
+        for the string-type alias, or ``default_dtype`` when ``raw_dtype`` is
+        neither a ``torch.dtype`` nor a string.
+
+    Raises:
+        ValueError: If ``raw_dtype`` is a string that names no recognized dtype.
     """
     if isinstance(raw_dtype, torch.dtype):
         return raw_dtype
-    elif isinstance(raw_dtype, str):
-        return STRING_DATA_TYPE_TO_TORCH_TYPE_MAP.get(raw_dtype, None)
-    else:
-        return default_dtype
+    if isinstance(raw_dtype, str):
+        return resolve_torch_dtype(raw_dtype)
+    return default_dtype
 
 
 def format_inputs(

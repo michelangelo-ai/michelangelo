@@ -50,9 +50,22 @@ class TestTorchTransformBaseLayer:
         assert layer.output_cols == ["output"]
 
     def test_init_without_kwargs(self) -> None:
-        """``name`` defaults to ``"transform_layer"``."""
+        """``name`` defaults to a generated snake_case name from the class."""
         layer = _BaseTestLayer(input_cols=[], output_cols=[])
-        assert layer.name == "transform_layer"
+        # ``_BaseTestLayer`` is a private (leading-underscore) class name, so the
+        # generated name is prefixed with "private" per ``to_snake_case``.
+        assert layer.name.startswith("private__base_test_layer_")
+
+    def test_default_names_are_unique(self) -> None:
+        """Two default-constructed layers of the same class get distinct names."""
+        first = _BaseTestLayer(input_cols=[], output_cols=[])
+        second = _BaseTestLayer(input_cols=[], output_cols=[])
+        assert first.name != second.name
+
+    def test_explicit_name_overrides_generation(self) -> None:
+        """An explicit ``name`` is used verbatim, not auto-generated."""
+        layer = _BaseTestLayer(input_cols=[], output_cols=[], name="explicit")
+        assert layer.name == "explicit"
 
     def test_abstract_class_cannot_be_instantiated(self) -> None:
         """The abstract base cannot be instantiated directly."""
@@ -214,6 +227,19 @@ class TestCast:
         with pytest.raises(ValueError, match="same length"):
             Cast(input_cols=["a", "b"], output_cols=["out"])
 
+    @pytest.mark.parametrize("dtype", ["float32", "torch.float32"])
+    def test_string_dtype_aliases_behave_identically(self, dtype: str) -> None:
+        """Bare and ``torch.``-prefixed string aliases both cast correctly."""
+        layer = Cast(input_cols=["feature"], output_cols=["casted"], dtype=dtype)
+        assert layer.dtype == torch.float32
+        inputs = {"feature": torch.tensor([1, 2, 3], dtype=torch.int32)}
+        assert layer(inputs)["casted"].dtype == torch.float32
+
+    def test_unrecognized_dtype_string_raises(self) -> None:
+        """A typo'd dtype string raises instead of silently no-op'ing."""
+        with pytest.raises(ValueError, match="Unsupported dtype specification"):
+            Cast(input_cols=["feature"], output_cols=["casted"], dtype="flaot32")
+
 
 class TestConstant:
     """Constant tensor generation shaped like the input."""
@@ -347,6 +373,16 @@ class TestDivide:
         with pytest.raises(ValueError, match="even"):
             Divide(input_cols=["a", "b", "c"], output_cols=["out"])
 
+    def test_explicit_eps_is_stored_and_applied(self) -> None:
+        """An explicit ``eps`` is stored and substituted for a zero denominator."""
+        layer = Divide(input_cols=["num", "den"], output_cols=["out"], eps=0.5)
+        assert layer.eps == 0.5
+        # 10 / eps when the denominator is zero.
+        inputs = {"num": torch.tensor([10.0]), "den": torch.tensor([0.0])}
+        torch.testing.assert_close(
+            layer(inputs)["out"], torch.tensor([20.0], dtype=torch.float64)
+        )
+
 
 class TestLogTransform:
     """Logarithmic transform with offset and clamping."""
@@ -383,6 +419,13 @@ class TestLogTransform:
         """Unequal input/output column counts raise ``ValueError``."""
         with pytest.raises(ValueError, match="same length"):
             LogTransform(input_cols=["feat1", "feat2"], output_cols=["out1"])
+
+    def test_name_kwarg_is_honored(self) -> None:
+        """``name`` is forwarded to the base class rather than dropped."""
+        layer = LogTransform(
+            input_cols=["feature"], output_cols=["log_feature"], name="my_log"
+        )
+        assert layer.name == "my_log"
 
 
 class TestSubtract:
