@@ -1,0 +1,69 @@
+# Michelangelo Deployment — Zonal rollout with metric health gate
+#
+# What this is:
+#   A Michelangelo Deployment CR that manages rolling out a model revision to
+#   inference-server-multi (backed by NVIDIA Triton). The health gate evaluates
+#   PromQL rules against Prometheus before advancing from one cluster to the next.
+#
+# What this is NOT:
+#   This does not manage the KServe InferenceService (inferenceservice.yaml).
+#   KServe and Michelangelo are separate systems. KServe is installed on the
+#   compute cluster and serves its own models independently. Michelangelo manages
+#   Triton via its own InferenceServer CR.
+#
+# Prerequisites:
+#   - InferenceServer 'inference-server-multi' must exist and target compute clusters
+#   - Revision 'my-model-v1' must exist
+#
+# Apply:
+#   kubectl apply -f deployment-with-healthcheck.yaml
+#
+# Force rollback (for demo):
+#   kubectl patch deployment.michelangelo.api/triton-zonal-deployment --type=merge \
+#     -p '{"spec":{"healthCheckConfig":{"rules":[{"name":"force-rollback","query":"vector(1)","op":"GT","threshold":0}]}}}'
+#
+# Clear and resume:
+#   kubectl patch deployment.michelangelo.api/triton-zonal-deployment --type=merge \
+#     -p '{"spec":{"healthCheckConfig":{"rules":[]}}}'
+
+apiVersion: michelangelo.api/v2
+kind: Deployment
+metadata:
+  name: triton-zonal-deployment
+  namespace: default
+spec:
+  desiredRevision:
+    name: my-model-v1
+    namespace: default
+  inferenceServer:
+    name: inference-server-multi   # Michelangelo-managed Triton InferenceServer
+    namespace: default
+  definition:
+    type: TARGET_TYPE_INFERENCE_SERVER
+
+  # Zonal: roll out to one cluster at a time, soak 5 minutes between zones.
+  # The controller will not advance to the next cluster until the health gate
+  # passes after the soak period.
+  strategy:
+    zonal:
+      rolloutPeriodInSeconds: 300
+
+  healthCheckConfig:
+    prometheusUrl: "http://michelangelo-prometheus-server:9090"
+    rules:
+      # Roll back if Triton inference error rate exceeds 5% over 2 minutes.
+      # Requires Prometheus scraping Triton's /metrics endpoint on port 8002.
+      - name: high-error-rate
+        query: >-
+          rate(nv_inference_request_failure_total{model="my-model-v1"}[2m])
+          / rate(nv_inference_request_success_total{model="my-model-v1"}[2m])
+        op: GT
+        threshold: 0.05
+
+      # Roll back if Triton P99 inference latency exceeds 1 second over 2 minutes.
+      - name: high-latency-p99
+        query: >-
+          histogram_quantile(0.99,
+            rate(nv_inference_request_duration_us_bucket{model="my-model-v1"}[2m])) / 1e6
+        op: GT
+        threshold: 1.0

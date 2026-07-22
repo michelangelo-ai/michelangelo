@@ -13,6 +13,12 @@ import (
 	k8sptr "k8s.io/utils/ptr"
 )
 
+// submitterBackoffLimit is the backoffLimit for the k8s Job that runs `ray job submit`.
+// KubeRay's own default (2, i.e. 3 attempts total) exhausts in well under a minute, which
+// is too tight to tolerate a single transient failure to reach the head pod's dashboard
+// agent (e.g. a brief crash under host resource pressure).
+const submitterBackoffLimit = 20
+
 // LogPersistenceConfig holds platform-level configuration for log persistence.
 // Loaded from YAML under jobs.k8sengine.mapper.logPersistence.
 // See: https://github.com/ray-project/kuberay/tree/master/historyserver/config
@@ -67,6 +73,9 @@ func (m Mapper) mapRay(rayJob *v2pb.RayJob, jobClusterObject runtime.Object, clu
 			// We need to allow user to configure the submitter pod template via ray task configuration
 			// Note: Add support for v1.2.2 kuberay once we upgrade to newer version
 			SubmitterPodTemplate: &submitterPod,
+			SubmitterConfig: &rayv1.SubmitterConfig{
+				BackoffLimit: k8sptr.To(int32(submitterBackoffLimit)),
+			},
 		},
 	}
 
@@ -384,9 +393,14 @@ func getRayClusterStateFromKubeRayState(kubeRayState rayv1.ClusterState) v2pb.Ra
 func isFailureCondition(cond metav1.Condition) bool {
 	switch rayv1.RayClusterConditionType(cond.Type) {
 	case rayv1.HeadPodReady:
+		// "HeadPodNotFound" and "ContainersNotReady" are transient: kuberay sets
+		// them while the pod is being created / containers are starting.
+		// Treat them like RayClusterPodsProvisioning (normal provisioning in progress).
 		return cond.Status == metav1.ConditionFalse &&
 			cond.Reason != "" &&
-			cond.Reason != rayv1.RayClusterPodsProvisioning
+			cond.Reason != rayv1.RayClusterPodsProvisioning &&
+			cond.Reason != "HeadPodNotFound" &&
+			cond.Reason != "ContainersNotReady"
 	case rayv1.RayClusterReplicaFailure:
 		return cond.Status == metav1.ConditionTrue
 	default:

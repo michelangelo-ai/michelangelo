@@ -1,0 +1,40 @@
+# Proxy service that makes the sandbox MinIO accessible in compute clusters
+# under the same DNS name (minio:9091) used by the sandbox cluster itself.
+# Needed because compute clusters have no MinIO of their own, and the
+# pipeline's default AWS_ENDPOINT_URL (michelangelo-config.yaml) is
+# http://minio:9091 unconditionally.
+#
+# The Endpoints IP below must match the sandbox server node's current Docker
+# bridge IP, which DRIFTS across Docker Desktop / k3d restarts — if
+# cross-cluster MinIO access starts failing, this is the first thing to
+# check and re-apply:
+#   docker inspect k3d-michelangelo-sandbox-server-0 --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
+#   kubectl --context k3d-michelangelo-compute-1 patch endpoints minio -n default \
+#     --type=json -p='[{"op":"replace","path":"/subsets/0/addresses/0/ip","value":"<new-ip>"}]'
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: default
+spec:
+  ports:
+  - name: api
+    port: 9091
+    targetPort: 9091
+  - name: console
+    port: 9090
+    targetPort: 9090
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: minio
+  namespace: default
+subsets:
+- addresses:
+  - ip: 172.18.0.6  # k3d-michelangelo-sandbox-server-0 Docker bridge IP — verify before reapplying, this drifts
+  ports:
+  - name: api
+    port: 30007     # sandbox MinIO NodePort for port 9091
+  - name: console
+    port: 30008     # sandbox MinIO NodePort for port 9090

@@ -32,6 +32,14 @@ rules:
   # target cluster; CleanupActor deletes them on teardown.
   resources: ["httproutes"]
   verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
+- apiGroups: ["ray.io"]
+  # Required for the jobs controller to provision RayCluster and RayJob CRs for uniflow runs.
+  resources: ["rayclusters", "rayclusters/status", "rayclusters/finalizers", "rayjobs", "rayjobs/status", "rayjobs/finalizers"]
+  verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
+- apiGroups: ["serving.kserve.io"]
+  # Required for the KServe backend to create/read InferenceService CRs on target clusters.
+  resources: ["inferenceservices", "inferenceservices/status"]
+  verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

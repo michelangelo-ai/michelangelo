@@ -1,0 +1,31 @@
+# KServe InferenceService — sklearn-iris demo
+#
+# This is a standalone KServe CR applied directly to the compute cluster.
+# It is NOT managed by Michelangelo's InferenceServer or Deployment controllers.
+#
+# KServe manages its own model serving lifecycle (predictor pods, routing,
+# scaling) independently. Michelangelo does not know this InferenceService exists.
+#
+# Apply to compute cluster:
+#   kubectl --context k3d-michelangelo-compute-1 apply -f inferenceservice.yaml
+#
+# Test:
+#   kubectl --context k3d-michelangelo-compute-1 \
+#     port-forward svc/sklearn-iris-predictor -n default 8081:80
+#   curl -X POST http://localhost:8081/v1/models/sklearn-iris:predict \
+#     -H "Content-Type: application/json" \
+#     -d '{"instances": [[6.8, 2.8, 4.8, 1.4]]}'
+
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: sklearn-iris
+  namespace: default
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
+spec:
+  predictor:
+    model:
+      modelFormat:
+        name: sklearn
+      storageUri: "gs://kfserving-examples/models/sklearn/1.0/model"

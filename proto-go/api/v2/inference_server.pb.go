@@ -67,6 +67,7 @@ const (
 	BACKEND_TYPE_LLM_D      BackendType = 2
 	BACKEND_TYPE_DYNAMO     BackendType = 3
 	BACKEND_TYPE_TORCHSERVE BackendType = 4
+	BACKEND_TYPE_KSERVE     BackendType = 5
 )
 
 var BackendType_name = map[int32]string{
@@ -75,6 +76,7 @@ var BackendType_name = map[int32]string{
 	2: "BACKEND_TYPE_LLM_D",
 	3: "BACKEND_TYPE_DYNAMO",
 	4: "BACKEND_TYPE_TORCHSERVE",
+	5: "BACKEND_TYPE_KSERVE",
 }
 
 var BackendType_value = map[string]int32{
@@ -83,6 +85,7 @@ var BackendType_value = map[string]int32{
 	"BACKEND_TYPE_LLM_D":      2,
 	"BACKEND_TYPE_DYNAMO":     3,
 	"BACKEND_TYPE_TORCHSERVE": 4,
+	"BACKEND_TYPE_KSERVE":     5,
 }
 
 func (BackendType) EnumDescriptor() ([]byte, []int) {

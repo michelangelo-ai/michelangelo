@@ -1,15 +1,22 @@
 package oss
 
 import (
+	"go.uber.org/config"
 	"go.uber.org/fx"
 
+	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // Module for fx dependency injection
 var Module = fx.Options(
+	fx.Provide(newDeploymentConfig),
 	fx.Invoke(register),
 )
+
+func newDeploymentConfig(provider config.Provider) (maconfig.DeploymentConfig, error) {
+	return maconfig.GetDeploymentConfig(provider)
+}
 
 // Register registers the OSS plugin for all target types and subtypes
 func register(p Params) error {

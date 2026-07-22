@@ -1,6 +1,7 @@
 """Training task for fine-tuning a BERT model on the CoLA dataset."""
 
 import logging
+import os
 
 import numpy as np
 import torch
@@ -9,9 +10,12 @@ from datasets import Dataset as HFDataset
 from ray.data import Dataset
 
 import michelangelo.uniflow.core as uniflow
+from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
 from michelangelo.uniflow.plugins.ray import RayTask
 
 log = logging.getLogger(__name__)
+
+_MODEL_NAME = "bert-cola"
 
 
 # Model creation function
@@ -58,7 +62,7 @@ def train(
         test_data: Ray Dataset containing test examples.
 
     Returns:
-        Dictionary containing training metrics and model save path.
+        Training metrics and the s3:// URI of the uploaded checkpoint.
     """
     log.info("Starting training...")
 
@@ -104,13 +108,27 @@ def train(
     train_result = trainer.train()
     trainer.save_model(output_dir)
 
-    log.info("Training complete. Best model saved.")
+    log.info("Training complete. Best model saved to %s", output_dir)
 
-    # Get the best checkpoint path
-    best_checkpoint = training_args.output_dir + "/checkpoint-best"
-    log.info(f"Best checkpoint path: {best_checkpoint}")
+    # upload_and_deploy runs on its own ephemeral RayCluster, so the local
+    # output_dir doesn't survive past this task's pod — upload it to shared
+    # storage and hand off a URI instead of a local path.
+    endpoint = os.environ.get("AWS_ENDPOINT_URL", "http://minio:9091")
+    endpoint_host = endpoint.replace("http://", "").replace("https://", "")
+    secure = os.environ.get("MA_FILE_SYSTEM_S3_SCHEME", "http") == "https"
 
-    return train_result, best_checkpoint
+    storage = MinioStorageBackend(
+        endpoint=endpoint_host,
+        bucket="deploy-models",
+        access_key=os.environ.get("AWS_ACCESS_KEY_ID", "minioadmin"),
+        secret_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "minioadmin"),
+        secure=secure,
+        create_bucket_if_missing=True,
+    )
+    checkpoint_uri = storage.upload(output_dir, f"{_MODEL_NAME}/checkpoint")
+    log.info("Checkpoint uploaded to %s", checkpoint_uri)
+
+    return train_result, checkpoint_uri
 
 
 def _compute_metrics(eval_pred):

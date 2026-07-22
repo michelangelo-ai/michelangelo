@@ -11,14 +11,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	osscommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory/clientfactorymocks"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig/modelconfigmocks"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -32,40 +31,36 @@ const (
 )
 
 type clientErrors struct {
-	getClient     error
-	getHTTPClient error
+	getClient        error
+	getHTTPClient    error
+	getDynamicClient error
 }
 
-// rolloutMocks groups every mock used by both rolling-rollout and model-cleanup tests so
-// per-test setup callbacks can program them in one place.
+// rolloutMocks groups every mock used by rolling-rollout and model-cleanup tests.
 type rolloutMocks struct {
-	factory             *clientfactorymocks.MockClientFactory
-	backend             *backendsmocks.MockBackend
-	modelConfigProvider *modelconfigmocks.MockModelConfigProvider
-	backendRegistry     *backends.Registry
+	factory         *clientfactorymocks.MockClientFactory
+	backend         *backendsmocks.MockBackend
+	backendRegistry *backends.Registry
 }
 
-// newRolloutFixture builds a target wired to the supplied mocks. clientErrs lets a test
-// inject GetClient / GetHTTPClient failures without re-mocking the factory each time;
-// when both are nil the factory returns nil, nil for both methods.
-//
-// registerBackend controls whether the BackendRegistry has a backend registered for Triton;
-// when false, GetBackend returns an error so the actor's BackendUnavailable branch fires.
+// newRolloutFixture builds a target wired to the supplied mocks.
+// registerBackend controls whether BACKEND_TYPE_TRITON is in the registry.
 func newRolloutFixture(t *testing.T, clientErrs clientErrors, registerBackend bool) (*rolloutMocks, *v2pb.ClusterTarget) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
 	mocks := &rolloutMocks{
-		factory:             clientfactorymocks.NewMockClientFactory(ctrl),
-		backend:             backendsmocks.NewMockBackend(ctrl),
-		modelConfigProvider: modelconfigmocks.NewMockModelConfigProvider(ctrl),
+		factory: clientfactorymocks.NewMockClientFactory(ctrl),
+		backend: backendsmocks.NewMockBackend(ctrl),
 	}
 
 	mocks.factory.EXPECT().GetClient(gomock.Any(), gomock.Any()).
 		Return(client.Client(nil), clientErrs.getClient).AnyTimes()
 	mocks.factory.EXPECT().GetHTTPClient(gomock.Any(), gomock.Any()).
 		Return((*http.Client)(nil), clientErrs.getHTTPClient).AnyTimes()
+	mocks.factory.EXPECT().GetDynamicClient(gomock.Any(), gomock.Any()).
+		Return(dynamic.Interface(nil), clientErrs.getDynamicClient).AnyTimes()
 
 	mocks.backendRegistry = backends.NewRegistry()
 	if registerBackend {
@@ -102,14 +97,14 @@ func TestRollingRolloutActor_Retrieve(t *testing.T) {
 		clientErrs        clientErrors
 		registerBackend   bool
 		setupMocks        func(*rolloutMocks)
-		preWriteFlag      bool // pre-write the ModelLoaded flag to test the short-circuit
+		preWriteFlag      bool
 		expectedStatus    apipb.ConditionStatus
 		expectedReasonSub string
 	}{
 		{
 			name:            "short-circuit via cached loaded flag",
 			registerBackend: true,
-			setupMocks:      func(*rolloutMocks) {}, // no calls expected
+			setupMocks:      func(*rolloutMocks) {},
 			preWriteFlag:    true,
 			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
 		},
@@ -177,7 +172,7 @@ func TestRollingRolloutActor_Retrieve(t *testing.T) {
 				require.NoError(t, osscommon.WriteModelLoadedFlag(condition))
 			}
 
-			actor := NewRollingRolloutActor(mocks.factory, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
+			actor := NewRollingRolloutActor(mocks.factory, mocks.backendRegistry, v2pb.BACKEND_TYPE_TRITON, zap.NewNop(), target)
 			got, err := actor.Retrieve(context.Background(), rolloutDeployment(""), condition)
 
 			require.NoError(t, err)
@@ -186,8 +181,6 @@ func TestRollingRolloutActor_Retrieve(t *testing.T) {
 				assert.Contains(t, got.Reason, tt.expectedReasonSub)
 			}
 			if got.Status == apipb.CONDITION_STATUS_TRUE && !tt.preWriteFlag {
-				// When CheckModelStatus returned ready, the actor should record the loaded flag
-				// on the condition so subsequent Retrieves short-circuit.
 				loaded, err := osscommon.ReadModelLoadedFlag(got)
 				require.NoError(t, err)
 				assert.True(t, loaded, "loaded flag should be set after model is ready")
@@ -203,7 +196,6 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 		setupMocks        func(*rolloutMocks)
 		expectedStatus    apipb.ConditionStatus
 		expectedReasonSub string
-		expectEntry       *modelconfig.ModelConfigEntry // when set, asserted against the captured AddModelToConfig arg
 	}{
 		{
 			name:              "GetClient errors",
@@ -213,10 +205,17 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 			expectedReasonSub: "auth refused",
 		},
 		{
-			name: "AddModelToConfig errors",
+			name:              "GetDynamicClient errors",
+			clientErrs:        clientErrors{getDynamicClient: errors.New("no dynamic client")},
+			setupMocks:        func(*rolloutMocks) {},
+			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedReasonSub: "no dynamic client",
+		},
+		{
+			name: "LoadModel errors",
 			setupMocks: func(m *rolloutMocks) {
-				m.modelConfigProvider.EXPECT().AddModelToConfig(gomock.Any(), gomock.Any(), gomock.Any(),
-					testISName, testNamespace, gomock.Any()).Return(errors.New("apply failed"))
+				m.backend.EXPECT().LoadModel(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+					testISName, testNamespace, testModelName, gomock.Any()).Return(errors.New("apply failed"))
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
 			expectedReasonSub: "apply failed",
@@ -224,15 +223,8 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 		{
 			name: "happy path",
 			setupMocks: func(m *rolloutMocks) {
-				m.modelConfigProvider.EXPECT().AddModelToConfig(gomock.Any(), gomock.Any(), gomock.Any(),
-					testISName, testNamespace, gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ *zap.Logger, _ client.Client, _, _ string, entry modelconfig.ModelConfigEntry) error {
-						assert.Equal(t, modelconfig.ModelConfigEntry{
-							Name:        testModelName,
-							StoragePath: "s3://deploy-models/" + testModelName + "/",
-						}, entry)
-						return nil
-					})
+				m.backend.EXPECT().LoadModel(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+					testISName, testNamespace, testModelName, "s3://deploy-models/"+testModelName+"/").Return(nil)
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_UNKNOWN,
 			expectedReasonSub: "model model-v1 loading in cluster c1",
@@ -244,7 +236,7 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 			mocks, target := newRolloutFixture(t, tt.clientErrs, true)
 			tt.setupMocks(mocks)
 
-			actor := NewRollingRolloutActor(mocks.factory, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
+			actor := NewRollingRolloutActor(mocks.factory, mocks.backendRegistry, v2pb.BACKEND_TYPE_TRITON, zap.NewNop(), target)
 			got, err := actor.Run(context.Background(), rolloutDeployment(""), &apipb.Condition{})
 
 			require.NoError(t, err)
@@ -258,6 +250,6 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 
 func TestRollingRolloutActor_GetType(t *testing.T) {
 	mocks, target := newRolloutFixture(t, clientErrors{}, true)
-	actor := NewRollingRolloutActor(mocks.factory, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
+	actor := NewRollingRolloutActor(mocks.factory, mocks.backendRegistry, v2pb.BACKEND_TYPE_TRITON, zap.NewNop(), target)
 	assert.Equal(t, "RollingRolloutComplete-"+testCluster, actor.GetType())
 }

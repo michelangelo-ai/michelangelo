@@ -22,6 +22,7 @@ require (
 	github.com/michelangelo-ai/michelangelo/proto-go v0.0.0-00010101000000-000000000000
 	github.com/minio/minio-go/v7 v7.0.86
 	github.com/prometheus/client_golang v1.22.0
+	github.com/prometheus/common v0.62.0
 	github.com/r3labs/diff/v3 v3.0.1
 	github.com/ray-project/kuberay/ray-operator v1.2.2
 	github.com/robfig/cron v1.2.0
@@ -97,7 +98,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
-	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect

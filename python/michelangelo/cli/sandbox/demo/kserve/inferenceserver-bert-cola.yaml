@@ -1,0 +1,56 @@
+# InferenceServer CR for the bert-cola KServe demo, deployed to both target
+# clusters. See ../README.md for the full step-by-step.
+#
+# Prerequisites before applying this:
+#   - ClusterServingRuntime (clusterservingruntime-tritonserver-cpu.yaml)
+#     applied on every clusterTargets entry below
+#   - minio-s3-secret.yaml applied on every clusterTargets entry below
+#     (creates the kserve-minio-sa referenced by the annotation)
+#   - RBAC (../../resources/rbac-inferenceserver.yaml) applied on every
+#     clusterTargets entry below
+#   - Model repo uploaded to the S3 path in initSpec.servingSpec.version
+#     (see upload_model_repo.py)
+#
+# clusterTargets[].kubernetes.host/port: this must be a host/port that's
+# reachable from wherever the Michelangelo controllermgr process actually
+# runs. For local dev, controllermgr runs on the host Mac, NOT as a pod
+# inside any cluster — so "https://kubernetes.default.svc" (in-cluster DNS)
+# does NOT work for a cluster targeting itself, even though it looks like
+# the natural choice. Use the cluster's own externally-exposed API port
+# instead, found via:
+#   docker port k3d-<cluster-name>-serverlb | grep 6443
+apiVersion: michelangelo.api/v2
+kind: InferenceServer
+metadata:
+  name: inference-server-bert-cola-kserve
+  namespace: default
+  annotations:
+    michelangelo/kserve-model-format: triton
+    michelangelo/kserve-service-account: kserve-minio-sa
+spec:
+  backendType: BACKEND_TYPE_KSERVE
+  tenancyType: TENANCY_TYPE_DEDICATED
+  owner:
+    name: user-example
+  ownerSpec:
+    tier: 1
+  initSpec:
+    numInstances: 1
+    resourceSpec:
+      cpu: 1
+      memory: 256Mi
+    servingSpec:
+      version: s3://deploy-models/bert-cola/kserve-repo/
+  clusterTargets:
+    - clusterId: michelangelo-compute-1
+      kubernetes:
+        host: https://host.docker.internal
+        port: "63323"
+        caDataTag: cluster-michelangelo-compute-1-ca-data
+        tokenTag: cluster-michelangelo-compute-1-is-token
+    - clusterId: michelangelo-sandbox
+      kubernetes:
+        host: https://host.docker.internal
+        port: "60683"
+        caDataTag: cluster-michelangelo-sandbox-ca-data
+        tokenTag: cluster-michelangelo-sandbox-is-token

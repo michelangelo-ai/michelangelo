@@ -1,0 +1,87 @@
+# The actual, live ClusterServingRuntime used by the bert-cola KServe demo.
+#
+# KServe auto-selects a runtime by matching `supportedModelFormats` against
+# the InferenceService's model format annotation — it does NOT use whatever
+# ClusterServingRuntime happens to be named similarly. This one is
+# deliberately named "kserve-tritonserver" to match (and override) the
+# built-in runtime KServe ships with, so it's the one actually selected for
+# `michelangelo/kserve-model-format: triton`.
+#
+# (clusterservingruntime-triton.yaml in this same directory, named
+# "kserve-tritonserver-sandbox", is NOT used by anything — it was an early
+# demo file that KServe never actually selects. Kept for reference only.)
+#
+# Apply to every cluster that will run bert-cola predictor pods:
+#   kubectl --context k3d-michelangelo-compute-1 apply -f clusterservingruntime-tritonserver-cpu.yaml
+#   kubectl --context k3d-michelangelo-sandbox   apply -f clusterservingruntime-tritonserver-cpu.yaml
+#
+# Requires the image built from triton-cpu-torch/Dockerfile to already be
+# imported into that cluster's k3d nodes — see ../README.md step 2.
+apiVersion: serving.kserve.io/v1alpha1
+kind: ClusterServingRuntime
+metadata:
+  name: kserve-tritonserver
+spec:
+  annotations:
+    prometheus.kserve.io/path: /metrics
+    prometheus.kserve.io/port: "8002"
+  containers:
+    - name: kserve-container
+      image: docker.io/library/michelangelo-triton-torch:v2409-pinned
+      imagePullPolicy: IfNotPresent
+      args:
+        - tritonserver
+        - --model-store=/mnt/models
+        - --grpc-port=9000
+        - --http-port=8080
+        - --allow-grpc=true
+        - --allow-http=true
+      env:
+        # Belt-and-suspenders: the 24.09 base no longer crashes without
+        # this, but it costs nothing to be explicit that no GPU is expected.
+        - name: CUDA_VISIBLE_DEVICES
+          value: "-1"
+      resources:
+        requests:
+          cpu: "1"
+          memory: 2Gi
+        limits:
+          cpu: "1"
+          memory: 2Gi
+      volumeMounts:
+        # Triton's python backend needs >=64MB of /dev/shm per model
+        # instance; the default pod /dev/shm is too small and inference
+        # fails with "No space left on device" without this.
+        - name: dshm
+          mountPath: /dev/shm
+  volumes:
+    - name: dshm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 512Mi
+  protocolVersions:
+    - v2
+    - grpc-v2
+  supportedModelFormats:
+    - name: tensorrt
+      version: "8"
+      autoSelect: true
+      priority: 1
+    - name: tensorflow
+      version: "1"
+      autoSelect: true
+      priority: 1
+    - name: tensorflow
+      version: "2"
+      autoSelect: true
+      priority: 1
+    - name: onnx
+      version: "1"
+      autoSelect: true
+      priority: 1
+    - name: pytorch
+      version: "1"
+    - name: triton
+      version: "2"
+      autoSelect: true
+      priority: 1

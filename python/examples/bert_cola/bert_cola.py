@@ -3,33 +3,38 @@
 Example workflow demonstrating BERT fine-tuning on the Corpus of Linguistic
 Acceptability (CoLA) task from the GLUE benchmark.
 Support workflow parameters via dict or Starlark-compatible parameters.
+
+End-to-end pipeline:
+  load_data → train → upload_model → register_model → create_deployment
 """
 
 import michelangelo.uniflow.core as uniflow
 from examples.bert_cola.data import load_data
+from examples.bert_cola.serve import upload_and_deploy
 from examples.bert_cola.train import train
 from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
 
 @uniflow.workflow()
 def train_workflow(path="nyu-mll/glue", name="cola", tokenizer_max_length=128):
-    """Training workflow for BERT model on GLUE datasets."""
+    """Training → serving workflow for BERT CoLA."""
     print("[train_workflow] Starting with config:")
     print("  - Dataset: " + path + "/" + name)
     print("  - Tokenizer max length: " + str(tokenizer_max_length))
 
-    # Load data using configuration
+    # Steps 1 & 2: Load data and train.
     train_data, validation_data, test_data = load_data(
         path=path,
         name=name,
         tokenizer_max_length=tokenizer_max_length,
     )
-    result = train(
-        train_data,
-        validation_data,
-        test_data,
-    )
-    print("result:", result)
+    train_result, checkpoint_uri = train(train_data, validation_data, test_data)
+    print("Training complete. Checkpoint:", checkpoint_uri)
+
+    # Steps 3-6: Package → upload → register → deploy (all in one RayTask).
+    # Runs on its own ephemeral RayCluster; reaches apiserver via MA_API_SERVER in ConfigMap.
+    deployment_name = upload_and_deploy(checkpoint_uri)
+    print("Deployment created:", deployment_name)
     print("ok.")
 
 
@@ -48,6 +53,9 @@ if __name__ == "__main__":
     ctx.environ[UF_PLUGIN_RAY_USE_FSSPEC] = "0"
     ctx.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0"
     ctx.environ["MA_NAMESPACE"] = "default"
+    # RayJob pods run inside the k3d cluster, so they reach the apiserver via
+    # its in-cluster Service DNS name, not localhost.
+    ctx.environ["MA_API_SERVER"] = "michelangelo-apiserver:15566"
     # this is example docker image, we don't need to pull it from docker registry
     ctx.environ["IMAGE_PULL_POLICY"] = "IfNotPresent"
     ctx.environ["S3_ALLOW_BUCKET_CREATION"] = "True"

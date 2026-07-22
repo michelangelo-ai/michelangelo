@@ -78,6 +78,8 @@ enum BackendType {
   BACKEND_TYPE_DYNAMO = 3;
   // TorchServe backend
   BACKEND_TYPE_TORCHSERVE = 4;
+  // KServe — controller creates and manages a KServe InferenceService CR
+  BACKEND_TYPE_KSERVE = 5;
 }
 
 // ClusterTarget identifies a Kubernetes cluster where the InferenceServer's

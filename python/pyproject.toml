@@ -12,8 +12,8 @@ packages = [
 
 [tool.poetry.dependencies]
 fsspec = ">=2023.10.0"
-grpcio = ">=1.66.1"
-grpcio-reflection = ">=1.66.1"
+grpcio = ">=1.66.1,<1.71.0"
+grpcio-reflection = ">=1.66.1,<1.71.0"
 onnx = "^1.16.1"
 onnxruntime = ">=1.19.0,<1.20.0"
 onnxscript = ">=0.1.0,<1.0.0"

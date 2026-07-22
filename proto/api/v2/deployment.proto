@@ -151,6 +151,44 @@ message DeploymentSpec {
 
   // Maps link names to their URLs, related to the deployment.
   map<string, string> resource_links = 12;
+
+  // Custom metric health rules evaluated by the HealthCheckGate during rollout.
+  // If any rule is breached the rollout is rolled back.
+  HealthCheckConfig health_check_config = 13;
+}
+
+// MetricHealthRule defines a single PromQL-based threshold that, when breached,
+// signals an unhealthy rollout and triggers automatic rollback.
+message MetricHealthRule {
+  enum ComparisonOp {
+    COMPARISON_OP_INVALID = 0;
+    GT  = 1;  // metric > threshold
+    LT  = 2;  // metric < threshold
+    GTE = 3;  // metric >= threshold
+    LTE = 4;  // metric <= threshold
+  }
+  // Human-readable name included in rollback condition messages.
+  string name = 1;
+  // PromQL instant query. Must resolve to a scalar or a single-element instant vector.
+  string query = 2;
+  // Comparison operator applied as: op(queryResult, threshold).
+  ComparisonOp op = 3;
+  // Numeric threshold. The rule fires when op(result, threshold) is true.
+  double threshold = 4;
+  // Minimum continuous breach duration before rollback is triggered (e.g. "120s").
+  // Empty or "0s" means trigger immediately on first breach.
+  // Reserved for future use — not enforced in the current implementation.
+  string for_duration = 5;
+}
+
+// HealthCheckConfig carries the Prometheus endpoint and rule set used by
+// HealthCheckGate to evaluate custom metric thresholds during rollout.
+message HealthCheckConfig {
+  // Prometheus base URL (e.g. "http://prometheus:9090").
+  // Overrides the controller-level defaultPrometheusURL when set.
+  string prometheus_url = 1;
+  // Ordered list of metric rules. Evaluation stops at the first breach.
+  repeated MetricHealthRule rules = 2;
 }
 
 // The spec for zonal updates. For zonal updates, we require implementations that

@@ -11,48 +11,47 @@ import (
 	osscommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
-	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &RollingRolloutActor{}
 
-// RollingRolloutActor loads a model into a single target cluster's inference server. One
-// instance is created per cluster at actor-chain construction time.
+// RollingRolloutActor loads a model into a single target cluster's inference server.
+// It is backend-aware: for Triton it writes to the model ConfigMap; for KServe it
+// patches the InferenceService storageUri. One instance is created per cluster.
 type RollingRolloutActor struct {
-	clientFactory       clientfactory.ClientFactory
-	backendRegistry     *backends.Registry
-	modelConfigProvider modelconfig.ModelConfigProvider
-	logger              *zap.Logger
-	target              *v2pb.ClusterTarget
+	clientFactory   clientfactory.ClientFactory
+	backendRegistry *backends.Registry
+	backendType     v2pb.BackendType
+	logger          *zap.Logger
+	target          *v2pb.ClusterTarget
 }
 
-// NewRollingRolloutActor creates a RollingRolloutActor for the given cluster.
+// NewRollingRolloutActor creates a RollingRolloutActor for the given cluster and backend type.
 func NewRollingRolloutActor(
 	clientFactory clientfactory.ClientFactory,
 	backendRegistry *backends.Registry,
-	modelConfigProvider modelconfig.ModelConfigProvider,
+	backendType v2pb.BackendType,
 	logger *zap.Logger,
 	target *v2pb.ClusterTarget,
 ) *RollingRolloutActor {
 	return &RollingRolloutActor{
-		clientFactory:       clientFactory,
-		backendRegistry:     backendRegistry,
-		modelConfigProvider: modelConfigProvider,
-		logger:              logger,
-		target:              target,
+		clientFactory:   clientFactory,
+		backendRegistry: backendRegistry,
+		backendType:     backendType,
+		logger:          logger,
+		target:          target,
 	}
 }
 
-// GetType returns the condition type identifier, including the cluster ID so each
-// cluster gets its own condition entry in status.conditions.
+// GetType returns the condition type identifier, including the cluster ID.
 func (a *RollingRolloutActor) GetType() string {
 	return osscommon.ActorTypeRollingRollout + "-" + a.target.GetClusterId()
 }
 
-// Retrieve checks whether the model is loaded and ready in Triton. Once ready, it records
-// that result on the condition so subsequent calls short-circuit without another Triton poll.
+// Retrieve checks whether the model is loaded and ready. Once ready, records that
+// result on the condition so subsequent calls short-circuit without re-polling.
 func (a *RollingRolloutActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	if loaded, _ := osscommon.ReadModelLoadedFlag(condition); loaded {
 		return conditionsutil.GenerateTrueCondition(condition), nil
@@ -68,7 +67,7 @@ func (a *RollingRolloutActor) Retrieve(ctx context.Context, deployment *v2pb.Dep
 		return conditionsutil.GenerateFalseCondition(condition, "HTTPClientUnavailable", err.Error()), nil
 	}
 
-	backend, err := a.backendRegistry.GetBackend(v2pb.BACKEND_TYPE_TRITON)
+	backend, err := a.backendRegistry.GetBackend(a.backendType)
 	if err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "BackendUnavailable", err.Error()), nil
 	}
@@ -82,7 +81,8 @@ func (a *RollingRolloutActor) Retrieve(ctx context.Context, deployment *v2pb.Dep
 		return conditionsutil.GenerateFalseCondition(condition, "ModelStatusCheckFailed", err.Error()), nil
 	}
 	if !ready {
-		return conditionsutil.GenerateFalseCondition(condition, "ModelNotReady", fmt.Sprintf("model %s not yet loaded in cluster %s", modelName, a.target.GetClusterId())), nil
+		return conditionsutil.GenerateFalseCondition(condition, "ModelNotReady",
+			fmt.Sprintf("model %s not yet loaded in cluster %s", modelName, a.target.GetClusterId())), nil
 	}
 
 	if err := osscommon.WriteModelLoadedFlag(condition); err != nil {
@@ -91,25 +91,33 @@ func (a *RollingRolloutActor) Retrieve(ctx context.Context, deployment *v2pb.Dep
 	return conditionsutil.GenerateTrueCondition(condition), nil
 }
 
-// Run registers the desired model in the cluster's inference server ConfigMap, triggering the
-// server to begin loading it. Returns UNKNOWN so the engine continues polling via Retrieve.
+// Run calls backend.LoadModel to register the desired model version for serving.
+// Returns UNKNOWN so the engine continues polling via Retrieve.
 func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	kubeClient, err := a.clientFactory.GetClient(ctx, a.target)
 	if err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "ClientUnavailable", err.Error()), nil
 	}
 
-	inferenceServerName := deployment.Spec.GetInferenceServer().GetName()
-	modelName := deployment.Spec.GetDesiredRevision().GetName()
-
-	// TODO(#696): make the storage path configurable w.r.t. storage client and location.
-	storagePath := fmt.Sprintf("s3://deploy-models/%s/", modelName)
-	if err := a.modelConfigProvider.AddModelToConfig(ctx, a.logger, kubeClient, inferenceServerName, deployment.Namespace, modelconfig.ModelConfigEntry{
-		Name:        modelName,
-		StoragePath: storagePath,
-	}); err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, "AddModelToConfigFailed", err.Error()), nil
+	dynClient, err := a.clientFactory.GetDynamicClient(ctx, a.target)
+	if err != nil {
+		return conditionsutil.GenerateFalseCondition(condition, "DynamicClientUnavailable", err.Error()), nil
 	}
 
-	return conditionsutil.GenerateUnknownCondition(condition, "ModelLoading", fmt.Sprintf("model %s loading in cluster %s", modelName, a.target.GetClusterId())), nil
+	backend, err := a.backendRegistry.GetBackend(a.backendType)
+	if err != nil {
+		return conditionsutil.GenerateFalseCondition(condition, "BackendUnavailable", err.Error()), nil
+	}
+
+	inferenceServerName := deployment.Spec.GetInferenceServer().GetName()
+	modelName := deployment.Spec.GetDesiredRevision().GetName()
+	// TODO(#696): make the storage path configurable w.r.t. storage client and location.
+	storageURI := fmt.Sprintf("s3://deploy-models/%s/", modelName)
+
+	if err := backend.LoadModel(ctx, a.logger, kubeClient, dynClient, inferenceServerName, deployment.Namespace, modelName, storageURI); err != nil {
+		return conditionsutil.GenerateFalseCondition(condition, "LoadModelFailed", err.Error()), nil
+	}
+
+	return conditionsutil.GenerateUnknownCondition(condition, "ModelLoading",
+		fmt.Sprintf("model %s loading in cluster %s", modelName, a.target.GetClusterId())), nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
@@ -11,15 +12,18 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 var _ Backend = &tritonBackend{}
 
 const (
-	defaultTritonImageTag = "23.04-py3"
+	defaultTritonImageTag  = "23.04-py3"
+	defaultTritonImageRepo = "nvcr.io/nvidia/tritonserver"
 
 	// k8sProgressDeadlineExceeded is the Kubernetes DeploymentCondition reason string
 	// that signals a rolling update has stalled. Named constant prevents silent
@@ -32,10 +36,12 @@ const (
 )
 
 // Triton Server Management
-type tritonBackend struct{}
+type tritonBackend struct {
+	modelConfigProvider modelconfig.ModelConfigProvider
+}
 
-func NewTritonBackend() *tritonBackend {
-	return &tritonBackend{}
+func NewTritonBackend(modelConfigProvider modelconfig.ModelConfigProvider) *tritonBackend {
+	return &tritonBackend{modelConfigProvider: modelConfigProvider}
 }
 
 func (b *tritonBackend) CreateServer(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServer *v2pb.InferenceServer) (*ServerStatus, error) {
@@ -213,6 +219,19 @@ func (b *tritonBackend) CheckModelStatus(ctx context.Context, logger *zap.Logger
 	return ready, nil
 }
 
+// LoadModel adds a model to the Triton ConfigMap so Triton loads it from storage.
+func (b *tritonBackend) LoadModel(ctx context.Context, logger *zap.Logger, kubeClient client.Client, _ dynamic.Interface, inferenceServerName, namespace, modelName, storageURI string) error {
+	return b.modelConfigProvider.AddModelToConfig(ctx, logger, kubeClient, inferenceServerName, namespace, modelconfig.ModelConfigEntry{
+		Name:        modelName,
+		StoragePath: storageURI,
+	})
+}
+
+// UnloadModel removes a model from the Triton ConfigMap so Triton unloads it.
+func (b *tritonBackend) UnloadModel(ctx context.Context, logger *zap.Logger, kubeClient client.Client, _ dynamic.Interface, inferenceServerName, namespace, modelName string) error {
+	return b.modelConfigProvider.RemoveModelFromConfig(ctx, logger, kubeClient, inferenceServerName, namespace, modelName)
+}
+
 func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServer *v2pb.InferenceServer) error {
 	deploymentName := generateK8sDeploymentName(inferenceServer.Name)
 
@@ -251,30 +270,15 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  "triton",
-							Image: fmt.Sprintf("nvcr.io/nvidia/tritonserver:%s", defaultTritonImageTag),
-							Ports: []corev1.ContainerPort{
+							Name:      "triton",
+							Image:     resolveContainerImage(inferenceServer.Spec.InitSpec),
+							Ports:     []corev1.ContainerPort{
 								{ContainerPort: 8000, Name: "http"},
 								{ContainerPort: 8001, Name: "grpc"},
 								{ContainerPort: 8002, Name: "metrics"},
 							},
 							Resources: buildResourceRequirements(inferenceServer.Spec.InitSpec),
-							Args: []string{
-								"tritonserver",
-								"--model-store=/mnt/models",
-								"--grpc-port=8001",
-								"--http-port=8000",
-								"--allow-grpc=true",
-								"--allow-http=true",
-								"--allow-metrics=true",
-								"--metrics-port=8002",
-								"--model-control-mode=explicit",
-								"--strict-model-config=false",
-								"--exit-on-error=true",
-								"--log-error=true",
-								"--log-warning=true",
-								"--log-verbose=0",
-							},
+							Args:      tritonArgs(inferenceServer.Spec.InitSpec),
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "workdir",
@@ -450,6 +454,55 @@ func buildResourceRequirements(initSpec *v2pb.InitSpec) corev1.ResourceRequireme
 func parseQuantity(value string) resource.Quantity {
 	qty, _ := resource.ParseQuantity(value)
 	return qty
+}
+
+// tritonArgs returns the container args for the Triton server.
+// When a custom image is specified via servingSpec.version, no args are returned
+// so the image's default entrypoint runs unchanged.
+func tritonArgs(initSpec *v2pb.InitSpec) []string {
+	if initSpec != nil && initSpec.ServingSpec != nil {
+		v := initSpec.ServingSpec.Version
+		if strings.ContainsAny(v, "/:") {
+			return nil // custom image — use its own entrypoint
+		}
+	}
+	return []string{
+		"tritonserver",
+		"--model-store=/mnt/models",
+		"--grpc-port=8001",
+		"--http-port=8000",
+		"--allow-grpc=true",
+		"--allow-http=true",
+		"--allow-metrics=true",
+		"--metrics-port=8002",
+		"--model-control-mode=explicit",
+		"--strict-model-config=false",
+		"--exit-on-error=true",
+		"--log-error=true",
+		"--log-warning=true",
+		"--log-verbose=0",
+	}
+}
+
+// resolveContainerImage returns the container image to use for the inference server.
+// If servingSpec.version looks like a full image reference (contains "/" or is "repo:tag"),
+// it is used as-is; otherwise it is treated as a Triton image tag.
+// Falls back to the default Triton image when version is unset.
+func resolveContainerImage(initSpec *v2pb.InitSpec) string {
+	if initSpec == nil || initSpec.ServingSpec == nil {
+		return fmt.Sprintf("%s:%s", defaultTritonImageRepo, defaultTritonImageTag)
+	}
+	version := initSpec.ServingSpec.Version
+	if version == "" {
+		return fmt.Sprintf("%s:%s", defaultTritonImageRepo, defaultTritonImageTag)
+	}
+	// Full image ref: contains "/" (registry/org) or ":" (image:tag).
+	// Plain Triton tags contain neither (e.g. "23.04-py3").
+	if strings.ContainsAny(version, "/:") {
+		return version
+	}
+	// Plain tag — apply to the default Triton repo
+	return fmt.Sprintf("%s:%s", defaultTritonImageRepo, version)
 }
 
 func generateK8sDeploymentName(inferenceServerName string) string {

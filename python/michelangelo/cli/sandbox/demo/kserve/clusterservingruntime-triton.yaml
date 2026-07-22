@@ -1,0 +1,59 @@
+# KServe ClusterServingRuntime for Triton Inference Server
+# Allows deploying Triton-backed models via KServe InferenceService on compute-1.
+apiVersion: serving.kserve.io/v1alpha1
+kind: ClusterServingRuntime
+metadata:
+  name: kserve-tritonserver-sandbox
+spec:
+  annotations:
+    prometheus.kserve.io/port: "8002"
+    prometheus.kserve.io/path: /metrics
+  supportedModelFormats:
+    - name: tensorrt
+      version: "8"
+      autoSelect: true
+    - name: tensorflow
+      version: "2"
+      autoSelect: true
+    - name: onnx
+      version: "1"
+      autoSelect: true
+    - name: pytorch
+      version: "1"
+      autoSelect: true
+    - name: triton
+      version: "2"
+      autoSelect: true
+  protocolVersions:
+    - v2
+    - grpc-v2
+  containers:
+    - name: kserve-container
+      image: nvcr.io/nvidia/tritonserver:23.04-py3
+      args:
+        - tritonserver
+        - --model-store=/mnt/models
+        - --grpc-port=9000
+        - --http-port=8080
+        - --allow-grpc=true
+        - --allow-http=true
+        - --allow-metrics=true
+        - --model-control-mode=explicit
+        - --strict-model-config=false
+      resources:
+        requests:
+          cpu: "1"
+          memory: 2Gi
+        limits:
+          cpu: "2"
+          memory: 4Gi
+      ports:
+        - name: h2c
+          containerPort: 9000
+          protocol: TCP
+        - name: http1
+          containerPort: 8080
+          protocol: TCP
+        - name: metrics
+          containerPort: 8002
+          protocol: TCP

@@ -1,0 +1,71 @@
+# Zonal Deployment Example
+#
+# Shows how zonal strategy works: clusters (zones) are processed sequentially.
+# The controller rolls out to compute-1 first, waits the soak period, evaluates
+# the health gate, then advances to compute-2. If the gate fails on compute-1,
+# compute-2 is never touched.
+#
+# NOTE: This targets Michelangelo's Triton InferenceServer, not KServe.
+# The KServe InferenceService (inferenceservice.yaml) is a separate system
+# that runs independently on the compute cluster.
+
+---
+# InferenceServer: declares two clusters as rollout targets (zones)
+apiVersion: michelangelo.api/v2
+kind: InferenceServer
+metadata:
+  name: inference-server-zonal
+  namespace: default
+spec:
+  clusterTargets:
+    # Zone A — receives the rollout first
+    - clusterId: compute-1
+      kubernetes:
+        host: "https://host.docker.internal"
+        port: 63323
+      tokenTag: cluster-michelangelo-compute-1-is-token
+      caDataTag: cluster-michelangelo-compute-1-ca-data
+
+    # Zone B — only rolled out after Zone A passes the health gate
+    - clusterId: compute-2
+      kubernetes:
+        host: "https://compute-2.internal"
+        port: 6443
+      tokenTag: compute-2-token
+      caDataTag: compute-2-ca
+
+---
+# Deployment: zonal rollout with 5-minute soak per zone
+#
+# Rollout sequence:
+#   compute-1: load model → route traffic → soak 300s → health gate ✓
+#   compute-2: load model → route traffic → soak 300s → health gate ✓
+#   cleanup old model from both clusters
+#
+#   If health gate fails on compute-1 → ROLLBACK, compute-2 untouched.
+apiVersion: michelangelo.api/v2
+kind: Deployment
+metadata:
+  name: zonal-demo-deployment
+  namespace: default
+spec:
+  desiredRevision:
+    name: my-model-v2
+    namespace: default
+  inferenceServer:
+    name: inference-server-zonal
+    namespace: default
+  definition:
+    type: TARGET_TYPE_INFERENCE_SERVER
+  strategy:
+    zonal:
+      rolloutPeriodInSeconds: 300   # 5-minute soak per zone
+  healthCheckConfig:
+    prometheusUrl: "http://michelangelo-prometheus-server:9090"
+    rules:
+      - name: high-error-rate
+        query: >-
+          rate(nv_inference_request_failure_total{model="my-model-v2"}[2m])
+          / rate(nv_inference_request_success_total{model="my-model-v2"}[2m])
+        op: GT
+        threshold: 0.05

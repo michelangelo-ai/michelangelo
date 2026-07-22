@@ -244,6 +244,51 @@ class MinioStorageBackend(StorageBackend):
                 ) from exc
         return f"s3://{self._bucket}/{destination_key}"
 
+    def upload_flat(self, local_dir: str, destination_prefix: str) -> str:
+        """Upload a directory's contents flat, file by file, with no tar archive.
+
+        Unlike :meth:`upload`, this preserves the directory tree as individual
+        objects under ``destination_prefix`` instead of bundling it into a
+        single ``__dir__.tar``. Needed for consumers that fetch artifacts as a
+        plain directory prefix and never untar — e.g. KServe's S3
+        storage-initializer, which downloads ``storageUri`` object-by-object.
+
+        Args:
+            local_dir: Absolute path to the local directory to upload.
+            destination_prefix: Key prefix within the bucket under which the
+                directory's contents are mirrored (e.g. a model revision name).
+
+        Returns:
+            URI in the form ``s3://{bucket}/{destination_prefix}/`` (trailing
+            slash), identifying the directory root consumers should read from.
+
+        Raises:
+            ValueError: If ``destination_prefix`` is empty or ``local_dir`` is
+                not a directory.
+            OSError: If the upload fails.
+        """
+        if not destination_prefix:
+            raise ValueError(
+                "destination_prefix must be non-empty. "
+                "Provide a key such as a model revision name."
+            )
+        if not os.path.isdir(local_dir):
+            raise ValueError(f"local_dir must be a directory: {local_dir!r}")
+        prefix = destination_prefix.rstrip("/")
+        for root, _dirs, files in os.walk(local_dir):
+            for filename in files:
+                local_path = os.path.join(root, filename)
+                rel_path = os.path.relpath(local_path, local_dir)
+                key = f"{prefix}/{rel_path}"
+                _logger.debug(
+                    "Uploading '%s' to s3://%s/%s.", local_path, self._bucket, key
+                )
+                try:
+                    self._client.fput_object(self._bucket, key, local_path)
+                except self._S3Error as exc:
+                    raise OSError(f"MinIO upload failed for key {key!r}: {exc}") from exc
+        return f"s3://{self._bucket}/{prefix}/"
+
     def download(self, uri: str, local_path: str) -> None:
         """Download an artifact from MinIO to a local path.
 

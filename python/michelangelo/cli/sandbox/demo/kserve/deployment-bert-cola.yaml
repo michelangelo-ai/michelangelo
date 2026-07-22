@@ -1,0 +1,28 @@
+# Deployment CR for the bert-cola KServe demo — points the InferenceServer
+# above at model revision "0" (the one registered by the standard
+# examples/bert_cola pipeline's upload_and_deploy task, or manually created
+# per upload_model_repo.py's --revision flag).
+#
+# Note: this CR's own status.stage tends to sit at DEPLOYMENT_STAGE_ROLLOUT_FAILED
+# with message "Deployment processed by OSS plugin" — that's a known stub/no-op
+# in this OSS build's rollout-actor plugin, unrelated to whether serving is
+# actually working. Don't use this CR's status to verify the demo — use the
+# InferenceServer CR's status.clusterStatuses and a direct inference request
+# instead (see ../README.md "Verify" section).
+apiVersion: michelangelo.api/v2
+kind: Deployment
+metadata:
+  name: bert-cola-kserve-deployment
+  namespace: default
+spec:
+  definition:
+    type: TARGET_TYPE_INFERENCE_SERVER
+  desiredRevision:
+    name: "0"
+    namespace: default
+  inferenceServer:
+    name: inference-server-bert-cola-kserve
+    namespace: default
+  strategy:
+    zonal:
+      rolloutPeriodInSeconds: 60

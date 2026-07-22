@@ -212,6 +212,13 @@ def init_arguments(p: argparse.ArgumentParser):
     )
     _ = demo_sp.add_parser("pipeline", help="Create pipeline demo resources")
     _ = demo_sp.add_parser("inference", help="Create inference server demo resources")
+    _ = demo_sp.add_parser(
+        "kserve",
+        help=(
+            "Install KServe on the compute cluster and create an InferenceService "
+            "demo with custom metric health rules."
+        ),
+    )
 
     delete_p = sp.add_parser("delete", help="Delete the cluster.")
     delete_p.add_argument(
@@ -1118,7 +1125,7 @@ def _create_cadence_domain(links):
 def _create_demo_crs(ns: argparse.Namespace):
     """Create demo Custom Resources (CRs) for the sandbox environment."""
     assert ns
-    if ns.demo_action != "pipeline" and ns.demo_action != "inference":
+    if ns.demo_action != "pipeline" and ns.demo_action != "inference" and ns.demo_action != "kserve":
         raise ValueError(f"Unsupported demo action: {ns.demo_action}")
 
     # Check if cluster exists
@@ -1169,6 +1176,8 @@ def _create_demo_crs(ns: argparse.Namespace):
         _create_pipeline_demo_crs()
     elif ns.demo_action == "inference":
         _create_inference_demo_crs()
+    elif ns.demo_action == "kserve":
+        _create_kserve_demo_crs()
     else:
         raise ValueError(f"Unsupported demo action: {ns.demo_action}")
 
@@ -2075,6 +2084,282 @@ def _setup_istio_with_gateway_api():
     )
 
     print("✅ Istio with Gateway API setup complete")
+
+
+
+
+# ---------------------------------------------------------------------------
+# KServe demo
+# ---------------------------------------------------------------------------
+
+#: cert-manager version installed on the compute cluster for KServe webhooks.
+_cert_manager_version = "v1.16.3"
+
+#: KServe version installed on the compute cluster.
+_kserve_version = "v0.13.1"
+
+
+def _setup_kserve_on_compute_cluster(compute_cluster_name: str) -> None:
+    """Install cert-manager and KServe (RawDeployment mode) on the compute cluster.
+
+    Steps performed:
+      1. Install cert-manager (required for KServe admission webhooks).
+      2. Install KServe controller and CRDs.
+      3. Remove the kube-rbac-proxy sidecar (its GCR image is not accessible in
+         sandbox environments).
+      4. Configure KServe for RawDeployment mode (no Knative/Istio required).
+      5. Install KServe ClusterServingRuntimes (sklearn, triton, torch, …).
+      6. Install Gateway API CRDs so per-cluster HTTPRoutes can be created by
+         the Michelangelo InferenceServer controller.
+    """
+    kube_ctx = f"k3d-{compute_cluster_name}"
+    print(f"🚀 Installing KServe {_kserve_version} on cluster '{compute_cluster_name}'...")
+
+    # ------------------------------------------------------------------
+    # 1. cert-manager
+    # ------------------------------------------------------------------
+    print("Installing cert-manager...")
+    _exec(
+        "kubectl",
+        "--context", kube_ctx,
+        "apply",
+        "-f",
+        f"https://github.com/cert-manager/cert-manager/releases/download/{_cert_manager_version}/cert-manager.yaml",
+    )
+    _exec(
+        "kubectl",
+        "--context", kube_ctx,
+        "wait",
+        "--for=condition=Available",
+        "deployment",
+        "-n", "cert-manager",
+        "--all",
+        "--timeout=120s",
+    )
+    print("✅ cert-manager ready")
+
+    # ------------------------------------------------------------------
+    # 2. KServe controller + CRDs
+    # ------------------------------------------------------------------
+    print("Installing KServe controller...")
+    _exec(
+        "kubectl",
+        "--context", kube_ctx,
+        "apply",
+        "-f",
+        f"https://github.com/kserve/kserve/releases/download/{_kserve_version}/kserve.yaml",
+    )
+
+    # ------------------------------------------------------------------
+    # 3. Remove kube-rbac-proxy sidecar (GCR image not available in sandbox)
+    # ------------------------------------------------------------------
+    print("Removing kube-rbac-proxy sidecar (GCR image unavailable in sandbox)...")
+    _exec(
+        "kubectl",
+        "--context", kube_ctx,
+        "patch",
+        "deployment", "kserve-controller-manager",
+        "-n", "kserve",
+        "--type=json",
+        "-p=[{\"op\":\"remove\",\"path\":\"/spec/template/spec/containers/1\"}]",
+    )
+    _exec(
+        "kubectl",
+        "--context", kube_ctx,
+        "wait",
+        "--for=condition=Available",
+        "deployment/kserve-controller-manager",
+        "-n", "kserve",
+        "--timeout=120s",
+    )
+    print("✅ KServe controller ready")
+
+    # ------------------------------------------------------------------
+    # 4. Configure RawDeployment mode (no Knative required)
+    # ------------------------------------------------------------------
+    print("Configuring KServe RawDeployment mode...")
+    _exec(
+        "kubectl",
+        "--context", kube_ctx,
+        "patch",
+        "configmap", "inferenceservice-config",
+        "-n", "kserve",
+        "--type=merge",
+        "-p={\"data\":{\"deploy\":\"{\\\"defaultDeploymentMode\\\":\\\"RawDeployment\\\"}\"}}",
+    )
+
+    # ------------------------------------------------------------------
+    # 5. KServe ClusterServingRuntimes (sklearn, triton, torchserve, …)
+    # ------------------------------------------------------------------
+    print("Installing KServe ClusterServingRuntimes...")
+    _exec(
+        "kubectl",
+        "--context", kube_ctx,
+        "apply",
+        "-f",
+        f"https://github.com/kserve/kserve/releases/download/{_kserve_version}/kserve-cluster-resources.yaml",
+    )
+
+    # ------------------------------------------------------------------
+    # 6. Gateway API CRDs (needed for Michelangelo IS controller HTTPRoutes)
+    # ------------------------------------------------------------------
+    print("Installing Gateway API CRDs on compute cluster...")
+    _exec(
+        "kubectl",
+        "--context", kube_ctx,
+        "apply",
+        "-f",
+        "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.1.0/standard-install.yaml",
+    )
+    _exec(
+        "kubectl",
+        "--context", kube_ctx,
+        "wait",
+        "--for=condition=Established",
+        "crd/httproutes.gateway.networking.k8s.io",
+        "--timeout=30s",
+    )
+
+    print(f"✅ KServe {_kserve_version} installed on '{compute_cluster_name}'")
+
+
+def _patch_controllermgr_config_for_kserve() -> None:
+    """Add inferenceServer.gateway and deployment.defaultPrometheusURL to the
+    controllermgr ConfigMap, then restart the controller so it picks up the
+    new configuration.
+    """
+    import json
+
+    print("Patching controllermgr ConfigMap with inferenceServer.gateway and defaultPrometheusURL...")
+
+    # Read current config
+    current_yaml_bytes = subprocess.check_output([
+        "kubectl",
+        "get", "configmap", "michelangelo-controllermgr-config",
+        "-n", "default",
+        "-o", "jsonpath={.data.base\\.yaml}",
+    ])
+    import yaml as _yaml
+    current = _yaml.safe_load(current_yaml_bytes)
+
+    # Merge in gateway and Prometheus config
+    current.setdefault("inferenceServer", {})["gateway"] = {
+        "name": "ma-gateway",
+        "serviceName": "ma-gateway-istio",
+        "serviceNamespace": "default",
+        "portName": "http",
+    }
+    current.setdefault("deployment", {})["defaultPrometheusURL"] = "http://prometheus:9090"
+
+    updated_yaml = _yaml.dump(current, default_flow_style=False)
+    patch = json.dumps({"data": {"base.yaml": updated_yaml}})
+
+    subprocess.run(
+        [
+            "kubectl",
+            "patch", "configmap", "michelangelo-controllermgr-config",
+            "-n", "default",
+            "--type=merge",
+            "-p", patch,
+        ],
+        check=True,
+    )
+
+    # Restart so the new config is loaded
+    _exec("kubectl", "rollout", "restart", "deployment/michelangelo-controllermgr", "-n", "default")
+    _exec(
+        "kubectl",
+        "rollout", "status", "deployment/michelangelo-controllermgr",
+        "-n", "default",
+        "--timeout=60s",
+    )
+    print("✅ controllermgr restarted with updated config")
+
+
+def _create_kserve_demo_crs() -> None:
+    """Set up KServe on the compute cluster and deploy a demo InferenceService.
+
+    Steps:
+      1. Install KServe (cert-manager + controller + runtimes) on compute-1.
+      2. Patch the Michelangelo controllermgr ConfigMap with gateway and
+         Prometheus config, then restart it.
+      3. Apply the demo KServe InferenceService (sklearn-iris from GCS).
+      4. Wait for the InferenceService to become Ready.
+      5. Print next steps including the deployment-with-healthcheck.yaml demo.
+    """
+    compute_cluster_name = "michelangelo-compute-1"
+    kube_ctx = f"k3d-{compute_cluster_name}"
+
+    print("🚀 Setting up Michelangelo AI KServe Demo...")
+
+    # ------------------------------------------------------------------
+    # 1. KServe installation on compute cluster
+    # ------------------------------------------------------------------
+    _setup_kserve_on_compute_cluster(compute_cluster_name)
+
+    # ------------------------------------------------------------------
+    # 2. Patch controllermgr config
+    # ------------------------------------------------------------------
+    _patch_controllermgr_config_for_kserve()
+
+    # ------------------------------------------------------------------
+    # 3. Apply demo ClusterServingRuntime + InferenceService
+    # ------------------------------------------------------------------
+    kserve_demo_dir = _dir / "demo" / "kserve"
+
+    csr_path = kserve_demo_dir / "clusterservingruntime-triton.yaml"
+    if csr_path.exists():
+        print("Applying custom Triton ClusterServingRuntime on compute cluster...")
+        _exec(
+            "kubectl",
+            "--context", kube_ctx,
+            "apply",
+            "-f", str(csr_path),
+        )
+
+    inference_service_path = kserve_demo_dir / "inferenceservice.yaml"
+    if not inference_service_path.exists():
+        _err_exit(f"❌ KServe demo InferenceService not found at {inference_service_path}")
+
+    print("Creating sklearn-iris InferenceService on compute cluster...")
+    _exec(
+        "kubectl",
+        "--context", kube_ctx,
+        "apply",
+        "-f", str(inference_service_path),
+    )
+
+    # ------------------------------------------------------------------
+    # 4. Wait for InferenceService ready
+    # ------------------------------------------------------------------
+    print("⏳ Waiting for InferenceService 'sklearn-iris' to be Ready...")
+    _exec(
+        "kubectl",
+        "--context", kube_ctx,
+        "wait",
+        "--for=condition=Ready",
+        "inferenceservice/sklearn-iris",
+        "-n", "default",
+        "--timeout=300s",
+    )
+
+    print("✅ KServe demo setup complete!")
+    print("")
+    print("📋 What was set up:")
+    print(f"  • cert-manager {_cert_manager_version} on {compute_cluster_name}")
+    print(f"  • KServe {_kserve_version} (RawDeployment mode, no Knative) on {compute_cluster_name}")
+    print("  • Gateway API CRDs on compute cluster")
+    print("  • sklearn-iris InferenceService serving predictions")
+    print("  • controllermgr updated with inferenceServer.gateway + defaultPrometheusURL")
+    print("")
+    print("🔬 Test the InferenceService:")
+    print(f'  kubectl --context {kube_ctx} port-forward svc/sklearn-iris-predictor -n default 8081:80')
+    print('  curl -X POST http://localhost:8081/v1/models/sklearn-iris:predict \\')
+    print('    -H "Content-Type: application/json" \\')
+    print('    -d \'{"instances": [[6.8, 2.8, 4.8, 1.4]]}\'')
+    print("")
+    print("📊 Test metric health gate rollback:")
+    print(f'  kubectl apply -f {kserve_demo_dir / "deployment-with-healthcheck.yaml"}')
 
 
 def _create_pipeline_demo_crs():

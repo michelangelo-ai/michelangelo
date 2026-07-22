@@ -24,6 +24,7 @@ const (
 	_mysqlConfigKey           = "mysql"
 	_ingesterConfigKey        = "ingester"
 	_inferenceServerConfigKey = "inferenceServer"
+	_deploymentConfigKey      = "deployment"
 )
 
 // K8sConfig is the configuration for k8s REST client.
@@ -156,4 +157,19 @@ func GetInferenceServerConfig(provider config.Provider) (InferenceServerConfig, 
 	inferenceServerConfig := InferenceServerConfig{}
 	err := provider.Get(_inferenceServerConfigKey).Populate(&inferenceServerConfig)
 	return inferenceServerConfig, err
+}
+
+// DeploymentConfig is the controller-side configuration for the deployment controller.
+type DeploymentConfig struct {
+	// DefaultPrometheusURL is the Prometheus base URL used by HealthCheckGate when
+	// a Deployment's healthCheckConfig does not specify its own URL.
+	// Example: "http://prometheus:9090"
+	DefaultPrometheusURL string `yaml:"defaultPrometheusURL"`
+}
+
+// GetDeploymentConfig parses the configuration file and returns the deployment controller configuration.
+func GetDeploymentConfig(provider config.Provider) (DeploymentConfig, error) {
+	cfg := DeploymentConfig{}
+	err := provider.Get(_deploymentConfigKey).Populate(&cfg)
+	return cfg, err
 }

@@ -517,6 +517,7 @@ type DeploymentSpec struct {
 	Owner         *UserInfo               `protobuf:"bytes,8,opt,name=owner,proto3" json:"owner,omitempty"`
 	ShadowSpec    *ShadowSpec             `protobuf:"bytes,11,opt,name=shadow_spec,json=shadowSpec,proto3" json:"shadowSpec,omitempty"`
 	ResourceLinks map[string]string       `protobuf:"bytes,12,rep,name=resource_links,json=resourceLinks,proto3" json:"resourceLinks,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	HealthCheckConfig *HealthCheckConfig  `protobuf:"bytes,13,opt,name=health_check_config,json=healthCheckConfig,proto3" json:"healthCheckConfig,omitempty"`
 }
 
 func (m *DeploymentSpec) Reset()      { *m = DeploymentSpec{} }
@@ -651,12 +652,124 @@ func (m *DeploymentSpec) GetResourceLinks() map[string]string {
 	return nil
 }
 
+func (m *DeploymentSpec) GetHealthCheckConfig() *HealthCheckConfig {
+	if m != nil {
+		return m.HealthCheckConfig
+	}
+	return nil
+}
+
 // XXX_OneofWrappers is for the internal use of the proto package.
 func (*DeploymentSpec) XXX_OneofWrappers() []interface{} {
 	return []interface{}{
 		(*DeploymentSpec_InferenceServer)(nil),
 		(*DeploymentSpec_MobileSpec)(nil),
 	}
+}
+
+// MetricHealthRule_ComparisonOp is the operator used to compare a Prometheus
+// query result against the threshold. Accepted values: "GT", "LT", "GTE", "LTE".
+type MetricHealthRule_ComparisonOp = string
+
+const (
+	MetricHealthRule_COMPARISON_OP_INVALID MetricHealthRule_ComparisonOp = ""
+	MetricHealthRule_GT                    MetricHealthRule_ComparisonOp = "GT"
+	MetricHealthRule_LT                    MetricHealthRule_ComparisonOp = "LT"
+	MetricHealthRule_GTE                   MetricHealthRule_ComparisonOp = "GTE"
+	MetricHealthRule_LTE                   MetricHealthRule_ComparisonOp = "LTE"
+)
+
+// MetricHealthRule is a single PromQL-based threshold; when breached during rollout it triggers rollback.
+type MetricHealthRule struct {
+	Name        string                        `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Query       string                        `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
+	Op          MetricHealthRule_ComparisonOp `protobuf:"bytes,3,opt,name=op,proto3" json:"op,omitempty"`
+	Threshold   float64                       `protobuf:"fixed64,4,opt,name=threshold,proto3" json:"threshold,omitempty"`
+	ForDuration string                        `protobuf:"bytes,5,opt,name=for_duration,json=forDuration,proto3" json:"forDuration,omitempty"`
+}
+
+func (m *MetricHealthRule) Reset()        { *m = MetricHealthRule{} }
+func (m *MetricHealthRule) ProtoMessage() {}
+func (m *MetricHealthRule) String() string {
+	return fmt.Sprintf("MetricHealthRule{name:%s query:%s op:%s threshold:%v}", m.GetName(), m.GetQuery(), m.GetOp(), m.GetThreshold())
+}
+func (m *MetricHealthRule) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+func (m *MetricHealthRule) GetQuery() string {
+	if m != nil {
+		return m.Query
+	}
+	return ""
+}
+func (m *MetricHealthRule) GetOp() MetricHealthRule_ComparisonOp {
+	if m != nil {
+		return m.Op
+	}
+	return MetricHealthRule_COMPARISON_OP_INVALID
+}
+func (m *MetricHealthRule) GetThreshold() float64 {
+	if m != nil {
+		return m.Threshold
+	}
+	return 0
+}
+func (m *MetricHealthRule) GetForDuration() string {
+	if m != nil {
+		return m.ForDuration
+	}
+	return ""
+}
+
+// HealthCheckConfig holds the Prometheus URL and metric rules used by HealthCheckGate.
+type HealthCheckConfig struct {
+	PrometheusURL string              `protobuf:"bytes,1,opt,name=prometheus_url,json=prometheusUrl,proto3" json:"prometheusUrl,omitempty"`
+	Rules         []*MetricHealthRule `protobuf:"bytes,2,rep,name=rules,proto3" json:"rules,omitempty"`
+}
+
+func (m *HealthCheckConfig) Reset()        { *m = HealthCheckConfig{} }
+func (m *HealthCheckConfig) ProtoMessage() {}
+func (m *HealthCheckConfig) String() string {
+	return fmt.Sprintf("HealthCheckConfig{prometheusURL:%s rules:%v}", m.GetPrometheusURL(), m.GetRules())
+}
+func (m *HealthCheckConfig) GetPrometheusURL() string {
+	if m != nil {
+		return m.PrometheusURL
+	}
+	return ""
+}
+func (m *HealthCheckConfig) GetRules() []*MetricHealthRule {
+	if m != nil {
+		return m.Rules
+	}
+	return nil
+}
+
+// MarshalJSONPB implements jsonpb.JSONPBMarshaler so gogo-protobuf's JSON
+// marshaler delegates to standard encoding/json instead of treating this as
+// a registered proto message.
+func (m *HealthCheckConfig) MarshalJSONPB(_ *jsonpb.Marshaler) ([]byte, error) {
+	return json.Marshal(m)
+}
+
+// UnmarshalJSONPB implements jsonpb.JSONPBUnmarshaler for the same reason.
+func (m *HealthCheckConfig) UnmarshalJSONPB(_ *jsonpb.Unmarshaler, b []byte) error {
+	return json.Unmarshal(b, m)
+}
+
+// MarshalJSON delegates to standard JSON encoding.
+func (m *HealthCheckConfig) MarshalJSON() ([]byte, error) {
+	type alias HealthCheckConfig
+	return json.Marshal((*alias)(m))
+}
+
+// UnmarshalJSON delegates to standard JSON decoding.
+func (m *HealthCheckConfig) UnmarshalJSON(b []byte) error {
+	type alias HealthCheckConfig
+	return json.Unmarshal(b, (*alias)(m))
 }
 
 type ZonalUpdate struct {
@@ -1394,6 +1507,8 @@ func init() {
 	proto.RegisterType((*DeletionSpec)(nil), "michelangelo.api.v2.DeletionSpec")
 	proto.RegisterType((*Deployment)(nil), "michelangelo.api.v2.Deployment")
 	proto.RegisterType((*DeploymentList)(nil), "michelangelo.api.v2.DeploymentList")
+	proto.RegisterType((*MetricHealthRule)(nil), "michelangelo.api.v2.MetricHealthRule")
+	proto.RegisterType((*HealthCheckConfig)(nil), "michelangelo.api.v2.HealthCheckConfig")
 }
 
 func init() {

@@ -13,6 +13,7 @@ import (
 	backends "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	zap "go.uber.org/zap"
+	dynamic "k8s.io/client-go/dynamic"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -111,4 +112,32 @@ func (m *MockBackend) IsHealthy(ctx context.Context, logger *zap.Logger, kubeCli
 func (mr *MockBackendMockRecorder) IsHealthy(ctx, logger, kubeClient, inferenceServerName, namespace interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsHealthy", reflect.TypeOf((*MockBackend)(nil).IsHealthy), ctx, logger, kubeClient, inferenceServerName, namespace)
+}
+
+// LoadModel mocks base method.
+func (m *MockBackend) LoadModel(ctx context.Context, logger *zap.Logger, kubeClient client.Client, dynClient dynamic.Interface, inferenceServerName, namespace, modelName, storageURI string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LoadModel", ctx, logger, kubeClient, dynClient, inferenceServerName, namespace, modelName, storageURI)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LoadModel indicates an expected call of LoadModel.
+func (mr *MockBackendMockRecorder) LoadModel(ctx, logger, kubeClient, dynClient, inferenceServerName, namespace, modelName, storageURI interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadModel", reflect.TypeOf((*MockBackend)(nil).LoadModel), ctx, logger, kubeClient, dynClient, inferenceServerName, namespace, modelName, storageURI)
+}
+
+// UnloadModel mocks base method.
+func (m *MockBackend) UnloadModel(ctx context.Context, logger *zap.Logger, kubeClient client.Client, dynClient dynamic.Interface, inferenceServerName, namespace, modelName string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UnloadModel", ctx, logger, kubeClient, dynClient, inferenceServerName, namespace, modelName)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UnloadModel indicates an expected call of UnloadModel.
+func (mr *MockBackendMockRecorder) UnloadModel(ctx, logger, kubeClient, dynClient, inferenceServerName, namespace, modelName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnloadModel", reflect.TypeOf((*MockBackend)(nil).UnloadModel), ctx, logger, kubeClient, dynClient, inferenceServerName, namespace, modelName)
 }

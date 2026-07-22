@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	"go.uber.org/zap"
-
+	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -32,4 +32,14 @@ type Backend interface {
 	IsHealthy(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName string, namespace string) (bool, error)
 	// CheckModelStatus reports whether a model is loaded and ready for inference.
 	CheckModelStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, httpClient *http.Client, apiServerURL string, inferenceServerName string, namespace string, modelName string) (bool, error)
+
+	// LoadModel registers a new model version for serving.
+	// For Triton: adds the model to the inference server's ConfigMap so Triton loads it.
+	// For KServe: updates the InferenceService storageUri to the new model path.
+	LoadModel(ctx context.Context, logger *zap.Logger, kubeClient client.Client, dynClient dynamic.Interface, inferenceServerName, namespace, modelName, storageURI string) error
+
+	// UnloadModel removes a model version from serving.
+	// For Triton: removes the model from the ConfigMap so Triton unloads it.
+	// For KServe: no-op — KServe performs an in-place update; no explicit unload needed.
+	UnloadModel(ctx context.Context, logger *zap.Logger, kubeClient client.Client, dynClient dynamic.Interface, inferenceServerName, namespace, modelName string) error
 }

@@ -11,11 +11,10 @@ import (
 	"go.uber.org/zap"
 
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-// oldModelName is the previously-deployed revision used by cleanup tests. The "happy" path
-// is when this model is still loaded and needs to be unloaded; the short-circuit paths set
-// CurrentRevision to nil or to the desired revision.
+// oldModelName is the previously-deployed revision used by cleanup tests.
 const oldModelName = "model-v0"
 
 func TestModelCleanupActor_Retrieve(t *testing.T) {
@@ -23,7 +22,7 @@ func TestModelCleanupActor_Retrieve(t *testing.T) {
 		name              string
 		clientErrs        clientErrors
 		registerBackend   bool
-		currentRevision   string // pass empty to set Status.CurrentRevision = nil
+		currentRevision   string
 		setupMocks        func(*rolloutMocks)
 		expectedStatus    apipb.ConditionStatus
 		expectedReasonSub string
@@ -107,7 +106,7 @@ func TestModelCleanupActor_Retrieve(t *testing.T) {
 			mocks, target := newRolloutFixture(t, tt.clientErrs, tt.registerBackend)
 			tt.setupMocks(mocks)
 
-			actor := NewModelCleanupActor(mocks.factory, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
+			actor := NewModelCleanupActor(mocks.factory, mocks.backendRegistry, v2pb.BACKEND_TYPE_TRITON, zap.NewNop(), target)
 			got, err := actor.Retrieve(context.Background(), rolloutDeployment(tt.currentRevision), &apipb.Condition{})
 
 			require.NoError(t, err)
@@ -131,7 +130,7 @@ func TestModelCleanupActor_Run(t *testing.T) {
 		{
 			name:            "no cleanup needed",
 			currentRevision: testModelName,
-			setupMocks:      func(*rolloutMocks) {}, // no factory or provider call expected
+			setupMocks:      func(*rolloutMocks) {},
 			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
 		},
 		{
@@ -143,10 +142,18 @@ func TestModelCleanupActor_Run(t *testing.T) {
 			expectedReasonSub: "auth refused",
 		},
 		{
-			name:            "RemoveModelFromConfig errors",
+			name:              "GetDynamicClient errors",
+			currentRevision:   oldModelName,
+			clientErrs:        clientErrors{getDynamicClient: errors.New("no dyn client")},
+			setupMocks:        func(*rolloutMocks) {},
+			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedReasonSub: "no dyn client",
+		},
+		{
+			name:            "UnloadModel errors",
 			currentRevision: oldModelName,
 			setupMocks: func(m *rolloutMocks) {
-				m.modelConfigProvider.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(),
+				m.backend.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 					testISName, testNamespace, oldModelName).Return(errors.New("apply failed"))
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
@@ -156,7 +163,7 @@ func TestModelCleanupActor_Run(t *testing.T) {
 			name:            "happy path",
 			currentRevision: oldModelName,
 			setupMocks: func(m *rolloutMocks) {
-				m.modelConfigProvider.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(),
+				m.backend.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 					testISName, testNamespace, oldModelName).Return(nil)
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_UNKNOWN,
@@ -169,7 +176,7 @@ func TestModelCleanupActor_Run(t *testing.T) {
 			mocks, target := newRolloutFixture(t, tt.clientErrs, true)
 			tt.setupMocks(mocks)
 
-			actor := NewModelCleanupActor(mocks.factory, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
+			actor := NewModelCleanupActor(mocks.factory, mocks.backendRegistry, v2pb.BACKEND_TYPE_TRITON, zap.NewNop(), target)
 			got, err := actor.Run(context.Background(), rolloutDeployment(tt.currentRevision), &apipb.Condition{})
 
 			require.NoError(t, err)
@@ -183,6 +190,6 @@ func TestModelCleanupActor_Run(t *testing.T) {
 
 func TestModelCleanupActor_GetType(t *testing.T) {
 	mocks, target := newRolloutFixture(t, clientErrors{}, true)
-	actor := NewModelCleanupActor(mocks.factory, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
+	actor := NewModelCleanupActor(mocks.factory, mocks.backendRegistry, v2pb.BACKEND_TYPE_TRITON, zap.NewNop(), target)
 	assert.Equal(t, "ModelCleanupComplete-"+testCluster, actor.GetType())
 }
