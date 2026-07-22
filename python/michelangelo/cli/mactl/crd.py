@@ -1,5 +1,6 @@
 """CRD class and its member method implementations."""
 
+import json
 from argparse import ArgumentParser
 from collections.abc import MutableMapping, Sequence
 from copy import deepcopy
@@ -12,7 +13,7 @@ from pathlib import Path
 from types import MethodType
 from typing import Any, Callable, Optional
 
-from google.protobuf.json_format import MessageToDict, ParseDict
+from google.protobuf.json_format import MessageToDict, MessageToJson, ParseDict
 from google.protobuf.message import Message
 from grpc import (
     Channel,
@@ -20,6 +21,7 @@ from grpc import (
     StatusCode,
 )
 from yaml import YAMLError
+from yaml import safe_dump as yaml_safe_dump
 from yaml import safe_load as yaml_safe_load
 
 from michelangelo.cli.mactl.apply_hooks import run_pre_apply_checks
@@ -268,21 +270,30 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
 
     _self: CRD = bound_args.arguments["self"]
     name = _resolve_name_arg(bound_args.arguments)
+    all_namespaces = bound_args.arguments.get("all_namespaces", False)
+    namespace = get_single_arg(bound_args.arguments, "namespace")
+    output = bound_args.arguments.get("output", "table")
 
-    if not name:
-        _LOG.debug("No name argument passed. List CRD in the namespace.")
-        _self.generate_list(crd_method_info.channel)
-        return _self.list(
-            namespace=get_single_arg(bound_args.arguments, "namespace"),
-            limit=bound_args.arguments.get("limit", 100),
-        )
+    if name:
+        if all_namespaces:
+            raise ValueError("cannot combine --all-namespaces with a resource name")
+        if not namespace:
+            raise ValueError("--namespace is required when fetching a resource by name")
+        call_res = _self._get(namespace=namespace, name=name)
+        _render_single_item(call_res, output)
+        return call_res
 
-    call_res = _self._get(
-        namespace=get_single_arg(bound_args.arguments, "namespace"),
-        name=name,
+    if not namespace and not all_namespaces:
+        raise ValueError("either --namespace or --all-namespaces is required")
+
+    _LOG.debug("No name argument passed. List CRD in the namespace.")
+    _self.generate_list(crd_method_info.channel)
+    return _self.list(
+        namespace="" if all_namespaces else namespace,
+        limit=bound_args.arguments.get("limit", 100),
+        all_namespaces=all_namespaces,
+        output=output,
     )
-    print(call_res)
-    return call_res
 
 
 def prepare_column_info() -> list[dict]:
@@ -346,20 +357,56 @@ def print_list_formatted(items: Sequence[Message]):
         )
 
 
+def _render_list_items(items: Sequence[Message], output_format: str) -> None:
+    """Render list of CRD items in the requested output format.
+
+    Matches Go mactl `-o {table|yaml|json}` behavior.
+    """
+    if output_format == "yaml":
+        docs = [MessageToDict(m, preserving_proto_field_name=True) for m in items]
+        print(yaml_safe_dump({"items": docs}, sort_keys=False))
+    elif output_format == "json":
+        docs = [MessageToDict(m, preserving_proto_field_name=True) for m in items]
+        print(json.dumps({"items": docs}, indent=2))
+    else:
+        print_list_formatted(items)
+
+
+def _render_single_item(msg: Message, output_format: str) -> None:
+    """Render a single CRD message in the requested output format."""
+    if output_format == "yaml":
+        print(
+            yaml_safe_dump(
+                MessageToDict(msg, preserving_proto_field_name=True), sort_keys=False
+            )
+        )
+    elif output_format == "json":
+        print(MessageToJson(msg, preserving_proto_field_name=True))
+    else:
+        print(msg)
+
+
 def _list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
     """Raw CRD LIST implementation - returns response without printing."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
     limit = bound_args.arguments.get("limit", 100)
+    all_namespaces = bound_args.arguments.get("all_namespaces", False)
+    namespace = (
+        "" if all_namespaces else get_single_arg(bound_args.arguments, "namespace")
+    )
 
     request_dict = {
-        "namespace": get_single_arg(bound_args.arguments, "namespace"),
+        "namespace": namespace,
         "list_options": {"limit": limit},
         "list_options_ext": {
+            "order_by": [
+                {"field": "metadata.creation_timestamp", "dir": "SORT_ORDER_DESC"}
+            ],
             "pagination": {
                 "offset": 0,
                 "limit": limit,
-            }
+            },
         },
     }
 
@@ -380,6 +427,7 @@ def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mes
 
     _self: CRD = bound_args.arguments["self"]
     limit = bound_args.arguments.get("limit", 100)
+    output = bound_args.arguments.get("output", "table")
 
     call_res = _self._list(
         **{k: v for k, v in bound_args.arguments.items() if k != "self"}
@@ -395,12 +443,12 @@ def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mes
     # we assume the there is only one list field in the response message
     raw_elems = results[next(iter(results))]
 
-    print_list_formatted(raw_elems.items)
+    _render_list_items(raw_elems.items, output)
 
     # Show warning if we got exactly the limit (there might be more)
     if len(raw_elems.items) == limit:
         print(
-            f"\n⚠️  The response is limited to {limit} pipelines. "
+            f"\n⚠️  The response is limited to {limit} items. "
             f"There may be more than {limit} results. "
             f"Consider a larger limit with --limit argument or using filter "
             f"to narrow down the result. (default: 100)"
@@ -544,13 +592,19 @@ class CRD:
                 "args": [
                     {
                         "func_signature": Parameter(
-                            "namespace", Parameter.POSITIONAL_OR_KEYWORD
+                            "namespace",
+                            Parameter.POSITIONAL_OR_KEYWORD,
+                            default="",
                         ),
                         "args": ["-n", "--namespace"],
                         "kwargs": {
                             "type": str,
-                            "required": True,
-                            "help": "Namespace of the resource",
+                            "required": False,
+                            "default": "",
+                            "help": (
+                                "Namespace of the resource. Required unless "
+                                "--all-namespaces is set."
+                            ),
                         },
                     },
                     {
@@ -599,6 +653,42 @@ class CRD:
                             "help": (
                                 "Maximum number of items to return when listing "
                                 "(default: 100)"
+                            ),
+                        },
+                    },
+                    {
+                        "func_signature": Parameter(
+                            "all_namespaces",
+                            Parameter.POSITIONAL_OR_KEYWORD,
+                            default=False,
+                        ),
+                        "args": ["-A", "--all-namespaces"],
+                        "kwargs": {
+                            "dest": "all_namespaces",
+                            "action": "store_true",
+                            "default": False,
+                            "help": (
+                                "List resources across all namespaces. Ignores "
+                                "--namespace when set; cannot be combined with "
+                                "a resource name."
+                            ),
+                        },
+                    },
+                    {
+                        "func_signature": Parameter(
+                            "output",
+                            Parameter.POSITIONAL_OR_KEYWORD,
+                            default="table",
+                        ),
+                        "args": ["-o", "--output"],
+                        "kwargs": {
+                            "dest": "output",
+                            "type": str,
+                            "choices": ["table", "yaml", "json"],
+                            "default": "table",
+                            "help": (
+                                "Output format, one of: table|yaml|json "
+                                "(default: table)"
                             ),
                         },
                     },
@@ -792,8 +882,14 @@ class CRD:
         list_func_signature = Signature(
             [
                 Parameter("self", Parameter.POSITIONAL_OR_KEYWORD),
-                Parameter("namespace", Parameter.POSITIONAL_OR_KEYWORD),
+                Parameter("namespace", Parameter.POSITIONAL_OR_KEYWORD, default=""),
                 Parameter("limit", Parameter.POSITIONAL_OR_KEYWORD, default=100),
+                Parameter(
+                    "all_namespaces",
+                    Parameter.POSITIONAL_OR_KEYWORD,
+                    default=False,
+                ),
+                Parameter("output", Parameter.POSITIONAL_OR_KEYWORD, default="table"),
             ]
         )
 

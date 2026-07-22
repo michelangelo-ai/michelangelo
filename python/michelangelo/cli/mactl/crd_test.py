@@ -242,6 +242,167 @@ class ListFuncImplRawTest(TestCase):
         self.assertEqual(request_dict["list_options_ext"]["pagination"]["limit"], 100)
         self.assertEqual(result, mock_response)
 
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.ParseDict")
+    def test_list_func_impl_raw_defaults_to_desc_creation_sort(
+        self, mock_parse_dict, mock_call
+    ):
+        """`_list_func_impl` requests DESC-by-creation ordering by default.
+
+        Matches Go mactl autogen behavior (main.go:141-147) so `<crd> get`
+        returns newest-first without callers having to opt in.
+        """
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="michelangelo.api.v2.ProjectService",
+            method_name="List",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        mock_call.return_value = Mock()
+
+        _list_func_impl(
+            crd_method_info,
+            Mock(arguments={"namespace": "test-namespace", "limit": 100}),
+        )
+
+        request_dict = mock_parse_dict.call_args[0][0]
+        order_by = request_dict["list_options_ext"]["order_by"]
+        self.assertEqual(len(order_by), 1)
+        self.assertEqual(order_by[0]["field"], "metadata.creation_timestamp")
+        self.assertEqual(order_by[0]["dir"], "SORT_ORDER_DESC")
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.ParseDict")
+    def test_list_func_impl_raw_all_namespaces_blanks_namespace(
+        self, mock_parse_dict, mock_call
+    ):
+        """`all_namespaces=True` sends namespace='' on the wire regardless of arg."""
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="michelangelo.api.v2.ProjectService",
+            method_name="List",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        mock_call.return_value = Mock()
+
+        _list_func_impl(
+            crd_method_info,
+            Mock(
+                arguments={
+                    "namespace": "ignored-ns",
+                    "limit": 100,
+                    "all_namespaces": True,
+                }
+            ),
+        )
+
+        request_dict = mock_parse_dict.call_args[0][0]
+        self.assertEqual(request_dict["namespace"], "")
+
+
+class RenderHelpersTest(TestCase):
+    """Test cases for _render_list_items and _render_single_item helpers."""
+
+    def _mock_item(self, ns: str, name: str) -> Mock:
+        m = Mock()
+        m.metadata = Mock()
+        m.metadata.namespace = ns
+        m.metadata.name = name
+        return m
+
+    @patch("michelangelo.cli.mactl.crd.MessageToDict")
+    def test_render_list_items_yaml(self, mock_to_dict):
+        """Yaml output emits a mapping under `items:` with proto field names."""
+        from michelangelo.cli.mactl.crd import _render_list_items
+
+        mock_to_dict.side_effect = [
+            {"metadata": {"name": "a"}},
+            {"metadata": {"name": "b"}},
+        ]
+
+        import io
+        from contextlib import redirect_stdout
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            _render_list_items(
+                [self._mock_item("ns", "a"), self._mock_item("ns", "b")], "yaml"
+            )
+
+        out = buf.getvalue()
+        self.assertIn("items:", out)
+        self.assertIn("name: a", out)
+        self.assertIn("name: b", out)
+        # yaml.safe_dump must have been called with preserving_proto_field_name=True
+        # via MessageToDict — verified by side_effect being consumed twice
+        self.assertEqual(mock_to_dict.call_count, 2)
+
+    @patch("michelangelo.cli.mactl.crd.MessageToDict")
+    def test_render_list_items_json(self, mock_to_dict):
+        """Json output emits valid JSON with items array."""
+        import json as _json
+
+        from michelangelo.cli.mactl.crd import _render_list_items
+
+        mock_to_dict.side_effect = [{"name": "a"}, {"name": "b"}]
+
+        import io
+        from contextlib import redirect_stdout
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            _render_list_items(
+                [self._mock_item("ns", "a"), self._mock_item("ns", "b")], "json"
+            )
+
+        parsed = _json.loads(buf.getvalue())
+        self.assertEqual(parsed, {"items": [{"name": "a"}, {"name": "b"}]})
+
+    @patch("michelangelo.cli.mactl.crd.print_list_formatted")
+    def test_render_list_items_table_defaults_to_current_impl(self, mock_print):
+        """Table output delegates to print_list_formatted (unchanged behavior)."""
+        from michelangelo.cli.mactl.crd import _render_list_items
+
+        items = [self._mock_item("ns", "a")]
+        _render_list_items(items, "table")
+
+        mock_print.assert_called_once_with(items)
+
+    @patch("michelangelo.cli.mactl.crd.MessageToJson")
+    def test_render_single_item_json(self, mock_to_json):
+        """Json output for a single item uses MessageToJson."""
+        from michelangelo.cli.mactl.crd import _render_single_item
+
+        mock_to_json.return_value = '{"name": "x"}'
+
+        import io
+        from contextlib import redirect_stdout
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            _render_single_item(Mock(), "json")
+
+        self.assertIn('"name": "x"', buf.getvalue())
+        mock_to_json.assert_called_once()
+
+    @patch("michelangelo.cli.mactl.crd.MessageToDict")
+    def test_render_single_item_yaml(self, mock_to_dict):
+        """Yaml output for a single item uses MessageToDict + yaml_safe_dump."""
+        from michelangelo.cli.mactl.crd import _render_single_item
+
+        mock_to_dict.return_value = {"metadata": {"name": "x"}}
+
+        import io
+        from contextlib import redirect_stdout
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            _render_single_item(Mock(), "yaml")
+
+        self.assertIn("name: x", buf.getvalue())
+
 
 class DeleteFuncImplTest(TestCase):
     """Test cases for delete_func_impl function."""
@@ -376,8 +537,161 @@ class GetFuncImplTest(TestCase):
         )
 
         mock_crd.generate_list.assert_called_once_with(crd_method_info.channel)
-        mock_crd.list.assert_called_once_with(namespace="ns", limit=50)
+        mock_crd.list.assert_called_once_with(
+            namespace="ns",
+            limit=50,
+            all_namespaces=False,
+            output="table",
+        )
         self.assertEqual(result, "list_result")
+
+    def test_get_func_impl_all_namespaces_lists_with_empty_namespace(self):
+        """`-A` with no name lists across all namespaces (namespace='' on wire)."""
+        mock_crd = Mock()
+        mock_crd.list = Mock(return_value="list_result")
+        mock_crd.generate_list = Mock()
+
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Get",
+            input_class=Mock,
+            output_class=Mock,
+        )
+
+        get_func_impl(
+            crd_method_info,
+            Mock(
+                arguments={
+                    "self": mock_crd,
+                    "namespace": "",
+                    "name": "",
+                    "name_flag": "",
+                    "limit": 100,
+                    "all_namespaces": True,
+                    "output": "table",
+                }
+            ),
+        )
+
+        mock_crd.list.assert_called_once_with(
+            namespace="",
+            limit=100,
+            all_namespaces=True,
+            output="table",
+        )
+
+    def test_get_func_impl_all_namespaces_wins_over_provided_namespace(self):
+        """When `-A` is set, --namespace value is ignored (mirrors Go mactl)."""
+        mock_crd = Mock()
+        mock_crd.list = Mock(return_value="list_result")
+        mock_crd.generate_list = Mock()
+
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Get",
+            input_class=Mock,
+            output_class=Mock,
+        )
+
+        get_func_impl(
+            crd_method_info,
+            Mock(
+                arguments={
+                    "self": mock_crd,
+                    "namespace": "ignored-ns",
+                    "name": "",
+                    "name_flag": "",
+                    "limit": 100,
+                    "all_namespaces": True,
+                    "output": "table",
+                }
+            ),
+        )
+
+        mock_crd.list.assert_called_once_with(
+            namespace="",
+            limit=100,
+            all_namespaces=True,
+            output="table",
+        )
+
+    def test_get_func_impl_all_namespaces_with_name_errors(self):
+        """`-A` combined with a resource name raises ValueError."""
+        mock_crd = Mock()
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Get",
+            input_class=Mock,
+            output_class=Mock,
+        )
+
+        with self.assertRaisesRegex(ValueError, "all-namespaces"):
+            get_func_impl(
+                crd_method_info,
+                Mock(
+                    arguments={
+                        "self": mock_crd,
+                        "namespace": "",
+                        "name": "my-resource",
+                        "name_flag": "",
+                        "all_namespaces": True,
+                    }
+                ),
+            )
+
+    def test_get_func_impl_no_namespace_no_all_namespaces_errors(self):
+        """Missing both --namespace and --all-namespaces raises ValueError."""
+        mock_crd = Mock()
+        mock_crd.generate_list = Mock()
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Get",
+            input_class=Mock,
+            output_class=Mock,
+        )
+
+        with self.assertRaisesRegex(ValueError, "namespace"):
+            get_func_impl(
+                crd_method_info,
+                Mock(
+                    arguments={
+                        "self": mock_crd,
+                        "namespace": "",
+                        "name": "",
+                        "name_flag": "",
+                        "all_namespaces": False,
+                    }
+                ),
+            )
+
+    def test_get_func_impl_name_without_namespace_errors(self):
+        """Fetching by name without --namespace raises ValueError."""
+        mock_crd = Mock()
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Get",
+            input_class=Mock,
+            output_class=Mock,
+        )
+
+        with self.assertRaisesRegex(ValueError, "namespace"):
+            get_func_impl(
+                crd_method_info,
+                Mock(
+                    arguments={
+                        "self": mock_crd,
+                        "namespace": "",
+                        "name": "my-resource",
+                        "name_flag": "",
+                        "all_namespaces": False,
+                    }
+                ),
+            )
 
 
 class GetFuncImplRawTest(TestCase):
