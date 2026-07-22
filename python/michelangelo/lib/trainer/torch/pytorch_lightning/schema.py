@@ -84,6 +84,90 @@ class TrainingObserver(Protocol):
         ...
 
 
+@runtime_checkable
+class ExperimentStore(Protocol):
+    """Pluggable locator for resumable Ray Train experiments.
+
+    An ``ExperimentStore`` lets :class:`LightningTrainer` auto-resume a prior
+    run's experiment directory. It bridges two moments that live in different
+    processes:
+
+    * :meth:`track` runs **on the worker (rank 0 only)** at the start of a run,
+      recording where this run's Ray Train experiment directory lives so a
+      *future* run can find it.
+    * :meth:`locate_resumable` runs **on the driver** before ``fit()``, looking
+      up a candidate experiment directory to restore from.
+
+    The stable cross-run identity is ``(storage_path, run_name)`` — both taken
+    from the driver's ``RunConfig`` and passed verbatim to both methods, so the
+    two sides always agree on the key regardless of how Ray names the on-disk
+    experiment directory.
+
+    **Picklability:** implementations must be picklable — Ray serializes the
+    training config (including this store) to worker processes for
+    :meth:`track`. Avoid open file handles, DB connections, or lambdas as
+    instance attributes (same constraint as :class:`TrainingObserver`).
+
+    **Never raise:** neither method may raise on the "nothing to resume" or
+    "couldn't persist" paths. :meth:`locate_resumable` returns ``None`` when
+    there is nothing to resume; :meth:`track` is best-effort (a failed write
+    must not fail an otherwise-successful training run). The trainer additionally
+    guards both call sites, so a misbehaving custom store cannot crash training.
+
+    Example::
+
+        from michelangelo.lib.trainer.torch.pytorch_lightning import (
+            FsspecExperimentStore,
+            LightningTrainerParam,
+        )
+
+        param = LightningTrainerParam(
+            create_model_fn=my_model_factory,
+            create_model_fn_kwargs={},
+            train_data=train_ds,
+            val_data=val_ds,
+            experiment_store=FsspecExperimentStore(),
+        )
+    """
+
+    def track(self, *, storage_path: str, run_name: str, experiment_path: str) -> None:
+        """Record this run's experiment directory for future resumption.
+
+        Called once, on worker rank 0, near the start of training.
+
+        Args:
+            storage_path: The driver's ``RunConfig.storage_path`` (the storage
+                root; also the fsspec root under which markers are kept).
+            run_name: The driver's ``RunConfig.name`` (stable run identity).
+            experiment_path: Absolute path of *this* run's Ray Train experiment
+                directory, derived by the caller from
+                ``ray.train.get_context().get_storage()``.
+
+        Returns:
+            ``None``.
+        """
+        ...
+
+    def locate_resumable(self, *, storage_path: str, run_name: str) -> str | None:
+        """Return a candidate experiment directory to resume, or ``None``.
+
+        Called on the driver before ``fit()``. The returned path is only a
+        *candidate*: the trainer validates it with
+        ``ray.train.torch.TorchTrainer.can_restore()`` before enabling
+        restoration, so this method must not itself check for a valid
+        checkpoint. Returns ``None`` when no marker exists or it cannot be read.
+
+        Args:
+            storage_path: The driver's ``RunConfig.storage_path``.
+            run_name: The driver's ``RunConfig.name``.
+
+        Returns:
+            A candidate experiment directory path, or ``None`` when there is
+            nothing to resume.
+        """
+        ...
+
+
 class TrainingType(Enum):
     """Enum for training types in incremental training."""
 

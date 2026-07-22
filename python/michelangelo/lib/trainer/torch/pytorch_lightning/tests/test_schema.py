@@ -23,6 +23,7 @@ pytest.importorskip("torch")
 pytest.importorskip("pytorch_lightning")
 
 from michelangelo.lib.trainer.torch.pytorch_lightning.schema import (
+    ExperimentStore,
     IncrementalTrainingMetadata,
     IncrementalTrainingSpec,
     LearningMode,
@@ -61,6 +62,36 @@ class TestTrainingObserver:
                 pass
 
         assert not isinstance(_Partial(), TrainingObserver)
+
+
+# -----------------------------------------------------------------------------
+# ExperimentStore Protocol
+# -----------------------------------------------------------------------------
+
+
+class TestExperimentStore:
+    """``ExperimentStore`` is a runtime-checkable protocol."""
+
+    def test_runtime_checkable_with_matching_class(self):
+        """A plain class implementing both methods satisfies the protocol."""
+
+        class _Store:
+            def track(self, *, storage_path, run_name, experiment_path):
+                pass
+
+            def locate_resumable(self, *, storage_path, run_name):
+                return None
+
+        assert isinstance(_Store(), ExperimentStore)
+
+    def test_runtime_checkable_rejects_incomplete_class(self):
+        """A class missing a method does not satisfy the protocol."""
+
+        class _Partial:
+            def track(self, *, storage_path, run_name, experiment_path):
+                pass
+
+        assert not isinstance(_Partial(), ExperimentStore)
 
 
 # -----------------------------------------------------------------------------

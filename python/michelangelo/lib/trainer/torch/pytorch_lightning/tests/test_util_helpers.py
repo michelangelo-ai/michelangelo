@@ -28,6 +28,7 @@ pytest.importorskip("pytorch_lightning")
 from michelangelo.lib.trainer.torch.pytorch_lightning._private.util import (  # noqa: E402
     _apply_layer_freeze,
     _load_weights_from_path,
+    _maybe_track_experiment,
 )
 
 _UTIL_MODULE = "michelangelo.lib.trainer.torch.pytorch_lightning._private.util"
@@ -168,3 +169,83 @@ class TestApplyLayerFreeze:
         model = _TwoLayerNet()
         _apply_layer_freeze(model, {"layer_names_to_freeze": ["nonexistent"]})
         assert self._frozen_names(model) == set()
+
+
+# -----------------------------------------------------------------------------
+# _maybe_track_experiment
+# -----------------------------------------------------------------------------
+
+
+def _config(store, storage_path="/root/runs", run_name="run1"):
+    """Build a per-worker config dict carrying an experiment store + identity."""
+    cfg = {}
+    if store is not None:
+        cfg["experiment_store"] = store
+    if storage_path is not None:
+        cfg["storage_path"] = storage_path
+    if run_name is not None:
+        cfg["run_name"] = run_name
+    return cfg
+
+
+class TestMaybeTrackExperiment:
+    """Rank-0-guarded, best-effort experiment tracking in the worker loop."""
+
+    def _patch_storage(self, storage_fs_path="/fs/root", experiment_dir_name="exp_x"):
+        """Patch ``ray`` so ``get_storage()`` returns a fake storage context."""
+        patcher = patch(f"{_UTIL_MODULE}.ray")
+        ray_mod = patcher.start()
+        sc = MagicMock(name="storage_context")
+        sc.storage_fs_path = storage_fs_path
+        sc.experiment_dir_name = experiment_dir_name
+        ray_mod.train.get_context.return_value.get_storage.return_value = sc
+        return patcher, ray_mod
+
+    def test_tracks_on_rank_0_with_derived_path(self):
+        """Rank 0 with full identity calls ``track`` with the derived path."""
+        store = MagicMock(name="store")
+        patcher, _ = self._patch_storage("/fs/root", "exp_x")
+        try:
+            _maybe_track_experiment(_config(store), rank=0)
+        finally:
+            patcher.stop()
+
+        store.track.assert_called_once_with(
+            storage_path="/root/runs",
+            run_name="run1",
+            experiment_path="/fs/root/exp_x",
+        )
+
+    def test_non_rank_0_does_not_track(self):
+        """A non-rank-0 worker never calls ``track`` (rank-0 guard)."""
+        store = MagicMock(name="store")
+        _maybe_track_experiment(_config(store), rank=1)
+        store.track.assert_not_called()
+
+    def test_no_store_is_noop(self):
+        """A config without a store is a no-op (no crash)."""
+        # No exception is the assertion here.
+        _maybe_track_experiment(_config(None), rank=0)
+
+    def test_missing_storage_path_skips(self):
+        """Missing ``storage_path`` skips tracking."""
+        store = MagicMock(name="store")
+        _maybe_track_experiment(_config(store, storage_path=None), rank=0)
+        store.track.assert_not_called()
+
+    def test_missing_run_name_skips(self):
+        """Missing ``run_name`` skips tracking."""
+        store = MagicMock(name="store")
+        _maybe_track_experiment(_config(store, run_name=None), rank=0)
+        store.track.assert_not_called()
+
+    def test_track_failure_is_swallowed(self):
+        """A store raising in ``track`` is swallowed (never fails training)."""
+        store = MagicMock(name="store")
+        store.track.side_effect = RuntimeError("boom")
+        patcher, _ = self._patch_storage()
+        try:
+            _maybe_track_experiment(_config(store), rank=0)  # must not raise
+        finally:
+            patcher.stop()
+        store.track.assert_called_once()

@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- `ExperimentStore` protocol and `FsspecExperimentStore` default in
+  `michelangelo.lib.trainer.torch.pytorch_lightning`, giving `LightningTrainer`
+  an opt-in auto-resume capability. Set
+  `LightningTrainerParam(experiment_store=FsspecExperimentStore())` and a
+  `RunConfig(name=..., storage_path=...)`; on rank 0 the trainer records the
+  run's experiment directory in a JSON marker at
+  `{storage_path}/.michelangelo_resume/{run_name}.json`, and a re-run with the
+  same identity restores from it when it holds a restorable checkpoint
+  (validated via `TorchTrainer.can_restore()`). Defaults to `None` (no tracking,
+  no resume); bring your own `ExperimentStore` for other backends.
+
 ## [0.5.0] - 2026-07-20
 
 ### Breaking Changes

@@ -48,6 +48,7 @@ from michelangelo.lib.trainer.torch.pytorch_lightning._private.util import (
 
 if TYPE_CHECKING:
     from michelangelo.lib.trainer.torch.pytorch_lightning.schema import (
+        ExperimentStore,
         IncrementalTrainingSpec,
         TrainingObserver,
         TransferLearningSpec,
@@ -93,6 +94,15 @@ class LightningTrainerParam:
             ``on_result`` (driver-side, after training) and ``on_checkpoint_saved``
             (worker-side, per epoch/step). Must be picklable if per-epoch
             observation is needed.
+        experiment_store: Optional :class:`~schema.ExperimentStore` enabling
+            opt-in auto-resume. When set (and ``run_config`` carries both a
+            ``name`` and a ``storage_path``), the trainer records this run's
+            experiment directory on rank 0 and, on a re-run with the same
+            identity, restores from the previously recorded directory if it
+            holds a restorable checkpoint. Defaults to ``None`` (no tracking,
+            no resume). Use
+            :class:`~experiment_store.FsspecExperimentStore` for the filesystem
+            default. Must be picklable (serialized to workers for tracking).
     """
 
     create_model_fn: Callable
@@ -111,6 +121,7 @@ class LightningTrainerParam:
     incremental_training_spec: IncrementalTrainingSpec | None = None
     initial_weights_path: str | None = None
     training_observer: TrainingObserver | None = None
+    experiment_store: ExperimentStore | None = None
 
     def __post_init__(self):
         """Apply default ``num_epochs`` and warn on the deprecated field usage."""
@@ -160,6 +171,18 @@ class LightningTrainer(TorchTrainer):
         if self._training_observer is not None:
             train_loop_config["training_observer"] = self._training_observer
 
+        # Pop experiment_store for the same asdict()-recursion reason. When set,
+        # re-inject it plus the (storage_path, run_name) identity taken from the
+        # driver's RunConfig, so the worker can record this run's experiment
+        # directory keyed off byte-identical strings the driver later resumes on.
+        self._experiment_store = trainer_param.experiment_store
+        train_loop_config.pop("experiment_store", None)
+        if self._experiment_store is not None:
+            train_loop_config["experiment_store"] = self._experiment_store
+            if run_config is not None:
+                train_loop_config["storage_path"] = run_config.storage_path
+                train_loop_config["run_name"] = run_config.name
+
         super().__init__(
             train_loop_per_worker=_train_loop_per_worker,
             train_loop_config=train_loop_config,
@@ -191,6 +214,8 @@ class LightningTrainer(TorchTrainer):
         if run_config is not None:
             self.run_config = run_config
 
+        self._maybe_enable_auto_resume()
+
         result = self.fit()
         if result.error:
             raise result.error
@@ -212,6 +237,48 @@ class LightningTrainer(TorchTrainer):
             "path": result.path,
             "metrics": result.metrics,
         }
+
+    def _maybe_enable_auto_resume(self) -> None:
+        """Point Ray Train at a resumable experiment directory when configured.
+
+        No-op unless an ``experiment_store`` is set and ``run_config`` carries
+        both a ``name`` and a ``storage_path``. Asks the store for a candidate
+        directory, then gates it through
+        ``ray.train.torch.TorchTrainer.can_restore()`` — the store never
+        validates checkpoints itself. On success, sets the Ray-internal
+        ``_restore_path`` / ``_restore_storage_filesystem`` attributes so
+        :meth:`fit` restores instead of starting fresh. A store that raises, a
+        missing candidate, or a candidate with no restorable checkpoint all fall
+        through to a fresh run.
+        """
+        store = self._experiment_store
+        if store is None or self.run_config is None:
+            return
+        storage_path = self.run_config.storage_path
+        run_name = self.run_config.name
+        if not storage_path or not run_name:
+            return
+
+        try:
+            candidate = store.locate_resumable(
+                storage_path=storage_path, run_name=run_name
+            )
+        except Exception:
+            _logger.warning("locate_resumable raised; not resuming", exc_info=True)
+            return
+
+        if not candidate:
+            return
+
+        fs = self.run_config.storage_filesystem
+        # ``_restore_path`` / ``_restore_storage_filesystem`` are Ray-internal
+        # BaseTrainer attributes; setting them is how a resumable run is enabled
+        # in-place. The public alternative (``TorchTrainer.restore``) rebuilds a
+        # fresh trainer, which is awkward from inside an instance's ``train()``.
+        if TorchTrainer.can_restore(candidate, fs):
+            self._restore_path = candidate
+            self._restore_storage_filesystem = fs
+            _logger.info("Auto-resume: restoring from %s", candidate)
 
 
 class LightningTrainerWithStateDict(LightningTrainer):

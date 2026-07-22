@@ -16,14 +16,20 @@ Public surface re-exported below:
 * :class:`TransferLearningSpec`, :class:`IncrementalTrainingSpec`,
   :class:`ModelSpec`, :class:`TrainingType`, :class:`LearningMode` — warm-start
   schema types consumed by the trainer.
+* :class:`ExperimentStore` — pluggable auto-resume seam;
+  :class:`FsspecExperimentStore` is the filesystem default.
 """
 
+from michelangelo.lib.trainer.torch.pytorch_lightning.experiment_store import (
+    FsspecExperimentStore,
+)
 from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (
     LightningTrainer,
     LightningTrainerParam,
     LightningTrainerWithStateDict,
 )
 from michelangelo.lib.trainer.torch.pytorch_lightning.schema import (
+    ExperimentStore,
     IncrementalTrainingSpec,
     LearningMode,
     ModelSpec,
@@ -33,6 +39,8 @@ from michelangelo.lib.trainer.torch.pytorch_lightning.schema import (
 )
 
 __all__ = [
+    "ExperimentStore",
+    "FsspecExperimentStore",
     "IncrementalTrainingSpec",
     "LearningMode",
     "LightningTrainer",

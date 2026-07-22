@@ -60,6 +60,17 @@ class TestLightningTrainerParam:
         param = _make_param()
         assert param.training_observer is None
 
+    def test_experiment_store_defaults_to_none(self):
+        """``experiment_store`` defaults to ``None`` (opt-in auto-resume)."""
+        param = _make_param()
+        assert param.experiment_store is None
+
+    def test_experiment_store_stored(self):
+        """``experiment_store`` is stored when provided."""
+        store = MagicMock(name="store")
+        param = _make_param(experiment_store=store)
+        assert param.experiment_store is store
+
     def test_training_observer_stored(self):
         """``training_observer`` is stored when provided."""
         observer = MagicMock(name="observer")
@@ -475,3 +486,190 @@ class TestWeightsOnlyDisabledContext:
             assert os.environ[KEY] == "1"
             raise RuntimeError("boom")
         assert os.environ[KEY] == "previous"
+
+
+# -----------------------------------------------------------------------------
+# ExperimentStore wiring: __init__
+# -----------------------------------------------------------------------------
+
+_LT_MODULE = "michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer"
+
+
+def _run_config(storage_path="/root/runs", name="run1"):
+    """Build a stand-in ``RunConfig`` exposing the fields the trainer reads."""
+    cfg = MagicMock(name="run_config")
+    cfg.storage_path = storage_path
+    cfg.name = name
+    cfg.storage_filesystem = MagicMock(name="storage_filesystem")
+    return cfg
+
+
+class TestExperimentStoreInit:
+    """``experiment_store`` pop/re-inject and identity injection in ``__init__``."""
+
+    def test_store_popped_from_asdict_and_reinjected_with_identity(self):
+        """Store is stored on ``self`` and re-injected with the run identity."""
+        store = MagicMock(name="store")
+        run_cfg = _run_config(storage_path="/root/runs", name="run1")
+        param = _make_param(experiment_store=store)
+
+        with patch(f"{_LT_MODULE}.TorchTrainer.__init__", return_value=None) as sup:
+            trainer = LightningTrainer(trainer_param=param, run_config=run_cfg)
+
+        assert trainer._experiment_store is store
+        loop_cfg = sup.call_args.kwargs["train_loop_config"]
+        assert loop_cfg["experiment_store"] is store
+        assert loop_cfg["storage_path"] == "/root/runs"
+        assert loop_cfg["run_name"] == "run1"
+
+    def test_no_store_leaves_config_clean(self):
+        """Without a store, no store/identity keys leak into the loop config."""
+        param = _make_param()
+        with patch(f"{_LT_MODULE}.TorchTrainer.__init__", return_value=None) as sup:
+            trainer = LightningTrainer(trainer_param=param, run_config=_run_config())
+
+        assert trainer._experiment_store is None
+        loop_cfg = sup.call_args.kwargs["train_loop_config"]
+        assert "experiment_store" not in loop_cfg
+        assert "storage_path" not in loop_cfg
+        assert "run_name" not in loop_cfg
+
+    def test_store_without_run_config_omits_identity(self):
+        """A store but no ``run_config`` re-injects the store but no identity."""
+        store = MagicMock(name="store")
+        param = _make_param(experiment_store=store)
+        with patch(f"{_LT_MODULE}.TorchTrainer.__init__", return_value=None) as sup:
+            LightningTrainer(trainer_param=param)  # no run_config
+
+        loop_cfg = sup.call_args.kwargs["train_loop_config"]
+        assert loop_cfg["experiment_store"] is store
+        assert "storage_path" not in loop_cfg
+        assert "run_name" not in loop_cfg
+
+
+# -----------------------------------------------------------------------------
+# ExperimentStore wiring: auto-resume gating in _maybe_enable_auto_resume
+# -----------------------------------------------------------------------------
+
+
+class TestAutoResume:
+    """``_maybe_enable_auto_resume`` gates a candidate through ``can_restore``."""
+
+    def _build(self, store, run_config):
+        """Build a trainer with mocked base init and an assigned ``run_config``."""
+        param = _make_param(experiment_store=store)
+        with patch(f"{_LT_MODULE}.TorchTrainer.__init__", return_value=None):
+            trainer = LightningTrainer(trainer_param=param, run_config=run_config)
+        # Base ``__init__`` is mocked, so set the attribute train() would rely on.
+        trainer.run_config = run_config
+        return trainer
+
+    def test_resumes_when_candidate_restorable(self):
+        """A restorable candidate sets the Ray-internal restore attributes."""
+        store = MagicMock(name="store")
+        store.locate_resumable.return_value = "/candidate/exp"
+        run_cfg = _run_config()
+        trainer = self._build(store, run_cfg)
+
+        with patch(f"{_LT_MODULE}.TorchTrainer.can_restore", return_value=True) as cr:
+            trainer._maybe_enable_auto_resume()
+
+        store.locate_resumable.assert_called_once_with(
+            storage_path=run_cfg.storage_path, run_name=run_cfg.name
+        )
+        cr.assert_called_once_with("/candidate/exp", run_cfg.storage_filesystem)
+        assert trainer._restore_path == "/candidate/exp"
+        assert trainer._restore_storage_filesystem is run_cfg.storage_filesystem
+
+    def test_no_resume_when_not_restorable(self):
+        """A candidate that fails ``can_restore`` does not enable restoration."""
+        store = MagicMock(name="store")
+        store.locate_resumable.return_value = "/candidate/exp"
+        trainer = self._build(store, _run_config())
+
+        with patch(f"{_LT_MODULE}.TorchTrainer.can_restore", return_value=False):
+            trainer._maybe_enable_auto_resume()
+
+        assert not hasattr(trainer, "_restore_path")
+
+    def test_no_resume_when_no_candidate(self):
+        """A ``None`` candidate skips ``can_restore`` entirely."""
+        store = MagicMock(name="store")
+        store.locate_resumable.return_value = None
+        trainer = self._build(store, _run_config())
+
+        with patch(f"{_LT_MODULE}.TorchTrainer.can_restore") as cr:
+            trainer._maybe_enable_auto_resume()
+
+        cr.assert_not_called()
+        assert not hasattr(trainer, "_restore_path")
+
+    def test_locate_raising_is_swallowed(self):
+        """A store that raises in ``locate_resumable`` falls through to fresh run."""
+        store = MagicMock(name="store")
+        store.locate_resumable.side_effect = RuntimeError("boom")
+        trainer = self._build(store, _run_config())
+
+        with patch(f"{_LT_MODULE}.TorchTrainer.can_restore") as cr:
+            trainer._maybe_enable_auto_resume()  # must not raise
+
+        cr.assert_not_called()
+        assert not hasattr(trainer, "_restore_path")
+
+    def test_skip_without_store(self):
+        """No store → no-op, and no crash reading run_config."""
+        trainer = self._build(None, _run_config())
+        with patch(f"{_LT_MODULE}.TorchTrainer.can_restore") as cr:
+            trainer._maybe_enable_auto_resume()
+        cr.assert_not_called()
+
+    def test_skip_without_run_config(self):
+        """A store but ``run_config is None`` → no locate, no resume."""
+        store = MagicMock(name="store")
+        trainer = self._build(store, None)
+        with patch(f"{_LT_MODULE}.TorchTrainer.can_restore") as cr:
+            trainer._maybe_enable_auto_resume()
+        store.locate_resumable.assert_not_called()
+        cr.assert_not_called()
+
+    def test_skip_when_storage_path_missing(self):
+        """A ``run_config`` without a storage_path → no locate, no resume."""
+        store = MagicMock(name="store")
+        trainer = self._build(store, _run_config(storage_path=None))
+        with patch(f"{_LT_MODULE}.TorchTrainer.can_restore") as cr:
+            trainer._maybe_enable_auto_resume()
+        store.locate_resumable.assert_not_called()
+        cr.assert_not_called()
+
+    def test_skip_when_run_name_missing(self):
+        """A ``run_config`` without a name → no locate, no resume."""
+        store = MagicMock(name="store")
+        trainer = self._build(store, _run_config(name=None))
+        with patch(f"{_LT_MODULE}.TorchTrainer.can_restore") as cr:
+            trainer._maybe_enable_auto_resume()
+        store.locate_resumable.assert_not_called()
+        cr.assert_not_called()
+
+    def test_train_invokes_auto_resume_before_fit(self):
+        """``train()`` calls ``_maybe_enable_auto_resume`` ahead of ``fit()``."""
+        trainer = self._build(MagicMock(name="store"), _run_config())
+        result = MagicMock()
+        result.error = None
+        result.checkpoint.path = "/c"
+        result.path = "/r"
+        result.metrics = {}
+
+        calls = []
+        with (
+            patch.object(
+                trainer,
+                "_maybe_enable_auto_resume",
+                side_effect=lambda: calls.append("resume"),
+            ),
+            patch.object(
+                trainer, "fit", side_effect=lambda: calls.append("fit") or result
+            ),
+        ):
+            trainer.train()
+
+        assert calls == ["resume", "fit"]
