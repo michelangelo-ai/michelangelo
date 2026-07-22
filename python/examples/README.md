@@ -1,4 +1,4 @@
-Example project showing various capabilities of the Michelangelo workflows.
+Example project showing various capabilities of the Michelangelo AI workflows.
 
 ## Project Structure
 
@@ -61,8 +61,8 @@ Create temporal sandbox
 
 The create setup dependencies for Uniflow including
 
-- Michelangelo-ai API
-- Michelangelo-ai controller manager
+- Michelangelo AI-ai API
+- Michelangelo AI-ai controller manager
 - Cadence
 - Starlark-worker
 - S3 storage

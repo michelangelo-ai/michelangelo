@@ -1,6 +1,6 @@
 # Tools Directory
 
-This directory contains utility scripts for Michelangelo development and testing.
+This directory contains utility scripts for Michelangelo AI development and testing.
 
 ## Directory Structure
 
@@ -21,7 +21,7 @@ Scripts in the root `tools/` directory are for **development purposes** and may 
 - **`gazelle`** - Go BUILD file generator
 - **`go`** - Go toolchain wrapper
 - **`goimports`** - Go import formatter
-- **`mamockgen`** - Mock generator for Michelangelo
+- **`mamockgen`** - Mock generator for Michelangelo AI
 - **`grpc-svc-gen.sh`** - gRPC service generator
 - **`gen-grpc-client.sh`** - gRPC client generator
 - **`run_ruff.sh`** - Python linter runner

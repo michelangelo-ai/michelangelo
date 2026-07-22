@@ -1,10 +1,10 @@
-# Michelangelo Starlark
+# Michelangelo AI Starlark
 
-Michelangelo Starlark lets you write workflows in the Starlark scripting language and run them on Cadence or Temporal, without needing to redeploy the worker.
+Michelangelo AI Starlark lets you write workflows in the Starlark scripting language and run them on Cadence or Temporal, without needing to redeploy the worker.
 
 ## Overview
 
-Michelangelo Starlark is a Cadence/Temporal worker that runs a generic workflow. This workflow takes Starlark code as input and executes it using an embedded Starlark interpreter. The interpreter is integrated with the Cadence/Temporal SDK, so your Starlark code can call Cadence/Temporal APIs directly.
+Michelangelo AI Starlark is a Cadence/Temporal worker that runs a generic workflow. This workflow takes Starlark code as input and executes it using an embedded Starlark interpreter. The interpreter is integrated with the Cadence/Temporal SDK, so your Starlark code can call Cadence/Temporal APIs directly.
 
 ## Getting Started
 

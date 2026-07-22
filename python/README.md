@@ -1,15 +1,15 @@
-# Michelangelo
+# Michelangelo AI
 
 **An end-to-end ML platform for building, training, and registering machine learning models at scale.**
 
 [![Documentation](https://img.shields.io/badge/docs-michelangelo--ai.org-blue)](https://michelangelo-ai.org/docs)
 [![GitHub](https://img.shields.io/badge/github-michelangelo--ai%2Fmichelangelo-lightgrey)](https://github.com/michelangelo-ai/michelangelo)
 
-Michelangelo gives ML engineers and data scientists a unified Python SDK for the entire model lifecycle — from data preparation and distributed training to model registration and production deployment. Define your ML workflows as Python functions using simple decorators, and Michelangelo handles orchestration, caching, and scaling across Ray and Spark clusters.
+Michelangelo AI gives ML engineers and data scientists a unified Python SDK for the entire model lifecycle — from data preparation and distributed training to model registration and production deployment. Define your ML workflows as Python functions using simple decorators, and Michelangelo AI handles orchestration, caching, and scaling across Ray and Spark clusters.
 
 ## Key Features
 
-- **Uniflow Pipeline Framework** — Define ML workflows with `@task` and `@workflow` decorators. Write plain Python functions and Michelangelo handles distributed execution, data passing between tasks, and result caching.
+- **Uniflow Pipeline Framework** — Define ML workflows with `@task` and `@workflow` decorators. Write plain Python functions and Michelangelo AI handles distributed execution, data passing between tasks, and result caching.
 
 - **Distributed Execution** — Scale tasks across Ray or Spark clusters with a single config change. Specify CPU, memory, GPU, and worker resources per task — no changes to your business logic required.
 
@@ -17,7 +17,7 @@ Michelangelo gives ML engineers and data scientists a unified Python SDK for the
 
 - **Python API Client** — Programmatically manage projects, pipelines, model registry, and pipeline runs through a gRPC-based Python client.
 
-- **CLI (`ma`)** — Register pipelines, manage triggers, run sandboxes, and interact with the Michelangelo platform from your terminal.
+- **CLI (`ma`)** — Register pipelines, manage triggers, run sandboxes, and interact with the Michelangelo AI platform from your terminal.
 
 - **Flexible Storage** — Read and write data across S3, GCS, HDFS, and local filesystems using the fsspec-based storage layer.
 
@@ -43,7 +43,7 @@ pip install michelangelo[plugin]
 | `michelangelo[ray-polars]` | Ray, Polars | You read Ray Datasets with nested list/struct columns (Polars fallback for [ray#61675](https://github.com/ray-project/ray/issues/61675)) |
 | `michelangelo[vllm]` | vLLM, Ray, PyTorch, Transformers | You're serving or fine-tuning large language models |
 | `michelangelo[example]` | All ML libraries for examples | You want to run the included example projects |
-| `michelangelo[dev]` | pytest, ruff, pre-commit, Ray | You're contributing to Michelangelo itself |
+| `michelangelo[dev]` | pytest, ruff, pre-commit, Ray | You're contributing to Michelangelo AI itself |
 
 ## Quickstart
 
@@ -101,7 +101,7 @@ def process_data(df):
 
 ### I/O Plugins
 
-Michelangelo provides typed I/O handlers for passing data between tasks. The
+Michelangelo AI provides typed I/O handlers for passing data between tasks. The
 handler is selected automatically based on the Python type of the value being
 written.
 
@@ -155,7 +155,7 @@ export MA_API_SERVER="localhost:12345"
 Evaluation reports capture structured metric charts produced by a training run.
 If you've used MLflow or W&B, here's the conceptual mapping:
 
-| Michelangelo | MLflow | W&B |
+| Michelangelo AI | MLflow | W&B |
 |---|---|---|
 | `metadata.namespace` | Experiment name | entity / project |
 | `metadata.name` | Run name | Run name |
