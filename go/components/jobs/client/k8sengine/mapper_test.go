@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	k8sptr "k8s.io/utils/ptr"
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -75,6 +76,9 @@ func TestMapper_MapGlobalJobToLocal(t *testing.T) {
 					TTLSecondsAfterFinished:  int32(300),
 					ShutdownAfterJobFinishes: true,
 					SubmitterPodTemplate:     submitterPod,
+					SubmitterConfig: &rayv1.SubmitterConfig{
+						BackoffLimit: k8sptr.To(int32(submitterBackoffLimit)),
+					},
 				},
 			},
 		},

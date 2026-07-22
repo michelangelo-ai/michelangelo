@@ -160,7 +160,10 @@ func IsRegionalCluster(cluster *v2pb.Cluster) bool {
 
 var terminalPodErrorReasons = map[string]bool{
 	// KubeRay condition-level reasons (from HeadPodReady / ReplicaFailure)
-	"HeadPodNotFound":       true,
+	// NOTE: HeadPodNotFound is intentionally excluded — it's a transient state
+	// kuberay sets while the head pod is being created, before the informer
+	// cache reflects the new pod, and routinely clears within a reconcile
+	// cycle or two once the head pod comes up. Not a terminal failure.
 	"FailedCreateHeadPod":   true,
 	"FailedCreateWorkerPod": true,
 	// Kubernetes container-level reasons (if KubeRay exposes them in future versions)

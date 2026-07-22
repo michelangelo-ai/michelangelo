@@ -104,6 +104,13 @@ func TestHasTerminalPodErrors(t *testing.T) {
 			expected: false,
 		},
 		{
+			name: "HeadPodNotFound is not immediately terminal",
+			errors: []*v2pb.PodErrors{
+				{Reason: "HeadPodNotFound", Message: "head pod not found"},
+			},
+			expected: false,
+		},
+		{
 			name: "CrashLoopBackOff is terminal",
 			errors: []*v2pb.PodErrors{
 				{Reason: "CrashLoopBackOff", Message: "container crashing"},

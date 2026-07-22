@@ -13,6 +13,12 @@ import (
 	k8sptr "k8s.io/utils/ptr"
 )
 
+// submitterBackoffLimit is the backoffLimit for the k8s Job that runs `ray job submit`.
+// KubeRay's default of 2 (3 total attempts) exhausts in well under a minute — too
+// tight to tolerate even a single transient failure to reach the head pod's
+// dashboard-agent port while the cluster is still starting up.
+const submitterBackoffLimit = 20
+
 // LogPersistenceConfig holds platform-level configuration for log persistence.
 // Loaded from YAML under jobs.k8sengine.mapper.logPersistence.
 // See: https://github.com/ray-project/kuberay/tree/master/historyserver/config
@@ -63,10 +69,10 @@ func (m Mapper) mapRay(rayJob *v2pb.RayJob, jobClusterObject runtime.Object, clu
 			Entrypoint:               rayJob.Spec.Entrypoint,
 			TTLSecondsAfterFinished:  int32(300),
 			ShutdownAfterJobFinishes: true,
-			// kuberay 1.0 only support SubmitterPodTemplate for configuration submitter pod
-			// We need to allow user to configure the submitter pod template via ray task configuration
-			// Note: Add support for v1.2.2 kuberay once we upgrade to newer version
-			SubmitterPodTemplate: &submitterPod,
+			SubmitterPodTemplate:     &submitterPod,
+			SubmitterConfig: &rayv1.SubmitterConfig{
+				BackoffLimit: k8sptr.To(int32(submitterBackoffLimit)),
+			},
 		},
 	}
 
