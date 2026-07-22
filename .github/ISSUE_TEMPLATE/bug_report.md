@@ -2,7 +2,7 @@
 name: Bug report
 about: Create a report to help us improve
 title: ''
-labels: ''
+labels: 'bug'
 assignees: ''
 
 ---
@@ -12,27 +12,32 @@ A clear and concise description of what the bug is.
 
 **To Reproduce**
 Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+1. ...
+2. ...
+3. See error
 
 **Expected behavior**
 A clear and concise description of what you expected to happen.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+**Actual behavior**
+What actually happened. Include any error messages, stack traces, or logs.
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+**Environment**
+- OS: [e.g. Ubuntu 22.04, macOS 14]
+- Python version: [e.g. 3.10.12] (for Python SDK issues)
+- `ma` CLI version: [e.g. 0.5.0] (run `ma version`)
+- Helm chart version: [e.g. 0.5.0] (for deployment issues)
+- Kubernetes version: [e.g. 1.29] (for deployment issues)
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+**Component**
+Which part of the project is affected?
+- [ ] Python SDK (`michelangelo` package)
+- [ ] `ma` CLI
+- [ ] API server / gRPC
+- [ ] Helm chart / Kubernetes deployment
+- [ ] UI (Studio)
+- [ ] Documentation
+- [ ] Other
 
 **Additional context**
-Add any other context about the problem here.
+Add any other context, screenshots, or relevant configuration here.

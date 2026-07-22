@@ -2,16 +2,16 @@
 
 ## Supported Versions
 
-The following verisons of the project are currently being supported with security updates.
+The following versions of the project are currently supported with security updates.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.0.1   | :white_check_mark: |
+| 0.5.x   | :white_check_mark: |
+| 0.4.x   | :white_check_mark: |
+| < 0.4   | :x:                |
 
 ## Reporting a Vulnerability
 
-> :warning: You must never report security related issues, vulnerabilities or bugs to the issue tracker, or elsewhere in public. Instead sensitive bugs should be submitted through the Uber [HackerOne](https://hackerone.com/uber) process.
+> :warning: Never report security vulnerabilities through the public issue tracker. Sensitive security bugs must be submitted through the Uber [HackerOne](https://hackerone.com/uber) program.
 
-For all other sugestions, features or bug please refer to the [CONTRIBUTING.md](./CONTRIBUTING.md) file.
-
-Thanks! 
+For all other suggestions, features, or bugs please refer to the [CONTRIBUTING.md](./CONTRIBUTING.md) file.
