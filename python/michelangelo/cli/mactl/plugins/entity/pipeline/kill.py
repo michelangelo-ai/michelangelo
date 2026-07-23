@@ -21,6 +21,7 @@ from michelangelo.cli.mactl.crd import (
     get_single_arg,
     inject_func_signature,
 )
+from michelangelo.cli.mactl.mutation_options import apply_dry_run_to_request
 
 # Import TypedStruct to register it in the descriptor pool
 from michelangelo.gen.api import typed_struct_pb2  # noqa: F401
@@ -72,6 +73,25 @@ def add_function_signature(crd: CRD) -> None:
                         "help": (
                             "Automatic yes to prompts; assume 'yes' as answer to "
                             "all prompts and run non-interactively."
+                        ),
+                    },
+                },
+                {
+                    "func_signature": Parameter(
+                        "dry_run",
+                        Parameter.POSITIONAL_OR_KEYWORD,
+                        default=False,
+                    ),
+                    "args": ["--dry-run"],
+                    "kwargs": {
+                        "dest": "dry_run",
+                        "action": "store_true",
+                        "default": False,
+                        "help": (
+                            "Send the request with server-side dry-run "
+                            "(k8s.io UpdateOptions.dryRun=['All']); server "
+                            "validates permission and rolls back without "
+                            "flipping spec.kill."
                         ),
                     },
                 },
@@ -131,6 +151,8 @@ def generate_kill(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] =
         # Create update request
         request_input = input_class()
         ParseDict(current_dict, request_input, ignore_unknown_fields=True)
+        apply_dry_run_to_request(request_input, "update_options", bound_args.arguments)
+        _dry_run = bound_args.arguments.get("dry_run", False)
 
         _LOG.info(
             "KILL Request input (%r) ready: %r",
@@ -153,6 +175,10 @@ def generate_kill(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] =
             metadata=METADATA_STUB,
             timeout=30,
         )
+
+        if _dry_run:
+            _LOG.info("Dry-run kill completed (%r): %r", type(response), response)
+            return response
 
         # Verify the kill flag was set
         response_dict = MessageToDict(response, preserving_proto_field_name=True)

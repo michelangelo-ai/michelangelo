@@ -5,6 +5,8 @@ from inspect import Parameter, Signature
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
 
+from grpc import RpcError, StatusCode
+
 from michelangelo.cli.mactl.crd import (
     CRD,
     CrdMethodInfo,
@@ -839,6 +841,104 @@ class CreateFuncImplTest(TestCase):
             mock_crd.func_crd_metadata_converter,
         )
         mock_call.assert_called_once_with(crd_method_info, mock_request)
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.apply_dry_run_to_request")
+    @patch("michelangelo.cli.mactl.crd.read_yaml_to_crd_request")
+    def test_create_func_impl_forwards_dry_run(
+        self, mock_read_yaml: MagicMock, mock_dry_run: MagicMock, _
+    ):
+        """create_func_impl invokes the dry-run helper with create_options."""
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Create",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        mock_crd = Mock()
+        mock_crd.full_name = "test.Service"
+        mock_crd.name = "test"
+        mock_request = Mock()
+        mock_read_yaml.return_value = mock_request
+
+        create_func_impl(
+            crd_method_info,
+            Mock(arguments={"self": mock_crd, "file": "f.yaml", "dry_run": True}),
+        )
+
+        mock_dry_run.assert_called_once_with(
+            mock_request,
+            "create_options",
+            {"self": mock_crd, "file": "f.yaml", "dry_run": True},
+        )
+
+
+class ApplyFuncImplDryRunTest(TestCase):
+    """apply_func_impl dry-run wiring (F025)."""
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.apply_dry_run_to_request")
+    @patch("michelangelo.cli.mactl.crd.get_crd_namespace_and_name_from_yaml")
+    def test_update_path_calls_helper_with_update_options(
+        self, mock_get_ns, mock_dry_run, _
+    ):
+        """Update path (existing CRD) routes dry_run through update_options."""
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Apply",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        mock_crd = Mock()
+        mock_crd.full_name = "test.Service"
+        mock_crd._get.return_value = Mock()  # existing
+        mock_request = Mock()
+        mock_crd.read_yaml_and_update_crd_request.return_value = mock_request
+        mock_get_ns.return_value = ("ns", "name")
+
+        args = {"self": mock_crd, "file": "f.yaml", "dry_run": True}
+        apply_func_impl(crd_method_info, Mock(arguments=args))
+
+        mock_dry_run.assert_called_once_with(mock_request, "update_options", args)
+
+    @patch("michelangelo.cli.mactl.crd.get_crd_namespace_and_name_from_yaml")
+    def test_create_when_missing_forwards_dry_run_to_self_create(self, mock_get_ns):
+        """SF-8 guard: apply→create path passes dry_run through to _self.create.
+
+        Without this, `_self.create(file)` would default dry_run to False and
+        silently drop the user's --dry-run intent on the create-when-missing
+        path.
+        """
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Apply",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        mock_crd = Mock()
+        mock_crd.full_name = "test.Service"
+        mock_crd._get.side_effect = NotFoundRpcError()
+        mock_get_ns.return_value = ("ns", "name")
+
+        apply_func_impl(
+            crd_method_info,
+            Mock(arguments={"self": mock_crd, "file": "f.yaml", "dry_run": True}),
+        )
+
+        mock_crd.create.assert_called_once_with("f.yaml", dry_run=True)
+
+
+class NotFoundRpcError(RpcError):
+    """Test fixture: RpcError with NOT_FOUND status code."""
+
+    def code(self):  # noqa: D102
+        return StatusCode.NOT_FOUND
+
+    def details(self):  # noqa: D102
+        return "not found"
 
 
 class BindSignatureTest(TestCase):

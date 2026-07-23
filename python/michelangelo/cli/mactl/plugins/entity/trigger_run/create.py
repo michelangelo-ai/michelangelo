@@ -14,6 +14,7 @@ from michelangelo.cli.mactl.grpc_tools import (
     get_message_class_by_name,
     get_methods_from_service,
 )
+from michelangelo.cli.mactl.mutation_options import apply_dry_run_to_request
 from michelangelo.cli.mactl.utils import get_user_name
 
 _LOG = getLogger(__name__)
@@ -63,6 +64,25 @@ def add_function_signature(crd: crd_module.CRD) -> None:
                         "help": (
                             "Name of the trigger from the pipeline's "
                             "registered triggerMap"
+                        ),
+                    },
+                },
+                {
+                    "func_signature": Parameter(
+                        "dry_run",
+                        Parameter.POSITIONAL_OR_KEYWORD,
+                        default=False,
+                    ),
+                    "args": ["--dry-run"],
+                    "kwargs": {
+                        "dest": "dry_run",
+                        "action": "store_true",
+                        "default": False,
+                        "help": (
+                            "Send the request with server-side dry-run "
+                            "(k8s.io CreateOptions.dryRun=['All']); server "
+                            "validates trigger config and rolls back without "
+                            "creating a TriggerRun."
                         ),
                     },
                 },
@@ -188,6 +208,7 @@ def generate_create(crd: crd_module.CRD, channel: Channel, parser: ArgumentParse
 
         request_input = input_class()
         ParseDict(trigger_run_dict, request_input)
+        apply_dry_run_to_request(request_input, "create_options", bound_args.arguments)
 
         _LOG.info(
             "Create request input (%r) ready: %r",

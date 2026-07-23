@@ -29,6 +29,7 @@ from michelangelo.cli.mactl.grpc_tools import (
     get_message_class_by_name,
     get_methods_from_service,
 )
+from michelangelo.cli.mactl.mutation_options import apply_dry_run_to_request
 
 _LOG = getLogger(__name__)
 METADATA_STUB = []
@@ -480,6 +481,7 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
     _LOG.info("Start apply_func for %r", _self.full_name)
 
     _file = get_single_arg(bound_args.arguments, "file")
+    _dry_run = bound_args.arguments.get("dry_run", False)
 
     _namespace, _name = get_crd_namespace_and_name_from_yaml(_file)
 
@@ -492,16 +494,19 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
             raise
 
     if message_instance is None:
-        # Create new CRD
+        # Create new CRD — must forward dry_run explicitly. _self.create's
+        # bound_args does not inherit apply's dry_run otherwise (Signature.bind
+        # fills the default False).
         _LOG.info("Create a new CRD")
         _self.generate_create(crd_method_info.channel)
-        return _self.create(_file)
+        return _self.create(_file, dry_run=_dry_run)
 
     # Update existing CRD
     _LOG.info("Retrieved message instance: %r", message_instance)
     request_input = _self.read_yaml_and_update_crd_request(
         crd_method_info.input_class, _file, message_instance
     )
+    apply_dry_run_to_request(request_input, "update_options", bound_args.arguments)
     call_res = crd_method_call(crd_method_info, request_input)
     print(call_res)
     return call_res
@@ -521,6 +526,7 @@ def create_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> M
         _file,
         _self.func_crd_metadata_converter,
     )
+    apply_dry_run_to_request(request_input, "create_options", bound_args.arguments)
     call_res = crd_method_call(crd_method_info, request_input)
     print(call_res)
     return call_res
@@ -552,6 +558,25 @@ class CRD:
                             "help": (
                                 "Custom Resource YAML file"
                                 " (can be configured with --file)"
+                            ),
+                        },
+                    },
+                    {
+                        "func_signature": Parameter(
+                            "dry_run",
+                            Parameter.POSITIONAL_OR_KEYWORD,
+                            default=False,
+                        ),
+                        "args": ["--dry-run"],
+                        "kwargs": {
+                            "dest": "dry_run",
+                            "action": "store_true",
+                            "default": False,
+                            "help": (
+                                "Send the request with server-side dry-run "
+                                "(k8s.io CreateOptions/UpdateOptions.dryRun="
+                                "['All']); server validates and rolls back "
+                                "without persisting."
                             ),
                         },
                     },
