@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from inspect import Parameter, Signature
+from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
 
@@ -18,6 +19,7 @@ from michelangelo.cli.mactl.crd import (
     inject_func_signature,
     list_func_impl,
     prepare_column_info,
+    print_list_formatted,
 )
 
 
@@ -159,6 +161,7 @@ class ListFuncImplTest(TestCase):
 
         mock_crd = Mock()
         mock_crd._list.return_value = mock_response
+        mock_crd.additional_columns = ()
 
         list_func_impl(
             crd_method_info,
@@ -200,6 +203,7 @@ class ListFuncImplTest(TestCase):
 
         mock_crd = Mock()
         mock_crd._list.return_value = mock_response
+        mock_crd.additional_columns = ()
 
         list_func_impl(
             crd_method_info,
@@ -368,7 +372,7 @@ class RenderHelpersTest(TestCase):
         items = [self._mock_item("ns", "a")]
         _render_list_items(items, "table")
 
-        mock_print.assert_called_once_with(items)
+        mock_print.assert_called_once_with(items, extra_columns=())
 
     @patch("michelangelo.cli.mactl.crd.MessageToJson")
     def test_render_single_item_json(self, mock_to_json):
@@ -1042,3 +1046,293 @@ class GenerateListTest(TestCase):
         self.assertEqual(result, mock_response)
         request_dict = mock_parse_dict.call_args[0][0]
         self.assertEqual(request_dict["namespace"], "test-ns")
+
+
+class _FakeAny:
+    """Records the Pack() call for filter-criterion assertion."""
+
+    def __init__(self):
+        self.packed = None
+
+    def Pack(self, msg):  # noqa: N802 — mirrors proto Any.Pack
+        self.packed = msg
+
+
+class _RecordingCriterionList(list):
+    """Mimics repeated proto field: `add()` returns a fresh criterion object."""
+
+    def add(self):
+        c = SimpleNamespace(field_name="", operator=0, match_value=_FakeAny())
+        self.append(c)
+        return c
+
+
+def _recording_input_class():
+    """Build an input_class whose instance records criterion additions.
+
+    Bypasses proto so tests don't require the michelangelo.api IDL at import
+    time.
+    """
+
+    def _factory():
+        return SimpleNamespace(
+            list_options_ext=SimpleNamespace(
+                operation=SimpleNamespace(criterion=_RecordingCriterionList())
+            )
+        )
+
+    return _factory
+
+
+class AdditionalColumnsHookTest(TestCase):
+    """CRD.additional_columns extension surface."""
+
+    def test_prepare_column_info_appends_extra_columns(self):
+        """Extra columns append after built-ins with header-length max_length."""
+        extra = [{"column_name": "STATE", "retrieve_func": lambda i: "RUNNING"}]
+
+        result = prepare_column_info(extra=extra)
+
+        self.assertEqual(len(result), 4)
+        self.assertEqual(result[-1]["column_name"], "STATE")
+        self.assertEqual(result[-1]["max_length"], len("STATE") + 1)
+
+    def test_prepare_column_info_no_extra_matches_baseline(self):
+        """Default call (no extras) preserves the 3-column baseline."""
+        self.assertEqual(len(prepare_column_info()), 3)
+
+    def test_print_list_formatted_coerces_non_str(self):
+        """retrieve_func returning non-str renders without AttributeError.
+
+        SF-1 from spec 043: probe returning int would crash `.ljust()` on
+        pre-F043 code — framework must str()-coerce.
+        """
+        item = Mock()
+        item.metadata.namespace = "ns"
+        item.metadata.name = "n"
+        item.metadata.labels = {}
+        extra = [{"column_name": "COUNT", "retrieve_func": lambda i: 42}]
+
+        with patch("builtins.print") as mock_print:
+            print_list_formatted([item], extra_columns=extra)
+
+        # Body row (second print call) contains "42" from the int column.
+        body_call = mock_print.call_args_list[1]
+        self.assertIn("42", body_call.args[0])
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.ParseDict")
+    @patch.object(CRD, "_extract_method_info")
+    def test_list_func_impl_passes_additional_columns(
+        self, mock_extract_method_info, mock_parse_dict, mock_call
+    ):
+        """`list_func_impl` threads `_self.additional_columns` into render."""
+        mock_extract_method_info.return_value = ("ListTestCrd", Mock, Mock)
+        crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.additional_columns = [
+            {"column_name": "OWNER", "retrieve_func": lambda i: "alice"}
+        ]
+        crd.generate_list(Mock())
+
+        mock_response = Mock()
+        mock_response.ListFields.return_value = [
+            (Mock(name="test_list"), Mock(items=[]))
+        ]
+        mock_call.return_value = mock_response
+
+        with patch("michelangelo.cli.mactl.crd._render_list_items") as mock_render:
+            list_func_impl(
+                CrdMethodInfo(
+                    channel=Mock(),
+                    crd_full_name="test.service.TestCrd",
+                    method_name="List",
+                    input_class=Mock,
+                    output_class=Mock,
+                ),
+                Mock(arguments={"self": crd, "namespace": "ns", "limit": 100}),
+            )
+
+        _, kwargs = mock_render.call_args
+        self.assertEqual(kwargs["extra_columns"], crd.additional_columns)
+
+
+class FilterFieldMapHookTest(TestCase):
+    """CRD.filter_field_map extension surface."""
+
+    def _method_info(self):
+        return CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.service.TestCrd",
+            method_name="List",
+            input_class=_recording_input_class(),
+            output_class=Mock,
+        )
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.ParseDict")
+    def test_filter_arg_present_appends_criterion(self, mock_parse_dict, mock_call):
+        """Non-empty filter value maps to a Criterion via Any(StringValue)."""
+        crd = SimpleNamespace(
+            additional_columns=[],
+            filter_field_map={"pipeline_name": "spec.pipeline_name"},
+        )
+        captured = {}
+
+        def _capture(_info, req):
+            captured["req"] = req
+            return Mock(ListFields=Mock(return_value=[]))
+
+        mock_call.side_effect = _capture
+
+        _list_func_impl(
+            self._method_info(),
+            Mock(
+                arguments={
+                    "self": crd,
+                    "namespace": "ns",
+                    "limit": 100,
+                    "pipeline_name": "trainer-v2",
+                }
+            ),
+        )
+
+        criteria = captured["req"].list_options_ext.operation.criterion
+        self.assertEqual(len(criteria), 1)
+        self.assertEqual(criteria[0].field_name, "spec.pipeline_name")
+        self.assertEqual(criteria[0].operator, 1)  # CRITERION_OPERATOR_EQUAL
+        self.assertEqual(criteria[0].match_value.packed.value, "trainer-v2")
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.ParseDict")
+    def test_filter_arg_empty_skips_criterion(self, mock_parse_dict, mock_call):
+        """Omitted / empty-string filter adds no criterion."""
+        crd = SimpleNamespace(
+            additional_columns=[],
+            filter_field_map={"pipeline_name": "spec.pipeline_name"},
+        )
+        captured = {}
+        mock_call.side_effect = lambda _i, req: (
+            captured.setdefault("req", req) or Mock(ListFields=Mock(return_value=[]))
+        )
+
+        _list_func_impl(
+            self._method_info(),
+            Mock(
+                arguments={
+                    "self": crd,
+                    "namespace": "ns",
+                    "limit": 100,
+                    "pipeline_name": "",
+                }
+            ),
+        )
+
+        self.assertEqual(len(captured["req"].list_options_ext.operation.criterion), 0)
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.ParseDict")
+    def test_no_filter_map_matches_baseline(self, mock_parse_dict, mock_call):
+        """CRDs that don't opt in emit zero criteria."""
+        crd = SimpleNamespace(additional_columns=[], filter_field_map={})
+        captured = {}
+        mock_call.side_effect = lambda _i, req: (
+            captured.setdefault("req", req) or Mock(ListFields=Mock(return_value=[]))
+        )
+
+        _list_func_impl(
+            self._method_info(),
+            Mock(arguments={"self": crd, "namespace": "ns", "limit": 100}),
+        )
+
+        self.assertEqual(len(captured["req"].list_options_ext.operation.criterion), 0)
+
+
+class ValidatedAdditionalGetArgsTest(TestCase):
+    """CRD._validated_additional_get_args guards plugin load-time errors."""
+
+    def _crd(self):
+        return CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+
+    def test_no_opt_in_returns_empty(self):
+        """CRD that doesn't opt in short-circuits to empty list."""
+        self.assertEqual(self._crd()._validated_additional_get_args(), [])
+
+    def test_dest_collision_with_builtin_raises(self):
+        """SF-3: dest shadowing a built-in `get` arg raises at parser wiring."""
+        crd = self._crd()
+        crd.additional_get_args = [
+            {
+                "func_signature": Parameter(
+                    "namespace", Parameter.POSITIONAL_OR_KEYWORD
+                ),
+                "args": ["--namespace"],
+                "kwargs": {"dest": "namespace", "type": str},
+            }
+        ]
+        with self.assertRaisesRegex(ValueError, "collides with built-in"):
+            crd._validated_additional_get_args()
+
+    def test_filter_map_unknown_dest_raises(self):
+        """SF-2: filter_field_map dest with no matching arg entry raises."""
+        crd = self._crd()
+        crd.additional_get_args = [
+            {
+                "func_signature": Parameter("foo", Parameter.POSITIONAL_OR_KEYWORD),
+                "args": ["--foo"],
+                "kwargs": {"dest": "foo", "type": str},
+            }
+        ]
+        crd.filter_field_map = {"unknown_dest": "spec.foo"}
+        with self.assertRaisesRegex(ValueError, "unknown_dest"):
+            crd._validated_additional_get_args()
+
+    def test_valid_extras_pass_through(self):
+        """Well-formed extras validate and return the same list."""
+        crd = self._crd()
+        crd.additional_get_args = [
+            {
+                "func_signature": Parameter("foo", Parameter.POSITIONAL_OR_KEYWORD),
+                "args": ["--foo"],
+                "kwargs": {"dest": "foo", "type": str},
+            }
+        ]
+        crd.filter_field_map = {"foo": "spec.foo"}
+        self.assertEqual(crd._validated_additional_get_args(), crd.additional_get_args)
+
+
+class ReadSignaturesHookTest(TestCase):
+    """CRD._read_signatures folds additional_get_args into `get` signature."""
+
+    def test_get_signature_includes_additional_get_args(self):
+        """`_read_signatures("get")` adds extra params after built-ins."""
+        crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.additional_get_args = [
+            {
+                "func_signature": Parameter(
+                    "pipeline_name",
+                    Parameter.POSITIONAL_OR_KEYWORD,
+                    default="",
+                ),
+                "args": ["--pipeline-name"],
+                "kwargs": {"dest": "pipeline_name", "type": str, "default": ""},
+            }
+        ]
+        sig = crd._read_signatures("get")
+        self.assertIn("pipeline_name", sig.parameters)
+
+    def test_non_get_signature_ignores_additional_get_args(self):
+        """`_read_signatures("apply")` does not fold in get-only extras."""
+        crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.additional_get_args = [
+            {
+                "func_signature": Parameter(
+                    "pipeline_name",
+                    Parameter.POSITIONAL_OR_KEYWORD,
+                    default="",
+                ),
+                "args": ["--pipeline-name"],
+                "kwargs": {"dest": "pipeline_name", "type": str, "default": ""},
+            }
+        ]
+        sig = crd._read_signatures("apply")
+        self.assertNotIn("pipeline_name", sig.parameters)

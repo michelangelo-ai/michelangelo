@@ -15,6 +15,7 @@ from typing import Any, Callable, Optional
 
 from google.protobuf.json_format import MessageToDict, MessageToJson, ParseDict
 from google.protobuf.message import Message
+from google.protobuf.wrappers_pb2 import StringValue
 from grpc import (
     Channel,
     RpcError,
@@ -296,8 +297,14 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
     )
 
 
-def prepare_column_info() -> list[dict]:
-    """Prepare column info for formatted printing of CRD items."""
+def prepare_column_info(extra: Sequence[dict] = ()) -> list[dict]:
+    """Prepare column info for formatted printing of CRD items.
+
+    ``extra`` is a per-CRD ``additional_columns`` list; each entry
+    ``{"column_name": str, "retrieve_func": Callable[[Message], str]}`` is
+    appended after the built-in columns with ``max_length`` seeded from the
+    header length.
+    """
     res = [
         {
             "column_name": "NAMESPACE",
@@ -322,22 +329,31 @@ def prepare_column_info() -> list[dict]:
             "max_length": len("LAST_UPDATED_SPEC") + 1,
         },
     ]
+    for col in extra:
+        name = col["column_name"]
+        res.append(
+            {
+                "column_name": name,
+                "retrieve_func": col["retrieve_func"],
+                "max_length": len(name) + 1,
+            }
+        )
     _LOG.debug("Prepared column info: %r", res)
     return res
 
 
-def print_list_formatted(items: Sequence[Message]):
+def print_list_formatted(items: Sequence[Message], extra_columns: Sequence[dict] = ()):
     """Print list of CRD items in formatted way."""
     _LOG.info("Print list of CRD items: %r (length %d)", type(items), len(items))
 
     ansi_header = "\033[1;37;44m"  # bold + white + blue background
     ansi_reset = "\033[0m"
 
-    column_info = prepare_column_info()
+    column_info = prepare_column_info(extra_columns)
     for item in items:
         for col in column_info:
             col["max_length"] = max(
-                col["max_length"], len(col["retrieve_func"](item)) + 1
+                col["max_length"], len(str(col["retrieve_func"](item))) + 1
             )
 
     print(
@@ -350,17 +366,22 @@ def print_list_formatted(items: Sequence[Message]):
             " "
             + "".join(
                 [
-                    col["retrieve_func"](item).ljust(col["max_length"])
+                    str(col["retrieve_func"](item)).ljust(col["max_length"])
                     for col in column_info
                 ]
             )
         )
 
 
-def _render_list_items(items: Sequence[Message], output_format: str) -> None:
+def _render_list_items(
+    items: Sequence[Message],
+    output_format: str,
+    extra_columns: Sequence[dict] = (),
+) -> None:
     """Render list of CRD items in the requested output format.
 
-    Matches Go mactl `-o {table|yaml|json}` behavior.
+    Matches Go mactl `-o {table|yaml|json}` behavior. ``extra_columns`` is
+    table-only; yaml/json emit the raw proto fields.
     """
     if output_format == "yaml":
         docs = [MessageToDict(m, preserving_proto_field_name=True) for m in items]
@@ -369,7 +390,7 @@ def _render_list_items(items: Sequence[Message], output_format: str) -> None:
         docs = [MessageToDict(m, preserving_proto_field_name=True) for m in items]
         print(json.dumps({"items": docs}, indent=2))
     else:
-        print_list_formatted(items)
+        print_list_formatted(items, extra_columns=extra_columns)
 
 
 def _render_single_item(msg: Message, output_format: str) -> None:
@@ -390,6 +411,7 @@ def _list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
     """Raw CRD LIST implementation - returns response without printing."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
+    _self: Optional[CRD] = bound_args.arguments.get("self")
     limit = bound_args.arguments.get("limit", 100)
     all_namespaces = bound_args.arguments.get("all_namespaces", False)
     namespace = (
@@ -412,6 +434,17 @@ def _list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
 
     request_input = crd_method_info.input_class()
     ParseDict(request_dict, request_input)
+
+    filter_field_map = getattr(_self, "filter_field_map", {}) if _self else {}
+    for arg_dest, field_name in filter_field_map.items():
+        value = bound_args.arguments.get(arg_dest)
+        if value in (None, "", (), []):
+            continue
+        criterion = request_input.list_options_ext.operation.criterion.add()
+        criterion.field_name = field_name
+        criterion.operator = 1  # CRITERION_OPERATOR_EQUAL
+        criterion.match_value.Pack(StringValue(value=str(value)))
+
     _LOG.info("ListRequest built: %r", request_input)
     call_res = crd_method_call(crd_method_info, request_input)
     _LOG.debug("Succeed to list CRDs: %r", type(call_res))
@@ -443,7 +476,11 @@ def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mes
     # we assume the there is only one list field in the response message
     raw_elems = results[next(iter(results))]
 
-    _render_list_items(raw_elems.items, output)
+    _render_list_items(
+        raw_elems.items,
+        output,
+        extra_columns=getattr(_self, "additional_columns", ()),
+    )
 
     # Show warning if we got exactly the limit (there might be more)
     if len(raw_elems.items) == limit:
@@ -535,6 +572,12 @@ class CRD:
         self.full_name = full_name
         self.func_crd_metadata_converter = convert_crd_metadata
         self.metadata = metadata
+        # Per-CRD extension registries. Subclasses opt in from their own
+        # __init__ after super().__init__(...). See CRD.configure_parser and
+        # _list_func_impl / list_func_impl for how each list is consumed.
+        self.additional_columns: list[dict] = []
+        self.additional_get_args: list[dict] = []
+        self.filter_field_map: dict[str, str] = {}
         self.func_signature: dict[str, dict] = {
             "apply": {
                 "help": "Apply an Entity (create or update)",
@@ -719,21 +762,67 @@ class CRD:
         _LOG.debug(
             "Start to configure parser with args: %r", self.func_signature[action]
         )
-        for arg_def in self.func_signature[action]["args"]:
+        arg_defs = list(self.func_signature[action]["args"])
+        if action == "get":
+            arg_defs.extend(self._validated_additional_get_args())
+        for arg_def in arg_defs:
             args = arg_def.get("args", [])
             kwargs = arg_def.get("kwargs", {})
             parser.add_argument(*args, **kwargs)
 
+    def _validated_additional_get_args(self) -> list[dict]:
+        """Return additional_get_args after validating dest collisions.
+
+        Raises ValueError if any entry shadows a built-in `get` dest or if
+        `filter_field_map` references a dest not declared in
+        `additional_get_args`. Empty list when the CRD hasn't opted in.
+        """
+        if not self.additional_get_args and not self.filter_field_map:
+            return []
+        builtin_dests = {
+            self._arg_dest(arg) for arg in self.func_signature["get"]["args"]
+        }
+        extra_dests: set[str] = set()
+        for arg in self.additional_get_args:
+            dest = self._arg_dest(arg)
+            if dest in builtin_dests:
+                raise ValueError(
+                    f"additional_get_args dest {dest!r} collides with built-in "
+                    f"`get` argument on CRD {self.name!r}"
+                )
+            extra_dests.add(dest)
+        for dest in self.filter_field_map:
+            if dest not in extra_dests:
+                raise ValueError(
+                    f"filter_field_map references dest {dest!r} but no matching "
+                    f"entry in additional_get_args on CRD {self.name!r}"
+                )
+        return list(self.additional_get_args)
+
+    @staticmethod
+    def _arg_dest(arg_def: dict) -> str:
+        """Derive argparse dest for a func_signature args entry.
+
+        Prefers explicit `kwargs.dest`; else the longest `args` string (long
+        option), stripped of leading dashes with hyphens → underscores. Matches
+        argparse's own dest inference.
+        """
+        dest = arg_def.get("kwargs", {}).get("dest")
+        if dest:
+            return dest
+        args = arg_def.get("args", [""])
+        longest = max(args, key=len)
+        return longest.lstrip("-").replace("-", "_")
+
     def _read_signatures(self, method_name: str) -> Signature:
         """Read function signatures for method name."""
         _LOG.debug("Prepare func signature for `%r` function", method_name)
+        arg_defs = list(self.func_signature[method_name]["args"])
+        if method_name == "get":
+            arg_defs.extend(self.additional_get_args)
         res = Signature(
             [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
-            + [
-                arg["func_signature"]
-                for arg in self.func_signature[method_name]["args"]
-                if "func_signature" in arg
-            ]
+            + [arg["func_signature"] for arg in arg_defs if "func_signature" in arg]
         )
         _LOG.debug("Read func signature: %r", res)
         return res
