@@ -380,8 +380,7 @@ def _render_list_items(
 ) -> None:
     """Render list of CRD items in the requested output format.
 
-    Matches Go mactl `-o {table|yaml|json}` behavior. ``extra_columns`` is
-    table-only; yaml/json emit the raw proto fields.
+    ``extra_columns`` is table-only; yaml/json emit the raw proto fields.
     """
     if output_format == "yaml":
         docs = [MessageToDict(m, preserving_proto_field_name=True) for m in items]
