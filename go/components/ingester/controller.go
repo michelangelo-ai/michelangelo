@@ -9,6 +9,8 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/cascadedelete"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -194,7 +196,8 @@ func (r *Reconciler) handleSync(ctx context.Context, log logr.Logger, object cli
 // On the normal apiserver delete the row is already soft-deleted/retained via the
 // DeletingAnnotation path, so this only removes the ingester finalizer. On a non-apiserver
 // delete (foreground GC, kubectl/GitOps) the annotation is absent; handleCascadeDeletion then
-// retains the final state of opted-in kinds before the finalizer is removed.
+// either retains the final state (opted-in kinds) or soft-deletes the row (everyone else)
+// before the finalizer is removed.
 func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object client.Object) (ctrl.Result, error) {
 	log.Info("Object is being deleted")
 
@@ -205,7 +208,8 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
 	}
 
 	// Non-apiserver delete (no DeletingAnnotation: foreground GC, kubectl/GitOps):
-	// retain opted-in kinds before the finalizer is removed; no-op otherwise.
+	// retain opted-in kinds before the finalizer is removed; soft-delete otherwise so a
+	// future recreation with the same name/namespace doesn't leave an orphaned row behind.
 	if !isDeletingAnnotationSet(object) {
 		wait, err := r.handleCascadeDeletion(ctx, log, object)
 		if err != nil {
@@ -231,13 +235,16 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
 }
 
 // handleCascadeDeletion reconciles the MySQL end-state for an object deleted
-// directly (no DeletingAnnotation), scoped to opted-in kinds via the RetainPolicy.
-// It never touches the ingester finalizer or issues a delete — GC owns that. It
-// returns wait=true only while an opted-in object still carries a non-ingester
-// (drain) finalizer, so the caller keeps the ingester finalizer and requeues;
-// there is deliberately no independent ingester timeout (unwedging a stuck drain
-// is the drain safety timeout's job). On drain completion it upserts the final
-// state (retain).
+// directly (no DeletingAnnotation). It never touches the ingester finalizer — GC
+// owns that. It returns wait=true only while an opted-in (RetainPolicy) object
+// still carries a non-ingester (drain) finalizer, so the caller keeps the
+// ingester finalizer and requeues; there is deliberately no independent
+// ingester timeout (unwedging a stuck drain is the drain safety timeout's job).
+// On drain completion it upserts the final state (retain). Kinds not opted into
+// the RetainPolicy are soft-deleted instead: without this, a CR deleted outside
+// michelangelo's own API (e.g. kubectl/GitOps) leaves its row behind, and
+// recreating it assigns a new K8s UID that inserts a distinct row rather than
+// colliding with the stale one, orphaning it permanently.
 func (r *Reconciler) handleCascadeDeletion(ctx context.Context, log logr.Logger, object client.Object) (wait bool, err error) {
 	// TODO(#943): gvks[0] may be non-deterministic when a type is registered under
 	// multiple versions. See issue for planned multi-GVK selection strategy.
@@ -247,8 +254,14 @@ func (r *Reconciler) handleCascadeDeletion(ctx context.Context, log logr.Logger,
 	}
 
 	if !r.retain.RetainOnCascade(gvks[0].Kind) {
-		// Not a cascade-retain kind: the caller just removes the ingester finalizer
-		// (unchanged behavior).
+		// Not a cascade-retain kind: soft-delete the row so a future recreation
+		// with the same name/namespace doesn't leave an orphan behind. NotFound
+		// (row never synced, or already deleted) is not an error here.
+		typeMeta := &metav1.TypeMeta{Kind: gvks[0].Kind, APIVersion: gvks[0].GroupVersion().String()}
+		if err := r.metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil && status.Code(err) != codes.NotFound {
+			log.Error(err, "Failed to delete object from metadata storage")
+			return false, err
+		}
 		return false, nil
 	}
 

@@ -254,3 +254,106 @@ func TestIntegration_MetadataStoragePrimaryKey_FallbackToUID(t *testing.T) {
 	assert.Equal(t, 1, rowCount, "one row when annotation is absent")
 	assert.Equal(t, uid, storedUID, "PK falls back to the object UID when annotation is absent")
 }
+
+// TestIntegration_DeleteThenRecreate_NoOrphanRow reproduces (pre-fix) and
+// verifies the fix (post-fix) for the orphaned-row scenario raised in review on
+// #1332: a CR deleted outside michelangelo's own API (kubectl/GitOps, no
+// DeletingAnnotation) and recreated with the same name/namespace gets a new
+// K8s UID. Because `uid` is the MySQL primary key, the recreated object
+// inserts a distinct row instead of colliding with the old one. The ingester
+// fix (handleCascadeDeletion) now soft-deletes the old row via storage.Delete
+// before the finalizer is removed, which this test simulates directly against
+// the storage layer: Upsert(cr1) -> Delete(cr1) -> Upsert(cr2, new UID) should
+// leave exactly one live row, with the old row present but soft-deleted
+// (not a live duplicate).
+func TestIntegration_DeleteThenRecreate_NoOrphanRow(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+
+	const (
+		ns   = "default"
+		name = "orphan-repro-deployment"
+	)
+	uid1 := string(types.UID("orig-uid-" + name))
+	uid2 := string(types.UID("new-uid-" + name))
+	t.Cleanup(func() { cleanupDeploymentRow(t, db, ns, name, uid1, uid2) })
+
+	typeMeta := metav1.TypeMeta{Kind: "Deployment", APIVersion: "michelangelo.uber.com/v2"}
+
+	cr1 := &v2pb.Deployment{
+		TypeMeta:   typeMeta,
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns, UID: types.UID(uid1), ResourceVersion: "1", CreationTimestamp: metav1.Now()},
+	}
+	require.NoError(t, store.Upsert(context.Background(), cr1, false, nil))
+
+	// Simulate what handleCascadeDeletion now does on a plain kubectl delete of
+	// a non-opted-in kind: soft-delete the row before the finalizer is removed.
+	require.NoError(t, store.Delete(context.Background(), &typeMeta, ns, name))
+
+	// Recreate: k8s assigns a new UID.
+	cr2 := &v2pb.Deployment{
+		TypeMeta:   typeMeta,
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns, UID: types.UID(uid2), ResourceVersion: "2", CreationTimestamp: metav1.Now()},
+	}
+	require.NoError(t, store.Upsert(context.Background(), cr2, false, nil))
+
+	// Exactly one live row should remain for this namespace/name.
+	var liveCount int
+	require.NoError(t, db.QueryRow(
+		"SELECT COUNT(*) FROM deployment WHERE namespace = ? AND name = ? AND delete_time IS NULL",
+		ns, name,
+	).Scan(&liveCount))
+	assert.Equal(t, 1, liveCount, "exactly one live row should remain after delete+recreate")
+
+	// The old row still physically exists (soft delete, not a hard delete) but
+	// is marked deleted, not a live duplicate.
+	var oldDeleteTime sql.NullTime
+	require.NoError(t, db.QueryRow("SELECT delete_time FROM deployment WHERE uid = ?", uid1).Scan(&oldDeleteTime))
+	assert.True(t, oldDeleteTime.Valid, "old row should be soft-deleted (delete_time set)")
+
+	// The new row is live.
+	var newDeleteTime sql.NullTime
+	require.NoError(t, db.QueryRow("SELECT delete_time FROM deployment WHERE uid = ?", uid2).Scan(&newDeleteTime))
+	assert.False(t, newDeleteTime.Valid, "new row should be live (delete_time NULL)")
+}
+
+// TestIntegration_DeleteThenRecreate_WithoutFix_WouldOrphan documents the bug
+// this fix addresses: skipping the Delete call (the pre-fix behavior for
+// non-opted-in kinds) leaves the old row live under its own UID forever, so
+// namespace/name now maps to two live rows.
+func TestIntegration_DeleteThenRecreate_WithoutFix_WouldOrphan(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+
+	const (
+		ns   = "default"
+		name = "orphan-repro-no-fix-deployment"
+	)
+	uid1 := string(types.UID("orig-uid-" + name))
+	uid2 := string(types.UID("new-uid-" + name))
+	t.Cleanup(func() { cleanupDeploymentRow(t, db, ns, name, uid1, uid2) })
+
+	typeMeta := metav1.TypeMeta{Kind: "Deployment", APIVersion: "michelangelo.uber.com/v2"}
+
+	cr1 := &v2pb.Deployment{
+		TypeMeta:   typeMeta,
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns, UID: types.UID(uid1), ResourceVersion: "1", CreationTimestamp: metav1.Now()},
+	}
+	require.NoError(t, store.Upsert(context.Background(), cr1, false, nil))
+
+	// No Delete call here — this is the pre-fix `handleCascadeDeletion` no-op
+	// for non-opted-in kinds on a plain kubectl delete.
+
+	cr2 := &v2pb.Deployment{
+		TypeMeta:   typeMeta,
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns, UID: types.UID(uid2), ResourceVersion: "2", CreationTimestamp: metav1.Now()},
+	}
+	require.NoError(t, store.Upsert(context.Background(), cr2, false, nil))
+
+	var liveCount int
+	require.NoError(t, db.QueryRow(
+		"SELECT COUNT(*) FROM deployment WHERE namespace = ? AND name = ? AND delete_time IS NULL",
+		ns, name,
+	).Scan(&liveCount))
+	assert.Equal(t, 2, liveCount, "without the Delete call, both rows are live orphans for the same namespace/name")
+}

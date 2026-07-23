@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -110,8 +112,8 @@ func TestCascadeDeletion_OptedInDrainComplete(t *testing.T) {
 }
 
 // TestCascadeDeletion_NonOptedIn: a non-opted-in kind being deleted directly
-// (no DeletingAnnotation) → NO upsert and NO delete to MySQL; the ingester just
-// removes its finalizer (unchanged behavior). Proves the scoping.
+// (no DeletingAnnotation) → NO upsert, but the row IS soft-deleted from MySQL
+// so a future recreation with the same name/namespace doesn't orphan it.
 func TestCascadeDeletion_NonOptedIn(t *testing.T) {
 	now := metav1.NewTime(time.Now())
 	dep := &v2.Deployment{
@@ -125,19 +127,50 @@ func TestCascadeDeletion_NonOptedIn(t *testing.T) {
 		},
 	}
 	ms := new(MockMetadataStorage)
+	ms.On("Delete", mock.Anything, mock.Anything, "default", "some-deployment").Return(nil)
 	retain := cascadedelete.NewStaticRetainPolicy("PipelineRun", "TriggerRun")
 
 	r, req := makeReconciler(t, dep, &v2.Deployment{}, ms, retain)
 	res, err := r.Reconcile(context.Background(), req)
 	require.NoError(t, err)
 	assert.Zero(t, res.RequeueAfter)
-	// Non-opted-in: no MySQL upsert and no MySQL delete from the cascade path.
+	// Non-opted-in: no MySQL upsert, but the row IS soft-deleted.
 	ms.AssertNotCalled(t, "Upsert", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-	ms.AssertNotCalled(t, "Delete", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	ms.AssertCalled(t, "Delete", mock.Anything, mock.Anything, "default", "some-deployment")
 
 	got := &v2.Deployment{}
 	require.NoError(t, r.Get(context.Background(), req.NamespacedName, got))
 	assert.False(t, ctrlutil.ContainsFinalizer(got, api.IngesterFinalizer), "ingester finalizer must be removed")
+}
+
+// TestCascadeDeletion_NonOptedIn_DeleteNotFound: the row was never synced (or
+// already deleted) — Delete returns NotFound, which must not block finalizer
+// removal or be treated as an error.
+func TestCascadeDeletion_NonOptedIn_DeleteNotFound(t *testing.T) {
+	now := metav1.NewTime(time.Now())
+	dep := &v2.Deployment{
+		TypeMeta: metav1.TypeMeta{APIVersion: "michelangelo.uber.com/v2", Kind: "Deployment"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "never-synced-deployment",
+			Namespace:         "default",
+			UID:               types.UID("u4"),
+			DeletionTimestamp: &now,
+			Finalizers:        []string{api.IngesterFinalizer},
+		},
+	}
+	ms := new(MockMetadataStorage)
+	ms.On("Delete", mock.Anything, mock.Anything, "default", "never-synced-deployment").
+		Return(status.Error(codes.NotFound, "object not found or already deleted"))
+	retain := cascadedelete.NewStaticRetainPolicy("PipelineRun", "TriggerRun")
+
+	r, req := makeReconciler(t, dep, &v2.Deployment{}, ms, retain)
+	res, err := r.Reconcile(context.Background(), req)
+	require.NoError(t, err)
+	assert.Zero(t, res.RequeueAfter)
+
+	got := &v2.Deployment{}
+	err = r.Get(context.Background(), req.NamespacedName, got)
+	assert.Error(t, err, "object should be deleted once ingester finalizer removed")
 }
 
 func TestHasNonIngesterFinalizer(t *testing.T) {

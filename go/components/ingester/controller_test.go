@@ -215,8 +215,10 @@ func TestReconciler_HandleDeletion(t *testing.T) {
 		WithObjects(model).
 		Build()
 
-	// Create mock storage (not called — MySQL deletion is handled via annotation path)
+	// Create mock storage — Model isn't opted into the cascade RetainPolicy, so a
+	// plain kubectl delete (no DeletingAnnotation) should soft-delete the row.
 	mockStorage := new(MockMetadataStorage)
+	mockStorage.On("Delete", mock.Anything, mock.Anything, "default", "test-model").Return(nil)
 
 	// Create reconciler
 	reconciler := NewReconciler(
@@ -240,9 +242,9 @@ func TestReconciler_HandleDeletion(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, ctrl.Result{}, result)
 
-	// Verify that storage was NOT called — the DeletionTimestamp path only removes
-	// the finalizer; MySQL deletion happens upstream via the DeletingAnnotation path.
-	mockStorage.AssertNotCalled(t, "Delete")
+	// Verify that storage was deleted so a future recreation with the same
+	// name/namespace doesn't leave this row behind as an orphan.
+	mockStorage.AssertCalled(t, "Delete", mock.Anything, mock.Anything, "default", "test-model")
 
 	// The finalizer is removed so K8s can garbage-collect the object.
 }
@@ -571,8 +573,9 @@ func TestSchemeGVKResolution(t *testing.T) {
 }
 
 // TestHandleDeletion_OnlyRemovesFinalizer verifies that handleDeletion does NOT call
-// storage.Delete — MySQL deletion is owned by the annotation path. The DeletionTimestamp
-// path only removes the ingester finalizer so K8s can garbage-collect the object.
+// storage.Upsert on the plain DeletionTimestamp path for a non-opted-in kind — it
+// soft-deletes the row instead, then removes the ingester finalizer so K8s can
+// garbage-collect the object.
 func TestHandleDeletion_OnlyRemovesFinalizer(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = v2.AddToScheme(scheme)
@@ -594,6 +597,7 @@ func TestHandleDeletion_OnlyRemovesFinalizer(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(model).Build()
 
 	mockStorage := new(MockMetadataStorage)
+	mockStorage.On("Delete", mock.Anything, mock.Anything, "default", "test-model").Return(nil)
 
 	reconciler := NewReconciler(
 		fakeClient,
@@ -609,8 +613,9 @@ func TestHandleDeletion_OnlyRemovesFinalizer(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Storage must not be touched — no MySQL delete on the DeletionTimestamp path.
-	mockStorage.AssertNotCalled(t, "Delete")
+	// No upsert on the DeletionTimestamp path — only the soft-delete.
+	mockStorage.AssertNotCalled(t, "Upsert")
+	mockStorage.AssertCalled(t, "Delete", mock.Anything, mock.Anything, "default", "test-model")
 }
 
 // TestHandleDeletionAnnotation_CorrectTypeMeta verifies the same scheme-based GVK

@@ -240,13 +240,15 @@ Immutable objects (like completed PipelineRuns) no longer consume etcd memory.
 
 Objects created before the ingester was enabled will NOT have the ingester finalizer. They are still synced to MySQL on the controller's first startup, but are not intercepted during deletion via `kubectl delete`. If a user deletes such an object directly through `kubectl`, Kubernetes removes it from etcd immediately — the ingester never sees the deletion — leaving behind an orphan row in MySQL with `delete_time IS NULL`. Over time this causes MySQL to drift out of sync with etcd.
 
-Two mitigations are available:
+Note this is narrower than it may sound: it only applies to objects that never had the ingester finalizer added in the first place. Once an object carries the finalizer (the normal case for anything the ingester has reconciled at least once), a direct `kubectl delete` (or GitOps/foreground-GC deletion) is intercepted correctly — `handleCascadeDeletion` soft-deletes the MySQL row for non-opted-in kinds (and retains the final state for kinds opted into the cascade `RetainPolicy`) before the finalizer is removed, so recreating the object under the same name/namespace does not orphan the old row.
+
+Two mitigations are available for the remaining pre-existing-object gap:
 
 1. **Backfill controller (not yet implemented):** A periodic reconciliation controller that compares MySQL rows against etcd and soft-deletes any rows whose corresponding etcd object no longer exists. This is the cleanest long-term solution but requires additional engineering work.
 
 2. **Require all deletes through the API Server:** The API Server sets the `michelangelo/Deleting` annotation instead of issuing a direct Kubernetes delete, which the ingester detects and handles correctly even without a finalizer. Enforce this operationally by restricting direct `kubectl delete` access to CRD objects.
 
-Until a backfill controller is in place, option 2 is the recommended operational workaround.
+Until a backfill controller is in place, option 2 is the recommended operational workaround for objects predating the ingester finalizer.
 
 ### Schema Evolution
 
