@@ -15,6 +15,7 @@ from grpc import Channel
 import michelangelo.cli.mactl.crd as _crd_module
 from michelangelo.cli.mactl.crd import (
     CRD,
+    apply_dry_run_to_request,
     bind_signature,
     get_single_arg,
     inject_func_signature,
@@ -24,7 +25,6 @@ from michelangelo.cli.mactl.grpc_tools import (
     get_methods_from_service,
     get_service_name,
 )
-from michelangelo.cli.mactl.mutation_options import apply_dry_run_to_request
 from michelangelo.cli.mactl.utils import get_user_name
 
 _LOG = getLogger(__name__)

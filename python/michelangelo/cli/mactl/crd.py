@@ -29,7 +29,6 @@ from michelangelo.cli.mactl.grpc_tools import (
     get_message_class_by_name,
     get_methods_from_service,
 )
-from michelangelo.cli.mactl.mutation_options import apply_dry_run_to_request
 
 _LOG = getLogger(__name__)
 METADATA_STUB = []
@@ -182,6 +181,30 @@ def read_yaml_to_crd_request(
     ParseDict(crd_dict, crd_instance)
     _LOG.info("Parsed CRD instance (%r): %r", type(crd_instance), crd_instance)
     return crd_instance
+
+
+def apply_dry_run_to_request(
+    request: Message,
+    options_attr: str,
+    bound_args_arguments: dict,
+) -> None:
+    """Set server-side dry-run on ``request.<options_attr>`` when opted in.
+
+    When ``bound_args_arguments["dry_run"]`` is truthy, appends the ``"All"``
+    sentinel to the ``dryRun`` list on the nested k8s.io ``CreateOptions`` /
+    ``UpdateOptions`` / ``DeleteOptions`` submessage. Server does full
+    validation then rolls back — nothing persists.
+
+    ``options_attr`` is one of ``"create_options"``, ``"update_options"``,
+    ``"delete_options"``. The submessage exposes the field as ``dryRun``
+    (camelCase) at the Python attribute level — writing ``.dry_run`` raises
+    ``AttributeError``.
+    """
+    if not bound_args_arguments.get("dry_run", False):
+        return
+    options = getattr(request, options_attr)
+    options.dryRun.append("All")
+    _LOG.info("Dry-run enabled: %s.dryRun=%s", options_attr, list(options.dryRun))
 
 
 def snake_to_camel(name: str) -> str:

@@ -17,11 +17,11 @@ from grpc import Channel
 from michelangelo.cli.mactl.crd import (
     CRD,
     METADATA_STUB,
+    apply_dry_run_to_request,
     bind_signature,
     get_single_arg,
     inject_func_signature,
 )
-from michelangelo.cli.mactl.mutation_options import apply_dry_run_to_request
 
 # Import TypedStruct to register it in the descriptor pool
 from michelangelo.gen.api import typed_struct_pb2  # noqa: F401

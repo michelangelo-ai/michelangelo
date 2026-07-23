@@ -10,11 +10,11 @@ from google.protobuf.json_format import MessageToDict, ParseDict
 from grpc import Channel, RpcError, StatusCode
 
 import michelangelo.cli.mactl.crd as crd_module
+from michelangelo.cli.mactl.crd import apply_dry_run_to_request
 from michelangelo.cli.mactl.grpc_tools import (
     get_message_class_by_name,
     get_methods_from_service,
 )
-from michelangelo.cli.mactl.mutation_options import apply_dry_run_to_request
 from michelangelo.cli.mactl.utils import get_user_name
 
 _LOG = getLogger(__name__)

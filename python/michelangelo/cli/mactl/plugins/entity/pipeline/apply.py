@@ -8,11 +8,11 @@ from grpc import RpcError, StatusCode
 from michelangelo.cli.mactl.crd import (
     CRD,
     CrdMethodInfo,
+    apply_dry_run_to_request,
     crd_method_call,
     get_crd_namespace_and_name_from_yaml,
     read_yaml_to_crd_request,
 )
-from michelangelo.cli.mactl.mutation_options import apply_dry_run_to_request
 
 _LOG = getLogger(__name__)
 

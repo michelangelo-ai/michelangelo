@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from inspect import Parameter, Signature
+from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
 
@@ -871,6 +872,71 @@ class CreateFuncImplTest(TestCase):
             mock_request,
             "create_options",
             {"self": mock_crd, "file": "f.yaml", "dry_run": True},
+        )
+
+
+class ApplyDryRunToRequestTest(TestCase):
+    """apply_dry_run_to_request helper wiring."""
+
+    def _fake_request(self, options_attr):
+        opts = SimpleNamespace(dryRun=[])
+        return SimpleNamespace(**{options_attr: opts})
+
+    def test_dry_run_true_appends_all_to_create_options(self):
+        """dry_run=True writes 'All' to create_options.dryRun."""
+        from michelangelo.cli.mactl.crd import apply_dry_run_to_request
+
+        req = self._fake_request("create_options")
+        apply_dry_run_to_request(req, "create_options", {"dry_run": True})
+        self.assertEqual(list(req.create_options.dryRun), ["All"])
+
+    def test_dry_run_true_appends_all_to_update_options(self):
+        """Same helper works for update_options."""
+        from michelangelo.cli.mactl.crd import apply_dry_run_to_request
+
+        req = self._fake_request("update_options")
+        apply_dry_run_to_request(req, "update_options", {"dry_run": True})
+        self.assertEqual(list(req.update_options.dryRun), ["All"])
+
+    def test_dry_run_false_leaves_options_untouched(self):
+        """dry_run=False adds nothing (default behavior)."""
+        from michelangelo.cli.mactl.crd import apply_dry_run_to_request
+
+        req = self._fake_request("create_options")
+        apply_dry_run_to_request(req, "create_options", {"dry_run": False})
+        self.assertEqual(list(req.create_options.dryRun), [])
+
+    def test_dry_run_missing_leaves_options_untouched(self):
+        """No dry_run key in bound_args → no-op."""
+        from michelangelo.cli.mactl.crd import apply_dry_run_to_request
+
+        req = self._fake_request("update_options")
+        apply_dry_run_to_request(req, "update_options", {})
+        self.assertEqual(list(req.update_options.dryRun), [])
+
+    def test_dry_run_wire_roundtrip_with_real_proto(self):
+        """Serialize→deserialize proves 'dryRun' hits the wire on real proto.
+
+        Guards silent no-ops: writing to `.dry_run` (snake_case) auto-creates
+        a phantom attribute on the real proto because k8s.io apimachinery uses
+        camelCase attribute names — the append would succeed but nothing
+        would reach the wire.
+        """
+        from google.protobuf.json_format import MessageToDict
+
+        from michelangelo.cli.mactl.crd import apply_dry_run_to_request
+        from michelangelo.gen.k8s.io.apimachinery.pkg.apis.meta.v1 import (
+            generated_pb2,
+        )
+
+        req_wrapper = SimpleNamespace(update_options=generated_pb2.UpdateOptions())
+        apply_dry_run_to_request(req_wrapper, "update_options", {"dry_run": True})
+
+        wire = req_wrapper.update_options.SerializeToString()
+        parsed = generated_pb2.UpdateOptions.FromString(wire)
+        self.assertEqual(
+            MessageToDict(parsed, preserving_proto_field_name=False).get("dryRun"),
+            ["All"],
         )
 
 
