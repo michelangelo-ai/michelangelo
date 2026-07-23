@@ -23,7 +23,9 @@ def pipeline_apply_func_impl(
 ) -> Message:
     """Pipeline apply implementation.
 
-    update_method_info is passed by generate_apply via the standard partial mechanism.
+    TODO: this plugin monkey-patches ``apply_func_impl``, so framework
+    ``-r/--root`` + ``-R/--recursive`` wiring is bypassed for the pipeline CRD.
+    Other CRDs are covered. Follow-up PR to plumb ``external_root`` here if needed.
     """
     _self: CRD = bound_args.arguments["self"]
     _file = bound_args.arguments["file"]

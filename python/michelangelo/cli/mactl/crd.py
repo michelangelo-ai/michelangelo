@@ -2,12 +2,14 @@
 
 import json
 from argparse import ArgumentParser
-from collections.abc import MutableMapping, Sequence
+from collections.abc import Iterator, MutableMapping, Sequence
+from contextlib import redirect_stdout
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
 from inspect import Parameter, Signature
+from io import StringIO
 from logging import getLogger
 from pathlib import Path
 from types import MethodType
@@ -112,6 +114,46 @@ def yaml_to_dict(yaml_path_string: str) -> dict[str, Any]:
 
     _LOG.info("YAML content loaded successfully: %r", list(res))
     return res
+
+
+def resolve_yaml_path(file: str, external_root: str) -> str:
+    """Prepend ``external_root`` to ``file`` when set (idempotent).
+
+    Returns ``file`` unchanged when ``external_root`` is empty OR when
+    ``file`` is already absolute under ``external_root`` — so a double
+    call with the same root is a no-op, and users passing an absolute
+    path already under the root are handled correctly.
+    """
+    if not external_root:
+        return file
+    root = str(Path(external_root))
+    if file == root or file.startswith(root + "/"):
+        return file
+    return str(Path(root) / file.lstrip("/"))
+
+
+def walk_crd_yamls(directory: str, kind: str) -> Iterator[Path]:
+    """Yield yaml files under ``directory`` whose top-level ``kind:`` matches.
+
+    Sorted (lexical, stable across runs). Symlinks not followed. Files that
+    fail to parse or don't match ``kind`` are skipped with a message on stdout.
+    Raises ``FileNotFoundError`` if ``directory`` does not exist.
+    """
+    root = Path(directory)
+    if not root.exists():
+        raise FileNotFoundError(f"directory not found: {directory}")
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        if path.suffix != ".yaml":
+            continue
+        try:
+            doc = yaml_safe_load(path.read_text())
+        except (OSError, YAMLError):
+            print(f"Skipped {path} since file can't be opened")
+            continue
+        if not isinstance(doc, dict) or doc.get("kind") != kind:
+            print(f"Skipped {path} since file is not of Kind {kind}")
+            continue
+        yield path
 
 
 def get_crd_namespace_and_name_from_yaml(yaml_path_string: str) -> tuple[str, str]:
@@ -546,15 +588,50 @@ def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> M
 
 
 def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
-    """Default common CRD member method implementation for APPLY method."""
+    """Default common CRD member method implementation for APPLY method.
+
+    Consumes framework flags: `-r/--root` (path prepend + per-CRD Construct context)
+    and `-R/--recursive` (walk directory, filter by kind, apply each).
+    """
     run_pre_apply_checks(crd_method_info.crd_full_name)
     _LOG.info("Bound arguments: %r", bound_args.arguments)
     _self: CRD = bound_args.arguments["self"]
     _LOG.info("Start apply_func for %r", _self.full_name)
 
     _file = get_single_arg(bound_args.arguments, "file")
-    _dry_run = bound_args.arguments.get("dry_run", False)
+    external_root = bound_args.arguments.get("external_root", "") or ""
+    recursive = bound_args.arguments.get("recursive", False)
 
+    _file = resolve_yaml_path(_file, external_root)
+
+    if recursive:
+        kind = snake_to_camel(_self.name)
+        apply_recursive(
+            _file,
+            kind,
+            lambda p: _apply_single(crd_method_info, _self, p, bound_args.arguments),
+        )
+        return None
+
+    return _apply_single(crd_method_info, _self, _file, bound_args.arguments)
+
+
+def _apply_single(
+    crd_method_info: CrdMethodInfo,
+    _self: "CRD",
+    _file: str,
+    bound_args_arguments: dict,
+) -> Message:
+    """Apply one already-resolved yaml file.
+
+    ``bound_args_arguments`` is the caller's ``bound_args.arguments`` dict
+    (from apply's Signature bind). Passed through unchanged so both create
+    and update paths hand the SAME dict to ``apply_dry_run_to_request`` —
+    future helper extensions that read additional keys stay consistent
+    across verbs.
+    """
+    dry_run = bound_args_arguments.get("dry_run", False)
+    external_root = bound_args_arguments.get("external_root", "") or ""
     _namespace, _name = get_crd_namespace_and_name_from_yaml(_file)
 
     message_instance = None
@@ -571,17 +648,53 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
         # fills the default False).
         _LOG.info("Create a new CRD")
         _self.generate_create(crd_method_info.channel)
-        return _self.create(_file, dry_run=_dry_run)
+        return _self.create(_file, dry_run=dry_run, external_root=external_root)
 
     # Update existing CRD
     _LOG.info("Retrieved message instance: %r", message_instance)
     request_input = _self.read_yaml_and_update_crd_request(
         crd_method_info.input_class, _file, message_instance
     )
-    apply_dry_run_to_request(request_input, "update_options", bound_args.arguments)
+    apply_dry_run_to_request(request_input, "update_options", bound_args_arguments)
     call_res = crd_method_call(crd_method_info, request_input)
     print(call_res)
     return call_res
+
+
+def apply_recursive(
+    directory: str, kind: str, per_file_fn: Callable[[str], None]
+) -> None:
+    """Sorted walk + kind-filter + continue-on-error aggregate.
+
+    Calls ``per_file_fn`` with each matched yaml path. Exceptions from
+    ``per_file_fn`` are captured; all matched files are processed even when
+    some fail; a ``RuntimeError`` is raised at the end if any failed.
+
+    Reusable by per-plugin apply overrides that need the same recursive UX
+    with their own per-file logic (e.g. a plugin's custom Construct hook).
+    """
+    failed: list[Path] = []
+    total = 0
+    for path in walk_crd_yamls(directory, kind):
+        total += 1
+        print(f"Applying {path}...")
+        buf = StringIO()
+        try:
+            with redirect_stdout(buf):
+                per_file_fn(str(path))
+        except Exception as e:
+            failed.append(path)
+            # On failure, dump the captured per-file output so the user has
+            # debug context. On success it stays suppressed to keep recursive
+            # output readable.
+            print(buf.getvalue(), end="")
+            print(f"Error: {e}")
+    if failed:
+        raise RuntimeError(
+            f"apply failed on {len(failed)} of {total} files: "
+            + ", ".join(str(p) for p in failed)
+        )
+    print(f"Successfully applied all {total} files in the directory")
 
 
 def create_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
@@ -591,6 +704,8 @@ def create_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> M
     _LOG.info("Start create_func for %r", _self.full_name)
 
     _file = get_single_arg(bound_args.arguments, "file")
+    external_root = bound_args.arguments.get("external_root", "") or ""
+    _file = resolve_yaml_path(_file, external_root)
 
     request_input = read_yaml_to_crd_request(
         crd_method_info.input_class,
@@ -636,6 +751,41 @@ class CRD:
                             "help": (
                                 "Custom Resource YAML file"
                                 " (can be configured with --file)"
+                            ),
+                        },
+                    },
+                    {
+                        "func_signature": Parameter(
+                            "external_root",
+                            Parameter.POSITIONAL_OR_KEYWORD,
+                            default="",
+                        ),
+                        "args": ["-r", "--root"],
+                        "kwargs": {
+                            "dest": "external_root",
+                            "type": str,
+                            "default": "",
+                            "required": False,
+                            "help": (
+                                "External workspace root. Prepended to --file"
+                                " and passed to per-CRD construction hook."
+                            ),
+                        },
+                    },
+                    {
+                        "func_signature": Parameter(
+                            "recursive",
+                            Parameter.POSITIONAL_OR_KEYWORD,
+                            default=False,
+                        ),
+                        "args": ["-R", "--recursive"],
+                        "kwargs": {
+                            "dest": "recursive",
+                            "action": "store_true",
+                            "default": False,
+                            "help": (
+                                "When --file is a directory, apply each"
+                                " matching YAML in the directory."
                             ),
                         },
                     },
@@ -1005,11 +1155,18 @@ class CRD:
         create_func_signature = Signature(
             [
                 Parameter("self", Parameter.POSITIONAL_OR_KEYWORD),
-                # `file` is the only positional; `dry_run` mirrors the apply
+                # `file` is the only positional. `dry_run` mirrors the apply
                 # func_signature so apply_func_impl.create(_, dry_run=...) call
                 # passes bind_signature on the create-when-missing path.
+                # `external_root` is the F046 -r/--root plumbing forwarded
+                # from apply_func_impl on the same create-when-missing path.
                 Parameter("file", Parameter.POSITIONAL_OR_KEYWORD),
                 Parameter("dry_run", Parameter.POSITIONAL_OR_KEYWORD, default=False),
+                Parameter(
+                    "external_root",
+                    Parameter.POSITIONAL_OR_KEYWORD,
+                    default="",
+                ),
             ]
         )
 

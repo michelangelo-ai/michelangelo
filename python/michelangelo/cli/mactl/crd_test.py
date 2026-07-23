@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from inspect import Parameter, Signature
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
@@ -22,6 +23,8 @@ from michelangelo.cli.mactl.crd import (
     list_func_impl,
     prepare_column_info,
     print_list_formatted,
+    resolve_yaml_path,
+    walk_crd_yamls,
 )
 
 
@@ -997,7 +1000,9 @@ class ApplyFuncImplDryRunTest(TestCase):
             Mock(arguments={"self": mock_crd, "file": "f.yaml", "dry_run": True}),
         )
 
-        mock_crd.create.assert_called_once_with("f.yaml", dry_run=True)
+        mock_crd.create.assert_called_once_with(
+            "f.yaml", dry_run=True, external_root=""
+        )
 
 
 class GenerateCreateSignatureTest(TestCase):
@@ -1050,6 +1055,297 @@ class NotFoundRpcError(RpcError):
 
     def details(self):  # noqa: D102
         return "not found"
+
+
+class ApplyRootRecursiveTest(TestCase):
+    """``-r/--root`` and ``-R/--recursive`` framework wiring on apply."""
+
+    def _mk_info(self):
+        return CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Apply",
+            input_class=Mock,
+            output_class=Mock,
+        )
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.get_crd_namespace_and_name_from_yaml")
+    def test_external_root_prepends_before_yaml_read(self, mock_get_ns: MagicMock, _):
+        """external_root is prepended to file before the yaml is read."""
+        mock_crd = Mock()
+        mock_crd.full_name = "test.Service"
+        mock_crd._get.return_value = Mock()
+        mock_crd.read_yaml_and_update_crd_request.return_value = Mock()
+        mock_get_ns.return_value = ("ns", "name")
+
+        apply_func_impl(
+            self._mk_info(),
+            Mock(
+                arguments={
+                    "self": mock_crd,
+                    "file": "sub/x.yaml",
+                    "external_root": "/root",
+                }
+            ),
+        )
+
+        called_path = mock_get_ns.call_args.args[0]
+        self.assertEqual(called_path, "/root/sub/x.yaml")
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.get_crd_namespace_and_name_from_yaml")
+    def test_recursive_walks_dir_sorted_and_applies_each(
+        self, mock_get_ns: MagicMock, mock_call: MagicMock
+    ):
+        """Recursive walks matching yamls sorted; one apply per file."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            for n in ["c.yaml", "a.yaml", "b.yaml"]:
+                (tmp / n).write_text(f"kind: Test\nmetadata:\n  name: {n}\n")
+
+            mock_crd = Mock()
+            mock_crd.name = "test"
+            mock_crd.full_name = "test.Service"
+            mock_crd._get.return_value = Mock()
+            mock_crd.read_yaml_and_update_crd_request.return_value = Mock()
+            mock_get_ns.side_effect = [("ns", "a"), ("ns", "b"), ("ns", "c")]
+
+            with patch("builtins.print") as mock_print:
+                apply_func_impl(
+                    self._mk_info(),
+                    Mock(
+                        arguments={
+                            "self": mock_crd,
+                            "file": str(tmp),
+                            "recursive": True,
+                        }
+                    ),
+                )
+
+            called_paths = [c.args[0] for c in mock_get_ns.call_args_list]
+            self.assertEqual(
+                [Path(p).name for p in called_paths], ["a.yaml", "b.yaml", "c.yaml"]
+            )
+            printed = [c.args[0] for c in mock_print.call_args_list]
+            self.assertIn("Successfully applied all 3 files in the directory", printed)
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.get_crd_namespace_and_name_from_yaml")
+    def test_recursive_continue_on_error_raises_aggregate(
+        self, mock_get_ns: MagicMock, _
+    ):
+        """One file failing does NOT abort the walk; aggregate error raised at end."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            for n in ["a.yaml", "b.yaml", "c.yaml"]:
+                (tmp / n).write_text(f"kind: Test\nmetadata:\n  name: {n}\n")
+
+            mock_crd = Mock()
+            mock_crd.name = "test"
+            mock_crd.full_name = "test.Service"
+            mock_crd._get.return_value = Mock()
+            mock_crd.read_yaml_and_update_crd_request.return_value = Mock()
+            mock_get_ns.side_effect = [
+                ("ns", "a"),
+                RuntimeError("bad b"),
+                ("ns", "c"),
+            ]
+
+            with self.assertRaisesRegex(
+                RuntimeError, r"apply failed on 1 of 3 files: .*b\.yaml"
+            ):
+                apply_func_impl(
+                    self._mk_info(),
+                    Mock(
+                        arguments={
+                            "self": mock_crd,
+                            "file": str(tmp),
+                            "recursive": True,
+                        }
+                    ),
+                )
+
+            # All three files were processed despite the middle one failing.
+            self.assertEqual(mock_get_ns.call_count, 3)
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.get_crd_namespace_and_name_from_yaml")
+    def test_create_when_missing_forwards_external_root(
+        self, mock_get_ns: MagicMock, _
+    ):
+        """Apply-create path forwards external_root to _self.create (SF-8)."""
+        mock_crd = Mock()
+        mock_crd.full_name = "test.Service"
+        mock_crd._get.side_effect = RpcError()
+        mock_crd._get.side_effect.code = lambda: StatusCode.NOT_FOUND
+        mock_get_ns.return_value = ("ns", "name")
+
+        apply_func_impl(
+            self._mk_info(),
+            Mock(
+                arguments={
+                    "self": mock_crd,
+                    "file": "x.yaml",
+                    "external_root": "/root",
+                }
+            ),
+        )
+
+        mock_crd.create.assert_called_once_with(
+            "/root/x.yaml", dry_run=False, external_root="/root"
+        )
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.read_yaml_to_crd_request")
+    def test_create_func_impl_resolves_external_root(self, mock_read_yaml, _):
+        """create_func_impl prepends external_root to the yaml path."""
+        mock_crd = Mock()
+        mock_crd.name = "test"
+        mock_crd.func_crd_metadata_converter = Mock()
+
+        create_func_impl(
+            CrdMethodInfo(
+                channel=Mock(),
+                crd_full_name="test.Service",
+                method_name="Create",
+                input_class=Mock,
+                output_class=Mock,
+            ),
+            Mock(
+                arguments={
+                    "self": mock_crd,
+                    "file": "x.yaml",
+                    "external_root": "/root",
+                }
+            ),
+        )
+
+        mock_read_yaml.assert_called_once()
+        called_path = mock_read_yaml.call_args.args[2]
+        self.assertEqual(called_path, "/root/x.yaml")
+
+
+class ResolveYamlPathTest(TestCase):
+    """Tests for ``resolve_yaml_path``."""
+
+    def test_no_root_returns_file_unchanged(self):
+        """Empty root leaves the file argument alone."""
+        self.assertEqual(resolve_yaml_path("pipeline.yaml", ""), "pipeline.yaml")
+
+    def test_root_prepended(self):
+        """Root is prepended when set."""
+        self.assertEqual(resolve_yaml_path("sub/x.yaml", "/root"), "/root/sub/x.yaml")
+
+    def test_trailing_slash_on_root_normalized(self):
+        """Trailing slash on root does not duplicate the separator."""
+        self.assertEqual(resolve_yaml_path("x.yaml", "/root/"), "/root/x.yaml")
+
+    def test_leading_slash_on_file_stripped(self):
+        """Leading slash on file does not confuse the join."""
+        self.assertEqual(resolve_yaml_path("/x.yaml", "/root"), "/root/x.yaml")
+
+    def test_idempotent_double_call(self):
+        """Calling resolve twice with the same root is a no-op (no double-prepend)."""
+        once = resolve_yaml_path("sub/y.yaml", "/root")
+        twice = resolve_yaml_path(once, "/root")
+        self.assertEqual(once, "/root/sub/y.yaml")
+        self.assertEqual(twice, once)
+
+    def test_absolute_file_already_under_root_unchanged(self):
+        """An absolute file already under root is returned unchanged."""
+        self.assertEqual(
+            resolve_yaml_path("/root/foo/y.yaml", "/root"), "/root/foo/y.yaml"
+        )
+
+
+class WalkCrdYamlsTest(TestCase):
+    """Tests for ``walk_crd_yamls``."""
+
+    def _write(self, dir: Path, name: str, kind: str) -> Path:
+        p = dir / name
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(f"kind: {kind}\nmetadata:\n  name: {p.stem}\n")
+        return p
+
+    def test_sorted_lexical_order(self):
+        """Walker yields matching yamls in lexical order (stable across runs)."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            for n in ["c.yaml", "b.yaml", "a.yaml"]:
+                self._write(tmp, n, "Pipeline")
+            got = [p.name for p in walk_crd_yamls(str(tmp), "Pipeline")]
+            self.assertEqual(got, ["a.yaml", "b.yaml", "c.yaml"])
+
+    def test_kind_filter_skips_mismatched(self):
+        """Yamls whose top-level ``kind:`` does not match are skipped."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self._write(tmp, "p.yaml", "Pipeline")
+            self._write(tmp, "j.yaml", "Project")
+            got = [p.name for p in walk_crd_yamls(str(tmp), "Pipeline")]
+            self.assertEqual(got, ["p.yaml"])
+
+    def test_non_yaml_skipped(self):
+        """Files without a .yaml extension are skipped even if content matches."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self._write(tmp, "p.yaml", "Pipeline")
+            (tmp / "notes.txt").write_text("kind: Pipeline\n")
+            got = [p.name for p in walk_crd_yamls(str(tmp), "Pipeline")]
+            self.assertEqual(got, ["p.yaml"])
+
+    def test_recursive_descent(self):
+        """Walker descends into subdirectories."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self._write(tmp, "sub/deep/p.yaml", "Pipeline")
+            self._write(tmp, "top.yaml", "Pipeline")
+            got = [p.name for p in walk_crd_yamls(str(tmp), "Pipeline")]
+            self.assertEqual(set(got), {"top.yaml", "p.yaml"})
+
+    def test_symlink_cycle_not_followed(self):
+        """Symlink loops do not cause infinite descent."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self._write(tmp, "p.yaml", "Pipeline")
+            (tmp / "loop").symlink_to(tmp)
+            got = [p.name for p in walk_crd_yamls(str(tmp), "Pipeline")]
+            self.assertEqual(got, ["p.yaml"])
+
+    def test_missing_directory_raises(self):
+        """A missing directory raises FileNotFoundError with the path."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = str(Path(tmp) / "nope")
+            with self.assertRaisesRegex(FileNotFoundError, "nope"):
+                list(walk_crd_yamls(missing, "Pipeline"))
+
+    def test_unparseable_yaml_skipped(self):
+        """Unparseable yaml is skipped, valid ones are still returned."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / "bad.yaml").write_text("kind: :bad: yaml:\n  ][")
+            self._write(tmp, "good.yaml", "Pipeline")
+            got = [p.name for p in walk_crd_yamls(str(tmp), "Pipeline")]
+            self.assertEqual(got, ["good.yaml"])
 
 
 class BindSignatureTest(TestCase):
