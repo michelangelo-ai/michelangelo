@@ -136,15 +136,46 @@ jobs:
           OUTPUT: RELEASE_NOTES.md
           GITHUB_REPO: ${{ github.repository }}
 
-      - name: Generate full changelog
-        uses: orhun/git-cliff-action@v4
-        id: cliff-full
-        with:
-          config: cliff.toml
-          args: --output CHANGELOG.md
-        env:
-          OUTPUT: CHANGELOG.md
-          GITHUB_REPO: ${{ github.repository }}
+      - name: Update CHANGELOG.md (splice in the new section, never rewrite history)
+        run: |
+          python3 - <<'PYEOF'
+          import re
+
+          # CHANGELOG.md accumulates full release history (Keep a Changelog
+          # style): every existing "## [X.Y.Z] - date" section must survive
+          # untouched. Running git-cliff over the whole history with no range
+          # (the old approach) re-derives every section from scratch, which
+          # silently reshuffles/rewrites older sections whenever tag ancestry
+          # is broken (this repo is squash-merge-only, so it always is --
+          # see needs_human_review.md). RELEASE_NOTES.md is already correctly
+          # scoped by the "Determine changelog range" step above and already
+          # carries the right section header via cliff.toml's own template
+          # ("## [Unreleased]" for an ignored RC/nightly tag, "## [X.Y.Z] -
+          # date" for a real final tag) -- so just splice that in place of
+          # the previous placeholder/Unreleased section and leave everything
+          # below it alone.
+          with open("RELEASE_NOTES.md") as f:
+              new_section = f.read().rstrip("\n") + "\n"
+
+          with open("CHANGELOG.md") as f:
+              lines = f.read().split("\n")
+
+          first_idx = next(i for i, l in enumerate(lines) if l.startswith("## "))
+          header, rest = lines[:first_idx], lines[first_idx:]
+
+          if rest and rest[0].strip() in ("## Unreleased", "## [Unreleased]"):
+              next_idx = next(
+                  (i for i in range(1, len(rest)) if rest[i].startswith("## ")),
+                  len(rest),
+              )
+              rest = rest[next_idx:]
+
+          content = "\n".join(header) + "\n" + new_section + "\n" + "\n".join(rest)
+          content = re.sub(r"\n{3,}", "\n\n\n", content).rstrip("\n") + "\n"
+
+          with open("CHANGELOG.md", "w") as f:
+              f.write(content)
+          PYEOF
 
       - name: Update GitHub Release
         uses: softprops/action-gh-release@v2
