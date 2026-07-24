@@ -28,6 +28,7 @@ Typical use::
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import uuid
@@ -37,6 +38,7 @@ from typing import TYPE_CHECKING, Callable
 
 import ray
 import torch
+from fsspec.core import url_to_fs
 from pytorch_lightning.utilities.deepspeed import (
     convert_zero_checkpoint_to_fp32_state_dict,
 )
@@ -57,6 +59,14 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 CHECKPOINT_NAME = ray.train.lightning.RayTrainReportCallback.CHECKPOINT_NAME
 CHECKPOINT_PATH_KEY = "checkpoint_path"
+# Filename Ray Train V2 uses for its on-disk checkpoint manager state, written
+# inside each run directory. Mirrors
+# ``ray.train.v2._internal.constants.CHECKPOINT_MANAGER_SNAPSHOT_FILENAME``;
+# duplicated here because that module is private. It is the only available
+# source for locating the latest checkpoint in a run directory, since V2's
+# public ``Result.from_path`` is unimplemented and ``can_restore`` /
+# ``resume_from_checkpoint`` are deprecated.
+_CHECKPOINT_MANAGER_SNAPSHOT_FILENAME = "checkpoint_manager_snapshot.json"
 _UNSET = object()
 
 
@@ -98,9 +108,13 @@ class LightningTrainerParam:
             opt-in auto-resume. When set (and ``run_config`` carries both a
             ``name`` and a ``storage_path``), the trainer records this run's
             experiment directory on rank 0 and, on a re-run with the same
-            identity, restores from the previously recorded directory if it
-            holds a restorable checkpoint. Defaults to ``None`` (no tracking,
-            no resume). Use
+            identity, seeds training from the previously recorded directory if
+            it holds a restorable checkpoint. Note that Ray Train V2 also
+            resumes natively from a reused run directory
+            (``storage_path/name``); the store additionally covers the case
+            where Ray's native checkpoint state is unavailable and provides a
+            pluggable, backend-agnostic record of resumable runs. Defaults to
+            ``None`` (no tracking, no store-driven resume). Use
             :class:`~experiment_store.FsspecExperimentStore` for the filesystem
             default. Must be picklable (serialized to workers for tracking).
     """
@@ -174,7 +188,7 @@ class LightningTrainer(TorchTrainer):
         # Pop experiment_store for the same asdict()-recursion reason. When set,
         # re-inject it plus the (storage_path, run_name) identity taken from the
         # driver's RunConfig, so the worker can record this run's experiment
-        # directory keyed off byte-identical strings the driver later resumes on.
+        # directory keyed off byte-identical strings a future run resumes on.
         self._experiment_store = trainer_param.experiment_store
         train_loop_config.pop("experiment_store", None)
         if self._experiment_store is not None:
@@ -182,6 +196,15 @@ class LightningTrainer(TorchTrainer):
             if run_config is not None:
                 train_loop_config["storage_path"] = run_config.storage_path
                 train_loop_config["run_name"] = run_config.name
+
+        # Resolve auto-resume at construction time. Ray Train V2 freezes the run
+        # context (including run_config) when the base trainer is constructed and
+        # resumes natively from a reused run directory; the store-driven seed
+        # below is threaded into the worker as a fallback that fires only when
+        # Ray has no native checkpoint to restore (see _train_loop_per_worker).
+        resume_checkpoint_path = self._resolve_resume_checkpoint(run_config)
+        if resume_checkpoint_path is not None:
+            train_loop_config["resume_checkpoint_path"] = resume_checkpoint_path
 
         super().__init__(
             train_loop_per_worker=_train_loop_per_worker,
@@ -212,9 +235,16 @@ class LightningTrainer(TorchTrainer):
         if scaling_config is not None:
             self.scaling_config = scaling_config
         if run_config is not None:
+            if self._experiment_store is not None:
+                _logger.warning(
+                    "run_config passed to train() overrides the construction-time "
+                    "RunConfig, but auto-resume was already resolved at __init__ "
+                    "from the original RunConfig (Ray Train V2 freezes the run "
+                    "context at construction). The override will not re-trigger "
+                    "auto-resume; pass run_config to the LightningTrainer "
+                    "constructor to control resumption."
+                )
             self.run_config = run_config
-
-        self._maybe_enable_auto_resume()
 
         result = self.fit()
         if result.error:
@@ -238,47 +268,103 @@ class LightningTrainer(TorchTrainer):
             "metrics": result.metrics,
         }
 
-    def _maybe_enable_auto_resume(self) -> None:
-        """Point Ray Train at a resumable experiment directory when configured.
+    def _resolve_resume_checkpoint(self, run_config) -> str | None:
+        """Resolve the checkpoint to seed auto-resume from, or ``None``.
 
         No-op unless an ``experiment_store`` is set and ``run_config`` carries
         both a ``name`` and a ``storage_path``. Asks the store for a candidate
-        directory, then gates it through
-        ``ray.train.torch.TorchTrainer.can_restore()`` — the store never
-        validates checkpoints itself. On success, sets the Ray-internal
-        ``_restore_path`` / ``_restore_storage_filesystem`` attributes so
-        :meth:`fit` restores instead of starting fresh. A store that raises, a
-        missing candidate, or a candidate with no restorable checkpoint all fall
-        through to a fresh run.
+        experiment directory, then resolves the latest Ray Train checkpoint
+        inside it via :meth:`_latest_checkpoint_in`. The resolved path is
+        threaded to the worker (``resume_checkpoint_path`` in
+        ``train_loop_config``) where it seeds resumption only if Ray has no
+        native checkpoint to restore. A store that raises, a missing candidate,
+        an incomplete run identity, or a candidate with no restorable checkpoint
+        all fall through to ``None`` (fresh run, or Ray's native resume).
+
+        Args:
+            run_config: The ``RunConfig`` passed at construction, carrying the
+                ``storage_path`` / ``name`` identity.
+
+        Returns:
+            A scheme-qualified checkpoint directory to seed resume from, or
+            ``None`` when there is nothing to resume.
         """
         store = self._experiment_store
-        if store is None or self.run_config is None:
-            return
-        storage_path = self.run_config.storage_path
-        run_name = self.run_config.name
+        if store is None or run_config is None:
+            return None
+        storage_path = run_config.storage_path
+        run_name = run_config.name
         if not storage_path or not run_name:
-            return
+            _logger.info(
+                "experiment_store is set but RunConfig is missing %s; "
+                "auto-resume is disabled for this run.",
+                "storage_path" if not storage_path else "name",
+            )
+            return None
 
         try:
             candidate = store.locate_resumable(
                 storage_path=storage_path, run_name=run_name
             )
         except Exception:
-            _logger.warning("locate_resumable raised; not resuming", exc_info=True)
-            return
+            _logger.warning(
+                "ExperimentStore.locate_resumable raised; not resuming",
+                exc_info=True,
+            )
+            return None
 
         if not candidate:
-            return
+            return None
 
-        fs = self.run_config.storage_filesystem
-        # ``_restore_path`` / ``_restore_storage_filesystem`` are Ray-internal
-        # BaseTrainer attributes; setting them is how a resumable run is enabled
-        # in-place. The public alternative (``TorchTrainer.restore``) rebuilds a
-        # fresh trainer, which is awkward from inside an instance's ``train()``.
-        if TorchTrainer.can_restore(candidate, fs):
-            self._restore_path = candidate
-            self._restore_storage_filesystem = fs
-            _logger.info("Auto-resume: restoring from %s", candidate)
+        checkpoint_path = self._latest_checkpoint_in(candidate)
+        if checkpoint_path is None:
+            _logger.info(
+                "Auto-resume: located experiment dir %s holds no restorable "
+                "checkpoint; starting fresh.",
+                candidate,
+            )
+            return None
+
+        _logger.info("Auto-resume: will seed from checkpoint %s", checkpoint_path)
+        return checkpoint_path
+
+    @staticmethod
+    def _latest_checkpoint_in(experiment_path: str) -> str | None:
+        """Return the latest Ray Train checkpoint directory in ``experiment_path``.
+
+        Reads Ray Train V2's ``checkpoint_manager_snapshot.json`` (best-effort)
+        and returns its ``latest_checkpoint_result`` directory joined onto
+        ``experiment_path``, preserving any URI scheme so the worker can build a
+        ``ray.train.Checkpoint`` from it. Returns ``None`` — without raising —
+        when the snapshot is missing, unreadable, or records no checkpoint;
+        these are the normal "nothing to resume" cases.
+
+        Args:
+            experiment_path: The candidate experiment directory returned by
+                :meth:`ExperimentStore.locate_resumable`.
+
+        Returns:
+            A scheme-qualified checkpoint directory path, or ``None``.
+        """
+        try:
+            fs, root = url_to_fs(experiment_path)
+            snapshot = f"{root.rstrip('/')}/{_CHECKPOINT_MANAGER_SNAPSHOT_FILENAME}"
+            if not fs.exists(snapshot):
+                return None
+            with fs.open(snapshot, "r") as f:
+                data = json.loads(f.read())
+            latest = data.get("latest_checkpoint_result") or {}
+            checkpoint_dir_name = latest.get("checkpoint_dir_name")
+            if not checkpoint_dir_name:
+                return None
+            return f"{experiment_path.rstrip('/')}/{checkpoint_dir_name}"
+        except Exception:
+            _logger.debug(
+                "Could not resolve latest checkpoint in %s",
+                experiment_path,
+                exc_info=True,
+            )
+            return None
 
 
 class LightningTrainerWithStateDict(LightningTrainer):

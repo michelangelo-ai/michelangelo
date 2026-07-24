@@ -114,7 +114,7 @@ class ExperimentStore(Protocol):
     must not fail an otherwise-successful training run). The trainer additionally
     guards both call sites, so a misbehaving custom store cannot crash training.
 
-    Example::
+    Example (default fsspec backend)::
 
         from michelangelo.lib.trainer.torch.pytorch_lightning import (
             FsspecExperimentStore,
@@ -128,6 +128,36 @@ class ExperimentStore(Protocol):
             val_data=val_ds,
             experiment_store=FsspecExperimentStore(),
         )
+
+    Example (bring your own backend)::
+
+        class RedisExperimentStore:
+            \"\"\"Record the resume pointer in Redis instead of a marker file.\"\"\"
+
+            def __init__(self, client) -> None:
+                self._client = client
+
+            def _key(self, storage_path: str, run_name: str) -> str:
+                return f"ma-resume:{storage_path}:{run_name}"
+
+            def track(
+                self, *, storage_path: str, run_name: str, experiment_path: str
+            ) -> None:
+                try:
+                    self._client.set(
+                        self._key(storage_path, run_name), experiment_path
+                    )
+                except Exception:  # best-effort: never fail training
+                    pass
+
+            def locate_resumable(
+                self, *, storage_path: str, run_name: str
+            ) -> str | None:
+                try:
+                    value = self._client.get(self._key(storage_path, run_name))
+                except Exception:  # nothing to resume on any lookup failure
+                    return None
+                return value.decode() if value else None
     """
 
     def track(self, *, storage_path: str, run_name: str, experiment_path: str) -> None:
@@ -140,8 +170,11 @@ class ExperimentStore(Protocol):
                 root; also the fsspec root under which markers are kept).
             run_name: The driver's ``RunConfig.name`` (stable run identity).
             experiment_path: Absolute path of *this* run's Ray Train experiment
-                directory, derived by the caller from
-                ``ray.train.get_context().get_storage()``.
+                directory, derived by the caller from the driver's
+                ``RunConfig.storage_path`` and
+                ``ray.train.get_context().get_storage().experiment_dir_name``.
+                Scheme-qualified for remote filesystems (e.g.
+                ``s3://bucket/runs/my_run``) so a later resume can address it.
 
         Returns:
             ``None``.
@@ -152,10 +185,10 @@ class ExperimentStore(Protocol):
         """Return a candidate experiment directory to resume, or ``None``.
 
         Called on the driver before ``fit()``. The returned path is only a
-        *candidate*: the trainer validates it with
-        ``ray.train.torch.TorchTrainer.can_restore()`` before enabling
-        restoration, so this method must not itself check for a valid
-        checkpoint. Returns ``None`` when no marker exists or it cannot be read.
+        *candidate*: the trainer resolves the latest Ray Train checkpoint within
+        it and seeds resumption only if one exists, so this method must not
+        itself check for a valid checkpoint. Returns ``None`` when no marker
+        exists or it cannot be read.
 
         Args:
             storage_path: The driver's ``RunConfig.storage_path``.

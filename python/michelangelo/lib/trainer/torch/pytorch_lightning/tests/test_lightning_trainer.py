@@ -548,128 +548,232 @@ class TestExperimentStoreInit:
 
 
 # -----------------------------------------------------------------------------
-# ExperimentStore wiring: auto-resume gating in _maybe_enable_auto_resume
+# ExperimentStore wiring: auto-resume resolution in _resolve_resume_checkpoint
 # -----------------------------------------------------------------------------
 
 
-class TestAutoResume:
-    """``_maybe_enable_auto_resume`` gates a candidate through ``can_restore``."""
+class TestResolveResumeCheckpoint:
+    """``_resolve_resume_checkpoint`` locates a checkpoint to seed resume from."""
 
     def _build(self, store, run_config):
         """Build a trainer with mocked base init and an assigned ``run_config``."""
         param = _make_param(experiment_store=store)
-        with patch(f"{_LT_MODULE}.TorchTrainer.__init__", return_value=None):
+        with (
+            patch(f"{_LT_MODULE}.TorchTrainer.__init__", return_value=None),
+            patch.object(
+                LightningTrainer, "_resolve_resume_checkpoint", return_value=None
+            ),
+        ):
             trainer = LightningTrainer(trainer_param=param, run_config=run_config)
-        # Base ``__init__`` is mocked, so set the attribute train() would rely on.
         trainer.run_config = run_config
         return trainer
 
-    def test_resumes_when_candidate_restorable(self):
-        """A restorable candidate sets the Ray-internal restore attributes."""
+    def test_returns_checkpoint_when_candidate_has_one(self):
+        """A candidate dir with a restorable checkpoint yields its path."""
         store = MagicMock(name="store")
         store.locate_resumable.return_value = "/candidate/exp"
         run_cfg = _run_config()
         trainer = self._build(store, run_cfg)
 
-        with patch(f"{_LT_MODULE}.TorchTrainer.can_restore", return_value=True) as cr:
-            trainer._maybe_enable_auto_resume()
+        with patch.object(
+            LightningTrainer,
+            "_latest_checkpoint_in",
+            return_value="/candidate/exp/checkpoint_0",
+        ) as latest:
+            result = trainer._resolve_resume_checkpoint(run_cfg)
 
         store.locate_resumable.assert_called_once_with(
             storage_path=run_cfg.storage_path, run_name=run_cfg.name
         )
-        cr.assert_called_once_with("/candidate/exp", run_cfg.storage_filesystem)
-        assert trainer._restore_path == "/candidate/exp"
-        assert trainer._restore_storage_filesystem is run_cfg.storage_filesystem
+        latest.assert_called_once_with("/candidate/exp")
+        assert result == "/candidate/exp/checkpoint_0"
 
-    def test_no_resume_when_not_restorable(self):
-        """A candidate that fails ``can_restore`` does not enable restoration."""
+    def test_returns_none_when_candidate_has_no_checkpoint(self):
+        """A candidate dir without a restorable checkpoint yields ``None``."""
         store = MagicMock(name="store")
         store.locate_resumable.return_value = "/candidate/exp"
-        trainer = self._build(store, _run_config())
+        run_cfg = _run_config()
+        trainer = self._build(store, run_cfg)
 
-        with patch(f"{_LT_MODULE}.TorchTrainer.can_restore", return_value=False):
-            trainer._maybe_enable_auto_resume()
+        with patch.object(LightningTrainer, "_latest_checkpoint_in", return_value=None):
+            assert trainer._resolve_resume_checkpoint(run_cfg) is None
 
-        assert not hasattr(trainer, "_restore_path")
-
-    def test_no_resume_when_no_candidate(self):
-        """A ``None`` candidate skips ``can_restore`` entirely."""
+    def test_returns_none_when_no_candidate(self):
+        """A ``None`` candidate skips checkpoint resolution entirely."""
         store = MagicMock(name="store")
         store.locate_resumable.return_value = None
-        trainer = self._build(store, _run_config())
+        run_cfg = _run_config()
+        trainer = self._build(store, run_cfg)
 
-        with patch(f"{_LT_MODULE}.TorchTrainer.can_restore") as cr:
-            trainer._maybe_enable_auto_resume()
-
-        cr.assert_not_called()
-        assert not hasattr(trainer, "_restore_path")
+        with patch.object(LightningTrainer, "_latest_checkpoint_in") as latest:
+            assert trainer._resolve_resume_checkpoint(run_cfg) is None
+        latest.assert_not_called()
 
     def test_locate_raising_is_swallowed(self):
-        """A store that raises in ``locate_resumable`` falls through to fresh run."""
+        """A store that raises in ``locate_resumable`` falls through to ``None``."""
         store = MagicMock(name="store")
         store.locate_resumable.side_effect = RuntimeError("boom")
-        trainer = self._build(store, _run_config())
+        run_cfg = _run_config()
+        trainer = self._build(store, run_cfg)
 
-        with patch(f"{_LT_MODULE}.TorchTrainer.can_restore") as cr:
-            trainer._maybe_enable_auto_resume()  # must not raise
+        assert trainer._resolve_resume_checkpoint(run_cfg) is None  # must not raise
 
-        cr.assert_not_called()
-        assert not hasattr(trainer, "_restore_path")
-
-    def test_skip_without_store(self):
-        """No store → no-op, and no crash reading run_config."""
+    def test_none_without_store(self):
+        """No store → ``None``, and no crash reading run_config."""
         trainer = self._build(None, _run_config())
-        with patch(f"{_LT_MODULE}.TorchTrainer.can_restore") as cr:
-            trainer._maybe_enable_auto_resume()
-        cr.assert_not_called()
+        assert trainer._resolve_resume_checkpoint(_run_config()) is None
 
-    def test_skip_without_run_config(self):
-        """A store but ``run_config is None`` → no locate, no resume."""
+    def test_none_without_run_config(self):
+        """A store but ``run_config is None`` → no locate, ``None``."""
         store = MagicMock(name="store")
         trainer = self._build(store, None)
-        with patch(f"{_LT_MODULE}.TorchTrainer.can_restore") as cr:
-            trainer._maybe_enable_auto_resume()
+        assert trainer._resolve_resume_checkpoint(None) is None
         store.locate_resumable.assert_not_called()
-        cr.assert_not_called()
 
-    def test_skip_when_storage_path_missing(self):
-        """A ``run_config`` without a storage_path → no locate, no resume."""
+    def test_incomplete_identity_logs_and_skips(self, caplog):
+        """A missing storage_path logs once and skips locate."""
+        import logging
+
         store = MagicMock(name="store")
-        trainer = self._build(store, _run_config(storage_path=None))
-        with patch(f"{_LT_MODULE}.TorchTrainer.can_restore") as cr:
-            trainer._maybe_enable_auto_resume()
-        store.locate_resumable.assert_not_called()
-        cr.assert_not_called()
+        run_cfg = _run_config(storage_path=None)
+        trainer = self._build(store, run_cfg)
 
-    def test_skip_when_run_name_missing(self):
-        """A ``run_config`` without a name → no locate, no resume."""
+        with caplog.at_level(logging.INFO, logger=_LT_MODULE):
+            assert trainer._resolve_resume_checkpoint(run_cfg) is None
+
+        store.locate_resumable.assert_not_called()
+        assert any("auto-resume is disabled" in r.message for r in caplog.records)
+
+    def test_missing_run_name_skips(self):
+        """A missing run name → no locate, ``None``."""
         store = MagicMock(name="store")
-        trainer = self._build(store, _run_config(name=None))
-        with patch(f"{_LT_MODULE}.TorchTrainer.can_restore") as cr:
-            trainer._maybe_enable_auto_resume()
+        run_cfg = _run_config(name=None)
+        trainer = self._build(store, run_cfg)
+        assert trainer._resolve_resume_checkpoint(run_cfg) is None
         store.locate_resumable.assert_not_called()
-        cr.assert_not_called()
 
-    def test_train_invokes_auto_resume_before_fit(self):
-        """``train()`` calls ``_maybe_enable_auto_resume`` ahead of ``fit()``."""
-        trainer = self._build(MagicMock(name="store"), _run_config())
+
+class TestLatestCheckpointIn:
+    """``_latest_checkpoint_in`` reads Ray's snapshot to find the latest checkpoint."""
+
+    def _write_snapshot(self, exp_dir, payload):
+        """Write a ``checkpoint_manager_snapshot.json`` into ``exp_dir``."""
+        import json
+
+        (exp_dir / "checkpoint_manager_snapshot.json").write_text(json.dumps(payload))
+
+    def test_returns_joined_checkpoint_path(self, tmp_path):
+        """The latest checkpoint dir name is joined onto the experiment path."""
+        exp = tmp_path / "run1"
+        exp.mkdir()
+        self._write_snapshot(
+            exp,
+            {"latest_checkpoint_result": {"checkpoint_dir_name": "checkpoint_000042"}},
+        )
+        result = LightningTrainer._latest_checkpoint_in(str(exp))
+        assert result == f"{exp}/checkpoint_000042"
+
+    def test_returns_none_when_snapshot_missing(self, tmp_path):
+        """No snapshot file → ``None`` (nothing to resume)."""
+        exp = tmp_path / "run1"
+        exp.mkdir()
+        assert LightningTrainer._latest_checkpoint_in(str(exp)) is None
+
+    def test_returns_none_when_no_latest_result(self, tmp_path):
+        """A snapshot without ``latest_checkpoint_result`` → ``None``."""
+        exp = tmp_path / "run1"
+        exp.mkdir()
+        self._write_snapshot(exp, {"checkpoint_results": []})
+        assert LightningTrainer._latest_checkpoint_in(str(exp)) is None
+
+    def test_returns_none_when_dir_name_empty(self, tmp_path):
+        """A latest result with no ``checkpoint_dir_name`` → ``None``."""
+        exp = tmp_path / "run1"
+        exp.mkdir()
+        self._write_snapshot(exp, {"latest_checkpoint_result": {}})
+        assert LightningTrainer._latest_checkpoint_in(str(exp)) is None
+
+    def test_returns_none_on_corrupt_snapshot(self, tmp_path):
+        """A corrupt (non-JSON) snapshot → ``None`` (swallowed)."""
+        exp = tmp_path / "run1"
+        exp.mkdir()
+        (exp / "checkpoint_manager_snapshot.json").write_text("{ not json")
+        assert LightningTrainer._latest_checkpoint_in(str(exp)) is None
+
+
+class TestResumeCheckpointInjection:
+    """``__init__`` threads the resolved checkpoint into ``train_loop_config``."""
+
+    def test_seed_injected_when_resolved(self):
+        """A resolved checkpoint path is placed in the worker config."""
+        store = MagicMock(name="store")
+        param = _make_param(experiment_store=store)
+        with (
+            patch(f"{_LT_MODULE}.TorchTrainer.__init__", return_value=None) as sup,
+            patch.object(
+                LightningTrainer,
+                "_resolve_resume_checkpoint",
+                return_value="/exp/checkpoint_0",
+            ),
+        ):
+            LightningTrainer(trainer_param=param, run_config=_run_config())
+
+        loop_cfg = sup.call_args.kwargs["train_loop_config"]
+        assert loop_cfg["resume_checkpoint_path"] == "/exp/checkpoint_0"
+
+    def test_no_seed_key_when_unresolved(self):
+        """No key is injected when nothing is resolved (fresh run)."""
+        store = MagicMock(name="store")
+        param = _make_param(experiment_store=store)
+        with (
+            patch(f"{_LT_MODULE}.TorchTrainer.__init__", return_value=None) as sup,
+            patch.object(
+                LightningTrainer, "_resolve_resume_checkpoint", return_value=None
+            ),
+        ):
+            LightningTrainer(trainer_param=param, run_config=_run_config())
+
+        loop_cfg = sup.call_args.kwargs["train_loop_config"]
+        assert "resume_checkpoint_path" not in loop_cfg
+
+
+class TestTrainRunConfigOverride:
+    """``train(run_config=...)`` override interplay with auto-resume (issue #2)."""
+
+    def _trainer_with_result(self, store):
+        """Build a trainer whose ``fit`` returns a benign result."""
+        param = _make_param(experiment_store=store)
+        with (
+            patch(f"{_LT_MODULE}.TorchTrainer.__init__", return_value=None),
+            patch.object(
+                LightningTrainer, "_resolve_resume_checkpoint", return_value=None
+            ),
+        ):
+            trainer = LightningTrainer(trainer_param=param, run_config=_run_config())
         result = MagicMock()
         result.error = None
         result.checkpoint.path = "/c"
         result.path = "/r"
         result.metrics = {}
+        trainer.fit = MagicMock(return_value=result)
+        return trainer
 
-        calls = []
-        with (
-            patch.object(
-                trainer,
-                "_maybe_enable_auto_resume",
-                side_effect=lambda: calls.append("resume"),
-            ),
-            patch.object(
-                trainer, "fit", side_effect=lambda: calls.append("fit") or result
-            ),
-        ):
-            trainer.train()
+    def test_override_warns_when_store_set(self, caplog):
+        """Overriding run_config in train() warns that resume won't re-trigger."""
+        import logging
 
-        assert calls == ["resume", "fit"]
+        trainer = self._trainer_with_result(MagicMock(name="store"))
+        with caplog.at_level(logging.WARNING, logger=_LT_MODULE):
+            trainer.train(run_config=_run_config(name="different"))
+
+        assert any("will not re-trigger" in r.message for r in caplog.records)
+
+    def test_no_warning_without_store(self, caplog):
+        """Without a store, a run_config override is not warned about."""
+        import logging
+
+        trainer = self._trainer_with_result(None)
+        with caplog.at_level(logging.WARNING, logger=_LT_MODULE):
+            trainer.train(run_config=_run_config(name="different"))
+
+        assert not any("re-trigger" in r.message for r in caplog.records)

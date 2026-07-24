@@ -58,6 +58,40 @@ class TestMarkerPath:
         )
 
 
+class TestMarkerPathTraversal:
+    """``run_name`` cannot escape the marker directory (path-traversal guard)."""
+
+    @pytest.mark.parametrize(
+        "run_name", ["../evil", "a/b", "..", ".", "", "nested/../../x", "a\\b"]
+    )
+    def test_unsafe_run_name_rejected(self, run_name):
+        """A ``run_name`` with a separator or ``..`` component is rejected."""
+        from michelangelo.lib.trainer.torch.pytorch_lightning.experiment_store import (
+            _InvalidRunNameError,
+        )
+
+        store = FsspecExperimentStore()
+        with pytest.raises(_InvalidRunNameError):
+            store._marker_path("/root/runs", run_name)
+
+    def test_locate_with_unsafe_run_name_returns_none(self, tmp_path):
+        """``locate_resumable`` swallows an unsafe run_name and returns ``None``."""
+        store = FsspecExperimentStore()
+        assert (
+            store.locate_resumable(storage_path=str(tmp_path), run_name="../evil")
+            is None
+        )
+
+    def test_track_with_unsafe_run_name_is_swallowed(self, tmp_path):
+        """``track`` never raises on an unsafe run_name and writes nothing."""
+        store = FsspecExperimentStore()
+        store.track(
+            storage_path=str(tmp_path), run_name="../evil", experiment_path="/exp"
+        )
+        # No marker directory escape: nothing written under the parent.
+        assert not (tmp_path.parent / "evil.json").exists()
+
+
 class TestRoundTrip:
     """Track-then-locate round-trip against a real local filesystem."""
 
@@ -110,6 +144,40 @@ class TestRoundTrip:
             store.locate_resumable(storage_path=storage_path, run_name="run1")
             == "/exp/new"
         )
+
+    def test_track_leaves_no_temp_file(self, tmp_path):
+        """The atomic temp-then-rename write leaves no ``.tmp`` residue."""
+        store = FsspecExperimentStore()
+        store.track(
+            storage_path=str(tmp_path), run_name="run1", experiment_path="/exp/dir"
+        )
+        marker_dir = tmp_path / ".michelangelo_resume"
+        leftovers = [p.name for p in marker_dir.iterdir() if p.name.endswith(".tmp")]
+        assert leftovers == []
+        assert (marker_dir / "run1.json").exists()
+
+    def test_track_is_atomic_rename(self, tmp_path):
+        """``track`` writes via a temp file and renames it into place."""
+        from unittest.mock import MagicMock, patch
+
+        store = FsspecExperimentStore()
+        fake_fs = MagicMock(name="fs")
+        # url_to_fs returns (fs, resolved_path); resolved path mirrors the marker.
+        marker = f"{tmp_path}/.michelangelo_resume/run1.json"
+        with patch(f"{_STORE_MODULE}.url_to_fs", return_value=(fake_fs, marker)):
+            store.track(
+                storage_path=str(tmp_path),
+                run_name="run1",
+                experiment_path="/exp/dir",
+            )
+
+        # Wrote to a temp sibling, then renamed onto the final marker path.
+        assert fake_fs.mv.call_count == 1
+        tmp_written = fake_fs.open.call_args.args[0]
+        assert tmp_written.startswith(marker) and tmp_written.endswith(".tmp")
+        src, dst = fake_fs.mv.call_args.args
+        assert src == tmp_written
+        assert dst == marker
 
 
 class TestNothingToResume:

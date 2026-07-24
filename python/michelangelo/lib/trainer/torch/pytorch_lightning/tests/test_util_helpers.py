@@ -202,18 +202,25 @@ class TestMaybeTrackExperiment:
         return patcher, ray_mod
 
     def test_tracks_on_rank_0_with_derived_path(self):
-        """Rank 0 with full identity calls ``track`` with the derived path."""
+        """Rank 0 with full identity calls ``track`` with the derived path.
+
+        The experiment path is derived from the driver-provided (scheme-qualified)
+        ``storage_path`` and the storage context's ``experiment_dir_name`` — not
+        the scheme-stripped ``storage_fs_path`` — so remote resume can address it.
+        """
         store = MagicMock(name="store")
-        patcher, _ = self._patch_storage("/fs/root", "exp_x")
+        patcher, _ = self._patch_storage("s3/root", "run1")
         try:
-            _maybe_track_experiment(_config(store), rank=0)
+            _maybe_track_experiment(
+                _config(store, storage_path="s3://bucket/runs"), rank=0
+            )
         finally:
             patcher.stop()
 
         store.track.assert_called_once_with(
-            storage_path="/root/runs",
+            storage_path="s3://bucket/runs",
             run_name="run1",
-            experiment_path="/fs/root/exp_x",
+            experiment_path="s3://bucket/runs/run1",
         )
 
     def test_non_rank_0_does_not_track(self):
