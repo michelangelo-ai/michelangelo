@@ -169,7 +169,7 @@ jobs:
         if: steps.changelog-diff.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.CR_PAT }}
           base: ${{ steps.branch.outputs.base }}
           commit-message: "docs: update CHANGELOG.md for ${{ steps.tag.outputs.tag }}"
           title: "docs: update CHANGELOG.md for ${{ steps.tag.outputs.tag }}"
