@@ -70,12 +70,18 @@ _helm_nodeport_map = [
 ]
 
 
+def _loopback(port_spec: str) -> str:
+    """Prefix a 'host:node' k3d port spec with 127.0.0.1 so k3d/Docker
+    binds the host side to loopback instead of the default 0.0.0.0."""
+    return f"127.0.0.1:{port_spec}"
+
+
 def _helm_chart_ports(workflow: str) -> list[str]:
     """Read control plane NodePorts from values-k3d.yaml.
 
     Returns host:nodeport strings for k3d's -p flag. NodePorts come from
-    values-k3d.yaml (single source of truth). Host ports are sandbox
-    conventions for localhost access.
+    values-k3d.yaml (single source of truth). Host ports are bound to
+    loopback for localhost-only access (see _loopback()).
 
     Cadence Web is included only when workflow=cadence; Temporal Web only
     when workflow=temporal.
@@ -278,7 +284,7 @@ def _create(ns: argparse.Namespace):
     ]
 
     for p in ports:
-        args += ["-p", f"{p}@agent:0"]
+        args += ["-p", f"{_loopback(p)}@agent:0"]
 
     _exec(*args)
 
@@ -1482,7 +1488,7 @@ def _create_compute_cluster(cluster_name: str):
 
     # Add port mappings for Ray
     for p in _ray_ports:
-        args += ["-p", f"{p}@agent:0"]
+        args += ["-p", f"{_loopback(p)}@agent:0"]
 
     _exec(*args)
 
