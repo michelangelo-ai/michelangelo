@@ -71,8 +71,11 @@ _helm_nodeport_map = [
 
 
 def _loopback(port_spec: str) -> str:
-    """Prefix a 'host:node' k3d port spec with 127.0.0.1 so k3d/Docker
-    binds the host side to loopback instead of the default 0.0.0.0."""
+    """Prefix a 'host:node' k3d port spec with 127.0.0.1.
+
+    Ensures k3d/Docker binds the host side to loopback instead of the
+    default 0.0.0.0.
+    """
     return f"127.0.0.1:{port_spec}"
 
 
