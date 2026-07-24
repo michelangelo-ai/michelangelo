@@ -13,14 +13,32 @@ crashes on Ray 2.51.x). Two scenarios are covered:
   resumes from a checkpoint located by a custom ``ExperimentStore`` pointing at
   a different run's directory (the store's load-bearing role in V2).
 
-They are slow (~1-2 min total) because each ``train()`` spins up Ray workers.
+They are slow (~1-2 min total) because each ``train()`` spins up Ray workers,
+and each spawns a real Ray cluster. On memory-constrained CI runners (e.g.
+GitHub-hosted, ~7 GB RAM / 8 GB ``/dev/shm``) ``ray.init()`` OOM-kills the
+pytest process — taking down the whole suite — so they are **skipped in CI by
+default**. Run them locally (the default off-CI), or in a dedicated
+Ray-enabled CI job, by setting ``MICHELANGELO_RUN_RAY_INTEGRATION_TESTS=1``.
 """
 
 from __future__ import annotations
 
+import os
 import sys
 
 import pytest
+
+# Skip in CI unless explicitly forced (see module docstring): a real Ray cluster
+# exceeds the memory of shared coverage runners and OOM-kills the whole run.
+if (os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS")) and (
+    os.environ.get("MICHELANGELO_RUN_RAY_INTEGRATION_TESTS") != "1"
+):
+    pytest.skip(
+        "Skipping real-Ray integration tests in CI (they spin up a Ray cluster "
+        "and OOM on constrained runners). Set "
+        "MICHELANGELO_RUN_RAY_INTEGRATION_TESTS=1 to run them.",
+        allow_module_level=True,
+    )
 
 pytest.importorskip("ray")
 torch = pytest.importorskip("torch")
