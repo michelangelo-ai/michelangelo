@@ -61,8 +61,8 @@ Create temporal sandbox
 
 The create setup dependencies for Uniflow including
 
-- Michelangelo AI-ai API
-- Michelangelo AI-ai controller manager
+- Michelangelo AI API
+- Michelangelo AI controller manager
 - Cadence
 - Starlark-worker
 - S3 storage
