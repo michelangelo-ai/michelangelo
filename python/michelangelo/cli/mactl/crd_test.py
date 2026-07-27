@@ -1382,7 +1382,10 @@ class FilterEndToEndTest(TestCase):
     def test_get_fallthrough_forwards_filter_to_list(
         self, _parse, mock_call, mock_extract
     ):
-        """`<crd> get -n <ns> --<attr> <val>` (no name) falls through to list with filter."""
+        """`<crd> get -n <ns> --<attr> <val>` (no name) falls through to list.
+
+        The forwarded filter reaches ``_list_func_impl`` and becomes a criterion.
+        """
         mock_extract.return_value = ("Op", _recording_input_class(), Mock)
         crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
         crd.filter_field_map = {"pipeline_name": "spec.pipeline_name"}
