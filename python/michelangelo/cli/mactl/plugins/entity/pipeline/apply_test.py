@@ -72,7 +72,7 @@ class PipelineApplyFuncImplTest(TestCase):
         pipeline_apply_func_impl(update_info, self._make_bound_args(mock_crd))
 
         mock_crd.generate_create.assert_called_once_with(update_info.channel)
-        mock_crd.create.assert_called_once_with("f.yaml")
+        mock_crd.create.assert_called_once_with("f.yaml", dry_run=False)
 
     @patch(
         "michelangelo.cli.mactl.plugins.entity.pipeline.apply.get_crd_namespace_and_name_from_yaml"

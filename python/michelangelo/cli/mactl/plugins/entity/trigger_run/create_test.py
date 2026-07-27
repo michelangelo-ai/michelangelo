@@ -76,14 +76,14 @@ class AddFunctionSignatureTest(TestCase):
             "Create a TriggerRun from a pipeline's trigger configuration.",
         )
 
-    def test_has_three_args(self):
-        """Test that exactly three args are defined."""
+    def test_has_four_args(self):
+        """Test that exactly four args are defined (namespace, name, file, dry_run)."""
         mock_crd = Mock()
         mock_crd.func_signature = {}
 
         add_function_signature(mock_crd)
 
-        self.assertEqual(len(mock_crd.func_signature["create"]["args"]), 3)
+        self.assertEqual(len(mock_crd.func_signature["create"]["args"]), 4)
 
     def test_namespace_arg(self):
         """Test namespace arg flags and kwargs."""
