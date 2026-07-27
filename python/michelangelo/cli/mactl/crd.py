@@ -290,8 +290,8 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
     _LOG.debug("No name argument passed. List CRD in the namespace.")
     _self.generate_list(crd_method_info.channel)
     # Forward any filter dest args declared in _self.filter_field_map so
-    # `<crd> get --filter foo=bar` (no name) falls through to list with the
-    # filter applied, not silently dropped.
+    # `<crd> get -n <ns> --<attr> <val>` (no name) falls through to list
+    # with the filter applied, not silently dropped.
     filter_field_map = getattr(_self, "filter_field_map", None)
     if not isinstance(filter_field_map, dict):
         filter_field_map = {}
