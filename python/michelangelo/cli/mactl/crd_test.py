@@ -997,6 +997,48 @@ class ApplyFuncImplDryRunTest(TestCase):
         mock_crd.create.assert_called_once_with("f.yaml", dry_run=True)
 
 
+class GenerateCreateSignatureTest(TestCase):
+    """generate_create must produce a signature that accepts `dry_run`.
+
+    Regression: without dry_run in create_func_signature, apply_func_impl's
+    `_self.create(_file, dry_run=_dry_run)` call raises
+    `TypeError: got an unexpected keyword argument 'dry_run'` at bind time.
+    The pre-existing ApplyFuncImplDryRunTest missed this because it mocked
+    `_self.create` (Mock auto-accepts any kwargs).
+    """
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.apply_dry_run_to_request")
+    @patch("michelangelo.cli.mactl.crd.ParseDict")
+    @patch("michelangelo.cli.mactl.crd.get_crd_namespace_and_name_from_yaml")
+    @patch("michelangelo.cli.mactl.crd.read_yaml_to_crd_request")
+    @patch.object(CRD, "_extract_method_info")
+    def test_crd_create_call_accepts_dry_run_kwarg(
+        self,
+        mock_extract,
+        mock_read,
+        mock_get_ns,
+        _parse,
+        mock_apply_dry,
+        mock_call,
+    ):
+        """`crd.create(file, dry_run=True)` must not TypeError at bind."""
+        mock_extract.return_value = ("CreateTestCrd", Mock, Mock)
+        mock_get_ns.return_value = ("ns", "name")
+        mock_read.return_value = Mock()
+        mock_call.return_value = Mock()
+
+        crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.generate_create(Mock())
+        # Real bound-method call — goes through bind_signature. Would TypeError
+        # if create_func_signature didn't include the dry_run parameter.
+        crd.create("f.yaml", dry_run=True)
+
+        # dry_run reached the helper via bound_args.arguments
+        args = mock_apply_dry.call_args[0][2]
+        self.assertTrue(args["dry_run"])
+
+
 class NotFoundRpcError(RpcError):
     """Test fixture: RpcError with NOT_FOUND status code."""
 

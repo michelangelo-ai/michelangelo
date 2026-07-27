@@ -902,8 +902,14 @@ class CRD:
             *self._extract_method_info(channel, self.full_name, "Create"),
         )
         create_func_signature = Signature(
-            [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
-            + [Parameter(name, Parameter.POSITIONAL_OR_KEYWORD) for name in ["file"]]
+            [
+                Parameter("self", Parameter.POSITIONAL_OR_KEYWORD),
+                # `file` is the only positional; `dry_run` mirrors the apply
+                # func_signature so apply_func_impl.create(_, dry_run=...) call
+                # passes bind_signature on the create-when-missing path.
+                Parameter("file", Parameter.POSITIONAL_OR_KEYWORD),
+                Parameter("dry_run", Parameter.POSITIONAL_OR_KEYWORD, default=False),
+            ]
         )
 
         bound_func = partial(create_func_impl, method_info)
