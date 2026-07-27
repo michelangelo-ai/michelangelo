@@ -268,3 +268,63 @@ class PipelineKillTest(TestCase):
             kill_func(self.mock_crd, namespace="test-ns", name="test-run", yes=True)
 
         self.assertIn("Kill operation failed", str(context.exception))
+
+
+class KillGrpcMetadataTest(TestCase):
+    """Regression: kill_func must resolve CRD metadata at call time.
+
+    Mirrors PR #1092's dev_run fix. If kill.py imports `METADATA_STUB` from
+    crd via `from ... import ...`, the local reference is bound to the empty
+    list captured at module load. The server then rejects with
+    `INVALID_ARGUMENT: missing service name, caller name, encoding`.
+    """
+
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.kill.MessageToDict")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.kill.ParseDict")
+    def test_kill_grpc_call_uses_crd_metadata(self, _parse, mock_to_dict):
+        """stub_method must be called with [*_self.metadata, ("ttl", "600")]."""
+        crd_metadata = [("service-name", "test-svc"), ("caller-name", "test-caller")]
+        mock_crd = Mock(spec=CRD)
+        mock_crd.name = "pipeline_run"
+        mock_crd.full_name = "michelangelo.api.v2.PipelineRunService"
+        mock_crd.metadata = crd_metadata
+        mock_crd.func_signature = {}
+
+        # bound_args must expose dry_run alongside the other fields
+        mock_signature = Mock()
+
+        def _bind(*args, **kwargs):
+            bound = Mock()
+            bound.arguments = {
+                "self": args[0] if args else kwargs.get("self"),
+                "namespace": kwargs.get("namespace"),
+                "name": kwargs.get("name"),
+                "yes": kwargs.get("yes", False),
+                "dry_run": kwargs.get("dry_run", False),
+            }
+            return bound
+
+        mock_signature.bind = _bind
+        mock_crd._read_signatures = Mock(return_value=mock_signature)
+        mock_crd.configure_parser = Mock()
+        mock_crd.generate_get = Mock()
+        mock_crd._extract_method_info = Mock(
+            return_value=("UpdatePipelineRun", MagicMock(), MagicMock())
+        )
+        mock_crd.get = Mock(return_value=Mock(spec=Message))
+        mock_to_dict.side_effect = [
+            {"pipeline_run": {"spec": {"placeholder": "v"}}},
+            {"pipeline_run": {"spec": {"kill": True}}},
+        ]
+
+        mock_stub = Mock(return_value=Mock(spec=Message))
+        mock_channel = Mock()
+        mock_channel.unary_unary.return_value = mock_stub
+
+        generate_kill(mock_crd, mock_channel)
+        mock_crd.kill(mock_crd, namespace="ns", name="run", yes=True, dry_run=False)
+
+        # The metadata kwarg must be the CRD's own metadata plus the ttl tuple,
+        # NOT the stale-import empty list.
+        _, kwargs = mock_stub.call_args
+        self.assertEqual(kwargs["metadata"], [*crd_metadata, ("ttl", "600")])

@@ -16,7 +16,6 @@ from grpc import Channel
 
 from michelangelo.cli.mactl.crd import (
     CRD,
-    METADATA_STUB,
     apply_dry_run_to_request,
     bind_signature,
     get_single_arg,
@@ -172,7 +171,10 @@ def generate_kill(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] =
 
         response = stub_method(
             request_input,
-            metadata=METADATA_STUB,
+            # Resolve CRD metadata at call time (not module load), mirroring
+            # pipeline/dev_run.py — `from crd import METADATA_STUB` captures
+            # the pre-init empty list and silently sends [] to the server.
+            metadata=[*_self.metadata, ("ttl", "600")],
             timeout=30,
         )
 
