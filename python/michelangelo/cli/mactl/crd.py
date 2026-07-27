@@ -314,8 +314,9 @@ def prepare_column_info(extra: Sequence[dict] = ()) -> list[dict]:
 
     ``extra`` is a per-CRD ``additional_columns`` list; each entry
     ``{"column_name": str, "retrieve_func": Callable[[Message], str]}`` is
-    appended after the built-in columns with ``max_length`` seeded from the
-    header length.
+    appended after the built-in columns. Each column's ``max_length`` is
+    seeded from ``len(column_name) + 1`` (the header string plus 1 for
+    trailing space) and grown per-row inside ``print_list_formatted``.
     """
     res = [
         {

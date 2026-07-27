@@ -1104,8 +1104,8 @@ class AdditionalColumnsHookTest(TestCase):
     def test_print_list_formatted_coerces_non_str(self):
         """retrieve_func returning non-str renders without AttributeError.
 
-        SF-1 from spec 043: probe returning int would crash `.ljust()` on
-        pre-F043 code — framework must str()-coerce.
+        A probe returning int would crash ``.ljust()`` — framework must
+        str()-coerce.
         """
         item = Mock()
         item.metadata.namespace = "ns"
@@ -1258,7 +1258,7 @@ class ValidatedAdditionalGetArgsTest(TestCase):
         self.assertEqual(self._crd()._validated_additional_get_args(), [])
 
     def test_dest_collision_with_builtin_raises(self):
-        """SF-3: dest shadowing a built-in `get` arg raises at parser wiring."""
+        """Dest shadowing a built-in `get` arg raises at parser wiring."""
         crd = self._crd()
         crd.additional_get_args = [
             {
@@ -1273,7 +1273,7 @@ class ValidatedAdditionalGetArgsTest(TestCase):
             crd._validated_additional_get_args()
 
     def test_filter_map_unknown_dest_raises(self):
-        """SF-2: filter_field_map dest with no matching arg entry raises."""
+        """filter_field_map dest with no matching arg entry raises."""
         crd = self._crd()
         crd.additional_get_args = [
             {
