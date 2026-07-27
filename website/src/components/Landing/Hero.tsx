@@ -19,7 +19,7 @@ export default function Hero(): React.ReactElement {
           The ML Platform Behind Uber&apos;s AI.
         </h1>
         <p className={styles.heroSubtitle}>
-          Open source and production-ready.
+          Now open source.
         </p>
         <div className={styles.heroTagline}>
           <AnimatedText />
