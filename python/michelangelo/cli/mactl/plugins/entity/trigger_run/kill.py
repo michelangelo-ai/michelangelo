@@ -62,6 +62,25 @@ def add_function_signature(crd: crd_module.CRD) -> None:
                         ),
                     },
                 },
+                {
+                    "func_signature": Parameter(
+                        "dry_run",
+                        Parameter.POSITIONAL_OR_KEYWORD,
+                        default=False,
+                    ),
+                    "args": ["--dry-run"],
+                    "kwargs": {
+                        "dest": "dry_run",
+                        "action": "store_true",
+                        "default": False,
+                        "help": (
+                            "Send the request with server-side dry-run "
+                            "(k8s.io UpdateOptions.dryRun=['All']); server "
+                            "validates permission and rolls back without "
+                            "flipping spec.kill."
+                        ),
+                    },
+                },
             ],
         },
     )
@@ -112,6 +131,10 @@ def generate_kill(
 
         request_input = input_class()
         ParseDict(current_dict, request_input, ignore_unknown_fields=True)
+        crd_module.apply_dry_run_to_request(
+            request_input, "update_options", bound_args.arguments
+        )
+        _dry_run = bound_args.arguments.get("dry_run", False)
 
         _LOG.info(
             "KILL Request input (%r) ready: %r",
@@ -133,6 +156,10 @@ def generate_kill(
             metadata=crd_module.METADATA_STUB,
             timeout=30,
         )
+
+        if _dry_run:
+            _LOG.info("Dry-run kill completed (%r): %r", type(response), response)
+            return response
 
         response_dict = MessageToDict(response, preserving_proto_field_name=True)
         resource_name = _self.name
