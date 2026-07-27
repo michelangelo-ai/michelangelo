@@ -1336,3 +1336,91 @@ class ReadSignaturesHookTest(TestCase):
         ]
         sig = crd._read_signatures("apply")
         self.assertNotIn("pipeline_name", sig.parameters)
+
+
+class FilterEndToEndTest(TestCase):
+    """End-to-end: filter flows through generate_list → bind → _list_func_impl.
+
+    Regression against a class of bug where the impl-level logic works but
+    the wiring rejects the filter kwarg at bind_signature time. Direct
+    ``_list_func_impl(bound_args)`` tests hide this by hand-building
+    bound_args; this test goes through ``crd.list(...)`` bound-method call.
+    """
+
+    @patch.object(CRD, "_extract_method_info")
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.ParseDict")
+    def test_crd_list_call_accepts_filter_kwarg(self, _parse, mock_call, mock_extract):
+        """`crd.list(pipeline_name="x")` must not TypeError at bind."""
+        mock_extract.return_value = ("ListTestCrd", _recording_input_class(), Mock)
+        crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.filter_field_map = {"pipeline_name": "spec.pipeline_name"}
+        crd.additional_columns = ()
+
+        captured = {}
+
+        def _capture(_info, req):
+            captured["req"] = req
+            field_desc = Mock()
+            field_desc.name = "test_list"
+            return Mock(ListFields=Mock(return_value=[(field_desc, Mock(items=[]))]))
+
+        mock_call.side_effect = _capture
+
+        crd.generate_list(Mock())
+        # Real bound-method call — goes through bind_signature. Would TypeError
+        # if list_func_signature didn't include the filter dest.
+        crd.list(namespace="ns", pipeline_name="trainer-v2")
+
+        criteria = captured["req"].list_options_ext.operation.criterion
+        self.assertEqual(len(criteria), 1)
+        self.assertEqual(criteria[0].field_name, "spec.pipeline_name")
+
+    @patch.object(CRD, "_extract_method_info")
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.ParseDict")
+    def test_get_fallthrough_forwards_filter_to_list(
+        self, _parse, mock_call, mock_extract
+    ):
+        """`<crd> get --filter foo` (no name) falls through to list with filter."""
+        mock_extract.return_value = ("Op", _recording_input_class(), Mock)
+        crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.filter_field_map = {"pipeline_name": "spec.pipeline_name"}
+        crd.additional_columns = ()
+
+        captured = {}
+
+        def _capture(_info, req):
+            captured["req"] = req
+            field_desc = Mock()
+            field_desc.name = "test_list"
+            return Mock(ListFields=Mock(return_value=[(field_desc, Mock(items=[]))]))
+
+        mock_call.side_effect = _capture
+
+        info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.service.TestCrd",
+            method_name="Get",
+            input_class=_recording_input_class(),
+            output_class=Mock,
+        )
+        get_func_impl(
+            info,
+            Mock(
+                arguments={
+                    "self": crd,
+                    "namespace": "ns",
+                    "name": "",
+                    "name_flag": "",
+                    "all_namespaces": False,
+                    "output": "table",
+                    "limit": 100,
+                    "pipeline_name": "trainer-v2",
+                }
+            ),
+        )
+
+        criteria = captured["req"].list_options_ext.operation.criterion
+        self.assertEqual(len(criteria), 1)
+        self.assertEqual(criteria[0].field_name, "spec.pipeline_name")

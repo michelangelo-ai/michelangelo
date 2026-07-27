@@ -289,11 +289,23 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
 
     _LOG.debug("No name argument passed. List CRD in the namespace.")
     _self.generate_list(crd_method_info.channel)
+    # Forward any filter dest args declared in _self.filter_field_map so
+    # `<crd> get --filter foo=bar` (no name) falls through to list with the
+    # filter applied, not silently dropped.
+    filter_field_map = getattr(_self, "filter_field_map", None)
+    if not isinstance(filter_field_map, dict):
+        filter_field_map = {}
+    filter_kwargs = {
+        k: bound_args.arguments[k]
+        for k in filter_field_map
+        if k in bound_args.arguments
+    }
     return _self.list(
         namespace="" if all_namespaces else namespace,
         limit=bound_args.arguments.get("limit", 100),
         all_namespaces=all_namespaces,
         output=output,
+        **filter_kwargs,
     )
 
 
@@ -978,6 +990,12 @@ class CRD:
                     default=False,
                 ),
                 Parameter("output", Parameter.POSITIONAL_OR_KEYWORD, default="table"),
+            ]
+            + [
+                # Per-CRD filter dests, so `_self.list(**filter_kwargs)` (called
+                # from get→list fall-through) doesn't get rejected by bind.
+                Parameter(dest, Parameter.POSITIONAL_OR_KEYWORD, default=None)
+                for dest in getattr(self, "filter_field_map", {})
             ]
         )
 
