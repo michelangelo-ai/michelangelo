@@ -2,7 +2,7 @@ name: Integration tests
 
 on:
   workflow_run:
-    workflows: ["Build examples Docker image", "Nightly Build"]
+    workflows: ["Nightly Build"]
     types: [completed]
   workflow_dispatch:
     inputs:
@@ -31,8 +31,6 @@ on:
         required: false
         type: string
         default: "main"
-  schedule:
-    - cron: "0 3 * * *"   # 03:00 UTC every day
 
 jobs:
   sandbox-e2e:
