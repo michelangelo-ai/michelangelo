@@ -44,6 +44,11 @@ DEFAULT_CONFIG = {
     # OSS apiserver writes ``pipelinerun.michelangelo/environment``; downstream
     # distributions may use a different key.
     "pipeline_run_environment_label": "pipelinerun.michelangelo/environment",
+    # Import path for the generated ``pipeline_pb2`` module the pipeline plugin
+    # consults for PipelineType enum names + values. Downstream distributions
+    # that extend the enum can point this at their own module without patching
+    # the pipeline plugin source.
+    "pipeline_type_pb2_module": "michelangelo.gen.api.v2.pipeline_pb2",
 }
 
 

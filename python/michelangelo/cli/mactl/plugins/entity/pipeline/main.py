@@ -25,6 +25,9 @@ from michelangelo.cli.mactl.plugins.entity.pipeline.dev_run import (
     convert_crd_metadata_pipeline_dev_run,
     generate_dev_run,
 )
+from michelangelo.cli.mactl.plugins.entity.pipeline.get import (
+    add_get_filters,
+)
 from michelangelo.cli.mactl.plugins.entity.pipeline.run import (
     add_function_signature as add_run_function_signature,
 )
@@ -55,6 +58,7 @@ def apply_plugins(crd: CRD, channel: Channel, *_, **__):
     crd.generate_delete = MethodType(
         lambda self, ch, parser: generate_delete(self, ch, parser), crd
     )
+    add_get_filters(crd)
     _LOG.info("Plugin entities applied successfully to crd: %s", crd)
 
 
