@@ -290,7 +290,11 @@ func (m *mysqlMetadataStorage) List(ctx context.Context, typeMeta *metav1.TypeMe
 	// that case applies before we start writing the query.
 	orderBySQL := ""
 	if listOptionsExt != nil && len(listOptionsExt.OrderBy) > 0 {
-		orderBySQL = buildOrderBySQL(listOptionsExt.OrderBy)
+		var err error
+		orderBySQL, err = buildOrderBySQL(listOptionsExt.OrderBy, indexPathToKeyMap)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Selector-string path: when the structured proto path isn't being used,
@@ -985,6 +989,17 @@ func buildFieldSelectorSQL(fieldSelectorStr string, indexPathToKeyMap map[string
 	return queryStr.String(), params, nil
 }
 
+// validOrderByColumnName matches MySQL unquoted-identifier-safe characters
+// only (letters, digits, underscore). Applied to the CRD-prefix-stripped
+// remainder of a caller-supplied OrderBy.Field before it is interpolated as
+// a raw backtick-quoted identifier, since identifier positions can't be
+// parameterized like `?`-bound literal values can. This is the load-bearing
+// injection control — indexPathToKeyMap is always nil in both real call
+// sites (apiserver, controllermgr) as shipped, so it cannot be relied on as
+// the primary defense; see indexPathToKeyMap (when non-nil) for how it's
+// layered in as opportunistic defense-in-depth.
+var validOrderByColumnName = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
+
 // buildOrderBySQL builds the ORDER BY clause from a list of OrderBy specs.
 //
 // Each OrderBy.Field is resolved as follows (matches internal buildOrderByQuery):
@@ -994,10 +1009,21 @@ func buildFieldSelectorSQL(fieldSelectorStr string, indexPathToKeyMap map[string
 //  3. Else if the (CRD-stripped) remainder equals orderByLabelField → emit
 //     orderByLabelColumn (which is a CTE column reference; the caller is
 //     responsible for prepending the matching WITH clause).
-//  4. Otherwise the remainder is used as the bare column name.
-func buildOrderBySQL(orderBy []*apipb.OrderBy) string {
+//  4. Else if indexPathToKeyMap is non-nil: use the mapped column if the
+//     remainder is a key in it, otherwise reject (codes.InvalidArgument) —
+//     mirrors buildFieldCriterionSQL's map-enforcement pattern. The map is
+//     always nil in production today (see validOrderByColumnName), so this
+//     branch is opportunistic defense-in-depth, not the primary control.
+//  5. Otherwise (indexPathToKeyMap nil) the remainder is used as the bare
+//     column name, gated by validOrderByColumnName before interpolation.
+//
+// Returns an error (codes.InvalidArgument) if a resolved, non-label column
+// name fails the identifier-syntax check — this is the fix for a SQL
+// injection where an unvalidated OrderBy.Field was interpolated directly
+// into a backtick-quoted identifier with no escaping.
+func buildOrderBySQL(orderBy []*apipb.OrderBy, indexPathToKeyMap map[string]string) (string, error) {
 	if len(orderBy) == 0 {
-		return ""
+		return "", nil
 	}
 	var clauses []string
 	for _, order := range orderBy {
@@ -1012,6 +1038,10 @@ func buildOrderBySQL(orderBy []*apipb.OrderBy) string {
 			} else if remainder == orderByLabelField {
 				colName = orderByLabelColumn
 				isLabelValueColumn = true
+			} else if col, ok := indexPathToKeyMap[remainder]; ok {
+				colName = col
+			} else if indexPathToKeyMap != nil {
+				return "", status.Errorf(codes.InvalidArgument, "invalid order_by field: %v", order.Field)
 			} else {
 				colName = remainder
 			}
@@ -1024,10 +1054,13 @@ func buildOrderBySQL(orderBy []*apipb.OrderBy) string {
 			// orderByLabelColumn already includes its own backticks.
 			clauses = append(clauses, colName+" "+dir)
 		} else {
+			if !validOrderByColumnName.MatchString(colName) {
+				return "", status.Errorf(codes.InvalidArgument, "invalid order_by field: %v", order.Field)
+			}
 			clauses = append(clauses, fmt.Sprintf("`%s` %s", colName, dir))
 		}
 	}
-	return " ORDER BY " + strings.Join(clauses, ", ")
+	return " ORDER BY " + strings.Join(clauses, ", "), nil
 }
 
 // extractMatchValue unpacks a gogo-protobuf types.Any match value into a string.

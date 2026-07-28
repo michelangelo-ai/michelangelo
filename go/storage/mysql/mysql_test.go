@@ -346,9 +346,11 @@ func TestBuildCriterionSQL_NilOperation(t *testing.T) {
 
 func TestBuildOrderBySQL(t *testing.T) {
 	cases := []struct {
-		name string
-		in   []*apipb.OrderBy
-		want string
+		name              string
+		in                []*apipb.OrderBy
+		indexPathToKeyMap map[string]string
+		want              string
+		wantErr           bool
 	}{
 		{
 			name: "empty",
@@ -377,10 +379,58 @@ func TestBuildOrderBySQL(t *testing.T) {
 			},
 			want: " ORDER BY `create_time` DESC, `name` ASC",
 		},
+		{
+			// Literal shape of the reported injection payload: closes the
+			// identifier's backtick early to inject an arbitrary expression.
+			name: "injection_payload_rejected",
+			in: []*apipb.OrderBy{
+				{Field: "name` = (SELECT SLEEP(5))-- -", Dir: apipb.SORT_ORDER_ASC},
+			},
+			wantErr: true,
+		},
+		{
+			name: "sql_metacharacters_rejected",
+			in: []*apipb.OrderBy{
+				{Field: "pipeline_run.name; DROP TABLE pipeline_run", Dir: apipb.SORT_ORDER_ASC},
+			},
+			wantErr: true,
+		},
+		{
+			name: "space_and_parens_rejected",
+			in: []*apipb.OrderBy{
+				{Field: "pipeline_run.updatexml(1, concat(0x7e, version()), 1)", Dir: apipb.SORT_ORDER_ASC},
+			},
+			wantErr: true,
+		},
+		{
+			// When indexPathToKeyMap is non-nil, a syntactically-valid field
+			// not present in the map is rejected, mirroring
+			// buildFieldCriterionSQL's map-enforcement behavior.
+			name: "populated_map_rejects_unmapped_field",
+			in: []*apipb.OrderBy{
+				{Field: "pipeline_run.some_field", Dir: apipb.SORT_ORDER_ASC},
+			},
+			indexPathToKeyMap: map[string]string{"other_field": "other_column"},
+			wantErr:           true,
+		},
+		{
+			name: "populated_map_allows_mapped_field",
+			in: []*apipb.OrderBy{
+				{Field: "pipeline_run.some_field", Dir: apipb.SORT_ORDER_ASC},
+			},
+			indexPathToKeyMap: map[string]string{"some_field": "some_column"},
+			want:              " ORDER BY `some_column` ASC",
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			require.Equal(t, c.want, buildOrderBySQL(c.in))
+			got, err := buildOrderBySQL(c.in, c.indexPathToKeyMap)
+			if c.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, c.want, got)
 		})
 	}
 }
