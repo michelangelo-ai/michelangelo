@@ -237,8 +237,10 @@ jobs:
       - name: Set nightly chart version
         run: |
           DATE_TAG="${{ needs.check-changes.outputs.date_tag }}"
-          sed -i "s/^version:.*/version: 0.3.0-nightly.${DATE_TAG}/" helm/michelangelo/Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"0.3.0-nightly.${DATE_TAG}\"/" helm/michelangelo/Chart.yaml
+          BASE_VERSION=$(grep '^version:' helm/michelangelo/Chart.yaml | head -1 | sed 's/^version: *//')
+          NIGHTLY_VERSION="${BASE_VERSION}-nightly.${DATE_TAG}"
+          sed -i "s/^version:.*/version: ${NIGHTLY_VERSION}/" helm/michelangelo/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${NIGHTLY_VERSION}\"/" helm/michelangelo/Chart.yaml
 
       - name: Add Helm repos
         run: |
@@ -289,7 +291,8 @@ jobs:
       - name: Set nightly version
         run: |
           DATE_TAG="${{ needs.check-changes.outputs.date_tag }}"
-          NIGHTLY_VERSION="0.3.0-nightly.${DATE_TAG}"
+          BASE_VERSION=$(jq -r '.version' packages/core/package.json)
+          NIGHTLY_VERSION="${BASE_VERSION}-nightly.${DATE_TAG}"
           jq ".version = \"$NIGHTLY_VERSION\"" packages/core/package.json > /tmp/core-pkg.json && mv /tmp/core-pkg.json packages/core/package.json
           jq ".version = \"$NIGHTLY_VERSION\""  packages/rpc/package.json  > /tmp/rpc-pkg.json  && mv /tmp/rpc-pkg.json  packages/rpc/package.json
           echo "Publishing npm nightly: $NIGHTLY_VERSION"
