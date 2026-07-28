@@ -2,9 +2,11 @@
 
 from types import SimpleNamespace
 from unittest import TestCase
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from michelangelo.cli.mactl.plugins.entity.pipeline.get import (
+    _DEFAULT_PB2_MODULE,
+    _load_pipeline_pb2,
     _normalize_pipeline_type,
     _render_owner,
     _render_type,
@@ -12,8 +14,64 @@ from michelangelo.cli.mactl.plugins.entity.pipeline.get import (
 )
 
 
+class LoadPipelinePb2Test(TestCase):
+    """The proto module path is configurable via ``pipeline_type_pb2_module``."""
+
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.get.importlib.import_module")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.get.load_config")
+    def test_defaults_to_v2_when_config_absent(self, mock_load, mock_import):
+        """Missing key → uses the default OSS v2 module path."""
+        mock_load.return_value = {}
+        _load_pipeline_pb2()
+        mock_import.assert_called_once_with(_DEFAULT_PB2_MODULE)
+
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.get.importlib.import_module")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.get.load_config")
+    def test_honors_config_override(self, mock_load, mock_import):
+        """Config value is passed straight to importlib.import_module."""
+        mock_load.return_value = {
+            "pipeline_type_pb2_module": "downstream.pkg.pipeline_pb2"
+        }
+        _load_pipeline_pb2()
+        mock_import.assert_called_once_with("downstream.pkg.pipeline_pb2")
+
+
+def _stub_pb2(names_with_ids):
+    """Build a stand-in for a pipeline_pb2 module carrying the given enum."""
+    stub = MagicMock()
+    stub.PipelineType.DESCRIPTOR.values = [
+        SimpleNamespace(name=n, number=i) for n, i in names_with_ids
+    ]
+
+    def _name(value):
+        for n, i in names_with_ids:
+            if i == value:
+                return n
+        raise ValueError(f"{value} is not a valid PipelineType")
+
+    stub.PipelineType.Name.side_effect = _name
+    return stub
+
+
+_OSS_ENUM = [
+    ("PIPELINE_TYPE_INVALID", 0),
+    ("PIPELINE_TYPE_TRAIN", 1),
+    ("PIPELINE_TYPE_EVAL", 2),
+]
+_EXTENDED_ENUM = [*_OSS_ENUM, ("PIPELINE_TYPE_TRAIN_LLM", 18)]
+
+
 class NormalizePipelineTypeTest(TestCase):
-    """--type flag value normalization."""
+    """--type flag value normalization uses whichever pb2 is configured."""
+
+    def setUp(self):
+        """Pin the plugin's pb2 loader to the OSS 3-value enum stub."""
+        patcher = patch(
+            "michelangelo.cli.mactl.plugins.entity.pipeline.get._load_pipeline_pb2",
+            return_value=_stub_pb2(_OSS_ENUM),
+        )
+        self.mock_load = patcher.start()
+        self.addCleanup(patcher.stop)
 
     def test_short_name_uppercase(self):
         """Short name in upper case gets the PIPELINE_TYPE_ prefix."""
@@ -42,9 +100,17 @@ class NormalizePipelineTypeTest(TestCase):
         self.assertIn("TRAIN", msg)
         self.assertNotIn("INVALID", msg)
 
-    def test_invalid_sentinel_accepted(self):
-        """PIPELINE_TYPE_INVALID is a real enum value so normalize accepts it."""
-        self.assertEqual(_normalize_pipeline_type("INVALID"), "PIPELINE_TYPE_INVALID")
+
+class NormalizeAcceptsExtendedEnumTest(TestCase):
+    """A downstream pb2 with extra values (e.g. TRAIN_LLM) is accepted."""
+
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.get._load_pipeline_pb2")
+    def test_extended_value_accepted(self, mock_load):
+        """Configured pb2 exposing TRAIN_LLM → --type TRAIN_LLM validates."""
+        mock_load.return_value = _stub_pb2(_EXTENDED_ENUM)
+        self.assertEqual(
+            _normalize_pipeline_type("TRAIN_LLM"), "PIPELINE_TYPE_TRAIN_LLM"
+        )
 
 
 class RenderOwnerTest(TestCase):
@@ -74,15 +140,24 @@ class RenderOwnerTest(TestCase):
 class RenderTypeTest(TestCase):
     """TYPE column value function."""
 
+    def setUp(self):
+        """Pin the plugin's pb2 loader to the OSS 3-value enum stub."""
+        patcher = patch(
+            "michelangelo.cli.mactl.plugins.entity.pipeline.get._load_pipeline_pb2",
+            return_value=_stub_pb2(_OSS_ENUM),
+        )
+        self.mock_load = patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_strips_prefix(self):
         """PipelineType.TRAIN = 1 → short name 'TRAIN'."""
         item = SimpleNamespace(spec=SimpleNamespace(type=1))
         self.assertEqual(_render_type(item), "TRAIN")
 
-    def test_invalid_zero_renders_as_invalid_short(self):
-        """PipelineType.INVALID = 0 → 'INVALID' after prefix strip."""
-        item = SimpleNamespace(spec=SimpleNamespace(type=0))
-        self.assertEqual(_render_type(item), "INVALID")
+    def test_unknown_enum_value_renders_as_numeric_fallback(self):
+        """Configured pb2 without this value → numeric fallback, no exception."""
+        item = SimpleNamespace(spec=SimpleNamespace(type=42))
+        self.assertEqual(_render_type(item), "42")
 
 
 class AddGetFiltersTest(TestCase):
@@ -118,7 +193,11 @@ class AddGetFiltersTest(TestCase):
             ["OWNER", "TYPE"],
         )
 
-    def test_type_arg_uses_normalizer_as_argparse_type(self):
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.get._load_pipeline_pb2",
+        return_value=_stub_pb2(_OSS_ENUM),
+    )
+    def test_type_arg_uses_normalizer_as_argparse_type(self, _mock_load):
         """--type registers _normalize_pipeline_type as its argparse type callable."""
         crd = self._fresh_crd()
         add_get_filters(crd)
