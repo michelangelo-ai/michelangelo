@@ -4,6 +4,7 @@ A command line interface to interact with the Michelangelo API server via gRPC.
 """
 
 import importlib
+import json
 import logging
 import pkgutil
 import re
@@ -45,6 +46,35 @@ _LOG = getLogger(__name__)
 
 PWD = Path(__file__).parent.resolve()
 DEFAULT_DIR_PLUGINS = PWD / "plugins"
+
+# gRPC channel options: retry transient UNAVAILABLE + round-robin across
+# resolved endpoints. Applied to every channel constructed below so a
+# briefly-flaky backend or single-node outage no longer surfaces as a
+# hard failure to the user. UNAVAILABLE is the only retryable code per
+# gRPC spec (server didn't ack, safe to replay); round_robin needs a
+# multi-endpoint resolver to actually failover — with pick_first it is
+# a no-op but harmless.
+_RETRY_SERVICE_CONFIG = json.dumps(
+    {
+        "loadBalancingConfig": [{"round_robin": {}}],
+        "methodConfig": [
+            {
+                "name": [{}],
+                "retryPolicy": {
+                    "maxAttempts": 4,
+                    "initialBackoff": "0.5s",
+                    "maxBackoff": "5s",
+                    "backoffMultiplier": 2,
+                    "retryableStatusCodes": ["UNAVAILABLE"],
+                },
+            }
+        ],
+    }
+)
+_CHANNEL_OPTIONS = [
+    ("grpc.enable_retries", 1),
+    ("grpc.service_config", _RETRY_SERVICE_CONFIG),
+]
 
 _LOG.info(f"Config: ADDRESS={ADDRESS}, USE_TLS={USE_TLS}, METADATA={METADATA}")
 
@@ -737,7 +767,7 @@ def run():
         cli_proxy_class = proxy_mod.CLIProxy
         with cli_proxy_class() as proxy:
             local_address = proxy.create_tunnel(ADDRESS)
-            with insecure_channel(local_address) as channel:
+            with insecure_channel(local_address, options=_CHANNEL_OPTIONS) as channel:
                 return main(channel, plugin_registry)
 
     if USE_TLS:
@@ -747,7 +777,9 @@ def run():
             ADDRESS,
         )
         # Use secure TLS connection
-        with secure_channel(ADDRESS, ssl_channel_credentials()) as channel:
+        with secure_channel(
+            ADDRESS, ssl_channel_credentials(), options=_CHANNEL_OPTIONS
+        ) as channel:
             return main(channel, plugin_registry)
 
     _LOG.info(
@@ -756,7 +788,7 @@ def run():
         ADDRESS,
     )
     # Use insecure connection for local development
-    with insecure_channel(ADDRESS) as channel:
+    with insecure_channel(ADDRESS, options=_CHANNEL_OPTIONS) as channel:
         return main(channel, plugin_registry)
 
 
