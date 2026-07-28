@@ -50,7 +50,7 @@ jobs:
         if: steps.check.outputs.changed == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: 24.14.1
+          node-version: 24.18.0
           registry-url: 'https://registry.npmjs.org'
           cache: 'yarn'
           cache-dependency-path: javascript/yarn.lock

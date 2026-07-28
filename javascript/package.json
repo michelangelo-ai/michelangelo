@@ -1,7 +1,7 @@
 {
   "name": "javascript",
   "engines": {
-    "node": "24.14.1",
+    "node": "24.18.0",
     "yarn": "^1.22.22"
   },
   "private": true,

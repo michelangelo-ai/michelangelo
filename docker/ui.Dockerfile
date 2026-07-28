@@ -1,5 +1,5 @@
-# Use Node.js 24.14.1 to match the engines requirement
-FROM node:24.14.1-alpine AS builder
+# Use Node.js 24.18.0 to match the engines requirement
+FROM node:24.18.0-alpine AS builder
 
 # Install dependencies for the gen-grpc-client.sh script
 RUN apk add --no-cache bash git perl curl
