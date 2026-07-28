@@ -355,16 +355,32 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
 
     _LOG.debug("No name argument passed. List CRD in the namespace.")
     _self.generate_list(crd_method_info.channel)
-    # Forward any filter dest args declared in _self.filter_field_map so
-    # `<crd> get -n <ns> --<attr> <val>` (no name) falls through to list
-    # with the filter applied, not silently dropped.
+    # Forward any filter arg declared on the get command so that
+    # `<crd> get -n <ns> --<attr> <val>` (no name) falls through to list with
+    # the filter applied, not silently dropped. Sources: every dest in
+    # additional_get_args (plugin-declared filter args) AND every string-form
+    # key in filter_field_map (a filter dest may be registered there directly
+    # by simpler plugins without also appearing in additional_get_args).
+    forward_dests: set[str] = set()
+    additional_get_args = getattr(_self, "additional_get_args", None)
+    if isinstance(additional_get_args, list):
+        for arg_spec in additional_get_args:
+            dest = (
+                arg_spec.get("kwargs", {}).get("dest")
+                if isinstance(arg_spec, dict)
+                else None
+            )
+            if dest:
+                forward_dests.add(dest)
     filter_field_map = getattr(_self, "filter_field_map", None)
-    if not isinstance(filter_field_map, dict):
-        filter_field_map = {}
+    if isinstance(filter_field_map, dict):
+        for k, v in filter_field_map.items():
+            # Skip callable-form entries — their key is a synthetic label,
+            # not an arg dest, and forwarding it would inject an unknown kwarg.
+            if isinstance(v, (str, dict)):
+                forward_dests.add(k)
     filter_kwargs = {
-        k: bound_args.arguments[k]
-        for k in filter_field_map
-        if k in bound_args.arguments
+        k: bound_args.arguments[k] for k in forward_dests if k in bound_args.arguments
     }
     return _self.list(
         namespace="" if all_namespaces else namespace,
@@ -515,6 +531,18 @@ def _list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
 
     filter_field_map = getattr(_self, "filter_field_map", {}) if _self else {}
     for arg_dest, spec in filter_field_map.items():
+        # Callable spec: signature (bound_args_arguments) -> list of
+        # {"field": str, "operator": int, "value": str} dicts. Used when
+        # one flag maps to multiple criteria or when several flags coordinate
+        # (e.g. a mutually-exclusive group). The callable itself gates on
+        # bound_args and may raise for validation errors.
+        if callable(spec):
+            for c in spec(bound_args.arguments):
+                criterion = request_input.list_options_ext.operation.criterion.add()
+                criterion.field_name = c["field"]
+                criterion.operator = c.get("operator", 1)
+                criterion.match_value.Pack(StringValue(value=str(c["value"])))
+            continue
         value = bound_args.arguments.get(arg_dest)
         if value in (None, "", (), []):
             continue
@@ -741,10 +769,11 @@ class CRD:
         # _list_func_impl / list_func_impl for how each list is consumed.
         self.additional_columns: list[dict] = []
         self.additional_get_args: list[dict] = []
-        # Value is a plain field-name string (defaults to CRITERION_OPERATOR_EQUAL)
-        # or a dict {"field": str, "operator": int} for per-field operator override
-        # (e.g. CRITERION_OPERATOR_LIKE for partial-match filters).
-        self.filter_field_map: dict[str, str | dict] = {}
+        # Value shapes: str = field name (defaults to EQUAL); dict {"field",
+        # "operator"} = per-field operator (e.g. LIKE); callable
+        # (bound_args_arguments) -> list of {"field","operator","value"} =
+        # dynamic multi-criterion (mutex groups, one-flag-many-criteria).
+        self.filter_field_map: dict[str, str | dict | Callable] = {}
         self.func_signature: dict[str, dict] = {
             "apply": {
                 "help": "Apply an Entity (create or update)",
@@ -1012,7 +1041,12 @@ class CRD:
                     f"`get` argument on CRD {self.name!r}"
                 )
             extra_dests.add(dest)
-        for dest in self.filter_field_map:
+        for dest, spec in self.filter_field_map.items():
+            # Callable specs use a synthetic key (not an arg dest) — they
+            # coordinate across multiple flags whose dests are declared
+            # separately in additional_get_args. Skip the dest-cross-check.
+            if callable(spec):
+                continue
             if dest not in extra_dests:
                 raise ValueError(
                     f"filter_field_map references dest {dest!r} but no matching "
@@ -1202,6 +1236,20 @@ class CRD:
         )
 
         self.configure_parser("list", parser)
+        # Union filter_field_map keys AND additional_get_args dests: some
+        # plugins (F011/F013 shape) put every filter dest in filter_field_map;
+        # others (F014 shape with a callable) declare dests only in
+        # additional_get_args and coordinate them via a single callable entry
+        # in filter_field_map. The get→list fallthrough forwards from both.
+        forward_dests: set[str] = set(getattr(self, "filter_field_map", {}) or ())
+        for arg_spec in getattr(self, "additional_get_args", ()) or ():
+            dest = (
+                arg_spec.get("kwargs", {}).get("dest")
+                if isinstance(arg_spec, dict)
+                else None
+            )
+            if dest:
+                forward_dests.add(dest)
         list_func_signature = Signature(
             [
                 Parameter("self", Parameter.POSITIONAL_OR_KEYWORD),
@@ -1218,7 +1266,7 @@ class CRD:
                 # Per-CRD filter dests, so `_self.list(**filter_kwargs)` (called
                 # from get→list fall-through) doesn't get rejected by bind.
                 Parameter(dest, Parameter.POSITIONAL_OR_KEYWORD, default=None)
-                for dest in getattr(self, "filter_field_map", {})
+                for dest in sorted(forward_dests)
             ]
         )
 

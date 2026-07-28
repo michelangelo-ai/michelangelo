@@ -1,0 +1,147 @@
+"""Revision get filters + display columns (Type, User, Base Resource).
+
+Three type-scoped filters (``--pipeline`` / ``--model`` / ``--deployment``,
+mutually exclusive, LIKE match on base_resource.name) and one independent
+``--owner`` filter (EQUAL). Uses the framework's callable-form
+``filter_field_map`` value to express the mutex + one-flag-two-criteria
+composite.
+"""
+
+from argparse import ArgumentTypeError
+from inspect import Parameter
+from logging import getLogger
+
+from google.protobuf.message import Message
+
+from michelangelo.cli.mactl.crd import CRD
+
+_LOG = getLogger(__name__)
+
+_TYPE_FLAGS = ("pipeline", "model", "deployment")
+_CRITERION_OPERATOR_EQUAL = 1
+_CRITERION_OPERATOR_LIKE = 9
+
+
+def _build_type_criteria(bound_args_arguments: dict) -> list:
+    """Emit base_type + base_resource_name criteria pair for the type flags.
+
+    Enforces mutual exclusion — >1 type flag set raises ``ArgumentTypeError``.
+    Empty pattern degrades to LIKE ``%`` (match every name of that type).
+    Returns ``[]`` when no type flag is set.
+    """
+    given = [t for t in _TYPE_FLAGS if bound_args_arguments.get(t) is not None]
+    if len(given) > 1:
+        raise ArgumentTypeError(
+            f"conflict options <{', '.join(given)}> are set at the same time"
+        )
+    if not given:
+        return []
+    type_kind = given[0]
+    pattern = bound_args_arguments.get(type_kind) or "%"
+    return [
+        {
+            "field": "revision.spec.base_type.kind",
+            "operator": _CRITERION_OPERATOR_EQUAL,
+            "value": type_kind,
+        },
+        {
+            "field": "revision.spec.base_resource.name",
+            "operator": _CRITERION_OPERATOR_LIKE,
+            "value": pattern,
+        },
+    ]
+
+
+def _render_type(item: Message) -> str:
+    """TYPE column — base_type.kind, empty when unset."""
+    if item.spec.HasField("base_type"):
+        return item.spec.base_type.kind or ""
+    return ""
+
+
+def _render_user(item: Message) -> str:
+    """USER column — owner.name, empty when unset."""
+    if item.spec.HasField("owner"):
+        return item.spec.owner.name or ""
+    return ""
+
+
+def _render_base_resource(item: Message) -> str:
+    """BASE_RESOURCE column — base_resource.name, empty when unset."""
+    if item.spec.HasField("base_resource"):
+        return item.spec.base_resource.name or ""
+    return ""
+
+
+def _type_flag_arg(name: str, help_text: str) -> dict:
+    """Build an additional_get_args entry for one of the 3 type flags.
+
+    Uses ``default=None`` (not empty string) so ``_build_type_criteria`` can
+    distinguish "flag omitted" from "flag given with empty value".
+    """
+    return {
+        "func_signature": Parameter(
+            name, Parameter.POSITIONAL_OR_KEYWORD, default=None
+        ),
+        "args": [f"--{name}"],
+        "kwargs": {
+            "dest": name,
+            "type": str,
+            "default": None,
+            "required": False,
+            "help": help_text,
+        },
+    }
+
+
+def add_get_filters(crd: CRD) -> None:
+    """Register 4 filter args and 3 columns on the revision CRD."""
+    crd.additional_get_args.extend(
+        [
+            _type_flag_arg(
+                "pipeline",
+                "list revisions whose base_type is pipeline "
+                "(optional pattern matches base_resource.name)",
+            ),
+            _type_flag_arg(
+                "model",
+                "list revisions whose base_type is model "
+                "(optional pattern matches base_resource.name)",
+            ),
+            _type_flag_arg(
+                "deployment",
+                "list revisions whose base_type is deployment "
+                "(optional pattern matches base_resource.name)",
+            ),
+            {
+                "func_signature": Parameter(
+                    "owner", Parameter.POSITIONAL_OR_KEYWORD, default=""
+                ),
+                "args": ["--owner"],
+                "kwargs": {
+                    "dest": "owner",
+                    "type": str,
+                    "default": "",
+                    "required": False,
+                    "help": "list revisions owned by the specified user",
+                },
+            },
+        ]
+    )
+    crd.filter_field_map.update(
+        {
+            # Callable — handles mutex + one-flag-two-criteria composite for
+            # the type-scoped flags. Synthetic key (not an arg dest).
+            "_revision_type_group": _build_type_criteria,
+            # Independent owner filter, plain EQUAL.
+            "owner": "revision.spec.owner.name",
+        }
+    )
+    crd.additional_columns.extend(
+        [
+            {"column_name": "TYPE", "retrieve_func": _render_type},
+            {"column_name": "USER", "retrieve_func": _render_user},
+            {"column_name": "BASE_RESOURCE", "retrieve_func": _render_base_resource},
+        ]
+    )
+    _LOG.debug("Revision get filters + columns registered on crd=%r", crd)
