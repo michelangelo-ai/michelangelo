@@ -173,7 +173,7 @@ DEFAULT_CHANNEL_OPTIONS: list[tuple[str, object]] = [
 
 
 def get_channel_options() -> list[tuple[str, object]]:
-    """gRPC channel options applied by mactl's run() to every channel.
+    """Return gRPC channel options applied by mactl's run() to every channel.
 
     Extension point: downstream consumers (e.g. an internal wrapper
     that needs a different retry budget, TLS knobs, or LB policy) can

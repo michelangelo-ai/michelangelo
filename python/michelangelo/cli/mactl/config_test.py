@@ -419,6 +419,4 @@ class ChannelOptionsTest(TestCase):
         result = get_channel_options()
         result.append(("grpc.max_send_message_length", 1))
         # Default is unchanged.
-        self.assertNotIn(
-            ("grpc.max_send_message_length", 1), DEFAULT_CHANNEL_OPTIONS
-        )
+        self.assertNotIn(("grpc.max_send_message_length", 1), DEFAULT_CHANNEL_OPTIONS)
