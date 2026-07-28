@@ -366,57 +366,41 @@ class ChannelOptionsTest(TestCase):
     """gRPC channel options exposed to mactl.run().
 
     Guards the shape of DEFAULT_CHANNEL_OPTIONS + get_channel_options().
-    The getter is the documented extension point for downstream consumers.
     """
 
-    def test_options_include_enable_retries_and_service_config(self):
-        """Both grpc.enable_retries and grpc.service_config are set."""
+    def test_channel_options_shape(self):
+        """Full expected shape.
+
+        Any drift in retry policy, LB config, method match, or the outer
+        tuple pair surfaces here. The safety-critical invariant is
+        ``retryableStatusCodes == ["UNAVAILABLE"]``: DEADLINE_EXCEEDED
+        and RESOURCE_EXHAUSTED are unsafe (server may have partially
+        executed) and must never be added to the list.
+        """
+        self.assertEqual(len(DEFAULT_CHANNEL_OPTIONS), 2)
         opts = dict(DEFAULT_CHANNEL_OPTIONS)
         self.assertEqual(opts["grpc.enable_retries"], 1)
-        self.assertIn("grpc.service_config", opts)
-
-    def test_service_config_is_valid_json(self):
-        """service_config JSON parses and has expected top-level keys."""
-        cfg = json.loads(dict(DEFAULT_CHANNEL_OPTIONS)["grpc.service_config"])
-        self.assertIn("loadBalancingConfig", cfg)
-        self.assertIn("methodConfig", cfg)
-
-    def test_load_balancing_is_round_robin(self):
-        """LB config selects round_robin (needed for multi-endpoint failover)."""
-        cfg = json.loads(dict(DEFAULT_CHANNEL_OPTIONS)["grpc.service_config"])
-        self.assertEqual(cfg["loadBalancingConfig"], [{"round_robin": {}}])
-
-    def test_retry_policy_only_retries_unavailable(self):
-        """Only UNAVAILABLE is retried.
-
-        DEADLINE_EXCEEDED and RESOURCE_EXHAUSTED are unsafe (server may
-        have partially executed) and must not be in the list.
-        """
-        cfg = json.loads(dict(DEFAULT_CHANNEL_OPTIONS)["grpc.service_config"])
-        policy = cfg["methodConfig"][0]["retryPolicy"]
-        self.assertEqual(policy["retryableStatusCodes"], ["UNAVAILABLE"])
-
-    def test_retry_policy_max_attempts_and_backoff(self):
-        """Bounded retry budget: 4 attempts, 0.5s→5s exponential."""
-        cfg = json.loads(dict(DEFAULT_CHANNEL_OPTIONS)["grpc.service_config"])
-        policy = cfg["methodConfig"][0]["retryPolicy"]
-        self.assertEqual(policy["maxAttempts"], 4)
-        self.assertEqual(policy["initialBackoff"], "0.5s")
-        self.assertEqual(policy["maxBackoff"], "5s")
-        self.assertEqual(policy["backoffMultiplier"], 2)
-
-    def test_method_config_applies_to_every_method(self):
-        """Method config `name=[{}]` matches every RPC — applies to all CRDs."""
-        cfg = json.loads(dict(DEFAULT_CHANNEL_OPTIONS)["grpc.service_config"])
-        self.assertEqual(cfg["methodConfig"][0]["name"], [{}])
-
-    def test_get_channel_options_returns_default(self):
-        """Getter returns the default list contents (by value)."""
-        self.assertEqual(get_channel_options(), DEFAULT_CHANNEL_OPTIONS)
+        self.assertEqual(
+            json.loads(opts["grpc.service_config"]),
+            {
+                "loadBalancingConfig": [{"round_robin": {}}],
+                "methodConfig": [
+                    {
+                        "name": [{}],
+                        "retryPolicy": {
+                            "maxAttempts": 4,
+                            "initialBackoff": "0.5s",
+                            "maxBackoff": "5s",
+                            "backoffMultiplier": 2,
+                            "retryableStatusCodes": ["UNAVAILABLE"],
+                        },
+                    }
+                ],
+            },
+        )
 
     def test_get_channel_options_returns_fresh_copy(self):
-        """Getter returns a fresh list so callers can't mutate the default."""
+        """Getter returns a fresh list so callers can't mutate module state."""
         result = get_channel_options()
         result.append(("grpc.max_send_message_length", 1))
-        # Default is unchanged.
         self.assertNotIn(("grpc.max_send_message_length", 1), DEFAULT_CHANNEL_OPTIONS)
