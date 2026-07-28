@@ -10,6 +10,7 @@ import (
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	commonV1 "go.temporal.io/api/common/v1"
 	temporalEnumsV1 "go.temporal.io/api/enums/v1"
 	workflowV1 "go.temporal.io/api/workflow/v1"
 	workflowserviceV1 "go.temporal.io/api/workflowservice/v1"
@@ -64,10 +65,11 @@ func TestStartWorkflow(t *testing.T) {
 
 func TestGetWorkflowExecutionInfo(t *testing.T) {
 	testCases := []struct {
-		name           string
-		mockFunc       func(mockTemporalClient *temporalMocks.Client)
-		errMsg         string
-		expectedStatus clientInterface.WorkflowExecutionStatus
+		name              string
+		mockFunc          func(mockTemporalClient *temporalMocks.Client)
+		errMsg            string
+		expectedStatus    clientInterface.WorkflowExecutionStatus
+		expectedExecution *clientInterface.WorkflowExecution
 	}{
 		{
 			name: "unspecified",
@@ -81,7 +83,8 @@ func TestGetWorkflowExecutionInfo(t *testing.T) {
 					nil,
 				)
 			},
-			expectedStatus: clientInterface.WorkflowExecutionStatusUnSpecified,
+			expectedStatus:    clientInterface.WorkflowExecutionStatusUnSpecified,
+			expectedExecution: &clientInterface.WorkflowExecution{},
 		},
 		{
 			name: "success",
@@ -90,12 +93,20 @@ func TestGetWorkflowExecutionInfo(t *testing.T) {
 					&workflowserviceV1.DescribeWorkflowExecutionResponse{
 						WorkflowExecutionInfo: &workflowV1.WorkflowExecutionInfo{
 							Status: temporalEnumsV1.WORKFLOW_EXECUTION_STATUS_RUNNING,
+							Execution: &commonV1.WorkflowExecution{
+								WorkflowId: "testWorkflow",
+								RunId:      "testRunID",
+							},
 						},
 					},
 					nil,
 				)
 			},
 			expectedStatus: clientInterface.WorkflowExecutionStatusRunning,
+			expectedExecution: &clientInterface.WorkflowExecution{
+				ID:    "testWorkflow",
+				RunID: "testRunID",
+			},
 		},
 		{
 			name: "failed",
@@ -109,7 +120,8 @@ func TestGetWorkflowExecutionInfo(t *testing.T) {
 					nil,
 				)
 			},
-			expectedStatus: clientInterface.WorkflowExecutionStatusFailed,
+			expectedStatus:    clientInterface.WorkflowExecutionStatusFailed,
+			expectedExecution: &clientInterface.WorkflowExecution{},
 		},
 		{
 			name: "error",
@@ -135,6 +147,7 @@ func TestGetWorkflowExecutionInfo(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, testCase.expectedStatus, status.Status)
+				require.Equal(t, testCase.expectedExecution, status.Execution)
 			}
 		})
 	}

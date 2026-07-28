@@ -36,6 +36,7 @@ go_test(
         "@com_github_stretchr_testify//assert:go_default_library",
         "@com_github_stretchr_testify//mock:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
+        "@io_temporal_go_api//common/v1:go_default_library",
         "@io_temporal_go_api//enums/v1:go_default_library",
         "@io_temporal_go_api//workflow/v1:go_default_library",
         "@io_temporal_go_api//workflowservice/v1:go_default_library",

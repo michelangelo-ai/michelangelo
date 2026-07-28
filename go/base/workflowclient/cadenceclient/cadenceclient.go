@@ -84,6 +84,10 @@ func (c *CadenceClient) GetWorkflowExecutionInfo(ctx context.Context, workflowID
 
 	return &clientInterface.WorkflowExecutionInfo{
 		Status: mapCadenceStatusToInterface(closeStatus),
+		Execution: &clientInterface.WorkflowExecution{
+			ID:    cadenceWorkflowExecutionInfo.GetExecution().GetWorkflowId(),
+			RunID: cadenceWorkflowExecutionInfo.GetExecution().GetRunId(),
+		},
 	}, nil
 }
 
