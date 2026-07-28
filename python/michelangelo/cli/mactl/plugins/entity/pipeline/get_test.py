@@ -1,5 +1,6 @@
 """Unit tests for pipeline get filters + display columns."""
 
+from argparse import ArgumentTypeError
 from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
@@ -92,13 +93,21 @@ class NormalizePipelineTypeTest(TestCase):
         self.assertEqual(_normalize_pipeline_type("  train  "), "PIPELINE_TYPE_TRAIN")
 
     def test_unknown_raises_with_valid_list(self):
-        """Unknown value raises ValueError listing the accepted names."""
-        with self.assertRaises(ValueError) as cm:
+        """Unknown value raises ArgumentTypeError listing the accepted names."""
+        with self.assertRaises(ArgumentTypeError) as cm:
             _normalize_pipeline_type("BOGUS")
         msg = str(cm.exception)
         self.assertIn("BOGUS", msg)
         self.assertIn("TRAIN", msg)
         self.assertNotIn("INVALID", msg)
+
+    def test_empty_string_passes_through(self):
+        """Empty argparse default must not trigger validation."""
+        self.assertEqual(_normalize_pipeline_type(""), "")
+
+    def test_whitespace_only_passes_through(self):
+        """Whitespace-only value skips validation (treated as omitted)."""
+        self.assertEqual(_normalize_pipeline_type("   "), "")
 
 
 class NormalizeAcceptsExtendedEnumTest(TestCase):
@@ -206,7 +215,7 @@ class AddGetFiltersTest(TestCase):
         )
         normalize = type_arg["kwargs"]["type"]
         self.assertEqual(normalize("train"), "PIPELINE_TYPE_TRAIN")
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ArgumentTypeError):
             normalize("BOGUS")
 
     def test_owner_arg_default_empty(self):

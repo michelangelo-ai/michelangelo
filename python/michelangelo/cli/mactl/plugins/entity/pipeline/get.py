@@ -12,6 +12,7 @@ their own generated module without patching this file.
 """
 
 import importlib
+from argparse import ArgumentTypeError
 from inspect import Parameter
 from logging import getLogger
 
@@ -46,10 +47,16 @@ def _pipeline_type_names() -> frozenset[str]:
 def _normalize_pipeline_type(value: str) -> str:
     """Return the full ``PIPELINE_TYPE_*`` name for ``value``.
 
+    Empty / whitespace-only values pass through unchanged so argparse's
+    default="" doesn't trigger validation when the user omits ``--type``.
     Accepts the full name or the short suffix (case-insensitive). Raises
-    ``ValueError`` when the value is not a declared enum member.
+    ``argparse.ArgumentTypeError`` when the value is not a declared enum
+    member — argparse renders that message verbatim.
     """
-    candidate = value.strip().upper()
+    stripped = value.strip()
+    if not stripped:
+        return ""
+    candidate = stripped.upper()
     if not candidate.startswith(_PIPELINE_TYPE_PREFIX):
         candidate = _PIPELINE_TYPE_PREFIX + candidate
     names = _pipeline_type_names()
@@ -59,7 +66,7 @@ def _normalize_pipeline_type(value: str) -> str:
             for n in names
             if n != "PIPELINE_TYPE_INVALID"
         )
-        raise ValueError(
+        raise ArgumentTypeError(
             f"invalid --type {value!r}; expected one of: {', '.join(valid)}"
         )
     return candidate
