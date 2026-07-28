@@ -11,10 +11,13 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"sort"
 	"testing"
 	"time"
 
 	api "github.com/michelangelo-ai/michelangelo/go/api"
+	"github.com/michelangelo-ai/michelangelo/go/storage"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -356,4 +359,80 @@ func TestIntegration_DeleteThenRecreate_WithoutFix_WouldOrphan(t *testing.T) {
 		ns, name,
 	).Scan(&liveCount))
 	assert.Equal(t, 2, liveCount, "without the Delete call, both rows are live orphans for the same namespace/name")
+}
+
+// TestIntegration_List_OrderBy_InjectionPayloadRejected is the smoke test for the
+// buildOrderBySQL fix (spec 018): runs the real List() RPC path — not the pure-function
+// unit test — against the pre-existing "california-housing" pipeline_run rows already
+// live in the local k3d sandbox's MySQL (produced by real sandbox pipeline runs, not
+// synthesized here), with a malicious order_by field. Confirms the query is rejected
+// with InvalidArgument before ever reaching the database, and that the row count is
+// unaffected (i.e. the payload's DROP TABLE / SLEEP side effects never executed).
+func TestIntegration_List_OrderBy_InjectionPayloadRejected(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	var countBefore int
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM pipeline_run").Scan(&countBefore))
+	require.Positive(t, countBefore, "expected pre-existing real pipeline_run rows from prior sandbox runs")
+
+	typeMeta := &metav1.TypeMeta{Kind: "PipelineRun", APIVersion: "michelangelo.api/v2"}
+	listOptsExt := &apipb.ListOptionsExt{
+		OrderBy: []*apipb.OrderBy{
+			{Field: "name` = (SELECT SLEEP(5))-- -", Dir: apipb.SORT_ORDER_ASC},
+		},
+	}
+	var listResp storage.ListResponse
+	err := store.List(ctx, typeMeta, "california-housing", &metav1.ListOptions{}, listOptsExt, &listResp)
+	require.Error(t, err, "malicious order_by field must be rejected, not reach the database")
+	assert.Contains(t, err.Error(), "invalid order_by field")
+
+	var countAfter int
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM pipeline_run").Scan(&countAfter))
+	assert.Equal(t, countBefore, countAfter, "rejected payload must have no side effect on the table")
+}
+
+// TestIntegration_List_OrderBy_ValidFieldStillWorks confirms the fix doesn't regress
+// legitimate ORDER BY usage: sorts the same real pipeline_run rows by create_time in
+// both directions and asserts the real, non-synthetic rows come back in the expected
+// chronological order.
+func TestIntegration_List_OrderBy_ValidFieldStillWorks(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	typeMeta := &metav1.TypeMeta{Kind: "PipelineRun", APIVersion: "michelangelo.api/v2"}
+
+	ascOpts := &apipb.ListOptionsExt{
+		OrderBy: []*apipb.OrderBy{{Field: "create_time", Dir: apipb.SORT_ORDER_ASC}},
+	}
+	var ascResp storage.ListResponse
+	require.NoError(t, store.List(ctx, typeMeta, "california-housing", &metav1.ListOptions{}, ascOpts, &ascResp))
+	require.GreaterOrEqual(t, len(ascResp.Items), 5, "expected the real pre-existing california-housing pipeline runs")
+
+	ascNames := make([]string, len(ascResp.Items))
+	for i, item := range ascResp.Items {
+		pr, ok := item.(*v2pb.PipelineRun)
+		require.True(t, ok)
+		ascNames[i] = pr.GetName()
+	}
+	assert.True(t, sort.StringsAreSorted(ascNames), "ASC order_by=create_time must return rows in ascending chronological order: %v", ascNames)
+
+	descOpts := &apipb.ListOptionsExt{
+		OrderBy: []*apipb.OrderBy{{Field: "create_time", Dir: apipb.SORT_ORDER_DESC}},
+	}
+	var descResp storage.ListResponse
+	require.NoError(t, store.List(ctx, typeMeta, "california-housing", &metav1.ListOptions{}, descOpts, &descResp))
+	require.Equal(t, len(ascResp.Items), len(descResp.Items))
+
+	descNames := make([]string, len(descResp.Items))
+	for i, item := range descResp.Items {
+		pr, ok := item.(*v2pb.PipelineRun)
+		require.True(t, ok)
+		descNames[i] = pr.GetName()
+	}
+	for i := range ascNames {
+		assert.Equal(t, ascNames[i], descNames[len(descNames)-1-i], "DESC must be the exact reverse of ASC over the same real rows")
+	}
 }
