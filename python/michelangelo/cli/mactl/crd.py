@@ -514,13 +514,21 @@ def _list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
     ParseDict(request_dict, request_input)
 
     filter_field_map = getattr(_self, "filter_field_map", {}) if _self else {}
-    for arg_dest, field_name in filter_field_map.items():
+    for arg_dest, spec in filter_field_map.items():
         value = bound_args.arguments.get(arg_dest)
         if value in (None, "", (), []):
             continue
+        # spec is either a plain field-name string (defaults to EQUAL) or a
+        # dict {"field": str, "operator": int} for per-field operator. The
+        # dict form is what CRDs with LIKE / IN / etc. filters need.
+        if isinstance(spec, str):
+            field_name, operator = spec, 1  # CRITERION_OPERATOR_EQUAL
+        else:
+            field_name = spec["field"]
+            operator = spec.get("operator", 1)
         criterion = request_input.list_options_ext.operation.criterion.add()
         criterion.field_name = field_name
-        criterion.operator = 1  # CRITERION_OPERATOR_EQUAL
+        criterion.operator = operator
         criterion.match_value.Pack(StringValue(value=str(value)))
 
     _LOG.info("ListRequest built: %r", request_input)
@@ -733,7 +741,10 @@ class CRD:
         # _list_func_impl / list_func_impl for how each list is consumed.
         self.additional_columns: list[dict] = []
         self.additional_get_args: list[dict] = []
-        self.filter_field_map: dict[str, str] = {}
+        # Value is a plain field-name string (defaults to CRITERION_OPERATOR_EQUAL)
+        # or a dict {"field": str, "operator": int} for per-field operator override
+        # (e.g. CRITERION_OPERATOR_LIKE for partial-match filters).
+        self.filter_field_map: dict[str, str | dict] = {}
         self.func_signature: dict[str, dict] = {
             "apply": {
                 "help": "Apply an Entity (create or update)",

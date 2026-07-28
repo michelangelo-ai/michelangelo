@@ -1930,3 +1930,70 @@ class FilterEndToEndTest(TestCase):
         criteria = captured["req"].list_options_ext.operation.criterion
         self.assertEqual(len(criteria), 1)
         self.assertEqual(criteria[0].field_name, "spec.pipeline_name")
+
+
+class FilterFieldMapDictSchemaTest(TestCase):
+    """filter_field_map value can be a dict for per-field operator override.
+
+    Backward compatibility: string values still default to CRITERION_OPERATOR_EQUAL.
+    New: dict values ``{"field": str, "operator": int}`` carry an explicit
+    operator (e.g. CRITERION_OPERATOR_LIKE = 9 for partial-match filters).
+    """
+
+    @patch.object(CRD, "_extract_method_info")
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.ParseDict")
+    def test_dict_form_carries_custom_operator(self, _parse, mock_call, mock_extract):
+        """Dict spec uses its declared operator (LIKE = 9), not the EQUAL default."""
+        mock_extract.return_value = ("Op", _recording_input_class(), Mock)
+        crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.filter_field_map = {
+            "revision": {"field": "spec.revision.name", "operator": 9},
+        }
+        crd.additional_columns = ()
+
+        captured = {}
+
+        def _capture(_info, req):
+            captured["req"] = req
+            field_desc = Mock()
+            field_desc.name = "test_list"
+            return Mock(ListFields=Mock(return_value=[(field_desc, Mock(items=[]))]))
+
+        mock_call.side_effect = _capture
+
+        crd.generate_list(Mock())
+        crd.list(namespace="ns", revision="abc")
+
+        criteria = captured["req"].list_options_ext.operation.criterion
+        self.assertEqual(len(criteria), 1)
+        self.assertEqual(criteria[0].field_name, "spec.revision.name")
+        self.assertEqual(criteria[0].operator, 9)
+
+    @patch.object(CRD, "_extract_method_info")
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.ParseDict")
+    def test_string_form_still_defaults_to_equal(self, _parse, mock_call, mock_extract):
+        """String spec continues to work — defaults operator to EQUAL = 1."""
+        mock_extract.return_value = ("Op", _recording_input_class(), Mock)
+        crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.filter_field_map = {"pipeline_name": "spec.pipeline_name"}
+        crd.additional_columns = ()
+
+        captured = {}
+
+        def _capture(_info, req):
+            captured["req"] = req
+            field_desc = Mock()
+            field_desc.name = "test_list"
+            return Mock(ListFields=Mock(return_value=[(field_desc, Mock(items=[]))]))
+
+        mock_call.side_effect = _capture
+
+        crd.generate_list(Mock())
+        crd.list(namespace="ns", pipeline_name="trainer-v2")
+
+        criteria = captured["req"].list_options_ext.operation.criterion
+        self.assertEqual(len(criteria), 1)
+        self.assertEqual(criteria[0].field_name, "spec.pipeline_name")
+        self.assertEqual(criteria[0].operator, 1)

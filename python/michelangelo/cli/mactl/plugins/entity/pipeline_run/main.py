@@ -10,6 +10,7 @@ from michelangelo.cli.mactl.plugins.entity.pipeline.kill import (
     add_function_signature as add_kill_function_signature,
 )
 from michelangelo.cli.mactl.plugins.entity.pipeline.kill import generate_kill
+from michelangelo.cli.mactl.plugins.entity.pipeline_run.get import add_get_filters
 
 _LOG = getLogger(__name__)
 
@@ -17,7 +18,8 @@ _LOG = getLogger(__name__)
 def apply_plugins(crd: CRD, channel: Channel, *_, **__):
     """Apply plugin entity function signatures to the CRD.
 
-    This adds the kill function signature for pipeline_run entity.
+    This adds the kill function signature for pipeline_run entity and
+    registers --actor/--revision filters plus 4 display columns on get.
     """
     _LOG.info("Applying pipeline_run plugin entity to crd: %r", crd)
     _LOG.debug("gRPC Channel: %r", channel)
@@ -26,5 +28,6 @@ def apply_plugins(crd: CRD, channel: Channel, *_, **__):
     crd.generate_kill = MethodType(
         lambda self, ch, parser: generate_kill(self, ch, parser), crd
     )
+    add_get_filters(crd)
 
     _LOG.info("Plugin entities applied successfully to pipeline_run crd: %s", crd)

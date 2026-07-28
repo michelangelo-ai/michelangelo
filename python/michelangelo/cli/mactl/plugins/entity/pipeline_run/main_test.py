@@ -17,6 +17,11 @@ class PipelineRunPluginTest(TestCase):
         self.mock_crd.full_name = "michelangelo.api.v2.PipelineRunService"
         self.mock_crd.metadata = {}
         self.mock_crd.func_signature = {}
+        # CRD.__init__ populates these; Mock(spec=CRD) uses class-level attrs
+        # only, so instance-level hook slots need to be added explicitly.
+        self.mock_crd.additional_get_args = []
+        self.mock_crd.additional_columns = []
+        self.mock_crd.filter_field_map = {}
         self.mock_channel = Mock()
 
     @patch(

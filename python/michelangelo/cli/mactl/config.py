@@ -35,6 +35,15 @@ DEFAULT_CONFIG = {
         "packages": [],
         "modules": {},
     },
+    # Import path for the generated ``pipeline_run_pb2`` module the pipeline_run
+    # plugin consults for the STATE enum name. Downstream distributions with
+    # a different generator layout can point this at their own module without
+    # patching the plugin source.
+    "pipeline_run_state_pb2_module": "michelangelo.gen.api.v2.pipeline_run_pb2",
+    # Label key the pipeline_run plugin reads for the ENVIRONMENT column.
+    # OSS apiserver writes ``pipelinerun.michelangelo/environment``; downstream
+    # distributions may use a different key.
+    "pipeline_run_environment_label": "pipelinerun.michelangelo/environment",
 }
 
 
