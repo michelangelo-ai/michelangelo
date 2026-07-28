@@ -147,27 +147,28 @@ def setup_minio_env() -> None:
 # Retry transient UNAVAILABLE (only status gRPC marks safe to replay: server
 # didn't ack) and prefer round_robin so a multi-endpoint resolver rebalances
 # per-request; behaves like pick_first when the resolver returns one endpoint.
-_DEFAULT_RETRY_SERVICE_CONFIG = json.dumps(
-    {
-        "loadBalancingConfig": [{"round_robin": {}}],
-        "methodConfig": [
-            {
-                "name": [{}],
-                "retryPolicy": {
-                    "maxAttempts": 4,
-                    "initialBackoff": "0.5s",
-                    "maxBackoff": "5s",
-                    "backoffMultiplier": 2,
-                    "retryableStatusCodes": ["UNAVAILABLE"],
-                },
-            }
-        ],
-    }
-)
-
 DEFAULT_CHANNEL_OPTIONS: list[tuple[str, object]] = [
     ("grpc.enable_retries", 1),
-    ("grpc.service_config", _DEFAULT_RETRY_SERVICE_CONFIG),
+    (
+        "grpc.service_config",
+        json.dumps(
+            {
+                "loadBalancingConfig": [{"round_robin": {}}],
+                "methodConfig": [
+                    {
+                        "name": [{}],
+                        "retryPolicy": {
+                            "maxAttempts": 4,
+                            "initialBackoff": "0.5s",
+                            "maxBackoff": "5s",
+                            "backoffMultiplier": 2,
+                            "retryableStatusCodes": ["UNAVAILABLE"],
+                        },
+                    }
+                ],
+            }
+        ),
+    ),
 ]
 
 
