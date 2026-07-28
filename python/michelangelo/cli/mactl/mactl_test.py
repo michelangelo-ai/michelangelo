@@ -1,6 +1,5 @@
 """Unit tests for mactl CLI functions."""
 
-import json
 import os
 import sys
 import tempfile
@@ -11,7 +10,7 @@ from pathlib import Path
 from unittest import TestCase
 from unittest.mock import ANY, MagicMock, Mock, patch
 
-from michelangelo.cli.mactl import mactl
+from michelangelo.cli.mactl import config, mactl
 from michelangelo.cli.mactl.crd import CRD
 from michelangelo.cli.mactl.mactl import (
     ADDRESS,
@@ -183,56 +182,6 @@ class TLSConfigurationTest(TestCase):
         """Test that invalid values for MACTL_USE_TLS are handled."""
         reload(mactl)
         self.assertEqual(mactl.USE_TLS, False)
-
-
-class ChannelOptionsTest(TestCase):
-    """Retry + LB gRPC service_config on every constructed channel.
-
-    Verifies _CHANNEL_OPTIONS carries a well-formed service_config with
-    retry on UNAVAILABLE + round_robin LB, so transient blips no longer
-    surface as hard errors from run().
-    """
-
-    def test_options_include_enable_retries_and_service_config(self):
-        """Both grpc.enable_retries and grpc.service_config are set."""
-        opts = dict(mactl._CHANNEL_OPTIONS)
-        self.assertEqual(opts["grpc.enable_retries"], 1)
-        self.assertIn("grpc.service_config", opts)
-
-    def test_service_config_is_valid_json(self):
-        """service_config JSON parses and has the expected top-level keys."""
-        cfg = json.loads(dict(mactl._CHANNEL_OPTIONS)["grpc.service_config"])
-        self.assertIn("loadBalancingConfig", cfg)
-        self.assertIn("methodConfig", cfg)
-
-    def test_load_balancing_is_round_robin(self):
-        """LB config selects round_robin (needed for multi-endpoint failover)."""
-        cfg = json.loads(dict(mactl._CHANNEL_OPTIONS)["grpc.service_config"])
-        self.assertEqual(cfg["loadBalancingConfig"], [{"round_robin": {}}])
-
-    def test_retry_policy_only_retries_unavailable(self):
-        """Only UNAVAILABLE is retried.
-
-        DEADLINE_EXCEEDED and RESOURCE_EXHAUSTED are unsafe (server may
-        have partially executed) and must not be in the list.
-        """
-        cfg = json.loads(dict(mactl._CHANNEL_OPTIONS)["grpc.service_config"])
-        policy = cfg["methodConfig"][0]["retryPolicy"]
-        self.assertEqual(policy["retryableStatusCodes"], ["UNAVAILABLE"])
-
-    def test_retry_policy_max_attempts_and_backoff(self):
-        """Bounded retry budget: 4 attempts, 0.5s→5s exponential."""
-        cfg = json.loads(dict(mactl._CHANNEL_OPTIONS)["grpc.service_config"])
-        policy = cfg["methodConfig"][0]["retryPolicy"]
-        self.assertEqual(policy["maxAttempts"], 4)
-        self.assertEqual(policy["initialBackoff"], "0.5s")
-        self.assertEqual(policy["maxBackoff"], "5s")
-        self.assertEqual(policy["backoffMultiplier"], 2)
-
-    def test_method_config_applies_to_every_method(self):
-        """Method config `name=[{}]` matches every RPC — applies to all CRDs."""
-        cfg = json.loads(dict(mactl._CHANNEL_OPTIONS)["grpc.service_config"])
-        self.assertEqual(cfg["methodConfig"][0]["name"], [{}])
 
 
 class TLSConnectionTest(TestCase):
@@ -990,7 +939,7 @@ class ProxySupportTest(TestCase):
 
         mock_proxy_instance.create_tunnel.assert_called_once_with("my-service")
         mock_insecure_channel.assert_called_once_with(
-            "localhost:12345", options=mactl._CHANNEL_OPTIONS
+            "localhost:12345", options=config.get_channel_options()
         )
         mock_main.assert_called_once_with(mock_channel, ANY)
 
@@ -1018,7 +967,7 @@ class ProxySupportTest(TestCase):
             run()
 
         mock_insecure_channel.assert_called_once_with(
-            "localhost:8080", options=mactl._CHANNEL_OPTIONS
+            "localhost:8080", options=config.get_channel_options()
         )
         mock_main.assert_called_once_with(mock_channel, ANY)
 
@@ -1046,7 +995,7 @@ class ProxySupportTest(TestCase):
             run()
 
         mock_insecure_channel.assert_called_once_with(
-            "my-service", options=mactl._CHANNEL_OPTIONS
+            "my-service", options=config.get_channel_options()
         )
         mock_main.assert_called_once_with(mock_channel, ANY)
 

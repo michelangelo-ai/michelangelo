@@ -1,5 +1,6 @@
 """Configuration management for mactl."""
 
+import json
 import sys
 from copy import deepcopy
 from logging import getLogger
@@ -141,3 +142,42 @@ def setup_minio_env() -> None:
     environ["AWS_ACCESS_KEY_ID"] = minio_config.get("access_key_id", "")
     environ["AWS_SECRET_ACCESS_KEY"] = minio_config.get("secret_access_key", "")
     environ["AWS_ENDPOINT_URL"] = minio_config.get("endpoint_url", "")
+
+
+# Retry transient UNAVAILABLE (only status gRPC marks safe to replay: server
+# didn't ack) and prefer round_robin so a multi-endpoint resolver rebalances
+# per-request; behaves like pick_first when the resolver returns one endpoint.
+_DEFAULT_RETRY_SERVICE_CONFIG = json.dumps(
+    {
+        "loadBalancingConfig": [{"round_robin": {}}],
+        "methodConfig": [
+            {
+                "name": [{}],
+                "retryPolicy": {
+                    "maxAttempts": 4,
+                    "initialBackoff": "0.5s",
+                    "maxBackoff": "5s",
+                    "backoffMultiplier": 2,
+                    "retryableStatusCodes": ["UNAVAILABLE"],
+                },
+            }
+        ],
+    }
+)
+
+DEFAULT_CHANNEL_OPTIONS: list[tuple[str, object]] = [
+    ("grpc.enable_retries", 1),
+    ("grpc.service_config", _DEFAULT_RETRY_SERVICE_CONFIG),
+]
+
+
+def get_channel_options() -> list[tuple[str, object]]:
+    """gRPC channel options applied by mactl's run() to every channel.
+
+    Extension point: downstream consumers (e.g. an internal wrapper
+    that needs a different retry budget, TLS knobs, or LB policy) can
+    override this function or reassign DEFAULT_CHANNEL_OPTIONS. mactl
+    calls this via the config module at channel-construction time, so
+    a runtime replacement takes effect on the next run().
+    """
+    return list(DEFAULT_CHANNEL_OPTIONS)

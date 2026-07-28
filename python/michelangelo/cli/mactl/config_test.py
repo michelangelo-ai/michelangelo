@@ -1,16 +1,19 @@
 """Unit tests for config module."""
 
+import json
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import mock_open, patch
 
 from michelangelo.cli.mactl.config import (
+    DEFAULT_CHANNEL_OPTIONS,
     DEFAULT_CONFIG,
     PACKAGE_CONFIG_FILE,
     USER_CONFIG_FILE,
     _apply_env_overrides,
     _deep_merge,
     _load_toml_file,
+    get_channel_options,
     load_config,
     setup_minio_env,
 )
@@ -357,3 +360,65 @@ class DefaultConstantsTest(TestCase):
         self.assertEqual(PACKAGE_CONFIG_FILE.name, "config.toml")
         self.assertEqual(USER_CONFIG_FILE.name, "user_config.toml")
         self.assertEqual(PACKAGE_CONFIG_FILE.parent, USER_CONFIG_FILE.parent)
+
+
+class ChannelOptionsTest(TestCase):
+    """gRPC channel options exposed to mactl.run().
+
+    Guards the shape of DEFAULT_CHANNEL_OPTIONS + get_channel_options().
+    The getter is the documented extension point for downstream consumers.
+    """
+
+    def test_options_include_enable_retries_and_service_config(self):
+        """Both grpc.enable_retries and grpc.service_config are set."""
+        opts = dict(DEFAULT_CHANNEL_OPTIONS)
+        self.assertEqual(opts["grpc.enable_retries"], 1)
+        self.assertIn("grpc.service_config", opts)
+
+    def test_service_config_is_valid_json(self):
+        """service_config JSON parses and has expected top-level keys."""
+        cfg = json.loads(dict(DEFAULT_CHANNEL_OPTIONS)["grpc.service_config"])
+        self.assertIn("loadBalancingConfig", cfg)
+        self.assertIn("methodConfig", cfg)
+
+    def test_load_balancing_is_round_robin(self):
+        """LB config selects round_robin (needed for multi-endpoint failover)."""
+        cfg = json.loads(dict(DEFAULT_CHANNEL_OPTIONS)["grpc.service_config"])
+        self.assertEqual(cfg["loadBalancingConfig"], [{"round_robin": {}}])
+
+    def test_retry_policy_only_retries_unavailable(self):
+        """Only UNAVAILABLE is retried.
+
+        DEADLINE_EXCEEDED and RESOURCE_EXHAUSTED are unsafe (server may
+        have partially executed) and must not be in the list.
+        """
+        cfg = json.loads(dict(DEFAULT_CHANNEL_OPTIONS)["grpc.service_config"])
+        policy = cfg["methodConfig"][0]["retryPolicy"]
+        self.assertEqual(policy["retryableStatusCodes"], ["UNAVAILABLE"])
+
+    def test_retry_policy_max_attempts_and_backoff(self):
+        """Bounded retry budget: 4 attempts, 0.5s→5s exponential."""
+        cfg = json.loads(dict(DEFAULT_CHANNEL_OPTIONS)["grpc.service_config"])
+        policy = cfg["methodConfig"][0]["retryPolicy"]
+        self.assertEqual(policy["maxAttempts"], 4)
+        self.assertEqual(policy["initialBackoff"], "0.5s")
+        self.assertEqual(policy["maxBackoff"], "5s")
+        self.assertEqual(policy["backoffMultiplier"], 2)
+
+    def test_method_config_applies_to_every_method(self):
+        """Method config `name=[{}]` matches every RPC — applies to all CRDs."""
+        cfg = json.loads(dict(DEFAULT_CHANNEL_OPTIONS)["grpc.service_config"])
+        self.assertEqual(cfg["methodConfig"][0]["name"], [{}])
+
+    def test_get_channel_options_returns_default(self):
+        """Getter returns the default list contents (by value)."""
+        self.assertEqual(get_channel_options(), DEFAULT_CHANNEL_OPTIONS)
+
+    def test_get_channel_options_returns_fresh_copy(self):
+        """Getter returns a fresh list so callers can't mutate the default."""
+        result = get_channel_options()
+        result.append(("grpc.max_send_message_length", 1))
+        # Default is unchanged.
+        self.assertNotIn(
+            ("grpc.max_send_message_length", 1), DEFAULT_CHANNEL_OPTIONS
+        )
