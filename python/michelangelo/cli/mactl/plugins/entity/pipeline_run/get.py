@@ -1,17 +1,9 @@
 """Pipeline_run get filters + display columns (Revision, User, Environment, State).
 
-Adds ``--actor`` (server-side EQUAL) and ``--revision`` (server-side LIKE)
-filters to ``ma pipeline_run get``, plus four extra table columns
-(``REVISION``, ``USER``, ``ENVIRONMENT``, ``STATE``). Uses the framework hooks
-on ``CRD`` (``additional_get_args``, ``filter_field_map``,
-``additional_columns``); ``filter_field_map`` value is a dict with an explicit
-operator for the ``--revision`` LIKE filter.
-
-Two config keys drive per-distribution behavior:
-- ``pipeline_run_state_pb2_module`` selects which generated pb2 provides the
-  ``PipelineRunState`` enum for the STATE column (default OSS v2).
-- ``pipeline_run_environment_label`` selects the label key for the ENVIRONMENT
-  column (default OSS ``pipelinerun.michelangelo/environment``).
+Adds ``--actor`` (EQUAL) and ``--revision`` (LIKE) filters and 4 columns.
+Two config keys let downstream override defaults:
+``pipeline_run_state_pb2_module`` (pb2 for the STATE enum) and
+``pipeline_run_environment_label`` (label key for the ENVIRONMENT column).
 """
 
 import importlib
