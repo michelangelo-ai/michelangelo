@@ -13,7 +13,7 @@ from io import StringIO
 from logging import getLogger
 from pathlib import Path
 from types import MethodType
-from typing import Any, Callable, NotRequired, Optional, TypedDict
+from typing import Any, Callable, Optional, TypedDict
 
 from google.protobuf.json_format import MessageToDict, MessageToJson, ParseDict
 from google.protobuf.message import Message
@@ -23,6 +23,7 @@ from grpc import (
     RpcError,
     StatusCode,
 )
+from typing_extensions import NotRequired
 from yaml import YAMLError
 from yaml import safe_dump as yaml_safe_dump
 from yaml import safe_load as yaml_safe_load
