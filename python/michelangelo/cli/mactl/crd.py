@@ -355,12 +355,9 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
 
     _LOG.debug("No name argument passed. List CRD in the namespace.")
     _self.generate_list(crd_method_info.channel)
-    # Forward any filter arg declared on the get command so that
-    # `<crd> get -n <ns> --<attr> <val>` (no name) falls through to list with
-    # the filter applied, not silently dropped. Sources: every dest in
-    # additional_get_args (plugin-declared filter args) AND every string-form
-    # key in filter_field_map (a filter dest may be registered there directly
-    # by simpler plugins without also appearing in additional_get_args).
+    # get→list fallthrough: forward every filter dest so `--<attr> <val>`
+    # reaches list. Sources: additional_get_args dests, and string-form
+    # filter_field_map keys (callable-form keys are synthetic — skipped).
     forward_dests: set[str] = set()
     additional_get_args = getattr(_self, "additional_get_args", None)
     if isinstance(additional_get_args, list):
@@ -375,8 +372,6 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
     filter_field_map = getattr(_self, "filter_field_map", None)
     if isinstance(filter_field_map, dict):
         for k, v in filter_field_map.items():
-            # Skip callable-form entries — their key is a synthetic label,
-            # not an arg dest, and forwarding it would inject an unknown kwarg.
             if isinstance(v, (str, dict)):
                 forward_dests.add(k)
     filter_kwargs = {
@@ -531,11 +526,8 @@ def _list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
 
     filter_field_map = getattr(_self, "filter_field_map", {}) if _self else {}
     for arg_dest, spec in filter_field_map.items():
-        # Callable spec: signature (bound_args_arguments) -> list of
-        # {"field": str, "operator": int, "value": str} dicts. Used when
-        # one flag maps to multiple criteria or when several flags coordinate
-        # (e.g. a mutually-exclusive group). The callable itself gates on
-        # bound_args and may raise for validation errors.
+        # Callable spec: (bound_args) -> list of criteria. Used for
+        # one-flag-many-criteria or coordinated (e.g. mutex) flags.
         if callable(spec):
             for c in spec(bound_args.arguments):
                 criterion = request_input.list_options_ext.operation.criterion.add()
@@ -769,10 +761,8 @@ class CRD:
         # _list_func_impl / list_func_impl for how each list is consumed.
         self.additional_columns: list[dict] = []
         self.additional_get_args: list[dict] = []
-        # Value shapes: str = field name (defaults to EQUAL); dict {"field",
-        # "operator"} = per-field operator (e.g. LIKE); callable
-        # (bound_args_arguments) -> list of {"field","operator","value"} =
-        # dynamic multi-criterion (mutex groups, one-flag-many-criteria).
+        # Value: str = field name (default EQUAL); dict = {"field","operator"};
+        # callable = (bound_args) -> list of criteria.
         self.filter_field_map: dict[str, str | dict | Callable] = {}
         self.func_signature: dict[str, dict] = {
             "apply": {
@@ -1042,9 +1032,7 @@ class CRD:
                 )
             extra_dests.add(dest)
         for dest, spec in self.filter_field_map.items():
-            # Callable specs use a synthetic key (not an arg dest) — they
-            # coordinate across multiple flags whose dests are declared
-            # separately in additional_get_args. Skip the dest-cross-check.
+            # Callable specs use a synthetic key — no dest to cross-check.
             if callable(spec):
                 continue
             if dest not in extra_dests:
@@ -1236,11 +1224,8 @@ class CRD:
         )
 
         self.configure_parser("list", parser)
-        # Union filter_field_map keys AND additional_get_args dests: some
-        # plugins (F011/F013 shape) put every filter dest in filter_field_map;
-        # others (F014 shape with a callable) declare dests only in
-        # additional_get_args and coordinate them via a single callable entry
-        # in filter_field_map. The get→list fallthrough forwards from both.
+        # Union sources so a callable filter_field_map entry (synthetic key)
+        # still gets its coordinated dests forwarded to the list Signature.
         forward_dests: set[str] = set(getattr(self, "filter_field_map", {}) or ())
         for arg_spec in getattr(self, "additional_get_args", ()) or ():
             dest = (
