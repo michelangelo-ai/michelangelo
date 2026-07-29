@@ -123,7 +123,10 @@ spec:
     spec:
       containers:
       - name: grafana
-        image: grafana/grafana:latest
+        # Pinned to an explicit version (not `:latest`) so the sandbox doesn't
+        # silently stick to whatever digest a node happened to cache first.
+        # Bump manually when a CVE affecting this version is reported.
+        image: grafana/grafana:13.1.1
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3000
