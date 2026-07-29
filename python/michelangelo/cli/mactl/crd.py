@@ -342,11 +342,11 @@ def _get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mes
 def _collect_forward_dests(obj) -> set[str]:
     """Every arg dest declared in ``additional_get_args``.
 
-    ``additional_get_args`` is the sole source of truth for `get` filter
-    flags. Callable-form ``filter_field_map`` entries have synthetic keys
-    (not dests); string/dict-form keys are guaranteed to be matched by an
-    ``additional_get_args`` entry via ``_validated_additional_get_args``,
-    so we only need to walk one container.
+    By convention, ``additional_get_args`` entries are filter flags — every
+    current OSS plugin uses it that way. The framework forwards all such
+    dests from `get` to `list`; a non-filter dest (if any plugin ever adds
+    one) would flow through harmlessly, since ``_list_func_impl`` only acts
+    on dests that also appear in ``filter_field_map``.
     """
     dests: set[str] = set()
     additional_get_args = getattr(obj, "additional_get_args", None)
