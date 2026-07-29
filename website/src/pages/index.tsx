@@ -10,7 +10,7 @@ export default function Home(): React.ReactElement {
   return (
     <Layout
       title="The ML Platform Behind Uber's AI"
-      description="Now open source."
+      description="Open-source ML platform for model training, deployment, and monitoring. Built at Uber."
     >
       <main className={styles.landing}>
         <Hero />

@@ -6,6 +6,7 @@
       .white { fill: #fff; }
     </style>
   </defs>
+  <rect x="0" y="-50" width="215" height="215" rx="24" ry="24" fill="#000"/>
   <rect class="gray" x="71.59" y="8.43" width="33.14" height="98.37"/>
   <polygon class="white" points="104.81 8.53 66.01 8.53 10.31 106.81 49.29 106.81 104.81 8.53"/>
   <polyline class="gray" points="167.35 71.09 204.38 71.27 167.32 106.81"/>

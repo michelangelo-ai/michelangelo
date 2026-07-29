@@ -3,7 +3,7 @@ import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
-  title: 'Michelangelo',
+  title: 'Michelangelo AI',
   tagline: 'ML Platform Documentation',
   favicon: 'img/favicon.svg',
 
@@ -64,7 +64,7 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'Michelangelo',
+      title: 'Michelangelo AI',
       logo: {
         alt: 'Michelangelo Logo',
         src: 'img/logo.svg',
