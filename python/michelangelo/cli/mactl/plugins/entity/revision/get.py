@@ -13,7 +13,7 @@ from logging import getLogger
 
 from google.protobuf.message import Message
 
-from michelangelo.cli.mactl.crd import CRD
+from michelangelo.cli.mactl.crd import CRD, Criterion
 
 _LOG = getLogger(__name__)
 
@@ -22,7 +22,7 @@ _CRITERION_OPERATOR_EQUAL = 1
 _CRITERION_OPERATOR_LIKE = 9
 
 
-def _build_type_criteria(bound_args_arguments: dict) -> list:
+def _build_type_criteria(bound_args_arguments: dict) -> list[Criterion]:
     """Emit base_type + base_resource_name criteria pair for the type flags.
 
     Enforces mutual exclusion — >1 type flag set raises ``ArgumentTypeError``.

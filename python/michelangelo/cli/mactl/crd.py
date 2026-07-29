@@ -13,7 +13,7 @@ from io import StringIO
 from logging import getLogger
 from pathlib import Path
 from types import MethodType
-from typing import Any, Callable, Optional
+from typing import Any, Callable, NotRequired, Optional, TypedDict
 
 from google.protobuf.json_format import MessageToDict, MessageToJson, ParseDict
 from google.protobuf.message import Message
@@ -35,6 +35,17 @@ from michelangelo.cli.mactl.grpc_tools import (
 
 _LOG = getLogger(__name__)
 METADATA_STUB = []
+
+
+class Criterion(TypedDict):
+    """Shape of a criterion returned by a callable-form filter_field_map entry."""
+
+    field: str
+    value: str
+    operator: NotRequired[int]  # defaults to CRITERION_OPERATOR_EQUAL (1)
+
+
+FilterCallable = Callable[[dict], list[Criterion]]
 
 
 def bind_signature(signature):
@@ -767,7 +778,7 @@ class CRD:
         self.additional_get_args: list[dict] = []
         # Value: str = field name (default EQUAL); dict = {"field","operator"};
         # callable = (bound_args) -> list of criteria.
-        self.filter_field_map: dict[str, str | dict | Callable] = {}
+        self.filter_field_map: dict[str, str | dict | FilterCallable] = {}
         self.func_signature: dict[str, dict] = {
             "apply": {
                 "help": "Apply an Entity (create or update)",
