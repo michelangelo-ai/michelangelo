@@ -511,6 +511,16 @@ def _render_single_item(msg: Message, output_format: str) -> None:
         print(msg)
 
 
+def _emit_criterion(
+    request_input: Message, field_name: str, value, operator: int = 1
+) -> None:
+    """Append one criterion to the ListRequest's operation."""
+    criterion = request_input.list_options_ext.operation.criterion.add()
+    criterion.field_name = field_name
+    criterion.operator = operator
+    criterion.match_value.Pack(StringValue(value=str(value)))
+
+
 def _list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
     """Raw CRD LIST implementation - returns response without printing."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
@@ -545,10 +555,9 @@ def _list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
         # one-flag-many-criteria or coordinated (e.g. mutex) flags.
         if callable(spec):
             for c in spec(bound_args.arguments):
-                criterion = request_input.list_options_ext.operation.criterion.add()
-                criterion.field_name = c["field"]
-                criterion.operator = c.get("operator", 1)
-                criterion.match_value.Pack(StringValue(value=str(c["value"])))
+                _emit_criterion(
+                    request_input, c["field"], c["value"], c.get("operator", 1)
+                )
             continue
         value = bound_args.arguments.get(arg_dest)
         if value in (None, "", (), []):
@@ -561,10 +570,7 @@ def _list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
         else:
             field_name = spec["field"]
             operator = spec.get("operator", 1)
-        criterion = request_input.list_options_ext.operation.criterion.add()
-        criterion.field_name = field_name
-        criterion.operator = operator
-        criterion.match_value.Pack(StringValue(value=str(value)))
+        _emit_criterion(request_input, field_name, value, operator)
 
     _LOG.info("ListRequest built: %r", request_input)
     call_res = crd_method_call(crd_method_info, request_input)
