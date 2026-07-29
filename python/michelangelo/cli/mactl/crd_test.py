@@ -1841,6 +1841,15 @@ class ReadSignaturesHookTest(TestCase):
         self.assertNotIn("pipeline_name", sig.parameters)
 
 
+def _arg_spec(dest: str) -> dict:
+    """Minimal additional_get_args entry for `dest` — matches real-plugin shape."""
+    return {
+        "func_signature": Parameter(dest, Parameter.POSITIONAL_OR_KEYWORD),
+        "args": [f"--{dest.replace('_', '-')}"],
+        "kwargs": {"dest": dest, "type": str},
+    }
+
+
 class FilterEndToEndTest(TestCase):
     """End-to-end: filter flows through generate_list → bind → _list_func_impl.
 
@@ -1857,6 +1866,7 @@ class FilterEndToEndTest(TestCase):
         """`crd.list(pipeline_name="x")` must not TypeError at bind."""
         mock_extract.return_value = ("ListTestCrd", _recording_input_class(), Mock)
         crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.additional_get_args = [_arg_spec("pipeline_name")]
         crd.filter_field_map = {"pipeline_name": "spec.pipeline_name"}
         crd.additional_columns = ()
 
@@ -1891,6 +1901,7 @@ class FilterEndToEndTest(TestCase):
         """
         mock_extract.return_value = ("Op", _recording_input_class(), Mock)
         crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.additional_get_args = [_arg_spec("pipeline_name")]
         crd.filter_field_map = {"pipeline_name": "spec.pipeline_name"}
         crd.additional_columns = ()
 
@@ -1947,6 +1958,7 @@ class FilterFieldMapDictSchemaTest(TestCase):
         """Dict spec uses its declared operator (LIKE = 9), not the EQUAL default."""
         mock_extract.return_value = ("Op", _recording_input_class(), Mock)
         crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.additional_get_args = [_arg_spec("revision")]
         crd.filter_field_map = {
             "revision": {"field": "spec.revision.name", "operator": 9},
         }
@@ -1977,6 +1989,7 @@ class FilterFieldMapDictSchemaTest(TestCase):
         """String spec continues to work — defaults operator to EQUAL = 1."""
         mock_extract.return_value = ("Op", _recording_input_class(), Mock)
         crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.additional_get_args = [_arg_spec("pipeline_name")]
         crd.filter_field_map = {"pipeline_name": "spec.pipeline_name"}
         crd.additional_columns = ()
 

@@ -329,10 +329,13 @@ def _get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mes
 
 
 def _collect_forward_dests(obj) -> set[str]:
-    """Union of additional_get_args dests + non-callable filter_field_map keys.
+    """Every arg dest declared in ``additional_get_args``.
 
-    Callable-form filter_field_map keys are synthetic labels (not arg dests)
-    and are excluded — forwarding them as kwargs would break `_self.list()`.
+    ``additional_get_args`` is the sole source of truth for `get` filter
+    flags. Callable-form ``filter_field_map`` entries have synthetic keys
+    (not dests); string/dict-form keys are guaranteed to be matched by an
+    ``additional_get_args`` entry via ``_validated_additional_get_args``,
+    so we only need to walk one container.
     """
     dests: set[str] = set()
     additional_get_args = getattr(obj, "additional_get_args", None)
@@ -342,11 +345,6 @@ def _collect_forward_dests(obj) -> set[str]:
                 dest = arg_spec.get("kwargs", {}).get("dest")
                 if dest:
                     dests.add(dest)
-    fmap = getattr(obj, "filter_field_map", None)
-    if isinstance(fmap, dict):
-        for k, v in fmap.items():
-            if isinstance(v, (str, dict)):
-                dests.add(k)
     return dests
 
 
