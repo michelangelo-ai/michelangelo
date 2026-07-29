@@ -521,6 +521,30 @@ def _emit_criterion(
     criterion.match_value.Pack(StringValue(value=str(value)))
 
 
+def _resolve_criteria(spec, bound_args: dict, arg_dest: str) -> list[Criterion]:
+    """Normalize any filter_field_map spec shape into a list of criteria.
+
+    - Callable spec: plugin returns its own criteria (0..N).
+    - String spec: one criterion, EQUAL operator, value from bound_args.
+    - Dict spec: one criterion with declared field + operator, value from bound_args.
+    Empty bound-args values (for string/dict specs) yield ``[]`` — no criterion.
+    """
+    if callable(spec):
+        return spec(bound_args)
+    value = bound_args.get(arg_dest)
+    if value in (None, "", (), []):
+        return []
+    if isinstance(spec, str):
+        return [{"field": spec, "value": value}]
+    return [
+        {
+            "field": spec["field"],
+            "value": value,
+            "operator": spec.get("operator", 1),
+        }
+    ]
+
+
 def _list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
     """Raw CRD LIST implementation - returns response without printing."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
@@ -551,26 +575,8 @@ def _list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
 
     filter_field_map = getattr(_self, "filter_field_map", {}) if _self else {}
     for arg_dest, spec in filter_field_map.items():
-        # Callable spec: (bound_args) -> list of criteria. Used for
-        # one-flag-many-criteria or coordinated (e.g. mutex) flags.
-        if callable(spec):
-            for c in spec(bound_args.arguments):
-                _emit_criterion(
-                    request_input, c["field"], c["value"], c.get("operator", 1)
-                )
-            continue
-        value = bound_args.arguments.get(arg_dest)
-        if value in (None, "", (), []):
-            continue
-        # spec is either a plain field-name string (defaults to EQUAL) or a
-        # dict {"field": str, "operator": int} for per-field operator. The
-        # dict form is what CRDs with LIKE / IN / etc. filters need.
-        if isinstance(spec, str):
-            field_name, operator = spec, 1  # CRITERION_OPERATOR_EQUAL
-        else:
-            field_name = spec["field"]
-            operator = spec.get("operator", 1)
-        _emit_criterion(request_input, field_name, value, operator)
+        for c in _resolve_criteria(spec, bound_args.arguments, arg_dest):
+            _emit_criterion(request_input, c["field"], c["value"], c.get("operator", 1))
 
     _LOG.info("ListRequest built: %r", request_input)
     call_res = crd_method_call(crd_method_info, request_input)
