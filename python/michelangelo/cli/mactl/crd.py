@@ -511,16 +511,6 @@ def _render_single_item(msg: Message, output_format: str) -> None:
         print(msg)
 
 
-def _emit_criterion(
-    request_input: Message, field_name: str, value, operator: int = 1
-) -> None:
-    """Append one criterion to the ListRequest's operation."""
-    criterion = request_input.list_options_ext.operation.criterion.add()
-    criterion.field_name = field_name
-    criterion.operator = operator
-    criterion.match_value.Pack(StringValue(value=str(value)))
-
-
 def _resolve_criteria(spec, bound_args: dict, arg_dest: str) -> list[Criterion]:
     """Normalize any filter_field_map spec shape into a list of criteria.
 
@@ -576,7 +566,10 @@ def _list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
     filter_field_map = getattr(_self, "filter_field_map", {}) if _self else {}
     for arg_dest, spec in filter_field_map.items():
         for c in _resolve_criteria(spec, bound_args.arguments, arg_dest):
-            _emit_criterion(request_input, c["field"], c["value"], c.get("operator", 1))
+            criterion = request_input.list_options_ext.operation.criterion.add()
+            criterion.field_name = c["field"]
+            criterion.operator = c.get("operator", 1)
+            criterion.match_value.Pack(StringValue(value=str(c["value"])))
 
     _LOG.info("ListRequest built: %r", request_input)
     call_res = crd_method_call(crd_method_info, request_input)
