@@ -328,6 +328,28 @@ def _get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mes
     )
 
 
+def _collect_forward_dests(obj) -> set[str]:
+    """Union of additional_get_args dests + non-callable filter_field_map keys.
+
+    Callable-form filter_field_map keys are synthetic labels (not arg dests)
+    and are excluded — forwarding them as kwargs would break `_self.list()`.
+    """
+    dests: set[str] = set()
+    additional_get_args = getattr(obj, "additional_get_args", None)
+    if isinstance(additional_get_args, list):
+        for arg_spec in additional_get_args:
+            if isinstance(arg_spec, dict):
+                dest = arg_spec.get("kwargs", {}).get("dest")
+                if dest:
+                    dests.add(dest)
+    fmap = getattr(obj, "filter_field_map", None)
+    if isinstance(fmap, dict):
+        for k, v in fmap.items():
+            if isinstance(v, (str, dict)):
+                dests.add(k)
+    return dests
+
+
 def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
     """Default common CRD member method implementation for GET method.
 
@@ -355,25 +377,9 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
 
     _LOG.debug("No name argument passed. List CRD in the namespace.")
     _self.generate_list(crd_method_info.channel)
-    # get→list fallthrough: forward every filter dest so `--<attr> <val>`
-    # reaches list. Sources: additional_get_args dests, and string-form
-    # filter_field_map keys (callable-form keys are synthetic — skipped).
-    forward_dests: set[str] = set()
-    additional_get_args = getattr(_self, "additional_get_args", None)
-    if isinstance(additional_get_args, list):
-        for arg_spec in additional_get_args:
-            dest = (
-                arg_spec.get("kwargs", {}).get("dest")
-                if isinstance(arg_spec, dict)
-                else None
-            )
-            if dest:
-                forward_dests.add(dest)
-    filter_field_map = getattr(_self, "filter_field_map", None)
-    if isinstance(filter_field_map, dict):
-        for k, v in filter_field_map.items():
-            if isinstance(v, (str, dict)):
-                forward_dests.add(k)
+    # get→list fallthrough: forward filter dests so `--<attr> <val>` reaches
+    # list (see _collect_forward_dests for source union).
+    forward_dests = _collect_forward_dests(_self)
     filter_kwargs = {
         k: bound_args.arguments[k] for k in forward_dests if k in bound_args.arguments
     }
@@ -1224,17 +1230,7 @@ class CRD:
         )
 
         self.configure_parser("list", parser)
-        # Union sources so a callable filter_field_map entry (synthetic key)
-        # still gets its coordinated dests forwarded to the list Signature.
-        forward_dests: set[str] = set(getattr(self, "filter_field_map", {}) or ())
-        for arg_spec in getattr(self, "additional_get_args", ()) or ():
-            dest = (
-                arg_spec.get("kwargs", {}).get("dest")
-                if isinstance(arg_spec, dict)
-                else None
-            )
-            if dest:
-                forward_dests.add(dest)
+        forward_dests = _collect_forward_dests(self)
         list_func_signature = Signature(
             [
                 Parameter("self", Parameter.POSITIONAL_OR_KEYWORD),
