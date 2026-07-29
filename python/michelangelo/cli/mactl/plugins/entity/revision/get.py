@@ -52,25 +52,23 @@ def _build_type_criteria(bound_args_arguments: dict) -> list:
     ]
 
 
-def _render_type(item: Message) -> str:
-    """TYPE column — base_type.kind, empty when unset."""
-    if item.spec.HasField("base_type"):
-        return item.spec.base_type.kind or ""
-    return ""
+def _render_field(message_field: str, sub_field: str):
+    """Build a column renderer that reads ``spec.<message_field>.<sub_field>``.
+
+    Returns "" when the parent message is unset or the leaf value is falsy.
+    """
+
+    def _render(item: Message) -> str:
+        if item.spec.HasField(message_field):
+            return getattr(getattr(item.spec, message_field), sub_field) or ""
+        return ""
+
+    return _render
 
 
-def _render_user(item: Message) -> str:
-    """USER column — owner.name, empty when unset."""
-    if item.spec.HasField("owner"):
-        return item.spec.owner.name or ""
-    return ""
-
-
-def _render_base_resource(item: Message) -> str:
-    """BASE_RESOURCE column — base_resource.name, empty when unset."""
-    if item.spec.HasField("base_resource"):
-        return item.spec.base_resource.name or ""
-    return ""
+_render_type = _render_field("base_type", "kind")
+_render_user = _render_field("owner", "name")
+_render_base_resource = _render_field("base_resource", "name")
 
 
 def _get_flag_arg(name: str, help_text: str, default=None) -> dict:
