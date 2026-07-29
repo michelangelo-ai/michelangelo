@@ -66,11 +66,6 @@ def _render_field(message_field: str, sub_field: str):
     return _render
 
 
-_render_type = _render_field("base_type", "kind")
-_render_user = _render_field("owner", "name")
-_render_base_resource = _render_field("base_resource", "name")
-
-
 def _get_flag_arg(name: str, help_text: str, default=None) -> dict:
     """Build an additional_get_args entry for a `revision get` flag.
 
@@ -131,9 +126,15 @@ def add_get_filters(crd: CRD) -> None:
     )
     crd.additional_columns.extend(
         [
-            {"column_name": "TYPE", "retrieve_func": _render_type},
-            {"column_name": "USER", "retrieve_func": _render_user},
-            {"column_name": "BASE_RESOURCE", "retrieve_func": _render_base_resource},
+            {
+                "column_name": "TYPE",
+                "retrieve_func": _render_field("base_type", "kind"),
+            },
+            {"column_name": "USER", "retrieve_func": _render_field("owner", "name")},
+            {
+                "column_name": "BASE_RESOURCE",
+                "retrieve_func": _render_field("base_resource", "name"),
+            },
         ]
     )
     _LOG.debug("Revision get filters + columns registered on crd=%r", crd)

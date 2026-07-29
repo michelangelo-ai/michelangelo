@@ -7,11 +7,13 @@ from unittest.mock import MagicMock
 
 from michelangelo.cli.mactl.plugins.entity.revision.get import (
     _build_type_criteria,
-    _render_base_resource,
-    _render_type,
-    _render_user,
+    _render_field,
     add_get_filters,
 )
+
+_render_type = _render_field("base_type", "kind")
+_render_user = _render_field("owner", "name")
+_render_base_resource = _render_field("base_resource", "name")
 
 
 class BuildTypeCriteriaTest(TestCase):
