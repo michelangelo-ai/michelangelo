@@ -73,21 +73,23 @@ def _render_base_resource(item: Message) -> str:
     return ""
 
 
-def _type_flag_arg(name: str, help_text: str) -> dict:
-    """Build an additional_get_args entry for one of the 3 type flags.
+def _get_flag_arg(name: str, help_text: str, default=None) -> dict:
+    """Build an additional_get_args entry for a `revision get` flag.
 
-    Uses ``default=None`` (not empty string) so ``_build_type_criteria`` can
+    Type flags use ``default=None`` so ``_build_type_criteria`` can
     distinguish "flag omitted" from "flag given with empty value".
+    ``--owner`` uses ``default=""`` so the framework's string-form
+    ``filter_field_map`` dispatch skips it when unset.
     """
     return {
         "func_signature": Parameter(
-            name, Parameter.POSITIONAL_OR_KEYWORD, default=None
+            name, Parameter.POSITIONAL_OR_KEYWORD, default=default
         ),
         "args": [f"--{name}"],
         "kwargs": {
             "dest": name,
             "type": str,
-            "default": None,
+            "default": default,
             "required": False,
             "help": help_text,
         },
@@ -98,34 +100,26 @@ def add_get_filters(crd: CRD) -> None:
     """Register 4 filter args and 3 columns on the revision CRD."""
     crd.additional_get_args.extend(
         [
-            _type_flag_arg(
+            _get_flag_arg(
                 "pipeline",
                 "list revisions whose base_type is pipeline "
                 "(optional pattern matches base_resource.name)",
             ),
-            _type_flag_arg(
+            _get_flag_arg(
                 "model",
                 "list revisions whose base_type is model "
                 "(optional pattern matches base_resource.name)",
             ),
-            _type_flag_arg(
+            _get_flag_arg(
                 "deployment",
                 "list revisions whose base_type is deployment "
                 "(optional pattern matches base_resource.name)",
             ),
-            {
-                "func_signature": Parameter(
-                    "owner", Parameter.POSITIONAL_OR_KEYWORD, default=""
-                ),
-                "args": ["--owner"],
-                "kwargs": {
-                    "dest": "owner",
-                    "type": str,
-                    "default": "",
-                    "required": False,
-                    "help": "list revisions owned by the specified user",
-                },
-            },
+            _get_flag_arg(
+                "owner",
+                "list revisions owned by the specified user",
+                default="",
+            ),
         ]
     )
     crd.filter_field_map.update(
