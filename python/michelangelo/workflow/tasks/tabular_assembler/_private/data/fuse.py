@@ -1,4 +1,4 @@
-"""Sample-data fusion for native-transform + predictor models."""
+"""Fused sample data from native-transform + predictor model metadata."""
 
 from __future__ import annotations
 

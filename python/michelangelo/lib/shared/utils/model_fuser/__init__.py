@@ -16,7 +16,6 @@ from .fuse import (
 )
 from .fuse_schema import fuse_input_schema, fuse_model_schema
 from .fused_model import FusedModel
-from .sample_data_fuse import fuse_sample_data
 
 __all__ = [
     "FusedModel",
@@ -27,6 +26,5 @@ __all__ = [
     "fuse_models_to_onnx",
     "fuse_models_to_python",
     "fuse_models_to_torchscript",
-    "fuse_sample_data",
     "get_predictor_output_field_order",
 ]

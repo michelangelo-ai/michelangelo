@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING
 
 from michelangelo.lib.model_manager.constants import StorageType
 from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
-from michelangelo.lib.shared.utils.model_fuser import (
-    fuse_model_schema,
+from michelangelo.lib.shared.utils.model_fuser import fuse_model_schema
+from michelangelo.workflow.tasks.tabular_assembler._private.data.fuse import (
     fuse_sample_data,
 )
 from michelangelo.workflow.tasks.tabular_assembler._private.model_class.resolve import (
