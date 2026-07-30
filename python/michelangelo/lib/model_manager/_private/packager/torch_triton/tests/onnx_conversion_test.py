@@ -129,8 +129,10 @@ class OnnxConversionTest(TestCase):
                 convert_to_onnx(source, dest, self.schema, sample_data=self.sample_data)
 
     def test_onnx_directory_source_moves_onnx_and_sidecars(self):
-        """A directory source (ONNX graph + external-data sidecars) is moved
-        next to dest_onnx_path, with the graph renamed to dest's basename.
+        """A directory source (ONNX graph + external-data sidecars) is moved.
+
+        The graph is moved next to dest_onnx_path and renamed to dest's
+        basename.
         """
         with tempfile.TemporaryDirectory() as temp_dir:
             source_dir = os.path.join(temp_dir, "source")
@@ -210,7 +212,7 @@ class OnnxConversionTest(TestCase):
                 convert_to_onnx(source_dir, dest, self.schema, sample_data=None)
 
     def test_export_passes_external_data_when_torch_supports_it(self):
-        """export includes external_data=True when torch.onnx.export supports it."""
+        """Export includes external_data=True when torch.onnx.export supports it."""
         with tempfile.TemporaryDirectory() as temp_dir:
             source = os.path.join(temp_dir, "model.pt")
             dest = os.path.join(temp_dir, "model.onnx")
@@ -228,7 +230,7 @@ class OnnxConversionTest(TestCase):
             self.assertTrue(os.path.exists(dest))
 
     def test_export_omits_external_data_when_torch_does_not_support_it(self):
-        """export doesn't pass external_data when the installed torch lacks it."""
+        """Export doesn't pass external_data when the installed torch lacks it."""
         with tempfile.TemporaryDirectory() as temp_dir:
             source = os.path.join(temp_dir, "model.pt")
             dest = os.path.join(temp_dir, "model.onnx")

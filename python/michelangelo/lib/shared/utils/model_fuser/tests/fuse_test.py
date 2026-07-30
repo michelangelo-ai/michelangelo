@@ -366,7 +366,8 @@ class ForwardAcceptsDictTest(unittest.TestCase):
             "x", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=dict
         )
         fake_sig = inspect.Signature(parameters=[self_param, x_param])
-        with mock.patch(f"{_PRIVATE_FUSE_MODULE}.inspect.signature", return_value=fake_sig):
+        target = f"{_PRIVATE_FUSE_MODULE}.inspect.signature"
+        with mock.patch(target, return_value=fake_sig):
             self.assertTrue(private_fuse_module._forward_accepts_dict(m))
 
 
@@ -375,8 +376,9 @@ class ForwardParamOrderTest(unittest.TestCase):
 
     def test_returns_param_names_excluding_self(self):
         """Returns param names excluding self."""
-        self.assertEqual(private_fuse_module._forward_param_order(_TensorPredictor()), ["out"])
-        self.assertEqual(private_fuse_module._forward_param_order(_DictPredictor()), ["inputs"])
+        param_order = private_fuse_module._forward_param_order
+        self.assertEqual(param_order(_TensorPredictor()), ["out"])
+        self.assertEqual(param_order(_DictPredictor()), ["inputs"])
 
     def test_returns_multiple_params_in_signature_order(self):
         """Returns multiple params in signature order."""
