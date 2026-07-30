@@ -202,7 +202,12 @@ def _get_default_value(type_info: dict[str, str], field_type: type) -> typing.An
     origin = typing.get_origin(field_type)
     if origin is None and isinstance(field_type, type):
         if issubclass(field_type, JSONData):
-            return field_type()
+            try:
+                return field_type()
+            except (pydantic.ValidationError, TypeError, ValueError):
+                # field_type has required fields with no defaults; there's no
+                # meaningful zero-value default to compute, so fall through to None.
+                return None
         if issubclass(field_type, Enum):
             return next(iter(field_type))
 
