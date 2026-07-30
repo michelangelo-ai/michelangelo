@@ -119,6 +119,7 @@ Start with the [Getting started](../getting-started/getting-started.md) guide to
 | [**Pipeline Management**](./pipeline-management.md) | Create and manage standard and custom pipelines |
 | [**Workflow Patterns**](./workflow-patterns.md) | Sequence, branch, loop, run tasks in parallel, and share datasets across runtimes |
 | [**Running Uniflow Pipelines**](./running-uniflow.md) | Environment setup, execution, and debugging |
+| [**YAML Pipeline Authoring**](./yaml-pipeline-authoring.md) | Configure a pipeline's tasks from a `pipeline_conf.yaml` file |
 | [**Caching and Resume**](./cache-and-pipelinerun-resume-form.md) | Cache task results and resume failed runs |
 | [**File Sync**](./file-sync-testing-flow-runbook.md) | Sync local code changes to remote runs |
 | [**Set Up Triggers**](./set-up-triggers.md) | Schedule and automate pipeline execution |
