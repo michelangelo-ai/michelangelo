@@ -2,6 +2,7 @@
 [![License](https://img.shields.io/github/license/michelangelo-ai/michelangelo)](http://www.apache.org/licenses/LICENSE-2.0)
 [![codecov](https://codecov.io/gh/michelangelo-ai/michelangelo/graph/badge.svg?token=HKJDT0I6CW)](https://codecov.io/gh/michelangelo-ai/michelangelo)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11481/badge)](https://www.bestpractices.dev/projects/11481)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/michelangelo-ai/michelangelo)
 
 # Michelangelo AI
 
