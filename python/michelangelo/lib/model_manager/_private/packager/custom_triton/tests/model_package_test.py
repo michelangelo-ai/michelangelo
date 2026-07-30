@@ -14,6 +14,16 @@ from michelangelo.lib.model_manager._private.packager.custom_triton import (
 from michelangelo.lib.model_manager._private.packager.template_renderer import (
     TritonTemplateRenderer,
 )
+from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
+
+
+def _model_schema() -> ModelSchema:
+    return ModelSchema(
+        input_schema=[ModelSchemaItem(name="input", data_type=DataType.INT, shape=[1])],
+        output_schema=[
+            ModelSchemaItem(name="response", data_type=DataType.INT, shape=[1])
+        ],
+    )
 
 
 class ModelPackageTest(TestCase):
@@ -42,6 +52,7 @@ class ModelPackageTest(TestCase):
                 "test_model_name",
                 "test_model_revision",
                 "michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.predict.Predict",
+                _model_schema(),
                 input_schema,
                 output_schema,
                 include_import_prefixes=["michelangelo"],
@@ -58,6 +69,8 @@ class ModelPackageTest(TestCase):
             )
             model = content["0"]["model"]
             self.assertIsNotNone(re.fullmatch(r"dir://(?:/.+)*/model", model))
+            self.assertIn("schema.yaml", content["metadata"])
+            self.assertIn("name: input", content["metadata"]["schema.yaml"])
 
     def test_generate_model_package_content_with_sample_data(self):
         """It writes sample_data.json with an added batch dimension."""
@@ -73,6 +86,7 @@ class ModelPackageTest(TestCase):
                 "test_model_name",
                 "test_model_revision",
                 "michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.predict.Predict",
+                _model_schema(),
                 input_schema,
                 output_schema,
                 include_import_prefixes=["michelangelo"],
@@ -98,6 +112,7 @@ class ModelPackageTest(TestCase):
                 "test_model_name",
                 "test_model_revision",
                 "michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.predict.Predict",
+                _model_schema(),
                 input_schema,
                 output_schema,
                 include_import_prefixes=["michelangelo"],
@@ -110,7 +125,7 @@ class ModelPackageTest(TestCase):
             self.assertEqual(loaded[0]["input"], [1])
 
     def test_generate_model_package_content_without_sample_data(self):
-        """It omits the metadata block when sample_data is not given."""
+        """It writes schema.yaml but skips sample_data.json without sample_data."""
         with tempfile.TemporaryDirectory() as temp_dir:
             gen = TritonTemplateRenderer()
             input_schema = {"input": {"type": "int32", "shape": "[ 1 ]"}}
@@ -122,12 +137,14 @@ class ModelPackageTest(TestCase):
                 "test_model_name",
                 "test_model_revision",
                 "michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.predict.Predict",
+                _model_schema(),
                 input_schema,
                 output_schema,
                 include_import_prefixes=["michelangelo"],
             )
 
-            self.assertNotIn("metadata", content)
+            self.assertIn("schema.yaml", content["metadata"])
+            self.assertNotIn("sample_data.json", content["metadata"])
 
     def test_generate_model_package_content_with_triton_parameters(self):
         """It threads triton_parameters into the generated config.pbtxt."""
@@ -142,6 +159,7 @@ class ModelPackageTest(TestCase):
                 "test_model_name",
                 "test_model_revision",
                 "michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.predict.Predict",
+                _model_schema(),
                 input_schema,
                 output_schema,
                 include_import_prefixes=["michelangelo"],
@@ -163,6 +181,7 @@ class ModelPackageTest(TestCase):
                 "test_model_name",
                 "test_model_revision",
                 "michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.predict.Predict",
+                _model_schema(),
                 input_schema,
                 output_schema,
                 include_import_prefixes=["michelangelo"],
@@ -188,3 +207,4 @@ class ModelPackageTest(TestCase):
             )
             self.assertTrue(os.path.exists(expected_file))
             self.assertIn("model", content["0"])
+

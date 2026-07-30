@@ -162,6 +162,7 @@ class CustomTritonPackager:
             model_name,
             model_revision,
             model_class,
+            model_schema,
             input_schema,
             output_schema,
             model_path_source_type=model_path_source_type,

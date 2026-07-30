@@ -148,6 +148,7 @@ class CustomTritonPackagerTest(TestCase):
             "0/michelangelo/lib/model_manager/packager/custom_triton/tests/fixtures/predict.py",
             "0/user_model.py",
             "config.pbtxt",
+            "metadata/schema.yaml",
         ]
 
         expected_files = sorted(package_files + self.model_loader_files)
@@ -429,6 +430,7 @@ class CustomTritonPackagerTest(TestCase):
                 "0/michelangelo/lib/model_manager/packager/custom_triton/tests/fixtures/predict.py",
                 "0/user_model.py",
                 "config.pbtxt",
+                "metadata/schema.yaml",
             ]
 
             expected_files = sorted(package_files + self.model_loader_files)
@@ -503,6 +505,7 @@ class CustomTritonPackagerTest(TestCase):
                 "0/michelangelo/lib/model_manager/packager/custom_triton/tests/fixtures/predict_with_relative_import.py",
                 "0/user_model.py",
                 "config.pbtxt",
+                "metadata/schema.yaml",
             ]
 
             expected_files = sorted(package_files + self.model_loader_files)
@@ -555,6 +558,7 @@ class CustomTritonPackagerTest(TestCase):
                 "0/michelangelo/lib/model_manager/packager/custom_triton/tests/fixtures/predict.py",
                 "0/user_model.py",
                 "config.pbtxt",
+                "metadata/schema.yaml",
             ]
 
             expected_files = sorted(package_files + self.model_loader_files)
