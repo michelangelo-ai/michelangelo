@@ -573,6 +573,30 @@ class InvokeModelTest(TestCase):
 
         self.assertTrue(torch.allclose(result, batch["x"]))
 
+    def test_single_dict_calling_convention_when_param_name_collides_with_feature(self):
+        """A dict-input model whose sole param name matches a feature key still works.
+
+        Regression test: matching on "batch keys are a subset of forward's
+        param names" (rather than arity) misfires here, since a single
+        feature literally named "inputs" makes {"inputs"} a subset of
+        {"inputs"} and incorrectly triggers **kwargs unpacking -- passing
+        the raw tensor to a parameter that expects the whole dict.
+        """
+
+        class DictInputModel(torch.nn.Module):
+            """Model that takes a dict as forward input, param named 'inputs'."""
+
+            def forward(self, inputs):
+                """Forward pass expecting a dict, not a bare tensor."""
+                return inputs["inputs"]
+
+        model = DictInputModel()
+        batch = {"inputs": torch.randn(1, 4)}
+
+        result = _invoke_model(model, batch)
+
+        self.assertTrue(torch.allclose(result, batch["inputs"]))
+
 
 class RemoveBatchSizeDimensionTest(TestCase):
     """Tests for _remove_batch_size_dimension."""

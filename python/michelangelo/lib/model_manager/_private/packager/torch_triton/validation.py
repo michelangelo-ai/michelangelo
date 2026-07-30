@@ -310,6 +310,14 @@ def _invoke_model(model: torch.nn.Module, batch_dict: dict[str, Any]) -> Any:
     are called as model(**batch_dict). Some take a single mapping argument, e.g.
     forward(self, inputs), and must be called as model(batch_dict).
 
+    A model with more than one named forward parameter is unambiguously the
+    positional-features case. With 0 or 1 named parameters, the dict-argument
+    call is tried first and only falls back to keyword-unpacking on a
+    ``TypeError`` -- matching on parameter-name overlap instead would
+    misfire when the sole dict parameter happens to share a name with one of
+    the batch's own feature keys (e.g. ``forward(self, inputs)`` with a
+    feature literally named ``"inputs"``).
+
     Args:
         model: The model to invoke.
         batch_dict: Batched inputs keyed by input name.
@@ -318,9 +326,13 @@ def _invoke_model(model: torch.nn.Module, batch_dict: dict[str, Any]) -> Any:
         The model's raw output.
     """
     params = get_forward_param_names(model)
-    if set(batch_dict.keys()).issubset(set(params)):
+    if len(params) > 1:
         return model(**batch_dict)
-    return model(batch_dict)
+
+    try:
+        return model(batch_dict)
+    except TypeError:
+        return model(**batch_dict)
 
 
 def _remove_batch_size_dimension(
