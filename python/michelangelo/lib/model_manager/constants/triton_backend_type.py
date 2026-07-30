@@ -13,11 +13,9 @@ class TritonBackendType:
     Attributes:
         PYTHON: Python backend for custom Python models
         TORCH: PyTorch backend (torchscript models)
-        TENSORRT: TensorRT backend for optimized GPU inference
         ONNX: ONNX Runtime backend for ONNX models
     """
 
     PYTHON = "python"
     TORCH = "pytorch"
-    TENSORRT = "tensorrt"
     ONNX = "onnxruntime"

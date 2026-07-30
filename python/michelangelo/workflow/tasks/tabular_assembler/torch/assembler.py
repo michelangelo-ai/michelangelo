@@ -55,8 +55,8 @@ def torch_assembler(
     Args:
         config: The assembler configuration. ``config.torch.backend``
             selects the Triton backend for the deployable package (one of
-            ``"pytorch"``, ``"tensorrt"``, ``"python"``, ``"onnxruntime"``,
-            or ``None`` for the packager default). ``config.torch
+            ``"pytorch"``, ``"python"``, ``"onnxruntime"``, or ``None`` for
+            the packager default). ``config.torch
             .include_import_prefixes`` scopes the packager's dependency-file
             walk (see ``TorchAssemblerConfig.include_import_prefixes``).
         raw_model: The trained predictor model to package.

@@ -45,17 +45,7 @@ parameters: {
 {%- endfor %}
 instance_group: [
   {
-    kind: {% if backend == "tensorrt" %}KIND_GPU{% else %}KIND_CPU{% endif %},
+    kind: KIND_CPU,
     count: {{instance_count}}
   }
 ]
-{% if backend == "tensorrt" -%}
-optimization: {
-  cuda: {
-    graphs: true
-  }
-  input_pinned_memory: {
-    enable: true
-  }
-}
-{%- endif %}

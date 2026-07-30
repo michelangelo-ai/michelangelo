@@ -58,7 +58,7 @@ class TorchAssemblerConfig:
 
     Attributes:
         backend: Triton backend used for the deployable package — one of
-            ``"pytorch"``, ``"tensorrt"``, ``"python"``, ``"onnxruntime"``.
+            ``"pytorch"``, ``"python"``, ``"onnxruntime"``.
             ``None`` selects the packager default (TorchScript/PyTorch).
             Validation of supported values is performed by the packager, not
             here, to keep a single source of truth.
