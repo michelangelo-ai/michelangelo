@@ -249,11 +249,23 @@ class ValidateModelClassTest(TestCase):
 class HasBatchDimensionTest(TestCase):
     """Test cases for ``_has_batch_dimension``."""
 
-    def test_batched_tensor_detected(self):
-        """A tensor with a batch dimension larger than one is detected."""
-        tensor = torch.zeros(8, 4)
+    def test_batch_size_one_detected(self):
+        """A tensor with a leading dimension of exactly 1 is treated as batched."""
+        tensor = torch.zeros(1, 4)
 
         self.assertTrue(_has_batch_dimension(tensor, expected_shape=[4]))
+
+    def test_batch_size_not_one_is_not_batched(self):
+        """A leading dimension larger than 1 is not treated as a batch dim.
+
+        Packaging validation always works with a single sample, so an extra
+        leading dimension of size >1 means the tensor's shape doesn't match
+        the schema at all, not that it's "already batched" -- matching
+        internal's semantics.
+        """
+        tensor = torch.zeros(8, 4)
+
+        self.assertFalse(_has_batch_dimension(tensor, expected_shape=[4]))
 
     def test_unbatched_tensor_detected(self):
         """A tensor matching the per-sample shape is not treated as batched."""
@@ -263,7 +275,7 @@ class HasBatchDimensionTest(TestCase):
 
     def test_empty_expected_shape_is_not_batched(self):
         """With no expected shape, the tensor is never treated as batched."""
-        tensor = torch.zeros(8, 4)
+        tensor = torch.zeros(1, 4)
 
         self.assertFalse(_has_batch_dimension(tensor, expected_shape=[]))
 

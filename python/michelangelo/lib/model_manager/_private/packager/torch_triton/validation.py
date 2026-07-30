@@ -264,10 +264,10 @@ def _load_model_class(package_path: str) -> Any:
 def _has_batch_dimension(tensor: torch.Tensor, expected_shape: list[int]) -> bool:
     """Check whether a tensor already carries a leading batch dimension.
 
-    A tensor is treated as batched when it has exactly one more dimension than
-    the schema's expected shape and its trailing dimensions match that shape.
-    The batch dimension's size is not constrained, so batches larger than one
-    are detected correctly.
+    A tensor is treated as batched when it has exactly one more dimension
+    than the schema's expected shape, that leading dimension has size 1
+    (packaging validation always works with a single sample), and its
+    trailing dimensions match the expected shape.
 
     Args:
         tensor: The input tensor to inspect.
@@ -281,7 +281,7 @@ def _has_batch_dimension(tensor: torch.Tensor, expected_shape: list[int]) -> boo
         return False
     if not expected_shape:
         return False
-    if tensor.ndim == len(expected_shape) + 1:
+    if tensor.ndim == len(expected_shape) + 1 and tensor.shape[0] == 1:
         return list(tensor.shape[1:]) == expected_shape
     return False
 
