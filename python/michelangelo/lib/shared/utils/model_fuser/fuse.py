@@ -29,6 +29,7 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any
 
+import pytorch_lightning as pl
 import torch
 
 from michelangelo.lib.model_manager.utils.onnx.torch_onnx import export_torch_to_onnx
@@ -41,7 +42,6 @@ from ._private.fuse import (
     _forward_accepts_dict,
     _forward_param_order,
     _load_module_from_path,
-    _pl_jit_scripting_guard,
     _schema_input_keys,
 )
 from .fused_model import FusedModel
@@ -176,7 +176,7 @@ def fuse_models_to_torchscript(
     # torch.no_grad ensures a consistent eval-mode fast path in
     # nn.TransformerEncoderLayer during trace; without it, trace vs.
     # verification runs can diverge.
-    with _pl_jit_scripting_guard(), torch.no_grad():
+    with pl.core.module._jit_is_scripting(), torch.no_grad():
         traced = torch.jit.trace(fused, (sample_input,))
         torch.jit.save(traced, dest_path)
     return dest_path

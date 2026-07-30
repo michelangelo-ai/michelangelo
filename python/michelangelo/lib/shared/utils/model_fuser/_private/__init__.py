@@ -7,7 +7,6 @@ from .fuse import (
     _forward_param_order,
     _is_state_dict,
     _load_module_from_path,
-    _pl_jit_scripting_guard,
     _schema_input_keys,
     _schema_output_keys,
 )
@@ -21,7 +20,6 @@ __all__ = [
     "_forward_param_order",
     "_is_state_dict",
     "_load_module_from_path",
-    "_pl_jit_scripting_guard",
     "_schema_input_keys",
     "_schema_output_keys",
 ]

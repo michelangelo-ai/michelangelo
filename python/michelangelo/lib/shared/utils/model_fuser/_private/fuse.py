@@ -11,8 +11,7 @@ from __future__ import annotations
 
 import inspect
 import os
-from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 
@@ -24,15 +23,6 @@ from michelangelo.uniflow.core.utils import import_attribute
 
 from ..fuse_schema import fuse_input_schema
 from ..fused_model import FusedModel
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
-
-try:
-    import pytorch_lightning as pl
-except ImportError:  # pragma: no cover - pytorch_lightning is a declared dependency
-    pl = None
-
 
 # ---------------------------------------------------------------------------
 # Module loading / forward-signature helpers
@@ -304,21 +294,3 @@ def _build_tx_hydra_spec(tx_hyperparameters: dict[str, Any]) -> dict[str, Any]:
         "available in OSS michelangelo."
     )
 
-
-@contextmanager
-def _pl_jit_scripting_guard() -> Iterator[None]:
-    """Best-effort wrapper around PyTorch Lightning's private jit-scripting context.
-
-    ``pl.core.module._jit_is_scripting`` avoids tracing LightningModule-only
-    hooks during ``torch.jit.trace``. It's a Lightning-internal API with no
-    public equivalent and has moved across Lightning releases before, so this
-    degrades to a no-op if the installed pytorch_lightning no longer exposes
-    it, rather than breaking the fused-model export.
-    """
-    module_attr = getattr(getattr(pl, "core", None), "module", None) if pl else None
-    jit_is_scripting = getattr(module_attr, "_jit_is_scripting", None)
-    if jit_is_scripting is None:
-        yield
-        return
-    with jit_is_scripting():
-        yield
