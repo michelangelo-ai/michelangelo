@@ -8,6 +8,7 @@ import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import {
   createQueryMockRouter,
+  createServiceProviderTestContext,
   getServiceProviderWrapper,
 } from '#core/test/wrappers/get-service-provider-wrapper';
 import { getSnackbarProviderWrapper } from '#core/test/wrappers/get-snackbar-provider-wrapper';
@@ -40,10 +41,21 @@ describe('useStudioMutation', () => {
     });
   });
 
-  test('sets mutationKey from config.mutationName for query cache tracking', async () => {
+  test('sets mutationKey so MutationCache can observe mutations by name', async () => {
     const mockResponse = { id: 'test-id' };
     const mockRequest = createQueryMockRouter({
       CreatePipeline: mockResponse,
+    });
+    const onMutationSuccess = vi.fn();
+
+    const { handles, wrapper: serviceWrapper } = createServiceProviderTestContext({
+      request: mockRequest,
+    });
+
+    handles.queryClient.getMutationCache().subscribe((event) => {
+      if (event.type === 'updated' && event.mutation.state.status === 'success') {
+        onMutationSuccess(event.mutation.options.mutationKey);
+      }
     });
 
     const { result } = renderHook(
@@ -51,7 +63,7 @@ describe('useStudioMutation', () => {
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper(),
-        getServiceProviderWrapper({ request: mockRequest }),
+        serviceWrapper,
         getSnackbarProviderWrapper(),
       ])
     );
@@ -59,8 +71,7 @@ describe('useStudioMutation', () => {
     result.current.mutate({ name: 'test-pipeline' });
 
     await waitFor(() => {
-      expect(mockRequest).toHaveBeenCalledWith('CreatePipeline', { name: 'test-pipeline' }, {});
-      expect(result.current.data).toEqual(mockResponse);
+      expect(onMutationSuccess).toHaveBeenCalledWith(['CreatePipeline']);
     });
   });
 
