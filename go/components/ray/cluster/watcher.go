@@ -394,6 +394,18 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 	}
 
 	newState := mapKubeRayClusterState(local.Status.State)
+
+	// Cache re-sync gives Update events even when the local cluster did not
+	// change. Exit early if global already reflects the local state to avoid
+	// unnecessary CRD writes.
+	if globalCluster.Status.State == newState && newState == v2pb.RAY_CLUSTER_STATE_READY {
+		launchedCond := jobsutils.GetCondition(&globalCluster.Status.StatusConditions, LaunchedCondition, globalCluster.Generation)
+		if launchedCond.GetStatus() == apipb.CONDITION_STATUS_TRUE {
+			log.V(1).Info("ray cluster already ready, skipping update")
+			return
+		}
+	}
+
 	log.Info("ray cluster event", "kuberay_state", local.Status.State, "mapped_state", newState)
 
 	if err := jobsutils.UpdateStatusWithRetries(ctx, r, &globalCluster,

@@ -173,6 +173,31 @@ func TestRayClusterEventHandler_Ready(t *testing.T) {
 	assert.Equal(t, "ClusterReady", launchedCond.Reason)
 }
 
+func TestRayClusterEventHandler_ReadyDedup(t *testing.T) {
+	globalCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Status: v2pb.RayClusterStatus{
+			State: v2pb.RAY_CLUSTER_STATE_READY,
+			StatusConditions: []*apipb.Condition{
+				{Type: LaunchedCondition, Status: apipb.CONDITION_STATUS_TRUE},
+			},
+		},
+	}
+	r := setupWatcherTest(t, globalCluster)
+
+	// Sending a Ready event when global is already READY+Launched=TRUE should
+	// be a no-op (de-dup): the launched condition's timestamp must not change.
+	r.rayClusterEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
+
+	updated := getUpdatedCluster(t, r)
+	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_READY, updated.Status.State)
+	launchedCond := findCondition(updated.Status.StatusConditions, LaunchedCondition)
+	require.NotNil(t, launchedCond)
+	// Timestamp should be zero (unchanged from the test fixture) because the
+	// handler exited before calling UpdateStatusWithRetries.
+	assert.Equal(t, int64(0), launchedCond.LastUpdatedTimestamp)
+}
+
 func TestRayClusterEventHandler_Failed(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
