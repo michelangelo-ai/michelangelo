@@ -21,6 +21,8 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -435,4 +437,398 @@ func TestIntegration_List_OrderBy_ValidFieldStillWorks(t *testing.T) {
 	for i := range ascNames {
 		assert.Equal(t, ascNames[i], descNames[len(descNames)-1-i], "DESC must be the exact reverse of ASC over the same real rows")
 	}
+}
+
+// ==============================================================================
+// directUpdate — the generic Update RPC path (issue #1622)
+// ==============================================================================
+
+// newDirectUpdateDeployment builds a Deployment CR for the directUpdate tests.
+func newDirectUpdateDeployment(namespace, name, uid, resVersion string,
+	labels, annotations map[string]string) *v2pb.Deployment {
+	return &v2pb.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "michelangelo.uber.com/v2",
+			Kind:       "Deployment",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              name,
+			Namespace:         namespace,
+			UID:               types.UID(uid),
+			ResourceVersion:   resVersion,
+			CreationTimestamp: metav1.Now(),
+			Labels:            labels,
+			Annotations:       annotations,
+		},
+	}
+}
+
+// seedDeployment performs the non-direct Upsert a real ingester sync would do, so the
+// direct-update tests have a live row to work against.
+func seedDeployment(t *testing.T, store *mysqlMetadataStorage, namespace, name, uid, resVersion string,
+	labels, annotations map[string]string) *v2pb.Deployment {
+	t.Helper()
+	cr := newDirectUpdateDeployment(namespace, name, uid, resVersion, labels, annotations)
+	require.NoError(t, store.Upsert(context.Background(), cr, false, nil), "seed Upsert must succeed")
+	return cr
+}
+
+// storedResVersion reads the res_version column straight out of the row.
+func storedResVersion(t *testing.T, db *sql.DB, namespace, name string) uint64 {
+	t.Helper()
+	var rv uint64
+	require.NoError(t,
+		db.QueryRow("SELECT res_version FROM deployment WHERE namespace=? AND name=? AND delete_time IS NULL",
+			namespace, name).Scan(&rv))
+	return rv
+}
+
+// TestIntegration_DirectUpdate_HappyPath is the base case: a direct update must succeed,
+// bump the stored resource version, and — critically — actually commit. Before the fix
+// the direct branch of Upsert returned without ever calling tx.Commit(), so the column
+// assertion here is what proves the transaction landed.
+func TestIntegration_DirectUpdate_HappyPath(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	const (
+		namespace = "integration-test-ns"
+		name      = "direct-update-happy"
+		uid       = "direct-update-happy-uid"
+	)
+	t.Cleanup(func() { cleanupDeploymentRow(t, db, namespace, name, uid) })
+
+	seedDeployment(t, store, namespace, name, uid, "1", map[string]string{"app": "before"}, nil)
+
+	var createTimeBefore, updateTimeBefore time.Time
+	require.NoError(t, db.QueryRowContext(ctx,
+		"SELECT create_time, update_time FROM deployment WHERE uid=?", uid).
+		Scan(&createTimeBefore, &updateTimeBefore))
+
+	update := newDirectUpdateDeployment(namespace, name, "", "1", map[string]string{"app": "after"}, nil)
+	require.NoError(t, store.Upsert(ctx, update, true, nil), "direct update must succeed")
+
+	assert.Equal(t, uint64(2), storedResVersion(t, db, namespace, name),
+		"res_version must be bumped and the transaction committed")
+	assert.Equal(t, "2", update.GetResourceVersion(),
+		"the new resource version must be written back onto the caller's object")
+
+	var createTimeAfter, updateTimeAfter time.Time
+	require.NoError(t, db.QueryRowContext(ctx,
+		"SELECT create_time, update_time FROM deployment WHERE uid=?", uid).
+		Scan(&createTimeAfter, &updateTimeAfter))
+	assert.Equal(t, createTimeBefore.UTC(), createTimeAfter.UTC(), "create_time must not move")
+	assert.False(t, updateTimeAfter.Before(updateTimeBefore), "update_time must not go backwards")
+}
+
+// TestIntegration_DirectUpdate_RewritesProtoSoNextReadSeesNewRV guards the subtle half of
+// #1622: GetByName reconstructs the object from the proto blob alone, so bumping only the
+// res_version column would leave the next read reporting a stale version.
+func TestIntegration_DirectUpdate_RewritesProtoSoNextReadSeesNewRV(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	const (
+		namespace = "integration-test-ns"
+		name      = "direct-update-proto-rewrite"
+		uid       = "direct-update-proto-rewrite-uid"
+	)
+	t.Cleanup(func() { cleanupDeploymentRow(t, db, namespace, name, uid) })
+
+	seedDeployment(t, store, namespace, name, uid, "1", map[string]string{"app": "before"}, nil)
+
+	update := newDirectUpdateDeployment(namespace, name, "", "1", map[string]string{"app": "after"}, nil)
+	require.NoError(t, store.Upsert(ctx, update, true, nil))
+
+	readBack := &v2pb.Deployment{}
+	require.NoError(t, store.GetByName(ctx, namespace, name, readBack))
+	assert.Equal(t, "2", readBack.GetResourceVersion(),
+		"GetByName reads metadata from the proto blob, so the blob must carry the new version")
+	assert.Equal(t, "after", readBack.GetLabels()["app"],
+		"the merged labels must be persisted into the proto blob too")
+}
+
+// TestIntegration_DirectUpdate_RepeatedReadModifyWriteSucceeds is the #1622 repro reduced
+// to the storage layer: the register_model client re-reads the object and reuses its
+// resource version on every retry. Three successive cycles must all succeed. Without the
+// proto rewrite the third one fails with FailedPrecondition forever.
+func TestIntegration_DirectUpdate_RepeatedReadModifyWriteSucceeds(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	const (
+		namespace = "integration-test-ns"
+		name      = "direct-update-repeat"
+		uid       = "direct-update-repeat-uid"
+	)
+	t.Cleanup(func() { cleanupDeploymentRow(t, db, namespace, name, uid) })
+
+	seedDeployment(t, store, namespace, name, uid, "1", map[string]string{"attempt": "0"}, nil)
+
+	for i := 1; i <= 3; i++ {
+		existing := &v2pb.Deployment{}
+		require.NoError(t, store.GetByName(ctx, namespace, name, existing),
+			"read before update %d", i)
+
+		update := newDirectUpdateDeployment(namespace, name, "", existing.GetResourceVersion(),
+			map[string]string{"attempt": fmt.Sprintf("%d", i)}, nil)
+		require.NoError(t, store.Upsert(ctx, update, true, nil),
+			"read-modify-write cycle %d must succeed", i)
+	}
+
+	assert.Equal(t, uint64(4), storedResVersion(t, db, namespace, name))
+	final := &v2pb.Deployment{}
+	require.NoError(t, store.GetByName(ctx, namespace, name, final))
+	assert.Equal(t, "3", final.GetLabels()["attempt"])
+}
+
+// TestIntegration_DirectUpdate_EmptyResourceVersionIsUnconditional mirrors Kubernetes
+// semantics: an unset resourceVersion on update means "no precondition".
+func TestIntegration_DirectUpdate_EmptyResourceVersionIsUnconditional(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	const (
+		namespace = "integration-test-ns"
+		name      = "direct-update-empty-rv"
+		uid       = "direct-update-empty-rv-uid"
+	)
+	t.Cleanup(func() { cleanupDeploymentRow(t, db, namespace, name, uid) })
+
+	seedDeployment(t, store, namespace, name, uid, "5", map[string]string{"app": "before"}, nil)
+
+	update := newDirectUpdateDeployment(namespace, name, "", "", map[string]string{"app": "after"}, nil)
+	require.NoError(t, store.Upsert(ctx, update, true, nil), "empty resourceVersion must not be a precondition")
+	assert.Equal(t, uint64(6), storedResVersion(t, db, namespace, name))
+}
+
+// TestIntegration_DirectUpdate_ResourceVersionMismatchConflicts checks both halves of the
+// optimistic-concurrency contract: the right gRPC code out, and no partial write left
+// behind (which also proves the deferred rollback still works).
+func TestIntegration_DirectUpdate_ResourceVersionMismatchConflicts(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	const (
+		namespace = "integration-test-ns"
+		name      = "direct-update-conflict"
+		uid       = "direct-update-conflict-uid"
+	)
+	t.Cleanup(func() { cleanupDeploymentRow(t, db, namespace, name, uid) })
+
+	seedDeployment(t, store, namespace, name, uid, "5", map[string]string{"app": "before"}, nil)
+
+	update := newDirectUpdateDeployment(namespace, name, "", "4", map[string]string{"app": "after"}, nil)
+	err := store.Upsert(ctx, update, true, nil)
+	require.Error(t, err)
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err),
+		"a stale resourceVersion must surface as FailedPrecondition: the Python client "+
+			"catches exactly this code to drive its retry loop")
+
+	assert.Equal(t, uint64(5), storedResVersion(t, db, namespace, name), "row must be unchanged")
+	unchanged := &v2pb.Deployment{}
+	require.NoError(t, store.GetByName(ctx, namespace, name, unchanged))
+	assert.Equal(t, "before", unchanged.GetLabels()["app"], "labels must be unchanged")
+}
+
+// TestIntegration_DirectUpdate_NonNumericResourceVersion rejects a structurally invalid
+// version as InvalidArgument rather than treating it as a lost update.
+func TestIntegration_DirectUpdate_NonNumericResourceVersion(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	const (
+		namespace = "integration-test-ns"
+		name      = "direct-update-bad-rv"
+		uid       = "direct-update-bad-rv-uid"
+	)
+	t.Cleanup(func() { cleanupDeploymentRow(t, db, namespace, name, uid) })
+
+	seedDeployment(t, store, namespace, name, uid, "5", nil, nil)
+
+	update := newDirectUpdateDeployment(namespace, name, "", "not-a-number", nil, nil)
+	err := store.Upsert(ctx, update, true, nil)
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	assert.Equal(t, uint64(5), storedResVersion(t, db, namespace, name), "row must be unchanged")
+}
+
+// TestIntegration_DirectUpdate_RowNotFound covers a namespace/name that was never stored.
+func TestIntegration_DirectUpdate_RowNotFound(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	update := newDirectUpdateDeployment("integration-test-ns", "direct-update-never-existed", "", "1", nil, nil)
+	err := store.Upsert(ctx, update, true, nil)
+	require.Error(t, err)
+	assert.Equal(t, codes.NotFound, status.Code(err))
+}
+
+// TestIntegration_DirectUpdate_SoftDeletedRowNotFound verifies a soft-deleted row cannot
+// be resurrected through the direct path.
+func TestIntegration_DirectUpdate_SoftDeletedRowNotFound(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	const (
+		namespace = "integration-test-ns"
+		name      = "direct-update-soft-deleted"
+		uid       = "direct-update-soft-deleted-uid"
+	)
+	t.Cleanup(func() { cleanupDeploymentRow(t, db, namespace, name, uid) })
+
+	seedDeployment(t, store, namespace, name, uid, "1", nil, nil)
+	typeMeta := &metav1.TypeMeta{APIVersion: "michelangelo.uber.com/v2", Kind: "Deployment"}
+	require.NoError(t, store.Delete(ctx, typeMeta, namespace, name))
+
+	update := newDirectUpdateDeployment(namespace, name, "", "1", nil, nil)
+	err := store.Upsert(ctx, update, true, nil)
+	require.Error(t, err)
+	assert.Equal(t, codes.NotFound, status.Code(err))
+
+	var deleteTime sql.NullTime
+	require.NoError(t, db.QueryRowContext(ctx,
+		"SELECT delete_time FROM deployment WHERE uid=?", uid).Scan(&deleteTime))
+	assert.True(t, deleteTime.Valid, "the row must stay soft-deleted")
+}
+
+// TestIntegration_DirectUpdate_ChildRowsKeyedByStoredUID is the highest-value case: the
+// register_model client sends name/namespace/labels but never a UID, so keying child rows
+// off metadataStoragePrimaryKey(incoming) would file them all under obj_uid = ”.
+func TestIntegration_DirectUpdate_ChildRowsKeyedByStoredUID(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	const (
+		namespace = "integration-test-ns"
+		name      = "direct-update-child-rows"
+		uid       = "direct-update-child-rows-uid"
+	)
+	t.Cleanup(func() { cleanupDeploymentRow(t, db, namespace, name, uid, "") })
+
+	seedDeployment(t, store, namespace, name, uid, "1",
+		map[string]string{"app": "before", "team": "platform"}, nil)
+
+	// No UID and no primary-key annotation — exactly what the Python client sends.
+	update := newDirectUpdateDeployment(namespace, name, "", "1", map[string]string{"app": "after"}, nil)
+	require.NoError(t, store.Upsert(ctx, update, true, nil))
+
+	rows, err := db.QueryContext(ctx,
+		"SELECT `key`, `value` FROM deployment_labels WHERE obj_uid=? ORDER BY `key`", uid)
+	require.NoError(t, err)
+	defer rows.Close()
+	got := map[string]string{}
+	for rows.Next() {
+		var k, v string
+		require.NoError(t, rows.Scan(&k, &v))
+		got[k] = v
+	}
+	require.NoError(t, rows.Err())
+	assert.Equal(t, map[string]string{"app": "after"}, got,
+		"labels must be replaced wholesale and keyed by the stored uid")
+
+	var orphaned int
+	require.NoError(t, db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM deployment_labels WHERE obj_uid=''").Scan(&orphaned))
+	assert.Equal(t, 0, orphaned, "no label rows may be orphaned under an empty obj_uid")
+}
+
+// TestIntegration_DirectUpdate_PreservesManagedAnnotations verifies that server-managed
+// annotations survive a caller that builds a fresh object and never echoes them back.
+func TestIntegration_DirectUpdate_PreservesManagedAnnotations(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	const (
+		namespace = "integration-test-ns"
+		name      = "direct-update-managed-annotations"
+		uid       = "direct-update-managed-annotations-uid"
+	)
+	t.Cleanup(func() { cleanupDeploymentRow(t, db, namespace, name, uid) })
+
+	seedDeployment(t, store, namespace, name, uid, "1", nil, map[string]string{
+		api.ImmutableAnnotation:                 "true",
+		api.MetadataStoragePrimaryKeyAnnotation: uid,
+	})
+
+	update := newDirectUpdateDeployment(namespace, name, "", "1", nil,
+		map[string]string{"user-annotation": "set-by-client"})
+	require.NoError(t, store.Upsert(ctx, update, true, nil))
+
+	readBack := &v2pb.Deployment{}
+	require.NoError(t, store.GetByName(ctx, namespace, name, readBack))
+	annotations := readBack.GetAnnotations()
+	assert.Equal(t, "true", annotations[api.ImmutableAnnotation],
+		"the immutability marker must not be destroyed by a metadata-only update")
+	assert.Equal(t, uid, annotations[api.MetadataStoragePrimaryKeyAnnotation],
+		"the migration primary key must not be destroyed by a metadata-only update")
+	assert.Equal(t, "set-by-client", annotations["user-annotation"])
+}
+
+// TestIntegration_DirectUpdate_IgnoresSpecChanges locks in the deliberate contract
+// behaviour: the direct path is metadata-only, so a caller that submits a modified spec
+// has that part of its request silently dropped.
+func TestIntegration_DirectUpdate_IgnoresSpecChanges(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	const (
+		namespace = "integration-test-ns"
+		name      = "direct-update-spec-ignored"
+		uid       = "direct-update-spec-ignored-uid"
+	)
+	t.Cleanup(func() { cleanupDeploymentRow(t, db, namespace, name, uid) })
+
+	seeded := newDirectUpdateDeployment(namespace, name, uid, "1", nil, nil)
+	seeded.Spec.DesiredRevision = &apipb.ResourceIdentifier{Namespace: namespace, Name: "revision-stored"}
+	require.NoError(t, store.Upsert(ctx, seeded, false, nil))
+
+	update := newDirectUpdateDeployment(namespace, name, "", "1", map[string]string{"app": "after"}, nil)
+	update.Spec.DesiredRevision = &apipb.ResourceIdentifier{Namespace: namespace, Name: "revision-from-caller"}
+	require.NoError(t, store.Upsert(ctx, update, true, nil))
+
+	readBack := &v2pb.Deployment{}
+	require.NoError(t, store.GetByName(ctx, namespace, name, readBack))
+	require.NotNil(t, readBack.Spec.DesiredRevision)
+	assert.Equal(t, "revision-stored", readBack.Spec.DesiredRevision.Name,
+		"the direct path must not persist spec changes")
+	assert.Equal(t, "after", readBack.GetLabels()["app"], "but metadata changes must land")
+}
+
+// TestIntegration_DirectUpdate_EmptyStoredProtoRejected covers a corrupt row: directUpdate
+// is a read-modify-write of the proto blob, and unmarshalling zero bytes succeeds with a
+// zero-valued object. Writing that back would blank out the stored name, namespace and
+// spec while the row's columns still looked correct, so an empty blob must abort.
+func TestIntegration_DirectUpdate_EmptyStoredProtoRejected(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	const (
+		namespace = "integration-test-ns"
+		name      = "direct-update-empty-proto"
+		uid       = "direct-update-empty-proto-uid"
+	)
+	t.Cleanup(func() { cleanupDeploymentRow(t, db, namespace, name, uid) })
+
+	seedDeployment(t, store, namespace, name, uid, "1", nil, nil)
+	_, err := db.ExecContext(ctx, "UPDATE deployment SET proto = NULL WHERE uid = ?", uid)
+	require.NoError(t, err)
+
+	update := newDirectUpdateDeployment(namespace, name, "", "1", map[string]string{"app": "after"}, nil)
+	err = store.Upsert(ctx, update, true, nil)
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err))
+	assert.Equal(t, uint64(1), storedResVersion(t, db, namespace, name), "row must be unchanged")
 }

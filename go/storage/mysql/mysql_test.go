@@ -5,10 +5,13 @@ import (
 
 	gogotypes "github.com/gogo/protobuf/types"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
+	api "github.com/michelangelo-ai/michelangelo/go/api"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -603,4 +606,129 @@ func TestFullUpsert_CrossClusterMigration(t *testing.T) {
 	// Verify the UIDs are actually different
 	require.NotEqual(t, string(metaObjOriginal.GetUID()), string(metaObjNew.GetUID()),
 		"UIDs are different across clusters as expected")
+}
+
+func TestCheckResourceVersionPrecondition(t *testing.T) {
+	cases := []struct {
+		name     string
+		incoming string
+		stored   uint64
+		wantCode codes.Code
+	}{
+		{"empty is unconditional", "", 5, codes.OK},
+		{"exact match", "5", 5, codes.OK},
+		{"zero padded still matches numerically", "007", 7, codes.OK},
+		{"stale version conflicts", "4", 5, codes.FailedPrecondition},
+		{"future version conflicts", "6", 5, codes.FailedPrecondition},
+		{"non numeric is invalid", "abc", 5, codes.InvalidArgument},
+		{"negative is invalid", "-1", 5, codes.InvalidArgument},
+		{"fractional is invalid", "1.5", 5, codes.InvalidArgument},
+		{"overflow is invalid", "18446744073709551616", 5, codes.InvalidArgument},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := checkResourceVersionPrecondition(c.incoming, c.stored)
+			if c.wantCode == codes.OK {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			require.Equal(t, c.wantCode, status.Code(err))
+		})
+	}
+}
+
+func TestMergeDirectUpdateMetadata_ReplacesUserSuppliedKeys(t *testing.T) {
+	stored := &v2pb.Model{ObjectMeta: metav1.ObjectMeta{
+		Labels: map[string]string{"app": "old", "team": "platform"},
+	}}
+	incoming := &v2pb.Model{ObjectMeta: metav1.ObjectMeta{
+		Labels: map[string]string{"app": "new"},
+	}}
+
+	mergeDirectUpdateMetadata(stored.GetObjectMeta(), incoming.GetObjectMeta(), 3)
+
+	// Wholesale replace: "app" takes the incoming value and "team" is dropped.
+	require.Equal(t, map[string]string{"app": "new"}, stored.GetLabels())
+	require.Equal(t, "3", stored.GetResourceVersion())
+}
+
+func TestMergeDirectUpdateMetadata_PreservesManagedKeys(t *testing.T) {
+	stored := &v2pb.Model{ObjectMeta: metav1.ObjectMeta{
+		Labels: map[string]string{
+			api.SpecUpdateTimestampLabel: "1700000000000000",
+			"app":                        "old",
+		},
+		Annotations: map[string]string{
+			api.ImmutableAnnotation:                 "true",
+			api.MetadataStoragePrimaryKeyAnnotation: "pk-original",
+			"user-annotation":                       "dropped",
+		},
+	}}
+	incoming := &v2pb.Model{ObjectMeta: metav1.ObjectMeta{
+		Labels:      map[string]string{"app": "new"},
+		Annotations: map[string]string{"user-annotation": "kept"},
+	}}
+
+	mergeDirectUpdateMetadata(stored.GetObjectMeta(), incoming.GetObjectMeta(), 2)
+
+	// Server-managed keys survive even though the caller never sent them.
+	require.Equal(t, "1700000000000000", stored.GetLabels()[api.SpecUpdateTimestampLabel])
+	require.Equal(t, "new", stored.GetLabels()["app"])
+	require.Equal(t, "true", stored.GetAnnotations()[api.ImmutableAnnotation])
+	require.Equal(t, "pk-original", stored.GetAnnotations()[api.MetadataStoragePrimaryKeyAnnotation])
+	require.Equal(t, "kept", stored.GetAnnotations()["user-annotation"])
+}
+
+func TestMergeDirectUpdateMetadata_IncomingManagedKeyWins(t *testing.T) {
+	stored := &v2pb.Model{ObjectMeta: metav1.ObjectMeta{
+		Annotations: map[string]string{api.ImmutableAnnotation: "true"},
+	}}
+	incoming := &v2pb.Model{ObjectMeta: metav1.ObjectMeta{
+		Annotations: map[string]string{api.ImmutableAnnotation: "false"},
+	}}
+
+	mergeDirectUpdateMetadata(stored.GetObjectMeta(), incoming.GetObjectMeta(), 2)
+
+	require.Equal(t, "false", stored.GetAnnotations()[api.ImmutableAnnotation])
+}
+
+func TestMergeDirectUpdateMetadata_LeavesSpecUntouched(t *testing.T) {
+	stored := &v2pb.Model{
+		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "old"}},
+		Spec:       v2pb.ModelSpec{Algorithm: "xgboost", Description: "stored spec"},
+	}
+	incoming := &v2pb.Model{
+		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "new"}},
+		Spec:       v2pb.ModelSpec{Algorithm: "pytorch", Description: "caller spec"},
+	}
+
+	mergeDirectUpdateMetadata(stored.GetObjectMeta(), incoming.GetObjectMeta(), 9)
+
+	// The direct path is metadata-only: the caller's spec is deliberately ignored.
+	require.Equal(t, "xgboost", stored.Spec.Algorithm)
+	require.Equal(t, "stored spec", stored.Spec.Description)
+	require.Equal(t, "9", stored.GetResourceVersion())
+}
+
+func TestMergeDirectUpdateMetadata_NilMaps(t *testing.T) {
+	stored := &v2pb.Model{ObjectMeta: metav1.ObjectMeta{
+		Labels:      map[string]string{"app": "old"},
+		Annotations: map[string]string{api.ImmutableAnnotation: "true"},
+	}}
+	incoming := &v2pb.Model{}
+
+	require.NotPanics(t, func() {
+		mergeDirectUpdateMetadata(stored.GetObjectMeta(), incoming.GetObjectMeta(), 1)
+	})
+
+	// User labels are cleared to nil, but the managed annotation is carried over.
+	require.Nil(t, stored.GetLabels())
+	require.Equal(t, map[string]string{api.ImmutableAnnotation: "true"}, stored.GetAnnotations())
+}
+
+func TestMergeManagedKeys_EmptyResultIsNil(t *testing.T) {
+	// Neither side has anything: the result must stay nil rather than become an
+	// empty map, so an object without labels does not gain one.
+	require.Nil(t, mergeManagedKeys(nil, nil, directUpdateManagedLabels))
 }
