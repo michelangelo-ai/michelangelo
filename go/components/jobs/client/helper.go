@@ -136,7 +136,7 @@ func (d defaultHelper) Watcher(params []*WatcherParams) ([]*ResourceWatcher, err
 		// For CRDs, we need a list and watch with our custom scheme
 		case constants.KubeSparkResource:
 			return nil, fmt.Errorf("Spark job is not supported")
-		case constants.KubeRayResource:
+		case constants.KubeRayResource, constants.KubeRayJobResource:
 			lw = d.NewFilteredListWatchFromClient(
 				p.Client,
 				p.ResourceName,

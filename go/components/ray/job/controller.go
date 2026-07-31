@@ -17,8 +17,8 @@ import (
 	jobsclient "github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
 	jobscluster "github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
-	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/watch"
 	jobsutils "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/utils"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/watch"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -95,13 +95,20 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	if !reflect.DeepEqual(originalRayJob, rayJob) {
-		// update the resource in ETCD
-		if isTerminalRayJobState(rayJob.Status.State) {
-			utils.MarkImmutable(&rayJob)
-		}
-		err := r.Status().Update(ctx, &rayJob)
-		if err != nil {
+		if err := r.Status().Update(ctx, &rayJob); err != nil {
 			logger.Error(err, "failed to update status")
+			res.RequeueAfter = requeueAfter
+			return res, err
+		}
+	}
+
+	// Mark terminal jobs as immutable. This is a metadata (annotation) update,
+	// separate from the status subresource update above, because Status().Update
+	// cannot persist annotations.
+	if isTerminalRayJobState(rayJob.Status.State) && !utils.IsImmutable(&rayJob) {
+		utils.MarkImmutable(&rayJob)
+		if err := r.Update(ctx, &rayJob); err != nil {
+			logger.Error(err, "failed to mark terminal job immutable")
 			res.RequeueAfter = requeueAfter
 			return res, err
 		}
