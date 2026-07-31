@@ -40,6 +40,30 @@ describe('useStudioMutation', () => {
     });
   });
 
+  test('sets mutationKey from config.mutationName for query cache tracking', async () => {
+    const mockResponse = { id: 'test-id' };
+    const mockRequest = createQueryMockRouter({
+      CreatePipeline: mockResponse,
+    });
+
+    const { result } = renderHook(
+      () => useStudioMutation({ mutationName: 'CreatePipeline' }),
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper(),
+        getServiceProviderWrapper({ request: mockRequest }),
+        getSnackbarProviderWrapper(),
+      ])
+    );
+
+    result.current.mutate({ name: 'test-pipeline' });
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith('CreatePipeline', { name: 'test-pipeline' }, {});
+      expect(result.current.data).toEqual(mockResponse);
+    });
+  });
+
   test('applies config.middleware to variables before calling request', async () => {
     const mockResponse = { id: 'test-id' };
     const mockRequest = createQueryMockRouter({

@@ -20,6 +20,7 @@ export const useStudioMutation = <TResponse, TPayload extends Record<string, unk
   const userHeaders = useUserRequestHeaders();
 
   const mutation = useMutation<TResponse, ApplicationError, TPayload>({
+    mutationKey: config ? [config.mutationName] : undefined,
     mutationFn: async (payload: TPayload) => {
       if (!config) throw new Error('useStudioMutation called without config');
       try {
