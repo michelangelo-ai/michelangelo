@@ -1,7 +1,7 @@
+import { FIELD_RENDERERS } from '#core/components/form/constants';
 import { useFormProvider } from '#core/providers/form-provider/use-form-provider';
-import { FIELD_RENDERERS } from '../constants';
 
-import type { FieldRenderer } from '../types';
+import type { FieldRenderer } from '#core/components/form/types';
 
 export function useFieldRenderer(type: string): FieldRenderer | undefined {
   const formContext = useFormProvider();

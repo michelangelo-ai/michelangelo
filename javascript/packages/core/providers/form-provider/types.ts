@@ -1,4 +1,4 @@
-import type { FieldRenderer, LayoutRenderer } from '#core/components/form/config/types';
+import type { FieldRenderer, LayoutRenderer } from '#core/components/form/types';
 
 export type FormContextType = {
   renderers: Record<string, FieldRenderer>;

@@ -1,7 +1,7 @@
-import { StringField } from '#core/components/form/fields/string/string-field';
+import { StringField } from './string-field';
 
-import type { FieldRendererProps } from '#core/components/form/config/types';
 import type { BaseFieldProps } from '#core/components/form/fields/types';
+import type { FieldRendererProps } from '#core/components/form/types';
 
 export function SchemaStringField({ config, ...baseProps }: FieldRendererProps) {
   if (config.multi) {

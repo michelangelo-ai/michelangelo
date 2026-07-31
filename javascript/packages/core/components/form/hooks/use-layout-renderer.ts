@@ -1,7 +1,7 @@
+import { LAYOUT_RENDERERS } from '#core/components/form/constants';
 import { useFormProvider } from '#core/providers/form-provider/use-form-provider';
-import { LAYOUT_RENDERERS } from '../constants';
 
-import type { LayoutRenderer } from '../types';
+import type { LayoutRenderer } from '#core/components/form/types';
 
 export function useLayoutRenderer(type: string): LayoutRenderer | undefined {
   const formContext = useFormProvider();

@@ -1,8 +1,7 @@
 import { Form } from '#core/components/form/form';
-import { LayoutItemList } from './layout/layout-item-list';
+import { LayoutItemList } from '#core/components/form/layout/layout-item-list';
 
-import type { FormData } from '#core/components/form/types';
-import type { FormConfig } from './types';
+import type { FormConfig, FormData } from '#core/components/form/types';
 
 type ConfigDrivenFormProps = {
   config: FormConfig;

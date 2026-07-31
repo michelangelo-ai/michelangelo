@@ -1,4 +1,4 @@
-import { SchemaStringField } from './fields/schema-string-field';
+import { SchemaStringField } from './fields/string/schema-string-field';
 
 import type { FieldRenderer, FieldType, LayoutRenderer } from './types';
 

@@ -1,8 +1,8 @@
-import { useLayoutRenderer } from '../hooks/use-layout-renderer';
+import { useLayoutRenderer } from '#core/components/form/hooks/use-layout-renderer';
 import { BuiltinLayoutRenderer } from './builtin-layout-renderer';
 import { LayoutItemList } from './layout-item-list';
 
-import type { BuiltinLayoutConfig, FieldConfig, LayoutConfig } from '../types';
+import type { BuiltinLayoutConfig, FieldConfig, LayoutConfig } from '#core/components/form/types';
 
 export function LayoutItemRenderer({
   config,
