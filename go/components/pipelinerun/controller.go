@@ -163,26 +163,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			pipelineRun.Status.WorkflowRunId = exec.Execution.RunID
 			pipelineRun.Status.State = mapWorkflowStatusToPipelineRunState(exec.Status)
 
-			// Set stable metadata storage primary key annotation if not already set
-			// This enables consistent identity across cluster migrations where K8s UIDs change
-			annotations := pipelineRun.GetAnnotations()
-			if annotations == nil {
-				annotations = make(map[string]string)
-			}
-			if _, exists := annotations[api.MetadataStoragePrimaryKeyAnnotation]; !exists {
-				// Use current UID as the stable PK for metadata storage (MySQL/Postgres/etc)
-				annotations[api.MetadataStoragePrimaryKeyAnnotation] = string(pipelineRun.UID)
-				pipelineRun.SetAnnotations(annotations)
-				logger.Info("set metadata storage primary key annotation for cross-cluster consistency",
-					zap.String("storage_pk", string(pipelineRun.UID)))
-			}
-
 			logger.Info("reconstructed status from workflow engine",
 				zap.String("workflow_id", workflowID),
 				zap.String("workflow_run_id", exec.Execution.RunID),
 				zap.String("state", pipelineRun.Status.State.String()),
-				zap.String("uid", string(pipelineRun.UID)),
-				zap.String("storage_pk", annotations[api.MetadataStoragePrimaryKeyAnnotation]))
+				zap.String("uid", string(pipelineRun.UID)))
 		}
 		// Continue on error - might be a new pipeline run or workflow engine temporarily unavailable
 	}
