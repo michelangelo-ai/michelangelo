@@ -44,6 +44,10 @@ export interface UserDataSources {
    * Endpoint that was invoked to generate the {@link response} interpolation property
    */
   endpoint?: string;
+  /**
+   * Name of the mutation that was invoked to generate the {@link response} interpolation property
+   */
+  mutationName?: string;
 }
 
 /**

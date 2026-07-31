@@ -5,10 +5,15 @@ import type { SuccessOperation } from '#core/components/actions/types';
 type HarnessProps = {
   operations?: SuccessOperation[];
   response?: unknown;
+  mutationName?: string;
 };
 
-export function UseSuccessOperationsTestHarness({ operations, response }: HarnessProps) {
-  const runSuccessOperations = useSuccessOperations(operations);
+export function UseSuccessOperationsTestHarness({
+  operations,
+  response,
+  mutationName,
+}: HarnessProps) {
+  const runSuccessOperations = useSuccessOperations(operations, mutationName);
 
   return <button onClick={() => runSuccessOperations(response)}>Run success operations</button>;
 }

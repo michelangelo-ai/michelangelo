@@ -16,7 +16,7 @@ const DEFAULT_TOAST_ICON = 'checkCircle';
  * The runner resolves response interpolation (e.g. `${response.metadata.name}`)
  * against the mutation result, then applies each operation in order.
  */
-export function useSuccessOperations(operations?: SuccessOperation[]) {
+export function useSuccessOperations(operations?: SuccessOperation[], mutationName?: string) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { enqueue, dequeue } = useSnackbar();
@@ -25,7 +25,7 @@ export function useSuccessOperations(operations?: SuccessOperation[]) {
   return useCallback(
     (response: unknown) => {
       if (!operations || operations.length === 0) return;
-      const resolved = resolver(operations, { response });
+      const resolved = resolver(operations, { response, mutationName });
       for (const op of resolved) {
         if (op.type === 'invalidate') {
           const fire = () => {
@@ -47,7 +47,7 @@ export function useSuccessOperations(operations?: SuccessOperation[]) {
         }
       }
     },
-    [operations, resolver, queryClient, navigate, enqueue, dequeue]
+    [operations, mutationName, resolver, queryClient, navigate, enqueue, dequeue]
   );
 }
 
