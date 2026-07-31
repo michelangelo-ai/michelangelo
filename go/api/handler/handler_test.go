@@ -923,3 +923,59 @@ func TestDeletePropagationPolicy(t *testing.T) {
 	assert.Equal(t, "true", annotations[api.DeletingAnnotation])
 	assert.Equal(t, string(foreground), annotations[api.DeletePropagationAnnotation])
 }
+
+// TestUpdateReturnsMetadataStorageResourceVersion covers the metadata-storage branch of
+// Update: the object is deep-copied before being handed to the metadata handler, so the
+// resource version the storage layer assigns must be copied back onto the caller's
+// object — that object is what the generated service layer returns to the client.
+func TestUpdateReturnsMetadataStorageResourceVersion(t *testing.T) {
+	k8sClient, err := setupK8s()
+	assert.NoError(t, err)
+
+	mockMetadataStorage, mockBlobStorage := setupMocks(t)
+
+	config := storage.MetadataStorageConfig{
+		EnableMetadataStorage:      true,
+		DeletionDelay:              0,
+		EnableResourceVersionCache: false,
+	}
+
+	builder := NewAPIHandlerBuilder().
+		WithK8sClient(k8sClient).
+		WithMetadataStorage(mockMetadataStorage, config).
+		WithBlobStorage(mockBlobStorage).
+		WithZapLogger(zap.Must(zap.NewDevelopment())).
+		WithMetrics(tally.NoopScope)
+	handler, err := builder.Build()
+	assert.NoError(t, err)
+
+	// An object that does not exist in K8s, so Update falls through to metadata storage.
+	testJob := &v2pb.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:       "default",
+			Name:            "test-metadata-update-resource-version",
+			ResourceVersion: "7",
+		},
+		Spec: v2pb.RayJobSpec{JobId: "test-metadata-update-resource-version"},
+	}
+
+	// Stand in for the MySQL backend: assign a new resource version on the object the
+	// storage layer is handed (which is the handler's deep copy, not testJob).
+	mockMetadataStorage.EXPECT().
+		Upsert(gomock.Any(), gomock.Any(), true, gomock.Any()).
+		Times(1).
+		DoAndReturn(func(ctx context.Context, object runtime.Object, direct bool,
+			indexedFields []storage.IndexedField) error {
+			metaObj, ok := object.(metav1.Object)
+			assert.True(t, ok)
+			assert.Equal(t, "7", metaObj.GetResourceVersion(),
+				"storage must see the resource version the caller sent")
+			metaObj.SetResourceVersion("8")
+			return nil
+		})
+
+	err = handler.Update(context.Background(), testJob, &metav1.UpdateOptions{})
+	assert.NoError(t, err)
+	assert.Equal(t, "8", testJob.GetResourceVersion(),
+		"the resource version assigned by metadata storage must reach the caller's object")
+}

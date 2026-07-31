@@ -185,6 +185,11 @@ func (handler *apiHandler) Update(ctx context.Context, obj ctrlRTClient.Object, 
 		if err != nil {
 			return surfaceGrpcError(err, "update", tmpObj.GetNamespace(), tmpObj.GetName())
 		}
+		// tmpObj is a deep copy, so the resource version metadata storage assigned lives
+		// only on the copy. Copy it onto the caller's object, which the generated service
+		// layer returns to the client as the response body.
+		obj.SetResourceVersion(tmpObj.GetResourceVersion())
+		return nil
 	}
 
 	return surfaceGrpcError(err, "update", tmpObj.GetNamespace(), tmpObj.GetName())
