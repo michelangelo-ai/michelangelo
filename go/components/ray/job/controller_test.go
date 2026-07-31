@@ -589,7 +589,9 @@ func TestReconciler_Reconcile(t *testing.T) {
 			postCheck: func(res ctrl.Result) {
 				assert.Equal(t, time.Duration(0), res.RequeueAfter)
 			},
-			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {},
+			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
+				assert.True(t, utils.IsImmutable(job), "terminal job should be marked immutable by reconciler")
+			},
 		},
 	}
 
