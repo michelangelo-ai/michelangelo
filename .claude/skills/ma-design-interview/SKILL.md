@@ -79,6 +79,10 @@ Read these directories at runtime to build an inventory of what's already availa
 | `javascript/packages/core/components/form/validation/`  | Built-in validators (required, min, max, minLength, maxLength, regex, url)           |
 | `javascript/packages/core/components/cell/constants.ts` | CellType enum — available column/metadata renderers                                  |
 
+**Read the `types.ts` file for each component, not just the directory listing.** The prop
+types determine what each component can do. Listing names without reading props leads to
+underusing what's already available or reinventing behavior that a prop already handles.
+
 This inventory determines what can be built with existing components vs what needs custom work.
 
 ### 1d. Build a field inventory
@@ -103,6 +107,38 @@ defines the question tree — what to ask, in what order, and what answers the c
 provide vs what requires contributor input.
 
 See `references/ui-onboarding.md` for UI configuration interviews.
+
+---
+
+## Phase 2.5: Design Alternatives
+
+When the interview surfaces a decision between meaningfully different approaches, don't
+ask the contributor to choose in the abstract. Build the alternatives and let them react
+to something concrete.
+
+### Trigger
+
+Enter this phase when a Phase 2 question involves the **shape** of the solution — not
+a detail within a settled shape.
+
+Triggers: "one thing or many?", "flat or nested?", "explicit or convention-based?",
+"user-configured or hardcoded?", "separate resources or inline?"
+
+Does not trigger: "required or optional?", "what label?", "which renderer?"
+
+### Process
+
+1. Generate up to **3 alternatives**, each labeled by its tradeoff posture — not
+   "Option 1/2/3". The name should tell the contributor what they're optimizing for.
+2. Present them for comparison. For UI work with a running dev server, screenshot each
+   one. For backend or API design, present the alternatives inline.
+3. The contributor picks one, or asks to revisit a specific alternative.
+4. **No new interview questions** during this phase. If the alternatives surface new
+   questions, loop back to Phase 2.
+
+### Output
+
+The chosen alternative becomes the input to Phase 3.
 
 ---
 
