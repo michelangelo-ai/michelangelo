@@ -32,10 +32,12 @@ All notable changes to this project will be documented in this file.
 - **uniflow:** Propagate namespace to Ray cluster spec (#1605)
 
 
+
 ### CI/CD
 
 
 - **integration-test:** Trigger only from Nightly Build (#1613)
+
 
 
 ### Documentation
@@ -45,6 +47,7 @@ All notable changes to this project will be documented in this file.
 
 
 - Add missing libomp macOS prerequisite to getting-started guide (#1253)
+
 
 
 ### Features
@@ -80,6 +83,7 @@ All notable changes to this project will be documented in this file.
 - **core:** Set mutationKey on useStudioMutation for MutationCache integration (#1647)
 
 
+
 ### Miscellaneous
 
 
@@ -96,6 +100,107 @@ All notable changes to this project will be documented in this file.
 
 
 - Bump version to 0.7.0-rc.1 (#1657)
+
+
+## [0.6.0] - 2026-07-27
+
+
+### Bug Fixes
+
+
+- **helm:** Allow x-user-email header in envoy CORS preflight (#1552)
+
+
+- **helm:** Envoy checksum annotation + missing x-user-name CORS header (#1558)
+
+
+- **release:** Exclude RC/nightly tags from changelog diff boundary, commit CHANGELOG.md via PR (#1561)
+
+
+- **docs:** Wrap Spark DataFrame in DatasetVariable in branching example (#1566)
+
+
+- **rayjob:** Right-size submitter pod instead of cloning the head (#1562)
+
+
+- **ci:** Changelog.yml CR_PAT token + stop full-history CHANGELOG.md regeneration (cherry-pick #1599) (#1602)
+
+
+
+### Documentation
+
+
+- Add v0.5.0 changelog entry (#1569)
+
+
+- Standardize branding to "Michelangelo AI" in READMEs and PyPI (#1577)
+
+
+- Standardize branding to "Michelangelo AI" across all docs (#1575)
+
+
+- Update CHANGELOG.md for v0.6.0-rc.1 (#1600)
+
+
+
+### Features
+
+
+- **native_transform:** Add pyarrow conversion helpers (PR A) (#1543)
+
+
+- **sandbox:** Support --set on ma sandbox create (#1554)
+
+
+- **native_transform:** Add IDHashTokenizer torch layer (PR A2) (#1548)
+
+
+- Add MetadataStoragePrimaryKey annotation for k8s migration (#1332)
+
+
+- **python:** Expose clean_reason and clean_details on GitInfo (F037) (#1572)
+
+
+- **native_transform:** Add foundation transform layers (PR B1) (#1570)
+
+
+
+### Miscellaneous
+
+
+- Quote templated image/secret-name values in core Deployment charts (#1544)
+
+
+- Add examples gallery page with all 9 working examples (#1469)
+
+
+- **core:** Upgrade baseui 15→18, move to peerDependencies (#1522)
+
+
+- Merge back release/v0.5 to main (#1547)
+
+
+- Remove stray test artifact python/create-project.json (#1476)
+
+
+- Ma cli: add -o, -A, and default DESC sort to <crd> get (#1576)
+
+
+- **release:** Prepare v0.6.0
+
+
+- Bump version to 0.6.0-rc.1 (#1595)
+
+
+- Release 0.6.0 (#1607)
+
+
+
+### Refactoring
+
+
+- **core:** Split public API from primitives entrypoint (#1526)
+
 
 ## [0.5.0] - 2026-07-20
 
