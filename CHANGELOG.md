@@ -8,104 +8,94 @@ All notable changes to this project will be documented in this file.
 ### Bug Fixes
 
 
-- **helm:** Allow x-user-email header in envoy CORS preflight (#1552)
+- **docs:** Correct double-suffix branding in README and examples (#1596)
 
 
-- **helm:** Envoy checksum annotation + missing x-user-name CORS header (#1558)
+- **ingester:** Soft-delete metadata-storage row on kubectl delete for non-opted-in kinds (#1585)
 
 
-- **release:** Exclude RC/nightly tags from changelog diff boundary, commit CHANGELOG.md via PR (#1561)
+- **ci:** Changelog.yml CR_PAT token + stop full-history CHANGELOG.md regeneration (#1599)
 
 
-- **docs:** Wrap Spark DataFrame in DatasetVariable in branching example (#1566)
+- **ci:** Nightly.yml npm/helm jobs no longer hardcode stale base version 0.3.0 (#1617)
 
 
-- **rayjob:** Right-size submitter pod instead of cloning the head (#1562)
+- **storage/mysql:** Validate OrderBy.Field identifier before SQL interpolation (#1616)
+
+
+- **sandbox:** Pin Grafana image to 13.1.1 instead of :latest (CVE-2026-31789) (#1623)
+
+
+- **build:** Bump pinned Node.js 24.14.1 -> 24.18.0 (Wiz-reported CVEs) (#1621)
+
+
+- **uniflow:** Propagate namespace to Ray cluster spec (#1605)
+
+
+### CI/CD
+
+
+- **integration-test:** Trigger only from Nightly Build (#1613)
 
 
 ### Documentation
 
 
-- Add v0.5.0 changelog entry (#1569)
+- Refresh governance files and issue templates (#1579)
 
 
-- Standardize branding to "Michelangelo AI" in READMEs and PyPI (#1577)
-
-
-- Standardize branding to "Michelangelo AI" across all docs (#1575)
+- Add missing libomp macOS prerequisite to getting-started guide (#1253)
 
 
 ### Features
 
 
-- **native_transform:** Add pyarrow conversion helpers (PR A) (#1543)
+- **trainer:** Add pluggable ExperimentStore for auto-resume (PR 4) (#1571)
 
 
-- **sandbox:** Support --set on ma sandbox create (#1554)
+- **python:** Add server-side --dry-run to apply, create, pipeline run, pipelinerun kill (#1591)
 
 
-- **native_transform:** Add IDHashTokenizer torch layer (PR A2) (#1548)
+- **python:** Additional_columns + filter_field_map hooks on CRD (#1588)
 
 
-- Add MetadataStoragePrimaryKey annotation for k8s migration (#1332)
+- **python:** Framework -r/--root and -R/--recursive on apply+create (#1590)
 
 
-- **python:** Expose clean_reason and clean_details on GitInfo (F037) (#1572)
+- **python:** --owner and --type filters + OWNER/TYPE columns on pipeline get (#1618)
 
 
-- **native_transform:** Add foundation transform layers (PR B1) (#1570)
+- **python:** --actor and --revision filters + REVISION/USER/ENVIRONMENT/STATE columns on pipeline_run get (#1619)
+
+
+- **python:** Retry + round_robin service_config on mactl gRPC channels (#1615)
+
+
+- **python:** --pipeline/--model/--deployment/--owner filters + 3 columns on revision get (#1620)
+
+
+- **core:** Expose mutationName in success operations resolver context (#1646)
+
+
+- **core:** Set mutationKey on useStudioMutation for MutationCache integration (#1647)
 
 
 ### Miscellaneous
 
 
-- Quote templated image/secret-name values in core Deployment charts (#1544)
+- Update hero subtitle to "Now open source." (#1606)
 
 
-- Add examples gallery page with all 9 working examples (#1469)
+- Merge back release/v0.6 to main (#1597)
 
 
-- **core:** Upgrade baseui 15→18, move to peerDependencies (#1522)
+- Bind k3d port-publishes to loopback instead of 0.0.0.0 (#1592)
 
 
-- Merge back release/v0.5 to main (#1547)
+- Fix site title, meta description, and favicon for search results (#1624)
 
 
-- Remove stray test artifact python/create-project.json (#1476)
-
-
-- Ma cli: add -o, -A, and default DESC sort to <crd> get (#1576)
-
-
-- **release:** Prepare v0.6.0
-
-
-- Bump version to 0.6.0-rc.1 (#1595)
-
-
-### Refactoring
-
-
-- **core:** Split public API from primitives entrypoint (#1526)
-
-### Added
-
-- `ExperimentStore` protocol and `FsspecExperimentStore` default in
-  `michelangelo.lib.trainer.torch.pytorch_lightning`, giving `LightningTrainer`
-  an opt-in auto-resume capability. Set
-  `LightningTrainerParam(experiment_store=FsspecExperimentStore())` and a
-  `RunConfig(name=..., storage_path=...)`; on rank 0 the trainer records the
-  run's experiment directory in a JSON marker at
-  `{storage_path}/.michelangelo_resume/{run_name}.json`, and a re-run with the
-  same identity restores from it when it holds a restorable checkpoint
-  (validated via `TorchTrainer.can_restore()`). Defaults to `None` (no tracking,
-  no resume); bring your own `ExperimentStore` for other backends.
-
-### Fixed
-
-- Ray tasks now create Michelangelo `RayCluster` and `RayJob` resources in
-  `MA_NAMESPACE`; workflows without `MA_NAMESPACE` continue using `default`,
-  and downstream KubeRay compute-resource placement is unchanged.
+- Bump version to 0.7.0-rc.1 (#1657)
 
 ## [0.5.0] - 2026-07-20
 
