@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { ArrayFieldOptions } from '#core/components/form/types';
+import type { ArrayFieldOptions } from '#core/components/form/types/form-types';
 
 export interface ArrayLayoutProps extends ArrayFieldOptions {
   /**

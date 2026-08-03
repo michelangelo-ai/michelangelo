@@ -1,6 +1,6 @@
 import { Form } from '#core/components/form/form';
 
-import type { FormProps } from '#core/components/form/types';
+import type { FormProps } from '#core/components/form/types/form-types';
 import type { WrapperComponentProps } from './types';
 
 export function getFormProviderWrapper(

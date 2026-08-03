@@ -8,7 +8,7 @@ import { StickyFooter } from '#core/components/form/components/sticky-footer/sti
 import { FormContext } from './form-context';
 
 import type { ReactNode } from 'react';
-import type { FieldRegistry, FormData, FormProps } from './types';
+import type { FieldRegistry, FormData, FormProps } from './types/form-types';
 
 const focusOnErrorDecorator = createFocusOnErrorDecorator();
 

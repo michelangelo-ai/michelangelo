@@ -1,6 +1,6 @@
 import { useFormState as useReactFinalFormState } from 'react-final-form';
 
-import type { FormData, FormState } from '../types';
+import type { FormData, FormState } from '../types/form-types';
 
 /**
  * Hook for accessing form state with customizable subscriptions.

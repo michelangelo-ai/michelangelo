@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useFieldArray } from 'react-final-form-arrays';
 
-import type { ArrayFieldOptions } from '#core/components/form/types';
+import type { ArrayFieldOptions } from '#core/components/form/types/form-types';
 
 /**
  * @param rootFieldPath - Dot-notation path to the root field of the array.
