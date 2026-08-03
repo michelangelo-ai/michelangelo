@@ -29,8 +29,26 @@ Interview discipline derived from [mattpocock/skills](https://github.com/mattpoc
 ## Phase 1: Context Discovery
 
 Start by understanding what the contributor wants to do. The input can range from broad
-("onboard Deployments to the UI") to narrow ("add notification fields to the create
-pipeline run form"). The skill should clarify scope before discovery:
+("onboard X to the UI") to narrow ("add Y fields to the Z form").
+
+### Resolve resource names before discovery
+
+Before launching any discovery, resolve every resource-like noun in the input to an
+actual proto file. Run `ls proto/api/v2/*.proto` and match the input against filenames.
+
+Examples of why this matters:
+- "create a trigger run for a pipeline" → `trigger_run.proto` + `pipeline.proto`, NOT
+  `pipeline_run.proto`. The input contains "run" and "pipeline" but the resource is
+  TriggerRun, not PipelineRun.
+- "add notifications to pipeline runs" → `pipeline_run.proto` + `notification.proto`.
+
+If the input maps cleanly to one or more proto files, proceed with those. If the mapping
+is ambiguous (e.g., multiple plausible resources, or no proto file matches), ask one
+scoping question to resolve.
+
+### Determine scope
+
+Once the resource(s) are resolved:
 
 - **New entity**: resource name is sufficient (e.g., "Deployment"). Discover everything.
 - **New surface on existing entity**: resource name + which surface (list, detail, form).
@@ -39,8 +57,6 @@ pipeline run form"). The skill should clarify scope before discovery:
   `notifications` to PipelineRunSpec, where `Notification` is defined in
   `notification.proto`). The skill must follow those references and discover the
   referenced message's schema too.
-
-If the contributor's description is ambiguous, ask one scoping question before proceeding.
 
 ### 1a. Discover schema artifacts
 
