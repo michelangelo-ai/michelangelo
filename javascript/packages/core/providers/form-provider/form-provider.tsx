@@ -7,12 +7,11 @@ import type { FormContextType } from './types';
 export const FormProvider = ({
   children,
   renderers = {},
-  validators = {},
   layouts = {},
 }: { children: React.ReactNode } & Partial<FormContextType>) => {
   const contextValue = useMemo<FormContextType>(
-    () => ({ renderers, validators, layouts }),
-    [renderers, validators, layouts]
+    () => ({ renderers, layouts }),
+    [renderers, layouts]
   );
 
   return <FormContext.Provider value={contextValue}>{children}</FormContext.Provider>;

@@ -1,7 +1,7 @@
 import { SchemaField } from '#core/components/form/fields/schema-field';
 import { LayoutItemRenderer } from './layout-item-renderer';
 
-import type { FieldConfig, LayoutItem } from '#core/components/form/types';
+import type { FieldConfig, LayoutItem } from '#core/components/form/types/form-types';
 
 export function LayoutItemList({
   items,

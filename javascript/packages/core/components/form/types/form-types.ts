@@ -1,6 +1,5 @@
 import type { FORM_ERROR } from 'final-form';
 import type { ComponentType } from 'react';
-import type { BaseFieldProps } from '#core/components/form/fields/types';
 import type { DeepPartial } from '#core/types/utility-types';
 
 export type FormData = Record<string, unknown>;
@@ -142,8 +141,9 @@ export type BuiltinFieldConfig = StringFieldConfig;
 
 export type FieldConfig = BuiltinFieldConfig | (SharedFieldConfig & { type: string });
 
-export type FieldRendererProps = BaseFieldProps & {
-  config: Record<string, unknown>;
+export type FieldRendererProps = {
+  name: string;
+  config: FieldConfig;
 };
 
 export type FieldRenderer = ComponentType<FieldRendererProps>;

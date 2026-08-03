@@ -1,13 +1,33 @@
 import { StringField } from './string-field';
 
-import type { BaseFieldProps } from '#core/components/form/fields/types';
-import type { FieldRendererProps } from '#core/components/form/types';
+import type { FieldRendererProps } from '#core/components/form/types/form-types';
 
-export function SchemaStringField({ config, ...baseProps }: FieldRendererProps) {
-  if (config.multi) {
-    // cast: multi=true narrows StringField to the string[] variant
-    return <StringField {...(baseProps as BaseFieldProps<string[]>)} multi />;
+export function SchemaStringField({ name, config }: FieldRendererProps) {
+  if ('multi' in config && config.multi) {
+    return (
+      <StringField
+        name={name}
+        label={config.label}
+        required={config.required}
+        disabled={config.disabled}
+        readOnly={config.readOnly}
+        placeholder={config.placeholder}
+        description={config.description}
+        caption={config.caption}
+        multi
+      />
+    );
   }
-  // cast: multi=false/absent narrows StringField to the string variant
-  return <StringField {...(baseProps as BaseFieldProps<string>)} />;
+  return (
+    <StringField
+      name={name}
+      label={config.label}
+      required={config.required}
+      disabled={config.disabled}
+      readOnly={config.readOnly}
+      placeholder={config.placeholder}
+      description={config.description}
+      caption={config.caption}
+    />
+  );
 }

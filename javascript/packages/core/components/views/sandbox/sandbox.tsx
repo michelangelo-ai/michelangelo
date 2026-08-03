@@ -4,7 +4,7 @@ import { HeadingXXLarge } from 'baseui/typography';
 import { ConfigDrivenForm } from '#core/components/form/config-driven-form';
 import { MainViewContainer } from '#core/components/views/main-view-container';
 
-import type { FormConfig } from '#core/components/form/types';
+import type { FormConfig } from '#core/components/form/types/form-types';
 
 const SAMPLE_FORM_CONFIG: FormConfig = {
   entities: {

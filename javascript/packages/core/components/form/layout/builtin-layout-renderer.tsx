@@ -3,7 +3,7 @@ import { FormGroup } from '#core/components/form/layout/form-group/form-group';
 import { FormRow } from '#core/components/form/layout/form-row/form-row';
 import { LayoutItemList } from './layout-item-list';
 
-import type { BuiltinLayoutConfig, FieldConfig } from '#core/components/form/types';
+import type { BuiltinLayoutConfig, FieldConfig } from '#core/components/form/types/form-types';
 
 export function BuiltinLayoutRenderer({
   config,
