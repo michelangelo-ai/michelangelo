@@ -29,7 +29,7 @@ Interview discipline derived from [mattpocock/skills](https://github.com/mattpoc
 ## Phase 1: Context Discovery
 
 Start by understanding what the contributor wants to do. The input can range from broad
-("onboard X to the UI") to narrow ("add Y fields to the Z form").
+("add new CRD to go services") to narrow ("add Y fields to the Z form").
 
 ### Resolve resource names before discovery
 
@@ -52,11 +52,7 @@ Once the resource(s) are resolved:
 
 - **New entity**: resource name is sufficient (e.g., "Deployment"). Discover everything.
 - **New surface on existing entity**: resource name + which surface (list, detail, form).
-- **Extend existing surface**: resource name + which fields to add. This is critical —
-  the fields being added may reference a _different_ proto message (e.g., adding
-  `notifications` to PipelineRunSpec, where `Notification` is defined in
-  `notification.proto`). The skill must follow those references and discover the
-  referenced message's schema too.
+- **Extend existing surface**: resource name + which fields to add.
 
 ### 1a. Discover schema artifacts
 
