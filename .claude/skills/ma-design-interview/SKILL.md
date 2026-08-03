@@ -162,29 +162,3 @@ The chosen alternative becomes the input to Phase 3.
 
 Generate the highest-quality implementation possible. The goal is a working prototype on a
 branch that either ships as-is (self-service) or gets refined by a frontend engineer.
-
-Forms are currently component-driven in the OSS repository. The field and layout components
-serve as a pseudo-configuration language — generation output is React components that compose
-these primitives.
-
-### For extending an existing surface
-
-- **Adding columns**: Add `ColumnConfig` entries to the existing list/detail config.
-  This is pure data — map proto field paths to CellType values.
-- **Adding detail metadata**: Same pattern as columns — `ColumnConfig` entries in the
-  detail view's `metadata` array.
-- **Adding form fields**: Add field components and layout to the existing form.
-  Update the entity's TypeScript type to include the new fields.
-
-### For new entity forms
-
-- Form component using discovered field/layout components from `javascript/packages/core/components/form/`
-- Validation using built-in validators from `javascript/packages/core/components/form/validation/`
-- Any custom field components identified during the interview
-
-### For new entities (full config)
-
-- `PhaseEntityConfig` with service binding
-- View configs (list with columns, detail with metadata and pages)
-- Form configs as above
-- Wire into the appropriate phase config
