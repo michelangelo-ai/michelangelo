@@ -1,0 +1,160 @@
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "v2";
+option java_multiple_files = true;
+option java_outer_classname = "DraftProto";
+option java_package = "com.michelangelo.api.v2";
+
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/user.proto";
+
+message DraftSpec {
+  // Type of the base resource this draft targets, e.g. Pipeline.
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta base_type = 1;
+
+  // Identifier of the base resource this draft targets.
+  michelangelo.api.ResourceIdentifier base_resource = 2;
+
+  // Content of the draft — the full spec of the base resource being edited.
+  google.protobuf.Any content = 3;
+
+  // The user who created this draft.
+  UserInfo owner = 4;
+
+  // Revision this draft was forked from.
+  michelangelo.api.ResourceIdentifier fork_from_revision = 5 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/Revision"
+    }
+  ];
+
+  // Code review workflow configuration.
+  CodeReviewWorkflow code_review = 10;
+}
+
+// Groups code review concerns, separating them from the core draft lifecycle.
+message CodeReviewWorkflow {
+  // Action to perform on the next reconcile.
+  ReviewAction action = 1;
+
+  // Git ref the review branch points to.
+  string git_ref = 2;
+
+  // Branch name for the review.
+  string branch = 3;
+
+  // Repository URL or identifier.
+  string repository = 4;
+
+  // Root path within the repository for generated files.
+  string root_path = 5;
+
+  // How the draft should land — merge the PR or apply-and-close.
+  LandingMode landing_mode = 6;
+}
+
+enum ReviewAction {
+  REVIEW_ACTION_INVALID = 0;
+  REVIEW_ACTION_REQUEST_FOR_REVIEW = 1;
+  REVIEW_ACTION_LAND = 2;
+  REVIEW_ACTION_ABANDON = 3;
+  REVIEW_ACTION_REBASE = 4;
+}
+
+enum LandingMode {
+  LANDING_MODE_UNSPECIFIED = 0;
+  LANDING_MODE_MERGE = 1;
+  LANDING_MODE_APPLY_AND_CLOSE = 2;
+}
+
+message DraftStatus {
+  // Current state of the draft lifecycle.
+  DraftState state = 1;
+
+  // Snapshot of the content at the last successful UpsertReview.
+  // Used to detect whether content has changed since the last VCS sync.
+  google.protobuf.Any current_content = 2;
+
+  // Human-readable status message from the controller or provider.
+  string status_message = 3;
+
+  // Code review status from the VCS provider.
+  CodeReviewWorkflowStatus code_review = 10;
+}
+
+// VCS feedback, updated independently of draft state.
+message CodeReviewWorkflowStatus {
+  // Approval status of the review.
+  CodeReviewStatus review_status = 1;
+
+  // URL of the review (PR, diff) in the VCS.
+  string review_url = 2;
+
+  // Timestamp of the last successful VCS poll.
+  google.protobuf.Timestamp last_vcs_sync = 3;
+
+  // Opaque provider state persisted across reconciles.
+  map<string, string> provider_state = 4;
+}
+
+enum CodeReviewStatus {
+  CODE_REVIEW_STATUS_UNSPECIFIED = 0;
+  CODE_REVIEW_STATUS_PENDING = 1;
+  CODE_REVIEW_STATUS_APPROVED = 2;
+  CODE_REVIEW_STATUS_CHANGES_REQUESTED = 3;
+}
+
+enum DraftState {
+  DRAFT_STATE_UNSPECIFIED = 0;
+  DRAFT_STATE_CREATED = 1;
+  DRAFT_STATE_IN_REVIEW = 2;
+  DRAFT_STATE_LANDING = 3;
+  DRAFT_STATE_LANDED = 4;
+  DRAFT_STATE_CLOSED = 5;
+  DRAFT_STATE_ERROR = 6;
+}
+
+// Draft represents a proposed change to a base resource (Pipeline, Deployment,
+// etc.) that routes through a code review workflow before taking effect.
+message Draft {
+  option (michelangelo.api.resource) = {};
+
+  option (michelangelo.api.index) = {
+    path: "spec.base_resource",
+    key: "base_resource",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.base_type.kind",
+    key: "base_type",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.owner.name",
+    key: "owner",
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  // Spec of the desired behavior of the draft.
+  DraftSpec spec = 3;
+
+  // Most recently observed status of the draft.
+  DraftStatus status = 4;
+}
+
+// A list of Draft objects.
+message DraftList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  repeated Draft items = 3;
+}
