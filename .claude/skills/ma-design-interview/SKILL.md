@@ -8,7 +8,7 @@ description: >
   "grill me", or when a task benefits from structured discovery before implementation.
 ---
 
-# /design-interview — Structured Design Interview
+# /ma-design-interview — Structured Design Interview
 
 Interview a contributor about a design task — from backend entity onboarding to UI
 configuration to API design. Reads the codebase first, asks questions second, generates
