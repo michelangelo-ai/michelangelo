@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.7.0] - 2026-08-03
 
 
 ### Bug Fixes
@@ -32,12 +32,10 @@ All notable changes to this project will be documented in this file.
 - **uniflow:** Propagate namespace to Ray cluster spec (#1605)
 
 
-
 ### CI/CD
 
 
 - **integration-test:** Trigger only from Nightly Build (#1613)
-
 
 
 ### Documentation
@@ -48,6 +46,8 @@ All notable changes to this project will be documented in this file.
 
 - Add missing libomp macOS prerequisite to getting-started guide (#1253)
 
+
+- Update CHANGELOG.md for v0.7.0-rc.1 (#1659)
 
 
 ### Features
@@ -83,7 +83,6 @@ All notable changes to this project will be documented in this file.
 - **core:** Set mutationKey on useStudioMutation for MutationCache integration (#1647)
 
 
-
 ### Miscellaneous
 
 
@@ -101,6 +100,8 @@ All notable changes to this project will be documented in this file.
 
 - Bump version to 0.7.0-rc.1 (#1657)
 
+
+- Release 0.7.0 (#1666)
 
 ## [0.6.0] - 2026-07-27
 
@@ -126,7 +127,6 @@ All notable changes to this project will be documented in this file.
 - **ci:** Changelog.yml CR_PAT token + stop full-history CHANGELOG.md regeneration (cherry-pick #1599) (#1602)
 
 
-
 ### Documentation
 
 
@@ -140,7 +140,6 @@ All notable changes to this project will be documented in this file.
 
 
 - Update CHANGELOG.md for v0.6.0-rc.1 (#1600)
-
 
 
 ### Features
@@ -162,7 +161,6 @@ All notable changes to this project will be documented in this file.
 
 
 - **native_transform:** Add foundation transform layers (PR B1) (#1570)
-
 
 
 ### Miscellaneous
@@ -193,7 +191,6 @@ All notable changes to this project will be documented in this file.
 
 
 - Release 0.6.0 (#1607)
-
 
 
 ### Refactoring
