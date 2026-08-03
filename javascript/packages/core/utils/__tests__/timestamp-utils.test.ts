@@ -1,11 +1,11 @@
 import { getCrdUpdatedSeconds } from '../timestamp-utils';
 
 describe('getCrdUpdatedSeconds', () => {
-  test('prefers the SpecUpdateTimestamp label when present', () => {
+  test('prefers the SpecUpdateTimestamp label when present, converting microseconds to seconds', () => {
     expect(
       getCrdUpdatedSeconds({
         metadata: {
-          labels: { 'michelangelo/SpecUpdateTimestamp': '1700000000' },
+          labels: { 'michelangelo/SpecUpdateTimestamp': '1700000000000000' },
           creationTimestamp: { seconds: 1650000000 },
         },
       })
