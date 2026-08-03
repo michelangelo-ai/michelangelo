@@ -91,26 +91,7 @@ jobs:
         run: .venv/bin/pip install retrying pyyaml pymysql -q
 
       - name: Install michelangelo-examples dependencies
-        # Installed into the same venv `ma` and pytest already use: `ma pipeline apply`
-        # runs a subprocess registration step that imports the pipeline's
-        # manifest.filePath module (e.g. michelangelo_examples.california_housing...)
-        # to discover the workflow function and build the uniflow tar, so
-        # michelangelo_examples must be importable from this venv, not just checked out.
-        # --no-deps: this job runs on a self-hosted runner whose `.venv` persists
-        # between CI runs (infra is intentionally kept running -- see below), so
-        # `poetry install`'s editable michelangelo install can carry stale dist-info
-        # metadata across a pyproject.toml version bump until the venv is next fully
-        # rebuilt. `michelangelo-examples`' own pyproject pins `michelangelo>=0.6.0`
-        # (a released-package constraint); if pip sees a stale pre-bump version string
-        # it can't satisfy locally, it falls back to querying the package index --
-        # which doesn't have 0.6.0 yet -- failing the install, or worse, would silently
-        # replace the dev checkout under test with a released wheel if a matching
-        # version existed. Verified: a genuinely fresh venv resolves this fine, but a
-        # persisted one (like this runner's) can hit the stale-metadata case; --no-deps
-        # avoids the version check entirely. The `-E example` install above already
-        # provides every other runtime dep pytorch_train/xgb_train need (torch,
-        # pytorch_lightning, xgboost, pyspark, ray, s3fs, etc.) -- only
-        # michelangelo_examples' own thin package needs installing here.
+        # only michelangelo_examples' own thin package needs installing here.
         run: .venv/bin/pip install -q --no-deps "$GITHUB_WORKSPACE/michelangelo-examples"
 
       - name: Run API CRUD tests
