@@ -58,19 +58,11 @@ def tabular_assembler(
 
     Returns:
         An ``AssembledModel`` with the deployable and raw packaged artifacts.
-        When no training framework is recorded and none can be resolved from
-        ``config.model_class``, both ``raw_model`` and ``deployable_model``
-        are empty placeholder artifacts (``path=""``) rather than ``None``,
-        matching this task's "always return a pair" contract.
-
-    Raises:
-        ValueError: If ``raw_model.metadata.training_framework`` is set to a
-            non-empty value that doesn't match any known framework. This is
-            almost always a caller bug (e.g. an internal training-framework
-            identifier that was never translated to this package's
-            constants) — failing loudly here is far easier to diagnose than
-            letting it surface as a silently-empty package several pipeline
-            stages later.
+        When no training framework is recorded, none can be resolved from
+        ``config.model_class``, or the recorded framework is unrecognized,
+        both ``raw_model`` and ``deployable_model`` are empty placeholder
+        artifacts (``path=""``) rather than ``None``, matching this task's
+        "always return a pair" contract.
     """
     if (
         raw_model.metadata.training_framework == TRAINING_FRAMEWORK_CUSTOM
@@ -84,13 +76,6 @@ def tabular_assembler(
     if raw_model.metadata.training_framework == TRAINING_FRAMEWORK_LIGHTNING:
         return torch_assembler(
             config, raw_model, native_transform_model, storage_backend=storage_backend
-        )
-    if raw_model.metadata.training_framework:
-        raise ValueError(
-            "Unrecognized raw_model.metadata.training_framework: "
-            f"{raw_model.metadata.training_framework!r}. Expected one of "
-            f"{TRAINING_FRAMEWORK_CUSTOM!r}, {TRAINING_FRAMEWORK_PYTORCH!r}, "
-            f"{TRAINING_FRAMEWORK_LIGHTNING!r}, or an unset (None) value."
         )
 
     return AssembledModel(
