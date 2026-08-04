@@ -1195,27 +1195,6 @@ class TestPadOrCrop1D:
         )["o"]
         torch.testing.assert_close(out, torch.tensor([20, 30], dtype=torch.int32))
 
-    def test_right_align_ragged_fill_value_stripped_before_crop(self) -> None:
-        """A ``ragged_fill_value`` is stripped before an align='right' crop."""
-        ragged_sentinel = -2_000_000_000
-        layer = PadOrCrop1D(
-            input_cols=["f"],
-            output_cols=["o"],
-            max_length=3,
-            dtype=torch.int32,
-            pad_value=-1,
-            ragged_fill_value=ragged_sentinel,
-            align="right",
-        )
-        out = layer(
-            {
-                "f": torch.tensor(
-                    [10, 20, 30, ragged_sentinel, ragged_sentinel], dtype=torch.int32
-                )
-            }
-        )["o"]
-        torch.testing.assert_close(out, torch.tensor([10, 20, 30], dtype=torch.int32))
-
     def test_right_align_pads_when_content_shorter_than_max_length(self) -> None:
         """Sentinel-trimmed content shorter than max_length is left-padded."""
         layer = PadOrCrop1D(
@@ -1356,8 +1335,8 @@ class TestPadOrCrop1D:
         assert out.dtype == torch.int64
         torch.testing.assert_close(out, torch.tensor([-1, -1, -1], dtype=torch.int64))
 
-    def test_default_nan_collation_sentinel_uses_pad_value(self) -> None:
-        """Without ragged_fill_value, NaN positions still become pad_value."""
+    def test_nan_collation_sentinel_uses_pad_value(self) -> None:
+        """NaN collation sentinels become pad_value."""
         layer = PadOrCrop1D(
             input_cols=["f"], output_cols=["o"], max_length=4, pad_value=4.61
         )
@@ -1365,8 +1344,8 @@ class TestPadOrCrop1D:
         assert out[0, 1].item() == pytest.approx(4.61, abs=1e-4)
         assert out[0, 3].item() == pytest.approx(4.61, abs=1e-4)
 
-    def test_default_int_sentinel_uses_pad_value(self) -> None:
-        """Without ragged_fill_value, INT32_SENTINEL positions become pad_value."""
+    def test_int_sentinel_uses_pad_value(self) -> None:
+        """INT32_SENTINEL collation positions become pad_value."""
         layer = PadOrCrop1D(
             input_cols=["f"], output_cols=["o"], max_length=4, pad_value=-1
         )
@@ -1377,67 +1356,14 @@ class TestPadOrCrop1D:
             out, torch.tensor([[10, -1, 30, -1]], dtype=torch.int32)
         )
 
-    def test_ragged_fill_value_nan_replaced(self) -> None:
-        """A NaN ragged_fill_value is converted to pad_value before padding."""
-        layer = PadOrCrop1D(
-            input_cols=["f"],
-            output_cols=["o"],
-            max_length=5,
-            dtype=torch.float32,
-            pad_value=0.0,
-            ragged_fill_value=float("nan"),
-        )
-        out = layer({"f": torch.tensor([1.0, 2.0, float("nan")])})["o"]
-        torch.testing.assert_close(out, torch.tensor([1.0, 2.0, 0.0, 0.0, 0.0]))
-
-    def test_ragged_fill_value_int_replaced(self) -> None:
-        """A numeric ragged_fill_value is converted to pad_value before padding."""
-        layer = PadOrCrop1D(
-            input_cols=["f"],
-            output_cols=["o"],
-            max_length=5,
-            dtype=torch.int32,
-            pad_value=-1,
-            ragged_fill_value=INT32_SENTINEL,
-        )
-        out = layer({"f": torch.tensor([10, 20, INT32_SENTINEL], dtype=torch.int32)})[
-            "o"
-        ]
-        torch.testing.assert_close(
-            out, torch.tensor([10, 20, -1, -1, -1], dtype=torch.int32)
-        )
-
-    def test_ragged_fill_value_legacy_numeric_sentinel_2d(self) -> None:
-        """A legacy -2B ragged sentinel is replaced across a batched 2D input."""
-        ragged_sentinel = -2_000_000_000
+    def test_non_standard_sentinel_is_left_as_data(self) -> None:
+        """A non-standard numeric value (not NaN/INT32_SENTINEL) is left as data."""
         layer = PadOrCrop1D(
             input_cols=["f"],
             output_cols=["o"],
             max_length=4,
             dtype=torch.int32,
             pad_value=-1,
-            ragged_fill_value=ragged_sentinel,
-        )
-        inputs = {
-            "f": torch.tensor(
-                [[10, 20, ragged_sentinel, ragged_sentinel], [30, 40, 50, 60]],
-                dtype=torch.int32,
-            )
-        }
-        torch.testing.assert_close(
-            layer(inputs)["o"],
-            torch.tensor([[10, 20, -1, -1], [30, 40, 50, 60]], dtype=torch.int32),
-        )
-
-    def test_ragged_fill_value_none_is_noop_for_custom_sentinel(self) -> None:
-        """With ragged_fill_value=None, a non-standard sentinel is left as data."""
-        layer = PadOrCrop1D(
-            input_cols=["f"],
-            output_cols=["o"],
-            max_length=4,
-            dtype=torch.int32,
-            pad_value=-1,
-            ragged_fill_value=None,
         )
         out = layer({"f": torch.tensor([10, -2_000_000_000, 30], dtype=torch.int32)})[
             "o"
@@ -1445,54 +1371,6 @@ class TestPadOrCrop1D:
         torch.testing.assert_close(
             out, torch.tensor([10, -2_000_000_000, 30, -1], dtype=torch.int32)
         )
-
-    def test_real_negative_one_preserved_with_ragged_fill_value(self) -> None:
-        """A real -1 survives when the ragged sentinel is a distinct value."""
-        ragged_sentinel = -2_000_000_000
-        layer = PadOrCrop1D(
-            input_cols=["f"],
-            output_cols=["o"],
-            max_length=4,
-            dtype=torch.int32,
-            pad_value=-1,
-            ragged_fill_value=ragged_sentinel,
-        )
-        out = layer({"f": torch.tensor([10, -1, ragged_sentinel], dtype=torch.int32)})[
-            "o"
-        ]
-        torch.testing.assert_close(
-            out, torch.tensor([10, -1, -1, -1], dtype=torch.int32)
-        )
-
-    def test_ragged_fill_value_numeric_on_float_input(self) -> None:
-        """A numeric (non-NaN) ragged sentinel is replaced in a float tensor."""
-        layer = PadOrCrop1D(
-            input_cols=["f"],
-            output_cols=["o"],
-            max_length=5,
-            dtype=torch.float32,
-            pad_value=0.0,
-            ragged_fill_value=-999.0,
-        )
-        # Both the explicit -999.0 sentinel and a stray NaN collapse to pad_value.
-        out = layer({"f": torch.tensor([1.0, -999.0, float("nan")])})["o"]
-        torch.testing.assert_close(out, torch.tensor([1.0, 0.0, 0.0, 0.0, 0.0]))
-
-    def test_ragged_fill_value_replaced_before_crop(self) -> None:
-        """Ragged sentinels are replaced even when the input is then cropped."""
-        ragged_sentinel = -2_000_000_000
-        layer = PadOrCrop1D(
-            input_cols=["f"],
-            output_cols=["o"],
-            max_length=3,
-            dtype=torch.int32,
-            pad_value=-1,
-            ragged_fill_value=ragged_sentinel,
-        )
-        out = layer(
-            {"f": torch.tensor([10, ragged_sentinel, 30, 40, 50], dtype=torch.int32)}
-        )["o"]
-        torch.testing.assert_close(out, torch.tensor([10, -1, 30], dtype=torch.int32))
 
     def test_over_padding_short_input(self) -> None:
         """A single element pads out to the full max_length."""
@@ -1730,7 +1608,6 @@ def _b2_layer_cases() -> list[tuple[str, TorchTransformBaseLayer, dict]]:
                 output_cols=["o"],
                 max_length=5,
                 pad_value=0.0,
-                ragged_fill_value=float("nan"),
             ),
             {"f": torch.tensor([1.0, float("nan"), 3.0])},
         ),
@@ -1741,7 +1618,6 @@ def _b2_layer_cases() -> list[tuple[str, TorchTransformBaseLayer, dict]]:
                 output_cols=["o"],
                 max_length=5,
                 pad_value=-1,
-                ragged_fill_value=INT32_SENTINEL,
             ),
             {"f": torch.tensor([10, INT32_SENTINEL, 30], dtype=torch.int32)},
         ),

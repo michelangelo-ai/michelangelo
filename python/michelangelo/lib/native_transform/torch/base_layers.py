@@ -14,7 +14,6 @@ fitted-statistics, and tokenizer layers are added in follow-up modules.
 from __future__ import annotations
 
 import abc
-import math
 
 import torch
 
@@ -1048,15 +1047,9 @@ class PadOrCrop1D(TorchTransformBaseLayer):
     dimension: shorter sequences are padded with ``pad_value`` and longer ones
     are cropped. ``align`` controls which end is kept and padded.
 
-    Before padding, two kinds of sentinel are converted to ``pad_value`` so that
-    padding introduced upstream (ragged-array collation) is not mistaken for real
-    data:
-
-    - When ``ragged_fill_value`` is set, positions equal to it (or ``NaN`` when
-      it is ``float('nan')``) are replaced with ``pad_value``.
-    - Regardless of ``ragged_fill_value``, remaining ``NaN`` positions (float
-      dtypes) and ``INT32_SENTINEL`` positions (integer dtypes) are replaced with
-      ``pad_value``.
+    Sentinel positions from upstream ragged-batch collation (``NaN`` for float
+    dtypes, ``INT32_SENTINEL`` for integer dtypes) are automatically replaced
+    with ``pad_value`` before the pad/crop logic runs.
 
     Args:
         input_cols: Column names of the input tensors.
@@ -1066,9 +1059,6 @@ class PadOrCrop1D(TorchTransformBaseLayer):
         dtype: Optional output dtype. When ``None``, the input dtype is
             preserved.
         pad_value: The value used for padding (default ``0``).
-        ragged_fill_value: Optional upstream padding sentinel to convert to
-            ``pad_value`` before pad/crop. Supports ``float('nan')`` (detected
-            via ``isnan``) and numeric values (detected via ``==``).
         align: ``"left"`` (default) pads on the right and keeps the first
             ``max_length`` elements; ``"right"`` pads on the left and keeps the
             last ``max_length`` elements of the real content, i.e. sentinel
@@ -1089,7 +1079,6 @@ class PadOrCrop1D(TorchTransformBaseLayer):
         max_length: int,
         dtype: torch.dtype | str | None = None,
         pad_value: int | float = 0,
-        ragged_fill_value: int | float | None = None,
         align: str = "left",
         **kwargs,
     ) -> None:
@@ -1102,8 +1091,6 @@ class PadOrCrop1D(TorchTransformBaseLayer):
             max_length: The fixed target length; must be positive.
             dtype: Optional output dtype; preserves input dtype when ``None``.
             pad_value: The value used for padding (default ``0``).
-            ragged_fill_value: Optional upstream padding sentinel to convert to
-                ``pad_value`` before pad/crop.
             align: ``"left"`` pads/crops on the right; ``"right"`` pads/crops on
                 the left.
             **kwargs: Additional base-layer options (e.g. ``name``).
@@ -1125,12 +1112,6 @@ class PadOrCrop1D(TorchTransformBaseLayer):
         self.dtype = initialize_dtype(dtype, None)
         # Store as float for TorchScript compatibility.
         self.pad_value = float(pad_value)
-        self.ragged_fill_value = (
-            float(ragged_fill_value) if ragged_fill_value is not None else None
-        )
-        self._ragged_sentinel_is_nan = ragged_fill_value is not None and math.isnan(
-            float(ragged_fill_value)
-        )
         self._int_sentinel = INT32_SENTINEL
         self.align = align
 
@@ -1162,23 +1143,11 @@ class PadOrCrop1D(TorchTransformBaseLayer):
         # where the real content ends: once a sentinel is rewritten to
         # ``pad_value`` it is indistinguishable from padding, and cropping to the
         # "last max_length elements" would keep padding over real data.
-        sentinel_mask = torch.zeros_like(stacked_input, dtype=torch.bool)
-        if self.ragged_fill_value is not None:
-            if self._ragged_sentinel_is_nan:
-                sentinel_mask = torch.isnan(stacked_input)
-            elif stacked_input.is_floating_point():
-                incoming = stacked_input.new_full((), self.ragged_fill_value)
-                sentinel_mask = (stacked_input == incoming) | torch.isnan(stacked_input)
-            else:
-                incoming = stacked_input.new_full((), self.ragged_fill_value)
-                sentinel_mask = stacked_input == incoming
-
-        # Remaining collation sentinels: NaN for floats, INT32_SENTINEL for ints.
         if stacked_input.is_floating_point():
-            sentinel_mask = sentinel_mask | torch.isnan(stacked_input)
+            sentinel_mask = torch.isnan(stacked_input)
         else:
             sentinel = stacked_input.new_full((), self._int_sentinel)
-            sentinel_mask = sentinel_mask | (stacked_input == sentinel)
+            sentinel_mask = stacked_input == sentinel
 
         replacement = stacked_input.new_full((), self.pad_value)
         stacked_input = torch.where(sentinel_mask, replacement, stacked_input)
