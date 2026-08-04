@@ -32,6 +32,7 @@ go_test(
     deps = [
         ":go_default_library",
         "//go/kubeproto/pboptions:go_default_library",
+        "//proto/api:go_default_library",
         "//proto/test/kubeproto:go_default_library",
         "//proto/test/kubeproto/indexing_errors:go_default_library",
         "@com_github_dave_dst//decorator:go_default_library",

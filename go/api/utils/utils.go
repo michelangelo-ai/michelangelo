@@ -95,6 +95,17 @@ func ToSnakeCase(camelStr string) string {
 	return strings.ToLower(snake)
 }
 
+// ToPascalCase converts a string from snake_case to PascalCase
+func ToPascalCase(snakeStr string) string {
+	parts := strings.Split(snakeStr, "_")
+	for i, p := range parts {
+		if p != "" {
+			parts[i] = strings.ToUpper(p[:1]) + p[1:]
+		}
+	}
+	return strings.Join(parts, "")
+}
+
 // IsNotFoundError checks if the error is not found error
 // It handles grpc not found error and k8s client not found error
 func IsNotFoundError(err error) bool {

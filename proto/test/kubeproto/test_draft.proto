@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package michelangelo.test.kubeproto;
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+
+option go_package = "kubeproto";
+
+// TestDraftSpec is the spec of the second content wrapper.
+message TestDraftSpec {
+  string content = 1;
+}
+
+// TestDraftStatus is the status of the second content wrapper.
+message TestDraftStatus {
+  int32 count = 1;
+}
+
+// TestDraft is an ordinary CRD that serves as the "test_draft" wrapper. TestBase
+// does not list "test_draft" in revisioned_in, so no
+// "test_base_test_draft_unmarshaled" sidecar is generated for it — only
+// TestDraft's own main/label/annotation tables.
+message TestDraft {
+  option (michelangelo.api.resource) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+  TestDraftSpec spec = 3;
+  TestDraftStatus status = 4;
+}
+
+message TestDraftList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+  repeated TestDraft items = 3;
+}
