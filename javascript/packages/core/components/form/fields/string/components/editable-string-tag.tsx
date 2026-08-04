@@ -16,6 +16,18 @@ export function EditableStringTag(props: EditableStringTagProps) {
   const [editing, setEditing] = useState(false);
   const [localValue, setLocalValue] = useState(initialValue);
 
+  // Equal padding on all sides, tighter than the shared Tag's default, to suit a compact
+  // tag-input list — asymmetric padding here would inflate the visible gap between tags on top
+  // of the container's own `gap` (see StringTagInput). Spacing between tags is handled by that
+  // `gap` rather than margin here, since Tag's own overrides always win margin conflicts when
+  // merged.
+  const compactTagRootStyle = {
+    paddingTop: theme.sizing.scale100,
+    paddingRight: theme.sizing.scale100,
+    paddingBottom: theme.sizing.scale100,
+    paddingLeft: theme.sizing.scale100,
+  };
+
   const handleCancelEditing = () => {
     setLocalValue(initialValue);
     setEditing(false);
@@ -43,17 +55,7 @@ export function EditableStringTag(props: EditableStringTagProps) {
             // renders at, so the confirm icon doesn't look oversized next to it.
             props: { name: 'check', onMouseDown: persistEditedValue, size: theme.sizing.scale500 },
           },
-          // Tighter padding than the shared Tag's default, to suit a compact tag-input list.
-          // Spacing between tags is handled by the container's `gap` (see StringTagInput) rather
-          // than margin here, since Tag's own overrides always win margin conflicts when merged.
-          Root: {
-            style: {
-              paddingTop: theme.sizing.scale100,
-              paddingRight: theme.sizing.scale200,
-              paddingBottom: theme.sizing.scale100,
-              paddingLeft: theme.sizing.scale200,
-            },
-          },
+          Root: { style: compactTagRootStyle },
         }}
         behavior={TAG_BEHAVIOR.selection}
         hierarchy={TAG_HIERARCHY.secondary}
@@ -79,17 +81,7 @@ export function EditableStringTag(props: EditableStringTagProps) {
       onActionClick={onRemove}
       onClick={() => setEditing(true)}
       overrides={{
-        // Tighter padding than the shared Tag's default, to suit a compact tag-input list.
-        // Spacing between tags is handled by the container's `gap` (see StringTagInput) rather
-        // than margin here, since Tag's own overrides always win margin conflicts when merged.
-        Root: {
-          style: {
-            paddingTop: theme.sizing.scale100,
-            paddingRight: theme.sizing.scale200,
-            paddingBottom: theme.sizing.scale100,
-            paddingLeft: theme.sizing.scale200,
-          },
-        },
+        Root: { style: compactTagRootStyle },
       }}
       hierarchy={TAG_HIERARCHY.primary}
     >
