@@ -1,6 +1,6 @@
 import { SchemaStringField } from './fields/string/schema-string-field';
 
-import type { FieldRenderer, FieldType, LayoutRenderer } from './types/form-types';
+import type { FieldRenderer, FieldType, LayoutRenderer } from './types/config-types';
 
 export const FIELD_RENDERERS: Partial<Record<FieldType, FieldRenderer>> = {
   string: SchemaStringField,

@@ -6,14 +6,14 @@ import type {
   BuiltinLayoutConfig,
   FieldConfig,
   LayoutConfig,
-} from '#core/components/form/types/form-types';
+} from '#core/components/form/types/config-types';
 
 export function LayoutItemRenderer({
   config,
-  entities,
+  fields,
 }: {
   config: LayoutConfig;
-  entities: Record<string, FieldConfig>;
+  fields: Record<string, FieldConfig>;
 }) {
   const CustomRenderer = useLayoutRenderer(config.type);
 
@@ -21,11 +21,11 @@ export function LayoutItemRenderer({
     return (
       <CustomRenderer
         config={config}
-        renderItems={(items) => <LayoutItemList items={items} entities={entities} />}
+        renderItems={(items) => <LayoutItemList items={items} fields={fields} />}
       />
     );
   }
 
   // cast: if no custom renderer matched, config is a built-in layout type
-  return <BuiltinLayoutRenderer config={config as BuiltinLayoutConfig} entities={entities} />;
+  return <BuiltinLayoutRenderer config={config as BuiltinLayoutConfig} fields={fields} />;
 }

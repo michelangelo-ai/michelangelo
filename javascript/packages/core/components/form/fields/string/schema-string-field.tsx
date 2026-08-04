@@ -1,6 +1,6 @@
 import { StringField } from './string-field';
 
-import type { FieldRendererProps } from '#core/components/form/types/form-types';
+import type { FieldRendererProps } from '#core/components/form/types/config-types';
 
 export function SchemaStringField({ name, config }: FieldRendererProps) {
   if ('multi' in config && config.multi) {

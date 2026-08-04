@@ -1,6 +1,6 @@
 import { useFieldRenderer } from '#core/components/form/hooks/use-field-renderer';
 
-import type { FieldConfig } from '#core/components/form/types/form-types';
+import type { FieldConfig } from '#core/components/form/types/config-types';
 
 export function SchemaField({
   fieldPath,

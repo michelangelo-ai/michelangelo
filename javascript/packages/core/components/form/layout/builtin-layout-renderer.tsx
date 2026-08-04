@@ -3,16 +3,16 @@ import { FormGroup } from '#core/components/form/layout/form-group/form-group';
 import { FormRow } from '#core/components/form/layout/form-row/form-row';
 import { LayoutItemList } from './layout-item-list';
 
-import type { BuiltinLayoutConfig, FieldConfig } from '#core/components/form/types/form-types';
+import type { BuiltinLayoutConfig, FieldConfig } from '#core/components/form/types/config-types';
 
 export function BuiltinLayoutRenderer({
   config,
-  entities,
+  fields,
 }: {
   config: BuiltinLayoutConfig;
-  entities: Record<string, FieldConfig>;
+  fields: Record<string, FieldConfig>;
 }) {
-  const renderChildren = <LayoutItemList items={config.items} entities={entities} />;
+  const renderChildren = <LayoutItemList items={config.items} fields={fields} />;
 
   switch (config.type) {
     case 'group':
