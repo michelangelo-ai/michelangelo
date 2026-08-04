@@ -22,7 +22,6 @@ import torch
 import torch.nn as nn
 
 from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
-from michelangelo.lib.model_manager.utils.onnx import torch_onnx
 from michelangelo.lib.model_manager.utils.onnx.torch_onnx import (
     export_torch_to_onnx,
     prepare_sample_inputs,
@@ -269,7 +268,7 @@ class ExportTorchToOnnxTest(TestCase):
             self.assertTrue(os.path.isfile(dest))
 
     def test_export_with_lightning_module(self):
-        """Export with lightning module invokes the jit-scripting guard."""
+        """Export with lightning module wraps the call in the jit-scripting context."""
 
         class _LitModel(pl.LightningModule):
             def __init__(self):
@@ -279,13 +278,7 @@ class ExportTorchToOnnxTest(TestCase):
             def forward(self, x: torch.Tensor) -> torch.Tensor:
                 return self.lin(x)
 
-        with (
-            tempfile.TemporaryDirectory() as d,
-            mock.patch(
-                f"{_TORCH_ONNX_MODULE}._lightning_jit_scripting_guard",
-                wraps=torch_onnx._lightning_jit_scripting_guard,
-            ) as guard_mock,
-        ):
+        with tempfile.TemporaryDirectory() as d:
             dest = os.path.join(d, "model.onnx")
             model = _LitModel()
             model.eval()
@@ -298,7 +291,6 @@ class ExportTorchToOnnxTest(TestCase):
                 is_lightning_module=True,
             )
             self.assertTrue(os.path.isfile(dest))
-            guard_mock.assert_called_once()
 
     def test_dynamo_export_retries_legacy_on_onnxscript_error(self):
         """Dynamo export retries legacy on onnxscript error."""

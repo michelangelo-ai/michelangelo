@@ -19,6 +19,7 @@ import os
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+import pytorch_lightning as pl
 import torch
 
 from michelangelo.lib.model_manager._private.utils.onnx_utils import (
@@ -36,33 +37,10 @@ from michelangelo.lib.model_manager._private.utils.torch_utils import (
 if TYPE_CHECKING:
     from michelangelo.lib.model_manager.schema import ModelSchema
 
-try:
-    import pytorch_lightning as pl
-except ImportError:  # pragma: no cover - pytorch_lightning is a declared dependency
-    pl = None
-
 _logger = logging.getLogger(__name__)
 
 OPSET_VERSION = 14
 _DYNAMO_OPSET_VERSION = 18
-
-
-def _lightning_jit_scripting_guard():
-    """Best-effort wrapper around PyTorch Lightning's private jit-scripting context.
-
-    ``pl.core.module._jit_is_scripting`` avoids tracing LightningModule-only
-    hooks during export. It's a Lightning-internal API with no public
-    equivalent and has moved across Lightning releases before, so this
-    degrades to a no-op if the installed pytorch_lightning (or no
-    pytorch_lightning at all) doesn't expose it, rather than breaking export.
-    """
-    module_attr = getattr(getattr(pl, "core", None), "module", None) if pl else None
-    jit_is_scripting = getattr(module_attr, "_jit_is_scripting", None)
-    if jit_is_scripting is None:
-        from contextlib import nullcontext
-
-        return nullcontext()
-    return jit_is_scripting()
 
 
 def export_torch_to_onnx(
@@ -182,7 +160,7 @@ def export_torch_to_onnx(
 
     def _do_export() -> None:
         if is_lightning_module:
-            with _lightning_jit_scripting_guard(), torch.no_grad():
+            with pl.core.module._jit_is_scripting(), torch.no_grad():
                 run_export_with_retry(
                     export_args,
                     export_kwargs,

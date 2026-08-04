@@ -7,6 +7,7 @@ import os
 import shutil
 from typing import TYPE_CHECKING, Any
 
+import pytorch_lightning as pl
 import torch
 
 from michelangelo.lib.model_manager._private.packager.torch_triton.validation import (
@@ -20,11 +21,6 @@ from michelangelo.lib.model_manager.utils.onnx.torch_onnx import (
     export_torch_to_onnx,
     prepare_sample_inputs,
 )
-
-try:
-    import pytorch_lightning as pl
-except ImportError:  # pragma: no cover - pytorch_lightning is a declared dependency
-    pl = None
 
 if TYPE_CHECKING:
     from michelangelo.lib.model_manager.schema import ModelSchema
@@ -251,7 +247,7 @@ def convert_to_onnx(
             "Failed to run model with sample inputs before ONNX export: %s", e
         )
 
-    is_lightning = pl is not None and isinstance(model, pl.LightningModule)
+    is_lightning = isinstance(model, pl.LightningModule)
 
     export_torch_to_onnx(
         model=model,
