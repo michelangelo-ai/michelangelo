@@ -46,7 +46,10 @@ describe('Model list page', () => {
                   },
                   spec: {
                     description: 'model workflow=fraud-classifier git=abc123',
-                    kind: 'MODEL_KIND_BINARY_CLASSIFICATION',
+                    // The generated proto client decodes enum fields to their numeric
+                    // discriminant (MODEL_KIND_BINARY_CLASSIFICATION = 3), not the enum's
+                    // string name — mock the real runtime shape, not the wire JSON shape.
+                    kind: 3,
                     modelFamily: { name: 'fraud-family' },
                   },
                 },
