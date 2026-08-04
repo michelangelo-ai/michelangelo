@@ -96,6 +96,11 @@ export function MultiStringField({
         id={name}
         value={unpersistedValue}
         onChange={(e) => setUnpersistedValue(e.currentTarget.value)}
+        // Must be a top-level prop rather than an `Input.props` override below: BaseInput
+        // composes a top-level onBlur with its own internal handler that clears the container's
+        // focused-border state, whereas an `Input.props` override replaces the rendered input's
+        // onBlur outright and skips that internal handler.
+        onBlur={handlePersistValue}
         placeholder={!disabled && !readOnly && valueList.length === 0 ? placeholder : ''}
         readOnly={readOnly}
         disabled={disabled}
@@ -108,7 +113,6 @@ export function MultiStringField({
             component: StringTagInput,
             props: {
               clear: clearValueList,
-              onBlur: handlePersistValue,
               onKeyDown: handleTagEntry,
               readOnly,
               removeValue: removeValueAtIndex,
