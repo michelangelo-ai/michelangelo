@@ -40,8 +40,8 @@ func testBaseCR() *v2pb.Pipeline {
 	}
 }
 
-func testInput() RevisionInput {
-	return RevisionInput{
+func testInput() UpsertParams {
+	return UpsertParams{
 		Name:       "pipeline-my-pipeline-abc123456789",
 		BaseCR:     testBaseCR(),
 		Owner:      "owner",

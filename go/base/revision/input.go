@@ -5,13 +5,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// RevisionInput carries the caller-facing fields needed to create or update
+// UpsertParams carries the caller-facing fields needed to create or update
 // a Revision. The Manager builds the full v2 Revision proto internally —
 // callers never import or construct a *v2pb.Revision directly.
 //
 // The caller owns Content preparation: BaseCR is marshaled as-is, so strip
 // any unwanted metadata (e.g. ManagedFields) before passing it in.
-type RevisionInput struct {
+type UpsertParams struct {
 	// Name is the Revision object's metadata name. The caller controls the
 	// naming scheme (e.g. "pipeline-foo-abc123", "my-model-42").
 	Name string

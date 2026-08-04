@@ -14,7 +14,7 @@ type Manager interface {
 	// immutability, update if mutable).
 	// Returns (true, nil) on create or update, (false, nil) on dedup (an
 	// existing immutable Revision with the same name already exists).
-	UpsertRevision(ctx context.Context, input RevisionInput, opts UpsertOpts) (bool, error)
+	UpsertRevision(ctx context.Context, input UpsertParams, opts UpsertOpts) (bool, error)
 }
 
 // UpsertOpts carries state-machine knobs for UpsertRevision.

@@ -24,12 +24,12 @@ type revisionManager struct {
 }
 
 // NewManager creates a Manager backed by the given API handler.
-// The scheme is used to derive the GVK of the BaseCR in RevisionInput.
+// The scheme is used to derive the GVK of the BaseCR in UpsertParams.
 func NewManager(handler api.Handler, scheme *runtime.Scheme, logger *zap.Logger) Manager {
 	return &revisionManager{handler: handler, scheme: scheme, logger: logger}
 }
 
-func (m *revisionManager) UpsertRevision(ctx context.Context, input RevisionInput, opts UpsertOpts) (bool, error) {
+func (m *revisionManager) UpsertRevision(ctx context.Context, input UpsertParams, opts UpsertOpts) (bool, error) {
 	rev, err := buildRevision(input, m.scheme)
 	if err != nil {
 		return false, fmt.Errorf("build revision from input: %w", err)
@@ -77,7 +77,7 @@ func (m *revisionManager) UpsertRevision(ctx context.Context, input RevisionInpu
 	return true, nil
 }
 
-func buildRevision(input RevisionInput, scheme *runtime.Scheme) (*v2pb.Revision, error) {
+func buildRevision(input UpsertParams, scheme *runtime.Scheme) (*v2pb.Revision, error) {
 	msg, ok := input.BaseCR.(proto.Message)
 	if !ok {
 		return nil, fmt.Errorf("BaseCR %T does not implement proto.Message", input.BaseCR)

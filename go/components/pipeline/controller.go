@@ -205,7 +205,7 @@ func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeli
 		return nil
 	}
 
-	input := revision.RevisionInput{
+	input := revision.UpsertParams{
 		Name:       formatRevisionName(pipeline),
 		BaseCR:     pipeline,
 		Owner:      pipeline.Spec.GetOwner().GetName(),
