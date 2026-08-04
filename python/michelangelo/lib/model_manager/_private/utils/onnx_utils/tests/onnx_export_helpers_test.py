@@ -541,14 +541,10 @@ class ForceOnnxIoShapesFromSchemaTest(TestCase):
             )
             pred_schema = ModelSchema(
                 input_schema=[
-                    ModelSchemaItem(
-                        name="pred_in", data_type=DataType.FLOAT, shape=[8]
-                    )
+                    ModelSchemaItem(name="pred_in", data_type=DataType.FLOAT, shape=[8])
                 ],
                 output_schema=[
-                    ModelSchemaItem(
-                        name="output", data_type=DataType.FLOAT, shape=[2]
-                    )
+                    ModelSchemaItem(name="output", data_type=DataType.FLOAT, shape=[2])
                 ],
             )
             force_onnx_io_shapes_from_schema(dest_path, [tx_schema, pred_schema])

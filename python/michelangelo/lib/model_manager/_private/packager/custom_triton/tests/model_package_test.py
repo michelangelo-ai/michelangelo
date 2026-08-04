@@ -207,4 +207,3 @@ class ModelPackageTest(TestCase):
             )
             self.assertTrue(os.path.exists(expected_file))
             self.assertIn("model", content["0"])
-

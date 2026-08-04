@@ -425,10 +425,13 @@ class ExportTorchToOnnxTest(TestCase):
             dest = os.path.join(d, "model.onnx")
             model = _SimpleModel()
             model.eval()
-            with mock.patch(
-                f"{_TORCH_ONNX_MODULE}.force_onnx_io_shapes_from_schema",
-                side_effect=Exception("bad onnx"),
-            ), self.assertLogs(_TORCH_ONNX_MODULE, level="WARNING"):
+            with (
+                mock.patch(
+                    f"{_TORCH_ONNX_MODULE}.force_onnx_io_shapes_from_schema",
+                    side_effect=Exception("bad onnx"),
+                ),
+                self.assertLogs(_TORCH_ONNX_MODULE, level="WARNING"),
+            ):
                 export_torch_to_onnx(
                     model=model,
                     dest_path=dest,

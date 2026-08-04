@@ -293,4 +293,3 @@ def _build_tx_hydra_spec(tx_hyperparameters: dict[str, Any]) -> dict[str, Any]:
         "model requires the native-transform package, which is not yet "
         "available in OSS michelangelo."
     )
-
