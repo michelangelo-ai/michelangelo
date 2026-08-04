@@ -99,9 +99,7 @@ class ReorderOutputSchemaTest(unittest.TestCase):
         """A ``field_order`` covering every field fully determines the result order."""
         schema = _make_schema(["a", "b", "c"])
         result = reorder_output_schema(schema, ["c", "b", "a"])
-        self.assertEqual(
-            [item.name for item in result.output_schema], ["c", "b", "a"]
-        )
+        self.assertEqual([item.name for item in result.output_schema], ["c", "b", "a"])
 
     def test_duplicate_field_order_preserves_duplicates(self):
         """Duplicates in ``field_order`` produce duplicates in output (no dedup)."""
