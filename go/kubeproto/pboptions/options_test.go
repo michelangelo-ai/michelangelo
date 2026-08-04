@@ -33,6 +33,7 @@ func TestOptions(t *testing.T) {
 	extTypes := pboptions.LoadPBExtensions(gen.Files)
 
 	var testFile *protogen.File
+	var msg3File *protogen.File
 	var groupInfoFile *protogen.File
 	for _, f := range gen.Files {
 		if !f.Generate {
@@ -41,11 +42,15 @@ func TestOptions(t *testing.T) {
 		if strings.HasSuffix(f.Proto.GetName(), "/testobject.proto") {
 			testFile = f
 		}
+		if strings.HasSuffix(f.Proto.GetName(), "/test_msg3.proto") {
+			msg3File = f
+		}
 		if strings.HasSuffix(f.Proto.GetName(), "/groupversion_info_ut.proto") {
 			groupInfoFile = f
 		}
 	}
 	assert.True(t, testFile != nil)
+	assert.True(t, msg3File != nil)
 
 	options, _ := pboptions.ReadOptions(extTypes, testFile.Proto.Options)
 	assert.Equal(t, "", options.String("group_info.name"))
@@ -53,6 +58,9 @@ func TestOptions(t *testing.T) {
 
 	messages := make(map[string]*protogen.Message)
 	for _, m := range testFile.Messages {
+		messages[string(m.Desc.Name())] = m
+	}
+	for _, m := range msg3File.Messages {
 		messages[string(m.Desc.Name())] = m
 	}
 	options, _ = pboptions.ReadOptions(extTypes, messages["TestMsg3"].Desc.Options().(*descriptorpb.MessageOptions))

@@ -167,6 +167,10 @@ func generateSQL(reqData []byte) *pluginpb.CodeGeneratorResponse {
 		filename := f.GeneratedFilenamePrefix + ".pb.sql"
 		g := gen.NewGeneratedFile(filename, f.GoImportPath)
 		var buf []byte
+		// Convention: at most one CRD (resource-annotated message) per proto file.
+		// Without this check a second CRD's schema would silently overwrite the
+		// first's below.
+		crdName := ""
 		for _, msg := range f.Messages {
 			pbOptions := msg.Desc.Options().(*descriptorpb.MessageOptions)
 			options, e := pboptions.ReadOptions(extTypes, pbOptions)
@@ -175,6 +179,12 @@ func generateSQL(reqData []byte) *pluginpb.CodeGeneratorResponse {
 			}
 
 			if options.Bool("has_resource") {
+				if crdName != "" {
+					logger.Panicf("Multiple CRDs in %v: %v and %v. Each proto file may declare at most one "+
+						"message with the michelangelo.api.resource option; move one to its own file",
+						f.Desc.Path(), crdName, msg.GoIdent.GoName)
+				}
+				crdName = msg.GoIdent.GoName
 				buf = generateSQLSchema(msg, options)
 			}
 		}
