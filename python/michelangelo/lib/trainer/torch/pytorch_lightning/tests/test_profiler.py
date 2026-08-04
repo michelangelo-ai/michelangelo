@@ -1,8 +1,8 @@
 """Tests for the profiler subsystem in ``_private/util.py``.
 
-Covers step-count estimation, profiler construction for every supported
-flavor, schedule defaults and validation, config resolution, and the
-post-``fit`` ``profiler_sink`` hook.
+Covers step-count estimation, ``pytorch`` profiler construction, schedule
+defaults and validation, config resolution, and the post-``fit``
+``profiler_sink`` hook.
 
 ``ray.train.get_context`` is mocked throughout so the helpers run without a
 Ray cluster.
@@ -23,9 +23,9 @@ pl = pytest.importorskip("pytorch_lightning")
 
 from pytorch_lightning.profilers import (  # noqa: E402
     AdvancedProfiler,
-    Profiler,
     PyTorchProfiler,
     SimpleProfiler,
+    XLAProfiler,
 )
 
 from michelangelo.lib._internal.errors import UserInputError  # noqa: E402
@@ -40,25 +40,6 @@ from michelangelo.lib.trainer.torch.pytorch_lightning._private.util import (  # 
 )
 
 _UTIL_MODULE = "michelangelo.lib.trainer.torch.pytorch_lightning._private.util"
-
-
-class _CustomProfiler(Profiler):
-    """Minimal ``Profiler`` subclass used to exercise the ``custom`` branch."""
-
-    def __init__(self, tag: str = "x"):
-        """Record ``tag`` so tests can assert kwargs were forwarded."""
-        super().__init__()
-        self.tag = tag
-
-    def start(self, action_name: str) -> None:
-        """No-op start hook."""
-
-    def stop(self, action_name: str) -> None:
-        """No-op stop hook."""
-
-
-class _NotAProfiler:
-    """Plain class used to assert the ``custom`` subclass check rejects it."""
 
 
 @pytest.fixture
@@ -294,39 +275,24 @@ class TestValidateProfilerSchedule:
 
 
 class TestBuildProfiler:
-    """Construction of each profiler flavor and its config validation."""
+    """Construction of the ``pytorch`` profiler and its config validation."""
 
     def test_none_config_builds_nothing(self):
         """A ``None`` config yields no profiler and no logs path."""
         assert _build_profiler(None) == (None, "")
 
-    @pytest.mark.parametrize(
-        ("shorthand", "expected_cls"),
-        [("simple", SimpleProfiler), ("advanced", AdvancedProfiler)],
-    )
-    def test_shorthand_string(self, shorthand, expected_cls, in_tmp_cwd, patched_ray):
-        """A shorthand string builds that profiler with default kwargs."""
-        profiler, logs_path = _build_profiler(shorthand)
-        assert isinstance(profiler, expected_cls)
+    def test_shorthand_string(self, in_tmp_cwd, patched_ray):
+        """The ``pytorch`` shorthand builds a ``PyTorchProfiler`` with default kwargs."""
+        profiler, logs_path = _build_profiler("pytorch")
+        assert isinstance(profiler, PyTorchProfiler)
         assert logs_path == os.path.join(str(in_tmp_cwd), "profiler_logs")
         assert os.path.isdir(logs_path)
 
     def test_logs_path_and_filename_carry_world_rank(self, in_tmp_cwd, patched_ray):
         """The trace filename embeds the world rank; Lightning adds local rank."""
         patched_ray.get_world_rank.return_value = 3
-        profiler, _ = _build_profiler("simple")
+        profiler, _ = _build_profiler("pytorch")
         assert profiler.filename == "profile-world-rank-3-local-rank"
-
-    def test_dict_config_forwards_kwargs(self, in_tmp_cwd, patched_ray):
-        """Sub-config kwargs reach the profiler constructor."""
-        profiler, _ = _build_profiler({"simple": {"extended": False}})
-        assert isinstance(profiler, SimpleProfiler)
-        assert profiler.extended is False
-
-    def test_advanced_dict_config(self, in_tmp_cwd, patched_ray):
-        """The ``advanced`` key builds an ``AdvancedProfiler``."""
-        profiler, _ = _build_profiler({"advanced": {"line_count_restriction": 5}})
-        assert isinstance(profiler, AdvancedProfiler)
 
     def test_pytorch_profiler_gets_default_schedule(self, in_tmp_cwd, patched_ray):
         """The ``pytorch`` key builds a ``PyTorchProfiler`` with a schedule."""
@@ -334,6 +300,12 @@ class TestBuildProfiler:
         assert isinstance(profiler, PyTorchProfiler)
         assert profiler.dirpath == logs_path
         assert profiler._schedule is not None
+
+    def test_dict_config_forwards_kwargs(self, in_tmp_cwd, patched_ray):
+        """Sub-config kwargs reach the ``PyTorchProfiler`` constructor."""
+        profiler, _ = _build_profiler({"pytorch": {"row_limit": 5}}, steps_per_epoch=30)
+        assert isinstance(profiler, PyTorchProfiler)
+        assert profiler._row_limit == 5
 
     def test_pytorch_profiler_validates_explicit_schedule(
         self, in_tmp_cwd, patched_ray
@@ -362,82 +334,36 @@ class TestBuildProfiler:
         _build_profiler(config, steps_per_epoch=30)
         assert sub_config == {"schedule": {"wait": 1, "warmup": 1, "active": 1}}
 
-    def test_xla_profiler(self, in_tmp_cwd, patched_ray):
-        """The ``xla`` key builds an ``XLAProfiler`` with its kwargs."""
-        # XLAProfiler requires a TPU runtime, so patch the class the lazy
-        # import inside _build_profiler resolves.
-        import pytorch_lightning.profilers as profilers_mod
-
-        with patch.object(profilers_mod, "XLAProfiler") as xla_cls:
-            profiler, _ = _build_profiler({"xla": {"port": 9012}})
-
-        xla_cls.assert_called_once_with(port=9012)
-        assert profiler is xla_cls.return_value
-
-    def test_custom_profiler(self, in_tmp_cwd, patched_ray):
-        """The ``custom`` key resolves and instantiates the given class."""
-        with patch(f"{_UTIL_MODULE}.get_module_attr", return_value=_CustomProfiler):
-            profiler, _ = _build_profiler(
-                {
-                    "custom": {
-                        "profiler_class": "pkg.mod._CustomProfiler",
-                        "profiler_kwargs": {"tag": "hello"},
-                    }
-                }
-            )
-        assert isinstance(profiler, _CustomProfiler)
-        assert profiler.tag == "hello"
-
-    def test_custom_profiler_without_kwargs(self, in_tmp_cwd, patched_ray):
-        """``profiler_kwargs`` is optional."""
-        with patch(f"{_UTIL_MODULE}.get_module_attr", return_value=_CustomProfiler):
-            profiler, _ = _build_profiler(
-                {"custom": {"profiler_class": "pkg.mod._CustomProfiler"}}
-            )
-        assert isinstance(profiler, _CustomProfiler)
-
-    def test_custom_profiler_must_subclass_profiler(self, in_tmp_cwd, patched_ray):
-        """A resolved class that is not a Lightning ``Profiler`` is rejected."""
-        with (
-            patch(f"{_UTIL_MODULE}.get_module_attr", return_value=_NotAProfiler),
-            pytest.raises(UserInputError, match="must be a subclass"),
-        ):
-            _build_profiler({"custom": {"profiler_class": "pkg.mod.Nope"}})
-
-    def test_custom_profiler_rejects_non_class(self, in_tmp_cwd, patched_ray):
-        """A resolved non-class (e.g. a function) is rejected, not crashed on."""
-        with (
-            patch(f"{_UTIL_MODULE}.get_module_attr", return_value=lambda: None),
-            pytest.raises(UserInputError, match="must be a subclass"),
-        ):
-            _build_profiler({"custom": {"profiler_class": "pkg.mod.factory"}})
-
     def test_no_profiler_selected_raises(self, in_tmp_cwd, patched_ray):
         """A dict that selects nothing is a user config error."""
         with pytest.raises(UserInputError, match="None were set"):
             _build_profiler({"upload_to_comet": False})
 
     def test_multiple_profilers_selected_raises(self, in_tmp_cwd, patched_ray):
-        """A dict that selects two profilers is a user config error."""
-        with pytest.raises(UserInputError, match="Multiple were set"):
-            _build_profiler({"simple": {}, "advanced": {}})
+        """A dict that selects two profiler flavors is a user config error.
+
+        Only ``pytorch`` is a supported flavor today, so this exercises the
+        general N-way selector (kept generic so a second flavor is additive,
+        see ``_PROFILER_SHORTHANDS``'s docstring) against a patched-in second
+        name rather than a real second profiler.
+        """
+        with (
+            patch(f"{_UTIL_MODULE}._PROFILER_SHORTHANDS", ("pytorch", "other")),
+            pytest.raises(UserInputError, match="Multiple were set"),
+        ):
+            _build_profiler({"pytorch": {}, "other": {}})
 
     def test_upload_to_comet_is_not_a_profiler_selection(self, in_tmp_cwd, patched_ray):
         """``upload_to_comet`` is metadata and never reaches a constructor."""
-        profiler, _ = _build_profiler({"simple": {}, "upload_to_comet": False})
-        assert isinstance(profiler, SimpleProfiler)
+        profiler, _ = _build_profiler({"pytorch": {}, "upload_to_comet": False})
+        assert isinstance(profiler, PyTorchProfiler)
 
     def test_invalid_shorthand_raises(self):
         """An unrecognized shorthand string raises ``ValueError``."""
         with pytest.raises(ValueError, match="Invalid profiler type"):
             _build_profiler("nonsense")
 
-    def test_custom_is_not_a_valid_shorthand(self):
-        """``custom`` needs a dict; it has no shorthand form."""
-        with pytest.raises(ValueError, match="Invalid profiler type"):
-            _build_profiler("custom")
-
-    @pytest.mark.parametrize("bad", [42, ["simple"], object()])
+    @pytest.mark.parametrize("bad", [42, ["pytorch"], object()])
     def test_invalid_config_type_raises(self, bad):
         """A config that is neither str, dict, nor ``None`` raises ``TypeError``."""
         with pytest.raises(TypeError, match="must be a str, dict, or None"):
@@ -458,20 +384,20 @@ class TestResolveProfiler:
 
     def test_shorthand_defaults_to_uploading(self, in_tmp_cwd, patched_ray):
         """A shorthand string cannot opt out, so export defaults to on."""
-        profiler, logs_path, upload = _resolve_profiler("simple", {}, 100, 8, 1, 0)
-        assert isinstance(profiler, SimpleProfiler)
+        profiler, logs_path, upload = _resolve_profiler("pytorch", {}, 100, 8, 1, 0)
+        assert isinstance(profiler, PyTorchProfiler)
         assert logs_path.endswith("profiler_logs")
         assert upload is True
 
     def test_dict_defaults_to_uploading(self, in_tmp_cwd, patched_ray):
         """Users must explicitly opt out of exporting results."""
-        _, _, upload = _resolve_profiler({"simple": {}}, {}, 100, 8, 1, 0)
+        _, _, upload = _resolve_profiler({"pytorch": {}}, {}, 100, 8, 1, 0)
         assert upload is True
 
     def test_upload_can_be_disabled(self, in_tmp_cwd, patched_ray):
         """``upload_to_comet: False`` turns the export off."""
         _, _, upload = _resolve_profiler(
-            {"simple": {}, "upload_to_comet": False}, {}, 100, 8, 1, 0
+            {"pytorch": {}, "upload_to_comet": False}, {}, 100, 8, 1, 0
         )
         assert upload is False
 
@@ -610,7 +536,7 @@ class TestCometProfilerSink:
         """XLA and custom profilers have no supported upload format."""
         logger = MagicMock(name="logger")
 
-        comet_profiler_sink(_CustomProfiler(), "/logs", logger)
+        comet_profiler_sink(MagicMock(spec=XLAProfiler), "/logs", logger)
 
         logger.experiment.log_asset.assert_not_called()
         logger.experiment.log_tensorflow_folder.assert_not_called()

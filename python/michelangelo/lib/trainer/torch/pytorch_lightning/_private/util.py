@@ -64,7 +64,14 @@ _MAX_PROFILER_ACTIVE_STEPS = 10
 _MAX_PROFILER_REPEAT = 3
 
 # Shorthand strings accepted in place of a full profiler config dict.
-_PROFILER_SHORTHANDS = ("simple", "advanced", "pytorch", "xla")
+#
+# Only ``pytorch`` is supported today — Michelangelo OSS is PyTorch-heavy, and
+# the other Lightning profilers (simple / advanced / xla) and a custom-class
+# escape hatch add config surface without a concrete user yet. The dict shape
+# (``{"pytorch": {...}, "upload_to_comet": ...}``) is kept as-is so adding a
+# second backend later, as we expand to more platforms, is additive rather
+# than a breaking config change.
+_PROFILER_SHORTHANDS = ("pytorch",)
 
 # Directory (under the worker's cwd) that every profiler writes its output to.
 # Fixed rather than temporary so a profiler sink can find the results after
@@ -765,6 +772,9 @@ def _build_profiler(
 ) -> tuple[pl.profilers.Profiler | None, str]:
     """Build a Lightning profiler from a user-supplied profiler config.
 
+    Only the ``pytorch`` profiler is currently supported (Michelangelo OSS is
+    PyTorch-heavy); more backends can be added as the platform expands.
+
     Every profiler writes into a fixed ``profiler_logs`` directory under the
     worker's current working directory, so a profiler sink can locate the
     results after training. Traces are named per world rank; Lightning's
@@ -774,21 +784,16 @@ def _build_profiler(
         profiler_config: One of
 
             * ``None`` — no profiler.
-            * A shorthand string: ``"simple"``, ``"advanced"``, ``"pytorch"``,
-              or ``"xla"``, equivalent to that key mapped to ``{}``.
-            * A dict setting exactly one of ``simple``, ``advanced``,
-              ``pytorch``, ``xla``, or ``custom`` to a kwargs dict. The
-              ``simple`` / ``advanced`` / ``xla`` kwargs are forwarded verbatim
-              to the corresponding Lightning profiler; ``pytorch`` is handled by
-              :func:`_build_pytorch_profiler`; ``custom`` takes
-              ``profiler_class`` (a dotted path to a ``pl.profilers.Profiler``
-              subclass) and optional ``profiler_kwargs``.
+            * The shorthand string ``"pytorch"``, equivalent to
+              ``{"pytorch": {}}``.
+            * A dict setting ``pytorch`` to a kwargs dict, handled by
+              :func:`_build_pytorch_profiler`.
 
             ``upload_to_comet`` is reserved metadata read by
             :func:`_resolve_profiler` and is never forwarded to a profiler
             constructor.
-        steps_per_epoch: Estimated steps per epoch, used only by the
-            ``pytorch`` branch to derive or validate a schedule.
+        steps_per_epoch: Estimated steps per epoch, used to derive or
+            validate the profiler's schedule.
 
     Returns:
         A ``(profiler, profiler_logs_path)`` tuple. Both are ``None`` / ``""``
@@ -797,9 +802,7 @@ def _build_profiler(
     Raises:
         TypeError: If ``profiler_config`` is neither a str, dict, nor ``None``.
         ValueError: If a shorthand string is not a recognized profiler name.
-        UserInputError: If the dict sets zero or more than one profiler, or if
-            ``custom`` resolves to something that is not a Lightning
-            ``Profiler`` subclass.
+        UserInputError: If the dict sets zero or more than one profiler.
     """
     if profiler_config is None:
         return None, ""
@@ -817,19 +820,17 @@ def _build_profiler(
 
     # Exactly one profiler flavor must be selected.
     selected = [
-        name
-        for name in ("simple", "advanced", "pytorch", "xla", "custom")
-        if profiler_config.get(name) is not None
+        name for name in _PROFILER_SHORTHANDS if profiler_config.get(name) is not None
     ]
     if not selected:
         raise UserInputError(
-            "Profiler config must set exactly one of: simple, advanced, "
-            "pytorch, xla, custom. None were set."
+            "Profiler config must set exactly one of: "
+            f"{', '.join(_PROFILER_SHORTHANDS)}. None were set."
         )
     if len(selected) > 1:
         raise UserInputError(
-            "Profiler config must set exactly one of: simple, advanced, "
-            f"pytorch, xla, custom. Multiple were set: {selected}."
+            "Profiler config must set exactly one of: "
+            f"{', '.join(_PROFILER_SHORTHANDS)}. Multiple were set: {selected}."
         )
 
     profiler_type = selected[0]
@@ -846,39 +847,8 @@ def _build_profiler(
     # Lightning's Profiler base class appends the local rank to this filename.
     filename = f"profile-world-rank-{world_rank}-local-rank"
 
-    from pytorch_lightning.profilers import (
-        AdvancedProfiler,
-        SimpleProfiler,
-        XLAProfiler,
-    )
-
-    if profiler_type == "simple":
-        return SimpleProfiler(
-            dirpath=profiler_logs_path, filename=filename, **profiler_kwargs
-        ), profiler_logs_path
-    if profiler_type == "advanced":
-        return AdvancedProfiler(
-            dirpath=profiler_logs_path, filename=filename, **profiler_kwargs
-        ), profiler_logs_path
-    if profiler_type == "pytorch":
-        return _build_pytorch_profiler(
-            profiler_logs_path, filename, profiler_kwargs, steps_per_epoch
-        ), profiler_logs_path
-    if profiler_type == "xla":
-        return XLAProfiler(**profiler_kwargs), profiler_logs_path
-
-    profiler_class = profiler_kwargs.get("profiler_class")
-    profiler_cls = get_module_attr(profiler_class)
-    if not (
-        isinstance(profiler_cls, type)
-        and issubclass(profiler_cls, pl.profilers.Profiler)
-    ):
-        raise UserInputError(
-            f"Custom profiler class {profiler_class!r} must be a subclass of "
-            f"pytorch_lightning.profilers.Profiler, got {profiler_cls!r}."
-        )
-    return profiler_cls(
-        **(profiler_kwargs.get("profiler_kwargs") or {})
+    return _build_pytorch_profiler(
+        profiler_logs_path, filename, profiler_kwargs, steps_per_epoch
     ), profiler_logs_path
 
 
