@@ -25,7 +25,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
       #----------------------------------------------
       #  Setup Python and Poetry using composite action
@@ -41,7 +41,9 @@ jobs:
       - name: Get base SHA for comparison
         id: get-base-sha
         run: |
-          echo "BASE_SHA=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_ENV"
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          echo "BASE_SHA=$BASE_SHA" >> "$GITHUB_ENV"
 
       - name: Get changed files
         id: changed-files
