@@ -41,9 +41,10 @@ func cascadeScheme(t *testing.T) *runtime.Scheme {
 	return s
 }
 
-// TestTriggerRun_RequestCancel_AtomicTokenAndKill: RequestCancel kills via the
-// runner and stamps the drain-counted token in one persisted update.
-func TestTriggerRun_RequestCancel_AtomicTokenAndKill(t *testing.T) {
+// TestTriggerRun_RequestCancel_PersistsTokenAndKilledStatus: RequestCancel kills
+// via the runner, persists KILLED through the status subresource, and stamps the
+// drain-counted token through the main resource.
+func TestTriggerRun_RequestCancel_PersistsTokenAndKilledStatus(t *testing.T) {
 	scheme := cascadeScheme(t)
 	run := &v2pb.TriggerRun{
 		ObjectMeta: metav1.ObjectMeta{Name: "tr1", Namespace: "ns", UID: types.UID("t1"), Finalizers: []string{drainFinalizer}},
@@ -62,6 +63,7 @@ func TestTriggerRun_RequestCancel_AtomicTokenAndKill(t *testing.T) {
 	got := &v2pb.TriggerRun{}
 	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Name: "tr1", Namespace: "ns"}, got))
 	assert.Equal(t, "true", got.GetAnnotations()["cascade.michelangelo.uber.com/drain-counted"], "token persisted with the kill")
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_KILLED, got.Status.State, "terminal status persisted through /status")
 	mockRunner.AssertCalled(t, "Kill", mock.Anything, mock.Anything)
 }
 

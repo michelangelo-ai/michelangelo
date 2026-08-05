@@ -3,6 +3,7 @@ package temporalclient
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	enumspb "go.temporal.io/api/enums/v1"
 	temporalEnumsV1 "go.temporal.io/api/enums/v1"
 	filterV1 "go.temporal.io/api/filter/v1"
+	"go.temporal.io/api/serviceerror"
 	workflowserviceV1 "go.temporal.io/api/workflowservice/v1"
 	temporalClient "go.temporal.io/sdk/client"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -400,13 +402,24 @@ func (c *TemporalClient) UnpauseTrigger(ctx context.Context, workflowID string) 
 func (c *TemporalClient) DeleteTrigger(ctx context.Context, workflowID string, runID string) error {
 	scheduleID := scheduleIDForWorkflow(workflowID)
 	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
-	if err := handle.Delete(ctx); err != nil {
+	if err := handle.Delete(ctx); err != nil && !isTemporalNotFound(err) {
 		return err
 	}
 	if runID == "" {
 		return nil
 	}
-	return c.Client.TerminateWorkflow(ctx, workflowID, runID, "trigger killed")
+	if err := c.Client.TerminateWorkflow(ctx, workflowID, runID, "trigger killed"); err != nil && !isTemporalNotFound(err) {
+		return err
+	}
+	return nil
+}
+
+// isTemporalNotFound makes trigger deletion idempotent. Temporal reports both an
+// already-deleted schedule and an already-completed workflow as NotFound; neither
+// means there is remaining trigger work to drain.
+func isTemporalNotFound(err error) bool {
+	var notFound *serviceerror.NotFound
+	return errors.As(err, &notFound)
 }
 
 // UpdateTrigger updates the cron schedule, optionally the paused state, and optionally the

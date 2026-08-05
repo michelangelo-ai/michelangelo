@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	commonV1 "go.temporal.io/api/common/v1"
 	temporalEnumsV1 "go.temporal.io/api/enums/v1"
+	"go.temporal.io/api/serviceerror"
 	workflowV1 "go.temporal.io/api/workflow/v1"
 	workflowserviceV1 "go.temporal.io/api/workflowservice/v1"
 	temporalClient "go.temporal.io/sdk/client"
@@ -691,6 +692,25 @@ func TestDeleteTrigger(t *testing.T) {
 				mockClient.On("ScheduleClient").Return(mockScheduleClient)
 				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
 				mockScheduleHandle.On("Delete", mock.Anything).Return(nil)
+			},
+		},
+		{
+			name:  "success - schedule already deleted",
+			runID: "",
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
+				mockScheduleHandle.On("Delete", mock.Anything).Return(serviceerror.NewNotFound("schedule not found"))
+			},
+		},
+		{
+			name:  "success - workflow already completed",
+			runID: runID,
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, scheduleID).Return(mockScheduleHandle)
+				mockScheduleHandle.On("Delete", mock.Anything).Return(serviceerror.NewNotFound("schedule not found"))
+				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, runID, "trigger killed").Return(serviceerror.NewNotFound("workflow execution already completed"))
 			},
 		},
 		{
