@@ -15,6 +15,7 @@ from michelangelo.lib.native_transform.torch.base_layers import (
     Divide,
     Floor,
     IdentityTransform,
+    IDHashTokenizer,
     LogTransform,
     PadOrCrop1D,
     Scale,
@@ -23,9 +24,6 @@ from michelangelo.lib.native_transform.torch.base_layers import (
     TensorColFillNone,
     Tile,
     TorchTransformBaseLayer,
-)
-from michelangelo.lib.native_transform.torch.id_hash_tokenizer import (
-    IDHashTokenizer,
 )
 
 __all__ = [

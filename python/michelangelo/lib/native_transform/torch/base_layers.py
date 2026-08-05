@@ -7,8 +7,10 @@ uses :func:`~michelangelo.lib.native_transform.torch.utils.format_inputs` /
 :func:`~michelangelo.lib.native_transform.torch.utils.format_outputs` to map its
 declared input/output columns to and from a single stacked tensor.
 
-This module provides the foundation (stateless, elementwise) layers. Structural,
-fitted-statistics, and tokenizer layers are added in follow-up modules.
+This module provides the foundation (stateless, elementwise) layers, plus
+structural layers (``Tile``, ``PadOrCrop1D``, ``Clip``, ``Scale``, ``CaseWhen``,
+``Compare``, ``TensorColFillNone``, etc.) and the ``IDHashTokenizer`` wrapper
+layer. Fitted-statistics layers are added in a follow-up module.
 """
 
 from __future__ import annotations
@@ -19,6 +21,9 @@ import torch
 
 from michelangelo.lib.constants.sentinel import INT32_SENTINEL
 from michelangelo.lib.native_transform.torch.constants import DEFAULT_EPSILON
+from michelangelo.lib.native_transform.torch.id_hash_tokenizer import (
+    IDHashTokenizer as _IDHashTokenizer,
+)
 from michelangelo.lib.native_transform.torch.utils import (
     format_inputs,
     format_outputs,
@@ -36,6 +41,7 @@ __all__ = [
     "Constant",
     "Divide",
     "Floor",
+    "IDHashTokenizer",
     "IdentityTransform",
     "LogTransform",
     "PadOrCrop1D",
@@ -1319,3 +1325,102 @@ class Clip(TorchTransformBaseLayer):
             clipped_tensor = torch.where(mask, stacked_inputs, clipped_tensor)
 
         return format_outputs(self.output_cols, clipped_tensor)
+
+
+class IDHashTokenizer(TorchTransformBaseLayer):
+    """Map integer IDs to contiguous vocabulary indices.
+
+    Composes the vocabulary-lookup core in
+    :class:`~michelangelo.lib.native_transform.torch.id_hash_tokenizer.IDHashTokenizer`
+    into the ``dict[str, torch.Tensor]`` layer contract. Sentinel positions
+    from upstream ragged-batch collation (``NaN`` for float inputs,
+    ``INT32_SENTINEL`` for integer inputs) are automatically detected and
+    preserved through the lookup: the sentinel mask is captured before the
+    float-to-int32 cast the core requires (``NaN`` does not survive that
+    cast), and restored as ``INT32_SENTINEL`` in the output regardless of the
+    input's original dtype.
+
+    .. note::
+        This is a different class from the one previously exported as
+        ``michelangelo.lib.native_transform.torch.IDHashTokenizer``: prior to
+        this layer's addition, that top-level name referred to the bare
+        lookup core above (a plain ``nn.Module`` taking and returning a
+        single ``torch.Tensor``). That core is still available under its
+        original name at
+        :mod:`michelangelo.lib.native_transform.torch.id_hash_tokenizer`; the
+        top-level package name now refers to this layer instead, which
+        composes the core into the dict-of-tensors transform-layer contract
+        used throughout this package.
+
+    Args:
+        input_cols: Column names of the input tensors.
+        output_cols: Column names of the output tensors; must match the
+            length of ``input_cols``.
+        vocabulary: List of integer values to map to contiguous indices,
+            forwarded to the wrapped core tokenizer.
+        **kwargs: Additional base-layer options (e.g. ``name``).
+
+    Raises:
+        ValueError: If ``input_cols`` and ``output_cols`` differ in length.
+    """
+
+    def __init__(
+        self,
+        input_cols: list[str],
+        output_cols: list[str],
+        vocabulary: list[int],
+        **kwargs,
+    ) -> None:
+        """Initialize the IDHashTokenizer layer.
+
+        Args:
+            input_cols: Column names of the input tensors.
+            output_cols: Column names of the output tensors; must match the
+                length of ``input_cols``.
+            vocabulary: List of integer values to map to contiguous indices,
+                forwarded to the wrapped core tokenizer.
+            **kwargs: Additional base-layer options (e.g. ``name``).
+
+        Raises:
+            ValueError: If ``input_cols`` and ``output_cols`` differ in
+                length.
+        """
+        super().__init__(input_cols, output_cols, **kwargs)
+        if len(input_cols) != len(output_cols):
+            raise ValueError(
+                "Input columns and output columns must have the same length."
+            )
+        self._tokenizer = _IDHashTokenizer(vocabulary=vocabulary)
+        # Expose useful attributes from the wrapped tokenizer.
+        self.vocabulary = self._tokenizer.vocabulary
+        self.unk_index = self._tokenizer.unk_index
+        self.output_vocab_size = self._tokenizer.output_vocab_size
+        # Stored as an instance attribute (rather than read from a module) for
+        # TorchScript compatibility.
+        self._int_sentinel = INT32_SENTINEL
+
+    def forward(self, inputs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        """Map the stacked input columns to vocabulary indices.
+
+        Args:
+            inputs: Mapping from column name to tensor.
+
+        Returns:
+            A mapping from each output column to its mapped-index tensor.
+        """
+        stacked_input = format_inputs(self.input_cols, inputs)
+
+        # Capture the sentinel mask before any float->int32 cast: NaN does
+        # not survive the cast, so it must be detected first.
+        if stacked_input.is_floating_point():
+            pad_mask = torch.isnan(stacked_input)
+            lookup_input = stacked_input.to(torch.int32)
+        else:
+            pad_mask = stacked_input == self._int_sentinel
+            lookup_input = stacked_input
+
+        output_tensor = self._tokenizer(lookup_input)
+        sentinel = output_tensor.new_full((), self._int_sentinel)
+        output_tensor = torch.where(pad_mask, sentinel, output_tensor)
+
+        return format_outputs(self.output_cols, output_tensor)

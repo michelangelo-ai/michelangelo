@@ -26,6 +26,7 @@ from michelangelo.lib.native_transform.torch.base_layers import (  # noqa: E402
     Divide,
     Floor,
     IdentityTransform,
+    IDHashTokenizer,
     LogTransform,
     PadOrCrop1D,
     Scale,
@@ -1643,6 +1644,132 @@ def _b2_layer_cases() -> list[tuple[str, TorchTransformBaseLayer, dict]]:
             {"v": torch.tensor([-5.0, 5.0, 15.0, -1.0])},
         ),
     ]
+
+
+class TestIDHashTokenizer:
+    """The IDHashTokenizer wrapper layer: lookup plus sentinel handling."""
+
+    def test_mismatched_columns_raises(self) -> None:
+        """Unequal input/output column counts raise ``ValueError``."""
+        with pytest.raises(ValueError, match="same length"):
+            IDHashTokenizer(
+                input_cols=["a", "b"], output_cols=["o"], vocabulary=[1, 2, 3]
+            )
+
+    def test_forward_basic(self) -> None:
+        """Known values map to their vocabulary position."""
+        layer = IDHashTokenizer(
+            input_cols=["x"], output_cols=["o"], vocabulary=[10, 20, 30]
+        )
+        out = layer({"x": torch.tensor([10, 30, 20], dtype=torch.int32)})["o"]
+        torch.testing.assert_close(out, torch.tensor([0, 2, 1], dtype=torch.int32))
+
+    def test_unknown_value_maps_to_unk_index(self) -> None:
+        """A value outside the vocabulary maps to unk_index."""
+        layer = IDHashTokenizer(
+            input_cols=["x"], output_cols=["o"], vocabulary=[10, 20]
+        )
+        out = layer({"x": torch.tensor([10, 99], dtype=torch.int32)})["o"]
+        torch.testing.assert_close(
+            out, torch.tensor([0, layer.unk_index], dtype=torch.int32)
+        )
+
+    def test_multi_column(self) -> None:
+        """Multiple columns tokenize independently."""
+        layer = IDHashTokenizer(
+            input_cols=["a", "b"], output_cols=["oa", "ob"], vocabulary=[1, 2]
+        )
+        out = layer(
+            {
+                "a": torch.tensor([1], dtype=torch.int32),
+                "b": torch.tensor([2], dtype=torch.int32),
+            }
+        )
+        torch.testing.assert_close(out["oa"], torch.tensor([0], dtype=torch.int32))
+        torch.testing.assert_close(out["ob"], torch.tensor([1], dtype=torch.int32))
+
+    def test_exposed_attributes(self) -> None:
+        """vocabulary/unk_index/output_vocab_size are forwarded from the core."""
+        layer = IDHashTokenizer(
+            input_cols=["x"], output_cols=["o"], vocabulary=[5, 6, 7]
+        )
+        assert layer.vocabulary == [5, 6, 7]
+        assert layer.unk_index == 3
+        assert layer.output_vocab_size == 3
+
+    def test_nan_sentinel_is_preserved(self) -> None:
+        """A NaN sentinel in float input is preserved as INT32_SENTINEL output.
+
+        The mask is captured before the float->int32 cast the core requires,
+        since NaN does not survive that cast.
+        """
+        layer = IDHashTokenizer(
+            input_cols=["x"], output_cols=["o"], vocabulary=[1, 2, 3]
+        )
+        out = layer({"x": torch.tensor([1.0, float("nan"), 3.0])})["o"]
+        torch.testing.assert_close(
+            out, torch.tensor([0, INT32_SENTINEL, 2], dtype=torch.int32)
+        )
+
+    def test_int_sentinel_is_preserved(self) -> None:
+        """An INT32_SENTINEL position in integer input is preserved."""
+        layer = IDHashTokenizer(
+            input_cols=["x"], output_cols=["o"], vocabulary=[1, 2, 3]
+        )
+        out = layer({"x": torch.tensor([1, INT32_SENTINEL, 3], dtype=torch.int32)})["o"]
+        torch.testing.assert_close(
+            out, torch.tensor([0, INT32_SENTINEL, 2], dtype=torch.int32)
+        )
+
+
+def _b4_layer_cases() -> list[tuple[str, TorchTransformBaseLayer, dict]]:
+    """Layer/input pairs shared by the B4 TorchScript round-trip test."""
+    return [
+        (
+            "id_hash_tokenizer",
+            IDHashTokenizer(
+                input_cols=["x"], output_cols=["o"], vocabulary=[10, 20, 30]
+            ),
+            {"x": torch.tensor([10, 30, 99], dtype=torch.int32)},
+        ),
+        (
+            "id_hash_tokenizer_nan_sentinel",
+            IDHashTokenizer(input_cols=["x"], output_cols=["o"], vocabulary=[1, 2, 3]),
+            {"x": torch.tensor([1.0, float("nan"), 3.0])},
+        ),
+    ]
+
+
+class TestB4TorchScriptRoundTrip:
+    """The B4 IDHashTokenizer wrapper must script, save/load, and match eager."""
+
+    @pytest.mark.parametrize(
+        ("layer", "inputs"),
+        [(layer, inputs) for _, layer, inputs in _b4_layer_cases()],
+        ids=[case_id for case_id, _, _ in _b4_layer_cases()],
+    )
+    def test_scripted_matches_eager(
+        self,
+        layer: TorchTransformBaseLayer,
+        inputs: dict[str, torch.Tensor],
+        tmp_path,
+    ) -> None:
+        """Scripting (and reloading) reproduces the eager forward output."""
+        layer.eval()
+        eager = layer(inputs)
+
+        scripted = torch.jit.script(layer)
+        scripted_out = scripted(inputs)
+        assert set(scripted_out) == set(eager)
+        for key in eager:
+            torch.testing.assert_close(scripted_out[key], eager[key])
+
+        model_path = tmp_path / "scripted_b4_layer.pt"
+        scripted.save(str(model_path))
+        loaded = torch.jit.load(str(model_path))
+        loaded_out = loaded(inputs)
+        for key in eager:
+            torch.testing.assert_close(loaded_out[key], eager[key])
 
 
 class TestB2TorchScriptRoundTrip:
