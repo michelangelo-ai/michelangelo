@@ -109,7 +109,7 @@ The following gRPC services back the serving control plane. All are defined in `
 | `ClusterService` | `cluster_svc.proto` | Manages compute Cluster registrations available to the serving control plane |
 | `RayClusterService` | `ray_cluster_svc.proto` | Manages Ray-specific cluster resources provisioned for inference workloads |
 
-Each service follows the standard CRUD pattern (Create, Get, List, Update, Delete). See the proto definitions for the full request/response schema.
+Each service follows the standard CRUD pattern (Create, Get, List, Update, Delete) and also exposes `DeleteXxxCollection` for bulk deletion. See the proto definitions for the full request/response schema.
 
 ## Next Steps
 
