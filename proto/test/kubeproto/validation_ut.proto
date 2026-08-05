@@ -3,6 +3,7 @@ syntax = "proto3";
 package michelangelo.test.kubeproto;
 
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "google/protobuf/duration.proto";
 import "michelangelo/api/options.proto";
 
 option go_package = "kubeproto";
@@ -115,6 +116,15 @@ message ValidationMsg12 {
     int32 f3 = 3;
     ValidationMsg1 f4 = 4;
   }
+}
+
+message ValidationMsg13 {
+  // f1 has no validation annotation: only the unconditional structural check applies.
+  google.protobuf.Duration f1 = 1;
+  // f2 must be in the range (0, 3600] seconds.
+  google.protobuf.Duration f2 = 2 [(michelangelo.api.validation) = {min: "0", max: "3600", excl_min: true}];
+  repeated google.protobuf.Duration f3 = 3 [(michelangelo.api.validation) = {items: {max: "60"}}];
+  map<string, google.protobuf.Duration> f4 = 4 [(michelangelo.api.validation) = {values: {min: "1"}}];
 }
 
 enum Enum1 {
