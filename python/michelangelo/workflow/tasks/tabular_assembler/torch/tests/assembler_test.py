@@ -599,20 +599,20 @@ class NativeTransformFusionTest(_LocalBackendTestCase):
 
 
 class ScalarColumnPackagingTest(_LocalBackendTestCase):
-    """End-to-end regression coverage for scalar (``shape=[]``) column packaging."""
+    """The assembler passes scalar (``shape=[]``) schema/sample_data through as-is."""
 
     @patch(f"{_ASSEMBLER_MODULE}.TorchTritonPackager.create_model_package")
     @patch(f"{_ASSEMBLER_MODULE}.TorchTritonPackager.create_raw_model_package")
-    def test_scalar_columns_do_not_raise_shape_validation_error(
+    def test_scalar_shape_is_passed_through_without_modification(
         self, mock_create_raw, mock_create_model
     ):
-        """A model with an explicit scalar (``shape=[1]``) feature packages cleanly.
+        """A ``shape=[]`` schema item and its sample_data reach the packager as-is.
 
-        ``ColumnConfig.shape`` no longer defaults to ``[]`` (fixed to match
-        internal's required, no-default field), so a scalar feature must be
-        declared with an explicit ``shape=[1]``. This test locks in that
-        ``normalize_scalar_shapes``'s defensive handling still works for the
-        (now only explicitly reachable) ``shape=[]`` case.
+        The assembler must never rewrite schema shapes or reshape
+        sample_data values -- packaging validation is the packager's job, not
+        the assembler's. A scalar column declared with ``shape=[]`` is passed
+        through unchanged; whether that's valid is for
+        ``TorchTritonPackager`` to decide.
         """
         mock_create_model.side_effect = _fake_create_package("deployable")
         mock_create_raw.side_effect = _fake_create_package("raw")
@@ -625,22 +625,23 @@ class ScalarColumnPackagingTest(_LocalBackendTestCase):
                 ModelSchemaItem(name="prediction", data_type=DataType.FLOAT, shape=[]),
             ],
         )
+        sample_data = [{"MedInc": np.float32(1.0)}]
         config = TabularAssemblerConfig()
         raw_model = ModelArtifact(
             path=self._upload_raw_model_source(),
             metadata=ModelMetadata(
                 model_class="test.SimpleTorchModel",
                 _schema=BytesIO(pickle.dumps(scalar_schema)),
-                _sample_data=BytesIO(pickle.dumps([{"MedInc": np.float32(1.0)}])),
+                _sample_data=BytesIO(pickle.dumps(sample_data)),
             ),
         )
 
-        # Packaging a scalar-only schema must not raise Triton's
-        # "Shape must be provided" ValueError.
         torch_assembler(config, raw_model, storage_backend=self.storage_backend)
 
         packaged_schema = mock_create_model.call_args.kwargs["model_schema"]
-        self.assertEqual(packaged_schema.input_schema[0].shape, [1])
+        self.assertEqual(packaged_schema.input_schema[0].shape, [])
+        packaged_sample_data = mock_create_model.call_args.kwargs["sample_data"]
+        self.assertEqual(packaged_sample_data[0]["MedInc"], np.float32(1.0))
 
 
 if __name__ == "__main__":

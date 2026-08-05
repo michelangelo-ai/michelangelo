@@ -21,7 +21,6 @@ from michelangelo.lib.model_manager.packager.torch_triton import TorchTritonPack
 from michelangelo.lib.shared.utils.model_fuser import fuse as _fuse
 from michelangelo.lib.shared.utils.model_fuser import fuse_model_schema
 from michelangelo.workflow.tasks.tabular_assembler._private.schema import (
-    normalize_scalar_shapes,
     reorder_output_schema,
 )
 from michelangelo.workflow.variables.metadata import ModelMetadata
@@ -177,10 +176,6 @@ def torch_assembler(
             packaged_model_class = model_class
             packaged_hyperparameters = hyperparameters
             packaged_sample_data = raw_model.metadata.sample_data
-
-        model_schema_for_package, packaged_sample_data = normalize_scalar_shapes(
-            model_schema_for_package, packaged_sample_data
-        )
 
         model_package_dest = os.path.join(temp_dir, "model_package")
         raw_model_package_dest = os.path.join(temp_dir, "raw_model_package")
