@@ -299,6 +299,8 @@ ma pipeline dev-run -f "./examples/bert_cola/pipeline.yaml" --file-sync --storag
 
 ##### Differences between dev-run and remote-run
 
+> For an architectural overview of how these two modes differ, see [Remote Run vs Pipeline Dev Run: what's actually different](../ml-pipelines/pipeline-running-modes.md#remote-run-vs-pipeline-dev-run-whats-actually-different).
+
 **1. dev-run: Test Pipeline from Local File**
 
 `pipeline dev-run` command runs a pipeline directly from your committed git snapshot. Pipeline run will be controlled by Michelangelo AI API server and controller. This command creates a PipelineRun entity but no Pipeline entity, so you will not see the pipeline entity information in MA Studio.
