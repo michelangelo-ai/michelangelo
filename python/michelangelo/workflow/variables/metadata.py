@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
-import pickle
 from dataclasses import dataclass, field
-from io import BytesIO
 from typing import TYPE_CHECKING, Any
 
+from michelangelo.workflow.variables._private.utils.serialization import (
+    retrieve_object,
+    save_object,
+)
+
 if TYPE_CHECKING:
+    from io import BytesIO
+
     from michelangelo.lib.model_manager.schema import ModelSchema
 
 
@@ -143,10 +148,7 @@ class ModelMetadata:
         Returns:
             The unpickled ``ModelSchema``, or ``None`` if ``_schema`` is unset.
         """
-        if self._schema is None:
-            return None
-        self._schema.seek(0)
-        return pickle.loads(self._schema.read())
+        return retrieve_object(self._schema)
 
     @property
     def sample_data(self) -> list[dict[str, Any]] | None:
@@ -158,10 +160,7 @@ class ModelMetadata:
         Returns:
             The unpickled sample data, or ``None`` if ``_sample_data`` is unset.
         """
-        if self._sample_data is None:
-            return None
-        self._sample_data.seek(0)
-        return pickle.loads(self._sample_data.read())
+        return retrieve_object(self._sample_data)
 
     @property
     def transform_spec(self) -> dict[str, Any] | None:
@@ -175,14 +174,11 @@ class ModelMetadata:
         Returns:
             The unpickled spec, or ``None`` if ``_transform_spec`` is unset.
         """
-        if self._transform_spec is None:
-            return None
-        self._transform_spec.seek(0)
-        return pickle.loads(self._transform_spec.read())
+        return retrieve_object(self._transform_spec)
 
     @transform_spec.setter
     def transform_spec(self, value: dict[str, Any] | None) -> None:
-        self._transform_spec = None if value is None else BytesIO(pickle.dumps(value))
+        self._transform_spec = save_object(value)
 
     @property
     def feature_stats(self) -> dict[str, Any] | None:
@@ -194,14 +190,11 @@ class ModelMetadata:
         Returns:
             The unpickled stats, or ``None`` if ``_feature_stats`` is unset.
         """
-        if self._feature_stats is None:
-            return None
-        self._feature_stats.seek(0)
-        return pickle.loads(self._feature_stats.read())
+        return retrieve_object(self._feature_stats)
 
     @feature_stats.setter
     def feature_stats(self, value: dict[str, Any] | None) -> None:
-        self._feature_stats = None if value is None else BytesIO(pickle.dumps(value))
+        self._feature_stats = save_object(value)
 
     @property
     def hyperparameters(self) -> dict[str, Any] | None:
@@ -214,14 +207,11 @@ class ModelMetadata:
             The unpickled hyperparameters, or ``None`` if
             ``_hyperparameters`` is unset.
         """
-        if self._hyperparameters is None:
-            return None
-        self._hyperparameters.seek(0)
-        return pickle.loads(self._hyperparameters.read())
+        return retrieve_object(self._hyperparameters)
 
     @hyperparameters.setter
     def hyperparameters(self, value: dict[str, Any] | None) -> None:
-        self._hyperparameters = None if value is None else BytesIO(pickle.dumps(value))
+        self._hyperparameters = save_object(value)
 
     def to_registry_dict(self) -> dict[str, str]:
         """Return a flat string dict of public fields suitable for registry tags.
