@@ -1,3 +1,4 @@
+import { useStyletron } from 'baseui';
 import { Button, KIND, SHAPE, SIZE } from 'baseui/button';
 
 import { AddButton } from '#core/components/form/components/add-button/add-button';
@@ -25,9 +26,10 @@ export function ArrayFormGroup({
     readOnly,
   });
   const addLabel = addLabelProp ?? (groupLabel ? `Add ${groupLabel.toLowerCase()}` : 'Add more');
+  const [css, theme] = useStyletron();
 
   return (
-    <>
+    <div className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale800 })}>
       {entries.map(({ id, indexedFieldPath }, index) => (
         <RepeatedLayoutProvider key={id} index={index} rootFieldPath={rootFieldPath}>
           <FormGroup
@@ -51,9 +53,9 @@ export function ArrayFormGroup({
               )
             }
             overrides={{
-              // FormGroup comes with marginBottom that intends to be applied to separate groups in the
-              // context of an entire form. Since the ArrayFormGroup has a button at the end, we need to
-              // remove the margin bottom to avoid disconnect between the form group and the button.
+              // ArrayFormGroup owns spacing between its own entries and the trailing AddButton via
+              // the wrapping flex gap above, so each entry's own marginBottom would double up
+              // (flex gap and margin are additive, not collapsing) and needs to be zeroed here.
               BoxContainer: { style: { marginBottom: 0 } },
             }}
           >
@@ -62,6 +64,6 @@ export function ArrayFormGroup({
         </RepeatedLayoutProvider>
       ))}
       {!readOnly && <AddButton label={addLabel} shape={SHAPE.pill} onClick={handleItemAdd} />}
-    </>
+    </div>
   );
 }
