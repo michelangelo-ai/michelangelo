@@ -1,6 +1,6 @@
 import { CellType } from '#core/components/cell/constants';
+import { getCrdUpdatedSeconds } from '#core/utils/crd-utils';
 import { readEnvironmentLabel } from '#core/utils/environment-utils';
-import { getCrdUpdatedSeconds } from '#core/utils/timestamp-utils';
 import { MODEL_KIND_TEXT_MAP } from './constants';
 
 import type { ColumnConfig } from '#core/components/table/types/column-types';

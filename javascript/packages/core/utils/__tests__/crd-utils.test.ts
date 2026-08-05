@@ -1,4 +1,4 @@
-import { getCrdUpdatedSeconds } from '../timestamp-utils';
+import { getCrdUpdatedSeconds } from '../crd-utils';
 
 describe('getCrdUpdatedSeconds', () => {
   test('prefers the SpecUpdateTimestamp label when present, converting microseconds to seconds', () => {
