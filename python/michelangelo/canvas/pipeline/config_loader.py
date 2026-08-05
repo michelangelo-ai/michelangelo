@@ -29,16 +29,61 @@ this phase.
 
 import importlib
 import inspect
+import typing
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Union
 
 import yaml
 
+from michelangelo.canvas.lib.shared.json_data.json_data import JSONData
 from michelangelo.canvas.schema.v2alpha1.config import TaskConfig, WorkflowConfig
 from michelangelo.canvas.schema.v2alpha1.job_specs import JobSpecs
 
 _CONFIG_PARAM = "config"
+
+
+def _nested_json_data_class(annotation: Any) -> Any:
+    """Return the JSONData subclass in ``annotation`` (unwrapping Optional), or None."""
+    if typing.get_origin(annotation) is typing.Union:
+        args = [a for a in typing.get_args(annotation) if a is not type(None)]
+        annotation = args[0] if len(args) == 1 else None
+    if isinstance(annotation, type) and issubclass(annotation, JSONData):
+        return annotation
+    return None
+
+
+def _fill_nullable_fields(cls: Any, raw: Any) -> Any:
+    """Recursively default omitted nullable (Optional) JSONData fields to None.
+
+    YAML authors shouldn't have to spell out ``spark: null`` / ``deps: null``
+    for every Optional field, but JSONData's class-level type defaults are not
+    applied by the pydantic runtime, leaving Optional fields required. This
+    normalizes a raw YAML dict so that omitted nullable fields parse as None.
+    Required (non-nullable) fields are left alone and still fail validation
+    when missing.
+    """
+    if not (isinstance(cls, type) and issubclass(cls, JSONData)):
+        return raw
+    if not isinstance(raw, dict):
+        return raw
+
+    out = dict(raw)
+    for name, field_info in cls.model_fields.items():
+        extra = (field_info.json_schema_extra or {}).get("json_data_field", {})
+        if name not in out:
+            if extra.get("nullable"):
+                out[name] = None
+            continue
+        nested_cls = _nested_json_data_class(field_info.annotation)
+        if nested_cls is not None:
+            out[name] = _fill_nullable_fields(nested_cls, out[name])
+    return out
+
+
+def parse_json_data(cls: type, raw: dict) -> Any:
+    """Parse a raw YAML mapping into ``cls``, tolerating omitted Optional fields."""
+    return cls(**_fill_nullable_fields(cls, raw))
 
 
 def _import_by_path(dotted_path: str) -> Any:
@@ -150,9 +195,15 @@ def load_pipeline_config(path: Union[str, Path]) -> PipelineConfig:
                 f"workflow function '{workflow_function_path}'s workflow-level "
                 "config parameter has no type annotation"
             )
-        workflow_config_obj = workflow_config_class(
-            **(raw.get("workflow_config") or {})
-        )
+        raw_workflow_config = raw.get("workflow_config") or {}
+        if isinstance(workflow_config_class, type) and issubclass(
+            workflow_config_class, JSONData
+        ):
+            workflow_config_obj = parse_json_data(
+                workflow_config_class, raw_workflow_config
+            )
+        else:
+            workflow_config_obj = workflow_config_class(**raw_workflow_config)
 
     task_configs: dict[str, TaskConfig] = {}
     task_functions: dict[str, Callable] = {}
@@ -170,11 +221,15 @@ def load_pipeline_config(path: Union[str, Path]) -> PipelineConfig:
                 )
 
         config_class = _config_class_for_param(task_function, _CONFIG_PARAM)
-        config_obj = config_class(**(task_raw.get("config") or {}))
+        raw_config = task_raw.get("config") or {}
+        if isinstance(config_class, type) and issubclass(config_class, JSONData):
+            config_obj = parse_json_data(config_class, raw_config)
+        else:
+            config_obj = config_class(**raw_config)
 
         job_specs_obj = None
         if task_raw.get("job_specs") is not None:
-            job_specs_obj = JobSpecs(**task_raw["job_specs"])
+            job_specs_obj = parse_json_data(JobSpecs, task_raw["job_specs"])
 
         task_configs[task_name] = TaskConfig(
             task_function=task_function_path or "",
