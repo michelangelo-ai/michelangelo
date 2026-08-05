@@ -73,6 +73,7 @@ func (this *IntervalSchedule) Validate(prefix string) error {
 				return err
 			}
 		}
+<<<<<<< HEAD
 		const (
 			durationMaxNanos   = 999999999
 			durationMinNanos   = -999999999
@@ -83,6 +84,9 @@ func (this *IntervalSchedule) Validate(prefix string) error {
 			return status.Error(codes.InvalidArgument, prefix+n+" "+"seconds out of range")
 		}
 		if v.GetNanos() < durationMinNanos || v.GetNanos() > durationMaxNanos {
+=======
+		if v.GetNanos() <= -1e9 || v.GetNanos() >= 1e9 {
+>>>>>>> 58044e2a (Regenerate proto-go via tools/gen-proto-go.sh)
 			return status.Error(codes.InvalidArgument, prefix+n+" "+"nanos out of range")
 		}
 		if (v.GetSeconds() < 0 && v.GetNanos() > 0) || (v.GetSeconds() > 0 && v.GetNanos() < 0) {
@@ -126,6 +130,7 @@ func (this *BatchPolicy) Validate(prefix string) error {
 				return err
 			}
 		}
+<<<<<<< HEAD
 		const (
 			durationMaxNanos   = 999999999
 			durationMinNanos   = -999999999
@@ -136,6 +141,9 @@ func (this *BatchPolicy) Validate(prefix string) error {
 			return status.Error(codes.InvalidArgument, prefix+n+" "+"seconds out of range")
 		}
 		if v.GetNanos() < durationMinNanos || v.GetNanos() > durationMaxNanos {
+=======
+		if v.GetNanos() <= -1e9 || v.GetNanos() >= 1e9 {
+>>>>>>> 58044e2a (Regenerate proto-go via tools/gen-proto-go.sh)
 			return status.Error(codes.InvalidArgument, prefix+n+" "+"nanos out of range")
 		}
 		if (v.GetSeconds() < 0 && v.GetNanos() > 0) || (v.GetSeconds() > 0 && v.GetNanos() < 0) {
