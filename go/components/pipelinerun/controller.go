@@ -78,7 +78,8 @@ type Reconciler struct {
 	plugin                 *plugin.Plugin
 	engine                 *defaultEngine.DefaultEngine[*v2pb.PipelineRun]
 	// workflowClient drives direct workflow teardown on the cascade safety-timeout
-	// path (ForceKill); graceful cancellation goes through the engine via Spec.Kill.
+	// path (ForceKill) and is used to reconstruct lost status from the workflow
+	// engine; graceful cancellation goes through the engine via Spec.Kill.
 	workflowClient    clientInterface.WorkflowClient
 	apiHandlerFactory apiHandler.Factory
 	notifier          *notification.PipelineRunNotifier
@@ -143,6 +144,32 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	logger.Info("Reconciling pipeline run starts")
 	if err := r.Get(ctx, req.Namespace, req.Name, &metav1.GetOptions{}, pipelineRun); err != nil {
 		return ctrl.Result{}, fmt.Errorf("get pipeline run %q: %w", req.NamespacedName, err)
+	}
+
+	// Reconstruct status from workflow engine if missing (disaster recovery).
+	// This handles cases where status is lost due to etcd corruption, TTL eviction,
+	// or controller restarts during critical updates.
+	//
+	// IMPORTANT: If a PipelineRun is deleted and recreated with the same name, the new
+	// PipelineRun will have a different K8s UID but the same workflow ID. This can cause
+	// MySQL primary key mismatches (MySQL uses UID as PK, workflow uses name as ID).
+	// Status reconstruction will work, but the MySQL metadata storage will have orphaned
+	// records from the old UID. Avoid recreating PipelineRuns with the same name.
+	if r.workflowClient != nil && (pipelineRun.Status.WorkflowId == "" || pipelineRun.Status.WorkflowRunId == "") {
+		workflowID := pipelineRun.Name
+		if exec, err := r.workflowClient.GetWorkflowExecutionInfo(ctx, workflowID, ""); err == nil && exec.Execution != nil {
+			// Restore workflow IDs and derive state from workflow engine
+			pipelineRun.Status.WorkflowId = workflowID
+			pipelineRun.Status.WorkflowRunId = exec.Execution.RunID
+			pipelineRun.Status.State = mapWorkflowStatusToPipelineRunState(exec.Status)
+
+			logger.Info("reconstructed status from workflow engine",
+				zap.String("workflow_id", workflowID),
+				zap.String("workflow_run_id", exec.Execution.RunID),
+				zap.String("state", pipelineRun.Status.State.String()),
+				zap.String("uid", string(pipelineRun.UID)))
+		}
+		// Continue on error - might be a new pipeline run or workflow engine temporarily unavailable
 	}
 
 	// Cascade-delete bookkeeping. GC stamps a deletionTimestamp when the owning
@@ -459,6 +486,33 @@ func (r *Reconciler) updatePipelineRunStatus(ctx context.Context, pipelineRun *v
 		}
 	}
 	return nil
+}
+
+// mapWorkflowStatusToPipelineRunState converts workflow engine status to pipeline run state.
+//
+// This mapping ensures consistency between the workflow engine's view of execution
+// state and the pipeline run's reported state. The condition engine actors will
+// further refine this state as they execute.
+func mapWorkflowStatusToPipelineRunState(status clientInterface.WorkflowExecutionStatus) v2pb.PipelineRunState {
+	switch status {
+	case clientInterface.WorkflowExecutionStatusRunning:
+		return v2pb.PIPELINE_RUN_STATE_RUNNING
+	case clientInterface.WorkflowExecutionStatusCompleted:
+		return v2pb.PIPELINE_RUN_STATE_SUCCEEDED
+	case clientInterface.WorkflowExecutionStatusFailed:
+		return v2pb.PIPELINE_RUN_STATE_FAILED
+	case clientInterface.WorkflowExecutionStatusTerminated,
+		clientInterface.WorkflowExecutionStatusCanceled:
+		return v2pb.PIPELINE_RUN_STATE_KILLED
+	case clientInterface.WorkflowExecutionStatusTimedOut:
+		return v2pb.PIPELINE_RUN_STATE_FAILED
+	case clientInterface.WorkflowExecutionStatusContinuedAsNew:
+		// ContinuedAsNew means workflow restarted, treat as running
+		return v2pb.PIPELINE_RUN_STATE_RUNNING
+	default:
+		// Unknown or unspecified status - default to RUNNING and let actors refine
+		return v2pb.PIPELINE_RUN_STATE_RUNNING
+	}
 }
 
 // Register sets up the PipelineRun controller with the controller-runtime manager.

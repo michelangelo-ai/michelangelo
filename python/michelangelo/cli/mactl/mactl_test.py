@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest import TestCase
 from unittest.mock import ANY, MagicMock, Mock, patch
 
-from michelangelo.cli.mactl import mactl
+from michelangelo.cli.mactl import config, mactl
 from michelangelo.cli.mactl.crd import CRD
 from michelangelo.cli.mactl.mactl import (
     ADDRESS,
@@ -938,7 +938,9 @@ class ProxySupportTest(TestCase):
             run()
 
         mock_proxy_instance.create_tunnel.assert_called_once_with("my-service")
-        mock_insecure_channel.assert_called_once_with("localhost:12345")
+        mock_insecure_channel.assert_called_once_with(
+            "localhost:12345", options=config.get_channel_options()
+        )
         mock_main.assert_called_once_with(mock_channel, ANY)
 
     @patch("michelangelo.cli.mactl.mactl.main")
@@ -964,7 +966,9 @@ class ProxySupportTest(TestCase):
 
             run()
 
-        mock_insecure_channel.assert_called_once_with("localhost:8080")
+        mock_insecure_channel.assert_called_once_with(
+            "localhost:8080", options=config.get_channel_options()
+        )
         mock_main.assert_called_once_with(mock_channel, ANY)
 
     @patch("michelangelo.cli.mactl.mactl.main")
@@ -990,7 +994,37 @@ class ProxySupportTest(TestCase):
 
             run()
 
-        mock_insecure_channel.assert_called_once_with("my-service")
+        mock_insecure_channel.assert_called_once_with(
+            "my-service", options=config.get_channel_options()
+        )
+        mock_main.assert_called_once_with(mock_channel, ANY)
+
+    @patch("michelangelo.cli.mactl.mactl.main")
+    @patch("michelangelo.cli.mactl.mactl.ssl_channel_credentials")
+    @patch("michelangelo.cli.mactl.mactl.secure_channel")
+    @patch("michelangelo.cli.mactl.mactl._CONFIG")
+    def test_run_with_tls(
+        self, mock_config, mock_secure_channel, mock_ssl_creds, mock_main
+    ):
+        """TLS branch: secure_channel gets ADDRESS + creds + shared channel options."""
+        mock_channel = MagicMock()
+        mock_secure_channel.return_value.__enter__ = Mock(return_value=mock_channel)
+        mock_secure_channel.return_value.__exit__ = Mock(return_value=None)
+        mock_ssl_creds.return_value = "ssl-creds"
+
+        mock_config.__getitem__.return_value = {"proxy": ""}
+
+        with (
+            patch("michelangelo.cli.mactl.mactl.ADDRESS", "api.example.com"),
+            patch("michelangelo.cli.mactl.mactl.USE_TLS", True),
+        ):
+            from michelangelo.cli.mactl.mactl import run
+
+            run()
+
+        mock_secure_channel.assert_called_once_with(
+            "api.example.com", "ssl-creds", options=config.get_channel_options()
+        )
         mock_main.assert_called_once_with(mock_channel, ANY)
 
 

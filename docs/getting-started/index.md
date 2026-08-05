@@ -10,6 +10,7 @@ Start here if you're evaluating the platform or want to learn the key concepts b
 
 - **[Overview](./overview.md)** — What Michelangelo AI is, how it works, and how familiar ML tools map to it
 - **[Core Concepts and Key Terms](./core-concepts-and-key-terms.md)** — Projects, workflows, tasks, and the key terms you'll encounter
+- **[MLOps Glossary](./glossary.md)** — Alphabetical reference for all Michelangelo AI terms, plus a concept mapping table for users coming from MLflow, Kubeflow, Ray, or Airflow
 
 ### I want to set up and start building
 

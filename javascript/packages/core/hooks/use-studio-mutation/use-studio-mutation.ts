@@ -15,11 +15,15 @@ export const useStudioMutation = <TResponse, TPayload extends Record<string, unk
 ): UseStudioMutationResult<TResponse, TPayload> => {
   const { request } = useServiceProvider();
   const normalizeError = useErrorNormalizer();
-  const runSuccessOperations = useSuccessOperations(config?.successOperations);
+  const runSuccessOperations = useSuccessOperations(
+    config?.successOperations,
+    config?.mutationName
+  );
   const { applyMiddleware } = useSchemaMiddleware(config?.middleware);
   const userHeaders = useUserRequestHeaders();
 
   const mutation = useMutation<TResponse, ApplicationError, TPayload>({
+    mutationKey: config ? [config.mutationName] : undefined,
     mutationFn: async (payload: TPayload) => {
       if (!config) throw new Error('useStudioMutation called without config');
       try {

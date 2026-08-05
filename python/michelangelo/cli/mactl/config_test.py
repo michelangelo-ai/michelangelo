@@ -1,16 +1,19 @@
 """Unit tests for config module."""
 
+import json
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import mock_open, patch
 
 from michelangelo.cli.mactl.config import (
+    DEFAULT_CHANNEL_OPTIONS,
     DEFAULT_CONFIG,
     PACKAGE_CONFIG_FILE,
     USER_CONFIG_FILE,
     _apply_env_overrides,
     _deep_merge,
     _load_toml_file,
+    get_channel_options,
     load_config,
     setup_minio_env,
 )
@@ -357,3 +360,47 @@ class DefaultConstantsTest(TestCase):
         self.assertEqual(PACKAGE_CONFIG_FILE.name, "config.toml")
         self.assertEqual(USER_CONFIG_FILE.name, "user_config.toml")
         self.assertEqual(PACKAGE_CONFIG_FILE.parent, USER_CONFIG_FILE.parent)
+
+
+class ChannelOptionsTest(TestCase):
+    """gRPC channel options exposed to mactl.run().
+
+    Guards the shape of DEFAULT_CHANNEL_OPTIONS + get_channel_options().
+    """
+
+    def test_channel_options_shape(self):
+        """Full expected shape.
+
+        Any drift in retry policy, LB config, method match, or the outer
+        tuple pair surfaces here. The safety-critical invariant is
+        ``retryableStatusCodes == ["UNAVAILABLE"]``: DEADLINE_EXCEEDED
+        and RESOURCE_EXHAUSTED are unsafe (server may have partially
+        executed) and must never be added to the list.
+        """
+        self.assertEqual(len(DEFAULT_CHANNEL_OPTIONS), 2)
+        opts = dict(DEFAULT_CHANNEL_OPTIONS)
+        self.assertEqual(opts["grpc.enable_retries"], 1)
+        self.assertEqual(
+            json.loads(opts["grpc.service_config"]),
+            {
+                "loadBalancingConfig": [{"round_robin": {}}],
+                "methodConfig": [
+                    {
+                        "name": [{}],
+                        "retryPolicy": {
+                            "maxAttempts": 4,
+                            "initialBackoff": "0.5s",
+                            "maxBackoff": "5s",
+                            "backoffMultiplier": 2,
+                            "retryableStatusCodes": ["UNAVAILABLE"],
+                        },
+                    }
+                ],
+            },
+        )
+
+    def test_get_channel_options_returns_fresh_copy(self):
+        """Getter returns a fresh list so callers can't mutate module state."""
+        result = get_channel_options()
+        result.append(("grpc.max_send_message_length", 1))
+        self.assertNotIn(("grpc.max_send_message_length", 1), DEFAULT_CHANNEL_OPTIONS)

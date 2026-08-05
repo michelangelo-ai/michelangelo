@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package michelangelo.test.kubeproto;
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+
+option go_package = "kubeproto";
+
+// TestWrapperSpec is the spec of a content wrapper. Real wrappers store the
+// content as a google.protobuf.Any at spec.content; a plain field stands in here
+// since sidecar generation is driven by the base type's revisioned_in, not the
+// wrapper.
+message TestWrapperSpec {
+  string content = 1;
+}
+
+// TestWrapperStatus is the status of a content wrapper.
+message TestWrapperStatus {
+  int32 count = 1;
+}
+
+// TestWrapper is an ordinary CRD that serves as the "test_wrapper" wrapper.
+// Because TestBase opts into "test_wrapper" via revisioned_in, the
+// "test_base_test_wrapper_unmarshaled" sidecar is generated off TestBase;
+// TestWrapper itself needs no special annotation.
+message TestWrapper {
+  option (michelangelo.api.resource) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+  TestWrapperSpec spec = 3;
+  TestWrapperStatus status = 4;
+}
+
+message TestWrapperList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+  repeated TestWrapper items = 3;
+}

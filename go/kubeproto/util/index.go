@@ -90,78 +90,156 @@ func ParseIndexedFields(crdRootMsg *protogen.Message, crdOptions *pboptions.Opti
 		}
 		indexedKeys[key] = true
 
-		parsedGoPaths, field, leafMsg := validateIndex(key, path, crdRootMsg)
+		newIndexedField := buildIndexedField(key, path, typeOverride, crdRootMsg)
 
-		newIndexedField := IndexedField{}
-		newIndexedField.Key = key
-		newIndexedField.GoPaths = parsedGoPaths
-		newIndexedField.ProtoPath = path
-
-		if leafMsg == nil {
-			// primitive type field
-			// If type_override is specified, use the specified type.
-			if typeOverride != "" {
-				newIndexedField.Type = typeOverride
-			} else {
-				switch field.Desc.Kind() {
-				case protoreflect.StringKind:
-					newIndexedField.Type = "VARCHAR(255)"
-				case protoreflect.Int32Kind, protoreflect.Fixed32Kind, protoreflect.Sint32Kind:
-					newIndexedField.Type = "INT"
-				case protoreflect.Int64Kind, protoreflect.Fixed64Kind, protoreflect.Sint64Kind:
-					newIndexedField.Type = "BIGINT"
-				case protoreflect.EnumKind:
-					newIndexedField.Type = "VARCHAR(255)"
-					newIndexedField.Flag |= IndexFlagEnum
-				case protoreflect.BoolKind:
-					newIndexedField.Type = "BOOLEAN"
-				default:
-					logger.Panicf("Invalid index annotation. Unsupported primitive type: %v, key: %v, path: %v",
-						field.Desc.Kind(), key, path)
-				}
+		for _, subField := range newIndexedField.SubFields {
+			if _, found := indexedKeys[subField.Key]; found {
+				logger.Panicf("Invalid index annotation. Duplicated key. key: %v, path: %v, subKey: %v",
+					key, path, subField.Key)
 			}
-
-			newIndexedField.Flag |= IndexFlagPrimitive
-		} else {
-			switch leafMsg.Desc.FullName() {
-			case "michelangelo.api.ResourceIdentifier":
-				newIndexedField.Flag |= IndexFlagCompositeKey
-				newIndexedField.SubFields = append(newIndexedField.SubFields,
-					IndexedSubField{Key: buildSubKey(key, "namespace"), GoPath: "Namespace",
-						ProtoPath: buildSubKeyProtoPath(path, "namespace"), Type: "VARCHAR(255)"})
-				newIndexedField.SubFields = append(newIndexedField.SubFields,
-					IndexedSubField{Key: buildSubKey(key, "name"), GoPath: "Name",
-						ProtoPath: buildSubKeyProtoPath(path, "name"), Type: "VARCHAR(255)"})
-			case "michelangelo.api.v2beta1.UserInfo", "michelangelo.api.v2.UserInfo":
-				newIndexedField.SubFields = append(newIndexedField.SubFields,
-					IndexedSubField{Key: buildSubKey(key, "name"), GoPath: "Name",
-						ProtoPath: buildSubKeyProtoPath(path, "name"), Type: "VARCHAR(255)"})
-				newIndexedField.SubFields = append(newIndexedField.SubFields,
-					IndexedSubField{Key: buildSubKey(key, "proxy_user"), GoPath: "ProxyUser",
-						ProtoPath: buildSubKeyProtoPath(path, "proxy_user"), Type: "VARCHAR(255)"})
-			case "google.protobuf.Timestamp":
-				newIndexedField.Type = "DATETIME"
-				newIndexedField.Flag |= IndexFlagPrimitive
-			case "k8s.io.apimachinery.pkg.apis.meta.v1.Time":
-				newIndexedField.Type = "DATETIME"
-				newIndexedField.Flag |= IndexFlagPrimitive
-			default:
-				logger.Panicf("Invalid index annotation. Unsupported message type: %v. key: %v, path: %v",
-					leafMsg.Desc.FullName(), key, path)
-			}
-
-			for _, subField := range newIndexedField.SubFields {
-				if _, found := indexedKeys[subField.Key]; found {
-					logger.Panicf("Invalid index annotation. Duplicated key. key: %v, path: %v, subKey: %v",
-						key, path, subField.Key)
-				}
-				indexedKeys[subField.Key] = true
-			}
+			indexedKeys[subField.Key] = true
 		}
 		indexedFields[i] = newIndexedField
 	}
 
 	return indexedFields
+}
+
+// RevisionedIndex describes a revisioned base CRD's index set and the wrapper
+// kinds it is mirrored into. A base CRD that lists resource.revisioned_in has
+// its full michelangelo.api.index set materialized into a
+// "<base>_<kind>_unmarshaled" sidecar table for each listed kind, so
+// List<Wrapper> can filter on the wrapped base resource's fields server-side.
+// Every listed kind mirrors the same base index set, so Fields is shared across
+// all Kinds rather than duplicated per kind.
+type RevisionedIndex struct {
+	// Kinds are the wrapper CRD kinds that mirror this index set, e.g.
+	// "revision", "draft". Each resolves to a wrapper CRD by convention
+	// (e.g. "revision" -> Revision, keyed on revision_uid).
+	Kinds []string
+	// Fields is the base CRD's full index set, resolved against the base
+	// message — which is exactly what each wrapper stores at spec.content.
+	Fields []IndexedField
+}
+
+// ParseRevisionedIndex returns the base CRD's michelangelo.api.index set
+// together with the wrapper kinds listed in resource.revisioned_in that mirror
+// it into "<base>_<kind>_unmarshaled" sidecar tables. Each index path resolves
+// against the base CRD message itself, which is what each wrapper stores at
+// spec.content, so every kind mirrors the same base index set.
+//
+// Returns nil when the CRD is not revisioned (resource.revisioned_in is empty).
+// Panics if revisioned_in is set but names an empty kind, or is set on a CRD
+// that declares no michelangelo.api.index fields to mirror.
+func ParseRevisionedIndex(crdRootMsg *protogen.Message, crdOptions *pboptions.Options) *RevisionedIndex {
+	kindCount := int(crdOptions.Int64("resource.len(revisioned_in)"))
+	if kindCount == 0 {
+		return nil
+	}
+
+	kinds := make([]string, 0, kindCount)
+	for i := 0; i < kindCount; i++ {
+		kind := crdOptions.String("resource.revisioned_in[" + strconv.Itoa(i) + "]")
+		if kind == "" {
+			logger.Panicf("Invalid revisioned_in annotation on %v. kind is not specified at index %d",
+				crdRootMsg.GoIdent.GoName, i)
+		}
+		kinds = append(kinds, kind)
+	}
+
+	fields := ParseIndexedFields(crdRootMsg, crdOptions)
+	if len(fields) == 0 {
+		logger.Panicf("Invalid revisioned_in annotation on %v. CRD declares revisioned_in %v "+
+			"but has no michelangelo.api.index fields to mirror", crdRootMsg.GoIdent.GoName, kinds)
+	}
+
+	return &RevisionedIndex{Kinds: kinds, Fields: fields}
+}
+
+// Sidecar names the storage artifacts of one (base table, wrapper kind) pair:
+// the "<base>_<kind>_unmarshaled" table and its "<kind>_uid" primary-key column.
+// protoc-gen-sql emits the CREATE TABLE under these names and
+// protoc-gen-kubeproto bakes them into the generated RevisionedIndexSpecs, so
+// both generators MUST derive them from SidecarFor — the runtime queries
+// whatever the spec says, and a divergence between the two would only surface
+// as a missing table in production.
+type Sidecar struct {
+	Table     string
+	UIDColumn string
+}
+
+// SidecarFor derives the sidecar identity for a (base table, wrapper kind) pair,
+// e.g. ("pipeline", "revision") -> {pipeline_revision_unmarshaled, revision_uid}.
+func SidecarFor(baseTableName, kind string) Sidecar {
+	return Sidecar{
+		Table:     baseTableName + "_" + kind + "_unmarshaled",
+		UIDColumn: kind + "_uid",
+	}
+}
+
+// buildIndexedField resolves a single (key, path) against rootMsg and returns the
+// fully-typed IndexedField (primitive type, enum flag, or composite message
+// subfields).
+func buildIndexedField(key, path, typeOverride string, rootMsg *protogen.Message) IndexedField {
+	parsedGoPaths, field, leafMsg := validateIndex(key, path, rootMsg)
+
+	newIndexedField := IndexedField{Key: key, GoPaths: parsedGoPaths, ProtoPath: path}
+
+	if leafMsg == nil {
+		// primitive type field
+		// If type_override is specified, use the specified type.
+		if typeOverride != "" {
+			newIndexedField.Type = typeOverride
+		} else {
+			switch field.Desc.Kind() {
+			case protoreflect.StringKind:
+				newIndexedField.Type = "VARCHAR(255)"
+			case protoreflect.Int32Kind, protoreflect.Fixed32Kind, protoreflect.Sint32Kind:
+				newIndexedField.Type = "INT"
+			case protoreflect.Int64Kind, protoreflect.Fixed64Kind, protoreflect.Sint64Kind:
+				newIndexedField.Type = "BIGINT"
+			case protoreflect.EnumKind:
+				newIndexedField.Type = "VARCHAR(255)"
+				newIndexedField.Flag |= IndexFlagEnum
+			case protoreflect.BoolKind:
+				newIndexedField.Type = "BOOLEAN"
+			default:
+				logger.Panicf("Invalid index annotation. Unsupported primitive type: %v, key: %v, path: %v",
+					field.Desc.Kind(), key, path)
+			}
+		}
+
+		newIndexedField.Flag |= IndexFlagPrimitive
+	} else {
+		switch leafMsg.Desc.FullName() {
+		case "michelangelo.api.ResourceIdentifier":
+			newIndexedField.Flag |= IndexFlagCompositeKey
+			newIndexedField.SubFields = append(newIndexedField.SubFields,
+				IndexedSubField{Key: buildSubKey(key, "namespace"), GoPath: "Namespace",
+					ProtoPath: buildSubKeyProtoPath(path, "namespace"), Type: "VARCHAR(255)"})
+			newIndexedField.SubFields = append(newIndexedField.SubFields,
+				IndexedSubField{Key: buildSubKey(key, "name"), GoPath: "Name",
+					ProtoPath: buildSubKeyProtoPath(path, "name"), Type: "VARCHAR(255)"})
+		case "michelangelo.api.v2beta1.UserInfo", "michelangelo.api.v2.UserInfo":
+			newIndexedField.SubFields = append(newIndexedField.SubFields,
+				IndexedSubField{Key: buildSubKey(key, "name"), GoPath: "Name",
+					ProtoPath: buildSubKeyProtoPath(path, "name"), Type: "VARCHAR(255)"})
+			newIndexedField.SubFields = append(newIndexedField.SubFields,
+				IndexedSubField{Key: buildSubKey(key, "proxy_user"), GoPath: "ProxyUser",
+					ProtoPath: buildSubKeyProtoPath(path, "proxy_user"), Type: "VARCHAR(255)"})
+		case "google.protobuf.Timestamp":
+			newIndexedField.Type = "DATETIME"
+			newIndexedField.Flag |= IndexFlagPrimitive
+		case "k8s.io.apimachinery.pkg.apis.meta.v1.Time":
+			newIndexedField.Type = "DATETIME"
+			newIndexedField.Flag |= IndexFlagPrimitive
+		default:
+			logger.Panicf("Invalid index annotation. Unsupported message type: %v. key: %v, path: %v",
+				leafMsg.Desc.FullName(), key, path)
+		}
+	}
+
+	return newIndexedField
 }
 
 func validateIndex(key, fullPath string, curMsg *protogen.Message) ([]string, *protogen.Field, *protogen.Message) {

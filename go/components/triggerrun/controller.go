@@ -246,9 +246,7 @@ StateMachine:
 			"name", triggerRun.Name,
 			"state", status.State,
 			"execution_workflow_id", status.ExecutionWorkflowId)
-		triggerRun.Status.State = status.State
-		triggerRun.Status.LogUrl = status.LogUrl
-		triggerRun.Status.ExecutionWorkflowId = status.ExecutionWorkflowId
+		triggerRun.Status = status
 	case v2pb.TRIGGER_RUN_STATE_RUNNING:
 		log.Info("TRIGGER_RUN_STATE_RUNNING")
 

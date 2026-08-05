@@ -1841,6 +1841,15 @@ class ReadSignaturesHookTest(TestCase):
         self.assertNotIn("pipeline_name", sig.parameters)
 
 
+def _arg_spec(dest: str) -> dict:
+    """Minimal additional_get_args entry for `dest` — matches real-plugin shape."""
+    return {
+        "func_signature": Parameter(dest, Parameter.POSITIONAL_OR_KEYWORD),
+        "args": [f"--{dest.replace('_', '-')}"],
+        "kwargs": {"dest": dest, "type": str},
+    }
+
+
 class FilterEndToEndTest(TestCase):
     """End-to-end: filter flows through generate_list → bind → _list_func_impl.
 
@@ -1857,6 +1866,7 @@ class FilterEndToEndTest(TestCase):
         """`crd.list(pipeline_name="x")` must not TypeError at bind."""
         mock_extract.return_value = ("ListTestCrd", _recording_input_class(), Mock)
         crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.additional_get_args = [_arg_spec("pipeline_name")]
         crd.filter_field_map = {"pipeline_name": "spec.pipeline_name"}
         crd.additional_columns = ()
 
@@ -1891,6 +1901,7 @@ class FilterEndToEndTest(TestCase):
         """
         mock_extract.return_value = ("Op", _recording_input_class(), Mock)
         crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.additional_get_args = [_arg_spec("pipeline_name")]
         crd.filter_field_map = {"pipeline_name": "spec.pipeline_name"}
         crd.additional_columns = ()
 
@@ -1947,6 +1958,7 @@ class FilterFieldMapDictSchemaTest(TestCase):
         """Dict spec uses its declared operator (LIKE = 9), not the EQUAL default."""
         mock_extract.return_value = ("Op", _recording_input_class(), Mock)
         crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.additional_get_args = [_arg_spec("revision")]
         crd.filter_field_map = {
             "revision": {"field": "spec.revision.name", "operator": 9},
         }
@@ -1977,6 +1989,7 @@ class FilterFieldMapDictSchemaTest(TestCase):
         """String spec continues to work — defaults operator to EQUAL = 1."""
         mock_extract.return_value = ("Op", _recording_input_class(), Mock)
         crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.additional_get_args = [_arg_spec("pipeline_name")]
         crd.filter_field_map = {"pipeline_name": "spec.pipeline_name"}
         crd.additional_columns = ()
 
@@ -1996,4 +2009,106 @@ class FilterFieldMapDictSchemaTest(TestCase):
         criteria = captured["req"].list_options_ext.operation.criterion
         self.assertEqual(len(criteria), 1)
         self.assertEqual(criteria[0].field_name, "spec.pipeline_name")
+        self.assertEqual(criteria[0].operator, 1)
+
+
+class FilterFieldMapCallableSchemaTest(TestCase):
+    """filter_field_map value can be a callable emitting a list of criteria.
+
+    Used when one flag maps to multiple criteria, or when several flags
+    coordinate (e.g. a mutually-exclusive group). The callable receives
+    ``bound_args.arguments`` and returns a list of ``{field, operator, value}``
+    dicts; the framework appends each one to the request.
+    """
+
+    @patch.object(CRD, "_extract_method_info")
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.ParseDict")
+    def test_callable_emits_multiple_criteria(self, _parse, mock_call, mock_extract):
+        """Callable returning 2 criteria appends both to the request."""
+        mock_extract.return_value = ("Op", _recording_input_class(), Mock)
+        crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+
+        def builder(_args):
+            return [
+                {"field": "a.b", "operator": 1, "value": "x"},
+                {"field": "a.c", "operator": 9, "value": "y"},
+            ]
+
+        crd.filter_field_map = {"_group": builder}
+        crd.additional_columns = ()
+
+        captured = {}
+
+        def _capture(_info, req):
+            captured["req"] = req
+            field_desc = Mock()
+            field_desc.name = "test_list"
+            return Mock(ListFields=Mock(return_value=[(field_desc, Mock(items=[]))]))
+
+        mock_call.side_effect = _capture
+
+        crd.generate_list(Mock())
+        crd.list(namespace="ns")
+
+        criteria = captured["req"].list_options_ext.operation.criterion
+        self.assertEqual(len(criteria), 2)
+        self.assertEqual(criteria[0].field_name, "a.b")
+        self.assertEqual(criteria[0].operator, 1)
+        self.assertEqual(criteria[1].field_name, "a.c")
+        self.assertEqual(criteria[1].operator, 9)
+
+    @patch.object(CRD, "_extract_method_info")
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.ParseDict")
+    def test_callable_returning_empty_list_adds_no_criteria(
+        self, _parse, mock_call, mock_extract
+    ):
+        """Callable that returns [] cleanly skips adding criteria."""
+        mock_extract.return_value = ("Op", _recording_input_class(), Mock)
+        crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.filter_field_map = {"_group": lambda _args: []}
+        crd.additional_columns = ()
+
+        captured = {}
+
+        def _capture(_info, req):
+            captured["req"] = req
+            field_desc = Mock()
+            field_desc.name = "test_list"
+            return Mock(ListFields=Mock(return_value=[(field_desc, Mock(items=[]))]))
+
+        mock_call.side_effect = _capture
+
+        crd.generate_list(Mock())
+        crd.list(namespace="ns")
+
+        self.assertEqual(len(captured["req"].list_options_ext.operation.criterion), 0)
+
+    @patch.object(CRD, "_extract_method_info")
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.ParseDict")
+    def test_callable_operator_defaults_to_equal(self, _parse, mock_call, mock_extract):
+        """Callable dict without explicit operator gets CRITERION_OPERATOR_EQUAL."""
+        mock_extract.return_value = ("Op", _recording_input_class(), Mock)
+        crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.filter_field_map = {
+            "_group": lambda _args: [{"field": "a.b", "value": "x"}]
+        }
+        crd.additional_columns = ()
+
+        captured = {}
+
+        def _capture(_info, req):
+            captured["req"] = req
+            field_desc = Mock()
+            field_desc.name = "test_list"
+            return Mock(ListFields=Mock(return_value=[(field_desc, Mock(items=[]))]))
+
+        mock_call.side_effect = _capture
+
+        crd.generate_list(Mock())
+        crd.list(namespace="ns")
+
+        criteria = captured["req"].list_options_ext.operation.criterion
         self.assertEqual(criteria[0].operator, 1)

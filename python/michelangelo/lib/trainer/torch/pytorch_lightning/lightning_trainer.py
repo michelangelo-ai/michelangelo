@@ -117,6 +117,17 @@ class LightningTrainerParam:
             ``None`` (no tracking, no store-driven resume). Use
             :class:`~experiment_store.FsspecExperimentStore` for the filesystem
             default. Must be picklable (serialized to workers for tracking).
+        profiler_sink: Optional callable invoked on each node-local rank 0
+            after ``fit()`` returns, as
+            ``profiler_sink(profiler, profiler_logs_path, logger)``, where
+            ``profiler`` is the profiler built from
+            ``lightning_trainer_kwargs["profiler"]``, ``profiler_logs_path`` is
+            the directory it wrote to, and ``logger`` is the resolved Lightning
+            logger. Use it to ship profiler output to an experiment tracker;
+            :func:`~_private.util.comet_profiler_sink` does this for Comet.
+            Ignored when no profiler is configured or when the profiler config
+            sets ``upload_to_comet: False``. Exceptions raised by the sink are
+            logged and swallowed. Must be picklable (serialized to workers).
     """
 
     create_model_fn: Callable
@@ -136,6 +147,7 @@ class LightningTrainerParam:
     initial_weights_path: str | None = None
     training_observer: TrainingObserver | None = None
     experiment_store: ExperimentStore | None = None
+    profiler_sink: Callable | None = None
 
     def __post_init__(self):
         """Apply default ``num_epochs`` and warn on the deprecated field usage."""
@@ -175,6 +187,29 @@ class LightningTrainer(TorchTrainer):
         # Pop out train and val data since we have to pass them into datasets parameter of TorchTrainer.
         train_data = train_loop_config.pop("train_data")
         val_data = train_loop_config.pop("val_data")
+
+        # A configured profiler needs an estimate of steps-per-epoch to derive
+        # (or validate) its sampling schedule, which needs the training row
+        # count. Only pay for it when a profiler is actually requested: count()
+        # reads Parquet metadata for read_parquet-backed datasets, but any other
+        # lineage forces execution of the dataset's lazy transformations.
+        # Counted off trainer_param rather than the popped train_data, which
+        # asdict() has already deep-copied.
+        profiler_config = (train_loop_config.get("lightning_trainer_kwargs") or {}).get(
+            "profiler"
+        )
+        if profiler_config is not None:
+            try:
+                train_loop_config["train_dataset_num_rows"] = (
+                    trainer_param.train_data.count()
+                )
+            except Exception:
+                _logger.warning(
+                    "Could not determine the training dataset size; the profiler "
+                    "schedule will fall back to its unbounded default.",
+                    exc_info=True,
+                )
+                train_loop_config["train_dataset_num_rows"] = None
         # Pop training_observer — Protocol instances can't survive asdict()
         # because it recursively converts nested objects. We store the original
         # object on self for driver-side use and re-inject it into

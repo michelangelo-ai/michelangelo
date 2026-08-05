@@ -8,18 +8,23 @@ import uuid
 from datetime import datetime, timezone
 
 
-def generate_random_name(prefix):
+def generate_random_name(prefix: str) -> str:
     """Generate a unique object name following Kubernetes naming conventions.
 
     Creates a name with format: {prefix}-{timestamp}-{random_chars}
     where prefix is normalized to lowercase with underscores replaced by hyphens.
+
+    The timestamp is second-granularity UTC, so names sort chronologically as
+    plain strings and a collision requires two calls in the same second that
+    also draw the same 8 hex characters.
 
     Args:
         prefix: Name prefix for the generated name. Must be 1-128 characters.
 
     Returns:
         A unique name string combining the prefix, UTC timestamp (YYYYMMDD-HHMMSS),
-        and the first segment of a random UUID.
+        and the first segment of a random UUID, e.g.
+        ``model-20260721-114130-2d9c959d``.
 
     Raises:
         RuntimeError: If prefix is empty or exceeds 128 characters.

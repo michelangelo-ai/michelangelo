@@ -77,6 +77,24 @@ func (m *{{.Name}}) GetIndexedKeyValuePairs() ([]storage.IndexedField){
 	var indexedFields []storage.IndexedField
 `))
 
+// CRDGetRevisionedIndexHeader is a template for the
+// GetRevisionedIndexKeyValuePairs() function signature. It is generated only for
+// revisioned base types (those with resource.revisioned_in entries) and returns
+// the per-wrapper-kind revisioned-index columns.
+var CRDGetRevisionedIndexHeader = template.Must(template.New("crdGetRevisionedIndexHeader").Parse(`
+func (m *{{.Name}}) GetRevisionedIndexKeyValuePairs() map[string][]storage.IndexedField {
+	result := make(map[string][]storage.IndexedField)
+`))
+
+// CRDRevisionedIndexSpecsHeader is a template for the RevisionedIndexSpecs()
+// function signature. Generated for revisioned base types; the function returns
+// one revisioned-index sidecar descriptor (wrapper GVK, table, uid column, path->column
+// map) per wrapper kind.
+var CRDRevisionedIndexSpecsHeader = template.Must(template.New("crdRevisionedIndexSpecsHeader").Parse(`
+func (m *{{.Name}}) RevisionedIndexSpecs() []storage.RevisionedIndexSpec {
+	return []storage.RevisionedIndexSpec{
+`))
+
 // CRDIndexesPathToKeyMapHeader is a template for generating CRDIndexesPathToKeyMap for a CRD.
 var CRDIndexesPathToKeyMapHeader = template.Must(template.New("crdIndexesPathToKeyMapHeader").Parse(`
 func init() {
@@ -150,3 +168,12 @@ var mysqlLabelAnnotationTables string
 
 // CRDMySQLLabelAnnotationTable is a template of a CRD's label and annotation table schema.
 var CRDMySQLLabelAnnotationTable = template.Must(template.New("MySQLLabelAnnotationTable").Parse(mysqlLabelAnnotationTables))
+
+//go:embed mysql_unmarshaled_table.tmpl
+var mysqlUnmarshaledTable string
+
+// CRDMySQLUnmarshaledTable is the header of a revisioned-index sidecar
+// ("*_unmarshaled") table: the table name and the foreign-key column back to
+// the wrapper CRD's uid. The indexed columns, primary key, and per-column
+// indexes are appended by protoc-gen-sql from the mirrored base index fields.
+var CRDMySQLUnmarshaledTable = template.Must(template.New("MySQLUnmarshaledTable").Parse(mysqlUnmarshaledTable))

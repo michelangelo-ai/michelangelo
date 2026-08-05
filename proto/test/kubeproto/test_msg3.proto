@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package michelangelo.test.kubeproto;
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "google/protobuf/any.proto";
+
+import "michelangelo/api/options.proto";
+
+option go_package = "kubeproto";
+
+message TestMsg3 {
+  option (michelangelo.api.resource) = {
+    scope: "Namespaced";
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  TestMsg3Spec spec = 3;
+
+  TestMsg3Status status = 4;
+}
+
+message TestMsg3Spec {
+  google.protobuf.Any any = 1 [(michelangelo.api.external_storage) = true];
+}
+
+message TestMsg3Status {
+  google.protobuf.Any any = 1 [(michelangelo.api.external_storage) = true];
+}

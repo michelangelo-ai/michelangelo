@@ -13,7 +13,7 @@ from io import StringIO
 from logging import getLogger
 from pathlib import Path
 from types import MethodType
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, TypedDict
 
 from google.protobuf.json_format import MessageToDict, MessageToJson, ParseDict
 from google.protobuf.message import Message
@@ -23,6 +23,7 @@ from grpc import (
     RpcError,
     StatusCode,
 )
+from typing_extensions import NotRequired
 from yaml import YAMLError
 from yaml import safe_dump as yaml_safe_dump
 from yaml import safe_load as yaml_safe_load
@@ -35,6 +36,17 @@ from michelangelo.cli.mactl.grpc_tools import (
 
 _LOG = getLogger(__name__)
 METADATA_STUB = []
+
+
+class Criterion(TypedDict):
+    """Shape of a criterion returned by a callable-form filter_field_map entry."""
+
+    field: str
+    value: str
+    operator: NotRequired[int]  # defaults to CRITERION_OPERATOR_EQUAL (1)
+
+
+FilterCallable = Callable[[dict], list[Criterion]]
 
 
 def bind_signature(signature):
@@ -328,6 +340,26 @@ def _get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mes
     )
 
 
+def _collect_forward_dests(obj) -> set[str]:
+    """Every arg dest declared in ``additional_get_args``.
+
+    By convention, ``additional_get_args`` entries are filter flags — every
+    current OSS plugin uses it that way. The framework forwards all such
+    dests from `get` to `list`; a non-filter dest (if any plugin ever adds
+    one) would flow through harmlessly, since ``_list_func_impl`` only acts
+    on dests that also appear in ``filter_field_map``.
+    """
+    dests: set[str] = set()
+    additional_get_args = getattr(obj, "additional_get_args", None)
+    if isinstance(additional_get_args, list):
+        for arg_spec in additional_get_args:
+            if isinstance(arg_spec, dict):
+                dest = arg_spec.get("kwargs", {}).get("dest")
+                if dest:
+                    dests.add(dest)
+    return dests
+
+
 def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
     """Default common CRD member method implementation for GET method.
 
@@ -355,16 +387,11 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
 
     _LOG.debug("No name argument passed. List CRD in the namespace.")
     _self.generate_list(crd_method_info.channel)
-    # Forward any filter dest args declared in _self.filter_field_map so
-    # `<crd> get -n <ns> --<attr> <val>` (no name) falls through to list
-    # with the filter applied, not silently dropped.
-    filter_field_map = getattr(_self, "filter_field_map", None)
-    if not isinstance(filter_field_map, dict):
-        filter_field_map = {}
+    # get→list fallthrough: forward filter dests so `--<attr> <val>` reaches
+    # list (see _collect_forward_dests for source union).
+    forward_dests = _collect_forward_dests(_self)
     filter_kwargs = {
-        k: bound_args.arguments[k]
-        for k in filter_field_map
-        if k in bound_args.arguments
+        k: bound_args.arguments[k] for k in forward_dests if k in bound_args.arguments
     }
     return _self.list(
         namespace="" if all_namespaces else namespace,
@@ -485,6 +512,30 @@ def _render_single_item(msg: Message, output_format: str) -> None:
         print(msg)
 
 
+def _resolve_criteria(spec, bound_args: dict, arg_dest: str) -> list[Criterion]:
+    """Normalize any filter_field_map spec shape into a list of criteria.
+
+    - Callable spec: plugin returns its own criteria (0..N).
+    - String spec: one criterion, EQUAL operator, value from bound_args.
+    - Dict spec: one criterion with declared field + operator, value from bound_args.
+    Empty bound-args values (for string/dict specs) yield ``[]`` — no criterion.
+    """
+    if callable(spec):
+        return spec(bound_args)
+    value = bound_args.get(arg_dest)
+    if value in (None, "", (), []):
+        return []
+    if isinstance(spec, str):
+        return [{"field": spec, "value": value}]
+    return [
+        {
+            "field": spec["field"],
+            "value": value,
+            "operator": spec.get("operator", 1),
+        }
+    ]
+
+
 def _list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
     """Raw CRD LIST implementation - returns response without printing."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
@@ -515,21 +566,11 @@ def _list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
 
     filter_field_map = getattr(_self, "filter_field_map", {}) if _self else {}
     for arg_dest, spec in filter_field_map.items():
-        value = bound_args.arguments.get(arg_dest)
-        if value in (None, "", (), []):
-            continue
-        # spec is either a plain field-name string (defaults to EQUAL) or a
-        # dict {"field": str, "operator": int} for per-field operator. The
-        # dict form is what CRDs with LIKE / IN / etc. filters need.
-        if isinstance(spec, str):
-            field_name, operator = spec, 1  # CRITERION_OPERATOR_EQUAL
-        else:
-            field_name = spec["field"]
-            operator = spec.get("operator", 1)
-        criterion = request_input.list_options_ext.operation.criterion.add()
-        criterion.field_name = field_name
-        criterion.operator = operator
-        criterion.match_value.Pack(StringValue(value=str(value)))
+        for c in _resolve_criteria(spec, bound_args.arguments, arg_dest):
+            criterion = request_input.list_options_ext.operation.criterion.add()
+            criterion.field_name = c["field"]
+            criterion.operator = c.get("operator", 1)
+            criterion.match_value.Pack(StringValue(value=str(c["value"])))
 
     _LOG.info("ListRequest built: %r", request_input)
     call_res = crd_method_call(crd_method_info, request_input)
@@ -741,10 +782,9 @@ class CRD:
         # _list_func_impl / list_func_impl for how each list is consumed.
         self.additional_columns: list[dict] = []
         self.additional_get_args: list[dict] = []
-        # Value is a plain field-name string (defaults to CRITERION_OPERATOR_EQUAL)
-        # or a dict {"field": str, "operator": int} for per-field operator override
-        # (e.g. CRITERION_OPERATOR_LIKE for partial-match filters).
-        self.filter_field_map: dict[str, str | dict] = {}
+        # Value: str = field name (default EQUAL); dict = {"field","operator"};
+        # callable = (bound_args) -> list of criteria.
+        self.filter_field_map: dict[str, str | dict | FilterCallable] = {}
         self.func_signature: dict[str, dict] = {
             "apply": {
                 "help": "Apply an Entity (create or update)",
@@ -1012,7 +1052,10 @@ class CRD:
                     f"`get` argument on CRD {self.name!r}"
                 )
             extra_dests.add(dest)
-        for dest in self.filter_field_map:
+        for dest, spec in self.filter_field_map.items():
+            # Callable specs use a synthetic key — no dest to cross-check.
+            if callable(spec):
+                continue
             if dest not in extra_dests:
                 raise ValueError(
                     f"filter_field_map references dest {dest!r} but no matching "
@@ -1202,6 +1245,7 @@ class CRD:
         )
 
         self.configure_parser("list", parser)
+        forward_dests = _collect_forward_dests(self)
         list_func_signature = Signature(
             [
                 Parameter("self", Parameter.POSITIONAL_OR_KEYWORD),
@@ -1218,7 +1262,7 @@ class CRD:
                 # Per-CRD filter dests, so `_self.list(**filter_kwargs)` (called
                 # from get→list fall-through) doesn't get rejected by bind.
                 Parameter(dest, Parameter.POSITIONAL_OR_KEYWORD, default=None)
-                for dest in getattr(self, "filter_field_map", {})
+                for dest in sorted(forward_dests)
             ]
         )
 

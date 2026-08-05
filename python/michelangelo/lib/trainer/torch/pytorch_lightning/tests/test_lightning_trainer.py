@@ -777,3 +777,69 @@ class TestTrainRunConfigOverride:
             trainer.train(run_config=_run_config(name="different"))
 
         assert not any("re-trigger" in r.message for r in caplog.records)
+
+
+# -----------------------------------------------------------------------------
+# Profiler wiring (driver side)
+# -----------------------------------------------------------------------------
+
+
+class TestProfilerRowCounting:
+    """Driver-side training-row counting that feeds the profiler schedule."""
+
+    def _loop_config(self, param):
+        """Construct a trainer with ``TorchTrainer.__init__`` stubbed out."""
+        with patch(
+            "michelangelo.lib.trainer.torch.pytorch_lightning."
+            "lightning_trainer.TorchTrainer.__init__",
+            return_value=None,
+        ) as mock_super:
+            LightningTrainer(trainer_param=param)
+        return mock_super.call_args.kwargs["train_loop_config"]
+
+    def test_rows_not_counted_without_a_profiler(self):
+        """No profiler config means the (potentially expensive) count is skipped."""
+        train_ds = MagicMock(name="train")
+        loop_cfg = self._loop_config(_make_param(train_data=train_ds))
+
+        train_ds.count.assert_not_called()
+        assert "train_dataset_num_rows" not in loop_cfg
+
+    def test_rows_counted_when_a_profiler_is_configured(self):
+        """A profiler config triggers the count and threads it to the worker."""
+        train_ds = MagicMock(name="train")
+        train_ds.count.return_value = 4096
+        param = _make_param(
+            train_data=train_ds, lightning_trainer_kwargs={"profiler": "simple"}
+        )
+
+        loop_cfg = self._loop_config(param)
+
+        train_ds.count.assert_called_once_with()
+        assert loop_cfg["train_dataset_num_rows"] == 4096
+
+    def test_count_failure_falls_back_to_none(self):
+        """A dataset that cannot be counted degrades to an unknown row count."""
+        train_ds = MagicMock(name="train")
+        train_ds.count.side_effect = RuntimeError("cannot count")
+        param = _make_param(
+            train_data=train_ds, lightning_trainer_kwargs={"profiler": {"pytorch": {}}}
+        )
+
+        loop_cfg = self._loop_config(param)
+
+        assert loop_cfg["train_dataset_num_rows"] is None
+
+    def test_profiler_sink_defaults_to_none(self):
+        """``profiler_sink`` is optional."""
+        assert _make_param().profiler_sink is None
+
+    def test_profiler_sink_reaches_the_worker_config(self):
+        """A plain callable survives ``asdict()`` and is threaded to workers."""
+
+        def my_sink(profiler, profiler_logs_path, logger):
+            """Test sink."""
+
+        loop_cfg = self._loop_config(_make_param(profiler_sink=my_sink))
+
+        assert loop_cfg["profiler_sink"] is my_sink

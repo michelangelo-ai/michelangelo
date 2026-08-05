@@ -29,6 +29,10 @@ go_test(
     embedsrcs = [
         "test/index_expected_output.sql",
         "test/object_expected_output.sql",
+        "test/test_base_expected_output.sql",
+        "test/test_draft_expected_output.sql",
+        "test/test_msg3_expected_output.sql",
+        "test/test_wrapper_expected_output.sql",
     ],
     deps = [
         "//proto/test/kubeproto:go_default_library",

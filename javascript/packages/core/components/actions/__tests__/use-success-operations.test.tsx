@@ -362,4 +362,31 @@ describe('useSuccessOperations', () => {
       expect(screen.getByText(/Current pathname: \/pipelines\/run-1/)).toBeInTheDocument();
     });
   });
+
+  describe('mutationName in resolver context', () => {
+    it('interpolates the toast message from mutationName', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <UseSuccessOperationsTestHarness
+          operations={[
+            { type: 'toast', message: interpolate('Mutation ${mutationName} completed') },
+          ]}
+          response={{}}
+          mutationName="CreatePipelineRun"
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getRouterWrapper(),
+          createServiceProviderTestContext({ request: vi.fn() }).wrapper,
+          getSnackbarProviderWrapper(),
+          getIconProviderWrapper(),
+        ])
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Run success operations' }));
+
+      expect(await screen.findByText('Mutation CreatePipelineRun completed')).toBeInTheDocument();
+    });
+  });
 });

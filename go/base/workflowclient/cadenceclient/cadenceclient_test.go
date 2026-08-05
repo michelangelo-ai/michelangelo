@@ -74,10 +74,11 @@ func TestGetWorkflowExecutionInfo(t *testing.T) {
 	runID := "testRunID"
 
 	testCases := []struct {
-		name           string
-		mockFunc       func(mockClient *cadencemocks.Client)
-		expectedStatus clientInterface.WorkflowExecutionStatus
-		errMsg         string
+		name              string
+		mockFunc          func(mockClient *cadencemocks.Client)
+		expectedStatus    clientInterface.WorkflowExecutionStatus
+		expectedExecution *clientInterface.WorkflowExecution
+		errMsg            string
 	}{
 		{
 			name: "GetWorkflowExecutionInfo Succeeded -- workflow completed",
@@ -89,8 +90,9 @@ func TestGetWorkflowExecutionInfo(t *testing.T) {
 						},
 					}, nil)
 			},
-			expectedStatus: clientInterface.WorkflowExecutionStatusCompleted,
-			errMsg:         "",
+			expectedStatus:    clientInterface.WorkflowExecutionStatusCompleted,
+			expectedExecution: &clientInterface.WorkflowExecution{},
+			errMsg:            "",
 		},
 		{
 			name: "GetWorkflowExecutionInfo Succeeded -- workflow failed",
@@ -102,8 +104,9 @@ func TestGetWorkflowExecutionInfo(t *testing.T) {
 						},
 					}, nil)
 			},
-			expectedStatus: clientInterface.WorkflowExecutionStatusFailed,
-			errMsg:         "",
+			expectedStatus:    clientInterface.WorkflowExecutionStatusFailed,
+			expectedExecution: &clientInterface.WorkflowExecution{},
+			errMsg:            "",
 		},
 		{
 			name: "GetWorkflowExecutionInfo Succeeded -- workflow running",
@@ -112,11 +115,19 @@ func TestGetWorkflowExecutionInfo(t *testing.T) {
 					&shared.DescribeWorkflowExecutionResponse{
 						WorkflowExecutionInfo: &shared.WorkflowExecutionInfo{
 							CloseStatus: nil,
+							Execution: &shared.WorkflowExecution{
+								WorkflowId: ptrString(workflowID),
+								RunId:      ptrString(runID),
+							},
 						},
 					}, nil)
 			},
 			expectedStatus: clientInterface.WorkflowExecutionStatusRunning,
-			errMsg:         "",
+			expectedExecution: &clientInterface.WorkflowExecution{
+				ID:    workflowID,
+				RunID: runID,
+			},
+			errMsg: "",
 		},
 		{
 			name: "GetWorkflowExecutionInfo Failed",
@@ -142,6 +153,7 @@ func TestGetWorkflowExecutionInfo(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, testCase.expectedStatus, workflowExecutionInfo.Status)
+				assert.Equal(t, testCase.expectedExecution, workflowExecutionInfo.Execution)
 			}
 		})
 	}
@@ -762,4 +774,8 @@ func (m *mockHistoryIterator) Next() (*shared.HistoryEvent, error) {
 	event := m.events[m.currentIndex]
 	m.currentIndex++
 	return event, nil
+}
+
+func ptrString(s string) *string {
+	return &s
 }

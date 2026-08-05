@@ -160,6 +160,10 @@ func (c *TemporalClient) GetWorkflowExecutionInfo(ctx context.Context, workflowI
 
 	return &clientInterface.WorkflowExecutionInfo{
 		Status: mapTemporalStatusToInterface(workflowExecutionInfo.Status),
+		Execution: &clientInterface.WorkflowExecution{
+			ID:    workflowExecutionInfo.GetExecution().GetWorkflowId(),
+			RunID: workflowExecutionInfo.GetExecution().GetRunId(),
+		},
 	}, nil
 }
 

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import itertools
+import re
 from unittest import TestCase
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from michelangelo.lib.model_manager.registry.client import RegisteredModel
 from michelangelo.workflow.schema.exceptions import ConfigurationError
@@ -15,6 +16,8 @@ from michelangelo.workflow.tasks.pusher.plugins.model_plugin import (
 )
 from michelangelo.workflow.variables.metadata import ModelMetadata
 from michelangelo.workflow.variables.types import AssembledModel, ModelArtifact
+
+_GENERATED_NAME_RE = re.compile(r"^model-\d{8}-\d{6}-[0-9a-f]{8}$")
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -62,6 +65,7 @@ def _plugin(
     registry: MagicMock | None = None,
     labels: dict | None = None,
     description: str | None = None,
+    kind: str | None = None,
     run_id: str | None = None,
     metadata: dict | None = None,
 ) -> ModelPusherPlugin:
@@ -71,6 +75,7 @@ def _plugin(
             model_name=model_name,
             labels=labels or {},
             description=description,
+            kind=kind,
             run_id=run_id,
             metadata=metadata or {},
         ),
@@ -153,7 +158,7 @@ class TestModelPusherPluginExecute(TestCase):
         self.assertEqual(call_kwargs["name"], "my-clf")
 
     def test_generates_name_when_model_name_is_none(self):
-        """It auto-generates a 'model-{uuid8}' name when config.model_name is None."""
+        """It auto-generates a timestamped name when config.model_name is None."""
         registry = MagicMock()
         registry.register_model.side_effect = lambda name, **kw: RegisteredModel(
             name=name, version="1", registry_uri=f"mock://{name}/1"
@@ -164,8 +169,27 @@ class TestModelPusherPluginExecute(TestCase):
             storage_backend=_mock_backend(),
             registry_client=registry,
         ).execute()
-        self.assertTrue(result["model_name"].startswith("model-"))
-        self.assertEqual(len(result["model_name"]), len("model-") + 8)
+        self.assertRegex(result["model_name"], _GENERATED_NAME_RE)
+
+    def test_name_generation_delegates_to_shared_api_utility(self):
+        """It calls michelangelo.api.v2 generate_random_name with the 'model' prefix."""
+        registry = MagicMock()
+        registry.register_model.side_effect = lambda name, **kw: RegisteredModel(
+            name=name, version="1", registry_uri=f"mock://{name}/1"
+        )
+        target = (
+            "michelangelo.workflow.tasks.pusher.plugins."
+            "model_plugin.generate_random_name"
+        )
+        with patch(target, return_value="model-20260721-114130-2d9c959d") as gen:
+            result = ModelPusherPlugin(
+                config=ModelPluginConfig(model_name=None),
+                artifact=_assembled(),
+                storage_backend=_mock_backend(),
+                registry_client=registry,
+            ).execute()
+        gen.assert_called_once_with("model")
+        self.assertEqual(result["model_name"], "model-20260721-114130-2d9c959d")
 
     def test_storage_key_includes_push_id_for_uniqueness(self):
         """Each execute() call uses a unique push_id in the storage key."""
@@ -195,6 +219,20 @@ class TestModelPusherPluginExecute(TestCase):
         _plugin(model_name="m", registry=registry).execute()
         call_kwargs = registry.register_model.call_args.kwargs
         self.assertIsNone(call_kwargs["description"])
+
+    def test_kind_forwarded_to_register_model(self):
+        """It passes config.kind to register_model(kind=...)."""
+        registry = _mock_registry(name="m")
+        _plugin(model_name="m", registry=registry, kind="regression").execute()
+        call_kwargs = registry.register_model.call_args.kwargs
+        self.assertEqual(call_kwargs["kind"], "regression")
+
+    def test_kind_none_when_not_set(self):
+        """It forwards kind=None when config.kind is not set."""
+        registry = _mock_registry(name="m")
+        _plugin(model_name="m", registry=registry).execute()
+        call_kwargs = registry.register_model.call_args.kwargs
+        self.assertIsNone(call_kwargs["kind"])
 
     def test_labels_merges_model_metadata_and_config_labels(self):
         """It merges ModelMetadata.to_registry_dict() with config.labels."""

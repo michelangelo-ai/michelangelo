@@ -18,8 +18,13 @@ Public surface re-exported below:
   schema types consumed by the trainer.
 * :class:`ExperimentStore` — pluggable auto-resume seam;
   :class:`FsspecExperimentStore` is the filesystem default.
+* :func:`comet_profiler_sink` — ready-made ``LightningTrainerParam.profiler_sink``
+  that ships profiler output to a Comet experiment.
 """
 
+from michelangelo.lib.trainer.torch.pytorch_lightning._private.util import (
+    comet_profiler_sink,
+)
 from michelangelo.lib.trainer.torch.pytorch_lightning.experiment_store import (
     FsspecExperimentStore,
 )
@@ -50,4 +55,5 @@ __all__ = [
     "TrainingObserver",
     "TrainingType",
     "TransferLearningSpec",
+    "comet_profiler_sink",
 ]

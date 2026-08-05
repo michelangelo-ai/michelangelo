@@ -280,6 +280,27 @@ func TestReconcile(t *testing.T) {
 			expectRequeue:  true,
 		},
 		{
+			name:    "redundant pause action is consumed while already paused",
+			request: ctrl.Request{NamespacedName: types.NamespacedName{Namespace: _namespace, Name: _triggerRun.Name}},
+			initialObject: func() v2pb.TriggerRun {
+				tr := _triggerRun.DeepCopy()
+				tr.Spec.Action = v2pb.TRIGGER_RUN_ACTION_PAUSE
+				return *tr
+			}(),
+			initialStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_PAUSED},
+			cronRunnerProvider: func() Runner {
+				mockRunner := &MockRunner{}
+				mockRunner.On("Update", mock.Anything, mock.Anything, v2pb.TRIGGER_RUN_ACTION_PAUSE).
+					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_PAUSED}, true, nil)
+				return mockRunner
+			},
+			expectErr:      false,
+			expectedErrStr: "",
+			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_PAUSED},
+			expectedAction: v2pb.TRIGGER_RUN_ACTION_NO_ACTION,
+			expectRequeue:  true,
+		},
+		{
 			name:          "triggerrun in failed status",
 			request:       ctrl.Request{NamespacedName: types.NamespacedName{Namespace: _namespace, Name: _triggerRun.Name}},
 			initialObject: _triggerRun,

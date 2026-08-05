@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package michelangelo.test.kubeproto;
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+
+option go_package = "kubeproto";
+
+// TestBaseSpec is the spec of a small revisioned base type.
+message TestBaseSpec {
+  string name = 1;
+  michelangelo.api.ResourceIdentifier ref = 2;
+}
+
+// TestBaseStatus is the status of a small revisioned base type.
+message TestBaseStatus {
+  int32 count = 1;
+}
+
+// TestBase is a revisioned base type. It opts into the "test_wrapper" wrapper
+// kind only (not "test_draft") via revisioned_in, so the sidecar table
+// "test_base_test_wrapper_unmarshaled" is generated for test_wrapper. Under
+// mirror-all, that sidecar materializes TestBase's FULL michelangelo.api.index
+// set: a primitive (spec.name), a composite ResourceIdentifier (spec.ref), and a
+// status field (status.count) — the last proving every base index is mirrored,
+// not a hand-picked subset.
+message TestBase {
+  option (michelangelo.api.resource) = {
+    revisioned_in: ["test_wrapper"]
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.name",
+    key:  "test_name",
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.ref",
+    key:  "test_ref",
+  };
+  option (michelangelo.api.index) = {
+    path: "status.count",
+    key:  "test_count",
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+  TestBaseSpec spec = 3;
+  TestBaseStatus status = 4;
+}
+
+message TestBaseList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+  repeated TestBase items = 3;
+}

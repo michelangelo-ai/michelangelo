@@ -14,17 +14,25 @@ import pytest
 # unavailable in a lightweight environment.
 torch = pytest.importorskip("torch")
 
+from michelangelo.lib.constants.sentinel import INT32_SENTINEL  # noqa: E402
 from michelangelo.lib.native_transform.torch.base_layers import (  # noqa: E402
+    CaseWhen,
     Cast,
     Ceil,
+    Clip,
+    Compare,
     Concatenate,
     Constant,
     Divide,
     Floor,
     IdentityTransform,
     LogTransform,
+    PadOrCrop1D,
+    Scale,
     Stack,
     Subtract,
+    TensorColFillNone,
+    Tile,
     TorchTransformBaseLayer,
 )
 
@@ -685,6 +693,983 @@ class TestTorchScriptRoundTrip:
             torch.testing.assert_close(scripted_out[key], eager[key])
 
         model_path = tmp_path / "scripted_layer.pt"
+        scripted.save(str(model_path))
+        loaded = torch.jit.load(str(model_path))
+        loaded_out = loaded(inputs)
+        for key in eager:
+            torch.testing.assert_close(loaded_out[key], eager[key])
+
+
+class TestTensorColFillNone:
+    """Filling missing positions detected from the runtime dtype."""
+
+    def test_mismatched_columns_raises(self) -> None:
+        """Unequal input/output column counts raise ``ValueError``."""
+        with pytest.raises(ValueError, match="same length"):
+            TensorColFillNone(
+                input_cols=["a", "b"], output_cols=["out"], default_value=0.0
+            )
+
+    def test_fill_nan_float(self) -> None:
+        """NaN positions in a float tensor are filled with the default."""
+        layer = TensorColFillNone(
+            input_cols=["feature"], output_cols=["filled"], default_value=0.0
+        )
+        inputs = {"feature": torch.tensor([1.0, float("nan"), 3.0, float("nan")])}
+        torch.testing.assert_close(
+            layer(inputs)["filled"], torch.tensor([1.0, 0.0, 3.0, 0.0])
+        )
+
+    def test_no_missing_values_passthrough(self) -> None:
+        """A tensor with no missing values is unchanged."""
+        layer = TensorColFillNone(
+            input_cols=["feature"], output_cols=["filled"], default_value=0.0
+        )
+        inputs = {"feature": torch.tensor([1.0, 2.0, 3.0])}
+        torch.testing.assert_close(
+            layer(inputs)["filled"], torch.tensor([1.0, 2.0, 3.0])
+        )
+
+    def test_custom_fill_value(self) -> None:
+        """A non-default fill value is used for NaN positions."""
+        layer = TensorColFillNone(
+            input_cols=["feature"], output_cols=["filled"], default_value=-1.0
+        )
+        inputs = {"feature": torch.tensor([1.0, float("nan"), 3.0])}
+        torch.testing.assert_close(
+            layer(inputs)["filled"], torch.tensor([1.0, -1.0, 3.0])
+        )
+
+    def test_detect_int32_min_as_missing(self) -> None:
+        """The int32 minimum is detected as missing and filled."""
+        layer = TensorColFillNone(
+            input_cols=["feature"], output_cols=["filled"], default_value=999
+        )
+        min_val = torch.iinfo(torch.int32).min
+        inputs = {"feature": torch.tensor([1, min_val, 3, min_val], dtype=torch.int32)}
+        outputs = layer(inputs)
+        assert outputs["filled"].dtype == torch.int32
+        torch.testing.assert_close(
+            outputs["filled"], torch.tensor([1, 999, 3, 999], dtype=torch.int32)
+        )
+
+    def test_detect_int64_min_as_missing(self) -> None:
+        """The int64 minimum is detected as missing and filled."""
+        layer = TensorColFillNone(
+            input_cols=["feature"], output_cols=["filled"], default_value=888
+        )
+        min_val = torch.iinfo(torch.int64).min
+        inputs = {"feature": torch.tensor([100, min_val, 200], dtype=torch.int64)}
+        outputs = layer(inputs)
+        assert outputs["filled"].dtype == torch.int64
+        torch.testing.assert_close(
+            outputs["filled"], torch.tensor([100, 888, 200], dtype=torch.int64)
+        )
+
+    def test_int32_all_missing(self) -> None:
+        """An all-missing int32 tensor is fully replaced."""
+        layer = TensorColFillNone(
+            input_cols=["feature"], output_cols=["filled"], default_value=0
+        )
+        min_val = torch.iinfo(torch.int32).min
+        inputs = {"feature": torch.tensor([min_val, min_val], dtype=torch.int32)}
+        torch.testing.assert_close(
+            layer(inputs)["filled"], torch.tensor([0, 0], dtype=torch.int32)
+        )
+
+    def test_int64_no_false_positive_on_real_values(self) -> None:
+        """Genuine int64 values (not the minimum) are left untouched."""
+        layer = TensorColFillNone(
+            input_cols=["feature"], output_cols=["filled"], default_value=0
+        )
+        inputs = {"feature": torch.tensor([10, 20, 30], dtype=torch.int64)}
+        torch.testing.assert_close(layer(inputs)["filled"], inputs["feature"])
+
+    def test_int64_no_false_positive_near_minimum(self) -> None:
+        """Values close to (but not equal to) the int64 minimum are not missing.
+
+        Detection must be an exact comparison. A float-mediated check loses
+        precision at this magnitude and flags a wide band around the sentinel.
+        """
+        min_val = torch.iinfo(torch.int64).min
+        near_min = [min_val + 1, min_val + 1_000_000_000, min_val + 10**15]
+        layer = TensorColFillNone(
+            input_cols=["feature"], output_cols=["filled"], default_value=0
+        )
+        inputs = {"feature": torch.tensor(near_min, dtype=torch.int64)}
+        torch.testing.assert_close(layer(inputs)["filled"], inputs["feature"])
+
+    def test_int64_minimum_still_detected_alongside_near_values(self) -> None:
+        """Only the exact int64 minimum is filled, even next to near-min values."""
+        min_val = torch.iinfo(torch.int64).min
+        layer = TensorColFillNone(
+            input_cols=["feature"], output_cols=["filled"], default_value=7
+        )
+        inputs = {
+            "feature": torch.tensor(
+                [min_val, min_val + 1_000_000_000], dtype=torch.int64
+            )
+        }
+        torch.testing.assert_close(
+            layer(inputs)["filled"],
+            torch.tensor([7, min_val + 1_000_000_000], dtype=torch.int64),
+        )
+
+    def test_multiple_columns(self) -> None:
+        """Each column is filled independently."""
+        layer = TensorColFillNone(
+            input_cols=["f1", "f2"], output_cols=["o1", "o2"], default_value=0.0
+        )
+        inputs = {
+            "f1": torch.tensor([1.0, float("nan")]),
+            "f2": torch.tensor([float("nan"), 2.0]),
+        }
+        outputs = layer(inputs)
+        torch.testing.assert_close(outputs["o1"], torch.tensor([1.0, 0.0]))
+        torch.testing.assert_close(outputs["o2"], torch.tensor([0.0, 2.0]))
+
+
+class TestCaseWhen:
+    """SQL-like conditional selection over (condition, value) pairs."""
+
+    def test_odd_input_columns_raises(self) -> None:
+        """An odd number of input columns raises ``ValueError``."""
+        with pytest.raises(ValueError, match="even number"):
+            CaseWhen(
+                input_cols=["cond1", "val1", "cond2"],
+                output_cols=["result"],
+                default_value=0,
+            )
+
+    def test_first_matching_condition_wins(self) -> None:
+        """Earlier condition-value pairs take priority over later ones."""
+        layer = CaseWhen(
+            input_cols=["cond1", "val1", "cond2", "val2"],
+            output_cols=["result"],
+            default_value=-1,
+        )
+        inputs = {
+            "cond1": torch.tensor([True, False, True, False]),
+            "val1": torch.tensor([10, 0, 30, 0]),
+            "cond2": torch.tensor([True, True, False, False]),
+            "val2": torch.tensor([100, 200, 0, 0]),
+        }
+        torch.testing.assert_close(
+            layer(inputs)["result"], torch.tensor([10, 200, 30, -1])
+        )
+
+    def test_default_used_when_no_condition_matches(self) -> None:
+        """The scalar default fills positions where no condition is true."""
+        layer = CaseWhen(
+            input_cols=["cond1", "val1", "cond2", "val2"],
+            output_cols=["result"],
+            default_value=99,
+        )
+        inputs = {
+            "cond1": torch.tensor([False, False, False]),
+            "val1": torch.tensor([1, 2, 3]),
+            "cond2": torch.tensor([False, False, False]),
+            "val2": torch.tensor([10, 20, 30]),
+        }
+        torch.testing.assert_close(layer(inputs)["result"], torch.tensor([99, 99, 99]))
+
+    def test_three_condition_pairs(self) -> None:
+        """Three pairs resolve in priority order, falling back to the default."""
+        layer = CaseWhen(
+            input_cols=["c1", "v1", "c2", "v2", "c3", "v3"],
+            output_cols=["result"],
+            default_value=0,
+        )
+        inputs = {
+            "c1": torch.tensor([True, False, False, False]),
+            "v1": torch.tensor([10, 10, 10, 10]),
+            "c2": torch.tensor([False, True, False, False]),
+            "v2": torch.tensor([20, 20, 20, 20]),
+            "c3": torch.tensor([False, False, True, False]),
+            "v3": torch.tensor([30, 30, 30, 30]),
+        }
+        torch.testing.assert_close(
+            layer(inputs)["result"], torch.tensor([10, 20, 30, 0])
+        )
+
+    def test_scalar_tensor_default(self) -> None:
+        """A 0-dim tensor default broadcasts across the value shape."""
+        layer = CaseWhen(
+            input_cols=["cond1", "val1"],
+            output_cols=["result"],
+            default_value=torch.tensor(-1),
+        )
+        inputs = {
+            "cond1": torch.tensor([True, False, True]),
+            "val1": torch.tensor([100, 200, 300]),
+        }
+        torch.testing.assert_close(
+            layer(inputs)["result"], torch.tensor([100, -1, 300])
+        )
+
+    def test_list_default(self) -> None:
+        """A list default is materialized element-wise."""
+        layer = CaseWhen(
+            input_cols=["cond1", "val1"],
+            output_cols=["result"],
+            default_value=[99, 99],
+        )
+        inputs = {
+            "cond1": torch.tensor([True, False]),
+            "val1": torch.tensor([10, 20]),
+        }
+        torch.testing.assert_close(layer(inputs)["result"], torch.tensor([10, 99]))
+
+    def test_all_conditions_true_uses_first(self) -> None:
+        """When every condition is true, the first pair's values are chosen."""
+        layer = CaseWhen(
+            input_cols=["cond1", "val1", "cond2", "val2"],
+            output_cols=["result"],
+            default_value=0,
+        )
+        inputs = {
+            "cond1": torch.tensor([True, True, True]),
+            "val1": torch.tensor([10, 20, 30]),
+            "cond2": torch.tensor([True, True, True]),
+            "val2": torch.tensor([100, 200, 300]),
+        }
+        torch.testing.assert_close(layer(inputs)["result"], torch.tensor([10, 20, 30]))
+
+
+class TestCompare:
+    """Pairwise element-wise comparisons."""
+
+    def test_odd_input_columns_raises(self) -> None:
+        """An odd number of input columns raises ``ValueError``."""
+        with pytest.raises(ValueError, match="even"):
+            Compare(input_cols=["l", "r", "x"], output_cols=["o"], compare_op="equal")
+
+    def test_output_not_half_raises(self) -> None:
+        """Output count not equal to half the input count raises ``ValueError``."""
+        with pytest.raises(ValueError, match="half"):
+            Compare(input_cols=["l", "r"], output_cols=["o1", "o2"], compare_op="equal")
+
+    def test_invalid_op_raises(self) -> None:
+        """An unsupported operator raises ``ValueError``."""
+        with pytest.raises(ValueError, match="not supported"):
+            Compare(input_cols=["l", "r"], output_cols=["o"], compare_op="between")
+
+    @pytest.mark.parametrize(
+        ("op", "expected"),
+        [
+            ("equal", [True, False, True]),
+            ("not_equal", [False, True, False]),
+        ],
+    )
+    def test_equality_ops(self, op: str, expected: list[bool]) -> None:
+        """``equal`` and ``not_equal`` produce boolean masks."""
+        layer = Compare(input_cols=["left", "right"], output_cols=["c"], compare_op=op)
+        inputs = {"left": torch.tensor([1, 2, 3]), "right": torch.tensor([1, 3, 3])}
+        outputs = layer(inputs)
+        assert outputs["c"].dtype == torch.bool
+        torch.testing.assert_close(outputs["c"], torch.tensor(expected))
+
+    @pytest.mark.parametrize(
+        ("op", "expected"),
+        [
+            ("greater", [False, False, True]),
+            ("less", [True, False, False]),
+            ("greater_equal", [False, True, True]),
+            ("less_equal", [True, True, False]),
+        ],
+    )
+    def test_ordering_ops_broadcast_scalar(self, op: str, expected: list[bool]) -> None:
+        """Ordering operators broadcast a scalar right operand."""
+        layer = Compare(input_cols=["left", "right"], output_cols=["c"], compare_op=op)
+        inputs = {"left": torch.tensor([1, 2, 3]), "right": torch.tensor(2)}
+        torch.testing.assert_close(layer(inputs)["c"], torch.tensor(expected))
+
+    def test_multiple_pairs(self) -> None:
+        """Multiple pairs compare independently."""
+        layer = Compare(
+            input_cols=["l1", "r1", "l2", "r2"],
+            output_cols=["o1", "o2"],
+            compare_op="equal",
+        )
+        inputs = {
+            "l1": torch.tensor([1, 2]),
+            "r1": torch.tensor([1, 3]),
+            "l2": torch.tensor([4, 5]),
+            "r2": torch.tensor([4, 5]),
+        }
+        outputs = layer(inputs)
+        torch.testing.assert_close(outputs["o1"], torch.tensor([True, False]))
+        torch.testing.assert_close(outputs["o2"], torch.tensor([True, True]))
+
+
+class TestTile:
+    """Repeating tensors along an axis by count or inferred from a target."""
+
+    def test_default_axis_is_zero(self) -> None:
+        """The default tiling axis is ``0``."""
+        assert Tile(input_cols=["s"], output_cols=["o"], count=2).axis == 0
+
+    def test_forward_with_count(self) -> None:
+        """An explicit count repeats a 2D tensor along axis 0."""
+        layer = Tile(input_cols=["source"], output_cols=["tiled"], axis=0, count=3)
+        inputs = {"source": torch.tensor([[1, 2], [3, 4]])}
+        expected = torch.tensor([[1, 2], [3, 4], [1, 2], [3, 4], [1, 2], [3, 4]])
+        torch.testing.assert_close(layer(inputs)["tiled"], expected)
+
+    def test_forward_1d_axis_0(self) -> None:
+        """A 1D tensor tiled along axis 0 stays 1D."""
+        layer = Tile(input_cols=["source"], output_cols=["tiled"], axis=0, count=4)
+        inputs = {"source": torch.tensor([1, 2, 3])}
+        outputs = layer(inputs)
+        assert outputs["tiled"].dim() == 1
+        torch.testing.assert_close(
+            outputs["tiled"], torch.tensor([1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3])
+        )
+
+    def test_forward_with_target(self) -> None:
+        """The count is inferred from the trailing target tensor's shape."""
+        layer = Tile(
+            input_cols=["source", "target"],
+            output_cols=["tiled"],
+            axis=0,
+            target_tensor_provided=True,
+        )
+        inputs = {
+            "source": torch.tensor([[1, 2]]),
+            "target": torch.tensor([[0], [0], [0]]),
+        }
+        torch.testing.assert_close(
+            layer(inputs)["tiled"], torch.tensor([[1, 2], [1, 2], [1, 2]])
+        )
+
+    def test_missing_count_and_target_raises(self) -> None:
+        """Construction without a count or target tensor raises ``ValueError``."""
+        with pytest.raises(ValueError, match="count must be specified"):
+            Tile(input_cols=["source"], output_cols=["tiled"], axis=0)
+
+    def test_axis_1_autounsqueeze_1d(self) -> None:
+        """A 1D input with axis=1 is unsqueezed to produce a 2D result."""
+        layer = Tile(input_cols=["source"], output_cols=["tiled"], axis=1, count=3)
+        inputs = {"source": torch.tensor([10, 20])}
+        outputs = layer(inputs)
+        assert outputs["tiled"].shape == torch.Size([2, 3])
+        torch.testing.assert_close(
+            outputs["tiled"], torch.tensor([[10, 10, 10], [20, 20, 20]])
+        )
+
+    def test_axis_1_autounsqueeze_with_target(self) -> None:
+        """Auto-unsqueeze also applies when the count comes from a target."""
+        layer = Tile(
+            input_cols=["source", "target"],
+            output_cols=["tiled"],
+            axis=1,
+            target_tensor_provided=True,
+        )
+        inputs = {
+            "source": torch.tensor([5, 10, 15]),
+            "target": torch.tensor([[0, 0, 0, 0]]),
+        }
+        outputs = layer(inputs)
+        assert outputs["tiled"].shape == torch.Size([3, 4])
+        torch.testing.assert_close(
+            outputs["tiled"],
+            torch.tensor([[5, 5, 5, 5], [10, 10, 10, 10], [15, 15, 15, 15]]),
+        )
+
+    def test_axis_negative_1(self) -> None:
+        """A negative axis tiles along the last dimension."""
+        layer = Tile(input_cols=["source"], output_cols=["tiled"], axis=-1, count=3)
+        inputs = {"source": torch.tensor([[1, 2], [3, 4]])}
+        torch.testing.assert_close(
+            layer(inputs)["tiled"],
+            torch.tensor([[1, 2, 1, 2, 1, 2], [3, 4, 3, 4, 3, 4]]),
+        )
+
+    def test_2d_axis_1_no_unsqueeze(self) -> None:
+        """A 2D input with axis=1 tiles without unsqueezing."""
+        layer = Tile(input_cols=["source"], output_cols=["tiled"], axis=1, count=2)
+        inputs = {"source": torch.tensor([[1], [2]])}
+        outputs = layer(inputs)
+        assert outputs["tiled"].dim() == 2
+        torch.testing.assert_close(outputs["tiled"], torch.tensor([[1, 1], [2, 2]]))
+
+    def test_multiple_columns_with_count(self) -> None:
+        """Multiple source columns are each tiled by the count."""
+        layer = Tile(input_cols=["s1", "s2"], output_cols=["o1", "o2"], count=2)
+        inputs = {"s1": torch.tensor([1, 2]), "s2": torch.tensor([3, 4])}
+        outputs = layer(inputs)
+        torch.testing.assert_close(outputs["o1"], torch.tensor([1, 2, 1, 2]))
+        torch.testing.assert_close(outputs["o2"], torch.tensor([3, 4, 3, 4]))
+
+
+class TestPadOrCrop1D:
+    """Padding/cropping to a fixed length, including sentinel handling."""
+
+    def test_invalid_align_raises(self) -> None:
+        """An align other than left/right raises ``ValueError``."""
+        with pytest.raises(ValueError, match="align"):
+            PadOrCrop1D(
+                input_cols=["x"], output_cols=["y"], max_length=3, align="center"
+            )
+
+    def test_non_positive_max_length_raises(self) -> None:
+        """A non-positive max_length raises ``ValueError``."""
+        with pytest.raises(ValueError, match="positive"):
+            PadOrCrop1D(input_cols=["x"], output_cols=["y"], max_length=0)
+
+    def test_mismatched_columns_raises(self) -> None:
+        """Unequal input/output column counts raise ``ValueError``."""
+        with pytest.raises(ValueError, match="same length"):
+            PadOrCrop1D(input_cols=["a", "b"], output_cols=["y"], max_length=3)
+
+    def test_left_padding_pads_right(self) -> None:
+        """align='left' pads on the right to reach max_length."""
+        layer = PadOrCrop1D(
+            input_cols=["f"], output_cols=["o"], max_length=5, pad_value=-1
+        )
+        out = layer({"f": torch.tensor([1, 2, 3])})["o"]
+        torch.testing.assert_close(out, torch.tensor([1, 2, 3, -1, -1]))
+
+    def test_left_cropping_keeps_first_n(self) -> None:
+        """align='left' crops from the right, keeping the first N."""
+        layer = PadOrCrop1D(
+            input_cols=["f"], output_cols=["o"], max_length=3, pad_value=-1
+        )
+        out = layer({"f": torch.tensor([1, 2, 3, 4, 5])})["o"]
+        torch.testing.assert_close(out, torch.tensor([1, 2, 3]))
+
+    def test_right_padding_pads_left(self) -> None:
+        """align='right' pads on the left."""
+        layer = PadOrCrop1D(
+            input_cols=["f"],
+            output_cols=["o"],
+            max_length=5,
+            pad_value=-1,
+            align="right",
+        )
+        out = layer({"f": torch.tensor([1, 2, 3])})["o"]
+        torch.testing.assert_close(out, torch.tensor([-1, -1, 1, 2, 3]))
+
+    def test_right_cropping_keeps_last_n(self) -> None:
+        """align='right' crops from the left, keeping the last N."""
+        layer = PadOrCrop1D(
+            input_cols=["f"],
+            output_cols=["o"],
+            max_length=3,
+            pad_value=-1,
+            align="right",
+        )
+        out = layer({"f": torch.tensor([1, 2, 3, 4, 5])})["o"]
+        torch.testing.assert_close(out, torch.tensor([3, 4, 5]))
+
+    def test_right_align_keeps_real_prefix_over_trailing_sentinels(self) -> None:
+        """align='right' crops to real content, not to sentinel padding.
+
+        A short sequence collated into a longer tensor carries trailing NaN
+        padding. Cropping to the last ``max_length`` raw positions would return
+        that padding; the real prefix must be kept instead.
+        """
+        layer = PadOrCrop1D(
+            input_cols=["f"],
+            output_cols=["o"],
+            max_length=3,
+            pad_value=-1.0,
+            align="right",
+        )
+        out = layer({"f": torch.tensor([1.0, 2.0, 3.0, float("nan"), float("nan")])})[
+            "o"
+        ]
+        torch.testing.assert_close(out, torch.tensor([1.0, 2.0, 3.0]))
+
+    def test_right_align_int_sentinel_stripped_before_crop(self) -> None:
+        """The integer collation sentinel is stripped before an align='right' crop."""
+        layer = PadOrCrop1D(
+            input_cols=["f"],
+            output_cols=["o"],
+            max_length=2,
+            pad_value=-1,
+            align="right",
+        )
+        out = layer(
+            {"f": torch.tensor([10, 20, 30, INT32_SENTINEL], dtype=torch.int32)}
+        )["o"]
+        torch.testing.assert_close(out, torch.tensor([20, 30], dtype=torch.int32))
+
+    def test_right_align_pads_when_content_shorter_than_max_length(self) -> None:
+        """Sentinel-trimmed content shorter than max_length is left-padded."""
+        layer = PadOrCrop1D(
+            input_cols=["f"],
+            output_cols=["o"],
+            max_length=4,
+            pad_value=-1.0,
+            align="right",
+        )
+        out = layer({"f": torch.tensor([1.0, 2.0, float("nan")])})["o"]
+        torch.testing.assert_close(out, torch.tensor([-1.0, -1.0, 1.0, 2.0]))
+
+    def test_right_align_all_sentinel_returns_all_pad(self) -> None:
+        """An input that is entirely sentinel yields only ``pad_value``."""
+        layer = PadOrCrop1D(
+            input_cols=["f"],
+            output_cols=["o"],
+            max_length=3,
+            pad_value=-1.0,
+            align="right",
+        )
+        out = layer({"f": torch.tensor([float("nan"), float("nan")])})["o"]
+        torch.testing.assert_close(out, torch.tensor([-1.0, -1.0, -1.0]))
+
+    def test_right_align_content_length_is_per_row(self) -> None:
+        """Each batch row is cropped against its own real-content length."""
+        layer = PadOrCrop1D(
+            input_cols=["f"],
+            output_cols=["o"],
+            max_length=3,
+            pad_value=-1.0,
+            align="right",
+        )
+        inputs = {
+            "f": torch.tensor(
+                [
+                    [1.0, 2.0, 3.0, float("nan"), float("nan")],
+                    [1.0, 2.0, 3.0, 4.0, 5.0],
+                    [1.0, float("nan"), float("nan"), float("nan"), float("nan")],
+                ]
+            )
+        }
+        torch.testing.assert_close(
+            layer(inputs)["o"],
+            torch.tensor([[1.0, 2.0, 3.0], [3.0, 4.0, 5.0], [-1.0, -1.0, 1.0]]),
+        )
+
+    def test_left_align_unaffected_by_trailing_sentinels(self) -> None:
+        """align='left' keeps the real prefix, as it always has."""
+        layer = PadOrCrop1D(
+            input_cols=["f"],
+            output_cols=["o"],
+            max_length=3,
+            pad_value=-1.0,
+            align="left",
+        )
+        out = layer({"f": torch.tensor([1.0, 2.0, 3.0, float("nan"), float("nan")])})[
+            "o"
+        ]
+        torch.testing.assert_close(out, torch.tensor([1.0, 2.0, 3.0]))
+
+    def test_exact_length_unchanged(self) -> None:
+        """An input already at max_length is returned unchanged."""
+        layer = PadOrCrop1D(input_cols=["f"], output_cols=["o"], max_length=3)
+        out = layer({"f": torch.tensor([1, 2, 3])})["o"]
+        torch.testing.assert_close(out, torch.tensor([1, 2, 3]))
+
+    def test_preserve_input_dtype_when_none(self) -> None:
+        """With dtype=None the input dtype is preserved on pad and crop."""
+        pad_layer = PadOrCrop1D(
+            input_cols=["f"], output_cols=["o"], max_length=5, pad_value=0
+        )
+        pad_out = pad_layer({"f": torch.tensor([1, 2, 3], dtype=torch.int32)})["o"]
+        assert pad_out.dtype == torch.int32
+        torch.testing.assert_close(
+            pad_out, torch.tensor([1, 2, 3, 0, 0], dtype=torch.int32)
+        )
+
+    def test_explicit_dtype_overrides_input(self) -> None:
+        """An explicit dtype converts the output."""
+        layer = PadOrCrop1D(
+            input_cols=["f"],
+            output_cols=["o"],
+            max_length=4,
+            dtype=torch.float32,
+            pad_value=0,
+        )
+        out = layer({"f": torch.tensor([1, 2, 3], dtype=torch.int64)})["o"]
+        assert out.dtype == torch.float32
+        torch.testing.assert_close(out, torch.tensor([1.0, 2.0, 3.0, 0.0]))
+
+    def test_string_dtype_alias(self) -> None:
+        """A string dtype alias resolves to the target dtype."""
+        layer = PadOrCrop1D(
+            input_cols=["f"],
+            output_cols=["o"],
+            max_length=3,
+            dtype="float64",
+            pad_value=0.0,
+        )
+        out = layer({"f": torch.tensor([1, 2, 3, 4], dtype=torch.int32)})["o"]
+        assert out.dtype == torch.float64
+        torch.testing.assert_close(
+            out, torch.tensor([1.0, 2.0, 3.0], dtype=torch.float64)
+        )
+
+    def test_empty_last_dim_returns_full_pad(self) -> None:
+        """A zero-length input becomes a full pad_value tensor of max_length."""
+        layer = PadOrCrop1D(
+            input_cols=["f"],
+            output_cols=["o"],
+            max_length=5,
+            dtype=torch.float32,
+            pad_value=-1.0,
+        )
+        out = layer({"f": torch.tensor([], dtype=torch.float32)})["o"]
+        torch.testing.assert_close(out, torch.full((5,), -1.0))
+
+    def test_empty_last_dim_preserves_batch_dim(self) -> None:
+        """An empty last dim keeps the batch dimension when padding a 2D input."""
+        layer = PadOrCrop1D(
+            input_cols=["f"],
+            output_cols=["o"],
+            max_length=3,
+            pad_value=7,
+            dtype=torch.int64,
+        )
+        out = layer({"f": torch.empty((2, 0), dtype=torch.int64)})["o"]
+        assert out.shape == torch.Size([2, 3])
+        torch.testing.assert_close(out, torch.full((2, 3), 7, dtype=torch.int64))
+
+    def test_empty_last_dim_preserves_dtype(self) -> None:
+        """An empty int64 input keeps its dtype in the full-pad output."""
+        layer = PadOrCrop1D(
+            input_cols=["f"], output_cols=["o"], max_length=3, pad_value=-1
+        )
+        out = layer({"f": torch.tensor([], dtype=torch.int64)})["o"]
+        assert out.dtype == torch.int64
+        torch.testing.assert_close(out, torch.tensor([-1, -1, -1], dtype=torch.int64))
+
+    def test_nan_collation_sentinel_uses_pad_value(self) -> None:
+        """NaN collation sentinels become pad_value."""
+        layer = PadOrCrop1D(
+            input_cols=["f"], output_cols=["o"], max_length=4, pad_value=4.61
+        )
+        out = layer({"f": torch.tensor([[1.0, float("nan"), 3.0]])})["o"]
+        assert out[0, 1].item() == pytest.approx(4.61, abs=1e-4)
+        assert out[0, 3].item() == pytest.approx(4.61, abs=1e-4)
+
+    def test_int_sentinel_uses_pad_value(self) -> None:
+        """INT32_SENTINEL collation positions become pad_value."""
+        layer = PadOrCrop1D(
+            input_cols=["f"], output_cols=["o"], max_length=4, pad_value=-1
+        )
+        out = layer({"f": torch.tensor([[10, INT32_SENTINEL, 30]], dtype=torch.int32)})[
+            "o"
+        ]
+        torch.testing.assert_close(
+            out, torch.tensor([[10, -1, 30, -1]], dtype=torch.int32)
+        )
+
+    def test_non_standard_sentinel_is_left_as_data(self) -> None:
+        """A non-standard numeric value (not NaN/INT32_SENTINEL) is left as data."""
+        layer = PadOrCrop1D(
+            input_cols=["f"],
+            output_cols=["o"],
+            max_length=4,
+            dtype=torch.int32,
+            pad_value=-1,
+        )
+        out = layer({"f": torch.tensor([10, -2_000_000_000, 30], dtype=torch.int32)})[
+            "o"
+        ]
+        torch.testing.assert_close(
+            out, torch.tensor([10, -2_000_000_000, 30, -1], dtype=torch.int32)
+        )
+
+    def test_over_padding_short_input(self) -> None:
+        """A single element pads out to the full max_length."""
+        layer = PadOrCrop1D(
+            input_cols=["f"],
+            output_cols=["o"],
+            max_length=4,
+            pad_value=9,
+            dtype=torch.int64,
+        )
+        out = layer({"f": torch.tensor([7])})["o"]
+        torch.testing.assert_close(out, torch.tensor([7, 9, 9, 9], dtype=torch.int64))
+
+    def test_multiple_columns(self) -> None:
+        """Multiple columns are padded/cropped independently."""
+        layer = PadOrCrop1D(
+            input_cols=["f1", "f2"],
+            output_cols=["o1", "o2"],
+            max_length=4,
+            dtype=torch.int64,
+            pad_value=-1,
+        )
+        inputs = {
+            "f1": torch.tensor([1, 2, 3, 4, 5]),
+            "f2": torch.tensor([6, 7, 8, 9, 10]),
+        }
+        outputs = layer(inputs)
+        torch.testing.assert_close(
+            outputs["o1"], torch.tensor([1, 2, 3, 4], dtype=torch.int64)
+        )
+        torch.testing.assert_close(
+            outputs["o2"], torch.tensor([6, 7, 8, 9], dtype=torch.int64)
+        )
+
+
+class TestScale:
+    """Scalar multiplication."""
+
+    def test_mismatched_columns_raises(self) -> None:
+        """Unequal input/output column counts raise ``ValueError``."""
+        with pytest.raises(ValueError, match="same length"):
+            Scale(input_cols=["a", "b"], output_cols=["out"], factor=2.0)
+
+    def test_basic_scaling(self) -> None:
+        """Values are multiplied by the factor."""
+        layer = Scale(input_cols=["val"], output_cols=["scaled"], factor=2.0)
+        inputs = {"val": torch.tensor([1.0, 2.0, 3.0])}
+        torch.testing.assert_close(
+            layer(inputs)["scaled"], torch.tensor([2.0, 4.0, 6.0])
+        )
+
+    def test_negative_factor(self) -> None:
+        """A negative factor flips signs and scales."""
+        layer = Scale(input_cols=["val"], output_cols=["scaled"], factor=-0.5)
+        inputs = {"val": torch.tensor([10.0, -20.0])}
+        torch.testing.assert_close(layer(inputs)["scaled"], torch.tensor([-5.0, 10.0]))
+
+    def test_multiple_columns(self) -> None:
+        """Each column is scaled by the same factor."""
+        layer = Scale(input_cols=["v1", "v2"], output_cols=["s1", "s2"], factor=10.0)
+        inputs = {"v1": torch.tensor([1.0, 2.0]), "v2": torch.tensor([3.0, 4.0])}
+        outputs = layer(inputs)
+        torch.testing.assert_close(outputs["s1"], torch.tensor([10.0, 20.0]))
+        torch.testing.assert_close(outputs["s2"], torch.tensor([30.0, 40.0]))
+
+
+class TestClip:
+    """Clamping to a range with optional value exemption."""
+
+    def test_mismatched_columns_raises(self) -> None:
+        """Unequal input/output column counts raise ``ValueError``."""
+        with pytest.raises(ValueError, match="same length"):
+            Clip(input_cols=["a", "b"], output_cols=["out"], min_value=0.0)
+
+    def test_no_bounds_raises(self) -> None:
+        """Omitting both bounds raises ``ValueError`` at construction time."""
+        with pytest.raises(ValueError, match="min_value or max_value"):
+            Clip(input_cols=["val"], output_cols=["clipped"])
+
+    def test_basic_clip(self) -> None:
+        """Values are clamped to ``[min_value, max_value]``."""
+        layer = Clip(
+            input_cols=["val"], output_cols=["clipped"], min_value=0.0, max_value=10.0
+        )
+        inputs = {"val": torch.tensor([-5.0, 5.0, 15.0])}
+        torch.testing.assert_close(
+            layer(inputs)["clipped"], torch.tensor([0.0, 5.0, 10.0])
+        )
+
+    def test_only_min_bound(self) -> None:
+        """A missing upper bound leaves large values untouched."""
+        layer = Clip(input_cols=["val"], output_cols=["clipped"], min_value=0.0)
+        inputs = {"val": torch.tensor([-5.0, 5.0, 1000.0])}
+        torch.testing.assert_close(
+            layer(inputs)["clipped"], torch.tensor([0.0, 5.0, 1000.0])
+        )
+
+    def test_only_max_bound(self) -> None:
+        """A missing lower bound leaves small values untouched."""
+        layer = Clip(input_cols=["val"], output_cols=["clipped"], max_value=10.0)
+        inputs = {"val": torch.tensor([-500.0, 5.0, 15.0])}
+        torch.testing.assert_close(
+            layer(inputs)["clipped"], torch.tensor([-500.0, 5.0, 10.0])
+        )
+
+    def test_ignore_value_preserved(self) -> None:
+        """Positions equal to ignore_value are preserved even if out of range."""
+        layer = Clip(
+            input_cols=["val"],
+            output_cols=["clipped"],
+            min_value=0.0,
+            max_value=10.0,
+            ignore_value=-1.0,
+        )
+        inputs = {"val": torch.tensor([-5.0, 5.0, 15.0, -1.0])}
+        torch.testing.assert_close(
+            layer(inputs)["clipped"], torch.tensor([0.0, 5.0, 10.0, -1.0])
+        )
+
+    def test_multiple_columns(self) -> None:
+        """Each column is clamped independently."""
+        layer = Clip(
+            input_cols=["v1", "v2"],
+            output_cols=["o1", "o2"],
+            min_value=0.0,
+            max_value=1.0,
+        )
+        inputs = {"v1": torch.tensor([-1.0, 2.0]), "v2": torch.tensor([0.5, 5.0])}
+        outputs = layer(inputs)
+        torch.testing.assert_close(outputs["o1"], torch.tensor([0.0, 1.0]))
+        torch.testing.assert_close(outputs["o2"], torch.tensor([0.5, 1.0]))
+
+
+def _b2_layer_cases() -> list[tuple[str, TorchTransformBaseLayer, dict]]:
+    """Build (id, layer, inputs) cases covering every B2 structural layer.
+
+    Each entry exercises the ``forward`` path that a served model relies on so
+    the TorchScript round-trip test can confirm the scripted module (and a
+    save/load cycle) reproduces the eager output.
+    """
+    return [
+        (
+            "tensor_col_fill_none_float",
+            TensorColFillNone(input_cols=["f"], output_cols=["o"], default_value=0.0),
+            {"f": torch.tensor([1.0, float("nan"), 3.0])},
+        ),
+        (
+            "tensor_col_fill_none_int32",
+            TensorColFillNone(input_cols=["f"], output_cols=["o"], default_value=9),
+            {
+                "f": torch.tensor(
+                    [1, torch.iinfo(torch.int32).min, 3], dtype=torch.int32
+                )
+            },
+        ),
+        (
+            "case_when_scalar_default",
+            CaseWhen(
+                input_cols=["c1", "v1", "c2", "v2"],
+                output_cols=["o"],
+                default_value=-1,
+            ),
+            {
+                "c1": torch.tensor([True, False, False]),
+                "v1": torch.tensor([10, 20, 30]),
+                "c2": torch.tensor([False, True, False]),
+                "v2": torch.tensor([100, 200, 300]),
+            },
+        ),
+        (
+            "case_when_tensor_default",
+            CaseWhen(
+                input_cols=["c1", "v1"],
+                output_cols=["o"],
+                default_value=torch.tensor(-1),
+            ),
+            {
+                "c1": torch.tensor([True, False, True]),
+                "v1": torch.tensor([100, 200, 300]),
+            },
+        ),
+        (
+            "compare_equal",
+            Compare(input_cols=["l", "r"], output_cols=["o"], compare_op="equal"),
+            {"l": torch.tensor([1, 2, 3]), "r": torch.tensor([1, 3, 3])},
+        ),
+        (
+            "compare_greater_equal",
+            Compare(
+                input_cols=["l", "r"], output_cols=["o"], compare_op="greater_equal"
+            ),
+            {"l": torch.tensor([1, 2, 3]), "r": torch.tensor(2)},
+        ),
+        (
+            "tile_count",
+            Tile(input_cols=["s"], output_cols=["o"], count=2),
+            {"s": torch.tensor([1, 2])},
+        ),
+        (
+            "tile_axis1_unsqueeze",
+            Tile(input_cols=["s"], output_cols=["o"], axis=1, count=3),
+            {"s": torch.tensor([10, 20])},
+        ),
+        (
+            "pad_or_crop_explicit_dtype",
+            PadOrCrop1D(
+                input_cols=["f"],
+                output_cols=["o"],
+                max_length=5,
+                dtype=torch.int64,
+                pad_value=0,
+            ),
+            {"f": torch.tensor([1, 2, 3])},
+        ),
+        (
+            "pad_or_crop_preserve_dtype",
+            PadOrCrop1D(input_cols=["f"], output_cols=["o"], max_length=5, pad_value=0),
+            {"f": torch.tensor([1, 2, 3], dtype=torch.int32)},
+        ),
+        (
+            "pad_or_crop_align_right",
+            PadOrCrop1D(
+                input_cols=["f"],
+                output_cols=["o"],
+                max_length=5,
+                pad_value=-1,
+                align="right",
+            ),
+            {"f": torch.tensor([1, 2, 3, 4, 5, 6, 7])},
+        ),
+        (
+            "pad_or_crop_ragged_nan",
+            PadOrCrop1D(
+                input_cols=["f"],
+                output_cols=["o"],
+                max_length=5,
+                pad_value=0.0,
+            ),
+            {"f": torch.tensor([1.0, float("nan"), 3.0])},
+        ),
+        (
+            "pad_or_crop_ragged_int",
+            PadOrCrop1D(
+                input_cols=["f"],
+                output_cols=["o"],
+                max_length=5,
+                pad_value=-1,
+            ),
+            {"f": torch.tensor([10, INT32_SENTINEL, 30], dtype=torch.int32)},
+        ),
+        (
+            "scale",
+            Scale(input_cols=["v"], output_cols=["o"], factor=2.0),
+            {"v": torch.tensor([1.0, 2.0])},
+        ),
+        (
+            "clip",
+            Clip(input_cols=["v"], output_cols=["o"], min_value=0.0, max_value=10.0),
+            {"v": torch.tensor([-5.0, 5.0, 15.0])},
+        ),
+        (
+            "clip_ignore_value",
+            Clip(
+                input_cols=["v"],
+                output_cols=["o"],
+                min_value=0.0,
+                max_value=10.0,
+                ignore_value=-1.0,
+            ),
+            {"v": torch.tensor([-5.0, 5.0, 15.0, -1.0])},
+        ),
+    ]
+
+
+class TestB2TorchScriptRoundTrip:
+    """Every B2 structural layer must script, save/load, and match eager output."""
+
+    @pytest.mark.parametrize(
+        ("layer", "inputs"),
+        [(layer, inputs) for _, layer, inputs in _b2_layer_cases()],
+        ids=[case_id for case_id, _, _ in _b2_layer_cases()],
+    )
+    def test_scripted_matches_eager(
+        self,
+        layer: TorchTransformBaseLayer,
+        inputs: dict[str, torch.Tensor],
+        tmp_path,
+    ) -> None:
+        """Scripting (and reloading) reproduces the eager forward output."""
+        layer.eval()
+        eager = layer(inputs)
+
+        scripted = torch.jit.script(layer)
+        scripted_out = scripted(inputs)
+        assert set(scripted_out) == set(eager)
+        for key in eager:
+            torch.testing.assert_close(scripted_out[key], eager[key])
+
+        model_path = tmp_path / "scripted_b2_layer.pt"
         scripted.save(str(model_path))
         loaded = torch.jit.load(str(model_path))
         loaded_out = loaded(inputs)

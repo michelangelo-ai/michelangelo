@@ -23,6 +23,7 @@ from grpc import (
     ssl_channel_credentials,
 )
 
+from michelangelo.cli.mactl import config as _config
 from michelangelo.cli.mactl.config import load_config, setup_minio_env
 from michelangelo.cli.mactl.crd import CRD, yaml_to_dict
 from michelangelo.cli.mactl.grpc_tools import list_services
@@ -737,7 +738,9 @@ def run():
         cli_proxy_class = proxy_mod.CLIProxy
         with cli_proxy_class() as proxy:
             local_address = proxy.create_tunnel(ADDRESS)
-            with insecure_channel(local_address) as channel:
+            with insecure_channel(
+                local_address, options=_config.get_channel_options()
+            ) as channel:
                 return main(channel, plugin_registry)
 
     if USE_TLS:
@@ -747,7 +750,9 @@ def run():
             ADDRESS,
         )
         # Use secure TLS connection
-        with secure_channel(ADDRESS, ssl_channel_credentials()) as channel:
+        with secure_channel(
+            ADDRESS, ssl_channel_credentials(), options=_config.get_channel_options()
+        ) as channel:
             return main(channel, plugin_registry)
 
     _LOG.info(
@@ -756,7 +761,7 @@ def run():
         ADDRESS,
     )
     # Use insecure connection for local development
-    with insecure_channel(ADDRESS) as channel:
+    with insecure_channel(ADDRESS, options=_config.get_channel_options()) as channel:
         return main(channel, plugin_registry)
 
 

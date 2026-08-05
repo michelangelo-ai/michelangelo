@@ -92,6 +92,17 @@ message ResourceDescriptor {
   // the message type of the same name in the hub version.
   // If the current version is hub version, the generated go code will contain the Hub() function.
   bool conversion = 102;
+
+  // revisioned_in lists the content-wrapper kinds this CRD is snapshotted into
+  // (e.g. "revision", "draft"). A non-empty list marks this CRD as a revisioned
+  // base type. For each listed wrapper kind, protoc-gen-sql generates a sidecar
+  // "<base>_<wrapper>_unmarshaled" table that mirrors all of this message's
+  // michelangelo.api.index annotations as columns so List<Wrapper> can filter on 
+  // the wrapped base resource's fields server-side. The wrapper kind resolves to a
+  // wrapper CRD by convention (e.g. "revision" -> Revision, keyed on revision_uid)
+  //  and the wrapped base resource lives at spec.content — which is exactly where
+  // each index path resolves. Every listed wrapper mirrors the full base index set (1:1).
+  repeated string revisioned_in = 103;
 }
 
 // An annotation for CRD list message

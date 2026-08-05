@@ -2,7 +2,108 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.7.0] - 2026-08-03
+
+
+### Bug Fixes
+
+
+- **docs:** Correct double-suffix branding in README and examples (#1596)
+
+
+- **ingester:** Soft-delete metadata-storage row on kubectl delete for non-opted-in kinds (#1585)
+
+
+- **ci:** Changelog.yml CR_PAT token + stop full-history CHANGELOG.md regeneration (#1599)
+
+
+- **ci:** Nightly.yml npm/helm jobs no longer hardcode stale base version 0.3.0 (#1617)
+
+
+- **storage/mysql:** Validate OrderBy.Field identifier before SQL interpolation (#1616)
+
+
+- **sandbox:** Pin Grafana image to 13.1.1 instead of :latest (CVE-2026-31789) (#1623)
+
+
+- **build:** Bump pinned Node.js 24.14.1 -> 24.18.0 (Wiz-reported CVEs) (#1621)
+
+
+- **uniflow:** Propagate namespace to Ray cluster spec (#1605)
+
+
+### CI/CD
+
+
+- **integration-test:** Trigger only from Nightly Build (#1613)
+
+
+### Documentation
+
+
+- Refresh governance files and issue templates (#1579)
+
+
+- Add missing libomp macOS prerequisite to getting-started guide (#1253)
+
+
+- Update CHANGELOG.md for v0.7.0-rc.1 (#1659)
+
+
+### Features
+
+
+- **trainer:** Add pluggable ExperimentStore for auto-resume (PR 4) (#1571)
+
+
+- **python:** Add server-side --dry-run to apply, create, pipeline run, pipelinerun kill (#1591)
+
+
+- **python:** Additional_columns + filter_field_map hooks on CRD (#1588)
+
+
+- **python:** Framework -r/--root and -R/--recursive on apply+create (#1590)
+
+
+- **python:** --owner and --type filters + OWNER/TYPE columns on pipeline get (#1618)
+
+
+- **python:** --actor and --revision filters + REVISION/USER/ENVIRONMENT/STATE columns on pipeline_run get (#1619)
+
+
+- **python:** Retry + round_robin service_config on mactl gRPC channels (#1615)
+
+
+- **python:** --pipeline/--model/--deployment/--owner filters + 3 columns on revision get (#1620)
+
+
+- **core:** Expose mutationName in success operations resolver context (#1646)
+
+
+- **core:** Set mutationKey on useStudioMutation for MutationCache integration (#1647)
+
+
+### Miscellaneous
+
+
+- Update hero subtitle to "Now open source." (#1606)
+
+
+- Merge back release/v0.6 to main (#1597)
+
+
+- Bind k3d port-publishes to loopback instead of 0.0.0.0 (#1592)
+
+
+- Fix site title, meta description, and favicon for search results (#1624)
+
+
+- Bump version to 0.7.0-rc.1 (#1657)
+
+
+- Release 0.7.0 (#1666)
+
+## [0.6.0] - 2026-07-27
 
 
 ### Bug Fixes
@@ -23,6 +124,9 @@ All notable changes to this project will be documented in this file.
 - **rayjob:** Right-size submitter pod instead of cloning the head (#1562)
 
 
+- **ci:** Changelog.yml CR_PAT token + stop full-history CHANGELOG.md regeneration (cherry-pick #1599) (#1602)
+
+
 ### Documentation
 
 
@@ -33,6 +137,9 @@ All notable changes to this project will be documented in this file.
 
 
 - Standardize branding to "Michelangelo AI" across all docs (#1575)
+
+
+- Update CHANGELOG.md for v0.6.0-rc.1 (#1600)
 
 
 ### Features
@@ -83,29 +190,14 @@ All notable changes to this project will be documented in this file.
 - Bump version to 0.6.0-rc.1 (#1595)
 
 
+- Release 0.6.0 (#1607)
+
+
 ### Refactoring
 
 
 - **core:** Split public API from primitives entrypoint (#1526)
 
-### Added
-
-- `ExperimentStore` protocol and `FsspecExperimentStore` default in
-  `michelangelo.lib.trainer.torch.pytorch_lightning`, giving `LightningTrainer`
-  an opt-in auto-resume capability. Set
-  `LightningTrainerParam(experiment_store=FsspecExperimentStore())` and a
-  `RunConfig(name=..., storage_path=...)`; on rank 0 the trainer records the
-  run's experiment directory in a JSON marker at
-  `{storage_path}/.michelangelo_resume/{run_name}.json`, and a re-run with the
-  same identity restores from it when it holds a restorable checkpoint
-  (validated via `TorchTrainer.can_restore()`). Defaults to `None` (no tracking,
-  no resume); bring your own `ExperimentStore` for other backends.
-
-### Fixed
-
-- Ray tasks now create Michelangelo `RayCluster` and `RayJob` resources in
-  `MA_NAMESPACE`; workflows without `MA_NAMESPACE` continue using `default`,
-  and downstream KubeRay compute-resource placement is unchanged.
 
 ## [0.5.0] - 2026-07-20
 

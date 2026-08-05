@@ -112,7 +112,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} Michelangelo.`,
+      copyright: `Copyright © ${new Date().getFullYear()} Michelangelo AI.`,
     },
     prism: {
       theme: prismThemes.github,
