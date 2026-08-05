@@ -115,10 +115,21 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/integration-test
 
       - name: Wait for worker to connect to Cadence
+        # `kubectl logs deployment/X` already scopes to the current pod's own
+        # log history (Sync sandbox recreates this pod every run), so no
+        # --since window is needed -- and a fixed one is actively harmful:
+        # "Started Activity Worker" is a one-time startup log, and if the
+        # preceding steps (API CRUD/MySQL tests) take longer than usual, the
+        # gap between the worker's real startup and this step's first poll
+        # can exceed a short --since window before the first grep even runs,
+        # guaranteeing all 30 retries burn out on a worker that actually
+        # connected instantly. Confirmed directly on the runner: worker
+        # logged "Started Activity Worker" ~1s after pod start, yet this step
+        # still spent the full 150s in a run where earlier steps ran long.
         run: |
           echo "Waiting for worker to establish Cadence connection..."
           for i in $(seq 1 30); do
-            if kubectl logs deployment/michelangelo-worker --since=120s 2>/dev/null \
+            if kubectl logs deployment/michelangelo-worker 2>/dev/null \
                 | grep -q "Started Activity Worker"; then
               echo "Worker connected to Cadence."
               exit 0
