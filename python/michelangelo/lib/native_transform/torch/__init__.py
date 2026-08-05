@@ -27,8 +27,14 @@ from michelangelo.lib.native_transform.torch.base_layers import (
 from michelangelo.lib.native_transform.torch.id_hash_tokenizer import (
     IDHashTokenizer,
 )
+from michelangelo.lib.native_transform.torch.stats_layers import (
+    Bucketization,
+    MinMax,
+    Normalization,
+)
 
 __all__ = [
+    "Bucketization",
     "CaseWhen",
     "Cast",
     "Ceil",
@@ -41,6 +47,8 @@ __all__ = [
     "IDHashTokenizer",
     "IdentityTransform",
     "LogTransform",
+    "MinMax",
+    "Normalization",
     "PadOrCrop1D",
     "Scale",
     "Stack",

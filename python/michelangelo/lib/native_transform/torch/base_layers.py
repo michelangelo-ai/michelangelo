@@ -7,8 +7,12 @@ uses :func:`~michelangelo.lib.native_transform.torch.utils.format_inputs` /
 :func:`~michelangelo.lib.native_transform.torch.utils.format_outputs` to map its
 declared input/output columns to and from a single stacked tensor.
 
-This module provides the foundation (stateless, elementwise) layers. Structural,
-fitted-statistics, and tokenizer layers are added in follow-up modules.
+This module provides the foundation (stateless, elementwise) layers, plus
+structural layers (``Tile``, ``PadOrCrop1D``, ``Clip``, ``Scale``, ``CaseWhen``,
+``Compare``, ``TensorColFillNone``, etc.). Fitted-statistics layers (``MinMax``,
+``Normalization``, ``Bucketization``) live in
+:mod:`~michelangelo.lib.native_transform.torch.stats_layers`; tokenizer layers
+are added in a follow-up module.
 """
 
 from __future__ import annotations
