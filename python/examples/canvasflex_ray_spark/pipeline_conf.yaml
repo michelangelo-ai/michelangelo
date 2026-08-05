@@ -73,5 +73,14 @@ task_configs:
               disk_size: 4Gi
               gpu: 0
               gpu_sku: ""
+          instances: 1
+        worker:
+          pod:
+            resource:
+              cpu: 1
+              memory: 1Gi
+              disk_size: 4Gi
+              gpu: 0
+              gpu_sku: ""
           min_instances: 0
           max_instances: 0

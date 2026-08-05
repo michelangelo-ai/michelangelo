@@ -128,11 +128,11 @@ def evaluate(config: EvaluateConfig, rows: list) -> dict:
         worker_memory="1Gi",
         worker_disk="4Gi",
         worker_gpu=0,
-        worker_instances=0,
+        worker_instances=1,
     )
 )
 def summarize(config: SummarizeConfig, metrics: dict) -> dict:
-    """Optional head-only Ray task: tag metrics with the experiment name."""
+    """Optional Ray task: tag metrics with the experiment name."""
     summary = dict(metrics)
     summary["experiment_name"] = config.experiment_name
     print("summarize: summary", summary)

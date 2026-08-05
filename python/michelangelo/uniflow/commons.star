@@ -68,6 +68,9 @@ def resource_dict(cpu, memory, disk = None, gpu = None, gpu_sku = ""):
         "memory": memory,
     }
     if disk:
+        # Key consumed by the SparkJob spec (Go side maps DiskSize to the
+        # pod's ephemeral-storage); not a valid raw k8s resource name, so
+        # the ray path must not forward it into pod resources.
         res["diskSize"] = disk
     if gpu:
         res["gpu"] = gpu
