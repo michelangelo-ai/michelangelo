@@ -159,7 +159,16 @@ func (this *ShadowSpec) Validate(prefix string) error {
 				return err
 			}
 		}
-		if v.GetNanos() <= -1e9 || v.GetNanos() >= 1e9 {
+		const (
+			durationMaxNanos   = 999999999
+			durationMinNanos   = -999999999
+			durationMaxSeconds = 315576000000
+			durationMinSeconds = -315576000000
+		)
+		if v.GetSeconds() < durationMinSeconds || v.GetSeconds() > durationMaxSeconds {
+			return status.Error(codes.InvalidArgument, prefix+n+" "+"seconds out of range")
+		}
+		if v.GetNanos() < durationMinNanos || v.GetNanos() > durationMaxNanos {
 			return status.Error(codes.InvalidArgument, prefix+n+" "+"nanos out of range")
 		}
 		if (v.GetSeconds() < 0 && v.GetNanos() > 0) || (v.GetSeconds() > 0 && v.GetNanos() < 0) {

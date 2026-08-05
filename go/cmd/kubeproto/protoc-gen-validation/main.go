@@ -45,9 +45,22 @@ var validateMsg = `
 
 // validateDurationStructural is emitted unconditionally for every google.protobuf.Duration
 // field, regardless of whether a bound annotation is present, since a structurally invalid
-// Duration (out-of-range nanos, or seconds/nanos with mismatched signs) is never meaningful.
+// Duration (out-of-range seconds/nanos, or seconds/nanos with mismatched signs) is never
+// meaningful. Bounds match the google.protobuf.Duration spec
+// (https://protobuf.dev/reference/protobuf/google.protobuf/#duration). Declared as local
+// constants scoped to this field's block, since multiple .proto files sharing a Go package
+// each emit this snippet independently and package-level constants would collide.
 var validateDurationStructural = `
-		if v.GetNanos() <= -1e9 || v.GetNanos() >= 1e9 {
+		const (
+			durationMaxNanos   = 999999999
+			durationMinNanos   = -999999999
+			durationMaxSeconds = 315576000000
+			durationMinSeconds = -315576000000
+		)
+		if v.GetSeconds() < durationMinSeconds || v.GetSeconds() > durationMaxSeconds {
+			return status.Error(codes.InvalidArgument, prefix + n + " " + "seconds out of range")
+		}
+		if v.GetNanos() < durationMinNanos || v.GetNanos() > durationMaxNanos {
 			return status.Error(codes.InvalidArgument, prefix + n + " " + "nanos out of range")
 		}
 		if (v.GetSeconds() < 0 && v.GetNanos() > 0) || (v.GetSeconds() > 0 && v.GetNanos() < 0) {
