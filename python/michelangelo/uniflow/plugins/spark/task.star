@@ -1,5 +1,5 @@
 load("@plugin", "atexit", "json", "os", "spark", "time", "workflow")
-load("../../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "DEFAULT_RETRY_ATTEMPTS", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_pythonpath", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "process_terminated_job", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
+load("../../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "DEFAULT_RETRY_ATTEMPTS", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_canvas_task_config", "get_pythonpath", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "process_terminated_job", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 SPARK_ENV = {
     "PYTHONPATH": get_pythonpath(),
@@ -99,6 +99,31 @@ def spark_task(
         _executor_gpu = int(_executor_gpu)
         _executor_instances = int(_executor_instances)
 
+        # Apply job_specs overrides when the task was called with a CanvasFlex
+        # TaskConfig envelope. job_specs wins over defaults and env overrides.
+        canvas_config = get_canvas_task_config(*args, **kwargs)
+        if canvas_config != None:
+            if canvas_config.get("retry_attempts") != None:
+                _retry_attempts = int(canvas_config["retry_attempts"])
+
+            job_specs = canvas_config.get("job_specs")
+            spark_job_spec = job_specs.get("spark") if job_specs != None else None
+            if spark_job_spec != None:
+                driver_res = spark_job_spec.get("driver", {}).get("pod", {}).get("resource", {})
+                _driver_cpu = int(driver_res.get("cpu", _driver_cpu))
+                _driver_memory = driver_res.get("memory", _driver_memory)
+                _driver_disk = driver_res.get("disk_size", _driver_disk)
+                _driver_gpu = int(driver_res.get("gpu", _driver_gpu))
+
+                executor_spec = spark_job_spec.get("executor")
+                if executor_spec != None:
+                    executor_res = executor_spec.get("pod", {}).get("resource", {})
+                    _executor_cpu = int(executor_res.get("cpu", _executor_cpu))
+                    _executor_memory = executor_res.get("memory", _executor_memory)
+                    _executor_disk = executor_res.get("disk_size", _executor_disk)
+                    _executor_gpu = int(executor_res.get("gpu", _executor_gpu))
+                    _executor_instances = int(executor_spec.get("instances", _executor_instances))
+
         result_url = get_result_url()
         _args = json.dumps(args) if args else "[]"
         _kwargs = json.dumps(kwargs) if kwargs else "{}"
@@ -125,7 +150,7 @@ def spark_task(
             executor_instances = _executor_instances,
         )
 
-        total_retry_attempt = retry_attempts + 1
+        total_retry_attempt = _retry_attempts + 1
         for retry_attempt_id in range(1, total_retry_attempt + 1):
             job_state, terminated_job = execute_spark_task(
                 namespace = namespace,

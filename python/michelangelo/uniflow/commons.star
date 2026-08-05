@@ -75,6 +75,26 @@ def resource_dict(cpu, memory, disk = None, gpu = None, gpu_sku = ""):
         res["gpu_sku"] = gpu_sku
     return res
 
+# Returns the CanvasFlex TaskConfig envelope from a task invocation, or None.
+# The envelope arrives here as a plain dict (workflow kwargs are JSON-decoded
+# into Starlark values) that keeps the __class__ marker added when the config
+# was serialized with the UniflowCodec context.
+def get_canvas_task_config(*args, **kwargs):
+    config = None
+    if "config" in kwargs:
+        config = kwargs["config"]
+    elif len(args) >= 1:
+        config = args[0]
+
+    if type(config) != "dict":
+        return None
+
+    cls = config.get("__class__", "")
+    if type(cls) == "string" and cls.startswith("michelangelo.") and cls.endswith(".TaskConfig"):
+        return config
+
+    return None
+
 def report_progress(task_path, task_name, task_log = "", task_message = "", task_state = "", start_time = "", end_time = "", output = "", retry_attempt_id = "", first_activity_id = "", activity_id = "", input = ""):
     if type(retry_attempt_id) != "str":
         retry_attempt_id = str(retry_attempt_id)

@@ -1,5 +1,6 @@
 from typing import Any, Optional
 
+from michelangelo.canvas.lib.shared.json_data.field import field
 from michelangelo.canvas.lib.shared.json_data.json_data import JSONData
 
 from .job_specs import JobSpecs
@@ -26,6 +27,7 @@ class TaskConfig(JSONData):
     task_function: str
     config: Any
     job_specs: Optional[JobSpecs]
+    retry_attempts: Optional[int] = field(default=None, ge=0)
 
 
 class WorkflowConfig(JSONData):
