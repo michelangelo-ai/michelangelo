@@ -58,6 +58,18 @@ class ModelPluginConfig:
             unique name is generated automatically when ``None``.
         description: Optional human-readable description stored in the
             registry alongside the model version.
+        kind: Optional prediction task the model performs, e.g.
+            ``ModelKind.REGRESSION`` from
+            ``michelangelo.lib.model_manager.constants``. Forwarded as a
+            dedicated ``kind`` argument to ``register_model()`` (not folded
+            into ``labels``), so registries that support it can surface it
+            as a first-class, indexed field (e.g. a "Type" column).
+
+            Example::
+
+                from michelangelo.lib.model_manager.constants import ModelKind
+                cfg = ModelPluginConfig(model_name="clf", kind=ModelKind.REGRESSION)
+
         labels: Indexed, filterable string key-value pairs forwarded to the
             registry at registration time (e.g.
             ``{"owner": "ml-platform", "training_framework": "xgboost"}``).
@@ -118,6 +130,7 @@ class ModelPluginConfig:
 
     model_name: str | None = None
     description: str | None = None
+    kind: str | None = None
     labels: dict[str, str] = field(default_factory=dict)
     run_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)

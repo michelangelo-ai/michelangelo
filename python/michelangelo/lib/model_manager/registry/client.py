@@ -34,6 +34,9 @@ class RegisteredModel:
             (e.g. Triton config + weights). Use this to load the model onto
             a model server for inference. ``None`` when not applicable or
             not exposed by the registry.
+        kind: The prediction task the model performs (e.g.
+            ``ModelKind.REGRESSION``). Mirrors the ``kind`` parameter passed
+            to ``register_model()``. ``None`` when not set.
         labels: Indexed, filterable string key-value pairs stored with the
             registration (e.g. ``{"training_framework": "xgboost"}``).
             Mirrors the ``labels`` parameter passed to ``register_model()``.
@@ -59,6 +62,7 @@ class RegisteredModel:
     registry_uri: str
     artifact_uri: str | None = None
     deployable_artifact_uri: str | None = None
+    kind: str | None = None
     labels: dict[str, str] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -92,6 +96,7 @@ class ModelRegistryClient(ABC):
                 artifact_uri: str,
                 deployable_artifact_uri: str | None = None,
                 description: str | None = None,
+                kind: str | None = None,
                 schema: dict[str, Any] | None = None,
                 labels: Mapping[str, str] | None = None,
                 metadata: Mapping[str, Any] | None = None,
@@ -102,6 +107,7 @@ class ModelRegistryClient(ABC):
                     version=version,
                     registry_uri=f"memory://{name}/{version}",
                     artifact_uri=artifact_uri,
+                    kind=kind,
                     labels=dict(labels or {}),
                     metadata=dict(metadata or {}),
                 )
@@ -128,6 +134,7 @@ class ModelRegistryClient(ABC):
         artifact_uri: str,
         deployable_artifact_uri: str | None = None,
         description: str | None = None,
+        kind: str | None = None,
         schema: dict[str, Any] | None = None,
         labels: Mapping[str, str] | None = None,
         metadata: Mapping[str, Any] | None = None,
@@ -146,6 +153,12 @@ class ModelRegistryClient(ABC):
                 ``None`` means the raw artifact is also used for serving.
             description: Optional human-readable description stored alongside
                 the model version in the registry.
+            kind: Optional prediction task the model performs, e.g.
+                ``ModelKind.REGRESSION`` from
+                ``michelangelo.lib.model_manager.constants``. Surfaced as a
+                dedicated, indexed field by registries that support it (e.g.
+                a "Type" column in a registry UI) rather than folded into
+                ``labels``.
             schema: Optional model input/output schema.
 
                 Implementations that do not support a native schema field
@@ -173,7 +186,7 @@ class ModelRegistryClient(ABC):
         Returns:
             A ``RegisteredModel`` describing the created registration,
             including the registry-assigned ``version``, ``registry_uri``,
-            ``labels``, and ``metadata``.
+            ``kind``, ``labels``, and ``metadata``.
 
         Raises:
             IOError: If the registry cannot be reached.
@@ -229,6 +242,7 @@ class InMemoryRegistryClient(ModelRegistryClient):
         artifact_uri: str,
         deployable_artifact_uri: str | None = None,
         description: str | None = None,
+        kind: str | None = None,
         schema: dict[str, Any] | None = None,
         labels: Mapping[str, str] | None = None,
         metadata: Mapping[str, Any] | None = None,
@@ -241,6 +255,7 @@ class InMemoryRegistryClient(ModelRegistryClient):
             registry_uri=f"memory://{name}/{version_num}",
             artifact_uri=artifact_uri,
             deployable_artifact_uri=deployable_artifact_uri,
+            kind=kind,
             labels=dict(labels or {}),
             metadata=dict(metadata or {}),
         )

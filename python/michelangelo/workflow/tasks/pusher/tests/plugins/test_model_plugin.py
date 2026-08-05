@@ -65,6 +65,7 @@ def _plugin(
     registry: MagicMock | None = None,
     labels: dict | None = None,
     description: str | None = None,
+    kind: str | None = None,
     run_id: str | None = None,
     metadata: dict | None = None,
 ) -> ModelPusherPlugin:
@@ -74,6 +75,7 @@ def _plugin(
             model_name=model_name,
             labels=labels or {},
             description=description,
+            kind=kind,
             run_id=run_id,
             metadata=metadata or {},
         ),
@@ -217,6 +219,20 @@ class TestModelPusherPluginExecute(TestCase):
         _plugin(model_name="m", registry=registry).execute()
         call_kwargs = registry.register_model.call_args.kwargs
         self.assertIsNone(call_kwargs["description"])
+
+    def test_kind_forwarded_to_register_model(self):
+        """It passes config.kind to register_model(kind=...)."""
+        registry = _mock_registry(name="m")
+        _plugin(model_name="m", registry=registry, kind="regression").execute()
+        call_kwargs = registry.register_model.call_args.kwargs
+        self.assertEqual(call_kwargs["kind"], "regression")
+
+    def test_kind_none_when_not_set(self):
+        """It forwards kind=None when config.kind is not set."""
+        registry = _mock_registry(name="m")
+        _plugin(model_name="m", registry=registry).execute()
+        call_kwargs = registry.register_model.call_args.kwargs
+        self.assertIsNone(call_kwargs["kind"])
 
     def test_labels_merges_model_metadata_and_config_labels(self):
         """It merges ModelMetadata.to_registry_dict() with config.labels."""
