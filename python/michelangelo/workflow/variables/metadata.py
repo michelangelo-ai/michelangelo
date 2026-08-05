@@ -11,13 +11,13 @@ if TYPE_CHECKING:
     from michelangelo.lib.model_manager.schema import ModelSchema
 
 
-TRAINING_FRAMEWORK_CUSTOM: str = "custom"
+TRAINING_FRAMEWORK_CUSTOM = "custom"
 """Training framework identifier for user-defined ``CustomModel`` subclasses."""
 
-TRAINING_FRAMEWORK_PYTORCH: str = "pytorch"
+TRAINING_FRAMEWORK_PYTORCH = "pytorch"
 """Training framework identifier for plain ``torch.nn.Module`` models."""
 
-TRAINING_FRAMEWORK_LIGHTNING: str = "lightning"
+TRAINING_FRAMEWORK_LIGHTNING = "lightning"
 """Training framework identifier for ``pytorch_lightning.LightningModule`` models."""
 
 
