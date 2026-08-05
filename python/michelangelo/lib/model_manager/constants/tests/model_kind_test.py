@@ -16,3 +16,6 @@ class ModelKindTest(TestCase):
         self.assertEqual(
             ModelKind.MULTICLASS_CLASSIFICATION, "multiclass-classification"
         )
+        self.assertEqual(ModelKind.LLM_COMPLETION, "llm-completion")
+        self.assertEqual(ModelKind.LLM_CHAT_COMPLETION, "llm-chat-completion")
+        self.assertEqual(ModelKind.LLM_EMBEDDING, "llm-embedding")
