@@ -17,6 +17,8 @@ import torch.nn as nn
 from michelangelo.lib.artifact_manager.storage_backend import LocalStorageBackend
 from michelangelo.lib.model_manager.constants import StorageType
 from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
+from michelangelo.lib.model_manager.schema.feature_schema import FeatureSchema
+from michelangelo.lib.model_manager.schema.feature_schema_item import FeatureSchemaItem
 from michelangelo.workflow.schema.assembler import (
     TabularAssemblerConfig,
     TorchAssemblerConfig,
@@ -26,9 +28,10 @@ from michelangelo.workflow.tasks.tabular_assembler.torch.assembler import (
 )
 from michelangelo.workflow.variables.metadata import (
     TRAINING_FRAMEWORK_PYTORCH,
+    FeaturePackageMetadata,
     ModelMetadata,
 )
-from michelangelo.workflow.variables.types import ModelArtifact
+from michelangelo.workflow.variables.types import FeaturePackageArtifact, ModelArtifact
 
 _ASSEMBLER_MODULE = "michelangelo.workflow.tasks.tabular_assembler.torch.assembler"
 
@@ -349,6 +352,94 @@ class TorchAssemblerTest(_LocalBackendTestCase):
                 storage_backend=self.storage_backend,
             )
         self.assertIn("native-transform", str(ctx.exception))
+
+
+class FeaturePackageFusionTest(_LocalBackendTestCase):
+    """Tests for ``torch_assembler``'s optional ``feature_package`` fusion."""
+
+    def _make_raw_model(self):
+        sample_data = [{"input": np.array([[1.0, 2.0]])}]
+        return ModelArtifact(
+            path=self._upload_raw_model_source(),
+            metadata=ModelMetadata(
+                model_class="test.SimpleTorchModel",
+                training_framework=TRAINING_FRAMEWORK_PYTORCH,
+                _schema=BytesIO(pickle.dumps(_make_schema())),
+                _sample_data=BytesIO(pickle.dumps(sample_data)),
+            ),
+        )
+
+    def _upload_raw_model_source(self, contents: bytes = b"weights") -> str:
+        src = os.path.join(tempfile.mkdtemp(dir=self._tmp.name), "model.pt")
+        with open(src, "wb") as f:
+            f.write(contents)
+        return self.storage_backend.upload(src, f"sources/{os.path.basename(src)}")
+
+    @patch(f"{_ASSEMBLER_MODULE}.TorchTritonPackager.create_model_package")
+    @patch(f"{_ASSEMBLER_MODULE}.TorchTritonPackager.create_raw_model_package")
+    def test_none_feature_package_leaves_e2e_schema_matching_model_schema(
+        self, mock_create_raw, mock_create_model
+    ):
+        """No ``feature_package`` -> e2e_schema falls back to the model's own schema."""
+        mock_create_model.side_effect = _fake_create_package("deployable")
+        mock_create_raw.side_effect = _fake_create_package("raw")
+        raw_model = self._make_raw_model()
+
+        assembled = torch_assembler(
+            TabularAssemblerConfig(), raw_model, storage_backend=self.storage_backend
+        )
+
+        self.assertEqual(
+            assembled.deployable_model.metadata.e2e_schema, raw_model.metadata.schema
+        )
+        self.assertIsNone(assembled.feature_package)
+
+    @patch(f"{_ASSEMBLER_MODULE}.TorchTritonPackager.create_model_package")
+    @patch(f"{_ASSEMBLER_MODULE}.TorchTritonPackager.create_raw_model_package")
+    def test_feature_package_is_fused_into_deployable_e2e_schema(
+        self, mock_create_raw, mock_create_model
+    ):
+        """A supplied ``feature_package`` is fused into the deployable's e2e fields."""
+        mock_create_model.side_effect = _fake_create_package("deployable")
+        mock_create_raw.side_effect = _fake_create_package("raw")
+        raw_model = self._make_raw_model()
+        feature_package = FeaturePackageArtifact(
+            path="features",
+            metadata=FeaturePackageMetadata(
+                _schema=BytesIO(
+                    pickle.dumps(
+                        FeatureSchema(
+                            input_schema=[
+                                FeatureSchemaItem(
+                                    name="raw_feature",
+                                    data_type=DataType.FLOAT,
+                                    shape=[1],
+                                ),
+                            ],
+                        )
+                    )
+                ),
+                _sample_data=BytesIO(pickle.dumps([{"raw_feature": 1.0}])),
+            ),
+        )
+
+        assembled = torch_assembler(
+            TabularAssemblerConfig(),
+            raw_model,
+            feature_package=feature_package,
+            storage_backend=self.storage_backend,
+        )
+
+        e2e_schema = assembled.deployable_model.metadata.e2e_schema
+        self.assertEqual(
+            sorted(item.name for item in e2e_schema.input_schema),
+            ["input", "raw_feature"],
+        )
+        e2e_sample_data = assembled.deployable_model.metadata.e2e_sample_data
+        self.assertEqual(e2e_sample_data[0]["raw_feature"], 1.0)
+        self.assertIs(assembled.feature_package, feature_package)
+        # Raw model metadata is unaffected by feature-package fusion.
+        self.assertIsNone(assembled.raw_model.metadata.e2e_schema)
 
 
 def _native_tx_schema() -> ModelSchema:

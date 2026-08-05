@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from michelangelo.lib.model_manager.schema.feature_schema import FeatureSchema
 from michelangelo.workflow.variables._private.utils.serialization import (
     retrieve_object,
     save_object,
@@ -106,12 +107,23 @@ class ModelMetadata:
             model class via ``model_class(**hyperparameters)``. Has a
             setter: assigning a dict pickles it into ``_hyperparameters``
             for you.
+        _e2e_schema: Serialised end-to-end schema produced by fusing a
+            ``FeaturePackageArtifact``'s schema into this model's own
+            ``schema`` during assembly, for the same
+            live-object-crossing-a-task-boundary reason as ``_schema``. Use
+            the ``e2e_schema`` property to read it back. Not included in
+            ``repr``.
+        _e2e_sample_data: Serialised end-to-end sample data produced the
+            same way as ``_e2e_schema``. Use the ``e2e_sample_data``
+            property to read it back. Not included in ``repr``.
 
     Warning:
         The ``_schema``, ``_sample_data``, ``_transform_spec``,
-        ``_feature_stats``, and ``_hyperparameters`` fields are unpickled on
-        read (``schema``, ``sample_data``, ``transform_spec``,
-        ``feature_stats``, ``hyperparameters`` properties). Unpickling
+        ``_feature_stats``, ``_hyperparameters``, ``_e2e_schema``, and
+        ``_e2e_sample_data`` fields are unpickled on read (``schema``,
+        ``sample_data``, ``transform_spec``, ``feature_stats``,
+        ``hyperparameters``, ``e2e_schema``, ``e2e_sample_data``
+        properties). Unpickling
         executes arbitrary code embedded in the payload, so only construct
         ``ModelMetadata`` from a trusted source (e.g. your own workflow task
         output), never from unvalidated external input.
@@ -135,6 +147,8 @@ class ModelMetadata:
     _transform_spec: BytesIO | None = field(default=None, repr=False)
     _feature_stats: BytesIO | None = field(default=None, repr=False)
     _hyperparameters: BytesIO | None = field(default=None, repr=False)
+    _e2e_schema: BytesIO | None = field(default=None, repr=False)
+    _e2e_sample_data: BytesIO | None = field(default=None, repr=False)
 
     @property
     def schema(self) -> ModelSchema | None:
@@ -213,6 +227,31 @@ class ModelMetadata:
     def hyperparameters(self, value: dict[str, Any] | None) -> None:
         self._hyperparameters = save_object(value)
 
+    @property
+    def e2e_schema(self) -> ModelSchema | None:
+        """End-to-end schema, lazily unpickled from ``_e2e_schema``.
+
+        Set when a feature package is fused into this model during assembly
+        (see ``fuse_e2e_schema``); read-only for the same reason ``schema``
+        is, via the same ``_schema``-backing pattern.
+
+        Returns:
+            The unpickled ``ModelSchema``, or ``None`` if ``_e2e_schema`` is unset.
+        """
+        return retrieve_object(self._e2e_schema)
+
+    @property
+    def e2e_sample_data(self) -> list[dict[str, Any]] | None:
+        """End-to-end sample data, lazily unpickled from ``_e2e_sample_data``.
+
+        Set when a feature package is fused into this model during assembly
+        (see ``build_e2e_sample_data``); read-only, mirroring ``sample_data``.
+
+        Returns:
+            The unpickled sample data, or ``None`` if ``_e2e_sample_data`` is unset.
+        """
+        return retrieve_object(self._e2e_sample_data)
+
     def to_registry_dict(self) -> dict[str, str]:
         """Return a flat string dict of public fields suitable for registry tags.
 
@@ -248,3 +287,52 @@ class ModelMetadata:
         if self.baseline_model_identifier is not None:
             result["baseline_model_identifier"] = self.baseline_model_identifier
         return result
+
+
+@dataclass
+class FeaturePackageMetadata:
+    """Typed metadata carried by a feature-package artifact.
+
+    A feature package describes the schema and sample data produced by a
+    feature-computation stage (e.g. a feature store lookup or a batch feature
+    pipeline) that precedes a model. Assemblers fuse this into the model's
+    own schema/sample data to produce the end-to-end serving contract; see
+    ``fuse_e2e_schema`` and ``build_e2e_sample_data``.
+
+    Attributes:
+        _schema: Serialised (pickled) ``FeatureSchema``, for the same
+            live-object-crossing-a-task-boundary reason as
+            ``ModelMetadata._schema``. Use the ``schema`` property to read it
+            back. Not included in ``repr``.
+        _sample_data: Serialised sample feature payload, for the same reason
+            ``_schema`` is serialised. Use the ``sample_data`` property to
+            read it back. Not included in ``repr``.
+
+    Warning:
+        The ``_schema`` and ``_sample_data`` fields are unpickled on read.
+        Unpickling executes arbitrary code embedded in the payload, so only
+        construct ``FeaturePackageMetadata`` from a trusted source, never
+        from unvalidated external input.
+    """
+
+    _schema: BytesIO | None = field(default=None, repr=False)
+    _sample_data: BytesIO | None = field(default=None, repr=False)
+
+    @property
+    def schema(self) -> FeatureSchema:
+        """Typed feature schema, lazily unpickled from ``_schema``.
+
+        Returns:
+            The unpickled ``FeatureSchema``, or an empty ``FeatureSchema()``
+            if ``_schema`` is unset.
+        """
+        return retrieve_object(self._schema) or FeatureSchema()
+
+    @property
+    def sample_data(self) -> list[dict[str, Any]] | None:
+        """Sample feature inputs, lazily unpickled from ``_sample_data``.
+
+        Returns:
+            The unpickled sample data, or ``None`` if ``_sample_data`` is unset.
+        """
+        return retrieve_object(self._sample_data)

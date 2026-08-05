@@ -7,54 +7,14 @@ and optional constructor arguments in ``0/skeleton.yaml``.
 
 from __future__ import annotations
 
-import contextlib
 import json
 import os
-import sys
 
 import torch
 import yaml
 
+from michelangelo.lib.model_manager._private.utils.loader_utils import import_model_class
 from michelangelo.lib.model_manager._private.utils.spec_utils.spec import instantiate
-
-
-@contextlib.contextmanager
-def _sys_path(directory: str):
-    """Temporarily prepend *directory* to ``sys.path``."""
-    sys.path.insert(0, directory)
-    try:
-        yield
-    finally:
-        with contextlib.suppress(ValueError):
-            sys.path.remove(directory)
-
-
-def _import_model_class(version_dir: str, model_class_str: str) -> type:
-    """Import *model_class_str* with *version_dir* on sys.path.
-
-    The version directory contains the serialized model class source and must
-    be on ``sys.path`` so the import succeeds inside the Triton serving
-    environment.
-
-    Args:
-        version_dir: Directory containing the serialized model source.
-        model_class_str: Fully qualified class name, e.g. ``my_pkg.MyModel``.
-
-    Returns:
-        The imported class.
-
-    Raises:
-        ValueError: If *model_class_str* is empty.
-        ImportError: If the class cannot be imported.
-    """
-    if not model_class_str:
-        raise ValueError("model_class.txt is empty")
-    module_def, _, class_name = model_class_str.rpartition(".")
-    with _sys_path(version_dir):
-        import importlib
-
-        module = importlib.import_module(module_def)
-    return getattr(module, class_name)
 
 
 def _load_skeleton(version_dir: str) -> dict:
@@ -113,7 +73,10 @@ def _load_torch_python_deployable_model(
     with open(model_class_path) as f:
         model_class_str = f.read().strip()
 
-    model_cls = _import_model_class(version_dir, model_class_str)
+    if not model_class_str:
+        raise ValueError(f"model_class.txt is empty in {version_dir}")
+
+    model_cls = import_model_class(version_dir, model_class_str)
     skeleton = _load_skeleton(version_dir)
 
     if "_target_" in skeleton:

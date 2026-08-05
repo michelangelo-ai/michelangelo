@@ -18,7 +18,11 @@ from michelangelo.workflow.variables.metadata import (
     TRAINING_FRAMEWORK_LIGHTNING,
     TRAINING_FRAMEWORK_PYTORCH,
 )
-from michelangelo.workflow.variables.types import AssembledModel, ModelArtifact
+from michelangelo.workflow.variables.types import (
+    AssembledModel,
+    FeaturePackageArtifact,
+    ModelArtifact,
+)
 
 if TYPE_CHECKING:
     from michelangelo.lib.artifact_manager.storage_backend import StorageBackend
@@ -31,6 +35,7 @@ def tabular_assembler(
     config: TabularAssemblerConfig,
     raw_model: ModelArtifact,
     native_transform_model: ModelArtifact | None = None,
+    feature_package: FeaturePackageArtifact | None = None,
     *,
     storage_backend: StorageBackend,
 ) -> AssembledModel:
@@ -51,6 +56,9 @@ def tabular_assembler(
         native_transform_model: Optional native-transform model preceding
             ``raw_model``. Passed through to the custom or PyTorch/Lightning
             assembler; ignored when the framework can't be resolved at all.
+        feature_package: Optional feature package preceding ``raw_model``.
+            Passed through identically to the custom or PyTorch/Lightning
+            assembler; ignored when the framework can't be resolved at all.
         storage_backend: Backend used to download source artifacts and upload
             produced packages. Required, keyword-only — this task boundary is
             an explicit injection point, not a place to silently default to
@@ -69,13 +77,26 @@ def tabular_assembler(
         or resolve_training_framework(config.model_class) == TRAINING_FRAMEWORK_CUSTOM
     ):
         return custom_assembler(
-            config, raw_model, native_transform_model, storage_backend=storage_backend
+            config,
+            raw_model,
+            native_transform_model,
+            feature_package,
+            storage_backend=storage_backend,
         )
     if raw_model.metadata.training_framework == TRAINING_FRAMEWORK_PYTORCH:
-        return torch_assembler(config, raw_model, storage_backend=storage_backend)
+        return torch_assembler(
+            config,
+            raw_model,
+            feature_package=feature_package,
+            storage_backend=storage_backend,
+        )
     if raw_model.metadata.training_framework == TRAINING_FRAMEWORK_LIGHTNING:
         return torch_assembler(
-            config, raw_model, native_transform_model, storage_backend=storage_backend
+            config,
+            raw_model,
+            native_transform_model,
+            feature_package,
+            storage_backend=storage_backend,
         )
 
     return AssembledModel(

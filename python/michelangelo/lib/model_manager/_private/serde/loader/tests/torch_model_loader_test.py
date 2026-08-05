@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 from unittest import TestCase
+from unittest.mock import MagicMock, patch
 
 import torch
 import yaml
@@ -131,6 +132,38 @@ class LoadTorchRawModelTest(TestCase):
 
             model = load_torch_raw_model(tmp)
             self.assertIsInstance(model, torch.nn.Linear)
+
+    @patch(
+        "michelangelo.lib.model_manager._private.utils.loader_utils.class_importer."
+        "create_alternative_defs"
+    )
+    @patch("importlib.import_module")
+    def test_falls_back_through_all_import_tiers_on_collision(
+        self, mock_import_module, mock_create_alt
+    ):
+        """A model class whose module collides on sys.path still loads via
+        the AST-rewrite fallback tier (regression test for the missing
+        shared import_model_class fallback in this loader)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg = _LoaderPackage(tmp)
+            pkg.write_model_class("colliding_module.Linear")
+            pkg.write_skeleton({"in_features": 4, "out_features": 2})
+            pkg.write_weights(torch.nn.Linear(4, 2).state_dict())
+
+            mock_module = MagicMock()
+            mock_module.Linear = torch.nn.Linear
+            mock_create_alt.return_value = ("/tmp/alt", "package_abc123")
+            mock_import_module.side_effect = [
+                ImportError("not found"),
+                ImportError("still not found"),
+                mock_module,
+            ]
+
+            model = load_torch_raw_model(tmp)
+
+            self.assertIsInstance(model, torch.nn.Linear)
+            self.assertEqual(mock_import_module.call_count, 3)
+            mock_create_alt.assert_called_once()
 
     def test_non_dict_state_dict_raises_type_error(self):
         """A model file that is not a state_dict raises TypeError."""

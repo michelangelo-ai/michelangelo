@@ -18,6 +18,10 @@ from typing import TYPE_CHECKING
 from michelangelo.lib.model_manager.constants import StorageType
 from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
 from michelangelo.lib.shared.utils.model_fuser import fuse_model_schema
+from michelangelo.lib.shared.utils.model_metadata import (
+    build_e2e_sample_data,
+    fuse_e2e_schema,
+)
 from michelangelo.workflow.tasks.tabular_assembler._private.data.fuse import (
     fuse_sample_data,
 )
@@ -33,6 +37,7 @@ from michelangelo.workflow.variables.types import AssembledModel, ModelArtifact
 if TYPE_CHECKING:
     from michelangelo.lib.artifact_manager.storage_backend import StorageBackend
     from michelangelo.workflow.schema.assembler import TabularAssemblerConfig
+    from michelangelo.workflow.variables.types import FeaturePackageArtifact
 
 __all__ = ["custom_assembler"]
 
@@ -41,6 +46,7 @@ def custom_assembler(
     config: TabularAssemblerConfig,
     raw_model: ModelArtifact,
     native_transform_model: ModelArtifact | None = None,
+    feature_package: FeaturePackageArtifact | None = None,
     *,
     storage_backend: StorageBackend,
 ) -> AssembledModel:
@@ -67,6 +73,11 @@ def custom_assembler(
             ``combined_model/{predictor,native_transform}/`` and the servable
             schema and sample data are the fusion of the transform's and the
             predictor's.
+        feature_package: Optional feature package preceding ``raw_model``.
+            When set, its schema/sample data are fused into the deployable
+            model's ``e2e_schema``/``e2e_sample_data`` (see
+            ``lib.shared.utils.model_metadata``); the raw model is
+            unaffected.
         storage_backend: Backend used to download the source artifact(s) and
             upload the produced packages. Required — the assembler task
             boundary is where storage access must be explicit, unlike the
@@ -155,11 +166,23 @@ def custom_assembler(
         )
         raw_uri = storage_backend.upload(raw_model_package_path, f"{upload_prefix}/raw")
 
+    e2e_schema = fuse_e2e_schema(
+        feature_package.metadata.schema if feature_package else None,
+        model_schema,
+    )
+    e2e_sample_data = build_e2e_sample_data(
+        feature_package.metadata.sample_data if feature_package else None,
+        sample_data,
+        {item.name for item in e2e_schema.input_schema},
+    )
+
     deployable_metadata = ModelMetadata(
         deployable=True,
         assembled=True,
         _schema=io.BytesIO(pickle.dumps(model_schema)),
         _sample_data=io.BytesIO(pickle.dumps(sample_data)),
+        _e2e_schema=io.BytesIO(pickle.dumps(e2e_schema)),
+        _e2e_sample_data=io.BytesIO(pickle.dumps(e2e_sample_data)),
     )
     raw_metadata = ModelMetadata(
         deployable=False,
@@ -177,4 +200,5 @@ def custom_assembler(
         deployable_model=ModelArtifact(
             path=deployable_uri, metadata=deployable_metadata
         ),
+        feature_package=feature_package,
     )

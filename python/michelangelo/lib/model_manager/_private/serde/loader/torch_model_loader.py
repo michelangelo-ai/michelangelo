@@ -9,13 +9,13 @@ recursively instantiated at load time.
 
 from __future__ import annotations
 
-import importlib
 import json
 import os
 
 import torch
 import yaml
 
+from michelangelo.lib.model_manager._private.utils.loader_utils import import_model_class
 from michelangelo.lib.model_manager._private.utils.spec_utils.spec import instantiate
 
 
@@ -77,15 +77,8 @@ def load_torch_raw_model(package_path: str) -> torch.nn.Module:
     if not model_class:
         raise ValueError("model_class.txt is empty in the model package.")
 
-    module_def, _, class_name = model_class.rpartition(".")
-    if not module_def or not class_name:
-        raise ValueError(
-            f"Invalid model class definition {model_class}. "
-            "Please specify the full import path to the model class."
-        )
-
-    module = importlib.import_module(module_def)
-    model_cls = getattr(module, class_name)
+    defs_path = os.path.dirname(model_class_path)
+    model_cls = import_model_class(defs_path, model_class)
 
     skeleton = _load_skeleton(package_path)
     model = instantiate(skeleton) if "_target_" in skeleton else model_cls(**skeleton)
@@ -102,7 +95,7 @@ def load_torch_raw_model(package_path: str) -> torch.nn.Module:
         model.load_state_dict(state_dict)
     except Exception as err:
         raise RuntimeError(
-            f"Failed to load state_dict into {class_name}: {err}"
+            f"Failed to load state_dict into {model_cls.__name__}: {err}"
         ) from err
 
     model.eval()

@@ -17,7 +17,11 @@ from michelangelo.workflow.variables.metadata import (
     TRAINING_FRAMEWORK_PYTORCH,
     ModelMetadata,
 )
-from michelangelo.workflow.variables.types import AssembledModel, ModelArtifact
+from michelangelo.workflow.variables.types import (
+    AssembledModel,
+    FeaturePackageArtifact,
+    ModelArtifact,
+)
 
 if TYPE_CHECKING:
     from numpy import ndarray
@@ -76,7 +80,29 @@ class TabularAssemblerDispatchTest(unittest.TestCase):
 
         self.assertIs(result, mock_custom.return_value)
         mock_custom.assert_called_once_with(
-            config, raw_model, None, storage_backend=self.storage_backend
+            config, raw_model, None, None, storage_backend=self.storage_backend
+        )
+
+    @patch(f"{_TASK_MODULE}.custom_assembler")
+    def test_dispatches_to_custom_with_feature_package(self, mock_custom):
+        """A supplied ``feature_package`` is forwarded to ``custom_assembler``."""
+        mock_custom.return_value = self._sentinel_result()
+        config = TabularAssemblerConfig()
+        raw_model = ModelArtifact(
+            path="p",
+            metadata=ModelMetadata(training_framework=TRAINING_FRAMEWORK_CUSTOM),
+        )
+        feature_package = FeaturePackageArtifact(path="features")
+
+        tabular_assembler(
+            config,
+            raw_model,
+            feature_package=feature_package,
+            storage_backend=self.storage_backend,
+        )
+
+        mock_custom.assert_called_once_with(
+            config, raw_model, None, feature_package, storage_backend=self.storage_backend
         )
 
     @patch(f"{_TASK_MODULE}.custom_assembler")
@@ -100,7 +126,7 @@ class TabularAssemblerDispatchTest(unittest.TestCase):
         )
 
         mock_custom.assert_called_once_with(
-            config, raw_model, native_tx, storage_backend=self.storage_backend
+            config, raw_model, native_tx, None, storage_backend=self.storage_backend
         )
 
     def test_torch_dispatch_resolves_now_that_torch_assembler_exists(self):
@@ -133,7 +159,7 @@ class TabularAssemblerDispatchTest(unittest.TestCase):
 
         self.assertIs(result, mock_torch.return_value)
         mock_torch.assert_called_once_with(
-            config, raw_model, storage_backend=self.storage_backend
+            config, raw_model, feature_package=None, storage_backend=self.storage_backend
         )
 
         mock_torch.reset_mock()
@@ -150,7 +176,54 @@ class TabularAssemblerDispatchTest(unittest.TestCase):
 
         self.assertIs(result, mock_torch.return_value)
         mock_torch.assert_called_once_with(
-            config, raw_model, native_tx, storage_backend=self.storage_backend
+            config, raw_model, native_tx, None, storage_backend=self.storage_backend
+        )
+
+    @patch("michelangelo.workflow.tasks.tabular_assembler.task.torch_assembler")
+    def test_dispatches_to_torch_assembler_with_feature_package(self, mock_torch):
+        """A supplied ``feature_package`` is forwarded to ``torch_assembler``
+        for both the pytorch and lightning frameworks.
+        """
+        mock_torch.return_value = self._sentinel_result()
+        config = TabularAssemblerConfig()
+        feature_package = FeaturePackageArtifact(path="features")
+        raw_model = ModelArtifact(
+            path="p",
+            metadata=ModelMetadata(training_framework=TRAINING_FRAMEWORK_PYTORCH),
+        )
+
+        tabular_assembler(
+            config,
+            raw_model,
+            feature_package=feature_package,
+            storage_backend=self.storage_backend,
+        )
+
+        mock_torch.assert_called_once_with(
+            config,
+            raw_model,
+            feature_package=feature_package,
+            storage_backend=self.storage_backend,
+        )
+
+        mock_torch.reset_mock()
+        mock_torch.return_value = self._sentinel_result()
+        native_tx = ModelArtifact(path="tx")
+        raw_model = ModelArtifact(
+            path="p",
+            metadata=ModelMetadata(training_framework=TRAINING_FRAMEWORK_LIGHTNING),
+        )
+
+        tabular_assembler(
+            config,
+            raw_model,
+            native_tx,
+            feature_package,
+            storage_backend=self.storage_backend,
+        )
+
+        mock_torch.assert_called_once_with(
+            config, raw_model, native_tx, feature_package, storage_backend=self.storage_backend
         )
 
     def test_unsupported_framework_returns_empty_pair(self):

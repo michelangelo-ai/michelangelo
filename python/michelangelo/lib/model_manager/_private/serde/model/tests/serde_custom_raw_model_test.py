@@ -56,7 +56,7 @@ class CustomRawModelTest(TestCase):
                 sys.modules["__main__"].__dict__[key] = self.main_dict[key]
 
     @patch(
-        "michelangelo.lib.model_manager._private.serde.model.custom_raw_model._logger.info"
+        "michelangelo.lib.model_manager._private.utils.loader_utils.class_importer._logger.info"
     )
     def test_load_custom_raw_model_from_external(self, mock_logger_info):
         """Test loading custom raw model from external package."""
@@ -88,7 +88,7 @@ class CustomRawModelTest(TestCase):
         )
 
     @patch(
-        "michelangelo.lib.model_manager._private.serde.model.custom_raw_model._logger.info"
+        "michelangelo.lib.model_manager._private.utils.loader_utils.class_importer._logger.info"
     )
     def test_load_custom_raw_model_from_internal(self, mock_logger_info):
         """Test loading custom raw model from internal package."""
@@ -133,7 +133,7 @@ class CustomRawModelTest(TestCase):
             self.assertEqual(response, "test_feature")
 
     @patch(
-        "michelangelo.lib.model_manager._private.serde.model.custom_raw_model._logger.info"
+        "michelangelo.lib.model_manager._private.utils.loader_utils.class_importer._logger.info"
     )
     def test_load_custom_raw_model_from_external_with_conflicting_imports(
         self, mock_logger_info

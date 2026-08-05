@@ -20,6 +20,10 @@ from michelangelo.lib.model_manager.constants import StorageType, TritonBackendT
 from michelangelo.lib.model_manager.packager.torch_triton import TorchTritonPackager
 from michelangelo.lib.shared.utils.model_fuser import fuse as _fuse
 from michelangelo.lib.shared.utils.model_fuser import fuse_model_schema
+from michelangelo.lib.shared.utils.model_metadata import (
+    build_e2e_sample_data,
+    fuse_e2e_schema,
+)
 from michelangelo.workflow.tasks.tabular_assembler._private.schema import (
     reorder_output_schema,
 )
@@ -29,6 +33,7 @@ from michelangelo.workflow.variables.types import AssembledModel, ModelArtifact
 if TYPE_CHECKING:
     from michelangelo.lib.artifact_manager.storage_backend import StorageBackend
     from michelangelo.workflow.schema.assembler import TabularAssemblerConfig
+    from michelangelo.workflow.variables.types import FeaturePackageArtifact
 
 __all__ = ["torch_assembler"]
 
@@ -37,6 +42,7 @@ def torch_assembler(
     config: TabularAssemblerConfig,
     raw_model: ModelArtifact,
     native_transform_model: ModelArtifact | None = None,
+    feature_package: FeaturePackageArtifact | None = None,
     *,
     storage_backend: StorageBackend,
 ) -> AssembledModel:
@@ -65,6 +71,11 @@ def torch_assembler(
         native_transform_model: Optional native-transform model preceding
             ``raw_model``. When set, the predictor and transform are fused
             into a single package with a combined input/output schema.
+        feature_package: Optional feature package preceding ``raw_model``.
+            When set, its schema/sample data are fused into the deployable
+            model's ``e2e_schema``/``e2e_sample_data`` (see
+            ``lib.shared.utils.model_metadata``); the raw model is
+            unaffected.
         storage_backend: Backend used to download source artifacts and
             upload produced packages. Required, keyword-only — this task
             boundary is an explicit injection point, not a place to
@@ -218,11 +229,23 @@ def torch_assembler(
         )
         raw_uri = storage_backend.upload(raw_model_package_path, f"{upload_prefix}/raw")
 
+    e2e_schema = fuse_e2e_schema(
+        feature_package.metadata.schema if feature_package else None,
+        model_schema_for_package,
+    )
+    e2e_sample_data = build_e2e_sample_data(
+        feature_package.metadata.sample_data if feature_package else None,
+        packaged_sample_data,
+        {item.name for item in e2e_schema.input_schema},
+    )
+
     deployable_metadata = ModelMetadata(
         deployable=True,
         assembled=True,
         _schema=io.BytesIO(pickle.dumps(model_schema_for_package)),
         _sample_data=io.BytesIO(pickle.dumps(packaged_sample_data)),
+        _e2e_schema=io.BytesIO(pickle.dumps(e2e_schema)),
+        _e2e_sample_data=io.BytesIO(pickle.dumps(e2e_sample_data)),
     )
     raw_metadata = ModelMetadata(
         deployable=False,
@@ -241,4 +264,5 @@ def torch_assembler(
         deployable_model=ModelArtifact(
             path=deployable_uri, metadata=deployable_metadata
         ),
+        feature_package=feature_package,
     )

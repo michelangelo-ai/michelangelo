@@ -18,10 +18,12 @@ from michelangelo.workflow.variables.metadata import (
     TRAINING_FRAMEWORK_CUSTOM,
     TRAINING_FRAMEWORK_LIGHTNING,
     TRAINING_FRAMEWORK_PYTORCH,
+    FeaturePackageMetadata,
     ModelMetadata,
 )
 from michelangelo.workflow.variables.types import (
     AssembledModel,
+    FeaturePackageArtifact,
     ModelArtifact,
     PusherResult,
 )
@@ -145,6 +147,105 @@ class TestAssembledModel(TestCase):
         model = AssembledModel(raw_model=raw, deployable_model=deployable)
         self.assertEqual(model.raw_model.path, "/tmp/raw")
         self.assertEqual(model.deployable_model.path, "/tmp/deployable")
+
+    def test_feature_package_defaults_to_none(self):
+        """It defaults feature_package to None."""
+        model = AssembledModel(raw_model=self._make_artifact())
+        self.assertIsNone(model.feature_package)
+
+    def test_stores_feature_package(self):
+        """It stores an explicitly provided FeaturePackageArtifact."""
+        feature_package = FeaturePackageArtifact(path="/tmp/features")
+        model = AssembledModel(raw_model=self._make_artifact(), feature_package=feature_package)
+        self.assertIs(model.feature_package, feature_package)
+
+
+class TestFeaturePackageMetadata(TestCase):
+    """Tests for FeaturePackageMetadata."""
+
+    def test_schema_defaults_to_empty_feature_schema(self):
+        """schema defaults to an empty FeatureSchema, not None."""
+        from michelangelo.lib.model_manager.schema.feature_schema import FeatureSchema
+
+        meta = FeaturePackageMetadata()
+        self.assertEqual(meta.schema, FeatureSchema())
+
+    def test_sample_data_defaults_to_none(self):
+        """sample_data defaults to None when _sample_data is unset."""
+        meta = FeaturePackageMetadata()
+        self.assertIsNone(meta.sample_data)
+
+    def test_schema_and_sample_data_unpickle_from_bytesio(self):
+        """schema/sample_data are lazily unpickled from their BytesIO fields."""
+        import pickle
+        from io import BytesIO
+
+        from michelangelo.lib.model_manager.schema.feature_schema import FeatureSchema
+        from michelangelo.lib.model_manager.schema.feature_schema_item import FeatureSchemaItem
+
+        schema = FeatureSchema(input_schema=[FeatureSchemaItem(name="x")])
+        sample_data = [{"x": 1.0}]
+        meta = FeaturePackageMetadata(
+            _schema=BytesIO(pickle.dumps(schema)),
+            _sample_data=BytesIO(pickle.dumps(sample_data)),
+        )
+        self.assertEqual(meta.schema, schema)
+        self.assertEqual(meta.sample_data, sample_data)
+
+
+class TestFeaturePackageArtifact(TestCase):
+    """Tests for FeaturePackageArtifact."""
+
+    def test_stores_path(self):
+        """It stores the provided path."""
+        artifact = FeaturePackageArtifact(path="/tmp/features")
+        self.assertEqual(artifact.path, "/tmp/features")
+
+    def test_metadata_defaults_to_empty_feature_package_metadata(self):
+        """It defaults metadata to a FeaturePackageMetadata instance with defaults."""
+        artifact = FeaturePackageArtifact(path="/tmp/features")
+        self.assertIsInstance(artifact.metadata, FeaturePackageMetadata)
+        self.assertIsNone(artifact.metadata.sample_data)
+
+    def test_metadata_instances_are_independent(self):
+        """It creates a separate FeaturePackageMetadata instance for each artifact."""
+        import pickle
+        from io import BytesIO
+
+        a = FeaturePackageArtifact(path="/tmp/a")
+        b = FeaturePackageArtifact(path="/tmp/b")
+        a.metadata._sample_data = BytesIO(pickle.dumps([{"x": 1}]))
+        self.assertIsNone(b.metadata.sample_data)
+
+
+class TestModelMetadataE2eFields(TestCase):
+    """Tests for ModelMetadata's e2e_schema/e2e_sample_data properties."""
+
+    def test_e2e_schema_defaults_to_none(self):
+        """e2e_schema defaults to None when _e2e_schema is unset."""
+        meta = ModelMetadata()
+        self.assertIsNone(meta.e2e_schema)
+
+    def test_e2e_sample_data_defaults_to_none(self):
+        """e2e_sample_data defaults to None when _e2e_sample_data is unset."""
+        meta = ModelMetadata()
+        self.assertIsNone(meta.e2e_sample_data)
+
+    def test_e2e_schema_and_sample_data_unpickle_from_bytesio(self):
+        """e2e_schema/e2e_sample_data are lazily unpickled from their BytesIO fields."""
+        import pickle
+        from io import BytesIO
+
+        from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem
+
+        schema = ModelSchema(input_schema=[ModelSchemaItem(name="x")])
+        sample_data = [{"x": 1.0}]
+        meta = ModelMetadata(
+            _e2e_schema=BytesIO(pickle.dumps(schema)),
+            _e2e_sample_data=BytesIO(pickle.dumps(sample_data)),
+        )
+        self.assertEqual(meta.e2e_schema, schema)
+        self.assertEqual(meta.e2e_sample_data, sample_data)
 
 
 class TestPusherResult(TestCase):
