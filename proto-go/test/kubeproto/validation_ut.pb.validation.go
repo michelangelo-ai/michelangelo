@@ -828,3 +828,137 @@ func (this *ValidationMsg12) Validate(prefix string) error {
 func RegisterValidationMsg12ValidateExt(f func(*ValidationMsg12, string) error) {
 	validationMsg12ValidateExt = f
 }
+
+// validationMsg13ValidateExt is an extension hook for additional validation logic
+var validationMsg13ValidateExt func(*ValidationMsg13, string) error
+
+func (this *ValidationMsg13) Validate(prefix string) error {
+
+	{
+		v := this.GetF1()
+		n := `f1`
+		var i interface{}
+		if reflect.ValueOf(v).Kind() == reflect.Ptr {
+			i = reflect.ValueOf(v).Interface()
+			if reflect.ValueOf(v).IsNil() {
+				i = nil
+			}
+		} else {
+			i = reflect.ValueOf(&v).Interface()
+		}
+		validate, hasValidate := i.(interface{ Validate(string) error })
+		if hasValidate {
+			if err := validate.Validate(prefix + n + "."); err != nil {
+				return err
+			}
+		}
+		if v.GetNanos() <= -1e9 || v.GetNanos() >= 1e9 {
+			return status.Error(codes.InvalidArgument, prefix+n+" "+"nanos out of range")
+		}
+		if (v.GetSeconds() < 0 && v.GetNanos() > 0) || (v.GetSeconds() > 0 && v.GetNanos() < 0) {
+			return status.Error(codes.InvalidArgument, prefix+n+" "+"seconds and nanos must have the same sign")
+		}
+	}
+	{
+		v := this.GetF2()
+		n := `f2`
+		if !((float64(v.GetSeconds())+float64(v.GetNanos())/1e9) > 0 && (float64(v.GetSeconds())+float64(v.GetNanos())/1e9) <= 3600) {
+			return status.Error(codes.InvalidArgument, prefix+n+" "+"must be in the range (0,3600] seconds")
+		}
+		var i interface{}
+		if reflect.ValueOf(v).Kind() == reflect.Ptr {
+			i = reflect.ValueOf(v).Interface()
+			if reflect.ValueOf(v).IsNil() {
+				i = nil
+			}
+		} else {
+			i = reflect.ValueOf(&v).Interface()
+		}
+		validate, hasValidate := i.(interface{ Validate(string) error })
+		if hasValidate {
+			if err := validate.Validate(prefix + n + "."); err != nil {
+				return err
+			}
+		}
+		if v.GetNanos() <= -1e9 || v.GetNanos() >= 1e9 {
+			return status.Error(codes.InvalidArgument, prefix+n+" "+"nanos out of range")
+		}
+		if (v.GetSeconds() < 0 && v.GetNanos() > 0) || (v.GetSeconds() > 0 && v.GetNanos() < 0) {
+			return status.Error(codes.InvalidArgument, prefix+n+" "+"seconds and nanos must have the same sign")
+		}
+	}
+	{
+		v := this.GetF3()
+		for i, v := range v {
+			n := `f3[` + strconv.Itoa(i) + `]`
+
+			if !((float64(v.GetSeconds()) + float64(v.GetNanos())/1e9) <= 60) {
+				return status.Error(codes.InvalidArgument, prefix+n+" "+"must be <= 60 seconds")
+			}
+			var i interface{}
+			if reflect.ValueOf(v).Kind() == reflect.Ptr {
+				i = reflect.ValueOf(v).Interface()
+				if reflect.ValueOf(v).IsNil() {
+					i = nil
+				}
+			} else {
+				i = reflect.ValueOf(&v).Interface()
+			}
+			validate, hasValidate := i.(interface{ Validate(string) error })
+			if hasValidate {
+				if err := validate.Validate(prefix + n + "."); err != nil {
+					return err
+				}
+			}
+			if v.GetNanos() <= -1e9 || v.GetNanos() >= 1e9 {
+				return status.Error(codes.InvalidArgument, prefix+n+" "+"nanos out of range")
+			}
+			if (v.GetSeconds() < 0 && v.GetNanos() > 0) || (v.GetSeconds() > 0 && v.GetNanos() < 0) {
+				return status.Error(codes.InvalidArgument, prefix+n+" "+"seconds and nanos must have the same sign")
+			}
+		}
+	}
+	{
+		v := this.GetF4()
+		for k, v := range v {
+			n := fmt.Sprintf(`f4[%v]`, k)
+
+			if !((float64(v.GetSeconds()) + float64(v.GetNanos())/1e9) >= 1) {
+				return status.Error(codes.InvalidArgument, prefix+n+" "+"must be >= 1 seconds")
+			}
+			var i interface{}
+			if reflect.ValueOf(v).Kind() == reflect.Ptr {
+				i = reflect.ValueOf(v).Interface()
+				if reflect.ValueOf(v).IsNil() {
+					i = nil
+				}
+			} else {
+				i = reflect.ValueOf(&v).Interface()
+			}
+			validate, hasValidate := i.(interface{ Validate(string) error })
+			if hasValidate {
+				if err := validate.Validate(prefix + n + "."); err != nil {
+					return err
+				}
+			}
+			if v.GetNanos() <= -1e9 || v.GetNanos() >= 1e9 {
+				return status.Error(codes.InvalidArgument, prefix+n+" "+"nanos out of range")
+			}
+			if (v.GetSeconds() < 0 && v.GetNanos() > 0) || (v.GetSeconds() > 0 && v.GetNanos() < 0) {
+				return status.Error(codes.InvalidArgument, prefix+n+" "+"seconds and nanos must have the same sign")
+			}
+		}
+	}
+	// Call extension validation if registered
+	if validationMsg13ValidateExt != nil {
+		if err := validationMsg13ValidateExt(this, prefix); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RegisterValidationMsg13ValidateExt registers an extension validation function
+func RegisterValidationMsg13ValidateExt(f func(*ValidationMsg13, string) error) {
+	validationMsg13ValidateExt = f
+}

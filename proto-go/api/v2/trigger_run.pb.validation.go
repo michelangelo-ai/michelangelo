@@ -73,6 +73,12 @@ func (this *IntervalSchedule) Validate(prefix string) error {
 				return err
 			}
 		}
+		if v.GetNanos() <= -1e9 || v.GetNanos() >= 1e9 {
+			return status.Error(codes.InvalidArgument, prefix+n+" "+"nanos out of range")
+		}
+		if (v.GetSeconds() < 0 && v.GetNanos() > 0) || (v.GetSeconds() > 0 && v.GetNanos() < 0) {
+			return status.Error(codes.InvalidArgument, prefix+n+" "+"seconds and nanos must have the same sign")
+		}
 	}
 	// Call extension validation if registered
 	if intervalScheduleValidateExt != nil {
@@ -110,6 +116,12 @@ func (this *BatchPolicy) Validate(prefix string) error {
 			if err := validate.Validate(prefix + n + "."); err != nil {
 				return err
 			}
+		}
+		if v.GetNanos() <= -1e9 || v.GetNanos() >= 1e9 {
+			return status.Error(codes.InvalidArgument, prefix+n+" "+"nanos out of range")
+		}
+		if (v.GetSeconds() < 0 && v.GetNanos() > 0) || (v.GetSeconds() > 0 && v.GetNanos() < 0) {
+			return status.Error(codes.InvalidArgument, prefix+n+" "+"seconds and nanos must have the same sign")
 		}
 	}
 	// Call extension validation if registered
