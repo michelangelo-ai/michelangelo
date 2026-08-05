@@ -1,0 +1,77 @@
+workflow_function: examples.canvasflex_ray_spark.workflow.ray_spark_pipeline
+task_configs:
+  prepare_data:
+    config:
+      num_rows: 200
+      seed: 7
+    # Values below intentionally differ from the SparkTask decorator defaults
+    # (cpu 1 / 1G / 10G / 1 executor) to prove job_specs win at run time.
+    job_specs:
+      spark:
+        driver:
+          pod:
+            resource:
+              cpu: 2
+              memory: 2G
+              disk_size: 20G
+              gpu: 0
+              gpu_sku: ""
+        executor:
+          pod:
+            resource:
+              cpu: 2
+              memory: 2G
+              disk_size: 20G
+              gpu: 0
+              gpu_sku: ""
+          instances: 2
+  evaluate:
+    config:
+      threshold: 0.5
+      num_shards: 4
+    # Values below intentionally differ from the RayTask decorator defaults
+    # (cpu 1 / 1Gi / 4Gi / 1 worker) to prove job_specs win at run time.
+    job_specs:
+      ray:
+        head:
+          pod:
+            resource:
+              cpu: 2
+              memory: 2Gi
+              disk_size: 8Gi
+              gpu: 0
+              gpu_sku: ""
+        worker:
+          pod:
+            resource:
+              cpu: 2
+              memory: 2Gi
+              disk_size: 8Gi
+              gpu: 0
+              gpu_sku: ""
+          min_instances: 1
+          max_instances: 2
+  # Optional task: delete this whole entry and the workflow skips summarize.
+  summarize:
+    config:
+      experiment_name: canvasflex-ray-spark-demo
+    job_specs:
+      ray:
+        head:
+          pod:
+            resource:
+              cpu: 1
+              memory: 2Gi
+              disk_size: 8Gi
+              gpu: 0
+              gpu_sku: ""
+        worker:
+          pod:
+            resource:
+              cpu: 1
+              memory: 1Gi
+              disk_size: 4Gi
+              gpu: 0
+              gpu_sku: ""
+          min_instances: 0
+          max_instances: 0

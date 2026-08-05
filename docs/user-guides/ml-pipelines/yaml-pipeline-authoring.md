@@ -8,8 +8,9 @@ touching code.
 ## What you'll learn
 
 * How to write task and workflow functions for YAML-driven configuration
-* The `pipeline_conf.yaml` schema: `workflow_function`, `workflow_config`, and `task_configs`
-* How to run a YAML-configured pipeline locally
+* The `pipeline_conf.yaml` schema: `workflow_function`, `workflow_config`, `task_configs`, and
+  per-task `job_specs`
+* How to run a YAML-configured pipeline locally and remotely (distributed Ray/Spark)
 
 ## Prerequisites
 
@@ -73,9 +74,59 @@ task_configs:
   - `task_function` (optional) — fully qualified name of an alternate implementation to run in
     place of the workflow module's own `<task_name>` function. Omit this to use the task as defined
     in the workflow module.
-  - `job_specs` (optional) — resource sizing (see `michelangelo.canvas.schema.v2alpha1.job_specs`).
+  - `job_specs` (optional) — per-task resource sizing applied at run time (see
+    [Sizing distributed tasks with `job_specs`](#sizing-distributed-tasks-with-job_specs)).
+
+## Sizing distributed tasks with `job_specs`
+
+Tasks decorated with a distributed config (`RayTask`, `SparkTask`) carry resource defaults in
+code. A `job_specs` block on a task's `task_configs` entry overrides those at run time, so the
+same workflow code can be resized per pipeline without touching Python:
+
+```yaml
+task_configs:
+  prepare_data:               # a SparkTask-decorated task
+    config:
+      num_rows: 200
+    job_specs:
+      spark:
+        driver:
+          pod:
+            resource: {cpu: 2, memory: 2G, disk_size: 20G, gpu: 0, gpu_sku: ""}
+        executor:
+          pod:
+            resource: {cpu: 2, memory: 2G, disk_size: 20G, gpu: 0, gpu_sku: ""}
+          instances: 2
+  evaluate:                   # a RayTask-decorated task
+    config:
+      threshold: 0.5
+    job_specs:
+      ray:
+        head:
+          pod:
+            resource: {cpu: 2, memory: 2Gi, disk_size: 8Gi, gpu: 0, gpu_sku: ""}
+        worker:
+          pod:
+            resource: {cpu: 2, memory: 2Gi, disk_size: 8Gi, gpu: 0, gpu_sku: ""}
+          min_instances: 1
+          max_instances: 2
+```
+
+The shape follows `michelangelo.canvas.schema.v2alpha1.job_specs` — `job_specs.spark` with
+`driver`/`executor` pods, or `job_specs.ray` with `head`/`worker` pods. All `resource` fields
+are required: set `gpu: 0` and `gpu_sku: ""` explicitly for CPU-only tasks.
+
+Resource values are resolved at run time with increasing precedence:
+
+1. **Decorator defaults** — the `RayTask(...)`/`SparkTask(...)` values in code.
+2. **Environment overrides** — e.g. `RAY_OVERRIDE_HEAD_CPU.<task_path>`,
+   `SPARK_OVERRIDE_DRIVER_MEMORY.<task_path>`.
+3. **`job_specs`** — the YAML block above; wins over both.
 
 ## Running a YAML-configured pipeline
+
+Locally, in-process (task Python bodies run in this process — a `SparkTask` starts a local Spark
+session, a `RayTask` a local Ray runtime):
 
 ```python
 from michelangelo.canvas.pipeline.run import run_pipeline
@@ -83,7 +134,23 @@ from michelangelo.canvas.pipeline.run import run_pipeline
 result = run_pipeline("path/to/pipeline_conf.yaml")
 ```
 
-See `python/examples/canvasflex_pipeline/` for a complete runnable example, including its README.
+Remotely, through the same registration/remote-run machinery as Python-authored pipelines —
+`michelangelo.canvas.pipeline.register` resolves the YAML into a workflow call and hands it to
+the standard Uniflow execution context:
+
+```bash
+python -m michelangelo.canvas.pipeline.register path/to/pipeline_conf.yaml \
+    remote-run --image <IMAGE> --storage-url <STORAGE_URL> --yes
+```
+
+Everything after the YAML path is the standard Uniflow context CLI, so `local-run` and the other
+`remote-run` flags work unchanged. For mactl-based registration,
+`michelangelo.canvas.pipeline.register.register_pipeline(...)` wraps
+`michelangelo.uniflow.registration.register.register()` the same way.
+
+See `python/examples/canvasflex_pipeline/` for a minimal local-only example, and
+`python/examples/canvasflex_ray_spark/` for a full Spark + Ray pipeline with `job_specs`
+overrides and an optional task, including its README.
 
 ## Current scope
 
@@ -91,9 +158,9 @@ This is an initial phase of YAML pipeline authoring. Not yet supported (tracked 
 
 - `{{var.}}` / `{{task.}}` / `{{fn.}}` templating in `pipeline_conf.yaml` values.
 - A build-system macro for producing deployable pipeline artifacts from a `pipeline_conf.yaml`
-  directory — `run_pipeline` runs a pipeline in-process locally only, without the distributed
-  (Ray/Spark) environment setup that [Running Uniflow Pipelines](./running-uniflow.md) covers for
-  plain Python-authored pipelines.
+  directory.
+- `job_specs.spark.spark_conf` and `job_specs.spark.deps` are accepted by the schema but not yet
+  plumbed through to the Spark job submission.
 
 ## Next steps
 
