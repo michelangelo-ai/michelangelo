@@ -5,7 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from michelangelo.workflow.variables.metadata import FeaturePackageMetadata, ModelMetadata
+from michelangelo.workflow.variables.metadata import (
+    FeaturePackageMetadata,
+    ModelMetadata,
+)
 
 
 @dataclass
@@ -38,8 +41,7 @@ class ModelArtifact:
 
 @dataclass
 class FeaturePackageArtifact:
-    """A feature package describing the schema/sample data of a
-    feature-computation stage that precedes a model.
+    """A feature package preceding a model's feature-computation stage.
 
     Assemblers fuse this into the model's own schema/sample data to produce
     the end-to-end serving contract (see ``fuse_e2e_schema``,
@@ -51,10 +53,15 @@ class FeaturePackageArtifact:
             sample data.
 
     Example:
-        >>> from michelangelo.workflow.variables.metadata import FeaturePackageMetadata
-        >>> package = FeaturePackageArtifact(path="/tmp/features", metadata=FeaturePackageMetadata())
+        >>> from michelangelo.workflow.variables.metadata import (
+        ...     FeaturePackageMetadata,
+        ... )
+        >>> package = FeaturePackageArtifact(
+        ...     path="/tmp/features", metadata=FeaturePackageMetadata()
+        ... )
         >>> package.metadata.schema
-        FeatureSchema(input_schema=[], feature_store_features_schema=[], derived_features_schema=[])
+        FeatureSchema(input_schema=[], feature_store_features_schema=[],
+        derived_features_schema=[])
     """
 
     path: str

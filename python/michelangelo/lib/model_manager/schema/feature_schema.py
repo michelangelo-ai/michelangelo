@@ -7,8 +7,9 @@ from michelangelo.lib.model_manager.schema.feature_schema_item import FeatureSch
 
 @dataclass
 class FeatureSchema:
-    """Schema of the features produced by a feature-computation stage that
-    precedes a model, e.g. a feature store lookup or a batch feature pipeline.
+    """Schema of a feature-computation stage that precedes a model.
+
+    E.g. a feature store lookup or a batch feature pipeline.
 
     This is intentionally shaped like ModelSchema so that a feature schema's
     input/feature-store/derived features can be fused into a model's own

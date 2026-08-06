@@ -141,9 +141,11 @@ class LoadTorchRawModelTest(TestCase):
     def test_falls_back_through_all_import_tiers_on_collision(
         self, mock_import_module, mock_create_alt
     ):
-        """A model class whose module collides on sys.path still loads via
-        the AST-rewrite fallback tier (regression test for the missing
-        shared import_model_class fallback in this loader)."""
+        """A model class whose module collides on sys.path still loads.
+
+        Verifies the AST-rewrite fallback tier (regression test for the
+        missing shared import_model_class fallback in this loader).
+        """
         with tempfile.TemporaryDirectory() as tmp:
             pkg = _LoaderPackage(tmp)
             pkg.write_model_class("colliding_module.Linear")

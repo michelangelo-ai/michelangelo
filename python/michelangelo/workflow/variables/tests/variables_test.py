@@ -156,7 +156,9 @@ class TestAssembledModel(TestCase):
     def test_stores_feature_package(self):
         """It stores an explicitly provided FeaturePackageArtifact."""
         feature_package = FeaturePackageArtifact(path="/tmp/features")
-        model = AssembledModel(raw_model=self._make_artifact(), feature_package=feature_package)
+        model = AssembledModel(
+            raw_model=self._make_artifact(), feature_package=feature_package
+        )
         self.assertIs(model.feature_package, feature_package)
 
 
@@ -164,7 +166,7 @@ class TestFeaturePackageMetadata(TestCase):
     """Tests for FeaturePackageMetadata."""
 
     def test_schema_defaults_to_empty_feature_schema(self):
-        """schema defaults to an empty FeatureSchema, not None."""
+        """Schema defaults to an empty FeatureSchema, not None."""
         from michelangelo.lib.model_manager.schema.feature_schema import FeatureSchema
 
         meta = FeaturePackageMetadata()
@@ -181,7 +183,9 @@ class TestFeaturePackageMetadata(TestCase):
         from io import BytesIO
 
         from michelangelo.lib.model_manager.schema.feature_schema import FeatureSchema
-        from michelangelo.lib.model_manager.schema.feature_schema_item import FeatureSchemaItem
+        from michelangelo.lib.model_manager.schema.feature_schema_item import (
+            FeatureSchemaItem,
+        )
 
         schema = FeatureSchema(input_schema=[FeatureSchemaItem(name="x")])
         sample_data = [{"x": 1.0}]

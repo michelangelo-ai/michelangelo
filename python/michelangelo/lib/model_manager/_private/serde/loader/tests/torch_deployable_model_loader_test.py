@@ -107,9 +107,11 @@ class LoadTorchPythonDeployableModelTest(TestCase):
     def test_falls_back_through_all_import_tiers_on_collision(
         self, mock_import_module, mock_create_alt
     ):
-        """A model class whose module collides on sys.path still loads via
-        the AST-rewrite fallback tier (regression test for the missing
-        shared import_model_class fallback in this loader)."""
+        """A model class whose module collides on sys.path still loads.
+
+        Verifies the AST-rewrite fallback tier (regression test for the
+        missing shared import_model_class fallback in this loader).
+        """
         model = torch.nn.Linear(4, 2)
         state_dict = model.state_dict()
 

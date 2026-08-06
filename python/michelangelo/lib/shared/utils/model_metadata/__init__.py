@@ -1,4 +1,4 @@
-"""Fusion utilities for combining a feature-package schema/sample-data with a model's own."""
+"""Fusion utilities combining a feature-package schema/sample data with a model's."""
 
 # flake8: noqa:F401
 from .e2e_sample_data import build_e2e_sample_data

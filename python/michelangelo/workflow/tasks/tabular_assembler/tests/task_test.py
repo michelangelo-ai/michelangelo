@@ -102,7 +102,11 @@ class TabularAssemblerDispatchTest(unittest.TestCase):
         )
 
         mock_custom.assert_called_once_with(
-            config, raw_model, None, feature_package, storage_backend=self.storage_backend
+            config,
+            raw_model,
+            None,
+            feature_package,
+            storage_backend=self.storage_backend,
         )
 
     @patch(f"{_TASK_MODULE}.custom_assembler")
@@ -159,7 +163,10 @@ class TabularAssemblerDispatchTest(unittest.TestCase):
 
         self.assertIs(result, mock_torch.return_value)
         mock_torch.assert_called_once_with(
-            config, raw_model, feature_package=None, storage_backend=self.storage_backend
+            config,
+            raw_model,
+            feature_package=None,
+            storage_backend=self.storage_backend,
         )
 
         mock_torch.reset_mock()
@@ -181,8 +188,9 @@ class TabularAssemblerDispatchTest(unittest.TestCase):
 
     @patch("michelangelo.workflow.tasks.tabular_assembler.task.torch_assembler")
     def test_dispatches_to_torch_assembler_with_feature_package(self, mock_torch):
-        """A supplied ``feature_package`` is forwarded to ``torch_assembler``
-        for both the pytorch and lightning frameworks.
+        """A supplied ``feature_package`` is forwarded to ``torch_assembler``.
+
+        Covers both the pytorch and lightning frameworks.
         """
         mock_torch.return_value = self._sentinel_result()
         config = TabularAssemblerConfig()
@@ -223,7 +231,11 @@ class TabularAssemblerDispatchTest(unittest.TestCase):
         )
 
         mock_torch.assert_called_once_with(
-            config, raw_model, native_tx, feature_package, storage_backend=self.storage_backend
+            config,
+            raw_model,
+            native_tx,
+            feature_package,
+            storage_backend=self.storage_backend,
         )
 
     def test_unsupported_framework_returns_empty_pair(self):

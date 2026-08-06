@@ -1,30 +1,31 @@
-# ruff: noqa: I001
+"""Import a model class with fallback strategies to avoid name collisions."""
+
+from __future__ import annotations
+
 import ast
-import os
-import sys
-import logging
 import importlib
-import tempfile
+import logging
+import os
 import shutil
+import sys
+import tempfile
 import uuid
 
 _logger = logging.getLogger(__name__)
 
 
 def create_import_rewriter(defs_path: str, prefix: str) -> ast.NodeTransformer:
-    """
-    Create an import rewriter to modify the import names to avoid conflicts with other packages.
-    """
+    """Create an import rewriter that prefixes imports to avoid name conflicts."""
     imports = os.listdir(defs_path)
 
     class ImportRewriter(ast.NodeTransformer):
-        def visit_Import(self, node):
+        def visit_Import(self, node):  # noqa: N802
             for alias in node.names:
                 if any(alias.name.startswith(import_name) for import_name in imports):
                     alias.name = prefix + alias.name
             return node
 
-        def visit_ImportFrom(self, node):
+        def visit_ImportFrom(self, node):  # noqa: N802
             if any(node.module.startswith(import_name) for import_name in imports):
                 node.module = prefix + node.module
             return node
@@ -33,11 +34,10 @@ def create_import_rewriter(defs_path: str, prefix: str) -> ast.NodeTransformer:
 
 
 def create_alternative_defs(defs_path: str) -> tuple[str, str]:
-    """
-    Create an alternative defs path with a unique wrapper to guarantee no conflicts between the import names and other packages.
-    """
+    """Copy defs into a uniquely-named wrapper package with rewritten imports."""
     tmpdir = tempfile.mkdtemp()
-    # A unique wrapper to guarantee no conflicts between the import names and other packages
+    # A unique wrapper to guarantee no conflicts between the import names
+    # and other packages.
     wrapper_name = f"package_{uuid.uuid4().hex}"
     wrapper_dir = os.path.join(tmpdir, wrapper_name)
     os.makedirs(wrapper_dir)
@@ -58,8 +58,7 @@ def create_alternative_defs(defs_path: str) -> tuple[str, str]:
 
 
 def import_model_class(defs_path: str, model_class_str: str) -> type:
-    """
-    Import a model class by its fully qualified name with fallback logic.
+    """Import a model class by its fully qualified name with fallback logic.
 
     Tries three strategies in order:
     1. Direct import from system path
@@ -76,19 +75,26 @@ def import_model_class(defs_path: str, model_class_str: str) -> type:
     module_def, _, class_name = model_class_str.rpartition(".")
 
     if not module_def or not class_name:
-        raise ValueError(f"Invalid model class definition {model_class_str}. Please specify the full import path to the model class.")
+        raise ValueError(
+            f"Invalid model class definition {model_class_str}. Please specify "
+            "the full import path to the model class."
+        )
 
     try:
         module = importlib.import_module(module_def)
     except (ImportError, ModuleNotFoundError):
-        _logger.info(f"Module {module_def} not found in the system path. Trying to load from the model package.")
+        _logger.info(
+            f"Module {module_def} not found in the system path. Trying to load "
+            "from the model package."
+        )
         sys.path.append(os.path.abspath(defs_path))
         try:
             module = importlib.import_module(module_def)
         except (ImportError, ModuleNotFoundError):
             _logger.info(
-                f"Module {module_def} not found after appending the model package to the system path. "
-                "Trying to load model after modifying the import names."
+                f"Module {module_def} not found after appending the model package "
+                "to the system path. Trying to load model after modifying the "
+                "import names."
             )
             new_defs_path, wrapper_name = create_alternative_defs(defs_path)
             sys.path.append(new_defs_path)
@@ -97,4 +103,6 @@ def import_model_class(defs_path: str, model_class_str: str) -> type:
     try:
         return getattr(module, class_name)
     except AttributeError as err:
-        raise AttributeError(f"Class {class_name} not found in module {module_def}.") from err
+        raise AttributeError(
+            f"Class {class_name} not found in module {module_def}."
+        ) from err

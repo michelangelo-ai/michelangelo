@@ -1,32 +1,38 @@
-# ruff: noqa: I001
+"""Tests for ``...loader_utils.class_importer``."""
+
+from __future__ import annotations
+
 import ast
 import os
 import tempfile
 from unittest import TestCase
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from michelangelo.lib.model_manager._private.utils.loader_utils.class_importer import (
-    import_model_class,
     create_alternative_defs,
     create_import_rewriter,
+    import_model_class,
 )
 
 _MODULE = "michelangelo.lib.model_manager._private.utils.loader_utils.class_importer"
 
 
 class ImportModelClassTest(TestCase):
+    """Tests for ``import_model_class``."""
+
     def test_invalid_model_class_no_module(self):
-        """Test error when model_class_str has no module part"""
+        """Test error when model_class_str has no module part."""
         with self.assertRaisesRegex(ValueError, "Invalid model class definition"):
             import_model_class("/some/path", "MyModel")
 
     def test_invalid_model_class_empty(self):
-        """Test error when model_class_str is just a dot"""
+        """Test error when model_class_str is just a dot."""
         with self.assertRaisesRegex(ValueError, "Invalid model class definition"):
             import_model_class("/some/path", ".")
 
     @patch("importlib.import_module")
     def test_direct_import_success(self, mock_import_module):
-        """Test successful direct import on first try"""
+        """Test successful direct import on first try."""
         mock_module = MagicMock()
         mock_class = MagicMock()
         mock_module.MyModel = mock_class
@@ -39,7 +45,7 @@ class ImportModelClassTest(TestCase):
 
     @patch("importlib.import_module")
     def test_class_not_found_in_module(self, mock_import_module):
-        """Test error when class doesn't exist in the imported module"""
+        """Test error when class doesn't exist in the imported module."""
         mock_module = MagicMock(spec=[])
         mock_import_module.return_value = mock_module
 
@@ -48,7 +54,7 @@ class ImportModelClassTest(TestCase):
 
     @patch("importlib.import_module")
     def test_fallback_to_defs_path(self, mock_import_module):
-        """Test fallback to appending defs_path when direct import fails"""
+        """Test fallback to appending defs_path when direct import fails."""
         mock_module = MagicMock()
         mock_class = MagicMock()
         mock_module.MyModel = mock_class
@@ -65,7 +71,7 @@ class ImportModelClassTest(TestCase):
     @patch(f"{_MODULE}.create_alternative_defs")
     @patch("importlib.import_module")
     def test_fallback_to_alternative_defs(self, mock_import_module, mock_create_alt):
-        """Test fallback to create_alternative_defs when both direct imports fail"""
+        """Test fallback to create_alternative_defs when both direct imports fail."""
         mock_module = MagicMock()
         mock_class = MagicMock()
         mock_module.MyModel = mock_class
@@ -87,8 +93,10 @@ class ImportModelClassTest(TestCase):
 
 
 class CreateAlternativeDefsTest(TestCase):
+    """Tests for ``create_alternative_defs``."""
+
     def test_creates_proper_directory_structure(self):
-        """Test create_alternative_defs creates proper directory structure"""
+        """Test create_alternative_defs creates proper directory structure."""
         with tempfile.TemporaryDirectory() as temp_dir:
             defs_dir = os.path.join(temp_dir, "defs")
             os.makedirs(defs_dir)
@@ -105,7 +113,7 @@ class CreateAlternativeDefsTest(TestCase):
             self.assertTrue(os.path.exists(os.path.join(wrapper_dir, "sample.py")))
 
     def test_rewrites_imports_in_files(self):
-        """Test create_alternative_defs actually rewrites imports in copied files"""
+        """Test create_alternative_defs actually rewrites imports in copied files."""
         with tempfile.TemporaryDirectory() as temp_dir:
             defs_dir = os.path.join(temp_dir, "defs")
             os.makedirs(defs_dir)
@@ -126,8 +134,10 @@ class CreateAlternativeDefsTest(TestCase):
 
 
 class CreateImportRewriterTest(TestCase):
+    """Tests for ``create_import_rewriter``."""
+
     def test_handles_import_statement(self):
-        """Test create_import_rewriter handles import statements"""
+        """Test create_import_rewriter handles import statements."""
         with tempfile.TemporaryDirectory() as temp_dir:
             os.makedirs(os.path.join(temp_dir, "mymodule"))
 
@@ -141,7 +151,7 @@ class CreateImportRewriterTest(TestCase):
             self.assertIn("prefix.mymodule", modified_code)
 
     def test_handles_from_import_statement(self):
-        """Test create_import_rewriter handles from...import statements"""
+        """Test create_import_rewriter handles from...import statements."""
         with tempfile.TemporaryDirectory() as temp_dir:
             os.makedirs(os.path.join(temp_dir, "mymodule"))
 
@@ -155,7 +165,7 @@ class CreateImportRewriterTest(TestCase):
             self.assertIn("prefix.mymodule", modified_code)
 
     def test_preserves_non_matching_imports(self):
-        """Test create_import_rewriter doesn't modify non-matching imports"""
+        """Test create_import_rewriter doesn't modify non-matching imports."""
         with tempfile.TemporaryDirectory() as temp_dir:
             os.makedirs(os.path.join(temp_dir, "mymodule"))
 
@@ -170,7 +180,7 @@ class CreateImportRewriterTest(TestCase):
             self.assertNotIn("prefix.torch", modified_code)
 
     def test_handles_multiple_imports(self):
-        """Test create_import_rewriter handles multiple imports in same statement"""
+        """Test create_import_rewriter handles multiple imports in same statement."""
         with tempfile.TemporaryDirectory() as temp_dir:
             os.makedirs(os.path.join(temp_dir, "module1"))
             os.makedirs(os.path.join(temp_dir, "module2"))

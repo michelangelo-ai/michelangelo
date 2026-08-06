@@ -5,7 +5,9 @@ import os
 from michelangelo.lib.model_manager._private.serde.loader.custom_model_loader import (
     load_custom_model,
 )
-from michelangelo.lib.model_manager._private.utils.loader_utils import import_model_class
+from michelangelo.lib.model_manager._private.utils.loader_utils import (
+    import_model_class,
+)
 from michelangelo.lib.model_manager.interface.custom_model import Model
 
 

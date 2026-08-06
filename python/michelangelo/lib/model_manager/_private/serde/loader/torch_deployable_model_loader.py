@@ -13,7 +13,9 @@ import os
 import torch
 import yaml
 
-from michelangelo.lib.model_manager._private.utils.loader_utils import import_model_class
+from michelangelo.lib.model_manager._private.utils.loader_utils import (
+    import_model_class,
+)
 from michelangelo.lib.model_manager._private.utils.spec_utils.spec import instantiate
 
 

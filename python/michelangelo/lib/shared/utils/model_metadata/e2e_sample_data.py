@@ -8,9 +8,10 @@ def build_e2e_sample_data(
     model_sample_data: Optional[list[dict]],
     e2e_input_cols: set[str],
 ) -> list[dict]:
-    """Merge feature-package (raw) + model sample data, filtered to e2e input schema columns.
+    """Merge feature-package (raw) and model sample data into one e2e row.
 
-    When a key appears in both, feature_sample_data wins - it holds the raw, pre-derivation
+    The merged row is filtered to ``e2e_input_cols``. When a key appears in
+    both, ``feature_sample_data`` wins - it holds the raw, pre-derivation
     values that serving callers actually supply.
     """
     merged: dict = {}
