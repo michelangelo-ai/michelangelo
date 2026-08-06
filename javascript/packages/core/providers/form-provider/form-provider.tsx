@@ -6,9 +6,8 @@ import type { FormContextType } from './types';
 
 /**
  * @description
- * Provider component that allows consumers to register custom field renderers
- * and layout renderers. Custom renderers are checked before falling back to
- * built-in renderers.
+ * Provider component that allows consumers to register custom field renderers.
+ * Custom renderers are checked before falling back to built-in renderers.
  *
  * @example
  * ```tsx
@@ -16,11 +15,7 @@ import type { FormContextType } from './types';
  *   'hive-select': HiveSelectField,
  * };
  *
- * const layoutRenderers = {
- *   tabs: TabsLayoutRenderer,
- * };
- *
- * <FormProvider renderers={fieldRenderers} layouts={layoutRenderers}>
+ * <FormProvider renderers={fieldRenderers}>
  *   <ConfigDrivenForm config={formConfig} onSubmit={handleSubmit} />
  * </FormProvider>
  * ```
@@ -28,12 +23,8 @@ import type { FormContextType } from './types';
 export const FormProvider = ({
   children,
   renderers = {},
-  layouts = {},
 }: { children: React.ReactNode } & Partial<FormContextType>) => {
-  const contextValue = useMemo<FormContextType>(
-    () => ({ renderers, layouts }),
-    [renderers, layouts]
-  );
+  const contextValue = useMemo<FormContextType>(() => ({ renderers }), [renderers]);
 
   return <FormContext.Provider value={contextValue}>{children}</FormContext.Provider>;
 };

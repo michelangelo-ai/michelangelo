@@ -1,9 +1,9 @@
-import type { FieldRenderer, LayoutRenderer } from '#core/components/form/types/config-types';
+import type { FieldRenderer } from '#core/components/form/types/config-types';
 
 /**
  * @description
- * The form context provided to the application to extend built-in field and
- * layout renderers with custom ones. Custom renderers are checked first before
+ * The form context provided to the application to extend built-in field
+ * renderers with custom ones. Custom renderers are checked first before
  * falling back to built-in behavior.
  */
 export type FormContextType = {
@@ -22,20 +22,4 @@ export type FormContextType = {
    * ```
    */
   renderers: Record<string, FieldRenderer>;
-
-  /**
-   * @description
-   * Layout renderers registered at the application level. Checked before built-in
-   * layout types (group, row, grid), so consumers can add new layout types or
-   * override existing ones.
-   *
-   * @example
-   * ```tsx
-   * const layouts = {
-   *   tabs: TabsLayoutRenderer,
-   *   accordion: AccordionLayoutRenderer,
-   * };
-   * ```
-   */
-  layouts: Record<string, LayoutRenderer>;
 };

@@ -5,12 +5,13 @@ import { LayoutItemList } from './layout-item-list';
 
 import type { BuiltinLayoutConfig, FieldConfig } from '#core/components/form/types/config-types';
 
+/** Dispatches a built-in layout config to its corresponding layout component. */
 export function BuiltinLayoutRenderer({
   config,
   fields,
 }: {
   config: BuiltinLayoutConfig;
-  fields: Record<string, FieldConfig>;
+  fields: Record<string, FieldConfig | undefined>;
 }) {
   const renderChildren = <LayoutItemList items={config.items} fields={fields} />;
 

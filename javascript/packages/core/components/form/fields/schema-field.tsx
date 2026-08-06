@@ -2,6 +2,7 @@ import { useFieldRenderer } from '#core/components/form/hooks/use-field-renderer
 
 import type { FieldConfig } from '#core/components/form/types/config-types';
 
+/** Resolves and renders the field renderer for a given field path. */
 export function SchemaField({
   fieldPath,
   config,

@@ -3,12 +3,13 @@ import { LayoutItemRenderer } from './layout-item-renderer';
 
 import type { FieldConfig, LayoutItem } from '#core/components/form/types/config-types';
 
+/** Walks a layout tree, rendering bare strings as fields and objects as layout nodes. */
 export function LayoutItemList({
   items,
   fields,
 }: {
   items: LayoutItem[];
-  fields: Record<string, FieldConfig>;
+  fields: Record<string, FieldConfig | undefined>;
 }) {
   return (
     <>
