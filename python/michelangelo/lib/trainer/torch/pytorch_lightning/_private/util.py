@@ -68,7 +68,7 @@ _MAX_PROFILER_REPEAT = 3
 # Only ``pytorch`` is supported today — Michelangelo OSS is PyTorch-heavy, and
 # the other Lightning profilers (simple / advanced / xla) and a custom-class
 # escape hatch add config surface without a concrete user yet. The dict shape
-# (``{"pytorch": {...}, "upload_to_comet": ...}``) is kept as-is so adding a
+# (``{"pytorch": {...}, "upload_profiler_results": ...}``) is kept as-is so adding a
 # second backend later, as we expand to more platforms, is additive rather
 # than a breaking config change.
 _PROFILER_SHORTHANDS = ("pytorch",)
@@ -792,7 +792,7 @@ def _build_profiler(
             * A dict setting ``pytorch`` to a kwargs dict, handled by
               :func:`_build_pytorch_profiler`.
 
-            ``upload_to_comet`` is reserved metadata read by
+            ``upload_profiler_results`` is reserved metadata read by
             :func:`_resolve_profiler` and is never forwarded to a profiler
             constructor.
         steps_per_epoch: Estimated steps per epoch, used to derive or
@@ -877,7 +877,7 @@ def _resolve_profiler(
 
     Returns:
         A ``(profiler, profiler_logs_path, upload_results)`` tuple.
-        ``upload_results`` mirrors the config's ``upload_to_comet`` flag and
+        ``upload_results`` mirrors the config's ``upload_profiler_results`` flag and
         gates the post-``fit`` ``profiler_sink`` call; it defaults to ``True``
         so callers must opt *out* of exporting results.
     """
@@ -885,7 +885,7 @@ def _resolve_profiler(
         return None, "", False
 
     upload_results = (
-        profiler_config.get("upload_to_comet", True)
+        profiler_config.get("upload_profiler_results", True)
         if isinstance(profiler_config, dict)
         else True
     )
@@ -1337,7 +1337,7 @@ def _maybe_export_profiler_results(
         profiler_logs_path: Directory the profiler wrote its output to.
         logger: The resolved Lightning logger, forwarded to the sink so it can
             attach results to the active experiment.
-        upload_profiler_results: The config's ``upload_to_comet`` flag; when
+        upload_profiler_results: The config's ``upload_profiler_results`` flag; when
             ``False`` the sink is not called.
         profiler_sink: The user-supplied
             ``Callable[[Profiler, str, logger], None]``, or ``None``.

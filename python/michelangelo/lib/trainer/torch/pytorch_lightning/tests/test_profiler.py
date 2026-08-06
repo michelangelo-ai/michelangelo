@@ -339,7 +339,7 @@ class TestBuildProfiler:
     def test_no_profiler_selected_raises(self, in_tmp_cwd, patched_ray):
         """A dict that selects nothing is a user config error."""
         with pytest.raises(UserInputError, match="None were set"):
-            _build_profiler({"upload_to_comet": False})
+            _build_profiler({"upload_profiler_results": False})
 
     def test_multiple_profilers_selected_raises(self, in_tmp_cwd, patched_ray):
         """A dict that selects two profiler flavors is a user config error.
@@ -355,9 +355,11 @@ class TestBuildProfiler:
         ):
             _build_profiler({"pytorch": {}, "other": {}})
 
-    def test_upload_to_comet_is_not_a_profiler_selection(self, in_tmp_cwd, patched_ray):
-        """``upload_to_comet`` is metadata and never reaches a constructor."""
-        profiler, _ = _build_profiler({"pytorch": {}, "upload_to_comet": False})
+    def test_upload_profiler_results_is_not_a_profiler_selection(
+        self, in_tmp_cwd, patched_ray
+    ):
+        """``upload_profiler_results`` is metadata and never reaches a constructor."""
+        profiler, _ = _build_profiler({"pytorch": {}, "upload_profiler_results": False})
         assert isinstance(profiler, PyTorchProfiler)
 
     def test_invalid_shorthand_raises(self):
@@ -378,7 +380,7 @@ class TestBuildProfiler:
 
 
 class TestResolveProfiler:
-    """Config resolution, including the ``upload_to_comet`` opt-out."""
+    """Config resolution, including the ``upload_profiler_results`` opt-out."""
 
     def test_none_config_resolves_to_nothing(self):
         """No profiler config means no profiler and no export."""
@@ -397,9 +399,9 @@ class TestResolveProfiler:
         assert upload is True
 
     def test_upload_can_be_disabled(self, in_tmp_cwd, patched_ray):
-        """``upload_to_comet: False`` turns the export off."""
+        """``upload_profiler_results: False`` turns the export off."""
         _, _, upload = _resolve_profiler(
-            {"pytorch": {}, "upload_to_comet": False}, {}, 100, 8, 1, 0
+            {"pytorch": {}, "upload_profiler_results": False}, {}, 100, 8, 1, 0
         )
         assert upload is False
 
@@ -460,7 +462,7 @@ class TestMaybeExportProfilerResults:
         sink.assert_not_called()
 
     def test_not_called_when_upload_disabled(self, patched_ray):
-        """``upload_to_comet: False`` suppresses the sink."""
+        """``upload_profiler_results: False`` suppresses the sink."""
         sink = MagicMock(name="sink")
         _maybe_export_profiler_results(MagicMock(), "/logs", None, False, sink)
         sink.assert_not_called()
