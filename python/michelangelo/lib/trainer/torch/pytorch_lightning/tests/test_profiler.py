@@ -34,9 +34,11 @@ from michelangelo.lib.trainer.torch.pytorch_lightning._private.util import (  # 
     _compute_default_schedule,
     _compute_steps_per_epoch,
     _maybe_export_profiler_results,
+    _profiler_output,
     _resolve_profiler,
     _validate_profiler_schedule,
     comet_profiler_sink,
+    mlflow_profiler_sink,
 )
 
 _UTIL_MODULE = "michelangelo.lib.trainer.torch.pytorch_lightning._private.util"
@@ -545,3 +547,130 @@ class TestCometProfilerSink:
         """A non-Comet logger is skipped rather than crashing the run."""
         # object() has no `experiment` attribute; no exception is the assertion.
         comet_profiler_sink(MagicMock(spec=PyTorchProfiler), "/logs", object())
+
+
+# -----------------------------------------------------------------------------
+# _profiler_output
+# -----------------------------------------------------------------------------
+
+
+class TestProfilerOutput:
+    """Classification shared by both built-in sinks."""
+
+    def test_pytorch_profiler_classified_as_dir(self):
+        """``PyTorchProfiler`` output is classified as a single directory."""
+        result = _profiler_output(MagicMock(spec=PyTorchProfiler), "/logs")
+        assert result == ("dir", ["/logs"])
+
+    @pytest.mark.parametrize("spec", [SimpleProfiler, AdvancedProfiler])
+    def test_text_profiler_classified_as_files(self, spec, tmp_path):
+        """Text-summary profilers are classified as their ``.txt`` files."""
+        (tmp_path / "a.txt").write_text("a")
+        (tmp_path / "b.txt").write_text("b")
+        (tmp_path / "ignored.json").write_text("{}")
+
+        kind, paths = _profiler_output(MagicMock(spec=spec), str(tmp_path))
+
+        assert kind == "files"
+        assert {os.path.basename(p) for p in paths} == {"a.txt", "b.txt"}
+
+    def test_no_text_files_returns_none(self, tmp_path):
+        """An empty logs directory has nothing to classify."""
+        assert _profiler_output(MagicMock(spec=SimpleProfiler), str(tmp_path)) is None
+
+    def test_unsupported_profiler_returns_none(self):
+        """XLA and custom profilers have no supported export format."""
+        assert _profiler_output(MagicMock(spec=XLAProfiler), "/logs") is None
+
+
+# -----------------------------------------------------------------------------
+# mlflow_profiler_sink
+# -----------------------------------------------------------------------------
+
+
+class TestMlflowProfilerSink:
+    """MLflow upload behavior for each profiler flavor."""
+
+    def _logger(self):
+        logger = MagicMock(name="logger")
+        logger.run_id = "run-123"
+        return logger
+
+    def test_pytorch_traces_upload_as_directory(self):
+        """``PyTorchProfiler`` traces go up as a directory via ``log_artifacts``."""
+        logger = self._logger()
+        profiler = MagicMock(spec=PyTorchProfiler)
+
+        mlflow_profiler_sink(profiler, "/logs", logger)
+
+        logger.experiment.log_artifacts.assert_called_once_with(
+            "run-123", "/logs", artifact_path="profiler"
+        )
+        logger.experiment.log_artifact.assert_not_called()
+
+    def test_pytorch_upload_failure_is_swallowed(self):
+        """A failed directory upload is logged, not raised."""
+        logger = self._logger()
+        logger.experiment.log_artifacts.side_effect = RuntimeError("nope")
+
+        mlflow_profiler_sink(MagicMock(spec=PyTorchProfiler), "/logs", logger)
+
+    @pytest.mark.parametrize("spec", [SimpleProfiler, AdvancedProfiler])
+    def test_text_summaries_upload_per_file(self, spec, tmp_path):
+        """Text-summary profilers upload each ``.txt`` file individually."""
+        (tmp_path / "a.txt").write_text("a")
+        (tmp_path / "b.txt").write_text("b")
+        (tmp_path / "ignored.json").write_text("{}")
+        logger = self._logger()
+
+        mlflow_profiler_sink(MagicMock(spec=spec), str(tmp_path), logger)
+
+        uploaded = {
+            os.path.basename(call.args[1])
+            for call in logger.experiment.log_artifact.call_args_list
+        }
+        assert uploaded == {"a.txt", "b.txt"}
+        for call in logger.experiment.log_artifact.call_args_list:
+            assert call.args[0] == "run-123"
+            assert call.kwargs == {"artifact_path": "profiler"}
+        logger.experiment.log_artifacts.assert_not_called()
+
+    def test_no_text_files_is_noop(self, tmp_path):
+        """An empty logs directory uploads nothing."""
+        logger = self._logger()
+        mlflow_profiler_sink(MagicMock(spec=SimpleProfiler), str(tmp_path), logger)
+        logger.experiment.log_artifact.assert_not_called()
+
+    def test_asset_upload_failure_does_not_stop_remaining_files(self, tmp_path):
+        """One failed asset upload does not abort the rest."""
+        (tmp_path / "a.txt").write_text("a")
+        (tmp_path / "b.txt").write_text("b")
+        logger = self._logger()
+        logger.experiment.log_artifact.side_effect = [RuntimeError("nope"), None]
+
+        mlflow_profiler_sink(MagicMock(spec=SimpleProfiler), str(tmp_path), logger)
+
+        assert logger.experiment.log_artifact.call_count == 2
+
+    def test_unsupported_profiler_is_skipped(self):
+        """XLA and custom profilers have no supported upload format."""
+        logger = self._logger()
+
+        mlflow_profiler_sink(MagicMock(spec=XLAProfiler), "/logs", logger)
+
+        logger.experiment.log_artifact.assert_not_called()
+        logger.experiment.log_artifacts.assert_not_called()
+
+    def test_logger_without_experiment_is_skipped(self):
+        """A logger with no MLflow client is skipped rather than crashing the run."""
+        # object() has no `experiment`/`run_id` attribute; no exception is the assertion.
+        mlflow_profiler_sink(MagicMock(spec=PyTorchProfiler), "/logs", object())
+
+    def test_logger_without_run_id_is_skipped(self):
+        """A logger with a client but no run id is skipped."""
+        logger = MagicMock(name="logger")
+        logger.run_id = None
+
+        mlflow_profiler_sink(MagicMock(spec=PyTorchProfiler), "/logs", logger)
+
+        logger.experiment.log_artifacts.assert_not_called()
