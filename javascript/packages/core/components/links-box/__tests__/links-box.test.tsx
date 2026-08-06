@@ -8,6 +8,7 @@ describe('LinksBox', () => {
   it('renders links with name and url', () => {
     render(
       <LinksBox
+        title="Useful links"
         links={[
           { name: 'Dashboard', url: 'https://grafana.example.com/d/abc' },
           { name: 'Logs', url: 'https://logs.example.com/app' },
@@ -30,6 +31,7 @@ describe('LinksBox', () => {
   it('filters out links missing a name or url', () => {
     render(
       <LinksBox
+        title="Useful links"
         links={[
           { name: 'Valid', url: 'https://example.com' },
           { name: undefined, url: 'https://no-name.com' },
@@ -44,9 +46,22 @@ describe('LinksBox', () => {
     expect(screen.queryByText('no-name.com')).not.toBeInTheDocument();
   });
 
+  it('renders a custom title when provided', () => {
+    render(
+      <LinksBox
+        title="Related dashboards"
+        links={[{ name: 'Valid', url: 'https://example.com' }]}
+      />,
+      buildWrapper([getBaseProviderWrapper()])
+    );
+
+    expect(screen.getByText('Related dashboards')).toBeInTheDocument();
+    expect(screen.queryByText('Useful links')).not.toBeInTheDocument();
+  });
+
   it('renders an empty box when all links are incomplete', () => {
     render(
-      <LinksBox links={[{ name: undefined, url: undefined }]} />,
+      <LinksBox title="Useful links" links={[{ name: undefined, url: undefined }]} />,
       buildWrapper([getBaseProviderWrapper()])
     );
 

@@ -9,10 +9,10 @@ import type { LinksBoxProps } from './types';
  * url are skipped.
  */
 export function LinksBox(props: LinksBoxProps) {
-  const { links } = props;
+  const { links, title } = props;
   return (
-    <Box title="Useful links">
-      <Row record={{}} items={mapLinkConfigToColumnConfig(links)} />
+    <Box title={title}>
+      <Row items={mapLinkConfigToColumnConfig(links)} />
     </Box>
   );
 }
