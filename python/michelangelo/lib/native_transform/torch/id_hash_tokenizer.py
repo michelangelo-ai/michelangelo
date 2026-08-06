@@ -19,6 +19,12 @@ __all__ = ["IDHashTokenizer"]
 class IDHashTokenizer(nn.Module):
     """Map integer IDs to contiguous vocabulary indices.
 
+    TODO(https://github.com/michelangelo-ai/michelangelo/issues/1699): this
+    core is a reusable, general-purpose layer colocated here only because
+    ``native_transform`` is currently its sole consumer. Move it into a
+    standalone reusable-layers package if a second consumer needs it or when
+    another such layer is added.
+
     Maps arbitrary input integer values to new, contiguous integer indices based
     on a provided vocabulary. Values not found in the vocabulary are mapped to an
     unknown index, which is set to the size of the (deduplicated) vocabulary.

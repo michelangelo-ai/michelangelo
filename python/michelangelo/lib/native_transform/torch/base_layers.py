@@ -1330,6 +1330,11 @@ class Clip(TorchTransformBaseLayer):
 class IDHashTokenizer(TorchTransformBaseLayer):
     """Map integer IDs to contiguous vocabulary indices.
 
+    TODO(https://github.com/michelangelo-ai/michelangelo/issues/1699): the
+    core this wraps is colocated under ``native_transform`` only because it's
+    currently the sole consumer; move both into a standalone reusable-layers
+    package if that changes.
+
     Composes the vocabulary-lookup core in
     :class:`~michelangelo.lib.native_transform.torch.id_hash_tokenizer.IDHashTokenizer`
     into the ``dict[str, torch.Tensor]`` layer contract. Sentinel positions
