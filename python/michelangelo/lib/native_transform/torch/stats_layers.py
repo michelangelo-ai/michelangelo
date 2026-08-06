@@ -220,9 +220,10 @@ class Bucketization(TorchTransformBaseLayer):
 
     Sentinel positions from upstream ragged-batch collation (``NaN`` for float
     inputs, ``INT32_SENTINEL`` for integer inputs) are automatically detected
-    and preserved through bucketization (rewritten as ``INT32_SENTINEL`` in
-    the output) so downstream layers can distinguish padding from real,
-    bucketized data.
+    and preserved through bucketization, so downstream layers can distinguish
+    padding from real, bucketized data. The restored sentinel matches the
+    *output* dtype: ``NaN`` when the output is floating-point (even for
+    integer input), ``INT32_SENTINEL`` otherwise.
 
     Args:
         input_cols: Column names of the input tensors.
