@@ -144,9 +144,33 @@ python -m michelangelo.canvas.pipeline.register path/to/pipeline_conf.yaml \
 ```
 
 Everything after the YAML path is the standard Uniflow context CLI, so `local-run` and the other
-`remote-run` flags work unchanged. For mactl-based registration,
-`michelangelo.canvas.pipeline.register.register_pipeline(...)` wraps
-`michelangelo.uniflow.registration.register.register()` the same way.
+`remote-run` flags work unchanged.
+
+## Registering with `ma pipeline apply`
+
+Standard (YAML-authored) pipelines register through the same `ma pipeline apply` command as
+custom workflows — no per-pipeline scripts or build targets. Point the Pipeline resource's
+manifest at the `pipeline_conf.yaml`:
+
+```yaml
+apiVersion: michelangelo.api/v2
+kind: Pipeline
+metadata:
+  namespace: my-project        # the project (must exist: `ma project apply ...`)
+  name: my-pipeline
+  annotations:
+    michelangelo/uniflow-image: <IMAGE>   # task image used by pipeline runs
+spec:
+  type: PIPELINE_TYPE_TRAIN
+  manifest:
+    filePath: pipeline_conf.yaml   # resolved relative to this file
+```
+
+`ma pipeline apply -f pipeline.yaml` detects the `pipeline_conf.yaml` manifest, resolves it with
+the config loader, uploads the workflow tarball, and stores the Pipeline with its task configs —
+after which `ma pipeline_run apply` starts runs against it. See
+`python/examples/canvasflex_tabular_train/README.md` for a copy-paste walkthrough of every run
+mode.
 
 See `python/examples/canvasflex_tabular_train/` for a minimal tabular_train-style Spark + Ray
 pipeline with a YAML-configurable data source, `job_specs` overrides, and local (in-process) or

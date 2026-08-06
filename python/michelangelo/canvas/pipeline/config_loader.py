@@ -17,7 +17,7 @@ YAML shape is::
             head: {pod: {resource: {cpu: 4, memory: 8G, disk_size: 20G, gpu: 0}}}
             worker: {pod: {resource: {...}}, min_instances: 1, max_instances: 4}
 
-Resolution is annotation-driven, matching the internal CanvasFlex convention:
+Resolution is annotation-driven, matching the internal Michelangelo convention:
 the workflow function's own signature says whether it takes
 ``(workflow_config, task_configs)`` or just ``(task_configs)``, and each task
 function's ``config`` parameter's type annotation says which

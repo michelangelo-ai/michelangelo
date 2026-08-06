@@ -1,0 +1,17 @@
+apiVersion: michelangelo.api/v2
+kind: Pipeline
+metadata:
+  # ma-dev-test is the sandbox demo project every example pipeline uses
+  # (registered once from python/michelangelo/cli/sandbox/demo/project.yaml).
+  namespace: ma-dev-test
+  name: canvasflex-tabular-train
+  annotations:
+    # Image the task clusters run with (read by the pipeline run's
+    # image-build step). Build/import it per the README.
+    michelangelo/uniflow-image: docker.io/library/canvasflex-demo:latest
+spec:
+  type: PIPELINE_TYPE_TRAIN
+  manifest:
+    # For standard (YAML-authored) workflows the manifest is the
+    # pipeline_conf.yaml, resolved relative to this file.
+    filePath: pipeline_conf.yaml

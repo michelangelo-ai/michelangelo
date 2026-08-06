@@ -11,6 +11,7 @@ import json
 import logging
 import sys
 from pathlib import Path
+from typing import Optional, Union
 
 import yaml
 
@@ -20,6 +21,121 @@ from michelangelo.uniflow.registration.config_builder import ConfigBuilder
 from michelangelo.uniflow.registration.register import prepare_uniflow_input
 
 _logger = logging.getLogger(__name__)
+
+
+def find_pipeline_conf(config_file_path: str) -> Optional[Path]:
+    """Locate the ``pipeline_conf.yaml`` behind this registration, if any.
+
+    Standard (YAML-authored) pipelines are registered from a
+    ``pipeline_conf.yaml`` (top-level ``workflow_function``/``task_configs``
+    keys — see ``michelangelo.canvas.pipeline.config_loader``). Two accepted
+    shapes:
+
+    - ``config_file_path`` is itself a ``pipeline_conf.yaml``.
+    - ``config_file_path`` is a Pipeline CRD YAML whose
+      ``spec.manifest.filePath`` (or ``path``) names a ``.yaml``/``.yml``
+      file, resolved relative to the CRD file's directory and then the
+      current directory.
+
+    Args:
+        config_file_path: Path to the configuration file mactl handed us.
+
+    Returns:
+        Path to the ``pipeline_conf.yaml`` to register from, or None when
+        this registration should use the module-import discovery flow
+        (custom Python workflows) instead.
+    """
+    with open(config_file_path) as f:
+        raw = yaml.safe_load(f) or {}
+    if not isinstance(raw, dict):
+        return None
+    if "workflow_function" in raw:
+        return Path(config_file_path)
+
+    manifest = (raw.get("spec") or {}).get("manifest") or {}
+    manifest_path = manifest.get("filePath") or manifest.get("path")
+    if not manifest_path or not str(manifest_path).endswith((".yaml", ".yml")):
+        return None
+
+    path = Path(manifest_path)
+    if path.is_absolute():
+        candidates = [path]
+    else:
+        candidates = [
+            Path(config_file_path).resolve().parent / path,
+            Path.cwd() / path,
+        ]
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        with open(candidate) as f:
+            conf_raw = yaml.safe_load(f) or {}
+        if isinstance(conf_raw, dict) and "workflow_function" in conf_raw:
+            return candidate
+        return None
+    return None
+
+
+def register_yaml_pipeline(
+    pipeline_conf_path: Union[str, Path], args: argparse.Namespace
+) -> tuple[str, str]:
+    """Register a ``pipeline_conf.yaml`` pipeline and write mactl artifacts.
+
+    Builds and uploads the workflow tarball from the resolved workflow
+    function, then writes ``uniflow_input.txt`` in the YAML-pipeline manifest
+    shape: top-level ``task_configs`` (plus ``workflow_config`` when the
+    workflow takes one) and ``environ``. The pipeline-run controller keys on
+    ``task_configs`` to pass these to the workflow as positional args
+    (``extractWorkflowInputs`` in
+    ``go/components/pipelinerun/actors/executeworkflow.go``, which already
+    labels this the "Yaml based pipeline" case), so this shape — not the
+    ``args``/``kwargs`` shape of custom workflows — is the wire contract for
+    YAML pipelines.
+
+    Args:
+        pipeline_conf_path: Path to the ``pipeline_conf.yaml`` file.
+        args: Parsed CLI namespace (project, pipeline, output_dir,
+            storage_url, output_filename, environ).
+
+    Returns:
+        Tuple of (remote tarball path, workflow function name).
+    """
+    from michelangelo.canvas.pipeline.config_loader import load_pipeline_config
+    from michelangelo.canvas.pipeline.register import resolve_workflow_call
+    from michelangelo.uniflow.core.codec import encoder
+    from michelangelo.uniflow.registration.uniflow_tar import prepare_uniflow_tar
+
+    pipeline_config = load_pipeline_config(pipeline_conf_path)
+    # resolve_workflow_call binds task functions into the workflow module's
+    # globals; the kwargs it returns are keyed by the workflow's own parameter
+    # names, but the manifest content must use the fixed task_configs /
+    # workflow_config keys, so those are taken from the WorkflowConfig below.
+    fn, _ = resolve_workflow_call(pipeline_config)
+
+    remote_path = prepare_uniflow_tar(
+        project_name=args.project,
+        pipeline_name=args.pipeline,
+        output_dir=args.output_dir,
+        workflow_function=f"{fn.__module__}.{fn.__name__}",
+        workflow_function_obj=fn,
+        storage_base_url=args.storage_url,
+        output_filename=args.output_filename,
+    )
+
+    workflow_config = pipeline_config.workflow_config
+    payload = {
+        "task_configs": workflow_config.task_configs,
+        "environ": json.loads(args.environ) if args.environ else {},
+    }
+    if workflow_config.workflow_config is not None:
+        payload["workflow_config"] = workflow_config.workflow_config
+
+    inputs_path = Path(args.output_dir) / "uniflow_input.txt"
+    with open(inputs_path, "w") as f:
+        json.dump(payload, f, default=encoder.default, indent=2)
+    _logger.info("Wrote YAML-pipeline uniflow input to: %s", inputs_path)
+
+    return remote_path, fn.__name__
 
 
 def discover_workflow_from_config(config_file_path: str):
@@ -147,6 +263,27 @@ def main():
     logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
 
     try:
+        # Standard YAML pipelines (pipeline_conf.yaml) register through the
+        # canvas config loader; custom Python workflows keep the
+        # module-import discovery flow below.
+        pipeline_conf_path = find_pipeline_conf(args.config_file)
+        if pipeline_conf_path is not None:
+            _logger.info("Detected YAML pipeline configuration: %s", pipeline_conf_path)
+            remote_path, workflow_function_name = register_yaml_pipeline(
+                pipeline_conf_path, args
+            )
+
+            _logger.info("Registration completed successfully")
+            _logger.info("Remote tarball path: %s", remote_path)
+
+            success_file = Path(args.output_dir) / "registration_success.txt"
+            success_file.write_text(f"SUCCESS: {remote_path}")
+
+            function_name_file = Path(args.output_dir) / "workflow_function_name.txt"
+            function_name_file.write_text(workflow_function_name)
+            _logger.info("Wrote workflow function name: %s", workflow_function_name)
+            return
+
         # Read pipeline configuration to discover workflow function
         _logger.info("Reading pipeline configuration: %s", args.config_file)
         workflow_fn = discover_workflow_from_config(args.config_file)

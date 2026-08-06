@@ -436,13 +436,26 @@ def populate_pipeline_spec_with_workflow_inputs(
 
         # Create the inner struct for workflow inputs
         inner_struct = Struct()
-        inner_struct.update(
-            {
-                "args": [],
-                "environ": input_dict.get("environ", {}),
-                "kwargs": input_dict.get("kwargs", []),
-            }
-        )
+        if "task_configs" in input_dict:
+            # Standard YAML pipeline (pipeline_conf.yaml): the pipeline-run
+            # controller keys on a top-level task_configs entry (passed to
+            # the workflow as positional args), so the registration output
+            # passes through unchanged.
+            inner_struct.update(
+                {
+                    key: input_dict[key]
+                    for key in ("task_configs", "workflow_config", "environ")
+                    if key in input_dict
+                }
+            )
+        else:
+            inner_struct.update(
+                {
+                    "args": [],
+                    "environ": input_dict.get("environ", {}),
+                    "kwargs": input_dict.get("kwargs", []),
+                }
+            )
 
         # Create TypedStruct
         typed_struct = TypedStruct()

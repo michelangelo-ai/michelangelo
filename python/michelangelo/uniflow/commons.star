@@ -78,7 +78,7 @@ def resource_dict(cpu, memory, disk = None, gpu = None, gpu_sku = ""):
         res["gpu_sku"] = gpu_sku
     return res
 
-# Returns the CanvasFlex TaskConfig envelope from a task invocation, or None.
+# Returns the typed TaskConfig envelope from a task invocation, or None.
 # The envelope arrives here as a plain dict (workflow kwargs are JSON-decoded
 # into Starlark values) that keeps the __class__ marker added when the config
 # was serialized with the UniflowCodec context.

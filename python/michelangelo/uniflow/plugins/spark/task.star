@@ -99,7 +99,7 @@ def spark_task(
         _executor_gpu = int(_executor_gpu)
         _executor_instances = int(_executor_instances)
 
-        # Apply job_specs overrides when the task was called with a CanvasFlex
+        # Apply job_specs overrides when the task was called with a typed
         # TaskConfig envelope. job_specs wins over defaults and env overrides.
         canvas_config = get_canvas_task_config(*args, **kwargs)
         if canvas_config != None:
