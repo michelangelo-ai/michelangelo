@@ -122,7 +122,7 @@ func (m Mapper) MapLocalClusterStatusToGlobal(localClusterObject runtime.Object)
 	case *rayv1.RayCluster:
 		v2Status := convertRayV1ClusterStatusToV2(obj)
 		v2Status.LogUrl = m.buildLogURL(obj.GetName())
-		reason := deriveReasonFromConditions(obj.Status.Conditions)
+		reason := deriveReasonFromConditions(obj)
 		if reason == "" {
 			reason = obj.Status.Reason
 		}

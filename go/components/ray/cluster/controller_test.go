@@ -561,6 +561,79 @@ func TestReconcilerReconcile(t *testing.T) {
 			},
 		},
 		{
+			name: "Cluster launched - suspended state keeps monitoring",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       rayClusterName,
+						Namespace:  testNamespace,
+						Generation: 1,
+					},
+					Spec: createRayClusterSpec(),
+					Status: v2pb.RayClusterStatus{
+						State: v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+						StatusConditions: []*apipb.Condition{
+							{
+								Type:   EnqueuedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   ScheduledCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   LaunchedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+						},
+						Assignment: &v2pb.AssignmentInfo{
+							Cluster: assignedCluster,
+						},
+					},
+				}
+				objects = append(objects, cluster)
+				return objects
+			},
+			setupMocks: func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {
+				mcc.addCluster(assignedCluster, &v2pb.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: assignedCluster,
+					},
+				})
+				// Suspension (e.g. Kueue admission gating) is non-terminal: even
+				// with a terminal-looking pod error attached, a suspended cluster
+				// must keep being monitored rather than be marked failed.
+				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
+					&matypes.JobClusterStatus{
+						Ray: &v2pb.RayClusterStatus{
+							State: v2pb.RAY_CLUSTER_STATE_SUSPENDED,
+							PodErrors: []*v2pb.PodErrors{
+								{
+									Name:   "HeadPodReady",
+									Reason: "HeadPodNotFound",
+								},
+							},
+						},
+						Reason: "ClusterSuspended",
+					}, nil)
+			},
+			expectedState:   v2pb.RAY_CLUSTER_STATE_SUSPENDED,
+			expectedMessage: "",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, requeueAfter, res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
+				for _, cond := range cluster.Status.StatusConditions {
+					if cond.Type == SucceededCondition {
+						assert.NotEqual(t, apipb.CONDITION_STATUS_FALSE, cond.Status,
+							"suspended cluster must not be marked failed")
+					}
+				}
+			},
+		},
+		{
 			name: "Cluster termination - succeeded type",
 			setup: func() []client.Object {
 				objects := make([]client.Object, 0)
