@@ -18,7 +18,7 @@ class themselves.
 from __future__ import annotations
 
 from enum import Enum
-from typing import ClassVar
+from typing import ClassVar, Optional, Union
 
 import torch
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -100,14 +100,18 @@ class TorchTransformLayerSpec(BaseModel, arbitrary_types_allowed=True):
     # model data; pydantic v2 checks ClassVar annotations before its
     # leading-underscore private-attribute inference, so this is not
     # swallowed into PrivateAttr handling.
-    _resolved_layer_type: ClassVar[str | None] = None
+    _resolved_layer_type: ClassVar[Optional[str]] = None
 
     name: str = Field(..., description="Name")
     input_cols: list[str] = Field(..., description="Input columns")
     output_cols: list[str] = Field(..., description="Output columns")
-    input_dtype: torch.dtype | str | None = Field(None, description="Input dtype")
-    output_dtype: torch.dtype | str | None = Field(None, description="Output dtype")
-    input_shape: list[int] | None = Field(
+    input_dtype: Optional[Union[torch.dtype, str]] = Field(
+        None, description="Input dtype"
+    )
+    output_dtype: Optional[Union[torch.dtype, str]] = Field(
+        None, description="Output dtype"
+    )
+    input_shape: Optional[list[int]] = Field(
         None,
         description=(
             "Static per-sample input shape (no batch dim) for each input "
@@ -115,7 +119,7 @@ class TorchTransformLayerSpec(BaseModel, arbitrary_types_allowed=True):
             "package the served model."
         ),
     )
-    is_training_features: list[bool] | None = Field(
+    is_training_features: Optional[list[bool]] = Field(
         None, description="Is training features"
     )
     mode: TransformerMode = Field(
@@ -187,7 +191,7 @@ class StandardScalerLayerSpec(TorchTransformLayerSpec):
         with_std: Whether to scale the data by the standard deviation.
     """
 
-    _resolved_layer_type: ClassVar[str | None] = "NormalizationLayerSpec"
+    _resolved_layer_type: ClassVar[Optional[str]] = "NormalizationLayerSpec"
 
     with_mean: bool = Field(
         True, description="Whether to center the data by subtracting the mean"
@@ -200,7 +204,7 @@ class StandardScalerLayerSpec(TorchTransformLayerSpec):
 class MinMaxScalerLayerSpec(TorchTransformLayerSpec):
     """Placeholder resolved to :class:`MinMaxLayerSpec` after fitting."""
 
-    _resolved_layer_type: ClassVar[str | None] = "MinMaxLayerSpec"
+    _resolved_layer_type: ClassVar[Optional[str]] = "MinMaxLayerSpec"
 
 
 class ConcatenateLayerSpec(TorchTransformLayerSpec):
@@ -211,7 +215,7 @@ class ConcatenateLayerSpec(TorchTransformLayerSpec):
             preserved.
     """
 
-    dtype: torch.dtype | str | None = Field(
+    dtype: Optional[Union[torch.dtype, str]] = Field(
         None, description="Optional output dtype. When None, preserves input dtype."
     )
 
@@ -246,19 +250,19 @@ class NumericalStandardTransformLayerSpec(TorchTransformLayerSpec):
     """
 
     scale_factor: float = Field(1.0, description="Scale factor")
-    default_value: float | str = Field(
+    default_value: Union[float, str] = Field(
         "0.5",
         description=(
             "Default value, string value will be '0.0 - 0.99' for percentile choice"
         ),
     )
-    cap_min: float | str = Field(
+    cap_min: Union[float, str] = Field(
         "0.01",
         description=(
             "Min value, string value will be '0.0 - 0.99' for percentile choice"
         ),
     )
-    cap_max: float | str = Field(
+    cap_max: Union[float, str] = Field(
         "0.99",
         description=(
             "Max value, string value will be '0.0 - 0.99' for percentile choice"
@@ -307,12 +311,12 @@ class PercentileBucketizationLayerSpec(TorchTransformLayerSpec):
         dtype: The output dtype.
     """
 
-    _resolved_layer_type: ClassVar[str | None] = "BucketizationLayerSpec"
+    _resolved_layer_type: ClassVar[Optional[str]] = "BucketizationLayerSpec"
 
     percentiles: list[float] = Field(
         ..., description="Percentile values (0-1 or 1-100) to compute boundaries from"
     )
-    dtype: torch.dtype | str = Field(torch.int64, description="Output dtype")
+    dtype: Union[torch.dtype, str] = Field(torch.int64, description="Output dtype")
 
 
 class BucketizationLayerSpec(TorchTransformLayerSpec):
@@ -326,7 +330,7 @@ class BucketizationLayerSpec(TorchTransformLayerSpec):
     boundaries: list[float] = Field(
         ..., description="Pre-computed boundary values for bucketization"
     )
-    dtype: torch.dtype | str = Field(torch.int64, description="Output dtype")
+    dtype: Union[torch.dtype, str] = Field(torch.int64, description="Output dtype")
 
 
 class TensorColFillNoneLayerSpec(TorchTransformLayerSpec):
@@ -340,7 +344,7 @@ class TensorColFillNoneLayerSpec(TorchTransformLayerSpec):
         default_value: The value to fill ``None`` positions with.
     """
 
-    default_value: int | float = Field(..., description="Value to fill None with")
+    default_value: Union[int, float] = Field(..., description="Value to fill None with")
 
 
 class CastLayerSpec(TorchTransformLayerSpec):
@@ -350,7 +354,7 @@ class CastLayerSpec(TorchTransformLayerSpec):
         dtype: The target dtype to cast to.
     """
 
-    dtype: torch.dtype | str = Field(
+    dtype: Union[torch.dtype, str] = Field(
         torch.float32, description="Target data type for casting"
     )
 
@@ -362,7 +366,7 @@ class CaseWhenLayerSpec(TorchTransformLayerSpec):
         default_value: The value output when no condition matches.
     """
 
-    default_value: int | float | bool | torch.Tensor = Field(
+    default_value: Union[int, float, bool, torch.Tensor] = Field(
         ..., description="Default value if no conditions match"
     )
 
@@ -393,8 +397,10 @@ class ConstantLayerSpec(TorchTransformLayerSpec):
         dtype: The output dtype.
     """
 
-    constant: int | float | bool = Field(..., description="Constant value to output")
-    dtype: torch.dtype | str = Field(torch.float32, description="Output dtype")
+    constant: Union[int, float, bool] = Field(
+        ..., description="Constant value to output"
+    )
+    dtype: Union[torch.dtype, str] = Field(torch.float32, description="Output dtype")
 
 
 class DivideLayerSpec(TorchTransformLayerSpec):
@@ -425,10 +431,10 @@ class PadOrCrop1DLayerSpec(TorchTransformLayerSpec):
     """
 
     max_length: int = Field(..., description="Max length for padding or cropping")
-    dtype: torch.dtype | str | None = Field(
+    dtype: Optional[Union[torch.dtype, str]] = Field(
         None, description="Output dtype. When None, preserves input dtype."
     )
-    pad_value: int | float = Field(0, description="Value to use for padding")
+    pad_value: Union[int, float] = Field(0, description="Value to use for padding")
     align: str = Field(
         "left",
         description=(
@@ -451,7 +457,7 @@ class TileLayerSpec(TorchTransformLayerSpec):
     """
 
     axis: int = Field(0, description="Axis along which to tile the tensor")
-    count: int | None = Field(
+    count: Optional[int] = Field(
         None, description="Number of times to tile the tensor (optional)"
     )
     target_tensor_provided: bool = Field(
@@ -503,9 +509,9 @@ class ClipLayerSpec(TorchTransformLayerSpec):
             clamped.
     """
 
-    min_value: float | None = Field(None, description="Minimum value (lower bound)")
-    max_value: float | None = Field(None, description="Maximum value (upper bound)")
-    ignore_value: float | None = Field(
+    min_value: Optional[float] = Field(None, description="Minimum value (lower bound)")
+    max_value: Optional[float] = Field(None, description="Maximum value (upper bound)")
+    ignore_value: Optional[float] = Field(
         None, description="Optional value to ignore during clipping"
     )
 

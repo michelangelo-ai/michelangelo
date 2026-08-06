@@ -200,6 +200,13 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 # The trainer package is a one-time snapshot of internal training code; line-length
 # rule is relaxed to preserve the original code shape from the upstream source.
 "michelangelo/lib/trainer/**/*.py" = ["E501"]
+# Pydantic v2 evaluates field annotations at class-definition time to build
+# validators, even with `from __future__ import annotations`. On Python 3.9,
+# evaluating `X | Y` union syntax raises TypeError (PEP 604 added `|` support to
+# `type` only in 3.10) -- so this file must keep `Optional`/`Union` from `typing`
+# rather than the pyupgrade-recommended `X | None`/`X | Y` syntax, or every
+# pydantic model here breaks at import time on 3.9 (see compat-matrix.yml).
+"michelangelo/lib/native_transform/torch/transform_layer_spec.py" = ["UP007", "UP045"]
 
 # Google-style docstrings
 [tool.ruff.lint.pydocstyle]
