@@ -1352,6 +1352,12 @@ class IDHashTokenizer(TorchTransformBaseLayer):
         composes the core into the dict-of-tensors transform-layer contract
         used throughout this package.
 
+        This naming collision is specific to this repo's layout: internally,
+        the lookup core lives in a separate package entirely (outside
+        ``native_transform``), so its wrapper layer and the core it composes
+        never shared a name or a module. Here, both live under
+        ``native_transform.torch``, which is what forces this repoint.
+
     Args:
         input_cols: Column names of the input tensors.
         output_cols: Column names of the output tensors; must match the
