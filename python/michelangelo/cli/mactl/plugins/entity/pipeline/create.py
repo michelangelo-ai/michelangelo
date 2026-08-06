@@ -409,31 +409,6 @@ def populate_pipeline_spec_with_workflow_inputs(
 
         input_dict = MessageToDict(workflow_inputs)
 
-        # Create manifest content in the format expected by internal code
-        # This matches the structure: value.fields.kwargs.list_value.values...
-
-        # Build kwargs structure
-        kwargs_values = []
-        for key, value in input_dict.get("kwargs", []):
-            kwargs_values.append(
-                {
-                    "list_value": {
-                        "values": [
-                            {"string_value": str(key)},
-                            {"string_value": str(value)},
-                        ]
-                    }
-                }
-            )
-
-        # Build environ structure
-        environ_fields = {}
-        for key, value in input_dict.get("environ", {}).items():
-            environ_fields[key] = {"string_value": str(value)}
-
-        # Create TypedStruct as an Any message with proper @type field
-        from google.protobuf.json_format import MessageToDict
-
         # Create the inner struct for workflow inputs
         inner_struct = Struct()
         if "task_configs" in input_dict:
