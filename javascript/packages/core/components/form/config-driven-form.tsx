@@ -2,7 +2,6 @@ import { Form } from '#core/components/form/form';
 import { LayoutItemList } from '#core/components/form/layout/layout-item-list';
 
 import type { FieldConfig, FormConfig } from '#core/components/form/types/config-types';
-import type { FormData } from '#core/components/form/types/form-types';
 import type { DeepPartial } from '#core/types/utility-types';
 
 type ConfigDrivenFormProps<T extends Record<string, unknown> = Record<string, unknown>> = {
@@ -30,11 +29,7 @@ export function ConfigDrivenForm<T extends Record<string, unknown>>({
   initialValues,
 }: ConfigDrivenFormProps<T>) {
   return (
-    <Form
-      // cast: FormConfig<T> narrows onSubmit to T, but Form expects FormData
-      onSubmit={onSubmit as (values: FormData) => void | object | Promise<object>}
-      initialValues={initialValues}
-    >
+    <Form<T> onSubmit={onSubmit} initialValues={initialValues}>
       <LayoutItemList
         items={config.layout}
         // cast: FormConfig<T> maps fields by keyof T, but LayoutItemList expects untyped record

@@ -1,31 +1,16 @@
 import type { ComponentType } from 'react';
 import type { StringFieldConfig } from '#core/components/form/fields/string/types';
 import type { SharedFieldConfig } from '#core/components/form/fields/types';
+import type { GridLayoutConfigFields } from '#core/components/form/layout/form-grid/types';
+import type { GroupLayoutConfigFields } from '#core/components/form/layout/form-group/types';
+import type { RowLayoutConfigFields } from '#core/components/form/layout/form-row/types';
 
 /** Enumerates the built-in field types available in the config-driven form system. */
 export enum FieldType {
-  /** Single-line or multi-line text input */
+  /**
+   * @description Renders a single-line **Input** or, with `multi: true`, a **Tag input** for multiple values
+   */
   STRING = 'string',
-  /** Numeric input */
-  NUMBER = 'number',
-  /** Toggle or checkbox for true/false values */
-  BOOLEAN = 'boolean',
-  /** Dropdown selection from a list of options */
-  SELECT = 'select',
-  /** Multiple-choice checkbox group */
-  CHECKBOX = 'checkbox',
-  /** Radio button group for single selection */
-  RADIO = 'radio',
-  /** Date picker */
-  DATE = 'date',
-  /** Multi-line text area */
-  TEXTAREA = 'textarea',
-  /** URL input with validation */
-  URL = 'url',
-  /** Key-value pair editor */
-  MAP = 'map',
-  /** Markdown editor with preview */
-  MARKDOWN = 'markdown',
 }
 
 /**
@@ -59,23 +44,17 @@ export type FieldRendererProps = {
 /** A React component that renders a form field from its config. */
 export type FieldRenderer = ComponentType<FieldRendererProps>;
 
-type GroupLayoutConfig = {
+type GroupLayoutConfig = GroupLayoutConfigFields & {
   type: 'group';
-  label?: string;
-  description?: string;
-  tooltip?: string;
-  collapsible?: boolean;
   items: LayoutItem[];
 };
 
-type RowLayoutConfig = {
+type RowLayoutConfig = RowLayoutConfigFields & {
   type: 'row';
-  name?: string;
-  span?: number[];
   items: LayoutItem[];
 };
 
-type GridLayoutConfig = {
+type GridLayoutConfig = GridLayoutConfigFields & {
   type: 'grid';
   items: LayoutItem[];
 };

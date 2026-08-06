@@ -37,3 +37,11 @@ interface CollapsibleFormGroupProps extends FormGroupBaseProps {
 }
 
 export type FormGroupProps = StaticFormGroupProps | CollapsibleFormGroupProps;
+
+/** Declarative config fields for a group layout — excludes children and runtime-only props. */
+export type GroupLayoutConfigFields = {
+  label?: string;
+  description?: string;
+  tooltip?: string;
+  collapsible?: boolean;
+};

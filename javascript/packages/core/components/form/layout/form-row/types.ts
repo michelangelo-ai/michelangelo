@@ -12,3 +12,9 @@ export interface FormRowProps {
   span?: number[];
   children: ReactNode;
 }
+
+/** Declarative config fields for a row layout — excludes children. */
+export type RowLayoutConfigFields = {
+  name?: string;
+  span?: number[];
+};
