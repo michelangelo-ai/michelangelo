@@ -1,24 +1,31 @@
 const ENVIRONMENT_LABEL_KEY = 'michelangelo/environment';
 
+const ENVIRONMENT_LABEL_MAP: Record<string, 'Development' | 'Production' | 'Testing'> = {
+  development: 'Development',
+  production: 'Production',
+  testing: 'Testing',
+};
+
 /**
  * Reads the CRD environment label and returns a human-readable environment name.
  *
  * CRD-backed entities have no dedicated `environment` field on their spec — the environment is
- * conveyed out-of-band via a `michelangelo/environment` metadata label with raw values like
- * `ENV_TYPE_DEVELOPMENT` / `ENV_TYPE_PRODUCTION`. This normalizes those raw values to the labels
- * shown in the UI, and returns an empty string when the label is absent or unrecognized (e.g. an
+ * conveyed out-of-band via a `michelangelo/environment` metadata label with raw lowercase values
+ * (`development`, `production`, `testing`). This normalizes those raw values to the labels shown
+ * in the UI, and returns an empty string when the label is absent or unrecognized (e.g. an
  * environment value introduced after this map was last updated) so the column renders blank
- * rather than a raw enum string.
+ * rather than a raw label string. (An earlier version of this function matched a prefixed
+ * `ENV_TYPE_*` form that turned out not to match any real label value; this was corrected after
+ * review, along with adding the `testing` case.)
  *
  * @example
- * readEnvironmentLabel({ 'michelangelo/environment': 'ENV_TYPE_PRODUCTION' }) // 'Production'
+ * readEnvironmentLabel({ 'michelangelo/environment': 'production' }) // 'Production'
  * readEnvironmentLabel(undefined) // ''
  */
 export function readEnvironmentLabel(
   labels?: Record<string, string>
-): 'Development' | 'Production' | '' {
+): 'Development' | 'Production' | 'Testing' | '' {
   const raw = labels?.[ENVIRONMENT_LABEL_KEY];
-  if (raw === 'ENV_TYPE_DEVELOPMENT') return 'Development';
-  if (raw === 'ENV_TYPE_PRODUCTION') return 'Production';
-  return '';
+  if (!raw) return '';
+  return ENVIRONMENT_LABEL_MAP[raw.toLowerCase()] ?? '';
 }

@@ -41,7 +41,7 @@ describe('Model list page', () => {
                 {
                   metadata: {
                     name: 'fraud-classifier',
-                    labels: { 'michelangelo/environment': 'ENV_TYPE_PRODUCTION' },
+                    labels: { 'michelangelo/environment': 'production' },
                     creationTimestamp: { seconds: 1700000000 },
                   },
                   spec: {
