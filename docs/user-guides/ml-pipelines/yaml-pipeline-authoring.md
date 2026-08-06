@@ -148,8 +148,9 @@ Everything after the YAML path is the standard Uniflow context CLI, so `local-ru
 `michelangelo.canvas.pipeline.register.register_pipeline(...)` wraps
 `michelangelo.uniflow.registration.register.register()` the same way.
 
-See `python/examples/canvasflex_ray_spark/` for a full Spark + Ray pipeline with `job_specs`
-overrides, optional tasks, and local (in-process) or remote execution, including its README.
+See `python/examples/canvasflex_tabular_train/` for a minimal tabular_train-style Spark + Ray
+pipeline with a YAML-configurable data source, `job_specs` overrides, and local (in-process) or
+remote execution, including its README.
 
 ## Current scope
 

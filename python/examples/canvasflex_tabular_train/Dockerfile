@@ -1,11 +1,11 @@
 # syntax=docker/dockerfile:1
 ###############################################################################
-# Slim CPU-only image for the canvasflex_ray_spark example (and other
+# Slim CPU-only image for the canvasflex_tabular_train example (and other
 # non-GPU demos). Skips the CUDA base and the -E example ML stack; installs
 # torch from the CPU wheel index (pytorch_lightning is a core dependency).
 #
 # $ cd $REPO_ROOT/python
-# $ docker build -t canvasflex-demo:latest -f ./examples/canvasflex_ray_spark/Dockerfile .
+# $ docker build -t canvasflex-demo:latest -f ./examples/canvasflex_tabular_train/Dockerfile .
 ###############################################################################
 
 # python:3.9-slim-bookworm: bookworm ships openjdk-17 (Spark 3.5 supports Java

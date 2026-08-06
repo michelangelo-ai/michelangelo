@@ -1,7 +1,7 @@
-"""Run the canvasflex_ray_spark example end-to-end, in-process.
+"""Run the canvasflex_tabular_train example end-to-end, in-process.
 
 Usage (from python/):
-    poetry run python -m examples.canvasflex_ray_spark.run_example
+    poetry run python -m examples.canvasflex_tabular_train.run_example
 
 The task bodies run in this process: SparkTask.pre_run starts a local Spark
 session (spark.master below) and RayTask.pre_run starts a local Ray runtime.
