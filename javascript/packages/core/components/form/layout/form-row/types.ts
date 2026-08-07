@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { LayoutItem } from '#core/components/form/types/config-types';
 
 export interface FormRowProps {
   /** Optional row label */
@@ -13,8 +14,9 @@ export interface FormRowProps {
   children: ReactNode;
 }
 
-/** Declarative config fields for a row layout — excludes children. */
-export type RowLayoutConfigFields = {
+export type RowLayoutConfig = {
+  type: 'row';
   name?: string;
   span?: number[];
+  items: LayoutItem[];
 };

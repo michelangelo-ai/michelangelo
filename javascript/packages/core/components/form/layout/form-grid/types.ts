@@ -1,8 +1,11 @@
 import type { ReactNode } from 'react';
+import type { LayoutItem } from '#core/components/form/types/config-types';
 
 export interface FormGridProps {
   children: ReactNode;
 }
 
-/** Declarative config fields for a grid layout — excludes children. */
-export type GridLayoutConfigFields = Record<string, never>;
+export type GridLayoutConfig = {
+  type: 'grid';
+  items: LayoutItem[];
+};
