@@ -123,6 +123,16 @@ class TestNormalizationAndMinMaxLayerSpec:
         assert spec.max == [1.0]
         assert spec.dim == -1
 
+    def test_normalization_multi_output_cols_raises(self) -> None:
+        """Normalization requires exactly one output column."""
+        with pytest.raises(pydantic.ValidationError, match="exactly one column"):
+            NormalizationLayerSpec(input_cols=["a", "b"], output_cols=["c", "d"])
+
+    def test_min_max_multi_output_cols_raises(self) -> None:
+        """MinMax requires exactly one output column."""
+        with pytest.raises(pydantic.ValidationError, match="exactly one column"):
+            MinMaxLayerSpec(input_cols=["a", "b"], output_cols=["c", "d"])
+
 
 class TestBucketizationLayerSpec:
     """Bucketization spec requires explicit boundaries."""

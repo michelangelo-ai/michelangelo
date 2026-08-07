@@ -158,6 +158,9 @@ class NormalizationLayerSpec(TorchTransformLayerSpec):
         std: The per-feature standard deviation values used for
             standardization.
         dim: The dimension along which input columns are concatenated.
+
+    Raises:
+        ValueError: If ``output_cols`` does not contain exactly one column.
     """
 
     mean: list[float] = Field([0.0], description="Mean")
@@ -165,6 +168,29 @@ class NormalizationLayerSpec(TorchTransformLayerSpec):
     dim: int = Field(
         -1, description="Dimension along which input columns are concatenated"
     )
+
+    @model_validator(mode="after")
+    def validate_output_cols(self) -> NormalizationLayerSpec:
+        """Require exactly one output column.
+
+        The ``Normalization`` layer concatenates all input columns into a
+        single output, so more than one ``output_cols`` entry would be
+        silently ignored past the first at layer-build time; fail here
+        instead, at spec-parse time.
+
+        Returns:
+            ``self``.
+
+        Raises:
+            ValueError: If ``output_cols`` does not contain exactly one
+                column.
+        """
+        if len(self.output_cols) != 1:
+            raise ValueError(
+                "output_cols must contain exactly one column, since the "
+                "input columns are concatenated into a single output."
+            )
+        return self
 
 
 class MinMaxLayerSpec(TorchTransformLayerSpec):
@@ -174,6 +200,9 @@ class MinMaxLayerSpec(TorchTransformLayerSpec):
         min: The per-feature minimum values used for scaling.
         max: The per-feature maximum values used for scaling.
         dim: The dimension along which input columns are concatenated.
+
+    Raises:
+        ValueError: If ``output_cols`` does not contain exactly one column.
     """
 
     min: list[float] = Field([0.0], description="Min value")
@@ -181,6 +210,29 @@ class MinMaxLayerSpec(TorchTransformLayerSpec):
     dim: int = Field(
         -1, description="Dimension along which input columns are concatenated"
     )
+
+    @model_validator(mode="after")
+    def validate_output_cols(self) -> MinMaxLayerSpec:
+        """Require exactly one output column.
+
+        The ``MinMax`` layer concatenates all input columns into a single
+        output, so more than one ``output_cols`` entry would be silently
+        ignored past the first at layer-build time; fail here instead, at
+        spec-parse time.
+
+        Returns:
+            ``self``.
+
+        Raises:
+            ValueError: If ``output_cols`` does not contain exactly one
+                column.
+        """
+        if len(self.output_cols) != 1:
+            raise ValueError(
+                "output_cols must contain exactly one column, since the "
+                "input columns are concatenated into a single output."
+            )
+        return self
 
 
 class StandardScalerLayerSpec(TorchTransformLayerSpec):
