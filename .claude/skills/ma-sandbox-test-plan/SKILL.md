@@ -10,6 +10,20 @@ user-invocable: true
 A pipeline that gates on failure at every stage. The output of each stage IS the evidence —
 don't summarize it away. See `.claude/skills/ma-sandbox-references/evidence-quality.md` for what makes evidence good vs. hollow.
 
+## Prerequisites
+
+Stage 4's JavaScript scenarios need a Playwright MCP server connected in this session. This repo
+doesn't ship one in `.mcp.json` — it's a per-user setup, not shared repo infra. If you don't have one
+connected yet, add it once with:
+
+```bash
+claude mcp add playwright -- npx -y @playwright/mcp@latest
+```
+
+MCP servers only load at session startup, so this doesn't take effect in the session that's currently
+running the skill — end this session and start a new one, then re-invoke `/ma-sandbox-test-plan`. Check
+`/mcp` to confirm the connection before running this skill.
+
 ## Stage 0: Detect stack
 
 ```bash
@@ -95,7 +109,12 @@ For each controller/reconcile path touched by the diff:
 
 ### JavaScript
 
-1. **Playwright setup.** Use `playwright-1`. Clean up stale screenshots: `rm -f .claude/ma-sandbox-test-plan-*.png`
+1. **Playwright setup.** Use whichever Playwright MCP server is connected in this session — check `/mcp`
+   if unsure which name it registered under. None connected → stop and report the command from
+   Prerequisites above; don't guess or fall back to a non-MCP browser tool. Clean up stale screenshots:
+   `rm -rf tmp/ma-sandbox-test-plan && mkdir -p tmp/ma-sandbox-test-plan` (repo-root `tmp/` is
+   already gitignored — screenshots are run evidence, not `.claude/` config, and shouldn't sit in a
+   dot-prefixed directory Finder hides by default)
 2. **Derive the route.** Read `.claude/skills/ma-sandbox-references/routes.md` for the phase/entity keyword tables and resolution
    algorithm. Resolve phase and entity as independent signals, then combine. No matching row → stop and
    report, don't guess.
@@ -105,7 +124,7 @@ For each controller/reconcile path touched by the diff:
      missing, create it (prefer the UI over a full re-seed) and document every setup step taken.
    - Do not use yab/curl/direct API calls for setup — `kubectl` for inspection, UI or `ma` CLI for creation.
 4. **Exercise the feature** — click, fill, trigger the interactions the description calls for.
-5. **Screenshot after each meaningful state:** `browser_take_screenshot` → `.claude/ma-sandbox-test-plan-{state-name}.png`.
+5. **Screenshot after each meaningful state:** `browser_take_screenshot` → `tmp/ma-sandbox-test-plan/{state-name}.png`.
 6. **Check console errors:** `browser_console_messages(level: "error")`. Classify:
 
    | Classification | Matches |
