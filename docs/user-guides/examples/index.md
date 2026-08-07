@@ -15,7 +15,7 @@ All examples live in [`python/examples/`](https://github.com/michelangelo-ai/mic
 
 | Example | Description | Runtime | Difficulty |
 |---------|-------------|---------|------------|
-| [California Housing (XGBoost)](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/pipelines/california_housing_xgb) | Full pipeline — feature prep, Spark preprocessing, distributed XGBoost training, and pusher step that exports model + eval report to storage and registry. | Ray + Spark | Beginner |
+| [California Housing (XGBoost)](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/california_housing/pipelines/xgb_train) | Full pipeline — feature prep, Spark preprocessing, distributed XGBoost training, and pusher step that exports model + eval report to storage and registry. Lives in [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples). | Ray + Spark | Beginner |
 | [BERT Text Classification](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/bert_cola) | Fine-tune BERT for linguistic acceptability classification on the CoLA benchmark (GLUE). Uses HuggingFace Transformers with distributed Ray training. | Ray | Intermediate |
 | [GPT Fine-tuning with LoRA](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/gpt_oss_20b_finetune) | Parameter-efficient fine-tuning using LoRA (1.29% trainable params) on the Stanford Alpaca instruction-following dataset. Includes perplexity and generation quality evaluation. | Ray | Advanced |
 | [Nomic AI Embedding Training](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/nomic_ai) | Train a long-context Nomic BERT model (2048 tokens) on WikiText using PyTorch Lightning with distributed Ray execution. | Ray | Intermediate |
@@ -53,15 +53,23 @@ PYTHONPATH=. poetry run python examples/<example_dir>/<script>.py
 For remote execution on a Michelangelo AI cluster, append `remote-run`:
 
 ```bash
-PYTHONPATH=. poetry run python examples/pipelines/california_housing_xgb/california_housing_xgb.py remote-run \
-  --project ma-examples \
-  --image ghcr.io/michelangelo-ai/examples:main
+# From the michelangelo-examples repo (https://github.com/michelangelo-ai/michelangelo-examples):
+pip install "michelangelo-examples[california-housing]"
+python -m michelangelo_examples.california_housing.pipelines.xgb_train.pipeline \
+  remote-run \
+  --image ghcr.io/michelangelo-ai/michelangelo-examples:california-housing \
+  --storage-url s3://michelangelo/workflows \
+  --environ AWS_ENDPOINT_URL=http://minio:9091 \
+  --environ AWS_ACCESS_KEY_ID=minioadmin \
+  --environ AWS_SECRET_ACCESS_KEY=minioadmin \
+  --environ REGISTRY_ENDPOINT=michelangelo-apiserver:15566 \
+  --yes
 ```
 
 See each example's README for specific prerequisites and run instructions.
 
 ## What's Next?
 
-- **New to Michelangelo AI?** Start with [California Housing (XGBoost)](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/pipelines/california_housing_xgb) — it covers the full pipeline end-to-end
+- **New to Michelangelo AI?** Start with [California Housing (XGBoost)](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/california_housing/pipelines/xgb_train) in the [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples) repo — it covers the full pipeline end-to-end
 - **Want to understand the framework?** Read [Getting Started with Pipelines](../getting-started/getting-started.md) for a guided walkthrough
 - **Ready to deploy?** See [Deploy a Model](../train-and-deploy-models/deploy-a-model.md) after training

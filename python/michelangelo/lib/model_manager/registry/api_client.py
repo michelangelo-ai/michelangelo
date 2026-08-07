@@ -146,13 +146,13 @@ class APIRegistryClient(ModelRegistryClient):
         client = APIClient(endpoint="apiserver:15566", caller="push-step")
         registry = APIRegistryClient(svc=client.ModelService, namespace="my-project")
         reg = registry.register_model(
-            name="california-housing-xgb",
-            artifact_uri="s3://bucket/models/california-housing-xgb/abc/raw/model.ubj",
+            name="my-model",
+            artifact_uri="s3://bucket/models/my-model/abc/raw/model.pt",
             kind=ModelKind.REGRESSION,
-            labels={"framework": "xgboost"},
+            labels={"framework": "pytorch"},
             metadata={"validation-rmse": 0.876},
         )
-        print(reg.registry_uri)  # "models:/my-project/california-housing-xgb/1"
+        print(reg.registry_uri)  # "models:/my-project/my-model/1"
     """
 
     def __init__(
