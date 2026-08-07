@@ -12,19 +12,30 @@ WORKTREE_ROOT=$(git rev-parse --show-toplevel)
 
 # --- Try to find an existing server for this branch ---
 for port in 5173 5174 5175 5176 5177 5178 5179 5180; do
-  PID=$(lsof -ti ":$port" 2>/dev/null | head -1)
-  [ -z "$PID" ] && continue
+  PID=$(lsof -ti ":$port" 2>/dev/null | head -1 || true)
+  if [ -z "$PID" ]; then
+    echo "Port $port: nothing listening." >&2
+    continue
+  fi
   PORT_CWD=$(lsof -p "$PID" 2>/dev/null | awk '$4=="cwd" {print $NF}')
-  [ -z "$PORT_CWD" ] && continue
+  if [ -z "$PORT_CWD" ]; then
+    echo "Port $port: pid $PID has no readable cwd — skipping." >&2
+    continue
+  fi
   PORT_ROOT=$(git -C "$PORT_CWD" rev-parse --show-toplevel 2>/dev/null || true)
   PORT_BRANCH=$(git -C "$PORT_CWD" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
   if [ "$PORT_ROOT" = "$WORKTREE_ROOT" ] && [ "$PORT_BRANCH" = "$CURRENT_BRANCH" ]; then
+    echo "Port $port: existing Vite for this worktree/branch (pid $PID) — reusing." >&2
     echo "$port $PID existing"
     exit 0
-  elif [ -n "$PORT_BRANCH" ] && [ "$PORT_BRANCH" != "$CURRENT_BRANCH" ]; then
+  elif [ -n "$PORT_BRANCH" ]; then
     echo "Port $port has Vite for branch '$PORT_BRANCH' (need '$CURRENT_BRANCH') — skipping." >&2
+  else
+    echo "Port $port: pid $PID is not a Vite server for this worktree — skipping." >&2
   fi
 done
+
+echo "No existing Vite server found for '$CURRENT_BRANCH' on ports 5173-5180; starting one." >&2
 
 # --- No existing server found — start one ---
 JS_DIR="$WORKTREE_ROOT/javascript"
@@ -49,7 +60,7 @@ for i in $(seq 1 30); do
     exit 1
   fi
   for port in 5173 5174 5175 5176 5177 5178 5179 5180; do
-    PID=$(lsof -ti ":$port" 2>/dev/null | head -1)
+    PID=$(lsof -ti ":$port" 2>/dev/null | head -1 || true)
     [ -z "$PID" ] && continue
     PORT_CWD=$(lsof -p "$PID" 2>/dev/null | awk '$4=="cwd" {print $NF}')
     [ -z "$PORT_CWD" ] && continue
@@ -57,6 +68,7 @@ for i in $(seq 1 30); do
     if [ "$PORT_ROOT" = "$WORKTREE_ROOT" ]; then
       STARTED_PORT=$port
       STARTED_PID=$SERVER_PID
+      echo "Vite bound to port $port (pid $SERVER_PID) after ${i}s." >&2
       break 2
     fi
   done
