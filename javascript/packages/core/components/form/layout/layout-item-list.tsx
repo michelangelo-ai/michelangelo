@@ -1,13 +1,9 @@
 import { SchemaField } from '#core/components/form/fields/schema-field';
-import { BuiltinLayoutRenderer } from './builtin-layout-renderer';
+import { LayoutRenderer } from './layout-renderer';
 
-import type {
-  BuiltinLayoutConfig,
-  FieldConfig,
-  LayoutItem,
-} from '#core/components/form/types/config-types';
+import type { FieldConfig, LayoutItem } from '#core/components/form/types/config-types';
 
-/** Walks a layout tree, rendering bare strings as fields and objects as layout nodes. */
+/** Renders a list of layout items — strings become fields, objects become layout components. */
 export function LayoutItemList({
   items,
   fields,
@@ -21,9 +17,7 @@ export function LayoutItemList({
         if (typeof item === 'string') {
           return <SchemaField key={item} fieldPath={item} config={fields[item]} />;
         }
-        // cast: all layout types are built-in; consumer layout extensions are not supported
-        const layoutConfig = item as BuiltinLayoutConfig;
-        return <BuiltinLayoutRenderer key={index} config={layoutConfig} fields={fields} />;
+        return <LayoutRenderer key={index} config={item} fields={fields} />;
       })}
     </>
   );

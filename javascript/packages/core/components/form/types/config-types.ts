@@ -44,26 +44,11 @@ export type FieldRendererProps = {
 /** A React component that renders a form field from its config. */
 export type FieldRenderer = ComponentType<FieldRendererProps>;
 
-/** Union of built-in layout types that the form engine renders natively. */
-export type BuiltinLayoutConfig =
-  | FormGroupLayoutConfig
-  | FormRowLayoutConfig
-  | FormGridLayoutConfig;
+/** Union of layout types that the form engine renders. */
+export type LayoutConfig = FormGroupLayoutConfig | FormRowLayoutConfig | FormGridLayoutConfig;
 
-/** A layout node — either a built-in type or a consumer-registered custom type. */
-export type LayoutConfig = BuiltinLayoutConfig | { type: string; items: LayoutItem[] };
-
-/** A layout tree node — either a layout config object or a bare field path string. */
+/** A layout entry — either a layout config or a field path string. */
 export type LayoutItem = LayoutConfig | string;
-
-/** Props passed to a layout renderer by the config-driven form system. */
-export type LayoutRendererProps = {
-  config: LayoutConfig;
-  renderItems: (items: LayoutItem[]) => React.ReactNode;
-};
-
-/** A React component that renders a layout node from its config. */
-export type LayoutRenderer = ComponentType<LayoutRendererProps>;
 
 /**
  * Declarative form configuration that defines fields and their layout.

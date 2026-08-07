@@ -3,17 +3,17 @@ import { FormGroup } from '#core/components/form/layout/form-group/form-group';
 import { FormRow } from '#core/components/form/layout/form-row/form-row';
 import { LayoutItemList } from './layout-item-list';
 
-import type { BuiltinLayoutConfig, FieldConfig } from '#core/components/form/types/config-types';
+import type { FieldConfig, LayoutConfig } from '#core/components/form/types/config-types';
 
-/** Dispatches a built-in layout config to its corresponding layout component. */
-export function BuiltinLayoutRenderer({
+/** Renders a layout config by dispatching to the matching layout component. */
+export function LayoutRenderer({
   config,
   fields,
 }: {
-  config: BuiltinLayoutConfig;
+  config: LayoutConfig;
   fields: Record<string, FieldConfig | undefined>;
 }) {
-  const renderChildren = <LayoutItemList items={config.items} fields={fields} />;
+  const children = <LayoutItemList items={config.items} fields={fields} />;
 
   switch (config.type) {
     case 'group':
@@ -24,16 +24,16 @@ export function BuiltinLayoutRenderer({
           tooltip={config.tooltip}
           collapsible={config.collapsible}
         >
-          {renderChildren}
+          {children}
         </FormGroup>
       );
     case 'row':
       return (
         <FormRow name={config.name} span={config.span}>
-          {renderChildren}
+          {children}
         </FormRow>
       );
     case 'grid':
-      return <FormGrid>{renderChildren}</FormGrid>;
+      return <FormGrid>{children}</FormGrid>;
   }
 }
