@@ -21,17 +21,20 @@ CHANGED_FILES=$(
 
 APISERVER_CHANGED=$(echo "$CHANGED_FILES" | grep -E '^go/cmd/apiserver/' | head -1 || true)
 CONTROLLERMGR_CHANGED=$(echo "$CHANGED_FILES" | grep -E '^go/cmd/controllermgr/' | head -1 || true)
+WORKER_CHANGED=$(echo "$CHANGED_FILES" | grep -E '^go/cmd/worker/' | head -1 || true)
 
-if [ -z "$APISERVER_CHANGED" ] && [ -z "$CONTROLLERMGR_CHANGED" ]; then
+if [ -z "$APISERVER_CHANGED" ] && [ -z "$CONTROLLERMGR_CHANGED" ] && [ -z "$WORKER_CHANGED" ]; then
   echo "clean"
   exit 0
 fi
 
-# Determine which service has changes (apiserver takes priority)
-if [ -n "$APISERVER_CHANGED" ]; then
-  SERVICE="apiserver"
-else
+# Determine which service has changes (controllermgr > worker > apiserver)
+if [ -n "$CONTROLLERMGR_CHANGED" ]; then
   SERVICE="controllermgr"
+elif [ -n "$WORKER_CHANGED" ]; then
+  SERVICE="worker"
+else
+  SERVICE="apiserver"
 fi
 
 # Check what image is currently running in the k3d cluster
