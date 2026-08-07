@@ -24,8 +24,6 @@ export const MODEL_CELL_CONFIG: ColumnConfig<object>[] = [
     ],
   },
   {
-    // Model.spec has no environment field; environment is CRD-label-only metadata, read via
-    // readEnvironmentLabel().
     id: 'metadata.labels',
     label: 'Environment',
     type: CellType.TEXT,
