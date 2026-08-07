@@ -159,3 +159,11 @@ The chosen alternative becomes the input to Phase 3.
 
 Generate the highest-quality implementation possible. The goal is a working prototype on a
 branch that either ships as-is (self-service) or gets refined by a frontend engineer.
+
+---
+
+## Phase 4: Verification
+
+Once generation is done, run `/ma-sandbox-test-plan` against the change to get real evidence
+it works — build/lint/test gates plus live integration scenarios in the sandbox — rather than
+declaring the interview complete on the strength of the generated code alone.
