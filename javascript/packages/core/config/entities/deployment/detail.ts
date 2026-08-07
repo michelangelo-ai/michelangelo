@@ -16,6 +16,12 @@ export const DEPLOYMENT_DETAIL_CONFIG: DetailViewConfig = {
     { id: 'metadata.creationTimestamp.seconds', label: 'Created', type: CellType.DATE },
     { id: 'metadata.labels["michelangelo/owner"]', label: 'Owner', type: CellType.TEXT },
     DEPLOYMENT_STAGE_CELL,
+    {
+      id: 'metadata.annotations["deployment.rollback.reason"]',
+      label: 'Rollback reason',
+      type: CellType.TEXT,
+      hideEmpty: true,
+    },
     DEPLOYMENT_STATE_CELL,
   ],
   pages: [

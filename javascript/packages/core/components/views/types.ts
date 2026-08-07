@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { ActionConfigSchema } from '#core/components/actions/types';
-import type { Cell } from '#core/components/cell/types';
+import type { RowCell } from '#core/components/row/types';
 import type { EmptyState } from '#core/components/table/components/table-empty-state/types';
 import type { PageSizeOption } from '#core/components/table/components/table-pagination/types';
 import type { ColumnConfig } from '#core/components/table/types/column-types';
@@ -23,7 +23,7 @@ export interface DetailViewConfig<T extends object = object> {
   type: 'detail';
 
   /** Metadata items to display in the detail view header */
-  metadata: Cell[];
+  metadata: RowCell[];
 
   /** Content sections to display in the detail view */
   pages: DetailPageConfig<T>[];
