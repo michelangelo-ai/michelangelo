@@ -15,7 +15,7 @@ from typing import Any, Callable, Dict, Optional
 
 import yaml
 
-from michelangelo.canvas.lib.shared.json_data import JSONData
+from michelangelo.lib.shared.json_data import JSONData
 from michelangelo.uniflow.core.utils import import_attribute
 
 _logger = logging.getLogger(__name__)
