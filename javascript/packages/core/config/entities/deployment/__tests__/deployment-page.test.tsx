@@ -111,6 +111,36 @@ describe('Deployment detail page', () => {
     expect(screen.getByText('Owner')).toBeInTheDocument();
     expect(screen.getByText('Stage')).toBeInTheDocument();
     expect(screen.getByText('State')).toBeInTheDocument();
+    expect(screen.getByText('Rollback reason')).toBeInTheDocument();
+  });
+
+  it('renders the rollback reason when the annotation is present', async () => {
+    render(
+      <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({
+          location: '/myproject/deploy/deployments/sentiment-deployment/stages',
+        }),
+        getServiceProviderWrapper({
+          request: createQueryMockRouter({
+            GetDeployment: {
+              deployment: buildDeployment({
+                metadata: {
+                  name: 'sentiment-deployment',
+                  creationTimestamp: { seconds: 1746000000 },
+                  labels: { 'michelangelo/owner': 'user-example' },
+                  annotations: { 'deployment.rollback.reason': 'Failed health check' },
+                },
+              }),
+            },
+          }),
+        }),
+      ])
+    );
+
+    expect(await screen.findByText('Rollback reason')).toBeInTheDocument();
+    expect(screen.getByText('Failed health check')).toBeInTheDocument();
   });
 
   it('renders the stages for the deployment', async () => {
