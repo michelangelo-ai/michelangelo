@@ -133,6 +133,162 @@ func TestConvertCriterionOperator(t *testing.T) {
 	}
 }
 
+func TestConvertCriterionOperator_RejectsInvalidFieldName(t *testing.T) {
+	// Identifier positions cannot be bound with placeholder parameters, so the
+	// column name is validated against validColumnName before it is spliced
+	// between backticks. Payloads below survive processFieldName unchanged and
+	// reach this function verbatim when indexPathToKeyMaps is nil, which is
+	// what both production constructor sites pass.
+	cases := []struct {
+		name      string
+		fieldName string
+		wantErr   bool
+	}{
+		{"plain_column", "name", false},
+		{"underscores_and_digits", "src_pipeline_run_name2", false},
+		// Literal shape of the reported payload: closes the identifier's
+		// backtick early to append an arbitrary expression.
+		{"backtick_escape_rejected", "name` = (SELECT SLEEP(5))-- -", true},
+		{"union_payload_rejected", "x` UNION SELECT 1 -- ", true},
+		{"semicolon_rejected", "name; DROP TABLE model", true},
+		{"parens_and_spaces_rejected", "updatexml(1, concat(0x7e, version()), 1)", true},
+		// Not an injection, but not a real column either: previously produced
+		// a cryptic MySQL "Unknown column" error, now a clean InvalidArgument.
+		{"dotted_path_rejected", "metadata.name", true},
+		{"empty_rejected", "", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, _, err := convertCriterionOperator(c.fieldName, apipb.CRITERION_OPERATOR_EQUAL, "v")
+			if c.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestBuildFieldCriterionSQL_RejectsInjectionWithNilMap(t *testing.T) {
+	// End-to-end shape of the vulnerability: a nil indexPathToKeyMap (the OSS
+	// default) skips the map-membership check, so field_name reaches the SQL
+	// builder straight from the caller-supplied CriterionOperation.
+	op := &apipb.CriterionOperation{
+		Criterion: []*apipb.Criterion{
+			{
+				FieldName:  "model.name` = (SELECT SLEEP(5))-- -",
+				Operator:   apipb.CRITERION_OPERATOR_EQUAL,
+				MatchValue: stringMatchValue(t, "x"),
+			},
+		},
+	}
+	_, _, err := buildFieldCriterionSQL(op, nil)
+	require.Error(t, err)
+}
+
+func TestBuildLabelCriterionSQL_SlashKeyStillWorks(t *testing.T) {
+	// Label keys legitimately contain '/' and would fail validColumnName, but
+	// they never reach it: buildFieldCriterionSQL skips label fields, and the
+	// key is bound as a parameter rather than interpolated as an identifier.
+	op := &apipb.CriterionOperation{
+		Criterion: []*apipb.Criterion{
+			{
+				FieldName:  "pipeline_run.metadata.labels.michelangelo/SpecUpdateTimestamp",
+				Operator:   apipb.CRITERION_OPERATOR_EQUAL,
+				MatchValue: stringMatchValue(t, "123"),
+			},
+		},
+	}
+	queryStrs, params, err := buildLabelCriterionSQL(op, "pipeline_run")
+	require.NoError(t, err)
+	require.Len(t, queryStrs, 1)
+	require.Contains(t, queryStrs[0], "`key`= ?")
+	require.Equal(t, "michelangelo/SpecUpdateTimestamp", params[0])
+
+	// The same criterion contributes no field clause.
+	fieldStrs, _, err := buildFieldCriterionSQL(op, nil)
+	require.NoError(t, err)
+	require.Empty(t, fieldStrs)
+}
+
+func TestBuildFieldSelectorSQL(t *testing.T) {
+	// Keys reaching this function have already passed labels.Parse via
+	// parseSelector, whose grammar excludes the characters needed to escape a
+	// backtick-quoted identifier. The validColumnName check is therefore
+	// defence-in-depth rather than a live injection fix: it keeps the invariant
+	// local to the splice instead of resting on an upstream parser, and turns a
+	// non-column key into a clean InvalidArgument rather than a MySQL error.
+	cases := []struct {
+		name              string
+		selector          string
+		indexPathToKeyMap map[string]string
+		want              string
+		wantParams        []interface{}
+		wantErr           bool
+	}{
+		{name: "empty", selector: "", want: ""},
+		{
+			name:       "equals_bare_column",
+			selector:   "name=alice",
+			want:       " AND `name`=?",
+			wantParams: []interface{}{"alice"},
+		},
+		{
+			name:     "empty_value_matches_null_or_blank",
+			selector: "name=",
+			want:     " AND (`name` IS NULL OR `name`='')",
+		},
+		{
+			name:       "in_operator",
+			selector:   "namespace in (a,b)",
+			want:       " AND `namespace` IN (?,?)",
+			wantParams: []interface{}{"a", "b"},
+		},
+		{
+			// Survives labels.Parse ('.' is a legal key character) but is not a
+			// column. Previously spliced in and failed at MySQL.
+			name:     "dotted_path_rejected",
+			selector: "metadata.name=alice",
+			wantErr:  true,
+		},
+		{
+			name:     "slash_key_rejected",
+			selector: "michelangelo/Foo=bar",
+			wantErr:  true,
+		},
+		{
+			name:     "hyphen_key_rejected",
+			selector: "foo-bar=baz",
+			wantErr:  true,
+		},
+		{
+			name:              "populated_map_rewrites_to_column",
+			selector:          "metadata.name=alice",
+			indexPathToKeyMap: map[string]string{"metadata.name": "name"},
+			want:              " AND `name`=?",
+			wantParams:        []interface{}{"alice"},
+		},
+		{
+			name:              "populated_map_rejects_unmapped_field",
+			selector:          "other=alice",
+			indexPathToKeyMap: map[string]string{"metadata.name": "name"},
+			wantErr:           true,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, params, err := buildFieldSelectorSQL(c.selector, c.indexPathToKeyMap)
+			if c.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, c.want, got)
+			require.Equal(t, c.wantParams, params)
+		})
+	}
+}
+
 func TestBuildLabelCriterionSQL(t *testing.T) {
 	op := &apipb.CriterionOperation{
 		Criterion: []*apipb.Criterion{

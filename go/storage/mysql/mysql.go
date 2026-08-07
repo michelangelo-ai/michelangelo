@@ -550,26 +550,24 @@ func processFieldName(fieldName string) (string, error) {
 //     internal map values "IS NULL "/"IS NOT NULL ").
 //   - IN / NOT IN list has no spaces between placeholders (e.g. "(?,?,?)").
 //
-// TODO(#1171): validate fieldName before splicing it into SQL.
+// fieldName is validated against validColumnName before it is interpolated.
 //
-// Trust model — both this function and the matching internal one assume the
-// caller has already vetted fieldName against an allowlist (internal does so
-// in processListOptExtFieldV2 via the per-CRD indexPathToKeyMap). When that
-// upstream check is bypassed — and in OSS that's the default whenever the
-// constructor is called with a nil indexPathToKeyMaps — fieldName is taken
-// straight from the caller-supplied CriterionOperation and embedded between
-// backticks here. A caller controlling field_name can break out of the
-// backtick-quoted identifier and inject SQL (e.g. field_name="x.` UNION
-// SELECT … --" survives processFieldName and lands here as `+ "`" + ` UNION
-// SELECT … --` `+ "`" + `).
+// Trust model — both this function and the matching internal one otherwise
+// assume the caller has already vetted fieldName against an allowlist (internal
+// does so in processListOptExtFieldV2 via the per-CRD indexPathToKeyMap). In
+// OSS that upstream check is skipped whenever the constructor is called with a
+// nil indexPathToKeyMaps, which both production call sites do, so fieldName
+// arrives here straight from the caller-supplied CriterionOperation. Without
+// the identifier check a caller controlling field_name could close the
+// backtick-quoted identifier and append arbitrary SQL.
 //
-// The right long-term fix is for the OSS constructor to require an
-// indexPathToKeyMaps and remove the permissive mode. As a defence-in-depth
-// stop-gap, we could reject any fieldName containing characters outside
-// [a-zA-Z0-9_] right here (cheap, no schema cost). Neither is done yet to
-// keep the public surface compatible with the existing caller sites that
-// pass nil today.
+// Requiring a non-nil indexPathToKeyMaps in the OSS constructor and dropping
+// the permissive mode would make the check here redundant, but that is a
+// breaking change to a public constructor and is deliberately left separate.
 func convertCriterionOperator(fieldName string, op apipb.CriterionOperator, value string) (string, []interface{}, error) {
+	if !validColumnName.MatchString(fieldName) {
+		return "", nil, status.Errorf(codes.InvalidArgument, "invalid field name: %v", fieldName)
+	}
 	qf := " `" + fieldName + "` "
 	switch op {
 	case apipb.CRITERION_OPERATOR_IS_NULL:
@@ -938,6 +936,13 @@ func buildLabelSelectorSQL(labelSelectorStr, tableName string) (labelSelectorPie
 // MySQL column map); fields not in the map are rejected with InvalidArgument.
 // When indexPathToKeyMap is nil, the path is used as the column name as-is
 // (permissive — matches our criterion-builder convention).
+//
+// Either way the resolved column name is validated against validColumnName
+// before backtick-quoted interpolation. Keys arriving here have already passed
+// labels.Parse, whose grammar excludes the characters needed to escape a
+// backtick, so this is defence-in-depth rather than a live injection fix: it
+// keeps the invariant local to the splice instead of resting on an upstream
+// parser, and turns a non-column key into a clean InvalidArgument.
 func buildFieldSelectorSQL(fieldSelectorStr string, indexPathToKeyMap map[string]string) (string, []interface{}, error) {
 	if fieldSelectorStr == "" {
 		return "", nil, nil
@@ -953,6 +958,10 @@ func buildFieldSelectorSQL(fieldSelectorStr string, indexPathToKeyMap map[string
 		if mapped, ok := indexPathToKeyMap[col]; ok {
 			col = mapped
 		} else if indexPathToKeyMap != nil {
+			return "", nil, status.Errorf(codes.InvalidArgument,
+				"invalid field selector, unsupported field. field: %v", req.Key())
+		}
+		if !validColumnName.MatchString(col) {
 			return "", nil, status.Errorf(codes.InvalidArgument,
 				"invalid field selector, unsupported field. field: %v", req.Key())
 		}
@@ -989,12 +998,15 @@ func buildFieldSelectorSQL(fieldSelectorStr string, indexPathToKeyMap map[string
 	return queryStr.String(), params, nil
 }
 
-// validOrderByColumnName matches MySQL unquoted-identifier-safe characters
-// (letters, digits, underscore). Applied to the column name derived from a
-// caller-supplied OrderBy.Field before backtick-quoted interpolation, because
-// identifier positions cannot be bound with placeholder parameters the way
-// literal values can.
-var validOrderByColumnName = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
+// validColumnName matches MySQL unquoted-identifier-safe characters (letters,
+// digits, underscore). Applied to every column name derived from caller-supplied
+// input before backtick-quoted interpolation, because identifier positions
+// cannot be bound with placeholder parameters the way literal values can.
+//
+// Guards the three paths that resolve a caller-controlled field path to a bare
+// column name: convertCriterionOperator (list_options_ext.operation),
+// buildFieldSelectorSQL (field_selector) and buildOrderBySQL (order_by).
+var validColumnName = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
 
 // buildOrderBySQL builds the ORDER BY clause from a list of OrderBy specs.
 //
@@ -1009,7 +1021,7 @@ var validOrderByColumnName = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
 //     remainder is a key in it, otherwise reject (codes.InvalidArgument) —
 //     mirrors buildFieldCriterionSQL's map-enforcement pattern.
 //  5. Otherwise the remainder is used as the bare column name, validated
-//     against validOrderByColumnName before interpolation.
+//     against validColumnName before interpolation.
 //
 // Returns codes.InvalidArgument if a resolved column name fails the
 // identifier-syntax check.
@@ -1046,7 +1058,7 @@ func buildOrderBySQL(orderBy []*apipb.OrderBy, indexPathToKeyMap map[string]stri
 			// orderByLabelColumn already includes its own backticks.
 			clauses = append(clauses, colName+" "+dir)
 		} else {
-			if !validOrderByColumnName.MatchString(colName) {
+			if !validColumnName.MatchString(colName) {
 				return "", status.Errorf(codes.InvalidArgument, "invalid order_by field: %v", order.Field)
 			}
 			clauses = append(clauses, fmt.Sprintf("`%s` %s", colName, dir))
