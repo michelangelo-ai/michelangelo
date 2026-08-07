@@ -187,8 +187,8 @@ describe('Deployment detail page', () => {
       ])
     );
 
-    expect(await screen.findByText('Information')).toBeInTheDocument();
-    expect(screen.getByText('Placing on inference server.')).toBeInTheDocument();
+    expect(await screen.findByText('Placing on inference server.')).toBeInTheDocument();
+    expect(screen.getAllByText('Information').length).toBeGreaterThan(1);
     expect(screen.getByText('Details')).toBeInTheDocument();
     expect(screen.getByText('PlacementInProgress')).toBeInTheDocument();
   });
@@ -234,5 +234,72 @@ describe('Deployment detail page', () => {
     await screen.findAllByText('SnapshotValidation');
     await screen.findAllByText('SnapshotPlacement');
     await screen.findByText('NoCapacity');
+  });
+});
+
+describe('Deployment information tab', () => {
+  const buildDeployment = () => ({
+    metadata: {
+      name: 'sentiment-deployment',
+      creationTimestamp: { seconds: 1746000000 },
+      labels: { 'michelangelo/owner': 'user-example' },
+    },
+    spec: {
+      definition: { type: 1 },
+      selector: { matchLabels: { environment: 'production' } },
+      strategy: { rolloutStrategy: { case: 'rolling', value: {} } },
+      target: { case: 'inferenceServer', value: { name: 'triton-server' } },
+      desiredRevision: { name: 'sentiment-model-rev-3' },
+      resourceLinks: { Dashboard: 'https://grafana.example.com/d/abc' },
+    },
+    status: {
+      state: DEPLOYMENT_STATE.HEALTHY,
+      stage: DEPLOYMENT_STAGE.ROLLOUT_COMPLETE,
+      message: 'Rollout completed successfully.',
+      currentRevision: { name: 'sentiment-model-rev-2' },
+      conditions: [] as object[],
+    },
+  });
+
+  const infoTabResponses = () => ({
+    GetDeployment: { deployment: buildDeployment() },
+  });
+
+  it('renders the deployment configuration with a link to the target', async () => {
+    render(
+      <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({
+          location: '/myproject/deploy/deployments/sentiment-deployment/info',
+        }),
+        getServiceProviderWrapper({ request: createQueryMockRouter(infoTabResponses()) }),
+      ])
+    );
+
+    expect(await screen.findByDisplayValue('Online')).toBeInTheDocument();
+    expect(screen.getByText('Configuration')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('production')).toBeInTheDocument();
+
+    const targetLink = screen.getByRole('link', { name: 'triton-server' });
+    expect(targetLink).toHaveAttribute('href', '/myproject/deploy/targets/triton-server');
+  });
+
+  it('renders the target link in useful links', async () => {
+    render(
+      <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({
+          location: '/myproject/deploy/deployments/sentiment-deployment/info',
+        }),
+        getServiceProviderWrapper({ request: createQueryMockRouter(infoTabResponses()) }),
+      ])
+    );
+
+    expect(await screen.findByRole('link', { name: 'triton-server' })).toHaveAttribute(
+      'href',
+      '/myproject/deploy/targets/triton-server'
+    );
   });
 });
