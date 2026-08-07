@@ -29,6 +29,75 @@ class SnapshotCreateTest(TestCase):
             written = list(snapshots_dir.glob("*/*.yaml"))
             self.assertEqual(written, [])
 
+    def test_create_writes_stripped_resource_and_keeps_status(self):
+        """Volatile fields are stripped from a captured resource, status kept."""
+        raw_pipeline_list = yaml.safe_dump(
+            {
+                "apiVersion": "v1",
+                "kind": "List",
+                "items": [
+                    {
+                        "apiVersion": "michelangelo.api/v2",
+                        "kind": "Pipeline",
+                        "metadata": {
+                            "name": "eval-pipeline",
+                            "namespace": "ma-dev-test",
+                            "uid": "c3eb9f45-0748-41f0-9415-f46b8b01ac5c",
+                            "resourceVersion": "1775",
+                            "creationTimestamp": "2026-07-30T20:45:45Z",
+                            "generation": 1,
+                            "ownerReferences": [{"name": "some-owner"}],
+                            "annotations": {
+                                "kubectl.kubernetes.io/last-applied-configuration": (
+                                    "{}"
+                                ),
+                                "michelangelo/MetadataStoragePrimaryKey": (
+                                    "c3eb9f45-0748-41f0-9415-f46b8b01ac5c"
+                                ),
+                                "michelangelo/worker_queue": "default",
+                            },
+                        },
+                        "spec": {"type": "PIPELINE_TYPE_EVAL"},
+                        "status": {"state": "PIPELINE_STATE_READY"},
+                    }
+                ],
+            }
+        )
+
+        def fake_run(args, **kwargs):
+            if "api-resources" in args:
+                return Mock(stdout="pipelines.michelangelo.api\n")
+            return Mock(stdout=raw_pipeline_list)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with (
+                patch.object(sandbox, "_dir", Path(tmp_dir)),
+                patch.object(sandbox, "_assert_sandbox_cluster_running"),
+                patch.object(sandbox.subprocess, "run", side_effect=fake_run),
+            ):
+                sandbox._snapshot_create(argparse.Namespace())
+
+            written_files = list(Path(tmp_dir).glob("snapshots/*/pipelines.yaml"))
+            self.assertEqual(len(written_files), 1)
+
+            with open(written_files[0]) as f:
+                written = yaml.safe_load(f)
+
+            item = written["items"][0]
+            self.assertNotIn("uid", item["metadata"])
+            self.assertNotIn("resourceVersion", item["metadata"])
+            self.assertNotIn("creationTimestamp", item["metadata"])
+            self.assertNotIn("generation", item["metadata"])
+            self.assertNotIn("ownerReferences", item["metadata"])
+            annotations = item["metadata"]["annotations"]
+            self.assertNotIn(
+                "kubectl.kubernetes.io/last-applied-configuration", annotations
+            )
+            self.assertNotIn("michelangelo/MetadataStoragePrimaryKey", annotations)
+            self.assertEqual(annotations, {"michelangelo/worker_queue": "default"})
+            self.assertEqual(item["spec"], {"type": "PIPELINE_TYPE_EVAL"})
+            self.assertEqual(item["status"], {"state": "PIPELINE_STATE_READY"})
+
 
 class SnapshotRestoreTest(TestCase):
     """Test cases for `ma sandbox snapshot restore`."""
