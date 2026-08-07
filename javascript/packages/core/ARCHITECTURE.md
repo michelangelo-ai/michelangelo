@@ -25,6 +25,10 @@ The two are **complementary**. Configuration is the natural fit for most **entit
 
 The configuration engine is deliberately kept lightweight. When a use case doesn't fit, the answer is an escape hatch ([§ Customization escape hatches](#customization-escape-hatches)), not more complexity in the engine.
 
+### Config is a shape, not a place
+
+A configuration isn't tied to one call site — it's a data shape that however many renderers choose to interpret it. `EntityConfig.actions`, for example, is a single array, but it's read by more than one component, each applying its own rendering rules to the same data (see the `ActionConfig` entry in [§ 3](#3-configuration-system) for the concrete case).
+
 ### Configurations live in consumer packages
 
 `core` provides the runtime that interprets configurations. The configurations themselves — the actual `PhaseConfig` objects, entity definitions, action lists, form schemas — live in the consuming application.
@@ -38,7 +42,7 @@ A configuration is a declarative description of a view, action, or form, express
 - A **`PhaseConfig`** describes a phase (e.g. _train_, _deploy_) and lists the entities it contains.
 - An **`EntityConfig`** describes an entity (e.g. _pipeline_, _deployment_) and lists its views and actions.
 - A **`ViewConfig`** describes a view of an entity — `list`, `detail`, or `form` — and specifies the columns, tabs, or fields it renders.
-- An **`ActionConfig`** describes an action (button, menu item) attached to an entity. It composes _what_ the action does (call a mutation or navigate to a route) with _how_ the user invokes it (immediately, with a confirmation step, or via a custom React component for bespoke flows).
+- An **`ActionConfig`** describes an action (button, menu item) attached to an entity. It composes _what_ the action does (call a mutation or navigate to a route) with _how_ the user invokes it (immediately, with a confirmation step, or via a custom React component for bespoke flows). The same `ActionConfig[]` on an `EntityConfig` is rendered by two different components, chosen by context rather than by the action author: table rows collapse all of a row's actions into one overflow popover that ignores hierarchy; the detail page header partitions the same array by hierarchy. An action doesn't choose where it renders; it inherits both surfaces automatically.
 - A **`FormConfig`** describes a form — fields, layout, validation, submission — for create and update flows.
 - A **`TableConfig`** describes a table view's columns, sorting, filtering, and action wiring.
 
@@ -47,7 +51,10 @@ A configuration is a declarative description of a view, action, or form, express
 Configurations are not a flat catalog. They compose:
 
 - **`QueryConfig` and `MutationConfig`** are parallel descriptors for backend calls — `QueryConfig` for reads (consumed by `useStudioQuery`), `MutationConfig` for writes (consumed by `useStudioMutation`). Anything that loads or mutates data references one of these: a `TableConfig`'s row source uses a `QueryConfig`; an `ActionConfig`'s mutation and a `FormConfig`'s submission use a `MutationConfig`.
+- **`MiddlewareSchema`** reshapes a record before it's sent as a mutation payload — applying scaffolds, copying or deriving fields via `operations`, and filtering by sub-type. An `ActionConfig`'s `mutation.middleware` and a `FormConfig`'s submission both go through this before the request is sent.
 - **`FormConfig` embeds inside other configs.** An `ActionConfig` can embed a `FormConfig` to render a form when the action is triggered (e.g. "Create Pipeline"); a `ViewConfig` for a form view wraps it directly; a detail view can embed one as a tab.
+
+An action's mutation payload is the record itself — the current row or page entity, optionally reshaped by `middleware`. Whether a request needs shaping is controlled by how an operator configures `ServiceProvider.request`.
 
 ### Customization escape hatches
 
@@ -171,6 +178,8 @@ Avoid mocking core's hooks (e.g. `vi.mock('#core/hooks/use-studio-mutation', …
 | `@michelangelo-ai/rpc`  | Optional ConnectRPC/gRPC-Web client                       |
 
 `core` does not depend on `rpc`. It declares the contracts (e.g. the shape of a `request` function); consumers provide implementations.
+
+`rpc` fulfills that contract with a manually-maintained requestId → handler map (`packages/rpc/handlers.ts`). Adding a new backend mutation or query is a two-sided change: the RPC must exist in the proto _and_ be registered in this map before any `MutationConfig`/`QueryConfig` can call it by name.
 
 ## 9. Where to look next
 
