@@ -9,6 +9,7 @@ import sys
 import tempfile
 import time
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -68,6 +69,37 @@ _helm_nodeport_map = [
     ("8090", ("ui", "service", "nodePort")),  # Michelangelo UI
     ("8088", ("cadence", "web", "service", "nodePort")),  # Cadence Web
     ("8080", ("temporal", "web", "service", "nodePort")),  # Temporal Web
+]
+
+# API group shared by every Michelangelo custom resource — used by
+# `ma sandbox snapshot` to discover CRD kinds dynamically instead of
+# hardcoding a list that would need updating as new CRDs are added.
+_snapshot_api_group = "michelangelo.api"
+
+# Volatile metadata fields stripped from a snapshotted resource so it can be
+# re-applied cleanly. `status` is deliberately left untouched: every
+# Michelangelo CRD registers `status` as a subresource, so `kubectl apply`
+# structurally cannot modify it regardless of what's in the file, and keeping
+# it gives a debugging reference for the state at capture time.
+_snapshot_strip_metadata_fields = [
+    "resourceVersion",
+    "uid",
+    "creationTimestamp",
+    "generation",
+    "selfLink",
+    "managedFields",
+    "ownerReferences",
+]
+
+# Annotations stripped from a snapshotted resource:
+# - last-applied-configuration is kubectl bookkeeping.
+# - MetadataStoragePrimaryKey is set once (idempotently) by the ingester
+#   controller and pinned to the object's original uid as its MySQL primary
+#   key. Left in place, a restored object's controller would never refresh
+#   it, silently decoupling the CRD's live uid from its DB row.
+_snapshot_strip_annotations = [
+    "kubectl.kubernetes.io/last-applied-configuration",
+    "michelangelo/MetadataStoragePrimaryKey",
 ]
 
 
@@ -233,6 +265,25 @@ def init_arguments(p: argparse.ArgumentParser):
         help=("Create a multi-cluster inference server demo."),
     )
 
+    snapshot_p = sp.add_parser(
+        "snapshot", help="Capture or restore Michelangelo CRD state."
+    )
+    snapshot_sp = snapshot_p.add_subparsers(dest="snapshot_action", required=True)
+    _ = snapshot_sp.add_parser(
+        "create", help="Capture all Michelangelo CRDs in the cluster to disk."
+    )
+    restore_p = snapshot_sp.add_parser(
+        "restore", help="Replay a previously captured snapshot into the cluster."
+    )
+    restore_p.add_argument(
+        "timestamp",
+        help=(
+            "Snapshot to restore — either the bare timestamp "
+            "(e.g. 20260807-170000) or the full path printed by "
+            "`snapshot create`."
+        ),
+    )
+
     delete_p = sp.add_parser("delete", help="Delete the cluster.")
     delete_p.add_argument(
         "--compute-cluster-name",
@@ -276,6 +327,8 @@ def run(ns: argparse.Namespace):
         return _stop(ns)
     if ns.action == "demo":
         return _create_demo_crs(ns)
+    if ns.action == "snapshot":
+        return _snapshot(ns)
 
     raise ValueError(f"Unsupported action: {ns.action}")
 
@@ -1152,13 +1205,8 @@ def _create_cadence_domain(links):
     sys.exit(result.returncode)
 
 
-def _create_demo_crs(ns: argparse.Namespace):
-    """Create demo Custom Resources (CRs) for the sandbox environment."""
-    assert ns
-    if ns.demo_action not in ("pipeline", "inference", "inference-multicluster"):
-        raise ValueError(f"Unsupported demo action: {ns.demo_action}")
-
-    # Check if cluster exists
+def _assert_sandbox_cluster_running():
+    """Ensure the sandbox cluster exists and is running, or exit with a hint."""
     try:
         _exec(
             "k3d",
@@ -1173,7 +1221,6 @@ def _create_demo_crs(ns: argparse.Namespace):
             "Please run 'ma sandbox create' first."
         )
 
-    # Check if cluster is running
     try:
         _exec("kubectl", "cluster-info", raise_error=True)
     except subprocess.CalledProcessError:
@@ -1181,6 +1228,15 @@ def _create_demo_crs(ns: argparse.Namespace):
             f"Cluster {_michelangelo_sandbox_kube_cluster_name} is not running. "
             "Please run 'ma sandbox start' first."
         )
+
+
+def _create_demo_crs(ns: argparse.Namespace):
+    """Create demo Custom Resources (CRs) for the sandbox environment."""
+    assert ns
+    if ns.demo_action != "pipeline" and ns.demo_action != "inference":
+        raise ValueError(f"Unsupported demo action: {ns.demo_action}")
+
+    _assert_sandbox_cluster_running()
 
     # Create CRs used by all demo resources
     demo_dir = _dir / "demo"
@@ -1210,6 +1266,143 @@ def _create_demo_crs(ns: argparse.Namespace):
         _create_inference_multicluster_demo_crs()
     else:
         raise ValueError(f"Unsupported demo action: {ns.demo_action}")
+
+
+def _snapshot(ns: argparse.Namespace):
+    """Dispatch `ma sandbox snapshot` to its create/restore action."""
+    assert ns
+    if ns.snapshot_action == "create":
+        return _snapshot_create(ns)
+    if ns.snapshot_action == "restore":
+        return _snapshot_restore(ns)
+    raise ValueError(f"Unsupported snapshot action: {ns.snapshot_action}")
+
+
+def _snapshot_kube_context() -> str:
+    return f"k3d-{_michelangelo_sandbox_kube_cluster_name}"
+
+
+def _snapshot_dir(timestamp: str) -> Path:
+    return _dir / "snapshots" / timestamp
+
+
+def _discover_michelangelo_kinds(context: str) -> list[str]:
+    """Discover plural resource names for every Michelangelo CRD in the cluster.
+
+    Uses `kubectl api-resources` rather than a hardcoded kind list so newly
+    added CRDs are picked up automatically.
+    """
+    result = subprocess.run(
+        [
+            "kubectl",
+            "--context",
+            context,
+            "api-resources",
+            f"--api-group={_snapshot_api_group}",
+            "-o",
+            "name",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def _strip_volatile_fields(item: dict):
+    """Strip volatile identity/bookkeeping fields from a resource in place."""
+    metadata = item.get("metadata", {})
+    for field in _snapshot_strip_metadata_fields:
+        metadata.pop(field, None)
+    annotations = metadata.get("annotations")
+    if annotations:
+        for key in _snapshot_strip_annotations:
+            annotations.pop(key, None)
+        if not annotations:
+            metadata.pop("annotations", None)
+
+
+def _snapshot_create(ns: argparse.Namespace):
+    """Capture every Michelangelo CRD in the cluster to a timestamped directory."""
+    assert ns
+    _assert_sandbox_cluster_running()
+    context = _snapshot_kube_context()
+
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    out_dir = _snapshot_dir(timestamp)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    captured_kinds = []
+    for kind in _discover_michelangelo_kinds(context):
+        result = subprocess.run(
+            ["kubectl", "--context", context, "get", kind, "-A", "-o", "yaml"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        doc = yaml.safe_load(result.stdout) or {}
+        items = doc.get("items") or []
+        if not items:
+            continue
+
+        for item in items:
+            _strip_volatile_fields(item)
+
+        kind_name = kind.split(".", 1)[0]
+        with open(out_dir / f"{kind_name}.yaml", "w") as f:
+            yaml.safe_dump(
+                {"apiVersion": "v1", "kind": "List", "items": items},
+                f,
+                sort_keys=False,
+            )
+        captured_kinds.append(kind_name)
+
+    print(f"\n📸 Snapshot captured at {out_dir}")
+    if captured_kinds:
+        print("Captured kinds:")
+        for kind_name in captured_kinds:
+            print(f"  - {kind_name}")
+    else:
+        print("No Michelangelo resources found in the cluster.")
+
+
+def _snapshot_restore(ns: argparse.Namespace):
+    """Replay a previously captured snapshot into the cluster.
+
+    `projects.yaml` (if present) is applied first, after ensuring each
+    project's namespace exists — namespaces are assumed to correspond 1:1
+    with projects. Every other `<kind>.yaml` file is then applied in any
+    order; nothing in the cluster enforces that a Project must exist before
+    other CRs are created, so this ordering is a courtesy, not a correctness
+    requirement.
+    """
+    assert ns
+    _assert_sandbox_cluster_running()
+    context = _snapshot_kube_context()
+
+    # Accept a bare timestamp ("20260807-104041") or a full/relative path to
+    # the snapshot directory (e.g. copy-pasted from `create`'s output) —
+    # only the final path segment is significant.
+    snapshot_path = _snapshot_dir(Path(ns.timestamp).name)
+    if not snapshot_path.is_dir():
+        _err_exit(f"Snapshot not found: {snapshot_path}")
+
+    projects_file = snapshot_path / "projects.yaml"
+    if projects_file.exists():
+        with open(projects_file) as f:
+            doc = yaml.safe_load(f) or {}
+        for project in doc.get("items") or []:
+            namespace = project.get("metadata", {}).get("namespace")
+            if namespace:
+                _ensure_namespace_exists(namespace)
+        _kube_apply(projects_file, context=context)
+
+    for yaml_file in sorted(snapshot_path.glob("*.yaml")):
+        if yaml_file == projects_file:
+            continue
+        _kube_apply(yaml_file, context=context)
+
+    print(f"\n✅ Restored snapshot from {snapshot_path}")
 
 
 def _delete(ns: argparse.Namespace):
@@ -1349,8 +1542,12 @@ def _sync_config_from_secret():
     )
 
 
-def _kube_apply(path: Path):
-    _exec("kubectl", "apply", "-f", str(path))
+def _kube_apply(path: Path, context: Optional[str] = None):
+    args = ["kubectl"]
+    if context:
+        args += ["--context", context]
+    args += ["apply", "-f", str(path)]
+    _exec(*args)
 
 
 def _apply_model_sync(is_name: str, context: Optional[str] = None):
