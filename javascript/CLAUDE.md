@@ -41,7 +41,7 @@ yarn test
 
 ### Testing
 
-- Query priority: `getByRole` → `getByLabelText` → `getByText` (ESLint's `testing-library/no-test-id-queries` enforces the `getByTestId` cutoff — see the `eslint-disable` convention for the rare legitimate exception)
+- Query priority: `getByRole` → `getByLabelText` → `getByText`
 - Mock external APIs and RPC calls; never mock internal hooks, React context, or well-tested utilities
 - Prefer integration-style tests over isolated component unit tests — e.g. table behavior is tested through `table.test.tsx` rather than scattered per-sub-component tests; reserve isolated unit tests for pure utils/hooks with standalone logic
 - See `.claude/calibration-notes.md` for lessons from past coverage that missed the mark
