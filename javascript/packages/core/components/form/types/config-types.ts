@@ -1,9 +1,9 @@
 import type { ComponentType } from 'react';
 import type { StringFieldConfig } from '#core/components/form/fields/string/types';
 import type { SharedFieldConfig } from '#core/components/form/fields/types';
-import type { GridLayoutConfig } from '#core/components/form/layout/form-grid/types';
-import type { GroupLayoutConfig } from '#core/components/form/layout/form-group/types';
-import type { RowLayoutConfig } from '#core/components/form/layout/form-row/types';
+import type { FormGridLayoutConfig } from '#core/components/form/layout/form-grid/types';
+import type { FormGroupLayoutConfig } from '#core/components/form/layout/form-group/types';
+import type { FormRowLayoutConfig } from '#core/components/form/layout/form-row/types';
 
 /** Enumerates the built-in field types available in the config-driven form system. */
 export enum FieldType {
@@ -45,7 +45,10 @@ export type FieldRendererProps = {
 export type FieldRenderer = ComponentType<FieldRendererProps>;
 
 /** Union of built-in layout types that the form engine renders natively. */
-export type BuiltinLayoutConfig = GroupLayoutConfig | RowLayoutConfig | GridLayoutConfig;
+export type BuiltinLayoutConfig =
+  | FormGroupLayoutConfig
+  | FormRowLayoutConfig
+  | FormGridLayoutConfig;
 
 /** A layout node — either a built-in type or a consumer-registered custom type. */
 export type LayoutConfig = BuiltinLayoutConfig | { type: string; items: LayoutItem[] };

@@ -19,7 +19,7 @@ export function BuiltinLayoutRenderer({
     case 'group':
       return (
         <FormGroup
-          title={config.label}
+          title={config.title}
           description={config.description}
           tooltip={config.tooltip}
           collapsible={config.collapsible}

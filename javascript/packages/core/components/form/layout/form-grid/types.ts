@@ -5,7 +5,7 @@ export interface FormGridProps {
   children: ReactNode;
 }
 
-export type GridLayoutConfig = {
+export type FormGridLayoutConfig = {
   type: 'grid';
   items: LayoutItem[];
 };

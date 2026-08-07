@@ -39,11 +39,11 @@ interface CollapsibleFormGroupProps extends FormGroupBaseProps {
 
 export type FormGroupProps = StaticFormGroupProps | CollapsibleFormGroupProps;
 
-export type GroupLayoutConfig = {
+export type FormGroupLayoutConfig = Pick<
+  FormGroupBaseProps,
+  'title' | 'description' | 'tooltip'
+> & {
   type: 'group';
-  label?: string;
-  description?: string;
-  tooltip?: string;
   collapsible?: boolean;
   items: LayoutItem[];
 };

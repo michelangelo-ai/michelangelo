@@ -14,9 +14,7 @@ export interface FormRowProps {
   children: ReactNode;
 }
 
-export type RowLayoutConfig = {
+export type FormRowLayoutConfig = Pick<FormRowProps, 'name' | 'span'> & {
   type: 'row';
-  name?: string;
-  span?: number[];
   items: LayoutItem[];
 };
