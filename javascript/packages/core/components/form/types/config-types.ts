@@ -28,6 +28,7 @@ export enum FieldType {
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface FieldConfigExtensions {}
 
+/** Uninion of all field config types implemented by packages/core */
 export type BuiltinFieldConfig = StringFieldConfig;
 
 /** Union of all field config types — built-in and consumer-extended. */
