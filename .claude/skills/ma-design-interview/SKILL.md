@@ -20,7 +20,7 @@ Interview discipline derived from [mattpocock/skills](https://github.com/mattpoc
 
 1. **One question at a time.** Never batch. Each answer informs the next question.
 2. **Recommend an answer for every question.** Propose what you'd do and why, then confirm.
-3. **Explore before asking.** If the codebase can answer it, don't ask the contributor.
+3. **Finding facts is your job, not the user's.** If the codebase can answer it, don't ask the contributor.
 4. **Resolve dependencies in order.** When decision A constrains decision B, settle A first.
 5. **Stop only at shared understanding.** Continue until every branch of the design tree has a resolved answer.
 
@@ -37,6 +37,7 @@ Before launching any discovery, resolve every resource-like noun in the input to
 actual proto file. Run `ls proto/api/v2/*.proto` and match the input against filenames.
 
 Examples of why this matters:
+
 - "create a trigger run for a pipeline" → `trigger_run.proto` + `pipeline.proto`, NOT
   `pipeline_run.proto`. The input contains "run" and "pipeline" but the resource is
   TriggerRun, not PipelineRun.
