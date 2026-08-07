@@ -53,6 +53,30 @@ describe('Model list page', () => {
                     modelFamily: { name: 'fraud-family' },
                   },
                 },
+                {
+                  metadata: {
+                    name: 'demand-forecaster',
+                    labels: { 'michelangelo/environment': 'development' },
+                    creationTimestamp: { seconds: 1700000000 },
+                  },
+                  spec: {
+                    description: 'model workflow=demand-forecaster git=def456',
+                    kind: 2, // MODEL_KIND_REGRESSION
+                    modelFamily: { name: 'demand-family' },
+                  },
+                },
+                {
+                  metadata: {
+                    name: 'user-segmenter',
+                    labels: { 'michelangelo/environment': 'testing' },
+                    creationTimestamp: { seconds: 1700000000 },
+                  },
+                  spec: {
+                    description: 'model workflow=user-segmenter git=ghi789',
+                    kind: 5, // MODEL_KIND_CLUSTERING
+                    modelFamily: { name: 'segment-family' },
+                  },
+                },
               ],
             },
           }),
@@ -65,5 +89,12 @@ describe('Model list page', () => {
     expect(screen.getByText('Binary Classification')).toBeInTheDocument();
     expect(screen.getByText('fraud-family')).toBeInTheDocument();
     expect(screen.getByText('model workflow=fraud-classifier git=abc123')).toBeInTheDocument();
+
+    expect(screen.getByRole('link', { name: 'demand-forecaster' })).toBeInTheDocument();
+    expect(screen.getByText('Development')).toBeInTheDocument();
+    expect(screen.getByText('Regression')).toBeInTheDocument();
+
+    expect(screen.getByRole('link', { name: 'user-segmenter' })).toBeInTheDocument();
+    expect(screen.getByText('Clustering')).toBeInTheDocument();
   });
 });
