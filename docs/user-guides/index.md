@@ -20,6 +20,7 @@ New to Michelangelo AI? Follow this path:
 |-------|-------------|
 | [ML Pipelines Overview](./ml-pipelines/index.md) | Tasks, workflows, pipelines, and the Uniflow framework |
 | [Running Uniflow Pipelines](./ml-pipelines/running-uniflow.md) | Run pipelines locally and remotely |
+| [YAML Pipeline Authoring](./ml-pipelines/yaml-pipeline-authoring.md) | Configure a pipeline's tasks from a `pipeline_conf.yaml` file |
 | [Pipeline Running Modes](./ml-pipelines/pipeline-running-modes.md) | Local Run, Remote Run, Pipeline Dev Run, and Pipeline Run |
 | [Project Management](./getting-started/project-management-for-ml-pipelines.md) | Organize pipelines, models, and resources into projects |
 | [Pipeline Management](./ml-pipelines/pipeline-management.md) | Create, update, and manage pipelines |

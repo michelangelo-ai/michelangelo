@@ -409,40 +409,28 @@ def populate_pipeline_spec_with_workflow_inputs(
 
         input_dict = MessageToDict(workflow_inputs)
 
-        # Create manifest content in the format expected by internal code
-        # This matches the structure: value.fields.kwargs.list_value.values...
-
-        # Build kwargs structure
-        kwargs_values = []
-        for key, value in input_dict.get("kwargs", []):
-            kwargs_values.append(
-                {
-                    "list_value": {
-                        "values": [
-                            {"string_value": str(key)},
-                            {"string_value": str(value)},
-                        ]
-                    }
-                }
-            )
-
-        # Build environ structure
-        environ_fields = {}
-        for key, value in input_dict.get("environ", {}).items():
-            environ_fields[key] = {"string_value": str(value)}
-
-        # Create TypedStruct as an Any message with proper @type field
-        from google.protobuf.json_format import MessageToDict
-
         # Create the inner struct for workflow inputs
         inner_struct = Struct()
-        inner_struct.update(
-            {
-                "args": [],
-                "environ": input_dict.get("environ", {}),
-                "kwargs": input_dict.get("kwargs", []),
-            }
-        )
+        if "task_configs" in input_dict:
+            # Standard YAML pipeline (pipeline_conf.yaml): the pipeline-run
+            # controller keys on a top-level task_configs entry (passed to
+            # the workflow as positional args), so the registration output
+            # passes through unchanged.
+            inner_struct.update(
+                {
+                    key: input_dict[key]
+                    for key in ("task_configs", "workflow_config", "environ")
+                    if key in input_dict
+                }
+            )
+        else:
+            inner_struct.update(
+                {
+                    "args": [],
+                    "environ": input_dict.get("environ", {}),
+                    "kwargs": input_dict.get("kwargs", []),
+                }
+            )
 
         # Create TypedStruct
         typed_struct = TypedStruct()

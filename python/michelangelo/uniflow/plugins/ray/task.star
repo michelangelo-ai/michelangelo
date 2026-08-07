@@ -1,5 +1,5 @@
 load("@plugin", "atexit", "json", "os", "ray", "time")
-load("../../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "DEFAULT_RETRY_ATTEMPTS", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_pythonpath", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "process_terminated_job", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
+load("../../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "DEFAULT_RETRY_ATTEMPTS", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_canvas_task_config", "get_pythonpath", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "process_terminated_job", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 DEFAULT_CREATE_CLUSTER_TIMEOUT_SECONDS = 60 * 30  # Timeout duration for cluster creation in seconds.
 RAY_ENV = {
@@ -157,6 +157,31 @@ def task(
         _worker_gpu = int(_worker_gpu)
         _worker_instances = int(_worker_instances)
 
+        # Apply job_specs overrides when the task was called with a typed
+        # TaskConfig envelope. job_specs wins over defaults and env overrides.
+        canvas_config = get_canvas_task_config(*args, **kwargs)
+        if canvas_config != None:
+            if canvas_config.get("retry_attempts") != None:
+                _retry_attempts = int(canvas_config["retry_attempts"])
+
+            job_specs = canvas_config.get("job_specs")
+            ray_job_spec = job_specs.get("ray") if job_specs != None else None
+            if ray_job_spec != None:
+                head_res = ray_job_spec.get("head", {}).get("pod", {}).get("resource", {})
+                _head_cpu = int(head_res.get("cpu", _head_cpu))
+                _head_memory = head_res.get("memory", _head_memory)
+                _head_disk = head_res.get("disk_size", _head_disk)
+                _head_gpu = int(head_res.get("gpu", _head_gpu))
+                _gpu_sku = head_res.get("gpu_sku", _gpu_sku)
+
+                worker_spec = ray_job_spec.get("worker", {})
+                worker_res = worker_spec.get("pod", {}).get("resource", {})
+                _worker_cpu = int(worker_res.get("cpu", _worker_cpu))
+                _worker_memory = worker_res.get("memory", _worker_memory)
+                _worker_disk = worker_res.get("disk_size", _worker_disk)
+                _worker_gpu = int(worker_res.get("gpu", _worker_gpu))
+                _worker_instances = int(worker_spec.get("max_instances", _worker_instances))
+
         result_url = get_result_url()
 
         # Create cluster
@@ -180,7 +205,7 @@ def task(
             runtime_env = runtime_env,
         )
 
-        total_retry_attempt = retry_attempts + 1
+        total_retry_attempt = _retry_attempts + 1
         for retry_attempt_id in range(1, total_retry_attempt + 1):
             job_state, job, cluster_url, ray_job_name = execute_ray_task(
                 task_path = task_path,

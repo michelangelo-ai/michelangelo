@@ -1,0 +1,70 @@
+# Minimal tabular_train pipeline, authored entirely through YAML.
+#
+# Everything use-case-specific lives here: point source.spark_sql.query at your
+# own table (e.g. "SELECT label, score FROM my_db.my_table WHERE datestr = ..."),
+# adjust the split ratio, name your feature/target columns, and size each task's
+# cluster via job_specs. The workflow code never changes.
+#
+# job_specs values below deliberately differ from the Starlark defaults so a
+# sandbox run proves YAML sizing wins. Every resource field is spelled out
+# because the OSS ResourceSpec currently requires disk_size/gpu/gpu_sku
+# (internal defaults them; aligning OSS is tracked as follow-up work).
+workflow_function: examples.canvasflex_tabular_train.workflow_function
+workflow_config: {}
+task_configs:
+  tabular_feature_prep:
+    config:
+      source:
+        spark_sql:
+          query: >
+            SELECT id,
+                   CAST(id % 2 AS INT) AS label,
+                   RAND(7)             AS score
+            FROM range(200)
+      split:
+        ratio:
+          train_ratio: 0.8
+    job_specs:
+      spark:
+        driver:
+          pod:
+            resource:
+              cpu: 2
+              memory: 2G
+              disk_size: 20G
+              gpu: 0
+              gpu_sku: ""
+        executor:
+          pod:
+            resource:
+              cpu: 2
+              memory: 2G
+              disk_size: 20G
+              gpu: 0
+              gpu_sku: ""
+          instances: 2
+  tabular_trainer:
+    config:
+      feature_column: score
+      target_column: label
+      num_thresholds: 20
+    job_specs:
+      ray:
+        head:
+          pod:
+            resource:
+              cpu: 2
+              memory: 2Gi
+              disk_size: 8Gi
+              gpu: 0
+              gpu_sku: ""
+        worker:
+          pod:
+            resource:
+              cpu: 2
+              memory: 2Gi
+              disk_size: 8Gi
+              gpu: 0
+              gpu_sku: ""
+          min_instances: 1
+          max_instances: 2

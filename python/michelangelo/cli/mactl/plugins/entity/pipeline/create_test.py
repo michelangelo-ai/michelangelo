@@ -164,6 +164,59 @@ class PipelineCreateTest(TestCase):
         )
         self.assertEqual(result["spec"]["owner"]["name"], "test-user")
 
+    def _populate_with_inputs(self, input_data: dict) -> dict:
+        """Run populate_pipeline_spec_with_workflow_inputs with real inputs."""
+        workflow_inputs = Struct()
+        workflow_inputs.update(input_data)
+
+        mock_repo = Mock()
+        mock_repo.active_branch.name = "main"
+        mock_repo.head.commit.hexsha = "abc123"
+
+        with patch(
+            "michelangelo.cli.mactl.plugins.entity.pipeline.create.get_user_name"
+        ) as mock_get_user_name:
+            mock_get_user_name.return_value = "test-user"
+            return populate_pipeline_spec_with_workflow_inputs(
+                {},
+                {"spec": {}},
+                workflow_inputs,
+                mock_repo,
+                Path("/fake/repo/pipelines/pipeline.yaml"),
+                Path("/fake/repo"),
+                "pipelines/pipeline.yaml",
+                "s3://bucket/tar",
+                "my_workflow",
+            )
+
+    def test_manifest_content_passes_yaml_pipeline_shape_through(self):
+        """task_configs registrations keep their shape in manifest content."""
+        result = self._populate_with_inputs(
+            {
+                "task_configs": {"train": {"config": {"learning_rate": 0.05}}},
+                "workflow_config": {"dataset": "cats-vs-dogs"},
+                "environ": {"UF_DEMO": "1"},
+            }
+        )
+
+        content_value = result["spec"]["manifest"]["content"]["value"]
+        self.assertIn("task_configs", content_value)
+        self.assertIn("workflow_config", content_value)
+        self.assertEqual(content_value["environ"], {"UF_DEMO": "1"})
+        self.assertNotIn("args", content_value)
+        self.assertNotIn("kwargs", content_value)
+
+    def test_manifest_content_keeps_legacy_shape_for_custom_workflows(self):
+        """args/kwargs registrations keep the legacy content shape."""
+        result = self._populate_with_inputs(
+            {"args": [], "kwargs": [["lr", "0.1"]], "environ": {}}
+        )
+
+        content_value = result["spec"]["manifest"]["content"]["value"]
+        self.assertEqual(content_value["args"], [])
+        self.assertIn("kwargs", content_value)
+        self.assertNotIn("task_configs", content_value)
+
     @patch(
         "michelangelo.cli.mactl.plugins.entity.pipeline.create.get_pipeline_config_and_tar"
     )
