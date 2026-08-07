@@ -2,6 +2,117 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### ⚠ Breaking Changes
+
+- **python:** Add kind to ModelPusherPlugin (#1687) — add kind to ModelPusherPlugin (#1687)
+
+
+### Bug Fixes
+
+
+- **website:** Update footer copyright to "Michelangelo AI" (#1664)
+
+
+- **pusher:** Use the shared api.v2 name generator for auto-generated model names (#1633)
+
+
+- **ui:** Tighten spacing and fix stuck focus state on multi-string field (#1681)
+
+
+- **go:** Sync TriggerRun inputs to Temporal schedules (#1663)
+
+
+- **ci:** Widen Cadence worker-connect wait window to 5 min (#1686)
+
+
+- **docs:** Update stale routing source links in integrate-custom-backend (#1625)
+
+
+- **ui:** Stop ArrayFormGroup spacing from depending on parent layout (#1682)
+
+
+- **ci:** Fix Go and Python lint and test checks for fork PRs (#1609)
+
+
+### CI/CD
+
+
+- **python:** Run michelangelo-examples CLI e2e tests in integration-test workflow (#1665)
+
+
+### Documentation
+
+
+- Add MLOps glossary page (#1628)
+
+
+- Sync CHANGELOG.md [0.7.0] section to main (#1677)
+
+
+- **security:** Update supported versions for 0.7.x (#1680)
+
+
+- Add API service stubs for 10 undocumented proto services (#1587)
+
+
+- **serving:** Add DeleteXxxCollection to serving API table footnote (#1689)
+
+
+- Add Docs badge to README badge row (#1696)
+
+
+- Add Ask DeepWiki badge to README (#1630)
+
+
+- **pipelines:** Clarify architectural difference between remote-run and dev-run (#1697)
+
+
+### Features
+
+
+- **pipelinerun:** Add status reconstruction from workflow engine (#1297)
+
+
+- Add design-interview skill for structured UX design (#1676)
+
+
+- **native_transform:** Add structural/shape layers (PR B2) (#1603)
+
+
+- **trainer:** Re-introduce profiler subsystem (PR 5) (#1614)
+
+
+- **python:** Add kind to ModelPusherPlugin (#1687) [**BREAKING**]
+
+
+- **python:** Migrate tabular_assembler to OSS (#1430)
+
+
+- **trainer:** Pluggable MLflow profiler sink (#1702)
+
+
+### Miscellaneous
+
+
+- Merge back release/v0.7 to main (#1660)
+
+
+- Add content index annotation (#1501)
+
+
+- Add google.protobuf.Duration support to protoc-gen-validation (#1694)
+
+
+- Add LinksBox and MessageContainer components (#1701)
+
+
+- Remove dead internal tracker links from code comments (#1712)
+
+
+- Bump version to 0.8.0-rc.1 (#1717)
+
 ## [0.7.0] - 2026-08-03
 
 
