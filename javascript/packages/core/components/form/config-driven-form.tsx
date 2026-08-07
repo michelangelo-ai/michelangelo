@@ -32,7 +32,7 @@ export function ConfigDrivenForm<T extends Record<string, unknown>>({
     <Form<T> onSubmit={onSubmit} initialValues={initialValues}>
       <LayoutItemList
         items={config.layout}
-        // cast: FormConfig<T> maps fields by keyof T, but LayoutItemList expects untyped record
+        // cast: erases keyof T — layouts are structural and don't depend on the data shape
         fields={config.fields as Record<string, FieldConfig | undefined>}
       />
     </Form>

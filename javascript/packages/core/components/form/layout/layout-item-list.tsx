@@ -9,6 +9,7 @@ export function LayoutItemList({
   fields,
 }: {
   items: LayoutItem[];
+  /** Field configs keyed by path — untyped since layouts are structural and don't depend on the data shape. */
   fields: Record<string, FieldConfig | undefined>;
 }) {
   return (
