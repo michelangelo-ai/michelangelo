@@ -7,6 +7,7 @@ import { StringField } from '#core/components/form/fields/string/string-field';
 import { Form } from '#core/components/form/form';
 import { LinksBox } from '#core/components/links-box/links-box';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
+import { DeploymentRevisionCard } from './deployment-revision-card';
 import { TARGET_TYPE_LABELS } from './shared';
 
 import type { DeploymentRecord } from './types';
@@ -39,6 +40,32 @@ export function DeploymentInfoPage({ data, isLoading }: { data?: object; isLoadi
   return (
     <div className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale600 })}>
       <LinksBox title="Useful links" links={links} isLoading={isLoading} />
+
+      <section>
+        <HeadingSmall marginTop="0" marginBottom={theme.sizing.scale600}>
+          Key status indicators
+        </HeadingSmall>
+        <div className={css({ display: 'flex', gap: theme.sizing.scale600, flexWrap: 'wrap' })}>
+          <DeploymentRevisionCard
+            title="Current model in production"
+            revision={deployment?.status?.currentRevision}
+            emptyText="No currently deployed model"
+            isLoading={isLoading}
+          />
+          <DeploymentRevisionCard
+            title="Candidate model"
+            revision={deployment?.status?.candidateRevision}
+            emptyText="No model currently being deployed"
+            isLoading={isLoading}
+          />
+          <DeploymentRevisionCard
+            title="Desired model to be deployed"
+            revision={deployment?.spec?.desiredRevision}
+            emptyText="No model configured to be deployed"
+            isLoading={isLoading}
+          />
+        </div>
+      </section>
 
       <section>
         <HeadingSmall marginTop="0" marginBottom={theme.sizing.scale600}>

@@ -195,6 +195,51 @@ describe('Deployment detail page', () => {
       expect(screen.queryByLabelText('Type of deployment')).not.toBeInTheDocument();
       expect(screen.queryByRole('link', { name: 'triton-server' })).not.toBeInTheDocument();
     });
+
+    it('renders the revision references on the deployment', async () => {
+      render(
+        <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({
+            location: '/myproject/deploy/deployments/sentiment-deployment/info',
+          }),
+          getServiceProviderWrapper({ request: createQueryMockRouter(infoTabResponses()) }),
+        ])
+      );
+
+      expect(await screen.findByText('sentiment-model-rev-2')).toBeInTheDocument();
+      expect(screen.getByText('Current model in production')).toBeInTheDocument();
+      expect(screen.getByText('sentiment-model-rev-3')).toBeInTheDocument();
+      expect(screen.getByText('No model currently being deployed')).toBeInTheDocument();
+    });
+
+    it('renders empty states when no revisions are set', async () => {
+      render(
+        <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({
+            location: '/myproject/deploy/deployments/sentiment-deployment/info',
+          }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetDeployment: {
+                deployment: {
+                  metadata: { name: 'sentiment-deployment' },
+                  spec: { definition: { type: 1 } },
+                  status: { state: DEPLOYMENT_STATE.EMPTY, stage: DEPLOYMENT_STAGE.INVALID },
+                },
+              },
+            }),
+          }),
+        ])
+      );
+
+      expect(await screen.findByText('No currently deployed model')).toBeInTheDocument();
+      expect(screen.getByText('No model currently being deployed')).toBeInTheDocument();
+      expect(screen.getByText('No model configured to be deployed')).toBeInTheDocument();
+    });
   });
 
   describe('ongoing operations tab', () => {
