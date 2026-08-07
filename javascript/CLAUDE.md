@@ -22,14 +22,17 @@ yarn test
 ### Structure
 
 - Kebab-case filenames, namespaced: `table-action-button.tsx` not `action-button.tsx`
+- Co-locate related code alongside the component it belongs to; stay flat until you have multiple files of the same type (several hooks → `hooks/`, several utils → `utils/`)
+- Start local (`components/my-component/utils/`); promote to a shared `utils/` only once multiple features need it
 - `__tests__/` lives next to the code it tests
 
 ### Code quality
 
-- Follow existing patterns first — look before you invent
-- Minimum complexity for the current task — don't design for hypothetical requirements
-- Don't abstract speculatively — three similar lines beat a forced abstraction
 - Primary export first in each file; helpers follow
+
+### TypeScript
+
+- Create focused types mapped from generated types — include only the properties you need, not the full generated shape
 
 ### React
 
@@ -41,8 +44,9 @@ yarn test
 - Query priority: `getByRole` → `getByLabelText` → `getByText` → `getByTestId`
 - `getByTestId` only for elements with no semantic role, or mock components — everything else is a bug
 - Mock external APIs and RPC calls; never mock internal hooks, React context, or well-tested utilities
+- Prefer integration-style tests over isolated component unit tests — e.g. table behavior is tested through `table.test.tsx` rather than scattered per-sub-component tests; reserve isolated unit tests for pure utils/hooks with standalone logic
+- See `.claude/calibration-notes.md` for lessons from past coverage that missed the mark
 
 ### Documentation
 
-- Comments explain _why_ — prefer renaming identifiers if code needs clarification
-- Skip JSDoc for simple functions whose TypeScript signature is self-explanatory
+- No AI/agent references in documentation
