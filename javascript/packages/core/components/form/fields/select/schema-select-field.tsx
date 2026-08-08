@@ -1,3 +1,4 @@
+import { resolveValidation } from '#core/components/form/validation/resolve-validation';
 import { SelectField } from './select-field';
 
 import type { FieldRendererProps } from '#core/components/form/types/config-types';
@@ -6,6 +7,7 @@ import type { SelectFieldConfig } from './types';
 export function SchemaSelectField({ name, config }: FieldRendererProps) {
   // cast: SchemaField routes by config.type, guaranteeing SelectFieldConfig
   const c = config as SelectFieldConfig;
+  const validate = resolveValidation(c.validation);
 
   return (
     <SelectField
@@ -24,6 +26,7 @@ export function SchemaSelectField({ name, config }: FieldRendererProps) {
       creatable={c.creatable}
       isLoading={c.isLoading}
       visibleOptionLimit={c.visibleOptionLimit}
+      validate={validate}
     />
   );
 }

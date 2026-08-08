@@ -1,3 +1,4 @@
+import { resolveValidation } from '#core/components/form/validation/resolve-validation';
 import { DateField } from './date-field';
 
 import type { FieldRendererProps } from '#core/components/form/types/config-types';
@@ -6,6 +7,7 @@ import type { DateFieldConfig } from './types';
 export function SchemaDateField({ name, config }: FieldRendererProps) {
   // cast: SchemaField routes by config.type, guaranteeing DateFieldConfig
   const c = config as DateFieldConfig;
+  const validate = resolveValidation(c.validation);
   return (
     <DateField
       name={name}
@@ -18,6 +20,7 @@ export function SchemaDateField({ name, config }: FieldRendererProps) {
       caption={c.caption}
       dateFormat={c.dateFormat}
       noFutureDate={c.noFutureDate}
+      validate={validate}
     />
   );
 }
