@@ -85,7 +85,22 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 			"name", triggerRun.Name,
 			"workflowId", wid,
 			"runId", *rid)
-		return v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil
+		// Finding an existing workflow proves only that it is running, not that
+		// its schedule action contains the current TriggerRun input. Leave the
+		// Actual* fields empty so Update verifies and refreshes them on the next
+		// reconciliation.
+		return v2pb.TriggerRunStatus{
+			State:  v2pb.TRIGGER_RUN_STATE_RUNNING,
+			LogUrl: getWorkflowURL(wid, r.WorkflowClient.GetProvider()),
+		}, nil
+	}
+	inputHash, err := scheduleInputHash(triggerRun)
+	if err != nil {
+		return v2pb.TriggerRunStatus{
+				ErrorMessage: err.Error(),
+				State:        v2pb.TRIGGER_RUN_STATE_FAILED,
+			}, fmt.Errorf("hash schedule input for trigger %s/%s: %w",
+				triggerRun.Namespace, triggerRun.Name, err)
 	}
 	log.Info("starting scheduled workflow",
 		"operation", "start_workflow",
@@ -94,7 +109,7 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 		"workflowId", opt.ID,
 		"taskList", opt.TaskList)
 	exec, err := r.WorkflowClient.StartWorkflow(
-		ctx, opt, "trigger.CronTrigger", CreateTriggerRequest{TriggerRun: triggerRun})
+		ctx, opt, "trigger.CronTrigger", CreateTriggerRequest{TriggerRun: scheduleWorkflowInput(triggerRun)})
 	if err != nil {
 		log.Error(err, "failed to start scheduled workflow",
 			"operation", "start_workflow",
@@ -113,16 +128,23 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 		"name", triggerRun.Name,
 		"execution_id", exec.ID,
 		"run_id", exec.RunID)
+	return recurringTriggerStatus(triggerRun, wid, opt.CronSchedule, inputHash, r.WorkflowClient.GetProvider()), nil
+}
+
+func recurringTriggerStatus(
+	triggerRun *v2pb.TriggerRun, workflowID string, cron string, inputHash string, provider string,
+) v2pb.TriggerRunStatus {
 	return v2pb.TriggerRunStatus{
 		State:  v2pb.TRIGGER_RUN_STATE_RUNNING,
-		LogUrl: getWorkflowURL(wid, r.WorkflowClient.GetProvider()),
+		LogUrl: getWorkflowURL(workflowID, provider),
 		ActualTrigger: &v2pb.Trigger{
 			TriggerType: &v2pb.Trigger_CronSchedule{
-				CronSchedule: &v2pb.CronSchedule{Cron: opt.CronSchedule},
+				CronSchedule: &v2pb.CronSchedule{Cron: cron},
 			},
 		},
-		ActualNotifications: triggerRun.Spec.Notifications,
-	}, nil
+		ActualNotifications:     triggerRun.Spec.Notifications,
+		ActualScheduleInputHash: inputHash,
+	}
 }
 
 // Kill stops the cron trigger by delegating to the shared killWorkflow utility.
@@ -205,6 +227,19 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun, a
 		Name:      triggerRun.Name,
 	})
 
+	// A paused schedule cannot start workflows with stale inputs, so defer all
+	// schedule synchronization until resume. This also avoids repeatedly calling
+	// Temporal for paused schedules whose workflow has exhausted its signal limit.
+	// Kill is intentionally not handled here; returning actionHandled=false lets
+	// the controller continue to the normal schedule deletion path.
+	if triggerRun.Status.State == v2pb.TRIGGER_RUN_STATE_PAUSED &&
+		action != v2pb.TRIGGER_RUN_ACTION_RESUME {
+		log.Info("trigger is paused, deferring schedule synchronization until resume")
+		// A repeated PAUSE command is already satisfied. Mark it handled so the
+		// controller clears the one-time action without contacting Temporal.
+		return triggerRun.Status, action == v2pb.TRIGGER_RUN_ACTION_PAUSE, nil
+	}
+
 	desiredCron := triggerRun.Spec.Trigger.GetCronSchedule().GetCron()
 	if desiredCron == "" {
 		log.Info("no cron schedule in spec, skipping update")
@@ -218,6 +253,14 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun, a
 
 	cronDrifted := actualCron != desiredCron
 	notifDrifted := !notificationsEqual(triggerRun.Spec.Notifications, triggerRun.Status.ActualNotifications)
+	desiredInputHash, err := scheduleInputHash(triggerRun)
+	if err != nil {
+		errorStatus := triggerRun.Status
+		errorStatus.ErrorMessage = err.Error()
+		return errorStatus, false, fmt.Errorf("hash schedule input for trigger %s/%s: %w",
+			triggerRun.Namespace, triggerRun.Name, err)
+	}
+	inputDrifted := triggerRun.Status.ActualScheduleInputHash != desiredInputHash
 
 	// Determine if we need to set paused state atomically with the update
 	var paused *bool
@@ -230,17 +273,18 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun, a
 		paused = &p
 	}
 
-	if !cronDrifted && !notifDrifted && paused == nil {
+	if !cronDrifted && !notifDrifted && !inputDrifted && paused == nil {
 		return triggerRun.Status, false, nil
 	}
 
 	wid := generateWorkflowID(triggerRun)
 
-	// Pass updated args when notifications drifted so the schedule's workflow
-	// input is refreshed in the same atomic handle.Update() call.
+	// Cron is also embedded in the workflow input and is used to calculate
+	// LAST_SCHEDULE_TIMESTAMP, so refresh the action args for cron drift even if
+	// the persisted input hash is unexpectedly already current.
 	var args []interface{}
-	if notifDrifted {
-		args = []interface{}{CreateTriggerRequest{TriggerRun: triggerRun}}
+	if inputDrifted || cronDrifted || notifDrifted {
+		args = []interface{}{CreateTriggerRequest{TriggerRun: scheduleWorkflowInput(triggerRun)}}
 	}
 
 	// cronToUpdate is empty when only notifications/paused changed — UpdateTrigger
@@ -253,11 +297,12 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun, a
 	log.Info("drift detected, updating workflow engine schedule",
 		"cronDrifted", cronDrifted,
 		"notifDrifted", notifDrifted,
+		"inputDrifted", inputDrifted,
 		"desiredCron", desiredCron,
 		"actualCron", actualCron,
 		"atomicPaused", paused)
 
-	err := c.WorkflowClient.UpdateTrigger(ctx, wid, cronToUpdate, paused, args)
+	err = c.WorkflowClient.UpdateTrigger(ctx, wid, cronToUpdate, paused, args)
 	if err != nil {
 		log.Error(err, "failed to update trigger in workflow engine",
 			"workflowId", wid,
@@ -290,6 +335,9 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun, a
 	}
 	if notifDrifted {
 		newStatus.ActualNotifications = triggerRun.Spec.Notifications
+	}
+	if len(args) > 0 {
+		newStatus.ActualScheduleInputHash = desiredInputHash
 	}
 
 	if paused != nil {

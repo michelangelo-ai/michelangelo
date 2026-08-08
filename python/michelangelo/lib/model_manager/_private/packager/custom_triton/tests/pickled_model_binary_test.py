@@ -3,7 +3,6 @@
 import os
 import pickle
 import tempfile
-from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -12,6 +11,9 @@ import numpy as np
 from michelangelo.lib.model_manager._private.packager.custom_triton import (
     serialize_pickle_dependencies,
     serialize_pickled_file_dependencies,
+)
+from michelangelo.lib.model_manager._private.packager.custom_triton.tests._helpers import (  # noqa: E501
+    list_relative_files,
 )
 from michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.invalid_model import (  # noqa: E501
     Model,
@@ -48,11 +50,7 @@ class PickledModelBinaryTest(TestCase):
                 model_path, target_dir, include_import_prefixes=["michelangelo"]
             )
 
-            files = sorted(
-                str(Path(os.path.join(dirpath, file)).relative_to(target_dir))
-                for dirpath, _, filenames in os.walk(target_dir)
-                for file in filenames
-            )
+            files = list_relative_files(target_dir)
 
             prefix = "michelangelo/lib/model_manager/"
             self.assertEqual(
@@ -105,11 +103,7 @@ class PickledModelBinaryTest(TestCase):
                 fn, target_dir, include_import_prefixes=["michelangelo"]
             )
 
-            files = sorted(
-                str(Path(os.path.join(dirpath, file)).relative_to(target_dir))
-                for dirpath, _, filenames in os.walk(target_dir)
-                for file in filenames
-            )
+            files = list_relative_files(target_dir)
 
             prefix = "michelangelo/lib/model_manager/"
             self.assertEqual(
@@ -141,10 +135,6 @@ class PickledModelBinaryTest(TestCase):
                 fn, target_dir, include_import_prefixes=["michelangelo"]
             )
 
-            files = sorted(
-                str(Path(os.path.join(dirpath, file)).relative_to(target_dir))
-                for dirpath, _, filenames in os.walk(target_dir)
-                for file in filenames
-            )
+            files = list_relative_files(target_dir)
 
             self.assertEqual(files, [])

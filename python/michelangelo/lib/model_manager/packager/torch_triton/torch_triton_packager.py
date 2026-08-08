@@ -88,7 +88,9 @@ class TorchTritonPackager:
             model_schema: The schema defining the model's input and output
                 features, including their names, data types, and shapes.
             model_name: The name to use for the model in the Triton model repository.
-                If not specified, a placeholder name is used.
+                If not specified, the ``name`` field is omitted from the
+                generated config and Triton derives it from the model
+                directory name instead.
             dest_model_path: The directory path where the model package should
                 be saved. If not specified, a temporary directory will be
                 created and its path returned.
@@ -165,9 +167,6 @@ class TorchTritonPackager:
 
         if not is_schema_valid:
             raise error
-
-        if not model_name:
-            model_name = "$MODEL_NAME"
 
         if not dest_model_path:
             dest_model_path = tempfile.mkdtemp()

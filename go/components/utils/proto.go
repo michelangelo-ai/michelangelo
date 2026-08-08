@@ -113,7 +113,7 @@ func MapProtoListValueToInterface(x *types.ListValue) ([]interface{}, error) {
 
 // Construct proto.Struct from map[string]interface{} type
 // Reference: https://github.com/protocolbuffers/protobuf-go/blob/master/types/known/structpb/struct.pb.go
-// Not adding the repo directly as it seems there are some compatibility issues tracked in https://code.uberinternal.com/T5741973.
+// Not adding the repo directly as it seems there are some compatibility issues.
 
 // NewValue constructs a Value from a general-purpose Go interface.
 //

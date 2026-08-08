@@ -172,6 +172,7 @@ export { ArrayFormRow } from '#core/components/form/layout/array-form-row/array-
 export { ArrayFormGroup } from '#core/components/form/layout/array-form-group/array-form-group';
 
 // Actions
+export { useSuccessOperations } from '#core/components/actions/use-success-operations';
 export * from '#core/components/actions/types';
 
 // Detail View

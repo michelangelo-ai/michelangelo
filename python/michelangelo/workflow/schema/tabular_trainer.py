@@ -79,9 +79,10 @@ class ColumnConfig:
 
     Attributes:
         data_type: PyTorch dtype string, e.g. ``"torch.float32"``.
-        shape: Tensor shape *excluding* the batch dimension, e.g.
-            ``[128]`` for a 128-element embedding. Defaults to ``[]``
-            (scalar).
+        shape: Tensor shape *excluding* the batch dimension, e.g. ``[128]``
+            for a 128-element embedding, or ``[1]`` for a scalar column.
+            Required -- there is no default; a caller must decide the
+            shape explicitly rather than relying on an implicit value.
 
     Example:
         >>> ColumnConfig(data_type="torch.float32", shape=[128])
@@ -89,7 +90,7 @@ class ColumnConfig:
     """
 
     data_type: str
-    shape: list[int] = field(default_factory=list)
+    shape: list[int]
 
 
 @dataclass
@@ -580,9 +581,9 @@ class LightningTrainerConfig:
         ... )
         >>> cfg = LightningTrainerConfig(
         ...     model_class="myproject.models.TabularNet",
-        ...     input_columns={"age": ColumnConfig("torch.float32")},
-        ...     output_columns={"score": ColumnConfig("torch.float32")},
-        ...     labels={"clicked": ColumnConfig("torch.long")},
+        ...     input_columns={"age": ColumnConfig("torch.float32", [1])},
+        ...     output_columns={"score": ColumnConfig("torch.float32", [1])},
+        ...     labels={"clicked": ColumnConfig("torch.long", [1])},
         ...     metadata_columns=["user_id"],
         ... )
     """
@@ -624,10 +625,10 @@ class TabularTrainerConfig:
         >>> cfg = TabularTrainerConfig(
         ...     lightning=LightningTrainerConfig(
         ...         model_class="myproject.models.TabularNet",
-        ...         input_columns={"age": ColumnConfig("torch.float32"),
-        ...                        "income": ColumnConfig("torch.float32")},
-        ...         output_columns={"score": ColumnConfig("torch.float32")},
-        ...         labels={"clicked": ColumnConfig("torch.long")},
+        ...         input_columns={"age": ColumnConfig("torch.float32", [1]),
+        ...                        "income": ColumnConfig("torch.float32", [1])},
+        ...         output_columns={"score": ColumnConfig("torch.float32", [1])},
+        ...         labels={"clicked": ColumnConfig("torch.long", [1])},
         ...         metadata_columns=["user_id"],
         ...     )
         ... )
@@ -637,10 +638,10 @@ class TabularTrainerConfig:
         >>> cfg = TabularTrainerConfig(
         ...     lightning=LightningTrainerConfig(
         ...         model_class="myproject.models.TabularNet",
-        ...         input_columns={"age": ColumnConfig("torch.float32"),
-        ...                        "income": ColumnConfig("torch.float32")},
-        ...         output_columns={"score": ColumnConfig("torch.float32")},
-        ...         labels={"clicked": ColumnConfig("torch.long")},
+        ...         input_columns={"age": ColumnConfig("torch.float32", [1]),
+        ...                        "income": ColumnConfig("torch.float32", [1])},
+        ...         output_columns={"score": ColumnConfig("torch.float32", [1])},
+        ...         labels={"clicked": ColumnConfig("torch.long", [1])},
         ...         metadata_columns=["user_id"],
         ...         dataloading_config=DataloadingConfig(
         ...             batch_iter_config=BatchIterConfig(

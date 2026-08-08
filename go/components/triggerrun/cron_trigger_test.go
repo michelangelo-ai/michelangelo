@@ -12,6 +12,7 @@ import (
 	interfaceMock "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface/interface_mock"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -37,6 +38,7 @@ func TestRun(t *testing.T) {
 		workflowClientProvider func(t *testing.T) clientInterface.WorkflowClient
 		expectedStatus         v2pb.TriggerRunStatus
 		expectError            bool
+		expectInputApplied     bool
 	}{
 		{
 			name: "already started",
@@ -58,8 +60,11 @@ func TestRun(t *testing.T) {
 					}, nil)
 				return mockClient
 			},
-			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
-			expectError:    false,
+			expectedStatus: v2pb.TriggerRunStatus{
+				State:  v2pb.TRIGGER_RUN_STATE_RUNNING,
+				LogUrl: _logURL,
+			},
+			expectError: false,
 		},
 		{
 			name: "ListOpenWorkflow failed and start succeeded",
@@ -72,8 +77,9 @@ func TestRun(t *testing.T) {
 				mockClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&clientInterface.WorkflowExecution{ID: _workflowID, RunID: _runID}, nil)
 				return mockClient
 			},
-			expectedStatus: v2pb.TriggerRunStatus{LogUrl: _logURL, State: v2pb.TRIGGER_RUN_STATE_RUNNING, ActualTrigger: &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 0 * * *"}}}},
-			expectError:    false,
+			expectedStatus:     v2pb.TriggerRunStatus{LogUrl: _logURL, State: v2pb.TRIGGER_RUN_STATE_RUNNING, ActualTrigger: &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 0 * * *"}}}},
+			expectError:        false,
+			expectInputApplied: true,
 		},
 		{
 			name: "empty open workflow and start succeeded",
@@ -91,8 +97,9 @@ func TestRun(t *testing.T) {
 				mockClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&clientInterface.WorkflowExecution{ID: _workflowID, RunID: _runID}, nil)
 				return mockClient
 			},
-			expectedStatus: v2pb.TriggerRunStatus{LogUrl: _logURL, State: v2pb.TRIGGER_RUN_STATE_RUNNING, ActualTrigger: &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 0 * * *"}}}},
-			expectError:    false,
+			expectedStatus:     v2pb.TriggerRunStatus{LogUrl: _logURL, State: v2pb.TRIGGER_RUN_STATE_RUNNING, ActualTrigger: &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 0 * * *"}}}},
+			expectError:        false,
+			expectInputApplied: true,
 		},
 		{
 			name: "start failed",
@@ -123,8 +130,57 @@ func TestRun(t *testing.T) {
 		} else {
 			assert.NoError(t, err, test.name)
 		}
+		if test.expectInputApplied {
+			test.expectedStatus = recurringTriggerStatus(
+				&_triggerRun,
+				generateWorkflowID(&_triggerRun),
+				_triggerRun.Spec.Trigger.GetCronSchedule().GetCron(),
+				mustScheduleInputHash(t, &_triggerRun),
+				"test-provider",
+			)
+		}
 		assert.Equal(t, test.expectedStatus, trStatus, test.name)
 	}
+}
+
+func TestRunExistingWorkflowLeavesInputForReconciliation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+	mockClient.EXPECT().GetDomain().Return("test-domain")
+	mockClient.EXPECT().GetProvider().Return("test-provider")
+	mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).Return(
+		&clientInterface.ListOpenWorkflowExecutionsResponse{
+			Executions: []clientInterface.WorkflowExecutionInfo{
+				{Execution: &clientInterface.WorkflowExecution{RunID: _runID}},
+			},
+		}, nil)
+
+	runner := setupCronTrigger(t, mockClient)
+	triggerRun := _triggerRun.DeepCopy()
+	status, err := runner.Run(context.Background(), triggerRun)
+	require.NoError(t, err)
+	require.Empty(t, status.ActualScheduleInputHash)
+	require.Nil(t, status.ActualTrigger)
+	require.Nil(t, status.ActualNotifications)
+
+	triggerRun.Status = status
+	mockClient.EXPECT().UpdateTrigger(
+		gomock.Any(),
+		generateWorkflowID(triggerRun),
+		triggerRun.Spec.Trigger.GetCronSchedule().GetCron(),
+		gomock.Nil(),
+		gomock.Eq([]interface{}{CreateTriggerRequest{TriggerRun: scheduleWorkflowInput(triggerRun)}}),
+	).Return(nil)
+
+	updatedStatus, handled, err := runner.Update(
+		context.Background(), triggerRun, v2pb.TRIGGER_RUN_ACTION_NO_ACTION)
+	require.NoError(t, err)
+	assert.False(t, handled)
+	assert.Equal(t, mustScheduleInputHash(t, triggerRun), updatedStatus.ActualScheduleInputHash)
+	assert.Equal(t,
+		triggerRun.Spec.Trigger.GetCronSchedule().GetCron(),
+		getCronFromActualTrigger(updatedStatus.ActualTrigger),
+	)
 }
 
 func TestRunStoresActualNotifications(t *testing.T) {
@@ -434,7 +490,13 @@ func TestCronTrigger_Update(t *testing.T) {
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 0 * * *", gomock.Nil(), gomock.Nil()).Return(nil)
+				mockClient.EXPECT().UpdateTrigger(
+					gomock.Any(),
+					"test-namespace.test-triggerrun",
+					"0 0 * * *",
+					gomock.Nil(),
+					gomock.Any(),
+				).Return(nil)
 				return mockClient
 			},
 			expectError:        false,
@@ -490,7 +552,13 @@ func TestCronTrigger_Update(t *testing.T) {
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 0 * * *", gomock.Nil(), gomock.Nil()).Return(fmt.Errorf("update failed"))
+				mockClient.EXPECT().UpdateTrigger(
+					gomock.Any(),
+					"test-namespace.test-triggerrun",
+					"0 0 * * *",
+					gomock.Nil(),
+					gomock.Any(),
+				).Return(fmt.Errorf("update failed"))
 				return mockClient
 			},
 			expectError:        true,
@@ -639,7 +707,7 @@ func TestCronTrigger_Update(t *testing.T) {
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 0 * * *", gomock.Any(), gomock.Nil()).Return(nil)
+				mockClient.EXPECT().UpdateTrigger(gomock.Any(), "test-namespace.test-triggerrun", "0 0 * * *", gomock.Any(), gomock.Any()).Return(nil)
 				return mockClient
 			},
 			expectError:        false,
@@ -650,6 +718,15 @@ func TestCronTrigger_Update(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			appliedTriggerRun := test.triggerRun.DeepCopy()
+			actualCron := getCronFromActualTrigger(test.triggerRun.Status.ActualTrigger)
+			if actualCron != "" {
+				appliedTriggerRun.Spec.Trigger.TriggerType = &v2pb.Trigger_CronSchedule{
+					CronSchedule: &v2pb.CronSchedule{Cron: actualCron},
+				}
+			}
+			test.triggerRun.Status.ActualScheduleInputHash = mustScheduleInputHash(t, appliedTriggerRun)
+
 			logger := zapr.NewLogger(zap.NewNop())
 			workflowClient := test.workflowClientProvider(t)
 			cronTrigger := NewCronTrigger(logger, workflowClient)
@@ -675,6 +752,93 @@ func TestCronTrigger_Update(t *testing.T) {
 			assert.Equal(t, test.expectedActualCron, getCronFromActualTrigger(status.ActualTrigger))
 		})
 	}
+}
+
+func TestCronTrigger_UpdateDefersDriftWhilePaused(t *testing.T) {
+	for _, test := range []struct {
+		action          v2pb.TriggerRunAction
+		expectedHandled bool
+	}{
+		{action: v2pb.TRIGGER_RUN_ACTION_NO_ACTION},
+		{action: v2pb.TRIGGER_RUN_ACTION_KILL},
+		{action: v2pb.TRIGGER_RUN_ACTION_PAUSE, expectedHandled: true},
+	} {
+		t.Run(test.action.String(), func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+			triggerRun := &v2pb.TriggerRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test-namespace",
+					Name:      "test-triggerrun",
+				},
+				Spec: v2pb.TriggerRunSpec{
+					Trigger: &v2pb.Trigger{
+						TriggerType: &v2pb.Trigger_CronSchedule{
+							CronSchedule: &v2pb.CronSchedule{Cron: "0 0 * * *"},
+						},
+						MaxConcurrency: 2,
+					},
+				},
+				Status: v2pb.TriggerRunStatus{
+					State:                   v2pb.TRIGGER_RUN_STATE_PAUSED,
+					ActualTrigger:           &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 6 * * *"}}},
+					ActualScheduleInputHash: "previous-input-hash",
+					ErrorMessage:            "exceeded workflow execution limit for signal events",
+				},
+			}
+
+			status, handled, err := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient).Update(
+				context.Background(), triggerRun, test.action)
+
+			require.NoError(t, err)
+			assert.Equal(t, test.expectedHandled, handled)
+			assert.Equal(t, triggerRun.Status, status)
+		})
+	}
+}
+
+func TestCronTrigger_UpdateSyncsDriftOnResume(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+	triggerRun := &v2pb.TriggerRun{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "test-namespace",
+			Name:      "test-triggerrun",
+		},
+		Spec: v2pb.TriggerRunSpec{
+			Trigger: &v2pb.Trigger{
+				TriggerType: &v2pb.Trigger_CronSchedule{
+					CronSchedule: &v2pb.CronSchedule{Cron: "0 0 * * *"},
+				},
+				MaxConcurrency: 2,
+			},
+		},
+		Status: v2pb.TriggerRunStatus{
+			State:         v2pb.TRIGGER_RUN_STATE_PAUSED,
+			ActualTrigger: &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 0 * * *"}}},
+			ErrorMessage:  "exceeded workflow execution limit for signal events",
+		},
+	}
+	previousInput := triggerRun.DeepCopy()
+	previousInput.Spec.Trigger.MaxConcurrency = 1
+	triggerRun.Status.ActualScheduleInputHash = mustScheduleInputHash(t, previousInput)
+	resumed := false
+	mockClient.EXPECT().UpdateTrigger(
+		gomock.Any(),
+		"test-namespace.test-triggerrun",
+		"",
+		gomock.Eq(&resumed),
+		gomock.Eq([]interface{}{CreateTriggerRequest{TriggerRun: scheduleWorkflowInput(triggerRun)}}),
+	).Return(nil)
+
+	status, handled, err := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient).Update(
+		context.Background(), triggerRun, v2pb.TRIGGER_RUN_ACTION_RESUME)
+
+	require.NoError(t, err)
+	assert.True(t, handled)
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_RUNNING, status.State)
+	assert.Empty(t, status.ErrorMessage)
+	assert.Equal(t, mustScheduleInputHash(t, triggerRun), status.ActualScheduleInputHash)
 }
 
 func TestCronTrigger_UpdateNotifications(t *testing.T) {
@@ -748,13 +912,16 @@ func TestCronTrigger_UpdateNotifications(t *testing.T) {
 					ActualNotifications: test.actual,
 				},
 			}
+			appliedTriggerRun := triggerRun.DeepCopy()
+			appliedTriggerRun.Spec.Notifications = test.actual
+			triggerRun.Status.ActualScheduleInputHash = mustScheduleInputHash(t, appliedTriggerRun)
 			if test.expectUpdate {
 				mockClient.EXPECT().UpdateTrigger(
 					gomock.Any(),
 					"test-namespace.test-triggerrun",
 					"",
 					gomock.Nil(),
-					gomock.Eq([]interface{}{CreateTriggerRequest{TriggerRun: triggerRun}}),
+					gomock.Eq([]interface{}{CreateTriggerRequest{TriggerRun: scheduleWorkflowInput(triggerRun)}}),
 				).Return(test.workflowUpdateError)
 			}
 
@@ -819,6 +986,9 @@ func TestCronTrigger_UpdateNotifications_SignalLimitError(t *testing.T) {
 			ActualNotifications: []*v2pb.Notification{oldNotif},
 		},
 	}
+	appliedTriggerRun := triggerRun.DeepCopy()
+	appliedTriggerRun.Spec.Notifications = []*v2pb.Notification{oldNotif}
+	triggerRun.Status.ActualScheduleInputHash = mustScheduleInputHash(t, appliedTriggerRun)
 
 	signalLimitErr := fmt.Errorf("exceeded workflow execution limit for signal events")
 	mockClient.EXPECT().UpdateTrigger(
@@ -826,10 +996,11 @@ func TestCronTrigger_UpdateNotifications_SignalLimitError(t *testing.T) {
 		"cauldron-admin.trigger-1778756734-1370990",
 		"",
 		gomock.Nil(),
-		gomock.Eq([]interface{}{CreateTriggerRequest{TriggerRun: triggerRun}}),
+		gomock.Eq([]interface{}{CreateTriggerRequest{TriggerRun: scheduleWorkflowInput(triggerRun)}}),
 	).Return(signalLimitErr)
 
-	status, handled, err := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient).Update(
+	runner := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient)
+	status, handled, err := runner.Update(
 		context.Background(), triggerRun, v2pb.TRIGGER_RUN_ACTION_NO_ACTION)
 
 	assert.Error(t, err, "expected error to be returned")
@@ -846,4 +1017,23 @@ func TestCronTrigger_UpdateNotifications_SignalLimitError(t *testing.T) {
 
 	// Error message should be preserved
 	assert.Contains(t, status.ErrorMessage, "exceeded workflow execution limit for signal events")
+	assert.Equal(t, triggerRun.Status.ActualScheduleInputHash, status.ActualScheduleInputHash,
+		"input hash must not advance when the workflow input update fails")
+
+	// The failed notification update is intentionally acknowledged through
+	// ActualNotifications. Notifications are excluded from the input hash, so the
+	// next reconciliation must not call UpdateTrigger again.
+	triggerRun.Status = status
+	secondStatus, secondHandled, secondErr := runner.Update(
+		context.Background(), triggerRun, v2pb.TRIGGER_RUN_ACTION_NO_ACTION)
+	require.NoError(t, secondErr)
+	assert.False(t, secondHandled)
+	assert.Equal(t, status, secondStatus)
+}
+
+func mustScheduleInputHash(t *testing.T, triggerRun *v2pb.TriggerRun) string {
+	t.Helper()
+	hash, err := scheduleInputHash(triggerRun)
+	require.NoError(t, err)
+	return hash
 }

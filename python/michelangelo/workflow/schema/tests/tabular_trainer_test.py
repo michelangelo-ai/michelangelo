@@ -62,23 +62,21 @@ class TestIncrementalTrainingModeConfig(TestCase):
 class TestColumnConfig(TestCase):
     """Tests for ColumnConfig dataclass."""
 
-    def test_required_data_type(self):
-        """It stores data_type and defaults shape to []."""
-        cfg = ColumnConfig(data_type="torch.float32")
-        self.assertEqual(cfg.data_type, "torch.float32")
-        self.assertEqual(cfg.shape, [])
+    def test_shape_required(self):
+        """``shape`` has no default; omitting it is a TypeError."""
+        with self.assertRaises(TypeError):
+            ColumnConfig(data_type="torch.float32")
 
     def test_shape_stored(self):
         """It stores an explicit shape."""
         cfg = ColumnConfig(data_type="torch.long", shape=[128])
+        self.assertEqual(cfg.data_type, "torch.long")
         self.assertEqual(cfg.shape, [128])
 
-    def test_shape_instances_are_independent(self):
-        """Default shape lists are not shared between instances."""
-        a = ColumnConfig(data_type="torch.float32")
-        b = ColumnConfig(data_type="torch.float32")
-        a.shape.append(1)
-        self.assertEqual(b.shape, [])
+    def test_scalar_column_uses_explicit_one_element_shape(self):
+        """A scalar column uses an explicit ``shape=[1]``, not an implicit default."""
+        cfg = ColumnConfig(data_type="torch.float32", shape=[1])
+        self.assertEqual(cfg.shape, [1])
 
 
 # ---------------------------------------------------------------------------
@@ -525,9 +523,9 @@ def _minimal_lightning_config(**overrides) -> LightningTrainerConfig:
     """Build a minimal valid LightningTrainerConfig."""
     defaults = {
         "model_class": "myproject.models.Net",
-        "input_columns": {"x": ColumnConfig("torch.float32")},
-        "output_columns": {"y": ColumnConfig("torch.float32")},
-        "labels": {"label": ColumnConfig("torch.long")},
+        "input_columns": {"x": ColumnConfig("torch.float32", [1])},
+        "output_columns": {"y": ColumnConfig("torch.float32", [1])},
+        "labels": {"label": ColumnConfig("torch.long", [1])},
         "metadata_columns": [],
     }
     defaults.update(overrides)
@@ -541,7 +539,7 @@ class TestLightningTrainerConfig(TestCase):
         """It stores all required fields and uses correct defaults."""
         cfg = _minimal_lightning_config()
         self.assertEqual(cfg.model_class, "myproject.models.Net")
-        self.assertEqual(cfg.input_columns, {"x": ColumnConfig("torch.float32")})
+        self.assertEqual(cfg.input_columns, {"x": ColumnConfig("torch.float32", [1])})
         self.assertEqual(cfg.metadata_columns, [])
         self.assertIsInstance(cfg.checkpoint_config, CheckpointConfig)
         self.assertIsNone(cfg.model_kwargs)

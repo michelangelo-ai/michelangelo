@@ -8,8 +8,10 @@ class RawModelType:
         CUSTOM_PYTHON: Custom Python model
         HUGGINGFACE: Huggingface Pipeline
         TORCH: PyTorch model
+        LIGHTNING: PyTorch Lightning model
     """
 
     CUSTOM_PYTHON = "custom-python"
     HUGGINGFACE = "huggingface"
     TORCH = "torch"
+    LIGHTNING = "lightning"

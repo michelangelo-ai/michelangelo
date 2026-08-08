@@ -22,21 +22,10 @@ jobs:
         working-directory: ./python
 
     steps:
-      - name: Checkout base branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.base_ref }}
-
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 50      # Fetch 50 max commits in single PR
-
-      - name: Fetch base branch
-        run: git fetch origin ${{ github.base_ref }}
-
-      - name: Check branch list
-        run: git branch -av
+          fetch-depth: 1
 
       #----------------------------------------------
       #  Setup Python and Poetry using composite action
@@ -52,8 +41,9 @@ jobs:
       - name: Get base SHA for comparison
         id: get-base-sha
         run: |
-          BASE_SHA=$(git merge-base origin/${{ github.base_ref }} HEAD)
-          echo "BASE_SHA=$BASE_SHA" >> $GITHUB_ENV
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          echo "BASE_SHA=$BASE_SHA" >> "$GITHUB_ENV"
 
       - name: Get changed files
         id: changed-files
@@ -107,7 +97,7 @@ jobs:
 
       - name: Comment on PR with Ruff results
         uses: actions/github-script@v6
-        if: env.CHANGED_FILES != ''
+        if: env.CHANGED_FILES != '' && github.event.pull_request.head.repo.full_name == github.repository
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |

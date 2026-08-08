@@ -4,14 +4,13 @@ import os
 import tempfile
 from typing import Optional
 from unittest import TestCase
+from unittest.mock import MagicMock, patch
 
 import torch
 
 from michelangelo.lib.model_manager._private.serde.loader.torch_deployable_model_loader import (  # noqa: E501
-    _import_model_class,
     _load_skeleton,
     _load_torch_python_deployable_model,
-    _sys_path,
 )
 
 
@@ -38,46 +37,6 @@ def _make_deployable_package(
             yaml.dump(skeleton, f)
 
     return tmp_dir
-
-
-class SysPathTest(TestCase):
-    """Tests for the _sys_path context manager."""
-
-    def test_directory_prepended_then_removed(self):
-        """The directory is on sys.path inside the block and removed after."""
-        import sys
-
-        sentinel = "/tmp/__test_sentinel_path__"
-        with _sys_path(sentinel):
-            self.assertIn(sentinel, sys.path)
-        self.assertNotIn(sentinel, sys.path)
-
-    def test_removal_is_idempotent_when_already_absent(self):
-        """No error when directory was already removed from sys.path inside block."""
-        import sys
-
-        sentinel = "/tmp/__test_sentinel_path_2__"
-        with _sys_path(sentinel):
-            sys.path.remove(sentinel)
-        # No ValueError raised — the finally block handles the missing entry.
-
-
-class ImportModelClassTest(TestCase):
-    """Tests for _import_model_class."""
-
-    def test_empty_string_raises_value_error(self):
-        """An empty model_class_str raises ValueError."""
-        with (
-            tempfile.TemporaryDirectory() as tmp,
-            self.assertRaisesRegex(ValueError, "model_class.txt is empty"),
-        ):
-            _import_model_class(tmp, "")
-
-    def test_valid_class_imported(self):
-        """A valid dotted class name is imported correctly."""
-        with tempfile.TemporaryDirectory() as tmp:
-            cls = _import_model_class(tmp, "torch.nn.Linear")
-            self.assertIs(cls, torch.nn.Linear)
 
 
 class LoadSkeletonTest(TestCase):
@@ -129,6 +88,55 @@ class LoadTorchPythonDeployableModelTest(TestCase):
             os.makedirs(os.path.join(tmp, "0"))
             with self.assertRaisesRegex(ValueError, "Missing model_class.txt"):
                 _load_torch_python_deployable_model(tmp)
+
+    def test_empty_model_class_txt_raises_value_error(self):
+        """An empty model_class.txt raises ValueError."""
+        with tempfile.TemporaryDirectory() as tmp:
+            version_dir = os.path.join(tmp, "0")
+            os.makedirs(version_dir)
+            with open(os.path.join(version_dir, "model_class.txt"), "w") as f:
+                f.write("")
+            with self.assertRaisesRegex(ValueError, "model_class.txt is empty"):
+                _load_torch_python_deployable_model(tmp)
+
+    @patch(
+        "michelangelo.lib.model_manager._private.utils.loader_utils.class_importer."
+        "create_alternative_defs"
+    )
+    @patch("importlib.import_module")
+    def test_falls_back_through_all_import_tiers_on_collision(
+        self, mock_import_module, mock_create_alt
+    ):
+        """A model class whose module collides on sys.path still loads.
+
+        Verifies the AST-rewrite fallback tier (regression test for the
+        missing shared import_model_class fallback in this loader).
+        """
+        model = torch.nn.Linear(4, 2)
+        state_dict = model.state_dict()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            _make_deployable_package(
+                tmp,
+                model_class_str="colliding_module.Linear",
+                state_dict=state_dict,
+                skeleton={"in_features": 4, "out_features": 2},
+            )
+
+            mock_module = MagicMock()
+            mock_module.Linear = torch.nn.Linear
+            mock_create_alt.return_value = ("/tmp/alt", "package_abc123")
+            mock_import_module.side_effect = [
+                ImportError("not found"),
+                ImportError("still not found"),
+                mock_module,
+            ]
+
+            loaded = _load_torch_python_deployable_model(tmp)
+
+            self.assertIsInstance(loaded, torch.nn.Linear)
+            self.assertEqual(mock_import_module.call_count, 3)
+            mock_create_alt.assert_called_once()
 
     def test_missing_weights_raises_file_not_found(self):
         """Missing model.pt raises FileNotFoundError."""

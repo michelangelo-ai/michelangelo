@@ -45,7 +45,10 @@ class CustomTritonPackager:
             the model implementation.
     """
 
-    def __init__(self, custom_batch_processing: Optional[bool] = False):
+    def __init__(
+        self,
+        custom_batch_processing: Optional[bool] = False,
+    ):
         """Create a CustomTritonPackager instance.
 
         Args:
@@ -75,6 +78,9 @@ class CustomTritonPackager:
         model_revision: Optional[str] = None,
         model_path_source_type: Optional[str] = StorageType.LOCAL,
         include_import_prefixes: Optional[list[str]] = None,
+        additional_import_prefixes: Optional[list[str]] = None,
+        triton_parameters: Optional[dict[str, str]] = None,
+        sample_data: Optional[list[dict[str, ndarray]]] = None,
     ) -> str:
         """Create a Triton model package for deployment to Michelangelo Studio.
 
@@ -109,6 +115,22 @@ class CustomTritonPackager:
                 example, ['uber', 'data.michelangelo'] will only include modules
                 starting with 'uber' or 'data.michelangelo'. If None or empty,
                 all imported modules will be included.
+            additional_import_prefixes: Additional Python module prefixes
+                whose source files should be included in the model package.
+                Useful when the model class uses dynamic imports (e.g.
+                importlib) that are not captured by static import analysis.
+                Each prefix is recursively resolved and its files are
+                serialized into the package.
+            triton_parameters: Custom Triton model config parameters to
+                include in the generated config.pbtxt. Each key-value pair
+                becomes a ``parameters`` block in the config, e.g.
+                ``{"MY_CUSTOM_PARAM": "16"}``.
+            sample_data: Sample inputs for the model's predict method,
+                written to ``metadata/sample_data.json`` in the package for
+                reference. Each item is a dictionary mapping input feature
+                names to numpy arrays. Unless ``custom_batch_processing`` was
+                set on this packager, a leading batch dimension is added to
+                match what Triton passes to the model at serve time.
 
         Returns:
             The absolute path to the generated model package directory.
@@ -140,12 +162,16 @@ class CustomTritonPackager:
             model_name,
             model_revision,
             model_class,
+            model_schema,
             input_schema,
             output_schema,
             model_path_source_type=model_path_source_type,
             root_path=dest_model_path,
             include_import_prefixes=include_import_prefixes,
+            additional_import_prefixes=additional_import_prefixes,
             custom_batch_processing=self.custom_batch_processing,
+            triton_parameters=triton_parameters,
+            sample_data=sample_data,
         )
 
         generate_folder(content, dest_model_path)
@@ -162,6 +188,7 @@ class CustomTritonPackager:
         model_path_source_type: Optional[str] = StorageType.LOCAL,
         requirements: Optional[Union[list[str], str]] = None,
         include_import_prefixes: Optional[list[str]] = None,
+        additional_import_prefixes: Optional[list[str]] = None,
     ) -> str:
         """Create a raw model package with sample data for testing.
 
@@ -207,6 +234,12 @@ class CustomTritonPackager:
                 example, ['uber', 'data.michelangelo'] will only include modules
                 starting with 'uber' or 'data.michelangelo'. If None or empty,
                 all imported modules will be included.
+            additional_import_prefixes: Additional Python module prefixes
+                whose source files should be included in the model package.
+                Useful when the model class uses dynamic imports (e.g.
+                importlib) that are not captured by static import analysis.
+                Each prefix is recursively resolved and its files are
+                serialized into the package.
 
         Returns:
             The absolute path to the generated raw model package directory.
@@ -256,6 +289,7 @@ class CustomTritonPackager:
             requirements=requirements,
             root_path=dest_model_path,
             include_import_prefixes=include_import_prefixes,
+            additional_import_prefixes=additional_import_prefixes,
             batch_inference=batch_inference,
         )
 

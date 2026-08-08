@@ -82,5 +82,5 @@ Understanding scope helps you decide if Michelangelo AI is the right tool.
 Connect with the Michelangelo AI core team and developer community through our dedicated channels:
 
 - **[GitHub Discussions](https://github.com/michelangelo-ai/michelangelo/discussions):** Our primary channel for general Q&A, troubleshooting, technical support, and sharing ideas.
-- **[Slack Workspace](https://michelangelo-ai.slack.com/):** For real-time chat, networking, and focused conversations with other developers in the ecosystem.
+- **[Slack Workspace](https://michelangelo-ai.slack.com/):** For real-time chat, networking, and focused conversations with other developers in the ecosystem. The workspace is invite-based; email [michelangelo-oss@uber.com](mailto:michelangelo-oss@uber.com) to request an invite.
 - **[Email](mailto:michelangelo-oss@uber.com):** For private, sensitive, or 1-on-1 inquiries that cannot be discussed publicly (for example, security disclosures or enterprise partnerships), feel free to email us at michelangelo-oss@uber.com.

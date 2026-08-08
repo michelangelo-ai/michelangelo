@@ -6,6 +6,9 @@ from typing import Optional, Union
 
 from numpy import ndarray
 
+from michelangelo.lib.model_manager._private.packager.custom_triton.additional_imports import (  # noqa: E501
+    serialize_additional_imports,
+)
 from michelangelo.lib.model_manager._private.packager.custom_triton.constants import (
     MODEL_CLASS_FILE_NAME,
 )
@@ -40,6 +43,7 @@ def generate_raw_model_package_content(
     requirements: Optional[Union[list[str], str]] = None,
     root_path: Optional[str] = None,
     include_import_prefixes: Optional[list[str]] = None,
+    additional_import_prefixes: Optional[list[str]] = None,
     batch_inference: Optional[bool] = False,
 ) -> dict:
     """Generate the raw model package content.
@@ -66,6 +70,12 @@ def generate_raw_model_package_content(
             with 'uber' or 'data.michelangelo' will be saved in the
             model package. Default is ['uber'],
             and if the list is empty, save all imports
+        additional_import_prefixes (Optional): additional Python module
+            prefixes whose source files should be included in the model
+            package. Useful when the model class uses dynamic imports
+            (e.g. importlib) that are not captured by static import
+            analysis. Each prefix is recursively resolved and its files
+            are serialized into the package.
         batch_inference (Optional): Specify if the prediction function in
             the model class handles batch inference. Default is False.
             If set to True, the model input/output will have an additional
@@ -99,6 +109,12 @@ def generate_raw_model_package_content(
         model_class,
         defs_path,
         MODEL_CLASS_FILE_NAME,
+        include_import_prefixes=include_import_prefixes,
+    )
+
+    serialize_additional_imports(
+        additional_import_prefixes,
+        defs_path,
         include_import_prefixes=include_import_prefixes,
     )
 

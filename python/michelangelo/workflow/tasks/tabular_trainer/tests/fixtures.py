@@ -19,9 +19,9 @@ def make_lightning_config(**overrides) -> LightningTrainerConfig:
     """Return a minimal valid ``LightningTrainerConfig``."""
     defaults = {
         "model_class": "tests.fixtures.DummyModel",
-        "input_columns": {"x": ColumnConfig("torch.float32")},
-        "output_columns": {"y": ColumnConfig("torch.float32")},
-        "labels": {"label": ColumnConfig("torch.long")},
+        "input_columns": {"x": ColumnConfig("torch.float32", [1])},
+        "output_columns": {"y": ColumnConfig("torch.float32", [1])},
+        "labels": {"label": ColumnConfig("torch.long", [1])},
         "metadata_columns": [],
     }
     defaults.update(overrides)

@@ -57,132 +57,57 @@ class ValidationTest(TestCase):
             predict.save(src_model_path)
             self.generate_package(src_model_path, model_class, dest_model_path)
 
-    def test_validate_raw_model_package_predict_error(self):
-        """Test validation fails when model predict raises an error."""
-        predict = Predict("test_content")
-        model_class = (
-            "michelangelo.lib.model_manager._private.packager.custom_triton."
-            "tests.fixtures.model_for_validation.ModelWithPredictError"
-        )
-        with tempfile.TemporaryDirectory() as temp_dir:
-            src_model_path = os.path.join(temp_dir, "model")
-            dest_model_path = os.path.join(temp_dir, "model_package")
-            os.makedirs(src_model_path)
-            predict.save(src_model_path)
-            with self.assertRaisesRegex(
-                RuntimeError,
-                (
-                    "Error when validating the raw model package. "
-                    "Error when test prediction with the model"
-                ),
-            ):
-                self.generate_package(src_model_path, model_class, dest_model_path)
-
-    def test_validate_raw_model_package_invalid_output(self):
-        """Test validation fails when model output is invalid."""
-        predict = Predict("test_content")
-        model_class = (
-            "michelangelo.lib.model_manager._private.packager.custom_triton."
-            "tests.fixtures.model_for_validation.ModelWithInvalidOutput"
-        )
-        with tempfile.TemporaryDirectory() as temp_dir:
-            src_model_path = os.path.join(temp_dir, "model")
-            dest_model_path = os.path.join(temp_dir, "model_package")
-            os.makedirs(src_model_path)
-            predict.save(src_model_path)
-            with self.assertRaisesRegex(
-                RuntimeError,
-                (
-                    "Error when validating the raw model package. "
-                    "Error validating model output data"
-                ),
-            ):
-                self.generate_package(src_model_path, model_class, dest_model_path)
-
-    def test_validate_raw_model_package_output_not_matching_schema(self):
-        """Test validation fails when model output doesn't match schema."""
-        predict = Predict("test_content")
-        model_class = (
-            "michelangelo.lib.model_manager._private.packager.custom_triton."
-            "tests.fixtures.model_for_validation.ModelWithOutputNotMatchingSchema"
-        )
-        with tempfile.TemporaryDirectory() as temp_dir:
-            src_model_path = os.path.join(temp_dir, "model")
-            dest_model_path = os.path.join(temp_dir, "model_package")
-            os.makedirs(src_model_path)
-            predict.save(src_model_path)
-            with self.assertRaisesRegex(
-                RuntimeError,
-                (
-                    "Error when validating the raw model package. "
-                    "Error validating model output data. "
-                    "Data fields do not match schema"
-                ),
-            ):
-                self.generate_package(src_model_path, model_class, dest_model_path)
-
-    def test_validate_raw_model_package_with_save_error(self):
-        """Test validation fails when model save raises an error."""
-        predict = Predict("test_content")
-        model_class = (
-            "michelangelo.lib.model_manager._private.packager.custom_triton."
-            "tests.fixtures.model_for_validation.ModelWithSaveError"
-        )
-        with tempfile.TemporaryDirectory() as temp_dir:
-            src_model_path = os.path.join(temp_dir, "model")
-            dest_model_path = os.path.join(temp_dir, "model_package")
-            os.makedirs(src_model_path)
-            predict.save(src_model_path)
-            with self.assertRaisesRegex(
-                RuntimeError,
-                (
-                    "Error when validating the raw model package. "
-                    "Error when test saving the model"
-                ),
-            ):
-                self.generate_package(src_model_path, model_class, dest_model_path)
-
-    def test_validate_raw_model_package_with_reload_error(self):
-        """Test validation fails when model reload raises an error."""
-        predict = Predict("test_content")
-        model_class = (
-            "michelangelo.lib.model_manager._private.packager.custom_triton."
-            "tests.fixtures.model_for_validation.ModelWithReloadError"
-        )
-        with tempfile.TemporaryDirectory() as temp_dir:
-            src_model_path = os.path.join(temp_dir, "model")
-            dest_model_path = os.path.join(temp_dir, "model_package")
-            os.makedirs(src_model_path)
-            predict.save(src_model_path)
-            with self.assertRaisesRegex(
-                RuntimeError,
-                (
-                    "Error when validating the raw model package. "
-                    "Error when test reloading the saved model, please double check"
-                ),
-            ):
-                self.generate_package(src_model_path, model_class, dest_model_path)
-
-    def test_validate_raw_model_package_with_invalid_model_class_after_reload(self):
-        """Test validation fails when reloaded model is not the correct class."""
-        predict = Predict("test_content")
-        model_class = (
-            "michelangelo.lib.model_manager._private.packager.custom_triton."
-            "tests.fixtures.model_for_validation.ModelWithMismatchingLoad"
-        )
-        with tempfile.TemporaryDirectory() as temp_dir:
-            src_model_path = os.path.join(temp_dir, "model")
-            dest_model_path = os.path.join(temp_dir, "model_package")
-            os.makedirs(src_model_path)
-            predict.save(src_model_path)
-            with self.assertRaisesRegex(
-                RuntimeError,
-                (
-                    "Error when validating the raw model package. "
-                    "The loaded model is not an instance of"
-                ),
-            ):
-                self.generate_package(src_model_path, model_class, dest_model_path)
+    def test_validate_raw_model_package_error_cases(self):
+        """Test validation failure messages for various model error conditions."""
+        cases = [
+            (
+                "ModelWithPredictError",
+                "Error when validating the raw model package. "
+                "Error when test prediction with the model",
+            ),
+            (
+                "ModelWithInvalidOutput",
+                "Error when validating the raw model package. "
+                "Error validating model output data",
+            ),
+            (
+                "ModelWithOutputNotMatchingSchema",
+                "Error when validating the raw model package. "
+                "Error validating model output data. "
+                "Data fields do not match schema",
+            ),
+            (
+                "ModelWithSaveError",
+                "Error when validating the raw model package. "
+                "Error when test saving the model",
+            ),
+            (
+                "ModelWithReloadError",
+                "Error when validating the raw model package. "
+                "Error when test reloading the saved model, please double check",
+            ),
+            (
+                "ModelWithMismatchingLoad",
+                "Error when validating the raw model package. "
+                "The loaded model is not an instance of",
+            ),
+        ]
+        for class_suffix, expected_message in cases:
+            with self.subTest(class_suffix=class_suffix):
+                predict = Predict("test_content")
+                model_class = (
+                    "michelangelo.lib.model_manager._private.packager.custom_triton."
+                    f"tests.fixtures.model_for_validation.{class_suffix}"
+                )
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    src_model_path = os.path.join(temp_dir, "model")
+                    dest_model_path = os.path.join(temp_dir, "model_package")
+                    os.makedirs(src_model_path)
+                    predict.save(src_model_path)
+                    with self.assertRaisesRegex(RuntimeError, expected_message):
+                        self.generate_package(
+                            src_model_path, model_class, dest_model_path
+                        )
 
     def test_validate_raw_model_package_without_sample_data(self):
         """Test validation of a raw model package without sample data."""

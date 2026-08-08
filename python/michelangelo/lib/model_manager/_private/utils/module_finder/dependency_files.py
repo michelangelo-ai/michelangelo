@@ -82,26 +82,44 @@ def find_dependency_files_internal(
 
     # if the module is a package
     if hasattr(package, "__path__"):
-        for importer, name, _ in pkgutil.walk_packages(package.__path__):
-            full_name = f"{module_name}.{name}"
+        # onerror=lambda _: None: pkgutil.walk_packages() re-raises any
+        # exception a submodule's __init__ raises at import time (not just
+        # ImportError -- e.g. stdlib's test.test_gdb raises SkipTest) unless
+        # given an error callback, which would otherwise abort this entire
+        # dependency walk over one unrelated, unimportable submodule.
+        #
+        # onerror only intercepts Exception subclasses, not SystemExit
+        # (BaseException, not Exception) -- and real-world packages ship
+        # __main__.py submodules with unguarded argparse/sys.exit() calls at
+        # import time (e.g. torch.utils.model_dump.__main__), which
+        # walk_packages() imports while probing whether it is itself a
+        # package. Wrap the walk too, so one such submodule doesn't abort
+        # dependency discovery for the rest of the package.
+        try:
+            for importer, name, _ in pkgutil.walk_packages(
+                package.__path__, onerror=lambda _: None
+            ):
+                full_name = f"{module_name}.{name}"
 
-            try:
-                sub_module = importlib.import_module(full_name)
-                files[full_name] = inspect.getfile(sub_module)
-            except (ImportError, TypeError, SystemExit):
-                pass
+                try:
+                    sub_module = importlib.import_module(full_name)
+                    files[full_name] = inspect.getfile(sub_module)
+                except (ImportError, TypeError, SystemExit):
+                    pass
 
-            init_file = os.path.join(importer.path, "__init__.py")
-            if os.path.exists(init_file):
-                files[f"{module_name}.__init__"] = init_file
+                init_file = os.path.join(importer.path, "__init__.py")
+                if os.path.exists(init_file):
+                    files[f"{module_name}.__init__"] = init_file
 
-            find_dependency_files_internal(
-                full_name,
-                files,
-                depth + 1,
-                prefixes,
-                max_depth,
-            )
+                find_dependency_files_internal(
+                    full_name,
+                    files,
+                    depth + 1,
+                    prefixes,
+                    max_depth,
+                )
+        except SystemExit:
+            pass
     # if the module is a file
     elif hasattr(package, "__file__"):
         files[module_name] = package.__file__

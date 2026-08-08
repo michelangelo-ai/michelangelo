@@ -138,6 +138,14 @@ def validate_deployable_onnx_file(
 
     Validation is content-based, so the file extension may differ from .onnx.
 
+    Handles both standard ONNX files and the external-data format (weights
+    stored in sidecar files next to the ``.onnx``, used for graphs exceeding
+    the 2 GiB protobuf serialization limit). For external-data models,
+    ``onnx.checker.check_model`` is invoked with the file path rather than a
+    loaded proto, so the checker resolves and validates the sidecar files
+    relative to the ``.onnx`` location — loading the full proto first would
+    require inlining the (potentially multi-GB) external tensors.
+
     Args:
         model_onnx_path: Path to the candidate ONNX file.
 
@@ -151,8 +159,16 @@ def validate_deployable_onnx_file(
             return False, ValueError(f"Path is not a file: {model_onnx_path}")
         if os.path.getsize(model_onnx_path) == 0:
             return False, ValueError(f"File is empty: {model_onnx_path}")
-        model_proto = onnx.load(model_onnx_path)
-        onnx.checker.check_model(model_proto)
+        model_proto = onnx.load(model_onnx_path, load_external_data=False)
+        has_external_data = any(
+            initializer.HasField("data_location")
+            and initializer.data_location == onnx.TensorProto.EXTERNAL
+            for initializer in model_proto.graph.initializer
+        )
+        if has_external_data:
+            onnx.checker.check_model(model_onnx_path, full_check=False)
+        else:
+            onnx.checker.check_model(model_proto, full_check=False)
     except Exception as e:
         return False, RuntimeError(f"File is not a valid ONNX model: {e}")
     else:
@@ -248,10 +264,10 @@ def _load_model_class(package_path: str) -> Any:
 def _has_batch_dimension(tensor: torch.Tensor, expected_shape: list[int]) -> bool:
     """Check whether a tensor already carries a leading batch dimension.
 
-    A tensor is treated as batched when it has exactly one more dimension than
-    the schema's expected shape and its trailing dimensions match that shape.
-    The batch dimension's size is not constrained, so batches larger than one
-    are detected correctly.
+    A tensor is treated as batched when it has exactly one more dimension
+    than the schema's expected shape, that leading dimension has size 1
+    (packaging validation always works with a single sample), and its
+    trailing dimensions match the expected shape.
 
     Args:
         tensor: The input tensor to inspect.
@@ -265,7 +281,7 @@ def _has_batch_dimension(tensor: torch.Tensor, expected_shape: list[int]) -> boo
         return False
     if not expected_shape:
         return False
-    if tensor.ndim == len(expected_shape) + 1:
+    if tensor.ndim == len(expected_shape) + 1 and tensor.shape[0] == 1:
         return list(tensor.shape[1:]) == expected_shape
     return False
 
@@ -294,6 +310,14 @@ def _invoke_model(model: torch.nn.Module, batch_dict: dict[str, Any]) -> Any:
     are called as model(**batch_dict). Some take a single mapping argument, e.g.
     forward(self, inputs), and must be called as model(batch_dict).
 
+    A model with more than one named forward parameter is unambiguously the
+    positional-features case. With 0 or 1 named parameters, the dict-argument
+    call is tried first and only falls back to keyword-unpacking on a
+    ``TypeError`` -- matching on parameter-name overlap instead would
+    misfire when the sole dict parameter happens to share a name with one of
+    the batch's own feature keys (e.g. ``forward(self, inputs)`` with a
+    feature literally named ``"inputs"``).
+
     Args:
         model: The model to invoke.
         batch_dict: Batched inputs keyed by input name.
@@ -302,9 +326,13 @@ def _invoke_model(model: torch.nn.Module, batch_dict: dict[str, Any]) -> Any:
         The model's raw output.
     """
     params = get_forward_param_names(model)
-    if set(batch_dict.keys()).issubset(set(params)):
+    if len(params) > 1:
         return model(**batch_dict)
-    return model(batch_dict)
+
+    try:
+        return model(batch_dict)
+    except TypeError:
+        return model(**batch_dict)
 
 
 def _remove_batch_size_dimension(

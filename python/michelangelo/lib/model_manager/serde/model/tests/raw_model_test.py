@@ -112,3 +112,30 @@ class RawModelTest(TestCase):
 
             model = load_raw_model(temp_dir)
             self.assertIsInstance(model, torch.nn.Module)
+
+    def test_load_lightning_raw_model(self):
+        """Test that a 'lightning' raw model type loads via the torch loader too."""
+        import torch
+
+        from michelangelo.lib.model_manager._private.packager.torch_triton.tests.fixtures.simple_model import (  # noqa: E501
+            save_state_dict,
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for d in ["model", "defs", "metadata", "dependencies"]:
+                os.makedirs(os.path.join(temp_dir, d))
+
+            save_state_dict(os.path.join(temp_dir, "model", "model.pt"))
+
+            model_class = (
+                "michelangelo.lib.model_manager._private.packager.torch_triton."
+                "tests.fixtures.simple_model.SimpleModel"
+            )
+            with open(os.path.join(temp_dir, "defs", "model_class.txt"), "w") as f:
+                f.write(model_class)
+
+            with open(os.path.join(temp_dir, "metadata", "type.yaml"), "w") as f:
+                f.write(f"type: {RawModelType.LIGHTNING}\n")
+
+            model = load_raw_model(temp_dir)
+            self.assertIsInstance(model, torch.nn.Module)

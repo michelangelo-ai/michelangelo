@@ -12,5 +12,4 @@ class TritonBackendTypeTest(TestCase):
         """It exposes expected names for each backend."""
         self.assertEqual(TritonBackendType.PYTHON, "python")
         self.assertEqual(TritonBackendType.TORCH, "pytorch")
-        self.assertEqual(TritonBackendType.TENSORRT, "tensorrt")
         self.assertEqual(TritonBackendType.ONNX, "onnxruntime")

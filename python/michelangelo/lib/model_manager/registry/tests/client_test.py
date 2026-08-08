@@ -103,6 +103,21 @@ class TestRegisteredModel(TestCase):
         )
         self.assertEqual(model.deployable_artifact_uri, "s3://bucket/triton")
 
+    def test_kind_defaults_to_none(self):
+        """It defaults kind to None when not provided."""
+        model = RegisteredModel(name="m", version="1", registry_uri="uri")
+        self.assertIsNone(model.kind)
+
+    def test_kind_can_be_provided(self):
+        """It stores an explicitly provided kind."""
+        model = RegisteredModel(
+            name="m",
+            version="1",
+            registry_uri="uri",
+            kind="regression",
+        )
+        self.assertEqual(model.kind, "regression")
+
 
 class _ConcreteClient(ModelRegistryClient):
     """Minimal concrete implementation for testing the ABC."""
@@ -113,6 +128,7 @@ class _ConcreteClient(ModelRegistryClient):
         artifact_uri: str,
         deployable_artifact_uri: str | None = None,
         description: str | None = None,
+        kind: str | None = None,
         schema: dict[str, Any] | None = None,
         labels: Mapping[str, str] | None = None,
         metadata: Mapping[str, Any] | None = None,
@@ -122,6 +138,7 @@ class _ConcreteClient(ModelRegistryClient):
             name=name,
             version="1",
             registry_uri=f"mem://{name}/1",
+            kind=kind,
             labels=dict(labels or {}),
             metadata=dict(metadata or {}),
         )
@@ -188,6 +205,16 @@ class TestModelRegistryClientABC(TestCase):
         self.assertEqual(result.metadata["run_id"], "run-abc123")
         self.assertEqual(result.metadata["accuracy"], 0.94)
         self.assertNotIn("run_id", result.labels)
+
+    def test_register_model_stores_kind(self):
+        """Kind is forwarded to the returned RegisteredModel."""
+        client = _ConcreteClient()
+        result = client.register_model(
+            name="clf",
+            artifact_uri="s3://bucket/raw",
+            kind="regression",
+        )
+        self.assertEqual(result.kind, "regression")
 
     def test_get_model_returns_registered_model(self):
         """It returns a RegisteredModel from a concrete get_model implementation."""
@@ -269,3 +296,17 @@ class TestInMemoryRegistryClient(TestCase):
         with self.assertRaises(KeyError) as ctx:
             self.registry.get_model(name="clf", version="99")
         self.assertIn("99", str(ctx.exception))
+
+    def test_register_model_stores_kind(self):
+        """Kind is forwarded to the returned record."""
+        reg = self.registry.register_model(
+            name="clf",
+            artifact_uri="s3://raw",
+            kind="regression",
+        )
+        self.assertEqual(reg.kind, "regression")
+
+    def test_register_model_kind_defaults_to_none(self):
+        """Kind defaults to None when not provided."""
+        reg = self.registry.register_model(name="clf", artifact_uri="s3://raw")
+        self.assertIsNone(reg.kind)

@@ -124,9 +124,10 @@ class LightningTrainerParam:
             ``lightning_trainer_kwargs["profiler"]``, ``profiler_logs_path`` is
             the directory it wrote to, and ``logger`` is the resolved Lightning
             logger. Use it to ship profiler output to an experiment tracker;
-            :func:`~_private.util.comet_profiler_sink` does this for Comet.
+            :func:`~_private.util.comet_profiler_sink` does this for Comet and
+            :func:`~_private.util.mlflow_profiler_sink` does this for MLflow.
             Ignored when no profiler is configured or when the profiler config
-            sets ``upload_to_comet: False``. Exceptions raised by the sink are
+            sets ``upload_profiler_results: False``. Exceptions raised by the sink are
             logged and swallowed. Must be picklable (serialized to workers).
     """
 

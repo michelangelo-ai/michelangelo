@@ -31,7 +31,7 @@ def load_raw_model(model_path: str) -> Union[Model, torch.nn.Module]:
     if raw_model_type == RawModelType.CUSTOM_PYTHON:
         return load_custom_raw_model(model_path)
 
-    if raw_model_type == RawModelType.TORCH:
+    if raw_model_type in (RawModelType.TORCH, RawModelType.LIGHTNING):
         return load_torch_raw_model(model_path)
 
     raise NotImplementedError(

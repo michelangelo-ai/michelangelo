@@ -257,8 +257,8 @@ class ModelPusherPlugin(PusherPluginBase):
 
     Args:
         config: ``ModelPluginConfig`` specifying the optional
-            ``model_name``, ``description``, ``labels``, ``run_id``, and
-            ``registry_clients`` list for multi-registry fan-out.
+            ``model_name``, ``description``, ``kind``, ``labels``, ``run_id``,
+            and ``registry_clients`` list for multi-registry fan-out.
         artifact: An ``AssembledModel`` with a pre-packaged ``raw_model``.
             ``deployable_model`` is optional — when ``None``, the deployable
             upload is skipped and ``deployable_artifact_uri`` is ``None`` in
@@ -285,6 +285,7 @@ class ModelPusherPlugin(PusherPluginBase):
         from michelangelo.lib.artifact_manager.storage_backend import (
             LocalStorageBackend,
         )
+        from michelangelo.lib.model_manager.constants import ModelKind
         from michelangelo.lib.model_manager.registry.client import (
             InMemoryRegistryClient,
         )
@@ -300,6 +301,7 @@ class ModelPusherPlugin(PusherPluginBase):
             config=ModelPluginConfig(
                 model_name="my-classifier",
                 description="Boston housing XGBoost model",
+                kind=ModelKind.REGRESSION,
                 labels={"owner": "ml-platform"},
                 run_id="mlflow-run-abc123",
             ),
@@ -445,6 +447,7 @@ class ModelPusherPlugin(PusherPluginBase):
                     artifact_uri=raw_uri,
                     deployable_artifact_uri=deployable_uri,
                     description=self._config.description,
+                    kind=self._config.kind,
                     labels=dict(
                         base_labels
                     ),  # shallow copy — prevents cross-registry mutation

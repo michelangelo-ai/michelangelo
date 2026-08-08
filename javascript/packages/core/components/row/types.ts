@@ -17,8 +17,6 @@ export type RowCell = Cell & {
    * In the "Triggers" metadata row, some columns (i.e. 'Max concurrency') need
    * to be hidden when their value is empty.
    *
-   * @see: https://t3.uberinternal.com/browse/MA-36479
-   *
    * @default false
    */
   hideEmpty?: boolean;

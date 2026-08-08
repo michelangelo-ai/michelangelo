@@ -10,7 +10,7 @@ Michelangelo AI Inference uses a plugin-based architecture with three main exten
 | --------- | ------- | ------------------------ |
 | `Backend` | Provision inference server infrastructure | Triton |
 | `ModelConfigProvider` | Manage model configurations | ConfigMap-based |
-| `RouteProvider` | Route traffic to models | Gateway API HTTPRoute |
+| `Manager` | Route traffic to models | Gateway API HTTPRoute |
 
 Each interface is designed to be idempotent—implementations should handle repeated calls gracefully.
 
@@ -71,30 +71,32 @@ The InferenceServer controller creates/deletes the model config, while the Deplo
 
 ---
 
-## 3. RouteProvider Interface
+## 3. Manager Interface
 
-The `RouteProvider` manages traffic routing to deployed models.
+The `Manager` interface manages traffic routing and routing rules for deployed models.
 
-**Interface:** [`go/components/deployment/route/interface.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/deployment/route/interface.go)
+**Interface:** [`go/components/common/routing/interface.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/common/routing/interface.go)
 
 ```go
-type RouteProvider interface {
-    EnsureDeploymentRoute(ctx context.Context, logger *zap.Logger, client dynamic.Interface, deploymentName string, namespace string, inferenceServerName string, modelName string) error
-    CheckDeploymentRouteStatus(ctx context.Context, logger *zap.Logger, client dynamic.Interface, deploymentName string, namespace string, inferenceServerName string, modelName string) (bool, error)
-    DeploymentRouteExists(ctx context.Context, logger *zap.Logger, client dynamic.Interface, deploymentName string, namespace string) (bool, error)
-    DeleteDeploymentRoute(ctx context.Context, logger *zap.Logger, client dynamic.Interface, deploymentName string, namespace string) error
+type Manager interface {
+    Create(ctx context.Context, client dynamic.Interface, name, namespace string, config RouteConfig) error
+    Exists(ctx context.Context, client dynamic.Interface, name, namespace string) (bool, error)
+    Delete(ctx context.Context, client dynamic.Interface, name, namespace string) error
+    AddRules(ctx context.Context, client dynamic.Interface, name, namespace string, rules ...Rule) error
+    RemoveRules(ctx context.Context, client dynamic.Interface, name, namespace string, matchPaths ...string) error
+    RuleExists(ctx context.Context, client dynamic.Interface, name, namespace string, rule Rule) (bool, error)
 }
 ```
 
-**Reference Implementation:** [`go/components/deployment/route/httproute.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/deployment/route/httproute.go)
+**Reference Implementation:** [`go/components/common/routing/gatewayapi/manager.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/common/routing/gatewayapi/manager.go)
 
 ### Default Behavior
 
-The default implementation creates HTTPRoutes that:
+The default implementation uses Gateway API HTTPRoute resources:
 
-1. Match requests on path `/{inferenceServerName}/{deploymentName}`
-2. Rewrite the path to `/v2/models/{modelName}` (Triton V2 inference protocol)
-3. Route to the inference server's Service
+- **`Create`** — creates an HTTPRoute for the given name/namespace using the supplied `RouteConfig`
+- **`AddRules` / `RemoveRules`** — incrementally adds or removes path-matching rules on an existing HTTPRoute; `RemoveRules` matches by path prefix
+- **`Exists` / `RuleExists`** — idempotency checks used by controllers before creating or adding rules
 
 ---
 

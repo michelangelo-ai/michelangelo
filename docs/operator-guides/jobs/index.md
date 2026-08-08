@@ -81,4 +81,13 @@ Michelangelo AI automatically provides:
 * Optional access to Ray Dashboard or Spark UI
 * Automatic cleanup via TTL policies
 
-Retries, check-pointing, and error handling depend on your application code.
+## gRPC API Services
+
+Job submission and lifecycle are backed by two gRPC services defined in `proto/api/v2/`:
+
+| Service | Proto file | Purpose |
+|---|---|---|
+| `RayJobService` | `ray_job_svc.proto` | Submit, track, and cancel Ray training or batch inference jobs |
+| `SparkJobService` | `spark_job_svc.proto` | Submit, track, and cancel Spark ETL and batch processing jobs |
+
+Both services follow the standard CRUD pattern (Create, Get, List, Update, Delete) and also expose `DeleteXxxCollection` for bulk deletion. See the proto definitions for request/response schema and status fields.

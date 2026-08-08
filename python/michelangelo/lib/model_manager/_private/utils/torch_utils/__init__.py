@@ -6,4 +6,5 @@ from .model import (
     load_model_from_state_dict,
     tensor_to_numpy,
     torch_dtype_to_data_type,
+    torch_export_supports_external_data,
 )

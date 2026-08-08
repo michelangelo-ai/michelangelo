@@ -13,3 +13,4 @@ class RawModelTypeTest(TestCase):
         self.assertEqual(RawModelType.CUSTOM_PYTHON, "custom-python")
         self.assertEqual(RawModelType.HUGGINGFACE, "huggingface")
         self.assertEqual(RawModelType.TORCH, "torch")
+        self.assertEqual(RawModelType.LIGHTNING, "lightning")

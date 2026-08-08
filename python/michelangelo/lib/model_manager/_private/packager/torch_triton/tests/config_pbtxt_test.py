@@ -125,6 +125,18 @@ class ConfigPbtxtTest(TestCase):
         self.assertIn('name: "test_model"', config)
         self.assertNotIn("test_model-", config)
 
+    def test_generate_config_pbtxt_content_without_model_name(self):
+        """It omits the top-level ``name`` field entirely when model_name is None."""
+        config = generate_config_pbtxt_content(
+            self.gen,
+            model_name=None,
+            model_revision=None,
+            model_schema=self.schema,
+        )
+
+        self.assertTrue(config.startswith('backend: "'))
+        self.assertNotIn("$MODEL_NAME", config)
+
     def test_generate_config_pbtxt_content_all_backends_render(self):
         """Every supported backend renders a non-empty config with its name."""
         for backend in (

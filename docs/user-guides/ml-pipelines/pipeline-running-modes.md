@@ -189,6 +189,27 @@ ma pipeline run --namespace="my-project" --name="my-pipeline"
 ma pipeline run --namespace="my-project" --name="my-pipeline" --resume_from=previous-run:step
 ```
 
+## Remote Run vs Pipeline Dev Run: what's actually different
+
+From the "why this mode exists" framing above, Remote Run and Pipeline Dev Run can look interchangeable — both let you test against real compute without registering a pipeline. The distinction that actually matters when choosing between them is architectural, not just "which dev stage am I in":
+
+| | Remote Run | Pipeline Dev Run |
+| ----- | ----- | ----- |
+| Invoked via | `python workflow.py remote-run` (a Uniflow feature, not an `ma` command) | `ma pipeline dev-run -f pipeline.yaml` |
+| Routed through the Michelangelo AI API server + controller? | No — submits directly to Cadence/Temporal | Yes |
+| Creates a `PipelineRun` entity? | No | Yes |
+| Resumable with `--resume_from`? | No | Yes |
+| Visible in MA Studio? | No | No — no parent `Pipeline` entity is created either, so there's nothing to attach it to in Studio's pipeline list. The run itself is still a real, queryable entity via `ma get pipeline_run` / kubectl |
+| Requires a prebuilt image? | Yes — you pass `--image` | No — builds and validates the image as part of the run |
+
+:::tip
+If you'll need to come back to a run later, share it with a teammate, or resume it from a failed step, use **Pipeline Dev Run** — it's the only one of the two that creates a trackable entity. Reach for **Remote Run** only once you already trust your image and just need real compute for a quick check.
+:::
+
+Job scheduling itself is identical either way: both ultimately submit to the same Cadence/Temporal worker, which is what talks to the Ray/Spark compute cluster. The difference is entirely in what happens *before* that — whether the Michelangelo AI control plane is involved at all.
+
+See the [CLI reference](../reference/cli.md#differences-between-dev-run-and-remote-run) for the full breakdown, including how `--file-sync` behaves differently under each mode.
+
 ## Decision tree: which mode should I use?
 
 ### Stage-based

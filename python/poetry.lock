@@ -13713,9 +13713,10 @@ ray-polars = ["polars", "ray", "ray"]
 trainer = ["numpy", "pytorch_lightning", "ray", "ray", "torch", "transformers"]
 trainer-comet = ["comet_ml"]
 trainer-deepspeed = ["deepspeed"]
+trainer-mlflow = ["mlflow"]
 vllm = ["accelerate", "datasets", "einops", "numpy", "pandas", "pyarrow", "pytorch_lightning", "ray", "ray", "s3fs", "setuptools", "torch", "transformers", "vllm"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9.0"
-content-hash = "4d8ac79bc38845fcec3e75e599fb98da7dcb6b3d18a53569adb168dd12af13f3"
+content-hash = "c2ce18bb919f0d9d4a5ac617d49d3a6cd6d4ae9cb530a4dc8c86dd0b506c7e21"

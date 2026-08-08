@@ -97,7 +97,21 @@ The model config stores the list of models to be loaded on an inference server. 
 
 Traffic routes manage traffic routing from the gateway to specific models on the inference server. Example implementation: Gateway API HTTPRoute.
 
-## **Next Steps**
+## gRPC API Services
+
+The following gRPC services back the serving control plane. All are defined in `proto/api/v2/` and accessible via the Michelangelo AI API server.
+
+| Service | Proto file | Purpose |
+|---|---|---|
+| `InferenceServerService` | `inference_server_svc.proto` | Lifecycle management for InferenceServer resources — provision, health-check, scale, delete |
+| `DeploymentService` | `deployment_svc.proto` | Model rollout management — stages, traffic routing, rollback |
+| `RevisionService` | `revision_svc.proto` | Manages Revision resources — immutable snapshots of a Deployment configuration |
+| `ClusterService` | `cluster_svc.proto` | Manages compute Cluster registrations available to the serving control plane |
+| `RayClusterService` | `ray_cluster_svc.proto` | Manages Ray-specific cluster resources provisioned for inference workloads |
+
+Each service follows the standard CRUD pattern (Create, Get, List, Update, Delete) and also exposes `DeleteXxxCollection` for bulk deletion. See the proto definitions for the full request/response schema.
+
+## Next Steps
 
 * [Run Inference on a Local Sandbox](./cluster-setup.md): Try inference in a local development environment
 * [Integrate with Your Custom Backend](./integrate-custom-backend.md): Add support for new serving frameworks

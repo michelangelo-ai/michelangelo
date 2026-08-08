@@ -9,8 +9,12 @@ declared input/output columns to and from a single stacked tensor.
 
 This module provides the foundation (stateless, elementwise) layers, plus
 structural layers (``Tile``, ``PadOrCrop1D``, ``Clip``, ``Scale``, ``CaseWhen``,
+This module provides the foundation (stateless, elementwise) layers, plus
+structural layers (``Tile``, ``PadOrCrop1D``, ``Clip``, ``Scale``, ``CaseWhen``,
 ``Compare``, ``TensorColFillNone``, etc.) and the ``IDHashTokenizer`` wrapper
-layer. Fitted-statistics layers are added in a follow-up module.
+layer. Fitted-statistics layers (``MinMax``, ``Normalization``,
+``Bucketization``) live in
+:mod:`~michelangelo.lib.native_transform.torch.stats_layers`.
 """
 
 from __future__ import annotations

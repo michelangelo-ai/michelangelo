@@ -68,7 +68,7 @@ _MAX_PROFILER_REPEAT = 3
 # Only ``pytorch`` is supported today — Michelangelo OSS is PyTorch-heavy, and
 # the other Lightning profilers (simple / advanced / xla) and a custom-class
 # escape hatch add config surface without a concrete user yet. The dict shape
-# (``{"pytorch": {...}, "upload_to_comet": ...}``) is kept as-is so adding a
+# (``{"pytorch": {...}, "upload_profiler_results": ...}``) is kept as-is so adding a
 # second backend later, as we expand to more platforms, is additive rather
 # than a breaking config change.
 _PROFILER_SHORTHANDS = ("pytorch",)
@@ -263,8 +263,11 @@ def build_mlflow_logger(
     """Build an ``MLFlowLogger`` for a Ray Train worker.
 
     Dotted-path factory target for ``LightningTrainerKwargs.logger``.
-    Unlike Comet, MLflow's client is process-safe and requires no
-    distributed barrier — each worker constructs its logger independently.
+    Unlike Comet, constructing an ``MLFlowLogger`` is process-safe and
+    requires no distributed barrier — each worker builds its own logger
+    independently. This does not extend to the ``.experiment`` property,
+    which Lightning decorates with the same rank-zero restriction as Comet's;
+    see :func:`mlflow_profiler_sink` for the implication on profiler export.
     ``run_id`` lets all workers attach to the same MLflow run for per-rank
     metric correlation; when ``None``, Lightning's default (rank-0-only
     logging) applies.
@@ -789,7 +792,7 @@ def _build_profiler(
             * A dict setting ``pytorch`` to a kwargs dict, handled by
               :func:`_build_pytorch_profiler`.
 
-            ``upload_to_comet`` is reserved metadata read by
+            ``upload_profiler_results`` is reserved metadata read by
             :func:`_resolve_profiler` and is never forwarded to a profiler
             constructor.
         steps_per_epoch: Estimated steps per epoch, used to derive or
@@ -874,7 +877,7 @@ def _resolve_profiler(
 
     Returns:
         A ``(profiler, profiler_logs_path, upload_results)`` tuple.
-        ``upload_results`` mirrors the config's ``upload_to_comet`` flag and
+        ``upload_results`` mirrors the config's ``upload_profiler_results`` flag and
         gates the post-``fit`` ``profiler_sink`` call; it defaults to ``True``
         so callers must opt *out* of exporting results.
     """
@@ -882,7 +885,7 @@ def _resolve_profiler(
         return None, "", False
 
     upload_results = (
-        profiler_config.get("upload_to_comet", True)
+        profiler_config.get("upload_profiler_results", True)
         if isinstance(profiler_config, dict)
         else True
     )
@@ -892,6 +895,44 @@ def _resolve_profiler(
     _logger.info("[profiler] [Rank %d] Steps per epoch: %s", rank, steps_per_epoch)
     profiler, profiler_logs_path = _build_profiler(profiler_config, steps_per_epoch)
     return profiler, profiler_logs_path, upload_results
+
+
+def _profiler_output(
+    profiler: pl.profilers.Profiler, profiler_logs_path: str
+) -> tuple[str, list[str]] | None:
+    """Classify a profiler's output as a directory or a set of text files.
+
+    Shared by :func:`comet_profiler_sink` and :func:`mlflow_profiler_sink`;
+    the classification is backend-independent, only the upload call differs.
+
+    Returns:
+        ``("dir", [profiler_logs_path])`` for ``PyTorchProfiler``
+        (TensorBoard-format traces), ``("files", txt_paths)`` for
+        ``SimpleProfiler``/``AdvancedProfiler`` text summaries (``None`` if
+        the directory has no ``.txt`` files), or ``None`` for any other
+        profiler type, which has no supported export format.
+    """
+    from pytorch_lightning.profilers import (
+        AdvancedProfiler,
+        PyTorchProfiler,
+        SimpleProfiler,
+    )
+
+    if isinstance(profiler, PyTorchProfiler):
+        return "dir", [profiler_logs_path]
+
+    if isinstance(profiler, (SimpleProfiler, AdvancedProfiler)):
+        txt_files = glob.glob(os.path.join(profiler_logs_path, "*.txt"))
+        if not txt_files:
+            _logger.warning("No profiler .txt files found in %s", profiler_logs_path)
+            return None
+        return "files", txt_files
+
+    _logger.info(
+        "Uploading results for %s is not supported; skipping.",
+        type(profiler).__name__,
+    )
+    return None
 
 
 def comet_profiler_sink(
@@ -928,12 +969,6 @@ def comet_profiler_sink(
     Returns:
         ``None``.
     """
-    from pytorch_lightning.profilers import (
-        AdvancedProfiler,
-        PyTorchProfiler,
-        SimpleProfiler,
-    )
-
     experiment = getattr(logger, "experiment", None)
     if experiment is None:
         _logger.warning(
@@ -943,40 +978,100 @@ def comet_profiler_sink(
         )
         return
 
-    if isinstance(profiler, PyTorchProfiler):
+    classified = _profiler_output(profiler, profiler_logs_path)
+    if classified is None:
+        return
+    kind, paths = classified
+
+    if kind == "dir":
         try:
-            _logger.info(
-                "Uploading PyTorch profiler traces from %s to Comet",
-                profiler_logs_path,
-            )
-            experiment.log_tensorflow_folder(profiler_logs_path)
+            _logger.info("Uploading PyTorch profiler traces from %s to Comet", paths[0])
+            experiment.log_tensorflow_folder(paths[0])
         except Exception:
             _logger.warning(
                 "Failed to upload PyTorch profiler traces to Comet", exc_info=True
             )
         return
 
-    if isinstance(profiler, (SimpleProfiler, AdvancedProfiler)):
-        txt_files = glob.glob(os.path.join(profiler_logs_path, "*.txt"))
-        if not txt_files:
-            _logger.warning("No profiler .txt files found in %s", profiler_logs_path)
-            return
-        for txt_file in txt_files:
-            try:
-                _logger.info("Uploading profiler log %s to Comet", txt_file)
-                experiment.log_asset(txt_file)
-            except Exception:
-                _logger.warning(
-                    "Failed to upload profiler log %s to Comet",
-                    txt_file,
-                    exc_info=True,
-                )
+    for txt_file in paths:
+        try:
+            _logger.info("Uploading profiler log %s to Comet", txt_file)
+            experiment.log_asset(txt_file)
+        except Exception:
+            _logger.warning(
+                "Failed to upload profiler log %s to Comet",
+                txt_file,
+                exc_info=True,
+            )
+
+
+def mlflow_profiler_sink(
+    profiler: pl.profilers.Profiler,
+    profiler_logs_path: str,
+    logger: Any,
+) -> None:
+    """Upload profiler output to an MLflow run.
+
+    Ready-made ``LightningTrainerParam.profiler_sink`` for runs that log to
+    MLflow via :func:`build_mlflow_logger`. ``PyTorchProfiler`` traces are
+    uploaded as a directory via ``MlflowClient.log_artifacts``;
+    ``SimpleProfiler``/``AdvancedProfiler`` text summaries are uploaded
+    per-file via ``MlflowClient.log_artifact``. Unlike Comet's
+    ``log_tensorflow_folder``, MLflow has no TensorBoard-aware upload: traces
+    are stored verbatim under an ``artifact_path="profiler"`` prefix and must
+    be downloaded to view in a trace viewer (e.g. ``chrome://tracing``).
+    ``XLAProfiler`` and custom profilers are not supported and are skipped
+    with a log message.
+
+    Every upload is best-effort: a failure is logged and swallowed so a
+    broken export never fails an otherwise-successful training run.
+
+    Note:
+        Lightning decorates ``MLFlowLogger.experiment`` with
+        ``@rank_zero_experiment``, identically to ``CometLogger.experiment``.
+        On any worker whose *global* rank is not 0 the property yields a
+        no-op dummy client (``_DummyExperiment``) and uploads are silently
+        dropped. ``experiment is None`` is therefore not a reliable
+        "can I upload?" check on any Lightning logger, including this one —
+        a non-zero-rank worker gets a dummy object, not ``None``. Pass a
+        custom sink built on a directly-constructed ``MlflowClient`` if
+        per-node profiles are required.
+
+    Args:
+        profiler: The profiler built for this worker.
+        profiler_logs_path: Directory the profiler wrote its output to.
+        logger: The resolved Lightning logger. Must expose ``experiment``
+            (an ``MlflowClient``) and ``run_id``; anything else is skipped.
+
+    Returns:
+        ``None``.
+    """
+    client = getattr(logger, "experiment", None)
+    run_id = getattr(logger, "run_id", None)
+    if client is None or run_id is None:
+        _logger.warning(
+            "mlflow_profiler_sink: logger %r has no MLflow client or run id; "
+            "skipping profiler upload.",
+            type(logger).__name__,
+        )
         return
 
-    _logger.info(
-        "Uploading results for %s is not supported; skipping.",
-        type(profiler).__name__,
-    )
+    classified = _profiler_output(profiler, profiler_logs_path)
+    if classified is None:
+        return
+    kind, paths = classified
+
+    for path in paths:
+        try:
+            _logger.info("Uploading profiler output %s to MLflow", path)
+            if kind == "dir":
+                client.log_artifacts(run_id, path, artifact_path="profiler")
+            else:
+                client.log_artifact(run_id, path, artifact_path="profiler")
+        except Exception:
+            _logger.warning(
+                "Failed to upload profiler output %s to MLflow", path, exc_info=True
+            )
 
 
 def _maybe_track_experiment(train_loop_config: dict, rank: int) -> None:
@@ -1242,7 +1337,7 @@ def _maybe_export_profiler_results(
         profiler_logs_path: Directory the profiler wrote its output to.
         logger: The resolved Lightning logger, forwarded to the sink so it can
             attach results to the active experiment.
-        upload_profiler_results: The config's ``upload_to_comet`` flag; when
+        upload_profiler_results: The config's ``upload_profiler_results`` flag; when
             ``False`` the sink is not called.
         profiler_sink: The user-supplied
             ``Callable[[Profiler, str, logger], None]``, or ``None``.

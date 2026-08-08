@@ -5,7 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from michelangelo.workflow.variables.metadata import ModelMetadata
+from michelangelo.workflow.variables.metadata import (
+    FeaturePackageMetadata,
+    ModelMetadata,
+)
 
 
 @dataclass
@@ -37,6 +40,35 @@ class ModelArtifact:
 
 
 @dataclass
+class FeaturePackageArtifact:
+    """A feature package preceding a model's feature-computation stage.
+
+    Assemblers fuse this into the model's own schema/sample data to produce
+    the end-to-end serving contract (see ``fuse_e2e_schema``,
+    ``build_e2e_sample_data``).
+
+    Attributes:
+        path: Absolute local filesystem path to the feature package.
+        metadata: Typed metadata describing the feature package's schema and
+            sample data.
+
+    Example:
+        >>> from michelangelo.workflow.variables.metadata import (
+        ...     FeaturePackageMetadata,
+        ... )
+        >>> package = FeaturePackageArtifact(
+        ...     path="/tmp/features", metadata=FeaturePackageMetadata()
+        ... )
+        >>> package.metadata.schema
+        FeatureSchema(input_schema=[], feature_store_features_schema=[],
+        derived_features_schema=[])
+    """
+
+    path: str
+    metadata: FeaturePackageMetadata = field(default_factory=FeaturePackageMetadata)
+
+
+@dataclass
 class AssembledModel:
     """A trained model transmitted between workflow tasks.
 
@@ -55,6 +87,9 @@ class AssembledModel:
         deployable_model: Optional serving-ready bundle (e.g. Triton config +
             weights) intended for deployment to a model server. ``None`` when
             the model has not been packaged for serving.
+        feature_package: Optional feature package fused into the deployable
+            model's end-to-end schema/sample data during assembly. ``None``
+            when the model has no upstream feature-computation stage.
 
     Example (with deployable):
         >>> artifact = ModelArtifact(path="/tmp/model.ubj")
@@ -73,6 +108,7 @@ class AssembledModel:
 
     raw_model: ModelArtifact
     deployable_model: ModelArtifact | None = None
+    feature_package: FeaturePackageArtifact | None = None
 
 
 @dataclass

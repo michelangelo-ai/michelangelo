@@ -43,6 +43,30 @@ var validateMsg = `
 			}
 		}`
 
+// validateDurationStructural is emitted unconditionally for every google.protobuf.Duration
+// field, regardless of whether a bound annotation is present, since a structurally invalid
+// Duration (out-of-range seconds/nanos, or seconds/nanos with mismatched signs) is never
+// meaningful. Bounds match the google.protobuf.Duration spec
+// (https://protobuf.dev/reference/protobuf/google.protobuf/#duration). Declared as local
+// constants scoped to this field's block, since multiple .proto files sharing a Go package
+// each emit this snippet independently and package-level constants would collide.
+var validateDurationStructural = `
+		const (
+			durationMaxNanos   = 999999999
+			durationMinNanos   = -999999999
+			durationMaxSeconds = 315576000000
+			durationMinSeconds = -315576000000
+		)
+		if v.GetSeconds() < durationMinSeconds || v.GetSeconds() > durationMaxSeconds {
+			return status.Error(codes.InvalidArgument, prefix + n + " " + "seconds out of range")
+		}
+		if v.GetNanos() < durationMinNanos || v.GetNanos() > durationMaxNanos {
+			return status.Error(codes.InvalidArgument, prefix + n + " " + "nanos out of range")
+		}
+		if (v.GetSeconds() < 0 && v.GetNanos() > 0) || (v.GetSeconds() > 0 && v.GetNanos() < 0) {
+			return status.Error(codes.InvalidArgument, prefix + n + " " + "seconds and nanos must have the same sign")
+		}`
+
 var validateOneofFmt = `
 	if this.Get%s() == nil {
 		return status.Error(codes.InvalidArgument, "one field in oneof " + prefix + "%s(%s) must be set")
@@ -196,11 +220,20 @@ var _ = strconv.Itoa
 			if field.Desc.Kind() == protoreflect.MessageKind && !field.Desc.IsMap() && !field.Desc.IsList() {
 				fieldValidateCode += validateMsg
 			}
+			if isDurationKind(field, fieldTarget) {
+				fieldValidateCode += validateDurationStructural
+			}
 			if field.Desc.IsList() && field.Desc.Kind() == protoreflect.MessageKind {
 				itemsValidateCode += validateMsg
 			}
+			if field.Desc.IsList() && isDurationKind(field, itemsTarget) {
+				itemsValidateCode += validateDurationStructural
+			}
 			if field.Desc.IsMap() && field.Desc.MapValue().Kind() == protoreflect.MessageKind {
 				valuesValidateCode += validateMsg
+			}
+			if field.Desc.IsMap() && isDurationKind(field, valuesTarget) {
+				valuesValidateCode += validateDurationStructural
 			}
 			if fieldValidateCode != "" || itemsValidateCode != "" || keysValidateCode != "" || valuesValidateCode != "" {
 				if field.Oneof != nil {
@@ -399,6 +432,25 @@ func getScalarKind(field *protogen.Field, target targetType) protoreflect.Kind {
 	return 0
 }
 
+// durationMessageFullName is the well-known type name used to recognize google.protobuf.Duration
+// fields regardless of which Go protobuf implementation (gogo, golang/protobuf) generated them.
+const durationMessageFullName protoreflect.FullName = "google.protobuf.Duration"
+
+// isDurationKind reports whether the resolved field for the given target is a
+// google.protobuf.Duration message field.
+func isDurationKind(field *protogen.Field, target targetType) bool {
+	if getScalarKind(field, target) != protoreflect.MessageKind {
+		return false
+	}
+	switch target {
+	case fieldTarget, itemsTarget:
+		return field.Desc.Message().FullName() == durationMessageFullName
+	case valuesTarget:
+		return field.Desc.MapValue().Message().FullName() == durationMessageFullName
+	}
+	return false
+}
+
 func getInt(field *protogen.Field, str string, bits int) string {
 	if str == "" {
 		return ""
@@ -453,6 +505,11 @@ func validateMaxMin(field *protogen.Field, validation *pboptions.Options, target
 	kind := getScalarKind(field, target)
 	strMax := validation.String("max")
 	strMin := validation.String("min")
+
+	if isDurationKind(field, target) {
+		return validateDurationMaxMin(field, validation, strMax, strMin)
+	}
+
 	goMax := "" // max in go syntax
 	goMin := "" // min in go syntax
 
@@ -486,7 +543,7 @@ func validateMaxMin(field *protogen.Field, validation *pboptions.Options, target
 		goMax = getFloat(field, strMax, 64)
 		goMin = getFloat(field, strMin, 64)
 	default:
-		compilerErrField(field, fmt.Sprintf("max / min validation only applies to numeric or enum fields"))
+		compilerErrField(field, fmt.Sprintf("max / min validation only applies to numeric, enum, or google.protobuf.Duration fields"))
 	}
 
 	minOp, maxOp, rangeFmt := minMaxOpsRange(validation)
@@ -501,6 +558,34 @@ func validateMaxMin(field *protogen.Field, validation *pboptions.Options, target
 	} else if goMin != "" {
 		condition = "!(v" + minOp + goMin + ")"
 		msg = fmt.Sprintf("must be %s %s", minOp, strMin)
+	} else {
+		return ""
+	}
+
+	return validateField(validation, msg, condition)
+}
+
+// validateDurationMaxMin generates a bound check for google.protobuf.Duration fields.
+// min/max are interpreted as seconds, consistent with how they're interpreted as the
+// target numeric type for int/float fields.
+func validateDurationMaxMin(field *protogen.Field, validation *pboptions.Options, strMax string, strMin string) string {
+	goMax := getFloat(field, strMax, 64)
+	goMin := getFloat(field, strMin, 64)
+
+	const secondsExpr = "(float64(v.GetSeconds()) + float64(v.GetNanos())/1e9)"
+
+	minOp, maxOp, rangeFmt := minMaxOpsRange(validation)
+	condition := ""
+	msg := ""
+	if goMax != "" && goMin != "" {
+		condition = "!(" + secondsExpr + minOp + goMin + " && " + secondsExpr + maxOp + goMax + ")"
+		msg = fmt.Sprintf("must be in the range "+rangeFmt+" seconds", strMin, strMax)
+	} else if goMax != "" {
+		condition = "!(" + secondsExpr + maxOp + goMax + ")"
+		msg = fmt.Sprintf("must be %s %s seconds", maxOp, strMax)
+	} else if goMin != "" {
+		condition = "!(" + secondsExpr + minOp + goMin + ")"
+		msg = fmt.Sprintf("must be %s %s seconds", minOp, strMin)
 	} else {
 		return ""
 	}

@@ -5,8 +5,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from michelangelo.lib.model_manager.schema.feature_schema import FeatureSchema
+from michelangelo.workflow.variables._private.utils.serialization import (
+    retrieve_object,
+    save_object,
+)
+
 if TYPE_CHECKING:
     from io import BytesIO
+
+    from michelangelo.lib.model_manager.schema import ModelSchema
 
 
 TRAINING_FRAMEWORK_CUSTOM = "custom"
@@ -64,17 +72,61 @@ class ModelMetadata:
             ``None`` for non-incremental models, and for the first run of a new
             incremental chain (the BASELINE run itself). Set on continuation
             runs to the identifier of the original baseline.
-        _schema: Serialised input/output schema (e.g. protobuf or JSON bytes).
-            Not included in ``repr`` to avoid flooding logs.
-        _sample_data: Serialised sample inference payload used for smoke-testing
-            the deployed model. Not included in ``repr``.
-        _hyperparameters: Serialised training hyperparameters for
-            reproducibility. Not included in ``repr``.
-        hyperparameters: Live training hyperparameters as a Python dict.
-            Used by ``ModelVariable.load_lightning_model()`` to re-instantiate
-            the model class via ``model_class(**hyperparameters)``. Distinct
-            from ``_hyperparameters``, which is the registry-bound serialised
-            form.
+        transform_spec: Opaque feature-transform specification propagated
+            from a native-transform model through assembly, used to
+            reconstruct the transform at serve time. ``None`` when the model
+            has no associated transform. See ``_transform_spec``.
+        feature_stats: Opaque feature statistics propagated from a
+            native-transform model through assembly (e.g. normalization
+            parameters). ``None`` when not recorded. See ``_feature_stats``.
+        _schema: Serialised (pickled) input/output schema. This, not a live
+            ``schema`` field, is what actually crosses a workflow task
+            boundary: a live ``ModelSchema`` object passed by value through
+            the workflow orchestrator can be large enough to exceed its
+            argument-size limits when inlined. Use the ``schema`` property to
+            read it back as a live object. Not included in ``repr``.
+        _sample_data: Serialised sample inference payload used for
+            smoke-testing the deployed model, for the same reason ``_schema``
+            is serialised rather than carried live. Use the ``sample_data``
+            property to read it back. Not included in ``repr``.
+        _transform_spec: Serialised ``transform_spec``, for the same
+            live-object-crossing-a-task-boundary reason as ``_schema``. Set
+            via the ``transform_spec`` property setter, which pickles the
+            value for you. Not included in ``repr``.
+        _feature_stats: Serialised ``feature_stats``, for the same reason.
+            Set via the ``feature_stats`` property setter. Not included in
+            ``repr``.
+        _hyperparameters: Serialised (pickled) training hyperparameters. This,
+            not a live ``hyperparameters`` field, is what crosses a workflow
+            task boundary, for the same workflow-orchestrator argument-size reason
+            as ``_schema``. Use the ``hyperparameters`` property to read or
+            write it as a live dict. Not included in ``repr``.
+        hyperparameters: Live training hyperparameters as a Python dict,
+            lazily unpickled from ``_hyperparameters``. Used by
+            ``ModelVariable.load_lightning_model()`` to re-instantiate the
+            model class via ``model_class(**hyperparameters)``. Has a
+            setter: assigning a dict pickles it into ``_hyperparameters``
+            for you.
+        _e2e_schema: Serialised end-to-end schema produced by fusing a
+            ``FeaturePackageArtifact``'s schema into this model's own
+            ``schema`` during assembly, for the same
+            live-object-crossing-a-task-boundary reason as ``_schema``. Use
+            the ``e2e_schema`` property to read it back. Not included in
+            ``repr``.
+        _e2e_sample_data: Serialised end-to-end sample data produced the
+            same way as ``_e2e_schema``. Use the ``e2e_sample_data``
+            property to read it back. Not included in ``repr``.
+
+    Warning:
+        The ``_schema``, ``_sample_data``, ``_transform_spec``,
+        ``_feature_stats``, ``_hyperparameters``, ``_e2e_schema``, and
+        ``_e2e_sample_data`` fields are unpickled on read (``schema``,
+        ``sample_data``, ``transform_spec``, ``feature_stats``,
+        ``hyperparameters``, ``e2e_schema``, ``e2e_sample_data``
+        properties). Unpickling
+        executes arbitrary code embedded in the payload, so only construct
+        ``ModelMetadata`` from a trusted source (e.g. your own workflow task
+        output), never from unvalidated external input.
 
     Example:
         >>> meta = ModelMetadata(training_framework="xgboost", deployable=True)
@@ -92,8 +144,113 @@ class ModelMetadata:
     baseline_model_identifier: str | None = None
     _schema: BytesIO | None = field(default=None, repr=False)
     _sample_data: BytesIO | None = field(default=None, repr=False)
+    _transform_spec: BytesIO | None = field(default=None, repr=False)
+    _feature_stats: BytesIO | None = field(default=None, repr=False)
     _hyperparameters: BytesIO | None = field(default=None, repr=False)
-    hyperparameters: dict[str, Any] | None = None
+    _e2e_schema: BytesIO | None = field(default=None, repr=False)
+    _e2e_sample_data: BytesIO | None = field(default=None, repr=False)
+
+    @property
+    def schema(self) -> ModelSchema | None:
+        """Typed input/output schema, lazily unpickled from ``_schema``.
+
+        Set via ``_schema`` (e.g. ``_schema=io.BytesIO(pickle.dumps(schema))``)
+        rather than as a constructor keyword — this stays a read-only view so
+        the only thing carried across a workflow task boundary is the
+        serialised payload, never a live object passed by value.
+
+        Returns:
+            The unpickled ``ModelSchema``, or ``None`` if ``_schema`` is unset.
+        """
+        return retrieve_object(self._schema)
+
+    @property
+    def sample_data(self) -> list[dict[str, Any]] | None:
+        """Sample inference inputs, lazily unpickled from ``_sample_data``.
+
+        Set via ``_sample_data`` for the same reason ``schema`` is backed by
+        ``_schema`` — see that property's docstring.
+
+        Returns:
+            The unpickled sample data, or ``None`` if ``_sample_data`` is unset.
+        """
+        return retrieve_object(self._sample_data)
+
+    @property
+    def transform_spec(self) -> dict[str, Any] | None:
+        """Feature-transform spec, lazily unpickled from ``_transform_spec``.
+
+        Unlike ``schema``/``sample_data``, this has a setter: callers may
+        assign a live dict directly (``meta.transform_spec = {...}``) and it
+        is pickled into ``_transform_spec`` for you, since the value only
+        needs to cross a task boundary after assembly, not at construction.
+
+        Returns:
+            The unpickled spec, or ``None`` if ``_transform_spec`` is unset.
+        """
+        return retrieve_object(self._transform_spec)
+
+    @transform_spec.setter
+    def transform_spec(self, value: dict[str, Any] | None) -> None:
+        self._transform_spec = save_object(value)
+
+    @property
+    def feature_stats(self) -> dict[str, Any] | None:
+        """Feature statistics, lazily unpickled from ``_feature_stats``.
+
+        Has a setter for the same reason ``transform_spec``'s does — see
+        that property's docstring.
+
+        Returns:
+            The unpickled stats, or ``None`` if ``_feature_stats`` is unset.
+        """
+        return retrieve_object(self._feature_stats)
+
+    @feature_stats.setter
+    def feature_stats(self, value: dict[str, Any] | None) -> None:
+        self._feature_stats = save_object(value)
+
+    @property
+    def hyperparameters(self) -> dict[str, Any] | None:
+        """Training hyperparameters, lazily unpickled from ``_hyperparameters``.
+
+        Has a setter for the same reason ``transform_spec``'s does — see
+        that property's docstring.
+
+        Returns:
+            The unpickled hyperparameters, or ``None`` if
+            ``_hyperparameters`` is unset.
+        """
+        return retrieve_object(self._hyperparameters)
+
+    @hyperparameters.setter
+    def hyperparameters(self, value: dict[str, Any] | None) -> None:
+        self._hyperparameters = save_object(value)
+
+    @property
+    def e2e_schema(self) -> ModelSchema | None:
+        """End-to-end schema, lazily unpickled from ``_e2e_schema``.
+
+        Set when a feature package is fused into this model during assembly
+        (see ``fuse_e2e_schema``); read-only for the same reason ``schema``
+        is, via the same ``_schema``-backing pattern.
+
+        Returns:
+            The unpickled ``ModelSchema``, or ``None`` if ``_e2e_schema`` is unset.
+        """
+        return retrieve_object(self._e2e_schema)
+
+    @property
+    def e2e_sample_data(self) -> list[dict[str, Any]] | None:
+        """End-to-end sample data, lazily unpickled from ``_e2e_sample_data``.
+
+        Set when a feature package is fused into this model during assembly
+        (see ``build_e2e_sample_data``); read-only, mirroring ``sample_data``.
+
+        Returns:
+            The unpickled sample data, or ``None`` if ``_e2e_sample_data`` is unset.
+        """
+        return retrieve_object(self._e2e_sample_data)
 
     def to_registry_dict(self) -> dict[str, str]:
         """Return a flat string dict of public fields suitable for registry tags.
@@ -101,7 +258,7 @@ class ModelMetadata:
         Omits ``None``-valued optional fields and serialises ``bool`` fields as
         ``"true"`` / ``"false"`` (lowercase) for consistent cross-registry
         storage. Binary payload fields (``_schema``, ``_sample_data``,
-        ``_hyperparameters``) are excluded.
+        ``_transform_spec``, ``_feature_stats``, ``_hyperparameters``) are excluded.
 
         Subclasses should override this method to include their own fields::
 
@@ -130,3 +287,52 @@ class ModelMetadata:
         if self.baseline_model_identifier is not None:
             result["baseline_model_identifier"] = self.baseline_model_identifier
         return result
+
+
+@dataclass
+class FeaturePackageMetadata:
+    """Typed metadata carried by a feature-package artifact.
+
+    A feature package describes the schema and sample data produced by a
+    feature-computation stage (e.g. a feature store lookup or a batch feature
+    pipeline) that precedes a model. Assemblers fuse this into the model's
+    own schema/sample data to produce the end-to-end serving contract; see
+    ``fuse_e2e_schema`` and ``build_e2e_sample_data``.
+
+    Attributes:
+        _schema: Serialised (pickled) ``FeatureSchema``, for the same
+            live-object-crossing-a-task-boundary reason as
+            ``ModelMetadata._schema``. Use the ``schema`` property to read it
+            back. Not included in ``repr``.
+        _sample_data: Serialised sample feature payload, for the same reason
+            ``_schema`` is serialised. Use the ``sample_data`` property to
+            read it back. Not included in ``repr``.
+
+    Warning:
+        The ``_schema`` and ``_sample_data`` fields are unpickled on read.
+        Unpickling executes arbitrary code embedded in the payload, so only
+        construct ``FeaturePackageMetadata`` from a trusted source, never
+        from unvalidated external input.
+    """
+
+    _schema: BytesIO | None = field(default=None, repr=False)
+    _sample_data: BytesIO | None = field(default=None, repr=False)
+
+    @property
+    def schema(self) -> FeatureSchema:
+        """Typed feature schema, lazily unpickled from ``_schema``.
+
+        Returns:
+            The unpickled ``FeatureSchema``, or an empty ``FeatureSchema()``
+            if ``_schema`` is unset.
+        """
+        return retrieve_object(self._schema) or FeatureSchema()
+
+    @property
+    def sample_data(self) -> list[dict[str, Any]] | None:
+        """Sample feature inputs, lazily unpickled from ``_sample_data``.
+
+        Returns:
+            The unpickled sample data, or ``None`` if ``_sample_data`` is unset.
+        """
+        return retrieve_object(self._sample_data)

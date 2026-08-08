@@ -2,11 +2,13 @@
 
 import os
 import tempfile
-from pathlib import Path
 from unittest import TestCase
 
 from michelangelo.lib.model_manager._private.packager.custom_triton import (
     serialize_model_class,
+)
+from michelangelo.lib.model_manager._private.packager.custom_triton.tests._helpers import (  # noqa: E501
+    list_relative_files,
 )
 
 
@@ -52,15 +54,7 @@ class ModelClassTest(TestCase):
                 content = f.read()
                 self.assertIn("class Predict(Model):", content)
 
-            files = sorted(
-                [
-                    str(
-                        Path(os.path.join(dirpath, file)).relative_to(target_dir),
-                    )
-                    for dirpath, _, filenames in os.walk(target_dir)
-                    for file in filenames
-                ],
-            )
+            files = list_relative_files(target_dir)
 
             prefix = "michelangelo/lib/model_manager/"
             self.assertEqual(

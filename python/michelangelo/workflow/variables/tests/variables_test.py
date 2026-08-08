@@ -18,10 +18,12 @@ from michelangelo.workflow.variables.metadata import (
     TRAINING_FRAMEWORK_CUSTOM,
     TRAINING_FRAMEWORK_LIGHTNING,
     TRAINING_FRAMEWORK_PYTORCH,
+    FeaturePackageMetadata,
     ModelMetadata,
 )
 from michelangelo.workflow.variables.types import (
     AssembledModel,
+    FeaturePackageArtifact,
     ModelArtifact,
     PusherResult,
 )
@@ -75,16 +77,16 @@ class TestModelMetadata(TestCase):
         """A subclass can add provider-specific fields."""
 
         @dataclass
-        class UberModelMetadata(ModelMetadata):
+        class ExtendedModelMetadata(ModelMetadata):
             training_job_id: str | None = None
 
-        uber_meta = UberModelMetadata(
+        extended_meta = ExtendedModelMetadata(
             training_framework="pytorch",
             training_job_id="job-1",
         )
-        self.assertEqual(uber_meta.training_framework, "pytorch")
-        self.assertEqual(uber_meta.training_job_id, "job-1")
-        self.assertIsInstance(uber_meta, ModelMetadata)
+        self.assertEqual(extended_meta.training_framework, "pytorch")
+        self.assertEqual(extended_meta.training_job_id, "job-1")
+        self.assertIsInstance(extended_meta, ModelMetadata)
 
 
 class TestModelArtifact(TestCase):
@@ -119,14 +121,14 @@ class TestModelArtifact(TestCase):
         """It stores a ModelMetadata subclass without modification."""
 
         @dataclass
-        class UberModelMetadata(ModelMetadata):
+        class ExtendedModelMetadata(ModelMetadata):
             training_job_id: str | None = None
 
-        uber_meta = UberModelMetadata(
+        extended_meta = ExtendedModelMetadata(
             training_framework="huggingface",
             training_job_id="j-42",
         )
-        artifact = ModelArtifact(path="/tmp/m", metadata=uber_meta)
+        artifact = ModelArtifact(path="/tmp/m", metadata=extended_meta)
         self.assertIsInstance(artifact.metadata, ModelMetadata)
         # type: ignore[attr-defined]
         self.assertEqual(artifact.metadata.training_job_id, "j-42")  # type: ignore[attr-defined]
@@ -145,6 +147,109 @@ class TestAssembledModel(TestCase):
         model = AssembledModel(raw_model=raw, deployable_model=deployable)
         self.assertEqual(model.raw_model.path, "/tmp/raw")
         self.assertEqual(model.deployable_model.path, "/tmp/deployable")
+
+    def test_feature_package_defaults_to_none(self):
+        """It defaults feature_package to None."""
+        model = AssembledModel(raw_model=self._make_artifact())
+        self.assertIsNone(model.feature_package)
+
+    def test_stores_feature_package(self):
+        """It stores an explicitly provided FeaturePackageArtifact."""
+        feature_package = FeaturePackageArtifact(path="/tmp/features")
+        model = AssembledModel(
+            raw_model=self._make_artifact(), feature_package=feature_package
+        )
+        self.assertIs(model.feature_package, feature_package)
+
+
+class TestFeaturePackageMetadata(TestCase):
+    """Tests for FeaturePackageMetadata."""
+
+    def test_schema_defaults_to_empty_feature_schema(self):
+        """Schema defaults to an empty FeatureSchema, not None."""
+        from michelangelo.lib.model_manager.schema.feature_schema import FeatureSchema
+
+        meta = FeaturePackageMetadata()
+        self.assertEqual(meta.schema, FeatureSchema())
+
+    def test_sample_data_defaults_to_none(self):
+        """sample_data defaults to None when _sample_data is unset."""
+        meta = FeaturePackageMetadata()
+        self.assertIsNone(meta.sample_data)
+
+    def test_schema_and_sample_data_unpickle_from_bytesio(self):
+        """schema/sample_data are lazily unpickled from their BytesIO fields."""
+        import pickle
+        from io import BytesIO
+
+        from michelangelo.lib.model_manager.schema.feature_schema import FeatureSchema
+        from michelangelo.lib.model_manager.schema.feature_schema_item import (
+            FeatureSchemaItem,
+        )
+
+        schema = FeatureSchema(input_schema=[FeatureSchemaItem(name="x")])
+        sample_data = [{"x": 1.0}]
+        meta = FeaturePackageMetadata(
+            _schema=BytesIO(pickle.dumps(schema)),
+            _sample_data=BytesIO(pickle.dumps(sample_data)),
+        )
+        self.assertEqual(meta.schema, schema)
+        self.assertEqual(meta.sample_data, sample_data)
+
+
+class TestFeaturePackageArtifact(TestCase):
+    """Tests for FeaturePackageArtifact."""
+
+    def test_stores_path(self):
+        """It stores the provided path."""
+        artifact = FeaturePackageArtifact(path="/tmp/features")
+        self.assertEqual(artifact.path, "/tmp/features")
+
+    def test_metadata_defaults_to_empty_feature_package_metadata(self):
+        """It defaults metadata to a FeaturePackageMetadata instance with defaults."""
+        artifact = FeaturePackageArtifact(path="/tmp/features")
+        self.assertIsInstance(artifact.metadata, FeaturePackageMetadata)
+        self.assertIsNone(artifact.metadata.sample_data)
+
+    def test_metadata_instances_are_independent(self):
+        """It creates a separate FeaturePackageMetadata instance for each artifact."""
+        import pickle
+        from io import BytesIO
+
+        a = FeaturePackageArtifact(path="/tmp/a")
+        b = FeaturePackageArtifact(path="/tmp/b")
+        a.metadata._sample_data = BytesIO(pickle.dumps([{"x": 1}]))
+        self.assertIsNone(b.metadata.sample_data)
+
+
+class TestModelMetadataE2eFields(TestCase):
+    """Tests for ModelMetadata's e2e_schema/e2e_sample_data properties."""
+
+    def test_e2e_schema_defaults_to_none(self):
+        """e2e_schema defaults to None when _e2e_schema is unset."""
+        meta = ModelMetadata()
+        self.assertIsNone(meta.e2e_schema)
+
+    def test_e2e_sample_data_defaults_to_none(self):
+        """e2e_sample_data defaults to None when _e2e_sample_data is unset."""
+        meta = ModelMetadata()
+        self.assertIsNone(meta.e2e_sample_data)
+
+    def test_e2e_schema_and_sample_data_unpickle_from_bytesio(self):
+        """e2e_schema/e2e_sample_data are lazily unpickled from their BytesIO fields."""
+        import pickle
+        from io import BytesIO
+
+        from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem
+
+        schema = ModelSchema(input_schema=[ModelSchemaItem(name="x")])
+        sample_data = [{"x": 1.0}]
+        meta = ModelMetadata(
+            _e2e_schema=BytesIO(pickle.dumps(schema)),
+            _e2e_sample_data=BytesIO(pickle.dumps(sample_data)),
+        )
+        self.assertEqual(meta.e2e_schema, schema)
+        self.assertEqual(meta.e2e_sample_data, sample_data)
 
 
 class TestPusherResult(TestCase):
@@ -520,9 +625,60 @@ class TestModelMetadataConstantsAndHyperparameters(TestCase):
 
     def test_hyperparameters_field_accepts_dict(self):
         """ModelMetadata stores a hyperparameters dict for Lightning loading."""
-        meta = ModelMetadata(hyperparameters={"lr": 0.001, "batch_size": 32})
+        meta = ModelMetadata()
+        meta.hyperparameters = {"lr": 0.001, "batch_size": 32}
         self.assertEqual(meta.hyperparameters["lr"], 0.001)
         self.assertEqual(meta.hyperparameters["batch_size"], 32)
+
+    def test_hyperparameters_setter_none_clears_field(self):
+        """Assigning None through the setter clears _hyperparameters."""
+        meta = ModelMetadata()
+        meta.hyperparameters = {"lr": 0.001}
+        meta.hyperparameters = None
+        self.assertIsNone(meta.hyperparameters)
+        self.assertIsNone(meta._hyperparameters)
+
+
+class TestModelMetadataTransformSpecAndFeatureStats(TestCase):
+    """Tests for the ``transform_spec`` and ``feature_stats`` properties."""
+
+    def test_transform_spec_field_defaults_to_none(self):
+        """ModelMetadata.transform_spec defaults to None."""
+        meta = ModelMetadata()
+        self.assertIsNone(meta.transform_spec)
+
+    def test_transform_spec_field_accepts_dict(self):
+        """ModelMetadata stores a transform_spec dict via the setter."""
+        meta = ModelMetadata()
+        meta.transform_spec = {"scaler": "standard"}
+        self.assertEqual(meta.transform_spec["scaler"], "standard")
+
+    def test_transform_spec_setter_none_clears_field(self):
+        """Assigning None through the setter clears _transform_spec."""
+        meta = ModelMetadata()
+        meta.transform_spec = {"scaler": "standard"}
+        meta.transform_spec = None
+        self.assertIsNone(meta.transform_spec)
+        self.assertIsNone(meta._transform_spec)
+
+    def test_feature_stats_field_defaults_to_none(self):
+        """ModelMetadata.feature_stats defaults to None."""
+        meta = ModelMetadata()
+        self.assertIsNone(meta.feature_stats)
+
+    def test_feature_stats_field_accepts_dict(self):
+        """ModelMetadata stores a feature_stats dict via the setter."""
+        meta = ModelMetadata()
+        meta.feature_stats = {"mean": 0.0, "std": 1.0}
+        self.assertEqual(meta.feature_stats["mean"], 0.0)
+
+    def test_feature_stats_setter_none_clears_field(self):
+        """Assigning None through the setter clears _feature_stats."""
+        meta = ModelMetadata()
+        meta.feature_stats = {"mean": 0.0}
+        meta.feature_stats = None
+        self.assertIsNone(meta.feature_stats)
+        self.assertIsNone(meta._feature_stats)
 
 
 class TestModelVariableCreate(TestCase):
@@ -937,13 +1093,9 @@ class TestModelVariableLightningIO(TestCase):
         mock_torch.load = MagicMock(return_value={"w": 1.0})
         built = MagicMock(name="built")
         mock_class = MagicMock(return_value=built)
-        var = ModelVariable(
-            path="memory://lit",
-            metadata=ModelMetadata(
-                model_class="pkg.M",
-                hyperparameters={"hidden": 16},
-            ),
-        )
+        metadata = ModelMetadata(model_class="pkg.M")
+        metadata.hyperparameters = {"hidden": 16}
+        var = ModelVariable(path="memory://lit", metadata=metadata)
         with (
             patch.dict(sys.modules, {"torch": mock_torch}),
             patch(f"{_MODEL_PATH}.import_attribute", return_value=mock_class),
@@ -1021,7 +1173,7 @@ class TestModelVariableLightningIO(TestCase):
         mock_class = MagicMock(return_value=MagicMock())
         var = ModelVariable(
             path="memory://lit",
-            metadata=ModelMetadata(model_class="pkg.M", hyperparameters=None),
+            metadata=ModelMetadata(model_class="pkg.M"),
         )
         with (
             patch.dict(sys.modules, {"torch": mock_torch}),

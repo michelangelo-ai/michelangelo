@@ -4,6 +4,7 @@ import os
 import tempfile
 from unittest import TestCase
 
+import onnx
 import pytest
 import torch
 
@@ -152,6 +153,40 @@ class ValidateDeployableOnnxFileTest(TestCase):
             self.assertTrue(is_valid, error)
             self.assertIsNone(error)
 
+    def test_valid_onnx_with_external_data(self):
+        """An external-data ONNX model validates via the path-based checker.
+
+        Uses size_threshold=0 to force every initializer into a sidecar file
+        regardless of size, exercising the external-data path without needing
+        an actual >2GB model.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = os.path.join(temp_dir, "model.onnx")
+            model = torch.nn.Linear(4, 2)
+            model.eval()
+            torch.onnx.export(
+                model,
+                (torch.randn(2, 4),),
+                path,
+                input_names=["x"],
+                output_names=["y"],
+                opset_version=14,
+            )
+            model_proto = onnx.load(path)
+            onnx.save_model(
+                model_proto,
+                path,
+                save_as_external_data=True,
+                all_tensors_to_one_file=True,
+                location="model.onnx.data",
+                size_threshold=0,
+            )
+
+            is_valid, error = validate_deployable_onnx_file(path)
+
+            self.assertTrue(is_valid, error)
+            self.assertIsNone(error)
+
     def test_non_onnx_file_is_invalid(self):
         """A file that is not an ONNX model is rejected."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -214,11 +249,23 @@ class ValidateModelClassTest(TestCase):
 class HasBatchDimensionTest(TestCase):
     """Test cases for ``_has_batch_dimension``."""
 
-    def test_batched_tensor_detected(self):
-        """A tensor with a batch dimension larger than one is detected."""
-        tensor = torch.zeros(8, 4)
+    def test_batch_size_one_detected(self):
+        """A tensor with a leading dimension of exactly 1 is treated as batched."""
+        tensor = torch.zeros(1, 4)
 
         self.assertTrue(_has_batch_dimension(tensor, expected_shape=[4]))
+
+    def test_batch_size_not_one_is_not_batched(self):
+        """A leading dimension larger than 1 is not treated as a batch dim.
+
+        Packaging validation always works with a single sample, so an extra
+        leading dimension of size >1 means the tensor's shape doesn't match
+        the schema at all, not that it's "already batched" -- matching
+        internal's semantics.
+        """
+        tensor = torch.zeros(8, 4)
+
+        self.assertFalse(_has_batch_dimension(tensor, expected_shape=[4]))
 
     def test_unbatched_tensor_detected(self):
         """A tensor matching the per-sample shape is not treated as batched."""
@@ -228,7 +275,7 @@ class HasBatchDimensionTest(TestCase):
 
     def test_empty_expected_shape_is_not_batched(self):
         """With no expected shape, the tensor is never treated as batched."""
-        tensor = torch.zeros(8, 4)
+        tensor = torch.zeros(1, 4)
 
         self.assertFalse(_has_batch_dimension(tensor, expected_shape=[]))
 
@@ -525,6 +572,30 @@ class InvokeModelTest(TestCase):
         result = _invoke_model(model, batch)
 
         self.assertTrue(torch.allclose(result, batch["x"]))
+
+    def test_single_dict_calling_convention_when_param_name_collides_with_feature(self):
+        """A dict-input model whose sole param name matches a feature key still works.
+
+        Regression test: matching on "batch keys are a subset of forward's
+        param names" (rather than arity) misfires here, since a single
+        feature literally named "inputs" makes {"inputs"} a subset of
+        {"inputs"} and incorrectly triggers **kwargs unpacking -- passing
+        the raw tensor to a parameter that expects the whole dict.
+        """
+
+        class DictInputModel(torch.nn.Module):
+            """Model that takes a dict as forward input, param named 'inputs'."""
+
+            def forward(self, inputs):
+                """Forward pass expecting a dict, not a bare tensor."""
+                return inputs["inputs"]
+
+        model = DictInputModel()
+        batch = {"inputs": torch.randn(1, 4)}
+
+        result = _invoke_model(model, batch)
+
+        self.assertTrue(torch.allclose(result, batch["inputs"]))
 
 
 class RemoveBatchSizeDimensionTest(TestCase):

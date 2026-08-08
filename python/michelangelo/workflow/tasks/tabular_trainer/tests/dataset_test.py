@@ -31,9 +31,9 @@ from michelangelo.workflow.tasks.tabular_trainer._private.dataset import (
 
 _BASE_LIGHTNING_CFG = {
     "model_class": "m",
-    "input_columns": {"x": ColumnConfig("torch.float32")},
-    "output_columns": {"y": ColumnConfig("torch.float32")},
-    "labels": {"label": ColumnConfig("torch.long")},
+    "input_columns": {"x": ColumnConfig("torch.float32", [1])},
+    "output_columns": {"y": ColumnConfig("torch.float32", [1])},
+    "labels": {"label": ColumnConfig("torch.long", [1])},
     "metadata_columns": [],
 }
 
@@ -176,8 +176,8 @@ class TestGetModelSchema(TestCase):
     def test_returns_model_schema(self):
         """It returns a ModelSchema instance."""
         schema = get_model_schema(
-            input_columns={"x": ColumnConfig("torch.float32")},
-            output_columns={"y": ColumnConfig("torch.float32")},
+            input_columns={"x": ColumnConfig("torch.float32", [1])},
+            output_columns={"y": ColumnConfig("torch.float32", [1])},
         )
         self.assertIsInstance(schema, ModelSchema)
 
@@ -185,8 +185,8 @@ class TestGetModelSchema(TestCase):
         """Input schema items carry the correct feature names."""
         schema = get_model_schema(
             input_columns={
-                "age": ColumnConfig("torch.float32"),
-                "income": ColumnConfig("torch.float32"),
+                "age": ColumnConfig("torch.float32", [1]),
+                "income": ColumnConfig("torch.float32", [1]),
             },
             output_columns={},
         )
@@ -198,7 +198,7 @@ class TestGetModelSchema(TestCase):
         """Output schema items carry the correct names."""
         schema = get_model_schema(
             input_columns={},
-            output_columns={"score": ColumnConfig("torch.float32")},
+            output_columns={"score": ColumnConfig("torch.float32", [1])},
         )
         self.assertEqual(schema.output_schema[0].name, "score")
 
@@ -227,8 +227,8 @@ class TestGetModelSchema(TestCase):
     def test_feature_store_schema_empty(self):
         """feature_store_features_schema is always empty (not set here)."""
         schema = get_model_schema(
-            input_columns={"x": ColumnConfig("torch.float32")},
-            output_columns={"y": ColumnConfig("torch.float32")},
+            input_columns={"x": ColumnConfig("torch.float32", [1])},
+            output_columns={"y": ColumnConfig("torch.float32", [1])},
         )
         self.assertEqual(schema.feature_store_features_schema, [])
 
@@ -368,7 +368,7 @@ class TestGetSampleData(TestCase):
         """It always returns a single-element list."""
         result = get_sample_data(
             {"x": np.array(1.0)},
-            {"x": ColumnConfig("torch.float32")},
+            {"x": ColumnConfig("torch.float32", [1])},
         )
         self.assertIsInstance(result, list)
         self.assertEqual(len(result), 1)
@@ -378,7 +378,7 @@ class TestGetSampleData(TestCase):
         """Values are cast to the dtype specified in ColumnConfig."""
         result = get_sample_data(
             {"x": np.array(1.0, dtype=np.float64)},
-            {"x": ColumnConfig("torch.float32")},
+            {"x": ColumnConfig("torch.float32", [1])},
         )
         self.assertEqual(result[0]["x"].dtype, np.float32)
 
@@ -402,7 +402,7 @@ class TestGetSampleData(TestCase):
         """A feature not in sample_data_dict is skipped (no KeyError)."""
         result = get_sample_data(
             {},
-            {"x": ColumnConfig("torch.float32")},
+            {"x": ColumnConfig("torch.float32", [1])},
         )
         self.assertNotIn("x", result[0])
 
@@ -410,7 +410,7 @@ class TestGetSampleData(TestCase):
         """A string value starting with '[' is parsed via ast.literal_eval."""
         result = get_sample_data(
             {"x": "[1.0, 2.0]"},
-            {"x": ColumnConfig("torch.float32")},
+            {"x": ColumnConfig("torch.float32", [1])},
         )
         self.assertEqual(result[0]["x"].dtype, np.float32)
         self.assertEqual(len(result[0]["x"]), 2)
@@ -420,7 +420,7 @@ class TestGetSampleData(TestCase):
         raw = np.array(["[1.0, 2.0]"], dtype=object)
         result = get_sample_data(
             {"x": raw},
-            {"x": ColumnConfig("torch.float32")},
+            {"x": ColumnConfig("torch.float32", [1])},
         )
         self.assertEqual(result[0]["x"].dtype, np.float32)
 
@@ -429,7 +429,7 @@ class TestGetSampleData(TestCase):
         raw = np.array(["[1.0]", "[2.0, 3.0]"], dtype=object)
         result = get_sample_data(
             {"x": raw},
-            {"x": ColumnConfig("torch.float32")},
+            {"x": ColumnConfig("torch.float32", [1])},
         )
         self.assertIsInstance(result[0]["x"], np.ndarray)
         self.assertNotEqual(result[0]["x"].dtype, object)
@@ -452,7 +452,7 @@ class TestGetSampleData(TestCase):
         """Keys not in input_columns are excluded from the result."""
         result = get_sample_data(
             {"x": np.array(1.0), "y": np.array(0)},
-            {"x": ColumnConfig("torch.float32")},
+            {"x": ColumnConfig("torch.float32", [1])},
         )
         self.assertIn("x", result[0])
         self.assertNotIn("y", result[0])
@@ -522,8 +522,8 @@ class TestConstructReadKwargs(TestCase):
     def test_columns_include_inputs_labels_metadata(self):
         """Columns = sorted(inputs | labels | metadata)."""
         cfg = _lightning_cfg(
-            input_columns={"feat_a": ColumnConfig("torch.float32")},
-            labels={"label": ColumnConfig("torch.long")},
+            input_columns={"feat_a": ColumnConfig("torch.float32", [1])},
+            labels={"label": ColumnConfig("torch.long", [1])},
             metadata_columns=["user_id"],
         )
         result = construct_read_kwargs(cfg)
@@ -532,9 +532,9 @@ class TestConstructReadKwargs(TestCase):
     def test_output_columns_excluded(self):
         """output_columns are NOT included in the column projection."""
         cfg = _lightning_cfg(
-            input_columns={"x": ColumnConfig("torch.float32")},
-            output_columns={"y": ColumnConfig("torch.float32")},
-            labels={"label": ColumnConfig("torch.long")},
+            input_columns={"x": ColumnConfig("torch.float32", [1])},
+            output_columns={"y": ColumnConfig("torch.float32", [1])},
+            labels={"label": ColumnConfig("torch.long", [1])},
             metadata_columns=[],
         )
         result = construct_read_kwargs(cfg)
@@ -544,10 +544,10 @@ class TestConstructReadKwargs(TestCase):
         """Columns list is always sorted."""
         cfg = _lightning_cfg(
             input_columns={
-                "z_feat": ColumnConfig("torch.float32"),
-                "a_feat": ColumnConfig("torch.float32"),
+                "z_feat": ColumnConfig("torch.float32", [1]),
+                "a_feat": ColumnConfig("torch.float32", [1]),
             },
-            labels={"m_label": ColumnConfig("torch.long")},
+            labels={"m_label": ColumnConfig("torch.long", [1])},
             metadata_columns=[],
         )
         result = construct_read_kwargs(cfg)

@@ -1,6 +1,7 @@
 """Tests for dependency file finding utilities."""
 
 import os
+import sys
 from unittest import TestCase
 
 from michelangelo.lib.model_manager._private.utils.module_finder import (
@@ -172,6 +173,32 @@ class DependencyFilesTest(TestCase):
             f"{prefix}package.fn2": "package/fn2.py",
         }
         self.assertEqual(cleaned_files, expected_files)
+
+    def test_find_imported_module_files_with_walk_packages_system_exit(self):
+        """It survives ``pkgutil.walk_packages`` re-raising ``SystemExit``.
+
+        ``walk_sys_exit_package.exit_subpackage`` unconditionally calls
+        ``sys.exit`` at import time. ``pkgutil.walk_packages`` imports each
+        subpackage it encounters *by its bare name* (not the fully-qualified
+        dotted path) to check whether it should recurse into it -- so this
+        only reproduces if that bare name is independently importable, hence
+        adding the fixture's own directory to ``sys.path``. That import
+        happens inside ``pkgutil.walk_packages``'s generator, not inside this
+        module's own ``importlib.import_module`` call, so the resulting
+        ``SystemExit`` can only be caught by the outer ``except SystemExit``
+        wrapping the whole walk, not the per-submodule one.
+        """
+        package_dir = os.path.join(
+            os.path.dirname(__file__), "fixtures", "walk_sys_exit_package"
+        )
+        sys.path.insert(0, package_dir)
+        self.addCleanup(sys.path.remove, package_dir)
+
+        files = find_dependency_files(
+            "michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.walk_sys_exit_package",
+        )
+        prefix = self.module_prefix
+        self.assertIn(f"{prefix}walk_sys_exit_package.__init__", files)
 
     def test_find_imported_module_files_with_multi_package_without_init(self):
         """It discovers files in implicit namespace packages."""

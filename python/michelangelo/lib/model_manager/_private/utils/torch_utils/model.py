@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from typing import Any
 
 import torch
@@ -46,6 +47,21 @@ def load_model_from_state_dict(
     model = model_fn(**(hyperparameters or {}))
     model.load_state_dict(state_dict)
     return model
+
+
+def torch_export_supports_external_data() -> bool:
+    """Check whether the installed torch's ``onnx.export`` accepts ``external_data``.
+
+    Only newer (Dynamo-era) exporters support splitting large weights into
+    sidecar files via this kwarg; older torch versions export everything
+    inline and will hit the 2 GiB protobuf serialization limit on large
+    models. Feature-detected via signature introspection rather than a
+    hard version pin, since it's robust across point releases and forks.
+
+    Returns:
+        True if ``torch.onnx.export`` accepts an ``external_data`` argument.
+    """
+    return "external_data" in inspect.signature(torch.onnx.export).parameters
 
 
 def tensor_to_numpy(value: Any) -> Any:

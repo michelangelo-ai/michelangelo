@@ -123,7 +123,7 @@ def get_model_schema(
         >>> from michelangelo.workflow.schema.tabular_trainer import ColumnConfig
         >>> schema = get_model_schema(
         ...     input_columns={"x": ColumnConfig("torch.float32", [4])},
-        ...     output_columns={"y": ColumnConfig("torch.float32")},
+        ...     output_columns={"y": ColumnConfig("torch.float32", [1])},
         ... )
         >>> len(schema.input_schema)
         1
@@ -296,7 +296,7 @@ def get_sample_data(
         >>> import numpy as np
         >>> data = get_sample_data(
         ...     {"x": np.array(1.0)},
-        ...     {"x": ColumnConfig("torch.float32")},
+        ...     {"x": ColumnConfig("torch.float32", [1])},
         ... )
         >>> len(data)
         1
@@ -466,9 +466,9 @@ def construct_read_kwargs(config: LightningTrainerConfig) -> dict:
         ... )
         >>> cfg = LightningTrainerConfig(
         ...     model_class="m", metadata_columns=["id"],
-        ...     input_columns={"x": ColumnConfig("torch.float32")},
-        ...     output_columns={"y": ColumnConfig("torch.float32")},
-        ...     labels={"label": ColumnConfig("torch.long")},
+        ...     input_columns={"x": ColumnConfig("torch.float32", [1])},
+        ...     output_columns={"y": ColumnConfig("torch.float32", [1])},
+        ...     labels={"label": ColumnConfig("torch.long", [1])},
         ... )
         >>> construct_read_kwargs(cfg)
         {'columns': ['id', 'label', 'x']}

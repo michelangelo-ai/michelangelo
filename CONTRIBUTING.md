@@ -10,7 +10,7 @@ See the [Table of Contents](#table-of-contents) for different ways to contribute
 
 There are other easy ways to help support the project and show your appreciation including
 * Star the project
-* Join the our community
+* Join our [GitHub Discussions](https://github.com/michelangelo-ai/michelangelo/discussions)
 * Shout about us online or at local meetups with your peers & colleagues
 
 <a id="table-of-contents"></a>
@@ -44,7 +44,7 @@ If you want to ask a question about the project, there are a few options availab
 
 * Check and read our [Documentation](https://michelangelo-ai.org/)
 * Search our existing [Issues](https://github.com/michelangelo-ai/michelangelo/issues) as this may also help you.
-* Join our Community (coming soon) to engage with other users and contributors,
+* Join our [GitHub Discussions](https://github.com/michelangelo-ai/michelangelo/discussions) to engage with other users and contributors.
 
 If you’re still facing issues and need further help, then we recommend the following process:
 * Open an [issue](https://github.com/michelangelo-ai/michelangelo/issues/new/choose).
