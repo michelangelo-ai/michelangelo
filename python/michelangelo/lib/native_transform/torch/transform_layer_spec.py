@@ -150,6 +150,30 @@ class TorchTransformLayerSpec(BaseModel, arbitrary_types_allowed=True):
         return values
 
 
+def _require_single_output_col(output_cols: list[str]) -> None:
+    """Raise unless ``output_cols`` contains exactly one column.
+
+    Shared by every spec whose layer concatenates all input columns into a
+    single output, both the concrete specs (:class:`NormalizationLayerSpec`,
+    :class:`MinMaxLayerSpec`) and their pre-fit placeholder counterparts
+    (:class:`StandardScalerLayerSpec`, :class:`MinMaxScalerLayerSpec`), since
+    a placeholder resolves 1:1 into the concrete spec named in its
+    ``_resolved_layer_type``: an ``output_cols`` value invalid for the
+    concrete spec is invalid for its placeholder too.
+
+    Args:
+        output_cols: The spec's ``output_cols`` value.
+
+    Raises:
+        ValueError: If ``output_cols`` does not contain exactly one column.
+    """
+    if len(output_cols) != 1:
+        raise ValueError(
+            "output_cols must contain exactly one column, since the "
+            "input columns are concatenated into a single output."
+        )
+
+
 class NormalizationLayerSpec(TorchTransformLayerSpec):
     """Spec for the ``Normalization`` layer (a fitted ``StandardScaler``).
 
@@ -185,11 +209,7 @@ class NormalizationLayerSpec(TorchTransformLayerSpec):
             ValueError: If ``output_cols`` does not contain exactly one
                 column.
         """
-        if len(self.output_cols) != 1:
-            raise ValueError(
-                "output_cols must contain exactly one column, since the "
-                "input columns are concatenated into a single output."
-            )
+        _require_single_output_col(self.output_cols)
         return self
 
 
@@ -227,11 +247,7 @@ class MinMaxLayerSpec(TorchTransformLayerSpec):
             ValueError: If ``output_cols`` does not contain exactly one
                 column.
         """
-        if len(self.output_cols) != 1:
-            raise ValueError(
-                "output_cols must contain exactly one column, since the "
-                "input columns are concatenated into a single output."
-            )
+        _require_single_output_col(self.output_cols)
         return self
 
 
@@ -241,6 +257,9 @@ class StandardScalerLayerSpec(TorchTransformLayerSpec):
     Args:
         with_mean: Whether to center the data by subtracting the mean.
         with_std: Whether to scale the data by the standard deviation.
+
+    Raises:
+        ValueError: If ``output_cols`` does not contain exactly one column.
     """
 
     _resolved_layer_type: ClassVar[Optional[str]] = "NormalizationLayerSpec"
@@ -252,11 +271,51 @@ class StandardScalerLayerSpec(TorchTransformLayerSpec):
         False, description="Whether to scale the data by the standard deviation"
     )
 
+    @model_validator(mode="after")
+    def validate_output_cols(self) -> StandardScalerLayerSpec:
+        """Require exactly one output column.
+
+        Resolves to :class:`NormalizationLayerSpec`, which concatenates all
+        input columns into a single output; fail here too, at spec-parse
+        time, rather than only once resolved.
+
+        Returns:
+            ``self``.
+
+        Raises:
+            ValueError: If ``output_cols`` does not contain exactly one
+                column.
+        """
+        _require_single_output_col(self.output_cols)
+        return self
+
 
 class MinMaxScalerLayerSpec(TorchTransformLayerSpec):
-    """Placeholder resolved to :class:`MinMaxLayerSpec` after fitting."""
+    """Placeholder resolved to :class:`MinMaxLayerSpec` after fitting.
+
+    Raises:
+        ValueError: If ``output_cols`` does not contain exactly one column.
+    """
 
     _resolved_layer_type: ClassVar[Optional[str]] = "MinMaxLayerSpec"
+
+    @model_validator(mode="after")
+    def validate_output_cols(self) -> MinMaxScalerLayerSpec:
+        """Require exactly one output column.
+
+        Resolves to :class:`MinMaxLayerSpec`, which concatenates all input
+        columns into a single output; fail here too, at spec-parse time,
+        rather than only once resolved.
+
+        Returns:
+            ``self``.
+
+        Raises:
+            ValueError: If ``output_cols`` does not contain exactly one
+                column.
+        """
+        _require_single_output_col(self.output_cols)
+        return self
 
 
 class ConcatenateLayerSpec(TorchTransformLayerSpec):

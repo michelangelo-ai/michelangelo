@@ -105,6 +105,26 @@ class TestPlaceholderSpecs:
         assert spec.with_mean is True
         assert spec.with_std is False
 
+    def test_standard_scaler_multi_output_cols_raises(self) -> None:
+        """StandardScalerLayerSpec requires exactly one output column.
+
+        It resolves to NormalizationLayerSpec, which enforces the same
+        constraint; catching it here (at spec-parse time, before fitting)
+        avoids a config that only fails once resolved.
+        """
+        with pytest.raises(pydantic.ValidationError, match="exactly one column"):
+            StandardScalerLayerSpec(input_cols=["a", "b"], output_cols=["c", "d"])
+
+    def test_min_max_scaler_multi_output_cols_raises(self) -> None:
+        """MinMaxScalerLayerSpec requires exactly one output column.
+
+        It resolves to MinMaxLayerSpec, which enforces the same constraint;
+        catching it here (at spec-parse time, before fitting) avoids a
+        config that only fails once resolved.
+        """
+        with pytest.raises(pydantic.ValidationError, match="exactly one column"):
+            MinMaxScalerLayerSpec(input_cols=["a", "b"], output_cols=["c", "d"])
+
 
 class TestNormalizationAndMinMaxLayerSpec:
     """Fitted-statistics spec field defaults."""
