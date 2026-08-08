@@ -1,11 +1,17 @@
-import pydantic
+"""Tests for the ``field`` and ``one_of`` helpers."""
+
 from unittest import TestCase
 
-from michelangelo.canvas.lib.shared.json_data.field import field, one_of
+import pydantic
+
+from michelangelo.lib.shared.json_data.field import field, one_of
 
 
 class TestField(TestCase):
+    """Verify field() and one_of() produce correct FieldInfo."""
+
     def test__field(self):
+        """Check default, required, and constraint metadata."""
         f = field()
         self.assertTrue(isinstance(f, pydantic.fields.FieldInfo))
         self.assertTrue(len(f.json_schema_extra["json_data_field"]) == 0)
@@ -35,6 +41,7 @@ class TestField(TestCase):
         self.assertTrue("pattern='\\\\w+'" in str_repr)
 
     def test__one_of(self):
+        """Check one_of creates correct _OneOf instances."""
         f = one_of(fields=["f1", "f2"], required=True)
         self.assertTrue(f.required)
         self.assertListEqual(f.fields, ["f1", "f2"])
