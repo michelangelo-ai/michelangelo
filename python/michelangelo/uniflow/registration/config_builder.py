@@ -11,11 +11,11 @@ import json
 import logging
 import os
 from contextlib import contextmanager
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Optional
 
 import yaml
 
-from michelangelo.canvas.lib.shared.json_data import JSONData
+from michelangelo.lib.shared.json_data import JSONData
 from michelangelo.uniflow.core.utils import import_attribute
 
 _logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ class ConfigBuilder:
     """Builder for workflow configuration and metadata extraction."""
 
     def __init__(
-        self, workflow_function_obj: Callable, config_data: Optional[Dict] = None
+        self, workflow_function_obj: Callable, config_data: Optional[dict] = None
     ):
         """Initialize ConfigBuilder with workflow function and optional config.
 
@@ -84,7 +84,7 @@ class ConfigBuilder:
         _logger.info("Creating ConfigBuilder from config file: %s", config_file_path)
 
         # Read YAML configuration
-        with open(config_file_path, "r") as f:
+        with open(config_file_path) as f:
             config = yaml.safe_load(f)
 
         # Extract manifest path
@@ -113,7 +113,8 @@ class ConfigBuilder:
         """Discover workflow function from manifest path.
 
         Args:
-            manifest_path: Module path like "module.submodule:function" or "module.submodule"
+            manifest_path: Module path like "module.submodule:function" or
+                "module.submodule"
 
         Returns:
             Callable: The discovered workflow function
@@ -136,8 +137,9 @@ class ConfigBuilder:
                 return workflow_function
             except (ImportError, AttributeError) as e:
                 raise ImportError(
-                    f"Could not import workflow function {function_name} from {module_path}: {e}"
-                )
+                    f"Could not import workflow function {function_name} "
+                    f"from {module_path}: {e}"
+                ) from e
         else:
             # No function specified, import module and find workflow function
             module_path = manifest_path
@@ -148,13 +150,17 @@ class ConfigBuilder:
                 workflow_functions = []
                 for attr_name in dir(module):
                     attr = getattr(module, attr_name)
-                    if callable(attr) and hasattr(attr, "__name__"):
-                        # Check if it's decorated with @workflow (look for workflow decorator metadata)
-                        if (
+                    # Check if it's decorated with @workflow (look for
+                    # workflow decorator metadata)
+                    if (
+                        callable(attr)
+                        and hasattr(attr, "__name__")
+                        and (
                             hasattr(attr, "_workflow_config")
                             or "workflow" in attr_name.lower()
-                        ):
-                            workflow_functions.append((attr_name, attr))
+                        )
+                    ):
+                        workflow_functions.append((attr_name, attr))
 
                 if len(workflow_functions) == 0:
                     raise ValueError(
@@ -183,9 +189,9 @@ class ConfigBuilder:
                     return workflow_function
 
             except (ImportError, AttributeError) as e:
-                raise ImportError(f"Could not import module {module_path}: {e}")
+                raise ImportError(f"Could not import module {module_path}: {e}") from e
 
-    def _build_workflow_config(self) -> Dict[str, Any]:
+    def _build_workflow_config(self) -> dict[str, Any]:
         """Build workflow configuration from function and config data."""
         # Get function signature
         sig = inspect.signature(self._workflow_function_obj)
@@ -241,7 +247,10 @@ class ConfigBuilder:
     @property
     def workflow_function(self) -> str:
         """Get the workflow function name as string."""
-        return f"{self._workflow_function_obj.__module__}.{self._workflow_function_obj.__name__}"
+        return (
+            f"{self._workflow_function_obj.__module__}."
+            f"{self._workflow_function_obj.__name__}"
+        )
 
     @property
     def workflow_function_obj(self) -> Callable:
@@ -277,7 +286,7 @@ class ConfigBuilder:
             # Get the module file path
             module_file = module.__file__
             if module_file and os.path.exists(module_file):
-                with open(module_file, "r") as f:
+                with open(module_file) as f:
                     source = f.read()
 
                 # Parse the AST to find ctx.run calls
@@ -285,26 +294,24 @@ class ConfigBuilder:
 
                 for node in ast.walk(tree):
                     # Look for calls like: ctx.run(train_workflow, param=value)
+                    # that invoke our workflow function
                     if (
                         isinstance(node, ast.Call)
                         and isinstance(node.func, ast.Attribute)
                         and isinstance(node.func.value, ast.Name)
                         and node.func.value.id == "ctx"
                         and node.func.attr == "run"
+                        and len(node.args) > 0
+                        and isinstance(node.args[0], ast.Name)
+                        and node.args[0].id == self._workflow_function_obj.__name__
                     ):
-                        # Check if this is calling our workflow function
-                        if (
-                            len(node.args) > 0
-                            and isinstance(node.args[0], ast.Name)
-                            and node.args[0].id == self._workflow_function_obj.__name__
-                        ):
-                            # Extract keyword arguments from the ctx.run call
-                            for keyword in node.keywords:
-                                if isinstance(keyword.value, ast.Constant):
-                                    kwargs[keyword.arg] = keyword.value.value
-                                elif isinstance(keyword.value, ast.Str):  # Python < 3.8
-                                    kwargs[keyword.arg] = keyword.value.s
-                            break
+                        # Extract keyword arguments from the ctx.run call
+                        for keyword in node.keywords:
+                            if isinstance(keyword.value, ast.Constant):
+                                kwargs[keyword.arg] = keyword.value.value
+                            elif isinstance(keyword.value, ast.Str):  # Python < 3.8
+                                kwargs[keyword.arg] = keyword.value.s
+                        break
 
         except Exception as e:
             _logger.warning("Could not extract kwargs from ctx.run calls: %s", e)
@@ -332,7 +339,7 @@ class ConfigBuilder:
             # Get the module file path
             module_file = module.__file__
             if module_file and os.path.exists(module_file):
-                with open(module_file, "r") as f:
+                with open(module_file) as f:
                     source = f.read()
 
                 # Parse the AST to find ctx.environ assignments

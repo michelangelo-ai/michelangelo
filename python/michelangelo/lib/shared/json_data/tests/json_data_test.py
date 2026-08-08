@@ -1,22 +1,27 @@
-from enum import Enum
+"""Tests for the JSONData base model."""
+
 import json
 import typing
+from enum import Enum
 from typing import Optional
+from unittest import TestCase
 
 import pydantic
 
-from michelangelo.canvas.lib.shared.json_data import field, one_of, JSONData
-
-from unittest import TestCase
+from michelangelo.lib.shared.json_data import JSONData, field, one_of
 
 
 class FruitEnum(str, Enum):
+    """String enum for test fixtures."""
+
     pear = "pear"
     banana = "banana"
     apple = "apple"
 
 
 class C(JSONData):
+    """Simple JSONData subclass for testing inheritance."""
+
     c0: int = field(default=0)
     c1: str = field(default="")
     c2: float = field(default=0.0)
@@ -24,28 +29,23 @@ class C(JSONData):
 
 
 class B(C):
+    """JSONData subclass inheriting from C."""
+
     b0: int = field(default=0)
     b1: str = field(default="b1")
     list0: list[int] = field(default=[])
 
 
 class A(JSONData):
-    # Default value of an int field is 0 is not otherwise specified
+    """Full-featured JSONData subclass exercising all field types."""
+
     num1: int = field(default=0)
-    # Optional field is annotated as '<type> | None'.
-    # If not specified, the default value of optional field is None.
     num3: Optional[int] = field(default=None)
-    # set default value and validation rules using field
-    # a float number in [0.0, 1.0)
     num4: float = field(default=0.5, ge=0.0, lt=1.0)
-    # set default value to ... requires users explicitly set this field
     num5: int = field(default=...)
 
-    # one and only one filed in the list must be set (not None)
     _one_of_str12 = one_of(fields=["str1", "str2"], required=True)
-    # optional string field <= 30 characters
     str1: Optional[str] = field(default=None, max_length=30)
-    # optional string field validated with a regular expression
     str2: Optional[str] = field(default=None, pattern=r"\w+")
 
     _one_of_n132 = one_of(fields=["f1", "f2", "f3"], required=False)
@@ -53,14 +53,11 @@ class A(JSONData):
     f2: Optional[float] = field(default=None)
     f3: Optional[int] = field(default=None)
 
-    # default value of bool field is false
     bool1: bool = field(default=False)
 
-    # Only support string enum. If not specified, the default is the 1st member of the enum.
     enum1: FruitEnum = field(default=FruitEnum.banana)
     enum2: FruitEnum = field(default=FruitEnum.pear)
 
-    # another JSONData class. The default value is B()
     b0: B = field(default=B(c0=0, c1="", c2=0.0, b0=0, list0=[]))
     b1: Optional[B] = field(default=B(c0=1, c1="test", c2=1.0, b0=2, list0=[]))
 
@@ -74,8 +71,10 @@ class A(JSONData):
 
 
 class TestJSONData(TestCase):
+    """Verify JSONData construction, validation, and serialization."""
+
     def test__json_data(self):
-        # Test basic functionality
+        """Check default values, types, and nested objects."""
         a = A(num5=100, str1="hello")
         self.assertEqual(a.num1, 0)
         self.assertEqual(a.num3, None)
@@ -85,11 +84,11 @@ class TestJSONData(TestCase):
         self.assertEqual(a.str2, None)
         self.assertFalse(a.bool1)
         self.assertEqual(a.enum1, FruitEnum.banana)
-        self.assertEqual(a.enum2, FruitEnum.pear)  # First enum value as default
+        self.assertEqual(a.enum2, FruitEnum.pear)
         self.assertIsInstance(a.b0, B)
-        self.assertEqual(a.b0.c0, 0)  # From C parent class
-        self.assertEqual(a.b0.c1, "")  # From C parent class
-        self.assertEqual(a.b0.c2, 0.0)  # From C parent class
+        self.assertEqual(a.b0.c0, 0)
+        self.assertEqual(a.b0.c1, "")
+        self.assertEqual(a.b0.c2, 0.0)
         self.assertEqual(a.b0.b0, 0)
         self.assertEqual(a.b0.b1, "b1")
         self.assertEqual(a.b0.list0, [])
@@ -105,27 +104,24 @@ class TestJSONData(TestCase):
         self.assertEqual(a.any0, None)
         self.assertEqual(a.list_any, [])
 
-        # Test validation
         with self.assertRaises(pydantic.ValidationError):
-            A(num5=100)  # Missing required one_of field
+            A(num5=100)
 
     def test__one_of(self):
-        # Test one_of validation
+        """Check one-of mutual exclusion constraints."""
         a = A(num5=100, str1="hello")
         self.assertEqual(a.str1, "hello")
         self.assertEqual(a.str2, None)
 
-        # Test with str2 instead
         a2 = A(num5=100, str2="world")
         self.assertEqual(a2.str1, None)
         self.assertEqual(a2.str2, "world")
 
-        # Test validation error when both are set
         with self.assertRaises(pydantic.ValidationError):
             A(num5=100, str1="hello", str2="world")
 
     def test__type_errors(self):
-        # Test various type validation errors
+        """Check that unsupported types raise TypeError."""
         with self.assertRaises(TypeError):
 
             class A:
@@ -157,13 +153,12 @@ class TestJSONData(TestCase):
                 a: IntEnum
 
     def test__serialize_model(self):
-        # Test serialization
+        """Check model_dump and JSON serialization."""
         a = A(num5=100, str1="hello")
         data = a.model_dump()
         self.assertIn("num5", data)
         self.assertEqual(data["num5"], 100)
         self.assertEqual(data["str1"], "hello")
 
-        # Test JSON serialization
         json_str = json.dumps(data)
         self.assertIn('"num5": 100', json_str)

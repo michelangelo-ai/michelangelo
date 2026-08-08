@@ -1,4 +1,7 @@
+"""Field descriptors and one-of constraints for JSONData models."""
+
 from typing import Any, Optional
+
 import pydantic
 from pydantic_core import PydanticUndefined
 
@@ -14,20 +17,20 @@ def field(
     min_length: Optional[int] = PydanticUndefined,
     max_length: Optional[int] = PydanticUndefined,
 ) -> Any:
-    """
-    Specify the default value and / or validation rules for a field.
-    Similar to dataclasses.field() and pydantic.field().
+    """Specify the default value and validation rules for a field.
 
-    :param default: default value for the field. If set to ellipsis(...), the field will have no default value, and
-                    users must specify a value. If not set, the default value will be inferred from the field type.
-                    (i.e. 0 for int, 0.0 for float, False for bool, "" for str, Class() for user defined class, etc.)
-    :param pattern: regular expression pattern used to validate str field.
-    :param gt: greater than
-    :param ge: greater or equal than
-    :param lt: less than
-    :param le: less or equal than
-    :param min_length: minimum length of a list, str, or dict field
-    :param max_length: maximum length of a list, str, or dict field
+    Similar to ``dataclasses.field()`` and ``pydantic.Field()``.
+
+    Args:
+        default: Default value for the field. Ellipsis (``...``)
+            means required. If omitted, inferred from the type.
+        pattern: Regex pattern to validate a str field.
+        gt: Greater than.
+        ge: Greater than or equal.
+        lt: Less than.
+        le: Less than or equal.
+        min_length: Minimum length of a list, str, or dict field.
+        max_length: Maximum length of a list, str, or dict field.
     """
     json_data_info = {}
     if default is Ellipsis:
@@ -52,10 +55,12 @@ class _OneOf(pydantic.BaseModel):
 
 
 def one_of(fields: list[str], required: bool = True) -> _OneOf:
-    """
-    Specify a one of validation rule. At most one field in the fields list may be set (not None).
-    :param fields: A list of field names.
-    :param required: If True, at least one field in the fields list must be not None.
-    :return:
+    """Specify a one-of validation rule.
+
+    At most one field in the list may be set (not None).
+
+    Args:
+        fields: A list of field names.
+        required: If True, at least one field must be not None.
     """
     return _OneOf(fields=fields, required=required)
