@@ -1,3 +1,4 @@
+import type { FieldValidation } from '#core/components/form/types/config-types';
 import type { FieldValidator } from '#core/components/form/validation/types';
 
 export interface BaseFieldProps<T = unknown, InputValue = T> {
@@ -103,4 +104,6 @@ export type SharedFieldConfig<T = unknown, InputValue = T> = Pick<
   | 'initialValue'
   | 'parse'
   | 'format'
->;
+> & {
+  validation?: FieldValidation;
+};

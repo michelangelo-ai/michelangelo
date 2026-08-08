@@ -1,3 +1,4 @@
+import { resolveValidation } from '#core/components/form/validation/resolve-validation';
 import { StringField } from './string-field';
 
 import type { FieldRendererProps } from '#core/components/form/types/config-types';
@@ -7,6 +8,7 @@ import type { StringFieldConfig } from './types';
 export function SchemaStringField({ name, config }: FieldRendererProps) {
   // cast: SchemaField routes by config.type, guaranteeing StringFieldConfig
   const c = config as StringFieldConfig;
+  const validate = resolveValidation(c.validation);
 
   return (
     <StringField
@@ -19,6 +21,7 @@ export function SchemaStringField({ name, config }: FieldRendererProps) {
       description={c.description}
       caption={c.caption}
       multi={c.multi}
+      validate={validate}
     />
   );
 }

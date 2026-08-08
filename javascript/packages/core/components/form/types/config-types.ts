@@ -65,6 +65,23 @@ export type BuiltinFieldConfig =
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface FieldConfigExtensions {}
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface FieldValidationExtensions {}
+
+export type BuiltinFieldValidation = {
+  regex?: { pattern: string | RegExp; errorMessage?: string };
+  min?: number;
+  max?: number;
+  minLength?: number;
+  maxLength?: number;
+  url?: { errorMessage?: string } | boolean;
+};
+
+export type FieldValidation = BuiltinFieldValidation &
+  FieldValidationExtensions & {
+    validate?: (value: unknown) => string | undefined;
+  };
+
 /** Enumerates the built-in field types available in the config-driven form system. */
 export enum FieldType {
   /**
