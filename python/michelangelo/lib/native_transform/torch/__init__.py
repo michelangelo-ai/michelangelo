@@ -25,6 +25,8 @@ from michelangelo.lib.native_transform.torch.base_layers import (
     Tile,
     TorchTransformBaseLayer,
 )
+from michelangelo.lib.native_transform.torch.duration import TimeDuration
+from michelangelo.lib.native_transform.torch.scale import ClipAndScale
 from michelangelo.lib.native_transform.torch.stats_layers import (
     Bucketization,
     MinMax,
@@ -37,6 +39,7 @@ __all__ = [
     "Cast",
     "Ceil",
     "Clip",
+    "ClipAndScale",
     "Compare",
     "Concatenate",
     "Constant",
@@ -53,5 +56,6 @@ __all__ = [
     "Subtract",
     "TensorColFillNone",
     "Tile",
+    "TimeDuration",
     "TorchTransformBaseLayer",
 ]
