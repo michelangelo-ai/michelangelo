@@ -143,7 +143,7 @@ class TestAPIRegistryClientRegisterModel(TestCase):
         """
         svc = _mock_svc()
         long_value = (
-            "examples.pipelines.california_housing_lightning.model.TorchRegressionModel"
+            "com.example.models.california_housing.lightning.TorchRegressionModel"
         )
         self.assertGreater(len(long_value), 63)
         _client(svc).register_model(
