@@ -41,7 +41,7 @@ def generate_numerical_scaled_transformation(
         specs: Mapping from feature name to a spec dict with keys
             ``min_value``, ``max_value``, and optionally ``scale_factor``
             (default ``1``) and ``output_type`` (default ``None``). E.g.
-            ``{"eta_min_seq": {"min_value": 5, "max_value": 120,
+            ``{"latency_seconds": {"min_value": 5, "max_value": 120,
             "scale_factor": 1 / 5, "output_type": "int32"}}``.
         tensor_map: Mapping from feature/output name to tensor, updated in
             place. Features not already present in ``tensor_map`` are
@@ -76,9 +76,9 @@ def generate_concatenation_transformation(
         specs: Mapping from feature name to a spec dict with keys
             ``input_cols`` (list of column names to concatenate) and
             optionally ``axis`` (default ``1``). E.g.
-            ``{"tokenized_derived_carousel_tag": {"input_cols":
-            ["tokenized_derived_carousel_tag_0",
-            "tokenized_derived_carousel_tag_1"], "axis": 1}}``.
+            ``{"tokenized_category_tag": {"input_cols":
+            ["tokenized_category_tag_0",
+            "tokenized_category_tag_1"], "axis": 1}}``.
         tensor_map: Mapping from feature/output name to tensor, updated in
             place.
 
@@ -102,7 +102,7 @@ def generate_cast_transformation(
         specs: Mapping from feature name to a spec dict with key ``dtype``
             (default ``torch.float32``), resolved via
             :func:`~michelangelo.lib.native_transform.torch.utils.resolve_torch_dtype`.
-            E.g. ``{"did_order": {"dtype": torch.float32}}``.
+            E.g. ``{"is_active": {"dtype": torch.float32}}``.
         tensor_map: Mapping from feature/output name to tensor, updated in
             place. Features not already present in ``tensor_map`` are
             skipped.
@@ -132,7 +132,7 @@ def generate_duration_transformation(
             :data:`~michelangelo.lib.native_transform.torch.constants.DEFAULT_TIME_DURATION_UNIT`),
             ``min_value``, ``max_value``, and ``log_scale``. E.g.
             ``{"duration_epoch_ms": {"target": "current_epoch_ms",
-            "target_shape": (-1, 1), "source": "splitted_derived_epoch_seq",
+            "target_shape": (-1, 1), "source": "reshaped_epoch_seq",
             "source_shape": (-1, 33), "unit": 24 * 60 * 60 * 1000,
             "min_value": 0, "max_value": 365, "log_scale": True}}``.
         tensor_map: Mapping from feature/output name to tensor, updated in

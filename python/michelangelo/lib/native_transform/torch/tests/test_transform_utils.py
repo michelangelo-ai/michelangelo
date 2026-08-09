@@ -68,15 +68,15 @@ class TestGenerateConcatenationTransformation:
     def test_default_axis(self) -> None:
         """Default axis is 1 (feature dimension)."""
         tensor_map = {
-            "carousel_tag_0": torch.tensor([[1.0], [2.0], [3.0]]),
-            "carousel_tag_1": torch.tensor([[4.0], [5.0], [6.0]]),
+            "category_tag_0": torch.tensor([[1.0], [2.0], [3.0]]),
+            "category_tag_1": torch.tensor([[4.0], [5.0], [6.0]]),
         }
-        specs = {"carousel_tag": {"input_cols": ["carousel_tag_0", "carousel_tag_1"]}}
+        specs = {"category_tag": {"input_cols": ["category_tag_0", "category_tag_1"]}}
         generate_concatenation_transformation(specs, tensor_map)
         expected = torch.tensor(
             [[1.0, 4.0], [2.0, 5.0], [3.0, 6.0]], dtype=torch.float32
         )
-        torch.testing.assert_close(tensor_map["concatenated_carousel_tag"], expected)
+        torch.testing.assert_close(tensor_map["concatenated_category_tag"], expected)
 
     def test_explicit_axis(self) -> None:
         """An explicit axis is respected."""
@@ -97,11 +97,11 @@ class TestGenerateCastTransformation:
 
     def test_bool_to_float(self) -> None:
         """Boolean tensors cast to a numeric dtype."""
-        tensor_map = {"did_order": torch.tensor([[True], [False], [True]])}
-        specs = {"did_order": {"dtype": "float32"}}
+        tensor_map = {"is_active": torch.tensor([[True], [False], [True]])}
+        specs = {"is_active": {"dtype": "float32"}}
         generate_cast_transformation(specs, tensor_map)
         expected = torch.tensor([[1.0], [0.0], [1.0]], dtype=torch.float32)
-        torch.testing.assert_close(tensor_map["casted_did_order"], expected)
+        torch.testing.assert_close(tensor_map["casted_is_active"], expected)
 
     def test_int_to_float(self) -> None:
         """A torch.dtype spec value is honored directly."""
