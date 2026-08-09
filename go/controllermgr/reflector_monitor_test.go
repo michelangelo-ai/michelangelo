@@ -1,6 +1,7 @@
 package controllermgr
 
 import (
+	"context"
 	"errors"
 	"io"
 	"testing"
@@ -168,35 +169,35 @@ func TestWatchErrorHandler_DurationOverflow(t *testing.T) {
 	base := testr.New(t)
 	handler := NewWatchErrorHandler(base)
 
-	handler(nil, errors.New(`failed to list *v2.Deployment: bad Duration: time: invalid duration "35999996400s"`))
+	handler(context.Background(), nil, errors.New(`failed to list *v2.Deployment: bad Duration: time: invalid duration "35999996400s"`))
 }
 
 func TestWatchErrorHandler_NilError(t *testing.T) {
 	base := testr.New(t)
 	handler := NewWatchErrorHandler(base)
 
-	handler(nil, nil)
+	handler(context.Background(), nil, nil)
 }
 
 func TestWatchErrorHandler_SchemaError(t *testing.T) {
 	base := testr.New(t)
 	handler := NewWatchErrorHandler(base)
 
-	handler(nil, errors.New("failed to list *v2.Pipeline: proto: wrong wireType = 2"))
+	handler(context.Background(), nil, errors.New("failed to list *v2.Pipeline: proto: wrong wireType = 2"))
 }
 
 func TestWatchErrorHandler_GenericListFailure(t *testing.T) {
 	base := testr.New(t)
 	handler := NewWatchErrorHandler(base)
 
-	handler(nil, errors.New("failed to list *v2.RayJob: connection refused"))
+	handler(context.Background(), nil, errors.New("failed to list *v2.RayJob: connection refused"))
 }
 
 func TestWatchErrorHandler_WatchFailure(t *testing.T) {
 	base := testr.New(t)
 	handler := NewWatchErrorHandler(base)
 
-	handler(nil, errors.New("connection reset by peer"))
+	handler(context.Background(), nil, errors.New("connection reset by peer"))
 }
 
 // TestWatchErrorHandler_EOF verifies that io.EOF (normal watch close) is
@@ -205,7 +206,7 @@ func TestWatchErrorHandler_EOF(t *testing.T) {
 	base := testr.New(t)
 	handler := NewWatchErrorHandler(base)
 
-	handler(nil, io.EOF)
+	handler(context.Background(), nil, io.EOF)
 }
 
 // TestWatchErrorHandler_UnexpectedEOF verifies that io.ErrUnexpectedEOF
@@ -214,5 +215,5 @@ func TestWatchErrorHandler_UnexpectedEOF(t *testing.T) {
 	base := testr.New(t)
 	handler := NewWatchErrorHandler(base)
 
-	handler(nil, io.ErrUnexpectedEOF)
+	handler(context.Background(), nil, io.ErrUnexpectedEOF)
 }
