@@ -7,7 +7,7 @@ sidebar_label: "Examples"
 
 End-to-end ML pipeline examples covering training, inference, recommendation systems, and model packaging. Each example is a complete, working workflow you can run locally or on a Michelangelo AI cluster.
 
-Most examples live in [`python/examples/`](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples). Heavier examples with their own dependency footprint — currently just California Housing (XGBoost + Spark) — live in the separate [`michelangelo-examples`](https://github.com/michelangelo-ai/michelangelo-examples) repo instead, to keep this core repo's dependencies lean.
+Most examples live in [`python/examples/`](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples). Heavier examples with their own dependency footprint — currently the California Housing pipelines (XGBoost + Spark, and PyTorch Lightning) — live in the separate [`michelangelo-examples`](https://github.com/michelangelo-ai/michelangelo-examples) repo instead, to keep this core repo's dependencies lean.
 
 ## By Use Case
 
@@ -16,6 +16,7 @@ Most examples live in [`python/examples/`](https://github.com/michelangelo-ai/mi
 | Example | Description | Runtime | Difficulty |
 |---------|-------------|---------|------------|
 | [California Housing (XGBoost)](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/california_housing/pipelines/xgb_train) | Full pipeline — feature prep, Spark preprocessing, distributed XGBoost training, and pusher step that exports model + eval report to storage and registry. Lives in [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples). | Ray + Spark | Beginner |
+| [California Housing (PyTorch Lightning)](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/california_housing/pipelines/pytorch_train) | Same California Housing use case as the XGBoost variant, using `tabular_trainer`'s `train_tabular()` for distributed Ray Train instead. Also has a local-only runner for a quick, sandbox-free trial. Lives in [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples). | Ray + Spark | Beginner |
 | [BERT Text Classification](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/bert_cola) | Fine-tune BERT for linguistic acceptability classification on the CoLA benchmark (GLUE). Uses HuggingFace Transformers with distributed Ray training. | Ray | Intermediate |
 | [GPT Fine-tuning with LoRA](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/gpt_oss_20b_finetune) | Parameter-efficient fine-tuning using LoRA (1.29% trainable params) on the Stanford Alpaca instruction-following dataset. Includes perplexity and generation quality evaluation. | Ray | Advanced |
 | [Nomic AI Embedding Training](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/nomic_ai) | Train a long-context Nomic BERT model (2048 tokens) on WikiText using PyTorch Lightning with distributed Ray execution. | Ray | Intermediate |
