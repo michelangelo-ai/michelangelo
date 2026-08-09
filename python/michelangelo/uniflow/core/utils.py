@@ -19,15 +19,26 @@ def dot_path(arg: Any) -> str:
     module = arg.__module__
 
     if module == "__main__":
-        # Resolve the real module path of the __main__ module.
-        file = sys.modules[module].__file__
-        assert file
+        # Resolve the real module path of the __main__ module. When run via
+        # `python -m pkg.module`, __spec__.name already IS the real dotted
+        # path -- no path-string reconstruction needed, and unlike deriving
+        # it from __file__'s relative path, this is immune to any "." in
+        # the file path itself (e.g. a venv's own `lib/python3.11/...`).
+        spec = sys.modules[module].__spec__
+        if spec is not None and spec.name != "__main__":
+            module = spec.name
+        else:
+            # Plain `python script.py` invocation: __spec__ is None (or, in
+            # some embeddings, still reports "__main__"). Fall back to the
+            # existing relative-path reconstruction for this case only.
+            file = sys.modules[module].__file__
+            assert file
 
-        file = os.path.relpath(file, start=os.getcwd())
-        file, _ = os.path.splitext(file)
-        assert "." not in file
+            file = os.path.relpath(file, start=os.getcwd())
+            file, _ = os.path.splitext(file)
+            assert "." not in file
 
-        module = file.replace(os.path.sep, ".")
+            module = file.replace(os.path.sep, ".")
 
     return f"{module}.{arg.__name__}"
 
