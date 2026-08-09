@@ -56,6 +56,7 @@ go_binary(
     env = {
         "CONFIG_DIR": "$(location :config)",
     },
+    # keep
     gc_linkopts = select({
         "@io_bazel_rules_go//go/platform:linux": [
             # The following GC options instruct Bazel to build a static binary for running the service in a static
