@@ -28,6 +28,7 @@ Each step runs as an isolated, containerized task. Michelangelo AI handles data 
 * Java 17 with `JAVA_HOME` set — required for the Spark preprocessing step. Java 21 is not compatible with PySpark 3.5 + Hadoop 3.3 (`getSubject is not supported` error). On macOS: `brew install openjdk@17` then `export JAVA_HOME=$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home`
 * For remote runs: Docker and access to a Kubernetes cluster (or use the [local sandbox](../../getting-started/sandbox-setup.md))
 * [Create a project](./project-management-for-ml-pipelines.md)
+* **macOS only, if running this tutorial's `xgb_train` example**: XGBoost requires OpenMP (`libomp.dylib`), which is not installed by default. Run `brew install libomp` before `pip install "michelangelo-examples[california-housing]"`.
 
 ## Environment setup
 
@@ -183,24 +184,25 @@ The context provides three methods:
 
 Then run it:
 
-```bash
-# Option A: Run this tutorial's example from michelangelo-examples
-pip install "michelangelo-examples[california-housing]"
-python -m michelangelo_examples.california_housing.pipelines.xgb_train
+The `feature_prep`/`train` workflow above is exactly what the `xgb_train` pipeline in [`michelangelo-examples`](https://github.com/michelangelo-ai/michelangelo-examples) implements — this tutorial's example now lives there, in its own pip-installable package, rather than in this repo. Install and run it:
 
-# Option B: Run any in-repo example (e.g. bert_cola) from this checkout
-cd michelangelo/python
-PYTHONPATH=. poetry run python examples/bert_cola/bert_cola.py
+```bash
+pip install "michelangelo-examples[california-housing]"
+python -m michelangelo_examples.california_housing.pipelines.xgb_train.pipeline
 ```
 
-> The California Housing XGBoost example lives in the separate
-> [`michelangelo-examples`](https://github.com/michelangelo-ai/michelangelo-examples)
-> repository as [`xgb_train`](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/california_housing/pipelines/xgb_train).
-> Install it via `pip install "michelangelo-examples[california-housing]"` and
-> run with `python -m ...` as shown above. The in-core examples (e.g. `bert_cola`)
-> still run from a `michelangelo` checkout as before.
+Local runs execute everything in your Python interpreter with zero additional infrastructure setup (beyond the one-time `pip install` above) — the fastest way to iterate on your workflow logic.
 
-Local runs execute everything in your Python interpreter with zero infrastructure setup. This is the fastest way to iterate on your workflow logic.
+> **Why a separate repo?** Heavier example pipelines with their own dependency
+> footprint (here, Spark + XGBoost) live in
+> [`michelangelo-examples`](https://github.com/michelangelo-ai/michelangelo-examples)
+> to keep this core repo's own dependencies lean. Lighter in-repo examples
+> like `bert_cola` (`python/examples/bert_cola/`) are unrelated to this
+> tutorial's pipeline but still run directly from this checkout:
+> ```bash
+> cd michelangelo/python
+> PYTHONPATH=. poetry run python examples/bert_cola/bert_cola.py
+> ```
 
 ## Step 4: Run remotely
 

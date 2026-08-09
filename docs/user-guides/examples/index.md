@@ -7,7 +7,7 @@ sidebar_label: "Examples"
 
 End-to-end ML pipeline examples covering training, inference, recommendation systems, and model packaging. Each example is a complete, working workflow you can run locally or on a Michelangelo AI cluster.
 
-All examples live in [`python/examples/`](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples).
+Most examples live in [`python/examples/`](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples). Heavier examples with their own dependency footprint — currently just California Housing (XGBoost + Spark) — live in the separate [`michelangelo-examples`](https://github.com/michelangelo-ai/michelangelo-examples) repo instead, to keep this core repo's dependencies lean.
 
 ## By Use Case
 
