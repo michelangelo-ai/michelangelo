@@ -6,9 +6,8 @@ import type { FormContextType } from './types';
 
 /**
  * @description
- * Provider component that allows consumers to register custom field renderers
- * and validators. Custom renderers are checked before falling back to built-in
- * renderers.
+ * Provider component that allows consumers to register custom field renderers.
+ * Custom renderers are checked before falling back to built-in renderers.
  *
  * @example
  * ```tsx
@@ -24,12 +23,8 @@ import type { FormContextType } from './types';
 export const FormProvider = ({
   children,
   renderers = {},
-  validators = {},
 }: { children: React.ReactNode } & Partial<FormContextType>) => {
-  const contextValue = useMemo<FormContextType>(
-    () => ({ renderers, validators }),
-    [renderers, validators]
-  );
+  const contextValue = useMemo<FormContextType>(() => ({ renderers }), [renderers]);
 
   return <FormContext.Provider value={contextValue}>{children}</FormContext.Provider>;
 };
