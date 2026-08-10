@@ -1801,7 +1801,6 @@ func init() {
 	YamlSchemas["EvaluationReport"] = `apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  creationTimestamp: null
   name: evaluationreports.michelangelo.api
 spec:
   group: michelangelo.api

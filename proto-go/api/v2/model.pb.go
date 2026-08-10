@@ -5700,7 +5700,6 @@ func init() {
 	YamlSchemas["Model"] = `apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  creationTimestamp: null
   name: models.michelangelo.api
 spec:
   group: michelangelo.api

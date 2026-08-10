@@ -3980,7 +3980,6 @@ func init() {
 	YamlSchemas["RayCluster"] = `apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  creationTimestamp: null
   name: rayclusters.michelangelo.api
 spec:
   group: michelangelo.api
@@ -4822,6 +4821,17 @@ spec:
                                               fieldPath:
                                                 type: string
                                             type: object
+                                          fileKeyRef:
+                                            properties:
+                                              key:
+                                                type: string
+                                              optional:
+                                                type: boolean
+                                              path:
+                                                type: string
+                                              volumeName:
+                                                type: string
+                                            type: object
                                           resourceFieldRef:
                                             properties:
                                               containerName:
@@ -5011,6 +5021,8 @@ spec:
                                               type: object
                                           type: object
                                       type: object
+                                    stopSignal:
+                                      type: string
                                   type: object
                                 livenessProbe:
                                   properties:
@@ -5244,6 +5256,23 @@ spec:
                                   type: object
                                 restartPolicy:
                                   type: string
+                                restartPolicyRules:
+                                  items:
+                                    properties:
+                                      action:
+                                        type: string
+                                      exitCodes:
+                                        properties:
+                                          operator:
+                                            type: string
+                                          values:
+                                            items:
+                                              format: int32
+                                              type: integer
+                                            type: array
+                                        type: object
+                                    type: object
+                                  type: array
                                 securityContext:
                                   properties:
                                     allowPrivilegeEscalation:
@@ -5506,6 +5535,17 @@ spec:
                                                   fieldPath:
                                                     type: string
                                                 type: object
+                                              fileKeyRef:
+                                                properties:
+                                                  key:
+                                                    type: string
+                                                  optional:
+                                                    type: boolean
+                                                  path:
+                                                    type: string
+                                                  volumeName:
+                                                    type: string
+                                                type: object
                                               resourceFieldRef:
                                                 properties:
                                                   containerName:
@@ -5695,6 +5735,8 @@ spec:
                                                   type: object
                                               type: object
                                           type: object
+                                        stopSignal:
+                                          type: string
                                       type: object
                                     livenessProbe:
                                       properties:
@@ -5928,6 +5970,23 @@ spec:
                                       type: object
                                     restartPolicy:
                                       type: string
+                                    restartPolicyRules:
+                                      items:
+                                        properties:
+                                          action:
+                                            type: string
+                                          exitCodes:
+                                            properties:
+                                              operator:
+                                                type: string
+                                              values:
+                                                items:
+                                                  format: int32
+                                                  type: integer
+                                                type: array
+                                            type: object
+                                        type: object
+                                      type: array
                                     securityContext:
                                       properties:
                                         allowPrivilegeEscalation:
@@ -6149,6 +6208,8 @@ spec:
                             type: boolean
                           hostname:
                             type: string
+                          hostnameOverride:
+                            type: string
                           imagePullSecrets:
                             items:
                               properties:
@@ -6193,6 +6254,17 @@ spec:
                                               apiVersion:
                                                 type: string
                                               fieldPath:
+                                                type: string
+                                            type: object
+                                          fileKeyRef:
+                                            properties:
+                                              key:
+                                                type: string
+                                              optional:
+                                                type: boolean
+                                              path:
+                                                type: string
+                                              volumeName:
                                                 type: string
                                             type: object
                                           resourceFieldRef:
@@ -6384,6 +6456,8 @@ spec:
                                               type: object
                                           type: object
                                       type: object
+                                    stopSignal:
+                                      type: string
                                   type: object
                                 livenessProbe:
                                   properties:
@@ -6617,6 +6691,23 @@ spec:
                                   type: object
                                 restartPolicy:
                                   type: string
+                                restartPolicyRules:
+                                  items:
+                                    properties:
+                                      action:
+                                        type: string
+                                      exitCodes:
+                                        properties:
+                                          operator:
+                                            type: string
+                                          values:
+                                            items:
+                                              format: int32
+                                              type: integer
+                                            type: array
+                                        type: object
+                                    type: object
+                                  type: array
                                 securityContext:
                                   properties:
                                     allowPrivilegeEscalation:
@@ -6858,6 +6949,34 @@ spec:
                                   type: string
                               type: object
                             type: array
+                          resources:
+                            properties:
+                              claims:
+                                items:
+                                  properties:
+                                    name:
+                                      type: string
+                                    request:
+                                      type: string
+                                  type: object
+                                type: array
+                              limits:
+                                additionalProperties:
+                                  anyOf:
+                                  - type: integer
+                                  - type: string
+                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                  x-kubernetes-int-or-string: true
+                                type: object
+                              requests:
+                                additionalProperties:
+                                  anyOf:
+                                  - type: integer
+                                  - type: string
+                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                  x-kubernetes-int-or-string: true
+                                type: object
+                            type: object
                           restartPolicy:
                             type: string
                           runtimeClassName:
@@ -6895,6 +7014,8 @@ spec:
                               runAsUser:
                                 format: int64
                                 pattern: ^[-]?\d{1,19}$
+                                type: string
+                              seLinuxChangePolicy:
                                 type: string
                               seLinuxOptions:
                                 properties:
@@ -7750,6 +7871,22 @@ spec:
                                                           type: object
                                                       type: object
                                                     type: array
+                                                type: object
+                                              podCertificate:
+                                                properties:
+                                                  certificateChainPath:
+                                                    type: string
+                                                  credentialBundlePath:
+                                                    type: string
+                                                  keyPath:
+                                                    type: string
+                                                  keyType:
+                                                    type: string
+                                                  maxExpirationSeconds:
+                                                    format: int32
+                                                    type: integer
+                                                  signerName:
+                                                    type: string
                                                 type: object
                                               secret:
                                                 properties:
@@ -8788,6 +8925,17 @@ spec:
                                                 fieldPath:
                                                   type: string
                                               type: object
+                                            fileKeyRef:
+                                              properties:
+                                                key:
+                                                  type: string
+                                                optional:
+                                                  type: boolean
+                                                path:
+                                                  type: string
+                                                volumeName:
+                                                  type: string
+                                              type: object
                                             resourceFieldRef:
                                               properties:
                                                 containerName:
@@ -8977,6 +9125,8 @@ spec:
                                                 type: object
                                             type: object
                                         type: object
+                                      stopSignal:
+                                        type: string
                                     type: object
                                   livenessProbe:
                                     properties:
@@ -9210,6 +9360,23 @@ spec:
                                     type: object
                                   restartPolicy:
                                     type: string
+                                  restartPolicyRules:
+                                    items:
+                                      properties:
+                                        action:
+                                          type: string
+                                        exitCodes:
+                                          properties:
+                                            operator:
+                                              type: string
+                                            values:
+                                              items:
+                                                format: int32
+                                                type: integer
+                                              type: array
+                                          type: object
+                                      type: object
+                                    type: array
                                   securityContext:
                                     properties:
                                       allowPrivilegeEscalation:
@@ -9472,6 +9639,17 @@ spec:
                                                     fieldPath:
                                                       type: string
                                                   type: object
+                                                fileKeyRef:
+                                                  properties:
+                                                    key:
+                                                      type: string
+                                                    optional:
+                                                      type: boolean
+                                                    path:
+                                                      type: string
+                                                    volumeName:
+                                                      type: string
+                                                  type: object
                                                 resourceFieldRef:
                                                   properties:
                                                     containerName:
@@ -9661,6 +9839,8 @@ spec:
                                                     type: object
                                                 type: object
                                             type: object
+                                          stopSignal:
+                                            type: string
                                         type: object
                                       livenessProbe:
                                         properties:
@@ -9894,6 +10074,23 @@ spec:
                                         type: object
                                       restartPolicy:
                                         type: string
+                                      restartPolicyRules:
+                                        items:
+                                          properties:
+                                            action:
+                                              type: string
+                                            exitCodes:
+                                              properties:
+                                                operator:
+                                                  type: string
+                                                values:
+                                                  items:
+                                                    format: int32
+                                                    type: integer
+                                                  type: array
+                                              type: object
+                                          type: object
+                                        type: array
                                       securityContext:
                                         properties:
                                           allowPrivilegeEscalation:
@@ -10115,6 +10312,8 @@ spec:
                               type: boolean
                             hostname:
                               type: string
+                            hostnameOverride:
+                              type: string
                             imagePullSecrets:
                               items:
                                 properties:
@@ -10159,6 +10358,17 @@ spec:
                                                 apiVersion:
                                                   type: string
                                                 fieldPath:
+                                                  type: string
+                                              type: object
+                                            fileKeyRef:
+                                              properties:
+                                                key:
+                                                  type: string
+                                                optional:
+                                                  type: boolean
+                                                path:
+                                                  type: string
+                                                volumeName:
                                                   type: string
                                               type: object
                                             resourceFieldRef:
@@ -10350,6 +10560,8 @@ spec:
                                                 type: object
                                             type: object
                                         type: object
+                                      stopSignal:
+                                        type: string
                                     type: object
                                   livenessProbe:
                                     properties:
@@ -10583,6 +10795,23 @@ spec:
                                     type: object
                                   restartPolicy:
                                     type: string
+                                  restartPolicyRules:
+                                    items:
+                                      properties:
+                                        action:
+                                          type: string
+                                        exitCodes:
+                                          properties:
+                                            operator:
+                                              type: string
+                                            values:
+                                              items:
+                                                format: int32
+                                                type: integer
+                                              type: array
+                                          type: object
+                                      type: object
+                                    type: array
                                   securityContext:
                                     properties:
                                       allowPrivilegeEscalation:
@@ -10824,6 +11053,34 @@ spec:
                                     type: string
                                 type: object
                               type: array
+                            resources:
+                              properties:
+                                claims:
+                                  items:
+                                    properties:
+                                      name:
+                                        type: string
+                                      request:
+                                        type: string
+                                    type: object
+                                  type: array
+                                limits:
+                                  additionalProperties:
+                                    anyOf:
+                                    - type: integer
+                                    - type: string
+                                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                    x-kubernetes-int-or-string: true
+                                  type: object
+                                requests:
+                                  additionalProperties:
+                                    anyOf:
+                                    - type: integer
+                                    - type: string
+                                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                    x-kubernetes-int-or-string: true
+                                  type: object
+                              type: object
                             restartPolicy:
                               type: string
                             runtimeClassName:
@@ -10861,6 +11118,8 @@ spec:
                                 runAsUser:
                                   format: int64
                                   pattern: ^[-]?\d{1,19}$
+                                  type: string
+                                seLinuxChangePolicy:
                                   type: string
                                 seLinuxOptions:
                                   properties:
@@ -11723,6 +11982,22 @@ spec:
                                                             type: object
                                                         type: object
                                                       type: array
+                                                  type: object
+                                                podCertificate:
+                                                  properties:
+                                                    certificateChainPath:
+                                                      type: string
+                                                    credentialBundlePath:
+                                                      type: string
+                                                    keyPath:
+                                                      type: string
+                                                    keyType:
+                                                      type: string
+                                                    maxExpirationSeconds:
+                                                      format: int32
+                                                      type: integer
+                                                    signerName:
+                                                      type: string
                                                   type: object
                                                 secret:
                                                   properties:

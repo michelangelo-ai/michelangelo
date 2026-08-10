@@ -1258,7 +1258,6 @@ func init() {
 	YamlSchemas["TestBase"] = `apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  creationTimestamp: null
   name: testbases.michelangelo.api
 spec:
   group: michelangelo.api
