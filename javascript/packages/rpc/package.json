@@ -22,6 +22,15 @@
   "exports": {
     ".": {
       "default": "./index.ts"
+    },
+    "./resources/pipeline": {
+      "default": "./resources/pipeline/types.ts"
+    },
+    "./resources/pipeline-run": {
+      "default": "./resources/pipeline-run/types.ts"
+    },
+    "./resources/trigger": {
+      "default": "./resources/trigger/types.ts"
     }
   },
   "imports": {

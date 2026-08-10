@@ -1,11 +1,11 @@
 import { ActionHierarchy, interpolate } from '@michelangelo-ai/core';
+import { TriggerRunAction, TriggerRunState } from '@michelangelo-ai/rpc/resources/trigger';
 
 import { TRIGGER_DETAIL_CONFIG } from './detail';
 import { TRIGGER_LIST_CONFIG } from './list';
-import { TriggerRunAction, TriggerRunState } from './types';
 
 import type { PhaseEntityConfig } from '@michelangelo-ai/core';
-import type { TriggerRun } from './types';
+import type { TriggerRun } from '@michelangelo-ai/rpc/resources/trigger';
 
 const isKillable = (record: unknown) => {
   // cast: record is unknown from the action predicate context; always TriggerRun in this entity

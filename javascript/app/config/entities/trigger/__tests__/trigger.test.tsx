@@ -9,6 +9,7 @@ import {
   getServiceProviderWrapper,
   getSnackbarProviderWrapper,
 } from '@michelangelo-ai/core/test-utils';
+import { TriggerRunAction, TriggerRunState } from '@michelangelo-ai/rpc/resources/trigger';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -16,10 +17,9 @@ import userEvent from '@testing-library/user-event';
 // surface. The test wrappers are available via the test-utils subpath export.
 import { InterpolatableActionsPopover } from '../../../../../packages/core/components/actions/interpolatable-actions-popover';
 import { TRIGGER_ENTITY_CONFIG } from '../trigger';
-import { TriggerRunAction, TriggerRunState } from '../types';
 
 import type { ActionConfigSchema, Data } from '@michelangelo-ai/core';
-import type { TriggerRun } from '../types';
+import type { TriggerRun } from '@michelangelo-ai/rpc/resources/trigger';
 
 // cast: PhaseEntityConfig.actions is ActionConfigSchema<T>[] where T is the entity's generic
 // parameter; InterpolatableActionsPopover expects Data (Record<string, unknown>). TriggerRun
