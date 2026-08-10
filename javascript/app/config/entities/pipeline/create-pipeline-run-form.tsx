@@ -9,8 +9,8 @@ import {
 import { generateSuffix } from './name-utils';
 
 import type { ActionComponentProps } from '@michelangelo-ai/core';
-import type { PipelineRun } from '../run/types';
-import type { Pipeline } from './types';
+import type { Pipeline } from '@michelangelo-ai/rpc/resources/pipeline';
+import type { PipelineRun } from '@michelangelo-ai/rpc/resources/pipeline-run';
 
 export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<Pipeline>) => {
   const { projectId } = useStudioParams('base');

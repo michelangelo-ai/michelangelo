@@ -1,8 +1,3 @@
-/**
- * Mirrors generated types from @michelangelo-ai/rpc trigger_run_pb.
- * Update alongside proto/api/v2/trigger_run.proto.
- */
-
 export type Trigger = {
   metadata: {
     name: string;
