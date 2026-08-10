@@ -36,6 +36,9 @@ All notable changes to this project will be documented in this file.
 - **ci:** Fix Go and Python lint and test checks for fork PRs (#1609)
 
 
+- Cherry-pick #1762 (restore ColumnConfig.shape default) + bump to 0.8.0-rc.2 (#1763)
+
+
 ### CI/CD
 
 
@@ -67,6 +70,9 @@ All notable changes to this project will be documented in this file.
 
 
 - **pipelines:** Clarify architectural difference between remote-run and dev-run (#1697)
+
+
+- Update CHANGELOG.md for v0.8.0-rc.1 (#1719)
 
 
 ### Features
