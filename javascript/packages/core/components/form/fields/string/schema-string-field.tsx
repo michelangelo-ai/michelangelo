@@ -8,21 +8,6 @@ export function SchemaStringField({ name, config }: FieldRendererProps) {
   // cast: SchemaField routes by config.type, guaranteeing StringFieldConfig
   const c = config as StringFieldConfig;
 
-  if (c.multi) {
-    return (
-      <StringField
-        name={name}
-        label={c.label}
-        required={c.required}
-        disabled={c.disabled}
-        readOnly={c.readOnly}
-        placeholder={c.placeholder}
-        description={c.description}
-        caption={c.caption}
-        multi
-      />
-    );
-  }
   return (
     <StringField
       name={name}
@@ -33,6 +18,7 @@ export function SchemaStringField({ name, config }: FieldRendererProps) {
       placeholder={c.placeholder}
       description={c.description}
       caption={c.caption}
+      multi={c.multi}
     />
   );
 }
