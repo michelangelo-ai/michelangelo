@@ -37,6 +37,7 @@ require (
 	go.uber.org/fx v1.24.0
 	go.uber.org/yarpc v1.89.1
 	go.uber.org/zap v1.27.1
+	golang.org/x/telemetry v0.0.0-20260409153401-be6f6cb8b1fa
 	golang.org/x/tools v0.44.0
 	google.golang.org/genproto v0.0.0-20240123012728-ef4313101c80
 	google.golang.org/grpc v1.83.0
