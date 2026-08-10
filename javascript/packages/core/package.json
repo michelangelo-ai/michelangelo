@@ -79,6 +79,10 @@
       "import": "./dist/primitives.js",
       "require": "./dist/primitives.cjs",
       "default": "./dist/primitives.js"
+    },
+    "./test-utils": {
+      "types": "./test-utils.ts",
+      "workspace": "./test-utils.ts"
     }
   },
   "imports": {
