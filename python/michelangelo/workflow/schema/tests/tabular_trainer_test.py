@@ -62,10 +62,10 @@ class TestIncrementalTrainingModeConfig(TestCase):
 class TestColumnConfig(TestCase):
     """Tests for ColumnConfig dataclass."""
 
-    def test_shape_required(self):
-        """``shape`` has no default; omitting it is a TypeError."""
-        with self.assertRaises(TypeError):
-            ColumnConfig(data_type="torch.float32")
+    def test_shape_defaults_to_empty_list(self):
+        """``shape`` defaults to ``[]`` (scalar) when omitted."""
+        cfg = ColumnConfig(data_type="torch.float32")
+        self.assertEqual(cfg.shape, [])
 
     def test_shape_stored(self):
         """It stores an explicit shape."""
@@ -73,10 +73,13 @@ class TestColumnConfig(TestCase):
         self.assertEqual(cfg.data_type, "torch.long")
         self.assertEqual(cfg.shape, [128])
 
-    def test_scalar_column_uses_explicit_one_element_shape(self):
-        """A scalar column uses an explicit ``shape=[1]``, not an implicit default."""
-        cfg = ColumnConfig(data_type="torch.float32", shape=[1])
-        self.assertEqual(cfg.shape, [1])
+    def test_shape_default_is_not_shared_between_instances(self):
+        """Each instance gets its own default list, not a shared mutable one."""
+        cfg1 = ColumnConfig(data_type="torch.float32")
+        cfg2 = ColumnConfig(data_type="torch.float32")
+        cfg1.shape.append(1)
+        self.assertEqual(cfg1.shape, [1])
+        self.assertEqual(cfg2.shape, [])
 
 
 # ---------------------------------------------------------------------------
