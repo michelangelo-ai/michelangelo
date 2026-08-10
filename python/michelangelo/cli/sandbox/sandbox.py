@@ -730,7 +730,7 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
             "temporal.enabled=true",  # enable temporal subchart
             "--set-string",
             "controllermgr.workflowClient.executionUrlFormat="
-            "http://localhost:8080/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}/{{.RunID}}/history",
+            "http://localhost:8080/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}",
         ]
     else:
         args += [
