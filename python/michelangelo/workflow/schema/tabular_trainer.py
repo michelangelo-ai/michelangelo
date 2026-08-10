@@ -80,17 +80,18 @@ class ColumnConfig:
     Attributes:
         data_type: PyTorch dtype string, e.g. ``"torch.float32"``.
         shape: Tensor shape *excluding* the batch dimension, e.g. ``[128]``
-            for a 128-element embedding, or ``[1]`` for a scalar column.
-            Required -- there is no default; a caller must decide the
-            shape explicitly rather than relying on an implicit value.
+            for a 128-element embedding. Defaults to ``[]``, i.e. a scalar
+            column -- the common tabular case.
 
     Example:
         >>> ColumnConfig(data_type="torch.float32", shape=[128])
         ColumnConfig(data_type='torch.float32', shape=[128])
+        >>> ColumnConfig(data_type="torch.float32")
+        ColumnConfig(data_type='torch.float32', shape=[])
     """
 
     data_type: str
-    shape: list[int]
+    shape: list[int] = field(default_factory=list)
 
 
 @dataclass
