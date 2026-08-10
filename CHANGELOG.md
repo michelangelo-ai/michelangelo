@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.8.0] - 2026-08-10
 
 ### ⚠ Breaking Changes
 
@@ -75,6 +75,9 @@ All notable changes to this project will be documented in this file.
 - Update CHANGELOG.md for v0.8.0-rc.1 (#1719)
 
 
+- Update CHANGELOG.md for v0.8.0-rc.2 (#1764)
+
+
 ### Features
 
 
@@ -118,6 +121,9 @@ All notable changes to this project will be documented in this file.
 
 
 - Bump version to 0.8.0-rc.1 (#1717)
+
+
+- Promote v0.8.0 (version strip from 0.8.0-rc.2) (#1769)
 
 ## [0.7.0] - 2026-08-03
 
