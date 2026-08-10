@@ -1,6 +1,6 @@
 import { MODEL_ENTITY_CONFIG } from '../entities/model/model';
 import { PIPELINE_ENTITY_CONFIG } from '../entities/pipeline/pipeline';
-import { RUN_ENTITY_CONFIG } from '../entities/run/run';
+import { PIPELINE_RUN_ENTITY_CONFIG } from '../entities/pipeline-run/pipeline-run';
 import { TRIGGER_ENTITY_CONFIG } from '../entities/trigger/trigger';
 
 import type { PhaseConfig } from '@michelangelo-ai/core';
@@ -15,7 +15,7 @@ export const TRAIN_PHASE: PhaseConfig = {
   state: 'active' as const,
   entities: [
     PIPELINE_ENTITY_CONFIG,
-    RUN_ENTITY_CONFIG,
+    PIPELINE_RUN_ENTITY_CONFIG,
     TRIGGER_ENTITY_CONFIG,
     MODEL_ENTITY_CONFIG,
     {

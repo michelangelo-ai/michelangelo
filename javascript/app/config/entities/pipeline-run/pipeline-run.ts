@@ -3,7 +3,7 @@ import { RUN_LIST_CONFIG } from './list';
 
 import type { PhaseEntityConfig } from '@michelangelo-ai/core';
 
-export const RUN_ENTITY_CONFIG: PhaseEntityConfig = {
+export const PIPELINE_RUN_ENTITY_CONFIG: PhaseEntityConfig = {
   id: 'runs',
   name: 'Pipeline Runs',
   service: 'pipelineRun',

@@ -1,6 +1,6 @@
 import { CellType } from '@michelangelo-ai/core';
 
-import { SHARED_RUN_CELL_CONFIG } from '../run/shared';
+import { SHARED_RUN_CELL_CONFIG } from '../pipeline-run/shared';
 import { TRIGGER_PIPELINE_CELL_CONFIG, TRIGGER_STATE_CELL_CONFIG } from './shared';
 
 import type { DetailViewConfig } from '@michelangelo-ai/core';
