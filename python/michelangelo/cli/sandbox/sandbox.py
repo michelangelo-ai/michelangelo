@@ -707,6 +707,10 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
     # Workflow engine — cadence is the default in values-k3d.yaml.
     # Always set the engine explicitly so that switching --workflow between
     # runs (e.g. cadence → temporal) overrides any --reuse-values residue.
+    # executionUrlFormat is a Go text/template string (rendered at runtime by
+    # ExecuteWorkflowActor.GetWorkflowUrl with .Domain/.ExecutionID), not a
+    # Helm template — the {{ }} placeholders below pass through `quote`
+    # untouched and are only ever parsed by the Go code that consumes them.
     if ns.workflow == "temporal":
         args += [
             "--set",
@@ -717,6 +721,9 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
             "cadence.enabled=false",  # ensure cadence subchart is off
             "--set",
             "temporal.enabled=true",  # enable temporal subchart
+            "--set-string",
+            "controllermgr.workflowClient.executionUrlFormat="
+            "http://localhost:8080/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}",
         ]
     else:
         args += [
@@ -728,6 +735,9 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
             "temporal.enabled=false",  # ensure temporal subchart is off
             "--set",
             "cadence.enabled=true",
+            "--set-string",
+            "controllermgr.workflowClient.executionUrlFormat="
+            "http://localhost:8088/domains/{{.Domain}}/workflows/{{.ExecutionID}}",
         ]
 
     # Service exclusions → enabled=false toggles
