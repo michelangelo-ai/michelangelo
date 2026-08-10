@@ -1,22 +1,20 @@
+import {
+  buildWrapper,
+  createQueryMockRouter,
+  getBaseProviderWrapper,
+  getErrorProviderWrapper,
+  getIconProviderWrapper,
+  getInterpolationProviderWrapper,
+  getRouterWrapper,
+  getServiceProviderWrapper,
+  getSnackbarProviderWrapper,
+} from '@michelangelo-ai/core/test-utils';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-// NOTE: these test utilities and this component are internal to packages/core and are not
-// part of its public export surface, so this test — which moved to app/config with the rest
-// of the trigger entity config — reaches into core's source tree via a relative path rather
-// than through the package's public API. See PR 2 of the config extraction plan for context.
+// NOTE: this component is internal to packages/core and is not part of its public export
+// surface. The test wrappers are available via the test-utils subpath export.
 import { InterpolatableActionsPopover } from '../../../../../packages/core/components/actions/interpolatable-actions-popover';
-import { buildWrapper } from '../../../../../packages/core/test/wrappers/build-wrapper';
-import { getBaseProviderWrapper } from '../../../../../packages/core/test/wrappers/get-base-provider-wrapper';
-import { getErrorProviderWrapper } from '../../../../../packages/core/test/wrappers/get-error-provider-wrapper';
-import { getIconProviderWrapper } from '../../../../../packages/core/test/wrappers/get-icon-provider-wrapper';
-import { getInterpolationProviderWrapper } from '../../../../../packages/core/test/wrappers/get-interpolation-provider-wrapper';
-import { getRouterWrapper } from '../../../../../packages/core/test/wrappers/get-router-wrapper';
-import {
-  createQueryMockRouter,
-  getServiceProviderWrapper,
-} from '../../../../../packages/core/test/wrappers/get-service-provider-wrapper';
-import { getSnackbarProviderWrapper } from '../../../../../packages/core/test/wrappers/get-snackbar-provider-wrapper';
 import { TRIGGER_ENTITY_CONFIG } from '../trigger';
 import { TriggerRunAction, TriggerRunState } from '../types';
 

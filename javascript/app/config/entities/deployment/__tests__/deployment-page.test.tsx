@@ -1,20 +1,18 @@
+import {
+  buildWrapper,
+  createQueryMockRouter,
+  getConfigProviderWrapper,
+  getErrorProviderWrapper,
+  getRouterWrapper,
+  getServiceProviderWrapper,
+} from '@michelangelo-ai/core/test-utils';
 import { render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 
-// NOTE: these test utilities and route components are internal to packages/core and are not
-// part of its public export surface, so this test — which moved to app/config with the rest
-// of the deployment entity config — reaches into core's source tree via a relative path
-// rather than through the package's public API. See PR 2 of the config extraction plan.
+// NOTE: these route components are internal to packages/core and are not part of its public
+// export surface. The test wrappers are available via the test-utils subpath export.
 import { EntityDetailRoute } from '../../../../../packages/core/router/entity-detail-route';
 import { PhaseListRoute } from '../../../../../packages/core/router/phase-list-route';
-import { buildWrapper } from '../../../../../packages/core/test/wrappers/build-wrapper';
-import { getConfigProviderWrapper } from '../../../../../packages/core/test/wrappers/get-config-provider-wrapper';
-import { getErrorProviderWrapper } from '../../../../../packages/core/test/wrappers/get-error-provider-wrapper';
-import { getRouterWrapper } from '../../../../../packages/core/test/wrappers/get-router-wrapper';
-import {
-  createQueryMockRouter,
-  getServiceProviderWrapper,
-} from '../../../../../packages/core/test/wrappers/get-service-provider-wrapper';
 import { DEPLOY_PHASE } from '../../../phases/deploy';
 import { DEPLOYMENT_CONDITION_STATUS, DEPLOYMENT_STAGE, DEPLOYMENT_STATE } from '../shared';
 
