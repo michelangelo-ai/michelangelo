@@ -2980,6 +2980,26 @@ func TestGetWorkflowUrl(t *testing.T) {
 			expectError: false,
 		},
 		{
+			// Regression test: GetWorkflowUrl gained a runID parameter and a
+			// {{.RunID}} template variable, but an operator's pre-existing
+			// executionUrlFormat that never references {{.RunID}} at all
+			// must keep resolving exactly as before -- text/template
+			// silently ignores unused map entries, so passing a non-empty
+			// runID here must not change the output.
+			name: "Pre-existing config without {{.RunID}} is unaffected by the new parameter",
+			configSetup: map[string]interface{}{
+				"workflowClient": map[string]interface{}{
+					"taskList":           "default",
+					"executionUrlFormat": "https://temporal-example.com/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}",
+					"domain":             "default",
+				},
+			},
+			inputName:   "existing-pipeline-run",
+			inputRunID:  "run-should-be-ignored-789",
+			expectedUrl: "https://temporal-example.com/namespaces/default/workflows/existing-pipeline-run",
+			expectError: false,
+		},
+		{
 			name: "Missing workflow config - should return empty string",
 			configSetup: map[string]interface{}{
 				"workflowClient": map[string]interface{}{
