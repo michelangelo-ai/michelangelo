@@ -1,0 +1,60 @@
+import { CellType } from '@michelangelo-ai/core';
+
+import { DEPLOYMENT_STAGE_CELL, DEPLOYMENT_STATE_CELL } from './shared';
+
+import type { ColumnConfig, ListViewConfig } from '@michelangelo-ai/core';
+
+const DEPLOYMENT_COLUMNS: ColumnConfig<object>[] = [
+  {
+    id: 'metadata.name',
+    label: 'Name',
+    type: CellType.TEXT,
+    url: '/${studio.projectId}/${studio.phase}/deployments/${row.metadata.name}',
+  },
+  {
+    id: 'status.currentRevision.name',
+    label: 'Model',
+    type: CellType.TEXT,
+  },
+  {
+    id: 'spec.definition.type',
+    label: 'Type',
+    type: CellType.TAG,
+    accessor: (data: unknown) => {
+      // cast: accessor receives unknown data; narrowing to expected proto shape for property
+      // access; see #1425
+      const type = (data as { spec?: { definition?: { type?: string } } })?.spec?.definition?.type;
+      if (!type) return null;
+      if (type === 'TARGET_TYPE_OFFLINE') return 'Offline';
+      if (type === 'TARGET_TYPE_MOBILE') return 'Mobile';
+      return 'Online';
+    },
+  },
+  DEPLOYMENT_STAGE_CELL,
+  {
+    id: 'spec.inferenceServer.name',
+    label: 'Target',
+    type: CellType.TEXT,
+    accessor: (data: unknown) => {
+      // cast: accessor receives unknown data; narrowing to expected proto shape for property
+      // access; see #1425
+      const target = (data as { spec?: { target?: { case?: string; value?: { name?: string } } } })
+        ?.spec?.target;
+      if (target?.case === 'inferenceServer') return target.value?.name ?? null;
+      return null;
+    },
+  },
+  {
+    id: 'spec.owner.name',
+    label: 'Owner',
+    type: CellType.TEXT,
+  },
+  DEPLOYMENT_STATE_CELL,
+];
+
+export const DEPLOYMENT_LIST_CONFIG: ListViewConfig<object> = {
+  type: 'list',
+  tableConfig: {
+    columns: DEPLOYMENT_COLUMNS,
+  },
+};

@@ -1,0 +1,22 @@
+import { CellType } from '@michelangelo-ai/core';
+
+import { TRIGGER_PIPELINE_CELL_CONFIG, TRIGGER_STATE_CELL_CONFIG } from './shared';
+
+import type { ListViewConfig } from '@michelangelo-ai/core';
+
+export const TRIGGER_LIST_CONFIG: ListViewConfig<object> = {
+  type: 'list',
+  tableConfig: {
+    columns: [
+      {
+        id: 'metadata.name',
+        label: 'Name',
+        url: '/${studio.projectId}/${studio.phase}/triggers/${data.metadata.name}',
+      },
+      { id: 'metadata.creationTimestamp.seconds', label: 'Created', type: CellType.DATE },
+      { id: 'spec.actor.name', label: 'Started by', type: CellType.TEXT },
+      TRIGGER_PIPELINE_CELL_CONFIG,
+      TRIGGER_STATE_CELL_CONFIG,
+    ],
+  },
+};

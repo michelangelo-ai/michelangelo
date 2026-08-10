@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Client as Styletron } from 'styletron-engine-atomic';
 import { Provider as StyletronProvider } from 'styletron-react';
 
+import { CATEGORIES } from './config/categories';
 import { ICONS } from './icons/icons';
 
 const DEV_USER = {
@@ -39,7 +40,10 @@ export function App() {
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <Routes>
-            <Route path="/*" element={<CoreApp dependencies={dependencies} />} />
+            <Route
+              path="/*"
+              element={<CoreApp config={{ categories: CATEGORIES }} dependencies={dependencies} />}
+            />
           </Routes>
         </BrowserRouter>
       </QueryClientProvider>

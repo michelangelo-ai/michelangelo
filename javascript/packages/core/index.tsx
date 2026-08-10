@@ -2,7 +2,6 @@ import { LayersManager } from 'baseui/layer';
 import { SnackbarProvider } from 'baseui/snackbar';
 
 import { NavigationBar } from '#core/components/navigation-bar/navigation-bar';
-import { CATEGORIES } from '#core/config/categories';
 import { ConfigProvider } from '#core/providers/config-provider/config-provider';
 import { ErrorProvider } from '#core/providers/error-provider/error-provider';
 import { IconProvider } from '#core/providers/icon-provider/icon-provider';
@@ -23,7 +22,7 @@ import '#core/styles/main.css';
 // TODO: Relocate the Props interface once the contents of the
 // packages/core/index.tsx file are moved to a final location
 type Props = {
-  config?: StudioConfig;
+  config: StudioConfig;
   dependencies: {
     error: ErrorContextValue;
     service: ServiceContextType;
@@ -44,7 +43,7 @@ export function CoreApp({ config, dependencies }: Props) {
             <ErrorProvider {...dependencies.error}>
               <IconProvider icons={dependencies.theme.icons}>
                 <UserProvider {...(dependencies.user ?? { timeZone: TimeZone.Local })}>
-                  <ConfigProvider config={config ?? { categories: CATEGORIES }}>
+                  <ConfigProvider config={config}>
                     <NavigationBar links={dependencies.navigationBar?.links} />
                     <Router />
                   </ConfigProvider>

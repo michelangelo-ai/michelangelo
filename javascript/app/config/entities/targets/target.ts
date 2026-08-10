@@ -1,0 +1,12 @@
+import { TARGET_DETAIL_CONFIG } from './detail';
+import { TARGET_LIST_CONFIG } from './list';
+
+import type { PhaseEntityConfig } from '@michelangelo-ai/core';
+
+export const TARGET_ENTITY_CONFIG: PhaseEntityConfig = {
+  id: 'targets',
+  name: 'Targets',
+  service: 'inferenceServer',
+  state: 'active',
+  views: [TARGET_LIST_CONFIG, TARGET_DETAIL_CONFIG],
+};
