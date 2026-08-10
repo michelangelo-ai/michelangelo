@@ -3,7 +3,7 @@ import type { FieldRenderer } from '#core/components/form/types/config-types';
 /**
  * @description
  * The form context provided to the application to extend built-in field
- * renderers and validators with custom ones. Custom renderers are checked
+ * renderers with custom ones. Custom renderers are checked
  * first before falling back to built-in behavior.
  */
 export type FormContextType = {
@@ -22,11 +22,4 @@ export type FormContextType = {
    * ```
    */
   renderers: Record<string, FieldRenderer>;
-
-  /**
-   * @description
-   * Custom validators registered at the application level. Consumers can add
-   * domain-specific validators via FieldValidationExtensions module augmentation.
-   */
-  validators: Record<string, (...args: never[]) => (value: unknown) => string | undefined>;
 };
