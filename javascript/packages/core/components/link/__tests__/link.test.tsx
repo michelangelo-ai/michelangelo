@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { Alert } from 'baseui/icon';
 
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
@@ -96,6 +97,48 @@ describe('Link', () => {
     it('should render custom icon component', () => {
       // eslint-disable-next-line testing-library/no-test-id-queries -- bare span, no accessible identity
       expect(screen.getByTestId('custom-icon')).toBeInTheDocument();
+    });
+  });
+
+  describe('onClick', () => {
+    it('should render and remain clickable when onClick is omitted', async () => {
+      render(
+        <Link href="/internal-path">Click me</Link>,
+        buildWrapper([getRouterWrapper(), getIconProviderWrapper()])
+      );
+
+      const link = await screen.findByRole('link', { name: 'Click me' });
+      await userEvent.click(link);
+
+      expect(link).toBeInTheDocument();
+    });
+
+    it('should call onClick when an internal link is clicked', async () => {
+      const onClick = vi.fn();
+      render(
+        <Link href="/internal-path" onClick={onClick}>
+          Click me
+        </Link>,
+        buildWrapper([getRouterWrapper(), getIconProviderWrapper()])
+      );
+
+      await userEvent.click(await screen.findByRole('link', { name: 'Click me' }));
+
+      expect(onClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('should call onClick when an external link is clicked', async () => {
+      const onClick = vi.fn();
+      render(
+        <Link href="https://example.com" onClick={onClick}>
+          External Link
+        </Link>,
+        buildWrapper([getRouterWrapper(), getIconProviderWrapper()])
+      );
+
+      await userEvent.click(await screen.findByRole('link', { name: /External Link/ }));
+
+      expect(onClick).toHaveBeenCalledTimes(1);
     });
   });
 });

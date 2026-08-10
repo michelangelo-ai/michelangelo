@@ -15,9 +15,11 @@ import type { LinkCellConfig } from './types';
  * Supports optional leading icon and automatic text truncation.
  *
  * @param props.value - Text value to display
+ * @param props.record - The data record for the row, passed to column.onClick when provided
  * @param props.column - Column configuration with optional url and icon
  *   - column.url: Link destination
  *   - column.icon: Icon name to show before the text
+ *   - column.onClick: Invoked with the record when the link is clicked, before navigation
  *
  * @example
  * ```tsx
@@ -35,15 +37,21 @@ import type { LinkCellConfig } from './types';
 export function LinkCell(props: CellRendererProps<string, LinkCellConfig>) {
   const [css, theme] = useStyletron();
   const cellToString = useCellToString();
-  const { column } = props;
-  const { icon, url } = column;
+  const { column, record } = props;
+  const { icon, url, onClick } = column;
 
   const content = <TruncatedText>{cellToString(props) ?? props.value}</TruncatedText>;
 
   return (
     <div className={css({ display: 'flex', alignItems: 'center', gap: theme.sizing.scale100 })}>
       {icon && <Icon name={icon} />}
-      {url && typeof url === 'string' ? <Link href={url}>{content}</Link> : content}
+      {url && typeof url === 'string' ? (
+        <Link href={url} onClick={onClick ? () => onClick(record) : undefined}>
+          {content}
+        </Link>
+      ) : (
+        content
+      )}
     </div>
   );
 }

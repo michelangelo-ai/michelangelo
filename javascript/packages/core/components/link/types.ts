@@ -6,6 +6,11 @@ export type LinkProps = {
   href: string;
   overrides?: LinkOverrides;
   title?: string;
+  /**
+   * Invoked when the link is clicked, before navigation occurs. Optional — omit for a plain
+   * link with no side effects.
+   */
+  onClick?: () => void;
 };
 
 type LinkOverrides = {

@@ -26,6 +26,8 @@ import type { LinkProps } from './types';
  * @param props.children - Link text or content to display
  * @param props.title - Optional title attribute for accessibility
  * @param props.overrides - BaseUI overrides for Link and ExternalLinkIcon components
+ * @param props.onClick - Optional handler invoked before navigation occurs, e.g. for
+ *   click-tracking supplied by the caller
  *
  * @example
  * ```tsx
@@ -49,7 +51,7 @@ import type { LinkProps } from './types';
  * ```
  */
 export function Link(props: LinkProps) {
-  const { children, href, overrides = {}, title } = props;
+  const { children, href, overrides = {}, title, onClick } = props;
 
   const [Link, linkProps] = getOverrides(overrides.Link, StyledLink);
 
@@ -65,13 +67,14 @@ export function Link(props: LinkProps) {
       target="_blank"
       rel="noopener noreferrer"
       title={title}
+      onClick={onClick}
       {...linkProps}
     >
       {children}
       <ExternalLinkIcon title="External link" {...externalLinkIconProps} />
     </Link>
   ) : (
-    <Link $as={RouterLink} to={href} title={title} {...linkProps}>
+    <Link $as={RouterLink} to={href} title={title} onClick={onClick} {...linkProps}>
       {children}
     </Link>
   );
