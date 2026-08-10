@@ -358,4 +358,112 @@ describe('ConfigDrivenForm', () => {
       expect(screen.getByLabelText('Name')).toHaveValue('Pre-filled');
     });
   });
+
+  describe('validation', () => {
+    it('shows minLength error after field is touched', async () => {
+      const user = userEvent.setup();
+
+      const config: FormConfig = {
+        fields: {
+          name: { type: 'string', label: 'Name', validation: { minLength: 5 } },
+        },
+        layout: ['name'],
+      };
+
+      render(
+        <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      await user.type(screen.getByLabelText('Name'), 'abc');
+      await user.tab();
+
+      await waitFor(() => {
+        expect(screen.getByText('Must be at least 5 characters.')).toBeInTheDocument();
+      });
+    });
+
+    it('shows maxLength error after field is touched', async () => {
+      const user = userEvent.setup();
+
+      const config: FormConfig = {
+        fields: {
+          name: { type: 'string', label: 'Name', validation: { maxLength: 3 } },
+        },
+        layout: ['name'],
+      };
+
+      render(
+        <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      await user.type(screen.getByLabelText('Name'), 'toolong');
+      await user.tab();
+
+      await waitFor(() => {
+        expect(screen.getByText('Must be at most 3 characters.')).toBeInTheDocument();
+      });
+    });
+
+    it('clears error when value becomes valid', async () => {
+      const user = userEvent.setup();
+
+      const config: FormConfig = {
+        fields: {
+          name: { type: 'string', label: 'Name', validation: { minLength: 3 } },
+        },
+        layout: ['name'],
+      };
+
+      render(
+        <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      const input = screen.getByLabelText('Name');
+      await user.type(input, 'ab');
+      await user.tab();
+
+      await waitFor(() => {
+        expect(screen.getByText('Must be at least 3 characters.')).toBeInTheDocument();
+      });
+
+      await user.clear(input);
+      await user.type(input, 'valid');
+
+      await waitFor(() => {
+        expect(screen.queryByText('Must be at least 3 characters.')).not.toBeInTheDocument();
+      });
+    });
+
+    it('supports custom validate function', async () => {
+      const user = userEvent.setup();
+
+      const config: FormConfig = {
+        fields: {
+          name: {
+            type: 'string',
+            label: 'Name',
+            validation: {
+              validate: (value: unknown) => (value === 'bad' ? 'Invalid value' : undefined),
+            },
+          },
+        },
+        layout: ['name'],
+      };
+
+      render(
+        <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      await user.type(screen.getByLabelText('Name'), 'bad');
+      await user.tab();
+
+      await waitFor(() => {
+        expect(screen.getByText('Invalid value')).toBeInTheDocument();
+      });
+    });
+  });
 });
