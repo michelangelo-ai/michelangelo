@@ -2947,6 +2947,7 @@ func TestGetWorkflowUrl(t *testing.T) {
 		name        string
 		configSetup map[string]interface{}
 		inputName   string
+		inputRunID  string
 		expectedUrl string
 		expectError bool
 	}{
@@ -2955,12 +2956,13 @@ func TestGetWorkflowUrl(t *testing.T) {
 			configSetup: map[string]interface{}{
 				"workflowClient": map[string]interface{}{
 					"taskList":           "default",
-					"executionUrlFormat": "http://cadence-web:8080/domain/{{.Domain}}/workflows/{{.ExecutionID}}",
+					"executionUrlFormat": "http://cadence-web:8080/domain/{{.Domain}}/workflows/{{.ExecutionID}}/{{.RunID}}",
 					"domain":             "michelangelo",
 				},
 			},
 			inputName:   "test-pipeline-run",
-			expectedUrl: "http://cadence-web:8080/domain/michelangelo/workflows/test-pipeline-run",
+			inputRunID:  "run-abc-123",
+			expectedUrl: "http://cadence-web:8080/domain/michelangelo/workflows/test-pipeline-run/run-abc-123",
 			expectError: false,
 		},
 		{
@@ -2968,12 +2970,13 @@ func TestGetWorkflowUrl(t *testing.T) {
 			configSetup: map[string]interface{}{
 				"workflowClient": map[string]interface{}{
 					"taskList":           "custom-queue",
-					"executionUrlFormat": "https://temporal-ui.prod:7243/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}",
+					"executionUrlFormat": "https://temporal-ui.prod:7243/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}/{{.RunID}}",
 					"domain":             "production",
 				},
 			},
 			inputName:   "prod-pipeline-execution",
-			expectedUrl: "https://temporal-ui.prod:7243/namespaces/production/workflows/prod-pipeline-execution",
+			inputRunID:  "run-def-456",
+			expectedUrl: "https://temporal-ui.prod:7243/namespaces/production/workflows/prod-pipeline-execution/run-def-456",
 			expectError: false,
 		},
 		{
@@ -2985,20 +2988,22 @@ func TestGetWorkflowUrl(t *testing.T) {
 				},
 			},
 			inputName:   "test-pipeline",
+			inputRunID:  "run-ghi-789",
 			expectedUrl: "",
 			expectError: false, // Method returns empty string on config error
 		},
 		{
-			name: "Empty pipeline name",
+			name: "Empty pipeline name and run ID",
 			configSetup: map[string]interface{}{
 				"workflowClient": map[string]interface{}{
 					"taskList":           "default",
-					"executionUrlFormat": "http://localhost:8080/domain/{{.Domain}}/workflows/{{.ExecutionID}}",
+					"executionUrlFormat": "http://localhost:8080/domain/{{.Domain}}/workflows/{{.ExecutionID}}/{{.RunID}}",
 					"domain":             "default",
 				},
 			},
 			inputName:   "",
-			expectedUrl: "http://localhost:8080/domain/default/workflows/",
+			inputRunID:  "",
+			expectedUrl: "http://localhost:8080/domain/default/workflows//",
 			expectError: false,
 		},
 		{
@@ -3006,12 +3011,13 @@ func TestGetWorkflowUrl(t *testing.T) {
 			configSetup: map[string]interface{}{
 				"workflowClient": map[string]interface{}{
 					"taskList":           "default",
-					"executionUrlFormat": "http://cadence-web:8080/domain/{{.Domain}}/workflows/{{.ExecutionID}}",
+					"executionUrlFormat": "http://cadence-web:8080/domain/{{.Domain}}/workflows/{{.ExecutionID}}/{{.RunID}}",
 					"domain":             "test-domain",
 				},
 			},
 			inputName:   "my-pipeline-run-123_test",
-			expectedUrl: "http://cadence-web:8080/domain/test-domain/workflows/my-pipeline-run-123_test",
+			inputRunID:  "run-jkl-012",
+			expectedUrl: "http://cadence-web:8080/domain/test-domain/workflows/my-pipeline-run-123_test/run-jkl-012",
 			expectError: false,
 		},
 	}
@@ -3046,7 +3052,7 @@ func TestGetWorkflowUrl(t *testing.T) {
 			actor := NewExecuteWorkflowActor(logger, workflowClient, &blobStore, apiHandlerInstance, configProvider)
 
 			// Test the GetWorkflowUrl method
-			result := actor.GetWorkflowUrl(testCase.inputName)
+			result := actor.GetWorkflowUrl(testCase.inputName, testCase.inputRunID)
 
 			if testCase.expectError {
 				require.Empty(t, result)

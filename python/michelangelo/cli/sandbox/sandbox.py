@@ -708,9 +708,17 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
     # Always set the engine explicitly so that switching --workflow between
     # runs (e.g. cadence → temporal) overrides any --reuse-values residue.
     # executionUrlFormat is a Go text/template string (rendered at runtime by
-    # ExecuteWorkflowActor.GetWorkflowUrl with .Domain/.ExecutionID), not a
-    # Helm template — the {{ }} placeholders below pass through `quote`
+    # ExecuteWorkflowActor.GetWorkflowUrl with .Domain/.ExecutionID/.RunID),
+    # not a Helm template — the {{ }} placeholders below pass through `quote`
     # untouched and are only ever parsed by the Go code that consumes them.
+    # Cadence Web routes a workflow's summary page by domain + cluster +
+    # workflow ID + run ID together (confirmed against a live sandbox run:
+    # a URL missing the cluster segment and run ID does not resolve to the
+    # summary page). "cluster0" is Cadence's default single-cluster name in
+    # this sandbox setup, not something surfaced by our own config today.
+    # The equivalent Temporal Web path below is unverified against a live
+    # Temporal-backed sandbox — flagging until someone confirms it the same
+    # way the Cadence path was confirmed.
     if ns.workflow == "temporal":
         args += [
             "--set",
@@ -723,7 +731,7 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
             "temporal.enabled=true",  # enable temporal subchart
             "--set-string",
             "controllermgr.workflowClient.executionUrlFormat="
-            "http://localhost:8080/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}",
+            "http://localhost:8080/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}/{{.RunID}}/history",
         ]
     else:
         args += [
@@ -737,7 +745,7 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
             "cadence.enabled=true",
             "--set-string",
             "controllermgr.workflowClient.executionUrlFormat="
-            "http://localhost:8088/domains/{{.Domain}}/workflows/{{.ExecutionID}}",
+            "http://localhost:8088/domains/{{.Domain}}/cluster0/workflows/{{.ExecutionID}}/{{.RunID}}/summary",
         ]
 
     # Service exclusions → enabled=false toggles
