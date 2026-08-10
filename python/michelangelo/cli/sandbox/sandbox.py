@@ -744,7 +744,7 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
             "cadence.enabled=true",
             "--set-string",
             "controllermgr.workflowClient.executionUrlFormat="
-            "http://localhost:8088/domains/{{.Domain}}/workflows/{{.ExecutionID}}/{{.RunID}}/",
+            "http://localhost:8088/domains/{{.Domain}}/workflows/{{.ExecutionID}}/{{.RunID}}/summary",
         ]
 
     # Service exclusions → enabled=false toggles
