@@ -6,6 +6,7 @@ import { vi } from 'vitest';
 import { CellType } from '#core/components/cell/constants';
 import { buildTableConfigFactory } from '#core/components/views/__fixtures__/table-config-factory';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
+import { getConfigProviderWrapper } from '#core/test/wrappers/get-config-provider-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
@@ -13,10 +14,9 @@ import { getServiceProviderWrapper } from '#core/test/wrappers/get-service-provi
 import {
   buildEntityConfigFactory,
   buildPhaseConfigFactory,
+  buildStudioConfig,
 } from '../__fixtures__/phase-config-factory';
 import { PhaseListRoute } from '../phase-list-route';
-
-import type { PhaseConfig } from '#core/types/common/studio-types';
 
 describe('PhaseListRoute', () => {
   const buildEntity = buildEntityConfigFactory();
@@ -25,55 +25,58 @@ describe('PhaseListRoute', () => {
     columns: [{ id: 'name', label: 'Name', type: CellType.TEXT }],
   });
 
-  const buildTestPhaseEntityConfig = (): Record<string, PhaseConfig> => ({
-    train: buildPhase({
-      id: 'train',
-      icon: 'train',
-      name: 'Train',
-      entities: [
-        buildEntity({
-          id: 'pipelines',
-          name: 'Pipelines',
-          service: 'pipeline',
+  const buildTestConfig = () =>
+    buildStudioConfig({
+      phases: [
+        buildPhase({
+          id: 'train',
+          icon: 'train',
+          name: 'Train',
+          entities: [
+            buildEntity({
+              id: 'pipelines',
+              name: 'Pipelines',
+              service: 'pipeline',
+            }),
+            buildEntity({
+              id: 'runs',
+              name: 'Pipeline Runs',
+              service: 'pipelineRun',
+            }),
+            buildEntity({
+              id: 'disabled-entity',
+              name: 'Disabled Entity',
+              service: 'disabled',
+              state: 'disabled',
+              views: [
+                {
+                  type: 'list',
+                  tableConfig: buildTableConfig(),
+                },
+              ],
+            }),
+          ],
         }),
-        buildEntity({
-          id: 'runs',
-          name: 'Pipeline Runs',
-          service: 'pipelineRun',
-        }),
-        buildEntity({
-          id: 'disabled-entity',
-          name: 'Disabled Entity',
-          service: 'disabled',
-          state: 'disabled',
-          views: [
-            {
-              type: 'list',
-              tableConfig: buildTableConfig(),
-            },
+        buildPhase({
+          id: 'evaluate',
+          icon: 'evaluate',
+          name: 'Evaluate',
+          entities: [
+            buildEntity({
+              id: 'evaluations',
+              name: 'Evaluations',
+              service: 'evaluation',
+              views: [
+                {
+                  type: 'list',
+                  tableConfig: buildTableConfig(),
+                },
+              ],
+            }),
           ],
         }),
       ],
-    }),
-    evaluate: buildPhase({
-      id: 'evaluate',
-      icon: 'evaluate',
-      name: 'Evaluate',
-      entities: [
-        buildEntity({
-          id: 'evaluations',
-          name: 'Evaluations',
-          service: 'evaluation',
-          views: [
-            {
-              type: 'list',
-              tableConfig: buildTableConfig(),
-            },
-          ],
-        }),
-      ],
-    }),
-  });
+    });
 
   test('renders tabs for active entities only, filtering out disabled ones', () => {
     const mockRequest = vi.fn().mockResolvedValue({
@@ -81,8 +84,9 @@ describe('PhaseListRoute', () => {
     });
 
     render(
-      <PhaseListRoute phases={buildTestPhaseEntityConfig()} />,
+      <PhaseListRoute />,
       buildWrapper([
+        getConfigProviderWrapper(buildTestConfig()),
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train/pipelines' }),
         getServiceProviderWrapper({ request: mockRequest }),
@@ -96,8 +100,9 @@ describe('PhaseListRoute', () => {
 
   test('shows error message for unknown phase', () => {
     render(
-      <PhaseListRoute phases={buildTestPhaseEntityConfig()} />,
+      <PhaseListRoute />,
       buildWrapper([
+        getConfigProviderWrapper(buildTestConfig()),
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/unknown-phase/entity' }),
         getServiceProviderWrapper({ request: vi.fn() }),
@@ -105,35 +110,37 @@ describe('PhaseListRoute', () => {
     );
 
     expect(screen.getByText(/Phase "unknown-phase" configuration not found/)).toBeInTheDocument();
-    expect(screen.getByText(/Available phases: train, evaluate/)).toBeInTheDocument();
   });
 
   test('shows message when phase has no listable entities', () => {
-    const configWithNoListableEntities = {
-      'no-listable': buildPhase({
-        id: 'no-listable',
-        icon: 'no-listable',
-        name: 'No Listable',
-        entities: [
-          buildEntity({
-            id: 'disabled-only',
-            name: 'Disabled Only',
-            service: 'disabled',
-            state: 'disabled',
-            views: [
-              {
-                type: 'list',
-                tableConfig: buildTableConfig(),
-              },
-            ],
-          }),
-        ],
-      }),
-    };
+    const config = buildStudioConfig({
+      phases: [
+        buildPhase({
+          id: 'no-listable',
+          icon: 'no-listable',
+          name: 'No Listable',
+          entities: [
+            buildEntity({
+              id: 'disabled-only',
+              name: 'Disabled Only',
+              service: 'disabled',
+              state: 'disabled',
+              views: [
+                {
+                  type: 'list',
+                  tableConfig: buildTableConfig(),
+                },
+              ],
+            }),
+          ],
+        }),
+      ],
+    });
 
     render(
-      <PhaseListRoute phases={configWithNoListableEntities} />,
+      <PhaseListRoute />,
       buildWrapper([
+        getConfigProviderWrapper(config),
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/no-listable/entity' }),
         getServiceProviderWrapper({ request: vi.fn() }),
@@ -151,8 +158,9 @@ describe('PhaseListRoute', () => {
     });
 
     render(
-      <PhaseListRoute phases={buildTestPhaseEntityConfig()} />,
+      <PhaseListRoute />,
       buildWrapper([
+        getConfigProviderWrapper(buildTestConfig()),
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train' }),
         getServiceProviderWrapper({ request: mockRequest }),
@@ -168,8 +176,9 @@ describe('PhaseListRoute', () => {
     });
 
     render(
-      <PhaseListRoute phases={buildTestPhaseEntityConfig()} />,
+      <PhaseListRoute />,
       buildWrapper([
+        getConfigProviderWrapper(buildTestConfig()),
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train/runs' }),
         getServiceProviderWrapper({ request: mockRequest }),
@@ -192,8 +201,9 @@ describe('PhaseListRoute', () => {
     });
 
     render(
-      <PhaseListRoute phases={buildTestPhaseEntityConfig()} />,
+      <PhaseListRoute />,
       buildWrapper([
+        getConfigProviderWrapper(buildTestConfig()),
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train/invalid-entity' }),
         getServiceProviderWrapper({ request: mockRequest }),
@@ -207,8 +217,9 @@ describe('PhaseListRoute', () => {
     const mockRequest = vi.fn().mockRejectedValue(new Error('Network error'));
 
     render(
-      <PhaseListRoute phases={buildTestPhaseEntityConfig()} />,
+      <PhaseListRoute />,
       buildWrapper([
+        getConfigProviderWrapper(buildTestConfig()),
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train/pipelines' }),
         getServiceProviderWrapper({ request: mockRequest }),
@@ -238,8 +249,9 @@ describe('PhaseListRoute', () => {
       });
 
     render(
-      <PhaseListRoute phases={buildTestPhaseEntityConfig()} />,
+      <PhaseListRoute />,
       buildWrapper([
+        getConfigProviderWrapper(buildTestConfig()),
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train/pipelines' }),
         getServiceProviderWrapper({ request: mockRequest }),
@@ -258,10 +270,11 @@ describe('PhaseListRoute', () => {
     });
   });
 
-  test('handles empty configuration object', () => {
+  test('shows error for unknown phase with empty config', () => {
     render(
-      <PhaseListRoute phases={{}} />,
+      <PhaseListRoute />,
       buildWrapper([
+        getConfigProviderWrapper(buildStudioConfig({ categories: [] })),
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train/pipelines' }),
         getServiceProviderWrapper({ request: vi.fn() }),
@@ -269,18 +282,20 @@ describe('PhaseListRoute', () => {
     );
 
     expect(screen.getByText(/Phase "train" configuration not found/)).toBeInTheDocument();
-    expect(screen.getByText(/Available phases:$/)).toBeInTheDocument();
   });
 
   test('handles configuration with empty entity arrays', () => {
-    const emptyConfig = {
-      train: buildPhase({ id: 'train', entities: [] }),
-      evaluate: buildPhase({ id: 'evaluate', entities: [] }),
-    };
+    const config = buildStudioConfig({
+      phases: [
+        buildPhase({ id: 'train', entities: [] }),
+        buildPhase({ id: 'evaluate', entities: [] }),
+      ],
+    });
 
     render(
-      <PhaseListRoute phases={emptyConfig} />,
+      <PhaseListRoute />,
       buildWrapper([
+        getConfigProviderWrapper(config),
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train/pipelines' }),
         getServiceProviderWrapper({ request: vi.fn() }),
@@ -293,38 +308,36 @@ describe('PhaseListRoute', () => {
   });
 
   test('filters out entities without list views', () => {
-    const configWithNonListViews = {
-      train: buildPhase({
-        id: 'train',
-        entities: [
-          buildEntity({
-            id: 'detail-only',
-            name: 'Detail Only',
-            service: 'detail',
-            views: [],
-          }),
-          buildEntity({
-            id: 'pipelines',
-            name: 'Pipelines',
-            service: 'pipeline',
-            views: [
-              {
-                type: 'list',
-                tableConfig: buildTableConfig(),
-              },
-            ],
-          }),
-        ],
-      }),
-    };
+    const config = buildStudioConfig({
+      entities: [
+        buildEntity({
+          id: 'detail-only',
+          name: 'Detail Only',
+          service: 'detail',
+          views: [],
+        }),
+        buildEntity({
+          id: 'pipelines',
+          name: 'Pipelines',
+          service: 'pipeline',
+          views: [
+            {
+              type: 'list',
+              tableConfig: buildTableConfig(),
+            },
+          ],
+        }),
+      ],
+    });
 
     const mockRequest = vi.fn().mockResolvedValue({
       pipelineList: { items: [] },
     });
 
     render(
-      <PhaseListRoute phases={configWithNonListViews} />,
+      <PhaseListRoute />,
       buildWrapper([
+        getConfigProviderWrapper(config),
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train/pipelines' }),
         getServiceProviderWrapper({ request: mockRequest }),
@@ -336,9 +349,14 @@ describe('PhaseListRoute', () => {
   });
 
   test('handles empty entities array gracefully', () => {
+    const config = buildStudioConfig({
+      phases: [buildPhase({ id: 'train', entities: [] })],
+    });
+
     render(
-      <PhaseListRoute phases={{ train: buildPhase({ id: 'train', entities: [] }) }} />,
+      <PhaseListRoute />,
       buildWrapper([
+        getConfigProviderWrapper(config),
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train' }),
         getServiceProviderWrapper({ request: vi.fn() }),
@@ -349,26 +367,24 @@ describe('PhaseListRoute', () => {
   });
 
   test('handles single entity', () => {
-    const singleEntityConfig = {
-      train: buildPhase({
-        id: 'train',
-        entities: [
-          buildEntity({
-            id: 'pipelines',
-            name: 'Pipelines',
-            service: 'pipeline',
-          }),
-        ],
-      }),
-    };
+    const config = buildStudioConfig({
+      entities: [
+        buildEntity({
+          id: 'pipelines',
+          name: 'Pipelines',
+          service: 'pipeline',
+        }),
+      ],
+    });
 
     const mockRequest = vi.fn().mockResolvedValue({
       pipelineList: { items: [] },
     });
 
     render(
-      <PhaseListRoute phases={singleEntityConfig} />,
+      <PhaseListRoute />,
       buildWrapper([
+        getConfigProviderWrapper(config),
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train/pipelines' }),
         getServiceProviderWrapper({ request: mockRequest }),
@@ -380,30 +396,33 @@ describe('PhaseListRoute', () => {
   });
 
   test('renders phase header with config metadata', () => {
-    const configWithDescription = {
-      train: buildPhase({
-        id: 'train',
-        icon: 'train',
-        name: 'Train & Evaluate',
-        description: 'Train machine learning models and evaluate their performance',
-        docUrl: 'https://docs.example.com',
-        entities: [
-          buildEntity({
-            id: 'pipelines',
-            name: 'Pipelines',
-            service: 'pipeline',
-          }),
-        ],
-      }),
-    };
+    const config = buildStudioConfig({
+      phases: [
+        buildPhase({
+          id: 'train',
+          icon: 'train',
+          name: 'Train & Evaluate',
+          description: 'Train machine learning models and evaluate their performance',
+          docUrl: 'https://docs.example.com',
+          entities: [
+            buildEntity({
+              id: 'pipelines',
+              name: 'Pipelines',
+              service: 'pipeline',
+            }),
+          ],
+        }),
+      ],
+    });
 
     const mockRequest = vi.fn().mockResolvedValue({
       pipelineList: { items: [] },
     });
 
     render(
-      <PhaseListRoute phases={configWithDescription} />,
+      <PhaseListRoute />,
       buildWrapper([
+        getConfigProviderWrapper(config),
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train/pipelines' }),
         getServiceProviderWrapper({ request: mockRequest }),

@@ -2,6 +2,8 @@ import { LayersManager } from 'baseui/layer';
 import { SnackbarProvider } from 'baseui/snackbar';
 
 import { NavigationBar } from '#core/components/navigation-bar/navigation-bar';
+import { CATEGORIES } from '#core/config/categories';
+import { ConfigProvider } from '#core/providers/config-provider/config-provider';
 import { ErrorProvider } from '#core/providers/error-provider/error-provider';
 import { IconProvider } from '#core/providers/icon-provider/icon-provider';
 import { ServiceProvider } from '#core/providers/service-provider/service-provider';
@@ -15,11 +17,13 @@ import type { ErrorContextValue } from '#core/providers/error-provider/types';
 import type { IconProviderContext } from '#core/providers/icon-provider/types';
 import type { ServiceContextType } from '#core/providers/service-provider/types';
 import type { UserContextType } from '#core/providers/user-provider/types';
+import type { StudioConfig } from '#core/types/common/studio-types';
 
 import '#core/styles/main.css';
 // TODO: Relocate the Props interface once the contents of the
 // packages/core/index.tsx file are moved to a final location
 type Props = {
+  config?: StudioConfig;
   dependencies: {
     error: ErrorContextValue;
     service: ServiceContextType;
@@ -31,7 +35,7 @@ type Props = {
   };
 };
 
-export function CoreApp({ dependencies }: Props) {
+export function CoreApp({ config, dependencies }: Props) {
   return (
     <ThemeProvider icons={dependencies.theme.icons}>
       <LayersManager zIndex={200}>
@@ -40,8 +44,10 @@ export function CoreApp({ dependencies }: Props) {
             <ErrorProvider {...dependencies.error}>
               <IconProvider icons={dependencies.theme.icons}>
                 <UserProvider {...(dependencies.user ?? { timeZone: TimeZone.Local })}>
-                  <NavigationBar links={dependencies.navigationBar?.links} />
-                  <Router />
+                  <ConfigProvider config={config ?? { categories: CATEGORIES }}>
+                    <NavigationBar links={dependencies.navigationBar?.links} />
+                    <Router />
+                  </ConfigProvider>
                 </UserProvider>
               </IconProvider>
             </ErrorProvider>
@@ -186,3 +192,18 @@ export type {
 
 // User Types
 export { UserRole } from '#core/providers/user-provider/types';
+
+// Config Provider
+export { useStudioConfig } from '#core/providers/config-provider/use-studio-config';
+
+// View Config Types
+export type {
+  ViewConfig,
+  ListViewConfig,
+  DetailViewConfig,
+  TableConfig,
+} from '#core/components/views/types';
+export type { DetailPageConfig } from '#core/components/views/detail-view/types/detail-view-schema-types';
+
+// Query Config Types
+export type { QueryConfig } from '#core/types/query-types';

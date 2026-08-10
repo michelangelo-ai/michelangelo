@@ -6,10 +6,8 @@ import { CircleExclamationMark } from '#core/components/illustrations/circle-exc
 import { CircleExclamationMarkKind } from '#core/components/illustrations/circle-exclamation-mark/types';
 import { PhaseEntityView } from '#core/components/views/phase-entity-view/phase-entity-view';
 import { isListableEntity } from '#core/components/views/phase-entity-view/utils';
-import { PHASES } from '#core/config/phases/phases';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
-
-import type { PhaseConfig } from '#core/types/common/studio-types';
+import { useStudioConfig } from '#core/providers/config-provider/use-studio-config';
 
 /**
  * Route component that maps phase URL parameters to entity configurations.
@@ -17,19 +15,24 @@ import type { PhaseConfig } from '#core/types/common/studio-types';
  * Handles unknown phases and phases with no active list entities by showing
  * appropriate messages rather than rendering empty UI. Only renders PhaseEntityView
  * when there are valid entities to display.
- *
- * @param phaseEntityConfig - Optional phase entity configuration override for testing
  */
-export function PhaseListRoute({ phases = PHASES }: { phases?: Record<string, PhaseConfig> } = {}) {
+export function PhaseListRoute() {
   const [, theme] = useStyletron();
   const { phase, projectId } = useStudioParams('list');
   const navigate = useNavigate();
+  const { categories, getPhase } = useStudioConfig();
 
-  if (!(phase in phases)) {
+  const phaseConfig = getPhase(phase);
+
+  if (!phaseConfig) {
+    const availablePhases = categories
+      .flatMap((c) => c.phases)
+      .map((p) => p.id)
+      .join(', ');
     return (
       <ErrorView
         title="Phase not found"
-        description={`Phase "${phase}" configuration not found. Available phases: ${Object.keys(phases).join(', ')}`}
+        description={`Phase "${phase}" configuration not found. Available phases: ${availablePhases}`}
         illustration={
           <CircleExclamationMark
             kind={CircleExclamationMarkKind.ERROR}
@@ -45,7 +48,7 @@ export function PhaseListRoute({ phases = PHASES }: { phases?: Record<string, Ph
     );
   }
 
-  const listableEntities = phases[phase].entities.filter(isListableEntity);
+  const listableEntities = phaseConfig.entities.filter(isListableEntity);
 
   if (listableEntities.length === 0) {
     return (
@@ -67,5 +70,5 @@ export function PhaseListRoute({ phases = PHASES }: { phases?: Record<string, Ph
     );
   }
 
-  return <PhaseEntityView phaseConfig={phases[phase]} entities={listableEntities} />;
+  return <PhaseEntityView phaseConfig={phaseConfig} entities={listableEntities} />;
 }
