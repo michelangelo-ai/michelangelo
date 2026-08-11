@@ -362,7 +362,6 @@ def _sync(ns: argparse.Namespace):
     # Upgrade or install the control plane via Helm.
     # Infrastructure (mysql, cadence, minio, grafana, prometheus) is left running.
 
-    _ensure_mysql_pod_running()
     _refresh_mysql_schema()
 
     _ensure_credentials_secret()
@@ -451,47 +450,6 @@ def _sync(ns: argparse.Namespace):
         )
 
     _helm_wait(ns)
-
-
-def _ensure_mysql_pod_running():
-    """Revive the bare `mysql` Pod if it isn't in the `Running` phase.
-
-    `_sync()`'s fast path leaves infrastructure Pods running rather than
-    recreating them, which assumes the previous sync's `mysql` Pod is still
-    alive. On a long-lived host, a node-level container-runtime restart can
-    leave a bare Pod (no Deployment/ReplicaSet to self-heal it) stuck in a
-    terminal phase (`Succeeded`/`Failed`) even though its containers never
-    exited on their own — `kubectl exec` then fails outright. Detect that
-    and delete+reapply the Pod manifest before `_refresh_mysql_schema()`
-    tries to exec into it.
-    """
-    phase_result = subprocess.run(
-        ["kubectl", "get", "pod", "mysql", "-o", "jsonpath={.status.phase}"],
-        capture_output=True,
-        text=True,
-    )
-    phase = phase_result.stdout.strip()
-
-    if phase_result.returncode == 0 and phase == "Running":
-        return
-
-    print(
-        f"mysql Pod is not Running (phase={phase or 'missing'}) — "
-        "recreating it before refreshing the schema."
-    )
-    subprocess.run(
-        ["kubectl", "delete", "pod", "mysql", "--ignore-not-found=true", "--wait=true"],
-        check=False,
-    )
-    _kube_apply(_dir / "resources" / "mysql.yaml")
-    _exec(
-        "kubectl",
-        "wait",
-        "--for=condition=ready",
-        "pod",
-        "mysql",
-        "--timeout=180s",
-    )
 
 
 def _refresh_mysql_schema():
