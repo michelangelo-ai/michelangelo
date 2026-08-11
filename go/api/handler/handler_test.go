@@ -979,3 +979,65 @@ func TestUpdateReturnsMetadataStorageResourceVersion(t *testing.T) {
 	assert.Equal(t, "8", testJob.GetResourceVersion(),
 		"the resource version assigned by metadata storage must reach the caller's object")
 }
+
+// TestUpdateEchoesCallerSpecForMetadataOnlyObjects covers the response half of a
+// register_model re-registration: the object exists only in metadata storage, so Update
+// takes the metadata-only direct path and drops the incoming spec, but returns the
+// caller's own object rather than a read-back. The client is therefore handed the artifact
+// URI it just sent while storage still holds the previous one.
+func TestUpdateEchoesCallerSpecForMetadataOnlyObjects(t *testing.T) {
+	k8sClient, err := setupK8s()
+	assert.NoError(t, err)
+
+	mockMetadataStorage, mockBlobStorage := setupMocks(t)
+
+	config := storage.MetadataStorageConfig{
+		EnableMetadataStorage:      true,
+		DeletionDelay:              0,
+		EnableResourceVersionCache: false,
+	}
+
+	builder := NewAPIHandlerBuilder().
+		WithK8sClient(k8sClient).
+		WithMetadataStorage(mockMetadataStorage, config).
+		WithBlobStorage(mockBlobStorage).
+		WithZapLogger(zap.Must(zap.NewDevelopment())).
+		WithMetrics(tally.NoopScope)
+	handler, err := builder.Build()
+	assert.NoError(t, err)
+
+	const newArtifactURI = "s3://models/echo/v2/model.pkl"
+
+	// A fresh proto with the new artifact URI and the resource version copied from the
+	// preceding get_model. Absent from K8s, so Update falls through to metadata storage.
+	incoming := &v2pb.Model{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:       "default",
+			Name:            "test-metadata-update-echoes-spec",
+			ResourceVersion: "7",
+		},
+		Spec: v2pb.ModelSpec{ModelArtifactUri: []string{newArtifactURI}},
+	}
+
+	mockMetadataStorage.EXPECT().
+		Upsert(gomock.Any(), gomock.Any(), true, gomock.Any()).
+		Times(1).
+		DoAndReturn(func(ctx context.Context, object runtime.Object, direct bool,
+			indexedFields []storage.IndexedField) error {
+			model, ok := object.(*v2pb.Model)
+			assert.True(t, ok)
+			assert.Equal(t, []string{newArtifactURI}, model.Spec.ModelArtifactUri,
+				"storage is handed the new artifact URI; it is storage that drops it")
+			// A metadata-only update: the spec is ignored, only the version advances.
+			model.SetResourceVersion("8")
+			return nil
+		})
+
+	err = handler.Update(context.Background(), incoming, &metav1.UpdateOptions{})
+	assert.NoError(t, err)
+
+	assert.Equal(t, []string{newArtifactURI}, incoming.Spec.ModelArtifactUri,
+		"the object returned to the client keeps the URI it sent, though it was not persisted")
+	assert.Equal(t, "8", incoming.GetResourceVersion(),
+		"the new resource version must still reach the caller")
+}

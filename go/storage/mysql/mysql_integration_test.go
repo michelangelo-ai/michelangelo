@@ -473,12 +473,19 @@ func seedDeployment(t *testing.T, store *mysqlMetadataStorage, namespace, name, 
 	return cr
 }
 
-// storedResVersion reads the res_version column straight out of the row.
+// storedResVersion reads the res_version column straight out of the deployment row.
 func storedResVersion(t *testing.T, db *sql.DB, namespace, name string) uint64 {
+	t.Helper()
+	return storedResVersionIn(t, db, "deployment", namespace, name)
+}
+
+// storedResVersionIn is storedResVersion for an arbitrary table.
+func storedResVersionIn(t *testing.T, db *sql.DB, table, namespace, name string) uint64 {
 	t.Helper()
 	var rv uint64
 	require.NoError(t,
-		db.QueryRow("SELECT res_version FROM deployment WHERE namespace=? AND name=? AND delete_time IS NULL",
+		db.QueryRow(fmt.Sprintf(
+			"SELECT res_version FROM %s WHERE namespace=? AND name=? AND delete_time IS NULL", table),
 			namespace, name).Scan(&rv))
 	return rv
 }
@@ -831,4 +838,92 @@ func TestIntegration_DirectUpdate_EmptyStoredProtoRejected(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, codes.Internal, status.Code(err))
 	assert.Equal(t, uint64(1), storedResVersion(t, db, namespace, name), "row must be unchanged")
+}
+
+// cleanupModelRow removes model rows created by a test, including the label/annotation
+// child rows (keyed by obj_uid, so they must be cleaned by uid).
+func cleanupModelRow(t *testing.T, db *sql.DB, namespace, name string, uids ...string) {
+	t.Helper()
+	_, err := db.Exec("DELETE FROM model WHERE namespace=? AND name=?", namespace, name)
+	require.NoError(t, err)
+	for _, uid := range uids {
+		_, err = db.Exec("DELETE FROM model_labels WHERE obj_uid=?", uid)
+		require.NoError(t, err)
+		_, err = db.Exec("DELETE FROM model_annotations WHERE obj_uid=?", uid)
+		require.NoError(t, err)
+	}
+}
+
+// TestIntegration_DirectUpdate_ReregisterModelKeepsStoredArtifactURI runs the register_model
+// re-registration sequence with two different artifact URIs: create, ALREADY_EXISTS, read
+// back the resourceVersion, then update with a fresh proto (api_client.py:221-267). The
+// direct path is metadata-only, so the second registration succeeds while storage keeps the
+// first artifact URI, and the caller's object still carries the second.
+func TestIntegration_DirectUpdate_ReregisterModelKeepsStoredArtifactURI(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	const (
+		namespace   = "integration-test-ns"
+		name        = "direct-update-reregister-model"
+		uid         = "direct-update-reregister-model-uid"
+		firstURI    = "s3://models/reregister/v1/model.pkl"
+		secondURI   = "s3://models/reregister/v2/model.pkl"
+		firstDeploy = "s3://models/reregister/v1/bundle.zip"
+	)
+	t.Cleanup(func() { cleanupModelRow(t, db, namespace, name, uid) })
+
+	first := &v2pb.Model{
+		TypeMeta: metav1.TypeMeta{APIVersion: "michelangelo.uber.com/v2", Kind: "Model"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              name,
+			Namespace:         namespace,
+			UID:               types.UID(uid),
+			ResourceVersion:   "1",
+			CreationTimestamp: metav1.Now(),
+			Labels:            map[string]string{"registered-by": "run-1"},
+		},
+		Spec: v2pb.ModelSpec{
+			ModelArtifactUri:      []string{firstURI},
+			DeployableArtifactUri: []string{firstDeploy},
+			Description:           "first registration",
+		},
+	}
+	require.NoError(t, store.Upsert(ctx, first, false, nil))
+
+	existing := &v2pb.Model{}
+	require.NoError(t, store.GetByName(ctx, namespace, name, existing))
+	require.Equal(t, []string{firstURI}, existing.Spec.ModelArtifactUri)
+
+	// _build_model_proto: a fresh object with the new artifact URI and no UID.
+	second := &v2pb.Model{
+		TypeMeta: metav1.TypeMeta{APIVersion: "michelangelo.uber.com/v2", Kind: "Model"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            name,
+			Namespace:       namespace,
+			ResourceVersion: existing.GetResourceVersion(),
+			Labels:          map[string]string{"registered-by": "run-2"},
+		},
+		Spec: v2pb.ModelSpec{
+			ModelArtifactUri: []string{secondURI},
+			Description:      "second registration",
+		},
+	}
+	require.NoError(t, store.Upsert(ctx, second, true, nil), "re-registration must succeed")
+
+	readBack := &v2pb.Model{}
+	require.NoError(t, store.GetByName(ctx, namespace, name, readBack))
+	assert.Equal(t, []string{firstURI}, readBack.Spec.ModelArtifactUri,
+		"the stored artifact URI must not change")
+	assert.Equal(t, []string{firstDeploy}, readBack.Spec.DeployableArtifactUri,
+		"an omitted spec field must not be cleared either")
+	assert.Equal(t, "first registration", readBack.Spec.Description)
+	assert.Equal(t, "run-2", readBack.GetLabels()["registered-by"],
+		"metadata changes must still land")
+	assert.Equal(t, uint64(2), storedResVersionIn(t, db, "model", namespace, name))
+
+	assert.Equal(t, []string{secondURI}, second.Spec.ModelArtifactUri,
+		"the caller's object keeps the URI it sent, so caller and storage disagree")
+	assert.Equal(t, "2", second.GetResourceVersion())
 }
