@@ -40,15 +40,12 @@ export const MODEL_CELL_CONFIG: ColumnConfig<object>[] = [
     type: CellType.TEXT,
   },
   {
-    // See MODEL_KIND_TEXT_MAP above for the full set of ModelKind display labels.
     id: 'spec.kind',
     label: 'Type',
     type: CellType.TYPE,
     typeTextMap: MODEL_KIND_TEXT_MAP,
   },
   {
-    // Prefers the SpecUpdateTimestamp label, falls back to creationTimestamp; see
-    // getCrdUpdatedSeconds().
     id: 'metadata',
     label: 'Last Updated',
     type: CellType.DATE,
