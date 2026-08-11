@@ -32,6 +32,14 @@ from michelangelo.lib.native_transform.torch.stats_layers import (
     MinMax,
     Normalization,
 )
+from michelangelo.lib.native_transform.torch.transform_utils import (
+    generate_cast_transformation,
+    generate_concatenation_transformation,
+    generate_duration_transformation,
+    generate_idhash_tokenization_transformation,
+    generate_numerical_scaled_transformation,
+    update_output_tensor_map,
+)
 
 __all__ = [
     "Bucketization",
@@ -58,4 +66,10 @@ __all__ = [
     "Tile",
     "TimeDuration",
     "TorchTransformBaseLayer",
+    "generate_cast_transformation",
+    "generate_concatenation_transformation",
+    "generate_duration_transformation",
+    "generate_idhash_tokenization_transformation",
+    "generate_numerical_scaled_transformation",
+    "update_output_tensor_map",
 ]
