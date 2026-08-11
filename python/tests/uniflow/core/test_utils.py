@@ -1,3 +1,5 @@
+"""Tests for michelangelo.uniflow.core.utils."""
+
 import os
 import subprocess
 import sys
@@ -22,7 +24,10 @@ pwd = os.environ["PWD"]
 
 
 class Test(unittest.TestCase):
+    """Tests for fsspec URL resolution and JSON encoding helpers."""
+
     def test_fsspec_url_to_fs_no_scheme(self):
+        """A scheme-less path resolves relative to cwd, absolute paths pass through."""
         _, absolute_path = fsspec.core.url_to_fs("/host/path/data.json")
         _, relative_path = fsspec.core.url_to_fs("host/path/data.json")
 
@@ -32,6 +37,7 @@ class Test(unittest.TestCase):
         self.assertEqual(str(expected_relative_path), relative_path)
 
     def test_fsspec_url_to_fs_file(self):
+        """A `file://` URL resolves the same as a scheme-less path."""
         _, absolute_path = fsspec.core.url_to_fs("file:///host/path/data.json")
         _, relative_path = fsspec.core.url_to_fs("file://host/path/data.json")
 
@@ -41,6 +47,7 @@ class Test(unittest.TestCase):
         self.assertEqual(str(expected_relative_path), relative_path)
 
     def test_fsspec_url_to_fs_memory(self):
+        """A `memory://` URL always resolves to an absolute-only path."""
         # memory - absolute only path
         _, path1 = fsspec.core.url_to_fs("memory:///host/path/data.json")
         _, path2 = fsspec.core.url_to_fs("memory://host/path/data.json")
@@ -50,6 +57,7 @@ class Test(unittest.TestCase):
         self.assertEqual(expected_path, path2)
 
     def test_encode_value_to_json(self):
+        """encode_value_to_json() writes through a mocked NamedTemporaryFile."""
         # Mocking tempfile.NamedTemporaryFile
         mock_temp_file = MagicMock()
         mock_file = MagicMock()
@@ -59,14 +67,19 @@ class Test(unittest.TestCase):
 
 
 @dataclass
-class Resource:  # basic dataclass
+class Resource:
+    """Basic dataclass fixture used by the dataclass_dict/is_dataclass tests."""
+
     index: int
     path: str
     metadata: Optional[Any] = None
 
 
 class DataclassTestCase(unittest.TestCase):
+    """Tests for dataclass_dict() and is_dataclass_instance()."""
+
     def test_dataclass_dict_required_only_attrs(self):
+        """dataclass_dict() covers required attributes plus defaulted ones."""
         # Init resource with required only attributes
         resource = Resource(
             index=101,
@@ -81,8 +94,10 @@ class DataclassTestCase(unittest.TestCase):
         self.assertEqual(expected, dct)
 
     def test_dataclass_dict_non_recursive(self):
-        # Init resource with another inner resource in its metadata. The inner resource must not be converted to
-        # dictionary because dataclass_dict supposed to be non-recursive.
+        """dataclass_dict() does not recurse into a nested dataclass field."""
+        # Init resource with another inner resource in its metadata. The
+        # inner resource must not be converted to a dictionary because
+        # dataclass_dict is supposed to be non-recursive.
         resource = Resource(
             index=101,
             path="/resources/101",
@@ -103,15 +118,39 @@ class DataclassTestCase(unittest.TestCase):
         self.assertEqual(expected, dct)
 
     def test_is_dataclass_instance(self):
+        """is_dataclass_instance() is true only for instances, not the type."""
         instance = Resource(index=0, path="")
         self.assertTrue(is_dataclass_instance(instance))
         self.assertFalse(
             is_dataclass_instance(Resource)
         )  # Resource is not a dataclass type, not an instance
 
-        # Standard Python dataclass.is_dataclass returns true for both type and instance.
+        # Standard Python dataclass.is_dataclass returns true for both the
+        # type and an instance.
         self.assertTrue(is_dataclass(instance))
         self.assertTrue(is_dataclass(Resource))
+
+
+def _subprocess_env(**overrides):
+    """Build a subprocess env without pytest-cov's coverage propagation vars.
+
+    pytest-cov injects COV_CORE_*/COVERAGE_PROCESS_START into the test
+    process's environment so that subprocesses can opt into coverage
+    measurement too. But those vars point a bare `COV_CORE_CONFIG=":"`
+    (no config file) at any subprocess that inherits them, so a spawned
+    subprocess re-measures the whole `source = ["michelangelo"]` tree with
+    none of pyproject.toml's `omit` patterns applied -- rediscovering every
+    untouched *_test.py file as "untested" and polluting the combined
+    coverage report. These subprocesses only exist to exercise dot_path()'s
+    `__main__` handling, so they should not participate in coverage at all.
+    """
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if not k.startswith(("COV_CORE_", "COVERAGE_"))
+    }
+    env.update(overrides)
+    return env
 
 
 class DotPathMainTestCase(unittest.TestCase):
@@ -160,16 +199,15 @@ class DotPathMainTestCase(unittest.TestCase):
                 )
             )
 
-            env = dict(os.environ)
-            existing_pythonpath = env.get("PYTHONPATH", "")
-            env["PYTHONPATH"] = os.pathsep.join(
+            existing_pythonpath = os.environ.get("PYTHONPATH", "")
+            pythonpath = os.pathsep.join(
                 p for p in [str(site_packages), existing_pythonpath] if p
             )
 
             result = subprocess.run(
                 [sys.executable, "-m", "fakepkg.mod"],
                 cwd=str(tmp_dir_path),
-                env=env,
+                env=_subprocess_env(PYTHONPATH=pythonpath),
                 capture_output=True,
                 text=True,
             )
@@ -212,6 +250,7 @@ class DotPathMainTestCase(unittest.TestCase):
             result = subprocess.run(
                 [sys.executable, str(script_path)],
                 cwd=str(tmp_dir_path),
+                env=_subprocess_env(),
                 capture_output=True,
                 text=True,
             )

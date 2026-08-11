@@ -1,3 +1,5 @@
+"""Generic helpers shared across the uniflow core package."""
+
 import argparse
 import dataclasses
 import importlib
@@ -16,6 +18,7 @@ log = logging.getLogger(__name__)
 
 
 def dot_path(arg: Any) -> str:
+    """Return the fully-qualified dotted path of a class or function."""
     module = arg.__module__
 
     if module == "__main__":
@@ -49,6 +52,7 @@ def log_attributes(
     obj,
     include_system=False,
 ):
+    """Log every non-dunder attribute of `obj` at the given log level."""
     if not logger.isEnabledFor(level):
         return
     logger.log(level, "%s", dot_path(type(obj)))
@@ -63,6 +67,7 @@ def log_attributes(
 
 
 def import_attribute(path: str, package=None):
+    """Import and return the attribute named by a dotted `path`."""
     m, attr = path.rsplit(".", 1)
     m = importlib.import_module(m, package=package)
     attr = getattr(m, attr)
@@ -70,18 +75,21 @@ def import_attribute(path: str, package=None):
 
 
 def dataclass_dict(v):
+    """Return a dataclass instance's fields as a shallow dict."""
     return {f.name: getattr(v, f.name) for f in dataclasses.fields(v)}
 
 
 def pydantic_dict(v: pydantic.BaseModel):
-    return {f: getattr(v, f) for f in v.model_fields.keys()}
+    """Return a pydantic model instance's fields as a shallow dict."""
+    return {f: getattr(v, f) for f in v.model_fields}
 
 
 class ArgparseEnvironAction(argparse.Action):
-    """Custom argparse action to parse environment variables from command line arguments.
+    """Custom argparse action to parse environment variables from the command line.
 
-    The action expects a list of strings, where each string can either be in the form 'ENV_VAR=value' or simply
-    'ENV_VAR'. If the latter, it fetches the value of 'ENV_VAR' from the current environment variables.
+    The action expects a list of strings, where each string can either be in
+    the form 'ENV_VAR=value' or simply 'ENV_VAR'. If the latter, it fetches
+    the value of 'ENV_VAR' from the current environment variables.
 
     Usage example:
 
@@ -93,6 +101,7 @@ class ArgparseEnvironAction(argparse.Action):
     """
 
     def __call__(self, _parser, namespace, values, _option_string=None):
+        """Parse `values` as ENV_VAR[=value] pairs into the destination dict."""
         assert isinstance(values, list), values
         dest = getattr(namespace, self.dest)
         assert isinstance(dest, dict), dest
@@ -102,14 +111,17 @@ class ArgparseEnvironAction(argparse.Action):
 
     @staticmethod
     def _parse_value(s: str):
-        """Parses a single command line argument to extract the environment variable and its value.
+        """Parse a single command line argument into an env var and its value.
+
         Parameters:
-            s: The command line argument. Expected format: "ENV_VAR=value" or just "ENV_VAR"
+            s: The command line argument. Expected format: "ENV_VAR=value" or
+                just "ENV_VAR"
         Returns:
             tuple: A tuple containing the environment variable name and its value.
 
         Raises:
-            KeyError: If the argument is not in the form 'ENV_VAR=value' and the environment variable is not found in os.environ.
+            KeyError: If the argument is not in the form 'ENV_VAR=value' and the
+                environment variable is not found in os.environ.
         """
         if "=" in s:
             env, val = s.split("=", maxsplit=1)
@@ -137,4 +149,5 @@ def encode_value_to_json(value, json_encoder: Optional[json.JSONEncoder] = None)
 
 
 def is_dataclass_instance(value):
+    """Return True if `value` is a dataclass instance, not a dataclass type."""
     return dataclasses.is_dataclass(value) and not inspect.isclass(value)
