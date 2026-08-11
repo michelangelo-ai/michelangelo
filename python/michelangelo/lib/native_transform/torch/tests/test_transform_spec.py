@@ -427,6 +427,39 @@ class TestUpdateNumericalStandardTransformParameters:
         )
         assert numerical_spec.cap_min == "0.01"
 
+    def test_resolves_with_explicit_custom_name_not_matching_prefix(self) -> None:
+        """Percentile resolution must not depend on ``name`` looking like the prefix.
+
+        Internal's name-string-prefix dispatch misses a spec given an
+        explicit ``name`` that doesn't start with the class prefix, silently
+        leaving ``cap_min``/``cap_max`` as unresolved percentile strings
+        instead of raising. This spec's ``name`` is deliberately chosen not
+        to match, to lock in that ``isinstance()`` dispatch has no equivalent
+        blind spot.
+        """
+        raw = {
+            "transform_specs": [
+                {
+                    "transform_name": "NumericalStandardTransform",
+                    "name": "my_custom_numerical_transform",
+                    "input_cols": ["col5"],
+                    "output_cols": ["col5_transformed"],
+                },
+            ]
+        }
+        spec = TransformSpec(raw_transform_specs=raw)
+        (placeholder,) = spec.transform_specs.values()
+        assert placeholder.name == "my_custom_numerical_transform"
+
+        spec.update_numerical_standard_transform_parameters(
+            {"col5_1": 0.1, "col5_99": 99.9, "col5_50": 50.0}
+        )
+
+        (resolved,) = spec.transform_specs.values()
+        assert resolved.cap_min == 0.1
+        assert resolved.cap_max == 99.9
+        assert resolved.default_value == 50.0
+
 
 class TestUpdateStandardScalerSpecs:
     """``update_standard_scaler_specs`` placeholder-hydration behavior."""
@@ -481,6 +514,38 @@ class TestUpdateStandardScalerSpecs:
         assert hydrated.std == [2.0]
         layers = spec.to_transform_layers(target_transform_level=0)
         assert len(layers) == 1
+
+    def test_hydration_with_explicit_custom_name_not_matching_prefix(self) -> None:
+        """Hydration must not depend on ``name`` looking like the class prefix.
+
+        Internal's name-string-prefix dispatch (``layer_spec.name.startswith(
+        "standardscaler")``) silently fails to hydrate a placeholder given an
+        explicit, non-generated ``name`` that doesn't happen to start with the
+        class prefix -- the spec is left un-hydrated with no error. This spec
+        gives the placeholder an explicit custom name specifically chosen to
+        not match that prefix, to lock in that ``isinstance()`` dispatch has
+        no equivalent blind spot.
+        """
+        raw = {
+            "transform_specs": [
+                {
+                    "transform_name": "StandardScaler",
+                    "name": "my_custom_feature_scaler",
+                    "input_cols": ["x"],
+                    "output_cols": ["x_scaled"],
+                },
+            ]
+        }
+        spec = TransformSpec(raw_transform_specs=raw)
+        (placeholder,) = spec.transform_specs.values()
+        assert placeholder.name == "my_custom_feature_scaler"
+
+        spec.update_standard_scaler_specs({"x_mean": 5.0, "x_std": 2.0})
+
+        (hydrated,) = spec.transform_specs.values()
+        assert isinstance(hydrated, NormalizationLayerSpec)
+        assert hydrated.mean == [5.0]
+        assert hydrated.std == [2.0]
 
 
 class TestUpdateMinMaxScalerSpecs:

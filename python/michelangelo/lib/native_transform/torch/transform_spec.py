@@ -264,10 +264,9 @@ class TransformSpec:
                 layer_spec.input_cols[0], torch.float32
             )
             # Regenerate the layer spec so any dtype-dependent validators re-run.
-            spec_cls = TORCH_TRANSFORM_LAYERS_SPECS_DICT[
-                layer_spec.__class__.__name__.replace("LayerSpec", "")
-            ]
-            self.transform_specs[layer_name] = spec_cls(**layer_spec.model_dump())
+            self.transform_specs[layer_name] = type(layer_spec)(
+                **layer_spec.model_dump()
+            )
 
     def update_numerical_standard_transform_parameters(
         self, percentile_dict: dict[str, float], target_transform_level: int = 0
