@@ -331,16 +331,22 @@ def _sync(ns: argparse.Namespace):
     # Start the cluster in case it was stopped at the end of a previous run.
     _exec("k3d", "cluster", "start", _michelangelo_sandbox_kube_cluster_name)
 
-    # Unlike `k3d cluster create`, `k3d cluster start` does not switch the
-    # kubeconfig's current-context. On a host running more than one k3d
-    # cluster, the ambient context can be left pointing at an unrelated
-    # cluster by prior manual work, silently redirecting every kubectl/helm
-    # call below at the wrong cluster (see spec 035 addendum).
+    # Unlike `k3d cluster create`, `k3d cluster start` does not refresh the
+    # kubeconfig. On a host running more than one k3d cluster, the ambient
+    # context can be left pointing at an unrelated cluster by prior manual
+    # work, and even switching the context name back is not enough: each
+    # k3d cluster's API server is published on a host port chosen at create
+    # time, so a stale kubeconfig entry for this cluster (e.g. from before
+    # a delete+recreate) still has the old, now-dead port. `k3d kubeconfig
+    # merge -d` rewrites the entry with the live port/certs and switches to
+    # it in one step (see spec 035 addendum).
     _exec(
-        "kubectl",
-        "config",
-        "use-context",
-        f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+        "k3d",
+        "kubeconfig",
+        "merge",
+        _michelangelo_sandbox_kube_cluster_name,
+        "-d",
+        "--kubeconfig-switch-context",
     )
 
     # Wait for the API server to become reachable after start.
