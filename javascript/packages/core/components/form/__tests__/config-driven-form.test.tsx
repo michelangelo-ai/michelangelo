@@ -466,4 +466,132 @@ describe('ConfigDrivenForm', () => {
       });
     });
   });
+
+  describe('condition layout', () => {
+    it('shows items when field value matches "is"', async () => {
+      const user = userEvent.setup();
+
+      const config: FormConfig = {
+        fields: {
+          mode: { type: 'string', label: 'Mode' },
+          advanced: { type: 'string', label: 'Advanced Setting' },
+        },
+        layout: ['mode', { type: 'condition', when: 'mode', is: 'advanced', items: ['advanced'] }],
+      };
+
+      render(
+        <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      expect(screen.queryByLabelText('Advanced Setting')).not.toBeInTheDocument();
+
+      await user.type(screen.getByLabelText('Mode'), 'advanced');
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Advanced Setting')).toBeInTheDocument();
+      });
+    });
+
+    it('hides items when field value matches "isNot"', async () => {
+      const user = userEvent.setup();
+
+      const config: FormConfig = {
+        fields: {
+          mode: { type: 'string', label: 'Mode' },
+          visible: { type: 'string', label: 'Visible' },
+        },
+        layout: ['mode', { type: 'condition', when: 'mode', isNot: 'hidden', items: ['visible'] }],
+      };
+
+      render(
+        <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      // empty field hides isNot conditional (empty = "not yet determined")
+      expect(screen.queryByLabelText('Visible')).not.toBeInTheDocument();
+
+      await user.type(screen.getByLabelText('Mode'), 'shown');
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Visible')).toBeInTheDocument();
+      });
+    });
+
+    it('shows items when field is empty with "isEmpty: true"', () => {
+      const config: FormConfig = {
+        fields: {
+          name: { type: 'string', label: 'Name' },
+          hint: { type: 'string', label: 'Enter a name to continue' },
+        },
+        layout: ['name', { type: 'condition', when: 'name', isEmpty: true, items: ['hint'] }],
+      };
+
+      render(
+        <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      expect(screen.getByLabelText('Enter a name to continue')).toBeInTheDocument();
+    });
+
+    it('shows items when field is non-empty with "isEmpty: false"', async () => {
+      const user = userEvent.setup();
+
+      const config: FormConfig = {
+        fields: {
+          name: { type: 'string', label: 'Name' },
+          greeting: { type: 'string', label: 'Greeting' },
+        },
+        layout: ['name', { type: 'condition', when: 'name', isEmpty: false, items: ['greeting'] }],
+      };
+
+      render(
+        <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      expect(screen.queryByLabelText('Greeting')).not.toBeInTheDocument();
+
+      await user.type(screen.getByLabelText('Name'), 'Alice');
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Greeting')).toBeInTheDocument();
+      });
+    });
+
+    it('shows items when field value matches any in "containsAny"', async () => {
+      const user = userEvent.setup();
+
+      const config: FormConfig = {
+        fields: {
+          role: { type: 'string', label: 'Role' },
+          admin: { type: 'string', label: 'Admin Panel' },
+        },
+        layout: [
+          'role',
+          {
+            type: 'condition',
+            when: 'role',
+            containsAny: ['admin', 'superadmin'],
+            items: ['admin'],
+          },
+        ],
+      };
+
+      render(
+        <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      expect(screen.queryByLabelText('Admin Panel')).not.toBeInTheDocument();
+
+      await user.type(screen.getByLabelText('Role'), 'admin');
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Admin Panel')).toBeInTheDocument();
+      });
+    });
+  });
 });

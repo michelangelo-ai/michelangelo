@@ -11,6 +11,7 @@ import type { StringFieldConfig } from '#core/components/form/fields/string/type
 import type { TextareaFieldConfig } from '#core/components/form/fields/textarea/types';
 import type { SharedFieldConfig } from '#core/components/form/fields/types';
 import type { UrlFieldConfig } from '#core/components/form/fields/url/types';
+import type { ConditionLayoutConfig } from '#core/components/form/layout/condition/types';
 import type { FormGridLayoutConfig } from '#core/components/form/layout/form-grid/types';
 import type { FormGroupLayoutConfig } from '#core/components/form/layout/form-group/types';
 import type { FormRowLayoutConfig } from '#core/components/form/layout/form-row/types';
@@ -34,7 +35,11 @@ export type FieldConfig<T = unknown> =
 export type LayoutItem = LayoutConfig | string;
 
 /** Union of layout types that the form engine renders. */
-export type LayoutConfig = FormGroupLayoutConfig | FormRowLayoutConfig | FormGridLayoutConfig;
+export type LayoutConfig =
+  | FormGroupLayoutConfig
+  | FormRowLayoutConfig
+  | FormGridLayoutConfig
+  | ConditionLayoutConfig;
 
 /** Union of all field config types implemented by packages/core. */
 export type BuiltinFieldConfig =

@@ -1,3 +1,4 @@
+import { FormCondition } from '#core/components/form/layout/condition/form-condition';
 import { FormGrid } from '#core/components/form/layout/form-grid/form-grid';
 import { FormGroup } from '#core/components/form/layout/form-group/form-group';
 import { FormRow } from '#core/components/form/layout/form-row/form-row';
@@ -35,5 +36,7 @@ export function LayoutRenderer({
       );
     case 'grid':
       return <FormGrid>{children}</FormGrid>;
+    case 'condition':
+      return <FormCondition layout={config}>{children}</FormCondition>;
   }
 }
