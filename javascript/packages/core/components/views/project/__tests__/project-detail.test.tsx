@@ -139,7 +139,7 @@ describe('ProjectDetail', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  test('comingSoon phase shows message and suppresses entity list', async () => {
+  test('comingSoon phase shows a "Coming soon" badge and disables its entity list', async () => {
     render(
       <ProjectDetail
         phases={[
@@ -172,7 +172,8 @@ describe('ProjectDetail', () => {
     await screen.findByText('Deploy & Predict');
 
     expect(screen.getByText('Coming soon')).toBeInTheDocument();
-    expect(screen.queryByText('Endpoints')).not.toBeInTheDocument();
+    expect(screen.getByText('Endpoints')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Endpoints' })).not.toBeInTheDocument();
   });
 
   test('phase description and learn more button render when docUrl is set', async () => {
