@@ -331,6 +331,18 @@ def _sync(ns: argparse.Namespace):
     # Start the cluster in case it was stopped at the end of a previous run.
     _exec("k3d", "cluster", "start", _michelangelo_sandbox_kube_cluster_name)
 
+    # Unlike `k3d cluster create`, `k3d cluster start` does not switch the
+    # kubeconfig's current-context. On a host running more than one k3d
+    # cluster, the ambient context can be left pointing at an unrelated
+    # cluster by prior manual work, silently redirecting every kubectl/helm
+    # call below at the wrong cluster (see spec 035 addendum).
+    _exec(
+        "kubectl",
+        "config",
+        "use-context",
+        f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+    )
+
     # Wait for the API server to become reachable after start.
     _exec(
         "kubectl",
@@ -540,6 +552,27 @@ def _helm_ensure_repos():
         _exec("helm", "repo", "add", "temporal", "https://go.temporal.io/helm-charts")
 
 
+def _helm_dependency_update():
+    """Fetch the chart's subchart dependencies into charts/ if not cached.
+
+    `helm template`/`helm dependency update` print status lines like
+    "Hang tight while we grab the latest..." and "Downloading <chart> from
+    repo ..." to stdout ahead of any real output when it has to fetch
+    dependencies. `helm template`'s own `--dependency-update` flag mixes
+    those lines into the manifest stream itself, breaking any caller that
+    parses its stdout as YAML documents (`yaml.safe_load_all` chokes on the
+    first "document" being a bare string). Running the fetch as its own,
+    separate, discarded-output step keeps `helm template`'s stdout clean
+    for callers like _helm_delete_services()/_helm_adopt_orphaned_resources()
+    that need to parse it, while still working on a runner whose charts/
+    cache isn't already warm (e.g. a fresh checkout).
+    """
+    subprocess.run(
+        ["helm", "dependency", "update", str(_chart_dir)],
+        capture_output=True,
+    )
+
+
 def _helm_delete_services(helm_args: list[str]):
     """Delete Services that would conflict with the chart's NodePorts.
 
@@ -547,6 +580,7 @@ def _helm_delete_services(helm_args: list[str]):
     a previous install structure) can still hold NodePorts. We scan all
     Services in the cluster for conflicting NodePorts and delete them.
     """
+    _helm_dependency_update()
     # Collect the NodePorts the chart wants to allocate.
     result = subprocess.run(
         [
@@ -629,6 +663,7 @@ def _helm_adopt_orphaned_resources(helm_args: list[str]):
     recreate it cleanly. Resources already managed by Helm (correct labels)
     are left untouched.
     """
+    _helm_dependency_update()
     result = subprocess.run(
         [
             "helm",
