@@ -96,7 +96,7 @@ describe('Deployment detail page', () => {
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({
-          location: '/myproject/deploy/deployments/sentiment-deployment/stages',
+          location: '/myproject/deploy/deployments/sentiment-deployment/ongoing-operations',
         }),
         getServiceProviderWrapper({
           request: createQueryMockRouter({
@@ -119,7 +119,7 @@ describe('Deployment detail page', () => {
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({
-          location: '/myproject/deploy/deployments/sentiment-deployment/stages',
+          location: '/myproject/deploy/deployments/sentiment-deployment/ongoing-operations',
         }),
         getServiceProviderWrapper({
           request: createQueryMockRouter({
@@ -150,7 +150,7 @@ describe('Deployment detail page', () => {
       ])
     );
 
-    expect(await screen.findByRole('tab', { name: 'Stages' })).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: 'Ongoing operations' })).toBeInTheDocument();
     await screen.findAllByText('Validation');
     await screen.findAllByText('Placement');
   });
@@ -161,7 +161,7 @@ describe('Deployment detail page', () => {
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({
-          location: '/myproject/deploy/deployments/sentiment-deployment/stages',
+          location: '/myproject/deploy/deployments/sentiment-deployment/ongoing-operations',
         }),
         getServiceProviderWrapper({
           request: createQueryMockRouter({
@@ -199,7 +199,7 @@ describe('Deployment detail page', () => {
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({
-          location: '/myproject/deploy/deployments/sentiment-deployment/stages',
+          location: '/myproject/deploy/deployments/sentiment-deployment/ongoing-operations',
         }),
         getServiceProviderWrapper({
           request: createQueryMockRouter({

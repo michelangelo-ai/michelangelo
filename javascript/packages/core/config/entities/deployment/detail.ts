@@ -19,12 +19,12 @@ export const DEPLOYMENT_DETAIL_CONFIG: DetailViewConfig = {
   ],
   pages: [
     {
-      id: 'stages',
-      label: 'Stages',
+      id: 'ongoing-operations',
+      label: 'Ongoing operations',
       type: 'execution',
       emptyState: {
         title: 'No deployment rollout in progress',
-        description: 'Stages will appear here when a deployment rollout is in progress',
+        description: 'Ongoing operations will appear here when a deployment rollout is in progress',
       },
       tasks: {
         accessor: (data: {
