@@ -132,23 +132,26 @@ class DataclassTestCase(unittest.TestCase):
 
 
 def _subprocess_env(**overrides):
-    """Build a subprocess env without pytest-cov's coverage propagation vars.
+    """Build a subprocess env that measures coverage against the right config.
 
-    pytest-cov injects COV_CORE_*/COVERAGE_PROCESS_START into the test
-    process's environment so that subprocesses can opt into coverage
-    measurement too. But those vars point a bare `COV_CORE_CONFIG=":"`
-    (no config file) at any subprocess that inherits them, so a spawned
-    subprocess re-measures the whole `source = ["michelangelo"]` tree with
-    none of pyproject.toml's `omit` patterns applied -- rediscovering every
-    untouched *_test.py file as "untested" and polluting the combined
-    coverage report. These subprocesses only exist to exercise dot_path()'s
-    `__main__` handling, so they should not participate in coverage at all.
+    pytest-cov injects COV_CORE_SOURCE/COV_CORE_CONFIG/COV_CORE_DATAFILE so
+    that a subprocess can opt into coverage measurement too. By default
+    COV_CORE_CONFIG is ":", meaning "auto-discover a config file from cwd"
+    -- but these tests spawn the subprocess from a throwaway tmp directory,
+    so that discovery can't find pyproject.toml's `omit` patterns and the
+    subprocess instead measures the whole `source = ["michelangelo"]` tree
+    unfiltered, rediscovering every untouched *_test.py file as "untested"
+    and dragging down the combined coverage report. Pointing COV_CORE_CONFIG
+    at the real pyproject.toml (found via COV_CORE_DATAFILE's directory,
+    which pytest-cov always sets alongside it) fixes the config discovery
+    without losing coverage of the lines this subprocess is meant to exercise.
     """
-    env = {
-        k: v
-        for k, v in os.environ.items()
-        if not k.startswith(("COV_CORE_", "COVERAGE_"))
-    }
+    env = dict(os.environ)
+    datafile = env.get("COV_CORE_DATAFILE")
+    if datafile:
+        pyproject = Path(datafile).resolve().parent / "pyproject.toml"
+        if pyproject.is_file():
+            env["COV_CORE_CONFIG"] = str(pyproject)
     env.update(overrides)
     return env
 
