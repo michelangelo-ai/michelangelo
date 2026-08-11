@@ -35,5 +35,7 @@ export function LayoutRenderer({
       );
     case 'grid':
       return <FormGrid>{children}</FormGrid>;
+    case 'condition':
+      return config.when ? <>{children}</> : null;
   }
 }

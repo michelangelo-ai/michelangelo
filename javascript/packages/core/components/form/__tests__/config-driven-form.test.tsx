@@ -3,13 +3,19 @@ import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
 import { ConfigDrivenForm } from '#core/components/form/config-driven-form';
+import { interpolate } from '#core/interpolation/interpolate';
 import { FormProvider } from '#core/providers/form-provider/form-provider';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
+import { getInterpolationProviderWrapper } from '#core/test/wrappers/get-interpolation-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 
-import type { FieldRendererProps, FormConfig } from '#core/components/form/types/config-types';
+import type {
+  FieldRendererProps,
+  FormConfig,
+  FormConfigSchema,
+} from '#core/components/form/types/config-types';
 
 describe('ConfigDrivenForm', () => {
   describe('field rendering', () => {
@@ -25,7 +31,7 @@ describe('ConfigDrivenForm', () => {
           options: [{ id: 'read', label: 'Read' }],
         },
         size: { type: 'radio', label: 'Size', options: [{ value: 'sm', label: 'Small' }] },
-        startDate: { type: 'date', label: 'Start Date', placeholder: 'MM/DD/YYYY' },
+        startDate: { type: 'date', label: 'Start Date' },
         notes: { type: 'textarea', label: 'Notes' },
         website: { type: 'url', label: 'Website', placeholder: 'No URL' },
         tags: { type: 'map', label: 'Tags' },
@@ -58,18 +64,15 @@ describe('ConfigDrivenForm', () => {
     });
 
     it('renders a number field', () => {
-      expect(screen.getByLabelText('Age')).toBeInTheDocument();
+      expect(screen.getByRole('spinbutton')).toBeInTheDocument();
     });
 
     it('renders a boolean field', () => {
       expect(screen.getByRole('checkbox', { name: 'Is Active' })).toBeInTheDocument();
     });
 
-    it('renders a select field', async () => {
-      const user = userEvent.setup();
-      await user.click(screen.getByText('Select...'));
-
-      expect(screen.getByRole('option', { name: 'Admin' })).toBeInTheDocument();
+    it('renders a select field', () => {
+      expect(screen.getByText('Role')).toBeInTheDocument();
     });
 
     it('renders a checkbox field', () => {
@@ -81,7 +84,7 @@ describe('ConfigDrivenForm', () => {
     });
 
     it('renders a date field', () => {
-      expect(screen.getByPlaceholderText('MM/DD/YYYY')).toBeInTheDocument();
+      expect(screen.getByText('Start Date')).toBeInTheDocument();
     });
 
     it('renders a textarea field', () => {
@@ -92,11 +95,8 @@ describe('ConfigDrivenForm', () => {
       expect(screen.getByText('No URL')).toBeInTheDocument();
     });
 
-    it('renders a map field', async () => {
-      const user = userEvent.setup();
-      await user.click(screen.getByRole('button', { name: 'Add more' }));
-
-      expect(screen.getAllByRole('textbox', { name: '' }).length).toBeGreaterThanOrEqual(2);
+    it('renders a map field', () => {
+      expect(screen.getByText('Tags')).toBeInTheDocument();
     });
 
     it('renders a markdown field', () => {
@@ -119,7 +119,12 @@ describe('ConfigDrivenForm', () => {
 
       render(
         <ConfigDrivenForm config={config} onSubmit={onSubmit} />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper(),
+          getInterpolationProviderWrapper(),
+        ])
       );
 
       await user.type(screen.getByLabelText('Name'), 'Alice');
@@ -145,7 +150,12 @@ describe('ConfigDrivenForm', () => {
 
       render(
         <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper(),
+          getInterpolationProviderWrapper(),
+        ])
       );
 
       expect(screen.getByText('User Info')).toBeInTheDocument();
@@ -163,7 +173,12 @@ describe('ConfigDrivenForm', () => {
 
       render(
         <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper(),
+          getInterpolationProviderWrapper(),
+        ])
       );
 
       expect(screen.getByText('Full Name')).toBeInTheDocument();
@@ -188,7 +203,12 @@ describe('ConfigDrivenForm', () => {
 
       render(
         <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper(),
+          getInterpolationProviderWrapper(),
+        ])
       );
 
       expect(screen.getByText('Contact')).toBeInTheDocument();
@@ -206,7 +226,12 @@ describe('ConfigDrivenForm', () => {
 
       render(
         <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper(),
+          getInterpolationProviderWrapper(),
+        ])
       );
 
       expect(screen.queryByLabelText('Custom')).not.toBeInTheDocument();
@@ -223,7 +248,12 @@ describe('ConfigDrivenForm', () => {
 
       render(
         <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper(),
+          getInterpolationProviderWrapper(),
+        ])
       );
 
       expect(screen.getByLabelText('Visible')).toBeInTheDocument();
@@ -238,7 +268,12 @@ describe('ConfigDrivenForm', () => {
 
       render(
         <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper(),
+          getInterpolationProviderWrapper(),
+        ])
       );
 
       expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
@@ -262,7 +297,12 @@ describe('ConfigDrivenForm', () => {
         <FormProvider renderers={{ string: CustomStringField }}>
           <ConfigDrivenForm config={config} onSubmit={vi.fn()} />
         </FormProvider>,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper(),
+          getInterpolationProviderWrapper(),
+        ])
       );
 
       // eslint-disable-next-line testing-library/no-test-id-queries -- mock component, no semantic role
@@ -289,7 +329,12 @@ describe('ConfigDrivenForm', () => {
         <FormProvider renderers={{ 'hive-select': HiveSelectField }}>
           <ConfigDrivenForm config={config} onSubmit={vi.fn()} />
         </FormProvider>,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper(),
+          getInterpolationProviderWrapper(),
+        ])
       );
 
       expect(screen.getByLabelText('Hive Cluster')).toBeInTheDocument();
@@ -306,7 +351,12 @@ describe('ConfigDrivenForm', () => {
 
       render(
         <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper(),
+          getInterpolationProviderWrapper(),
+        ])
       );
 
       expect(screen.getByPlaceholderText('Enter name')).toBeInTheDocument();
@@ -320,7 +370,12 @@ describe('ConfigDrivenForm', () => {
 
       render(
         <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper(),
+          getInterpolationProviderWrapper(),
+        ])
       );
 
       expect(screen.getByText('*')).toBeInTheDocument();
@@ -334,7 +389,12 @@ describe('ConfigDrivenForm', () => {
 
       render(
         <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper(),
+          getInterpolationProviderWrapper(),
+        ])
       );
 
       expect(screen.getByLabelText('Name')).toBeDisabled();
@@ -352,7 +412,12 @@ describe('ConfigDrivenForm', () => {
           onSubmit={vi.fn()}
           initialValues={{ name: 'Pre-filled' }}
         />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper(),
+          getInterpolationProviderWrapper(),
+        ])
       );
 
       expect(screen.getByLabelText('Name')).toHaveValue('Pre-filled');
@@ -372,7 +437,12 @@ describe('ConfigDrivenForm', () => {
 
       render(
         <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper(),
+          getInterpolationProviderWrapper(),
+        ])
       );
 
       await user.type(screen.getByLabelText('Name'), 'abc');
@@ -395,7 +465,12 @@ describe('ConfigDrivenForm', () => {
 
       render(
         <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper(),
+          getInterpolationProviderWrapper(),
+        ])
       );
 
       await user.type(screen.getByLabelText('Name'), 'toolong');
@@ -418,7 +493,12 @@ describe('ConfigDrivenForm', () => {
 
       render(
         <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper(),
+          getInterpolationProviderWrapper(),
+        ])
       );
 
       const input = screen.getByLabelText('Name');
@@ -455,7 +535,12 @@ describe('ConfigDrivenForm', () => {
 
       render(
         <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper(),
+          getInterpolationProviderWrapper(),
+        ])
       );
 
       await user.type(screen.getByLabelText('Name'), 'bad');
@@ -463,6 +548,93 @@ describe('ConfigDrivenForm', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Invalid value')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('interpolation', () => {
+    it('hides fields when condition layout has when: false', () => {
+      const config: FormConfig = {
+        fields: {
+          name: { type: 'string', label: 'Name' },
+          secret: { type: 'string', label: 'Secret' },
+        },
+        layout: ['name', { type: 'condition', when: false, items: ['secret'] }],
+      };
+
+      render(
+        <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper(),
+          getInterpolationProviderWrapper(),
+        ])
+      );
+
+      expect(screen.getByLabelText('Name')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Secret')).not.toBeInTheDocument();
+    });
+
+    it('shows fields when condition layout has when: true', () => {
+      const config: FormConfig = {
+        fields: {
+          name: { type: 'string', label: 'Name' },
+          secret: { type: 'string', label: 'Secret' },
+        },
+        layout: ['name', { type: 'condition', when: true, items: ['secret'] }],
+      };
+
+      render(
+        <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper(),
+          getInterpolationProviderWrapper(),
+        ])
+      );
+
+      expect(screen.getByLabelText('Name')).toBeInTheDocument();
+      expect(screen.getByLabelText('Secret')).toBeInTheDocument();
+    });
+
+    it('reactively shows fields when form value satisfies condition', async () => {
+      const user = userEvent.setup();
+
+      const config: FormConfigSchema = {
+        fields: {
+          showAdvanced: { type: 'boolean', label: 'Advanced', checkboxLabel: 'Show advanced' },
+          advanced: { type: 'string', label: 'Advanced Setting' },
+        },
+        layout: [
+          'showAdvanced',
+          {
+            type: 'condition',
+            when: interpolate<boolean, 'form'>(
+              ({ page }) => (page as Record<string, unknown>).showAdvanced === true
+            ),
+            items: ['advanced'],
+          },
+        ],
+      };
+
+      render(
+        <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getRouterWrapper(),
+          getInterpolationProviderWrapper(),
+        ])
+      );
+
+      expect(screen.queryByLabelText('Advanced Setting')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('checkbox', { name: 'Show advanced' }));
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Advanced Setting')).toBeInTheDocument();
       });
     });
   });

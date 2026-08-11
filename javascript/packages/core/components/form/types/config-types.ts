@@ -14,6 +14,7 @@ import type { UrlFieldConfig } from '#core/components/form/fields/url/types';
 import type { FormGridLayoutConfig } from '#core/components/form/layout/form-grid/types';
 import type { FormGroupLayoutConfig } from '#core/components/form/layout/form-group/types';
 import type { FormRowLayoutConfig } from '#core/components/form/layout/form-row/types';
+import type { DeepInterpolatable, Interpolatable } from '#core/interpolation/types';
 
 /**
  * Declarative form configuration that defines fields and their layout.
@@ -34,7 +35,17 @@ export type FieldConfig<T = unknown> =
 export type LayoutItem = LayoutConfig | string;
 
 /** Union of layout types that the form engine renders. */
-export type LayoutConfig = FormGroupLayoutConfig | FormRowLayoutConfig | FormGridLayoutConfig;
+export type LayoutConfig =
+  | FormGroupLayoutConfig
+  | FormRowLayoutConfig
+  | FormGridLayoutConfig
+  | ConditionLayoutConfig;
+
+export type ConditionLayoutConfig = {
+  type: 'condition';
+  when: Interpolatable<boolean>;
+  items: LayoutItem[];
+};
 
 /** Union of all field config types implemented by packages/core. */
 export type BuiltinFieldConfig =
@@ -144,6 +155,9 @@ export enum FieldType {
    */
   MARKDOWN = 'markdown',
 }
+
+/** Interpolatable version of FormConfig — allows interpolation expressions in field and layout values. */
+export type FormConfigSchema = DeepInterpolatable<FormConfig>;
 
 /** Props passed to a field renderer by the config-driven form system. */
 export type FieldRendererProps = {
