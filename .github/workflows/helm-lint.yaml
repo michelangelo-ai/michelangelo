@@ -11,6 +11,9 @@ on:
     paths:
       - 'helm/**'
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Lint and template check

@@ -27,6 +27,13 @@ from michelangelo.lib.native_transform.torch.base_layers import (
 )
 from michelangelo.lib.native_transform.torch.duration import TimeDuration
 from michelangelo.lib.native_transform.torch.scale import ClipAndScale
+from michelangelo.lib.native_transform.torch.base_transform_module import (
+    TorchTransformModule,
+    get_transform_module,
+)
+from michelangelo.lib.native_transform.torch.constants import (
+    TORCH_TYPE_TO_TORCH_DTYPE_CLASS_NAME_MAP,
+)
 from michelangelo.lib.native_transform.torch.stats_layers import (
     Bucketization,
     MinMax,
@@ -40,8 +47,17 @@ from michelangelo.lib.native_transform.torch.transform_utils import (
     generate_numerical_scaled_transformation,
     update_output_tensor_map,
 )
+from michelangelo.lib.native_transform.torch.transform_spec import (
+    TORCH_TRANSFORM_LAYERS_DICT,
+    TORCH_TRANSFORM_LAYERS_SPECS_DICT,
+    TransformSpec,
+)
+from michelangelo.lib.native_transform.torch.utils import generate_layer_name
 
 __all__ = [
+    "TORCH_TRANSFORM_LAYERS_DICT",
+    "TORCH_TRANSFORM_LAYERS_SPECS_DICT",
+    "TORCH_TYPE_TO_TORCH_DTYPE_CLASS_NAME_MAP",
     "Bucketization",
     "CaseWhen",
     "Cast",
@@ -72,4 +88,8 @@ __all__ = [
     "generate_idhash_tokenization_transformation",
     "generate_numerical_scaled_transformation",
     "update_output_tensor_map",
+    "TorchTransformModule",
+    "TransformSpec",
+    "generate_layer_name",
+    "get_transform_module",
 ]

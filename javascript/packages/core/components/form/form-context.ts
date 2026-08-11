@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react';
 
-import type { FormInstance } from './types';
+import type { FormInstance } from './types/form-types';
 
 export const FormContext = createContext<FormInstance | null>(null);
 

@@ -56,7 +56,7 @@ jobs:
           path: base
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: head/go/go.mod
           cache-dependency-path: head/go/go.sum

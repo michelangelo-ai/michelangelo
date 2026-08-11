@@ -8,7 +8,7 @@ import { FormErrorBanner } from '#core/components/form/components/form-error-ban
 import { SubmitButton } from '#core/components/form/components/submit-button/submit-button';
 import { Form } from '#core/components/form/form';
 
-import type { FormData } from '#core/components/form/types';
+import type { FormData } from '#core/components/form/types/form-types';
 import type { FormDialogProps } from './types';
 
 /**

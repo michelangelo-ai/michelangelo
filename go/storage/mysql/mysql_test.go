@@ -5,10 +5,13 @@ import (
 
 	gogotypes "github.com/gogo/protobuf/types"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
+	api "github.com/michelangelo-ai/michelangelo/go/api"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -128,6 +131,162 @@ func TestConvertCriterionOperator(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, c.wantSQL, sql)
+			require.Equal(t, c.wantParams, params)
+		})
+	}
+}
+
+func TestConvertCriterionOperator_RejectsInvalidFieldName(t *testing.T) {
+	// Identifier positions cannot be bound with placeholder parameters, so the
+	// column name is validated against validColumnName before it is spliced
+	// between backticks. Payloads below survive processFieldName unchanged and
+	// reach this function verbatim when indexPathToKeyMaps is nil, which is
+	// what both production constructor sites pass.
+	cases := []struct {
+		name      string
+		fieldName string
+		wantErr   bool
+	}{
+		{"plain_column", "name", false},
+		{"underscores_and_digits", "src_pipeline_run_name2", false},
+		// Literal shape of the reported payload: closes the identifier's
+		// backtick early to append an arbitrary expression.
+		{"backtick_escape_rejected", "name` = (SELECT SLEEP(5))-- -", true},
+		{"union_payload_rejected", "x` UNION SELECT 1 -- ", true},
+		{"semicolon_rejected", "name; DROP TABLE model", true},
+		{"parens_and_spaces_rejected", "updatexml(1, concat(0x7e, version()), 1)", true},
+		// Not an injection, but not a real column either: previously produced
+		// a cryptic MySQL "Unknown column" error, now a clean InvalidArgument.
+		{"dotted_path_rejected", "metadata.name", true},
+		{"empty_rejected", "", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, _, err := convertCriterionOperator(c.fieldName, apipb.CRITERION_OPERATOR_EQUAL, "v")
+			if c.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestBuildFieldCriterionSQL_RejectsInjectionWithNilMap(t *testing.T) {
+	// End-to-end shape of the vulnerability: a nil indexPathToKeyMap (the OSS
+	// default) skips the map-membership check, so field_name reaches the SQL
+	// builder straight from the caller-supplied CriterionOperation.
+	op := &apipb.CriterionOperation{
+		Criterion: []*apipb.Criterion{
+			{
+				FieldName:  "model.name` = (SELECT SLEEP(5))-- -",
+				Operator:   apipb.CRITERION_OPERATOR_EQUAL,
+				MatchValue: stringMatchValue(t, "x"),
+			},
+		},
+	}
+	_, _, err := buildFieldCriterionSQL(op, nil)
+	require.Error(t, err)
+}
+
+func TestBuildLabelCriterionSQL_SlashKeyStillWorks(t *testing.T) {
+	// Label keys legitimately contain '/' and would fail validColumnName, but
+	// they never reach it: buildFieldCriterionSQL skips label fields, and the
+	// key is bound as a parameter rather than interpolated as an identifier.
+	op := &apipb.CriterionOperation{
+		Criterion: []*apipb.Criterion{
+			{
+				FieldName:  "pipeline_run.metadata.labels.michelangelo/SpecUpdateTimestamp",
+				Operator:   apipb.CRITERION_OPERATOR_EQUAL,
+				MatchValue: stringMatchValue(t, "123"),
+			},
+		},
+	}
+	queryStrs, params, err := buildLabelCriterionSQL(op, "pipeline_run")
+	require.NoError(t, err)
+	require.Len(t, queryStrs, 1)
+	require.Contains(t, queryStrs[0], "`key`= ?")
+	require.Equal(t, "michelangelo/SpecUpdateTimestamp", params[0])
+
+	// The same criterion contributes no field clause.
+	fieldStrs, _, err := buildFieldCriterionSQL(op, nil)
+	require.NoError(t, err)
+	require.Empty(t, fieldStrs)
+}
+
+func TestBuildFieldSelectorSQL(t *testing.T) {
+	// Keys reaching this function have already passed labels.Parse via
+	// parseSelector, whose grammar excludes the characters needed to escape a
+	// backtick-quoted identifier. The validColumnName check is therefore
+	// defence-in-depth rather than a live injection fix: it keeps the invariant
+	// local to the splice instead of resting on an upstream parser, and turns a
+	// non-column key into a clean InvalidArgument rather than a MySQL error.
+	cases := []struct {
+		name              string
+		selector          string
+		indexPathToKeyMap map[string]string
+		want              string
+		wantParams        []interface{}
+		wantErr           bool
+	}{
+		{name: "empty", selector: "", want: ""},
+		{
+			name:       "equals_bare_column",
+			selector:   "name=alice",
+			want:       " AND `name`=?",
+			wantParams: []interface{}{"alice"},
+		},
+		{
+			name:     "empty_value_matches_null_or_blank",
+			selector: "name=",
+			want:     " AND (`name` IS NULL OR `name`='')",
+		},
+		{
+			name:       "in_operator",
+			selector:   "namespace in (a,b)",
+			want:       " AND `namespace` IN (?,?)",
+			wantParams: []interface{}{"a", "b"},
+		},
+		{
+			// Survives labels.Parse ('.' is a legal key character) but is not a
+			// column. Previously spliced in and failed at MySQL.
+			name:     "dotted_path_rejected",
+			selector: "metadata.name=alice",
+			wantErr:  true,
+		},
+		{
+			name:     "slash_key_rejected",
+			selector: "michelangelo/Foo=bar",
+			wantErr:  true,
+		},
+		{
+			name:     "hyphen_key_rejected",
+			selector: "foo-bar=baz",
+			wantErr:  true,
+		},
+		{
+			name:              "populated_map_rewrites_to_column",
+			selector:          "metadata.name=alice",
+			indexPathToKeyMap: map[string]string{"metadata.name": "name"},
+			want:              " AND `name`=?",
+			wantParams:        []interface{}{"alice"},
+		},
+		{
+			name:              "populated_map_rejects_unmapped_field",
+			selector:          "other=alice",
+			indexPathToKeyMap: map[string]string{"metadata.name": "name"},
+			wantErr:           true,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, params, err := buildFieldSelectorSQL(c.selector, c.indexPathToKeyMap)
+			if c.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, c.want, got)
 			require.Equal(t, c.wantParams, params)
 		})
 	}
@@ -603,4 +762,129 @@ func TestFullUpsert_CrossClusterMigration(t *testing.T) {
 	// Verify the UIDs are actually different
 	require.NotEqual(t, string(metaObjOriginal.GetUID()), string(metaObjNew.GetUID()),
 		"UIDs are different across clusters as expected")
+}
+
+func TestCheckResourceVersionPrecondition(t *testing.T) {
+	cases := []struct {
+		name     string
+		incoming string
+		stored   uint64
+		wantCode codes.Code
+	}{
+		{"empty is unconditional", "", 5, codes.OK},
+		{"exact match", "5", 5, codes.OK},
+		{"zero padded still matches numerically", "007", 7, codes.OK},
+		{"stale version conflicts", "4", 5, codes.FailedPrecondition},
+		{"future version conflicts", "6", 5, codes.FailedPrecondition},
+		{"non numeric is invalid", "abc", 5, codes.InvalidArgument},
+		{"negative is invalid", "-1", 5, codes.InvalidArgument},
+		{"fractional is invalid", "1.5", 5, codes.InvalidArgument},
+		{"overflow is invalid", "18446744073709551616", 5, codes.InvalidArgument},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := checkResourceVersionPrecondition(c.incoming, c.stored)
+			if c.wantCode == codes.OK {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			require.Equal(t, c.wantCode, status.Code(err))
+		})
+	}
+}
+
+func TestMergeDirectUpdateMetadata_ReplacesUserSuppliedKeys(t *testing.T) {
+	stored := &v2pb.Model{ObjectMeta: metav1.ObjectMeta{
+		Labels: map[string]string{"app": "old", "team": "platform"},
+	}}
+	incoming := &v2pb.Model{ObjectMeta: metav1.ObjectMeta{
+		Labels: map[string]string{"app": "new"},
+	}}
+
+	mergeDirectUpdateMetadata(stored.GetObjectMeta(), incoming.GetObjectMeta(), 3)
+
+	// Wholesale replace: "app" takes the incoming value and "team" is dropped.
+	require.Equal(t, map[string]string{"app": "new"}, stored.GetLabels())
+	require.Equal(t, "3", stored.GetResourceVersion())
+}
+
+func TestMergeDirectUpdateMetadata_PreservesManagedKeys(t *testing.T) {
+	stored := &v2pb.Model{ObjectMeta: metav1.ObjectMeta{
+		Labels: map[string]string{
+			api.SpecUpdateTimestampLabel: "1700000000000000",
+			"app":                        "old",
+		},
+		Annotations: map[string]string{
+			api.ImmutableAnnotation:                 "true",
+			api.MetadataStoragePrimaryKeyAnnotation: "pk-original",
+			"user-annotation":                       "dropped",
+		},
+	}}
+	incoming := &v2pb.Model{ObjectMeta: metav1.ObjectMeta{
+		Labels:      map[string]string{"app": "new"},
+		Annotations: map[string]string{"user-annotation": "kept"},
+	}}
+
+	mergeDirectUpdateMetadata(stored.GetObjectMeta(), incoming.GetObjectMeta(), 2)
+
+	// Server-managed keys survive even though the caller never sent them.
+	require.Equal(t, "1700000000000000", stored.GetLabels()[api.SpecUpdateTimestampLabel])
+	require.Equal(t, "new", stored.GetLabels()["app"])
+	require.Equal(t, "true", stored.GetAnnotations()[api.ImmutableAnnotation])
+	require.Equal(t, "pk-original", stored.GetAnnotations()[api.MetadataStoragePrimaryKeyAnnotation])
+	require.Equal(t, "kept", stored.GetAnnotations()["user-annotation"])
+}
+
+func TestMergeDirectUpdateMetadata_IncomingManagedKeyWins(t *testing.T) {
+	stored := &v2pb.Model{ObjectMeta: metav1.ObjectMeta{
+		Annotations: map[string]string{api.ImmutableAnnotation: "true"},
+	}}
+	incoming := &v2pb.Model{ObjectMeta: metav1.ObjectMeta{
+		Annotations: map[string]string{api.ImmutableAnnotation: "false"},
+	}}
+
+	mergeDirectUpdateMetadata(stored.GetObjectMeta(), incoming.GetObjectMeta(), 2)
+
+	require.Equal(t, "false", stored.GetAnnotations()[api.ImmutableAnnotation])
+}
+
+func TestMergeDirectUpdateMetadata_LeavesSpecUntouched(t *testing.T) {
+	stored := &v2pb.Model{
+		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "old"}},
+		Spec:       v2pb.ModelSpec{Algorithm: "xgboost", Description: "stored spec"},
+	}
+	incoming := &v2pb.Model{
+		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "new"}},
+		Spec:       v2pb.ModelSpec{Algorithm: "pytorch", Description: "caller spec"},
+	}
+
+	mergeDirectUpdateMetadata(stored.GetObjectMeta(), incoming.GetObjectMeta(), 9)
+
+	// The direct path is metadata-only: the caller's spec is deliberately ignored.
+	require.Equal(t, "xgboost", stored.Spec.Algorithm)
+	require.Equal(t, "stored spec", stored.Spec.Description)
+	require.Equal(t, "9", stored.GetResourceVersion())
+}
+
+func TestMergeDirectUpdateMetadata_NilMaps(t *testing.T) {
+	stored := &v2pb.Model{ObjectMeta: metav1.ObjectMeta{
+		Labels:      map[string]string{"app": "old"},
+		Annotations: map[string]string{api.ImmutableAnnotation: "true"},
+	}}
+	incoming := &v2pb.Model{}
+
+	require.NotPanics(t, func() {
+		mergeDirectUpdateMetadata(stored.GetObjectMeta(), incoming.GetObjectMeta(), 1)
+	})
+
+	// User labels are cleared to nil, but the managed annotation is carried over.
+	require.Nil(t, stored.GetLabels())
+	require.Equal(t, map[string]string{api.ImmutableAnnotation: "true"}, stored.GetAnnotations())
+}
+
+func TestMergeManagedKeys_EmptyResultIsNil(t *testing.T) {
+	// Neither side has anything: the result must stay nil rather than become an
+	// empty map, so an object without labels does not gain one.
+	require.Nil(t, mergeManagedKeys(nil, nil, directUpdateManagedLabels))
 }

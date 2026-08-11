@@ -10,6 +10,9 @@ on:
     paths:
       - 'javascript/**'
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Lint & Typecheck

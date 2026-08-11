@@ -88,3 +88,19 @@ export interface BaseFieldProps<T = unknown, InputValue = T> {
    */
   validate?: FieldValidator;
 }
+
+/** Declarative field configuration derived from BaseFieldProps, excluding runtime-only concerns. */
+export type SharedFieldConfig<T = unknown, InputValue = T> = Pick<
+  BaseFieldProps<T, InputValue>,
+  | 'label'
+  | 'required'
+  | 'disabled'
+  | 'readOnly'
+  | 'placeholder'
+  | 'description'
+  | 'caption'
+  | 'defaultValue'
+  | 'initialValue'
+  | 'parse'
+  | 'format'
+>;

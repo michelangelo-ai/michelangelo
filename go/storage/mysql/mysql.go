@@ -145,7 +145,19 @@ func (m *mysqlMetadataStorage) Upsert(ctx context.Context, object runtime.Object
 	if direct {
 		// Direct update: only update labels, annotations, and resource version
 		// Check resource version for optimistic concurrency control
-		return m.directUpdate(ctx, tx, tableName, metaObj, object)
+		newResVersion, directErr := m.directUpdate(ctx, tx, tableName, metaObj, object)
+		if directErr != nil {
+			return directErr
+		}
+		if commitErr := tx.Commit(); commitErr != nil {
+			return status.Errorf(codes.Internal, "failed to commit direct update: %v", commitErr)
+		}
+		// Hand the new resource version back through the object the caller passed in.
+		// Only after a successful commit, so a failed commit never yields a version the
+		// database does not have. Per the MetadataStorage contract, this version must not
+		// be used for listing or watching.
+		metaObj.SetResourceVersion(strconv.FormatUint(newResVersion, 10))
+		return nil
 	}
 
 	// Full upsert: update all fields. Compute the stable primary key once so the main
@@ -550,26 +562,24 @@ func processFieldName(fieldName string) (string, error) {
 //     internal map values "IS NULL "/"IS NOT NULL ").
 //   - IN / NOT IN list has no spaces between placeholders (e.g. "(?,?,?)").
 //
-// TODO(#1171): validate fieldName before splicing it into SQL.
+// fieldName is validated against validColumnName before it is interpolated.
 //
-// Trust model — both this function and the matching internal one assume the
-// caller has already vetted fieldName against an allowlist (internal does so
-// in processListOptExtFieldV2 via the per-CRD indexPathToKeyMap). When that
-// upstream check is bypassed — and in OSS that's the default whenever the
-// constructor is called with a nil indexPathToKeyMaps — fieldName is taken
-// straight from the caller-supplied CriterionOperation and embedded between
-// backticks here. A caller controlling field_name can break out of the
-// backtick-quoted identifier and inject SQL (e.g. field_name="x.` UNION
-// SELECT … --" survives processFieldName and lands here as `+ "`" + ` UNION
-// SELECT … --` `+ "`" + `).
+// Trust model — both this function and the matching internal one otherwise
+// assume the caller has already vetted fieldName against an allowlist (internal
+// does so in processListOptExtFieldV2 via the per-CRD indexPathToKeyMap). In
+// OSS that upstream check is skipped whenever the constructor is called with a
+// nil indexPathToKeyMaps, which both production call sites do, so fieldName
+// arrives here straight from the caller-supplied CriterionOperation. Without
+// the identifier check a caller controlling field_name could close the
+// backtick-quoted identifier and append arbitrary SQL.
 //
-// The right long-term fix is for the OSS constructor to require an
-// indexPathToKeyMaps and remove the permissive mode. As a defence-in-depth
-// stop-gap, we could reject any fieldName containing characters outside
-// [a-zA-Z0-9_] right here (cheap, no schema cost). Neither is done yet to
-// keep the public surface compatible with the existing caller sites that
-// pass nil today.
+// Requiring a non-nil indexPathToKeyMaps in the OSS constructor and dropping
+// the permissive mode would make the check here redundant, but that is a
+// breaking change to a public constructor and is deliberately left separate.
 func convertCriterionOperator(fieldName string, op apipb.CriterionOperator, value string) (string, []interface{}, error) {
+	if !validColumnName.MatchString(fieldName) {
+		return "", nil, status.Errorf(codes.InvalidArgument, "invalid field name: %v", fieldName)
+	}
 	qf := " `" + fieldName + "` "
 	switch op {
 	case apipb.CRITERION_OPERATOR_IS_NULL:
@@ -938,6 +948,13 @@ func buildLabelSelectorSQL(labelSelectorStr, tableName string) (labelSelectorPie
 // MySQL column map); fields not in the map are rejected with InvalidArgument.
 // When indexPathToKeyMap is nil, the path is used as the column name as-is
 // (permissive — matches our criterion-builder convention).
+//
+// Either way the resolved column name is validated against validColumnName
+// before backtick-quoted interpolation. Keys arriving here have already passed
+// labels.Parse, whose grammar excludes the characters needed to escape a
+// backtick, so this is defence-in-depth rather than a live injection fix: it
+// keeps the invariant local to the splice instead of resting on an upstream
+// parser, and turns a non-column key into a clean InvalidArgument.
 func buildFieldSelectorSQL(fieldSelectorStr string, indexPathToKeyMap map[string]string) (string, []interface{}, error) {
 	if fieldSelectorStr == "" {
 		return "", nil, nil
@@ -953,6 +970,10 @@ func buildFieldSelectorSQL(fieldSelectorStr string, indexPathToKeyMap map[string
 		if mapped, ok := indexPathToKeyMap[col]; ok {
 			col = mapped
 		} else if indexPathToKeyMap != nil {
+			return "", nil, status.Errorf(codes.InvalidArgument,
+				"invalid field selector, unsupported field. field: %v", req.Key())
+		}
+		if !validColumnName.MatchString(col) {
 			return "", nil, status.Errorf(codes.InvalidArgument,
 				"invalid field selector, unsupported field. field: %v", req.Key())
 		}
@@ -989,12 +1010,15 @@ func buildFieldSelectorSQL(fieldSelectorStr string, indexPathToKeyMap map[string
 	return queryStr.String(), params, nil
 }
 
-// validOrderByColumnName matches MySQL unquoted-identifier-safe characters
-// (letters, digits, underscore). Applied to the column name derived from a
-// caller-supplied OrderBy.Field before backtick-quoted interpolation, because
-// identifier positions cannot be bound with placeholder parameters the way
-// literal values can.
-var validOrderByColumnName = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
+// validColumnName matches MySQL unquoted-identifier-safe characters (letters,
+// digits, underscore). Applied to every column name derived from caller-supplied
+// input before backtick-quoted interpolation, because identifier positions
+// cannot be bound with placeholder parameters the way literal values can.
+//
+// Guards the three paths that resolve a caller-controlled field path to a bare
+// column name: convertCriterionOperator (list_options_ext.operation),
+// buildFieldSelectorSQL (field_selector) and buildOrderBySQL (order_by).
+var validColumnName = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
 
 // buildOrderBySQL builds the ORDER BY clause from a list of OrderBy specs.
 //
@@ -1009,7 +1033,7 @@ var validOrderByColumnName = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
 //     remainder is a key in it, otherwise reject (codes.InvalidArgument) —
 //     mirrors buildFieldCriterionSQL's map-enforcement pattern.
 //  5. Otherwise the remainder is used as the bare column name, validated
-//     against validOrderByColumnName before interpolation.
+//     against validColumnName before interpolation.
 //
 // Returns codes.InvalidArgument if a resolved column name fails the
 // identifier-syntax check.
@@ -1046,7 +1070,7 @@ func buildOrderBySQL(orderBy []*apipb.OrderBy, indexPathToKeyMap map[string]stri
 			// orderByLabelColumn already includes its own backticks.
 			clauses = append(clauses, colName+" "+dir)
 		} else {
-			if !validOrderByColumnName.MatchString(colName) {
+			if !validColumnName.MatchString(colName) {
 				return "", status.Errorf(codes.InvalidArgument, "invalid order_by field: %v", order.Field)
 			}
 			clauses = append(clauses, fmt.Sprintf("`%s` %s", colName, dir))
@@ -1196,8 +1220,212 @@ func (m *mysqlMetadataStorage) fullUpsert(ctx context.Context, tx *sql.Tx, table
 	return nil
 }
 
-func (m *mysqlMetadataStorage) directUpdate(ctx context.Context, tx *sql.Tx, tableName string, metaObj metav1.Object, object runtime.Object) error {
-	return status.Errorf(codes.Unimplemented, "direct update not yet implemented")
+// directUpdateManagedLabels and directUpdateManagedAnnotations are the label and
+// annotation keys that Michelangelo itself owns.
+//
+// A direct update replaces the caller's label and annotation sets wholesale, matching
+// Kubernetes PUT semantics. But callers of the generic Update RPC routinely build a
+// fresh object rather than doing read-modify-write, so a strict replace would silently
+// destroy server-managed state — the immutability marker, the migration primary key, and
+// the timestamp label that List supports as an ORDER BY key. These keys are therefore
+// carried over from the stored object when, and only when, the incoming object does not
+// supply them at all; an explicitly supplied value always wins.
+var (
+	directUpdateManagedLabels = []string{
+		api.SpecUpdateTimestampLabel,
+		api.UpdateTimestampLabel,
+	}
+	directUpdateManagedAnnotations = []string{
+		api.MetadataStoragePrimaryKeyAnnotation,
+		api.ImmutableAnnotation,
+		api.DeletingAnnotation,
+		api.DeletePropagationAnnotation,
+	}
+)
+
+// checkResourceVersionPrecondition compares the caller-supplied resource version against
+// the value currently stored on the row.
+//
+// An empty incoming resource version means "no precondition", matching Kubernetes update
+// semantics where an unset resourceVersion on PUT is an unconditional update. A
+// syntactically invalid version is rejected as InvalidArgument rather than as a conflict,
+// because it could never have come from the BIGINT UNSIGNED column. A well-formed version
+// that does not match is a lost update, reported as FailedPrecondition to match the
+// StatusReasonConflict mapping in K8sStatusReasonToGrpcError.
+//
+// The comparison is numeric, not textual, so that a zero-padded version such as "007"
+// still matches the 7 that MySQL returns.
+func checkResourceVersionPrecondition(incoming string, stored uint64) error {
+	if incoming == "" {
+		return nil
+	}
+	parsed, err := strconv.ParseUint(incoming, 10, 64)
+	if err != nil {
+		return status.Errorf(codes.InvalidArgument,
+			"invalid resourceVersion %q: must be a base-10 unsigned integer", incoming)
+	}
+	if parsed != stored {
+		return status.Errorf(codes.FailedPrecondition,
+			"resourceVersion conflict: the object has been modified; stored %d, got %d",
+			stored, parsed)
+	}
+	return nil
+}
+
+// mergeDirectUpdateMetadata overlays the incoming object's labels and annotations, plus
+// the new resource version, onto the stored object. Spec and status are left untouched:
+// on the direct path the stored object is the source of truth for everything except
+// metadata (see the MetadataStorage.Upsert contract).
+//
+// Server-managed keys absent from the incoming object are preserved — see
+// directUpdateManagedLabels / directUpdateManagedAnnotations.
+func mergeDirectUpdateMetadata(stored, incoming metav1.Object, newResVersion uint64) {
+	stored.SetLabels(mergeManagedKeys(stored.GetLabels(), incoming.GetLabels(), directUpdateManagedLabels))
+	stored.SetAnnotations(mergeManagedKeys(stored.GetAnnotations(), incoming.GetAnnotations(), directUpdateManagedAnnotations))
+	stored.SetResourceVersion(strconv.FormatUint(newResVersion, 10))
+}
+
+// mergeManagedKeys returns incoming, plus any key in managedKeys that stored has and
+// incoming does not. Returns nil when the result would be empty, so an object that had no
+// labels keeps a nil map rather than gaining an empty one.
+func mergeManagedKeys(stored, incoming map[string]string, managedKeys []string) map[string]string {
+	merged := make(map[string]string, len(incoming)+len(managedKeys))
+	for k, v := range incoming {
+		merged[k] = v
+	}
+	for _, k := range managedKeys {
+		if _, supplied := merged[k]; supplied {
+			continue
+		}
+		if v, ok := stored[k]; ok {
+			merged[k] = v
+		}
+	}
+	if len(merged) == 0 {
+		return nil
+	}
+	return merged
+}
+
+// directUpdate applies a metadata-only update to an object that lives solely in metadata
+// storage, and returns the resource version it assigned.
+//
+// Per the MetadataStorage.Upsert contract this touches only labels, annotations and the
+// resource version; the spec and status are read back from the stored row and written
+// out unchanged, so a caller that submits a modified spec has that part of its request
+// silently ignored. That is intentional — this path is only reached for objects that
+// have been evicted from etcd because they are immutable.
+//
+// The stored proto and json blobs are rewritten rather than just the res_version column,
+// because GetByName and List reconstruct objects from the proto blob alone
+// (TODO(#1173)). Bumping only the column would leave the next read reporting a stale
+// resource version, and the caller's next update would then conflict forever.
+//
+// The returned version is derived from a per-row counter and, as the interface contract
+// notes, must not be used for listing or watching: an ingester re-sync of the same object
+// writes the etcd resource version back over it.
+func (m *mysqlMetadataStorage) directUpdate(ctx context.Context, tx *sql.Tx, tableName string, metaObj metav1.Object, object runtime.Object) (uint64, error) {
+	// Lock and read the live row. Addressed by namespace+name rather than by uid because
+	// callers of the generic Update RPC are not required to echo back a UID, so
+	// metadataStoragePrimaryKey would frequently be empty here. This also matches how
+	// GetByName and Delete address rows.
+	//
+	// FOR UPDATE is load-bearing: without it two concurrent direct updates both read
+	// res_version = N, both compute N+1, and one is silently lost.
+	selectQuery := fmt.Sprintf(`
+		SELECT uid, res_version, proto
+		FROM %s
+		WHERE namespace = ? AND name = ? AND delete_time IS NULL
+		LIMIT 1
+		FOR UPDATE
+	`, tableName)
+
+	var (
+		storedUID   string
+		storedRV    uint64
+		storedProto []byte
+	)
+	err := tx.QueryRowContext(ctx, selectQuery, metaObj.GetNamespace(), metaObj.GetName()).
+		Scan(&storedUID, &storedRV, &storedProto)
+	if err == sql.ErrNoRows {
+		// Soft-deleted rows are excluded by the delete_time predicate and land here too.
+		return 0, status.Errorf(codes.NotFound, "object not found or deleted: %s/%s",
+			metaObj.GetNamespace(), metaObj.GetName())
+	}
+	if err != nil {
+		return 0, status.Errorf(codes.Internal, "failed to load object for direct update: %v", err)
+	}
+	// This is a read-modify-write of the proto blob, so an empty blob must abort rather
+	// than proceed: unmarshalling no bytes succeeds and yields a zero-valued object, and
+	// writing that back would blank out the stored name, namespace and spec while the
+	// row's columns still looked correct.
+	if len(storedProto) == 0 {
+		return 0, status.Errorf(codes.Internal,
+			"stored proto is empty for %s/%s: refusing to overwrite it", tableName, metaObj.GetName())
+	}
+
+	if err = checkResourceVersionPrecondition(metaObj.GetResourceVersion(), storedRV); err != nil {
+		return 0, err
+	}
+	newResVersion := storedRV + 1
+
+	// Rebuild the stored object, changing only its metadata.
+	storedObject := object.DeepCopyObject()
+	storedMsg, ok := storedObject.(proto.Message)
+	if !ok {
+		return 0, status.Errorf(codes.InvalidArgument, "object does not implement proto.Message")
+	}
+	storedMsg.Reset()
+	if err = proto.Unmarshal(storedProto, storedMsg); err != nil {
+		return 0, status.Errorf(codes.Internal, "failed to unmarshal stored proto: %v", err)
+	}
+	storedMeta, err := getObjectMeta(storedObject)
+	if err != nil {
+		return 0, err
+	}
+	mergeDirectUpdateMetadata(storedMeta, metaObj, newResVersion)
+
+	newProtoBytes, err := proto.Marshal(storedMsg)
+	if err != nil {
+		return 0, status.Errorf(codes.Internal, "failed to marshal merged object to proto: %v", err)
+	}
+	newJSONBytes, err := json.Marshal(storedObject)
+	if err != nil {
+		return 0, status.Errorf(codes.Internal, "failed to marshal merged object to JSON: %v", err)
+	}
+
+	// The res_version guard is redundant under FOR UPDATE, but keeps this correct if the
+	// lock hint is ever dropped or the isolation level lowered.
+	updateQuery := fmt.Sprintf(`
+		UPDATE %s
+		SET res_version = ?, update_time = ?, proto = ?, json = ?
+		WHERE uid = ? AND res_version = ? AND delete_time IS NULL
+	`, tableName)
+	result, err := tx.ExecContext(ctx, updateQuery,
+		newResVersion, time.Now().UTC(), newProtoBytes, newJSONBytes, storedUID, storedRV)
+	if err != nil {
+		return 0, status.Errorf(codes.Internal, "failed to apply direct update: %v", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, status.Errorf(codes.Internal, "failed to get rows affected: %v", err)
+	}
+	if rowsAffected != 1 {
+		return 0, status.Errorf(codes.Internal,
+			"direct update affected %d rows, expected exactly 1", rowsAffected)
+	}
+
+	// Child rows are keyed by the uid actually stored on the row, not by
+	// metadataStoragePrimaryKey(metaObj): the latter is empty whenever the caller omits
+	// the UID, which would orphan every label and annotation under obj_uid = ''.
+	if err = m.upsertLabels(ctx, tx, tableName, storedUID, storedMeta.GetLabels()); err != nil {
+		return 0, err
+	}
+	if err = m.upsertAnnotations(ctx, tx, tableName, storedUID, storedMeta.GetAnnotations()); err != nil {
+		return 0, err
+	}
+
+	return newResVersion, nil
 }
 
 func (m *mysqlMetadataStorage) upsertLabels(ctx context.Context, tx *sql.Tx, tableName string, uid string, labels map[string]string) error {

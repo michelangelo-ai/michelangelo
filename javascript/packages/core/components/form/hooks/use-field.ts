@@ -5,7 +5,7 @@ import { combineValidators } from '#core/components/form/validation/combine-vali
 import { required as requiredValidator } from '#core/components/form/validation/validators';
 
 import type { FieldValidator } from '#core/components/form/validation/types';
-import type { FieldInput, FieldState } from '../types';
+import type { FieldInput, FieldState } from '../types/form-types';
 
 export function useField<T = unknown, InputValue = T>(
   name: string,

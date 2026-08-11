@@ -15,6 +15,9 @@ on:
       - 'website/**'
       - 'javascript/**'
 
+permissions:
+  contents: read
+
 jobs:
   bazel-build:
     runs-on: ubuntu-latest

@@ -1,4 +1,7 @@
 import { CellType } from '#core/components/cell/constants';
+import { getCrdUpdatedSeconds } from '#core/utils/crd-utils';
+import { readEnvironmentLabel } from '#core/utils/environment-utils';
+import { MODEL_KIND_TEXT_MAP } from './constants';
 
 import type { ColumnConfig } from '#core/components/table/types/column-types';
 import type { ListViewConfig } from '#core/components/views/types';
@@ -6,17 +9,30 @@ import type { ListViewConfig } from '#core/components/views/types';
 export const MODEL_CELL_CONFIG: ColumnConfig<object>[] = [
   {
     id: 'metadata.name',
-    label: 'Name',
-    // url: '/${studio.projectId}/${studio.phase}/models/${data.metadata.name}',
-    tooltip: {
-      content: 'Click to view model details',
-      action: 'filter',
-    },
+    label: 'Model',
+    items: [
+      {
+        id: 'metadata.name',
+        url: '/${studio.projectId}/${studio.phase}/models/${data.metadata.name}',
+      },
+      {
+        // spec.description is a free-text summary generated upstream by the training pipeline
+        // (e.g. "model workflow=... git=... docker=..."). Rendered verbatim, no parsing.
+        id: 'spec.description',
+        type: CellType.DESCRIPTION,
+      },
+    ],
   },
   {
-    id: 'metadata.creationTimestamp.seconds',
-    label: 'Created',
-    type: CellType.DATE,
+    id: 'metadata.labels',
+    label: 'Environment',
+    type: CellType.TEXT,
+    accessor: (data: unknown) => {
+      // cast: accessor receives unknown data; narrowing to expected proto shape for property
+      // access; see #1425
+      const labels = (data as { metadata?: { labels?: Record<string, string> } })?.metadata?.labels;
+      return readEnvironmentLabel(labels) || null;
+    },
   },
   {
     id: 'spec.modelFamily.name',
@@ -24,41 +40,22 @@ export const MODEL_CELL_CONFIG: ColumnConfig<object>[] = [
     type: CellType.TEXT,
   },
   {
-    id: 'spec.environment',
-    label: 'Environment',
+    id: 'spec.kind',
+    label: 'Type',
     type: CellType.TYPE,
-    typeTextMap: {
-      0: 'Development',
-      1: 'Production',
-    },
+    typeTextMap: MODEL_KIND_TEXT_MAP,
   },
   {
-    id: 'spec.deployed',
-    label: 'Deployed',
-    type: CellType.BOOLEAN,
-  },
-  {
-    id: 'spec.trainingFramework',
-    label: 'Framework',
-    type: CellType.TAG,
-  },
-  {
-    id: 'status.state',
-    label: 'State',
-    type: CellType.STATE,
-    stateTextMap: {
-      0: 'Draft',
-      1: 'Training',
-      2: 'Completed',
-      3: 'Failed',
-      4: 'Deployed',
-    },
-    stateColorMap: {
-      0: 'gray',
-      1: 'blue',
-      2: 'green',
-      3: 'red',
-      4: 'green',
+    id: 'metadata',
+    label: 'Last Updated',
+    type: CellType.DATE,
+    accessor: (data: unknown) => {
+      // cast: accessor receives unknown data; narrowing to expected proto shape for property
+      // access; see #1425
+      const row = data as {
+        metadata?: { labels?: Record<string, string>; creationTimestamp?: { seconds: number } };
+      };
+      return getCrdUpdatedSeconds(row);
     },
   },
 ];

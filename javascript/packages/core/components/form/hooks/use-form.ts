@@ -2,7 +2,7 @@ import { useForm as useReactFinalForm } from 'react-final-form';
 
 import { useFormContext } from '#core/components/form/form-context';
 
-import type { FormApi } from '../types';
+import type { FormApi } from '../types/form-types';
 
 export function useForm(): FormApi {
   const { fieldRegistry } = useFormContext();

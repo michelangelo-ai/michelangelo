@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { LayoutItem } from '#core/components/form/types/config-types';
 
 export interface FormRowProps {
   /** Optional row label */
@@ -12,3 +13,8 @@ export interface FormRowProps {
   span?: number[];
   children: ReactNode;
 }
+
+export type FormRowLayoutConfig = Pick<FormRowProps, 'name' | 'span'> & {
+  type: 'row';
+  items: LayoutItem[];
+};

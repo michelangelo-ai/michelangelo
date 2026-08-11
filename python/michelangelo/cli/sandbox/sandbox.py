@@ -707,6 +707,17 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
     # Workflow engine — cadence is the default in values-k3d.yaml.
     # Always set the engine explicitly so that switching --workflow between
     # runs (e.g. cadence → temporal) overrides any --reuse-values residue.
+    # executionUrlFormat is a Go text/template string (rendered at runtime by
+    # ExecuteWorkflowActor.GetWorkflowUrl with .Domain/.ExecutionID/.RunID),
+    # not a Helm template — the {{ }} placeholders below pass through `quote`
+    # untouched and are only ever parsed by the Go code that consumes them.
+    # Cadence Web needs domain + workflow ID + run ID to resolve a workflow's
+    # page (confirmed against a live sandbox run) — it redirects to the
+    # right cluster and summary view on its own from that, so neither a
+    # hardcoded cluster segment nor an explicit "/summary" suffix is needed.
+    # The equivalent Temporal Web path below is unverified against a live
+    # Temporal-backed sandbox — flagging until someone confirms it the same
+    # way the Cadence path was confirmed.
     if ns.workflow == "temporal":
         args += [
             "--set",
@@ -717,6 +728,9 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
             "cadence.enabled=false",  # ensure cadence subchart is off
             "--set",
             "temporal.enabled=true",  # enable temporal subchart
+            "--set-string",
+            "controllermgr.workflowClient.executionUrlFormat="
+            "http://localhost:8080/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}",
         ]
     else:
         args += [
@@ -728,6 +742,9 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
             "temporal.enabled=false",  # ensure temporal subchart is off
             "--set",
             "cadence.enabled=true",
+            "--set-string",
+            "controllermgr.workflowClient.executionUrlFormat="
+            "http://localhost:8088/domains/{{.Domain}}/workflows/{{.ExecutionID}}/{{.RunID}}/summary",
         ]
 
     # Service exclusions → enabled=false toggles

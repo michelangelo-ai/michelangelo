@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { BoxOverrides } from '#core/components/box/types';
+import type { LayoutItem } from '#core/components/form/types/config-types';
 
 interface FormGroupBaseProps {
   title?: string;
@@ -37,3 +38,12 @@ interface CollapsibleFormGroupProps extends FormGroupBaseProps {
 }
 
 export type FormGroupProps = StaticFormGroupProps | CollapsibleFormGroupProps;
+
+export type FormGroupLayoutConfig = Pick<
+  FormGroupBaseProps,
+  'title' | 'description' | 'tooltip'
+> & {
+  type: 'group';
+  collapsible?: boolean;
+  items: LayoutItem[];
+};

@@ -55,6 +55,15 @@ Once the resource(s) are resolved:
 - **New surface on existing entity**: resource name + which surface (list, detail, form).
 - **Extend existing surface**: resource name + which fields to add.
 
+### Read the architecture doc
+
+Run `find . -iname "ARCHITECTURE.md" -not -path "*/node_modules/*" -not -path "*/dist/*"` to
+locate every architecture doc in the repo. More than one may exist (e.g. per-package under
+`javascript/`). If the command finds none, note that and move on.
+
+For each result, skim its section headers, then read in full only the doc(s) covering the
+language area the task touches (`go/`, `javascript/`, `python/`); skip the rest.
+
 ### 1a. Discover schema artifacts
 
 From the resource name (and any referenced messages), locate:

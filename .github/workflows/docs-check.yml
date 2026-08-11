@@ -8,6 +8,9 @@ on:
       - 'docs/**'
       - 'website/**'
 
+permissions:
+  contents: read
+
 jobs:
   validate-docs:
     runs-on: ubuntu-latest
