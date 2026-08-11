@@ -34,6 +34,7 @@ New to Michelangelo AI? Follow this path:
 | [Train and Register a Model](./train-and-deploy-models/train-and-register-a-model.md) | Train at scale and register artifacts |
 | [Model Registry Guide](./train-and-deploy-models/model-registry-guide.md) | Version, track, and manage trained models |
 | [Deploy a Model](./train-and-deploy-models/deploy-a-model.md) | Bind a registered model to an inference server |
+| [Native Feature Transforms](./train-and-deploy-models/native-feature-transforms.md) | Fit and materialize transform layers that run identically at train and serve time |
 
 ### Reference
 
