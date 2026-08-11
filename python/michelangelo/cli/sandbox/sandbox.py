@@ -1704,40 +1704,48 @@ def _create_compute_cluster_crd(cluster_name: str):
     # Ensure ma-system namespace exists
     _ensure_namespace_exists("ma-system")
 
-    # Get kubeconfig for the Ray jobs cluster
-    kubeconfig = subprocess.check_output(
-        ["k3d", "kubeconfig", "get", cluster_name]
-    ).decode()
+    if cluster_name == _michelangelo_sandbox_kube_cluster_name:
+        # Self-referential case: the cluster being registered is the same
+        # one apiserver runs in. Reach it via the in-cluster Kubernetes
+        # service instead of the host-published API port. The host-external
+        # address (whatever `k3d kubeconfig get` reports — 0.0.0.0 on Linux,
+        # host.docker.internal on Docker Desktop) is meant for clients on
+        # the host machine; from apiserver's own Pod network namespace it
+        # either refuses (loopback-equivalent addresses) or fails TLS
+        # verification (the k3s server cert's SANs don't cover
+        # host.k3d.internal). `kubernetes.default.svc` is already a valid
+        # SAN on every k3s server cert and always resolves in-cluster.
+        host, port = "https://kubernetes.default.svc", "443"
+    else:
+        # Genuinely separate compute cluster: apiserver (in cluster A) must
+        # reach cluster B's host-published API port, so there's no
+        # in-cluster shortcut. Extract host/port from cluster B's own
+        # kubeconfig.
+        kubeconfig = subprocess.check_output(
+            ["k3d", "kubeconfig", "get", cluster_name]
+        ).decode()
+        kubeconfig_data = yaml.safe_load(kubeconfig)
+        server_url = kubeconfig_data["clusters"][0]["cluster"]["server"]
 
-    # Parse the kubeconfig YAML
-    kubeconfig_data = yaml.safe_load(kubeconfig)
+        # Extract host and port from server URL
+        # Example: "https://host.docker.internal:52910"
+        import re
 
-    # Extract server URL from clusters[0].cluster.server
-    server_url = kubeconfig_data["clusters"][0]["cluster"]["server"]
-
-    # Extract host and port from server URL
-    # Example: "https://host.docker.internal:52910"
-    import re
-
-    match = re.search(r"(https://[^:]+):(\d+)", server_url)
-    if not match:
-        raise ValueError(
-            f"Could not extract cluster host and port from server URL: {server_url}"
-        )
-    host, port = match.groups()
-
-    # On Linux, `k3d kubeconfig get` publishes the API server bound to all
-    # interfaces, so the server URL's host is a loopback-equivalent address
-    # (0.0.0.0, 127.0.0.1, localhost) meant for clients on the VM itself.
-    # The Cluster CR we're building here is read by apiserver, which runs
-    # as a Pod *inside* this same k3d cluster — from its own network
-    # namespace, connecting to a loopback address just loops back to
-    # itself and refuses (nothing listens there), rather than reaching the
-    # host's published port. `host.k3d.internal` is the DNS name k3d
-    # injects into CoreDNS specifically so in-cluster workloads can reach
-    # host-published ports; substitute it for any loopback-equivalent host.
-    if host in ("https://0.0.0.0", "https://127.0.0.1", "https://localhost"):
-        host = "https://host.k3d.internal"
+        match = re.search(r"(https://[^:]+):(\d+)", server_url)
+        if not match:
+            raise ValueError(
+                f"Could not extract cluster host and port from server URL: {server_url}"
+            )
+        host, port = match.groups()
+        # NOTE: on Linux, this host is typically a loopback-equivalent
+        # address (0.0.0.0/127.0.0.1/localhost) that only routes from the
+        # VM itself, not from a Pod's network namespace. host.k3d.internal
+        # is reachable in-cluster, but cluster B's default k3s server cert
+        # doesn't carry it as a SAN either, so this still needs
+        # `--tls-san=host.k3d.internal` passed to that cluster's
+        # `k3d cluster create` to pass TLS verification end-to-end.
+        if host in ("https://0.0.0.0", "https://127.0.0.1", "https://localhost"):
+            host = "https://host.k3d.internal"
 
     # Create Cluster CRD manifest
     cluster_crd = {
