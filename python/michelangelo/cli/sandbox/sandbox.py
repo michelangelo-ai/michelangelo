@@ -1726,6 +1726,19 @@ def _create_compute_cluster_crd(cluster_name: str):
         )
     host, port = match.groups()
 
+    # On Linux, `k3d kubeconfig get` publishes the API server bound to all
+    # interfaces, so the server URL's host is a loopback-equivalent address
+    # (0.0.0.0, 127.0.0.1, localhost) meant for clients on the VM itself.
+    # The Cluster CR we're building here is read by apiserver, which runs
+    # as a Pod *inside* this same k3d cluster — from its own network
+    # namespace, connecting to a loopback address just loops back to
+    # itself and refuses (nothing listens there), rather than reaching the
+    # host's published port. `host.k3d.internal` is the DNS name k3d
+    # injects into CoreDNS specifically so in-cluster workloads can reach
+    # host-published ports; substitute it for any loopback-equivalent host.
+    if host in ("https://0.0.0.0", "https://127.0.0.1", "https://localhost"):
+        host = "https://host.k3d.internal"
+
     # Create Cluster CRD manifest
     cluster_crd = {
         "apiVersion": "michelangelo.api/v2",
