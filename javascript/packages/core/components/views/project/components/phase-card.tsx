@@ -1,16 +1,12 @@
 import { useNavigate } from 'react-router-dom-v5-compat';
 import { useStyletron } from 'baseui';
-import {
-  Badge,
-  COLOR as BADGE_COLOR,
-  HIERARCHY as BADGE_HIERARCHY,
-  SHAPE as BADGE_SHAPE,
-} from 'baseui/badge';
 import { Button, KIND, SHAPE, SIZE } from 'baseui/button';
 
 import { Box } from '#core/components/box/box';
 import { Icon } from '#core/components/icon/icon';
 import { Link } from '#core/components/link/link';
+import { TAG_COLOR, TAG_SIZE } from '#core/components/tag/constants';
+import { Tag } from '#core/components/tag/tag';
 import { capitalizeFirstLetter } from '#core/utils/string-utils';
 
 import type { PhaseConfig } from '#core/types/common/studio-types';
@@ -30,12 +26,9 @@ export function PhaseCard(props: PhaseConfig & { projectId: string }) {
           <Icon name={icon} size={theme.sizing.scale500} />
           {name}
           {isComingSoon && (
-            <Badge
-              content="Coming soon"
-              color={BADGE_COLOR.accent}
-              hierarchy={BADGE_HIERARCHY.secondary}
-              shape={BADGE_SHAPE.pill}
-            />
+            <Tag color={TAG_COLOR.blue} size={TAG_SIZE.xSmall} closeable={false}>
+              Coming soon
+            </Tag>
           )}
         </div>
       }
