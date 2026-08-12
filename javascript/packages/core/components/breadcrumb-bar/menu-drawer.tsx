@@ -4,6 +4,7 @@ import { Button, KIND, SHAPE, SIZE } from 'baseui/button';
 import { ANCHOR, Drawer } from 'baseui/drawer';
 
 import { Icon } from '#core/components/icon/icon';
+import { TAG_COLOR } from '#core/components/tag/constants';
 import { Tag } from '#core/components/tag/tag';
 import { PhaseEntityList } from './phase-entity-list';
 import { PhaseHeader, TopLevelNavLink } from './styled-components';
@@ -101,7 +102,7 @@ export function MenuDrawer({ phases, projectId, topLevelLinks }: Props) {
                 {phase.icon && <Icon name={phase.icon} size="16px" title="" />}
                 {phase.name}
                 {phase.state === 'comingSoon' && (
-                  <Tag size="xSmall" closeable={false}>
+                  <Tag color={TAG_COLOR.blue} size="xSmall" closeable={false}>
                     Coming soon
                   </Tag>
                 )}

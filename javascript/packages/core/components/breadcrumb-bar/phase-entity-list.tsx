@@ -26,7 +26,7 @@ export function PhaseEntityList({
   return (
     <ul className={css({ listStyleType: 'none', padding: 0, margin: 0 })}>
       {phase.entities.map((entity) => {
-        const isDisabled = entity.state !== 'active';
+        const isDisabled = phase.state !== 'active' || entity.state !== 'active';
         const isSelected = !isDisabled && currentPhase === phase.id && currentEntity === entity.id;
 
         return (
