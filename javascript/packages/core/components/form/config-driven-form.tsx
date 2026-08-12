@@ -1,5 +1,5 @@
 import { Form } from '#core/components/form/form';
-import { LayoutItemList } from '#core/components/form/layout/layout-item-list';
+import { ResolvedFormContent } from '#core/components/form/resolved-form-content';
 import { applySubmitTransforms } from '#core/components/form/utils/apply-submit-transforms';
 import { filterHiddenConditionFields } from '#core/components/form/utils/filter-hidden-condition-fields';
 
@@ -43,8 +43,8 @@ export function ConfigDrivenForm<T extends Record<string, unknown>>({
       }}
       initialValues={initialValues}
     >
-      <LayoutItemList
-        items={config.layout}
+      <ResolvedFormContent
+        layout={config.layout}
         // cast: erases keyof T — layouts are structural and don't depend on the data shape
         fields={config.fields as Record<string, FieldConfig | undefined>}
       />

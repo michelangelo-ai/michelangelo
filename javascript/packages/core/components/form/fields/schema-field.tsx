@@ -1,3 +1,5 @@
+import { memo } from 'react';
+
 import { useFieldRenderer } from '#core/components/form/hooks/use-field-renderer';
 
 import type { FieldConfig } from '#core/components/form/types/config-types';
@@ -7,8 +9,11 @@ import type { FieldConfig } from '#core/components/form/types/config-types';
  *
  * Renders nothing if specified field configuration's type is not
  * registered to FIELD_RENDERERS or FormContext.renderers.
+ *
+ * Wrapped in `memo` so that a stable `config` reference (see `ResolvedFormContent`)
+ * skips re-rendering fields whose resolved interpolations haven't changed.
  */
-export function SchemaField({
+function SchemaFieldInner({
   fieldPath,
   config,
 }: {
@@ -20,3 +25,5 @@ export function SchemaField({
 
   return <Renderer name={fieldPath} config={config} />;
 }
+
+export const SchemaField = memo(SchemaFieldInner);

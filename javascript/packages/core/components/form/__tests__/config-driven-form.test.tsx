@@ -3,10 +3,12 @@ import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
 import { ConfigDrivenForm } from '#core/components/form/config-driven-form';
+import { interpolate } from '#core/interpolation/interpolate';
 import { FormProvider } from '#core/providers/form-provider/form-provider';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
+import { getInterpolationProviderWrapper } from '#core/test/wrappers/get-interpolation-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 
 import type { FieldRendererProps, FormConfig } from '#core/components/form/types/config-types';
@@ -651,6 +653,160 @@ describe('ConfigDrivenForm', () => {
       await waitFor(() => {
         expect(screen.getByLabelText('Admin Panel')).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('interpolation', () => {
+    it('resolves a function interpolation against another field value', async () => {
+      const user = userEvent.setup();
+
+      const config: FormConfig = {
+        fields: {
+          toggle: { type: 'string', label: 'Toggle' },
+          target: {
+            type: 'string',
+            label: 'Target',
+            disabled: interpolate(
+              (params) => (params.page as { toggle?: string }).toggle === 'yes'
+            ),
+          },
+        },
+        layout: ['toggle', 'target'],
+      };
+
+      render(
+        <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      expect(screen.getByLabelText('Target')).not.toBeDisabled();
+
+      await user.type(screen.getByLabelText('Toggle'), 'yes');
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Target')).toBeDisabled();
+      });
+    });
+
+    it('resolves a string interpolation from another field value', async () => {
+      const user = userEvent.setup();
+
+      const config: FormConfig = {
+        fields: {
+          name: { type: 'string', label: 'Name' },
+          greeting: { type: 'string', label: 'Greeting', placeholder: interpolate('${page.name}') },
+        },
+        layout: ['name', 'greeting'],
+      };
+
+      render(
+        <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      await user.type(screen.getByLabelText('Name'), 'Alice');
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText('Alice')).toBeInTheDocument();
+      });
+    });
+
+    it('renders non-interpolated fields normally alongside interpolated fields', () => {
+      const config: FormConfig = {
+        fields: {
+          toggle: { type: 'string', label: 'Toggle' },
+          target: {
+            type: 'string',
+            label: 'Target',
+            disabled: interpolate(
+              (params) => (params.page as { toggle?: string }).toggle === 'yes'
+            ),
+          },
+          plain: { type: 'string', label: 'Plain' },
+        },
+        layout: ['toggle', 'target', 'plain'],
+      };
+
+      render(
+        <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      expect(screen.getByLabelText('Plain')).toBeInTheDocument();
+      expect(screen.getByLabelText('Plain')).not.toBeDisabled();
+    });
+
+    it('resolves interpolated fields inside a condition layout', async () => {
+      const user = userEvent.setup();
+
+      const config: FormConfig = {
+        fields: {
+          mode: { type: 'string', label: 'Mode' },
+          advanced: {
+            type: 'string',
+            label: 'Advanced Setting',
+            disabled: interpolate((params) => (params.page as { mode?: string }).mode === 'locked'),
+          },
+        },
+        layout: ['mode', { type: 'condition', when: 'mode', is: 'advanced', items: ['advanced'] }],
+      };
+
+      render(
+        <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      await user.type(screen.getByLabelText('Mode'), 'advanced');
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Advanced Setting')).toBeInTheDocument();
+      });
+      expect(screen.getByLabelText('Advanced Setting')).not.toBeDisabled();
+    });
+
+    it('resolves an unresolvable interpolation to undefined instead of "[object Object]"', () => {
+      const config: FormConfig = {
+        fields: {
+          name: {
+            type: 'string',
+            label: 'Name',
+            caption: interpolate('${page.missing.path}'),
+          },
+        },
+        layout: ['name'],
+      };
+
+      render(
+        <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      expect(screen.queryByText('[object Object]')).not.toBeInTheDocument();
     });
   });
 });
