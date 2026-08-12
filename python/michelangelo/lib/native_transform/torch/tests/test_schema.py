@@ -99,6 +99,19 @@ class TestToBatchedTensor:
         assert tensor.dtype == torch.float64
         assert shape == [2]
 
+    def test_list_with_null_element_returns_none_shape(self) -> None:
+        """A list with a null element must fall back like a None value."""
+        tensor, shape = _to_batched_tensor([1.0, None, 3.0])
+        assert shape is None
+        assert tensor.shape == torch.Size([1, 1])
+        assert tensor.dtype == torch.float32
+
+    def test_dict_value_returns_none_shape(self) -> None:
+        """A dict value must fall back like a None value, not propagate."""
+        tensor, shape = _to_batched_tensor({"a": 1.0})
+        assert shape is None
+        assert tensor.shape == torch.Size([1, 1])
+
 
 class TestBuildSchemaItems:
     """``_build_schema_items``'s column -> ``ModelSchemaItem`` assembly."""

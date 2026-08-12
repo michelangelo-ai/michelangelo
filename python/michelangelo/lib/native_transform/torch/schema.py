@@ -74,7 +74,7 @@ def _to_batched_tensor(
         return fallback, None
     try:
         tensor = torch.as_tensor(value)
-    except (TypeError, ValueError):
+    except Exception:
         return fallback, None
     if tensor.dim() == 0:
         tensor = tensor.unsqueeze(0)
