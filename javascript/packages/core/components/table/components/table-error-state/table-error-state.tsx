@@ -1,6 +1,6 @@
-import { ErrorView } from '#core/components/error-view/error-view';
 import { CircleExclamationMark } from '#core/components/illustrations/circle-exclamation-mark/circle-exclamation-mark';
 import { CircleExclamationMarkKind } from '#core/components/illustrations/circle-exclamation-mark/types';
+import { Signpost } from '#core/components/signpost/signpost';
 import { GrpcStatusCode } from '#core/constants/grpc-status-codes';
 import { TableStateWrapper } from '../table-state-wrapper';
 
@@ -13,7 +13,7 @@ export function TableErrorState({ error }: TableErrorStateProps) {
     case GrpcStatusCode.DEADLINE_EXCEEDED:
       return (
         <TableStateWrapper>
-          <ErrorView
+          <Signpost
             illustration={
               <CircleExclamationMark
                 kind={CircleExclamationMarkKind.ERROR}
@@ -31,7 +31,7 @@ export function TableErrorState({ error }: TableErrorStateProps) {
     default:
       return (
         <TableStateWrapper>
-          <ErrorView
+          <Signpost
             illustration={
               <CircleExclamationMark
                 kind={CircleExclamationMarkKind.ERROR}

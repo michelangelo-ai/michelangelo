@@ -1,6 +1,6 @@
 import { styled } from 'baseui';
 
-export const ErrorViewContainer = styled('div', ({ $theme }) => ({
+export const SignpostContainer = styled('div', ({ $theme }) => ({
   textAlign: 'center',
   margin: '90px auto',
   maxWidth: '450px',

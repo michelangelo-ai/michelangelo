@@ -3,15 +3,15 @@ import { Button, KIND, SHAPE } from 'baseui/button';
 import { HeadingXSmall, ParagraphMedium } from 'baseui/typography';
 import { omit } from 'lodash';
 
-import { ErrorViewContainer } from './styled-components';
+import { SignpostContainer } from './styled-components';
 
-import type { ErrorViewProps } from './types';
-export function ErrorView(props: ErrorViewProps) {
+import type { SignpostProps } from './types';
+export function Signpost(props: SignpostProps) {
   const [css] = useStyletron();
   const { illustration, title, description, buttonConfig } = props;
 
   return (
-    <ErrorViewContainer>
+    <SignpostContainer>
       {illustration}
       <HeadingXSmall className={css({ margin: 0 })}>{title}</HeadingXSmall>
       {description && (
@@ -22,6 +22,6 @@ export function ErrorView(props: ErrorViewProps) {
           {buttonConfig.content}
         </Button>
       )}
-    </ErrorViewContainer>
+    </SignpostContainer>
   );
 }

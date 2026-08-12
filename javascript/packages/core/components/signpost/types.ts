@@ -1,7 +1,7 @@
 import type { ButtonProps } from 'baseui/button';
 import type { ReactNode } from 'react';
 
-export type ErrorViewProps = {
+export type SignpostProps = {
   illustration: ReactNode;
   title: string;
   description?: string | null;

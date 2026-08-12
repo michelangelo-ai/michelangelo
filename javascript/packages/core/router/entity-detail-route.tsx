@@ -2,10 +2,10 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom-v5-compat';
 import { useStyletron } from 'baseui';
 
-import { ErrorView } from '#core/components/error-view/error-view';
 import { CircleExclamationMark } from '#core/components/illustrations/circle-exclamation-mark/circle-exclamation-mark';
 import { CircleExclamationMarkKind } from '#core/components/illustrations/circle-exclamation-mark/types';
 import { Row } from '#core/components/row/row';
+import { Signpost } from '#core/components/signpost/signpost';
 import { DetailViewPageRenderer } from '#core/components/views/detail-view/components/detail-view-page-renderer/detail-view-page-renderer';
 import { DetailViewPages } from '#core/components/views/detail-view/components/detail-view-pages/detail-view-pages';
 import { DetailView } from '#core/components/views/detail-view/detail-view';
@@ -78,7 +78,7 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
 
   if (error) {
     return (
-      <ErrorView
+      <Signpost
         title="Entity not found"
         description={`Could not load ${entity} "${entityId}". ${error.message}`}
         illustration={

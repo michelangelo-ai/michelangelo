@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom-v5-compat';
 import { useStyletron } from 'baseui';
 import { Tab, Tabs } from 'baseui/tabs-motion';
 
-import { ErrorView } from '#core/components/error-view/error-view';
 import { CircleExclamationMark } from '#core/components/illustrations/circle-exclamation-mark/circle-exclamation-mark';
 import { CircleExclamationMarkKind } from '#core/components/illustrations/circle-exclamation-mark/types';
 import { PageHeader } from '#core/components/page-header/page-header';
+import { Signpost } from '#core/components/signpost/signpost';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { EntityTable } from './entity-table';
 
@@ -49,7 +49,7 @@ export function PhaseEntityView<T extends object = object>({
     // Return null to avoid flashing the error view during that redirect.
     if (!currentEntity) return null;
     return (
-      <ErrorView
+      <Signpost
         buttonConfig={{
           onClick: () => navigate(`/${projectId}`),
           content: 'Go home',

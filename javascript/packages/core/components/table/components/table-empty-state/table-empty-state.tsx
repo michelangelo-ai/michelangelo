@@ -1,4 +1,4 @@
-import { ErrorView } from '#core/components/error-view/error-view';
+import { Signpost } from '#core/components/signpost/signpost';
 import { TableStateWrapper } from '../table-state-wrapper';
 
 import type { TableEmptyStateProps } from './types';
@@ -6,7 +6,7 @@ import type { TableEmptyStateProps } from './types';
 export function TableEmptyState({ emptyState }: TableEmptyStateProps) {
   return (
     <TableStateWrapper>
-      <ErrorView
+      <Signpost
         illustration={emptyState.icon}
         title={emptyState.title}
         description={emptyState.content}
