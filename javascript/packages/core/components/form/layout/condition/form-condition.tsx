@@ -7,6 +7,14 @@ import { buildIndexedFieldId } from './build-indexed-field-id';
 import type { ReactNode } from 'react';
 import type { ConditionLayoutConfig } from './types';
 
+/**
+ * Renders `children` when `layout` evaluates to true against the current form state.
+ *
+ * `layout.when` is an entity-relative field path (e.g. `items.name`), not a literal
+ * field id. Inside a `RepeatedLayoutProvider`, it's resolved through
+ * `buildIndexedFieldId` against the current item's index before subscribing, so the
+ * same config can be reused across every item in a repeated layout.
+ */
 export function FormCondition({
   layout,
   children,
