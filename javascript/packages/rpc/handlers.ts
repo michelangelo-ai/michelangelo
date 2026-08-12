@@ -27,6 +27,7 @@ async function createHandlers() {
     GetProject: unary(services.ProjectService.getProject),
     GetPipeline: unary(services.PipelineService.getPipeline),
     ListPipeline: unary(services.PipelineService.listPipeline),
+    DeletePipeline: unary(services.PipelineService.deletePipeline),
     ListPipelineRun: unary(services.PipelineRunService.listPipelineRun),
     GetPipelineRun: unary(services.PipelineRunService.getPipelineRun),
     ListTriggerRun: unary(services.TriggerRunService.listTriggerRun),
