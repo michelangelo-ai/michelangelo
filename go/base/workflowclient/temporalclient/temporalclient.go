@@ -15,6 +15,7 @@ import (
 	"go.temporal.io/api/serviceerror"
 	workflowserviceV1 "go.temporal.io/api/workflowservice/v1"
 	temporalClient "go.temporal.io/sdk/client"
+	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -42,6 +43,7 @@ func mapTemporalStatusToInterface(status temporalEnumsV1.WorkflowExecutionStatus
 
 type TemporalClient struct {
 	Client   temporalClient.Client
+	Logger   *zap.Logger
 	Provider string
 	Domain   string
 }
@@ -402,16 +404,32 @@ func (c *TemporalClient) UnpauseTrigger(ctx context.Context, workflowID string) 
 func (c *TemporalClient) DeleteTrigger(ctx context.Context, workflowID string, runID string) error {
 	scheduleID := scheduleIDForWorkflow(workflowID)
 	handle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
-	if err := handle.Delete(ctx); err != nil && !isTemporalNotFound(err) {
-		return err
+	if err := handle.Delete(ctx); err != nil {
+		if !isTemporalNotFound(err) {
+			return err
+		}
+		c.logger().Info("Temporal schedule already absent during trigger deletion",
+			zap.String("schedule_id", scheduleID))
 	}
 	if runID == "" {
 		return nil
 	}
-	if err := c.Client.TerminateWorkflow(ctx, workflowID, runID, "trigger killed"); err != nil && !isTemporalNotFound(err) {
-		return err
+	if err := c.Client.TerminateWorkflow(ctx, workflowID, runID, "trigger killed"); err != nil {
+		if !isTemporalNotFound(err) {
+			return err
+		}
+		c.logger().Info("Temporal workflow already absent during trigger deletion",
+			zap.String("workflow_id", workflowID),
+			zap.String("run_id", runID))
 	}
 	return nil
+}
+
+func (c *TemporalClient) logger() *zap.Logger {
+	if c.Logger == nil {
+		return zap.NewNop()
+	}
+	return c.Logger
 }
 
 // isTemporalNotFound makes trigger deletion idempotent. Temporal reports both an

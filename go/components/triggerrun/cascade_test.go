@@ -19,6 +19,7 @@ import (
 	apiutils "github.com/michelangelo-ai/michelangelo/go/api/utils"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	interfaceMock "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface/interface_mock"
+	"github.com/michelangelo-ai/michelangelo/go/cascadedelete"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
@@ -65,6 +66,52 @@ func TestTriggerRun_RequestCancel_PersistsTokenAndKilledStatus(t *testing.T) {
 	assert.Equal(t, "true", got.GetAnnotations()["cascade.michelangelo.uber.com/drain-counted"], "token persisted with the kill")
 	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_KILLED, got.Status.State, "terminal status persisted through /status")
 	mockRunner.AssertCalled(t, "Kill", mock.Anything, mock.Anything)
+}
+
+func TestTriggerRun_DrainFinishesAcrossReconciles(t *testing.T) {
+	scheme := cascadeScheme(t)
+	run := &v2pb.TriggerRun{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "tr-drain",
+			Namespace:  "ns",
+			UID:        types.UID("t-drain"),
+			Finalizers: []string{drainFinalizer},
+		},
+		Status: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
+	}
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(run).WithStatusSubresource(run).Build()
+
+	mockRunner := &MockRunner{}
+	mockRunner.On("Kill", mock.Anything, mock.Anything).
+		Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_KILLED}, nil).
+		Once()
+	r := &Reconciler{Handler: apiHandler.NewFakeAPIHandler(c), scheme: scheme, cronTrigger: mockRunner}
+
+	drainStep := func(current *v2pb.TriggerRun) error {
+		state := cascadedelete.DrainState{
+			Object:      current,
+			Kind:        metricKind,
+			Finalizer:   drainFinalizer,
+			IsTerminal:  isTerminateState(current),
+			WorkStarted: triggerRunWorkStarted(current),
+		}
+		_, err := cascadedelete.RunDrainStep(context.Background(), state,
+			&triggerRunDrainTarget{r: r, log: logr.Discard(), run: current}, drainRequeueInterval)
+		return err
+	}
+
+	reconciled := run.DeepCopy()
+	require.NoError(t, drainStep(reconciled))
+	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Name: run.Name, Namespace: run.Namespace}, reconciled))
+	require.Equal(t, v2pb.TRIGGER_RUN_STATE_KILLED, reconciled.Status.State)
+	require.Equal(t, "true", reconciled.GetAnnotations()["cascade.michelangelo.uber.com/drain-counted"])
+
+	require.NoError(t, drainStep(reconciled.DeepCopy()))
+	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Name: run.Name, Namespace: run.Namespace}, reconciled))
+	assert.False(t, ctrlutil.ContainsFinalizer(reconciled, drainFinalizer))
+	assert.Empty(t, reconciled.GetAnnotations()["cascade.michelangelo.uber.com/drain-counted"])
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_KILLED, reconciled.Status.State)
+	mockRunner.AssertExpectations(t)
 }
 
 // TestTriggerRun_Progress_ReissuesKill: Progress re-issues the idempotent kill and
