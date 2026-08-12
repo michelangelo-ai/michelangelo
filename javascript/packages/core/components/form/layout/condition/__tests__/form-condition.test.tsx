@@ -11,17 +11,9 @@ import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wr
 
 import type { ConditionLayoutConfig } from '#core/components/form/layout/condition/types';
 
-function SetValueButton({ name, value }: { name: string; value: unknown }) {
+function SetValueButton({ name, value, label }: { name: string; value: unknown; label: string }) {
   const { change } = useForm();
-  return <button onClick={() => change(name, value)}>{`set:${JSON.stringify(value)}`}</button>;
-}
-
-function content() {
-  return screen.queryByText('Conditional Content');
-}
-
-async function setValue(user: ReturnType<typeof userEvent.setup>, value: unknown) {
-  await user.click(screen.getByRole('button', { name: `set:${JSON.stringify(value)}` }));
+  return <button onClick={() => change(name, value)}>{label}</button>;
 }
 
 describe('FormCondition', () => {
@@ -43,7 +35,7 @@ describe('FormCondition', () => {
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
 
-      expect(content()).toBeInTheDocument();
+      expect(screen.queryByText('Conditional Content')).toBeInTheDocument();
     });
 
     it('hides children when value does not match', () => {
@@ -56,7 +48,7 @@ describe('FormCondition', () => {
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
 
-      expect(content()).not.toBeInTheDocument();
+      expect(screen.queryByText('Conditional Content')).not.toBeInTheDocument();
     });
 
     it('hides children again when value changes away from the match', async () => {
@@ -66,16 +58,18 @@ describe('FormCondition', () => {
           <FormCondition layout={layout}>
             <div>Conditional Content</div>
           </FormCondition>
-          <SetValueButton name="mode" value="basic" />
+          <SetValueButton name="mode" value="basic" label="Change value" />
         </Form>,
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
 
-      expect(content()).toBeInTheDocument();
+      expect(screen.queryByText('Conditional Content')).toBeInTheDocument();
 
-      await setValue(user, 'basic');
+      await user.click(screen.getByRole('button', { name: 'Change value' }));
 
-      await waitFor(() => expect(content()).not.toBeInTheDocument());
+      await waitFor(() =>
+        expect(screen.queryByText('Conditional Content')).not.toBeInTheDocument()
+      );
     });
   });
 
@@ -97,7 +91,7 @@ describe('FormCondition', () => {
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
 
-      expect(content()).not.toBeInTheDocument();
+      expect(screen.queryByText('Conditional Content')).not.toBeInTheDocument();
     });
 
     it('renders children when value differs from isNot and is non-empty', () => {
@@ -110,7 +104,7 @@ describe('FormCondition', () => {
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
 
-      expect(content()).toBeInTheDocument();
+      expect(screen.queryByText('Conditional Content')).toBeInTheDocument();
     });
 
     it('hides children when value is empty ("not yet determined")', () => {
@@ -123,7 +117,7 @@ describe('FormCondition', () => {
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
 
-      expect(content()).not.toBeInTheDocument();
+      expect(screen.queryByText('Conditional Content')).not.toBeInTheDocument();
     });
 
     it('hides children again once value changes back to isNot', async () => {
@@ -133,16 +127,18 @@ describe('FormCondition', () => {
           <FormCondition layout={layout}>
             <div>Conditional Content</div>
           </FormCondition>
-          <SetValueButton name="mode" value="hidden" />
+          <SetValueButton name="mode" value="hidden" label="Change value" />
         </Form>,
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
 
-      expect(content()).toBeInTheDocument();
+      expect(screen.queryByText('Conditional Content')).toBeInTheDocument();
 
-      await setValue(user, 'hidden');
+      await user.click(screen.getByRole('button', { name: 'Change value' }));
 
-      await waitFor(() => expect(content()).not.toBeInTheDocument());
+      await waitFor(() =>
+        expect(screen.queryByText('Conditional Content')).not.toBeInTheDocument()
+      );
     });
   });
 
@@ -164,7 +160,7 @@ describe('FormCondition', () => {
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
 
-      expect(content()).toBeInTheDocument();
+      expect(screen.queryByText('Conditional Content')).toBeInTheDocument();
     });
 
     it('hides children when field is non-empty', () => {
@@ -177,7 +173,7 @@ describe('FormCondition', () => {
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
 
-      expect(content()).not.toBeInTheDocument();
+      expect(screen.queryByText('Conditional Content')).not.toBeInTheDocument();
     });
 
     it('hides children once field becomes non-empty, and shows again once cleared', async () => {
@@ -187,19 +183,21 @@ describe('FormCondition', () => {
           <FormCondition layout={layout}>
             <div>Conditional Content</div>
           </FormCondition>
-          <SetValueButton name="name" value="Alice" />
-          <SetValueButton name="name" value="" />
+          <SetValueButton name="name" value="Alice" label="Set to Alice" />
+          <SetValueButton name="name" value="" label="Clear" />
         </Form>,
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
 
-      expect(content()).toBeInTheDocument();
+      expect(screen.queryByText('Conditional Content')).toBeInTheDocument();
 
-      await setValue(user, 'Alice');
-      await waitFor(() => expect(content()).not.toBeInTheDocument());
+      await user.click(screen.getByRole('button', { name: 'Set to Alice' }));
+      await waitFor(() =>
+        expect(screen.queryByText('Conditional Content')).not.toBeInTheDocument()
+      );
 
-      await setValue(user, '');
-      await waitFor(() => expect(content()).toBeInTheDocument());
+      await user.click(screen.getByRole('button', { name: 'Clear' }));
+      await waitFor(() => expect(screen.queryByText('Conditional Content')).toBeInTheDocument());
     });
   });
 
@@ -221,7 +219,7 @@ describe('FormCondition', () => {
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
 
-      expect(content()).toBeInTheDocument();
+      expect(screen.queryByText('Conditional Content')).toBeInTheDocument();
     });
 
     it('hides children when field is empty', () => {
@@ -234,7 +232,7 @@ describe('FormCondition', () => {
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
 
-      expect(content()).not.toBeInTheDocument();
+      expect(screen.queryByText('Conditional Content')).not.toBeInTheDocument();
     });
 
     it('hides children again once field is cleared', async () => {
@@ -244,16 +242,18 @@ describe('FormCondition', () => {
           <FormCondition layout={layout}>
             <div>Conditional Content</div>
           </FormCondition>
-          <SetValueButton name="name" value="" />
+          <SetValueButton name="name" value="" label="Clear" />
         </Form>,
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
 
-      expect(content()).toBeInTheDocument();
+      expect(screen.queryByText('Conditional Content')).toBeInTheDocument();
 
-      await setValue(user, '');
+      await user.click(screen.getByRole('button', { name: 'Clear' }));
 
-      await waitFor(() => expect(content()).not.toBeInTheDocument());
+      await waitFor(() =>
+        expect(screen.queryByText('Conditional Content')).not.toBeInTheDocument()
+      );
     });
   });
 
@@ -275,7 +275,7 @@ describe('FormCondition', () => {
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
 
-      expect(content()).toBeInTheDocument();
+      expect(screen.queryByText('Conditional Content')).toBeInTheDocument();
     });
 
     it('hides when a scalar value is not in the list', () => {
@@ -288,7 +288,7 @@ describe('FormCondition', () => {
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
 
-      expect(content()).not.toBeInTheDocument();
+      expect(screen.queryByText('Conditional Content')).not.toBeInTheDocument();
     });
 
     it('renders when an array value overlaps with the list', () => {
@@ -301,7 +301,7 @@ describe('FormCondition', () => {
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
 
-      expect(content()).toBeInTheDocument();
+      expect(screen.queryByText('Conditional Content')).toBeInTheDocument();
     });
 
     it('hides when an array value does not overlap with the list', () => {
@@ -314,7 +314,7 @@ describe('FormCondition', () => {
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
 
-      expect(content()).not.toBeInTheDocument();
+      expect(screen.queryByText('Conditional Content')).not.toBeInTheDocument();
     });
 
     it('hides again once the value changes to a non-matching one', async () => {
@@ -324,16 +324,18 @@ describe('FormCondition', () => {
           <FormCondition layout={layout}>
             <div>Conditional Content</div>
           </FormCondition>
-          <SetValueButton name="role" value="guest" />
+          <SetValueButton name="role" value="guest" label="Change value" />
         </Form>,
         buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
       );
 
-      expect(content()).toBeInTheDocument();
+      expect(screen.queryByText('Conditional Content')).toBeInTheDocument();
 
-      await setValue(user, 'guest');
+      await user.click(screen.getByRole('button', { name: 'Change value' }));
 
-      await waitFor(() => expect(content()).not.toBeInTheDocument());
+      await waitFor(() =>
+        expect(screen.queryByText('Conditional Content')).not.toBeInTheDocument()
+      );
     });
   });
 });
