@@ -24,6 +24,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import SkipNextIcon from '@mui/icons-material/SkipNext';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 
 import { createMuiIconAdapter } from './mui-icon-adapter';
 
@@ -46,6 +47,7 @@ export const ICONS = {
   diamondEmpty: createMuiIconAdapter(CropSquareIcon),
   stopCircle: createMuiIconAdapter(StopCircleIcon),
   menu: createMuiIconAdapter(MenuIcon),
+  monitor: createMuiIconAdapter(VisibilityIcon),
   overflowMenu: createMuiIconAdapter(MoreVertIcon),
   playerNext: createMuiIconAdapter(SkipNextIcon),
   playerPlay: createMuiIconAdapter(PlayArrowIcon),
