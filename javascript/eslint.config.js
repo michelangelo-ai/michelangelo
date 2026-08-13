@@ -272,6 +272,17 @@ export default [
     rules: sharedRules,
   },
 
+  // packages/core/index.tsx is the package's public API barrel (see the
+  // no-barrel-exports exception above) — it exports hooks, types, and
+  // constants alongside components by design, so react-refresh's
+  // component-only-export rule doesn't apply here.
+  {
+    files: ['packages/core/index.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+
   // Interpolation module - Allow unsafe operations for dynamic data handling
   {
     files: [
