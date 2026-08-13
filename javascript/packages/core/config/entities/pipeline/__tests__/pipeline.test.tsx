@@ -19,12 +19,21 @@ import { getSnackbarProviderWrapper } from '#core/test/wrappers/get-snackbar-pro
 import type { PhaseConfig } from '#core/types/common/studio-types';
 
 function buildPipeline() {
-  return { metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' }, spec: { owner: { name: 'me' } } };
+  return {
+    metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
+    spec: { owner: { name: 'me' } },
+  };
 }
 
 function buildTestPhases(): Record<string, PhaseConfig> {
   return {
-    train: { id: 'train', icon: 'train', name: 'Train', state: 'active', entities: [PIPELINE_ENTITY_CONFIG] },
+    train: {
+      id: 'train',
+      icon: 'train',
+      name: 'Train',
+      state: 'active',
+      entities: [PIPELINE_ENTITY_CONFIG],
+    },
   };
 }
 
@@ -81,7 +90,9 @@ describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
         );
       });
 
-      expect(screen.getByText(/Current pathname: \/ma-dev-test\/train\/pipelines/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Current pathname: \/ma-dev-test\/train\/pipelines/)
+      ).toBeInTheDocument();
     });
 
     it('keeps the dialog open and shows the error when delete fails', async () => {
@@ -147,7 +158,9 @@ describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
         );
       });
 
-      expect(screen.getByText(/Current pathname: \/ma-dev-test\/train\/pipelines/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Current pathname: \/ma-dev-test\/train\/pipelines/)
+      ).toBeInTheDocument();
     });
 
     it('keeps the dialog open and shows the error when delete fails', async () => {
