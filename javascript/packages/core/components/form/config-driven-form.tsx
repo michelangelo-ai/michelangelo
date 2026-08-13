@@ -1,5 +1,7 @@
 import { Form } from '#core/components/form/form';
 import { LayoutItemList } from '#core/components/form/layout/layout-item-list';
+import { applySubmitTransforms } from '#core/components/form/utils/apply-submit-transforms';
+import { filterHiddenConditionFields } from '#core/components/form/utils/filter-hidden-condition-fields';
 
 import type { FieldConfig, FormConfig } from '#core/components/form/types/config-types';
 import type { DeepPartial } from '#core/types/utility-types';
@@ -29,7 +31,18 @@ export function ConfigDrivenForm<T extends Record<string, unknown>>({
   initialValues,
 }: ConfigDrivenFormProps<T>) {
   return (
-    <Form<T> onSubmit={onSubmit} initialValues={initialValues}>
+    <Form<T>
+      onSubmit={(values, ...rest) => {
+        const transformed = applySubmitTransforms([filterHiddenConditionFields], values, config);
+        // cast: onSubmit's declared type only accepts `values`; forwarding the extra
+        // final-form args (form, callback) preserves the pre-existing pass-through behavior
+        return (onSubmit as (...args: unknown[]) => void | object | Promise<object>)(
+          transformed,
+          ...rest
+        );
+      }}
+      initialValues={initialValues}
+    >
       <LayoutItemList
         items={config.layout}
         // cast: erases keyof T — layouts are structural and don't depend on the data shape

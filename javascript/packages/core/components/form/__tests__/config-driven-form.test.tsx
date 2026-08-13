@@ -491,4 +491,38 @@ describe('ConfigDrivenForm', () => {
       expect(screen.getByLabelText('Advanced Setting')).toBeInTheDocument();
     });
   });
+
+  it('does not submit values left over from a field hidden by a condition', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    const config: FormConfig = {
+      fields: {
+        mode: { type: 'string', label: 'Mode' },
+        advanced: { type: 'string', label: 'Advanced Setting' },
+      },
+      layout: ['mode', { type: 'condition', when: 'mode', is: 'advanced', items: ['advanced'] }],
+    };
+
+    render(
+      <ConfigDrivenForm config={config} onSubmit={onSubmit} />,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+    );
+
+    await user.type(screen.getByLabelText('Mode'), 'advanced');
+    await waitFor(() => expect(screen.getByLabelText('Advanced Setting')).toBeInTheDocument());
+
+    await user.type(screen.getByLabelText('Advanced Setting'), 'stale value');
+    await user.clear(screen.getByLabelText('Mode'));
+    await user.type(screen.getByLabelText('Mode'), 'basic');
+    await waitFor(() =>
+      expect(screen.queryByLabelText('Advanced Setting')).not.toBeInTheDocument()
+    );
+
+    fireEvent.submit(screen.getByLabelText('Mode'));
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith({ mode: 'basic' }, expect.anything(), expect.anything())
+    );
+  });
 });
