@@ -54,12 +54,6 @@ from michelangelo.lib.native_transform.torch.transform_utils import (
     update_output_tensor_map,
 )
 from michelangelo.lib.native_transform.torch.utils import generate_layer_name
-from michelangelo.uniflow.core.io_registry import default_io
-
-# Register TransformSpec as a first-class IO-serializable workflow value, so
-# it can be passed between Uniflow tasks the same way a DataFrame or Dataset
-# is (see michelangelo.uniflow.core.io_registry.default_io).
-default_io[TransformSpec] = TransformSpecIO
 
 __all__ = [
     "TORCH_TRANSFORM_LAYERS_DICT",

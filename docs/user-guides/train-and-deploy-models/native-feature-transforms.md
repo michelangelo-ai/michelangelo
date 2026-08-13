@@ -78,8 +78,8 @@ spec.update_min_max_scaler_specs(fitted_stats)
 
 Once fitted, a `TransformSpec` is a plain value you'll want to pass between
 pipeline stages (e.g. from a "fit transforms" task to a "train" task) or
-persist alongside a model artifact. `TransformSpecIO` registers `TransformSpec`
-with Uniflow's [`default_io`](../reference/type-system.md) registry, so it
+persist alongside a model artifact. `TransformSpecIO` adapts `TransformSpec`
+to Uniflow's [`default_io`](../reference/type-system.md) registry, so it
 round-trips through `write`/`read` the same way a `DataFrame` or `Dataset`
 does:
 
@@ -93,10 +93,16 @@ io.write("s3://bucket/run-id/transform_spec.json", spec)
 restored_spec = io.read("s3://bucket/run-id/transform_spec.json", None)
 ```
 
-Because `TransformSpec` is registered in `default_io`, any Uniflow task that
-declares a `TransformSpec`-typed input or output gets this serialization for
-free without calling `TransformSpecIO` directly — see
-[Type System](../reference/type-system.md) for how task I/O typing works.
+To have any Uniflow task that declares a `TransformSpec`-typed input or
+output get this serialization for free, without calling `TransformSpecIO`
+directly, import the plugin package to register it in `default_io`:
+
+```python
+import michelangelo.uniflow.plugins.native_transform  # noqa: F401  (registers TransformSpec with default_io)
+```
+
+See [Type System](../reference/type-system.md) for how task I/O typing
+works.
 
 ### Materialize and run
 
@@ -144,5 +150,6 @@ of `update_standard_scaler_specs`/`update_min_max_scaler_specs`.
 To support persisting a *new* transform-related type as a workflow value the
 way `TransformSpecIO` does for `TransformSpec`, implement the
 `IO[T]` protocol (`write`/`read`) and register it with
-`default_io[YourType] = YourTypeIO`, matching the pattern in
-`michelangelo/lib/native_transform/torch/io.py`.
+`default_io[YourType] = YourTypeIO` in a `michelangelo.uniflow.plugins.*`
+package, matching the pattern in
+`michelangelo/uniflow/plugins/native_transform/io.py`.

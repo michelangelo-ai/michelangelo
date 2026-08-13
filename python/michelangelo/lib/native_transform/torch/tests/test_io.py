@@ -15,7 +15,6 @@ from michelangelo.lib.native_transform.torch.io import TransformSpecIO  # noqa: 
 from michelangelo.lib.native_transform.torch.transform_spec import (  # noqa: E402
     TransformSpec,
 )
-from michelangelo.uniflow.core.io_registry import default_io  # noqa: E402
 
 RAW_SPECS = {
     "transform_specs": [
@@ -79,13 +78,6 @@ class TestTransformSpecIO:
         io = TransformSpecIO()
         with pytest.raises(json.JSONDecodeError):
             io.read(str(url), None)
-
-    def test_registered_in_default_io(self) -> None:
-        """Importing the torch native_transform package registers the handler."""
-        import michelangelo.lib.native_transform.torch  # noqa: F401
-
-        assert TransformSpec in default_io
-        assert isinstance(default_io[TransformSpec], TransformSpecIO)
 
     def test_read_result_is_independent_of_written_instance(self, tmp_path) -> None:
         """Mutating the original spec after write() doesn't affect the restored copy."""
