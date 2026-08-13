@@ -1,0 +1,34 @@
+apiVersion: v2
+name: michelangelo-llm-gateway
+description: Deploys LiteLLM as an independently released Michelangelo data plane
+type: application
+version: 0.1.0
+appVersion: "1.85.1"
+kubeVersion: ">=1.27.0-0"
+
+dependencies:
+  - name: litellm-helm
+    alias: litellm
+    version: "1.85.1"
+    repository: oci://ghcr.io/berriai
+
+home: https://github.com/michelangelo-ai/michelangelo
+icon: https://raw.githubusercontent.com/michelangelo-ai/michelangelo/main/website/static/img/michelangelo-logo-color.svg
+sources:
+  - https://github.com/michelangelo-ai/michelangelo
+  - https://github.com/michelangelo-ai/michelangelo/tree/main/helm/michelangelo-llm-gateway
+  - https://github.com/BerriAI/litellm
+keywords:
+  - llm
+  - gateway
+  - litellm
+  - michelangelo
+maintainers:
+  - name: Michelangelo Maintainers
+    email: maintainers@michelangelo-ai.org
+    url: https://github.com/michelangelo-ai/michelangelo
+annotations:
+  artifacthub.io/category: machine-learning
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/prerelease: "true"
+  org.opencontainers.image.source: https://github.com/michelangelo-ai/michelangelo

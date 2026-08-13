@@ -1,0 +1,55 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "michelangelo-llm-gateway.fullname" . }}
+  labels:
+    {{- include "michelangelo-llm-gateway.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "michelangelo-llm-gateway.litellmSelectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  {{- if or .Values.networkPolicy.ingress .Values.tests.enabled }}
+  ingress:
+    {{- with .Values.networkPolicy.ingress }}
+    {{- tpl (toYaml .) $ | nindent 4 }}
+    {{- end }}
+    {{- if .Values.tests.enabled }}
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "michelangelo-llm-gateway.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: test
+      ports:
+        - port: {{ .Values.litellm.service.port }}
+          protocol: TCP
+    {{- end }}
+  {{- else }}
+  ingress: []
+  {{- end }}
+  {{- if or .Values.networkPolicy.allowDNS .Values.networkPolicy.egress }}
+  egress:
+    {{- if .Values.networkPolicy.allowDNS }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.dns.namespaceSelector | nindent 14 }}
+          podSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.dns.podSelector | nindent 14 }}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    {{- end }}
+    {{- with .Values.networkPolicy.egress }}
+    {{- tpl (toYaml .) $ | nindent 4 }}
+    {{- end }}
+  {{- else }}
+  egress: []
+  {{- end }}
+{{- end }}
