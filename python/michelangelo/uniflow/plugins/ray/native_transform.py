@@ -186,11 +186,7 @@ def compute_numerical_statistics(
     if not aggregate_fns:
         return numerical_stats
 
-    batch_count = (
-        len(numerical_statistics_computation_specs)
-        // numerical_statistics_batch_fn_size
-        + 1
-    )
+    batch_count = len(aggregate_fns) // numerical_statistics_batch_fn_size + 1
     for i in range(batch_count):
         batch = aggregate_fns[
             i * numerical_statistics_batch_fn_size : (i + 1)

@@ -270,6 +270,61 @@ class ComputeNumericalStatisticsTests(unittest.TestCase):
 
         self.assertEqual(mock_dataset.aggregate.call_count, 2)
 
+    def test_batch_count_covers_all_aggregate_fns_not_just_specs(self):
+        """batch_count must scale with aggregate_fns, not with column specs.
+
+        Two columns each contribute 4 aggregate fns (max/min/mean/std), for 8
+        total, while there are only 2 specs. With a batch size of 2, a
+        batch_count derived from spec count would only cover the first 4
+        aggregate fns, silently dropping the rest.
+        """
+
+        class _FakeAggFn:
+            def __init__(self, input_col, alias_name=None, **_kwargs):
+                self.input_col = input_col
+                self.alias_name = alias_name
+
+        mock_dataset = MagicMock()
+        mock_dataset.select_columns.return_value = mock_dataset
+        mock_dataset.aggregate.side_effect = lambda *fns: {
+            fn.alias_name: 1.0 for fn in fns
+        }
+        specs = {
+            "col1": {
+                "percentiles": [],
+                "max": True,
+                "min": True,
+                "mean": True,
+                "std": True,
+            },
+            "col2": {
+                "percentiles": [],
+                "max": True,
+                "min": True,
+                "mean": True,
+                "std": True,
+            },
+        }
+
+        mock_aggregate = MagicMock()
+        mock_aggregate.Max = mock_aggregate.Min = mock_aggregate.Mean = (
+            mock_aggregate.Std
+        ) = _FakeAggFn
+        with patch.dict("sys.modules", {"ray.data.aggregate": mock_aggregate}):
+            result = compute_numerical_statistics(
+                mock_dataset,
+                existing_numerical_stats={},
+                numerical_statistics_computation_specs=specs,
+                numerical_statistics_batch_fn_size=2,
+            )
+
+        expected_keys = {
+            f"{col}_{stat}"
+            for col in ("col1", "col2")
+            for stat in ("max", "min", "mean", "std")
+        }
+        self.assertEqual(set(result.keys()), expected_keys)
+
 
 class GetTorchDtypeTests(unittest.TestCase):
     """Tests for get torch dtype."""
