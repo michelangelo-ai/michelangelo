@@ -13,6 +13,7 @@ import { buildTaskMatrix } from './utils/build-task-matrix';
 import { determineExecutionState } from './utils/determine-execution-state';
 import { handleScrollToTask } from './utils/scroll-to-task';
 
+import type { Data } from '#core/components/actions/types';
 import type { ExecutionDetailViewSchema, ExecutionOverrides } from './types';
 
 export function Execution<
@@ -77,6 +78,10 @@ export function Execution<
             key={index}
             task={task}
             metadata={schema.tasks.header.metadata}
+            actions={schema.tasks.header.actions}
+            // cast: TData extends object lacks an index signature; always a plain record at
+            // runtime; see #1443
+            pageData={data as Data}
             bodySchema={schema.tasks.body}
             overrides={overrides}
           />

@@ -21,6 +21,7 @@ export const TaskContentStack = styled('div', ({ $theme }) => ({
   display: 'flex',
   flexDirection: 'column',
   gap: $theme.sizing.scale800,
+  width: '100%',
 }));
 
 export function TaskPanel(props: CollapsibleBoxProps & { id?: string; state?: TaskState }) {

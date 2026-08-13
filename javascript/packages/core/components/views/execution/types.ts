@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react';
+import type { ActionConfigSchema, Data } from '#core/components/actions/types';
 import type { RowCell } from '#core/components/row/types';
 import type { Accessor } from '#core/types/common/studio-types';
 import type { TaskBodySchema } from './components/task-details/renderers/types';
@@ -123,6 +124,14 @@ export type ExecutionDetailViewSchema<
        * ```
        */
       metadata?: RowCell[];
+
+      /**
+       * Optional actions rendered as a popover menu at the far right of the task header,
+       * next to the expand/collapse control (e.g. retry). Resolved against a record
+       * merging the page-level data with the individual task's own record, so
+       * conditions can reference fields from either.
+       */
+      actions?: ActionConfigSchema<Data>[];
     };
 
     /**

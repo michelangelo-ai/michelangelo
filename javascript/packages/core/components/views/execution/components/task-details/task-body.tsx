@@ -16,7 +16,7 @@ import type { TaskBodyProps } from './types';
 
 export function TaskBody<TTaskRecord extends object>(props: TaskBodyProps<TTaskRecord>) {
   const [css, theme] = useStyletron();
-  const { task, bodySchema, overrides, metadata } = props;
+  const { task, bodySchema, overrides, metadata, actions, pageData } = props;
   const { subTasks } = task;
   const resolver = useInterpolationResolver();
 
@@ -41,6 +41,8 @@ export function TaskBody<TTaskRecord extends object>(props: TaskBodyProps<TTaskR
             bodySchema={bodySchema}
             overrides={overrides}
             metadata={metadata}
+            actions={actions}
+            pageData={pageData}
           />
         ))}
       </TaskContentStack>

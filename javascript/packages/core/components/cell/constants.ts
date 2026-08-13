@@ -3,7 +3,6 @@ import { DateCell } from './renderers/date/date-cell';
 import { DescriptionCell } from './renderers/description/description-cell';
 import { LinkCell } from './renderers/link/link-cell';
 import { MultiCell } from './renderers/multi/multi-cell';
-import { RetryCell } from './renderers/retry/retry-cell';
 import { StateCell } from './renderers/state/state-cell';
 import { TagCell } from './renderers/tag/tag-cell';
 import { TextCell } from './renderers/text/text-cell';
@@ -81,11 +80,6 @@ export enum CellType {
    * Sentence cased formatted with stripped type prefix or suffix
    */
   TYPE = 'TYPE',
-
-  /**
-   * @description Renders a **Retry Button** for failed tasks
-   */
-  RETRY = 'RETRY',
 }
 
 export const CELL_RENDERERS = {
@@ -95,7 +89,6 @@ export const CELL_RENDERERS = {
   [CellType.LINK]: LinkCell,
   [CellType.MULTI]: MultiCell,
   [CellType.REPEATED_ITEMS]: MultiCell,
-  [CellType.RETRY]: RetryCell,
   [CellType.STATE]: StateCell,
   [CellType.TAG]: TagCell,
   [CellType.TYPE]: TypeCell,

@@ -99,7 +99,14 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
   // cast: PhaseEntityConfig carries no entity type generic, so the runtime-selected service key's
   // value is assumed to be the entity object; related to #1425
   const entityData = data?.[entityConfig!.service] as Record<string, unknown> | undefined;
-  const resolvedDetailViewConfig = resolver(detailViewConfig, { page: entityData });
+  // `tasks` schemas are resolved later with per-row context (see task-body.tsx,
+  // interpolatable-actions-popover.tsx) — resolving them here with only `page` would
+  // permanently bake in values computed without `row`.
+  const resolvedDetailViewConfig = resolver(
+    detailViewConfig,
+    { page: entityData },
+    (key) => key === 'tasks'
+  );
   return (
     <DetailView
       subtitle={entityConfig!.name}

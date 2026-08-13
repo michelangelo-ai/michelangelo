@@ -18,21 +18,36 @@ import type { TaskDetailsProps } from './types';
 export function TaskDetails<TTaskRecord extends object = object>(
   props: TaskDetailsProps<TTaskRecord>
 ) {
-  const { task, metadata, bodySchema, overrides } = props;
+  const { task, metadata, actions, pageData, bodySchema, overrides } = props;
   const scrollId = buildTaskScrollId(task);
 
   if (!!task.subTasks?.length || bodySchema?.length) {
     return (
       <TaskPanel
         id={scrollId}
-        title={<TaskHeader task={task} metadata={metadata} />}
+        title={<TaskHeader task={task} metadata={metadata} actions={actions} pageData={pageData} />}
         defaultExpanded={task.focused}
         state={task.state}
       >
-        <TaskBody task={task} bodySchema={bodySchema} metadata={metadata} overrides={overrides} />
+        <TaskBody
+          task={task}
+          bodySchema={bodySchema}
+          metadata={metadata}
+          actions={actions}
+          pageData={pageData}
+          overrides={overrides}
+        />
       </TaskPanel>
     );
   }
 
-  return <TaskHeader id={scrollId} task={task} metadata={metadata} />;
+  return (
+    <TaskHeader
+      id={scrollId}
+      task={task}
+      metadata={metadata}
+      actions={actions}
+      pageData={pageData}
+    />
+  );
 }
