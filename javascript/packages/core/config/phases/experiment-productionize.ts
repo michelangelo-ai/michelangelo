@@ -5,7 +5,7 @@ import { TRIGGER_ENTITY_CONFIG } from '#core/config/entities/trigger/trigger';
 import type { PhaseConfig } from '#core/types/common/studio-types';
 
 export const EXPERIMENT_PRODUCTIONIZE_PHASE: PhaseConfig = {
-  id: 'experiment-productionize',
+  id: 'retrain',
   icon: 'rocket',
   name: 'Experiment & Productionize',
   description: 'Experiment with pipelines and productionize your machine learning workflows',
