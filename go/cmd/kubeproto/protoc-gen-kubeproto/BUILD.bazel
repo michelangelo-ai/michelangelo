@@ -40,7 +40,10 @@ go_test(
     embed = [":go_default_library"],
     embedsrcs = ["test/expected_go_code.txt"],
     deps = [
+        "//go/kubeproto/pboptions:go_default_library",
+        "//go/kubeproto/util:go_default_library",
         "//proto/test/kubeproto:go_default_library",
+        "//proto/test/kubeproto/revisioned_errors:go_default_library",
         "@com_github_dave_dst//:go_default_library",
         "@com_github_dave_dst//decorator:go_default_library",
         "@com_github_gogo_protobuf//protoc-gen-gogo/plugin:go_default_library",
@@ -50,5 +53,10 @@ go_test(
         "@io_k8s_api//core/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/api/resource:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@org_golang_google_protobuf//compiler/protogen:go_default_library",
+        "@org_golang_google_protobuf//proto:go_default_library",
+        "@org_golang_google_protobuf//reflect/protoregistry:go_default_library",
+        "@org_golang_google_protobuf//types/descriptorpb:go_default_library",
+        "@org_golang_google_protobuf//types/pluginpb:go_default_library",
     ],
 )

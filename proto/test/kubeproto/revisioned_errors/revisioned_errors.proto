@@ -1,0 +1,186 @@
+syntax = "proto3";
+
+package michelangelo.test.kubeproto.revisioned_errors;
+
+import "google/protobuf/any.proto";
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+
+option go_package = "revisioned_errors";
+
+// ---- Case 1: revisioned_in names a kind that resolves to no message ----
+
+message UnresolvedWrapperBaseSpec {
+  string name = 1;
+}
+
+message UnresolvedWrapperBaseStatus {
+}
+
+message UnresolvedWrapperBase {
+  option (michelangelo.api.resource) = {
+    revisioned_in: ["nonexistent_wrapper"]
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.name";
+    key:  "name";
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  UnresolvedWrapperBaseSpec spec = 3;
+  UnresolvedWrapperBaseStatus status = 4;
+}
+
+// ---- Case 2: revisioned_in names a kind that resolves to a message that is
+// not itself a CRD resource (missing michelangelo.api.resource) ----
+
+message NotAResourceWrapperSpec {
+  google.protobuf.Any content = 1;
+}
+
+message NotAResourceWrapper {
+  NotAResourceWrapperSpec spec = 1;
+}
+
+message NotAResourceBaseSpec {
+  string name = 1;
+}
+
+message NotAResourceBaseStatus {
+}
+
+message NotAResourceBase {
+  option (michelangelo.api.resource) = {
+    revisioned_in: ["not_a_resource_wrapper"]
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.name";
+    key:  "name";
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  NotAResourceBaseSpec spec = 3;
+  NotAResourceBaseStatus status = 4;
+}
+
+// ---- Case 3: wrapper CRD's spec has no "content" field at all ----
+
+message MissingContentWrapperSpec {
+  string payload = 1;
+}
+
+message MissingContentWrapperStatus {
+}
+
+message MissingContentWrapper {
+  option (michelangelo.api.resource) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  MissingContentWrapperSpec spec = 3;
+  MissingContentWrapperStatus status = 4;
+}
+
+message MissingContentBaseSpec {
+  string name = 1;
+}
+
+message MissingContentBaseStatus {
+}
+
+message MissingContentBase {
+  option (michelangelo.api.resource) = {
+    revisioned_in: ["missing_content_wrapper"]
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.name";
+    key:  "name";
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  MissingContentBaseSpec spec = 3;
+  MissingContentBaseStatus status = 4;
+}
+
+// ---- Case 4: wrapper CRD has a "content" field at spec.content, but it is
+// not a google.protobuf.Any ----
+
+message WrongTypeContentWrapperSpec {
+  string content = 1;
+}
+
+message WrongTypeContentWrapperStatus {
+}
+
+message WrongTypeContentWrapper {
+  option (michelangelo.api.resource) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  WrongTypeContentWrapperSpec spec = 3;
+  WrongTypeContentWrapperStatus status = 4;
+}
+
+message WrongTypeContentBaseSpec {
+  string name = 1;
+}
+
+message WrongTypeContentBaseStatus {
+}
+
+message WrongTypeContentBase {
+  option (michelangelo.api.resource) = {
+    revisioned_in: ["wrong_type_content_wrapper"]
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.name";
+    key:  "name";
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  WrongTypeContentBaseSpec spec = 3;
+  WrongTypeContentBaseStatus status = 4;
+}
+
+// ---- Case 5: wrapper CRD exists and is a resource, but has no "spec" field
+// at all (so even the first path segment can't resolve) ----
+
+message NoSpecWrapper {
+  option (michelangelo.api.resource) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+}
+
+message NoSpecBaseSpec {
+  string name = 1;
+}
+
+message NoSpecBaseStatus {
+}
+
+message NoSpecBase {
+  option (michelangelo.api.resource) = {
+    revisioned_in: ["no_spec_wrapper"]
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.name";
+    key:  "name";
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  NoSpecBaseSpec spec = 3;
+  NoSpecBaseStatus status = 4;
+}
