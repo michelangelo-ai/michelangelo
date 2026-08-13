@@ -1,5 +1,6 @@
 import { useField } from 'react-final-form';
 
+import { isEmptyFieldValue } from '#core/components/form/utils/is-empty-field-value';
 import { useRepeatedLayoutContext } from '#core/providers/repeated-layout-provider/use-repeated-layout-context';
 import { buildIndexedFieldId } from './build-indexed-field-id';
 
@@ -38,5 +39,23 @@ export function FormCondition({
 }
 
 function shouldRender(layout: ConditionLayoutConfig, value: unknown): boolean {
-  return value === layout.is;
+  if ('is' in layout) {
+    return value === layout.is;
+  }
+
+  if ('isNot' in layout) {
+    return !isEmptyFieldValue(value) && value !== layout.isNot;
+  }
+
+  if ('isEmpty' in layout) {
+    return layout.isEmpty ? isEmptyFieldValue(value) : !isEmptyFieldValue(value);
+  }
+
+  if ('containsAny' in layout) {
+    return Array.isArray(value)
+      ? layout.containsAny.some((item) => value.includes(item))
+      : layout.containsAny.some((item) => value === item);
+  }
+
+  return true;
 }
