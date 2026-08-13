@@ -15,6 +15,21 @@ function unary<Fn>(fn: Fn): ExtractUnaryRpc<Fn> {
   return fn as unknown as ExtractUnaryRpc<Fn>;
 }
 
+// Delete<CRD>Request messages are uniformly { name, namespace, deleteOptions? } across every
+// service, while actions send the full CRD record (metadata/spec/status/typeMeta). Wrapping a
+// generated deleteX method here lets every Delete* handler share this reshape instead of each
+// entity config repeating it as mutation middleware.
+function deleteCrd<Req extends { name: string; namespace: string }, Res>(
+  deleteFn: (request: Req, headers?: Record<string, string>) => Promise<Res>
+) {
+  return (
+    record: { metadata: { name: string; namespace: string } },
+    headers?: Record<string, string>
+  ) =>
+    // cast: Req may carry additional optional fields (e.g. deleteOptions) beyond name/namespace
+    deleteFn({ name: record.metadata.name, namespace: record.metadata.namespace } as Req, headers);
+}
+
 async function createHandlers() {
   const services = await getServices();
 
@@ -27,7 +42,7 @@ async function createHandlers() {
     GetProject: unary(services.ProjectService.getProject),
     GetPipeline: unary(services.PipelineService.getPipeline),
     ListPipeline: unary(services.PipelineService.listPipeline),
-    DeletePipeline: unary(services.PipelineService.deletePipeline),
+    DeletePipeline: deleteCrd(services.PipelineService.deletePipeline),
     ListPipelineRun: unary(services.PipelineRunService.listPipelineRun),
     GetPipelineRun: unary(services.PipelineRunService.getPipelineRun),
     ListTriggerRun: unary(services.TriggerRunService.listTriggerRun),

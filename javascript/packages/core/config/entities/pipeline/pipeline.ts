@@ -26,23 +26,6 @@ export const PIPELINE_ENTITY_CONFIG: PhaseEntityConfig = {
         type: 'mutation',
         mutation: {
           mutationName: 'DeletePipeline',
-          // DeletePipelineRequest is flat ({ name, namespace }); the record is a full
-          // Pipeline (metadata/spec/status/typeMeta). Reshape to the request shape —
-          // the backend rejects unknown fields.
-          middleware: {
-            operations: [
-              { source: 'metadata.name', destination: 'name', transformation: (value) => value },
-              {
-                source: 'metadata.namespace',
-                destination: 'namespace',
-                transformation: (value) => value,
-              },
-              { destination: 'metadata', transformation: 'unset' },
-              { destination: 'spec', transformation: 'unset' },
-              { destination: 'status', transformation: 'unset' },
-              { destination: 'typeMeta', transformation: 'unset' },
-            ],
-          },
           successOperations: [
             { type: 'invalidate', targets: ['ListPipeline'] },
             { type: 'route', route: '/${studio.projectId}/${studio.phase}/pipelines' },

@@ -82,16 +82,18 @@ describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
 
       await user.click(getSubmitButton(dialog));
 
+      // The record is sent as-is; reshaping it into the flat DeletePipelineRequest
+      // ({ name, namespace }) the backend expects happens in the RPC handler (see
+      // packages/rpc/handlers.ts's deleteCrd), not in client-side mutation middleware.
       await waitFor(() => {
-        expect(mockRequest).toHaveBeenCalledWith(
-          'DeletePipeline',
-          { name: 'eval-pipeline', namespace: 'ma-dev-test' },
-          {}
-        );
+        expect(mockRequest).toHaveBeenCalledWith('DeletePipeline', buildPipeline(), {});
       });
 
+      // Navigation is a success operation that runs after the mutation resolves, i.e.
+      // asynchronously relative to the waitFor above — assert on it with findByText,
+      // not a synchronous getByText, so the test doesn't race the navigation.
       expect(
-        screen.getByText(/Current pathname: \/ma-dev-test\/train\/pipelines/)
+        await screen.findByText(/Current pathname: \/ma-dev-test\/train\/pipelines/)
       ).toBeInTheDocument();
     });
 
@@ -151,15 +153,14 @@ describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
       await user.click(getSubmitButton(dialog));
 
       await waitFor(() => {
-        expect(mockRequest).toHaveBeenCalledWith(
-          'DeletePipeline',
-          { name: 'eval-pipeline', namespace: 'ma-dev-test' },
-          {}
-        );
+        expect(mockRequest).toHaveBeenCalledWith('DeletePipeline', buildPipeline(), {});
       });
 
+      // Navigation is a success operation that runs after the mutation resolves, i.e.
+      // asynchronously relative to the waitFor above — assert on it with findByText,
+      // not a synchronous getByText, so the test doesn't race the navigation.
       expect(
-        screen.getByText(/Current pathname: \/ma-dev-test\/train\/pipelines/)
+        await screen.findByText(/Current pathname: \/ma-dev-test\/train\/pipelines/)
       ).toBeInTheDocument();
     });
 

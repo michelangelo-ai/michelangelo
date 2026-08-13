@@ -8,6 +8,7 @@ vi.mock('../services', () => ({ getServices: mockGetServices }));
 const createPipelineRun = vi.fn().mockResolvedValue({});
 const updatePipelineRun = vi.fn().mockResolvedValue({});
 const updateTriggerRun = vi.fn().mockResolvedValue({});
+const deletePipeline = vi.fn().mockResolvedValue({});
 
 mockGetServices.mockResolvedValue(
   new Proxy({} as Record<string, Record<string, unknown>>, {
@@ -17,6 +18,9 @@ mockGetServices.mockResolvedValue(
       }
       if (serviceName === 'TriggerRunService') {
         return { updateTriggerRun };
+      }
+      if (serviceName === 'PipelineService') {
+        return { deletePipeline };
       }
       return new Proxy({}, { get: () => vi.fn().mockResolvedValue({}) });
     },
@@ -63,5 +67,19 @@ describe('rpc handlers — mutation envelope wrapping', () => {
     await handlers.CreatePipelineRun(record as never);
 
     expect((record.spec as Record<string, unknown>).actor).toBeUndefined();
+  });
+
+  it('DeletePipeline extracts name/namespace from the full record', async () => {
+    const handlers = await getRpcHandlers();
+    const record = {
+      metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
+      spec: { owner: { name: 'me' } },
+    };
+    await handlers.DeletePipeline(record as never);
+
+    expect(deletePipeline).toHaveBeenCalledWith(
+      { name: 'eval-pipeline', namespace: 'ma-dev-test' },
+      undefined
+    );
   });
 });
