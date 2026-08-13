@@ -1,6 +1,7 @@
 import { DATA_PHASE } from './data';
 import { DEPLOY_PHASE } from './deploy';
 import { RETRAIN_PHASE } from './retrain';
+import { MONITOR_DEBUG_PHASE } from './monitor-debug';
 import { TRAIN_PHASE } from './train';
 
 export const PHASES = {
@@ -8,4 +9,5 @@ export const PHASES = {
   train: TRAIN_PHASE,
   deploy: DEPLOY_PHASE,
   retrain: RETRAIN_PHASE,
+  'monitor-debug': MONITOR_DEBUG_PHASE,
 };
