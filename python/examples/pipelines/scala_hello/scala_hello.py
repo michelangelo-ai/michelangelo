@@ -17,7 +17,7 @@ __all__ = ["scala_hello_workflow"]
 
 
 @uniflow.workflow()
-def scala_hello_workflow(main_file: str = "", main_class: str = "HelloScala"):
+def scala_hello_workflow(main_file: str = "local:///app/examples/pipelines/scala_hello/target/HelloScala.jar", main_class: str = "HelloScala"):
     """Run the HelloScala Spark JAR as a single ScalaTask.
 
     Args:
