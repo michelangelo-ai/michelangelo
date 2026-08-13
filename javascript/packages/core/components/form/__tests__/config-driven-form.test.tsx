@@ -466,4 +466,29 @@ describe('ConfigDrivenForm', () => {
       });
     });
   });
+
+  it('shows conditional items when the triggering field value matches', async () => {
+    const user = userEvent.setup();
+
+    const config: FormConfig = {
+      fields: {
+        mode: { type: 'string', label: 'Mode' },
+        advanced: { type: 'string', label: 'Advanced Setting' },
+      },
+      layout: ['mode', { type: 'condition', when: 'mode', is: 'advanced', items: ['advanced'] }],
+    };
+
+    render(
+      <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+    );
+
+    expect(screen.queryByLabelText('Advanced Setting')).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Mode'), 'advanced');
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Advanced Setting')).toBeInTheDocument();
+    });
+  });
 });
