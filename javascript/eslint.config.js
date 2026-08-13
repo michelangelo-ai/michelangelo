@@ -272,12 +272,13 @@ export default [
     rules: sharedRules,
   },
 
-  // packages/core/index.tsx is the package's public API barrel (see the
-  // no-barrel-exports exception above) — it exports hooks, types, and
-  // constants alongside components by design, so react-refresh's
-  // component-only-export rule doesn't apply here.
+  // packages/core/index.tsx and packages/core/primitives.tsx are the
+  // package's public API barrels (see the no-barrel-exports exception
+  // above for index.tsx) — they export hooks, types, and constants
+  // alongside components by design, so react-refresh's component-only-export
+  // rule doesn't apply here.
   {
-    files: ['packages/core/index.tsx'],
+    files: ['packages/core/index.tsx', 'packages/core/primitives.tsx'],
     rules: {
       'react-refresh/only-export-components': 'off',
     },
@@ -328,7 +329,8 @@ export default [
     ...tseslint.configs.disableTypeChecked,
   },
 
-  // no-multi-comp: tests and styled-component files legitimately define multiple components
+  // Tests and styled-component files legitimately define multiple components,
+  // and test files/wrappers are never part of the app's Fast Refresh graph.
   {
     files: [
       'packages/**/__tests__/**/*.{ts,tsx}',
@@ -339,6 +341,7 @@ export default [
     ],
     rules: {
       'react/no-multi-comp': 'off',
+      'react-refresh/only-export-components': 'off',
     },
   },
 
