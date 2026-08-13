@@ -158,6 +158,85 @@ func TestReconcile_RevisioningEnabled_NoCommit(t *testing.T) {
 	assert.True(t, err != nil, "no Revision CR should exist when pipeline has no commit")
 }
 
+// status.latestRevision only advances for main/master. Feature-branch reconciles
+// still snapshot a Revision CR — they just don't move the "latest" pointer.
+func TestReconcile_LatestRevisionOnlyOnDefaultBranch(t *testing.T) {
+	testCases := []struct {
+		name                   string
+		branch                 string
+		existingLatestRevision *apipb.ResourceIdentifier
+		expectLatestRevision   *apipb.ResourceIdentifier
+	}{
+		{
+			name:   "main advances latestRevision",
+			branch: "main",
+			expectLatestRevision: &apipb.ResourceIdentifier{
+				Name:      "pipeline-test-pipeline-abc123456789",
+				Namespace: "test-namespace",
+			},
+		},
+		{
+			name:   "master advances latestRevision",
+			branch: "master",
+			expectLatestRevision: &apipb.ResourceIdentifier{
+				Name:      "pipeline-test-pipeline-abc123456789",
+				Namespace: "test-namespace",
+			},
+		},
+		{
+			name:                 "feature branch does not advance latestRevision",
+			branch:               "feature/my-mr",
+			expectLatestRevision: nil,
+		},
+		{
+			name:   "feature branch leaves an existing latestRevision untouched",
+			branch: "feature/my-mr",
+			existingLatestRevision: &apipb.ResourceIdentifier{
+				Name:      "pipeline-test-pipeline-earlier",
+				Namespace: "test-namespace",
+			},
+			expectLatestRevision: &apipb.ResourceIdentifier{
+				Name:      "pipeline-test-pipeline-earlier",
+				Namespace: "test-namespace",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pipeline := &v2pb.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pipeline",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.PipelineSpec{
+					Commit: &v2pb.CommitInfo{
+						GitRef: "abc123456789",
+						Branch: tc.branch,
+					},
+				},
+				Status: v2pb.PipelineStatus{
+					LatestRevision: tc.existingLatestRevision,
+				},
+			}
+
+			reconciler := setUpReconciler(t, []client.Object{pipeline}, env.Context{}, Config{RevisioningEnabled: true})
+			_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}})
+			require.NoError(t, err)
+
+			got := &v2pb.Pipeline{}
+			require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "test-pipeline", &metav1.GetOptions{}, got))
+			require.Equal(t, v2pb.PIPELINE_STATE_READY, got.Status.State)
+			assert.Equal(t, tc.expectLatestRevision, got.Status.LatestRevision)
+
+			rev := &v2pb.Revision{}
+			require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "pipeline-test-pipeline-abc123456789", &metav1.GetOptions{}, rev),
+				"Revision CR must still be snapshotted for non-default branches")
+			assert.Equal(t, "abc123456789", rev.Spec.RevisionId)
+		})
+	}
+}
+
 func TestFormatRevisionName(t *testing.T) {
 	testCases := []struct {
 		name           string
