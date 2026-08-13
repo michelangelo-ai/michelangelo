@@ -959,8 +959,19 @@ describe('EntityDetailRoute', () => {
           status: {
             state: 'SUCCESS',
             steps: [
-              { displayName: 'Has Activity', state: 'SUCCEEDED', activityId: '1', subSteps: [] },
-              { displayName: 'No Activity', state: 'SUCCEEDED', subSteps: [] },
+              {
+                displayName: 'Execute Workflow',
+                state: 'SUCCEEDED',
+                subSteps: [
+                  {
+                    displayName: 'Has Activity',
+                    state: 'SUCCEEDED',
+                    activityId: '1',
+                    subSteps: [],
+                  },
+                  { displayName: 'No Activity', state: 'SUCCEEDED', subSteps: [] },
+                ],
+              },
             ],
           },
         },
@@ -1007,6 +1018,30 @@ describe('EntityDetailRoute', () => {
       await user.click(within(enabledTask).getByRole('button', { name: 'Actions' }));
       await user.click(await screen.findByRole('option', { name: 'Retry' }));
       expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    });
+
+    // Regression test: activityId is never set on top-level steps like Execute Workflow (only
+    // on nested subSteps — see go/components/pipelinerun/actors/executeworkflow.go), so an
+    // always-disabled action there is misleading. Top-level steps shouldn't render the action at all.
+    test('does not render the action on a top-level step', async () => {
+      render(
+        <EntityDetailRoute phases={buildTaskActionPhases()} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({ location: '/myproject/train/runs/run-123' }),
+          getServiceProviderWrapper({ request: mockTaskRunRequest() }),
+        ])
+      );
+
+      await screen.findAllByText('Execute Workflow');
+      const topLevelContainer = document.getElementById('task-Execute Workflow')!;
+      // Header renders before body content in document order, so the first `role="button"`
+      // descendant is the task's own header, not a nested subtask's.
+      const topLevelHeader = topLevelContainer.querySelector('[role="button"]')!;
+
+      expect(
+        within(topLevelHeader as HTMLElement).queryByRole('button', { name: 'Actions' })
+      ).not.toBeInTheDocument();
     });
   });
 

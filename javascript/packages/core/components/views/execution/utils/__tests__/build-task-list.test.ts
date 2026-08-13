@@ -66,6 +66,7 @@ describe('buildTaskList', () => {
       subTasks: [],
       record: data.steps[0].subSteps[0],
       focused: false,
+      depth: 1,
     });
     expect(result[0].subTasks[1]).toEqual({
       name: 'Child Task 2',
@@ -73,6 +74,7 @@ describe('buildTaskList', () => {
       subTasks: [],
       record: data.steps[0].subSteps[1],
       focused: true,
+      depth: 1,
     });
   });
 

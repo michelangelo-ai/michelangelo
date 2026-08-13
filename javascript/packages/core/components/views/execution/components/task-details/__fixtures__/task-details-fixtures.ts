@@ -42,6 +42,7 @@ export const createTask = (overrides: DeepPartial<Task> = {}): Task =>
       subTasks: [],
       record: { displayName: 'Default Task', state: 'SUCCEEDED' },
       focused: false,
+      depth: 0,
     },
     overrides
   );

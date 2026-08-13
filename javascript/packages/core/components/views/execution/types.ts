@@ -194,6 +194,8 @@ export type Task<TTaskRecord extends object = object> = {
   record: TTaskRecord;
   /** True for the task that should receive UI focus and attention */
   focused: boolean;
+  /** Nesting depth: 0 for top-level tasks from `accessor`, incremented for each level of `subTasksAccessor` nesting */
+  depth: number;
 };
 
 /**

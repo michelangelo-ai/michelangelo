@@ -13,5 +13,6 @@ export function createTask(
     focused,
     subTasks,
     record: { name, state },
+    depth: 0,
   };
 }
