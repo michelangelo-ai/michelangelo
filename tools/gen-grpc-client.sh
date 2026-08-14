@@ -1,5 +1,15 @@
 #!/usr/bin/env bash
-# Generate gRPC client code from protobuf files
+# Generate gRPC client language bindings (Python and JavaScript classes)
+# from protobuf files via buf's remote codegen plugins.
+#
+# Does NOT touch helm/michelangelo/files/descriptors.pb or
+# transcoder-services.json — those are a separate concern with a separate
+# trigger (see tools/gen-descriptors.sh). This script needs network access
+# to buf.build's remote plugins and BSR dependencies regardless, and is
+# wired into javascript/package.json's `generate`/`prebuild`/`setup`
+# scripts; requiring Bazel here too (gen-descriptors.sh's dependency, now
+# that it builds descriptors.pb via `bazel build`) would impose a new,
+# unrelated toolchain requirement on every `yarn build`/`yarn setup`.
 set -e
 set -x
 
@@ -34,11 +44,6 @@ move_generated_files() {
 
 if ! command -v buf &> /dev/null; then
   echo "Buf is NOT installed. Please install it from https://docs.buf.build/installation"
-  exit 1
-fi
-
-if ! command -v jq &> /dev/null; then
-  echo "jq is NOT installed. Please install it from https://jqlang.org/download"
   exit 1
 fi
 
@@ -110,10 +115,6 @@ EOF
 # generate gRPC code
 buf dep update "${TMP_DIR}"
 buf generate --template "${TMP_DIR}/buf.gen.yaml" "${TMP_DIR}" -o "${TMP_DIR}"
-
-# build the FileDescriptorSet + grpc_json_transcoder services allowlist that
-# the Envoy ConfigMap templates read at `helm template`/`helm install` time
-"${WORKSPACE_ROOT}/tools/gen-descriptors.sh" "${WORKSPACE_ROOT}/helm/michelangelo/files"
 
 # copy generated code to requesting client directories
 IFS=',' read -ra CLIENT_ARRAY <<< "$CLIENTS"

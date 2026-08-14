@@ -23,9 +23,9 @@ Scripts in the root `tools/` directory are for **development purposes** and may 
 - **`goimports`** - Go import formatter
 - **`mamockgen`** - Mock generator for Michelangelo AI
 - **`grpc-svc-gen.sh`** - gRPC service generator
-- **`gen-grpc-client.sh`** - gRPC client generator; run automatically by `yarn generate`/`prebuild`/`setup` in `javascript/`
-- **`gen-descriptors.sh`** - Builds the proto descriptor set + `grpc_json_transcoder` services allowlist scoped to what `javascript/packages/rpc/services.ts` references (called by `gen-grpc-client.sh`)
-- **`check-transcoder-services.sh`** - CI backstop verifying the transcoder services allowlist matches `services.ts`, for changes that bypass `yarn generate`
+- **`gen-grpc-client.sh`** - Generates gRPC client language bindings (Python/JS classes); run automatically by `yarn generate`/`prebuild`/`setup` in `javascript/`. Does NOT touch `descriptors.pb`/`transcoder-services.json` (see below)
+- **`gen-descriptors.sh`** - Builds `helm/michelangelo/files/descriptors.pb` (via `bazel build //proto/api/v2:v2_proto`, same trigger as `gen-proto-go.sh`) + the `grpc_json_transcoder` services allowlist scoped to what `javascript/packages/rpc/services.ts` references. CI-enforced on every proto/go change via `main.yml`'s `dirty-check` job
+- **`check-transcoder-services.sh`** - Narrow CI backstop verifying the transcoder services allowlist matches `services.ts`, for `services.ts`-only changes that `main.yml`'s `dirty-check` (path-filtered away from `javascript/`) never sees
 - **`run_ruff.sh`** - Python linter runner
 - **`assert_python_version.py`** - Python version checker
 - **`utils.py`** - Common utilities
