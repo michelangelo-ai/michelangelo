@@ -5,23 +5,35 @@ on:
     paths:
       - 'proto/**'
       - 'helm/michelangelo/files/**'
+      - 'tools/gen-descriptors.sh'
+      - 'tools/check-transcoder-services.sh'
   push:
     branches:
       - main
     paths:
       - 'proto/**'
       - 'helm/michelangelo/files/**'
+      - 'tools/gen-descriptors.sh'
+      - 'tools/check-transcoder-services.sh'
 
 permissions:
   contents: read
 
 jobs:
   check:
-    name: Verify transcoder-services.json is in sync with proto/api
+    name: Verify transcoder-services.json is up to date
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check transcoder-services.json matches proto/api
+      - name: Set up buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Backstop for changes that bypass the normal `yarn generate` /
+      # `yarn build` flow that already regenerates this file automatically
+      # (see javascript/package.json's `prebuild` and `setup` scripts).
+      - name: Check transcoder-services.json is up to date
         run: tools/check-transcoder-services.sh

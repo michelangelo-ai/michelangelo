@@ -27,6 +27,8 @@ After editing any `.proto` file, regenerate the Go bindings:
 4. Run `tools/gen-proto-go.sh` to regenerate alias `BUILD.bazel` files under `proto-go/`, sync dependency versions from `go/go.mod` into `proto-go/go.mod`, and run `go mod tidy` in `proto-go/`
 5. Check in both the `.proto` changes and the generated `proto-go/` changes
 
+If the change adds, removes, or renames a service (not just a field or method), the JavaScript and Python clients and the Envoy transcoder's allowlist need regenerating too — see [gen-grpc-client.sh](shell-scripts.md#gen-grpc-clientsh). That one you usually don't have to run by hand: it's wired into `javascript/`'s normal `yarn build`/`yarn setup` flow.
+
 ## Service Pattern
 
 Each ML entity (Pipeline, InferenceServer, Model, etc.) has a corresponding `*_svc.proto` file that defines a gRPC service with standard CRUD methods. For example, `pipeline_svc.proto` defines `PipelineService` with `CreatePipeline`, `GetPipeline`, `ListPipelines`, `UpdatePipeline`, and `DeletePipeline` RPCs.
