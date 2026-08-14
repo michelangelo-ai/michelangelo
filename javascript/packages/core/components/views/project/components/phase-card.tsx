@@ -21,6 +21,11 @@ export function PhaseCard(props: PhaseConfig & { projectId: string }) {
 
   return (
     <Box
+      overrides={{
+        BoxContainer: {
+          style: { minHeight: '220px' },
+        },
+      }}
       title={
         <div className={css({ display: 'flex', alignItems: 'center', gap: theme.sizing.scale400 })}>
           <Icon name={icon} size={theme.sizing.scale500} />
