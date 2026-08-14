@@ -36,6 +36,19 @@ describe('filterHiddenConditionFields', () => {
     expect(filterHiddenConditionFields(values, config)).toEqual({ mode: 'basic' });
   });
 
+  it('strips a nested field without touching a sibling nested field', () => {
+    const config: FormConfig = {
+      fields: {},
+      layout: ['mode', { type: 'condition', when: 'mode', is: 'advanced', items: ['spec.a.b'] }],
+    };
+    const values = { mode: 'basic', spec: { a: { b: 'stale', c: 'kept' } } };
+
+    expect(filterHiddenConditionFields(values, config)).toEqual({
+      mode: 'basic',
+      spec: { a: { c: 'kept' } },
+    });
+  });
+
   it('strips every leaf field nested under a false is condition wrapping a group', () => {
     const config: FormConfig = {
       fields: {},
