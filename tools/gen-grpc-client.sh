@@ -37,6 +37,11 @@ if ! command -v buf &> /dev/null; then
   exit 1
 fi
 
+if ! command -v jq &> /dev/null; then
+  echo "jq is NOT installed. Please install it from https://jqlang.org/download"
+  exit 1
+fi
+
 while [[ "$#" -gt 0 ]]; do
   case $1 in
     --clients)
@@ -110,6 +115,14 @@ buf generate --template "${TMP_DIR}/buf.gen.yaml" "${TMP_DIR}" -o "${TMP_DIR}"
 # transcode JSON<->binary proto without any Go-side jsonpb involvement
 mkdir -p "${WORKSPACE_ROOT}/helm/michelangelo/files"
 buf build "${TMP_DIR}" --exclude-source-info -o "${WORKSPACE_ROOT}/helm/michelangelo/files/descriptors.pb"
+
+# derive the grpc_json_transcoder allowlist from the same descriptor set,
+# so it can never drift from the services the client actually generates for
+buf build "${TMP_DIR}" --exclude-source-info -o "${TMP_DIR}/descriptors.json"
+jq -r '
+  [.file[] | select(.service != null) | .package as $pkg | .service[] | "\($pkg).\(.name)"]
+  | sort
+' "${TMP_DIR}/descriptors.json" > "${WORKSPACE_ROOT}/helm/michelangelo/files/transcoder-services.json"
 
 # copy generated code to requesting client directories
 IFS=',' read -ra CLIENT_ARRAY <<< "$CLIENTS"
