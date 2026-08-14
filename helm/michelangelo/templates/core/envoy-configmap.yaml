@@ -82,6 +82,16 @@ data:
                             # Use camelCase field names (proto3 JSON default)
                             # instead of snake_case proto field names.
                             preserve_proto_field_names: false
+                            # Emit enum fields as their string name (e.g.
+                            # "PHASE_COMPLETE") rather than the underlying
+                            # number. This is already Envoy's default, but is
+                            # set explicitly so it doesn't silently flip on an
+                            # Envoy upgrade. Values Envoy's proto_descriptor
+                            # doesn't recognize (e.g. a stale descriptors.pb)
+                            # still fall back to numbers regardless of this
+                            # setting — see the descriptor-freshness-check CI
+                            # job in api-surface-check.yml.
+                            always_print_enums_as_ints: false
                       - name: envoy.filters.http.cors
                         typed_config:
                           "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
